@@ -1,0 +1,87 @@
+#timekeeper, #outputHTML {
+    width: 100%;
+}
+
+#videos {
+    text-align:center;
+
+    width: 40%;
+    float: right;
+}
+
+#videos div {
+    order: 3;
+    float: left;
+}
+
+#videos video {
+    width: auto;
+    width: 13vw;
+    height: 10vw;
+    padding: 1em;
+}
+
+.videoTitle {
+    float: left;
+}
+
+#videos h2 {
+    display: block;
+    position: relative;
+    color: white;
+}
+
+video, h2 {
+    padding: 0 !important;
+    margin: 0;
+}
+
+h2 {
+    background: rgba(0,0,0,.3)
+}
+
+#videoplayermain {
+    order: 1;
+    height: 0;
+    background: url("../img/tv.png");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    text-align: center;
+    width: 80vw;
+    height: 50vw;
+    float: left;
+    width: 60%;
+}
+
+#videoplayermain h2 {
+    position: absolute;
+    align-content: left;
+    text-align: left;
+    left: 10vw;
+    top: 10vw;
+    color: #00ff00;
+    font-family: 'VT323';
+    font-size: 3vw;
+}
+
+#videoplayermain video {
+    margin-top: 4vw;
+    width: 80%;
+}
+
+#radio {
+    height: 20vw;
+    width: 32vw;
+    float: left;
+    background: url('../img/radio.png');
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+#radio #screen {
+    font-family: 'VT323';
+    font-size: 2vw;
+    padding: 6vh 12vh;
+}
