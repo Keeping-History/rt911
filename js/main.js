@@ -3,66 +3,72 @@
 // told in by media, photos, audio and other media timestamped and
 // replayed in real time. The time starts at September 11, 2001 at
 // Midnight Easter Time, and runs to 11:59:59 PM the same day.
-
 //
 
-remoteurl = "http://54.87.47.88:8080/videos/"
+remoteurl = "http://54.87.47.88:8080/videos/";
+start = "08:31:00";
 
 var data = (function() {
-  var result;
-  $.ajax({
-      type:'GET',
-      url: remoteurl,
-      dataType:'json',
-      async:false,
-      success:function(data){
-          result = data;
-      }
-  });
-  return result;
+    var result;
+    $.ajax({
+        type: 'GET',
+        url: remoteurl,
+        dataType: 'json',
+        async: false,
+        success: function(data) {
+            result = data;
+        }
+    });
+    return result;
 })();
 
 // Attach the media timeline to an HTML5 player
 // The player will control the current 'time' of the sim
-var audio = document.getElementById('timekeeper');
-audio.setAttribute("autoplay","");
+var timekeeper = document.getElementById('timekeeper');
+timekeeper.setAttribute("autoplay", "");
 
-audio.addEventListener('canplay', function() {
-  jumpIt("08:31:00");
+// When the timkekeeper is loaded, jump to the start point,
+// load the videos and then pause, ready for play.
+timekeeper.addEventListener('canplay', function() {
+    jumpIt(start);
+    var players = document.querySelectorAll('#videos * video, #videoplayermain video');
+    for (let player of players) {
+        player.pause();
+    }
 }, false);
 
- // Events for the main timeline controller
- // When the timeline is seeked, then update the play location of the child video players
- audio.addEventListener('seeked', function() {
-  var players = document.querySelectorAll('#videos * video, #videoplayermain video');
-  for (let player of players) {
-      var dataItem = data.find(data => data.vidid === player.id);
-      player.currentTime = johng.timestamp() - hmsToSeconds(dataItem.start);
-  }
+// Events for the main timeline controller
+// When the timeline is seeked, then update the play location of the child video players
+timekeeper.addEventListener('seeked', function() {
+    var players = document.querySelectorAll('#videos * video, #videoplayermain video');
+    for (let player of players) {
+        var dataItem = data.find(data => data.vidid === player.id);
+        player.currentTime = johng.timestamp() - hmsToSeconds(dataItem.start);
+    }
 }, false);
 
 // When the timeline controller is playing, make sure the child video players are running
-audio.addEventListener('play', function() {
-  var players = document.querySelectorAll('#videos * video, #videoplayermain video');
-  for (let player of players) {
-      player.play();
-  }
+timekeeper.addEventListener('play', function() {
+    var players = document.querySelectorAll('#videos * video, #videoplayermain video');
+    for (let player of players) {
+        player.play();
+    }
 }, false);
 
 // When the timeline controller is paused, make sure the child video players also pause
-audio.addEventListener('pause', function() {
-  var players = document.querySelectorAll('#videos * video, #videoplayermain video')  ;
-  for (let player of players) {
-      player.pause();
-  }
+timekeeper.addEventListener('pause', function() {
+    var players = document.querySelectorAll('#videos * video, #videoplayermain video');
+    for (let player of players) {
+        player.pause();
+    }
 }, false);
 
 
 // Boilerplate code to load our framework, memento.js
 var johng = memento();
 
-// ATtach our memento object to our timekeeper audio player
-johng.node(audio);
+// Attach our memento object to our timekeeper audio player
+johng.node(timekeeper);
 
 // Load in the johng data
 johng.all_data(data);
@@ -82,13 +88,13 @@ johng.tick(true, function(activeVideos, timestamp) {
     activePlayers = Array.prototype.slice.call(document.querySelectorAll('#videos * video, #videoplayermain video'));
 
     // The activeVideos is passed in to the function each time it is run
-    if(Array.isArray(activeVideos)) {
+    if (Array.isArray(activeVideos)) {
         activeVideos.forEach(function(thisVideo) {
             activeVideosList.push(thisVideo.vidid);
         })
     }
 
-    if(Array.isArray(activePlayers)) {
+    if (Array.isArray(activePlayers)) {
         activePlayers.forEach(function(thisPlayer) {
             activePlayersList.push(thisPlayer.id);
         })
@@ -98,7 +104,7 @@ johng.tick(true, function(activeVideos, timestamp) {
     let addPlayers = activeVideosList.filter(x => !activePlayersList.includes(x));
 
     // And add them
-    if(Array.isArray(addPlayers)) {
+    if (Array.isArray(addPlayers)) {
         // Ok, so addPlayers is an actual Array, so we can loop over it
         addPlayers.forEach(
             function(playerId) {
@@ -106,77 +112,81 @@ johng.tick(true, function(activeVideos, timestamp) {
                 // Does a player window with the same ID already exist?
                 var doesPlayerExist = document.getElementById(playerId);
 
-                if(!doesPlayerExist){
-                  // Grab the video data item because we need it
-                  var dataItem = data.find(data => data.vidid === playerId);
+                if (!doesPlayerExist) {
+                    // Grab the video data item because we need it
+                    var dataItem = data.find(data => data.vidid === playerId);
 
-                  var newPlayerContainer = document.createElement('div');
-                  newPlayerContainer.setAttribute("id", playerId + '_div');
+                    // If not, then let's create a container...
+                    var newPlayerContainer = document.createElement('div');
+                    newPlayerContainer.setAttribute("id", playerId + '_div');
 
-                  // If not,y then let's create a player
-                  var newPlayer = document.createElement('video');
-                  newPlayer.controls = false;
+                    // ... and a player for our video
+                    var newPlayer = document.createElement('video');
+                    newPlayer.controls = false;
+                    newPlayer.setAttribute("id", playerId);
 
-                  // Create a title
-                  var newPlayerTitle = document.createElement("h2");
-                  newPlayerTitle.appendChild(document.createTextNode(dataItem.source));
-                  newPlayerTitle.setAttribute("id", playerId + 'title');
+                    // Create a title
+                    var newPlayerTitle = document.createElement("h2");
+                    newPlayerTitle.appendChild(document.createTextNode(dataItem.source));
+                    newPlayerTitle.setAttribute("id", playerId + '_title');
 
-                  newPlayer.setAttribute("id", playerId);
+                    // Add video object and title we just created to DOM
+                    newPlayerContainer.appendChild(newPlayerTitle)
+                    newPlayerContainer.appendChild(newPlayer)
 
-                  // Add video object and title we just created to DOM
-                  newPlayerContainer.appendChild(newPlayerTitle)
-                  newPlayerContainer.appendChild(newPlayer)
+                    document.querySelector("#videos").appendChild(newPlayerContainer);
 
-                  document.querySelector("#videos").appendChild(newPlayerContainer);
+                    // Create a source element for the video player
+                    var source = document.createElement('source');
+                    source.src = dataItem.url;
 
-                  // Create a source element for the video player
-                  var source = document.createElement('source');
-                  source.src = dataItem.url;
+                    // Append the source element to the video player
+                    newPlayer.appendChild(source);
 
-                  // Append the source element to the video player
-                  newPlayer.appendChild(source);
+                    // When mousing over a player, unmute it so we can hear.
+                    newPlayerContainer.addEventListener("mouseover", function() {
+                        document.getElementById(playerId).muted = false;
+                    });
 
+                    // When mousing out of a player, mute it again,
+                    // unless it is our main video, in which case don't mute.
+                    newPlayerContainer.addEventListener("mouseout", function() {
+                        if (document.getElementById(playerId + '_div').classList.contains("highlight")) {
+                            document.getElementById(playerId).muted = false;
+                        } else {
+                            document.getElementById(playerId).muted = true;
+                        }
+                    });
 
-                  newPlayerContainer.addEventListener("mouseover", function(){
-                    document.getElementById(playerId).muted = false;
-                  });
+                    // When clicking a player, make it the main video player,
+                    newPlayerContainer.addEventListener("click", function() {
 
-                  newPlayerContainer.addEventListener("mouseout", function(){
-                    if(document.getElementById(playerId + '_div').classList.contains("highlight")) {
-                      document.getElementById(playerId).muted = false;
-                    } else{
-                      document.getElementById(playerId).muted = true;
-                    }
-                  });
+                        $('#videoplayermain').children().prependTo("#videos");
 
-                  newPlayerContainer.addEventListener("click", function(){
+                        if (document.getElementById(playerId + '_div').classList.contains("highlight")) {
+                            document.getElementById(playerId + '_div').classList.remove("highlight")
+                            document.getElementById(playerId).muted = true;
+                        } else {
+                            var container = document.querySelector("#videos");
+                            matches = container.querySelectorAll('div.highlight')
 
-                    $('#videoplayermain').children().prependTo("#videos");
+                            matches.forEach(function(item) {
+                                item.classList.remove("highlight");
+                            });
 
+                            document.getElementById(playerId + '_div').classList.add("highlight");
+                            document.getElementById(playerId).muted = false;
+                            var element = $('#' + playerId + '_div').detach();
+                            $('#videoplayermain').append(element);
+                        }
+                    });
 
-                    if(document.getElementById(playerId + '_div').classList.contains("highlight")) {
-                      document.getElementById(playerId + '_div').classList.remove("highlight")
-                      document.getElementById(playerId).muted = true;
-                    } else {
-                      var container = document.querySelector("#videos");
-                      matches = container.querySelectorAll('div.highlight')
+                    newPlayer.currentTime = timestamp - hmsToSeconds(dataItem.start);
 
-                      matches.forEach(function(item) {
-                        item.classList.remove("highlight");
-                      });
-                      document.getElementById(playerId + '_div').classList.add("highlight");
-                      document.getElementById(playerId).muted = false;
-                      var element = $('#' + playerId + '_div').detach();
-                      $('#videoplayermain').append(element);
-                  }});
-
-
-                  // When the player is ready to be played, check the timestamp and start at the appropriate time
-                  newPlayer.oncanplay = function() {
-                      this.currentTime = timestamp - hmsToSeconds(dataItem.start);
-                      this.play();
-                      this.muted = true;
+                    // When the player is ready to be played, check the timestamp and start at the appropriate time
+                    newPlayer.oncanplay = function() {
+                        this.play();
+                        this.muted = true;
                     };
                 }
             }
@@ -187,21 +197,22 @@ johng.tick(true, function(activeVideos, timestamp) {
     let removePlayers = activePlayersList.filter(x => !activeVideosList.includes(x));
 
     // And remove them
-    if(Array.isArray(removePlayers)) {
+    if (Array.isArray(removePlayers)) {
         // We have some players that are no longer live and should be destroyed.
         removePlayers.forEach(
             function(playerId) {
-                if(playerId) {
-                  document.getElementById(playerId + "_div").remove();
-            }
-        })
+                if (playerId) {
+                    document.getElementById(playerId + "_div").remove();
+                }
+            })
     }
- });
+});
 
- // Helper function to convert HH:MM:SS to Seconds
+// Helper function to convert HH:MM:SS to Seconds
 function hmsToSeconds(str) {
     var p = str.split(':'),
-        s = 0, m = 1;
+        s = 0,
+        m = 1;
     while (p.length > 0) {
         s += m * parseInt(p.pop(), 10);
         m *= 60;
@@ -211,5 +222,5 @@ function hmsToSeconds(str) {
 
 // Jump to the right timestamp
 function jumpIt(str) {
-  audio.currentTime = hmsToSeconds(str)
+    timekeeper.currentTime = hmsToSeconds(str)
 }

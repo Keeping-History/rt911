@@ -1,24 +1,25 @@
-#timekeeper, #outputHTML {
+#timekeeper,
+#outputHTML {
     width: 100%;
 }
 
 #videos {
-    text-align:center;
-
-    width: 40%;
-    float: right;
+    text-align: center;
+    width: 100%;
+    float: left;
 }
 
 #videos div {
     order: 3;
     float: left;
+    padding: 1em;
 }
 
 #videos video {
     width: auto;
-    width: 13vw;
+    width: 25wh;
     height: 10vw;
-    padding: 1em;
+    padding: 5em;
 }
 
 .videoTitle {
@@ -27,17 +28,22 @@
 
 #videos h2 {
     display: block;
-    position: relative;
+    position: absolute;
     color: white;
+    font-size: 1em;
+    margin-left: 1%;
+    font-family: 'VT323';
+    color: #00ff00;
+    background: rgba(0, 0, 0, .8)
 }
 
-video, h2 {
+video,
+h2 {
     padding: 0 !important;
-    margin: 0;
 }
 
 h2 {
-    background: rgba(0,0,0,.3)
+    background: rgba(0, 0, 0, .3)
 }
 
 #videoplayermain {
@@ -58,21 +64,21 @@ h2 {
     position: absolute;
     align-content: left;
     text-align: left;
-    left: 10vw;
-    top: 10vw;
+    left: 8%;
+    top: 8%;
     color: #00ff00;
     font-family: 'VT323';
     font-size: 3vw;
 }
 
 #videoplayermain video {
-    margin-top: 4vw;
+    margin-top: 6%;
     width: 80%;
 }
 
 #radio {
     height: 20vw;
-    width: 32vw;
+    width: 40%;
     float: left;
     background: url('../img/radio.png');
     background-position: center;
@@ -83,5 +89,5 @@ h2 {
 #radio #screen {
     font-family: 'VT323';
     font-size: 2vw;
-    padding: 6vh 12vh;
+    padding: 10% 25%;
 }
