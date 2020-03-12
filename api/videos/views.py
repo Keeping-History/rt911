@@ -28,7 +28,7 @@ def index(request):
     new_videos = []
 
     for vid in data:
-        add_time_delta = tzmap[vid['tz']] + 4
+        add_time_delta = tzmap[vid['tz']] + 4 # convert UTC to Eastern Standard Time
 
         vid['start_date'] = vid['start_date'] + timedelta(hours=add_time_delta)
         vid['end_date'] = vid['end_date'] + timedelta(hours=add_time_delta)

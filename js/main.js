@@ -25,7 +25,7 @@ var data = (function() {
 // Attach the media timeline to an HTML5 player
 // The player will control the current 'time' of the sim
 var timekeeper = document.getElementById('timekeeper');
-timekeeper.setAttribute("autoplay", "");
+timekeeper.setAttribute("autoplay", "false");
 
 // When the timkekeeper is loaded, jump to the start point,
 // load the videos and then pause, ready for play.
@@ -133,7 +133,6 @@ johng.tick(true, function(activeVideos, timestamp) {
                     // Add video object and title we just created to DOM
                     newPlayerContainer.appendChild(newPlayerTitle)
                     newPlayerContainer.appendChild(newPlayer)
-
                     document.querySelector("#videos").appendChild(newPlayerContainer);
 
                     // Create a source element for the video player

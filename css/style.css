@@ -5,21 +5,19 @@
 
 #videos {
     text-align: center;
-    width: 100%;
-    float: left;
+    width: 40%;
+    float: right;
 }
 
 #videos div {
     order: 3;
     float: left;
-    padding: 1em;
+    padding: .5em;
 }
 
 #videos video {
-    width: auto;
     width: 25wh;
     height: 10vw;
-    padding: 5em;
 }
 
 .videoTitle {
@@ -64,16 +62,17 @@ h2 {
     position: absolute;
     align-content: left;
     text-align: left;
-    left: 8%;
-    top: 8%;
+    font-size: 2vw;
+    margin: 6% 10% !important;
     color: #00ff00;
     font-family: 'VT323';
     font-size: 3vw;
+    padding: 0.25em !important;
 }
 
 #videoplayermain video {
-    margin-top: 6%;
-    width: 80%;
+    margin-top: 8%;
+    width: 73%;
 }
 
 #radio {
@@ -88,6 +87,10 @@ h2 {
 
 #radio #screen {
     font-family: 'VT323';
-    font-size: 2vw;
+    font-size: 1em;
     padding: 10% 25%;
+}
+
+#radio {
+    display: none;
 }
