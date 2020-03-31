@@ -6,25 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('videos', '0003_auto_20200220_0516'),
+        ('media', '0003_auto_20200220_0516'),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='video',
+            model_name='media',
             name='end_time',
         ),
         migrations.RemoveField(
-            model_name='video',
+            model_name='media',
             name='start_time',
         ),
         migrations.AlterField(
-            model_name='video',
+            model_name='media',
             name='end_date',
             field=models.DateTimeField(),
         ),
         migrations.AlterField(
-            model_name='video',
+            model_name='media',
             name='start_date',
             field=models.DateTimeField(),
         ),

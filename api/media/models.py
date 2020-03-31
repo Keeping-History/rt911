@@ -2,7 +2,7 @@ from django.db import models
 
 # Create your models here.
 
-class Video(models.Model):
+class Media(models.Model):
     start_date  = models.DateTimeField()
     end_date    = models.DateTimeField()
     tz          = models.CharField(max_length=4)

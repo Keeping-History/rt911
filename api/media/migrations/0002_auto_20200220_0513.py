@@ -6,17 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('videos', '0001_initial'),
+        ('media', '0001_initial'),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='video',
+            model_name='media',
             name='end_date',
             field=models.DateField(),
         ),
         migrations.AlterField(
-            model_name='video',
+            model_name='media',
             name='start_date',
             field=models.DateField(),
         ),

@@ -1,5 +1,5 @@
 from django.http import JsonResponse
-from .models import Video
+from .models import Media
 from datetime import datetime
 from datetime import timedelta
 from datetime import time
@@ -20,12 +20,12 @@ tzmap = {
 
 def index(request):
     data = list(
-        Video.objects.values()
+        Media.objects.values()
         .filter(start_date__day=11)
         .order_by('start_date')
     )
 
-    new_videos = []
+    new_media = []
 
     for vid in data:
         add_time_delta = tzmap[vid['tz']] + 4 # convert UTC to Eastern Standard Time
@@ -36,6 +36,6 @@ def index(request):
         vid['start'] = '{0}:{1}:59'.format(vid['start_date'].hour, vid['start_date'].minute)
         vid['end'] = '{0}:{1}:59'.format(vid['end_date'].hour, vid['end_date'].minute)
 
-        new_videos.append(vid)
+        new_media.append(vid)
 
-    return JsonResponse(new_videos, safe=False)
+    return JsonResponse(new_media, safe=False)
