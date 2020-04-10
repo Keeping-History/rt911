@@ -3,6 +3,11 @@
     width: 100%;
 }
 
+#timekeeper {
+    position: fixed;
+    z-index: 111;
+}
+
 #videos {
     text-align: center;
     width: 40%;
@@ -52,10 +57,10 @@ h2 {
     background-repeat: no-repeat;
     background-size: contain;
     text-align: center;
-    width: 80vw;
-    height: 50vw;
+    height: 46vw;
     float: left;
     width: 60%;
+    position: fixed;
 }
 
 #videoplayermain h2 {
@@ -71,8 +76,8 @@ h2 {
 }
 
 #videoplayermain video {
-    margin-top: 8%;
-    width: 73%;
+    margin-top: 5%;
+    width: 86%;
 }
 
 #radio {

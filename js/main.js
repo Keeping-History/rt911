@@ -9517,7 +9517,6 @@ johng.tick(true, function(activeVideos, timestamp) {
 
     // Show which players are not active but should be added
     let addPlayers = activeVideosList.filter(x => !activePlayersList.includes(x));
-    console.log(addPlayers);
 
     // And add them
     if (Array.isArray(addPlayers)) {
