@@ -16,6 +16,10 @@ class Media(models.Model):
 
     approved.boolean = True
 
+    class Meta:
+        ordering = ["start_date"]
+        verbose_name_plural = "media"
+
     def __str__(self):
         return self.full
 
