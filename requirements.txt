@@ -1,2 +1,6 @@
 django
 django-cors-headers
+mysqlclient
+django-mysql==3.4.0
+django-admin-rangefilter
+django-import-export

@@ -10,7 +10,7 @@
   ];
   var length = methods.length;
   var console = (window.console = window.console || {});
-  
+
   while (length--) {
     method = methods[length];
 
@@ -20,5 +20,21 @@
     }
   }
 }());
+
+function isPlaying(playerId) {
+  var player = document.getElementById(playerId);
+  return !player.paused && !player.ended && 0 < player.currentTime;
+}
+
+function pause_all_players() {
+  $("video, audio:not(#timekeeper").each(function () {
+    $(this).get(0).pause();
+  });
+}
+
+function set_player_time(dataItem) {
+  console.log($('#' + dataItem.vidid));
+  $('#' + dataItem.vidid).get(0).currentTime = johng.timestamp() - hmsToSeconds(dataItem.start) + dataItem.jump;
+}
 
 // Place any jQuery/helper plugins in here.

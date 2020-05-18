@@ -3,7 +3,6 @@ from internetarchive import search_items, get_item, get_files
 from pprint import pprint
 
 f = open("ful911-a.csv", "a")
-pprint(search_items('collection:"911"'))
 
 for i in search_items('collection:911'):
     item = get_item(i['identifier'])
@@ -19,7 +18,7 @@ for i in search_items('collection:911'):
         video_time = str(match.group())
 
     result = re.sub(r'(?: .*(?:((- )|( \- )|(to) )))', "-", video_time)
-    
+
     f.write(
         item.item_metadata['metadata']['title'] + ";" \
         + hashItem   + ";"  \

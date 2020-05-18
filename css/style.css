@@ -1,101 +1,111 @@
-#timekeeper,
-#outputHTML {
-    width: 100%;
+/* @override
+	http://127.0.0.1:5500/css/style.css */
+
+    #timekeeper,
+    #outputHTML {
+        width: 100%;
+    }
+
+    #timekeeper, #timekeeperHolder {
+        z-index: 112;
+    }
+
+    #timekeeperHolder {
+        width: 100%;
+        height: 3vh;
+    }
+
+    #filterHolder {
+        height: 2vh;
+    }
+
+    #videos {
+        float:  left;
+        text-align: center;
+        width: 100%;
+        overflow: scroll;
+        display: flex
+    }
+
+    #videos div {
+        order: 3;
+        float: left;
+        padding: .5em;
+   height: 5%; }
+
+    #videos video {
+        height: 10vh;
+    }
+
+    .videoTitle {
+        float: left;
+   }
+
+    #videos h2 {
+        color: white;
+        font-size: 1em;
+        font-family: 'VT323';
+        color: #00ff00;
+        background: rgba(0, 0, 0, .8);
+        z-index: 9999;
+        margin-bottom: -3vh;
+        position: relative;
+        margin-left: 1vw;
+        width: 4vw;
 }
 
-#timekeeper {
-    position: fixed;
-    z-index: 111;
-}
+    h2 {
+        background: rgba(0, 0, 0, .3)
+    }
 
-#videos {
-    text-align: center;
-    width: 40%;
-    float: right;
-}
+    #videoplayermain {
+        order: 1;
+        height: 0;
+        background: url("../img/tv.png");
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: contain;
+        text-align: center;
+        height: 44vw;
+        float: left;
+        width: 60%;
+    }
 
-#videos div {
-    order: 3;
-    float: left;
-    padding: .5em;
-}
+    #videoplayermain h2 {
+        position: absolute;
+        align-content: left;
+        text-align: left;
+        font-size: 2vw;
+        color: #00ff00;
+        font-family: 'VT323';
+        font-size: 3vw;
+        padding: 1vw !important;
+		left: 6vw;
+		top: 4vh;
+		float: none;
+    }
 
-#videos video {
-    width: 25wh;
-    height: 10vw;
-}
+    #videoplayermain video {
+        margin-top: 3vh;
+        width: 85%;
+    }
 
-.videoTitle {
-    float: left;
-}
+    #radio {
+        height: 20vw;
+        width: 40%;
+        float: left;
+        background: url('../img/radio.png');
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: contain;
+    }
 
-#videos h2 {
-    display: block;
-    position: absolute;
-    color: white;
-    font-size: 1em;
-    margin-left: 1%;
-    font-family: 'VT323';
-    color: #00ff00;
-    background: rgba(0, 0, 0, .8)
-}
+    #radio #screen {
+        font-family: 'VT323';
+        font-size: 1em;
+        padding: 10% 25%;
+    }
 
-video,
-h2 {
-    padding: 0 !important;
-}
-
-h2 {
-    background: rgba(0, 0, 0, .3)
-}
-
-#videoplayermain {
-    order: 1;
-    height: 0;
-    background: url("../img/tv.png");
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: contain;
-    text-align: center;
-    height: 46vw;
-    float: left;
-    width: 60%;
-    position: fixed;
-}
-
-#videoplayermain h2 {
-    position: absolute;
-    align-content: left;
-    text-align: left;
-    font-size: 2vw;
-    margin: 6% 10% !important;
-    color: #00ff00;
-    font-family: 'VT323';
-    font-size: 3vw;
-    padding: 0.25em !important;
-}
-
-#videoplayermain video {
-    margin-top: 5%;
-    width: 86%;
-}
-
-#radio {
-    height: 20vw;
-    width: 40%;
-    float: left;
-    background: url('../img/radio.png');
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: contain;
-}
-
-#radio #screen {
-    font-family: 'VT323';
-    font-size: 1em;
-    padding: 10% 25%;
-}
-
-#radio {
-    display: none;
-}
+    #radio {
+        display: none;
+    }

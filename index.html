@@ -14,7 +14,9 @@
     <link rel="stylesheet" href="css/normalize.css">
     <link rel="stylesheet" href="css/style.css">
     <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.16/mediaelementplayer.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.1.1.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.16/mediaelement-and-player.min.js"></script>
     <meta name="theme-color" content="#fafafa">
 </head>
 
@@ -23,18 +25,36 @@
     <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience and security.</p>
   <![endif]-->
 
-    <audio controls id="timekeeper">
-    <source src="media/out.mp3" type="audio/mpeg">
-    Your browser does not support the audio element.
-  </audio>
+    <div id="timekeeperHolder">
+        <audio controls id="timekeeper">
+            <source src="media/out.mp3" type="audio/mpeg">
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+    <div id="filterHolder">
+        <form id="filters">
+            <select name="day">
+                <option>9</option>
+                <option>10</option>
+                <option selected="selected">11</option>
+                <option>12</option>
+                <option>13</option>
+                <option>14</option>
+                <option>15</option>
+                <option>16</option>
+                <option>17</option>
+                <option>18</option>
+                <option>19</option>
+                <option>20</option>
+            </select>
+
+        </form>
+    </div>
 
     <div id="videoplayermain">
     </div>
 
-    <div id="radio">
-        <div id="screen">
-            <p id="lcd">Coming Soon...</p>
-        </div>
+    <div id="audios">
     </div>
 
     <div id="videos">

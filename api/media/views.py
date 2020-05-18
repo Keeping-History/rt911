@@ -1,41 +1,82 @@
-from django.http import JsonResponse
-from .models import Media
-from datetime import datetime
-from datetime import timedelta
-from datetime import time
-from pprint import pprint
+from datetime import datetime, timedelta, time
+import hashlib
 
-tzmap = {
-    'EDT': -4,
-    'CDT': -5,
-    'JST': 9,
-    'CEST': 2,
-    'BST': 1,
+from django.http import JsonResponse
+from django.db.models import Q
+from .models import Media
+
+# Map timezones to their UTC numerical difference
+timezone_map = {
+    'UTC': 0,
+    'PDT': -7,
     'MSD': 4,
+    'MDT': -6,
+    'JST': 9,
     'EEST': 3,
+    'EDT': -4,
     'CST': 8,
-    'ADT': -3
+    'CEST': 2,
+    'CDT': -3,
+    'BST': 1,
+    'ADT': -3,
 }
 
-
 def index(request):
+
+    # Create an array to hold our query filters
+    q = Q()
+
+    # Is the request a GET type?
+    if request.method == 'GET':
+
+        # If URL params are set, create the approrpriate Q query filter
+        if 'day' in request.GET:
+            q &= Q(start_date__day=request.GET['day'])
+        if 'network' in request.GET:
+            q &= Q(source=request.GET['network'])
+        if 'year' in request.GET:
+            q &= Q(start_date__year=request.GET['year'])
+        if 'month' in request.GET:
+            q &= Q(start_date__month=request.GET['month'])
+        if 'format' in request.GET:
+            q &= Q(format=request.GET['format'])
+
+    # Activate our (lazy) filters and get the actual data
     data = list(
         Media.objects.values()
-        .filter(start_date__day=11)
+        .filter(q)
         .order_by('start_date')
     )
 
+
+    # Create a holder for our view output
     new_media = []
 
-    for vid in data:
-        add_time_delta = tzmap[vid['tz']] + 4 # convert UTC to Eastern Standard Time
+    for media_item in data:
 
-        vid['start_date'] = vid['start_date'] + timedelta(hours=add_time_delta)
-        vid['end_date'] = vid['end_date'] + timedelta(hours=add_time_delta)
+        media_item['media_type'] =  media_item['format']
 
-        vid['start'] = '{0}:{1}:59'.format(vid['start_date'].hour, vid['start_date'].minute)
-        vid['end'] = '{0}:{1}:59'.format(vid['end_date'].hour, vid['end_date'].minute)
+        mediaTypes = {
+            'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg']),
+            'audio': set(['mp3', 'aac', 'ogg', 'flac', 'webm', 'wav']),
+            'html': set(['html']),
+            'iframe': set(['iframe']),
+            'image': set(['jpg', 'png', 'gif']),
+        }
+        for mediaType in mediaTypes:
+            if media_item['format'] in mediaTypes[mediaType]:
+                media_item['media_type'] = mediaType
 
-        new_media.append(vid)
+        media_item['duration'] = int((media_item['end_date'] - media_item['start_date']).total_seconds() - media_item['jump']  - media_item['trim'])
+
+        add_time_delta = timezone_map[media_item['tz']] + 4 # convert UTC to Eastern Standard Time
+
+        media_item['start_date'] = media_item['start_date'] + timedelta(hours=add_time_delta)
+        media_item['end_date'] = media_item['end_date'] + timedelta(hours=add_time_delta)
+
+        media_item['start'] = '{0}:{1}:00'.format(media_item['start_date'].hour, media_item['start_date'].minute)
+        media_item['end'] = '{0}:{1}:59'.format(media_item['end_date'].hour, media_item['end_date'].minute)
+        media_item['vidid'] = hashlib.md5(media_item['url'].encode("utf-8")).hexdigest()
+        new_media.append(media_item)
 
     return JsonResponse(new_media, safe=False)

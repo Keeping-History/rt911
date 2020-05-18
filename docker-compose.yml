@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  db:
+    image: mysql:5.7
+    ports:
+      - '3306:3306'
+    environment:
+       MYSQL_DATABASE: 'rt911'
+       MYSQL_USER: 'rt911'
+       MYSQL_PASSWORD: 'rt911'
+       MYSQL_ROOT_PASSWORD: 'rt911'
+  web:
+    build: .
+    command: bash -c "python api/manage.py makemigrations && python api/manage.py migrate && python api/manage.py loaddata fixtures/initial.json && python api/manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/rt911
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    restart: always
