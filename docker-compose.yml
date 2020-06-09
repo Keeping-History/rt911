@@ -12,7 +12,12 @@ services:
        MYSQL_ROOT_PASSWORD: 'rt911'
   web:
     build: .
-    command: bash -c "python api/manage.py makemigrations && python api/manage.py migrate && python api/manage.py loaddata fixtures/initial.json && python api/manage.py runserver 0.0.0.0:8000"
+    command: >
+        bash -c "python api/manage.py makemigrations &&
+        python api/manage.py migrate &&
+        python api/manage.py loaddata fixtures/initial.json &&
+        python api/manage.py shell -c 'from django.contrib.auth.models import User; User.objects.filter(email=\"rt911@robbiebyrd.com\").delete(); User.objects.create_superuser(\"rt911\", \"rt911@robbiebyrd.com\", \"rt911\")' &&
+        python api/manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/rt911
     ports:

@@ -40,6 +40,13 @@ class Media(models.Model):
         return hashlib.md5(self.url.encode("utf-8")).hexdigest()
 
     @property
+    def adminPlayer(self):
+        return '<{type} src="{src}"/>'.format(
+            type=self.format,
+            src=self.url,
+        )
+
+    @property
     def mediaType(self):
         mediaTypes = {
             'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg']),

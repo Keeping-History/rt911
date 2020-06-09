@@ -1,73 +1,44 @@
-<!doctype html>
-<html class="no-js" lang="">
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
     <meta charset="utf-8">
-    <title></title>
-    <meta name="description" content="">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>September 11 Terminal</title>
+    <meta name="author" content="Themesberg">
+    <meta name="description"
+        content="Windows 95 is a free Retro UI Kit to bring back the great memories of the 95's. Original Windows 95 Buttons, Icons, Windows, Tabs and many more await you!">
+    <meta name="keywords"
+        content="Windows 95, Windows 95 UI Kit, Windows 95 Buttons, Windows 95 Cards, Windows 95 Icons, Windows 95 Forms, Windows 95 Typography, Windows 95 Website, Retro Website, Bootstrap Retro, Themesberg" />
 
-    <link rel="manifest" href="site.webmanifest">
-    <link rel="apple-touch-icon" href="icon.png">
-    <!-- Place favicon.ico in the root directory -->
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://themesberg.com/product/ui-kits/windows-95-ui-kit">
+    <meta property="og:title" content="Windows 95 UI Kit">
+    <meta property="og:description"
+        content="Windows 95 is a free Retro UI Kit to bring back the great memories of the 95's. Original Windows 95 Buttons, Icons, Windows, Tabs and many more await you!">
+    <meta property="og:image"
+        content="https://themesberg.s3.us-east-2.amazonaws.com/public/products/windows-95/windows-95-ui-kit-preview.jpg">
 
-    <link rel="stylesheet" href="css/normalize.css">
-    <link rel="stylesheet" href="css/style.css">
-    <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.16/mediaelementplayer.min.css" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.1.1.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.16/mediaelement-and-player.min.js"></script>
-    <meta name="theme-color" content="#fafafa">
-</head>
-
-<body>
-    <!--[if IE]>
-    <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience and security.</p>
-  <![endif]-->
-
-    <div id="timekeeperHolder">
-        <audio controls id="timekeeper">
-            <source src="media/out.mp3" type="audio/mpeg">
-            Your browser does not support the audio element.
-        </audio>
-    </div>
-    <div id="filterHolder">
-        <form id="filters">
-            <select name="day">
-                <option>9</option>
-                <option>10</option>
-                <option selected="selected">11</option>
-                <option>12</option>
-                <option>13</option>
-                <option>14</option>
-                <option>15</option>
-                <option>16</option>
-                <option>17</option>
-                <option>18</option>
-                <option>19</option>
-                <option>20</option>
-            </select>
-
-        </form>
-    </div>
-
-    <div id="videoplayermain">
-    </div>
-
-    <div id="audios">
-    </div>
-
-    <div id="videos">
-    </div>
-
-    <script src="js/vendor/modernizr-3.8.0.min.js"></script>
-    <script src="js/memento.js"></script>
-    <script src="js/plugins.js"></script>
-    <script src="js/main.js"></script>
-
-    <!-- Google Analytics: change UA-XXXXX-Y to be your site's ID. -->
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://themesberg.com/product/ui-kits/windows-95-ui-kit">
+    <meta property="twitter:title" content="Windows 95 UI Kit">
+    <meta property="twitter:description"
+        content="Windows 95 is a free Retro UI Kit to bring back the great memories of the 95's. Original Windows 95 Buttons, Icons, Windows, Tabs and many more await you!">
+    <meta property="twitter:image"
+        content="https://themesberg.s3.us-east-2.amazonaws.com/public/products/windows-95/windows-95-ui-kit-preview.jpg">
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <meta name="msapplication-TileColor" content="#2d89ef">
+    <!-- Bootstrap CSS -->
+    <link type="text/css" rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.min.css">
+    <!-- Pixel CSS -->
+    <link type="text/css" rel="stylesheet" href="css/w95.css">
+    <!-- Google Analytics -->
     <script>
-        window.ga = function() {
+        window.ga = function () {
             ga.q.push(arguments)
         };
         ga.q = [];
@@ -77,6 +48,188 @@
         ga('send', 'pageview')
     </script>
     <script src="https://www.google-analytics.com/analytics.js" async></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js"></script>
+
+
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.15-rc1/mediaelementplayer.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.16/mediaelementplayer.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.1.1.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.16/mediaelement-and-player.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.min.js"></script>
+    <meta name="theme-color" content="#fafafa">
+</head>
+
+<body>
+    <audio controls id="timekeeper" class="handsoff">
+        <source src="media/out.mp3" type="audio/mpeg">
+        Your browser does not support the HTML audio element.
+    </audio>
+
+    <header class="header-global" style="height: 3vh;">
+        <nav id="navbar-main"
+            class="navbar d-flex flex-row align-items-center navbar-main navbar-expand-lg navbar-dark justify-content-between">
+            <ul class="navbar-nav navbar-nav-hover flex-row align-items-center">
+                <li class="nav-item">
+                    <div id="filterHolder">
+                        <form id="filters">
+                            <label for="day">🗓️</label>
+                            <select name="day" class="btn-primary">
+                                <option value=9>September 9</option>
+                                <option value=10>September 10</option>
+                                <option value=11 selected="selected">September 11</option>
+                                <option value=12>September 12</option>
+                                <option value=13>September 13</option>
+                                <option value=14>September 14</option>
+                                <option value=15>September 15</option>
+                                <option value=16>September 16</option>
+                                <option value=17>September 17</option>
+                                <option value=18>September 18</option>
+                                <option value=19>September 19</option>
+                                <option value=20>September 20</option>
+                            </select>
+                        </form>
+                    </div>
+                </li>
+                <li class="nav-item">
+                </li>
+                <li class="nav-item">
+                    <button id="playButton">Play</button>
+                </li>
+                <li class="nav-item">
+                    <button id="pauseButton">Pause</button>
+                </li>
+            </ul>
+            <div class="time text-center timeText">
+                <span class="time text-uppercase">??? ??</span>
+            </div>
+        </nav>
+    </header>
+    <main class="">
+        <!-- Hero -->
+        <section class="section bg-tertiary w-100 h-100 pt-3">
+            <div class="container-fluid">
+                <div class="row justify-content-center">
+                    <div class="col-8">
+                        <div class="card card-secondary" style="height: 80vh;">
+                            <div class="card-header text-center">
+                                <span>LIVE TV - NEW YORK CITY</span>
+                            </div>
+
+                            <div id="videoPlayerMainHolder" class="card-body">
+                                <div id="videoplayermain">
+                                </div>
+                            </div>
+
+                            <div id="videos"></div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card card-secondary">
+                            <div class="card-header text-center">
+                                <span>RADIO SCANNER</span>
+                            </div>
+
+                            <div class="card-body">
+                                <div id="audioplayermain">
+                                </div>
+                            </div>
+
+                            <div id="audios"></div>
+                        </div>
+                        <div class="card card-tertiary mt-3">
+                            <div class="card-header text-center">
+                                <div class="marquee">
+                                    <p>LIVE NEWS TICKER</p>
+                                </div>
+                            </div>
+
+                            <div class="card-body">
+                                <div id="texts"></div>
+                            </div>
+                            </div>
+
+
+                        </div>
+
+                    </div>
+               </div>
+            </div>
+        </section>
+        <!-- Hero -->
+    </main>
+    <footer style="height: 3vh; position: relative; bottom: 0;">
+        <nav id="navbar-footer"
+            class="navbar navbar-main navbar-expand-lg navbar-dark justify-content-between navbar-footer">
+            <ul class="navbar-nav navbar-nav-hover flex-row align-items-center">
+                <li class="nav-item" data-toggle="tooltip" data-placement="top" title="Tooltip on right">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">7:59 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">8:30 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">8:49 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">9:02 AM</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </footer>
+
+    <!-- Core -->
+    <script src="node_modules/popper.js/dist/umd/popper.min.js"></script>
+    <script src="node_modules/jquery/dist/jquery.min.js"></script>
+    <script src="node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
+    <script src="js/vendor/modernizr-3.8.0.min.js"></script>
+    <script src="js/memento.js"></script>
+    <script src="js/plugins.js"></script>
+    <script src="js/main.js"></script>
+
+    <!-- pixel JS -->
+    <script src="js/w95.js"></script>
+
 </body>
 
 </html>
+
+
+<!-- <!doctype html>
+<html class="no-js" lang="">
+
+<head>
+    <meta charset="utf-8">
+    <title></title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+
+    <div id="videoplayermain">
+    </div>
+
+    <div id="audioplayermain">
+    </div>
+
+    <div id="audios">
+    </div>
+
+
+</body>
+
+</html>
+-->

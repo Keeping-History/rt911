@@ -85,17 +85,27 @@ WSGI_APPLICATION = 'api.wsgi.application'
 #    }
 #}
 
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.mysql',
+#        'NAME': 'rt911',
+#        'USER': 'rt911',
+#        'PASSWORD': 'rt911',
+#        'HOST': 'db',
+#        'PORT': 3306,
+#    }
+#}
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'rt911',
         'USER': 'rt911',
-        'PASSWORD': 'rt911',
-        'HOST': 'db',
+        'PASSWORD': 'CT7SQzldZqwS2pinf6s9',
+        'HOST': 'rt911.cluster-ro-c5mg5ikbvlof.us-east-1.rds.amazonaws.com',
         'PORT': 3306,
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/3.0/ref/settings/#auth-password-validators

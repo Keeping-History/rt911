@@ -32,6 +32,7 @@ class MediaAdmin(ImportExportModelAdmin):
     actions = [approve_media]
     resource_class = MediaResource
 
+
 class TagAdmin(ImportExportModelAdmin):
     model = Tag
     list_display = ['name', 'description']
