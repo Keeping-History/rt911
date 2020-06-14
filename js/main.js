@@ -5,7 +5,7 @@
 // Midnight Easter Time, and runs to 11:59:59 PM the same day.
 //
 
-baseremoteurl = "http://localhost:8000/media/";
+baseremoteurl = "https://civil-clarity-280121.ue.r.appspot.com/media/";
 start = "08:37:00";
 var data = getData();
 

@@ -74,13 +74,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'api.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/2.1/ref/settings/#databases
 
 # Install PyMySQL as mysqlclient/MySQLdb to use Django's mysqlclient adapter
 # See https://docs.djangoproject.com/en/2.1/ref/databases/#mysql-db-api-drivers
 # for more information
+import pymysql  # noqa: 402
+pymysql.version_info = (1, 4, 6, 'final', 0)  # change mysqlclient version
+pymysql.install_as_MySQLdb()
 
 # [START db_setup]
 if os.getenv('GAE_APPLICATION', None):
@@ -105,7 +107,7 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'HOST': 'db',
+            'HOST': '127.0.0.1',
             'PORT': '3306',
             'NAME': 'rt911',
             'USER': 'rt911',
@@ -113,7 +115,6 @@ else:
         }
     }
 # [END db_setup]
-
 
 # Password validation
 # https://docs.djangoproject.com/en/3.0/ref/settings/#auth-password-validators
@@ -153,8 +154,9 @@ USE_TZ = True
 
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
-STATIC_URL = '/web/'
+STATIC_URL = '/static/'
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ORIGIN_WHITELIST = (
-    'http://localhost:8000',
+    'https://*',
+    'http://*',
 )

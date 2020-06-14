@@ -40,13 +40,15 @@ display: none;
     font-size: 1em;
     font-family: 'VT323';
     color: #00ff00;
-    padding-left: 1rem;
+    padding-left: .25rem;
     margin-left: .5rem;
     z-index: 9999;
     position: relative;
     text-align: left;
     top: 2.25rem;
     width: 50%;
+    overflow: hidden;
+    white-space: nowrap;
 }
 
 #videos h2, #videoplayermain h2 {
