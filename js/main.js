@@ -201,10 +201,9 @@ $(document).ready(function () {
         $('[data-toggle="tooltip"]').tooltip()
     })
     overlayOn();
-
-    document.getElementById('aol').addEventListener('ended', myHandler, false);
-    function myHandler(e) {
+    $('#aol').trigger("play");
+    $('#aol').on("ended", function(){
         overlayOff();
-    }
+    })
 
 });
