@@ -62,9 +62,9 @@ function addItems(currentItemsList, activeItemsList) {
                                 'type': dataItem.media_type + '/' + dataItem.format,
                                 'controls': true,
                                 'muted': false,
-                                'autoplay': false,
+                                'autoplay': true,
                                 'preload': 'auto',
-                                'media_volume': 1
+                                'media_volume': .5
                             });
 
                             var newMediaItemTitle = $('<h2 />')
@@ -94,6 +94,7 @@ function addItems(currentItemsList, activeItemsList) {
                     newMediaItem.prop("volume", $(newMediaItem).attr('media_volume'));
                     newMediaItem.prop("muted", $(newMediaItem).attr('muted'));
 
+                    newMediaItem.trigger('play');
                     // When mousing over a player, unmute it so we can hear.
                     $(newMediaItemContainer).mouseover(function () {
                         if ($('#' + playerId + '_div').hasClass("highlight") && (dataItem.media_type == 'video')) {
@@ -204,6 +205,10 @@ $(document).ready(function () {
     $('#aol').trigger("play");
     $('#aol').on("ended", function(){
         overlayOff();
+    })
+    $('#closepopup').on('click', function(){
+        overlayOff();
+        this.display('none');
     })
 
 });
