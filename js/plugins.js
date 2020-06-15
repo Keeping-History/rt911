@@ -22,7 +22,7 @@
 }());
 
 function setTimeAllPlayers() {
-  $('video, audio:not(.handsoff)').each(function () {
+  $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     $(this).get(0).currentTime = setPlayerTime(this);
   });
 }
@@ -33,19 +33,19 @@ function isPlaying(playerId) {
 }
 
 function pauseAllPlayers() {
-  $('video, audio:not(.handsoff)').each(function () {
+  $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     promise = $(this).get(0).pause();
   });
 }
 
 function playAllPlayers() {
-  $('video, audio:not(.handsoff)').each(function () {
+  $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     promise = $(this).get(0).play();
   });
 }
 
 function muteAllPlayers() {
-  $('video, audio:not(.handsoff)').each(function () {
+  $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     $(this).prop('muted', true);
   });
 }

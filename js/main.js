@@ -161,7 +161,7 @@ johng.tick(true, function (activeItems, timestamp) {
     let currentItemsList = [], activeItemsList = [], currentItems = [];
     $('.timeText').text(getCurrentTime());
     // We slice the currentItems list so we can an Array instead of an HTMLCollection
-    currentItems = Array.prototype.slice.call(document.querySelectorAll("div.embededHTML, video, audio:not(.handsoff)"));
+    currentItems = Array.prototype.slice.call(document.querySelectorAll("div.embededHTML, video:not(.handsoff), audio:not(.handsoff)"));
 
     // The activeItems is passed in to the function each time it is run
     activeItems.forEach(function (item) {
@@ -178,6 +178,13 @@ johng.tick(true, function (activeItems, timestamp) {
 
 });
 
+function overlayOn() {
+    document.getElementById("overlay").style.display = "block";
+}
+
+function overlayOff() {
+    document.getElementById("overlay").style.display = "none";
+}
 // Setup things when the document is ready
 $(document).ready(function () {
     // If updating form fields, add their changes to the URL
@@ -193,4 +200,11 @@ $(document).ready(function () {
     $(function () {
         $('[data-toggle="tooltip"]').tooltip()
     })
+    overlayOn();
+
+    document.getElementById('aol').addEventListener('ended', myHandler, false);
+    function myHandler(e) {
+        overlayOff();
+    }
+
 });
