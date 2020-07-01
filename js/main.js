@@ -78,7 +78,7 @@ function addItems(currentItemsList, activeItemsList) {
                                     'id': playerId
                                 })
                                     .addClass('embededHTML')
-                                    .text(dataItem.full);
+                                    .text(dataItem.full_title);
 
                                 var newMediaItemTitle = $()
                                     .text(dataItem.source);
