@@ -3,13 +3,13 @@
 
 # TEAM
 
-    <name> -- <role> -- <twitter>
+    Robbie Byrd -- Developer -- @robbie_byrd
 
 # THANKS
 
-    <name>
+    Internet Archive (http://www.archive.org)
+    The History Commons (http://www.historycommons.org)
 
 # TECHNOLOGY COLOPHON
 
     CSS3, HTML5
-    Apache Server Configs, jQuery, Modernizr, Normalize.css

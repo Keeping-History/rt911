@@ -101,6 +101,10 @@ display: none;
     display: none;
 }
 
+#audios {
+    height: 20%;
+    display: flex;
+}
 #audios * h2 {
     font-size: 1rem !important;
 }
@@ -166,4 +170,14 @@ main {
 
 #aol {
     z-index: 99;
+}
+
+#htmls {
+        height: 68vh;
+        overflow: scroll;
+}
+
+.small,
+small {
+    font-size: 20%;
 }

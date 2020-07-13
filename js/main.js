@@ -6,7 +6,7 @@
 //
 
 baseremoteurl = "https://civil-clarity-280121.ue.r.appspot.com/media/";
-start = "08:37:00";
+start = "08:16:35";
 var data = getData();
 
 window.data.forEach(function (item) {
@@ -25,7 +25,6 @@ function addItems(currentItemsList, activeItemsList) {
         // Ok, so addPlayers is an actual Array, so we can loop over it
         addPlayers.forEach(
             function (playerId) {
-
                 // Does a player window with the same ID already exist?
                 var doesPlayerExist = document.getElementById(playerId);
 
@@ -37,7 +36,7 @@ function addItems(currentItemsList, activeItemsList) {
                     var newMediaItemContainer = $('<div/>')
                         .attr("id", playerId + '_div')
 
-                    switch (dataItem.media_type) {
+                        switch (dataItem.media_type) {
 
                         case 'video':
                             var newMediaItem = $('<video />', {
@@ -46,9 +45,10 @@ function addItems(currentItemsList, activeItemsList) {
                                 'type': dataItem.media_type + '/' + dataItem.format,
                                 'controls': false,
                                 'muted': true,
-                                'autoplay': false,
-                                'preload': 'auto'
+                                'preload': 'auto',
+                                'class': '',
                             });
+
                             var newMediaItemTitle = $('<h2 />')
                                 .attr("id", playerId + '_title')
                                 .text(dataItem.source);
@@ -61,48 +61,62 @@ function addItems(currentItemsList, activeItemsList) {
                                 'src': dataItem.url,
                                 'type': dataItem.media_type + '/' + dataItem.format,
                                 'controls': true,
-                                'muted': false,
                                 'autoplay': true,
-                                'preload': 'auto',
-                                'media_volume': .5
-                            });
+                                'media_volume': .5,
+                                'class': '',
+                          });
 
                             var newMediaItemTitle = $('<h2 />')
                                 .attr("id", playerId + '_title')
-                                .text(dataItem.source);
+                                .text(dataItem.source + ' - ' + dataItem.title);
 
                             break;
 
-                            default:
-                                var newMediaItem = $('<div />', {
-                                    'id': playerId
-                                })
-                                    .addClass('embededHTML')
-                                    .text(dataItem.full_title);
+                        case 'html':
+                            var newMediaItem = $('<div />', {
+                                'id': playerId
+                            })
+                                .addClass('embededHTML')
+                                .html(dataItem.content);
+                                newMediaItem.prepend($('<img />',  {
+                                    'src': dataItem.image,
+                                    'style': 'float: right; width: 10%'
+                                }))
+                            var newMediaItemTitle = $('<h6 />')
+                                .text(formatTime(dataItem.start_date) + ' - ' + dataItem.title);
 
-                                var newMediaItemTitle = $()
-                                    .text(dataItem.source);
+
+                            break
+
+                        default:
+                            var newMediaItem = $('<div />', {
+                                'id': playerId
+                            })
+                                .addClass('embededHTML')
+                                .text(dataItem.full_title);
+
+                            var newMediaItemTitle = $()
+                                .text(dataItem.source);
 
                     };
+
+
 
                     // Add video object and title we just created to DOM
                     newMediaItemTitle.appendTo($(newMediaItemContainer));
                     newMediaItem.appendTo($(newMediaItemContainer));
-                    newMediaItemContainer.appendTo("#" + dataItem.media_type + "s");
+                    newMediaItemContainer.prependTo("#" + dataItem.media_type + "s");
 
                     newMediaItem[0].currentTime = johng.timestamp() - hmsToSeconds(dataItem.start) + dataItem.jump;
                     newMediaItem.prop("volume", $(newMediaItem).attr('media_volume'));
                     newMediaItem.prop("muted", $(newMediaItem).attr('muted'));
 
-                    newMediaItem.trigger('play');
+                    // TODO: We're not doing anything with the promise right now, but will need to later
+                    playPromise = newMediaItem.trigger('play').promise();
+
                     // When mousing over a player, unmute it so we can hear.
                     $(newMediaItemContainer).mouseover(function () {
                         if ($('#' + playerId + '_div').hasClass("highlight") && (dataItem.media_type == 'video')) {
-                            $('#' + playerId).prop('muted', false);
-                        } else if (dataItem.media_type == 'audio') {
-                            $('#' + playerId).prop('muted', false);
-                        }
-                        else {
                             $('#' + playerId).prop('muted', false);
                         }
                     });
@@ -112,27 +126,23 @@ function addItems(currentItemsList, activeItemsList) {
                     $(newMediaItemContainer).mouseout(function () {
                         if ($('#' + playerId + '_div').hasClass("highlight") && (dataItem.media_type == 'video')) {
                             $('#' + playerId).prop('muted', false);
-                        } else if (dataItem.media_type == 'audio') {
-                            $('#' + playerId).prop('muted', false);
-                        }
-                        else {
-                            $('#' + playerId).prop('muted', $('#' + playerId).attr('muted'));
                         }
                     });
 
                     // When clicking a player, make it the main video player,
                     $(newMediaItemContainer).click(function () {
-                        $('#' + dataItem.media_type + 'playermain').children().prependTo('#' + dataItem.media_type + 's');
-                        $('#' + playerId).prop('muted', $('#' + playerId).attr('muted'));
-                        if ($('#' + playerId + '_div').hasClass("highlight")) {
-                            $('div').removeClass("highlight");
-                        } else {
-                            $('div').removeClass("highlight");
-                            $('#' + dataItem.media_type + 's').find(dataItem.media_type).prop('muted', true);
-                            $('#' + playerId + '_div').prependTo('#' + dataItem.media_type + 'playermain')
-                                .addClass("highlight");
-                            $('#' + playerId).prop('muted', false);
-                        }
+                        if ((dataItem.media_type == 'video')) {
+                            $('#' + dataItem.media_type + 'playermain').children().prependTo('#' + dataItem.media_type + 's');
+                            $('#' + playerId).prop('muted', $('#' + playerId).attr('muted'));
+                            if ($('#' + playerId + '_div').hasClass("highlight")) {
+                                $('div').removeClass("highlight");
+                            } else {
+                                $('div').removeClass("highlight");
+                                $('#' + dataItem.media_type + 's').find(dataItem.media_type).prop('muted', true);
+                                $('#' + playerId + '_div').prependTo('#' + dataItem.media_type + 'playermain')
+                                    .addClass("highlight");
+                                $('#' + playerId).prop('muted', false);
+                            }}
                         return false;
                     });
 
@@ -185,6 +195,7 @@ function overlayOn() {
 
 function overlayOff() {
     document.getElementById("overlay").style.display = "none";
+    document.getElementById("closepopupbutton").style.display = "none";
 }
 // Setup things when the document is ready
 $(document).ready(function () {
@@ -201,11 +212,12 @@ $(document).ready(function () {
     $(function () {
         $('[data-toggle="tooltip"]').tooltip()
     })
-    overlayOn();
-    $('#aol').trigger("play");
+    //overlayOn();
+    //$('#aol').trigger("play");
     $('#aol').on("ended", function(){
         overlayOff();
     })
+
     $('#closepopup').on('click', function(){
         overlayOff();
         this.display('none');

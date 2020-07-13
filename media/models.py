@@ -19,16 +19,16 @@ class Media(models.Model):
     tz = models.CharField(max_length=4)
     title = models.CharField(max_length=255)
     source = models.CharField(max_length=255)
-    url = models.URLField()
+    url = models.URLField(default=None)
     format = models.CharField(max_length=10)
     full_title = models.CharField(max_length=255)
-    content = models.TextField(default="")
+    content = models.TextField(default=None)
     approved = models.BooleanField(default=False)
     jump = models.IntegerField(default=0)
     trim = models.IntegerField(default=0)
     tags = models.ManyToManyField(Tag)
-    image = models.URLField()
-    image_caption = models.TextField(default="")
+    image = models.URLField(default=None)
+    image_caption = models.TextField(default=None)
 
     approved.boolean = True
 
@@ -42,7 +42,7 @@ class Media(models.Model):
 
     @property
     def vidid(self):
-        return hashlib.md5(self.url.encode("utf-8")).hexdigest()
+        return 'm' + hashlib.md5(self.url.encode("utf-8")).hexdigest()
 
     @property
     def adminPlayer(self):

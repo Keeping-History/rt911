@@ -76,7 +76,7 @@ def index(request):
 
         media_item['start'] = '{0}:{1}:{2}'.format(media_item['start_date'].hour, media_item['start_date'].minute, media_item['start_date'].second)
         media_item['end'] = '{0}:{1}:{2}'.format(media_item['end_date'].hour, media_item['end_date'].minute, media_item['end_date'].second)
-        media_item['vidid'] = hashlib.md5(media_item['url'].encode("utf-8")).hexdigest()
+        media_item['vidid'] = 'm' + hashlib.md5(media_item['url'].encode("utf-8")).hexdigest()
         new_media.append(media_item)
 
     return JsonResponse(new_media, safe=False)

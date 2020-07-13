@@ -1,3 +1,5 @@
 .history/
 *.code-workspace
 .vscode/
+cloud_sql_proxy
+start_db.sh

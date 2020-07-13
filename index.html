@@ -50,27 +50,30 @@
     <script src="https://www.google-analytics.com/analytics.js" async></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js"></script>
 
-
     <link rel="manifest" href="site.webmanifest">
     <link rel="apple-touch-icon" href="img/icon.png">
 
     <link rel="stylesheet" href="css/style.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.15-rc1/mediaelementplayer.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.16/mediaelementplayer.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.1.1.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mediaelement/4.2.16/mediaelement-and-player.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.min.js"></script>
+    <link href="https://vjs.zencdn.net/7.8.3/video-js.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/videojs-wavesurfer@3.2.0/dist/css/videojs.wavesurfer.min.css" />
+    <script src="https://vjs.zencdn.net/7.8.3/video.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-wavesurfer@3.2.0/dist/videojs.wavesurfer.min.js"></script>
+
     <meta name="theme-color" content="#fafafa">
 </head>
 
-<body>
+<body><iframe src="https://github.com/anars/blank-audio/blob/master/250-milliseconds-of-silence.mp3" allow="autoplay"
+        id="audio" style="display: none"></iframe>
+
     <audio controls id="timekeeper" class="handsoff">
         <source src="rsrc/out.mp3" type="audio/mpeg">
         Your browser does not support the HTML audio element.
     </audio>
 
-    <header class="header-global" style="height: 3vh;">
+    <header class="header-global">
         <nav id="navbar-main"
             class="navbar d-flex flex-row align-items-center navbar-main navbar-expand-lg navbar-dark justify-content-between">
             <ul class="navbar-nav navbar-nav-hover flex-row align-items-center">
@@ -103,9 +106,50 @@
                 <li class="nav-item">
                     <button id="pauseButton">Pause</button>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item" id="closepopupbutton">
                     <button id="closepopup">Close AOL Connect</button>
                 </li>
+
+
+                <li class="nav-item">
+                    <button id="rewind4" class="ffrw" data-skip=-1800>
+                        <<<< </button> </li>
+                <li class="nav-item">
+                    <button id="rewind3" class="ffrw" data-skip=-300>
+                        <<< </button> </li>
+
+                <li class="nav-item">
+                    <button id="rewind2" class="ffrw" data-skip=-60>
+                        <<
+                    </button>
+                </li>
+
+                                <li class="nav-item">
+                                    <button id="rewind1" class="ffrw" data-skip=-30>
+                                        < </button> </li>
+
+                <li class="nav-item">
+                    <button id="forward1" class="ffrw" data-skip=30>
+                         >
+                    </button>
+                </li>
+
+                <li class="nav-item">
+                    <button id="forward2" class="ffrw" data-skip=60>
+                        >>
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button id="forward3" class="ffrw" data-skip=300>
+                        >>>
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button id="forward4" class="ffrw" data-skip=1800>
+                        >>>>
+                    </button>
+                </li>
+
            </ul>
             <div class="time text-center timeText">
                 <span class="time text-uppercase">??? ??</span>
@@ -153,7 +197,7 @@
                             </div>
 
                             <div class="card-body">
-                                <div id="texts"></div>
+                                <div id="htmls"></div>
                             </div>
                             </div>
 
@@ -173,8 +217,7 @@
                     <div class="row justify-content-center">
                         <div class="col-7">
                             <div class="card card-secondary" style="height: 80vh;">
-                                <video id="aol" class="handsoff" width="100%" height="100%" controls="false"" autoplay="
-                                    false" poster="rsrc/signin.jpg">
+                                <video id="aol" class="handsoff" width="100%" height="100%" controls="false"" poster="rsrc/signin.jpg">
                                     <source src="rsrc/signin.mp4" type="video/mp4" />
                                 </video>
                             </div>
@@ -185,7 +228,7 @@
 
         </div>
 
-    <footer style="height: 3vh; position: relative; bottom: 0;">
+    <footer style="position: relative; bottom: 0;">
         <nav id="navbar-footer"
             class="navbar navbar-main navbar-expand-lg navbar-dark justify-content-between navbar-footer">
             <ul class="navbar-nav navbar-nav-hover flex-row align-items-center">

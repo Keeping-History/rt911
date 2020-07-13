@@ -106,15 +106,26 @@ function updateData() {
 }
 
 function preloadAudioFile(url) {
-  a = $('<audio />')
+    a = $('<audio />')
     .attr('src', url)
-    .attr('preload', true)
-    .attr('autoplay', false)
-    .attr('muted', true)
-    .appendTo('body')
+    .attr('preload', '')
+    .attr('muted', 'muted')
     .css('display', 'none')
-    .addClass('handsoff');
+    .addClass('handsoff')
+    .appendTo('body');
 };
+
+function formatTime(date) {
+  date = Date.parse(date)
+  var hours = date.getHours();
+  var minutes = date.getMinutes();
+  var ampm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  minutes = minutes < 10 ? '0' + minutes : minutes;
+  var strTime = hours + ':' + minutes + ' ' + ampm;
+  return (strTime)
+}
 
 
 function addTimelineListeners() {
@@ -228,5 +239,11 @@ $("#pauseButton").on("click", function () {
 });
 
 $('.nav-link').on("click", function () {
+  pauseAllPlayers();
   jumpIt(convert12Hto24H(this.text));
 })
+
+$('.ffrw').on("click", function () {
+  var timekeeper = $('#timekeeper').get(0);
+  timekeeper.currentTime = timekeeper.currentTime + $(this).data("skip");
+});
