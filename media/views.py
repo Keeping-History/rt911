@@ -33,7 +33,8 @@ def index(request):
         if 'day' in request.GET:
             q &= Q(start_date__day=request.GET['day'])
         if 'network' in request.GET:
-            q &= Q(source=request.GET['network'])
+            if request.GET['network'] != '':
+                q &= Q(source=request.GET['network'])
         if 'year' in request.GET:
             q &= Q(start_date__year=request.GET['year'])
         if 'month' in request.GET:

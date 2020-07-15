@@ -11,12 +11,11 @@ display: none;
 #filterHolder {
     height: 2vh;
 }
-
 #videos {
     float: left;
     text-align: center;
     width: 98%;
-    overflow-y: scroll;
+    overflow-x: scroll;
     display: flex;
     padding: 1vw;
 }
@@ -137,16 +136,6 @@ main {
     height: 94vh;
 }
 
-::-webkit-scrollbar {
-    -webkit-appearance: none;
-    width: 0px;
-}
-
-::-webkit-scrollbar-thumb {
-    border-radius: 8px;
-    background-color: rgba(0, 0, 0, .5);
-}
-
 #overlay {
     position: fixed;
     /* Sit on top of the page content */
@@ -173,11 +162,40 @@ main {
 }
 
 #htmls {
-        height: 68vh;
-        overflow: scroll;
+    height: 68vh;
+    width: 98%;
+    overflow-y: scroll;
+    padding: 1vw;
 }
+
 
 .small,
 small {
     font-size: 20%;
+}
+
+footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+}
+
+div {
+    scrollbar-width: think;
+    scrollbar-color: gray black;
+}
+
+/* Works on Chrome/Edge/Safari */
+div::-webkit-scrollbar {
+    width: 20px;
+}
+
+div::-webkit-scrollbar-track {
+    background: black;
+}
+
+div::-webkit-scrollbar-thumb {
+    background-color: black;
+    border-radius: 0;
+    border: 20px solid white;
 }
