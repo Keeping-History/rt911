@@ -6,12 +6,12 @@
 //
 
 baseremoteurl = "https://civil-clarity-280121.ue.r.appspot.com/media/";
-start = "08:16:35";
+start = "08:49:35";
 var data = getData();
 
 window.data.forEach(function (item) {
     if (item.media_type == 'audio') {
-        preloadAudioFile(item.url);
+        //preloadAudioFile(item.url);
     }
 }
 )
@@ -30,19 +30,19 @@ function addItems(currentItemsList, activeItemsList) {
 
                 if (!doesPlayerExist) {
                     // Grab the video data item because we need it
-                    var dataItem = data.find(data => data.vidid === playerId);
+                    var mediaItem = data.find(data => data.vidid === playerId);
 
                     // If not, then let's create a container...
                     var newMediaItemContainer = $('<div/>')
                         .attr("id", playerId + '_div')
 
-                        switch (dataItem.media_type) {
+                        switch (mediaItem.media_type) {
 
                         case 'video':
                             var newMediaItem = $('<video />', {
                                 'id': playerId,
-                                'src': dataItem.url,
-                                'type': dataItem.media_type + '/' + dataItem.format,
+                                'src': mediaItem.url,
+                                'type': mediaItem.media_type + '/' + mediaItem.format,
                                 'controls': false,
                                 'muted': true,
                                 'preload': 'auto',
@@ -51,24 +51,24 @@ function addItems(currentItemsList, activeItemsList) {
 
                             var newMediaItemTitle = $('<h2 />')
                                 .attr("id", playerId + '_title')
-                                .text(dataItem.source);
+                                .text(mediaItem.source);
 
                             break;
 
                         case 'audio':
                             var newMediaItem = $('<audio />', {
                                 'id': playerId,
-                                'src': dataItem.url,
-                                'type': dataItem.media_type + '/' + dataItem.format,
+                                'src': mediaItem.url,
+                                'type': mediaItem.media_type + '/' + mediaItem.format,
                                 'controls': true,
-                                'autoplay': true,
-                                'media_volume': .5,
+                                'autoplay': false,
+                                'media_volume': mediaItem.volume,
                                 'class': '',
                           });
 
                             var newMediaItemTitle = $('<h2 />')
                                 .attr("id", playerId + '_title')
-                                .text(dataItem.source + ' - ' + dataItem.title);
+                                .text(mediaItem.source + ' - ' + mediaItem.title);
 
                             break;
 
@@ -77,27 +77,27 @@ function addItems(currentItemsList, activeItemsList) {
                                 'id': playerId
                             })
                                 .addClass('embededHTML')
-                                .html(dataItem.content);
+                                .html(mediaItem.content);
                                 newMediaItem.prepend($('<img />',  {
-                                    'src': dataItem.image,
-                                    'style': 'float: right; width: 10%'
+                                    'src': mediaItem.image,
+                                    'style': 'float: right; width: 35%'
                                 }))
                             var newMediaItemTitle = $('<h6 />')
-                                .text(formatTime(dataItem.start_date) + ' - ' + dataItem.title);
+                                .text(formatTime(mediaItem.start_date) + ' - ' + mediaItem.title);
 
-
-                            break
+                            break;
 
                         default:
                             var newMediaItem = $('<div />', {
                                 'id': playerId
                             })
                                 .addClass('embededHTML')
-                                .text(dataItem.full_title);
+                                .text(mediaItem.full_title)
 
                             var newMediaItemTitle = $()
-                                .text(dataItem.source);
+                                .text(mediaItem.source);
 
+                            break;
                     };
 
 
@@ -105,18 +105,27 @@ function addItems(currentItemsList, activeItemsList) {
                     // Add video object and title we just created to DOM
                     newMediaItemTitle.appendTo($(newMediaItemContainer));
                     newMediaItem.appendTo($(newMediaItemContainer));
-                    newMediaItemContainer.prependTo("#" + dataItem.media_type + "s");
-
-                    newMediaItem[0].currentTime = johng.timestamp() - hmsToSeconds(dataItem.start) + dataItem.jump;
+                    newMediaItemContainer.prependTo("#" + mediaItem.media_type + "s");
+                    newMediaItem[0].currentTime = johng.timestamp() - hmsToSeconds(mediaItem.start) + mediaItem.jump;
                     newMediaItem.prop("volume", $(newMediaItem).attr('media_volume'));
                     newMediaItem.prop("muted", $(newMediaItem).attr('muted'));
+
+                    if (mediaItem.media_type == 'html') {
+                        newMediaItem.readmore({
+                            collapsedHeight: 0,
+                            speed: 75,
+                            lessLink: '<button class="btn mr-2 mb-2 btn-primary" type="button"><span class="btn-text"><a href="#">Read Less</a></span></button>',
+                            moreLink: '<button class="btn mr-2 mb-2 btn-primary" type="button"><span class="btn-text"><a href="#">Read More</a></span></button>',
+                            blockCSS: 'display: block; float: right;'
+                        })
+                    }
 
                     // TODO: We're not doing anything with the promise right now, but will need to later
                     playPromise = newMediaItem.trigger('play').promise();
 
                     // When mousing over a player, unmute it so we can hear.
                     $(newMediaItemContainer).mouseover(function () {
-                        if ($('#' + playerId + '_div').hasClass("highlight") && (dataItem.media_type == 'video')) {
+                        if ($('#' + playerId + '_div').hasClass("highlight") && (mediaItem.media_type == 'video')) {
                             $('#' + playerId).prop('muted', false);
                         }
                     });
@@ -124,22 +133,22 @@ function addItems(currentItemsList, activeItemsList) {
                     // When mousing out of a player, mute it again,
                     // unless it is our main video, in which case don't mute.
                     $(newMediaItemContainer).mouseout(function () {
-                        if ($('#' + playerId + '_div').hasClass("highlight") && (dataItem.media_type == 'video')) {
+                        if ($('#' + playerId + '_div').hasClass("highlight") && (mediaItem.media_type == 'video')) {
                             $('#' + playerId).prop('muted', false);
                         }
                     });
 
                     // When clicking a player, make it the main video player,
                     $(newMediaItemContainer).click(function () {
-                        if ((dataItem.media_type == 'video')) {
-                            $('#' + dataItem.media_type + 'playermain').children().prependTo('#' + dataItem.media_type + 's');
+                        if ((mediaItem.media_type == 'video')) {
+                            $('#' + mediaItem.media_type + 'playermain').children().prependTo('#' + mediaItem.media_type + 's');
                             $('#' + playerId).prop('muted', $('#' + playerId).attr('muted'));
                             if ($('#' + playerId + '_div').hasClass("highlight")) {
                                 $('div').removeClass("highlight");
                             } else {
                                 $('div').removeClass("highlight");
-                                $('#' + dataItem.media_type + 's').find(dataItem.media_type).prop('muted', true);
-                                $('#' + playerId + '_div').prependTo('#' + dataItem.media_type + 'playermain')
+                                $('#' + mediaItem.media_type + 's').find(mediaItem.media_type).prop('muted', true);
+                                $('#' + playerId + '_div').prependTo('#' + mediaItem.media_type + 'playermain')
                                     .addClass("highlight");
                                 $('#' + playerId).prop('muted', false);
                             }}

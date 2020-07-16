@@ -29,6 +29,7 @@ class Media(models.Model):
     tags = models.ManyToManyField(Tag)
     image = models.URLField(default=None)
     image_caption = models.TextField(default=None)
+    volume = models.DecimalField(max_digits=5, decimal_places=2, default=1.0)
 
     approved.boolean = True
 
@@ -53,7 +54,7 @@ class Media(models.Model):
 
     @property
     def contentPlain(self):
-        return BeautifulSoup(self.content, "lxml").text
+        return BeautifulSoup(self.content, "html.parser").text
 
     @property
     def mediaType(self):
