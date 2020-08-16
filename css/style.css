@@ -102,8 +102,14 @@ display: none;
 
 #audios {
     height: 20%;
-    display: flex;
+    display: block;
+    width: 100%;
 }
+
+#audios audio {
+    width: 100%;
+}
+
 #audios * h2 {
     font-size: 1rem !important;
 }

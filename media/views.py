@@ -3,7 +3,7 @@ import hashlib
 
 from django.http import JsonResponse
 from django.db.models import Q
-from .models import Media
+from .models import Media, Tag, TagType
 
 # Map timezones to their UTC numerical difference
 timezone_map = {
@@ -81,3 +81,67 @@ def index(request):
         new_media.append(media_item)
 
     return JsonResponse(new_media, safe=False)
+
+
+def networks(request):
+
+    # Activate our (lazy) filters and get the actual data
+    data = list(
+        Media.objects.values()
+    )
+
+   # Create a holder for our view output
+    networks = []
+
+    for item in data:
+        networks.append(item['source'])
+
+    return JsonResponse(list(dict.fromkeys(networks)), safe=False)
+
+
+def formats(request):
+
+    # Activate our (lazy) filters and get the actual data
+    data = list(
+        Media.objects.values()
+    )
+
+   # Create a holder for our view output
+    formats = []
+
+    for item in data:
+        formats.append(item['format'])
+
+    return JsonResponse(list(dict.fromkeys(formats)), safe=False)
+
+
+def tags(request):
+
+    # Activate our (lazy) filters and get the actual data
+    data = list(
+        Tag.objects.values()
+    )
+
+   # Create a holder for our view output
+    tags = []
+
+    for item in data:
+        tags.append(item['description'])
+
+    return JsonResponse(list(dict.fromkeys(tags)), safe=False)
+
+
+def tag_types(request):
+
+    # Activate our (lazy) filters and get the actual data
+    data = list(
+        TagType.objects.values()
+    )
+
+   # Create a holder for our view output
+    tag_types = []
+
+    for item in data:
+        tag_types.append(item['name'])
+
+    return JsonResponse(list(dict.fromkeys(tag_types)), safe=False)

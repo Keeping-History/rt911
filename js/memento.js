@@ -1,7 +1,7 @@
 (function() {
 
     'use strict';
-  
+
     // function factory
     var memento;
     memento = function() {
@@ -372,14 +372,14 @@
       // return results of the factory
       return func;
     };
-  
+
     // attach factory to global scope
     if (!window.memento) {
       window.memento = memento;
     } else if (!window.memento_factory) {
       window.memento_factory = memento;
     } else {
-      console.log('could not expose memento.js because global variables named "memento" and "memento_factory" already exist');
+      alert('could not expose memento.js because global variables named "memento" and "memento_factory" already exist');
     }
-  
+
   }).call(this);

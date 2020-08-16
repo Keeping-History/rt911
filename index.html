@@ -8,36 +8,29 @@
     <meta name="author" content="Robbie Byrd">
     <meta name="description"
         content="A collection and recreation of media and events on the day of and around September 11, 2001.">
-    <meta name="keywords"
-        content="September 11 2001, 9/11, New York, Twin Towers, Trade Towers, World Trade Center" />
-
-    <!-- Open Graph / Facebook -->
+    <meta name="keywords" content="September 11 2001, 9/11, New York, Twin Towers, Trade Towers, World Trade Center" />
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://github.org/robbiebyrd/rt911">
     <meta property="og:title" content="September 11 in Realtime">
     <meta property="og:description"
         content="A collection and recreation of media and events on the day of and around September 11, 2001.">
-    <meta property="og:image"
-        content="rsrc/signin.jpg">
-
-    <!-- Twitter -->
+    <meta property="og:image" content="rsrc/signin.jpg">
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://github.org/robbiebyrd/rt911">
     <meta property="twitter:title" content="September 11 in Realtime">
     <meta property="twitter:description"
         content="A collection and recreation of media and events on the day of and around September 11, 2001.">
-    <meta property="twitter:image"
-        content="rsrc/signin.jpg">
-    <!-- Favicon -->
+    <meta property="twitter:image" content="rsrc/signin.jpg">
     <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png">
     <meta name="msapplication-TileColor" content="#2d89ef">
-    <!-- Bootstrap CSS -->
-    <link type="text/css" rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.min.css">
-    <!-- Pixel CSS -->
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="apple-touch-icon" href="img/icon.png">
+
+    <link type="text/css" rel="stylesheet" href="css/vendor/bootstrap.min.css">
     <link type="text/css" rel="stylesheet" href="css/w95.css">
-    <!-- Google Analytics -->
-    <script>
+    <link rel="stylesheet" href="css/style.css">
+   <script>
         window.ga = function () {
             ga.q.push(arguments)
         };
@@ -49,27 +42,19 @@
     </script>
     <script src="https://www.google-analytics.com/analytics.js" async></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js"></script>
-
-    <link rel="manifest" href="site.webmanifest">
-    <link rel="apple-touch-icon" href="img/icon.png">
-
-    <link rel="stylesheet" href="css/style.css">
     <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.js" integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc=" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/readmore-js@2.2.1/readmore.min.js"></script>
-
-    <meta name="theme-color" content="#fafafa">
+    <meta name="theme-color" content="#000181">
 </head>
 
-<body><iframe src="https://github.com/anars/blank-audio/blob/master/250-milliseconds-of-silence.mp3" allow="autoplay"
-        id="audio" style="display: none"></iframe>
-
+<body>
+     <div id="preloads" class="hidden"></div>
     <audio controls id="timekeeper" class="handsoff">
         <source src="rsrc/out.mp3" type="audio/mpeg">
         Your browser does not support the HTML audio element.
     </audio>
-
     <header class="header-global">
         <nav id="navbar-main"
             class="navbar d-flex flex-row align-items-center navbar-main navbar-expand-lg navbar-dark justify-content-between">
@@ -92,18 +77,21 @@
                                 <option value=19>September 19</option>
                                 <option value=20>September 20</option>
                             </select>
-
-                            <label for="network">📺 </label>
+                            <label for="network">📺</label>
                             <select name="network" id="network" class="btn-primary">
-                                <option value='CNN'>CNN</option>
                                 <option value='' selected="selected">All</option>
-
                             </select>
-
+                            <!--
+                            <label for="format">📺</label>
+                            <select name="format" id="format" class="btn-primary">
+                                <option value='mp3'>mp3</option>
+                                <option value='mp4'>mp4</option>
+                                <option value='html'>html</option>
+                                <option value='' selected="selected">All</option>
+                            </select>
+                            -->
                         </form>
                     </div>
-                </li>
-                <li class="nav-item">
                 </li>
                 <li class="nav-item">
                     <button id="playButton">Play</button>
@@ -114,57 +102,37 @@
                 <li class="nav-item" id="closepopupbutton">
                     <button id="closepopup">Close AOL Connect</button>
                 </li>
-
-
                 <li class="nav-item">
-                    <button id="rewind4" class="ffrw" data-skip=-1800>
-                        &lt;&lt;&lt;&lt; </button> </li>
-                <li class="nav-item">
-                    <button id="rewind3" class="ffrw" data-skip=-300>
-                        &lt;&lt;&lt; </button> </li>
-
-                <li class="nav-item">
-                    <button id="rewind2" class="ffrw" data-skip=-60>
-                        &lt;&lt;
-                    </button>
-                </li>
-
-                <li class="nav-item">
-                    <button id="rewind1" class="ffrw" data-skip=-30>
-                        &lt;
-                     </button>
-                    </li>
-
-                <li class="nav-item">
-                    <button id="forward1" class="ffrw" data-skip=30>
-                         &gt;
-                    </button>
-                </li>
-
-                <li class="nav-item">
-                    <button id="forward2" class="ffrw" data-skip=60>
-                         &gt; &gt;
-                    </button>
+                    <button id="rewind4" class="ffrw" data-skip=-1800>&lt;&lt;&lt;&lt;</button>
                 </li>
                 <li class="nav-item">
-                    <button id="forward3" class="ffrw" data-skip=300>
-                         &gt; &gt; &gt;
-                    </button>
+                    <button id="rewind3" class="ffrw" data-skip=-300>&lt;&lt;&lt;</button>
                 </li>
                 <li class="nav-item">
-                    <button id="forward4" class="ffrw" data-skip=1800>
-                         &gt; &gt; &gt; &gt;
-                    </button>
+                    <button id="rewind2" class="ffrw" data-skip=-60>&lt;&lt;</button>
                 </li>
-
-           </ul>
+                <li class="nav-item">
+                    <button id="rewind1" class="ffrw" data-skip=-30>&lt;</button>
+                </li>
+                <li class="nav-item">
+                    <button id="forward1" class="ffrw" data-skip=30>&gt;</button>
+                </li>
+                <li class="nav-item">
+                    <button id="forward2" class="ffrw" data-skip=60>&gt;&gt;</button>
+                </li>
+                <li class="nav-item">
+                    <button id="forward3" class="ffrw" data-skip=300>&gt;&gt;&gt;</button>
+                </li>
+                <li class="nav-item">
+                    <button id="forward4" class="ffrw" data-skip=1800>&gt;&gt;&gt;&gt;</button>
+                </li>
+            </ul>
             <div class="time text-center timeText">
                 <span class="time text-uppercase">??? ??</span>
             </div>
         </nav>
     </header>
     <main>
-        <!-- Hero -->
         <section class="section bg-tertiary w-100 h-100 pt-3">
             <div class="container-fluid" style="margin-top: 6vh;">
                 <div class="row justify-content-center">
@@ -173,13 +141,11 @@
                             <div class="card-header text-center">
                                 <span>LIVE TV - NEW YORK CITY</span>
                             </div>
-
                             <div id="videoPlayerMainHolder" class="card-body">
-                                <div id="videoplayermain">
-                                </div>
+                                <div id="videoplayermain"></div>
                             </div>
-                                    <span>Choose the date, pick a time from the bottom bar, and click a video player below. Press play (above) to begin.</span>
-
+                            <span>Choose the date, pick a time from the bottom bar, and click a video player below.
+                                Press play (above) to begin.</span>
                             <div id="videos"></div>
                         </div>
                     </div>
@@ -188,12 +154,17 @@
                             <div class="card-header text-center">
                                 <span>RADIO SCANNER</span>
                             </div>
-
                             <div class="card-body">
-                                <div id="audioplayermain">
+                                <div class="form-check">
+                                    <label class="form-check-label">
+                                        <input id="mute_all_audio" class="form-check-input" type="checkbox">
+                                        <span class="form-check-x"></span>
+                                        <span class="form-check-sign"></span>
+                                        Mute Radio
+                                    </label>
                                 </div>
+                                <div id="audioplayermain"></div>
                             </div>
-
                             <div id="audios"></div>
                         </div>
                         <div class="card card-tertiary mt-3">
@@ -202,45 +173,43 @@
                                     <p>LIVE NEWS TICKER</p>
                                 </div>
                             </div>
-
                             <div class="card-body">
                                 <div id="htmls"></div>
-                            </div>
-
-
-                        </div>
-
-                    </div>
-               </div>
-            </div>
-        </section>
-        <!-- Hero -->
-    </main>
-
-        <div id="overlay" class="bg-tertiary">
-            <section class="section bg-tertiary w-100 h-100">
-                <div class="container-fluid">
-                    <div class="row justify-content-center">
-                        <div class="col-7">
-                            <div class="card card-secondary" style="height: 80vh;">
-                                <video id="aol" class="handsoff" width="100%" height="100%" controls="false" poster="rsrc/signin.jpg">
-                                    <source src="rsrc/signin.mp4" type="video/mp4" />
-                                </video>
                             </div>
                         </div>
                     </div>
                 </div>
-            </section>
-
-        </div>
-
+            </div>
+        </section>
+    </main>
+    <div id="overlay" class="bg-tertiary">
+        <section class="section bg-tertiary w-100 h-100">
+            <div class="container-fluid">
+                <div class="row justify-content-center">
+                    <div class="col-7">
+                        <div class="card card-secondary" style="height: 80vh;">
+                            <video id="aol" class="handsoff" width="100%" height="100%" controls="false"
+                                poster="rsrc/signin.jpg">
+                                <source src="rsrc/signin.mp4" type="video/mp4" />
+                            </video>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
     <footer style="position: relative; bottom: 0;">
         <nav id="navbar-footer"
             class="navbar navbar-main navbar-expand-lg navbar-dark justify-content-between navbar-footer">
             <ul class="navbar-nav navbar-nav-hover flex-row align-items-center">
-                <li class="nav-item" data-toggle="tooltip" data-placement="top" title="Tooltip on right">
+                <li class="nav-item" data-toggle="tooltip" data-placement="top" title="AA11 Departs Boston's aiport">
                     <a href="#" class="nav-link" role="button">
                         <span class="nav-link-inner-text">7:59 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item" data-toggle="tooltip" data-placement="top" title="AA11 loses radio contact">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">8:14 AM</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -255,24 +224,24 @@
                 </li>
                 <li class="nav-item">
                     <a href="#" class="nav-link" role="button">
-                        <span class="nav-link-inner-text">9:02 AM</span>
+                        <span class="nav-link-inner-text">9:03 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item" data-toggle="tooltip" data-placement="top" title="President Bush speaks from Oval Office">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">8:30 PM</span>
                     </a>
                 </li>
             </ul>
         </nav>
     </footer>
-
-    <!-- Core -->
-    <script src="node_modules/popper.js/dist/umd/popper.min.js"></script>
-    <script src="node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="js/vendor/bootstrap.min.js"></script>
     <script src="js/vendor/modernizr-3.8.0.min.js"></script>
+    <script src="js/w95.js"></script>
     <script src="js/memento.js"></script>
     <script src="js/plugins.js"></script>
     <script src="js/main.js"></script>
-
-    <!-- pixel JS -->
-    <script src="js/w95.js"></script>
-
 </body>
 
 </html>

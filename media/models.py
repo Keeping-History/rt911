@@ -5,32 +5,41 @@ from django_mysql.models import ListCharField
 from bs4 import BeautifulSoup
 
 
-class Tag(models.Model):
+class TagType(models.Model):
     name = models.CharField(max_length=255)
-    description = models.CharField(max_length=255)
 
     def __str__(self):
         return self.name
 
+class Tag(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.CharField(max_length=255)
+    type_of = models.ForeignKey(TagType, on_delete=models.SET_NULL, null=True)
+
+    def __str__(self):
+        return self.name
 
 class Media(models.Model):
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
     tz = models.CharField(max_length=4)
+
     title = models.CharField(max_length=255)
     source = models.CharField(max_length=255)
-    url = models.URLField(default=None)
-    format = models.CharField(max_length=10)
     full_title = models.CharField(max_length=255)
-    content = models.TextField(default=None)
-    approved = models.BooleanField(default=False)
+    tags = models.ManyToManyField(Tag)
+
+    url = models.URLField(default=None)
+    format = models.CharField(max_length=5)
     jump = models.IntegerField(default=0)
     trim = models.IntegerField(default=0)
-    tags = models.ManyToManyField(Tag)
-    image = models.URLField(default=None)
-    image_caption = models.TextField(default=None)
     volume = models.DecimalField(max_digits=5, decimal_places=2, default=1.0)
 
+    content = models.TextField(default=None, null=True)
+    image = models.URLField(default='', null=True)
+    image_caption = models.TextField(default='', null=True)
+
+    approved = models.BooleanField(default=False)
     approved.boolean = True
 
     class Meta:

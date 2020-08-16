@@ -10,7 +10,7 @@ for i in search_items('collection:911'):
 
     full_url = "https://" + str(item.server) + item.dir + "/" + fnames[0]
     prehash = i['identifier'].encode()
-    hashItem = hashlib.md5(prehash).hexdigest()
+    hashItem = 'm' + hashlib.md5(prehash).hexdigest()
     regex = r"(?<=(2001 )).*"
     matches = re.finditer(regex, item.item_metadata['metadata']['title'], re.MULTILINE)
 
