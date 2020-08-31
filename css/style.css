@@ -61,7 +61,7 @@ footer {
     }
 
 #videoplayermain div {
-    height: 40vw;
+    height: 76vh;
 }
 
 #videoplayermain h2 {
@@ -76,7 +76,6 @@ footer {
 
 #videoplayermain video {
     height: 100%;
-    object-fit: fill;
     width: 100%;
 }
 
@@ -86,12 +85,10 @@ footer {
 }
 
 #htmlcards {
-    height: 100% !important;
-    max-height: 60vh;
-    }
+height: 47% !important;
+}
 
 #videocards {
-    height: 95%;
 }
 
 #audios {
