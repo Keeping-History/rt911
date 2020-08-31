@@ -14,6 +14,7 @@ timezone_map = {
     'JST': 9,
     'EEST': 3,
     'EDT': -4,
+    'EST': -4,
     'CST': 8,
     'CEST': 2,
     'CDT': -3,

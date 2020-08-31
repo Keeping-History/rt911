@@ -55,8 +55,13 @@ class MediaAdmin(ImportExportModelAdmin):
     def preview_media(self, obj):
         return (format_html("<%s src='%s' controls=true class='preview' />" % (obj.mediaType, obj.url)))
 
+    preview_media.short_description = "Preview Media"
+
     def preview_image(self, obj):
         return (format_html("<img src='%s' class='preview' />" % (obj.image)))
+
+    preview_image.short_description = "Preview Image"
+
 
 def assign_person_tagtype(modeladmin, request, queryset):
     for media in queryset:

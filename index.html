@@ -27,10 +27,11 @@
     <link rel="manifest" href="site.webmanifest">
     <link rel="apple-touch-icon" href="img/icon.png">
 
-    <link type="text/css" rel="stylesheet" href="css/vendor/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.6.2/plyr.css" />
+    <link type="text/css" rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.css">
     <link type="text/css" rel="stylesheet" href="css/w95.css">
     <link rel="stylesheet" href="css/style.css">
-   <script>
+    <script>
         window.ga = function () {
             ga.q.push(arguments)
         };
@@ -43,21 +44,24 @@
     <script src="https://www.google-analytics.com/analytics.js" async></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js"></script>
     <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.5.1.js" integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc=" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.js"
+        integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/readmore-js@2.2.1/readmore.min.js"></script>
+    <script src="https://cdn.plyr.io/3.6.2/plyr.polyfilled.js"></script>
     <meta name="theme-color" content="#000181">
 </head>
 
-<body>
-     <div id="preloads" class="hidden"></div>
-    <audio controls id="timekeeper" class="handsoff">
+<body class="bg-tertiary">
+    <div id="preloads" class="hidden"></div>
+    <audio controls id="timekeeper" class="handsoff hidden">
         <source src="rsrc/out.mp3" type="audio/mpeg">
         Your browser does not support the HTML audio element.
     </audio>
-    <header class="header-global">
+    <header>
         <nav id="navbar-main"
-            class="navbar d-flex flex-row align-items-center navbar-main navbar-expand-lg navbar-dark justify-content-between">
+            class="navbar d-flex flex-row align-items-center navbar-main navbar-expand-lg navbar-dark justify-content-between"
+            style="height: 2.5rem;">
             <ul class="navbar-nav navbar-nav-hover flex-row align-items-center">
                 <li class="nav-item">
                     <div id="filterHolder">
@@ -132,51 +136,51 @@
             </div>
         </nav>
     </header>
-    <main>
-        <section class="section bg-tertiary w-100 h-100 pt-3">
-            <div class="container-fluid" style="margin-top: 6vh;">
+    <main class="h-100 mt-5">
+        <section class="section vw-100 vh-100 pt-2 pb-2">
+            <div class="container-fluid">
                 <div class="row justify-content-center">
                     <div class="col-8">
-                        <div class="card card-secondary" style="height: 80vh;">
+                        <div class="card card-secondary" id="videocards">
                             <div class="card-header text-center">
                                 <span>LIVE TV - NEW YORK CITY</span>
                             </div>
                             <div id="videoPlayerMainHolder" class="card-body">
                                 <div id="videoplayermain"></div>
                             </div>
-                            <span>Choose the date, pick a time from the bottom bar, and click a video player below.
-                                Press play (above) to begin.</span>
-                            <div id="videos"></div>
+                                <div id="videos"></div>
+                                <div stlye="clear"></div>
+
                         </div>
                     </div>
-                    <div class="col-4">
-                        <div class="card card-secondary">
-                            <div class="card-header text-center">
-                                <span>RADIO SCANNER</span>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-check">
-                                    <label class="form-check-label">
-                                        <input id="mute_all_audio" class="form-check-input" type="checkbox">
-                                        <span class="form-check-x"></span>
-                                        <span class="form-check-sign"></span>
-                                        Mute Radio
-                                    </label>
-                                </div>
-                                <div id="audioplayermain"></div>
-                            </div>
-                            <div id="audios"></div>
+
+            <div class="col-4">
+                <div class="card card-secondary" id="audiocards">
+                    <div class="card-header text-center">
+                        <span>RADIO SCANNER</span>
+                        <div class="form-check" id="muteform">
+                            <label class="form-check-label">
+                                <input id="mute_all_audio" class="form-check-input" type="checkbox" checked>
+                                <span class="form-check-x"></span>
+                                <span class="form-check-sign"></span>
+                                Mute Radio
+                            </label>
                         </div>
-                        <div class="card card-tertiary mt-3">
-                            <div class="card-header text-center">
-                                <div class="marquee">
-                                    <p>LIVE NEWS TICKER</p>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div id="htmls"></div>
-                            </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="audioplayermain"></div>
+                        <div id="audios"></div>
+                    </div>
+
+                </div>
+                <div class="card card-tertiary mt-3" id="htmlcards">
+                    <div class="card-header text-center">
+                        <div class="marquee">
+                            <p>LIVE NEWS TICKER</p>
                         </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="htmls"></div>
                     </div>
                 </div>
             </div>
@@ -187,20 +191,23 @@
             <div class="container-fluid">
                 <div class="row justify-content-center">
                     <div class="col-7">
-                        <div class="card card-secondary" style="height: 80vh;">
-                            <video id="aol" class="handsoff" width="100%" height="100%" controls="false"
+                        <div class="card card-secondary">
+                            <video id="aol" class="handsoff"
                                 poster="rsrc/signin.jpg">
                                 <source src="rsrc/signin.mp4" type="video/mp4" />
                             </video>
                         </div>
                     </div>
                 </div>
+            </div></div>
             </div>
+
         </section>
     </div>
-    <footer style="position: relative; bottom: 0;">
+    <footer>
         <nav id="navbar-footer"
-            class="navbar navbar-main navbar-expand-lg navbar-dark justify-content-between navbar-footer">
+            class="navbar navbar-main navbar-expand-lg navbar-dark justify-content-between navbar-footer"
+            style="height: 2.5rem;">
             <ul class="navbar-nav navbar-nav-hover flex-row align-items-center">
                 <li class="nav-item" data-toggle="tooltip" data-placement="top" title="AA11 Departs Boston's aiport">
                     <a href="#" class="nav-link" role="button">
@@ -227,7 +234,8 @@
                         <span class="nav-link-inner-text">9:03 AM</span>
                     </a>
                 </li>
-                <li class="nav-item" data-toggle="tooltip" data-placement="top" title="President Bush speaks from Oval Office">
+                <li class="nav-item" data-toggle="tooltip" data-placement="top"
+                    title="President Bush speaks from Oval Office">
                     <a href="#" class="nav-link" role="button">
                         <span class="nav-link-inner-text">8:30 PM</span>
                     </a>
@@ -235,9 +243,9 @@
             </ul>
         </nav>
     </footer>
-    <script src="https://unpkg.com/@popperjs/core@2"></script>
-    <script src="js/vendor/bootstrap.min.js"></script>
-    <script src="js/vendor/modernizr-3.8.0.min.js"></script>
+    <script src="node_modules/popper.js/dist/umd/popper.js"></script>
+    <script src="node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
     <script src="js/w95.js"></script>
     <script src="js/memento.js"></script>
     <script src="js/plugins.js"></script>

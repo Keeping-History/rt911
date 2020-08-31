@@ -1,34 +1,37 @@
-/* @override
-	http://127.0.0.1:5500/css/style.css */
-#outputHTML {
-    width: 100%;
+body {
+    overflow: hidden;
 }
 
-#timekeeper {
-display: none;
+.hidden {
+    display: none !important;
 }
 
-#filterHolder {
-    height: 2vh;
+footer {
+    position: absolute;
+    bottom: 0;
 }
+
 #videos {
-    float: left;
-    text-align: center;
-    width: 98%;
-    overflow-x: scroll;
-    display: flex;
-    padding: 1vw;
+   overflow-y: hidden;
+   display: flex;
+   max-width: 97%;
+   margin: 0 1vw 1vh 1vw;
 }
 
 #videos div {
     order: 3;
     float: left;
-    padding: .5em;
-    height: 5%;
+    margin-left: .25rem;
 }
 
-#videos video {
-    height: 10vh;
+#videos div video {
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+}
+
+#videos div:first-of-type {
+    margin-left: 0;
 }
 
 .videoTitle {
@@ -39,34 +42,27 @@ display: none;
     font-size: 1em;
     font-family: 'VT323';
     color: #00ff00;
-    padding-left: .25rem;
-    margin-left: .5rem;
-    z-index: 9;
-    position: relative;
-    text-align: left;
-    top: 2.25rem;
-    width: 50%;
-    overflow: hidden;
-    white-space: nowrap;
+    position: absolute;
+    width: auto;
 }
 
-#videos h2, #videoplayermain h2 {
+#videos h2,
+#videoplayermain h2 {
     background: rgba(0, 0, 0, .3)
 }
-
-#videoplayermain {
-    text-align: center;
-    height: 60vh;
+#videoPlayerMainHolder {
+    background: black;
+    height: 90%;
 }
-#videoplayermain video {
-    width: 90%;
-    position: relative;
-    top: 0;
-    left: 0;
+#videoplayermain, #videoplayermain div div video{
+    text-align: center;
+    height: 100%;
     width: 100%;
-    height: 60vh;
     }
 
+#videoplayermain div {
+    height: 40vw;
+}
 
 #videoplayermain h2 {
     position: absolute;
@@ -76,44 +72,57 @@ display: none;
     padding: 1vw !important;
     float: none;
     z-index: 10;
-    bottom: 1;
 }
 
-
-#radio {
-    height: 20vw;
-    width: 40%;
-    float: left;
-    background: url('../img/radio.png');
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: contain;
+#videoplayermain video {
+    height: 100%;
+    object-fit: fill;
+    width: 100%;
 }
 
-#radio #screen {
-    font-family: 'VT323';
-    font-size: 1em;
-    padding: 10% 25%;
+#audiocards{
+    height: 100% !important;
+    max-height: 30vh;
 }
 
-#radio {
-    display: none;
+#htmlcards {
+    height: 100% !important;
+    max-height: 60vh;
+    }
+
+#videocards {
+    height: 95%;
 }
 
 #audios {
-    height: 20%;
     display: block;
-    width: 100%;
+    overflow-x: scroll;
+    overflow-y: scroll;
+    height: 100%;
+    display: flex;
+    flex-flow: wrap;
 }
+#audios > div {
+    border: 1px solid black;
+    margin: 5px;
+     padding: 5px;
+    max-height: 25%;
+    }
 
-#audios audio {
-    width: 100%;
+#audios * .plyr__controls {
+    --plyr-audio-controls-background: #C0C0C0;
+    --plyr-audio-control-color: #000000;
+    --plyr-audio-control-background-hover: #000;
+    padding: 0;
 }
 
 #audios * h2 {
-    font-size: 1rem !important;
+    font-size: .75em !important;
 }
 
+#audios>div {
+    float: left;
+}
 .marquee {
     white-space: nowrap;
     overflow: hidden;
@@ -138,29 +147,18 @@ display: none;
     }
 }
 
-main {
-    height: 94vh;
-}
-
 #overlay {
     position: fixed;
-    /* Sit on top of the page content */
     display: none;
-    /* Hidden by default */
     width: 100%;
-    /* Full width (cover the whole page) */
     height: 100%;
-    /* Full height (cover the whole page) */
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.5);
-    /* Black background with opacity */
     z-index: 20;
-    /* Specify a stack order in case you're using a different order for other elements */
     cursor: pointer;
-    /* Add a pointer on hover */
 }
 
 #aol {
@@ -168,10 +166,8 @@ main {
 }
 
 #htmls {
-    height: 68vh;
-    width: 98%;
     overflow-y: scroll;
-    padding: 1vw;
+    height: 100%;
 }
 
 #htmls div {
@@ -191,28 +187,27 @@ footer {
     width: 100%;
 }
 
-div {
-    scrollbar-width: think;
-    scrollbar-color: gray black;
-}
-
-/* Works on Chrome/Edge/Safari */
-div::-webkit-scrollbar {
-    width: 20px;
-}
-
-div::-webkit-scrollbar-track {
-    background: black;
-}
-
-div::-webkit-scrollbar-thumb {
-    background-color: black;
-    border-radius: 0;
-    border: 20px solid white;
-}
 a [data-readmore-toggle] {
     display: block;
     width: 100%;
 }
-*[data-readmore] {
+
+#muteform {
+    float: right;
+    text-transform: uppercase;
+}
+
+#muteform label {
+        color: white;
+}
+
+::-webkit-scrollbar {
+    -webkit-appearance: none;
+    width: 7px;
+}
+
+::-webkit-scrollbar-thumb {
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, .5);
+    -webkit-box-shadow: 0 0 1px rgba(255, 255, 255, .5);
 }

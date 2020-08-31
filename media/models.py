@@ -26,18 +26,19 @@ class Media(models.Model):
 
     title = models.CharField(max_length=255)
     source = models.CharField(max_length=255)
-    full_title = models.CharField(max_length=255)
-    tags = models.ManyToManyField(Tag)
+    full_title = models.CharField(max_length=255, blank=True)
+    tags = models.ManyToManyField(Tag, blank=True)
 
-    url = models.URLField(default=None)
+    url = models.URLField(default=None, blank=True)
     format = models.CharField(max_length=5)
     jump = models.IntegerField(default=0)
     trim = models.IntegerField(default=0)
     volume = models.DecimalField(max_digits=5, decimal_places=2, default=1.0)
+    mute = models.BooleanField(default=False)
 
-    content = models.TextField(default=None, null=True)
-    image = models.URLField(default='', null=True)
-    image_caption = models.TextField(default='', null=True)
+    content = models.TextField(default='', blank=True)
+    image = models.URLField(default='', blank=True)
+    image_caption = models.TextField(default='', blank=True)
 
     approved = models.BooleanField(default=False)
     approved.boolean = True
@@ -83,3 +84,8 @@ class Media(models.Model):
     @property
     def duration(self):
         return self.end_date - self.start_date
+
+    def save(self, *args, **kwargs):
+        if not self.full_title:
+            self.full_title = self.title
+        super(Media, self).save(*args, **kwargs)
