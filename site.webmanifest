@@ -18,6 +18,6 @@
         }
     ],
     "start_url": "/?utm_source=homescreen",
-    "background_color": "#fafafa",
-    "theme_color": "#fafafa"
+    "background_color": "#000181",
+    "theme_color": "#2d89ef"
 }
