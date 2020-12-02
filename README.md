@@ -13,4 +13,5 @@ The application is to parts:
 2. The UI - A basic HTML5/Bootstrap/jQuery app to display the videos
 
 ## SEE IT IN ACTION
-*The UI*  http://nine11rt.s3-website-us-east-1.amazonaws.com
+### The UI
+http://www.911realtime.org

@@ -1,0 +1,276 @@
+.hidden {
+  display: none !important;
+}
+
+body {
+  overflow: hidden;
+}
+
+.grid-container {
+  display: grid;
+  gap: 1em 1em;
+  grid-template-areas: "Left Right-Top""Left Right-Bottom";
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 0fr 0fr;
+  margin: 3.5rem 1%;
+}
+
+.Left {
+  grid-area: Left;
+}
+
+.Right {
+  width: 30%
+}
+
+.Right-Top {
+  display: block;
+  grid-area: Right-Top;
+  width: 30vw;
+}
+
+.Right-Bottom {
+  grid-area: Right-Bottom;
+  width: 30vw;
+}
+
+#navbar-main {
+  height: 4vh;
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+#navbar-footer {
+  height: 4vh;
+}
+
+#videocards {
+  height: 100%;
+}
+
+#videos {
+  display: flex;
+  margin: 0 1vw 1vh;
+  overflow: hidden;
+}
+
+#videos div {
+  float: left;
+  margin-left: .25rem;
+  max-height: 4vh;
+  order: 3;
+}
+
+#videos div video {
+  object-fit: fill;
+  width: 100%;
+}
+
+#videos div:first-of-type {
+  margin-left: 0;
+}
+
+.videoTitle {
+  float: left;
+}
+
+#videos h2 {
+  color: #0f0;
+  font: 1em "VT323";
+  position: absolute;
+  width: auto;
+}
+
+#videos h2,
+#videoplayermain h2 {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+#videoPlayerMainHolder {
+  background: #000;
+}
+
+#videoplayermain {
+  background: url('../img/static.gif');
+  height: 75vh;
+}
+
+#videoplayermain div div video {
+  height: 100%;
+  text-align: center;
+  width: 100%;
+}
+
+#videoplayermain div {
+  height: 100%;
+  background: #000;
+  text-align: center;
+}
+
+#videoplayermain h2 {
+  color: #0f0;
+  float: none;
+  font: 3vw "VT323";
+  padding: 1vw !important;
+  position: absolute;
+  z-index: 10;
+}
+
+#videoplayermain video {
+  height: 100%;
+  width: 100%
+}
+
+#audios {
+  display: flex;
+  flex-flow: wrap;
+  height: 30vh !important;
+  overflow: scroll;
+}
+
+#htmls {
+  height: 44vh !important;
+}
+
+#audios>div {
+  border: 1px solid #000;
+  margin: .25rem;
+  padding: .25rem;
+}
+
+#audios * .plyr {
+  min-width: 0;
+}
+
+.icon-titlebar {
+  width: 2vh;
+}
+
+#audios * .plyr__controls {
+  justify-content: space-between;
+  padding: 0;
+  --plyr-audio-control-background-hover: #000;
+  --plyr-audio-control-color: #000;
+  --plyr-audio-controls-background: silver;
+}
+
+#audios .plyr__controls .plyr__controls__item:first-child {
+  margin: 0;
+}
+
+#audios * h2 {
+  font-size: .5rem !important;
+  margin: 0;
+  padding: 0;
+}
+
+
+#modal-content {
+  border-radius: 0 !important;
+  font-size: 1rem;
+}
+
+#modal-title {
+  line-height: 1.5;
+}
+
+#modal-body {
+  height: 75vh;
+  padding: 1vw;
+  overflow: scroll;
+}
+
+#modal-image {
+  width: 100%;
+  border: 1px solid #000;
+  margin-bottom: 1rem;
+}
+
+#audios * .plyr__volume {
+  flex-direction: row-reverse;
+  min-width: 0;
+}
+
+.marquee p {
+  animation: marquee 10s linear infinite;
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+  padding-left: 100%;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translate(0, 0);
+  }
+
+  100% {
+    transform: translate(-100%, 0);
+  }
+}
+
+#overlay {
+  background-color: rgba(0, 0, 0, 0.5);
+  bottom: 0;
+  cursor: pointer;
+  display: none;
+  height: 100%;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 100%;
+  z-index: 20;
+}
+
+#aol {
+  z-index: 99;
+}
+
+#audios,
+#htmls {
+  overflow: scroll;
+}
+
+#htmls div {
+  clear: both;
+  overflow: hidden;
+}
+
+#htmls .card-body {
+  overflow: scroll;
+}
+
+.small,
+small {
+  font-size: 20%;
+}
+
+footer {
+  bottom: 0;
+  position: absolute;
+  width: 100%;
+}
+
+a [data-readmore-toggle] {
+  display: block;
+  width: 100%;
+}
+
+#muteform {
+  float: right;
+  text-transform: uppercase;
+}
+
+#muteform label {
+  color: #fff;
+}
+
+.plyr__time {
+  font-size: .5rem;
+}
+
+#htmls div h6 {
+  font-size: .75rem;
+}

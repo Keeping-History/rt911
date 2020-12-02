@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="author" content="Robbie Byrd">
+    <meta name="description"
+        content="A collection and recreation of media and events on the day of and around September 11, 2001.">
+    <meta name="keywords" content="September 11 2001, 9/11, New York, Twin Towers, Trade Towers, World Trade Center" />
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://github.org/robbiebyrd/rt911">
+    <meta property="og:title" content="September 11 in Realtime">
+    <meta property="og:description"
+        content="A collection and recreation of media and events on the day of and around September 11, 2001.">
+    <meta property="og:image" content="rsrc/signin.jpg">
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://github.org/robbiebyrd/rt911">
+    <meta property="twitter:title" content="September 11 in Realtime">
+    <meta property="twitter:description"
+        content="A collection and recreation of media and events on the day of and around September 11, 2001.">
+    <meta property="twitter:image" content="rsrc/signin.jpg">
+    <meta name="msapplication-TileColor" content="#2d89ef">
+    <meta name="theme-color" content="#000181">
+
+    <title>September 11 Terminal</title>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png">
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="apple-touch-icon" href="img/icon.png">
+
+    <link type="text/css" href="https://cdn.plyr.io/3.6.2/plyr.css" rel="stylesheet" />
+    <link type="text/css" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+        rel="stylesheet" />
+
+    <link type="text/css" rel="stylesheet" href="css/w95.css" />
+    <link rel="stylesheet" href="css/style.css" />
+
+    <script>
+        // Google Analytics Tracking
+        window.ga = function () {
+            ga.q.push(arguments)
+        };
+        ga.q = [];
+        ga.l = +new Date;
+        ga('create', 'UA-29632937-4', 'auto');
+        ga('set', 'transport', 'beacon');
+        ga('send', 'pageview')
+    </script>
+
+    <script src="https://www.google-analytics.com/analytics.js" async></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js"></script>
+    <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.5.1.js"
+        integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/readmore-js@2.2.1/readmore.min.js"></script>
+    <script src="https://cdn.plyr.io/3.6.2/plyr.polyfilled.js"></script>
+
+</head>
+
+
+<body class="bg-tertiary">
+    <div id="preloads" class="hidden"></div>
+    <audio controls id="timekeeper" class="handsoff hidden">
+        <source src="rsrc/out.mp3" type="audio/mpeg">
+        Your browser does not support the HTML audio element.
+    </audio>
+    <header>
+        <nav id="navbar-main"
+            class="navbar d-flex flex-row align-items-center navbar-main navbar-expand-lg navbar-dark justify-content-between"
+            style="height: 2.5rem;">
+            <ul class="navbar-nav navbar-nav-hover flex-row align-items-center">
+                <li class="nav-item">
+                    <div id="filterHolder">
+                        <form id="filters">
+                            <label for="day">🗓️</label>
+                            <select name="day" id="day" class="btn-primary">
+                                <option value=9>September 9</option>
+                                <option value=10>September 10</option>
+                                <option value=11 selected="selected">September 11</option>
+                                <option value=12>September 12</option>
+                                <option value=13>September 13</option>
+                                <option value=14>September 14</option>
+                                <option value=15>September 15</option>
+                                <option value=16>September 16</option>
+                                <option value=17>September 17</option>
+                                <option value=18>September 18</option>
+                                <option value=19>September 19</option>
+                                <option value=20>September 20</option>
+                            </select>
+                            <label for="network">📺</label>
+                            <select name="network" id="network" class="btn-primary">
+                                <option value='' selected="selected">All</option>
+                            </select>
+                            <!--
+                            <label for="format">📺</label>
+                            <select name="format" id="format" class="btn-primary">
+                                <option value='video'>video</option>
+                                <option value='audio'>audio</option>
+                                <option value='html'>html</option>
+                                <option value='' selected="selected">All</option>
+                            </select>
+                            -->
+                        </form>
+                    </div>
+                </li>
+                <li class="nav-item">
+                    <button id="playButton" data-toggle="tooltip" data-placement="bottom" title="Play">
+                        >
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button id="pauseButton" data-toggle="tooltip" data-placement="bottom" title="Pause">
+                        =
+                    </button>
+                </li>
+                <li class="nav-item hidden" id="closepopupbutton">
+                    <button id="closepopup">Close AOL Connect</button>
+                </li>
+                <li class="nav-item">
+                    <button id="rewind4" class="ffrw" data-skip=-1800>&laquo;&laquo;</button>
+                </li>
+                <li class="nav-item">
+                    <button id="rewind3" class="ffrw" data-skip=-300>&laquo;</button>
+                </li>
+                <li class="nav-item">
+                    <button id="rewind1" class="ffrw" data-skip=-30>&lsaquo;</button>
+                </li>
+                <li class="nav-item">
+                    <button id="forward1" class="ffrw" data-skip=30>&rsaquo;</button>
+                </li>
+                <li class="nav-item">
+                    <button id="forward3" class="ffrw" data-skip=300>&raquo;</button>
+                </li>
+                <li class="nav-item">
+                    <button id="forward4" class="ffrw" data-skip=1800>&raquo;&raquo;</button>
+                </li>
+            </ul>
+            <div class="time text-center timeText">
+                <span class="time text-uppercase">??? ??</span>
+            </div>
+        </nav>
+    </header>
+    <main>
+        <div class="grid-container">
+            <div class="Left">
+                <div class="card card-secondary" id="videocards">
+                    <div class="card-header text-center">
+                        <div class="form-check" id="closevideo">
+                            <input class="form-check-input" type="checkbox" checked>
+                            <span class="form-check-x"></span>
+                            <span class="form-check-sign"></span>
+                        </div>
+                        <img src="https://win98icons.alexmeub.com/icons/png/network_television-3.png"
+                            class="icon-titlebar">
+                        <span>LIVE TV - NYC CABLE1</span>
+                    </div>
+                    <div id="videoPlayerMainHolder" class="card-body">
+                        <div id="videoplayermain"></div>
+                    </div>
+                    <div id="videos"></div>
+                    <div stlye="clear"></div>
+
+                </div>
+
+            </div>
+            <div class="Right Right-Top">
+                <div class="card card-secondary" id="audiocards">
+                    <div class="card-header text-center">
+                        <div class="form-check" id="closeaudio">
+                            <input class="form-check-input" type="checkbox" checked>
+                            <span class="form-check-x"></span>
+                            <span class="form-check-sign"></span>
+                        </div>
+                        <span>RADIO SCANNER</span>
+                        <div class="form-check" id="muteform">
+                            <label class="form-check-label">
+                                <input id="mute_all_audio" class="form-check-input" type="checkbox" checked>
+                                <img id="radio_mute_icon" src="https://win98icons.alexmeub.com/icons/png/loudspeaker_muted-0.png"
+                                    class="icon-titlebar float-right">
+                            </label>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="audioplayermain"></div>
+                        <div id="audios"></div>
+                    </div>
+
+                </div>
+
+            </div>
+            <div class="Right Right-Bottom">
+                <div class="card card-tertiary" id="htmlcards">
+                    <div class="card-header text-center">
+                        <div class="form-check" id="closehtml">
+                            <input id="mute_all_audio" class="form-check-input" type="checkbox" checked>
+                            <span class="form-check-x"></span>
+                            <span class="form-check-sign"></span>
+                        </div>
+                        <img src="https://win98icons.alexmeub.com/icons/png/msn_cool-4.png"
+                            class="icon-titlebar float-right">
+                        <div class="marquee">
+
+                            <p>LIVE NEWS TICKER</p>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="htmls"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+    <div id="overlay" class="bg-tertiary">
+        <section class="section bg-tertiary w-100 h-100">
+            <div class="container-fluid">
+                <div class="row justify-content-center">
+                    <div class="col-7">
+                        <div class="card card-secondary">
+                            <video id="aol" class="handsoff" poster="rsrc/signin.jpg">
+                                <source src="rsrc/signin.mp4" type="video/mp4" />
+                            </video>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    </div>
+    </div>
+
+    </section>
+    </div>
+    <footer>
+        <nav id="navbar-footer"
+            class="navbar navbar-main navbar-expand-lg navbar-dark justify-content-between navbar-footer">
+            <ul class="navbar-nav navbar-nav-hover flex-row align-items-center">
+                <li class="nav-item" data-toggle="tooltip" data-placement="top" title="AA11 Departs Boston's aiport">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">7:59 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item" data-toggle="tooltip" data-placement="top" title="AA11 loses radio contact">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">8:14 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">8:30 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item" data-toggle="tooltip" data-placement="top" title="AA11 hits the WTC North Tower">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">8:46 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">8:49 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">9:03 AM</span>
+                    </a>
+                </li>
+                <li class="nav-item" data-toggle="tooltip" data-placement="top"
+                    title="President Bush speaks from Oval Office">
+                    <a href="#" class="nav-link" role="button">
+                        <span class="nav-link-inner-text">8:30 PM</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </footer>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
+    <script src="js/w95.js"></script>
+    <script src="js/memento.js"></script>
+    <script src="js/plugins.js"></script>
+    <script src="js/main.js"></script>
+    <!-- Modal -->
+
+    <div class="modal" tabindex="-1" role="dialog" id="modalModal">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content card card-tertiary">
+                <div class="card-header text-center">
+                    <div class="form-check" id="closemodal">
+                        <input data-dismiss="modal" id="close_modal_input" class="form-check-input" type="checkbox"
+                            checked>
+                        <span class="form-check-x"></span>
+                        <span class="form-check-sign"></span>
+                    </div>
+                    <div id="modal-title">ALERT</div>
+                </div>
+                <div id="modal-body">
+                    <h3 id="modal-title">
+                        <span id="modal-time" class="text-bold"></span>
+                        <span id="modal-fulltitle">ALERT</span>
+                    </h3>
+                    <img id="modal-image" src="" />
+                    <p id="modal-image-caption" class="text-italic"></p>
+
+                    <p id="modal-content">This is a test of the alert system.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!--
+    <div class="modal fade" id="modalModal" tabindex="-1" role="dialog" aria-labelledby="modaltitle">
+        <div class="modal-dialog" role="document">
+            <div class="card card-tertiary" id="">
+                <div class="card-header text-center">
+                    <div class="form-check" id="closemodal">
+                        <input data-dismiss="modal" id="close_modal_input" class="form-check-input" type="checkbox" checked>
+                        <span class="form-check-x"></span>
+                        <span class="form-check-sign"></span>
+                    </div>
+                    <div id="modaltitle">{{TITLE}}</div>
+                </div>
+                <div class="card-body">
+                    <div id="modalcontent">{{CONTENT}}</div>
+                </div>
+            </div>
+            -->
+    </div>
+    </div>
+</body>
+
+</html>
