@@ -1,0 +1,193 @@
+#videos {
+  overflow-y: scroll;
+  overflow-x: hidden;
+  height: 6.25rem;
+  position: relative;
+}
+
+#videos div {
+  position: relative;
+  display: inline-block;
+  max-height: 6em;
+  max-width: 8em;
+}
+
+#videos video {
+  height: 100%;
+  width: 100%;
+}
+
+#videos div h2 {
+  color: #0f0;
+  font: 1em "VT323";
+  position: absolute;
+  width: 2em;
+  float: left;
+  left: 0;
+  margin: 0.5em;
+}
+
+.videoTitle {
+  float: left;
+}
+
+#videos h2,
+#videoplayermain h2 {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+#videoPlayerMainHolder {
+  background: #000;
+}
+
+#videoplayermain {
+  background: url("../img/static.gif");
+  text-align: center;
+}
+
+#videoplayermain * video {
+  height: 100%;
+  width: 100%;
+  text-align: center;
+  max-height: 50vh;
+  background: black;
+}
+
+#videoplayermain {
+  height: 100%;
+  width: 100%;
+  background: #000;
+  text-align: center;
+}
+
+#videoplayermain h2 {
+  color: #0f0;
+  font: 3vw "VT323";
+  padding: 0 1vw !important;
+  margin-left: 3%;
+  position: absolute;
+}
+
+#videoPlayerMainHolder {
+  background: url(../img/static.gif);
+  min-height: 50vh;
+}
+#videoplayermain div {
+  min-height: 50vh;
+}
+
+#channel-guide-header {
+  margin: 0.5rem 0 0.5rem 0;
+  padding: 0;
+  font-size: 1rem;
+}
+
+#channel-guide {
+  margin-top: 1em;
+}
+
+#videos-wrapper {
+  position: relative;
+  bottom: 0;
+}
+
+#audios {
+  display: flex;
+  flex-flow: wrap;
+  height: 20vh !important;
+  overflow-x: hidden;
+  overflow-y: scroll;
+}
+#audios div {
+    max-width: 13rem;
+  }
+
+#htmls {
+  max-height: 50vh;
+  overflow-x: hidden;
+  overflow-y: scroll;
+}
+
+#htmls h3 {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+#htmls div > button {
+  margin-left: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+
+#audios > div {
+  border: 1px solid #000;
+  margin: 0.25rem;
+  padding: 0.25rem;
+}
+
+#audios * .plyr {
+  min-width: 0;
+}
+
+.icon-titlebar {
+  width: 2vh;
+}
+
+#audios * .plyr__controls {
+  justify-content: space-between;
+  padding: 0;
+  --plyr-audio-control-background-hover: #000;
+  --plyr-audio-control-color: #000;
+  --plyr-audio-controls-background: #ddd;
+}
+
+#audios .plyr__controls .plyr__controls__item:first-child {
+  margin: 0;
+}
+
+#audios * h2 {
+  font-size: 0.5rem !important;
+  margin: 0;
+  padding: 0;
+}
+
+#modalModal,
+.modal {
+  padding: 0;
+  margin: 0;
+  z-index: 999999;
+  -webkit-border-radius: 0;
+  border-radius: 0;
+  max-width: 56rem;
+}
+
+#modal-image {
+      max-width: 100%;
+}
+.blocker {
+  z-index: 9999999 !important;
+}
+
+#news {
+  text-align: left !important;
+}
+
+#audio div.inner,
+#news div.inner {
+  padding: 0;
+  padding-left: 0.5rem;
+}
+
+#htmls div {
+  overflow: hidden;
+}
+#news,
+#audio {
+  right: 10%;
+  width: 35%;
+}
+
+#settings,
+#controls {
+  right: 10%;
+  width: 15%;
+}

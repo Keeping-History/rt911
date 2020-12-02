@@ -17,15 +17,8 @@ window.johng();
 
 // Adds the base API URL and any URL filters and returns a full URL for AJAX calls
 function getURL() {
-    return window.baseremoteurl + "?" + $("#filters").serialize();
+    return window.baseremoteurl + "?" + $("#filters :input[value!='all']").serialize();
 }
-
-$('#modalModal').modal({
-    backdrop: 'static',
-    keyboard: false,
-    show: false,
-    focus: true
-})
 
 function moveTime(increment) {
     window.timekeeper.currentTime = window.timekeeper.currentTime + increment;
@@ -75,6 +68,17 @@ function hmsToSeconds(hmsString) {
     return seconds;
 }
 
+function setReadMores() {
+    $("#htmls div div").readmore({
+        embedCSS: false,
+        collapsedHeight: 0,
+        speed: 75,
+        lessLink: '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read Less</a></span></button>',
+        moreLink: '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read More</a></span></button>',
+        blockCSS: 'display: inline-block; float: right;'
+    });
+}
+
 function setTimeAllPlayers() {
     $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
         $(this).get(0).currentTime = setPlayerTime(this);
@@ -96,7 +100,7 @@ function muteAudioPlayers() {
 }
 
 function preloadMediaFile(mediaType, url, id) {
-    if (!$("#" + id + "_preload").length && mediaType == "audio" && true == false) {
+    if (!$("#" + id + "_preload").length && mediaType == "audio") {
         a = $('<' + mediaType + ' />')
             .attr('src', url)
             .attr('id', id + '_preload')
@@ -113,20 +117,10 @@ function isMediaReady(activeItems) {
     activeItems.forEach(element => {
         if (element.media_type == 'video') {
             $("#" + element.vidid).on('canplay', function () {
-                //console.log(this);
+                console.log('canplay: ' + this);
             });
         }
     });
-}
-
-// OVERLAY Control the waiting/loading overlay
-function overlayOn() {
-    document.getElementById("overlay").style.display = "block";
-}
-
-function overlayOff() {
-    document.getElementById("overlay").style.display = "none";
-    document.getElementById("closepopupbutton").style.display = "none";
 }
 
 //convert12Hto24H Convert 12H time format to 24H time format
@@ -151,8 +145,19 @@ function convert12Hto24H(stringTimeInput) {
 
 //Get the Current time in text format
 function getTimeText(seconds) {
-    a = (new Date).clearTime().addSeconds(seconds).toString('h:mm:ss tt');
-    return a;
+    var d = new Date(0);
+    d.setSeconds(seconds); // specify value for SECONDS here
+    var stringDate = (d.getHours() + 6) + ":" + zeroFill(d.getMinutes(), 2) + ":" + zeroFill(d.getSeconds(), 2)
+
+    return stringDate;
+}
+
+function zeroFill(number, width) {
+    width -= number.toString().length;
+    if (width > 0) {
+        return new Array(width + (/\./.test(number) ? 2 : 1)).join('0') + number;
+    }
+    return number + ""; // always return a string
 }
 
 function formatTime(date) {
@@ -185,22 +190,21 @@ function setTimeAllPlayers() {
 
 function pauseAllPlayers() {
     $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
-        promise = $(this).get(0).pause();
-        if (playPromise !== undefined) {
-            playPromise.then(function () {
-                // Automatic playback started!
-            }).catch(function (error) {
-                // Automatic playback failed.
-                // Show a UI element to let the user manually start playback.
-            });
-        }
+        $(this).get(0).pause();
+        // if (playPromise !== undefined) {
+        //     playPromise.then(function () {
+        //         // Automatic playback started!
+        //     }).catch(function (error) {
+        //         // Automatic playback failed.
+        //         // Show a UI element to let the user manually start playback.
+        //     });
+        // }
     });
 }
 
 function playAllPlayers() {
-    $('.highlight video, audio:not(.handsoff)').each(function () {
+    $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
         var playPromise = $(this).get(0).play();
-
         // In browsers that don’t yet support this functionality,
         // playPromise won’t be defined.
         if (playPromise !== undefined) {
@@ -217,7 +221,7 @@ function playAllPlayers() {
 function preloadPlayers(data) {
     if (data != undefined || data.length > 0) {
         data.forEach(function (item) {
-            if (item.media_type == 'audio' || item.media_type == 'video') {
+            if (item.media_type == 'audio') { // just audio files for now
                 preloadMediaFile(item.media_type, item.url, item.vidid);
             }
         }
@@ -309,7 +313,6 @@ function setPlayerTime(player) {
 function addItems(currentItemsList, activeItemsList) {
     // Show which players are not active but should be added
     let addMediaItems = activeItemsList.filter(x => !currentItemsList.includes(x));
-
     // And add them
     if (Array.isArray(addMediaItems)) {
         // Ok, so addMediaItems is an actual Array, so we can loop over it
@@ -339,7 +342,7 @@ function addItems(currentItemsList, activeItemsList) {
                                 $("#" + playerId + "_div").remove();
                             });
 
-                            var newMediaItemSource = $("<source />")
+                            $("<source />")
                                 .attr("src", mediaItem.url)
                                 .attr("type", mediaItem.media_type + "/" + mediaItem.format)
                                 .appendTo(newMediaItem);
@@ -384,7 +387,7 @@ function addItems(currentItemsList, activeItemsList) {
                                 'src': mediaItem.image,
                                 'style': 'float: right; width: 35%'
                             }))
-                            var newMediaItemTitle = $('<h6 />')
+                            var newMediaItemTitle = $('<h3 />')
                                 .text(formatTime(mediaItem.start_date) + ' - ' + mediaItem.title);
 
                             break;
@@ -403,9 +406,13 @@ function addItems(currentItemsList, activeItemsList) {
 
                                 $('#modal-fulltitle').text(mediaItem.title);
                                 $('#modal-content').html(mediaItem.content);
-                                $('#modalModal').modal('show');
+                                $('#modalModal').modal({
+                                    backdrop: false,
+                                    show: true,
+                                    showClose: false
+                                })
                                 window.modals.push(mediaItem.vidid);
-
+                                $("#timekeeper").trigger('pause');
                             }
                             break;
 
@@ -437,16 +444,6 @@ function addItems(currentItemsList, activeItemsList) {
 
                         // TODO: We're not doing anything with the promise right now, but will need to later
                         playPromise = newMediaItem.trigger('play').promise();
-                    }
-
-                    if (mediaItem.media_type == 'html') {
-                        newMediaItem.readmore({
-                            collapsedHeight: 0,
-                            speed: 75,
-                            lessLink: '<button class="btn mr-2 mb-2 btn-info" type="button"><span class="btn-text"><a href="#">Read Less</a></span></button>',
-                            moreLink: '<button class="btn mr-2 mb-2 btn-primary" type="button"><span class="btn-text"><a href="#">Read More</a></span></button>',
-                            blockCSS: 'display: block; float: right;'
-                        })
                     }
 
                     if (mediaItem.media_type == 'video') {
@@ -495,10 +492,9 @@ function addItems(currentItemsList, activeItemsList) {
 // Every time the media player's time changes, this function weill be called
 // This is our main running function
 window.johng.tick(true, function (activeItems, timestamp) {
-
     var plusSixtySeconds = window.johng.data(timestamp + 60);
     plusSixtySeconds.forEach(function (item) {
-        if (item.media_type == 'audio' || item.media_type == 'video') {
+        if (item.media_type == 'audio') { // just audio players for now
             preloadMediaFile(item.media_type, item.url, item.vidid);
         }
     });
@@ -507,6 +503,8 @@ window.johng.tick(true, function (activeItems, timestamp) {
     // Set some variables
     let currentItemsList = [], activeItemsList = [], currentItems = [];
     $('.timeText').text(getTimeText(window.timekeeper.currentTime));
+
+
     // We slice the currentItems list so we can an Array instead of an HTMLCollection
     currentItems = Array.prototype.slice.call(document.querySelectorAll("div.embededHTML, video:not(.handsoff), audio:not(.handsoff)"));
 

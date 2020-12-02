@@ -5,8 +5,8 @@ import urllib.request
 from urllib.parse import urlparse
 import os
 
-ACCESS_KEY = 'AKIAJ2VX3G2NN3QUN4GA'
-SECRET_KEY = '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'
+ACCESS_KEY = 'xxx'
+SECRET_KEY = 'xxx'
 BUCKET_NAME = 'videos.911realtime.org'
 URL_LIST = 'https://s3.amazonaws.com/videos.911realtime.org/files.txt'
 
@@ -45,7 +45,7 @@ with open('/src/files.txt', 'r') as f:
 print("+++++")
 
 with open('/src/files.txt') as file:
-    for url_item in file: 
+    for url_item in file:
         firstpos = url_item.rfind("/")
         lastpos = len(url_item)
         filename = url_item[firstpos+1:lastpos].rstrip().lstrip()

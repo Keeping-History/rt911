@@ -5,27 +5,36 @@
 // Midnight Easter Time, and runs to 11:59:59 PM the same day.
 //
 
-window.start = "08:46:15";
+window.start = "08:46:39";
 
 updateData();
 
 // Setup things when the document is ready
 $(function () {
 
-    $("#closemodal span.form-check-x").on("click", function() {
-        $('#modalModal').modal('hide');
-    })
+    $("#nav-list li").on("mouseenter", function () {
+        $(this).children().show();
+    });
 
-    $('#modalModal').on('show.bs.modal', function (e) {
-        $("#timekeeper").trigger('pause');
-    })
-    $('#modalModal').on('hide.bs.modal', function (e) {
-        $("#timekeeper").trigger('play');
-    })
+    $("#nav-list li").on("mouseleave", function () {
+        $(this).children().hide();
+    });
+
     $(".nav-link").click(function () {
         pauseAllPlayers();
         jumpIt(moment($(this).children().text(), ["h:mm A"]).format("HH:mm:ss"));
     });
+
+    $(".close-modal-button").click(function () {
+        $.modal.close();
+        $("#timekeeper").trigger('play');
+    })
+
+    $('.close-modal-command').click(function (event) {
+        event.preventDefault();
+        $.modal.close();
+        $("#timekeeper").trigger('play');
+    })
 
     $("#playButton").on("click", function () {
         $("#timekeeper").trigger('play');
@@ -57,35 +66,6 @@ $(function () {
             pauseAllPlayers()
         };
     }, 1000);
-    // Enable our tooltips for navigation items
-    $('[data-toggle="tooltip"]').tooltip();
-
-    // Turn on our AOL hold overlay and start the show
-    //overlayOn();
-    //$('#aol').trigger("play");
-
-    // Once the AOL vid is done, let's close it.
-    $('#aol').on("ended", function(){
-        overlayOff();
-    })
-
-    $('#closeaudio').on('click', function() {
-        muteAudioPlayers();
-        $('#audiocards').hide();
-  })
-
-    $('#closehtml').on('click', function () {
-        $('#htmlcards').hide();
-    })
-
-    $('#closevideo').on('click', function () {
-        $('#videocards').hide();
-    })
-
-    // Once the pop-up is gone, remove the remove button.
-    $('#closepopup').on('click', function(){
-        overlayOff();
-    })
 
     muteAudioPlayers();
 
