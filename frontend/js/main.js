@@ -22,7 +22,6 @@ $(function () {
         $(this).children("ul").hide();
     });
 
-
     $(".close-modal-button").click(function () {
         $.modal.close();
         $("#timekeeper").trigger('play');
