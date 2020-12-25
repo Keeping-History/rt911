@@ -47,6 +47,8 @@ def index(request):
             if request.GET['collection'] != 'all':
                 q &= Q(collection=request.GET['collection'])
 
+        q &= Q(approved=True)
+
     # Activate our (lazy) filters and get the actual data
     data = list(
         Media.objects.values()
