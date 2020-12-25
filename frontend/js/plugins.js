@@ -1,6 +1,6 @@
 window.start = "08:46:39";
 
-window.baseremoteurl = "https://media.911realtime.org/media/";
+window.baseremoteurl = "https://api.911realtime.org/";
 window.timekeeper = $('#timekeeper').get(0);
 
 window.modals = []
