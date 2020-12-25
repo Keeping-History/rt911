@@ -41,7 +41,7 @@
 }
 
 #videoplayermain {
-  background: url("../img/static.gif");
+  background: url("img/static.gif");
   text-align: center;
 }
 
@@ -69,7 +69,7 @@
 }
 
 #videoPlayerMainHolder {
-  background: url(../img/static.gif);
+  background: url("img/static.gif");
   min-height: 50vh;
 }
 #videoplayermain div {
