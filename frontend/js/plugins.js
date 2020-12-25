@@ -80,9 +80,6 @@ function setReadMores() {
     });
 }
 
-
-
-
 function isMediaReady(activeItems) {
     activeItems.forEach(element => {
         if (element.media_type == 'video') {
@@ -93,21 +90,10 @@ function isMediaReady(activeItems) {
     });
 }
 
-
-
-
-
-
-
 function isPlaying(playerId) {
     var player = document.getElementById(playerId);
     return !player.paused && !player.ended && 0 < player.currentTime;
 }
-
-
-
-
-
 
 // Jump to the right timestamp
 function jumpIt(timeString) {
@@ -218,9 +204,9 @@ function addItems(currentItemsList, activeItemsList) {
                             });
 
                             var mediaType
-                            if(mediaItem.format == 'm3u8') {
+                            if (mediaItem.format == 'm3u8') {
                                 mediaType = "application/vnd.apple.mpegurl"
-                            } else if(mediaItem.format == "mpd") {
+                            } else if (mediaItem.format == "mpd") {
                                 mediaType = "application/dash+xml"
                             } else (
                                 mediaType = mediaItem.media_type + "/" + mediaItem.format
@@ -276,11 +262,11 @@ function addItems(currentItemsList, activeItemsList) {
                                 .append('<hr />')
 
                             var newMediaItemTitle = $('<h3 />')
-                                
+
                                 .text(' - ' + mediaItem.title)
                                 .prepend($('<span />').html(formatTime(mediaItem.start_date)))
 
-                                break;
+                            break;
 
                         case 'modal':
                             if (jQuery.inArray(mediaItem.vidid, window.modals) === -1) {
@@ -376,7 +362,7 @@ function addItems(currentItemsList, activeItemsList) {
     }
 
     const audioPlayers = Plyr.setup('.plyr-audio', { controls: ['current-time', 'duration', 'mute'] });
-    const videoPlayers = Plyr.setup('.plyr-video', { controls: [''], clickToPlay: false});
+    const videoPlayers = Plyr.setup('.plyr-video', { controls: [''], clickToPlay: false });
 
 }
 
