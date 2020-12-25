@@ -76,7 +76,7 @@ class Media(models.Model):
     @property
     def mediaType(self):
         mediaTypes = {
-            'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg']),
+            'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg', 'm3u8', 'm3u']),
             'audio': set(['mp3', 'aac', 'ogg', 'flac', 'webm', 'wav']),
             'html': set(['html']),
             'modal': set(['modal']),
