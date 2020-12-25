@@ -16,49 +16,9 @@ $(function () {
     $(".resizable").resizable();
 
     //Enable Icons and Menu items to be clickable and open their windows/apps
-    $("#icon-tv").dblclick(function () {
-        $("#tv").removeClass('hidden').css("z-index", "9000");
-    });
-
-    $("#icon-news").dblclick(function () {
-        $("#news").removeClass('hidden').css("z-index", "9000");;
-        setReadMores();
-    });
-
-    $("#icon-audio").dblclick(function () {
-        $("#audio").removeClass('hidden').css("z-index", "9000");;
-    });
-
-    //var res = str.split(" ");
-
-    $("#menu-tv").click(function () {
-        $("#tv").removeClass('hidden').css("z-index", "9000");;
-    });
-
-    $("#menu-news").click(function () {
-        $("#news").removeClass('hidden').css("z-index", "9000");;
-        setReadMores();
-    });
-
-    $("#menu-audio").click(function () {
-        $("#audio").removeClass('hidden').css("z-index", "9000");;
-    });
-
-    $("#menu-about").click(function () {
-        $("#about").removeClass('hidden').css("z-index", "9000");
-    });
-
-    $("#menu-play").click(function () {
-        $("#timekeeper").trigger('play');
-    });
-
-    $("#menu-pause").click(function () {
-        $("#timekeeper").trigger('pause');
-    });
-
-    $("#menu-settings").click(function () {
-        $("#settings").removeClass('hidden');
-    });
+    $(".icon").dblclick(function () {
+        $("#" + $(this).get(0).id.split("-")[1]).removeClass('hidden').css("z-index", "9000");
+    })
 
     // Zoom Box -- Make Window Full Screen and toggle back
     $(".zoom-box").on("click", function () {
@@ -115,7 +75,7 @@ $(function () {
         }
 
     });
-
+    
     // Close Box -- Close the window when clicked
     $(".close-box, .close-button").on("click", function () {
         a = this.closest(".content");
@@ -128,5 +88,33 @@ $(function () {
         $(this).css("z-index", "1200");
     });
 
+    $("#menu-tv").click(function () {
+        $("#tv").removeClass('hidden').css("z-index", "9000");;
+    });
+
+    $("#menu-news").click(function () {
+        $("#news").removeClass('hidden').css("z-index", "9000");;
+        setReadMores();
+    });
+
+    $("#menu-audio").click(function () {
+        $("#audio").removeClass('hidden').css("z-index", "9000");;
+    });
+
+    $("#menu-about").click(function () {
+        $("#about").removeClass('hidden').css("z-index", "9000");
+    });
+
+    $("#menu-play").click(function () {
+        $("#timekeeper").trigger('play');
+    });
+
+    $("#menu-pause").click(function () {
+        $("#timekeeper").trigger('pause');
+    });
+
+    $("#menu-settings").click(function () {
+        $("#settings").removeClass('hidden');
+    });
 
 });
