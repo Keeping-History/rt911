@@ -1,5 +1,6 @@
+window.start = "08:46:39";
 
-window.baseremoteurl = "https://civil-clarity-280121.ue.r.appspot.com/media/";
+window.baseremoteurl = "https://media.911realtime.org/media/";
 window.timekeeper = $('#timekeeper').get(0);
 
 window.modals = []
@@ -79,39 +80,8 @@ function setReadMores() {
     });
 }
 
-function setTimeAllPlayers() {
-    $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
-        $(this).get(0).currentTime = setPlayerTime(this);
-    });
-}
 
-function muteAllPlayers() {
-    $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
-        $(this).prop('muted', true);
-    });
-}
 
-function unmuteAudioPlayers() {
-    $("audio:not(.handsoff)").prop('muted', false);
-}
-
-function muteAudioPlayers() {
-    $("audio:not(.handsoff)").prop('muted', true);
-}
-
-function preloadMediaFile(mediaType, url, id) {
-    if (!$("#" + id + "_preload").length && mediaType == "audio") {
-        a = $('<' + mediaType + ' />')
-            .attr('src', url)
-            .attr('id', id + '_preload')
-            .attr('preload', true)
-            .attr('autoplay', false)
-            .attr('muted', true)
-            .css('display', 'none')
-            .addClass('handsoff')
-            .appendTo('#preloads');
-    }
-};
 
 function isMediaReady(activeItems) {
     activeItems.forEach(element => {
@@ -123,111 +93,21 @@ function isMediaReady(activeItems) {
     });
 }
 
-//convert12Hto24H Convert 12H time format to 24H time format
-function convert12Hto24H(stringTimeInput) {
-    stringTime = $.trim(stringTimeInput)
-    const [time, modifier] = stringTime.split(' ');
-    let [hours, minutes, seconds] = time.split(':');
-    if (seconds === undefined) {
-        seconds = "00";
-    }
 
-    if (hours === '12') {
-        hours = '00';
-    }
 
-    if (modifier.toUpperCase() === 'PM') {
-        hours = parseInt(hours, 10) + 12;
-    }
 
-    return `${hours}:${minutes}:${seconds}`;
-}
 
-//Get the Current time in text format
-function getTimeText(seconds) {
-    var d = new Date(0);
-    d.setSeconds(seconds); // specify value for SECONDS here
-    var stringDate = (d.getHours() + 6) + ":" + zeroFill(d.getMinutes(), 2) + ":" + zeroFill(d.getSeconds(), 2)
 
-    return stringDate;
-}
-
-function zeroFill(number, width) {
-    width -= number.toString().length;
-    if (width > 0) {
-        return new Array(width + (/\./.test(number) ? 2 : 1)).join('0') + number;
-    }
-    return number + ""; // always return a string
-}
-
-function formatTime(date) {
-    date = Date.parse(date)
-    var hours = date.getHours();
-    var minutes = date.getMinutes();
-    var ampm = hours >= 12 ? 'pm' : 'am';
-    hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-    minutes = minutes < 10 ? '0' + minutes : minutes;
-    var strTime = hours + ':' + minutes + ' ' + ampm;
-    return (strTime)
-}
 
 function isPlaying(playerId) {
     var player = document.getElementById(playerId);
     return !player.paused && !player.ended && 0 < player.currentTime;
 }
 
-function setPlayerTime(player) {
-    var dataItem = window.data.find(data => data.vidid === player.id);
-    return johng.timestamp() - hmsToSeconds(dataItem.start) + dataItem.jump;
-}
 
-function setTimeAllPlayers() {
-    $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
-        $(this).get(0).currentTime = setPlayerTime(this);
-    });
-}
 
-function pauseAllPlayers() {
-    $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
-        $(this).get(0).pause();
-        // if (playPromise !== undefined) {
-        //     playPromise.then(function () {
-        //         // Automatic playback started!
-        //     }).catch(function (error) {
-        //         // Automatic playback failed.
-        //         // Show a UI element to let the user manually start playback.
-        //     });
-        // }
-    });
-}
 
-function playAllPlayers() {
-    $('video:not(.handsoff), audio:not(.handsoff)').each(function () {
-        var playPromise = $(this).get(0).play();
-        // In browsers that don’t yet support this functionality,
-        // playPromise won’t be defined.
-        if (playPromise !== undefined) {
-            playPromise.then(function () {
-                // Automatic playback started!
-            }).catch(function (error) {
-                // Automatic playback failed.
-                // Show a UI element to let the user manually start playback.
-            });
-        }
-    });
-}
 
-function preloadPlayers(data) {
-    if (data != undefined || data.length > 0) {
-        data.forEach(function (item) {
-            if (item.media_type == 'audio') { // just audio files for now
-                preloadMediaFile(item.media_type, item.url, item.vidid);
-            }
-        }
-        )
-    };
-}
 
 // Jump to the right timestamp
 function jumpIt(timeString) {
@@ -241,7 +121,7 @@ function addTimekeeperListeners() {
 
     // When the timkekeeper is loaded, jump to the start point,
     // load the videos and then pause, ready for play.
-    $('#timekeeper').on('loadeddata', function () {
+    $('#timekeeper').on('canplay', function () {
         jumpIt(window.start);
         setTimeAllPlayers();
         muteAudioPlayers();
@@ -297,16 +177,11 @@ function updateData() {
 
     updateTimelineData(window.data);
 
-    $('#timekeeper').trigger('pause')
+    $('#timekeeper').trigger('pause');
 }
 
 function updateTimelineData(data) {
-    johng.all_data(data);
-}
-
-function setPlayerTime(player) {
-    var dataItem = window.data.find(data => data.vidid === player.id);
-    return window.johng.timestamp() - hmsToSeconds(dataItem.start) + dataItem.jump;
+    window.johng.all_data(data);
 }
 
 
@@ -328,7 +203,7 @@ function addItems(currentItemsList, activeItemsList) {
                     // If not, then let's create a container...
                     var newMediaItemContainer = $("<div/>")
                         .attr("id", playerId + "_div")
-
+                    connsole.log(mediaItem)
                     switch (mediaItem.media_type) {
 
                         case 'video':
@@ -342,14 +217,24 @@ function addItems(currentItemsList, activeItemsList) {
                                 $("#" + playerId + "_div").remove();
                             });
 
+                            var mediaType
+                            if(mediaItem.format == 'm3u8') {
+                                mediaType = "application/vnd.apple.mpegurl"
+                            } else if(mediaItem.format == "mpd") {
+                                mediaType = "application/dash+xml"
+                            } else (
+                                mediaType = mediaItem.media_type + "/" + mediaItem.format
+                            );
+
                             $("<source />")
                                 .attr("src", mediaItem.url)
-                                .attr("type", mediaItem.media_type + "/" + mediaItem.format)
+                                .attr("type", mediaType)
                                 .appendTo(newMediaItem);
 
                             var newMediaItemTitle = $("<h2 />")
                                 .attr("id", playerId + '_title')
-                                .text(mediaItem.source);
+                                .text(mediaItem.source)
+                                .addClass('videotitle');
 
                             break;
 
@@ -365,7 +250,7 @@ function addItems(currentItemsList, activeItemsList) {
                                     $("#" + playerId + "_div").remove();
                                 });
 
-                                var newMediaItemSource = $("<source />")
+                            var newMediaItemSource = $("<source />")
                                 .attr("src", mediaItem.url)
                                 .attr("type", mediaItem.media_type + "/" + mediaItem.format)
                                 .appendTo(newMediaItem);
@@ -381,24 +266,30 @@ function addItems(currentItemsList, activeItemsList) {
                             var newMediaItem = $('<div />', {
                                 'id': playerId
                             })
-                                .addClass('embededHTML')
-                                .html(mediaItem.content);
-                            newMediaItem.prepend($('<img />', {
-                                'src': mediaItem.image,
-                                'style': 'float: right; width: 35%'
-                            }))
-                            var newMediaItemTitle = $('<h3 />')
-                                .text(formatTime(mediaItem.start_date) + ' - ' + mediaItem.title);
+                                .addClass('htmlitem')
+                                .html(mediaItem.content)
+                                .prepend($('<img />', {
+                                    'src': mediaItem.image,
+                                    'style': 'float: right;',
+                                    'class': 'htmlsimage'
+                                }))
+                                .append('<hr />')
 
-                            break;
+                            var newMediaItemTitle = $('<h3 />')
+                                
+                                .text(' - ' + mediaItem.title)
+                                .prepend($('<span />').html(formatTime(mediaItem.start_date)))
+
+                                break;
 
                         case 'modal':
                             if (jQuery.inArray(mediaItem.vidid, window.modals) === -1) {
                                 $('#modal-title').text(mediaItem.source);
                                 $('#modal-time').text(mediaItem.start);
 
-                                if(mediaItem.image != "") {
+                                if (mediaItem.image != "") {
                                     $("#modal-image").attr("src", mediaItem.image);
+                                    $("#modal-image").attr("alt", mediaItem.image_caption);
                                     if (mediaItem.image_caption != "") {
                                         $("#modal-image-caption").html(mediaItem.image_caption);
                                     }
@@ -420,7 +311,7 @@ function addItems(currentItemsList, activeItemsList) {
                             var newMediaItem = $('<div />', {
                                 'id': playerId
                             })
-                                .addClass('embededHTML')
+                                .addClass('htmlitem')
                                 .text(mediaItem.full_title)
 
                             var newMediaItemTitle = $()
@@ -485,7 +376,7 @@ function addItems(currentItemsList, activeItemsList) {
     }
 
     const audioPlayers = Plyr.setup('.plyr-audio', { controls: ['current-time', 'duration', 'mute'] });
-    //const videoPlayers = Plyr.setup('.plyr-video', { controls: [''] });
+    const videoPlayers = Plyr.setup('.plyr-video', { controls: [''], clickToPlay: false});
 
 }
 
@@ -506,7 +397,7 @@ window.johng.tick(true, function (activeItems, timestamp) {
 
 
     // We slice the currentItems list so we can an Array instead of an HTMLCollection
-    currentItems = Array.prototype.slice.call(document.querySelectorAll("div.embededHTML, video:not(.handsoff), audio:not(.handsoff)"));
+    currentItems = Array.prototype.slice.call(document.querySelectorAll("div.htmlitem, video:not(.handsoff), audio:not(.handsoff)"));
 
     // The activeItems is passed in to the function each time it is run
     activeItems.forEach(function (item) {
@@ -518,9 +409,7 @@ window.johng.tick(true, function (activeItems, timestamp) {
         currentItemsList.push(item.id);
     })
 
-    isMediaReady(activeItems);
-
     addItems(currentItemsList, activeItemsList);
     removeItems(currentItemsList, activeItemsList);
 
-});
+})
