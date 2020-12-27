@@ -338,6 +338,42 @@
                 <button class="command_button close-modal-button">Close</button>
             </div>
         </div>
+
+        <audio controls id="timekeeper" class="handsoff hidden" preload="auto">
+            <source src="rsrc/out.mp3" type="audio/mpeg" />
+            Your browser does not support the HTML audio element.
+        </audio>
+        <div id="preloads" class="hidden"></div>
+        <div id="templates" class="hidden">
+            <script id="audio_player_template" type="x-tmpl-mustache">
+                <div id="{{PlayerID}}_div">
+                    <h2 id="{{PlayerID}}_title" class="audiotitle">{{Title}}</h2>
+                    <audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio">
+                        <source src="{{AudioURL}}" type="{{Type}}">
+                    </audio>
+                </div>
+            </script>
+            <script id="html_item_template" type="x-tmpl-mustache">
+                <div id="{{ItemID}}_div">
+                    <h3>
+                        <span>{{Time}}</span> - {{Title}}
+                    </h3>
+                    <div id="{{ItemID}}" class="htmlitem">
+                        <img src="{{ImageURL}}" style="float:right;" class="htmlsimage">
+                        {{{Content}}}
+                    </div>
+                </div>
+            </script>
+             <script id="video_item_template" type="x-tmpl-mustache">
+                <div id="{{PlayerID}}_div">
+                    <h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2>
+                    <video id="{{PlayerID}}" controls="false" muted="true" preload="true" class="plyr-video">
+                        <source src="{{VideoURL}}" type="{{Type}}">
+                    </audio>
+                </div>
+            </script>
+       </div>
+
         <script src="index.js"></script>
         <script src="js/memento.js"></script>
         <script src="js/plugins.js"></script>
