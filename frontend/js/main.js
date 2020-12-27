@@ -10,7 +10,7 @@ $(function () {
     muteAudioPlayers();
     updateData();
     pauseAllPlayers();
-
+    
     $("#nav-list li").on("mouseenter", function () {
         $(this).children().show();
     });
@@ -47,7 +47,6 @@ $(function () {
     })
 
     $('.ffrw').on("click", function () {
-        console.log(parseInt($(this).data("skip")));
         moveTime(parseInt($(this).data("skip")));
     });
 
