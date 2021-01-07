@@ -50,7 +50,7 @@ jmespath==0.10.0
 jsonpatch==1.26
 jsonpointer==2.0
 lazy-object-proxy==1.4.3
-lxml==4.6.1
+lxml==4.6.2
 MarkupPy==1.14
 MarkupSafe==1.1.1
 mccabe==0.6.1
