@@ -365,7 +365,7 @@ function create_html(playerId, mediaItem) {
 
 function create_video(playerId, mediaItem) {
     if (mediaItem.format == 'm3u8') {
-        mediaType = "application/vnd.apple.mpegurl"
+        mediaType = "application/x-mpegURL"
     } else if (mediaItem.format == "mpd") {
         mediaType = "application/dash+xml"
     } else (
