@@ -98,9 +98,11 @@
   overflow-x: hidden;
   overflow-y: scroll;
 }
+
 #audios div {
     max-width: 13rem;
-  }
+    max-height: 6rem;
+}
 
 #htmls {
   max-height: 50vh;

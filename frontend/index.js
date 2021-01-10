@@ -25,11 +25,6 @@ $(function () {
         b = this.closest(".content");
         isMax = $(this).data("max");
 
-        width = $(b).css("width");
-        height = $(b).css("height");
-        window_top = $(b).css("top");
-        left = $(b).css("left");
-
         if (!isMax) {
             $(b)
                 .css("width", "99%")
@@ -37,12 +32,12 @@ $(function () {
                 .css("left", ".5rem")
                 .css("top", "2.5rem");
 
-            $(this).data("width", width);
-            $(this).data("height", "");
-            $(this).data("top", window_top);
-            $(this).data("left", left);
-
-            $(this).data("max", true);
+            $(this)
+                .data("width", $(b).css("width"))
+                .data("height", $(b).css("height"))
+                .data("top", $(b).css("top"))
+                .data("left", $(b).css("left"))
+                .data("max", true);
 
         } else {
             $(b)
@@ -51,7 +46,9 @@ $(function () {
                 .css("top", $(this).data("top"))
                 .css("left", $(this).data("left"))
                 .css("z-index","900")
-            d = $(this).data("max", false);
+
+            $(this)
+                .data("max", false);
 
         }
     });
