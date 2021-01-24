@@ -1,396 +1,390 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Mac OS 8.1</title>
+	<link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="structure.css">
+	<link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="rt911.css">
+	<link rel="stylesheet" href="fonts/charcoal.css">
+	<link rel="stylesheet" href="fonts/chicagoflf.css">
+	<link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 
-    <head>
-        <meta charset="UTF-8" />
-        <title>Mac OS 8.1</title>
-        <link rel="shortcut icon" href="img/favicon.ico" />
-        <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet" />
-        <link rel="stylesheet" href="structure.css" />
-        <link rel="stylesheet" href="style.css" />
-        <link rel="stylesheet" href="rt911.css" />
-        <link rel="stylesheet" href="fonts/charcoal.css" />
-        <link rel="stylesheet" href="fonts/chicagoflf.css" />
-        <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet" />
-        <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
-        <link type="text/css" href="https://cdn.plyr.io/3.6.2/plyr.css" rel="stylesheet" />
-        <script src="https://cdn.jsdelivr.net/npm/hls.js"></script>
-        <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
-        <script src="https://www.google-analytics.com/analytics.js" async></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/readmore-js@2.2.1/readmore.min.js"></script>
-        <script src="https://cdn.plyr.io/3.6.2/plyr.polyfilled.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js"></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css" /> </head>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
+	<link type="text/css" href="https://cdn.plyr.io/3.6.2/plyr.css" rel="stylesheet">
+	<script src="https://cdn.jsdelivr.net/npm/hls.js@0.14.17/dist/hls.min.js"></script>
+	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
+	<script src="https://www.google-analytics.com/analytics.js" async></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/readmore-js@2.2.1/readmore.min.js"></script>
+	<script src="https://cdn.plyr.io/3.6.2/plyr.polyfilled.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/mustache.js/4.1.0/mustache.min.js" integrity="sha512-HYiNpwSxYuji84SQbCU5m9kHEsRqwWypXgJMBtbRSumlx1iBB6QaxgEBZHSHEGM+fKyCX/3Kb5V5jeVXm0OglQ==" crossorigin="anonymous"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css">
+	<script src="js/memento.js"></script>
+	<script src="index.js"></script>
+</head>
 
-    <body>
-        <audio controls id="timekeeper" class="handsoff hidden" preload="auto">
-            <source src="rsrc/out.mp3" type="audio/mpeg" /> Your browser does not support the HTML audio element. </audio>
-        <div id="preloads" class="hidden"></div>
-        <nav>
-            <div id="nav-wrapper">
-                <ul id="nav-list">
-                    <li id="apple-logo">
-                        <ul class="menu command_button">
-                            <li id="menu-tv"> <img src="img/tv.png" width="16" alt="TV Tuner" /> TV Tuner </li>
-                            <li id="menu-news"> <img src="img/news.png" width="16" alt="News Reader" /> News </li>
-                            <li id="menu-audio"> <img src="img/sound.png" width="16" alt="Audio Browser" /> Audio </li>
-                        </ul>
-                    </li>
-                    <li> File
-                        <ul class="menu command_button">
-                            <li id="menu-play"> <img src="img/tv.png" width="16" alt="Play" /> Play </li>
-                            <li id="menu-pause"> <img src="img/tv.png" width="16" alt="Pause" /> Pause </li>
-                            <li id="menu-settings"> <img src="img/tv.png" width="16" alt="Settings" /> Settings </li>
-                        </ul>
-                    </li>
-                    <li> Edit
-                        <ul class="menu command_button">
-                            <li id="menu-controls"> <img src="img/tv.png" width="16" alt="Controls Window" /> Controls </li>
-                        </ul>
-                    </li>
-                    <li> Help
-                        <ul class="menu command_button">
-                            <li id="menu-about">About</li>
-                        </ul>
-                    </li>
-                    <li id="macoslogo"> <img src="img/macos.svg" alt="MacOS" /> </li>
-                    <li id="time" class="time text-center timeText">8:39 PM</li>
-                </ul>
-            </div>
-        </nav>
-        <div id="icon-holder" title="Desktop">
-            <div class="icon draggable-icon ui-widget-content" id="icon-tv"> <img src="img/tv.png" alt="TV Tuner" />
-                <h2>TV Tuner</h2> </div>
-            <div class="icon draggable-icon ui-widget-content" id="icon-news"> <img src="img/news.png" alt="News Reader" />
-                <h2>News</h2> </div>
-            <div class="icon draggable-icon ui-widget-content" id="icon-audio"> <img src="img/sound.png" alt="Audio Browser" />
-                <h2>Audio</h2> </div>
-        </div>
-        <div id="controls" class="content draggable-window" style="text-align: center">
-            <div class="control-box close-box">
-                <a class="control-box-inner"></a>
-            </div>
-            <div class="control-box zoom-box hidden">
-                <div class="control-box-inner">
-                    <div class="zoom-box-inner"></div>
-                </div>
-            </div>
-            <div class="control-box windowshade-box hidden">
-                <div class="control-box-inner">
-                    <div class="windowshade-box-inner"></div>
-                </div>
-            </div>
-            <h1 class="title noright">
-        <span>Controls</span>
-      </h1>
-            <div class="inner">
-                <div id="controls-inner">
-                    <button id="rewindButton1" class="command_button ffrw" data-skip="-300"> &laquo; </button>
-                    <button id="rewindButton2" class="command_button ffrw" data-skip="-30"> &lsaquo; </button>
-                    <button id="playButton" class="command_button">Play</button>
-                    <button id="pauseButton" class="command_button">Pause</button>
-                    <button id="forwardButton1" class="command_button ffrw" data-skip="30"> &rsaquo; </button>
-                    <button id="forwardButton2" class="command_button ffrw" data-skip="300"> &raquo; </button>
-                </div>
-            </div>
-        </div>
-        <div id="news" class="content hidden draggable-window" style="text-align: center">
-            <div class="control-box close-box">
-                <a class="control-box-inner"></a>
-            </div>
-            <div class="control-box zoom-box">
-                <div class="control-box-inner">
-                    <div class="zoom-box-inner"></div>
-                </div>
-            </div>
-            <div class="control-box windowshade-box">
-                <div class="control-box-inner">
-                    <div class="windowshade-box-inner"></div>
-                </div>
-            </div>
-            <h1 class="title">
-        <span>News Ticker</span>
-      </h1>
-            <div class="inner">
-                <div id="htmls"></div>
-            </div>
-        </div>
-        <div id="audio" class="content hidden draggable-window" style="text-align: center">
-            <div class="control-box close-box">
-                <a class="control-box-inner"></a>
-            </div>
-            <div class="control-box zoom-box">
-                <div class="control-box-inner">
-                    <div class="zoom-box-inner"></div>
-                </div>
-            </div>
-            <div class="control-box windowshade-box">
-                <div class="control-box-inner">
-                    <div class="windowshade-box-inner"></div>
-                </div>
-            </div>
-            <h1 class="title">
-        <span>Audio Player</span>
-      </h1>
-            <div class="inner">
-                <input id="mute_all_audio" class="form-check-input" type="checkbox" checked /> <img id="radio_mute_icon" src="https://win98icons.alexmeub.com/icons/png/loudspeaker_muted-0.png" class="icon-titlebar float-right" alt="Mute Audio" />
-                <div id="audioplayermain"></div>
-                <div id="audios"></div>
-            </div>
-        </div>
-        <div id="tv" class="content hidden draggable-window">
-            <div class="control-box close-box">
-                <a class="control-box-inner"></a>
-            </div>
-            <div class="control-box zoom-box">
-                <div class="control-box-inner">
-                    <div class="zoom-box-inner"></div>
-                </div>
-            </div>
-            <div class="control-box windowshade-box">
-                <div class="control-box-inner">
-                    <div class="windowshade-box-inner"></div>
-                </div>
-            </div>
-            <h1 class="title">
-        <span>TV Tuner</span>
-      </h1>
-            <div class="inner">
-                <div id="videoPlayerMainHolder" class="card-body">
-                    <div id="videoplayermain"></div>
-                </div>
-                <div id="channel-guide">
-                    <h1 id="channel-guide-header">Channel Guide</h1>
-                    <div id="videos-wrapper">
-                        <div id="videos"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div id="about" class="content hidden draggable-window" style="text-align: center">
-            <div class="control-box close-box">
-                <a class="control-box-inner"></a>
-            </div>
-            <div class="control-box zoom-box">
-                <div class="control-box-inner">
-                    <div class="zoom-box-inner"></div>
-                </div>
-            </div>
-            <div class="control-box windowshade-box">
-                <div class="control-box-inner">
-                    <div class="windowshade-box-inner"></div>
-                </div>
-            </div>
-            <h1 class="title">
-        <span>About</span>
-      </h1>
-            <div class="inner">
-                <div class="icon"> <img src="img/mac.png" alt="Macintosh Computer" /> </div>
-                <ul>
-                    <li style="text-align: left">
-                        <h1>9/11 Realtime</h1>
-                        <p> <b>Thanks and Open Source Notices</b> </p>
-                        <p> <b>Based on classic.css by Nathanael Gentry</b> </p>
-                        <p> <a href="https://github.com/npjg/classic.css" target="_blank">classic.css on github.com</a
-              >
-            </p>
-            <p>
-              MIT License
-              <br />
-              <br />Copyright (c) 2019 Nathanael Gentry
-              <br />
-              <br />Permission is hereby granted, free of charge, to any person
-              obtaining a copy&nbsp;of this software and associated
-              documentation files (the "Software"), to deal&nbsp;in the Software
-              without restriction, including without limitation the
-              rights&nbsp;to use, copy, modify, merge, publish, distribute,
-              sublicense, and/or sell&nbsp;copies of the Software, and to permit
-              persons to whom the Software is furnished to do so, subject to the
-              following conditions:
-            </p>
-            <p>
-              The above copyright notice and this permission notice shall be
-              included in all&nbsp;copies or substantial portions of the
-              Software.
-              <br />&nbsp; <br />THE SOFTWARE IS &nbsp;PROVIDED "AS IS", WITHOUT
-              WARRANTY OF ANY KIND, EXPRESS OR&nbsp;IMPLIED, INCLUDING BUT NOT
-              LIMITED TO THE WARRANTIES OF MERCHANTABILITY,&nbsp;FITNESS FOR A
-              PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-              THE&nbsp;AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-              DAMAGES OR OTHER&nbsp;LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-              TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-              SOFTWARE OR THE USE OR OTHER DEALINGS IN THE&nbsp;SOFTWARE.
-            </p>
-            <p></p>
-          </li>
-        </ul>
-        <button class="command_button close-button">Close</button>
-      </div>
-    </div>
-    <div
-      id="settings"
-      class="content hidden draggable-window"
-      style="text-align: center"
-    >
-      <div class="control-box close-box">
-        <a class="control-box-inner"></a> </div>
-            <div class="control-box zoom-box">
-                <div class="control-box-inner">
-                    <div class="zoom-box-inner"></div>
-                </div>
-            </div>
-            <div class="control-box windowshade-box">
-                <div class="control-box-inner">
-                    <div class="windowshade-box-inner"></div>
-                </div>
-            </div>
-            <h1 class="title">
-        <span>Settings</span>
-      </h1>
-            <div class="inner">
-                <ul>
-                    <li style="text-align: left">
-                        <h1>Settings</h1>
-                        <div id="filterHolder" class="">
-                            <form id="filters">
-                                <ul>
-                                    <li class="hidden">
-                                        <label for="day">Date 🗓</label>
-                                        <select name="day" id="day" class="btn-primary">
-                                            <option value="9">September 9</option>
-                                            <option value="10">September 10</option>
-                                            <option value="11" selected="selected"> September 11 </option>
-                                            <option value="12">September 12</option>
-                                            <option value="13">September 13</option>
-                                            <option value="14">September 14</option>
-                                            <option value="15">September 15</option>
-                                            <option value="16">September 16</option>
-                                            <option value="17">September 17</option>
-                                            <option value="18">September 18</option>
-                                            <option value="19">September 19</option>
-                                            <option value="20">September 20</option>
-                                        </select>
-                                    </li>
-                                    <li>
-                                        <label for="network">📺 Network</label>
-                                        <select name="network" id="network" class="btn-primary">
-                                            <option value="all" selected="selected">All</option>
-                                        </select>
-                                    </li>
-                                    <li>
-                                        <label for="format">📺 Format</label>
-                                        <select name="format" id="format" class="btn-primary">
-                                            <option value="video">video</option>
-                                            <option value="audio">audio</option>
-                                            <option value="html">html</option>
-                                            <option value="all" selected="selected">All</option>
-                                        </select>
-                                    </li>
-                                    <li>
-                                        <label for="Collection">📺 Collection</label>
-                                        <select name="collection" id="Collection" class="btn-primary">
-                                            <option value="1">Main</option>
-                                            <option value="all" selected="selected">All</option>
-                                        </select>
-                                    </li>
-                                </ul>
-                            </form>
-                        </div>
-                    </li>
-                </ul>
-                <button class="command_button close-button">Close</button>
-            </div>
-        </div>
-        <div id="modalModal" class="content draggable-window modal" style="text-align: center">
-            <div class="close-modal-command control-box close-box close-modal"> <a class="control-box-inner" href="#close-modal" rel="modal:close">
-          Close
-        </a> </div>
-            <div class="control-box zoom-box">
-                <div class="control-box-inner">
-                    <div class="zoom-box-inner"></div>
-                </div>
-            </div>
-            <div class="control-box windowshade-box">
-                <div class="control-box-inner">
-                    <div class="windowshade-box-inner"></div>
-                </div>
-            </div>
-            <h1 class="title">
-        <span>About</span>
-      </h1>
-            <div class="inner">
-                <ul>
-                    <li style="text-align: left">
-                        <h1 id="modal-title">
-              <span id="modal-time" class="text-bold"></span>
-              <span id="modal-fulltitle">ALERT</span>
-            </h1> <img id="modal-image" src="img/blank.png" alt="none" />
-                        <p id="modal-image-caption" class="text-italic"></p>
-                        <p id="modal-content"></p>
-                    </li>
-                </ul>
-                <button class="command_button close-modal-button">Close</button>
-            </div>
-        </div>
+<body>
 
-        <audio controls id="timekeeper" class="handsoff hidden" preload="auto">
-            <source src="rsrc/out.mp3" type="audio/mpeg" />
-            Your browser does not support the HTML audio element.
-        </audio>
-        <div id="preloads" class="hidden"></div>
-        <div id="templates" class="hidden">
-            <script id="audio_player_template" type="x-tmpl-mustache">
-                <div id="{{PlayerID}}_div">
-                    <h2 id="{{PlayerID}}_title" class="audiotitle">{{Title}}</h2>
-                    <audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio">
-                        <source src="{{AudioURL}}" type="{{Type}}">
-                    </audio>
-                </div>
-            </script>
-            <script id="html_item_template" type="x-tmpl-mustache">
-                <div id="{{ItemID}}_div">
-                    <h3>
-                        <span>{{Time}}</span> - {{Title}}
-                    </h3>
-                    <div id="{{ItemID}}" class="htmlitem">
-                        <img src="{{ImageURL}}" style="float:right;" class="htmlsimage">
-                        {{{Content}}}
-                    </div>
-                </div>
-            </script>
-             <script id="video_item_template" type="x-tmpl-mustache">
-                <div id="{{PlayerID}}_div">
-                    <h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2>
-                    <video id="{{PlayerID}}" controls="false" muted="true" preload="true" class="plyr-video">
-                        <source src="{{VideoURL}}" type="{{Type}}">
-                    </audio>
-                </div>
-            </script>
-       </div>
+<div id="bootScreen" style="height:100%;width:100%;background:black;" class="" ></div>
+	<nav>
+		<div id="nav-wrapper">
+			<ul id="nav-list">
+				<li id="apple-logo">
+					<ul class="menu command_button">
+						<li id="menu-tv"><img src="img/tv.png" width="16" alt="TV Tuner"> TV Tuner</li>
+						<li id="menu-news"><img src="img/news.png" width="16" alt="News Reader"> News</li>
+						<li id="menu-audio"><img src="img/sound.png" width="16" alt="Audio Browser"> Audio</li>
+					</ul>
+				</li>
+				<li>File
+					<ul class="menu command_button">
+						<li id="menu-play"><img src="img/tv.png" width="16" alt="Play"> Play</li>
+						<li id="menu-pause"><img src="img/tv.png" width="16" alt="Pause"> Pause</li>
+						<li id="menu-settings"><img src="img/tv.png" width="16" alt="Settings"> Settings</li>
+					</ul>
+				</li>
+				<li>Edit
+					<ul class="menu command_button">
+					s	<li id="menu-controls"><img src="img/tv.png" width="16" alt="Controls Window"> Controls</li>
+					</ul>
+				</li>
+				<li>Help
+					<ul class="menu command_button">
+						<li id="menu-about">About</li>
+					</ul>
+				</li>
+				<li id="macoslogo"><img src="img/macos.svg" alt="MacOS"></li>
+				<li id="time" class="time text-center timeText">8:39 PM</li>
+			</ul>
+		</div>
+	</nav>
+	<div id="icon-holder" title="Desktop">
+		<div class="icon draggable-icon ui-widget-content" id="icon-tv"><img src="img/tv.png" alt="TV Tuner">
+			<h2>TV Tuner</h2></div>
+		<div class="icon draggable-icon ui-widget-content" id="icon-news"><img src="img/news.png" alt="News Reader">
+			<h2>News</h2></div>
+		<div class="icon draggable-icon ui-widget-content" id="icon-audio"><img src="img/sound.png" alt="Audio Browser">
+			<h2>Audio</h2></div>
+	</div>
+	<div id="controls" class="content draggable-window" style="text-align:center">
+		<div class="control-box close-box">
+			<a class="control-box-inner"></a>
+		</div>
+		<div class="control-box zoom-box hidden">
+			<div class="control-box-inner">
+				<div class="zoom-box-inner"></div>
+			</div>
+		</div>
+		<div class="control-box windowshade-box hidden">
+			<div class="control-box-inner">
+				<div class="windowshade-box-inner"></div>
+			</div>
+		</div>
+		<h1 class="title noright"><span>Controls</span></h1>
+		<div class="inner">
+			<div id="controls-inner">
+				<button id="rewindButton1" class="command_button ffrw" data-skip="-300">&laquo;</button>
+				<button id="rewindButton2" class="command_button ffrw" data-skip="-30">&lsaquo;</button>
+				<button id="playButton" class="command_button">Play</button>
+				<button id="pauseButton" class="command_button">Pause</button>
+				<button id="forwardButton1" class="command_button ffrw" data-skip="30">&rsaquo;</button>
+				<button id="forwardButton2" class="command_button ffrw" data-skip="300">&raquo;</button>
+				<hr />
+				<label for"jumpItHour">H: </label><input id="jumpItHour" class="short-time-input" value="8" />
+				<label for"jumpItMinute">M: </label><input id="jumpItMinute" class="short-time-input" value="35" />
+				<label for"jumpItSecond">S: </label><input id="jumpItSecond" class="short-time-input" value="00" />
+				<button id="jumpItButton" class="command_button">GO</button>
+			</div>
+		</div>
+	</div>
+	<div id="news" class="content hidden draggable-window resizable" style="text-align:center">
+		<div class="control-box close-box">
+			<a class="control-box-inner"></a>
+		</div>
+		<div class="control-box zoom-box">
+			<div class="control-box-inner">
+				<div class="zoom-box-inner"></div>
+			</div>
+		</div>
+		<div class="control-box windowshade-box">
+			<div class="control-box-inner">
+				<div class="windowshade-box-inner"></div>
+			</div>
+		</div>
+		<h1 class="title"><span>News Ticker</span></h1>
+		<div class="inner">
+			<div id="htmls"></div>
+		</div>
+	</div>
+	<div id="audio" class="content hidden draggable-window" style="text-align:center">
+		<div class="control-box close-box">
+			<a class="control-box-inner"></a>
+		</div>
+		<div class="control-box zoom-box">
+			<div class="control-box-inner">
+				<div class="zoom-box-inner"></div>
+			</div>
+		</div>
+		<div class="control-box windowshade-box">
+			<div class="control-box-inner">
+				<div class="windowshade-box-inner"></div>
+			</div>
+		</div>
+		<h1 class="title"><span>Audio Player</span></h1>
+		<div class="inner">
+			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon" src="https://win98icons.alexmeub.com/icons/png/loudspeaker_muted-0.png" class="icon-titlebar float-right" alt="Mute Audio">
+			<div id="audioplayermain"></div>
+			<div id="audios"></div>
+		</div>
+	</div>
+	<div id="tv" class="content draggable-window resizable hidden">
+		<div class="control-box close-box">
+			<a class="control-box-inner"></a>
+		</div>
+		<div class="control-box zoom-box">
+			<div class="control-box-inner">
+				<div class="zoom-box-inner"></div>
+			</div>
+		</div>
+		<div class="control-box windowshade-box">
+			<div class="control-box-inner">
+				<div class="windowshade-box-inner"></div>
+			</div>
+		</div>
+		<h1 class="title"><span>TV Tuner</span></h1>
+		<div class="inner">
+			<div id="videoPlayerMainHolder" class="card-body">
+				<div id="videoplayermain"></div>
+			</div>
+			<div id="channel-guide">
+				<h1 id="channel-guide-header">Channel Guide</h1>
+				<div id="videos-wrapper">
+					<div id="videos"></div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div id="about" class="content hidden draggable-window" style="text-align:center">
+		<div class="control-box close-box">
+			<a class="control-box-inner"></a>
+		</div>
+		<div class="control-box zoom-box">
+			<div class="control-box-inner">
+				<div class="zoom-box-inner"></div>
+			</div>
+		</div>
+		<div class="control-box windowshade-box">
+			<div class="control-box-inner">
+				<div class="windowshade-box-inner"></div>
+			</div>
+		</div>
+		<h1 class="title"><span>About</span></h1>
+		<div class="inner">
+			<div class="icon"><img src="img/mac.png" alt="Macintosh Computer"></div>
+			<ul>
+				<li style="text-align:left">
+					<h1>9/11 Realtime</h1>
+					<p><b>Thanks and Open Source Notices</b></p>
+					<p><b>Based on classic.css by Nathanael Gentry</b></p>
+					<p><a href="https://github.com/npjg/classic.css" target="_blank">classic.css on github.com</a></p>
+					<p>MIT License
+						<br>
+						<br>Copyright (c) 2019 Nathanael Gentry
+						<br>
+						<br>Permission is hereby granted, free of charge, to any person obtaining a copy&nbsp;of this software and associated documentation files (the "Software"), to deal&nbsp;in the Software without restriction, including without limitation the rights&nbsp;to use, copy, modify, merge, publish, distribute, sublicense, and/or sell&nbsp;copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
+					<p>The above copyright notice and this permission notice shall be included in all&nbsp;copies or substantial portions of the Software.
+						<br>&nbsp;
+						<br>THE SOFTWARE IS &nbsp;PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR&nbsp;IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,&nbsp;FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE&nbsp;AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER&nbsp;LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE&nbsp;SOFTWARE.</p>
+					<p></p>
+				</li>
+			</ul>
+			<button class="command_button close-button">Close</button>
+		</div>
+	</div>
+	<div id="settings" class="content hidden draggable-window" style="text-align:center">
+		<div class="control-box close-box">
+			<a class="control-box-inner"></a>
+		</div>
+		<div class="control-box zoom-box">
+			<div class="control-box-inner">
+				<div class="zoom-box-inner"></div>
+			</div>
+		</div>
+		<div class="control-box windowshade-box">
+			<div class="control-box-inner">
+				<div class="windowshade-box-inner"></div>
+			</div>
+		</div>
+		<h1 class="title"><span>Settings</span></h1>
+		<div class="inner">
+			<ul>
+				<li style="text-align:left">
+					<h1>Settings</h1>
+					<div id="filterHolder">
+						<form id="filters">
+							<ul>
+								<li class="hidden">
+									<label for="day">Date 🗓</label>
+									<select name="day" id="day" class="btn-primary">
+										<option value="9">September 9</option>
+										<option value="10">September 10</option>
+										<option value="11" selected>September 11</option>
+										<option value="12">September 12</option>
+										<option value="13">September 13</option>
+										<option value="14">September 14</option>
+										<option value="15">September 15</option>
+										<option value="16">September 16</option>
+										<option value="17">September 17</option>
+										<option value="18">September 18</option>
+										<option value="19">September 19</option>
+										<option value="20">September 20</option>
+									</select>
+								</li>
+								<li>
+									<label for="network">📺 Network</label>
+									<select name="network" id="network" class="btn-primary">
+										<option value="all" selected>All</option>
+									</select>
+								</li>
+								<li>
+									<label for="format">📺 Format</label>
+									<select name="format" id="format" class="btn-primary">
+										<option value="video">video</option>
+										<option value="audio">audio</option>
+										<option value="html">html</option>
+										<option value="all" selected>All</option>
+									</select>
+								</li>
+							</ul>
+						</form>
+					</div>
+				</li>
+			</ul>
+			<button class="command_button close-button">Close</button>
+		</div>
+	</div>
+	<div id="modalModal" class="content draggable-window modal" style="text-align:center">
+		<div class="close-modal-command control-box close-box close-modal"><a class="control-box-inner" href="#close-modal" rel="modal:close">Close</a></div>
+		<div class="control-box zoom-box">
+			<div class="control-box-inner">
+				<div class="zoom-box-inner"></div>
+			</div>
+		</div>
+		<div class="control-box windowshade-box">
+			<div class="control-box-inner">
+				<div class="windowshade-box-inner"></div>
+			</div>
+		</div>
+		<h1 class="title"><span>About</span></h1>
+		<div class="inner">
+			<ul>
+				<li style="text-align:left">
+					<h1 id="modal-title"><span id="modal-time" class="text-bold"></span> <span id="modal-fulltitle">ALERT</span></h1><img id="modal-image" src="img/blank.png" alt="none">
+					<p id="modal-image-caption" class="text-italic"></p>
+					<p id="modal-content"></p>
+				</li>
+			</ul>
+			<button class="command_button close-modal-button">Close</button>
+		</div>
+	</div>
 
-        <script src="index.js"></script>
-        <script src="js/memento.js"></script>
-        <script src="js/plugins.js"></script>
-        <script src="js/media.js"></script>
-        <script src="js/main.js"></script>
-        <script>
-            // Google Analytics Tracking
-            window.ga = function()
-            {
-                ga.q.push(arguments);
-            };
-            ga.q = [];
-            ga.l = +new Date();
-            ga("create", "UA-29632937-4", "auto");
-            ga("set", "transport", "beacon");
-            ga("send", "pageview");
-        </script>
-    </body>
+	<div id="modalBoot" class="main-modal content draggable-window modal" style="text-align:center">
+		<div class="close-modal-command control-box close-box close-modal"><a class="control-box-inner" href="#close-modal" rel="modal:close">Close</a></div>
+		<div class="control-box zoom-box">
+			<div class="control-box-inner">
+				<div class="zoom-box-inner"></div>
+			</div>
+		</div>
+		<div class="control-box windowshade-box">
+			<div class="control-box-inner">
+				<div class="windowshade-box-inner"></div>
+			</div>
+		</div>
+		<h1 class="title"><span>9/11 in Realtime</span></h1>
+		<div class="inner">
+			<ul>
+				<li style="text-align:left">
+					<h1 id="modal-title"><span id="modal-time" class="text-bold"></span> <span id="modal-fulltitle">About 9/11 in Realtime</span></h1><img id="modal-image" src="img/blank.png" alt="none">
+					<p id="modal-image-caption" class="text-italic"></p>
+					<p id="modal-content">
+					9/11 in Realtime is a multimedia experiment for teachers, with the purpose of helping
+					their students truly understand and absorb the events of September 11, 2001. We've collected
+					media--video, audio and other items--available from the days before and after the September 11 attacks,
+					syncrhonized them together and built a tool to help students be immersed in the events of the day.
+					<br>
+					<br>
+					<b>THE FOLLOWING WEBSITE MAY CONTAIN VISUALS, AUDIO AND OTHER CONTENT THAT SOME VIEWERS MAY FIND
+					EXTREMELY DISTURBING.</b>
+					<br>
+					<br>
+					THIS TOOL IS INTENDED TO BE USED ALONGSIDE A CAREFULLY RESEARCHED AND APPROPRIATE CURRICULUM.
+					<br>
+					<br>
+					For questions regarding this project, please email <a href="mailto:me@robbiebyrd.com">Robbie Byrd</a>.
+					</p>
+				</li>
+			</ul>
+			<img src="img/boot.png" class="center">
+			<br />
+			<button class="command_button close-modal-main-button" style="height: 3em;">POWER ON</button>
+			<br />
+		</div>
+	</div>
 
+	<audio controls id="timekeeper" class="handsoff hidden" preload="auto">
+		<source src="rsrc/out.mp3" type="audio/mpeg">
+		Your browser does not support the HTML audio element.
+	</audio>
+
+	<audio controls id="chime" class="handsoff hidden" preload="auto" autoplay>
+		<source src="rsrc/boot.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
+	</audio>
+
+	<div id="preloads" class="hidden"></div>
+
+	<div id="templates" class="hidden">
+		<script id="audio_player_template" type="x-tmpl-mustache">
+			<div id="{{PlayerID}}_div">
+				<h2 id="{{PlayerID}}_title" class="audiotitle">{{Title}}</h2>
+				<audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio">
+					<source src="{{AudioURL}}" type="{{Type}}">
+				</audio>
+			</div>
+		</script>
+		<script id="html_item_template" type="x-tmpl-mustache">
+			<div id="{{ItemID}}_div">
+				<h3>
+					<span>{{Time}}</span> - {{Title}}
+				</h3>
+				<div id="{{ItemID}}" class="htmlitem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsimage"> {{{Content}}} </div>
+			</div>
+		</script>
+		<script id="video_item_template" type="x-tmpl-mustache">
+			<div id="{{PlayerID}}_div">
+				<h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2>
+				<video id="{{PlayerID}}" playsinline autoplay muted preload="true" class="plyr-video">
+					<source src="{{VideoURL}}" type="{{Type}}"> 
+				</video>
+			</div>
+		</script>
+	</div>
+
+	<script src="js/main.js"></script>
+	<script src="js/media.js"></script>
+	<script src="js/plugins.js"></script>
+
+	<script>
+		window.ga = function() {
+			ga.q.push(arguments)
+		}, ga.q = [], ga.l = +new Date, ga("create", "UA-29632937-4", "auto"), ga("set", "transport", "beacon"), ga("send", "pageview");
+	</script>
+</body>
 </html>
