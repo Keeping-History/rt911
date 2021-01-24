@@ -1,3 +1,7 @@
+#tv {
+  height: 65%;
+}
+
 #videos {
   overflow-y: scroll;
   overflow-x: hidden;
@@ -38,24 +42,29 @@
 
 #videoPlayerMainHolder {
   background: #000;
+  height: 75%;
+  background: url("img/static.gif");
+  min-height: 35vh;
 }
 
 #videoplayermain {
   background: url("img/static.gif");
   text-align: center;
+  height: 100%;
+}
+
+#videoplayermain div.highlight {
+  height: 100%;
 }
 
 #videoplayermain * video {
-  height: 100%;
-  width: 100%;
   text-align: center;
-  max-height: 50vh;
   background: black;
+  width: 100%;
+  height: 100%;
 }
 
 #videoplayermain {
-  height: 100%;
-  width: 100%;
   background: #000;
   text-align: center;
 }
@@ -68,14 +77,6 @@
   position: absolute;
 }
 
-#videoPlayerMainHolder {
-  background: url("img/static.gif");
-  min-height: 50vh;
-}
-#videoplayermain div {
-  min-height: 50vh;
-}
-
 #channel-guide-header {
   margin: 0.5rem 0 0.5rem 0;
   padding: 0;
@@ -83,7 +84,12 @@
 }
 
 #channel-guide {
-  margin-top: 1em;
+  padding-top: 1em;
+  padding-right: 2em;
+  margin-right: .5em;
+  background: #ddd;
+  bottom: 2em;
+  position: absolute;
 }
 
 #videos-wrapper {
@@ -105,9 +111,10 @@
 }
 
 #htmls {
-  max-height: 50vh;
   overflow-x: hidden;
   overflow-y: scroll;
+  max-height: 85vh;
+  height: 98% !important;
 }
 
 #htmls h3 {
@@ -154,8 +161,8 @@
 
 #modalModal,
 .modal {
-  padding: 0;
-  margin: 0;
+  padding: 0 !important;
+  margin: 0 !important;
   z-index: 999999;
   -webkit-border-radius: 0;
   border-radius: 0;
@@ -171,6 +178,8 @@
 
 #news {
   text-align: left !important;
+  top: 15%;
+  height: 80%;
 }
 
 #audio div.inner,
@@ -188,10 +197,15 @@
   width: 35%;
 }
 
-#settings,
-#controls {
-  right: 10%;
-  width: 15%;
+#audio {
+  top: 70%;
+  left: 5%;
+  width: 45%;
+}
+
+#settings, #controls {
+  width: auto;
+  left: 65%;
 }
 
 .htmlsimage {
@@ -213,4 +227,22 @@
  
 .icon h2 {
   text-shadow: 2px 2px 0 #aaa, -2px -2px 0 #888;
+}
+
+.short-time-input {
+  width: 3em;
+}
+
+.ui-resizable-handle {
+  z-index: 999999999999999 !important;
+  height: 21px;
+  width: 21px;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  background: url('img/corner.png');
+}
+
+div.content.resizable .inner {
+  overflow: hidden;
 }
