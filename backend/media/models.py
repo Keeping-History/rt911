@@ -1,6 +1,7 @@
 import hashlib
 
 from django.db import models
+from django import forms
 
 class TagType(models.Model):
     name = models.CharField(max_length=255)
@@ -16,11 +17,17 @@ class Tag(models.Model):
     def __str__(self):
         return self.name
 
-
 class Collection(models.Model):
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=255)
     type_of = models.ForeignKey(TagType, on_delete=models.SET_NULL, null=True)
+
+    def __str__(self):
+        return self.name
+
+class Marker(models.Model):
+    name = models.CharField(max_length=255)
+    time_marker = models.DateTimeField()
 
     def __str__(self):
         return self.name

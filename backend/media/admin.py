@@ -6,7 +6,7 @@ from django.utils.html import format_html
 
 import logging
 
-from .models import Media, Tag, TagType, Collection
+from .models import Media, Tag, TagType, Collection, Marker
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,12 @@ class CollectionAdmin(ImportExportModelAdmin):
     model = Collection
     list_display = ['name']
 
+class MarkerAdmin(ImportExportModelAdmin):
+    model = Marker
+    list_display = ['name']
+
 admin.site.register(Media, MediaAdmin)
 admin.site.register(Tag, TagAdmin)
 admin.site.register(TagType, TagTypeAdmin)
 admin.site.register(Collection, CollectionAdmin)
+admin.site.register(Marker, MarkerAdmin)

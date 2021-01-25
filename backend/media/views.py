@@ -168,3 +168,21 @@ def collections(request):
         collections.append(item['name'])
 
     return JsonResponse(list(dict.fromkeys(collections)), safe=False)
+
+def timemarkers(request):
+
+    # Activate our (lazy) filters and get the actual data
+    data = list(
+        Marker.objects.values()
+    )
+
+   # Create a holder for our view output
+    markers = []
+
+    for item in data:
+        marker = {}
+        marker['name'] = item['name']
+        marker['time'] = item['time']
+        markers.append(marker)
+
+    return JsonResponse(list(dict.fromkeys(markers)), safe=False)
