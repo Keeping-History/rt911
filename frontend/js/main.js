@@ -488,8 +488,8 @@ jQuery(function () {
 
     jQuery("#pauseButton").on("click", function () {
         jQuery("#timekeeper").trigger('pause');
-        pauseAllPlayers();
-        setTimeAllPlayers();
+        //pauseAllPlayers();
+        //setTimeAllPlayers();
     });
 
     jQuery('.time-marker').on("click", function () {
@@ -637,17 +637,18 @@ jQuery(function () {
     });
 
     jQuery("#jumpItButton").click(function () {
+        pauseAllPlayers();
         jumpHour = jQuery("#jumpItHour").val();
         jumpMinute = jQuery("#jumpItMinute").val();
         jumpSecond = jQuery("#jumpItSecond").val();
         if (jumpHour == "") {
-            jumpHour = "8";
+            jumpHour = "00";
         }
         if (jumpMinute == "") {
-            jumpMinute = "0";
+            jumpMinute = "00";
         }
         if (jumpSecond == "") {
-            jumpSecond = "0";
+            jumpSecond = "00";
         }
 
         jQuery("#jumpItHour").val(jumpHour);
@@ -655,6 +656,7 @@ jQuery(function () {
         jQuery("#jumpItSecond").val(jumpSecond);
 
         jumpIt(jumpHour + ":" + jumpMinute + ":" + jumpSecond);
+        playAllPlayers();
     });
 
 

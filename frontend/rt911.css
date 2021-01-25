@@ -197,6 +197,18 @@
   width: 35%;
 }
 
+#timelineofevents {
+  left: 35%;
+  width: 30%;
+}
+
+#events {
+  text-align: left;
+}
+
+#events ul li {
+  margin-bottom: 2em;}
+
 #audio {
   top: 70%;
   left: 5%;
@@ -205,7 +217,7 @@
 
 #settings, #controls {
   width: auto;
-  left: 65%;
+  left: 75%;
 }
 
 .htmlsimage {
@@ -245,4 +257,11 @@
 
 div.content.resizable .inner {
   overflow: hidden;
+}
+
+a.time-marker {
+  font-size: large;
+  display: block;
+  float: left;
+  margin-right: 1em;
 }
