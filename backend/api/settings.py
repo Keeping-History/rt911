@@ -111,7 +111,7 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'HOST': 'localhost',
+            'HOST': 'db',
             'PORT': '3306',
             'NAME': 'rt911',
             'USER': 'rt911',
