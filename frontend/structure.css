@@ -70,6 +70,7 @@ ul.menu {
 .content {
   position: absolute;
   width: 50%;
+  overflow: hidden;
 }
 
 .control-box {
