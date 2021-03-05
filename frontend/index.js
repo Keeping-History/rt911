@@ -57,22 +57,19 @@ jQuery(function () {
 
     // Windowshade Box -- Minimize the window to just the title bar
     jQuery(".windowshade-box").on("click", function () {
-        c = this.closest(".content");
+        c = jQuery(this).closest(".content");
         c.css("z-index", "1");
         d = jQuery(this).data("shade");
         e = jQuery(this).data("shade-height", jQuery(this).css("height"));
-
         if (!d) {
             jQuery(c).children('.inner').addClass('hidden');
             jQuery(c).css('height', "");
             jQuery(this).data("shade", true);
-
         } else {
             jQuery(c).children('.inner').removeClass('hidden');
             jQuery(c).css("height", e);
             jQuery(this).data("shade", false);
         }
-
     });
     
     // Close Box -- Close the window when clicked
