@@ -61,7 +61,7 @@
 					<ul class="menu command_button">
 						<li id="menu-play"><img src="img/tv.png" width="16" alt="Play"> Play</li>
 						<li id="menu-pause"><img src="img/tv.png" width="16" alt="Pause"> Pause</li>
-						<li id="menu-settings"><img src="img/tv.png" width="16" alt="Settings"> Settings</li>
+						<li id="menu-settings"><img src="img/settings.png" width="16" alt="Settings"> Settings</li>
 					</ul>
 				</li>
 				<li>Edit
@@ -76,7 +76,7 @@
 					</ul>
 				</li>
 				<li id="macoslogo"><img src="img/macos.svg" alt="MacOS"></li>
-				<li id="time" class="time text-center timeText">8:39 PM</li>
+				<li id="time" class="time text-center timeText">Loading...</li>
 			</ul>
 		</div>
 	</nav>
@@ -108,6 +108,7 @@
 				<button id="rewindButton1" class="command_button ffrw" data-skip="-300">&laquo;</button>
 				<button id="rewindButton2" class="command_button ffrw" data-skip="-30">&lsaquo;</button>
 				<button id="playButton" class="command_button">Play</button>
+				<button id="syncButton" class="command_button">||</button>
 				<button id="pauseButton" class="command_button">Pause</button>
 				<button id="forwardButton1" class="command_button ffrw" data-skip="30">&rsaquo;</button>
 				<button id="forwardButton2" class="command_button ffrw" data-skip="300">&raquo;</button>
@@ -115,6 +116,12 @@
 				<label for"jumpItHour">H: </label><input id="jumpItHour" class="short-time-input" value="8" />
 				<label for"jumpItMinute">M: </label><input id="jumpItMinute" class="short-time-input" value="35" />
 				<label for"jumpItSecond">S: </label><input id="jumpItSecond" class="short-time-input" value="00" />
+				<label for"jumpItSecond">S: </label>
+				<select id="jumpItPeriod">
+					<option value="AM">AM</option>
+					<option value="PM">PM</option>
+				</select>
+
 				<button id="jumpItButton" class="command_button">GO</button>
 			</div>
 		</div>
@@ -154,7 +161,7 @@
 		</div>
 		<h1 class="title"><span>Audio Player</span></h1>
 		<div class="inner">
-			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon" src="https://win98icons.alexmeub.com/icons/png/loudspeaker_muted-0.png" class="icon-titlebar float-right" alt="Mute Audio">
+			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon" src="img/sound_off.png" class="icon-titlebar float-right" alt="Mute Audio">
 			<div id="audioplayermain"></div>
 			<div id="audios"></div>
 		</div>
@@ -269,6 +276,8 @@
 				<li style="text-align:left">
 					<h1>9/11 Realtime</h1>
 					<p><b>Thanks and Open Source Notices</b></p>
+					<p><b>Based on memento.js by Vijith Assar</b></p>
+					<p><a href="https://github.com/vijithassar/memento" target="_blank">memento.js on Github</a></p>
 					<p><b>Based on classic.css by Nathanael Gentry</b></p>
 					<p><a href="https://github.com/npjg/classic.css" target="_blank">classic.css on github.com</a></p>
 					<p>MIT License
@@ -411,7 +420,7 @@
 			</ul>
 			<img src="img/boot.png" class="center">
 			<br />
-			<button class="command_button close-modal-main-button" style="height: 3em;">POWER ON</button>
+			<button class="command_button close-modal-boot-button" style="height: 3em;">POWER ON</button>
 			<br />
 		</div>
 	</div>
@@ -447,7 +456,7 @@
 		<script id="video_item_template" type="x-tmpl-mustache">
 			<div id="{{PlayerID}}_div">
 				<h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2>
-				<video id="{{PlayerID}}" playsinline autoplay muted preload="true" class="plyr-video">
+				<video id="{{PlayerID}}" playsinline controls autoplay muted preload="true" class="plyr-video">
 					<source src="{{VideoURL}}" type="{{Type}}"> 
 				</video>
 			</div>
@@ -455,8 +464,6 @@
 	</div>
 
 	<script src="js/main.js"></script>
-	<script src="js/media.js"></script>
-	<script src="js/plugins.js"></script>
 
 	<script>
 		window.ga = function() {
