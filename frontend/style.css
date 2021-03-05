@@ -250,4 +250,5 @@ ul.menu {
 
 .modal {
   background: #ccc !important;
+  border-radius: 0 !important;
 }

@@ -3,6 +3,18 @@
 <head>
 	<meta charset="UTF-8">
 	<title>Mac OS 8.1</title>
+
+	<link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="194x194" href="img/favicon-194x194.png">
+	<link rel="icon" type="image/png" sizes="192x192" href="img/android-chrome-192x192.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png">
+	<link rel="manifest" href="site.webmanifest">
+	<link rel="mask-icon" href="img/safari-pinned-tab.svg" color="#365888">
+	<meta name="msapplication-TileColor" content="#dddddd">
+	<meta name="msapplication-TileImage" content="img/mstile-144x144.png">
+	<meta name="theme-color" content="#ddd">
+
 	<link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="structure.css">
 	<link rel="stylesheet" href="style.css">
@@ -10,11 +22,12 @@
 	<link rel="stylesheet" href="fonts/charcoal.css">
 	<link rel="stylesheet" href="fonts/chicagoflf.css">
 	<link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+	<link type="text/css" href="https://cdn.plyr.io/3.6.2/plyr.css" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css">
 
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
-	<link type="text/css" href="https://cdn.plyr.io/3.6.2/plyr.css" rel="stylesheet">
 	<script src="https://cdn.jsdelivr.net/npm/hls.js@0.14.17/dist/hls.min.js"></script>
 	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
@@ -26,9 +39,9 @@
 	<script src="https://cdn.plyr.io/3.6.2/plyr.polyfilled.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/mustache.js/4.1.0/mustache.min.js" integrity="sha512-HYiNpwSxYuji84SQbCU5m9kHEsRqwWypXgJMBtbRSumlx1iBB6QaxgEBZHSHEGM+fKyCX/3Kb5V5jeVXm0OglQ==" crossorigin="anonymous"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js"></script>
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css">
 	<script src="js/memento.js"></script>
 	<script src="index.js"></script>
+
 </head>
 
 <body>
@@ -48,7 +61,7 @@
 					<ul class="menu command_button">
 						<li id="menu-play"><img src="img/tv.png" width="16" alt="Play"> Play</li>
 						<li id="menu-pause"><img src="img/tv.png" width="16" alt="Pause"> Pause</li>
-						<li id="menu-settings"><img src="img/tv.png" width="16" alt="Settings"> Settings</li>
+						<li id="menu-settings"><img src="img/settings.png" width="16" alt="Settings"> Settings</li>
 					</ul>
 				</li>
 				<li>Edit
@@ -63,7 +76,7 @@
 					</ul>
 				</li>
 				<li id="macoslogo"><img src="img/macos.svg" alt="MacOS"></li>
-				<li id="time" class="time text-center timeText">8:39 PM</li>
+				<li id="time" class="time text-center timeText">Loading...</li>
 			</ul>
 		</div>
 	</nav>
@@ -95,6 +108,7 @@
 				<button id="rewindButton1" class="command_button ffrw" data-skip="-300">&laquo;</button>
 				<button id="rewindButton2" class="command_button ffrw" data-skip="-30">&lsaquo;</button>
 				<button id="playButton" class="command_button">Play</button>
+				<button id="syncButton" class="command_button">||</button>
 				<button id="pauseButton" class="command_button">Pause</button>
 				<button id="forwardButton1" class="command_button ffrw" data-skip="30">&rsaquo;</button>
 				<button id="forwardButton2" class="command_button ffrw" data-skip="300">&raquo;</button>
@@ -102,6 +116,12 @@
 				<label for"jumpItHour">H: </label><input id="jumpItHour" class="short-time-input" value="8" />
 				<label for"jumpItMinute">M: </label><input id="jumpItMinute" class="short-time-input" value="35" />
 				<label for"jumpItSecond">S: </label><input id="jumpItSecond" class="short-time-input" value="00" />
+				<label for"jumpItSecond">S: </label>
+				<select id="jumpItPeriod">
+					<option value="AM">AM</option>
+					<option value="PM">PM</option>
+				</select>
+
 				<button id="jumpItButton" class="command_button">GO</button>
 			</div>
 		</div>
@@ -141,7 +161,7 @@
 		</div>
 		<h1 class="title"><span>Audio Player</span></h1>
 		<div class="inner">
-			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon" src="https://win98icons.alexmeub.com/icons/png/loudspeaker_muted-0.png" class="icon-titlebar float-right" alt="Mute Audio">
+			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon" src="img/sound_off.png" class="icon-titlebar float-right" alt="Mute Audio">
 			<div id="audioplayermain"></div>
 			<div id="audios"></div>
 		</div>
@@ -256,6 +276,8 @@
 				<li style="text-align:left">
 					<h1>9/11 Realtime</h1>
 					<p><b>Thanks and Open Source Notices</b></p>
+					<p><b>Based on memento.js by Vijith Assar</b></p>
+					<p><a href="https://github.com/vijithassar/memento" target="_blank">memento.js on Github</a></p>
 					<p><b>Based on classic.css by Nathanael Gentry</b></p>
 					<p><a href="https://github.com/npjg/classic.css" target="_blank">classic.css on github.com</a></p>
 					<p>MIT License
@@ -398,7 +420,7 @@
 			</ul>
 			<img src="img/boot.png" class="center">
 			<br />
-			<button class="command_button close-modal-main-button" style="height: 3em;">POWER ON</button>
+			<button class="command_button close-modal-boot-button" style="height: 3em;">POWER ON</button>
 			<br />
 		</div>
 	</div>
@@ -434,7 +456,7 @@
 		<script id="video_item_template" type="x-tmpl-mustache">
 			<div id="{{PlayerID}}_div">
 				<h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2>
-				<video id="{{PlayerID}}" playsinline autoplay muted preload="true" class="plyr-video">
+				<video id="{{PlayerID}}" playsinline controls autoplay muted preload="true" class="plyr-video">
 					<source src="{{VideoURL}}" type="{{Type}}"> 
 				</video>
 			</div>
@@ -442,8 +464,6 @@
 	</div>
 
 	<script src="js/main.js"></script>
-	<script src="js/media.js"></script>
-	<script src="js/plugins.js"></script>
 
 	<script>
 		window.ga = function() {

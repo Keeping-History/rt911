@@ -1,3 +1,54 @@
+// Global Vars
+var baseRemoteURL = "https://api.911realtime.org/";
+var timeZone = {plus:6,pretty:"ET"} 
+var globalModals = [];
+var getNetworkCache = []
+var getDataCache = []
+var johng = memento();
+var timeDrift = 5
+var playoverDrift = 15
+var playerSync = 2
+
+// Media Contol and associated functios
+
+// Caching and preload Functions
+function preloadPlayers(data) {
+    if (data != undefined || data.length > 0) {
+        data.forEach(function (item) {
+                preloadMediaFile(item.media_type, item.url, item.vidid);
+        });
+    }
+}
+
+function preloadMediaFile(mediaType, url, id) {
+    if (!jQuery("#" + id + "_preload").length) {
+        a = jQuery('<' + mediaType + ' />')
+            .attr('src', url)
+            .attr('id', id + '_preload')
+            .attr('preload', true)
+            .attr('autoplay', false)
+            .attr('muted', true)
+            .css('display', 'none')
+            .addClass('handsoff')
+            .appendTo('#preloads');
+    }
+}
+
+// Audio Control
+function muteAllPlayers() {
+    jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
+        jQuery(this).prop('muted', true);
+    });
+}
+
+function unmuteAudioPlayers() {
+    jQuery("audio:not(.handsoff)").prop('muted', false);
+}
+
+function muteAudioPlayers() {
+    jQuery("audio:not(.handsoff)").prop('muted', true);
+}
+
 // Playback Control
 function pauseAllPlayers() {
     jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
@@ -11,43 +62,33 @@ function playAllPlayers() {
     });
 }
 
-// Media Functions
-function preloadPlayers(data) {
-    if (data != undefined || data.length > 0) {
-        data.forEach(function (item) {
-            if (item.media_type == 'audio') { // just audio files for now
-                preloadMediaFile(item.media_type, item.url, item.vidid);
-            }
-        });
-    }
-}
-function preloadMediaFile(mediaType, url, id) {
-    if (!jQuery("#" + id + "_preload").length && (mediaType == "audio")) {
-        a = jQuery('<' + mediaType + ' />')
-            .attr('src', url)
-            .attr('id', id + '_preload')
-            .attr('preload', true)
-            .attr('autoplay', false)
-            .attr('muted', true)
-            .css('display', 'none')
-            .addClass('handsoff')
-            .appendTo('#preloads');
-    }
+function setTimeAllPlayers() {
+    jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
+        if(Math.abs(getPlayerTime(this.id) - jQuery(this).get(0).currentTime) > timeDrift) {
+            jQuery(this).get(0).fastSeek(getPlayerTime(this.id));
+        }
+    });
 }
 
+function setTimePlayer(playerId) {
+    video = jQuery("#" + playerId).get(0)
+    video.fastSeek(getPlayerTime(playerId));
+}
+
+
 // Time Functions
-function setPlayerTime(player) {
+function getPlayerTime(playerId) {
     jsonData = getData();
-    dataItem = jsonData.find(jsonData => jsonData.vidid === player.id);
-    return johng.timestamp() - dataItem.start + dataItem.jump;
+    dataItem = jsonData.find(jsonData => jsonData.vidid === playerId);
+    return window.johng.timestamp() - dataItem.start + dataItem.jump;
 }
 
 //Get the Current time in text format
 function secondsToTimeFormatted(seconds) {
     var d = new Date(0);
     d.setSeconds(seconds);
-    d.setHours(d.getHours() + 6); // Eastern Time Zone adjustment
-    return dateFormatter(d) + " ET";
+    d.setHours(d.getHours() + window.timeZone.plus); // Eastern Time Zone adjustment
+    return dateFormatter(d) + " " + window.timeZone.pretty;
 }
 
 function dateFormatter(d) {
@@ -59,33 +100,10 @@ function dateFormatter(d) {
     hours = hours ? hours : 12; // the hour '0' should be '12'
     minutes = minutes < 10 ? '0' + minutes : minutes;
     seconds = seconds < 10 ? '0' + seconds : seconds;
-    var strTime = hours + ':' + minutes + ":" + seconds + " " + ampm;
 
-    return strTime;
+    return hours + ':' + minutes + ":" + seconds + " " + ampm;
 
 }
-
-//convert12Hto24H Convert 12H time format to 24H time format
-function convert12Hto24H(stringTimeInput) {
-    stringTime = $.trim(stringTimeInput);
-    const [time, modifier] = stringTime.split(' ');
-    let [hours, minutes, seconds] = time.split(':');
-    if (seconds === undefined) {
-        seconds = "00";
-    }
-
-    if (hours === '12') {
-        hours = '00';
-    }
-
-    if (modifier.toUpperCase() === 'PM') {
-        hours = parseInt(hours, 10) + 12;
-    }
-
-    return `${hours}:${minutes}:${seconds}`;
-}
-
-var baseRemoteURL = "http://api.911realtime.org/";
 
 // Adds the base API URL and any URL filters and returns a full URL for AJAX calls
 function getURL() {
@@ -93,14 +111,11 @@ function getURL() {
     return window.baseRemoteURL + "?tm=" + d.getTime() + "&" + jQuery("#filters :input[value!='all']").serialize();
 }
 
-function muteAudioPlayers() {
-    //TODO: placeholder, i lost this code somwhere
-}
-
 // Grabs the json via ajax
 function getData() {
-    if (typeof window.data !== 'undefined') {
-        return window.data;
+    
+    if (window.getDataCache.length > 0) {
+        return window.getDataCache;
     } else {
         $.ajax({
             type: 'GET',
@@ -109,29 +124,30 @@ function getData() {
             async: false,
             cache: true,
             success: function (data) {
-                result = data;
-            }
-        });
-        return result;
+                window.getDataCache = data;
+        }});
+        return window.getDataCache;
     }
 }
 
-// Grabs the available sources/networks via ajax
+// Grabs the json via ajax
 function getNetworks() {
-    var result;
-    $.ajax({
-        type: 'GET',
-        url: window.baseRemoteURL + 'networks',
-        dataType: 'json',
-        async: false,
-        cache: true,
-        success: function (networks) {
-            result = networks;
-        }
-    });
-    // TODO: Add localstorage caching here to prevent multiple calls to the endpoint
-    return result;
+    if (typeof window.getNetworkCache !== 'undefined') {
+        return window.getNetworkCache;
+    } else {
+        $.ajax({
+            type: 'GET',
+            url: window.baseRemoteURL + 'networks',
+            dataType: 'json',
+            async: false,
+            cache: true,
+            success: function (data) {
+                window.getNetworkCache = data;
+        }});
+        return window.getNetworkCache;
+    }
 }
+
 
 function hmsToSeconds(hmsString) {
     var a = hmsString.split(':'); // split it at the colons
@@ -140,11 +156,6 @@ function hmsToSeconds(hmsString) {
     var seconds = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]);
 
     return seconds;
-}
-
-function isPlaying(playerId) {
-    var player = document.getElementById(playerId);
-    return !player.paused && !player.ended && 0 < player.currentTime;
 }
 
 function removeItems(currentItemsList, activeItemsList) {
@@ -156,19 +167,24 @@ function removeItems(currentItemsList, activeItemsList) {
         removePlayers.forEach(
             function (playerId) {
                 if (playerId) {
-                    jQuery('#' + playerId + '_div').remove();
-                    jQuery('#' + playerId + '_preload').remove();
+                    var mediaItem = getData().find(data => data.vidid === playerId);
+                    if(mediaItem.format == 'audio' || mediaItem.format == 'video') {
+                        setTimeout(function(){ 
+                            jQuery('#' + playerId + '_div').remove();
+                            jQuery('#' + playerId + '_preload').remove();
+                        }, playoverDrift * 1000);
+                    } else {
+                        jQuery('#' + playerId + '_div').remove();
+                    }
                 }
             });
     }
 }
 
 function updateData() {
-    networks = getNetworks();
-    updateNetworks(networks);
+    updateNetworks();
     data = getData();
     window.johng.all_data(data);
-    jQuery('#timekeeper').trigger('pause');
 }
 
 function addItems(currentItemsList, activeItemsList) {
@@ -185,7 +201,7 @@ function addItems(currentItemsList, activeItemsList) {
 
                 if (!doesPlayerExist) {
                     // Grab the video data item because we need it
-                    var mediaItem = data.find(data => data.vidid === playerId);
+                    var mediaItem = getData().find(data => data.vidid === playerId);
 
                     switch (mediaItem.media_type) {
                         case 'video':
@@ -198,6 +214,8 @@ function addItems(currentItemsList, activeItemsList) {
 
                         case 'html':
                             jQuery("#htmls").append(create_html(playerId, mediaItem));
+                            // TODO: This has some wonky UI right now
+                            // setReadMore(playerId);
                             break;
 
                         case 'modal':
@@ -233,20 +251,25 @@ function addItems(currentItemsList, activeItemsList) {
                         jQuery("#" + playerId + "_div").prependTo("#" + mediaItem.media_type + "s");
                     };
 
+                    if (mediaItem.media_type == 'audio') {
+                        Plyr.setup("#" + playerId, { controls: ['current-time', 'duration', 'mute'] });
+                    };
+
                     if (mediaItem.media_type == 'audio' || mediaItem.media_type == 'video') {
                         jQuery("#" + playerId).prop("volume", jQuery(jQuery("#" + playerId)).attr('media_volume'));
                         jQuery("#" + playerId).prop("muted", jQuery(jQuery("#" + playerId)).attr('muted'));
                         jQuery("#" + playerId).currentTime = window.johng.timestamp() - mediaItem.start + mediaItem.jump;
 
                         // TODO: We're not doing anything with the promise right now, but will need to later
-                        jQuery("#" + playerId).trigger('load');
+                        promise = jQuery("#" + playerId).trigger('play');
+                        jQuery("#" + playerId).bind("ended", function() {
+                            jQuery("#" + $(this).attr('id') + "_div").empty().remove();
+                            jQuery("#" + $(this).attr('id') + "_preload").empty().remove();
+                        });
                     }
 
                     if (mediaItem.media_type == 'video') {
-
-                        jQuery("#" + playerId).on("ended", function () {
-                            jQuery("#" + playerId + "_div").empty().remove();
-                        });
+                        Plyr.setup("#" + playerId, { controls: ['current-time', 'progress', 'airplay', 'fullscreen'], clickToPlay: false });
 
                         // When mousing over a player, unmute it so we can hear.
                         jQuery(jQuery("#" + playerId + "_div")).mouseover(function () {
@@ -274,12 +297,17 @@ function addItems(currentItemsList, activeItemsList) {
                             }
                         });
 
+                        jQuery("#" + playerId).get(0).onloadeddata = (event) => {
+                            console.log('loaded data for ' + playerId)
+                        };
+
                         // When clicking a player, make it the main player,
                         jQuery("#" + playerId + "_div").click(function () {
                             jQuery('#' + mediaItem.media_type + 'playermain').children().prependTo('#' + mediaItem.media_type + 's');
                             jQuery('#' + playerId).prop('muted', jQuery('#' + playerId).attr('muted'));
                             if (jQuery('#' + playerId + '_div').hasClass("highlight")) {
                                 jQuery('div').removeClass("highlight");
+                                jQuery('#' + playerId).prop('muted', true);
                             } else {
                                 jQuery('div').removeClass("highlight");
                                 jQuery('#' + mediaItem.media_type + 's').find(mediaItem.media_type).prop('muted', true);
@@ -293,11 +321,6 @@ function addItems(currentItemsList, activeItemsList) {
                 }
             });
     }
-
-    const audioPlayers = Plyr.setup('.plyr-audio', { controls: ['current-time', 'duration', 'mute'] });
-    //const videoPlayers = Plyr.setup('.plyr-video', { controls: [''], clickToPlay: false });
-    setReadMores();
-
 }
 
 function create_audio(playerId, mediaItem) {
@@ -354,7 +377,9 @@ function create_video(playerId, mediaItem) {
         PlayerID: playerId,
         VideoURL: mediaItem.url,
         Type: mediaItem.type,
-        Source: mediaItem.source
+        Source: mediaItem.source,
+        StartTime: mediaItem.startTime
+
     };
 
     var template = document.getElementById('video_item_template').innerHTML;
@@ -370,10 +395,9 @@ function create_video(playerId, mediaItem) {
 }
 
 function isMediaReady() {
-    current_data = johng.data();
+    current_data = window.johng.data();
     current_data.forEach(element => {
         if (element.media_type == 'video') {
-            console.log('found video: ', element);
             jQuery("#" + element.vidid).on('canplay', function () {
                 console.log('canplay: ', element);
             });
@@ -387,56 +411,53 @@ function isPlaying(playerId) {
 }
 
 function moveTime(increment) {
-    pauseAllPlayers();
-    timekeeper.currentTime = timekeeper.currentTime + increment;
+    jQuery('#timekeeper').get(0).fastSeek(jQuery('#timekeeper').get(0).currentTime + increment);
     setTimeAllPlayers();
-    playAllPlayers();
 }
 
-function setReadMores() {
-    // jQuery("#htmls div div").readmore({
-    //     embedCSS: false,
-    //     collapsedHeight: 0,
-    //     speed: 75,
-    //     lessLink: '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read Less</a></span></button>',
-    //     moreLink: '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read More</a></span></button>',
-    //     blockCSS: 'display: inline-block; float: right;'
-    // });
+function setReadMore(playerId) {
+    jQuery("#" + playerId).readmore({
+        embedCSS: false,
+        collapsedHeight: 0,
+        speed: 75,
+        lessLink: '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read Less</a></span></button>',
+        moreLink: '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read More</a></span></button>',
+        blockCSS: 'display: inline-block; float: right;'
+    });
 }
 // Jump to the right timestamp
-function jumpIt(timeString) {
-    timekeeper.currentTime = hmsToSeconds(timeString);
+function jumpToTime(stringTimeInput) {
+
+    stringTime = $.trim(stringTimeInput);
+    const [time, modifier] = stringTime.split(' ');
+    let [hours, minutes, seconds] = time.split(':');
+    if (seconds === undefined) {
+        seconds = "00";
+    }
+
+    if (hours === '12') {
+        hours = '00';
+    }
+
+    if (modifier.toUpperCase() === 'PM') {
+        hours = parseInt(hours, 10) + 12;
+    }
+
+    jQuery('#timekeeper').get(0).currentTime = hmsToSeconds(`${hours}:${minutes}:${seconds}`);
+
     setTimeAllPlayers();
 }
 
 function addTimekeeperListeners() {
-    // Attach the media timeline to an HTML5 player
-    // The player will control the current 'time' of the sim
-    timekeeper.setAttribute("autoplay", "false");
-    startTime = "08:46:00";
-
-    jumpIt(startTime);
-    muteAudioPlayers();
-    pauseAllPlayers();
-    setTimeAllPlayers();
-
     // Events for the main timeline controller
-    // When the timeline is seeked, then update the play location of the child video players
-    timekeeper.addEventListener('seeked', function () {
-        setTimeAllPlayers();
-    }, false);
-
-    // When the timeline controller is playing, make sure the child video players are running
-    timekeeper.addEventListener('play', function () {
-        setTimeAllPlayers();
-        playAllPlayers();
-    }, false);
+    // When the timeline controller is told to play, make sure the child video players are running
+    //jQuery('#timekeeper').get(0).addEventListener('play', playAllPlayers, false);
 
     // When the timeline controller is paused, make sure the child video players also pause
-    timekeeper.addEventListener('pause', function () {
-        setTimeAllPlayers();
-        pauseAllPlayers();
-    }, false);
+    jQuery('#timekeeper').get(0).addEventListener('pause', setTimeAllPlayers, false);
+
+     // When the timeline is seeked, then update the play location of the child video players
+    jQuery('#timekeeper').get(0).addEventListener('seeked', setTimeAllPlayers, false);
 }
 
 function updateNetworks() {
@@ -445,13 +466,6 @@ function updateNetworks() {
         jQuery('#network').append(jQuery('<option>').text(item).attr('value', item));
     });
 }
-
-function updateData() {
-    updateNetworks(getNetworks());
-    window.johng.all_data(getData());
-    jQuery('#timekeeper').trigger('pause');
-}
-
 
 // The 9/11RT johng
 // A live re-creation of real-time media from September 11, 2001,
@@ -462,20 +476,21 @@ function updateData() {
 
 // Setup things when the document is ready
 jQuery(function () {
+    jQuery('#timekeeper').get(0).setAttribute("autoplay", "false");
 
-    jQuery('.close-modal-main-button').click(function (event) {
+    jQuery('.close-modal-boot-button').click(function (event) {
         event.preventDefault();
+        addTimekeeperListeners();
         jQuery("#chime").trigger('play');
         jQuery("#bootScreen").fadeOut(1000);
+        jumpToTime("08:35:00 AM");
+        muteAudioPlayers();
+        setTimeAllPlayers();
+        
         $.modal.close();
     });
 
     jQuery(".close-modal-button").click(function () {
-        $.modal.close();
-        jQuery("#timekeeper").trigger('play');
-    });
-
-    jQuery('.close-modal-command').click(function (event) {
         event.preventDefault();
         $.modal.close();
         jQuery("#timekeeper").trigger('play');
@@ -483,19 +498,23 @@ jQuery(function () {
 
     jQuery("#playButton").on("click", function () {
         jQuery("#timekeeper").trigger('play');
-        playAllPlayers();
     });
+
+    jQuery("#syncButton").on("click", function () {
+        setTimeAllPlayers();
+    });
+
+    jQuery("#loadButton").on("click", function () {
+        setTimeAllPlayers();
+    });
+
 
     jQuery("#pauseButton").on("click", function () {
         jQuery("#timekeeper").trigger('pause');
-        //pauseAllPlayers();
-        //setTimeAllPlayers();
     });
 
     jQuery('.time-marker').on("click", function () {
-        pauseAllPlayers();
-        jumpIt(convert12Hto24H(this.text));
-
+        jumpToTime(this.text);
     });
 
     jQuery('.ffrw').on("click", function () {
@@ -505,10 +524,10 @@ jQuery(function () {
     jQuery('#mute_all_audio').click(function () {
         if (jQuery(this).is(':checked')) {
             muteAudioPlayers();
-            jQuery('#radio_mute_icon').attr('src', 'https://win98icons.alexmeub.com/icons/png/loudspeaker_muted-0.png');
+            jQuery('#radio_mute_icon').attr('src', 'img/sound_off.png');
         } else {
             //unmuteAudioPlayers();
-            jQuery('#radio_mute_icon').attr('src', 'https://win98icons.alexmeub.com/icons/png/loudspeaker_rays-0.png');
+            jQuery('#radio_mute_icon').attr('src', 'img/sound_on.png');
         }
     });
 
@@ -521,127 +540,29 @@ jQuery(function () {
         if (!isPlaying('timekeeper')) {
             pauseAllPlayers();
         }
-    }, 1000);
+    }, playerSync * 1000);
 
-});
+    window.setInterval(function () {
+        if (isPlaying('timekeeper')) {
+            playAllPlayers();
+        }
+    }, playerSync * 1000);
 
-
-
-// Media Contol and associated functios
-
-// Audio Control
-function muteAllPlayers() {
-    jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
-        jQuery(this).prop('muted', true);
-    });
-}
-
-function unmuteAudioPlayers() {
-    jQuery("audio:not(.handsoff)").prop('muted', false);
-}
-
-function muteAudioPlayers() {
-    jQuery("audio:not(.handsoff)").prop('muted', true);
-}
-
-function setTimeAllPlayers() {
-    jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
-        jQuery(this).get(0).currentTime = setPlayerTime(this);
-        jQuery(this).get(0).play();
-
-    });
-}
-
-
-if (Hls.isSupported()) {
-    console.log('hls is supported!');
-}
-
-
-var johng = memento();
-// select audio node
-var timekeeper = document.getElementById('timekeeper');
-
-// bind audio to memento object
-johng.node(timekeeper);
-
-// Add listeners so that when our main media player is moved others do the same
-//addTimekeeperListeners();
-
-
-globalModals = [];
-
-// This function loads the data into johng
-var data = getData();
-window.johng.all_data(data);
-
-//muteAudioPlayers();
-//pauseAllPlayers();
-
-// Every time the media player's time changes, this function weill be called
-// This is our main running function
-johng.tick(true, function (activeItems, timestamp, node) {
-    var plusSixtySeconds = johng.data(timestamp + 60);
-    if (Array.isArray(plusSixtySeconds)) {
-        plusSixtySeconds.forEach(function (item) {
-            if (item.media_type == 'audio') { // just audio players for now
-                preloadMediaFile(item.media_type, item.url, item.vidid);
-            }
-        });
-    }
-
-    // Set some variables
-    var current_data = johng.data();
-
-    let currentItemsList = [], activeItemsList = [], currentItems = [];
-
-    // We slice the currentItems list so we can an Array instead of an HTMLCollection
-    currentItems = Array.prototype.slice.call(document.querySelectorAll("div.htmlitem, video:not(.handsoff), audio:not(.handsoff)"));
-
-    // The activeItems is passed in to the function each time it is run
-    if (Array.isArray(activeItems)) {
-        activeItems.forEach(function (item) {
-            activeItemsList.push(item.vidid);
-        });
-    }
-
-    // Current items are those currently on the page
-    if (Array.isArray(currentItems)) {
-        currentItems.forEach(function (item) {
-            currentItemsList.push(item.id);
-        });
-    }
-
-    addItems(currentItemsList, activeItemsList);
-    removeItems(currentItemsList, activeItemsList);
-
-    // Set the "clock" onscreen to the curent time
-    jQuery('.timeText').text(secondsToTimeFormatted(timekeeper.currentTime));
-
-});
-
-// Initialize the tracker
-johng();
-
-jumpIt("08:35:00");
-
-//Add custom UI function hooks here
-jQuery(function () {
     jQuery("#menu-play").click(function () {
         jQuery("#timekeeper").trigger('play');
     });
 
     jQuery("#menu-pause").click(function () {
         jQuery("#timekeeper").trigger('pause');
-        setTimeAllPlayers();
     });
 
     jQuery("#jumpItButton").click(function () {
-        pauseAllPlayers();
         jumpHour = jQuery("#jumpItHour").val();
         jumpMinute = jQuery("#jumpItMinute").val();
         jumpSecond = jQuery("#jumpItSecond").val();
-        if (jumpHour == "") {
+        jumpPeriod = jQuery("#jumpItPeriod").val();
+
+         if (jumpHour == "") {
             jumpHour = "00";
         }
         if (jumpMinute == "") {
@@ -654,10 +575,65 @@ jQuery(function () {
         jQuery("#jumpItHour").val(jumpHour);
         jQuery("#jumpItMinute").val(jumpMinute);
         jQuery("#jumpItSecond").val(jumpSecond);
+        jQuery("#jumpItPeriod").val(jumpPeriod);
 
-        jumpIt(jumpHour + ":" + jumpMinute + ":" + jumpSecond);
-        playAllPlayers();
+        jumpToTime(jumpHour + ":" + jumpMinute + ":" + jumpSecond + " " + jumpPeriod);
     });
 
+    // bind audio to memento object
+    window.johng.node(jQuery("#timekeeper").get(0));
+
+    // This function loads the data into johng
+    window.johng.all_data(getData());
+
+    // Every time the media player's time changes, this function weill be called
+    // This is our main running function
+    window.johng.tick(true, function (activeItems, timestamp, node) {
+        var plusSixtySeconds = window.johng.data(timestamp + 60);
+        if (Array.isArray(plusSixtySeconds)) {
+            plusSixtySeconds.forEach(function (item) {
+                if (item.media_type == 'audio') { // just audio players for now
+                    preloadMediaFile(item.media_type, item.url, item.vidid);
+                }
+            });
+        }
+
+        // Set some variables
+        var current_data = window.johng.data();
+
+        let currentItemsList = [], activeItemsList = [], currentItems = [];
+
+        // We slice the currentItems list so we can an Array instead of an HTMLCollection
+        currentItems = Array.prototype.slice.call(document.querySelectorAll("div.htmlitem, video:not(.handsoff), audio:not(.handsoff)"));
+
+        // The activeItems is passed in to the function each time it is run
+        if (Array.isArray(activeItems)) {
+            activeItems.forEach(function (item) {
+                activeItemsList.push(item.vidid);
+            });
+        }
+
+        // Current items are those currently on the page
+        if (Array.isArray(currentItems)) {
+            currentItems.forEach(function (item) {
+                currentItemsList.push(item.id);
+            });
+        }
+
+        addItems(currentItemsList, activeItemsList);
+        removeItems(currentItemsList, activeItemsList);
+
+        // Set the "clock" onscreen to the curent time
+        jQuery('.timeText').text(secondsToTimeFormatted(jQuery('#timekeeper').get(0).currentTime));
+
+        jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
+            if(jQuery(this).get(0).readyState < 2)
+                console.log(jQuery(this).get(0).id, jQuery(this).get(0).readyState);
+            });
+
+    });
+
+    // Initialize the tracker
+    window.johng();
 
 });
