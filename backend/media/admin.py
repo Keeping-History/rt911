@@ -28,11 +28,17 @@ def approve_media(modeladmin, request, queryset):
         media.save()
 approve_media.short_description = 'Approve Media'
 
+def disapprove_media(modeladmin, request, queryset):
+    for media in queryset:
+        media.approved = False
+        media.save()
+disapprove_media.short_description = 'Disapprove Media'
+
 class MediaAdmin(ImportExportModelAdmin):
     list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'source', 'tz', 'mediaType']
     list_filter = [ ('start_date', DateTimeRangeFilter), ('end_date', DateTimeRangeFilter), 'collection', 'approved', 'source', 'format']
     date_hierarchy = 'start_date'
-    actions = [approve_media]
+    actions = [approve_media, disapprove_media]
     resource_class = MediaResource
     search_fields = ('title', 'full_title', 'source', 'content', 'image_caption')
     actions_selection_counter = True
