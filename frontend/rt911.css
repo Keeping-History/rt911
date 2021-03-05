@@ -2,6 +2,9 @@
   height: 65%;
 }
 
+#tv .inner {
+  overflow: hidden;
+}
 #videos {
   overflow-y: scroll;
   overflow-x: hidden;
@@ -86,10 +89,12 @@
 #channel-guide {
   padding-top: 1em;
   padding-right: 2em;
-  margin-right: .5em;
-  background: #ddd;
+  margin-right: 0.5em;
+  background: none;
   bottom: 2em;
   position: absolute;
+  width: 100%;
+  background: #ddd;
 }
 
 #videos-wrapper {
@@ -106,13 +111,11 @@
 }
 
 #audios div {
-    max-width: 13rem;
-    max-height: 6rem;
+  max-width: 13rem;
+  max-height: 6rem;
 }
 
 #htmls {
-  overflow-x: hidden;
-  overflow-y: scroll;
   max-height: 85vh;
   height: 98% !important;
 }
@@ -138,7 +141,8 @@
 }
 
 .icon-titlebar {
-  width: 2vh;
+  width: 2rem;
+  margin-top: 5px;
 }
 
 #audios * .plyr__controls {
@@ -170,7 +174,7 @@
 }
 
 #modal-image {
-      max-width: 100%;
+  max-width: 100%;
 }
 .blocker {
   z-index: 9999999 !important;
@@ -207,7 +211,8 @@
 }
 
 #events ul li {
-  margin-bottom: 2em;}
+  margin-bottom: 2em;
+}
 
 #audio {
   top: 70%;
@@ -215,7 +220,8 @@
   width: 45%;
 }
 
-#settings, #controls {
+#settings,
+#controls {
   width: auto;
   left: 75%;
 }
@@ -236,7 +242,7 @@
 #videos div .plyr__controls {
   display: none;
 }
- 
+
 .icon h2 {
   text-shadow: 2px 2px 0 #aaa, -2px -2px 0 #888;
 }
@@ -246,17 +252,17 @@
 }
 
 .ui-resizable-handle {
-  z-index: 999999999999999 !important;
   height: 21px;
   width: 21px;
   position: absolute;
   right: 0;
   bottom: 0;
-  background: url('img/corner.png');
+  background: url("img/corner.png");
 }
 
 div.content.resizable .inner {
-  overflow: hidden;
+  overflow-y: scroll;
+  overflow-x: hidden;
 }
 
 a.time-marker {
@@ -264,4 +270,8 @@ a.time-marker {
   display: block;
   float: left;
   margin-right: 1em;
+}
+
+::-webkit-scrollbar {
+  margin-bottom: 100px; 
 }
