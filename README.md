@@ -8,7 +8,7 @@ The application is two parts:
 1. The API - A Django application that serves a JSON file
 2. The UI - A basic HTML5/Bootstrap/jQuery app to display the videos
 
-###To start the backend CMS:
+### To start the backend CMS:
 1. Clone this repo to your local machine.
 2. Make sure to install Docker, docker-compose, and the Google Cloud SDK.
 3. Open a terminal and change into the root of the repo.
@@ -20,7 +20,7 @@ docker-compose up
 ```
 5. Open http://0.0.0.0:8001 in your browser.
 
-###To start the frontend CMS:
+### To start the frontend CMS:
 1. Open a terminal and change into the root of the repo.
 2. From a command line, run the following commands: 
 ```cd frontend
