@@ -34,6 +34,6 @@ docker-compose up
 http://www.911realtime.org
 
 ### The CMS
-http://admin.911realtime.org/admin
-Username: rt911view
-Password: R34lt1m3V13w5
+http://admin.911realtime.org/admin  
+*Username*: rt911view  
+*Password*: R34lt1m3V13w5  
