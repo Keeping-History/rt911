@@ -21,13 +21,12 @@ docker-compose up
 5. Open http://0.0.0.0:8001 in your browser.
 
 ###To start the frontend CMS:
-1. Make sure to install Docker, docker-compose, and the Google Cloud SDK.
-2. Open a terminal and change into the root of the repo.
-3. From a command line, run the following commands: 
+1. Open a terminal and change into the root of the repo.
+2. From a command line, run the following commands: 
 ```cd frontend
 ./start_server
 ```
-4. Visit http://127.0.0.1:8000 in your browser.
+3. Visit http://127.0.0.1:8000 in your browser.
 
 
 ## SEE IT IN ACTION
