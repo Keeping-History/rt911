@@ -21,7 +21,7 @@ services:
     volumes:
       - .:/rt911
     ports:
-      - "8000:8000"
+      - "8001:8000"
     restart: always
     depends_on:
       - "db"

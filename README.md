@@ -18,7 +18,7 @@ The application is two parts:
 docker-compose build
 docker-compose up
 ```
-5. Open http://0.0.0.0:8000 in your browser.
+5. Open http://0.0.0.0:8001 in your browser.
 
 ###To start the frontend CMS:
 1. Make sure to install Docker, docker-compose, and the Google Cloud SDK.
