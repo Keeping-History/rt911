@@ -1,4 +1,4 @@
-./start_db.sh
+./start_db
 sleep 5
 bash -c "python3 manage.py makemigrations &&
 python3 manage.py migrate &&
