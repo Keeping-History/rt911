@@ -84,7 +84,7 @@ def index(request):
         media_item['end_date'] = media_item['end_date'] + timedelta(hours=add_time_delta)
 
         media_item['start'] = media_item['start_date'].hour*3600 + media_item['start_date'].minute * 60 + media_item['start_date'].second
-        media_item['end'] = media_item['end_date'].hour*3600 + media_item['end_date'].minute * 60 + media_item['end_date'].second
+        media_item['end'] = media_item['start'] + media_item['duration']
         media_item['vidid'] = 'm' + hashlib.md5(media_item['url'].encode("utf-8")).hexdigest()
         new_media.append(media_item)
 
