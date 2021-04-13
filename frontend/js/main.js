@@ -5,7 +5,8 @@ var globalModals = [];
 var timeDrift = 5
 var playoverDrift = 15
 var playerSync = 2
-
+var networkListCache = []
+var dataCache = []
 // Caching and preload Functions
 function preloadPlayers(data) {
     if (data != undefined || data.length > 0) {
