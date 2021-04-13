@@ -39,14 +39,14 @@
 	<script src="https://cdn.plyr.io/3.6.2/plyr.polyfilled.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/mustache.js/4.1.0/mustache.min.js" integrity="sha512-HYiNpwSxYuji84SQbCU5m9kHEsRqwWypXgJMBtbRSumlx1iBB6QaxgEBZHSHEGM+fKyCX/3Kb5V5jeVXm0OglQ==" crossorigin="anonymous"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js"></script>
-	<script src="js/memento.js"></script>
+	<script src="js/johng.js"></script>
 	<script src="index.js"></script>
 
 </head>
 
 <body>
 
-<div id="bootScreen" style="height:100%;width:100%;background:black;" class="" ></div>
+	<div id="hider" style="height:100%;width:100%;background:black;" class="" ></div>
 	<nav>
 		<div id="nav-wrapper">
 			<ul id="nav-list">
@@ -145,7 +145,7 @@
 			<div id="htmls"></div>
 		</div>
 	</div>
-	<div id="audio" class="content hidden draggable-window" style="text-align:center">
+	<div id="audio" class="content draggable-window resizable hidden" style="text-align:center">
 		<div class="control-box close-box">
 			<a class="control-box-inner"></a>
 		</div>
@@ -357,19 +357,8 @@
 		</div>
 	</div>
 
-	<div id="modalModal" class="content draggable-window modal" style="text-align:center">
-		<div class="close-modal-command control-box close-box close-modal"><a class="control-box-inner" href="#close-modal" rel="modal:close">Close</a></div>
-		<div class="control-box zoom-box">
-			<div class="control-box-inner">
-				<div class="zoom-box-inner"></div>
-			</div>
-		</div>
-		<div class="control-box windowshade-box">
-			<div class="control-box-inner">
-				<div class="windowshade-box-inner"></div>
-			</div>
-		</div>
-		<h1 class="title"><span>About</span></h1>
+	<div id="modalModal" class="content modal" style="text-align:center">
+		<h1 class="title title-full"><span>About</span></h1>
 		<div class="inner">
 			<ul>
 				<li style="text-align:left">
@@ -382,19 +371,8 @@
 		</div>
 	</div>
 
-	<div id="modalBoot" class="main-modal content draggable-window modal" style="text-align:center">
-		<div class="close-modal-command control-box close-box close-modal"><a class="control-box-inner" href="#close-modal" rel="modal:close">Close</a></div>
-		<div class="control-box zoom-box">
-			<div class="control-box-inner">
-				<div class="zoom-box-inner"></div>
-			</div>
-		</div>
-		<div class="control-box windowshade-box">
-			<div class="control-box-inner">
-				<div class="windowshade-box-inner"></div>
-			</div>
-		</div>
-		<h1 class="title"><span>9/11 in Realtime</span></h1>
+	<div id="modalBoot" class="main-modal content modal" style="text-align:center">
+		<h1 class="title title-full"><span>9/11 in Realtime</span></h1>
 		<div class="inner">
 			<ul>
 				<li style="text-align:left">
@@ -456,19 +434,21 @@
 		<script id="video_item_template" type="x-tmpl-mustache">
 			<div id="{{PlayerID}}_div">
 				<h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2>
-				<video id="{{PlayerID}}" playsinline controls autoplay muted preload="true" class="plyr-video">
+				<video id="{{PlayerID}}" autoplay muted preload="true" class="plyr-video">
 					<source src="{{VideoURL}}" type="{{Type}}"> 
 				</video>
 			</div>
 		</script>
 	</div>
 
-	<script src="js/main.js"></script>
 
 	<script>
 		window.ga = function() {
 			ga.q.push(arguments)
 		}, ga.q = [], ga.l = +new Date, ga("create", "UA-29632937-4", "auto"), ga("set", "transport", "beacon"), ga("send", "pageview");
 	</script>
+
+	<script src="js/main.js"></script>
+
 </body>
 </html>
