@@ -8,7 +8,7 @@
 #videos {
   overflow-y: scroll;
   overflow-x: hidden;
-  height: 6.25rem;
+  height: 100%;
   position: relative;
 }
 
@@ -87,17 +87,17 @@
 }
 
 #channel-guide {
+  height: 20%;
   padding-top: 1em;
   padding-right: 2em;
   margin-right: 0.5em;
   background: none;
   bottom: 2em;
-  position: absolute;
-  width: 100%;
   background: #ddd;
 }
 
 #videos-wrapper {
+  height: 100%;
   position: relative;
   bottom: 0;
 }
@@ -105,13 +105,10 @@
 #audios {
   display: flex;
   flex-flow: wrap;
-  height: 20vh !important;
-  overflow-x: hidden;
-  overflow-y: scroll;
 }
 
 #audios div {
-  max-width: 13rem;
+  max-width: 16rem;
   max-height: 6rem;
 }
 
