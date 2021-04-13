@@ -12,17 +12,15 @@ The application is two parts:
 1. Clone this repo to your local machine.
 2. Make sure to install Docker, docker-compose, and the Google Cloud SDK.
 3. Open a terminal and change into the root of the repo.
-4. From a command line, run the following commands: 
+4. From a command line, run the following commands:
 ```cd backend
-./start_db.sh
-docker-compose build
-docker-compose up
+./start_server
 ```
 5. Open http://0.0.0.0:8001 in your browser.
 
 ### To start the frontend CMS:
 1. Open a terminal and change into the root of the repo.
-2. From a command line, run the following commands: 
+2. From a command line, run the following commands:
 ```cd frontend
 ./start_server
 ```
@@ -34,6 +32,6 @@ docker-compose up
 http://www.911realtime.org
 
 ### The CMS
-http://admin.911realtime.org/admin  
-*Username*: rt911view  
-*Password*: R34lt1m3V13w5  
+http://admin.911realtime.org/admin
+*Username*: rt911view
+*Password*: R34lt1m3V13w5
