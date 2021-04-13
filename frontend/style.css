@@ -214,6 +214,18 @@ ul.menu {
   text-align: center;
 }
 
+.title-full {
+  background-position: 10% 10% !important;
+}
+
+.title-full span {
+  padding: 0 1.5rem;
+}
+.title-full ::before, .title-full ::after {
+  content: "";
+  display: block;
+}
+
 .windowshade-box-inner {
   border-bottom: 1px solid #000;
   border-top: 1px solid #000;
