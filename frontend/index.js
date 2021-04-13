@@ -103,10 +103,12 @@ jQuery(function () {
     })
 
     jQuery('#modalBoot').modal({
-        backdrop: true,
         show: true,
+        escapeClose: false,
+        clickClose: false,
         showClose: false,
-        fadeDuration: 250
+        fadeDuration: 250,
+        clickClose: false,
+        blockerClass: "blocker"
     });
-
 });
