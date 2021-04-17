@@ -1,12 +1,22 @@
+// The 9/11RT johng
+// A live re-creation of real-time media from September 11, 2001,
+// told in by media, photos, audio and other media timestamped and
+// replayed in real time. The time starts at September 11, 2001 at
+// Midnight Eastern Time, and runs to 11:59:59 PM the same day.
+//
+
 // Global Vars
 var baseRemoteURL = "https://api.911realtime.org/";
 var timeZone = { plus: 6, pretty: "ET" }
 var globalModals = [];
-var timeDrift = 5
-var playoverDrift = 15
-var playerSync = 2
-var networkListCache = []
-var dataCache = []
+var timeDrift = 5 // don't change the current video's time unless it is this many seconds out of sync
+var playoverDrift = 1 // determines how long a media item will play afer it's supposed to be removed, in case it didnt' play all the way through
+var playerSync = 2 // determines how quickly after the counter is stopped should audios and videos be checked to stop as well
+
+// Preload data to improve performance
+var networkListCache = ["WORLDNET", "WETA", "MCM", "WJLA", "WTTG", "WUSA", "WRC", "NHK", "TCN", "AZT", "GLVSN", "NEWSW", "WSBK", "CNN", "BET", "IRAQ", "BBC", "NTV", "History Commons", "CCTV3", "NEADS/NORAD", "AA11", "atc", "Rutgers", "FLASH", "ANT1", "MSNBC", "PSC"];
+var dataCache = [];
+
 // Caching and preload Functions
 function preloadPlayers(data) {
     if (data != undefined || data.length > 0) {
