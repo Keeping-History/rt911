@@ -291,3 +291,11 @@ a.time-marker {
 .ui-draggable-dragging.content, .ui-resizable-resizing.content {
   box-shadow: none !important;
 }
+
+.plyr--loading.plyr--video {
+  background-image: url(img/static.gif) !important;
+}
+
+.plyr--loading.plyr--video * {
+  opacity: 0;
+}

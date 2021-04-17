@@ -126,7 +126,7 @@ function getData() {
             async: false,
             cache: true,
             success: function (data) {
-                dataCache = data;
+                window.dataCache = data;
             }
         });
         return dataCache;
@@ -147,6 +147,7 @@ function updateNetworks() {
             async: false,
             cache: true,
             success: function (data) {
+                window.networkListCache = data;
                 data.forEach(function (item) {
                     jQuery('#network').append(jQuery('<option>').text(item).attr('value', item));
                 });
@@ -204,7 +205,7 @@ function addItems(addMediaItems) {
                         case 'video':
                             jQuery("#videos").append(create_video(playerId, mediaItem));
 
-                            Plyr.setup("#" + playerId, { controls: ['current-time', 'progress', 'airplay', 'fullscreen', 'volume'], clickToPlay: false });
+                            Plyr.setup("#" + playerId, { controls: ['current-time', 'airplay', 'fullscreen'], clickToPlay: false });
 
                             // When mousing over a player, unmute it so we can hear.
                             jQuery(jQuery("#" + playerId + "_div")).mouseover(function () {
@@ -241,7 +242,7 @@ function addItems(addMediaItems) {
                             // };
 
                             // When clicking a player, make it the main player,
-                            jQuery("#" + playerId + "_div").click(function () {
+                            jQuery("#" + playerId + "_div .plyr__video-wrapper").click(function () {
                                 jQuery('#' + mediaItem.media_type + 'playermain').children().prependTo('#' + mediaItem.media_type + 's');
                                 jQuery('#' + playerId).prop('muted', jQuery('#' + playerId).attr('muted'));
                                 if (jQuery('#' + playerId + '_div').hasClass("highlight")) {
@@ -441,25 +442,15 @@ function jumpToTime(stringTimeInput) {
     setTimeAllPlayers();
 }
 
-// The 9/11RT johng
-// A live re-creation of real-time media from September 11, 2001,
-// told in by media, photos, audio and other media timestamped and
-// replayed in real time. The time starts at September 11, 2001 at
-// Midnight Eastern Time, and runs to 11:59:59 PM the same day.
-//
-
 // Setup things when the document is ready
 jQuery(function () {
 
     jQuery('.close-modal-boot-button, #hider').click(function (event) {
         jQuery("#chime").trigger('play');
         jQuery("#hider").hide();
-        muteAudioPlayers();
-        setTimeAllPlayers();
         $.modal.close();
-        jumpToTime("7:45:00 AM");
-        johng.updateClock();
         johng.play();
+        muteAllPlayers();
     });
 
     jQuery(".close-modal-button").click(function () {
@@ -574,7 +565,7 @@ jQuery(function () {
         // are no longer active to deactivate.
         addMediaItems = activeItemsList.filter(x => !currentItemsList.includes(x));
         removeMediaItems = currentItemsList.filter(x => !activeItemsList.includes(x));
-        
+
         // Add New Items to the page that don't already exist
         addItems(addMediaItems);
 
@@ -586,10 +577,15 @@ jQuery(function () {
                 // If a video only has a little bit of play info, let's go ahead and set
                 // the current time so that it doesn't download extraneous data
                 console.log("changig time for " + this.get(0).id);
-                setTimePlayer(jQuery(this).get(0).id);
+                //setTimePlayer(jQuery(this).get(0).id);
             }
         });
         // This function loads the data into johng
         updateData();
     };
+    
+    updateData();
+    muteAudioPlayers();
+    jumpToTime("7:45:00 AM");
+    setTimeAllPlayers();
 });
