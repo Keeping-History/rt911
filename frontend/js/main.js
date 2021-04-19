@@ -174,15 +174,8 @@ function removeItems(removeMediaItems) {
             function (playerId) {
                 if (playerId) {
                     var mediaItem = johng.get().find(data => data.vidid === playerId);
-                    if (mediaItem.format == 'audio' || mediaItem.format == 'video') {
-                        jQuery('#' + playerId).addClass("handsoff");
-                        setTimeout(function () {
-                            jQuery('#' + playerId + '_div').remove();
-                            jQuery('#' + playerId + '_preload').remove();
-                        }, playoverDrift * 1000);
-                    } else {
-                        jQuery('#' + playerId + '_div').remove();
-                    }
+                    jQuery('#' + playerId + '_div').remove();
+                    jQuery('#' + playerId + '_preload').remove();
                 }
             });
     }
@@ -217,14 +210,41 @@ function addItems(addMediaItems) {
                             if (mediaItem.format == 'm3u8') {
                                 if (Hls.isSupported()) {
                                     var video = document.getElementById(playerId);
-                                    var hls = new Hls();
+                                    var config = {
+                                        debug: true,
+                                    }
+                                    var hls = new Hls(config);
                                     // bind them together
                                     hls.attachMedia(video);
+                                    console.log("HLS" + mediaItem);
                                     hls.on(Hls.Events.MEDIA_ATTACHED, function () {
                                         hls.loadSource(mediaItem.url);
+                                        hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
+                                            console.log('manifest loaded, found ' + data.levels.length + ' quality level');
+                                        });
+                                        hls.on(Hls.Events.ERROR, function (event, data) {
+                                            if (data.fatal) {
+                                                switch (data.type) {
+                                                    case Hls.ErrorTypes.NETWORK_ERROR:
+                                                        // try to recover network error
+                                                        console.log('fatal network error encountered, try to recover');
+                                                        hls.startLoad();
+                                                        break;
+                                                    case Hls.ErrorTypes.MEDIA_ERROR:
+                                                        console.log('fatal media error encountered, try to recover');
+                                                        hls.recoverMediaError();
+                                                        break;
+                                                    default:
+                                                        // cannot recover
+                                                        hls.destroy();
+                                                        break;
+                                                }
+                                            }
+                                        });
                                     });
                                 }
                             }
+
 
                             // When mousing out of a player, mute it again,
                             // unless it is our main video, in which case don't mute.
@@ -478,6 +498,7 @@ jQuery(function () {
     jQuery('.time-marker').on("click", function () {
         jumpToTime(this.text);
         johng.updateClock();
+        johng.play();
     });
 
     jQuery('.ffrw').on("click", function () {
@@ -576,14 +597,13 @@ jQuery(function () {
             if (jQuery(this).get(0).readyState > 3) {
                 // If a video only has a little bit of play info, let's go ahead and set
                 // the current time so that it doesn't download extraneous data
-                console.log("changig time for " + this.get(0).id);
                 //setTimePlayer(jQuery(this).get(0).id);
             }
         });
         // This function loads the data into johng
         updateData();
     };
-    
+
     updateData();
     muteAudioPlayers();
     jumpToTime("7:45:00 AM");
