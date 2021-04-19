@@ -14,11 +14,11 @@ var johng = {
     pad: function (val) {
       return val > 9 ? val : "0" + val;
     },
-    tick: function (self) {
-      if (self.count < 0 || self.count >= 86400) {
-        self.count = 0;
+    tick: function (me) {
+      if (me.count < 0 || me.count >= 86400) {
+        me.count = 0;
       }
-      self.count += self.accuracy;
+      me.count += me.accuracy;
       this.updateClock();
       this.tickFunction();
     },
@@ -32,12 +32,12 @@ var johng = {
       return true;
     },
     play: function () {
-      self = this;
+      me = this;
       if (!this.interval) {
         this.interval = setInterval(function () {
-          self.tick(self);
+          me.tick(me);
         }, this.accuracy * 1000);
-        self.playing = true;
+        this.playing = true;
       }
     },
     reset: function () {
@@ -64,7 +64,7 @@ var johng = {
     pause: function () {
       clearInterval(this.interval);
       delete this.interval;
-      self.playing = false;
+      this.playing = false;
     },
     isPlaying: function () {
       return this.playing;
