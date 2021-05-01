@@ -3,11 +3,13 @@ import hashlib
 from django.db import models
 from django import forms
 
+
 class TagType(models.Model):
     name = models.CharField(max_length=255)
 
     def __str__(self):
         return self.name
+
 
 class Tag(models.Model):
     name = models.CharField(max_length=255)
@@ -17,6 +19,7 @@ class Tag(models.Model):
     def __str__(self):
         return self.name
 
+
 class Collection(models.Model):
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=255)
@@ -25,12 +28,14 @@ class Collection(models.Model):
     def __str__(self):
         return self.name
 
+
 class Marker(models.Model):
     name = models.CharField(max_length=255)
     time_marker = models.DateTimeField()
 
     def __str__(self):
         return self.name
+
 
 class Media(models.Model):
     start_date = models.DateTimeField()
@@ -83,17 +88,16 @@ class Media(models.Model):
     @property
     def mediaType(self):
         mediaTypes = {
-            'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg', 'm3u8', 'm3u']),
-            'audio': set(['mp3', 'aac', 'ogg', 'flac', 'webm', 'wav']),
-            'html': set(['html']),
-            'modal': set(['modal']),
-            'image': set(['jpg', 'png', 'gif']),
+            'html': ['html'],
+            'audio': ['mp3', 'aac', 'ogg', 'flac', 'webm', 'wav'],
+            'video': ['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg', 'm3u8', 'm3u'],
+            'modal': ['modal'],
+            'image': ['jpg', 'png', 'gif']
         }
+
         for mediaType in mediaTypes:
             if self.format in mediaTypes[mediaType]:
                 return mediaType
-            else:
-                return self.format
 
     @property
     def duration(self):
