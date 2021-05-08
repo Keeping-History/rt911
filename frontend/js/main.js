@@ -63,8 +63,10 @@ function pauseAllPlayers() {
 }
 
 function playAllPlayers() {
-    jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
-        jQuery(this).get(0).play();
+    jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () { 
+        if(jQuery(this).get(0).paused){
+            jQuery(this).get(0).play();
+        }
     });
 }
 
@@ -198,14 +200,26 @@ function addItems(addMediaItems) {
                         case 'video':
                             jQuery("#videos").append(create_video(playerId, mediaItem));
 
-                            Plyr.setup("#" + playerId, { controls: ['current-time', 'airplay', 'fullscreen'], clickToPlay: false });
+                            Plyr.setup("#" + playerId, { controls: ['current-time', 'airplay', 'fullscreen', 'volume', 'airplay'], clickToPlay: false });
 
+                            //jQuery("#" + playerId).prop("volume", jQuery("#" + playerId).attr('media_volume'));
+
+                            /* THIS IS A BAD USER EXPERIENCE... Commenting out for now.
                             // When mousing over a player, unmute it so we can hear.
-                            jQuery(jQuery("#" + playerId + "_div")).mouseover(function () {
-                                if (jQuery('#' + playerId + '_div').hasClass("highlight") && (mediaItem.media_type == 'video')) {
+                            jQuery(jQuery("#" + playerId + "_div")).mouseenter(function () {
+                                if (!jQuery('#' + playerId + '_div').hasClass("highlight") && (mediaItem.media_type == 'video')) {
                                     jQuery('#' + playerId).prop('muted', false);
                                 }
                             });
+
+                            // When mousing out of a player, mute it again,
+                            // unless it is our main video, in which case don't mute.
+                            jQuery(jQuery("#" + playerId + "_div")).mouseleave(function () {
+                                if (!jQuery('#' + playerId + '_div').hasClass("highlight")) {
+                                    jQuery('#' + playerId).prop('muted', true);
+                                }
+                            });
+                            */
 
                             if (mediaItem.format == 'm3u8') {
                                 if (Hls.isSupported()) {
@@ -245,15 +259,6 @@ function addItems(addMediaItems) {
                                 }
                             }
 
-
-                            // When mousing out of a player, mute it again,
-                            // unless it is our main video, in which case don't mute.
-                            jQuery(jQuery("#" + playerId + "_div")).mouseout(function () {
-                                if (jQuery('#' + playerId + '_div').hasClass("highlight")) {
-                                    jQuery('#' + playerId).prop('muted', false);
-                                }
-                            });
-
                             // This is debugging code that helps me watch for videos that might
                             // be stubborn and not want to download for some reason. The
                             // onloadeddata fires when "data for the current frame is available".
@@ -262,7 +267,7 @@ function addItems(addMediaItems) {
                             // };
 
                             // When clicking a player, make it the main player,
-                            jQuery("#" + playerId + "_div .plyr__video-wrapper").click(function () {
+                            jQuery("#" + playerId + "_div div.plyr div:not(.plyr__controls, .plyr__controls *)").click(function () {
                                 jQuery('#' + mediaItem.media_type + 'playermain').children().prependTo('#' + mediaItem.media_type + 's');
                                 jQuery('#' + playerId).prop('muted', jQuery('#' + playerId).attr('muted'));
                                 if (jQuery('#' + playerId + '_div').hasClass("highlight")) {
@@ -282,7 +287,9 @@ function addItems(addMediaItems) {
                         case 'audio':
                             jQuery("#audios").append(create_audio(playerId, mediaItem));
                             Plyr.setup("#" + playerId, { controls: ['current-time', 'duration', 'mute', 'volume'] });
-                            jQuery("#" + playerId).prop("muted", jQuery(jQuery("#" + playerId)).attr('muted'));
+                            jQuery("#" + playerId).prop("volume", jQuery("#" + playerId).attr('media_volume'));
+
+                            jQuery("#" + playerId).prop("muted", jQuery("#mute_all_audio").is(':checked'));
                             jQuery("#" + playerId).currentTime = johng.current() - mediaItem.start + mediaItem.jump;
 
                             // TODO: We're not using promise right now, but will need to later
@@ -300,31 +307,33 @@ function addItems(addMediaItems) {
                             break;
 
                         case 'modal':
-                            if (jQuery.inArray(mediaItem.vidid, window.globalModals) === -1) {
-                                jQuery('#modal-title').text(mediaItem.source);
-                                jQuery('#modal-time').text(mediaItem.start);
+                            if(mediaItem.end > johng.current()) {
+                                if (jQuery.inArray(mediaItem.vidid, window.globalModals) === -1) {
+                                    jQuery('#modal-title').text(mediaItem.source);
+                                    jQuery('#modal-time').text(mediaItem.start);
 
-                                if (mediaItem.image != "") {
-                                    jQuery("#modal-image").attr("src", mediaItem.image);
-                                    jQuery("#modal-image").attr("alt", mediaItem.image_caption);
-                                    if (mediaItem.image_caption != "") {
-                                        jQuery("#modal-image-caption").html(mediaItem.image_caption);
+                                    if (mediaItem.image != "") {
+                                        jQuery("#modal-image").attr("src", mediaItem.image);
+                                        jQuery("#modal-image").attr("alt", mediaItem.image_caption);
+                                        if (mediaItem.image_caption != "") {
+                                            jQuery("#modal-image-caption").html(mediaItem.image_caption);
+                                        }
                                     }
-                                }
 
-                                jQuery('#modal-fulltitle').text(mediaItem.title);
-                                jQuery('#modal-content').html(mediaItem.content);
-                                jQuery('#modalModal').modal({
-                                    backdrop: false,
-                                    show: true,
-                                    showClose: false,
-                                    closeExisting: false,
-                                    fadeDuration: 100,
-                                    clickClose: false,
-                                    blockerClass: "blocker"
-                                })
-                                window.globalModals.push(mediaItem.vidid);
-                                johng.pause();
+                                    jQuery('#modal-fulltitle').text(mediaItem.title);
+                                    jQuery('#modal-content').html(mediaItem.content);
+                                    jQuery('#modalModal').modal({
+                                        backdrop: false,
+                                        show: true,
+                                        showClose: false,
+                                        closeExisting: false,
+                                        fadeDuration: 100,
+                                        clickClose: false,
+                                        blockerClass: "blocker"
+                                    })
+                                    window.globalModals.push(mediaItem.vidid);
+                                    johng.pause();
+                                }
                             }
                             break;
                     };
@@ -507,10 +516,10 @@ jQuery(function () {
 
     jQuery('#mute_all_audio').click(function () {
         if (jQuery(this).is(':checked')) {
-            muteAudioPlayers();
+            //unmuteAudioPlayers();
             jQuery('#radio_mute_icon').attr('src', 'img/sound_off.png');
         } else {
-            //unmuteAudioPlayers();
+            muteAudioPlayers();
             jQuery('#radio_mute_icon').attr('src', 'img/sound_on.png');
         }
     });
@@ -523,6 +532,7 @@ jQuery(function () {
     window.setInterval(function () {
         if (!johng.isPlaying()) {
             pauseAllPlayers();
+            setTimeAllPlayers();
         }
     }, playerSync * 1000);
 
