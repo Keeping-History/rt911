@@ -68,3 +68,4 @@ target/
 /backend/pyvenv.cfg
 /frontend/grid.html
 /frontend/grid-test.css
+/backend/static
