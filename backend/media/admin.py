@@ -59,8 +59,8 @@ class MediaAdmin(ImportExportModelAdmin):
     readonly_fields = ('preview_media', 'preview_image', )
 
     def preview_media(self, obj):
-        return (format_html("<%s src='%s' controls=true class='preview' />" % (obj.mediaType, obj.url)))
-
+        return (format_html("<%s src='%s' controls=true class='preview' />" % (obj.media_type, obj.url)))
+ 
     preview_media.short_description = "Preview Media"
 
     def preview_image(self, obj):

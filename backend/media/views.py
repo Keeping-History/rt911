@@ -66,8 +66,8 @@ def index(request):
         media_item['media_type'] =  media_item['format']
 
         mediaTypes = {
-            'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg', 'm3u8', 'm3u']),
             'audio': set(['mp3', 'aac', 'ogg', 'flac', 'webm', 'wav']),
+            'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg', 'm3u8', 'm3u']),
             'html': set(['html']),
             'iframe': set(['iframe']),
             'image': set(['jpg', 'png', 'gif']),
