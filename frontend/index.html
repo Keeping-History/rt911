@@ -161,7 +161,7 @@
 		</div>
 		<h1 class="title"><span>Audio Player</span></h1>
 		<div class="inner">
-			<input id="mute_all_audio" class="form-check-input" type="checkbox"> <img id="radio_mute_icon" src="img/sound_on.png" class="icon-titlebar float-right" alt="Mute Audio">
+			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon" src="img/sound_on.png" class="icon-titlebar float-right" alt="Mute Audio">
 			<div id="audioplayermain"></div>
 			<div id="audios"></div>
 		</div>
@@ -429,7 +429,7 @@
 		<script id="video_item_template" type="x-tmpl-mustache">
 			<div id="{{PlayerID}}_div">
 				<h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2>
-				<video id="{{PlayerID}}" autoplay muted preload="true" class="plyr-video">
+				<video id="{{PlayerID}}" autoplay muted media_volume="{{Volume}}" preload="true" class="plyr-video">
 					<source src="{{VideoURL}}" type="{{Type}}"> 
 				</video>
 			</div>
