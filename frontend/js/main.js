@@ -178,6 +178,7 @@ function removeItems(removeMediaItems) {
                     var mediaItem = johng.get().find(data => data.vidid === playerId);
                     jQuery('#' + playerId + '_div').remove();
                     jQuery('#' + playerId + '_preload').remove();
+                    jQuery('#' + playerId).destroy();
                 }
             });
     }
@@ -298,6 +299,7 @@ function addItems(addMediaItems) {
                             jQuery("#" + playerId).bind("ended", function () {
                                 jQuery("#" + $(this).attr('id') + "_div").empty().remove();
                                 jQuery("#" + $(this).attr('id') + "_preload").empty().remove();
+                                jQuery("#" + $(this).attr('id')).destroy();
                             });
                             break;
 
