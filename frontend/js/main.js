@@ -202,7 +202,8 @@ function addItems(addMediaItems) {
 
                             Plyr.setup("#" + playerId, { controls: ['current-time', 'airplay', 'fullscreen', 'volume', 'airplay'], clickToPlay: false });
 
-                            //jQuery("#" + playerId).prop("volume", jQuery("#" + playerId).attr('media_volume'));
+                            jQuery("#" + playerId).prop("volume", jQuery("#" + playerId).attr('media_volume'));
+                            jQuery("#" + playerId).prop("muted", true);
 
                             /* THIS IS A BAD USER EXPERIENCE... Commenting out for now.
                             // When mousing over a player, unmute it so we can hear.
@@ -289,7 +290,7 @@ function addItems(addMediaItems) {
                             Plyr.setup("#" + playerId, { controls: ['current-time', 'duration', 'mute', 'volume'] });
                             jQuery("#" + playerId).prop("volume", jQuery("#" + playerId).attr('media_volume'));
 
-                            jQuery("#" + playerId).prop("muted", jQuery("#mute_all_audio").is(':checked'));
+                            jQuery("#" + playerId).prop("muted", !jQuery("#mute_all_audio").is(':checked'));
                             jQuery("#" + playerId).currentTime = johng.current() - mediaItem.start + mediaItem.jump;
 
                             // TODO: We're not using promise right now, but will need to later
@@ -402,8 +403,8 @@ function create_video(playerId, mediaItem) {
         VideoURL: mediaItem.url,
         Type: mediaItem.type,
         Source: mediaItem.source,
-        StartTime: mediaItem.startTime
-
+        StartTime: mediaItem.startTime,
+        Volume: mediaItem.volume,
     };
 
     var template = document.getElementById('video_item_template').innerHTML;
@@ -517,10 +518,10 @@ jQuery(function () {
     jQuery('#mute_all_audio').click(function () {
         if (jQuery(this).is(':checked')) {
             //unmuteAudioPlayers();
-            jQuery('#radio_mute_icon').attr('src', 'img/sound_off.png');
+            jQuery('#radio_mute_icon').attr('src', 'img/sound_on.png');
         } else {
             muteAudioPlayers();
-            jQuery('#radio_mute_icon').attr('src', 'img/sound_on.png');
+            jQuery('#radio_mute_icon').attr('src', 'img/sound_off.png');
         }
     });
 
