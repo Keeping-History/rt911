@@ -44,6 +44,7 @@ var networkListCache = [
     "MSNBC",
     "PSC",
 ];
+var markerListCache = [];
 var dataCache = [];
 
 // Caching and preload Functions
@@ -199,8 +200,55 @@ function updateNetworks() {
     }
 }
 
+function updateMarkers() {
+    if (markerListCache.length > 0) {
+        markerListCache.forEach(function (item) {
+            if (jQuery("#events ul #" + item["id"]).length === 0) {
+                jQuery(
+                    "<li id=" +
+                        item["id"] +
+                        '><b><a href="#" class="time-marker">' +
+                        item["time_marker"] +
+                        "</a></b>" +
+                        item["name"] +
+                        "</li>"
+                ).appendTo("#events ul");
+            }
+        });
+    } else {
+        $.ajax({
+            type: "GET",
+            url: window.baseRemoteURL + "markers",
+            dataType: "json",
+            async: false,
+            cache: true,
+            success: function (data) {
+                window.markerListCache = data;
+                data.forEach(function (item) {
+                    if (jQuery("#events ul #" + item["id"]).length === 0) {
+                        jQuery(
+                            "<li id=" +
+                                item["id"] +
+                                '><b><a href="#" class="time-marker">' +
+                                item["time_marker"] +
+                                "</a></b>" +
+                                item["name"] +
+                                "</li>"
+                        ).appendTo("#events ul");
+                    }
+                });
+            },
+        });
+    }
+    jQuery(".time-marker").on("click", function () {
+        console.log(this);
+        jumpToTime(this.text);
+        johng.updateClock();
+        johng.play();
+    });
+}
+
 function updateData() {
-    updateNetworks();
     johng.set(getData());
 }
 
@@ -260,9 +308,11 @@ function addItems(addMediaItems) {
                             clickToPlay: false,
                         });
 
-                        player.on("ready", (event) => {
-                            console.log("ready", event.detail.plyr.media.id);
-                        });
+                        /*
+                            player.on("ready", (event) => {
+                                console.log("ready", event.detail.plyr.media.id);
+                            });
+                        */
 
                         jQuery("#" + playerId).prop(
                             "volume",
@@ -378,9 +428,12 @@ function addItems(addMediaItems) {
 
                         // TODO: We're not using promise right now, but will need to later
                         jQuery("#" + playerId).trigger("play");
-                        jQuery("#" + playerId).bind("ended", function (playerId) {
-                            removeItems([playerId]);
-                        });
+                        jQuery("#" + playerId).bind(
+                            "ended",
+                            function (playerId) {
+                                removeItems([playerId]);
+                            }
+                        );
                         break;
 
                     case "html":
@@ -586,12 +639,6 @@ jQuery(function () {
         johng.pause();
     });
 
-    jQuery(".time-marker").on("click", function () {
-        jumpToTime(this.text);
-        johng.updateClock();
-        johng.play();
-    });
-
     jQuery(".ffrw").on("click", function () {
         moveTime(parseInt(jQuery(this).data("skip")));
     });
@@ -710,7 +757,16 @@ jQuery(function () {
     };
 
     updateData();
+    updateNetworks();
+    updateMarkers();
     muteAudioPlayers();
-    jumpToTime("7:45:00 AM");
+    var time = new Date();
+    var timeString = time.toLocaleString("en-US", {
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+        hour12: true,
+    });
+    jumpToTime(timeString);
     setTimeAllPlayers();
 });
