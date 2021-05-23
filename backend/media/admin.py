@@ -59,7 +59,7 @@ class MediaAdmin(ImportExportModelAdmin):
     readonly_fields = ('preview_media', 'preview_image', )
 
     def preview_media(self, obj):
-        return (format_html("<%s src='%s' controls=true class='preview' />" % (obj.media_type, obj.url)))
+        return (format_html("<%s src='%s' controls=true class='preview' />" % (obj.mediaType, obj.url)))
  
     preview_media.short_description = "Preview Media"
 
@@ -109,7 +109,7 @@ class CollectionAdmin(ImportExportModelAdmin):
 
 class MarkerAdmin(ImportExportModelAdmin):
     model = Marker
-    list_display = ['name']
+    list_display = ['name', 'time_marker']
 
 admin.site.register(Media, MediaAdmin)
 admin.site.register(Tag, TagAdmin)
