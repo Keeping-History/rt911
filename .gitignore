@@ -66,6 +66,5 @@ docs/_build/
 target/
 /backend/bin
 /backend/pyvenv.cfg
-/frontend/grid.html
-/frontend/grid-test.css
 /backend/static
+/.prettierrc
