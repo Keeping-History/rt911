@@ -109,7 +109,7 @@ class CollectionAdmin(ImportExportModelAdmin):
 
 class MarkerAdmin(ImportExportModelAdmin):
     model = Marker
-    list_display = ['name', 'time_marker']
+    list_display = ['approved', 'name', 'time_marker']
 
 admin.site.register(Media, MediaAdmin)
 admin.site.register(Tag, TagAdmin)

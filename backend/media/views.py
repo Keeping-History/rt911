@@ -3,7 +3,7 @@ import hashlib
 
 from django.http import JsonResponse
 from django.db.models import Q
-from .models import Media, Tag, TagType, Collection
+from .models import Media, Tag, TagType, Collection, Marker
 
 # Map timezones to their UTC numerical difference
 timezone_map = {
@@ -170,20 +170,25 @@ def collections(request):
 
     return JsonResponse(list(dict.fromkeys(collections)), safe=False)
 
-def timemarkers(request):
+def markers(request):
 
     # Activate our (lazy) filters and get the actual data
+    q = Q(approved=True)
+
     data = list(
         Marker.objects.values()
+        .filter(q)
+        .order_by('time_marker')
     )
-
-   # Create a holder for our view output
+    print(data)
+    # Create a holder for our view output
     markers = []
 
     for item in data:
         marker = {}
         marker['name'] = item['name']
-        marker['time'] = item['time']
+        marker['id'] = item['id']
+        marker['time_marker'] = item['time_marker'].strftime("%-I:%M:%S %p")
         markers.append(marker)
 
-    return JsonResponse(list(dict.fromkeys(markers)), safe=False)
+    return JsonResponse(list(markers), safe=False)

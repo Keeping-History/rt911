@@ -9,4 +9,5 @@ urlpatterns = [
     path('tags', views.tags, name='tags'),
     path('tag_types', views.tag_types, name='tag_types'),
     path('collections', views.collections, name='collections'),
+    path('markers', views.markers, name='markers'),
 ]

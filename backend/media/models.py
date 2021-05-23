@@ -1,4 +1,5 @@
 import hashlib
+from datetime import datetime
 
 from django.db import models
 from django import forms
@@ -28,14 +29,22 @@ class Collection(models.Model):
     def __str__(self):
         return self.name
 
+def default_start_time():
+    now = datetime.now()
+    start = now.replace(day=11, month=9, year=2001)
+    return start
 
 class Marker(models.Model):
     name = models.CharField(max_length=255)
-    time_marker = models.DateTimeField()
+    time_marker = models.DateTimeField(default=default_start_time)
+    approved = models.BooleanField(default=False)
+    approved.boolean = True
 
     def __str__(self):
         return self.name
 
+    class Meta:
+       ordering = ['-time_marker']
 
 class Media(models.Model):
     start_date = models.DateTimeField()
