@@ -180,7 +180,7 @@ def markers(request):
         .filter(q)
         .order_by('time_marker')
     )
-    print(data)
+
     # Create a holder for our view output
     markers = []
 
