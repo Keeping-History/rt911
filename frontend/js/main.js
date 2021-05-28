@@ -241,7 +241,6 @@ function updateMarkers() {
         });
     }
     jQuery(".time-marker").on("click", function () {
-        console.log(this);
         jumpToTime(this.text);
         johng.updateClock();
         johng.play();
@@ -550,12 +549,13 @@ function create_video(playerId, mediaItem) {
     return $.parseHTML($.trim(Mustache.render(template, videoItem)));
 }
 
+// A helper function that's not currently used.
 function isMediaReady() {
     current_data = johng.get();
     current_data.forEach((element) => {
         if (element.media_type == "video") {
             jQuery("#" + element.vidid).on("canplay", function () {
-                console.log("canplay: ", element);
+                // console.log("canplay: ", element);
             });
         }
     });
@@ -610,15 +610,15 @@ function jumpToTime(stringTimeInput) {
 
 // Setup things when the document is ready
 jQuery(function () {
-    jQuery(".close-modal-boot-button, #hider").click(function (event) {
-        jQuery("#chime").trigger("play");
+    jQuery(".close-modal-boot-button, #hider").on("click", function (event) {
         jQuery("#hider").hide();
         $.modal.close();
+        jQuery("#sound_boot").trigger("play");
         johng.play();
         muteAllPlayers();
     });
 
-    jQuery(".close-modal-button").click(function () {
+    jQuery(".close-modal-button").on("click", function () {
         $.modal.close();
         johng.play();
     });
@@ -643,7 +643,7 @@ jQuery(function () {
         moveTime(parseInt(jQuery(this).data("skip")));
     });
 
-    jQuery("#mute_all_audio").click(function () {
+    jQuery("#mute_all_audio").on("click", function () {
         if (jQuery(this).is(":checked")) {
             //unmuteAudioPlayers();
             jQuery("#radio_mute_icon").attr("src", "img/sound_on.png");
@@ -655,7 +655,17 @@ jQuery(function () {
 
     // If updating form fields, add their changes to the URL
     jQuery("#filters input").on("click", updateData);
-    jQuery("select").on("change", updateData);
+    jQuery("#filters select").on("change", updateData);
+    jQuery("#backgroundSetting").on("change", function () {
+        jQuery("body, html").css(
+            "background-image",
+            encodeURI(
+                "url(img/patterns/" +
+                    jQuery(this).children(":selected").attr("id") +
+                    ")"
+            )
+        );
+    });
 
     // Make sure the child players are always paused when the timeline player is also paused
     window.setInterval(function () {
@@ -671,11 +681,11 @@ jQuery(function () {
         }
     }, playerSync * 1000);
 
-    jQuery("#menu-play").click(function () {
+    jQuery("#menu-play").on("click", function () {
         johng.play();
     });
 
-    jQuery("#menu-pause").click(function () {
+    jQuery("#menu-pause").on("click", function () {
         johng.pause();
     });
 
