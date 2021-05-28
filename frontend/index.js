@@ -1,4 +1,9 @@
-jQuery(function () {
+function isMobile() {
+    try{ document.createEvent("TouchEvent"); return true; }
+    catch(e){ return false; }
+  }
+
+  jQuery(function () {
     //Make windows movable and make sure the active window is on top
     jQuery(".draggable-window").draggable({
         handle: "h1.title",
@@ -8,19 +13,14 @@ jQuery(function () {
         },
     });
 
-    //Make icons movable
-    jQuery(".draggable-icon").draggable();
-
     //Make windows resizable
     //TODO: This is not currently working because we don't have a grab button
     jQuery(".resizable").resizable({
-        handles: "se"
+        handles: "se",
+        stop: function (event, ui) {
+            jQuery("#sound_move_stop").trigger("play");
+        },
     });
-
-    //Enable Icons and Menu items to be clickable and open their windows/apps
-    jQuery(".icon").dblclick(function () {
-        jQuery("#" + jQuery(this).get(0).id.split("-")[1]).removeClass('hidden').css("z-index", "9000");
-    })
 
     // Zoom Box -- Make Window Full Screen and toggle back
     jQuery(".zoom-box").on("click", function () {
@@ -41,16 +41,14 @@ jQuery(function () {
                 .data("left", jQuery(b).css("left"))
                 .data("max", true);
 
-        } else {
-            jQuery(b)
-                .css("width", jQuery(this).data("width"))
-                .css("height", jQuery(this).data("height"))
-                .css("top", jQuery(this).data("top"))
-                .css("left", jQuery(this).data("left"))
-                .css("z-index","900")
+            jQuery("#sound_windowshade_expand").trigger("play");
 
-            jQuery(this)
-                .data("max", false);
+            } else {
+            jQuery(b)
+                .removeAttr("style")
+                jQuery("#sound_windowshade_collapse").trigger("play");
+
+            jQuery(this).data("max", false);
 
         }
     });
@@ -62,30 +60,50 @@ jQuery(function () {
         d = jQuery(this).data("shade");
         e = jQuery(this).data("shade-height", jQuery(this).css("height"));
         if (!d) {
-            jQuery(c).children('.inner').addClass('hidden');
-            jQuery(c).css('height', "");
+            jQuery(c).children(".inner").addClass("hidden");
+            jQuery(c).css("height", "");
             jQuery(this).data("shade", true);
+            jQuery("#sound_windowshade_collapse").trigger("play");
         } else {
-            jQuery(c).children('.inner').removeClass('hidden');
+            jQuery(c).children(".inner").removeClass("hidden");
             jQuery(c).css("height", e);
             jQuery(this).data("shade", false);
+            jQuery("#sound_windowshade_expand").trigger("play");
         }
     });
-    
+
     // Close Box -- Close the window when clicked
     jQuery(".close-box, .close-button").on("click", function () {
         a = this.closest(".content");
-        jQuery(a).addClass('hidden');
+        jQuery(a).addClass("hidden");
+        jQuery("#sound_close").trigger("play");
     });
 
+    // Enable Desktop Icons
+    if( isMobile() ) {
+        jQuery(".icon").on("click", function () {
+            jQuery("#" + jQuery(this).get(0).id.split("-")[1])
+                .removeClass("hidden")
+                .css("z-index", "9000");
+            jQuery("#sound_open").trigger("play");
+        });
+    } else {
+         jQuery(".draggable-icon").draggable({});
+         jQuery(".icon").on("dblclick", function () {
+            jQuery("#" + jQuery(this).get(0).id.split("-")[1])
+                .removeClass("hidden")
+                .css("z-index", "9000");
+            jQuery("#sound_open").trigger("play");
+        });
+    }
+
     // Make sure the active window is on top
-    jQuery(".content").click(function () {
-        jQuery(".content").css("z-index", "1100")
+    jQuery(".content").on("click", function () {
+        jQuery(".content").css("z-index", "1100");
         jQuery(this).css("z-index", "1200");
     });
 
-    // Menu Items - show and hide menu items and drop downs
-    jQuery("#nav-list li").on("mouseenter", function () {
+    jQuery("#nav-list li").on("click touch", function () {
         jQuery(this).children().show();
     });
 
@@ -93,22 +111,22 @@ jQuery(function () {
         jQuery(this).children("ul").hide();
     });
 
-    jQuery("#nav-list li").on("click", function () {
-        jQuery(this).children("ul").hide();
-    });
 
     // Enable menu items to be clickable by default and open a windows/app with the same name
-    jQuery("#nav-list li ul li").click(function () {
-        jQuery("#" + jQuery(this).get(0).id.split("-")[1]).removeClass('hidden').css("z-index", "9000");
-    })
+    jQuery("#nav-list li ul li").on("click", function () {
+        jQuery("#sound_open").trigger("play");
+        jQuery("#" + jQuery(this).get(0).id.split("-")[1])
+            .removeClass("hidden")
+            .css("z-index", "9000");
+    });
 
-    jQuery('#modalBoot').modal({
+    jQuery("#modalBoot").modal({
         show: true,
         escapeClose: false,
         clickClose: false,
         showClose: false,
         fadeDuration: 250,
         clickClose: false,
-        blockerClass: "blocker"
+        blockerClass: "blocker",
     });
 });

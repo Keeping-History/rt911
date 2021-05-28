@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<title>Mac OS 8.1</title>
+	<title>9/11 Realtime</title>
+
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+
+	<meta name="msapplication-TileColor" content="#dddddd">
+	<meta name="msapplication-TileImage" content="img/mstile-144x144.png">
+	<meta name="theme-color" content="#ddd">
 
 	<link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png">
 	<link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
@@ -11,9 +17,6 @@
 	<link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png">
 	<link rel="manifest" href="site.webmanifest">
 	<link rel="mask-icon" href="img/safari-pinned-tab.svg" color="#365888">
-	<meta name="msapplication-TileColor" content="#dddddd">
-	<meta name="msapplication-TileImage" content="img/mstile-144x144.png">
-	<meta name="theme-color" content="#ddd">
 
 	<link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="structure.css">
@@ -25,26 +28,39 @@
 	<link type="text/css" href="https://cdn.plyr.io/3.6.2/plyr.css" rel="stylesheet">
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css">
 
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
-	<script src="https://cdn.jsdelivr.net/npm/hls.js@0.14.17/dist/hls.min.js"></script>
-	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
-	<script src="https://www.google-analytics.com/analytics.js" async></script>
+	<!-- Google Tag Manager -->
+	<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+	new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+	j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+	'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+	})(window,document,'script','dataLayer','GTM-5RXCWC9');</script>
+	<!-- End Google Tag Manager -->
+
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.js"></script>
-	<script src="https://cdn.jsdelivr.net/npm/readmore-js@2.2.1/readmore.min.js"></script>
+
 	<script src="https://cdn.plyr.io/3.6.2/plyr.polyfilled.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/mustache.js/4.1.0/mustache.min.js" integrity="sha512-HYiNpwSxYuji84SQbCU5m9kHEsRqwWypXgJMBtbRSumlx1iBB6QaxgEBZHSHEGM+fKyCX/3Kb5V5jeVXm0OglQ==" crossorigin="anonymous"></script>
+	<script src="https://cdn.jsdelivr.net/npm/hls.js@0.14.17/dist/hls.min.js"></script>
+
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
+
+	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui-touch-punch/0.2.3/jquery.ui.touch-punch.min.js"></script>
+
+	<script src="https://cdn.jsdelivr.net/npm/readmore-js@2.2.1/readmore.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/mustache.js/4.1.0/mustache.min.js" integrity="sha512-HYiNpwSxYuji84SQbCU5m9kHEsRqwWypXgJMBtbRSumlx1iBB6QaxgEBZHSHEGM+fKyCX/3Kb5V5jeVXm0OglQ==" crossorigin="anonymous"></script>
+
 	<script src="js/johng.js"></script>
 	<script src="index.js"></script>
 
 </head>
 
 <body>
+	<!-- Google Tag Manager (noscript) -->
+	<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5RXCWC9"
+	height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+	<!-- End Google Tag Manager (noscript) -->
 
 	<div id="hider" style="height:100%;width:100%;background:black;" class="" ></div>
 	<nav>
@@ -61,18 +77,20 @@
 					<ul class="menu command_button">
 						<li id="menu-play"><img src="img/tv.png" width="16" alt="Play"> Play</li>
 						<li id="menu-pause"><img src="img/tv.png" width="16" alt="Pause"> Pause</li>
-						<li id="menu-settings"><img src="img/settings.png" width="16" alt="Settings"> Settings</li>
+						<hr>
+						<li id="menu-controls"><img src="img/controls.png" width="16" alt="Controls"> Controls</li>
+						<li id="menu-timeline"><img src="img/timeline.png" width="16" alt="Timeline"> Timeline</li>
 					</ul>
 				</li>
 				<li>Edit
 					<ul class="menu command_button">
-					<li id="menu-controls"><img src="img/tv.png" width="16" alt="Controls Window"> Controls</li>
-					<li id="menu-timelineofevents"><img src="img/tv.png" width="16" alt="Controls Window"> Timeline of Events</li>
+						<li id="menu-settings"><img src="img/settings.png" width="16" alt="Settings"> Settings</li>
 					</ul>
 				</li>
 				<li>Help
 					<ul class="menu command_button">
-						<li id="menu-about">About</li>
+						<li id="menu-about"><img src="img/about.png" width="16" alt="About">About</li>
+						<li id="menu-help"><img src="img/help.png" width="16" alt="Help">Help</li>
 					</ul>
 				</li>
 				<li id="macoslogo"><img src="img/macos.svg" alt="MacOS"></li>
@@ -85,8 +103,14 @@
 			<h2>TV Tuner</h2></div>
 		<div class="icon draggable-icon ui-widget-content" id="icon-news"><img src="img/news.png" alt="News Reader">
 			<h2>News</h2></div>
-		<div class="icon draggable-icon ui-widget-content" id="icon-audio"><img src="img/sound.png" alt="Audio Browser">
+		<div class="icon draggable-icon ui-widget-content" id="icon-audio"><img src="img/audio.png" alt="Audio Browser">
 			<h2>Audio</h2></div>
+		<div class="icon draggable-icon ui-widget-content" id="icon-controls"><img src="img/controls.png" alt="Controls">
+			<h2>Controls</h2></div>
+		<div class="icon draggable-icon ui-widget-content" id="icon-timeline"><img src="img/timeline.png" alt="Timeline">
+			<h2>Timeline</h2></div>
+		<div class="icon draggable-icon ui-widget-content" id="icon-settings"><img src="img/settings.png" alt="Settings">
+			<h2>Settings</h2></div>
 	</div>
 	<div id="controls" class="content draggable-window" style="text-align:center">
 		<div class="control-box close-box">
@@ -193,7 +217,7 @@
 			</div>
 		</div>
 	</div>
-	<div id="timelineofevents" class="content draggable-window resizable" style="text-align:center">
+	<div id="timeline" class="content draggable-window resizable" style="text-align:center">
 		<div class="control-box close-box">
 			<a class="control-box-inner"></a>
 		</div>
@@ -207,7 +231,7 @@
 				<div class="windowshade-box-inner"></div>
 			</div>
 		</div>
-		<h1 class="title"><span>Events</span></h1>
+		<h1 class="title"><span>Timeline of Events</span></h1>
 		<div class="inner">
 			<div id="events">
 				<ul></ul>
@@ -230,7 +254,7 @@
 		</div>
 		<h1 class="title"><span>About</span></h1>
 		<div class="inner">
-			<div class="icon"><img src="img/mac.png" alt="Macintosh Computer"></div>
+			<div class="icon"><img src="img/about.png" alt="Macintosh Computer"></div>
 			<ul>
 				<li style="text-align:left">
 					<h1>9/11 Realtime</h1>
@@ -253,7 +277,7 @@
 			<button class="command_button close-button">Close</button>
 		</div>
 	</div>
-	<div id="settings" class="content hidden draggable-window" style="text-align:center">
+	<div id="help" class="content hidden draggable-window" style="text-align:center">
 		<div class="control-box close-box">
 			<a class="control-box-inner"></a>
 		</div>
@@ -267,7 +291,24 @@
 				<div class="windowshade-box-inner"></div>
 			</div>
 		</div>
-		<h1 class="title"><span>Settings</span></h1>
+		<h1 class="title"><span>Help</span></h1>
+		<div class="inner">
+			<div class="icon"><img src="img/help.png" alt="Help"></div>
+			<ul>
+				<li style="text-align:left">
+					<h1>Help</h1>
+					<p>Coming Soon</p>
+					<p></p>
+				</li>
+			</ul>
+			<button class="command_button close-button">Close</button>
+		</div>
+	</div>
+	<div id="settings" class="content draggable-window hidden" style="text-align:center">
+		<div class="control-box close-box">
+			<a class="control-box-inner"></a>
+		</div>
+		<h1 class="title noright"><span>Settings</span></h1>
 		<div class="inner">
 			<ul>
 				<li style="text-align:left">
@@ -292,13 +333,13 @@
 										<option value="20">September 20</option>
 									</select>
 								</li>
-								<li>
+								<li class="hidden">
 									<label for="network">📺 Network</label>
 									<select name="network" id="network" class="btn-primary">
 										<option value="all" selected>All</option>
 									</select>
 								</li>
-								<li>
+								<li class="hidden">
 									<label for="format">📺 Format</label>
 									<select name="format" id="format" class="btn-primary">
 										<option value="video">video</option>
@@ -309,6 +350,61 @@
 								</li>
 							</ul>
 						</form>
+					</div>
+					<hr>
+					<div id="backgroundSettingControl" class="settingsControl">
+						<label for="backgroundSetting">Background</label>
+						<img id="backgroundSettingsIcon" class="settingsIcon" src="img/background_settings.png">
+						<select id="backgroundSetting" class="setting">
+							<option id="Bubbles Bondi.png">Bubbles Bondi</option>
+							<option id="Azul Dark.png">Azul Dark</option>
+							<option id="Azul Extra Light.png">Azul Extra Light</option>
+							<option id="Azul Light.png">Azul Light</option>
+							<option id="Bondi Dark.png">Bondi Dark</option>
+							<option id="Bondi Extra Dark.png">Bondi Extra Dark</option>
+							<option id="Bondi Light.png">Bondi Light</option>
+							<option id="Bondi Medium.png">Bondi Medium</option>
+							<option id="Bondi.png">Bondi</option>
+							<option id="Bossanova Bondi.png">Bossanova Bondi</option>
+							<option id="Bossanova Poppy 2.png" >Bossanova Poppy 2</option>
+							<option id="Bossanova Poppy.png" >Bossanova Poppy</option>
+							<option id="Bubbles Poppy.png" >Bubbles Poppy</option>
+							<option id="Candy Bar Azul.png" >Candy Bar Azul</option>
+							<option id="Candy Bar Pistachio.png" >Candy Bar Pistachio</option>
+							<option id="Candy Bar Sunny.png" >Candy Bar Sunny</option>
+							<option id="Candy Bar.png" >Candy Bar</option>
+							<option id="Diagonals Bondi Dark.png" >Diagonals Bondi Dark</option>
+							<option id="Diagonals Bondi.png" >Diagonals Bondi</option>
+							<option id="Diagonals Poppy.png" >Diagonals Poppy</option>
+							<option id="Flat Peanuts Poppy.png" >Flat Peanuts Poppy</option>
+							<option id="Flat Peanuts.png" >Flat Peanuts</option>
+							<option id="French Blue Dark.png" selected>French Blue Dark</option>
+							<option id="French Blue Light.png" >French Blue Light</option>
+							<option id="Lollipop 2.png" >Lollipop 2</option>
+							<option id="Lollipop 3.png" >Lollipop 3</option>
+							<option id="Lollipop 4.png" >Lollipop 4</option>
+							<option id="Lollipop 5.png" >Lollipop 5</option>
+							<option id="Lollipop.png" >Lollipop</option>
+							<option id="Peanuts Azul.png" >Peanuts Azul</option>
+							<option id="Peanuts Pistachio.png" >Peanuts Pistachio</option>
+							<option id="Pistachio Dark.png" >Pistachio Dark</option>
+							<option id="Pistachio Light.png" >Pistachio Light</option>
+							<option id="Pistachio Medium.png" >Pistachio Medium</option>
+							<option id="Poppy Dark.png" >Poppy Dark</option>
+							<option id="Poppy Light.png" >Poppy Light</option>
+							<option id="Poppy Medium.png" >Poppy Medium</option>
+							<option id="Poppy.png" >Poppy</option>
+							<option id="Rio Azul.png" >Rio Azul</option>
+							<option id="Rio Pistachio.png" >Rio Pistachio</option>
+							<option id="Ripple Azul.png" >Ripple Azul</option>
+							<option id="Ripple Bondi.png" >Ripple Bondi</option>
+							<option id="Ripple Poppy.png" >Ripple Poppy</option>
+							<option id="Sunny Dark.png" >Sunny Dark</option>
+							<option id="Sunny Light.png" >Sunny Light</option>
+							<option id="Sunny.png" >Sunny</option>
+							<option id="Waves Azul.png" >Waves Azul</option>
+							<option id="Waves Bondi.png" >Waves Bondi</option>
+						</select>
 					</div>
 				</li>
 			</ul>
@@ -338,6 +434,9 @@
 					<h1 id="modal-title"><span id="modal-time" class="text-bold"></span> <span id="modal-fulltitle">About 9/11 in Realtime</span></h1><img id="modal-image" src="img/blank.png" alt="none">
 					<p id="modal-image-caption" class="text-italic"></p>
 					<p id="modal-content">
+					<h2>The time is currently <span id="time" class="time text-center timeText">Loading...</span></h2>
+
+					<hr>
 					9/11 in Realtime is a multimedia experiment for teachers, with the purpose of helping
 					their students truly understand and absorb the events of September 11, 2001. We've collected
 					media--video, audio and other items--available from the days before and after the September 11 attacks,
@@ -362,9 +461,25 @@
 		</div>
 	</div>
 
-	<audio controls id="chime" class="handsoff hidden" preload="auto">
+	<audio controls id="sound_boot" class="handsoff hidden" preload="auto">
 		<source src="rsrc/boot.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
 	</audio>
+	<audio controls id="sound_close" class="handsoff hidden" preload="auto">
+		<source src="rsrc/close.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
+	</audio>
+	<audio controls id="sound_windowshade_collapse" class="handsoff hidden" preload="auto">
+		<source src="rsrc/windowshade_collapse.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
+	</audio>
+	<audio controls id="sound_windowshade_expand" class="handsoff hidden" preload="auto">
+		<source src="rsrc/windowshade_expand.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
+	</audio>
+	<audio controls id="sound_open" class="handsoff hidden" preload="auto">
+		<source src="rsrc/open.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
+	</audio>
+	<audio controls id="sound_move_stop" class="handsoff hidden" preload="auto">
+		<source src="rsrc/move_stop.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
+	</audio>
+
 
 	<div id="preloads" class="hidden"></div>
 
@@ -383,6 +498,7 @@
 					<span>{{Time}}</span> - {{Title}}
 				</h3>
 				<div id="{{ItemID}}" class="htmlitem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsimage"> {{{Content}}} </div>
+				<hr>
 			</div>
 		</script>
 		<script id="video_item_template" type="x-tmpl-mustache">
@@ -394,13 +510,6 @@
 			</div>
 		</script>
 	</div>
-
-
-	<script>
-		window.ga = function() {
-			ga.q.push(arguments)
-		}, ga.q = [], ga.l = +new Date, ga("create", "UA-29632937-4", "auto"), ga("set", "transport", "beacon"), ga("send", "pageview");
-	</script>
 
 	<script src="js/main.js"></script>
 	<script>
