@@ -1,7 +1,6 @@
 #tv {
     left: 1%;
     width: 65%;
-    height: 80%;
 }
 
 #tv .inner {
@@ -48,16 +47,16 @@
 }
 
 #videoPlayerMainHolder {
-    height: 75%;
+    height: 85%;
     min-height: 35vh;
     background: #000;
-    background: url("img/static.gif");
+    background: url("../../img/static.gif");
 }
 
 #videoplayermain {
     height: 100%;
     text-align: center;
-    background: url("img/static.gif");
+    background: url("../../img/static.gif");
 }
 
 #videoplayermain div.highlight {
@@ -91,7 +90,6 @@
 }
 
 #channel-guide {
-    position: absolute;
     bottom: 1em;
     padding-right: 2em;
     width: 97%;
@@ -180,13 +178,14 @@
     padding: 0;
 }
 
-#modalModal, .modal {
+.modal {
     z-index: 999999;
     max-width: 56rem;
     margin: 0 !important;
     padding: 0 !important;
     -webkit-border-radius: 0;
     border-radius: 0;
+    position: relative !important;
 }
 
 .blocker {
@@ -209,7 +208,7 @@
     text-align: left !important;
     width: 25%;
     left: 70%;
-    height: 80%;
+    max-height: 80%;
 }
 
 #audio div.inner, #news div.inner {
@@ -224,7 +223,7 @@
 #timeline {
     left: 70%;
     width: 23%;
-    height: 70%;
+    max-height: 70%;
     margin-top: 10%;
 }
 
@@ -289,7 +288,7 @@
     bottom: 0;
     width: 21px;
     height: 21px;
-    background: url("img/corner.png");
+    background: url("../../img/corner.png");
 }
 
 div.content.resizable .inner {
@@ -323,7 +322,7 @@ a.time-marker {
 }
 
 .plyr--loading.plyr--video {
-    background-image: url(img/static.gif) !important;
+    background-image: url(../../img/static.gif) !important;
 }
 
 .plyr--loading.plyr--video * {

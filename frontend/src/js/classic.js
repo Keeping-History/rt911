@@ -1,9 +1,13 @@
 function isMobile() {
-    try{ document.createEvent("TouchEvent"); return true; }
-    catch(e){ return false; }
-  }
+    try {
+        document.createEvent("TouchEvent");
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
 
-  jQuery(function () {
+jQuery(function () {
     //Make windows movable and make sure the active window is on top
     jQuery(".draggable-window").draggable({
         handle: "h1.title",
@@ -42,14 +46,11 @@ function isMobile() {
                 .data("max", true);
 
             jQuery("#sound_windowshade_expand").trigger("play");
-
-            } else {
-            jQuery(b)
-                .removeAttr("style")
-                jQuery("#sound_windowshade_collapse").trigger("play");
+        } else {
+            jQuery(b).removeAttr("style");
+            jQuery("#sound_windowshade_collapse").trigger("play");
 
             jQuery(this).data("max", false);
-
         }
     });
 
@@ -80,7 +81,7 @@ function isMobile() {
     });
 
     // Enable Desktop Icons
-    if( isMobile() ) {
+    if (isMobile()) {
         jQuery(".icon").on("click", function () {
             jQuery("#" + jQuery(this).get(0).id.split("-")[1])
                 .removeClass("hidden")
@@ -88,8 +89,8 @@ function isMobile() {
             jQuery("#sound_open").trigger("play");
         });
     } else {
-         jQuery(".draggable-icon").draggable({});
-         jQuery(".icon").on("dblclick", function () {
+        jQuery(".draggable-icon").draggable({});
+        jQuery(".icon").on("dblclick", function () {
             jQuery("#" + jQuery(this).get(0).id.split("-")[1])
                 .removeClass("hidden")
                 .css("z-index", "9000");
@@ -110,7 +111,6 @@ function isMobile() {
     jQuery("#nav-list li").on("mouseleave", function () {
         jQuery(this).children("ul").hide();
     });
-
 
     // Enable menu items to be clickable by default and open a windows/app with the same name
     jQuery("#nav-list li ul li").on("click", function () {

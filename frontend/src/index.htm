@@ -18,42 +18,11 @@
 	<link rel="manifest" href="site.webmanifest">
 	<link rel="mask-icon" href="img/safari-pinned-tab.svg" color="#365888">
 
-	<link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
-	<link rel="stylesheet" href="structure.css">
-	<link rel="stylesheet" href="style.css">
-	<link rel="stylesheet" href="rt911.css">
-	<link rel="stylesheet" href="fonts/charcoal.css">
-	<link rel="stylesheet" href="fonts/chicagoflf.css">
-	<link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet">
-	<link type="text/css" href="https://cdn.plyr.io/3.6.2/plyr.css" rel="stylesheet">
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css">
+	<link rel="stylesheet" href="css/index.min.css">
 
 	<!-- Google Tag Manager -->
-	<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-	new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-	j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-	'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-	})(window,document,'script','dataLayer','GTM-5RXCWC9');</script>
+	<script>!function(e,t,a,n,g){e[n]=e[n]||[],e[n].push({"gtm.start":(new Date).getTime(),event:"gtm.js"});var m=t.getElementsByTagName(a)[0],r=t.createElement(a);r.async=!0,r.src="https://www.googletagmanager.com/gtm.js?id=GTM-5RXCWC9",m.parentNode.insertBefore(r,m)}(window,document,"script","dataLayer");</script>
 	<!-- End Google Tag Manager -->
-
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js"></script>
-
-	<script src="https://cdn.plyr.io/3.6.2/plyr.polyfilled.js"></script>
-	<script src="https://cdn.jsdelivr.net/npm/hls.js@0.14.17/dist/hls.min.js"></script>
-
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
-
-	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui-touch-punch/0.2.3/jquery.ui.touch-punch.min.js"></script>
-
-	<script src="https://cdn.jsdelivr.net/npm/readmore-js@2.2.1/readmore.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/mustache.js/4.1.0/mustache.min.js" integrity="sha512-HYiNpwSxYuji84SQbCU5m9kHEsRqwWypXgJMBtbRSumlx1iBB6QaxgEBZHSHEGM+fKyCX/3Kb5V5jeVXm0OglQ==" crossorigin="anonymous"></script>
-
-	<script src="js/johng.js"></script>
-	<script src="index.js"></script>
-
 </head>
 
 <body>
@@ -427,7 +396,7 @@
 	</div>
 
 	<div id="modalBoot" class="main-modal content modal" style="text-align:center">
-		<h1 class="title title-full"><span>9/11 in Realtime</span></h1>
+		<h1 class="title noright title-full"><span>9/11 in Realtime</span></h1>
 		<div class="inner">
 			<ul>
 				<li style="text-align:left">
@@ -484,36 +453,11 @@
 	<div id="preloads" class="hidden"></div>
 
 	<div id="templates" class="hidden">
-		<script id="audio_player_template" type="x-tmpl-mustache">
-			<div id="{{PlayerID}}_div">
-				<h2 id="{{PlayerID}}_title" class="audiotitle">{{Title}}</h2>
-				<audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio">
-					<source src="{{AudioURL}}" type="{{Type}}">
-				</audio>
-			</div>
-		</script>
-		<script id="html_item_template" type="x-tmpl-mustache">
-			<div id="{{ItemID}}_div">
-				<h3>
-					<span>{{Time}}</span> - {{Title}}
-				</h3>
-				<div id="{{ItemID}}" class="htmlitem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsimage"> {{{Content}}} </div>
-				<hr>
-			</div>
-		</script>
-		<script id="video_item_template" type="x-tmpl-mustache">
-			<div id="{{PlayerID}}_div">
-				<h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2>
-				<video id="{{PlayerID}}" autoplay muted media_volume="{{Volume}}" preload="true" class="plyr-video">
-					<source src="{{VideoURL}}" type="{{Type}}"> 
-				</video>
-			</div>
-		</script>
+		<script id="audio_player_template" type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="audiotitle">{{Title}}</h2> <audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio"> <source src="{{AudioURL}}" type="{{Type}}"> </audio></div></script>
+		<script id="html_item_template" type="x-tmpl-mustache"><div id="{{ItemID}}_div"><h3> <span>{{Time}}</span> - {{Title}}</h3><div id="{{ItemID}}" class="htmlitem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsimage"> {{{Content}}}</div><hr></div></script>
+		<script id="video_item_template" type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2> <video id="{{PlayerID}}" autoplay muted media_volume="{{Volume}}" preload="true" class="plyr-video"> <source src="{{VideoURL}}" type="{{Type}}"> </video></div></script>
 	</div>
 
-	<script src="js/main.js"></script>
-	<script>
-		setTimeout(function(){ johng.tickFunction(window.johng); setTimeAllPlayers();}, 1500);
-	</script>
+	<script src="js/index.min.js"></script>
 </body>
 </html>

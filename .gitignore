@@ -68,3 +68,4 @@ target/
 /backend/pyvenv.cfg
 /backend/static
 /.prettierrc
+node_modules

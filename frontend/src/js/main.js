@@ -6,14 +6,21 @@
 //
 
 // Global Vars
-var baseRemoteURL = "https://api.911realtime.org/";
-var timeZone = { plus: 6, pretty: "ET" };
+const baseRemoteURL = "http://admin.911realtime.org/media/";
+const timeZone = { plus: 6, pretty: "ET" };
+const timeDrift = 5; // don't change the current video's time unless it is this many seconds out of sync
+const playoverDrift = 1; // determines how long a media item will play afer it's supposed to be removed, in case it didnt' play all the way through
+const playerSync = 2; // determines how quickly after the counter is stopped should audios and videos be checked to stop as well
+const preloadBuffer = 120; // determines whether or not a file should be preloaded or not, based on whether it would matter or not
+const preloadFormats = ["audio"];
+
+// Modal holder object
 var globalModals = [];
-var timeDrift = 5; // don't change the current video's time unless it is this many seconds out of sync
-var playoverDrift = 1; // determines how long a media item will play afer it's supposed to be removed, in case it didnt' play all the way through
-var playerSync = 2; // determines how quickly after the counter is stopped should audios and videos be checked to stop as well
 
 // Preload data to improve performance
+// If these are empty, they will be prepopulated from an AJAX call on load.
+var dataCache = [];
+var markerListCache = [];
 var networkListCache = [
     "WORLDNET",
     "WETA",
@@ -44,14 +51,18 @@ var networkListCache = [
     "MSNBC",
     "PSC",
 ];
-var markerListCache = [];
-var dataCache = [];
 
 // Caching and preload Functions
 function preloadPlayers(data) {
     if (data != undefined || data.length > 0) {
         data.forEach(function (item) {
-            preloadMediaFile(item.media_type, item.url, item.vidid);
+            if (
+                preloadFormats.includes(item.media_type) &&
+                item.start - preloadBuffer < johng.count &&
+                item.end - preloadBuffer > johng.count
+            ) {
+                preloadMediaFile(item.media_type, item.url, item.vidid);
+            }
         });
     }
 }
@@ -126,8 +137,8 @@ function getPlayerTime(playerId) {
 function secondsToTimeFormatted(seconds) {
     var d = new Date(0);
     d.setSeconds(seconds);
-    d.setHours(d.getHours() + window.timeZone.plus); // Eastern Time Zone adjustment
-    return dateFormatter(d) + " " + window.timeZone.pretty;
+    d.setHours(d.getHours() + timeZone.plus); // Eastern Time Zone adjustment
+    return dateFormatter(d) + " " + timeZone.pretty;
 }
 
 function dateFormatter(d) {
@@ -146,7 +157,7 @@ function dateFormatter(d) {
 function getAPIURL() {
     var d = new Date();
     return (
-        window.baseRemoteURL +
+        baseRemoteURL +
         "?tm=" +
         d.getTime() +
         "&" +
@@ -184,7 +195,7 @@ function updateNetworks() {
     } else {
         $.ajax({
             type: "GET",
-            url: window.baseRemoteURL + "networks",
+            url: baseRemoteURL + "networks",
             dataType: "json",
             async: false,
             cache: true,
@@ -218,7 +229,7 @@ function updateMarkers() {
     } else {
         $.ajax({
             type: "GET",
-            url: window.baseRemoteURL + "markers",
+            url: baseRemoteURL + "markers",
             dataType: "json",
             async: false,
             cache: true,
@@ -646,10 +657,10 @@ jQuery(function () {
     jQuery("#mute_all_audio").on("click", function () {
         if (jQuery(this).is(":checked")) {
             //unmuteAudioPlayers();
-            jQuery("#radio_mute_icon").attr("src", "img/sound_on.png");
+            jQuery("#radio_mute_icon").attr("src", "../img/sound_on.png");
         } else {
             muteAudioPlayers();
-            jQuery("#radio_mute_icon").attr("src", "img/sound_off.png");
+            jQuery("#radio_mute_icon").attr("src", "../img/sound_off.png");
         }
     });
 
@@ -660,9 +671,9 @@ jQuery(function () {
         jQuery("body, html").css(
             "background-image",
             encodeURI(
-                "url(img/patterns/" +
+                "url('../img/" +
                     jQuery(this).children(":selected").attr("id") +
-                    ")"
+                    "')"
             )
         );
     });
@@ -678,6 +689,7 @@ jQuery(function () {
     window.setInterval(function () {
         if (johng.isPlaying()) {
             playAllPlayers();
+            setTimeAllPlayers();
         }
     }, playerSync * 1000);
 
@@ -749,8 +761,9 @@ jQuery(function () {
             (x) => !activeItemsList.includes(x)
         );
 
-        // Add New Items to the page that don't already exist
+        // Add New Items to the page that don't already exist and apply preload rules
         addItems(addMediaItems);
+        preloadPlayers(getData());
 
         // Remove old items from the page that aren't currently active
         removeItems(removeMediaItems);
@@ -780,3 +793,8 @@ jQuery(function () {
     jumpToTime(timeString);
     setTimeAllPlayers();
 });
+
+setTimeout(function () {
+    johng.tickFunction(window.johng);
+    setTimeAllPlayers();
+}, 1500);

@@ -36,7 +36,7 @@ disapprove_media.short_description = 'Disapprove Media'
 
 class MediaAdmin(ImportExportModelAdmin):
     list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'source', 'tz', 'mediaType']
-    list_filter = [ ('start_date', DateTimeRangeFilter), ('end_date', DateTimeRangeFilter), 'collection', 'approved', 'source', 'format']
+    list_filter = [ ('start_date', DateTimeRangeFilter), ('end_date', DateTimeRangeFilter), 'approved', 'source', 'format']
     date_hierarchy = 'start_date'
     actions = [approve_media, disapprove_media]
     resource_class = MediaResource
@@ -47,7 +47,7 @@ class MediaAdmin(ImportExportModelAdmin):
             'fields': (('start_date', 'end_date', 'tz'),)
         }),
         ('Info', {
-            'fields': ('title', 'source', 'full_title', 'collection', 'tags', 'approved')
+            'fields': ('title', 'source', 'full_title', 'tags', 'approved')
         }),
         ('Media', {
             'fields': ('preview_media', 'url', 'format', ('jump', 'trim', 'volume'), ),
@@ -105,7 +105,8 @@ class TagTypeAdmin(ImportExportModelAdmin):
 
 class CollectionAdmin(ImportExportModelAdmin):
     model = Collection
-    list_display = ['name']
+    list_display = ['description']
+    filter_horizontal = ('media_item',)
 
 class MarkerAdmin(ImportExportModelAdmin):
     model = Marker

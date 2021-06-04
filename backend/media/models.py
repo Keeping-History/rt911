@@ -5,6 +5,12 @@ from django.db import models
 from django import forms
 
 
+def default_start_time():
+    now = datetime.now()
+    start = now.replace(day=11, month=9, year=2001)
+    return start
+
+
 class TagType(models.Model):
     name = models.CharField(max_length=255)
 
@@ -21,19 +27,6 @@ class Tag(models.Model):
         return self.name
 
 
-class Collection(models.Model):
-    name = models.CharField(max_length=255)
-    description = models.CharField(max_length=255)
-    type_of = models.ForeignKey(TagType, on_delete=models.SET_NULL, null=True)
-
-    def __str__(self):
-        return self.name
-
-def default_start_time():
-    now = datetime.now()
-    start = now.replace(day=11, month=9, year=2001)
-    return start
-
 class Marker(models.Model):
     name = models.CharField(max_length=255)
     time_marker = models.DateTimeField(default=default_start_time)
@@ -44,7 +37,8 @@ class Marker(models.Model):
         return self.name
 
     class Meta:
-       ordering = ['-time_marker']
+        ordering = ['-time_marker']
+
 
 class Media(models.Model):
     start_date = models.DateTimeField()
@@ -56,7 +50,6 @@ class Media(models.Model):
     full_title = models.CharField(max_length=255, blank=True)
 
     tags = models.ManyToManyField(Tag, blank=True)
-    collection = models.ManyToManyField(Collection, blank=True)
     url = models.URLField(default=None, blank=True)
     format = models.CharField(max_length=5)
     jump = models.IntegerField(default=0)
@@ -77,7 +70,7 @@ class Media(models.Model):
         verbose_name_plural = 'media items'
 
     def __str__(self):
-        return self.full_title
+        return self.start_date.strftime('%d/%m/%Y %I:%M %p') + " " + self.source + " " + self.title
 
     @property
     def vidid(self):
@@ -116,3 +109,12 @@ class Media(models.Model):
         if not self.full_title:
             self.full_title = self.title
         super(Media, self).save(*args, **kwargs)
+
+
+class Collection(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.CharField(max_length=255)
+    media_item = models.ManyToManyField(Media, blank=True)
+
+    def __str__(self):
+        return self.name
