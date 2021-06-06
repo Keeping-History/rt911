@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
 	<meta charset="UTF-8">
 	<title>9/11 Realtime</title>
 
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
 
 	<meta name="msapplication-TileColor" content="#dddddd">
 	<meta name="msapplication-TileImage" content="img/mstile-144x144.png">
@@ -21,17 +22,17 @@
 	<link rel="stylesheet" href="css/index.min.css">
 
 	<!-- Google Tag Manager -->
-	<script>!function(e,t,a,n,g){e[n]=e[n]||[],e[n].push({"gtm.start":(new Date).getTime(),event:"gtm.js"});var m=t.getElementsByTagName(a)[0],r=t.createElement(a);r.async=!0,r.src="https://www.googletagmanager.com/gtm.js?id=GTM-5RXCWC9",m.parentNode.insertBefore(r,m)}(window,document,"script","dataLayer");</script>
+	<script>!function (e, t, a, n, g) { e[n] = e[n] || [], e[n].push({ "gtm.start": (new Date).getTime(), event: "gtm.js" }); var m = t.getElementsByTagName(a)[0], r = t.createElement(a); r.async = !0, r.src = "https://www.googletagmanager.com/gtm.js?id=GTM-5RXCWC9", m.parentNode.insertBefore(r, m) }(window, document, "script", "dataLayer");</script>
 	<!-- End Google Tag Manager -->
 </head>
 
 <body>
 	<!-- Google Tag Manager (noscript) -->
-	<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5RXCWC9"
-	height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+	<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5RXCWC9" height="0" width="0"
+			style="display:none;visibility:hidden"></iframe></noscript>
 	<!-- End Google Tag Manager (noscript) -->
 
-	<div id="hider" style="height:100%;width:100%;background:black;" class="" ></div>
+	<div id="hider" style="height:100%;width:100%;background:black;" class=""></div>
 	<nav>
 		<div id="nav-wrapper">
 			<ul id="nav-list">
@@ -69,31 +70,30 @@
 	</nav>
 	<div id="icon-holder" title="Desktop">
 		<div class="icon draggable-icon ui-widget-content" id="icon-tv"><img src="img/tv.png" alt="TV Tuner">
-			<h2>TV Tuner</h2></div>
+			<h2>TV Tuner</h2>
+		</div>
 		<div class="icon draggable-icon ui-widget-content" id="icon-news"><img src="img/news.png" alt="News Reader">
-			<h2>News</h2></div>
+			<h2>News</h2>
+		</div>
 		<div class="icon draggable-icon ui-widget-content" id="icon-audio"><img src="img/audio.png" alt="Audio Browser">
-			<h2>Audio</h2></div>
-		<div class="icon draggable-icon ui-widget-content" id="icon-controls"><img src="img/controls.png" alt="Controls">
-			<h2>Controls</h2></div>
-		<div class="icon draggable-icon ui-widget-content" id="icon-timeline"><img src="img/timeline.png" alt="Timeline">
-			<h2>Timeline</h2></div>
-		<div class="icon draggable-icon ui-widget-content" id="icon-settings"><img src="img/settings.png" alt="Settings">
-			<h2>Settings</h2></div>
+			<h2>Audio</h2>
+		</div>
+		<div class="icon draggable-icon ui-widget-content" id="icon-controls"><img src="img/controls.png"
+				alt="Controls">
+			<h2>Controls</h2>
+		</div>
+		<div class="icon draggable-icon ui-widget-content" id="icon-timeline"><img src="img/timeline.png"
+				alt="Timeline">
+			<h2>Timeline</h2>
+		</div>
+		<div class="icon draggable-icon ui-widget-content" id="icon-settings"><img src="img/settings.png"
+				alt="Settings">
+			<h2>Settings</h2>
+		</div>
 	</div>
 	<div id="controls" class="content draggable-window" style="text-align:center">
 		<div class="control-box close-box">
 			<a class="control-box-inner"></a>
-		</div>
-		<div class="control-box zoom-box hidden">
-			<div class="control-box-inner">
-				<div class="zoom-box-inner"></div>
-			</div>
-		</div>
-		<div class="control-box windowshade-box hidden">
-			<div class="control-box-inner">
-				<div class="windowshade-box-inner"></div>
-			</div>
 		</div>
 		<h1 class="title noright"><span>Controls</span></h1>
 		<div class="inner">
@@ -154,7 +154,8 @@
 		</div>
 		<h1 class="title"><span>Audio Player</span></h1>
 		<div class="inner">
-			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon" src="img/sound_on.png" class="icon-titlebar float-right" alt="Mute Audio">
+			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon"
+				src="img/sound_on.png" class="icon-titlebar float-right" alt="Mute Audio">
 			<div id="audioplayermain"></div>
 			<div id="audios"></div>
 		</div>
@@ -236,10 +237,22 @@
 						<br>
 						<br>Copyright (c) 2019 Nathanael Gentry
 						<br>
-						<br>Permission is hereby granted, free of charge, to any person obtaining a copy&nbsp;of this software and associated documentation files (the "Software"), to deal&nbsp;in the Software without restriction, including without limitation the rights&nbsp;to use, copy, modify, merge, publish, distribute, sublicense, and/or sell&nbsp;copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
-					<p>The above copyright notice and this permission notice shall be included in all&nbsp;copies or substantial portions of the Software.
+						<br>Permission is hereby granted, free of charge, to any person obtaining a copy&nbsp;of this
+						software and associated documentation files (the "Software"), to deal&nbsp;in the Software
+						without restriction, including without limitation the rights&nbsp;to use, copy, modify, merge,
+						publish, distribute, sublicense, and/or sell&nbsp;copies of the Software, and to permit persons
+						to whom the Software is furnished to do so, subject to the following conditions:
+					</p>
+					<p>The above copyright notice and this permission notice shall be included in all&nbsp;copies or
+						substantial portions of the Software.
 						<br>&nbsp;
-						<br>THE SOFTWARE IS &nbsp;PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR&nbsp;IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,&nbsp;FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE&nbsp;AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER&nbsp;LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE&nbsp;SOFTWARE.</p>
+						<br>THE SOFTWARE IS &nbsp;PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+						OR&nbsp;IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,&nbsp;FITNESS
+						FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE&nbsp;AUTHORS OR COPYRIGHT
+						HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER&nbsp;LIABILITY, WHETHER IN AN ACTION OF
+						CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+						OR OTHER DEALINGS IN THE&nbsp;SOFTWARE.
+					</p>
 					<p></p>
 				</li>
 			</ul>
@@ -284,40 +297,43 @@
 					<h1>Settings</h1>
 					<div id="filterHolder">
 						<form id="filters">
-							<ul>
-								<li class="hidden">
-									<label for="day">Date 🗓</label>
-									<select name="day" id="day" class="btn-primary">
-										<option value="9">September 9</option>
-										<option value="10">September 10</option>
-										<option value="11" selected>September 11</option>
-										<option value="12">September 12</option>
-										<option value="13">September 13</option>
-										<option value="14">September 14</option>
-										<option value="15">September 15</option>
-										<option value="16">September 16</option>
-										<option value="17">September 17</option>
-										<option value="18">September 18</option>
-										<option value="19">September 19</option>
-										<option value="20">September 20</option>
-									</select>
-								</li>
-								<li class="hidden">
-									<label for="network">📺 Network</label>
-									<select name="network" id="network" class="btn-primary">
-										<option value="all" selected>All</option>
-									</select>
-								</li>
-								<li class="hidden">
-									<label for="format">📺 Format</label>
-									<select name="format" id="format" class="btn-primary">
-										<option value="video">video</option>
-										<option value="audio">audio</option>
-										<option value="html">html</option>
-										<option value="all" selected>All</option>
-									</select>
-								</li>
-							</ul>
+							<div class="settingsControl">
+								<label for="day">Date</label>
+								<img class="settingsIcon" src="img/calendar.png">
+								<select name="day" id="day" class="btn-primary">
+									<option value="9">September 9</option>
+									<option value="10">September 10</option>
+									<option value="11" selected>September 11</option>
+									<option value="12">September 12</option>
+									<option value="13">September 13</option>
+									<option value="14">September 14</option>
+									<option value="15">September 15</option>
+									<option value="16">September 16</option>
+									<option value="17">September 17</option>
+									<option value="18">September 18</option>
+									<option value="19">September 19</option>
+									<option value="20">September 20</option>
+								</select>
+							</div>
+							<hr>
+							<div class="settingsControl">
+								<label for="network">Network</label>
+								<img class="settingsIcon" src="img/tv.png">
+								<select name="network" id="network" class="btn-primary">
+									<option value="all" selected>All</option>
+								</select>
+							</div>
+							<hr>
+							<div class="settingsControl">
+								<label for="format">Format</label>
+								<img class="settingsIcon" src="img/web.png">
+								<select name="format" id="format" class="btn-primary">
+									<option value="video">video</option>
+									<option value="audio">audio</option>
+									<option value="html">html</option>
+									<option value="all" selected>All</option>
+								</select>
+							</div>
 						</form>
 					</div>
 					<hr>
@@ -335,44 +351,44 @@
 							<option id="Bondi Medium.png">Bondi Medium</option>
 							<option id="Bondi.png">Bondi</option>
 							<option id="Bossanova Bondi.png">Bossanova Bondi</option>
-							<option id="Bossanova Poppy 2.png" >Bossanova Poppy 2</option>
-							<option id="Bossanova Poppy.png" >Bossanova Poppy</option>
-							<option id="Bubbles Poppy.png" >Bubbles Poppy</option>
-							<option id="Candy Bar Azul.png" >Candy Bar Azul</option>
-							<option id="Candy Bar Pistachio.png" >Candy Bar Pistachio</option>
-							<option id="Candy Bar Sunny.png" >Candy Bar Sunny</option>
-							<option id="Candy Bar.png" >Candy Bar</option>
-							<option id="Diagonals Bondi Dark.png" >Diagonals Bondi Dark</option>
-							<option id="Diagonals Bondi.png" >Diagonals Bondi</option>
-							<option id="Diagonals Poppy.png" >Diagonals Poppy</option>
-							<option id="Flat Peanuts Poppy.png" >Flat Peanuts Poppy</option>
-							<option id="Flat Peanuts.png" >Flat Peanuts</option>
+							<option id="Bossanova Poppy 2.png">Bossanova Poppy 2</option>
+							<option id="Bossanova Poppy.png">Bossanova Poppy</option>
+							<option id="Bubbles Poppy.png">Bubbles Poppy</option>
+							<option id="Candy Bar Azul.png">Candy Bar Azul</option>
+							<option id="Candy Bar Pistachio.png">Candy Bar Pistachio</option>
+							<option id="Candy Bar Sunny.png">Candy Bar Sunny</option>
+							<option id="Candy Bar.png">Candy Bar</option>
+							<option id="Diagonals Bondi Dark.png">Diagonals Bondi Dark</option>
+							<option id="Diagonals Bondi.png">Diagonals Bondi</option>
+							<option id="Diagonals Poppy.png">Diagonals Poppy</option>
+							<option id="Flat Peanuts Poppy.png">Flat Peanuts Poppy</option>
+							<option id="Flat Peanuts.png">Flat Peanuts</option>
 							<option id="French Blue Dark.png" selected>French Blue Dark</option>
-							<option id="French Blue Light.png" >French Blue Light</option>
-							<option id="Lollipop 2.png" >Lollipop 2</option>
-							<option id="Lollipop 3.png" >Lollipop 3</option>
-							<option id="Lollipop 4.png" >Lollipop 4</option>
-							<option id="Lollipop 5.png" >Lollipop 5</option>
-							<option id="Lollipop.png" >Lollipop</option>
-							<option id="Peanuts Azul.png" >Peanuts Azul</option>
-							<option id="Peanuts Pistachio.png" >Peanuts Pistachio</option>
-							<option id="Pistachio Dark.png" >Pistachio Dark</option>
-							<option id="Pistachio Light.png" >Pistachio Light</option>
-							<option id="Pistachio Medium.png" >Pistachio Medium</option>
-							<option id="Poppy Dark.png" >Poppy Dark</option>
-							<option id="Poppy Light.png" >Poppy Light</option>
-							<option id="Poppy Medium.png" >Poppy Medium</option>
-							<option id="Poppy.png" >Poppy</option>
-							<option id="Rio Azul.png" >Rio Azul</option>
-							<option id="Rio Pistachio.png" >Rio Pistachio</option>
-							<option id="Ripple Azul.png" >Ripple Azul</option>
-							<option id="Ripple Bondi.png" >Ripple Bondi</option>
-							<option id="Ripple Poppy.png" >Ripple Poppy</option>
-							<option id="Sunny Dark.png" >Sunny Dark</option>
-							<option id="Sunny Light.png" >Sunny Light</option>
-							<option id="Sunny.png" >Sunny</option>
-							<option id="Waves Azul.png" >Waves Azul</option>
-							<option id="Waves Bondi.png" >Waves Bondi</option>
+							<option id="French Blue Light.png">French Blue Light</option>
+							<option id="Lollipop 2.png">Lollipop 2</option>
+							<option id="Lollipop 3.png">Lollipop 3</option>
+							<option id="Lollipop 4.png">Lollipop 4</option>
+							<option id="Lollipop 5.png">Lollipop 5</option>
+							<option id="Lollipop.png">Lollipop</option>
+							<option id="Peanuts Azul.png">Peanuts Azul</option>
+							<option id="Peanuts Pistachio.png">Peanuts Pistachio</option>
+							<option id="Pistachio Dark.png">Pistachio Dark</option>
+							<option id="Pistachio Light.png">Pistachio Light</option>
+							<option id="Pistachio Medium.png">Pistachio Medium</option>
+							<option id="Poppy Dark.png">Poppy Dark</option>
+							<option id="Poppy Light.png">Poppy Light</option>
+							<option id="Poppy Medium.png">Poppy Medium</option>
+							<option id="Poppy.png">Poppy</option>
+							<option id="Rio Azul.png">Rio Azul</option>
+							<option id="Rio Pistachio.png">Rio Pistachio</option>
+							<option id="Ripple Azul.png">Ripple Azul</option>
+							<option id="Ripple Bondi.png">Ripple Bondi</option>
+							<option id="Ripple Poppy.png">Ripple Poppy</option>
+							<option id="Sunny Dark.png">Sunny Dark</option>
+							<option id="Sunny Light.png">Sunny Light</option>
+							<option id="Sunny.png">Sunny</option>
+							<option id="Waves Azul.png">Waves Azul</option>
+							<option id="Waves Bondi.png">Waves Bondi</option>
 						</select>
 					</div>
 				</li>
@@ -386,7 +402,8 @@
 		<div class="inner">
 			<ul>
 				<li style="text-align:left">
-					<h1 id="modal-title"><span id="modal-time" class="text-bold"></span> <span id="modal-fulltitle">ALERT</span></h1><img id="modal-image" src="img/blank.png" alt="none">
+					<h1 id="modal-title"><span id="modal-time" class="text-bold"></span> <span
+							id="modal-fulltitle">ALERT</span></h1><img id="modal-image" src="img/blank.png" alt="none">
 					<p id="modal-image-caption" class="text-italic"></p>
 					<p id="modal-content"></p>
 				</li>
@@ -400,7 +417,9 @@
 		<div class="inner">
 			<ul>
 				<li style="text-align:left">
-					<h1 id="modal-title"><span id="modal-time" class="text-bold"></span> <span id="modal-fulltitle">About 9/11 in Realtime</span></h1><img id="modal-image" src="img/blank.png" alt="none">
+					<h1 id="modal-title"><span id="modal-time" class="text-bold"></span> <span
+							id="modal-fulltitle">About 9/11 in Realtime</span></h1><img id="modal-image"
+						src="img/blank.png" alt="none">
 					<p id="modal-image-caption" class="text-italic"></p>
 					<p id="modal-content">
 					<h2>The time is currently <span id="time" class="time text-center timeText">Loading...</span></h2>
@@ -408,18 +427,20 @@
 					<hr>
 					9/11 in Realtime is a multimedia experiment for teachers, with the purpose of helping
 					their students truly understand and absorb the events of September 11, 2001. We've collected
-					media--video, audio and other items--available from the days before and after the September 11 attacks,
+					media--video, audio and other items--available from the days before and after the September 11
+					attacks,
 					syncrhonized them together and built a tool to help students be immersed in the events of the day.
 					<br>
 					<br>
 					<b>THE FOLLOWING WEBSITE MAY CONTAIN VISUALS, AUDIO AND OTHER CONTENT THAT SOME VIEWERS MAY FIND
-					EXTREMELY DISTURBING.</b>
+						EXTREMELY DISTURBING.</b>
 					<br>
 					<br>
 					THIS TOOL IS INTENDED TO BE USED ALONGSIDE A CAREFULLY RESEARCHED AND APPROPRIATE CURRICULUM.
 					<br>
 					<br>
-					For questions regarding this project, please email <a href="mailto:me@robbiebyrd.com">Robbie Byrd</a>.
+					For questions regarding this project, please email <a href="mailto:me@robbiebyrd.com">Robbie
+						Byrd</a>.
 					</p>
 				</li>
 			</ul>
@@ -437,10 +458,12 @@
 		<source src="rsrc/close.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
 	</audio>
 	<audio controls id="sound_windowshade_collapse" class="handsoff hidden" preload="auto">
-		<source src="rsrc/windowshade_collapse.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
+		<source src="rsrc/windowshade_collapse.mp3" type="audio/mpeg">Your browser does not support the HTML audio
+		element.
 	</audio>
 	<audio controls id="sound_windowshade_expand" class="handsoff hidden" preload="auto">
-		<source src="rsrc/windowshade_expand.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
+		<source src="rsrc/windowshade_expand.mp3" type="audio/mpeg">Your browser does not support the HTML audio
+		element.
 	</audio>
 	<audio controls id="sound_open" class="handsoff hidden" preload="auto">
 		<source src="rsrc/open.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
@@ -453,11 +476,15 @@
 	<div id="preloads" class="hidden"></div>
 
 	<div id="templates" class="hidden">
-		<script id="audio_player_template" type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="audiotitle">{{Title}}</h2> <audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio"> <source src="{{AudioURL}}" type="{{Type}}"> </audio></div></script>
-		<script id="html_item_template" type="x-tmpl-mustache"><div id="{{ItemID}}_div"><h3> <span>{{Time}}</span> - {{Title}}</h3><div id="{{ItemID}}" class="htmlitem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsimage"> {{{Content}}}</div><hr></div></script>
-		<script id="video_item_template" type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2> <video id="{{PlayerID}}" autoplay muted media_volume="{{Volume}}" preload="true" class="plyr-video"> <source src="{{VideoURL}}" type="{{Type}}"> </video></div></script>
+		<script id="audio_player_template"
+			type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="audiotitle">{{Title}}</h2> <audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio"> <source src="{{AudioURL}}" type="{{Type}}"> </audio></div></script>
+		<script id="html_item_template"
+			type="x-tmpl-mustache"><div id="{{ItemID}}_div"><h3> <span>{{Time}}</span> - {{Title}}</h3><div id="{{ItemID}}" class="htmlitem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsimage"> {{{Content}}}</div><hr></div></script>
+		<script id="video_item_template"
+			type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2> <video id="{{PlayerID}}" autoplay muted media_volume="{{Volume}}" preload="true" class="plyr-video"> <source src="{{VideoURL}}" type="{{Type}}"> </video></div></script>
 	</div>
 
 	<script src="js/index.min.js"></script>
 </body>
+
 </html>
