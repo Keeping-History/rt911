@@ -258,6 +258,10 @@ function updateMarkers() {
     });
 }
 
+function refreshData(){
+    dataCache = []
+    updateData();
+}
 function updateData() {
     johng.set(getData());
 }
@@ -665,8 +669,8 @@ jQuery(function () {
     });
 
     // If updating form fields, add their changes to the URL
-    jQuery("#filters input").on("click", updateData);
-    jQuery("#filters select").on("change", updateData);
+    jQuery("#filters input").on("click", refreshData);
+    jQuery("#filters select").on("change", refreshData);
     jQuery("#backgroundSetting").on("change", function () {
         jQuery("body, html").css(
             "background-image",
