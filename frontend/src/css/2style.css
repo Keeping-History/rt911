@@ -12,44 +12,50 @@
 }
 
 ::-webkit-scrollbar {
-  width: 16px
+  width: 16px;
+  margin-bottom: 3em;
 }
 
-::-webkit-scrollbar-button:end {
+::-webkit-resizer{
+  margin: 3em;
+}
+
+::-webkit-scrollbar-button:start {
   display: block;
   width: 16px;
   height: 16px;
+  top: 16px;
   background-color: #dedede;
   box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bcbcbc
 }
 
-::-webkit-scrollbar-button:end:vertical {
+::-webkit-scrollbar-button:start:vertical {
   border-left: 1px solid #000;
   border-right: 1px solid #000;
   border-bottom: 1px solid #000
 }
 
-::-webkit-scrollbar-button:end:vertical:decrement {
+::-webkit-scrollbar-button:start:vertical:decrement {
   background: linear-gradient(transparent 75%, #000 0) 50%/8px 4px no-repeat, linear-gradient(transparent 50%, #000 0) 50%/6px 4px no-repeat, linear-gradient(transparent 25%, #000 0) 50%/4px 4px no-repeat, linear-gradient(#000 50%, #000 0) 50%/2px 4px no-repeat, #dedede
 }
 
-::-webkit-scrollbar-button:end:vertical:increment {
+::-webkit-scrollbar-button:start:vertical:increment {
   background: linear-gradient(0deg, transparent 75%, #000 0) 50%/8px 4px no-repeat, linear-gradient(0deg, transparent 50%, #000 0) 50%/6px 4px no-repeat, linear-gradient(0deg, transparent 25%, #000 0) 50%/4px 4px no-repeat, linear-gradient(0deg, #000 50%, #000 0) 50%/2px 4px no-repeat, #dedede;
   height: 15px;
   border-bottom: none
 }
 
-::-webkit-scrollbar-button:end:horizontal {
+::-webkit-scrollbar-button:start:horizontal {
   border-top: 1px solid #000;
   border-bottom: 1px solid #000;
   border-right: 1px solid #000
 }
 
-::-webkit-scrollbar-button:end:horizontal:decrement {
+::-webkit-scrollbar-button:start:horizontal:decrement {
   background: linear-gradient(90deg, transparent 75%, #000 0) 50%/4px 8px no-repeat, linear-gradient(90deg, transparent 50%, #000 0) 50%/4px 6px no-repeat, linear-gradient(90deg, transparent 25%, #000 0) 50%/4px 4px no-repeat, linear-gradient(90deg, #000 50%, #000 0) 50%/4px 2px no-repeat, #dedede
 }
 
-::-webkit-scrollbar-button:end:horizontal:increment {
+::-webkit-scrollbar-button:start:horizontal:increment {
   background: linear-gradient(270deg, transparent 75%, #000 0) 50%/4px 8px no-repeat, linear-gradient(270deg, transparent 50%, #000 0) 50%/4px 6px no-repeat, linear-gradient(270deg, transparent 25%, #000 0) 50%/4px 4px no-repeat, linear-gradient(270deg, #000 50%, #000 0) 50%/4px 2px no-repeat, #dedede;
   width: 15px;
   border-right: none

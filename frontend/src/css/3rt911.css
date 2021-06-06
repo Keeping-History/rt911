@@ -56,7 +56,6 @@
 #videoplayermain {
     height: 100%;
     text-align: center;
-    background: url("../../img/static.gif");
 }
 
 #videoplayermain div.highlight {
@@ -114,6 +113,7 @@
 #htmls {
     height: 98% !important;
     max-height: 85vh;
+    min-height: 10em;
 }
 
 #htmls h3 {
@@ -145,6 +145,11 @@
     clear: both;
     display: table;
     width: 100%;
+}
+
+.settingsControl select, .settingsControl input {
+    float: right;
+    width: 85%;
 }
 
 .settingsIcon {
@@ -223,7 +228,7 @@
 #timeline {
     left: 70%;
     width: 23%;
-    max-height: 70%;
+    max-height: 60%;
     margin-top: 10%;
 }
 
