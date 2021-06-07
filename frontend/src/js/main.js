@@ -177,7 +177,7 @@ function getData() {
             async: false,
             cache: true,
             success: function (data) {
-                window.dataCache = data;
+                dataCache = data;
             },
         });
         return dataCache;
@@ -200,7 +200,7 @@ function updateNetworks() {
             async: false,
             cache: true,
             success: function (data) {
-                window.networkListCache = data;
+                networkListCache = data;
                 data.forEach(function (item) {
                     jQuery("#network").append(
                         jQuery("<option>").text(item).attr("value", item)
@@ -234,7 +234,7 @@ function updateMarkers() {
             async: false,
             cache: true,
             success: function (data) {
-                window.markerListCache = data;
+                markerListCache = data;
                 data.forEach(function (item) {
                     if (jQuery("#events ul #" + item["id"]).length === 0) {
                         jQuery(
@@ -260,6 +260,10 @@ function updateMarkers() {
 
 function refreshData(){
     dataCache = []
+    markerListCache = [];
+    networkListCache = [];
+    updateMarkers();
+    updateNetworks();
     updateData();
 }
 function updateData() {
@@ -463,7 +467,7 @@ function addItems(addMediaItems) {
                             if (
                                 jQuery.inArray(
                                     mediaItem.vidid,
-                                    window.globalModals
+                                    globalModals
                                 ) === -1
                             ) {
                                 jQuery("#modal-title").text(mediaItem.source);
@@ -500,7 +504,7 @@ function addItems(addMediaItems) {
                                     clickClose: false,
                                     blockerClass: "blocker",
                                 });
-                                window.globalModals.push(mediaItem.vidid);
+                                globalModals.push(mediaItem.vidid);
                                 johng.pause();
                             }
                         }
@@ -799,6 +803,6 @@ jQuery(function () {
 });
 
 setTimeout(function () {
-    johng.tickFunction(window.johng);
+    johng.tickFunction(johng);
     setTimeAllPlayers();
 }, 1500);
