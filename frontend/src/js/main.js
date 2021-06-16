@@ -6,7 +6,7 @@
 //
 
 // Global Vars
-const baseRemoteURL = "http://admin.911realtime.org/media/";
+const baseRemoteURL = "//admin.911realtime.org/media/";
 const timeZone = { plus: 6, pretty: "ET" };
 const timeDrift = 5; // don't change the current video's time unless it is this many seconds out of sync
 const playoverDrift = 1; // determines how long a media item will play afer it's supposed to be removed, in case it didnt' play all the way through
@@ -158,9 +158,7 @@ function getAPIURL() {
     var d = new Date();
     return (
         baseRemoteURL +
-        "?tm=" +
-        d.getTime() +
-        "&" +
+        "?" +
         jQuery("#filters :input[value!='all']").serialize()
     );
 }
@@ -177,7 +175,11 @@ function getData() {
             async: false,
             cache: true,
             success: function (data) {
-                dataCache = data;
+                if(data.length > 0) {
+                    dataCache = data;
+                } else {
+                    dataCache = ['No Items Found']
+                }
             },
         });
         return dataCache;
@@ -185,7 +187,7 @@ function getData() {
 }
 
 // Grabs the json via ajax
-function updateNetworks() {
+async function updateNetworks() {
     if (networkListCache.length > 0) {
         networkListCache.forEach(function (item) {
             jQuery("#network").append(
@@ -197,7 +199,7 @@ function updateNetworks() {
             type: "GET",
             url: baseRemoteURL + "networks",
             dataType: "json",
-            async: false,
+            async: true,
             cache: true,
             success: function (data) {
                 networkListCache = data;
@@ -211,7 +213,7 @@ function updateNetworks() {
     }
 }
 
-function updateMarkers() {
+async function updateMarkers() {
     if (markerListCache.length > 0) {
         markerListCache.forEach(function (item) {
             if (jQuery("#events ul #" + item["id"]).length === 0) {
@@ -231,7 +233,7 @@ function updateMarkers() {
             type: "GET",
             url: baseRemoteURL + "markers",
             dataType: "json",
-            async: false,
+            async: true,
             cache: true,
             success: function (data) {
                 markerListCache = data;
@@ -248,17 +250,17 @@ function updateMarkers() {
                         ).appendTo("#events ul");
                     }
                 });
+                jQuery(".time-marker").on("click", function () {
+                    jumpToTime(this.text);
+                    johng.updateClock();
+                    johng.play();
+                });
             },
         });
     }
-    jQuery(".time-marker").on("click", function () {
-        jumpToTime(this.text);
-        johng.updateClock();
-        johng.play();
-    });
 }
 
-function refreshData(){
+async function refreshData(){
     dataCache = []
     markerListCache = [];
     networkListCache = [];
