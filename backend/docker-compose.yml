@@ -14,8 +14,8 @@ services:
     build: .
     # python manage.py loaddata fixtures/initial.json &&
     command: >
-      bash -c "python manage.py makemigrations &&
-      python manage.py migrate &&
+      bash -c "python manage.py makemigrations --no-input &&
+      python manage.py migrate --no-input &&
       python manage.py shell -c 'from django.contrib.auth.models import User; User.objects.filter(email=\"rt911@robbiebyrd.com\").delete(); User.objects.create_superuser(\"rt911\", \"rt911@robbiebyrd.com\", \"rt911\")' &&
       python manage.py runserver  0.0.0.0:8000"
     volumes:
