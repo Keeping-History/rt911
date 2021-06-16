@@ -2,6 +2,7 @@ import hashlib
 from datetime import datetime
 
 from django.db import models
+from django.contrib import admin
 from django import forms
 
 
@@ -70,7 +71,7 @@ class Media(models.Model):
         verbose_name_plural = 'media items'
 
     def __str__(self):
-        return self.start_date.strftime('%d/%m/%Y %I:%M %p') + " " + self.source + " " + self.title
+        return self.start_date.strftime('%m/%d/%Y %I:%M %p') + " " + self.source + " " + self.title
 
     @property
     def vidid(self):
@@ -114,7 +115,7 @@ class Media(models.Model):
 class Collection(models.Model):
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=255)
-    media_item = models.ManyToManyField(Media, blank=True)
+    media = models.ManyToManyField(to=Media, blank=True, limit_choices_to={'approved': True})
 
     def __str__(self):
         return self.name

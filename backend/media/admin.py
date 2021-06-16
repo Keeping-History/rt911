@@ -34,14 +34,26 @@ def disapprove_media(modeladmin, request, queryset):
         media.save()
 disapprove_media.short_description = 'Disapprove Media'
 
+class CollectionInline(admin.TabularInline):
+    model = Collection.media.through
+
+class CollectionAdmin(ImportExportModelAdmin):
+    model = Collection
+    list_display = ['description']
+    filter_horizontal = ('media',)
+    search_fields = ['name', 'description',]
+    inlines = (CollectionInline,)
+    exclude = ('media',)
+
 class MediaAdmin(ImportExportModelAdmin):
     list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'source', 'tz', 'mediaType']
     list_filter = [ ('start_date', DateTimeRangeFilter), ('end_date', DateTimeRangeFilter), 'approved', 'source', 'format']
     date_hierarchy = 'start_date'
-    actions = [approve_media, disapprove_media]
+    actions = [approve_media, disapprove_media, ]
     resource_class = MediaResource
     search_fields = ('title', 'full_title', 'source', 'content', 'image_caption')
     actions_selection_counter = True
+    inlines = (CollectionInline,)
     fieldsets= (
         ('Date', {
             'fields': (('start_date', 'end_date', 'tz'),)
@@ -102,11 +114,6 @@ class TagAdmin(ImportExportModelAdmin):
 class TagTypeAdmin(ImportExportModelAdmin):
     model = TagType
     list_display = ['name']
-
-class CollectionAdmin(ImportExportModelAdmin):
-    model = Collection
-    list_display = ['description']
-    filter_horizontal = ('media_item',)
 
 class MarkerAdmin(ImportExportModelAdmin):
     model = Marker
