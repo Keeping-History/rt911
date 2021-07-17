@@ -62,136 +62,138 @@ let globalModals = [];
 
 // Caching and preload Functions
 function preloadPlayers(data) {
-    if (data != undefined || data.length > 0) {
-        data.forEach(function (item) {
-            if (
-                preloadFormats.includes(item.media_type) &&
+  if (data != undefined || data.length > 0) {
+    data.forEach(function(item) {
+      if (
+        preloadFormats.includes(item.media_type) &&
                 item.start - preloadBuffer < johng.count &&
                 item.end - preloadBuffer > johng.count
-            ) {
-                preloadMediaFile(item.media_type, item.url, item.vidid);
-            }
-        });
-    }
+      ) {
+        preloadMediaFile(item.media_type, item.url, item.vidid);
+      }
+    });
+  }
 }
 
+// Function that creates a media object and preloads its data
 function preloadMediaFile(mediaType, url, id) {
-    if (!jQuery("#" + id + "_preload").length) {
-        a = jQuery("<" + mediaType + " />")
-            .attr("src", url)
-            .attr("id", id + "_preload")
-            .attr("preload", true)
-            .attr("autoplay", false)
-            .attr("muted", true)
-            .css("display", "none")
-            .addClass("handsoff")
-            .appendTo("#preloads");
-    }
+  if (!jQuery('#' + id + '_preload').length) {
+    a = jQuery('<' + mediaType + ' />')
+        .attr('src', url)
+        .attr('id', id + '_preload')
+        .attr('preload', true)
+        .attr('autoplay', false)
+        .attr('muted', true)
+        .css('display', 'none')
+        .addClass('handsoff')
+        .appendTo('#preloads');
+  }
 }
 
 // Audio Control
 function muteAllPlayers() {
-    jQuery("video:not(.handsoff), audio:not(.handsoff)").each(function () {
-        jQuery(this).prop("muted", true);
-    });
+  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function() {
+    jQuery(this).prop('muted', true);
+  });
 }
 
 function muteAudioPlayers() {
-    jQuery("audio:not(.handsoff)").prop("muted", true);
+  jQuery('audio:not(.handsoff)').prop('muted', true);
 }
 
 function unmuteAudioPlayers() {
-    jQuery("audio:not(.handsoff)").prop("muted", false);
+  jQuery('audio:not(.handsoff)').prop('muted', false);
 }
 
 // Playback Control
 function pauseAllPlayers() {
-    jQuery("video:not(.handsoff), audio:not(.handsoff)").each(function () {
-        jQuery(this).get(0).pause();
-    });
+  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function() {
+    jQuery(this).get(0).pause();
+  });
 }
 
 function playAllPlayers() {
-    jQuery("video:not(.handsoff), audio:not(.handsoff)").each(function () {
-        if (jQuery(this).get(0).paused) {
-            jQuery(this).get(0).play();
-        }
-    });
+  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function() {
+    if (jQuery(this).get(0).paused) {
+      jQuery(this).get(0).play();
+    }
+  });
 }
 
 function setTimeAllPlayers() {
-    jQuery("video:not(.handsoff), audio:not(.handsoff)").each(function () {
-        if (
-            Math.abs(getPlayerTime(this.id) - jQuery(this).get(0).currentTime) >
+  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function() {
+    if (
+      Math.abs(getPlayerTime(this.id) - jQuery(this).get(0).currentTime) >
             timeDrift
-        ) {
-            jQuery(this).get(0).currentTime = getPlayerTime(this.id);
-        }
-    });
+    ) {
+      jQuery(this).get(0).currentTime = getPlayerTime(this.id);
+    }
+  });
 }
 
 function setTimePlayer(playerId) {
-    video = jQuery("#" + playerId).get(0);
-    video.currentTime = getPlayerTime(playerId);
+  video = jQuery('#' + playerId).get(0);
+  video.currentTime = getPlayerTime(playerId);
 }
 
 // Time Functions
 function getPlayerTime(playerId) {
-    dataItem = johng.all().find((jsonData) => jsonData.vidid === playerId);
-    return johng.current() - dataItem.start + dataItem.jump;
+  dataItem = johng.all().find((jsonData) => jsonData.vidid === playerId);
+  return johng.current() - dataItem.start + dataItem.jump;
 }
 
-//Get the Current time in text format
+// Get the Current time in text format
 function secondsToTimeFormatted(seconds) {
-    var d = new Date(0);
-    d.setSeconds(seconds);
-    d.setHours(d.getHours() + timeZone.plus); // Eastern Time Zone adjustment
-    return dateFormatter(d) + " " + timeZone.pretty;
+  const d = new Date(0);
+  d.setSeconds(seconds);
+  d.setHours(d.getHours() + timeZone.diff); // Eastern Time Zone adjustment
+  return dateFormatter(d) + ' ' + timeZone.pretty;
 }
 
+// Format a date in pretty format
 function dateFormatter(d) {
-    var hours = d.getHours();
-    var minutes = d.getMinutes();
-    var seconds = d.getSeconds();
-    var ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-    minutes = minutes < 10 ? "0" + minutes : minutes;
-    seconds = seconds < 10 ? "0" + seconds : seconds;
-    return hours + ":" + minutes + ":" + seconds + " " + ampm;
+  let hours = d.getHours();
+  let minutes = d.getMinutes();
+  let seconds = d.getSeconds();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  minutes = minutes < 10 ? '0' + minutes : minutes;
+  seconds = seconds < 10 ? '0' + seconds : seconds;
+  return hours + ':' + minutes + ':' + seconds + ' ' + ampm;
 }
 
 // Adds the base API URL and any URL filters and returns a full URL for AJAX calls
 function getAPIURL() {
-    var d = new Date();
-    return (
-        baseRemoteURL +
-        "?" +
-        jQuery("#filters :input[value!='all']").serialize()
-    );
+  const d = new Date();
+  return (
+    baseRemoteURL +
+        '?' +
+        jQuery('#filters :input[value!=\'all\']').serialize()
+  );
 }
 
-// Grabs the json via ajax
+// Grabs the data via ajax
 function getData() {
-    if (dataCache.length > 0) {
-        return dataCache;
-    } else {
-        $.ajax({
-            type: "GET",
-            url: getAPIURL(),
-            dataType: "json",
-            async: false,
-            cache: true,
-            success: function (data) {
-                if(data.length > 0) {
-                    dataCache = data;
-                } else {
-                    dataCache = ['No Items Found']
-                }
-            },
-        });
-        return dataCache;
-    }
+  if (dataCache !== undefined) {
+    return dataCache;
+  } else {
+    $.ajax({
+      type: 'GET',
+      url: getAPIURL(),
+      dataType: 'json',
+      async: false,
+      cache: true,
+      success: function(data) {
+        if (data.length > 0) {
+          dataCache = data;
+        } else {
+          dataCache = ['No Items Found'];
+        }
+      },
+    });
+    return dataCache;
+  }
 }
 
 // Grabs the json via ajax
@@ -276,33 +278,36 @@ async function refreshData(){
     updateNetworks();
     updateData();
 }
+
+// Update the media data
 function updateData() {
-    johng.set(getData());
+  johng.set(getData());
 }
 
+// Convert Hours:Minutes:Seconds to just seconds
 function hmsToSeconds(hmsString) {
-    var a = hmsString.split(":");
-    var seconds = +a[0] * 60 * 60 + +a[1] * 60 + +a[2];
-    return seconds;
+  const a = hmsString.split(':');
+  const seconds = +a[0] * 60 * 60 + +a[1] * 60 + +a[2];
+  return seconds;
 }
 
 function removeItems(removeMediaItems) {
-    if (Array.isArray(removeMediaItems)) {
-        // We have some players that are no longer live and should be destroyed.
-        removeMediaItems.forEach(function (playerId) {
-            if (playerId) {
-                var mediaItem = johng
-                    .get()
-                    .find((data) => data.vidid === playerId);
-                jQuery("#" + playerId + "_div")
-                    .empty()
-                    .remove();
-                jQuery("#" + playerId + "_preload")
-                    .empty()
-                    .remove();
-            }
-        });
-    }
+  if (Array.isArray(removeMediaItems)) {
+    // We have some players that are no longer live and should be destroyed.
+    removeMediaItems.forEach(function(playerId) {
+      if (playerId) {
+        const mediaItem = johng
+            .get()
+            .find((data) => data.vidid === playerId);
+        jQuery('#' + playerId + '_div')
+            .empty()
+            .remove();
+        jQuery('#' + playerId + '_preload')
+            .empty()
+            .remove();
+      }
+    });
+  }
 }
 
 function addItems(addMediaItems) {
@@ -533,218 +538,218 @@ function addItems(addMediaItems) {
 }
 
 function create_audio(playerId, mediaItem) {
-    var audioItem = {
-        PlayerID: playerId,
-        AudioURL: mediaItem.url,
-        Volume: mediaItem.volume,
-        Type: mediaItem.type,
-        Title: mediaItem.source + " - " + mediaItem.title,
-    };
+  const audioItem = {
+    PlayerID: playerId,
+    AudioURL: mediaItem.url,
+    Volume: mediaItem.volume,
+    Type: mediaItem.type,
+    Title: mediaItem.source + ' - ' + mediaItem.title,
+  };
 
-    var template = document.getElementById("audio_player_template").innerHTML;
-    return $.parseHTML($.trim(Mustache.render(template, audioItem)));
+  const template = document.getElementById('audio_player_template').innerHTML;
+  return $.parseHTML($.trim(Mustache.render(template, audioItem)));
 }
 
 function create_html(playerId, mediaItem) {
-    var htmlItem = {
-        ItemID: playerId,
-        Time: dateFormatter(Date.parse(mediaItem.start_date)),
-        Title: mediaItem.title,
-        ImageURL: mediaItem.image,
-        Content: mediaItem.content,
-    };
+  const htmlItem = {
+    ItemID: playerId,
+    Time: dateFormatter(Date.parse(mediaItem.start_date)),
+    Title: mediaItem.title,
+    ImageURL: mediaItem.image,
+    Content: mediaItem.content,
+  };
 
-    var template = document.getElementById("html_item_template").innerHTML;
-    return $.parseHTML($.trim(Mustache.render(template, htmlItem)));
+  const template = document.getElementById('html_item_template').innerHTML;
+  return $.parseHTML($.trim(Mustache.render(template, htmlItem)));
 }
 
 function create_video(playerId, mediaItem) {
-    if (mediaItem.format == "m3u8") {
-        mediaType = "application/x-mpegURL";
-    } else if (mediaItem.format == "mpd") {
-        mediaType = "application/dash+xml";
-    } else mediaType = mediaItem.media_type + "/" + mediaItem.format;
+  if (mediaItem.format == 'm3u8') {
+    mediaType = 'application/x-mpegURL';
+  } else if (mediaItem.format == 'mpd') {
+    mediaType = 'application/dash+xml';
+  } else mediaType = mediaItem.media_type + '/' + mediaItem.format;
 
-    var videoItem = {
-        PlayerID: playerId,
-        VideoURL: mediaItem.url,
-        Type: mediaItem.type,
-        Source: mediaItem.source,
-        StartTime: mediaItem.startTime,
-        Volume: mediaItem.volume,
-    };
+  const videoItem = {
+    PlayerID: playerId,
+    VideoURL: mediaItem.url,
+    Type: mediaItem.type,
+    Source: mediaItem.source,
+    StartTime: mediaItem.startTime,
+    Volume: mediaItem.volume,
+  };
 
-    var template = document.getElementById("video_item_template").innerHTML;
-    return $.parseHTML($.trim(Mustache.render(template, videoItem)));
+  const template = document.getElementById('video_item_template').innerHTML;
+  return $.parseHTML($.trim(Mustache.render(template, videoItem)));
 }
 
 // A helper function that's not currently used.
 function isMediaReady() {
-    current_data = johng.get();
-    current_data.forEach((element) => {
-        if (element.media_type == "video") {
-            jQuery("#" + element.vidid).on("canplay", function () {
-                // console.log("canplay: ", element);
-            });
-        }
-    });
+  current_data = johng.get();
+  current_data.forEach((element) => {
+    if (element.media_type == 'video') {
+      jQuery('#' + element.vidid).on('canplay', function() {
+        // console.log("canplay: ", element);
+      });
+    }
+  });
 }
 
 function isPlaying(playerId) {
-    var player = document.getElementById(playerId);
-    return !player.paused && !player.ended && 0 < player.currentTime;
+  const player = document.getElementById(playerId);
+  return !player.paused && !player.ended && 0 < player.currentTime;
 }
 
 function moveTime(increment) {
-    johng.move(increment);
-    setTimeAllPlayers();
+  johng.move(increment);
+  setTimeAllPlayers();
 }
 
 function setReadMore(playerId) {
-    jQuery("#" + playerId).readmore({
-        embedCSS: true,
-        blockCSS: "display: block; width: 100%; height: 100%; background: red;",
-        collapsedHeight: 300,
-        heightMargin: 300,
-        speed: 75,
-        lessLink:
+  jQuery('#' + playerId).readmore({
+    embedCSS: true,
+    blockCSS: 'display: block; width: 100%; height: 100%; background: red;',
+    collapsedHeight: 300,
+    heightMargin: 300,
+    speed: 75,
+    lessLink:
             '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read Less</a></span></button>',
-        moreLink:
+    moreLink:
             '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read More</a></span></button>',
-        blockCSS: "display: inline-block; float: right;",
-    });
+    blockCSS: 'display: inline-block; float: right;',
+  });
 }
 
 // Jump to the right timestamp
-function jumpToTime(stringTimeInput) {
-    stringTime = $.trim(stringTimeInput);
-    const [time, modifier] = stringTime.split(" ");
-    let [hours, minutes, seconds] = time.split(":");
+async function jumpToTime(stringTimeInput) {
+  stringTime = $.trim(stringTimeInput);
+  const [time, modifier] = stringTime.split(' ');
+  let [hours, minutes, seconds] = time.split(':');
 
-    if (seconds === undefined) {
-        seconds = "00";
-    }
-    if (hours === "12") {
-        hours = "00";
-    }
-    if (modifier.toUpperCase() === "PM") {
-        hours = parseInt(hours, 10) + 12;
-    }
+  if (seconds === undefined) {
+    seconds = '00';
+  }
+  if (hours === '12') {
+    hours = '00';
+  }
+  if (modifier.toUpperCase() === 'PM') {
+    hours = parseInt(hours, 10) + 12;
+  }
 
-    johng.setCurrent(hmsToSeconds(`${hours}:${minutes}:${seconds}`));
-    johng.updateClock();
-    johng.pause();
-    setTimeAllPlayers();
+  johng.setCurrent(hmsToSeconds(`${hours}:${minutes}:${seconds}`));
+  johng.updateClock();
+  johng.pause();
+  setTimeAllPlayers();
 }
 
 // Setup things when the document is ready
-jQuery(function () {
-    jQuery(".close-modal-boot-button, #hider").on("click", function (event) {
-        jQuery("#hider").hide();
-        $.modal.close();
-        jQuery("#sound_boot").trigger("play");
-        johng.play();
-        muteAllPlayers();
-    });
+jQuery(function() {
+  jQuery('.close-modal-boot-button, #hider').on('click', function(event) {
+    jQuery('#hider').hide();
+    $.modal.close();
+    jQuery('#sound_boot').trigger('play');
+    johng.play();
+    muteAllPlayers();
+  });
 
-    jQuery(".close-modal-button").on("click", function () {
-        $.modal.close();
-        johng.play();
-    });
+  jQuery('.close-modal-button').on('click', function() {
+    $.modal.close();
+    johng.play();
+  });
 
-    jQuery("#playButton").on("click", function () {
-        johng.play();
-    });
+  jQuery('#playButton').on('click', function() {
+    johng.play();
+  });
 
-    jQuery("#syncButton").on("click", function () {
-        setTimeAllPlayers();
-    });
+  jQuery('#syncButton').on('click', function() {
+    setTimeAllPlayers();
+  });
 
-    jQuery("#loadButton").on("click", function () {
-        setTimeAllPlayers();
-    });
+  jQuery('#loadButton').on('click', function() {
+    setTimeAllPlayers();
+  });
 
-    jQuery("#pauseButton").on("click", function () {
-        johng.pause();
-    });
+  jQuery('#pauseButton').on('click', function() {
+    johng.pause();
+  });
 
-    jQuery(".ffrw").on("click", function () {
-        moveTime(parseInt(jQuery(this).data("skip")));
-    });
+  jQuery('.ffrw').on('click', function() {
+    moveTime(parseInt(jQuery(this).data('skip')));
+  });
 
-    jQuery("#mute_all_audio").on("click", function () {
-        if (jQuery(this).is(":checked")) {
-            //unmuteAudioPlayers();
-            jQuery("#radio_mute_icon").attr("src", "../img/sound_on.png");
-        } else {
-            muteAudioPlayers();
-            jQuery("#radio_mute_icon").attr("src", "../img/sound_off.png");
-        }
-    });
+  jQuery('#mute_all_audio').on('click', function() {
+    if (jQuery(this).is(':checked')) {
+      // unmuteAudioPlayers();
+      jQuery('#radio_mute_icon').attr('src', '../img/sound_on.png');
+    } else {
+      muteAudioPlayers();
+      jQuery('#radio_mute_icon').attr('src', '../img/sound_off.png');
+    }
+  });
 
-    // If updating form fields, add their changes to the URL
-    jQuery("#filters input").on("click", refreshData);
-    jQuery("#filters select").on("change", refreshData);
-    jQuery("#backgroundSetting").on("change", function () {
-        jQuery("body, html").css(
-            "background-image",
-            encodeURI(
-                "url('../img/" +
-                    jQuery(this).children(":selected").attr("id") +
-                    "')"
-            )
-        );
-    });
+  // If updating form fields, add their changes to the URL
+  jQuery('#filters input').on('click', refreshData);
+  jQuery('#filters select').on('change', refreshData);
+  jQuery('#backgroundSetting').on('change', function() {
+    jQuery('body, html').css(
+        'background-image',
+        encodeURI(
+            'url(\'../img/' +
+                jQuery(this).children(':selected').attr('id') +
+                '\')',
+        ),
+    );
+  });
 
-    // Make sure the child players are always paused when the timeline player is also paused
-    window.setInterval(function () {
-        if (!johng.isPlaying()) {
-            pauseAllPlayers();
-            setTimeAllPlayers();
-        }
-    }, playerSync * 1000);
+  // Make sure the child players are always paused when the timeline player is also paused
+  window.setInterval(function() {
+    if (!johng.isPlaying()) {
+      pauseAllPlayers();
+      setTimeAllPlayers();
+    }
+  }, playerSync * 1000);
 
-    window.setInterval(function () {
-        if (johng.isPlaying()) {
-            playAllPlayers();
-            setTimeAllPlayers();
-        }
-    }, playerSync * 1000);
+  window.setInterval(function() {
+    if (johng.isPlaying()) {
+      playAllPlayers();
+      setTimeAllPlayers();
+    }
+  }, playerSync * 1000);
 
-    jQuery("#menu-play").on("click", function () {
-        johng.play();
-    });
+  jQuery('#menu-play').on('click', function() {
+    johng.play();
+  });
 
-    jQuery("#menu-pause").on("click", function () {
-        johng.pause();
-    });
+  jQuery('#menu-pause').on('click', function() {
+    johng.pause();
+  });
 
-    jQuery("#jumpItButton").click(function () {
-        jumpHour = jQuery("#jumpItHour").val();
-        jumpMinute = jQuery("#jumpItMinute").val();
-        jumpSecond = jQuery("#jumpItSecond").val();
-        jumpPeriod = jQuery("#jumpItPeriod").val();
+  jQuery('#jumpItButton').click(function() {
+    jumpHour = jQuery('#jumpItHour').val();
+    jumpMinute = jQuery('#jumpItMinute').val();
+    jumpSecond = jQuery('#jumpItSecond').val();
+    jumpPeriod = jQuery('#jumpItPeriod').val();
 
-        if (jumpHour == "") {
-            jumpHour = "00";
-        }
-        if (jumpMinute == "") {
-            jumpMinute = "00";
-        }
-        if (jumpSecond == "") {
-            jumpSecond = "00";
-        }
+    if (jumpHour == '') {
+      jumpHour = '00';
+    }
+    if (jumpMinute == '') {
+      jumpMinute = '00';
+    }
+    if (jumpSecond == '') {
+      jumpSecond = '00';
+    }
 
-        jQuery("#jumpItHour").val(jumpHour);
-        jQuery("#jumpItMinute").val(jumpMinute);
-        jQuery("#jumpItSecond").val(jumpSecond);
-        jQuery("#jumpItPeriod").val(jumpPeriod);
+    jQuery('#jumpItHour').val(jumpHour);
+    jQuery('#jumpItMinute').val(jumpMinute);
+    jQuery('#jumpItSecond').val(jumpSecond);
+    jQuery('#jumpItPeriod').val(jumpPeriod);
 
-        jumpToTime(
-            jumpHour + ":" + jumpMinute + ":" + jumpSecond + " " + jumpPeriod
-        );
-        johng.play();
-    });
+    jumpToTime(
+        jumpHour + ':' + jumpMinute + ':' + jumpSecond + ' ' + jumpPeriod,
+    );
+    johng.play();
+  });
 
     // Every time the media player's time changes, this function weill be called
     // This is our main running function
@@ -812,7 +817,8 @@ jQuery(function () {
     setTimeAllPlayers();
 });
 
-setTimeout(function () {
+  // Every 1.5 seconds, sync the video players' time with the johng counter
+  setTimeout(function() {
     johng.tickFunction(johng);
     setTimeAllPlayers();
-}, 1500);
+  }, 1500);

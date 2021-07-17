@@ -106,10 +106,9 @@
 				<button id="forwardButton1" class="command_button ffrw" data-skip="30">&rsaquo;</button>
 				<button id="forwardButton2" class="command_button ffrw" data-skip="300">&raquo;</button>
 				<hr />
-				<label for"jumpItHour">H: </label><input id="jumpItHour" class="short-time-input" value="8" />
-				<label for"jumpItMinute">M: </label><input id="jumpItMinute" class="short-time-input" value="35" />
-				<label for"jumpItSecond">S: </label><input id="jumpItSecond" class="short-time-input" value="00" />
-				<label for"jumpItSecond">S: </label>
+				<label for="jumpItHour">H: </label><input id="jumpItHour" class="short-time-input" value="8" />
+				<label for="jumpItMinute">M: </label><input id="jumpItMinute" class="short-time-input" value="35" />
+				<label for="jumpItSecond">S: </label><input id="jumpItSecond" class="short-time-input" value="00" />
 				<select id="jumpItPeriod">
 					<option value="AM">AM</option>
 					<option value="PM">PM</option>
@@ -154,8 +153,10 @@
 		</div>
 		<h1 class="title"><span>Audio Player</span></h1>
 		<div class="inner">
-			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon"
-				src="img/sound_on.png" class="icon-titlebar float-right" alt="Mute Audio">
+			<div id="audio_controls">
+				<input id="mute_all_audio" class="form-check-input" type="checkbox"> <img id="radio_mute_icon"
+					src="img/sound_off.png" class="icon-titlebar float-right" alt="Mute Audio">
+			</div>
 			<div id="audioplayermain"></div>
 			<div id="audios"></div>
 		</div>
