@@ -64,7 +64,7 @@
 
 #videoplayermain * video {
     width: 100%;
-    max-height: 80vh;
+    max-height: 67vh;
     text-align: center;
     background: black;
 }
@@ -287,43 +287,11 @@
     width: 3em;
 }
 
-.ui-resizable-handle {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    width: 21px;
-    height: 21px;
-    background: url("../../img/corner.png");
-}
-
-div.content.resizable .inner {
-    overflow-x: hidden;
-    overflow-y: scroll;
-}
-
 a.time-marker {
     font-size: large;
     display: block;
     float: left;
     margin-right: 1em;
-}
-
-::-webkit-scrollbar {
-    margin-bottom: 100px;
-}
-
-.ui-draggable-dragging, .ui-resizable-resizing {
-    transform: scale(1);
-    border: 2px black dotted !important;
-    background-color: rgba(25, 25, 25, 0) !important;
-}
-
-.ui-draggable-dragging *, .ui-resizable-resizing * {
-    opacity: 0;
-}
-
-.ui-draggable-dragging.content, .ui-resizable-resizing.content {
-    box-shadow: none !important;
 }
 
 .plyr--loading.plyr--video {

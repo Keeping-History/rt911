@@ -230,3 +230,16 @@ ul.menu {
   padding: 0 1rem;
   width: 100%;
 }
+
+.ui-resizable-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 21px;
+  height: 21px;
+}
+
+div.content.resizable .inner {
+  overflow-x: hidden;
+  overflow-y: scroll;
+}
