@@ -69,3 +69,7 @@ target/
 /backend/static
 /.prettierrc
 node_modules
+/blog
+/frontend/.eslintrc.yml
+/package.json
+/package-lock.json
