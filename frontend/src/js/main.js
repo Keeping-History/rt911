@@ -802,12 +802,36 @@ jQuery(function() {
         // setTimePlayer(jQuery(this).get(0).id);
       }
     });
-    jumpToTime(timeString);
-    setTimeAllPlayers();
-});
+  };
+
+  jQuery('#bootModal').modal({
+    backdrop: false,
+    show: true,
+    showClose: false,
+    closeExisting: false,
+    fadeDuration: 100,
+    clickClose: false,
+    blockerClass: 'blocker',
+  });
 
   // Every 1.5 seconds, sync the video players' time with the johng counter
   setTimeout(function() {
     johng.tickFunction(johng);
     setTimeAllPlayers();
   }, 1500);
+
+  // Get just the time in pretty format from the current timestamp
+  const time = new Date();
+  const timeString = time.toLocaleString('en-US', {
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: true,
+  });
+  jumpToTime(timeString);
+
+  updateAllData();
+  muteAudioPlayers();
+
+  setTimeAllPlayers();
+});
