@@ -271,15 +271,21 @@ async function updateMarkers() {
   });
 }
 
+function invalidateLocalDataCache() {
+  dataCache = [];
+  markerListCache = [];
+  networkListCache = [];
+}
+// Get fresh data: clear out cache and make a new call
+function refreshData() {
+  invalidateLocalDataCache();
+  updateAllData();
 }
 
-async function refreshData(){
-    dataCache = []
-    markerListCache = [];
-    networkListCache = [];
-    updateMarkers();
-    updateNetworks();
-    updateData();
+function updateAllData() {
+  updateMarkers();
+  updateNetworks();
+  updateData();
 }
 
 // Update the media data
