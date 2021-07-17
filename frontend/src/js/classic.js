@@ -56,20 +56,21 @@ jQuery(function () {
 
     // Windowshade Box -- Minimize the window to just the title bar
     jQuery(".windowshade-box").on("click", function () {
-        c = jQuery(this).closest(".content");
-        c.css("z-index", "1");
-        d = jQuery(this).data("shade");
-        e = jQuery(this).data("shade-height", jQuery(this).css("height"));
-        if (!d) {
-            jQuery(c).children(".inner").addClass("hidden");
-            jQuery(c).css("height", "");
-            jQuery(this).data("shade", true);
-            jQuery("#sound_windowshade_collapse").trigger("play");
-        } else {
-            jQuery(c).children(".inner").removeClass("hidden");
-            jQuery(c).css("height", e);
-            jQuery(this).data("shade", false);
+        let contentBox = jQuery(this).closest(".content");
+        contentBox.css("z-index", "1");
+        let shadeHeight = jQuery(this).data("shade-height", jQuery(this).css("height"));
+        if (jQuery(this).hasClass("shade")) {
+            jQuery(contentBox).children(".inner").removeClass("hidden");
+            jQuery(contentBox).children(".ui-resizable-handle").removeClass("hidden");
+            jQuery(contentBox).css("height", shadeHeight);
+            jQuery(this).removeClass("shade");
             jQuery("#sound_windowshade_expand").trigger("play");
+        } else {
+            jQuery(contentBox).children(".inner").addClass("hidden");
+            jQuery(contentBox).children(".ui-resizable-handle").addClass("hidden");
+            jQuery(contentBox).css("height", "");
+            jQuery(this).addClass("shade");
+            jQuery("#sound_windowshade_collapse").trigger("play");
         }
     });
 
