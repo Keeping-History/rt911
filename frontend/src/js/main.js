@@ -6,51 +6,59 @@
 //
 
 // Global Vars
-const baseRemoteURL = "//admin.911realtime.org/media/";
-const timeZone = { plus: 6, pretty: "ET" };
-const timeDrift = 5; // don't change the current video's time unless it is this many seconds out of sync
-const playoverDrift = 1; // determines how long a media item will play afer it's supposed to be removed, in case it didnt' play all the way through
-const playerSync = 2; // determines how quickly after the counter is stopped should audios and videos be checked to stop as well
-const preloadBuffer = 120; // determines whether or not a file should be preloaded or not, based on whether it would matter or not
-const preloadFormats = ["audio"];
+// baseRemoteURL: The base URL for the API
+//
+// timeZone: An object with the offset from GMT and the
+// "pretty" display of the timezone
+//
+// timeDrift: don't change the current video's time unless it is this
+// many seconds out of sync
+//
+// playerSync: determines how quickly after the counter is stopped
+// should audios and videos be checked to stop as well
+//
+// preloadBuffer: determines a threshold for whether
+// or not a file should be preloaded or not. This is
+// based on whether it would make a significant difference
+//
+// preloadFormats: the media formats that should be pre-loaded. Currently
+// only Audio. Videos are not recommended at this time.
+//
+// audioControls, videoControls: an array of the controls that each
+// type of media player should display. See
+// https://github.com/sampotts/plyr/blob/master/CONTROLS.md
+//
+
+const baseRemoteURL = '//admin.911realtime.org/media/';
+const timeZone = {diff: 6, pretty: 'ET'};
+const timeDrift = 5;
+const playerSync = 2;
+const preloadBuffer = 120;
+const preloadFormats = ['audio'];
+const audioControls = [
+  'current-time',
+  'duration',
+  'mute',
+  'volume',
+];
+const videoControls = [
+  'current-time',
+  'airplay',
+  'fullscreen',
+  'volume',
+  'airplay',
+];
 
 // Modal holder object
-var globalModals = [];
+let globalModals = [];
 
 // Preload data to improve performance
 // If these are empty, they will be prepopulated from an AJAX call on load.
-var dataCache = [];
-var markerListCache = [];
-var networkListCache = [
-    "WORLDNET",
-    "WETA",
-    "MCM",
-    "WJLA",
-    "WTTG",
-    "WUSA",
-    "WRC",
-    "NHK",
-    "TCN",
-    "AZT",
-    "GLVSN",
-    "NEWSW",
-    "WSBK",
-    "CNN",
-    "BET",
-    "IRAQ",
-    "BBC",
-    "NTV",
-    "History Commons",
-    "CCTV3",
-    "NEADS/NORAD",
-    "AA11",
-    "atc",
-    "Rutgers",
-    "FLASH",
-    "ANT1",
-    "MSNBC",
-    "PSC",
-];
+// UPDATE: To improve the editing experience, these data cache files have
+// been moved to dataCache.js and will be compiled in at build time.
+// var dataCache = []
+// var networkListCache = []
+// var markerListCache = []
 
 // Caching and preload Functions
 function preloadPlayers(data) {
