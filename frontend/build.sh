@@ -27,6 +27,7 @@ html_file_output = config['DEFAULT']['HTMLFileOutput']
 root_files, css_items, js_items, css_contents, js_contents, html_contents = "", "", "", "", "", ""
 
 compress_js = config['DEFAULT']['CompressJS']
+compress_css = config['DEFAULT']['CompressCSS']
 
 shutil.rmtree(build_dir, ignore_errors=True)
 os.makedirs(os.path.dirname(build_dir), exist_ok=True)
@@ -71,11 +72,17 @@ for filename in os.listdir(js_dir):
 
 os.makedirs(os.path.dirname(css_output), exist_ok=True)
 css_file_write = open(css_output, "w+")
-temp = css_file_write.write(compress(css_contents))
+
+if compress_css == 1:
+    temp = css_file_write.write(compress(css_contents))
+else:
+    temp = css_file_write.write(css_contents)
+
 css_file_write.close()
 
 os.makedirs(os.path.dirname(js_output), exist_ok=True)
 js_file_write = open(js_output, "w+")
+
 if compress_js == 1:
     temp = js_file_write.write(jsmin(js_contents))
 else:
