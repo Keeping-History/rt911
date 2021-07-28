@@ -250,3 +250,26 @@ ul.menu {
   background: #ccc !important;
   border-radius: 0 !important;
 }
+
+::-webkit-scrollbar {
+  margin-bottom: 100px;
+}
+
+.ui-draggable-dragging, .ui-resizable-resizing {
+  transform: scale(1);
+  border: 2px black dotted !important;
+  background-color: rgba(25, 25, 25, 0) !important;
+}
+
+.ui-draggable-dragging *, .ui-resizable-resizing * {
+  opacity: 0;
+}
+
+.ui-draggable-dragging.content, .ui-resizable-resizing.content {
+  box-shadow: none !important;
+}
+
+.ui-resizable-handle {
+  background: url("../../img/corner.png");
+}
+

@@ -27,11 +27,6 @@
 </head>
 
 <body>
-	<!-- Google Tag Manager (noscript) -->
-	<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5RXCWC9" height="0" width="0"
-			style="display:none;visibility:hidden"></iframe></noscript>
-	<!-- End Google Tag Manager (noscript) -->
-
 	<div id="hider" style="height:100%;width:100%;background:black;" class=""></div>
 	<nav>
 		<div id="nav-wrapper">
@@ -106,10 +101,9 @@
 				<button id="forwardButton1" class="command_button ffrw" data-skip="30">&rsaquo;</button>
 				<button id="forwardButton2" class="command_button ffrw" data-skip="300">&raquo;</button>
 				<hr />
-				<label for"jumpItHour">H: </label><input id="jumpItHour" class="short-time-input" value="8" />
-				<label for"jumpItMinute">M: </label><input id="jumpItMinute" class="short-time-input" value="35" />
-				<label for"jumpItSecond">S: </label><input id="jumpItSecond" class="short-time-input" value="00" />
-				<label for"jumpItSecond">S: </label>
+				<label for="jumpItHour">H: </label><input id="jumpItHour" class="short-time-input" value="8" />
+				<label for="jumpItMinute">M: </label><input id="jumpItMinute" class="short-time-input" value="35" />
+				<label for="jumpItSecond">S: </label><input id="jumpItSecond" class="short-time-input" value="00" />
 				<select id="jumpItPeriod">
 					<option value="AM">AM</option>
 					<option value="PM">PM</option>
@@ -154,9 +148,11 @@
 		</div>
 		<h1 class="title"><span>Audio Player</span></h1>
 		<div class="inner">
-			<input id="mute_all_audio" class="form-check-input" type="checkbox" checked> <img id="radio_mute_icon"
-				src="img/sound_on.png" class="icon-titlebar float-right" alt="Mute Audio">
-			<div id="audioplayermain"></div>
+			<div id="audio_controls">
+				<input id="mute_all_audio" class="form-check-input" type="checkbox"> <img id="radio_mute_icon"
+					src="img/sound_off.png" class="icon-titlebar float-right" alt="Mute Audio">
+			</div>
+			<div id="audioPlayerMain"></div>
 			<div id="audios"></div>
 		</div>
 	</div>
@@ -177,7 +173,7 @@
 		<h1 class="title"><span>TV Tuner</span></h1>
 		<div class="inner">
 			<div id="videoPlayerMainHolder" class="card-body">
-				<div id="videoplayermain"></div>
+				<div id="VideoPlayerMain"></div>
 			</div>
 			<div id="channel-guide">
 				<h1 id="channel-guide-header">Channel Guide</h1>
@@ -412,16 +408,16 @@
 		</div>
 	</div>
 
-	<div id="modalBoot" class="main-modal content modal" style="text-align:center">
+	<div id="bootModal" class="main-modal content modal" style="text-align:center">
 		<h1 class="title noright title-full"><span>9/11 in Realtime</span></h1>
 		<div class="inner">
 			<ul>
 				<li style="text-align:left">
-					<h1 id="modal-title"><span id="modal-time" class="text-bold"></span> <span
-							id="modal-fulltitle">About 9/11 in Realtime</span></h1><img id="modal-image"
+					<h1 id="boot-modal-title"><span id="boot-modal-time" class="text-bold"></span> <span
+							id="boot-modal-fulltitle">About 9/11 in Realtime</span></h1><img id="modal-image"
 						src="img/blank.png" alt="none">
-					<p id="modal-image-caption" class="text-italic"></p>
-					<p id="modal-content">
+					<p id="boot-modal-image-caption" class="text-italic"></p>
+					<p id="boot-modal-content">
 					<h2>The time is currently <span id="time" class="time text-center timeText">Loading...</span></h2>
 
 					<hr>

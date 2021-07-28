@@ -54,9 +54,9 @@ ul.menu {
 }
 
 .content .inner {
-  height: 97%;
+  max-height: 97%;
   margin: 2px 4px 4px;
-  padding: 1em;
+  padding: 6px;
 }
 
 .content ul {
@@ -229,4 +229,17 @@ ul.menu {
   height: 100%;
   padding: 0 1rem;
   width: 100%;
+}
+
+.ui-resizable-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 21px;
+  height: 21px;
+}
+
+div.content.resizable .inner {
+  overflow-x: hidden;
+  overflow-y: scroll;
 }

@@ -1,6 +1,6 @@
 var johng = {
     count: 0,
-    accuracy: 1, //seconds
+    accuracy: .1, //seconds
     clock: false,
     clock12hour: false,
     data: [],
@@ -33,7 +33,7 @@ var johng = {
         return true;
     },
     play: function () {
-        me = this;
+        let me = this;
         if (!this.interval) {
             this.interval = setInterval(function () {
                 me.tick(me);
