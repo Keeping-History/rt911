@@ -5,6 +5,7 @@
 
 #tv .inner {
     overflow: hidden;
+    height: 100%;
 }
 
 #videos {
@@ -42,39 +43,38 @@
     float: left;
 }
 
-#videos h2, #videoplayermain h2 {
+#videos h2, #VideoPlayerMain h2 {
     background: rgba(0, 0, 0, 0.3);
 }
 
 #videoPlayerMainHolder {
-    height: 85%;
+    height: 67vh; 
     min-height: 35vh;
     background: #000;
     background: url("../../img/static.gif");
 }
 
-#videoplayermain {
+#VideoPlayerMain {
     height: 100%;
     text-align: center;
 }
 
-#videoplayermain div.highlight {
+#VideoPlayerMain div.highlight {
     height: 100%;
 }
 
-#videoplayermain * video {
+#VideoPlayerMain * video {
     width: 100%;
-    max-height: 67vh;
     text-align: center;
     background: black;
 }
 
-#videoplayermain {
+#VideoPlayerMain {
     text-align: center;
     background: #000;
 }
 
-#videoplayermain h2 {
+#VideoPlayerMain h2 {
     font: 3vw "VT323";
     position: absolute;
     margin-left: 3%;
@@ -228,7 +228,7 @@
 #timeline {
     left: 70%;
     width: 23%;
-    max-height: 60%;
+    height: 60%;
     margin-top: 10%;
 }
 

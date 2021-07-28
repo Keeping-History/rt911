@@ -54,9 +54,9 @@ ul.menu {
 }
 
 .content .inner {
-  height: 97%;
+  max-height: 97%;
   margin: 2px 4px 4px;
-  padding: 1em;
+  padding: 6px;
 }
 
 .content ul {
