@@ -31,7 +31,7 @@
 
 const baseRemoteURL = '//admin.911realtime.org/media/';
 const timeZone = {diff: 6, pretty: 'ET'};
-const timeDrift = 5;
+const timeDrift = 15;
 const playerSync = 2;
 const preloadBuffer = 120;
 const preloadFormats = ['audio'];
