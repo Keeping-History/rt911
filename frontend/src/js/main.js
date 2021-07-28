@@ -361,7 +361,7 @@ function addItems(addMediaItems) {
                             playerId +
                             '_div div.plyr div:not(.plyr__controls, .plyr__controls *)',
             ).click(function() {
-              jQuery('#' + mediaItem.media_type + 'playermain')
+              jQuery('#' + mediaItem.media_type + 'PlayerMain')
                   .children()
                   .prependTo('#' + mediaItem.media_type + 's');
               jQuery('#' + playerId).prop(
@@ -384,7 +384,7 @@ function addItems(addMediaItems) {
                     .prependTo(
                         '#' +
                                         mediaItem.media_type +
-                                        'playermain',
+                                        'PlayerMain',
                     )
                     .addClass('highlight');
                 jQuery('#' + playerId).prop('muted', false);
