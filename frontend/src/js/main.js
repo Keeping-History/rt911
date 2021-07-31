@@ -30,7 +30,7 @@
 //
 
 const baseRemoteURL = '//admin.911realtime.org/media/';
-const timeZone = {diff: 6, pretty: 'ET'};
+const timeZone = { diff: 6, pretty: 'ET' };
 const timeDrift = 15;
 const playerSync = 2;
 const preloadBuffer = 120;
@@ -50,7 +50,7 @@ const videoControls = [
 ];
 
 // Modal holder object
-let globalModals = [];
+const globalModals = [];
 
 // Preload data to improve performance
 // If these are empty, they will be prepopulated from an AJAX call on load.
@@ -63,11 +63,11 @@ let globalModals = [];
 // Caching and preload Functions
 function preloadPlayers(data) {
   if (data != undefined || data.length > 0) {
-    data.forEach(function(item) {
+    data.forEach((item) => {
       if (
-        preloadFormats.includes(item.media_type) &&
-                item.start - preloadBuffer < johng.count &&
-                item.end - preloadBuffer > johng.count
+        preloadFormats.includes(item.media_type)
+        && item.start - preloadBuffer < johng.count
+        && item.end - preloadBuffer > johng.count
       ) {
         preloadMediaFile(item.media_type, item.url, item.vidid);
       }
@@ -77,22 +77,22 @@ function preloadPlayers(data) {
 
 // Function that creates a media object and preloads its data
 function preloadMediaFile(mediaType, url, id) {
-  if (!jQuery('#' + id + '_preload').length) {
-    a = jQuery('<' + mediaType + ' />')
-        .attr('src', url)
-        .attr('id', id + '_preload')
-        .attr('preload', true)
-        .attr('autoplay', false)
-        .attr('muted', true)
-        .css('display', 'none')
-        .addClass('handsoff')
-        .appendTo('#preloads');
+  if (!jQuery(`#${id}_preload`).length) {
+    a = jQuery(`<${mediaType} />`)
+      .attr('src', url)
+      .attr('id', `${id}_preload`)
+      .attr('preload', true)
+      .attr('autoplay', false)
+      .attr('muted', true)
+      .css('display', 'none')
+      .addClass('handsoff')
+      .appendTo('#preloads');
   }
 }
 
 // Audio Control
 function muteAllPlayers() {
-  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function() {
+  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     jQuery(this).prop('muted', true);
   });
 }
@@ -107,13 +107,13 @@ function unmuteAudioPlayers() {
 
 // Playback Control
 function pauseAllPlayers() {
-  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function() {
+  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     jQuery(this).get(0).pause();
   });
 }
 
 function playAllPlayers() {
-  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function() {
+  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     if (jQuery(this).get(0).paused) {
       jQuery(this).get(0).play();
     }
@@ -121,10 +121,10 @@ function playAllPlayers() {
 }
 
 function setTimeAllPlayers() {
-  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function() {
+  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     if (
-      Math.abs(getPlayerTime(this.id) - jQuery(this).get(0).currentTime) >
-            timeDrift
+      Math.abs(getPlayerTime(this.id) - jQuery(this).get(0).currentTime)
+      > timeDrift
     ) {
       jQuery(this).get(0).currentTime = getPlayerTime(this.id);
     }
@@ -132,7 +132,7 @@ function setTimeAllPlayers() {
 }
 
 function setTimePlayer(playerId) {
-  video = jQuery('#' + playerId).get(0);
+  video = jQuery(`#${playerId}`).get(0);
   video.currentTime = getPlayerTime(playerId);
 }
 
@@ -147,7 +147,7 @@ function secondsToTimeFormatted(seconds) {
   const d = new Date(0);
   d.setSeconds(seconds);
   d.setHours(d.getHours() + timeZone.diff); // Eastern Time Zone adjustment
-  return dateFormatter(d) + ' ' + timeZone.pretty;
+  return `${dateFormatter(d)} ${timeZone.pretty}`;
 }
 
 // Format a date in pretty format
@@ -156,20 +156,20 @@ function dateFormatter(d) {
   let minutes = d.getMinutes();
   let seconds = d.getSeconds();
   const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12; // the hour '0' should be '12'
-  minutes = minutes < 10 ? '0' + minutes : minutes;
-  seconds = seconds < 10 ? '0' + seconds : seconds;
-  return hours + ':' + minutes + ':' + seconds + ' ' + ampm;
+  hours %= 12;
+  hours = hours || 12; // the hour '0' should be '12'
+  minutes = minutes < 10 ? `0${minutes}` : minutes;
+  seconds = seconds < 10 ? `0${seconds}` : seconds;
+  return `${hours}:${minutes}:${seconds} ${ampm}`;
 }
 
 // Adds the base API URL and any URL filters and returns a full URL for AJAX calls
 function getAPIURL() {
   const d = new Date();
   return (
-    baseRemoteURL +
-        '?' +
-        jQuery('#filters :input[value!=\'all\']').serialize()
+    `${baseRemoteURL
+    }?${
+      jQuery('#filters :input[value!=\'all\']').serialize()}`
   );
 }
 
@@ -177,45 +177,44 @@ function getAPIURL() {
 function getData() {
   if (dataCache !== undefined) {
     return dataCache;
-  } else {
-    $.ajax({
-      type: 'GET',
-      url: getAPIURL(),
-      dataType: 'json',
-      async: false,
-      cache: true,
-      success: function(data) {
-        if (data.length > 0) {
-          dataCache = data;
-        } else {
-          dataCache = ['No Items Found'];
-        }
-      },
-    });
-    return dataCache;
   }
+  $.ajax({
+    type: 'GET',
+    url: getAPIURL(),
+    dataType: 'json',
+    async: false,
+    cache: true,
+    success(data) {
+      if (data.length > 0) {
+        dataCache = data;
+      } else {
+        dataCache = ['No Items Found'];
+      }
+    },
+  });
+  return dataCache;
 }
 
 // Grabs the list of networks via ajax
 function updateNetworks() {
   if (networkListCache.length > 0) {
-    networkListCache.forEach(function(item) {
+    networkListCache.forEach((item) => {
       jQuery('#network').append(
-          jQuery('<option>').text(item).attr('value', item),
+        jQuery('<option>').text(item).attr('value', item),
       );
     });
   } else {
     $.ajax({
       type: 'GET',
-      url: baseRemoteURL + 'networks',
+      url: `${baseRemoteURL}networks`,
       dataType: 'json',
       async: true,
       cache: true,
-      success: function(data) {
+      success(data) {
         networkListCache = data;
-        data.forEach(function(item) {
+        data.forEach((item) => {
           jQuery('#network').append(
-              jQuery('<option>').text(item).attr('value', item),
+            jQuery('<option>').text(item).attr('value', item),
           );
         });
       },
@@ -226,45 +225,45 @@ function updateNetworks() {
 // Grabs the list of available time markers via ajax
 async function updateMarkers() {
   if (markerListCache.length > 0) {
-    markerListCache.forEach(function(item) {
-      if (jQuery('#events ul #' + item['id']).length === 0) {
+    markerListCache.forEach((item) => {
+      if (jQuery(`#events ul #${item.id}`).length === 0) {
         jQuery(
-            '<li id=' +
-                    item['id'] +
-                    '><b><a href="#" class="time-marker">' +
-                    item['time_marker'] +
-                    '</a></b>' +
-                    item['name'] +
-                    '</li>',
+          `<li id=${
+            item.id
+          }><b><a href="#" class="time-marker">${
+            item.time_marker
+          }</a></b>${
+            item.name
+          }</li>`,
         ).appendTo('#events ul');
       }
     });
   } else {
     $.ajax({
       type: 'GET',
-      url: baseRemoteURL + 'markers',
+      url: `${baseRemoteURL}markers`,
       dataType: 'json',
       async: true,
       cache: true,
-      success: function(data) {
+      success(data) {
         markerListCache = data;
-        data.forEach(function(item) {
-          if (jQuery('#events ul #' + item['id']).length === 0) {
+        data.forEach((item) => {
+          if (jQuery(`#events ul #${item.id}`).length === 0) {
             jQuery(
-                '<li id=' +
-                            item['id'] +
-                            '><b><a href="#" class="time-marker">' +
-                            item['time_marker'] +
-                            '</a></b>' +
-                            item['name'] +
-                            '</li>',
+              `<li id=${
+                item.id
+              }><b><a href="#" class="time-marker">${
+                item.time_marker
+              }</a></b>${
+                item.name
+              }</li>`,
             ).appendTo('#events ul');
           }
         });
       },
     });
   }
-  jQuery('.time-marker').on('click', function() {
+  jQuery('.time-marker').on('click', function () {
     jumpToTime(this.text);
     johng.updateClock();
     johng.play();
@@ -303,17 +302,17 @@ function hmsToSeconds(hmsString) {
 function removeItems(removeMediaItems) {
   if (Array.isArray(removeMediaItems)) {
     // We have some players that are no longer live and should be destroyed.
-    removeMediaItems.forEach(function(playerId) {
+    removeMediaItems.forEach((playerId) => {
       if (playerId) {
-        const mediaItem = johng
-            .get()
-            .find((data) => data.vidid === playerId);
-        jQuery('#' + playerId + '_div')
-            .empty()
-            .remove();
-        jQuery('#' + playerId + '_preload')
-            .empty()
-            .remove();
+        johng.get()
+          .find((data) => data.vidid === playerId);
+        console.log(jQuery(`#${playerId}`));
+        jQuery(`#${playerId}_div`)
+          .empty()
+          .remove();
+        jQuery(`#${playerId}_preload`)
+          .empty()
+          .remove();
       }
     });
   }
@@ -323,71 +322,71 @@ function addItems(addMediaItems) {
   // And add them
   if (Array.isArray(addMediaItems)) {
     // Ok, so addMediaItems is an actual Array, so we can loop over it
-    addMediaItems.forEach(function(playerId) {
+    addMediaItems.forEach((playerId) => {
       // Does a player window with the same ID already exist?
       const doesPlayerExist = document.getElementById(playerId);
 
       if (!doesPlayerExist) {
         // Grab the video's data item because we will need it
         const mediaItem = johng
-            .all()
-            .find((data) => data.vidid === playerId);
+          .all()
+          .find((data) => data.vidid === playerId);
 
         switch (mediaItem.media_type) {
           case 'video':
             // Add video to the holder
             jQuery('#videos').append(
-                create_video(playerId, mediaItem),
+              create_video(playerId, mediaItem),
             );
 
             // Create a new Plyr instance for the video
-            player = new Plyr('#' + playerId, {
+            player = new Plyr(`#${playerId}`, {
               controls: videoControls,
               clickToPlay: false,
             });
 
             // Set the volume to the correct value
-            jQuery('#' + playerId).prop(
-                'volume',
-                jQuery('#' + playerId).attr('media_volume'),
+            jQuery(`#${playerId}`).prop(
+              'volume',
+              jQuery(`#${playerId}`).attr('media_volume'),
             );
 
             // Mute the video, as it only plays audio when expanded
-            jQuery('#' + playerId).prop('muted', true);
+            jQuery(`#${playerId}`).prop('muted', true);
 
             // When clicking a player, make it the main player,
             jQuery(
-                '#' +
-                            playerId +
-                            '_div div.plyr div:not(.plyr__controls, .plyr__controls *)',
-            ).click(function() {
-              jQuery('#' + mediaItem.media_type + 'PlayerMain')
-                  .children()
-                  .prependTo('#' + mediaItem.media_type + 's');
-              jQuery('#' + playerId).prop(
-                  'muted',
-                  jQuery('#' + playerId).attr('muted'),
+              `#${
+                playerId
+              }_div div.plyr div:not(.plyr__controls, .plyr__controls *)`,
+            ).click(() => {
+              jQuery(`#${mediaItem.media_type}PlayerMain`)
+                .children()
+                .prependTo(`#${mediaItem.media_type}s`);
+              jQuery(`#${playerId}`).prop(
+                'muted',
+                jQuery(`#${playerId}`).attr('muted'),
               );
               if (
-                jQuery('#' + playerId + '_div').hasClass(
-                    'highlight',
+                jQuery(`#${playerId}_div`).hasClass(
+                  'highlight',
                 )
               ) {
                 jQuery('div').removeClass('highlight');
-                jQuery('#' + playerId).prop('muted', true);
+                jQuery(`#${playerId}`).prop('muted', true);
               } else {
                 jQuery('div').removeClass('highlight');
-                jQuery('#' + mediaItem.media_type + 's')
-                    .find(mediaItem.media_type)
-                    .prop('muted', true);
-                jQuery('#' + playerId + '_div')
-                    .prependTo(
-                        '#' +
-                                        mediaItem.media_type +
-                                        'PlayerMain',
-                    )
-                    .addClass('highlight');
-                jQuery('#' + playerId).prop('muted', false);
+                jQuery(`#${mediaItem.media_type}s`)
+                  .find(mediaItem.media_type)
+                  .prop('muted', true);
+                jQuery(`#${playerId}_div`)
+                  .prependTo(
+                    `#${
+                      mediaItem.media_type
+                    }PlayerMain`,
+                  )
+                  .addClass('highlight');
+                jQuery(`#${playerId}`).prop('muted', false);
               }
               return false;
             });
@@ -396,38 +395,38 @@ function addItems(addMediaItems) {
             if (mediaItem.format == 'm3u8') {
               if (Hls.isSupported()) {
                 const video = document.getElementById(playerId);
-                const hls = new Hls({debug: false});
+                const hls = new Hls({ debug: false });
                 // Bind the vide and the HLS plugin together
                 hls.attachMedia(video);
-                hls.on(Hls.Events.MEDIA_ATTACHED, function() {
+                hls.on(Hls.Events.MEDIA_ATTACHED, () => {
                   hls.loadSource(mediaItem.url);
                   hls.on(
-                      Hls.Events.ERROR,
-                      function(event, data) {
-                        if (data.fatal) {
-                          switch (data.type) {
-                            case Hls.ErrorTypes
-                                .NETWORK_ERROR:
-                              // try to recover network error
-                              console.log(
-                                  'fatal network error encountered, try to recover',
-                              );
-                              hls.startLoad();
-                              break;
-                            case Hls.ErrorTypes
-                                .MEDIA_ERROR:
-                              console.log(
-                                  'fatal media error encountered, try to recover',
-                              );
-                              hls.recoverMediaError();
-                              break;
-                            default:
-                              // cannot recover
-                              hls.destroy();
-                              break;
-                          }
+                    Hls.Events.ERROR,
+                    (event, data) => {
+                      if (data.fatal) {
+                        switch (data.type) {
+                          case Hls.ErrorTypes
+                            .NETWORK_ERROR:
+                            // try to recover network error
+                            console.log(
+                              'fatal network error encountered, try to recover',
+                            );
+                            hls.startLoad();
+                            break;
+                          case Hls.ErrorTypes
+                            .MEDIA_ERROR:
+                            console.log(
+                              'fatal media error encountered, try to recover',
+                            );
+                            hls.recoverMediaError();
+                            break;
+                          default:
+                            // cannot recover
+                            hls.destroy();
+                            break;
                         }
-                      },
+                      }
+                    },
                   );
                 });
               }
@@ -439,53 +438,44 @@ function addItems(addMediaItems) {
 
             // Add audio to the holder
             jQuery('#audios').append(
-                create_audio(playerId, mediaItem),
+              create_audio(playerId, mediaItem),
             );
 
             // Create a Plyr instace for the player
-            Plyr.setup('#' + playerId, {
+            Plyr.setup(`#${playerId}`, {
               controls: audioControls,
             });
 
             // Set the volume to the correct value
-            jQuery('#' + playerId).prop(
-                'volume',
-                jQuery('#' + playerId).attr('media_volume'),
+            jQuery(`#${playerId}`).prop(
+              'volume',
+              jQuery(`#${playerId}`).attr('media_volume'),
             );
 
             // Only allow the audio player to unmute when the master mute
             // button is unchecked
-            jQuery('#' + playerId).prop(
-                'muted',
-                !jQuery('#mute_all_audio').is(':checked'),
+            jQuery(`#${playerId}`).prop(
+              'muted',
+              !jQuery('#mute_all_audio').is(':checked'),
             );
-            jQuery('#' + playerId).currentTime =
-                            johng.current() - mediaItem.start + mediaItem.jump;
+            jQuery(`#${playerId}`).currentTime = johng.current() - mediaItem.start + mediaItem.jump;
 
             // TODO: We're not using promise right now, but will need to later
-            jQuery('#' + playerId).trigger('play').promise();
-            jQuery('#' + playerId).bind(
-                'ended',
-                function(playerId) {
-                  removeItems([playerId]);
-                },
+            jQuery(`#${playerId}`).trigger('play').promise();
+            jQuery(`#${playerId}`).bind(
+              'ended',
+              (playerId) => {
+                removeItems([playerId]);
+              },
             );
-            break;
-
-          case 'html':
-            jQuery('#htmls').append(
-                create_html(playerId, mediaItem),
-            );
-            // TODO: This has some wonky UI right now
-            // setReadMore(playerId);
             break;
 
           case 'modal':
             if (mediaItem.end > johng.current()) {
               if (
                 jQuery.inArray(
-                    mediaItem.vidid,
-                    globalModals,
+                  mediaItem.vidid,
+                  globalModals,
                 ) === -1
               ) {
                 jQuery('#modal-title').text(mediaItem.source);
@@ -493,25 +483,25 @@ function addItems(addMediaItems) {
 
                 if (mediaItem.image != '') {
                   jQuery('#modal-image').attr(
-                      'src',
-                      mediaItem.image,
+                    'src',
+                    mediaItem.image,
                   );
                   jQuery('#modal-image').attr(
-                      'alt',
-                      mediaItem.image_caption,
+                    'alt',
+                    mediaItem.image_caption,
                   );
                   if (mediaItem.image_caption != '') {
                     jQuery('#modal-image-caption').html(
-                        mediaItem.image_caption,
+                      mediaItem.image_caption,
                     );
                   }
                 }
 
                 jQuery('#modal-fulltitle').text(
-                    mediaItem.title,
+                  mediaItem.title,
                 );
                 jQuery('#modal-content').html(
-                    mediaItem.content,
+                  mediaItem.content,
                 );
                 jQuery('#modalModal').modal({
                   backdrop: false,
@@ -527,12 +517,18 @@ function addItems(addMediaItems) {
               }
             }
             break;
+          default:
+            jQuery('#htmls').append(
+              create_html(playerId, mediaItem),
+            );
+            // TODO: This has some wonky UI right now
+            // setReadMore(playerId);
+            break;
         }
-
-        if (mediaItem.media_type != 'modal') {
+        if (mediaItem.media_type !== 'modal') {
           // Add video object and title we just created to DOM
-          jQuery('#' + playerId + '_div').prependTo(
-              '#' + mediaItem.media_type + 's',
+          jQuery(`#${playerId}_div`).prependTo(
+            `#${mediaItem.media_type}s`,
           );
         }
       }
@@ -546,7 +542,7 @@ function create_audio(playerId, mediaItem) {
     AudioURL: mediaItem.url,
     Volume: mediaItem.volume,
     Type: mediaItem.type,
-    Title: mediaItem.source + ' - ' + mediaItem.title,
+    Title: `${mediaItem.source} - ${mediaItem.title}`,
   };
 
   const template = document.getElementById('audio_player_template').innerHTML;
@@ -571,7 +567,7 @@ function create_video(playerId, mediaItem) {
     mediaType = 'application/x-mpegURL';
   } else if (mediaItem.format == 'mpd') {
     mediaType = 'application/dash+xml';
-  } else mediaType = mediaItem.media_type + '/' + mediaItem.format;
+  } else mediaType = `${mediaItem.media_type}/${mediaItem.format}`;
 
   const videoItem = {
     PlayerID: playerId,
@@ -591,7 +587,7 @@ function isMediaReady() {
   current_data = johng.get();
   current_data.forEach((element) => {
     if (element.media_type == 'video') {
-      jQuery('#' + element.vidid).on('canplay', function() {
+      jQuery(`#${element.vidid}`).on('canplay', () => {
         // console.log("canplay: ", element);
       });
     }
@@ -600,7 +596,7 @@ function isMediaReady() {
 
 function isPlaying(playerId) {
   const player = document.getElementById(playerId);
-  return !player.paused && !player.ended && 0 < player.currentTime;
+  return !player.paused && !player.ended && player.currentTime > 0;
 }
 
 function moveTime(increment) {
@@ -609,16 +605,16 @@ function moveTime(increment) {
 }
 
 function setReadMore(playerId) {
-  jQuery('#' + playerId).readmore({
+  jQuery(`#${playerId}`).readmore({
     embedCSS: true,
     blockCSS: 'display: block; width: 100%; height: 100%; background: red;',
     collapsedHeight: 300,
     heightMargin: 300,
     speed: 75,
     lessLink:
-            '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read Less</a></span></button>',
+      '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read Less</a></span></button>',
     moreLink:
-            '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read More</a></span></button>',
+      '<button class="command_button" type="button"><span class="btn-text"><a href="#">Read More</a></span></button>',
     blockCSS: 'display: inline-block; float: right;',
   });
 }
@@ -646,8 +642,8 @@ async function jumpToTime(stringTimeInput) {
 }
 
 // Setup things when the document is ready
-jQuery(function() {
-  jQuery('.close-modal-boot-button, #hider').on('click', function(event) {
+jQuery(() => {
+  jQuery('.close-modal-boot-button, #hider').on('click', (event) => {
     jQuery('#hider').hide();
     $.modal.close();
     jQuery('#sound_boot').trigger('play');
@@ -655,32 +651,32 @@ jQuery(function() {
     muteAllPlayers();
   });
 
-  jQuery('.close-modal-button').on('click', function() {
+  jQuery('.close-modal-button').on('click', () => {
     $.modal.close();
     johng.play();
   });
 
-  jQuery('#playButton').on('click', function() {
+  jQuery('#playButton').on('click', () => {
     johng.play();
   });
 
-  jQuery('#syncButton').on('click', function() {
+  jQuery('#syncButton').on('click', () => {
     setTimeAllPlayers();
   });
 
-  jQuery('#loadButton').on('click', function() {
+  jQuery('#loadButton').on('click', () => {
     setTimeAllPlayers();
   });
 
-  jQuery('#pauseButton').on('click', function() {
+  jQuery('#pauseButton').on('click', () => {
     johng.pause();
   });
 
-  jQuery('.ffrw').on('click', function() {
+  jQuery('.ffrw').on('click', function () {
     moveTime(parseInt(jQuery(this).data('skip')));
   });
 
-  jQuery('#mute_all_audio').on('click', function() {
+  jQuery('#mute_all_audio').on('click', function () {
     if (jQuery(this).is(':checked')) {
       // unmuteAudioPlayers();
       jQuery('#radio_mute_icon').attr('src', '../img/sound_on.png');
@@ -693,41 +689,41 @@ jQuery(function() {
   // If updating form fields, add their changes to the URL
   jQuery('#filters input').on('click', refreshData);
   jQuery('#filters select').on('change', refreshData);
-  jQuery('#backgroundSetting').on('change', function() {
+  jQuery('#backgroundSetting').on('change', function () {
     jQuery('body, html').css(
-        'background-image',
-        encodeURI(
-            'url(\'../img/' +
-                jQuery(this).children(':selected').attr('id') +
-                '\')',
-        ),
+      'background-image',
+      encodeURI(
+        `url('../img/${
+          jQuery(this).children(':selected').attr('id')
+        }')`,
+      ),
     );
   });
 
   // Make sure the child players are always paused when the timeline player is also paused
-  window.setInterval(function() {
+  window.setInterval(() => {
     if (!johng.isPlaying()) {
       pauseAllPlayers();
       setTimeAllPlayers();
     }
   }, playerSync * 1000);
 
-  window.setInterval(function() {
+  window.setInterval(() => {
     if (johng.isPlaying()) {
       playAllPlayers();
       setTimeAllPlayers();
     }
   }, playerSync * 1000);
 
-  jQuery('#menu-play').on('click', function() {
+  jQuery('#menu-play').on('click', () => {
     johng.play();
   });
 
-  jQuery('#menu-pause').on('click', function() {
+  jQuery('#menu-pause').on('click', () => {
     johng.pause();
   });
 
-  jQuery('#jumpItButton').click(function() {
+  jQuery('#jumpItButton').click(() => {
     jumpHour = jQuery('#jumpItHour').val();
     jumpMinute = jQuery('#jumpItMinute').val();
     jumpSecond = jQuery('#jumpItSecond').val();
@@ -749,14 +745,14 @@ jQuery(function() {
     jQuery('#jumpItPeriod').val(jumpPeriod);
 
     jumpToTime(
-        jumpHour + ':' + jumpMinute + ':' + jumpSecond + ' ' + jumpPeriod,
+      `${jumpHour}:${jumpMinute}:${jumpSecond} ${jumpPeriod}`,
     );
     johng.play();
   });
 
   // Every time the media player's time changes, this function weill be called
   // This is our main running function
-  johng.tickFunction = function() {
+  johng.tickFunction = function () {
     // Set some variables
     activeItems = johng.get();
     timestamp = johng.current();
@@ -767,9 +763,9 @@ jQuery(function() {
     // We slice the currentItems list so we can an Array
     // instead of an HTMLCollection
     currentItems = Array.prototype.slice.call(
-        document.querySelectorAll(
-            'div.htmlitem, video:not(.handsoff), audio:not(.handsoff)',
-        ),
+      document.querySelectorAll(
+        'div.htmlitem, video:not(.handsoff), audio:not(.handsoff)',
+      ),
     );
 
     // The activeItems is passed in to the function each time it is run
@@ -782,20 +778,20 @@ jQuery(function() {
     // currently on the page and should be added, and as well trigger items that
     // are no longer active to deactivate.
     addMediaItems = activeItemsList.filter(
-        (x) => !currentItemsList.includes(x),
+      (x) => !currentItemsList.includes(x),
     );
     removeMediaItems = currentItemsList.filter(
-        (x) => !activeItemsList.includes(x),
+      (x) => !activeItemsList.includes(x),
     );
 
     // Add New Items to the page that don't already exist and apply preload rules
     addItems(addMediaItems);
-    preloadPlayers(getData());
+    //preloadPlayers(getData());
 
     // Remove old items from the page that aren't currently active
     removeItems(removeMediaItems);
 
-    jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function() {
+    jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
       if (jQuery(this).get(0).readyState > 3) {
         // If a video only has a little bit of play info, let's go ahead and set
         // the current time so that it doesn't download extraneous data
@@ -815,7 +811,7 @@ jQuery(function() {
   });
 
   // Every 1.5 seconds, sync the video players' time with the johng counter
-  setTimeout(function() {
+  setTimeout(() => {
     johng.tickFunction(johng);
     setTimeAllPlayers();
   }, 1500);
