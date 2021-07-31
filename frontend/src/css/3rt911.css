@@ -43,7 +43,7 @@
     float: left;
 }
 
-#videos h2, #VideoPlayerMain h2 {
+#videos h2, #videoPlayerMain h2 {
     background: rgba(0, 0, 0, 0.3);
 }
 
@@ -54,27 +54,27 @@
     background: url("../../img/static.gif");
 }
 
-#VideoPlayerMain {
+#videoPlayerMain {
     height: 100%;
     text-align: center;
 }
 
-#VideoPlayerMain div.highlight {
+#videoPlayerMain div.highlight {
     height: 100%;
 }
 
-#VideoPlayerMain * video {
+#videoPlayerMain * video {
     width: 100%;
     text-align: center;
     background: black;
 }
 
-#VideoPlayerMain {
+#videoPlayerMain {
     text-align: center;
     background: #000;
 }
 
-#VideoPlayerMain h2 {
+#videoPlayerMain h2 {
     font: 3vw "VT323";
     position: absolute;
     margin-left: 3%;
@@ -106,8 +106,7 @@
 }
 
 #audios div {
-    max-width: 20rem;
-    max-height: 6rem;
+    height: 100%;
 }
 
 #htmls {
