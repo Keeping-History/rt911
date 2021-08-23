@@ -27,7 +27,7 @@
 </head>
 
 <body>
-	<div id="hider" style="height:100%;width:100%;background:black;" class=""></div>
+	<div id="hider" class="blocker"></div>
 	<nav>
 		<div id="nav-wrapper">
 			<ul id="nav-list">
@@ -132,7 +132,7 @@
 			<div id="htmls"></div>
 		</div>
 	</div>
-	<div id="audio" class="content draggable-window resizable hidden" style="text-align:center">
+	<div id="audio" class="content draggable-window resizable" style="text-align:center">
 		<div class="control-box close-box">
 			<a class="control-box-inner"></a>
 		</div>
@@ -156,7 +156,7 @@
 			<div id="audios"></div>
 		</div>
 	</div>
-	<div id="tv" class="content draggable-window resizable hidden">
+	<div id="tv" class="content draggable-window resizable">
 		<div class="control-box close-box">
 			<a class="control-box-inner"></a>
 		</div>
@@ -406,7 +406,7 @@
 	</div>
 	<div id="modals" class="content hidden"></div>
 	<div id="modalModal" class="content modal" style="text-align:center">
-		<h1 class="title title-full"><span>About</span></h1>
+		<h1 class="title title-full noright noleft"><span>About</span></h1>
 		<div class="inner">
 			<ul>
 				<li style="text-align:left">
@@ -421,7 +421,7 @@
 	</div>
 
 	<div id="bootModal" class="main-modal content modal" style="text-align:center">
-		<h1 class="title noright title-full"><span>9/11 in Realtime</span></h1>
+		<h1 class="title noright noleft title-full"><span>9/11 in Realtime</span></h1>
 		<div class="inner">
 			<ul>
 				<li style="text-align:left">
@@ -485,11 +485,11 @@
 
 	<div id="templates" class="hidden">
 		<script id="audio_player_template"
-			type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="audiotitle">{{Title}}</h2> <audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio"> <source src="{{AudioURL}}" type="{{Type}}"> </audio></div></script>
+			type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="audioTitle">{{Title}}</h2> <audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio"> <source src="{{AudioURL}}" type="{{Type}}"> </audio></div></script>
 		<script id="html_item_template"
-			type="x-tmpl-mustache"><div id="{{ItemID}}_div"><h3> <span>{{Time}}</span> - {{Title}}</h3><div id="{{ItemID}}" class="htmlitem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsimage"> {{{Content}}}</div><hr></div></script>
+			type="x-tmpl-mustache"><div id="{{ItemID}}_div"><h3 id="{{PlayerID}}_title" class="htmlTitle"> <span>{{Time}}</span> - {{Title}}</h3><div id="{{ItemID}}" class="htmlitem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsimage"> {{{Content}}}</div><hr></div></script>
 		<script id="video_item_template"
-			type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="videotitle">{{Source}}</h2> <video id="{{PlayerID}}" autoplay muted media_volume="{{Volume}}" preload="true" class="plyr-video"> <source src="{{VideoURL}}" type="{{Type}}"> </video></div></script>
+			type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="videoTitle">{{Source}}</h2> <video id="{{PlayerID}}" autoplay muted media_volume="{{Volume}}" preload="true" class="plyr-video"> <source src="{{VideoURL}}" type="{{Type}}"> </video></div></script>
 	</div>
 
 	<script src="js/index.min.js"></script>

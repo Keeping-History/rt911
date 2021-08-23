@@ -1,13 +1,25 @@
-function isMobile() {
-    try {
-        document.createEvent("TouchEvent");
-        return true;
-    } catch (e) {
-        return false;
-    }
-}
-
 jQuery(function () {
+
+    let audios = {
+        boot: new Audio('../rsrc/boot.mp3'),
+        close: new Audio('../rsrc/close.mp3'),
+        menu: new Audio('../rsrc/menu.mp3'),
+        move_stop: new Audio('../rsrc/move_stop.mp3'),
+        open: new Audio('../rsrc/open.mp3'),
+        windowshade_collapse: new Audio('../rsrc/windowshade_collapse.mp3'),
+        windowshade_expand: new Audio('../rsrc/windowshade_expand.mp3')
+    }
+
+    // Helper function to decide if browser is mobile or not
+    function isMobile() {
+        try {
+            document.createEvent("TouchEvent");
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
     //Make windows movable and make sure the active window is on top
     jQuery(".draggable-window").draggable({
         handle: "h1.title",
@@ -18,11 +30,10 @@ jQuery(function () {
     });
 
     //Make windows resizable
-    //TODO: This is not currently working because we don't have a grab button
     jQuery(".resizable").resizable({
         handles: "se",
         stop: function (event, ui) {
-            jQuery("#sound_move_stop").trigger("play");
+            audios['move_stop'].play();
         },
     });
 
@@ -45,10 +56,10 @@ jQuery(function () {
                 .data("left", jQuery(b).css("left"))
                 .data("max", true);
 
-            jQuery("#sound_windowshade_expand").trigger("play");
+            audios['windowshade_expand'].play();
         } else {
             jQuery(b).removeAttr("style");
-            jQuery("#sound_windowshade_collapse").trigger("play");
+            audios['windowshade_collapse'].play();
 
             jQuery(this).data("max", false);
         }
@@ -64,13 +75,13 @@ jQuery(function () {
             jQuery(contentBox).children(".ui-resizable-handle").removeClass("hidden");
             jQuery(contentBox).css("height", shadeHeight);
             jQuery(this).removeClass("shade");
-            jQuery("#sound_windowshade_expand").trigger("play");
+            audios['windowshade_expand'].play();
         } else {
             jQuery(contentBox).children(".inner").addClass("hidden");
             jQuery(contentBox).children(".ui-resizable-handle").addClass("hidden");
             jQuery(contentBox).css("height", "");
             jQuery(this).addClass("shade");
-            jQuery("#sound_windowshade_collapse").trigger("play");
+            audios['windowshade_collapse'].play();
         }
     });
 
@@ -78,7 +89,7 @@ jQuery(function () {
     jQuery(".close-box, .close-button").on("click", function () {
         a = this.closest(".content");
         jQuery(a).addClass("hidden");
-        jQuery("#sound_close").trigger("play");
+        audios['close'].play();
     });
 
     // Enable Desktop Icons
@@ -87,16 +98,16 @@ jQuery(function () {
             jQuery("#" + jQuery(this).get(0).id.split("-")[1])
                 .removeClass("hidden")
                 .css("z-index", "9000");
-            jQuery("#sound_open").trigger("play");
-        });
+            audios['open'].play();
+            });
     } else {
         jQuery(".draggable-icon").draggable({});
         jQuery(".icon").on("dblclick", function () {
             jQuery("#" + jQuery(this).get(0).id.split("-")[1])
                 .removeClass("hidden")
                 .css("z-index", "9000");
-            jQuery("#sound_open").trigger("play");
-        });
+            audios['open'].play();
+            });
     }
 
     // Make sure the active window is on top
@@ -115,7 +126,7 @@ jQuery(function () {
 
     // Enable menu items to be clickable by default and open a windows/app with the same name
     jQuery("#nav-list li ul li").on("click", function () {
-        jQuery("#sound_open").trigger("play");
+        audios['open'].play();
         jQuery("#" + jQuery(this).get(0).id.split("-")[1])
             .removeClass("hidden")
             .css("z-index", "9000");

@@ -49,36 +49,22 @@ const videoControls = [
   'airplay',
 ];
 
-// Modal holder object
+// Global Modal holder object
 const globalModals = [];
 
+// Global Media Player holder object
+const plyrPlayers = {};
+
 // Preload data to improve performance
-// If these are empty, they will be prepopulated from an AJAX call on load.
-// UPDATE: To improve the editing experience, these data cache files have
-// been moved to dataCache.js and will be compiled in at build time.
-// var dataCache = []
-// var networkListCache = []
-// var markerListCache = []
+// During build time, cache json data is added as a variable to increase
+// load time. If these are empty, they will be populated from an AJAX
+// call on load.
 
 // Caching and preload Functions
-function preloadPlayers(data) {
-  if (data != undefined || data.length > 0) {
-    data.forEach((item) => {
-      if (
-        preloadFormats.includes(item.media_type)
-        && item.start - preloadBuffer < johng.count
-        && item.end - preloadBuffer > johng.count
-      ) {
-        preloadMediaFile(item.media_type, item.url, item.vidid);
-      }
-    });
-  }
-}
-
 // Function that creates a media object and preloads its data
 function preloadMediaFile(mediaType, url, id) {
   if (!jQuery(`#${id}_preload`).length) {
-    a = jQuery(`<${mediaType} />`)
+    jQuery(`<${mediaType} />`)
       .attr('src', url)
       .attr('id', `${id}_preload`)
       .attr('preload', true)
@@ -90,9 +76,24 @@ function preloadMediaFile(mediaType, url, id) {
   }
 }
 
+// Utility function to preload all needed players
+function preloadPlayers(data) {
+  if (data !== undefined || data.length > 0) {
+    data.forEach(async (item) => {
+      if (
+        preloadFormats.includes(item.media_type)
+        && item.start - preloadBuffer < johng.count
+        && item.end - preloadBuffer > johng.count
+      ) {
+        preloadMediaFile(item.media_type, item.url, item.vidid);
+      }
+    });
+  }
+}
+
 // Audio Control
 function muteAllPlayers() {
-  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
+  jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function muteThisPlayer() {
     jQuery(this).prop('muted', true);
   });
 }
@@ -120,34 +121,26 @@ function playAllPlayers() {
   });
 }
 
-function setTimeAllPlayers() {
+// Time Functions
+function getPlayerTime(playerId) {
+  const dataItem = johng.all().find((jsonData) => jsonData.vidid === playerId);
+  return johng.current() - dataItem.start + dataItem.jump;
+}
+
+function setTimePlayer(playerId) {
+  jQuery(`#${playerId}`).get(0).currentTime = getPlayerTime(playerId);
+}
+
+function setTimeAllPlayers(sync = false) {
   jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     if (
-      Math.abs(getPlayerTime(this.id) - jQuery(this).get(0).currentTime)
-      > timeDrift
+      (Math.abs(getPlayerTime(this.id) - jQuery(this).get(0).currentTime)
+        > timeDrift)
+     || sync === true
     ) {
       jQuery(this).get(0).currentTime = getPlayerTime(this.id);
     }
   });
-}
-
-function setTimePlayer(playerId) {
-  video = jQuery(`#${playerId}`).get(0);
-  video.currentTime = getPlayerTime(playerId);
-}
-
-// Time Functions
-function getPlayerTime(playerId) {
-  dataItem = johng.all().find((jsonData) => jsonData.vidid === playerId);
-  return johng.current() - dataItem.start + dataItem.jump;
-}
-
-// Get the Current time in text format
-function secondsToTimeFormatted(seconds) {
-  const d = new Date(0);
-  d.setSeconds(seconds);
-  d.setHours(d.getHours() + timeZone.diff); // Eastern Time Zone adjustment
-  return `${dateFormatter(d)} ${timeZone.pretty}`;
 }
 
 // Format a date in pretty format
@@ -163,19 +156,24 @@ function dateFormatter(d) {
   return `${hours}:${minutes}:${seconds} ${ampm}`;
 }
 
+// Get the Current time in text format
+function secondsToTimeFormatted(seconds) {
+  const d = new Date(0);
+  d.setSeconds(seconds);
+  d.setHours(d.getHours() + timeZone.diff); // Eastern Time Zone adjustment
+  return `${dateFormatter(d)} ${timeZone.pretty}`;
+}
+
 // Adds the base API URL and any URL filters and returns a full URL for AJAX calls
 function getAPIURL() {
-  const d = new Date();
   return (
-    `${baseRemoteURL
-    }?${
-      jQuery('#filters :input[value!=\'all\']').serialize()}`
+    `${baseRemoteURL}?${jQuery('#filters :input[value!=\'all\']').serialize()}`
   );
 }
 
 // Grabs the data via ajax
 function getData() {
-  if (dataCache !== undefined) {
+  if (typeof dataCache !== 'undefined') {
     return dataCache;
   }
   $.ajax({
@@ -228,12 +226,9 @@ async function updateMarkers() {
     markerListCache.forEach((item) => {
       if (jQuery(`#events ul #${item.id}`).length === 0) {
         jQuery(
-          `<li id=${
-            item.id
-          }><b><a href="#" class="time-marker">${
-            item.time_marker
-          }</a></b>${
-            item.name
+          `<li id=${item.id
+          }><b><a href="#" class="time-marker">${item.time_marker
+          }</a></b>${item.name
           }</li>`,
         ).appendTo('#events ul');
       }
@@ -250,12 +245,9 @@ async function updateMarkers() {
         data.forEach((item) => {
           if (jQuery(`#events ul #${item.id}`).length === 0) {
             jQuery(
-              `<li id=${
-                item.id
-              }><b><a href="#" class="time-marker">${
-                item.time_marker
-              }</a></b>${
-                item.name
+              `<li id=${item.id
+              }><b><a href="#" class="time-marker">${item.time_marker
+              }</a></b>${item.name
               }</li>`,
             ).appendTo('#events ul');
           }
@@ -306,7 +298,17 @@ function removeItems(removeMediaItems) {
       if (playerId) {
         johng.get()
           .find((data) => data.vidid === playerId);
-        console.log(jQuery(`#${playerId}`));
+        if (plyrPlayers[playerId]) {
+          plyrPlayers[playerId].destroy();
+          jQuery(`#${playerId}`)[0].pause();
+          jQuery(`#${playerId}`)[0].currentSrc = null;
+          jQuery(`#${playerId}`)[0].src = '';
+          jQuery(`#${playerId}`)[0].removeAttribute('src'); // empty source
+          jQuery(`#${playerId}`)[0].srcObject = null;
+          jQuery(`#${playerId}`)[0].load();
+          delete jQuery(`#${playerId}`);
+        }
+
         jQuery(`#${playerId}_div`)
           .empty()
           .remove();
@@ -340,7 +342,7 @@ function addItems(addMediaItems) {
             );
 
             // Create a new Plyr instance for the video
-            player = new Plyr(`#${playerId}`, {
+            plyrPlayers[playerId] = new Plyr(`#${playerId}`, {
               controls: videoControls,
               clickToPlay: false,
             });
@@ -356,8 +358,7 @@ function addItems(addMediaItems) {
 
             // When clicking a player, make it the main player,
             jQuery(
-              `#${
-                playerId
+              `#${playerId
               }_div div.plyr div:not(.plyr__controls, .plyr__controls *)`,
             ).click(() => {
               jQuery(`#${mediaItem.media_type}PlayerMain`)
@@ -381,8 +382,7 @@ function addItems(addMediaItems) {
                   .prop('muted', true);
                 jQuery(`#${playerId}_div`)
                   .prependTo(
-                    `#${
-                      mediaItem.media_type
+                    `#${mediaItem.media_type
                     }PlayerMain`,
                   )
                   .addClass('highlight');
@@ -408,15 +408,15 @@ function addItems(addMediaItems) {
                           case Hls.ErrorTypes
                             .NETWORK_ERROR:
                             // try to recover network error
-                            console.log(
-                              'fatal network error encountered, try to recover',
+                            console.info(
+                              'HLS: fatal network error encountered, try to recover',
                             );
                             hls.startLoad();
                             break;
                           case Hls.ErrorTypes
                             .MEDIA_ERROR:
-                            console.log(
-                              'fatal media error encountered, try to recover',
+                            console.info(
+                              'HLS: fatal media error encountered, try to recover',
                             );
                             hls.recoverMediaError();
                             break;
@@ -441,8 +441,7 @@ function addItems(addMediaItems) {
               create_audio(playerId, mediaItem),
             );
 
-            // Create a Plyr instace for the player
-            Plyr.setup(`#${playerId}`, {
+            plyrPlayers[playerId] = new Plyr(`#${playerId}`, {
               controls: audioControls,
             });
 
@@ -471,7 +470,7 @@ function addItems(addMediaItems) {
             break;
 
           case 'modal':
-            if (mediaItem.end > johng.current()) {
+            if (mediaItem.end > johng.current() && !jQuery("#bootModal").is(":visible")) {
               if (
                 jQuery.inArray(
                   mediaItem.vidid,
@@ -595,8 +594,8 @@ function isMediaReady() {
 }
 
 function isPlaying(playerId) {
-  const player = document.getElementById(playerId);
-  return !player.paused && !player.ended && player.currentTime > 0;
+  const thisPlayer = document.getElementById(playerId);
+  return !thisPlayer.paused && !thisPlayer.ended && thisPlayer.currentTime > 0;
 }
 
 function moveTime(increment) {
@@ -693,8 +692,7 @@ jQuery(() => {
     jQuery('body, html').css(
       'background-image',
       encodeURI(
-        `url('../img/${
-          jQuery(this).children(':selected').attr('id')
+        `url('../img/${jQuery(this).children(':selected').attr('id')
         }')`,
       ),
     );
@@ -824,7 +822,7 @@ jQuery(() => {
     second: 'numeric',
     hour12: true,
   });
-  jumpToTime(timeString);
+  jumpToTime("08:46:40 AM");
 
   updateAllData();
   muteAudioPlayers();

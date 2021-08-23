@@ -119,6 +119,10 @@ ul.menu {
   width: .5rem;
 }
 
+.title.noleft ::before {
+  width: .5rem;
+}
+
 .title.halfright ::after {
   width: 1.75rem;
 }

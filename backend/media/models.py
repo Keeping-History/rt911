@@ -44,6 +44,7 @@ class Marker(models.Model):
 class Media(models.Model):
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
+    calc_duration = models.IntegerField(default=0)
     tz = models.CharField(max_length=4)
 
     title = models.CharField(max_length=255)
