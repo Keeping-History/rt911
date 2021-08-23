@@ -41,6 +41,7 @@
 
 .videoTitle {
     float: left;
+    z-index: 999;
 }
 
 #videos h2, #videoPlayerMain h2 {
@@ -193,14 +194,11 @@
 }
 
 .blocker {
-    z-index: 9999999999 !important;
+    z-index: 99999999999 !important;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 1) !important;
-}
-
-#hider {
-    z-index: 3 !important;
+    background: url(../../img/classic_bg.gif) !important;
+    background-repeat: repeat;
 }
 
 #modal-image {
@@ -243,7 +241,7 @@
 }
 
 #audio {
-    top: 85%;
+    top: 88%;
     left: 1%;
     width: 65%;
 }
@@ -265,10 +263,6 @@
     float: right;
     margin: 0 1em 0 3em;
     max-width: 10em;}
-
-.videotitle {
-    z-index: 999;
-}
 
 .plyr--video {
     background: none !important;
