@@ -822,7 +822,7 @@ jQuery(() => {
     second: 'numeric',
     hour12: true,
   });
-  jumpToTime("08:46:00 AM");
+  jumpToTime("08:16:00 AM");
 
   updateAllData();
   muteAudioPlayers();
