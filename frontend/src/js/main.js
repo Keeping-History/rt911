@@ -18,8 +18,8 @@
 // should audios and videos be checked to stop as well
 //
 // preloadBuffer: determines a threshold for whether
-// or not a file should be preloaded or not. This is
-// based on whether it would make a significant difference
+// or not a file should be preloaded. This is based
+// on whether it would make a significant difference
 //
 // preloadFormats: the media formats that should be pre-loaded. Currently
 // only Audio. Videos are not recommended at this time.
@@ -31,9 +31,9 @@
 
 const baseRemoteURL = '//admin.911realtime.org/media/';
 const timeZone = { diff: 6, pretty: 'ET' };
-const timeDrift = 15;
-const playerSync = 2;
-const preloadBuffer = 120;
+const timeDrift = 15; // seconds
+const playerSync = 1; // seconds
+const preloadBuffer = 120; // seconds
 const preloadFormats = ['audio'];
 const audioControls = [
   'current-time',
@@ -299,13 +299,13 @@ function removeItems(removeMediaItems) {
         johng.get()
           .find((data) => data.vidid === playerId);
         if (plyrPlayers[playerId]) {
-          plyrPlayers[playerId].destroy();
           jQuery(`#${playerId}`)[0].pause();
           jQuery(`#${playerId}`)[0].currentSrc = null;
           jQuery(`#${playerId}`)[0].src = '';
           jQuery(`#${playerId}`)[0].removeAttribute('src'); // empty source
           jQuery(`#${playerId}`)[0].srcObject = null;
           jQuery(`#${playerId}`)[0].load();
+          plyrPlayers[playerId].destroy();
           delete jQuery(`#${playerId}`);
         }
 
@@ -762,7 +762,7 @@ jQuery(() => {
     // instead of an HTMLCollection
     currentItems = Array.prototype.slice.call(
       document.querySelectorAll(
-        'div.htmlitem, video:not(.handsoff), audio:not(.handsoff)',
+        'div.htmlItem, video:not(.handsoff), audio:not(.handsoff)',
       ),
     );
 
@@ -784,7 +784,7 @@ jQuery(() => {
 
     // Add New Items to the page that don't already exist and apply preload rules
     addItems(addMediaItems);
-    //preloadPlayers(getData());
+    // preloadPlayers(getData());
 
     // Remove old items from the page that aren't currently active
     removeItems(removeMediaItems);
@@ -822,7 +822,13 @@ jQuery(() => {
     second: 'numeric',
     hour12: true,
   });
-  jumpToTime("08:16:00 AM");
+
+  // Currently, we are defaulting to 8:16 AM ET.
+  // TODO: Add a button to home modal that allows you to change the time to now
+  const urlParams = new URLSearchParams(window.location.search);
+  const myParam = urlParams.get('start');
+
+  jumpToTime('08:13:30 AM');
 
   updateAllData();
   muteAudioPlayers();

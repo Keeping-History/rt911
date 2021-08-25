@@ -28,6 +28,44 @@
 
 <body>
 	<div id="hider" class="blocker"></div>
+	<div id="bootModal" class="main-modal content modal" style="text-align:center">
+		<h1 class="title noright noleft title-full"><span>9/11 in Realtime</span></h1>
+		<div class="inner">
+			<ul>
+				<li style="text-align:left">
+					<h1 id="boot-modal-title"><span id="boot-modal-time" class="text-bold"></span> <span
+							id="boot-modal-fulltitle">About 9/11 in Realtime</span></h1><img id="modal-image"
+						src="img/blank.png" alt="none">
+					<p id="boot-modal-image-caption" class="text-italic"></p>
+					<p id="boot-modal-content">
+					<h2>The time is currently <span id="time" class="time text-center timeText">Loading...</span></h2>
+
+					<hr>
+					9/11 in Realtime is a multimedia experiment for teachers, with the purpose of helping
+					their students truly understand and absorb the events of September 11, 2001. We've collected
+					media--video, audio and other items--available from the days before and after the September 11
+					attacks,
+					syncrhonized them together and built a tool to help students be immersed in the events of the day.
+					<br>
+					<br>
+					<b>THE FOLLOWING WEBSITE MAY CONTAIN VISUALS, AUDIO AND OTHER CONTENT THAT SOME VIEWERS MAY FIND
+						EXTREMELY DISTURBING.</b>
+					<br>
+					<br>
+					THIS TOOL IS INTENDED TO BE USED ALONGSIDE A CAREFULLY RESEARCHED AND APPROPRIATE CURRICULUM.
+					<br>
+					<br>
+					For questions regarding this project, please email <a href="mailto:me@robbiebyrd.com">Robbie
+						Byrd</a>.
+					</p>
+				</li>
+			</ul>
+			<img src="img/boot.png" class="center">
+			<br />
+			<button class="command_button close-modal-boot-button" style="height: 3em;">POWER ON</button>
+			<br />
+		</div>
+	</div>
 	<nav>
 		<div id="nav-wrapper">
 			<ul id="nav-list">
@@ -113,7 +151,7 @@
 			</div>
 		</div>
 	</div>
-	<div id="news" class="content hidden draggable-window resizable" style="text-align:center">
+	<div id="news" class="content draggable-window resizable" style="text-align:center">
 		<div class="control-box close-box">
 			<a class="control-box-inner"></a>
 		</div>
@@ -420,45 +458,6 @@
 		</div>
 	</div>
 
-	<div id="bootModal" class="main-modal content modal" style="text-align:center">
-		<h1 class="title noright noleft title-full"><span>9/11 in Realtime</span></h1>
-		<div class="inner">
-			<ul>
-				<li style="text-align:left">
-					<h1 id="boot-modal-title"><span id="boot-modal-time" class="text-bold"></span> <span
-							id="boot-modal-fulltitle">About 9/11 in Realtime</span></h1><img id="modal-image"
-						src="img/blank.png" alt="none">
-					<p id="boot-modal-image-caption" class="text-italic"></p>
-					<p id="boot-modal-content">
-					<h2>The time is currently <span id="time" class="time text-center timeText">Loading...</span></h2>
-
-					<hr>
-					9/11 in Realtime is a multimedia experiment for teachers, with the purpose of helping
-					their students truly understand and absorb the events of September 11, 2001. We've collected
-					media--video, audio and other items--available from the days before and after the September 11
-					attacks,
-					syncrhonized them together and built a tool to help students be immersed in the events of the day.
-					<br>
-					<br>
-					<b>THE FOLLOWING WEBSITE MAY CONTAIN VISUALS, AUDIO AND OTHER CONTENT THAT SOME VIEWERS MAY FIND
-						EXTREMELY DISTURBING.</b>
-					<br>
-					<br>
-					THIS TOOL IS INTENDED TO BE USED ALONGSIDE A CAREFULLY RESEARCHED AND APPROPRIATE CURRICULUM.
-					<br>
-					<br>
-					For questions regarding this project, please email <a href="mailto:me@robbiebyrd.com">Robbie
-						Byrd</a>.
-					</p>
-				</li>
-			</ul>
-			<img src="img/boot.png" class="center">
-			<br />
-			<button class="command_button close-modal-boot-button" style="height: 3em;">POWER ON</button>
-			<br />
-		</div>
-	</div>
-
 	<audio controls id="sound_boot" class="handsoff hidden" preload="auto">
 		<source src="rsrc/boot.mp3" type="audio/mpeg">Your browser does not support the HTML audio element.
 	</audio>
@@ -487,7 +486,7 @@
 		<script id="audio_player_template"
 			type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="audioTitle">{{Title}}</h2> <audio id="{{PlayerID}}" controls="true" autoplay="true" media_volume="{{Volume}}" class="plyr-audio"> <source src="{{AudioURL}}" type="{{Type}}"> </audio></div></script>
 		<script id="html_item_template"
-			type="x-tmpl-mustache"><div id="{{ItemID}}_div"><h3 id="{{PlayerID}}_title" class="htmlTitle"> <span>{{Time}}</span> - {{Title}}</h3><div id="{{ItemID}}" class="htmlitem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsimage"> {{{Content}}}</div><hr></div></script>
+			type="x-tmpl-mustache"><div id="{{ItemID}}_div"><h3 id="{{PlayerID}}_title" class="htmlTitle"> <span>{{Time}}</span> - {{Title}}</h3><div id="{{ItemID}}" class="htmlItem"> <img src="{{ImageURL}}" style="float:right;" class="htmlsImage"> {{{Content}}}</div><hr></div></script>
 		<script id="video_item_template"
 			type="x-tmpl-mustache"><div id="{{PlayerID}}_div"><h2 id="{{PlayerID}}_title" class="videoTitle">{{Source}}</h2> <video id="{{PlayerID}}" autoplay muted media_volume="{{Volume}}" preload="true" class="plyr-video"> <source src="{{VideoURL}}" type="{{Type}}"> </video></div></script>
 	</div>

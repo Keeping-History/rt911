@@ -132,13 +132,4 @@ jQuery(function () {
             .css("z-index", "9000");
     });
 
-    jQuery("#modalBoot").modal({
-        show: true,
-        escapeClose: false,
-        clickClose: false,
-        showClose: false,
-        fadeDuration: 250,
-        clickClose: false,
-        blockerClass: "blocker",
-    });
 });
