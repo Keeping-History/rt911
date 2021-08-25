@@ -825,7 +825,10 @@ jQuery(() => {
 
   // Currently, we are defaulting to 8:16 AM ET.
   // TODO: Add a button to home modal that allows you to change the time to now
-  jumpToTime('08:16:00 AM');
+  const urlParams = new URLSearchParams(window.location.search);
+  const myParam = urlParams.get('start');
+
+  jumpToTime('08:13:30 AM');
 
   updateAllData();
   muteAudioPlayers();
