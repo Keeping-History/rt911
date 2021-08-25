@@ -216,6 +216,7 @@
 #audio div.inner, #news div.inner {
     padding: 0;
     padding-left: 0.5rem;
+    height: 100% !important;
 }
 
 #htmls div {
@@ -225,8 +226,9 @@
 #timeline {
     left: 70%;
     width: 23%;
-    height: 60%;
+    height: 40%;
     margin-top: 10%;
+    top: 35%;
 }
 
 #events {
