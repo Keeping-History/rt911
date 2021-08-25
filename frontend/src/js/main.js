@@ -762,7 +762,7 @@ jQuery(() => {
     // instead of an HTMLCollection
     currentItems = Array.prototype.slice.call(
       document.querySelectorAll(
-        'div.htmlitem, video:not(.handsoff), audio:not(.handsoff)',
+        'div.htmlItem, video:not(.handsoff), audio:not(.handsoff)',
       ),
     );
 
@@ -784,7 +784,7 @@ jQuery(() => {
 
     // Add New Items to the page that don't already exist and apply preload rules
     addItems(addMediaItems);
-    //preloadPlayers(getData());
+    // preloadPlayers(getData());
 
     // Remove old items from the page that aren't currently active
     removeItems(removeMediaItems);
@@ -822,7 +822,10 @@ jQuery(() => {
     second: 'numeric',
     hour12: true,
   });
-  jumpToTime("08:16:00 AM");
+
+  // Currently, we are defaulting to 8:16 AM ET.
+  // TODO: Add a button to home modal that allows you to change the time to now
+  jumpToTime('08:16:00 AM');
 
   updateAllData();
   muteAudioPlayers();
