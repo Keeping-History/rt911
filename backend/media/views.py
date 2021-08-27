@@ -51,7 +51,8 @@ def index(request):
             q &= Q(start_date__day=request.GET['day'])
         if 'network' in request.GET:
             if request.GET['network'] != 'all':
-                q &= Q(source__in=request.GET['network'].split(','))
+                #q &= Q(source__in=request.GET['network'].split(','))
+                q &= Q(source__in=request.GET.getlist('source'))
         if 'year' in request.GET:
             q &= Q(start_date__year=request.GET['year'])
         if 'month' in request.GET:
@@ -59,10 +60,12 @@ def index(request):
         # TODO: Need to get mediaType instead of format.
         if 'format' in request.GET:
             if request.GET['format'] != 'all':
-                q &= Q(format__in=request.GET['format'].split(','))
+                #q &= Q(format__in=request.GET['format'].split(','))
+                q &= Q(format__in=request.GET.getlist('format'))
         if 'collection' in request.GET:
             if request.GET['collection'] != 'all':
-                q &= Q(collection__in=request.GET['collection'].split(','))
+                #q &= Q(collection__in=request.GET['collection'].split(','))
+                q &= Q(collection__in=request.GET.getlist('collection'))
 
         q &= Q(approved=True)
 
