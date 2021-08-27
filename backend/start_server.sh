@@ -1,4 +1,4 @@
 #!/bin/bash
-start_db
+./start_db.sh
 docker-compose build
 docker-compose up
