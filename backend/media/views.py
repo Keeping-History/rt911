@@ -7,20 +7,20 @@ from .models import Media, Tag, TagType, Collection, Marker
 
 # Map timezones to their UTC numerical difference
 timezone_map = {
-    'UTC': 0,
-    'PDT': -7,
-    'MSD': 4,
-    'MDT': -6,
-    'JST': 9,
-    'EEST': 3,
-    'EDT': -4,
-    'ET': -4,
-    'EST': -4,
-    'CST': 8,
-    'CEST': 2,
-    'CDT': -3,
-    'BST': 1,
     'ADT': -3,
+    'BST': 1,
+    'CDT': -3,
+    'CEST': 2,
+    'CST': 8,
+    'EDT': -4,
+    'EEST': 3,
+    'EST': -4,
+    'ET': -4,
+    'JST': 9,
+    'MDT': -6,
+    'MSD': 4,
+    'PDT': -7,
+    'UTC': 0
 }
 
 def index(request):
