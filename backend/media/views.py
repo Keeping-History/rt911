@@ -46,27 +46,23 @@ def index(request):
 
     # Is the request a GET type?
     if request.method == 'GET':
-
         # If URL params are set, create the approrpriate Q query filter
         if 'day' in request.GET:
             q &= Q(start_date__day=request.GET['day'])
-        # Need to allow multi select
         if 'network' in request.GET:
             if request.GET['network'] != 'all':
-                q &= Q(source=request.GET['network'])
+                q &= Q(source__in=request.GET['network'].split(','))
         if 'year' in request.GET:
             q &= Q(start_date__year=request.GET['year'])
         if 'month' in request.GET:
             q &= Q(start_date__month=request.GET['month'])
         # TODO: Need to get mediaType instead of format.
-        # TODO: Need to allow multiple formats
         if 'format' in request.GET:
             if request.GET['format'] != 'all':
-                q &= Q(format=request.GET['format'])
-        # TODO: Needs to be the primary query when present
+                q &= Q(format__in=request.GET['format'].split(','))
         if 'collection' in request.GET:
             if request.GET['collection'] != 'all':
-                q &= Q(collection=request.GET['collection'])
+                q &= Q(collection__in=request.GET['collection'].split(','))
 
         q &= Q(approved=True)
 
