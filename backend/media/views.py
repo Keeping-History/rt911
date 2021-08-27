@@ -7,21 +7,37 @@ from .models import Media, Tag, TagType, Collection, Marker
 
 # Map timezones to their UTC numerical difference
 timezone_map = {
-    'UTC': 0,
-    'PDT': -7,
-    'MSD': 4,
-    'MDT': -6,
-    'JST': 9,
-    'EEST': 3,
-    'EDT': -4,
-    'ET': -4,
-    'EST': -4,
-    'CST': 8,
-    'CEST': 2,
-    'CDT': -3,
-    'BST': 1,
     'ADT': -3,
+    'BST': 1,
+    'CDT': -3,
+    'CEST': 2,
+    'CST': 8,
+    'EDT': -4,
+    'EEST': 3,
+    'EST': -4,
+    'ET': -4,
+    'JST': 9,
+    'MDT': -6,
+    'MSD': 4,
+    'PDT': -7,
+    'UTC': 0
 }
+
+def mediaType(format):
+
+    mediaTypes = {
+        'audio': set(['mp3', 'aac', 'ogg', 'flac', 'webm', 'wav']),
+        'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg', 'm3u8', 'm3u']),
+        'html': set(['html']),
+        'iframe': set(['iframe']),
+        'image': set(['jpg', 'png', 'gif']),
+    }
+
+    for mediaType in mediaTypes:
+        if format in mediaTypes[mediaType]:
+            return mediaType
+
+    return format
 
 def index(request):
 
@@ -30,27 +46,23 @@ def index(request):
 
     # Is the request a GET type?
     if request.method == 'GET':
-
         # If URL params are set, create the approrpriate Q query filter
         if 'day' in request.GET:
             q &= Q(start_date__day=request.GET['day'])
-        # Need to allow multi select
         if 'network' in request.GET:
             if request.GET['network'] != 'all':
-                q &= Q(source=request.GET['network'])
+                q &= Q(source__in=request.GET['network'].split(','))
         if 'year' in request.GET:
             q &= Q(start_date__year=request.GET['year'])
         if 'month' in request.GET:
             q &= Q(start_date__month=request.GET['month'])
         # TODO: Need to get mediaType instead of format.
-        # TODO: Need to allow multiple formats
         if 'format' in request.GET:
             if request.GET['format'] != 'all':
-                q &= Q(format=request.GET['format'])
-        # TODO: Needs to be the primary query when present
+                q &= Q(format__in=request.GET['format'].split(','))
         if 'collection' in request.GET:
             if request.GET['collection'] != 'all':
-                q &= Q(collection=request.GET['collection'])
+                q &= Q(collection__in=request.GET['collection'].split(','))
 
         q &= Q(approved=True)
 
@@ -67,18 +79,7 @@ def index(request):
 
     for media_item in data:
 
-        media_item['media_type'] =  media_item['format']
-
-        mediaTypes = {
-            'audio': set(['mp3', 'aac', 'ogg', 'flac', 'webm', 'wav']),
-            'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg', 'm3u8', 'm3u']),
-            'html': set(['html']),
-            'iframe': set(['iframe']),
-            'image': set(['jpg', 'png', 'gif']),
-        }
-        for mediaType in mediaTypes:
-            if media_item['format'] in mediaTypes[mediaType]:
-                media_item['media_type'] = mediaType
+        media_item['media_type'] = mediaType(media_item['format'])
 
         media_item['duration'] = int((media_item['end_date'] - media_item['start_date']).total_seconds() - media_item['jump']  - media_item['trim'])
 

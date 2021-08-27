@@ -37,7 +37,7 @@ The application is two parts:
     ./start_server.sh
     ```
 
-3. Visit <http://127.0.0.1:8001> in your browser.
+3. Visit <http://127.0.0.1:8000> in your browser.
 
 ## SEE IT IN ACTION
 
