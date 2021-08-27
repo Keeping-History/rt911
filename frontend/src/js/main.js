@@ -460,7 +460,7 @@ function addItems(addMediaItems) {
             jQuery(`#${playerId}`).currentTime = johng.current() - mediaItem.start + mediaItem.jump;
 
             // TODO: We're not using promise right now, but will need to later
-            jQuery(`#${playerId}`).trigger('play').promise();
+            jQuery(`#${playerId}`).trigger('play')
             jQuery(`#${playerId}`).bind(
               'ended',
               (playerId) => {
