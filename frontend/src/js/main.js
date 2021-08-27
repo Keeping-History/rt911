@@ -173,7 +173,7 @@ function getAPIURL() {
 
 // Grabs the data via ajax
 function getData() {
-  if (typeof dataCache !== 'undefined') {
+  if (dataCache.length > 0) {
     return dataCache;
   }
   $.ajax({
