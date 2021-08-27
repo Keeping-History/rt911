@@ -23,6 +23,22 @@ timezone_map = {
     'UTC': 0
 }
 
+def mediaType(format):
+
+    mediaTypes = {
+        'audio': set(['mp3', 'aac', 'ogg', 'flac', 'webm', 'wav']),
+        'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg', 'm3u8', 'm3u']),
+        'html': set(['html']),
+        'iframe': set(['iframe']),
+        'image': set(['jpg', 'png', 'gif']),
+    }
+
+    for mediaType in mediaTypes:
+        if format in mediaTypes[mediaType]:
+            return mediaType
+
+    return format
+
 def index(request):
 
     # Create an array to hold our query filters
@@ -67,18 +83,7 @@ def index(request):
 
     for media_item in data:
 
-        media_item['media_type'] =  media_item['format']
-
-        mediaTypes = {
-            'audio': set(['mp3', 'aac', 'ogg', 'flac', 'webm', 'wav']),
-            'video': set(['h.264', 'mp4', 'mov', 'mpg', 'webm', 'ogg', 'm3u8', 'm3u']),
-            'html': set(['html']),
-            'iframe': set(['iframe']),
-            'image': set(['jpg', 'png', 'gif']),
-        }
-        for mediaType in mediaTypes:
-            if media_item['format'] in mediaTypes[mediaType]:
-                media_item['media_type'] = mediaType
+        media_item['media_type'] = mediaType(media_item['format'])
 
         media_item['duration'] = int((media_item['end_date'] - media_item['start_date']).total_seconds() - media_item['jump']  - media_item['trim'])
 
