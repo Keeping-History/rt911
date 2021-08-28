@@ -70,7 +70,7 @@ def index(request):
     data = list(
         Media.objects.values()
         .filter(q)
-        .order_by('start_date')
+        .order_by('-sort', 'start_date')
     )
 
 
