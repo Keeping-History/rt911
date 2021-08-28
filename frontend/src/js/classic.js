@@ -1,13 +1,21 @@
 jQuery(function () {
+    const interfaceAudioPlayer = new Audio();
 
-    let audios = {
-        boot: new Audio('../rsrc/boot.mp3'),
-        close: new Audio('../rsrc/close.mp3'),
-        menu: new Audio('../rsrc/menu.mp3'),
-        move_stop: new Audio('../rsrc/move_stop.mp3'),
-        open: new Audio('../rsrc/open.mp3'),
-        windowshade_collapse: new Audio('../rsrc/windowshade_collapse.mp3'),
-        windowshade_expand: new Audio('../rsrc/windowshade_expand.mp3')
+    function playInterfaceSound(sound) {
+        sounds = {
+            "boot": "../rsrc/boot.mp3",
+            "close": "../rsrc/close.mp3",
+            "menu": "../rsrc/menu.mp3",
+            "move_stop": "../rsrc/move_stop.mp3",
+            "open": "../rsrc/open.mp3",
+            "windowshade_collapse": "../rsrc/windowshade_collapse.mp3",
+            "windowshade_expand": "../rsrc/windowshade_expand.mp3",
+        };
+
+        if (sound in sounds) {
+            interfaceAudioPlayer.src = sounds[sound];
+            interfaceAudioPlayer.play();
+        }
     }
 
     // Helper function to decide if browser is mobile or not
@@ -33,7 +41,7 @@ jQuery(function () {
     jQuery(".resizable").resizable({
         handles: "se",
         stop: function (event, ui) {
-            audios['move_stop'].play();
+            playInterfaceSound("move_stop");
         },
     });
 
@@ -55,11 +63,10 @@ jQuery(function () {
                 .data("top", jQuery(b).css("top"))
                 .data("left", jQuery(b).css("left"))
                 .data("max", true);
-
-            audios['windowshade_expand'].play();
+            playInterfaceSound("windowshade_expand");
         } else {
             jQuery(b).removeAttr("style");
-            audios['windowshade_collapse'].play();
+            playInterfaceSound("windowshade_collapse");
 
             jQuery(this).data("max", false);
         }
@@ -69,19 +76,26 @@ jQuery(function () {
     jQuery(".windowshade-box").on("click", function () {
         let contentBox = jQuery(this).closest(".content");
         contentBox.css("z-index", "1");
-        let shadeHeight = jQuery(this).data("shade-height", jQuery(this).css("height"));
+        let shadeHeight = jQuery(this).data(
+            "shade-height",
+            jQuery(this).css("height")
+        );
         if (jQuery(this).hasClass("shade")) {
             jQuery(contentBox).children(".inner").removeClass("hidden");
-            jQuery(contentBox).children(".ui-resizable-handle").removeClass("hidden");
+            jQuery(contentBox)
+                .children(".ui-resizable-handle")
+                .removeClass("hidden");
             jQuery(contentBox).css("height", shadeHeight);
             jQuery(this).removeClass("shade");
-            audios['windowshade_expand'].play();
+            playInterfaceSound("windowshade_expand");
         } else {
             jQuery(contentBox).children(".inner").addClass("hidden");
-            jQuery(contentBox).children(".ui-resizable-handle").addClass("hidden");
+            jQuery(contentBox)
+                .children(".ui-resizable-handle")
+                .addClass("hidden");
             jQuery(contentBox).css("height", "");
             jQuery(this).addClass("shade");
-            audios['windowshade_collapse'].play();
+            playInterfaceSound("windowshade_collapse");
         }
     });
 
@@ -89,7 +103,7 @@ jQuery(function () {
     jQuery(".close-box, .close-button").on("click", function () {
         a = this.closest(".content");
         jQuery(a).addClass("hidden");
-        audios['close'].play();
+        playInterfaceSound("close");
     });
 
     // Enable Desktop Icons
@@ -98,16 +112,16 @@ jQuery(function () {
             jQuery("#" + jQuery(this).get(0).id.split("-")[1])
                 .removeClass("hidden")
                 .css("z-index", "9000");
-            audios['open'].play();
-            });
+            playInterfaceSound("open");
+        });
     } else {
         jQuery(".draggable-icon").draggable({});
         jQuery(".icon").on("dblclick", function () {
             jQuery("#" + jQuery(this).get(0).id.split("-")[1])
                 .removeClass("hidden")
                 .css("z-index", "9000");
-            audios['open'].play();
-            });
+            playInterfaceSound("open");
+        });
     }
 
     // Make sure the active window is on top
@@ -126,10 +140,9 @@ jQuery(function () {
 
     // Enable menu items to be clickable by default and open a windows/app with the same name
     jQuery("#nav-list li ul li").on("click", function () {
-        audios['open'].play();
+        playInterfaceSound("play");
         jQuery("#" + jQuery(this).get(0).id.split("-")[1])
             .removeClass("hidden")
             .css("z-index", "9000");
     });
-
 });
