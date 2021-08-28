@@ -46,7 +46,7 @@ class CollectionAdmin(ImportExportModelAdmin):
     exclude = ('media',)
 
 class MediaAdmin(ImportExportModelAdmin):
-    list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'source', 'tz', 'mediaType']
+    list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'source', 'tz', 'mediaType', 'sort']
     list_filter = [ ('start_date', DateTimeRangeFilter), ('end_date', DateTimeRangeFilter), 'approved', 'source', 'format']
     date_hierarchy = 'start_date'
     actions = [approve_media, disapprove_media, ]
@@ -59,7 +59,7 @@ class MediaAdmin(ImportExportModelAdmin):
             'fields': (('start_date', 'end_date', 'tz'),)
         }),
         ('Info', {
-            'fields': ('title', 'source', 'full_title', 'tags', 'approved')
+            'fields': ('title', 'source', 'full_title', 'tags', 'approved', 'sort')
         }),
         ('Media', {
             'fields': ('preview_media', 'url', 'format', ('jump', 'trim', 'volume'), ),
