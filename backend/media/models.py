@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime
+import datetime
 
 from django.db import models
 from django.contrib import admin
@@ -44,7 +44,7 @@ class Marker(models.Model):
 class Media(models.Model):
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
-    calc_duration = models.IntegerField(default=0)
+    calc_duration = models.IntegerField(default=0, editable=False)
     tz = models.CharField(max_length=4)
     sort = models.IntegerField(default=0)
 
@@ -68,7 +68,7 @@ class Media(models.Model):
     approved.boolean = True
 
     class Meta:
-        ordering = ["start_date"]
+        ordering = ['sort', 'start_date']
         verbose_name = 'media'
         verbose_name_plural = 'media items'
 
@@ -78,6 +78,11 @@ class Media(models.Model):
     @property
     def vidid(self):
         return 'm' + hashlib.md5(self.url.encode("utf-8")).hexdigest()
+
+    @property
+    def calcDuration(self):
+        return str(datetime.timedelta(seconds=self.calc_duration))
+
 
     @property
     def adminPlayer(self):

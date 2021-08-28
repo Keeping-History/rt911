@@ -3,6 +3,7 @@ from rangefilter.filter import DateRangeFilter, DateTimeRangeFilter
 from import_export import resources
 from import_export.admin import ImportExportModelAdmin
 from django.utils.html import format_html
+import datetime
 
 import logging
 
@@ -46,7 +47,8 @@ class CollectionAdmin(ImportExportModelAdmin):
     exclude = ('media',)
 
 class MediaAdmin(ImportExportModelAdmin):
-    list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'source', 'tz', 'mediaType', 'sort']
+    readonly_fields=('calcDuration')
+    list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'source', 'tz', 'mediaType', 'sort', 'calcDuration']
     list_filter = [ ('start_date', DateTimeRangeFilter), ('end_date', DateTimeRangeFilter), 'approved', 'source', 'format']
     date_hierarchy = 'start_date'
     actions = [approve_media, disapprove_media, ]
