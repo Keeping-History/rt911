@@ -32,7 +32,7 @@
 const baseRemoteURL = '//admin.911realtime.org/media/';
 const timeZone = { diff: 6, pretty: 'ET' };
 const timeDrift = 15; // seconds
-const playerSync = 1; // seconds
+const playerSync = 3; // seconds
 const preloadBuffer = 120; // seconds
 const preloadFormats = ['audio'];
 const audioControls = [
@@ -131,7 +131,7 @@ function setTimePlayer(playerId) {
   jQuery(`#${playerId}`).get(0).currentTime = getPlayerTime(playerId);
 }
 
-function setTimeAllPlayers(sync = false) {
+async function setTimeAllPlayers(sync = false) {
   jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     if (
       (Math.abs(getPlayerTime(this.id) - jQuery(this).get(0).currentTime)
@@ -296,8 +296,6 @@ function removeItems(removeMediaItems) {
     // We have some players that are no longer live and should be destroyed.
     removeMediaItems.forEach((playerId) => {
       if (playerId) {
-        johng.get()
-          .find((data) => data.vidid === playerId);
         if (plyrPlayers[playerId]) {
           jQuery(`#${playerId}`)[0].pause();
           jQuery(`#${playerId}`)[0].currentSrc = null;
@@ -758,8 +756,8 @@ jQuery(() => {
     let activeItemsList = [];
     let currentItems = [];
 
-    // We slice the currentItems list so we can an Array
-    // instead of an HTMLCollection
+    // We slice the currentItems list so we can have an Array
+    // instead of an HTMLCollection.
     currentItems = Array.prototype.slice.call(
       document.querySelectorAll(
         'div.htmlItem, video:not(.handsoff), audio:not(.handsoff)',
@@ -808,11 +806,11 @@ jQuery(() => {
     blockerClass: 'blocker',
   });
 
-  // Every 1.5 seconds, sync the video players' time with the johng counter
+  // Every (playerSync) seconds, sync the video players' time with the johng counter
   setTimeout(() => {
-    johng.tickFunction(johng);
+    johng.tickFunction();
     setTimeAllPlayers();
-  }, 1500);
+  }, playerSync * 1000);
 
   // Get just the time in pretty format from the current timestamp
   const time = new Date();

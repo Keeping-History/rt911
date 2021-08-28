@@ -1,6 +1,6 @@
 const johng = {
   count: 0,
-  accuracy: 0.1, // seconds
+  accuracy: 1, // seconds
   clock: false,
   clock12hour: false,
   data: [],
