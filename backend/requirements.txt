@@ -85,7 +85,7 @@ service-identity==18.1.0
 simplejson==3.17.2
 six==1.15.0
 soupsieve==2.0.1
-sqlparse==0.4.1
+sqlparse==0.4.2
 tablib==2.0.0
 toml==0.10.2
 tqdm==4.53.0
