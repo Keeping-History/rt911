@@ -51,9 +51,12 @@ const videoControls = [
 
 // Global Modal holder object
 const globalModals = [];
-
+ 
 // Global Media Player holder object
 const plyrPlayers = {};
+
+// Create our johng instance
+const johng = new JohnG(0, 1, true, false, ".timeText");
 
 // Preload data to improve performance
 // During build time, cache json data is added as a variable to increase
@@ -148,12 +151,15 @@ function dateFormatter(d) {
   let hours = d.getHours();
   let minutes = d.getMinutes();
   let seconds = d.getSeconds();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours %= 12;
-  hours = hours || 12; // the hour '0' should be '12'
+  if(!this.clock24hour) {
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours %= 12;
+    hours = hours || 12; // the hour '0' should be '12'
+    return `${hours}:${minutes}:${seconds} ${ampm}`;
+  }
   minutes = minutes < 10 ? `0${minutes}` : minutes;
   seconds = seconds < 10 ? `0${seconds}` : seconds;
-  return `${hours}:${minutes}:${seconds} ${ampm}`;
+  return `${hours}:${minutes}:${seconds}`;
 }
 
 // Get the Current time in text format
