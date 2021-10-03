@@ -30,7 +30,11 @@
 //
 
 const baseRemoteURL = '//admin.911realtime.org/media/';
-const timeZone = { diff: 6, pretty: 'ET' };
+//const timeZone = { diff: -6, pretty: 'ET' };
+const timeZone = { diff:new Date().getTimezoneOffset() / -60 , pretty: new Date().toString().match(/\(([A-Za-z\s].*)\)/)[1]}
+
+console.log(timeZone)
+
 const timeDrift = 15; // seconds
 const playerSync = 3; // seconds
 const preloadBuffer = 120; // seconds
@@ -51,12 +55,13 @@ const videoControls = [
 
 // Global Modal holder object
 const globalModals = [];
- 
+
 // Global Media Player holder object
 const plyrPlayers = {};
+const hlsPlayers = {};
 
 // Create our johng instance
-const johng = new JohnG(0, 1, true, false, ".timeText");
+const johng = new JohnG(0, 1, true, false, ".timeText", timeZone);
 
 // Preload data to improve performance
 // During build time, cache json data is added as a variable to increase
@@ -80,7 +85,7 @@ function preloadMediaFile(mediaType, url, id) {
 }
 
 // Utility function to preload all needed players
-function preloadPlayers(data) {
+async function preloadPlayers(data) {
   if (data !== undefined || data.length > 0) {
     data.forEach(async (item) => {
       if (
@@ -110,13 +115,13 @@ function unmuteAudioPlayers() {
 }
 
 // Playback Control
-function pauseAllPlayers() {
+async function pauseAllPlayers() {
   jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     jQuery(this).get(0).pause();
   });
 }
 
-function playAllPlayers() {
+async function playAllPlayers() {
   jQuery('video:not(.handsoff), audio:not(.handsoff)').each(function () {
     if (jQuery(this).get(0).paused) {
       jQuery(this).get(0).play();
@@ -130,7 +135,7 @@ function getPlayerTime(playerId) {
   return johng.current() - dataItem.start + dataItem.jump;
 }
 
-function setTimePlayer(playerId) {
+async function setTimePlayer(playerId) {
   jQuery(`#${playerId}`).get(0).currentTime = getPlayerTime(playerId);
 }
 
@@ -139,7 +144,7 @@ async function setTimeAllPlayers(sync = false) {
     if (
       (Math.abs(getPlayerTime(this.id) - jQuery(this).get(0).currentTime)
         > timeDrift)
-     || sync === true
+      || sync === true
     ) {
       jQuery(this).get(0).currentTime = getPlayerTime(this.id);
     }
@@ -151,7 +156,7 @@ function dateFormatter(d) {
   let hours = d.getHours();
   let minutes = d.getMinutes();
   let seconds = d.getSeconds();
-  if(!this.clock24hour) {
+  if (!this.clock24hour) {
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours %= 12;
     hours = hours || 12; // the hour '0' should be '12'
@@ -166,7 +171,7 @@ function dateFormatter(d) {
 function secondsToTimeFormatted(seconds) {
   const d = new Date(0);
   d.setSeconds(seconds);
-  d.setHours(d.getHours() + timeZone.diff); // Eastern Time Zone adjustment
+  d.setHours(d.getHours() - timeZone.diff); // Eastern Time Zone adjustment
   return `${dateFormatter(d)} ${timeZone.pretty}`;
 }
 
@@ -186,11 +191,12 @@ function getData() {
     type: 'GET',
     url: getAPIURL(),
     dataType: 'json',
-    async: false,
+    async: true,
     cache: true,
     success(data) {
       if (data.length > 0) {
         dataCache = data;
+        johng.set(data);
       } else {
         dataCache = ['No Items Found'];
       }
@@ -273,6 +279,7 @@ function invalidateLocalDataCache() {
   markerListCache = [];
   networkListCache = [];
 }
+
 // Get fresh data: clear out cache and make a new call
 function refreshData() {
   invalidateLocalDataCache();
@@ -297,7 +304,7 @@ function hmsToSeconds(hmsString) {
   return seconds;
 }
 
-function removeItems(removeMediaItems) {
+async function removeItems(removeMediaItems) {
   if (Array.isArray(removeMediaItems)) {
     // We have some players that are no longer live and should be destroyed.
     removeMediaItems.forEach((playerId) => {
@@ -324,7 +331,7 @@ function removeItems(removeMediaItems) {
   }
 }
 
-function addItems(addMediaItems) {
+async function addItems(addMediaItems) {
   // And add them
   if (Array.isArray(addMediaItems)) {
     // Ok, so addMediaItems is an actual Array, so we can loop over it
@@ -399,12 +406,12 @@ function addItems(addMediaItems) {
             if (mediaItem.format == 'm3u8') {
               if (Hls.isSupported()) {
                 const video = document.getElementById(playerId);
-                const hls = new Hls({ debug: false });
+                hlsPlayers[playerId]  = new Hls({ debug: false });
                 // Bind the vide and the HLS plugin together
-                hls.attachMedia(video);
-                hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-                  hls.loadSource(mediaItem.url);
-                  hls.on(
+                hlsPlayers[playerId].attachMedia(video);
+                hlsPlayers[playerId].on(Hls.Events.MEDIA_ATTACHED, () => {
+                  hlsPlayers[playerId].loadSource(mediaItem.url);
+                  hlsPlayers[playerId].on(
                     Hls.Events.ERROR,
                     (event, data) => {
                       if (data.fatal) {
@@ -415,18 +422,18 @@ function addItems(addMediaItems) {
                             console.info(
                               'HLS: fatal network error encountered, try to recover',
                             );
-                            hls.startLoad();
+                            hlsPlayers[playerId].startLoad();
                             break;
                           case Hls.ErrorTypes
                             .MEDIA_ERROR:
                             console.info(
                               'HLS: fatal media error encountered, try to recover',
                             );
-                            hls.recoverMediaError();
+                            hlsPlayers[playerId].recoverMediaError();
                             break;
                           default:
                             // cannot recover
-                            hls.destroy();
+                            hlsPlayers[playerId].destroy();
                             break;
                         }
                       }
@@ -529,7 +536,7 @@ function addItems(addMediaItems) {
             break;
         }
         if (mediaItem.media_type !== 'modal') {
-          // Add video object and title we just created to DOM
+          // Add object to the dom in it's proper holder
           jQuery(`#${playerId}_div`).prependTo(
             `#${mediaItem.media_type}s`,
           );
