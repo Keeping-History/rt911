@@ -21,9 +21,10 @@ The application is two parts:
 3. Open a terminal and change into the root of the repo.
 4. From a command line, run the following commands:
 
-    ```cd backend
-    ./start_server.sh
-    ```
+```
+cd backend
+./start_server.sh
+```
 
 5. Open <http://0.0.0.0:8001> in your browser.
 
@@ -32,10 +33,11 @@ The application is two parts:
 1. Open a terminal and change into the root of the repo.
 2. From a command line, run the following commands:
 
-    ```cd frontend
-    ./build.sh
-    ./start_server.sh
-    ```
+```
+cd frontend
+./build.sh
+./start_server.sh
+```
 
 3. Visit <http://127.0.0.1:8000> in your browser.
 
