@@ -8,7 +8,7 @@ from .models import Media, Tag, TagType, Collection, Marker
 # Map timezones to their UTC numerical difference
 timezone_map = {
     'ADT': -3,
-    'BST': 1,
+    'BST': -6,
     'CDT': -3,
     'CEST': 2,
     'CST': 8,
