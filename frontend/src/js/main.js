@@ -1,4 +1,4 @@
-// The 9/11RT johng
+// 9/11 Realtime
 // A live re-creation of real-time media from September 11, 2001,
 // told in by media, photos, audio and other media timestamped and
 // replayed in real time. The time starts at September 11, 2001 at
@@ -53,10 +53,10 @@ const videoControls = [
   'airplay',
 ];
 
-// Global Modal holder object
+// Global Modal holder array
 const globalModals = [];
 
-// Global Media Player holder object
+// Global Media Player holder objects
 const plyrPlayers = {};
 const hlsPlayers = {};
 
@@ -349,7 +349,7 @@ async function addItems(addMediaItems) {
           case 'video':
             // Add video to the holder
             jQuery('#videos').append(
-              create_video(playerId, mediaItem),
+              createVideo(playerId, mediaItem),
             );
 
             // Create a new Plyr instance for the video
@@ -449,7 +449,7 @@ async function addItems(addMediaItems) {
 
             // Add audio to the holder
             jQuery('#audios').append(
-              create_audio(playerId, mediaItem),
+              createAudio(playerId, mediaItem),
             );
 
             plyrPlayers[playerId] = new Plyr(`#${playerId}`, {
@@ -529,7 +529,7 @@ async function addItems(addMediaItems) {
             break;
           default:
             jQuery('#htmls').append(
-              create_html(playerId, mediaItem),
+              createHTML(playerId, mediaItem),
             );
             // TODO: This has some wonky UI right now
             // setReadMore(playerId);
@@ -546,7 +546,7 @@ async function addItems(addMediaItems) {
   }
 }
 
-function create_audio(playerId, mediaItem) {
+function createAudio(playerId, mediaItem) {
   const audioItem = {
     PlayerID: playerId,
     AudioURL: mediaItem.url,
@@ -559,7 +559,7 @@ function create_audio(playerId, mediaItem) {
   return $.parseHTML($.trim(Mustache.render(template, audioItem)));
 }
 
-function create_html(playerId, mediaItem) {
+function createHTML(playerId, mediaItem) {
   const htmlItem = {
     ItemID: playerId,
     Time: dateFormatter(Date.parse(mediaItem.start_date)),
@@ -572,7 +572,7 @@ function create_html(playerId, mediaItem) {
   return $.parseHTML($.trim(Mustache.render(template, htmlItem)));
 }
 
-function create_video(playerId, mediaItem) {
+function createVideo(playerId, mediaItem) {
   if (mediaItem.format == 'm3u8') {
     mediaType = 'application/x-mpegURL';
   } else if (mediaItem.format == 'mpd') {
