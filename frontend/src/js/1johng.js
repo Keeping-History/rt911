@@ -1,13 +1,13 @@
 var JohnG = class {
     /**
-     * Create a new JohnG instance
-     * @param  {integer} start=0
-     * @param  {integer} accuracy=1
-     * @param  {boolean} clock=false
-     * @param  {boolean} clock24hour=false
-     * @param  {string} clockDisplay=""
-     * @param  {object} timezone={diff, pretty}
-     * @param  {array} data=[]
+     * Creates a new JohnG instance
+     * @param  {integer} start=0 - The point from which the clock should start
+     * @param  {integer} accuracy=1 - The duration of each "tick", in seconds
+     * @param  {boolean} clock=false - Whether or not to show the clock
+     * @param  {boolean} clock24hour=false - Whether or not to use 24-hour time
+     * @param  {string} clockDisplay="" - A CSS selector for the clock element
+     * @param  {object} timezone={diff, pretty} - The timezone to use
+     * @param  {array} data=[] - An array of data to display
      */
     constructor(
         start = 0,
@@ -123,13 +123,13 @@ var JohnG = class {
         };
 
         this.setClock = function (hour, min, sec) {
-            jQuery(this.clockDisplay).text(secondsToTimeFormatted(0));
+            jQuery(this.clockDisplay).text(secondsToTimeFormatted(hour * 3600 + min * 60 + sec));
         };
 
         this.secondsToTimeFormatted = function (seconds) {
             const d = new Date(0);
             d.setSeconds(seconds);
-            d.setHours(d.getHours() + this.timeZone.diff); // Eastern Time Zone adjustment
+            d.setHours(d.getHours()); // Eastern Time Zone adjustment
             return `${dateFormatter(d)} ${this.timeZone.pretty}`;
         };
 
