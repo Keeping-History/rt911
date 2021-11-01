@@ -64,6 +64,7 @@ def index(request):
             if request.GET['collection'] != 'all':
                 q &= Q(collection__in=request.GET.getlist('collection'))
 
+        # Only show approved media
         q &= Q(approved=True)
 
     # Activate our (lazy) filters and get the actual data
