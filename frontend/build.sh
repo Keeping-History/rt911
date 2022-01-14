@@ -12,97 +12,112 @@ from htmlmin import minify
 config = configparser.ConfigParser()
 config.read('build.ini')
 
-build_dir = config['DEFAULT']['BuildDirectory']
-css_dir = config['DEFAULT']['CSSDirectory']
-js_dir = config['DEFAULT']['JSDirectory']
-img_dir = config['DEFAULT']['ImgDirectory']
-rsrc_dir = config['DEFAULT']['RsrcDirectory']
-html_file = config['DEFAULT']['HTMLFile']
+shutil.rmtree(config['DEFAULT']['BuildDirectory'], ignore_errors=True)
+os.makedirs(os.path.dirname(config['DEFAULT']['BuildDirectory']), exist_ok=True)
 
-css_output = config['DEFAULT']['CSSOutput']
-js_output = config['DEFAULT']['JSOutput']
-img_dir_output = config['DEFAULT']['ImgOutputDirectory']
-rsrc_dir_output = config['DEFAULT']['RsrcOutputDirectory']
-html_file_output = config['DEFAULT']['HTMLFileOutput']
-root_files, css_items, js_items, css_contents, js_contents, html_contents = "", "", "", "", "", ""
 
-compress_js = config['DEFAULT']['CompressJS']
-compress_css = config['DEFAULT']['CompressCSS']
+# CSS
+def css_process():
+    print('Processing CSS files')
+    css_contents = ""
+    if config['DEFAULT']['CSSURLS'] != "":
+        css_items = config['DEFAULT']['CSSURLS'].split(",")
+    if len(css_items) >= 0:
+        for css_item in css_items:
+            r = requests.get(css_item)
+            css_contents += r.text + '\n'
 
-shutil.rmtree(build_dir, ignore_errors=True)
-os.makedirs(os.path.dirname(build_dir), exist_ok=True)
+    for filename in os.listdir(config['DEFAULT']['CSSDirectory']):
+        if filename.endswith(".css"):
+            with open(config['DEFAULT']['CSSDirectory'] + filename, 'r') as file:
+                css_data = file.read()
+            css_contents += css_data + '\n'
+        else:
+            continue
 
-if config['DEFAULT']['CSSURLS'] != "":
-    css_items = config['DEFAULT']['CSSURLS'].split(",")
-if config['DEFAULT']['JSURLS'] != "":
-    js_items = config['DEFAULT']['JSURLS'].split(",")
-if config['DEFAULT']['RootFiles'] != "":
-    root_files = config['DEFAULT']['RootFiles'].split(",")
+    os.makedirs(os.path.dirname(config['DEFAULT']['CSSOutput']), exist_ok=True)
+    css_file_write = open(config['DEFAULT']['CSSOutput'], "w+")
 
-if len(css_items) >= 0:
-    for css_item in css_items:
-        r = requests.get(css_item)
-        css_contents += r.text + '\n'
-
-if len(js_items) >= 0:
-    for js_item in js_items:
-        r = requests.get(js_item)
-        js_contents += r.text + '\n'
-
-if len(root_files) >= 0:
-    for root_file in root_files:
-        shutil.copyfile('./src/' + root_file, build_dir + root_file)
-
-for filename in os.listdir(css_dir):
-    if filename.endswith(".css"):
-        with open(css_dir + filename, 'r') as file:
-            css_data = file.read()
-        css_contents += css_data + '\n'
+    if config['DEFAULT']['CompressCSS'] == 1:
+        temp = css_file_write.write(compress(css_contents))
     else:
-        continue
+        temp = css_file_write.write(css_contents)
 
-for filename in os.listdir(js_dir):
-    if filename.endswith(".js"):
-        with open(js_dir + filename, 'r') as file:
-            js_data = file.read()
-        js_contents += js_data + '\n'
+    css_file_write.close()
+    print('Processing CSS files complete')
+
+
+# JS
+def js_process():
+    print('Processing JS files')
+    js_contents = ""
+    if config['DEFAULT']['JSURLS'] != "":
+        js_items = config['DEFAULT']['JSURLS'].split(",")
+
+    if len(js_items) >= 0:
+        for js_item in js_items:
+            r = requests.get(js_item)
+            js_contents += r.text + '\n'
+
+    for filename in os.listdir(config['DEFAULT']['JSDirectory']):
+        if filename.endswith(".js"):
+            with open(config['DEFAULT']['JSDirectory'] + filename, 'r') as file:
+                js_data = file.read()
+            js_contents += js_data + '\n'
+        else:
+            continue
+    os.makedirs(os.path.dirname(config['DEFAULT']['JSOutput']), exist_ok=True)
+    js_file_write = open(config['DEFAULT']['JSOutput'], "w+")
+
+    if config['DEFAULT']['CompressJS'] == 1:
+        temp = js_file_write.write(jsmin(js_contents))
     else:
-        continue
+        temp = js_file_write.write(js_contents)
+
+    js_file_write.close()
+    print('Processing JS files complete')
 
 
-os.makedirs(os.path.dirname(css_output), exist_ok=True)
-css_file_write = open(css_output, "w+")
+#HTML
+def html_process():
+    print('Processing HTML files')
+    with open(config['DEFAULT']['HTMLFile'], 'r') as file:
+        html_data = file.read()
+    html_contents = minify(html_data)
 
-if compress_css == 1:
-    temp = css_file_write.write(compress(css_contents))
-else:
-    temp = css_file_write.write(css_contents)
+    html_file_write = open(config['DEFAULT']['HTMLFileOutput'], "w+")
+    temp = html_file_write.write(html_contents)
+    html_file_write.close()
 
-css_file_write.close()
 
-os.makedirs(os.path.dirname(js_output), exist_ok=True)
-js_file_write = open(js_output, "w+")
+#Files in root directory
+def root_process():
+    root_files = ""
+    if config['DEFAULT']['RootFiles'] != "":
+        root_files = config['DEFAULT']['RootFiles'].split(",")
 
-if compress_js == 1:
-    temp = js_file_write.write(jsmin(js_contents))
-else:
-    temp = js_file_write.write(js_contents)
+    if len(root_files) >= 0:
+        for root_file in root_files:
+            shutil.copyfile('./src/' + root_file, config['DEFAULT']['BuildDirectory'] + root_file)
+    print('Processing HTML files complete')
 
-js_file_write.close()
 
-os.makedirs(os.path.dirname(img_dir_output), exist_ok=True)
-# replace the . with your starting directory
-for root, dirs, files in os.walk(img_dir):
-    for file in files:
-        path_file = os.path.join(root, file)
-        shutil.copy2(path_file, img_dir_output)  # change you destination dir
+# Additional resource Files
+def resource_process():
+    print('Processing Resource files')
+    os.makedirs(os.path.dirname(config['DEFAULT']['ImgOutputDirectory']), exist_ok=True)
+    for root, dirs, files in os.walk(config['DEFAULT']['ImgDirectory']):
+        for file in files:
+            path_file = os.path.join(root, file)
+            shutil.copy2(path_file, config['DEFAULT']['ImgOutputDirectory'])  # change you destination dir
 
-destination = shutil.copytree(rsrc_dir, rsrc_dir_output)
+    destination = shutil.copytree(config['DEFAULT']['RsrcDirectory'], config['DEFAULT']['RsrcOutputDirectory'])
+    print('Processing Resource files complete')
 
-with open(html_file, 'r') as file:
-    html_data = file.read()
-html_contents = minify(html_data)
 
-html_file_write = open(html_file_output, "w+")
-temp = html_file_write.write(html_contents)
-html_file_write.close()
+if __name__ == '__main__':
+    css_process()
+    js_process()
+    html_process()
+    root_process()
+    resource_process()
