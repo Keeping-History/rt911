@@ -83,7 +83,7 @@ def index(request):
 
         media_item['duration'] = int((media_item['end_date'] - media_item['start_date']).total_seconds() - media_item['jump']  - media_item['trim'])
 
-        add_time_delta = timezone_map[media_item['tz']] + 4 # convert UTC to Eastern Standard Time
+        add_time_delta = 0 # convert UTC to Eastern Standard Time
 
         media_item['start_date'] = media_item['start_date'] + timedelta(hours=add_time_delta)
         media_item['end_date'] = media_item['end_date'] + timedelta(hours=add_time_delta)

@@ -48,7 +48,7 @@ class CollectionAdmin(ImportExportModelAdmin):
 
 class MediaAdmin(ImportExportModelAdmin):
     readonly_fields=('calcDuration')
-    list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'source', 'tz', 'mediaType', 'sort', 'calcDuration']
+    list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'source', 'mediaType', 'sort', 'calcDuration']
     list_filter = [ ('start_date', DateTimeRangeFilter), ('end_date', DateTimeRangeFilter), 'approved', 'source', 'format']
     date_hierarchy = 'start_date'
     actions = [approve_media, disapprove_media, ]
@@ -58,7 +58,7 @@ class MediaAdmin(ImportExportModelAdmin):
     inlines = (CollectionInline,)
     fieldsets= (
         ('Date', {
-            'fields': (('start_date', 'end_date', 'tz'),)
+            'fields': (('start_date', 'end_date'),)
         }),
         ('Info', {
             'fields': ('title', 'source', 'full_title', 'tags', 'approved', 'sort')

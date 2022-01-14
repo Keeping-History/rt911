@@ -45,7 +45,6 @@ class Media(models.Model):
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
     calc_duration = models.IntegerField(default=0, editable=False)
-    tz = models.CharField(max_length=4)
     sort = models.IntegerField(default=0)
 
     title = models.CharField(max_length=255)
