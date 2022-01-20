@@ -8,8 +8,8 @@ services:
     environment:
       MYSQL_DATABASE: "rt911"
       MYSQL_USER: "rt911"
-      MYSQL_PASSWORD: "CT7SQzldZqwS2pinf6s9"
-      MYSQL_ROOT_PASSWORD: "CT7SQzldZqwS2pinf6s9"
+      MYSQL_PASSWORD: "rt911"
+      MYSQL_ROOT_PASSWORD: "rt911"
   web:
     build: .
     # python manage.py loaddata fixtures/initial.json &&
