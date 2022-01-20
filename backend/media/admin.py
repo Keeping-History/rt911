@@ -111,7 +111,7 @@ class TagAdmin(ImportExportModelAdmin):
     list_display = ['name', 'description', 'type_of']
     search_fields = ('name', 'description')
     actions = [assign_person_tagtype,
-               assign_topic_tagtype, assign_military_tagtype]
+    assign_topic_tagtype, assign_military_tagtype]
 
 class TagTypeAdmin(ImportExportModelAdmin):
     model = TagType
