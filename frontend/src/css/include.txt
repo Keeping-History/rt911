@@ -1,0 +1,4 @@
+https://fonts.googleapis.com/css?family=VT323&display=swap
+https://fonts.googleapis.com/css?family=VT323&display=swap
+https://cdn.plyr.io/3.6.2/plyr.css
+https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css

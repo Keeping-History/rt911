@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python3
 
 import os
 import requests
@@ -20,59 +20,66 @@ os.makedirs(os.path.dirname(config['DEFAULT']['BuildDirectory']), exist_ok=True)
 def css_process():
     print('Processing CSS files')
     css_contents = ""
-    if config['DEFAULT']['CSSURLS'] != "":
-        css_items = config['DEFAULT']['CSSURLS'].split(",")
+    if os.path.exists("./src/css/include.txt"):
+        with open("./src/css/include.txt") as css_file:
+            css_items = [css_item.rstrip() for css_item in css_file.readlines() if css_item.strip()]
     if len(css_items) >= 0:
         for css_item in css_items:
             r = requests.get(css_item)
-            css_contents += r.text + '\n'
+            if config['DEFAULT']['CompressCSS'] == "1":
+                css_contents += compress(r.text) + '\n'
+            else:
+                css_contents += r.text + '\n'
 
     for filename in os.listdir(config['DEFAULT']['CSSDirectory']):
         if filename.endswith(".css"):
             with open(config['DEFAULT']['CSSDirectory'] + filename, 'r') as file:
                 css_data = file.read()
-            css_contents += css_data + '\n'
+                if config['DEFAULT']['CompressCSS'] == "1":
+                    css_contents += compress(css_data) + '\n'
+                else:
+                    css_contents += css_data + '\n'
         else:
             continue
 
     os.makedirs(os.path.dirname(config['DEFAULT']['CSSOutput']), exist_ok=True)
     css_file_write = open(config['DEFAULT']['CSSOutput'], "w+")
 
-    if config['DEFAULT']['CompressCSS'] == 1:
-        temp = css_file_write.write(compress(css_contents))
-    else:
-        temp = css_file_write.write(css_contents)
+    temp = css_file_write.write(css_contents)
 
     css_file_write.close()
     print('Processing CSS files complete')
-
 
 # JS
 def js_process():
     print('Processing JS files')
     js_contents = ""
-    if config['DEFAULT']['JSURLS'] != "":
-        js_items = config['DEFAULT']['JSURLS'].split(",")
-
+    if os.path.exists("./src/js/include.txt"):
+        with open("./src/js/include.txt") as js_file:
+            js_items = [js_item.rstrip() for js_item in js_file.readlines() if js_item.strip()]
     if len(js_items) >= 0:
         for js_item in js_items:
             r = requests.get(js_item)
-            js_contents += r.text + '\n'
+            if config['DEFAULT']['CompressJS'] == "1":
+                js_contents += jsmin(r.text) + '\n'
+            else:
+                js_contents += r.text + '\n'
 
     for filename in os.listdir(config['DEFAULT']['JSDirectory']):
         if filename.endswith(".js"):
             with open(config['DEFAULT']['JSDirectory'] + filename, 'r') as file:
                 js_data = file.read()
-            js_contents += js_data + '\n'
+                if config['DEFAULT']['CompressJS'] == "1":
+                    js_contents += jsmin(js_data) + '\n'
+                else:
+                    js_contents += js_data + '\n'
         else:
             continue
+
     os.makedirs(os.path.dirname(config['DEFAULT']['JSOutput']), exist_ok=True)
     js_file_write = open(config['DEFAULT']['JSOutput'], "w+")
 
-    if config['DEFAULT']['CompressJS'] == 1:
-        temp = js_file_write.write(jsmin(js_contents))
-    else:
-        temp = js_file_write.write(js_contents)
+    temp = js_file_write.write(js_contents)
 
     js_file_write.close()
     print('Processing JS files complete')
@@ -111,7 +118,7 @@ def resource_process():
             path_file = os.path.join(root, file)
             shutil.copy2(path_file, config['DEFAULT']['ImgOutputDirectory'])  # change you destination dir
 
-    destination = shutil.copytree(config['DEFAULT']['RsrcDirectory'], config['DEFAULT']['RsrcOutputDirectory'])
+    destination = shutil.copytree(config['DEFAULT']['ResourcesDirectory'], config['DEFAULT']['ResourcesOutputDirectory'])
     print('Processing Resource files complete')
 
 
