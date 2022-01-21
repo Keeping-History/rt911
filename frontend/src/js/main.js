@@ -319,15 +319,20 @@ function removeItems (removeMediaItems) {
   }
 }
 
+function itemExists (playerId) {
+  if (document.getElementById(playerId)) {
+    return true
+  } else {
+    return false
+  }
+}
+
 function addItems (addMediaItems) {
-  // And add them
+  // If addMediaItems is an Array, then we can loop over it
   if (Array.isArray(addMediaItems)) {
-    // Ok, so addMediaItems is an actual Array, so we can loop over it
     addMediaItems.forEach((playerId) => {
       // Does a player window with the same ID already exist?
-      const doesPlayerExist = document.getElementById(playerId)
-
-      if (!doesPlayerExist) {
+      if (itemExists(playerId)) {
         // Grab the video's data item because we will need it
         const mediaItem = controller
           .all()
