@@ -458,8 +458,10 @@ function addItems (addMediaItems) {
             )
             jQuery(`#${playerId}`).currentTime = controller.current() - mediaItem.start + mediaItem.jump
 
-            // TODO: We're not using promise right now, but will need to later
+            // Start playback of the video file
             jQuery(`#${playerId}`).trigger('play')
+
+            // Ensure that when the video is done playing, it is removed
             jQuery(`#${playerId}`).bind(
               'ended',
               (playerId) => {
@@ -780,7 +782,6 @@ jQuery(() => {
 
   // Currently, we are defaulting to 8:13:30 AM ET.
   // TODO: Add a button to home modal that allows you to change the time to now/a marker time
-
   jumpToTime('08:13:30 AM')
 
   updateAllData()
