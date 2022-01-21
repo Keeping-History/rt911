@@ -75,12 +75,18 @@ function preloadMediaFile (mediaType, url, id) {
       .attr('muted', true)
       .css('display', 'none')
       .addClass('hands-off')
-      .appendTo('#preloads')
+      .appendTo('#preloadContainer')
   }
 }
 
 // Utility function to preload all needed players
 function preloadPlayers (data) {
+  if (!$('#preloadContainer').length) {
+    jQuery('<div>', {
+      id: 'preloadContainer'
+    }).appendTo('body')
+  }
+
   if (data !== undefined || data.length > 0) {
     data.forEach(async (item) => {
       if (
