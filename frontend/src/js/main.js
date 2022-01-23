@@ -400,10 +400,29 @@ function addItems (addMediaItems) {
               if (Hls.isSupported()) {
                 const video = document.getElementById(playerId)
                 const hls = new Hls({ debug: false })
-                // Bind the vide and the HLS plugin together
+
+                function updateQuality (newQuality) {
+                  hls.levels.forEach((level, levelIndex) => {
+                    if (level.height === newQuality) {
+                      hls.currentLevel = levelIndex
+                    }
+                  })
+                }
+
+                // Bind the video and the HLS plugin together
                 hls.attachMedia(video)
                 hls.on(Hls.Events.MEDIA_ATTACHED, () => {
                   hls.loadSource(mediaItem.url)
+                  const defaultOptions = {}
+                  hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                    const availableQualities = hls.levels.map((l) => l.height)
+                    defaultOptions.quality = {
+                      default: availableQualities[0],
+                      options: availableQualities,
+                      forced: true,
+                      onChange: (e) => updateQuality(e)
+                    }
+                  })
                   hls.on(
                     Hls.Events.ERROR,
                     (event, data) => {
