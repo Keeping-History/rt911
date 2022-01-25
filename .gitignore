@@ -73,3 +73,6 @@ node_modules
 /frontend/.eslintrc.yml
 /package.json
 /package-lock.json
+
+# File Manager Files
+.DS_Store
