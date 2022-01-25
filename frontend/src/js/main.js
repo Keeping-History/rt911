@@ -601,8 +601,7 @@ function createVideo (playerId, mediaItem) {
 // A helper function that's not currently used.
 // Attach a function to each video player when it is ready to play
 function isMediaReady () {
-  const currentData = controller.get()
-  currentData.forEach((element) => {
+  controller.all().forEach((element) => {
     if (element.media_type === 'video') {
       jQuery(`#${element.vidid}`).on('canplay', () => {
         // console.log("canplay: ", element);
