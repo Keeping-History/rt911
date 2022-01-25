@@ -173,8 +173,8 @@ function getAPIURL () {
 
 // Grabs the data via ajax
 function getData () {
-  if (window.dataCache.length > 0) {
-    return window.dataCache
+  if (dataCache.length > 0) {
+    return dataCache
   }
   $.ajax({
     type: 'GET',
@@ -184,19 +184,19 @@ function getData () {
     cache: true,
     success (data) {
       if (data.length > 0) {
-        window.dataCache = data
+        dataCache = data
       } else {
-        window.dataCache = ['No Items Found']
+        dataCache = ['No Items Found']
       }
     }
   })
-  return window.dataCache
+  return dataCache
 }
 
 // Grabs the list of networks via ajax
 function updateNetworks () {
-  if (window.networkListCache.length > 0) {
-    window.networkListCache.forEach((item) => {
+  if (networkListCache.length > 0) {
+    networkListCache.forEach((item) => {
       jQuery('#network').append(
         jQuery('<option>').text(item).attr('value', item)
       )
@@ -209,7 +209,7 @@ function updateNetworks () {
       async: true,
       cache: true,
       success (data) {
-        window.networkListCache = data
+        networkListCache = data
         data.forEach((item) => {
           jQuery('#network').append(
             jQuery('<option>').text(item).attr('value', item)
@@ -222,8 +222,8 @@ function updateNetworks () {
 
 // Grabs the list of available time markers via ajax
 async function updateMarkers () {
-  if (window.markerListCache.length > 0) {
-    window.markerListCache.forEach((item) => {
+  if (markerListCache.length > 0) {
+    markerListCache.forEach((item) => {
       if (jQuery(`#events ul #${item.id}`).length === 0) {
         jQuery(
           `<li id=${item.id
@@ -241,7 +241,7 @@ async function updateMarkers () {
       async: true,
       cache: true,
       success (data) {
-        window.markerListCache = data
+        markerListCache = data
         data.forEach((item) => {
           if (jQuery(`#events ul #${item.id}`).length === 0) {
             jQuery(
@@ -263,9 +263,9 @@ async function updateMarkers () {
 }
 
 function invalidateLocalDataCache () {
-  window.dataCache = []
-  window.markerListCache = []
-  window.networkListCache = []
+  dataCache = []
+  markerListCache = []
+  networkListCache = []
 }
 
 // Get fresh data: clear out cache and make a new call
