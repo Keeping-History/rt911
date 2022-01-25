@@ -599,6 +599,7 @@ function createVideo (playerId, mediaItem) {
 }
 
 // A helper function that's not currently used.
+// Attach a function to each video player when it is ready to play
 function isMediaReady () {
   const currentData = controller.get()
   currentData.forEach((element) => {
@@ -610,6 +611,7 @@ function isMediaReady () {
   })
 }
 
+// Move time forwards or backwards, in seconds.
 function moveTime (increment) {
   controller.move(increment)
   setTimeAllPlayers()
