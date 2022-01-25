@@ -76,3 +76,4 @@ node_modules
 
 # File Manager Files
 .DS_Store
+.env
