@@ -55,6 +55,9 @@ const globalModals = []
 // Global Media Player holder object
 const plyrPlayers = {}
 
+// Global HLS engine holder object
+const hlsPlayers = {}
+
 // Create our controller instance
 const controller = new JohnG(0, 1, true, false, '.timeText')
 
@@ -250,16 +253,16 @@ async function updateMarkers () {
               }</a></b>${item.name
               }</li>`
             ).appendTo('#events ul')
+            jQuery(`#${item.id}`).on('click', function (item) {
+              jumpToTime(item.target.text)
+              controller.updateClock()
+              controller.play()
+            })
           }
         })
       }
     })
   }
-  jQuery('.time-marker').on('click', function () {
-    jumpToTime(this.text)
-    controller.updateClock()
-    controller.play()
-  })
 }
 
 function invalidateLocalDataCache () {
@@ -297,8 +300,10 @@ function removeItems (removeMediaItems) {
     // We have some players that are no longer live and should be destroyed.
     removeMediaItems.forEach((playerId) => {
       if (playerId) {
+        if (hlsPlayers[playerId]) {
+          hlsPlayers[playerId].destroy()
+        }
         if (plyrPlayers[playerId]) {
-          jQuery(`#${playerId}`)[0].pause()
           jQuery(`#${playerId}`)[0].currentSrc = null
           jQuery(`#${playerId}`)[0].src = ''
           jQuery(`#${playerId}`)[0].removeAttribute('src') // empty source
@@ -344,6 +349,49 @@ function addItems (addMediaItems) {
               clickToPlay: false
             })
 
+            // ENABLE HLS
+            if (mediaItem.format === 'm3u8') {
+              if (Hls.isSupported()) {
+                const video = document.getElementById(playerId)
+                hlsPlayers[playerId] = new Hls({ debug: false, capLevelToPlayerSize: true })
+
+                // Bind the video and the HLS plugin together
+                hlsPlayers[playerId].attachMedia(video)
+                hlsPlayers[playerId].nextLevel = 0
+                hlsPlayers[playerId].on(Hls.Events.MEDIA_ATTACHED, () => {
+                  hlsPlayers[playerId].loadSource(mediaItem.url)
+                  hlsPlayers[playerId].on(
+                    Hls.Events.ERROR,
+                    (event, data) => {
+                      if (data.fatal) {
+                        switch (data.type) {
+                          case Hls.ErrorTypes
+                            .NETWORK_ERROR:
+                            // try to recover network error
+                            console.info(
+                              'HLS: fatal network error encountered, try to recover'
+                            )
+                            hlsPlayers[playerId].startLoad()
+                            break
+                          case Hls.ErrorTypes
+                            .MEDIA_ERROR:
+                            console.info(
+                              'HLS: fatal media error encountered, try to recover'
+                            )
+                            hlsPlayers[playerId].recoverMediaError()
+                            break
+                          default:
+                            // cannot recover
+                            hlsPlayers[playerId].destroy()
+                            break
+                        }
+                      }
+                    }
+                  )
+                })
+              }
+            }
+
             // Set the volume to the correct value
             jQuery(`#${playerId}`).prop(
               'volume',
@@ -371,6 +419,7 @@ function addItems (addMediaItems) {
                 )
               ) {
                 jQuery('div').removeClass('highlight')
+                hlsPlayers[playerId].nextLevel = 0
                 jQuery(`#${playerId}`).prop('muted', true)
               } else {
                 jQuery('div').removeClass('highlight')
@@ -384,69 +433,10 @@ function addItems (addMediaItems) {
                   )
                   .addClass('highlight')
                 jQuery(`#${playerId}`).prop('muted', false)
+                hlsPlayers[playerId].nextLevel = -1
               }
               return false
             })
-
-            // ENABLE HLS
-            if (mediaItem.format === 'm3u8') {
-              if (Hls.isSupported()) {
-                const video = document.getElementById(playerId)
-                const hls = new Hls({ debug: false })
-
-                function updateQuality (newQuality) {
-                  hls.levels.forEach((level, levelIndex) => {
-                    if (level.height === newQuality) {
-                      hls.currentLevel = levelIndex
-                    }
-                  })
-                }
-
-                // Bind the video and the HLS plugin together
-                hls.attachMedia(video)
-                hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-                  hls.loadSource(mediaItem.url)
-                  const defaultOptions = {}
-                  hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
-                    const availableQualities = hls.levels.map((l) => l.height)
-                    defaultOptions.quality = {
-                      default: availableQualities[0],
-                      options: availableQualities,
-                      forced: true,
-                      onChange: (e) => updateQuality(e)
-                    }
-                  })
-                  hls.on(
-                    Hls.Events.ERROR,
-                    (event, data) => {
-                      if (data.fatal) {
-                        switch (data.type) {
-                          case Hls.ErrorTypes
-                            .NETWORK_ERROR:
-                            // try to recover network error
-                            console.info(
-                              'HLS: fatal network error encountered, try to recover'
-                            )
-                            hls.startLoad()
-                            break
-                          case Hls.ErrorTypes
-                            .MEDIA_ERROR:
-                            console.info(
-                              'HLS: fatal media error encountered, try to recover'
-                            )
-                            hls.recoverMediaError()
-                            break
-                          default:
-                            // cannot recover
-                            hls.destroy()
-                            break
-                        }
-                      }
-                    }
-                  )
-                })
-              }
-            }
 
             break
 
@@ -531,6 +521,7 @@ function addItems (addMediaItems) {
                 })
                 globalModals.push(mediaItem.vidid)
                 controller.pause()
+                pauseAllPlayers()
               }
             }
             break
@@ -628,6 +619,7 @@ async function jumpToTime (stringTimeInput) {
   controller.setCurrent(hmsToSeconds(`${hours}:${minutes}:${seconds}`))
   controller.updateClock()
   controller.pause()
+  pauseAllPlayers()
   setTimeAllPlayers()
 }
 
@@ -660,6 +652,7 @@ jQuery(() => {
 
   jQuery('#pauseButton').on('click', () => {
     controller.pause()
+    pauseAllPlayers()
   })
 
   jQuery('.ffrw').on('click', function () {
@@ -710,6 +703,7 @@ jQuery(() => {
 
   jQuery('#menu-pause').on('click', () => {
     controller.pause()
+    pauseAllPlayers()
   })
 
   jQuery('#jumpItButton').click(() => {
@@ -734,7 +728,7 @@ jQuery(() => {
     jQuery('#jumpItPeriod').val(jumpPeriod)
 
     jumpToTime(
-      `${jumpHour}:${jumpMinute}:${jumpSecond} ${jumpPeriod}`
+      `${jumpHour}:${jumpMinute}:${jumpSecond}` + ' ' + `${jumpPeriod}`
     )
     controller.play()
   })
