@@ -1,4 +1,6 @@
 #!/bin/bash
+yes | cp -rf .env.deploy .env
+direnv allow . && eval "$(direnv export bash)"
 ./start_db.sh
 sleep 10
 bash -c "pip3 install -r requirements.txt &&
