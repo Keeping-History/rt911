@@ -28,6 +28,8 @@ cd backend
 
 5. Open <http://0.0.0.0:8001> in your browser.
 
+6. If you are using an Apple Silicon Mac, you may need to install mysqlclient separately. See https://stackoverflow.com/questions/66669728/trouble-installing-mysql-client-on-mac
+
 ### To start the frontend CMS
 
 1. Open a terminal and change into the root of the repo.
@@ -52,3 +54,39 @@ cd frontend
 <https://admin.911realtime.org/admin>
 *Username*: rt911view
 *Password*: R34lt1m3V13w5
+
+## Special Thanks
+Chris Wooster
+Sergey Kochergan
+Kori Stephens
+Alison L. Roberts
+Ryan M.
+Richard Harms
+Marina Harper
+Matt MG Herron
+Will Harris
+Tristan Warsaw
+Michael Locher
+Ruthalas
+James Wendel
+Adil Majid
+Jason Smith
+Adros
+Nikita Rogozov
+Will Riches
+Alana Malone
+Cameron Murphy
+Florence Arsenault
+Brian Witt
+Robinson Collado
+Léon Spaans
+Ben Romberg
+Adam Garst
+Greg
+Tolu
+David
+Gus Gordon
+Andrew Poirier
+Ty Satrang
+Carla Fuentes
+Laura M. Macklin Baglien

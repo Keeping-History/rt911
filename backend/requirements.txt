@@ -53,7 +53,7 @@ lxml>=4.6.2
 MarkupPy==1.14
 MarkupSafe==2.0.1
 mccabe==0.6.1
-mysqlclient>=2.0.1
+mysqlclient>=2.0.3
 odfpy==1.4.1
 openpyxl==3.0.9
 parsel==1.6.0
