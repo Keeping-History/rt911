@@ -213,6 +213,21 @@
     max-height: 80%;
 }
 
+#about {
+    top: 25%;
+    text-align: left !important;
+    width: 50%;
+    left: 25%;
+}
+
+#about .inner {
+    overflow-x: hidden;
+    overflow-y: scroll;
+    margin: 2px 4px 4px;
+    padding: 6px;
+}
+
+
 #audio div.inner, #news div.inner {
     padding: 0;
     padding-left: 0.5rem;
