@@ -63,6 +63,38 @@ class Media(models.Model):
     image = models.URLField(default='', blank=True)
     image_caption = models.TextField(default='', blank=True)
 
+    timezone = models.CharField(max_length=5, choices=[
+        ('CST', 'Central Standard Time'),
+        ('ADT', 'Atlantic Daylight Time'),
+        ('BST', 'British Summer Time'),
+        ('CST', 'Central Standard Time'),
+        ('CDT', 'Central Daylight Time'),
+        ('EDT', 'Eastern Daylight Time'),
+        ('EST', 'Eastern Standard Time'),
+        ('MSD', 'Moscow Summer Time'),
+        ('MDT', 'Mountain Daylight Time'),
+        ('MST', 'Mountain Standard Time'),
+        ('PDT', 'Pacific Daylight Time'),
+        ('PST', 'Pacific Standard Time'),
+        ('UTC', 'Coordinated Universal Time'),
+        ('JST', 'Japan Standard Time'),
+        ('CEST', 'Central European Summer Time'),
+        ('EEST', 'Eastern European Summer Time'),
+    ])
+
+    approved = models.BooleanField(default=False)
+    approved.boolean = True
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        self.calc_duration = (self.end_date - self.start_date).total_seconds()
+        super(Media, self).save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-start_date']
+
     approved = models.BooleanField(default=False)
     approved.boolean = True
 
