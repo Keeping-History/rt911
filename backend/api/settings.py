@@ -13,8 +13,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SECRET_KEY = str(os.getenv('DJANGO_SECRET_KEY'))
 DEBUG = str(os.getenv('DJANGO_DEBUG'))
-ALLOWED_HOSTS = str(os.getenv('DJANGO_ALLOWED_HOSTS'))
-
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS').split(' ')
 
 # Application definition
 
@@ -77,11 +76,11 @@ if os.getenv('GAE_APPLICATION', None):
     # the unix socket at /cloudsql/<your-cloudsql-connection string>
     DATABASES = {
         'default': {
-            'ENGINE': str(os.getenv('DJANGO_DB_CLOUD_ENGINE')),
-            'HOST': str(os.getenv('DJANGO_DB_CLOUD_HOST')),
-            'USER': str(os.getenv('DJANGO_DB_CLOUD_USER')),
-            'PASSWORD': str(os.getenv('DJANGO_DB_CLOUD_PASSWORD')),
-            'NAME': str(os.getenv('DJANGO_DB_CLOUD_NAME')),
+            'ENGINE': str(os.getenv('DJANGO_DB_CLOUD_ENGINE', '')),
+            'HOST': str(os.getenv('DJANGO_DB_CLOUD_HOST', '')),
+            'USER': str(os.getenv('DJANGO_DB_CLOUD_USER', '')),
+            'PASSWORD': str(os.getenv('DJANGO_DB_CLOUD_PASSWORD', '')),
+            'NAME': str(os.getenv('DJANGO_DB_CLOUD_NAME', '')),
         }
     }
 else:
@@ -93,12 +92,12 @@ else:
     # See https://cloud.google.com/sql/docs/mysql-connect-proxy
     DATABASES = {
         'default': {
-            'ENGINE': str(os.getenv('DJANGO_DB_LOCAL_ENGINE')),
-            'HOST': str(os.getenv('DJANGO_DB_LOCAL_HOST')),
-            'PORT': int(os.getenv('DJANGO_DB_LOCAL_PORT')),
-            'USER': str(os.getenv('DJANGO_DB_LOCAL_USER')),
-            'PASSWORD': str(os.getenv('DJANGO_DB_LOCAL_PASSWORD')),
-            'NAME': str(os.getenv('DJANGO_DB_LOCAL_NAME')),
+            'ENGINE': str(os.getenv('DJANGO_DB_LOCAL_ENGINE', '')),
+            'HOST': str(os.getenv('DJANGO_DB_LOCAL_HOST', '')),
+            'PORT': int(os.getenv('DJANGO_DB_LOCAL_PORT', 0)),
+            'USER': str(os.getenv('DJANGO_DB_LOCAL_USER', '')),
+            'PASSWORD': str(os.getenv('DJANGO_DB_LOCAL_PASSWORD', '')),
+            'NAME': str(os.getenv('DJANGO_DB_LOCAL_NAME', '')),
         }
     }
 # [END db_setup]
