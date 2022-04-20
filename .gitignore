@@ -77,3 +77,8 @@ node_modules
 # File Manager Files
 .DS_Store
 .env
+
+# Virtualenv related
+bin/
+include/
+pip-selfcheck.json
