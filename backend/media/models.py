@@ -44,7 +44,6 @@ class Marker(models.Model):
 class Media(models.Model):
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
-    calc_duration = models.IntegerField(default=0, editable=False)
     sort = models.IntegerField(default=0)
 
     title = models.CharField(max_length=255)
@@ -63,23 +62,16 @@ class Media(models.Model):
     image = models.URLField(default='', blank=True)
     image_caption = models.TextField(default='', blank=True)
 
-    timezone = models.CharField(max_length=5, choices=[
-        ('CST', 'Central Standard Time'),
-        ('ADT', 'Atlantic Daylight Time'),
-        ('BST', 'British Summer Time'),
-        ('CST', 'Central Standard Time'),
-        ('CDT', 'Central Daylight Time'),
-        ('EDT', 'Eastern Daylight Time'),
-        ('EST', 'Eastern Standard Time'),
-        ('MSD', 'Moscow Summer Time'),
-        ('MDT', 'Mountain Daylight Time'),
-        ('MST', 'Mountain Standard Time'),
-        ('PDT', 'Pacific Daylight Time'),
-        ('PST', 'Pacific Standard Time'),
-        ('UTC', 'Coordinated Universal Time'),
-        ('JST', 'Japan Standard Time'),
-        ('CEST', 'Central European Summer Time'),
-        ('EEST', 'Eastern European Summer Time'),
+    timezone = models.CharField(max_length=255, choices=[
+		('Asia/Baghdad',     'ADT - Atlantic Daylight Time'),
+		('Europe/London',    'BST - British Summer Time'),
+		('America/Chicago',  'CDT - Central Daylight Time'),
+		('Europe/Paris',     'CEST - Central European Summer Time'),
+		('Asia/Shanghai',    'CST - China Standard Time'),
+		('America/New_York', 'EDT - Eastern Daylight Time'),
+		('Asia/Jerusalem',   'EEST - Eastern European Summer Time'),
+		('Asia/Tokyo',       'JST - Japan Standard Time'),
+		('Europe/Moscow',    'MSD - Moscow Daylight Time')
     ])
 
     approved = models.BooleanField(default=False)
@@ -87,10 +79,6 @@ class Media(models.Model):
 
     def __str__(self):
         return self.title
-
-    def save(self, *args, **kwargs):
-        self.calc_duration = (self.end_date - self.start_date).total_seconds()
-        super(Media, self).save(*args, **kwargs)
 
     class Meta:
         ordering = ['-start_date']
@@ -112,7 +100,8 @@ class Media(models.Model):
 
     @property
     def calcDuration(self):
-        return str(datetime.timedelta(seconds=self.calc_duration))
+        delta = self.end_date - self.start_date
+        return str(datetime.timedelta(seconds=delta.total_seconds()))
 
 
     @property

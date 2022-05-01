@@ -48,7 +48,7 @@ class CollectionAdmin(ImportExportModelAdmin):
 
 class MediaAdmin(ImportExportModelAdmin):
     readonly_fields=('calcDuration')
-    list_display = ['approved', 'duration', 'title' ,'start_date', 'end_date', 'timezone', 'source', 'mediaType', 'sort', 'calcDuration']
+    list_display = ['approved', 'title' ,'start_date', 'end_date', 'timezone', 'source', 'mediaType', 'sort', 'calcDuration']
     list_filter = [ ('start_date', DateTimeRangeFilter), ('end_date', DateTimeRangeFilter), 'approved', 'source', 'format']
     date_hierarchy = 'start_date'
     actions = [approve_media, disapprove_media, ]
@@ -82,36 +82,10 @@ class MediaAdmin(ImportExportModelAdmin):
 
     preview_image.short_description = "Preview Image"
 
-
-def assign_person_tagtype(modeladmin, request, queryset):
-    for media in queryset:
-        TagType(1, name='Person').save()
-        media.type_of = TagType(1)
-        media.save()
-
-def assign_topic_tagtype(modeladmin, request, queryset):
-    for media in queryset:
-        TagType(2, name='Topic').save()
-        media.type_of = TagType(2)
-        media.save()
-
-
-def assign_military_tagtype(modeladmin, request, queryset):
-    for media in queryset:
-        TagType(3, name='Military').save()
-        media.type_of = TagType(3)
-        media.save()
-
-assign_person_tagtype.short_description = 'Make Person'
-assign_topic_tagtype.short_description = 'Make Topic'
-assign_military_tagtype.short_description = 'Make Military'
-
 class TagAdmin(ImportExportModelAdmin):
     model = Tag
     list_display = ['name', 'description', 'type_of']
-    search_fields = ('name', 'description')
-    actions = [assign_person_tagtype,
-    assign_topic_tagtype, assign_military_tagtype]
+    search_fields = ('name', 'description', 'type_of')
 
 class TagTypeAdmin(ImportExportModelAdmin):
     model = TagType
