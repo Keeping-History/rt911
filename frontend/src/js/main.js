@@ -30,6 +30,7 @@
 //
 
 const baseRemoteURL = '//admin.911realtime.org/media/'
+const timezone = {diff: 6, pretty: "ET"}
 const timeDrift = 15 // seconds
 const playerSync = 3 // seconds
 const preloadBuffer = 120 // seconds
@@ -59,7 +60,7 @@ const plyrPlayers = {}
 const hlsPlayers = {}
 
 // Create our controller instance
-const controller = new JohnG(0, 1, true, false, '.timeText')
+const controller = new JohnG(0, 1, true, false, '.timeText', timezone)
 
 // Preload data to improve performance
 // During build time, cache json data is added as a variable to increase
@@ -153,7 +154,9 @@ async function setTimeAllPlayers (sync = false) {
 
 // Format a date in pretty format
 function dateFormatter (d) {
-  let hours = d.getHours()
+  let hours = d.getHours() - timezone.diff
+  console.log("dateformmater");
+  console.log(d.getHours(), d.getHours() + timezone.diff);
   let minutes = d.getMinutes()
   let seconds = d.getSeconds()
   if (!this.clock24hour) {
@@ -783,7 +786,8 @@ jQuery(() => {
     closeExisting: false,
     fadeDuration: 100,
     clickClose: false,
-    blockerClass: 'blocker'
+    blockerClass: 'blocker',
+    escapeClose: false,
   })
 
   // Every (playerSync) seconds, sync the video players' time with the controller counter

@@ -83,6 +83,18 @@ def js_process():
 
     temp = js_file_write.write(js_contents)
 
+    print('Processing JSON Data Cache')
+    if config['DEFAULT']['CacheVars'] != "" and config['DEFAULT']['CacheURLS'] != "":
+        cache_vars = config['DEFAULT']['CacheVars'].split(",")
+        cache_urls = config['DEFAULT']['CacheURLS'].split(",")
+        data_cache_file_content = ""
+        for i in range(len(cache_vars)):
+            cache_url_file = urllib.request.urlopen(cache_urls[i])
+            cache_url_bytes = cache_url_file.read()
+            cache_url_contents = cache_url_bytes.decode("utf8")
+            cache_url_file.close()
+            data_cache_file_content += 'var ' + cache_vars[i] + ' = ' + cache_url_contents + '\n'
+    temp = js_file_write.write(data_cache_file_content)
     js_file_write.close()
     print('Processing JS files complete')
 
@@ -124,24 +136,6 @@ def resource_process():
     print('Processing Resource files complete')
 
 
-# Fill the data cache
-def data_cache_process():
-    print('Processing JSON Data Cache')
-    if config['DEFAULT']['CacheVars'] != "" and config['DEFAULT']['CacheURLS'] != "":
-        cache_vars = config['DEFAULT']['CacheVars'].split(",")
-        cache_urls = config['DEFAULT']['CacheURLS'].split(",")
-        data_cache_file_content = ""
-        for i in range(len(cache_vars)):
-            cache_url_file = urllib.request.urlopen(cache_urls[i])
-            cache_url_bytes = cache_url_file.read()
-            cache_url_contents = cache_url_bytes.decode("utf8")
-            cache_url_file.close()
-            data_cache_file_content += 'var ' + cache_vars[i] + ' = ' + cache_url_contents + '\n'
-    data_cache_file_write = open(config['DEFAULT']['CacheFileOuput'], "w+")
-    temp = data_cache_file_write.write(data_cache_file_content)
-    data_cache_file_write.close()
-
-
 # Fire the processes
 if __name__ == '__main__':
     css_process()
@@ -149,4 +143,3 @@ if __name__ == '__main__':
     html_process()
     root_process()
     resource_process()
-    data_cache_process()

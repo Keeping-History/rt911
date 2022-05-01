@@ -15,7 +15,7 @@ const JohnG = class {
     clock = false,
     clock24hour = false,
     clockDisplay = '',
-    timeZone = { diff: 6, pretty: 'ET' },
+    timeZone = { diff: -6, pretty: 'ET' },
     data = []
   ) {
     this.count = start
