@@ -8,7 +8,7 @@ do
 done
 ffmpeg -f concat -i ordered.txt -vcodec copy -acodec copy output.mp4
 declare -a ord=( $(cut -d '=' -f1 ordered.txt) )
-for index in "${!ord[@]}";
+for index in "${!arr[@]}";
 do
     rm "$index.mp4"
 done
