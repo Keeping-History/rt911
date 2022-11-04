@@ -89,7 +89,7 @@ sqlparse>=0.4.2
 tablib==3.1.0
 toml==0.10.2
 tqdm==4.62.3
-Twisted==22.4.0
+Twisted==22.10.0
 typed-ast==1.5.1
 urllib3>=1.26.4
 w3lib==1.22.0
