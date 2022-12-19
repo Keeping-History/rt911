@@ -2,7 +2,7 @@
 
 Project to collect multimedia from the September 11 Attacks and synchronize them into a common media player.
 
-VISIT THE SITE AT (911realtime.org)[https://911realtime.org]
+VISIT THE SITE AT https://911realtime.org
 
 ## Getting Started
 
