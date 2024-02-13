@@ -4,6 +4,8 @@ Project to collect multimedia from the September 11 Attacks and synchronize them
 
 VISIT THE SITE AT https://911realtime.org
 
+WHY DID WE DO THIS? https://youtu.be/q1ukl6G_s_M
+
 ## Getting Started
 
 The application is two parts:
