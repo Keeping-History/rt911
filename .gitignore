@@ -79,6 +79,6 @@ node_modules
 .env
 
 # Virtualenv related
-bin/
 include/
 pip-selfcheck.json
+codealike.json

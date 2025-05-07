@@ -1,0 +1,209 @@
+{
+  "system": {
+    "manager": {
+      "sound": {
+        "volume": 100,
+        "labels": [
+          {
+            "id": "",
+            "group": "",
+            "label": "",
+            "description": ""
+          }
+        ],
+        "disabled": [
+          "disabledSoundLabel"
+        ],
+        "soundPlayer": {}
+      },
+      "desktop": {},
+      "window": {
+        "active": "Text",
+        "windows": [
+          {
+            "id": "true",
+            "title": "true",
+            "appId": "true",
+            "icon": "true",
+            "hidden": true,
+            "open": true,
+            "closable": true,
+            "zoomed": true,
+            "zoomable": true,
+            "collapsed": true,
+            "collapsible": true,
+            "resizable": true,
+            "scrollable": true,
+            "modal": true,
+            "growable": true,
+            "size": [
+              "Text",
+              "Text"
+            ],
+            "position": [
+              "Text",
+              "Text"
+            ],
+            "minimumSize": [
+              "Text",
+              "Text"
+            ],
+            "header": {},
+            "appMenu": [
+              {}
+            ],
+            "contextMenu": [
+              {
+                "id": "",
+                "title": "",
+                "image": "",
+                "disabled": false,
+                "icon": "",
+                "keyboardShortcut": "",
+                "link": "",
+                "onClickFunc": {},
+                "menuChildren": []
+              }
+            ],
+            "onCloseFunc": {}
+          }
+        ]
+      },
+      "app": {
+        "active": "Text",
+        "apps": [
+          {
+            "id": "string",
+            "name": "string",
+            "icon": "string",
+            "defaultWindow": "string",
+            "noDesktopIcon": false,
+            "debug": false,
+            "openOnBoot": false
+          }
+        ]
+      }
+    },
+    "preferences": {
+      "theme": {
+        "available": [
+          {
+            "measurements": {
+              "window": {
+                "borderSize": 0,
+                "controlSize": 0,
+                "paddingSize": 0,
+                "scrollbarSize": 0
+              }
+            },
+            "typography": {
+              "ui": "",
+              "uiSize": 0,
+              "header": "",
+              "headerSize": 0,
+              "body": "",
+              "bodySize": 0
+            },
+            "id": "Unique Theme ID, URL Safe",
+            "desktop": {
+              "iconSize": 0,
+              "iconFontSize": 0,
+              "backgroundImage": "",
+              "backgroundColor": 0,
+              "backgroundImageRepeat": "",
+              "backgroundImagePosition": "",
+              "backgroundImageSize": ""
+            },
+            "name": "Theme Display Name",
+            "color": {
+              "window": {
+                "border": "",
+                "borderOutset": "",
+                "borderInset": "",
+                "frame": "",
+                "title": "",
+                "document": ""
+              },
+              "systemPalette": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "themePalette": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "NOTE": "Colors are stored as integers of their hex rep.\n\nlet hex: number = 0xff5733;\nlet a = hex.toString(16)\nconst b = Number('0x' + a)\nconsole.log(a,b)\n",
+              "outline": 0,
+              "select": 0,
+              "highlight": 0,
+              "black": 0,
+              "white": 0,
+              "alert": 0,
+              "error": 0,
+              "system": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "current": {
+          "baseId": "The theme that was last selected",
+          "modified": true,
+          "color": {
+            "system": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "window": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "theme": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "NOTE": "Colors are stored as integers of their hex rep.\n\nconst hexToInt = (hex: string): number => {\n    if(!hex.startsWith('0x')) hex = \"0x\" + hex\n    return Number(hex)\n}\n\nconst intToHex = (int: number): string => {\n    return int.toString(16)\n}\n\n\n",
+            "outline": 0,
+            "select": 0,
+            "highlight": 0,
+            "black": 0,
+            "white": 0,
+            "alert": 0,
+            "error": 0
+          }
+        }
+      }
+    }
+  }
+}

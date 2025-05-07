@@ -1,9 +1,0 @@
-https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js
-https://code.jquery.com/ui/1.12.1/jquery-ui.min.js
-https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js
-https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js
-https://cdnjs.cloudflare.com/ajax/libs/jqueryui-touch-punch/0.2.3/jquery.ui.touch-punch.min.js
-https://cdnjs.cloudflare.com/ajax/libs/datejs/1.0/date.min.js
-https://cdn.plyr.io/3.6.2/plyr.polyfilled.js
-https://cdn.jsdelivr.net/npm/hls.js@1.0.10/dist/hls.min.js
-https://cdnjs.cloudflare.com/ajax/libs/mustache.js/4.1.0/mustache.min.js

@@ -1,5 +1,0 @@
-requests
-configparser
-csscompressor
-jsmin
-htmlmin

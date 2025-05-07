@@ -1,3 +1,0 @@
-var dataCache = [{"id": 16919, "start_date": "2001-09-11T00:00:01Z", "end_date": "2001-09-11T23:59:59Z", "calc_duration": 23996, "sort": 100, "title": "CNN", "source": "CNN", "full_title": "CNN : September 11, 2001", "url": "https://cdn2.911realtime.org/transcoded/cnn/2001-09-11_2/CNN_20010911_video-hls.m3u8", "format": "m3u8", "jump": 0, "trim": 0, "volume": "1.00", "mute": false, "content": "CNN : September 11, 2001", "image": "https://cdn.911realtime.org/transcoded/cnn/2001-09-11/CNN_20010911_video-poster.jpg", "image_caption": "", "approved": true, "media_type": "video", "duration": 86398, "start": 1, "end": 86399, "vidid": "m8a3c50ac20e0f2ac264893c54f41fe9f"}]
-var markerListCache = []
-var networkListCache = []
