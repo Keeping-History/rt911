@@ -13,7 +13,8 @@ import { classicyDesktopIconEventHandler } from '@/app/SystemFolder/SystemResour
 import themesData from '@/app/SystemFolder/ControlPanels/AppearanceManager/styles/themes.json'
 import {
     classicyDateTimeManagerEventHandler
-} from "@/app/SystemFolder/ControlPanels/DateAndTimeManager/DateAndTimeManager";
+} from "@/app/SystemFolder/ControlPanels/DateAndTimeManager/DateAndTimeManager.app";
+import { useDesktopDispatch } from '@/app/SystemFolder/ControlPanels/AppManager/ClassicyAppManagerContext'
 
 export interface ClassicyStoreSystemAppManager extends ClassicyStoreSystemManager {
     apps: ClassicyStoreSystemApp[]

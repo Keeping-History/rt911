@@ -3,7 +3,6 @@ import classicyMenuStyles from '@/app/SystemFolder/SystemResources/Menu/Classicy
 import classNames from 'classnames'
 import React, {useContext} from 'react'
 import {useDesktop, useDesktopDispatch} from "@/app/SystemFolder/ControlPanels/AppManager/ClassicyAppManagerContext";
-import {classicyDesktopStateEventReducer} from "@/app/SystemFolder/ControlPanels/AppManager/ClassicyAppManager";
 
 type ClassicyDesktopMenuWidgetTimeProps = {
     hide?: boolean
@@ -25,7 +24,7 @@ const ClassicyDesktopMenuWidgetTime: React.FC<ClassicyDesktopMenuWidgetTimeProps
                                                                                          flashSeparators = true,
                                                                                      }) => {
     const desktopContext = useDesktop()
-    const desktopDispatch = useDesktopDispatch()
+    const desktopEventDispatch = useDesktopDispatch()
     const [time, setTime] = React.useState({
         day: new Date(desktopContext.System.Manager.DateAndTime.dateTime).getDay(),
         minutes: new Date(desktopContext.System.Manager.DateAndTime.dateTime).getMinutes(),
@@ -38,6 +37,7 @@ const ClassicyDesktopMenuWidgetTime: React.FC<ClassicyDesktopMenuWidgetTimeProps
     React.useEffect(() => {
         const intervalId = setInterval(() => {
             const date = new Date(desktopContext.System.Manager.DateAndTime.dateTime)
+            date.setSeconds(date.getSeconds() + 1)
             setTime({
                 day: date.getDay(),
                 minutes: date.getMinutes(),
@@ -45,7 +45,10 @@ const ClassicyDesktopMenuWidgetTime: React.FC<ClassicyDesktopMenuWidgetTimeProps
                 seconds: date.getSeconds(),
                 period: date.getHours() >= 12 ? ' PM' : ' AM',
             })
-            desktopContext.System.Manager.DateAndTime.dateTime = date.toISOString()
+            desktopEventDispatch({
+                type: 'ClassicyManagerDateTimeSet',
+                dateTime: date,
+            })
         }, 1000)
 
         return () => clearInterval(intervalId)
@@ -73,15 +76,16 @@ const ClassicyDesktopMenuWidgetTime: React.FC<ClassicyDesktopMenuWidgetTimeProps
     }
 
     const openDateTimeManager = () => {
-        desktopDispatch({
+        desktopEventDispatch({
             type: 'ClassicyAppOpen',
             app: {
                 id: "DateAndTimeManager.app",
                 name: "Date and Time Manager",
+                icon: `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/img/icons/control-panels/date-time-manager/date-time-manager.png`
             },
         })
-
     }
+
     return (
         <>
             {!hide && (

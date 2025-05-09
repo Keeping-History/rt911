@@ -84,7 +84,7 @@ export const AppearanceManager: React.FC = () => {
     }
 
     return (
-        <ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow={'AppearanceManager_1'} openOnBoot={true}>
+        <ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow={'AppearanceManager_1'} openOnBoot={true} noDesktopIcon={true} addSystemMenu={true} >
             <ClassicyWindow
                 id={'AppearanceManager_1'}
                 title={appName}

@@ -30,6 +30,30 @@ export interface ClassicyStoreSystemDesktopManager extends ClassicyStoreSystemMa
 
 export const classicyDesktopEventHandler = (ds: ClassicyStore, action) => {
     switch (action.type) {
+        case 'ClassicyDesktopAppMenuAdd': {
+            const menuItem = {
+                id: "system_menu" +  action.app.id,
+                title: action.app.name,
+                image: action.app.icon,
+                event: "ClassicyAppOpen",
+                eventData: {
+                    app: {
+                        id: action.app.id,
+                        name: action.app.name,
+                        icon: action.app.icon,
+                    },
+                }
+            }
+
+            const exists = ds.System.Manager.Desktop.systemMenu.findIndex((i) => i.id === menuItem.id )
+            if (exists >= 0) {
+                ds.System.Manager.Desktop.systemMenu[exists] = menuItem
+            } else {
+                ds.System.Manager.Desktop.systemMenu.push(menuItem)
+            }
+
+            break
+        }
         case 'ClassicyDesktopFocus': {
             if ('e' in action && action.e.target.id === 'classicyDesktop') {
                 ds.System.Manager.App.apps = ds.System.Manager.App.apps.map((a) => {

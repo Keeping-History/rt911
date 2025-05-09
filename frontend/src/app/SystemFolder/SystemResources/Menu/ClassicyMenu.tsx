@@ -2,6 +2,7 @@ import classicyMenuStyles from '@/app/SystemFolder/SystemResources/Menu/Classicy
 import { useSoundDispatch } from '@/app/SystemFolder/SystemResources/SoundManager/ClassicySoundManagerContext'
 import classNames from 'classnames'
 import React from 'react'
+import {useDesktopDispatch} from "@/app/SystemFolder/ControlPanels/AppManager/ClassicyAppManagerContext";
 
 export interface ClassicyMenuItem {
     id: string
@@ -11,6 +12,8 @@ export interface ClassicyMenuItem {
     icon?: string
     keyboardShortcut?: string
     link?: string
+    event?: string
+    eventData?: any
     onClickFunc?: any
     menuChildren?: ClassicyMenuItem[]
     className?: string
@@ -40,6 +43,7 @@ const ClassicyMenu: React.FC<ClassicyMenuProps> = ({ menuItems, navClass, subNav
 
 const ClassicyMenuItem: React.FC<{ menuItem: ClassicyMenuItem; subNavClass: string }> = ({ menuItem, subNavClass }) => {
     const player = useSoundDispatch()
+    const desktopDispatch = useDesktopDispatch()
     if (menuItem) {
         let newMenuItem = <></>
         if (menuItem.id === 'spacer') {
@@ -68,6 +72,11 @@ const ClassicyMenuItem: React.FC<{ menuItem: ClassicyMenuItem; subNavClass: stri
                 onClick={() => {
                     if (menuItem.onClickFunc) {
                         menuItem.onClickFunc()
+                    } else if (menuItem.event && menuItem.eventData) {
+                        desktopDispatch({
+                            type: "ClassicyAppOpen",
+                            app: menuItem.eventData.app,
+                        })
                     }
                 }}
                 onMouseOver={() => {

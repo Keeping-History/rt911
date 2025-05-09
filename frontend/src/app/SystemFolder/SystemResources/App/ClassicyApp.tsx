@@ -11,6 +11,7 @@ interface ClassicyAppProps {
     icon: string
     defaultWindow: string
     noDesktopIcon?: boolean
+    addSystemMenu?: boolean
     debug?: boolean
     openOnBoot?: boolean
     children?: any
@@ -21,6 +22,7 @@ const ClassicyApp: React.FC<ClassicyAppProps> = ({
     icon,
     name,
     openOnBoot,
+    addSystemMenu,
     noDesktopIcon,
     defaultWindow,
     debug = false,
@@ -67,6 +69,16 @@ const ClassicyApp: React.FC<ClassicyAppProps> = ({
     }
 
     React.useEffect(() => {
+        if (addSystemMenu) {
+            desktopEventDispatch({
+                type: 'ClassicyDesktopAppMenuAdd',
+                app: {
+                    id: id,
+                    name: name,
+                    icon: icon,
+                },
+            })
+        }
         if (isAppActive()) {
             desktopEventDispatch({
                 type: 'ClassicyWindowFocus',

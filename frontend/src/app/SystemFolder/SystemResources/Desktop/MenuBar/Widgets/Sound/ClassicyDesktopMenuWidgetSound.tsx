@@ -3,6 +3,7 @@ import classicyMenuStyles from '@/app/SystemFolder/SystemResources/Menu/Classicy
 import { useSound, useSoundDispatch } from '@/app/SystemFolder/SystemResources/SoundManager/ClassicySoundManagerContext'
 import classNames from 'classnames'
 import React from 'react'
+import {useDesktop, useDesktopDispatch} from "@/app/SystemFolder/ControlPanels/AppManager/ClassicyAppManagerContext";
 
 type ClassicyDesktopMenuWidgetSoundProps = {
     hide?: boolean
@@ -14,6 +15,19 @@ const ClassicyDesktopMenuWidgetSound: React.FC<ClassicyDesktopMenuWidgetSoundPro
 
     const player = useSoundDispatch()
     const playerState = useSound()
+    const desktopEventDispatch = useDesktopDispatch()
+
+    const openSoundManager = (e) => {
+        e.preventDefault()
+        desktopEventDispatch({
+            type: 'ClassicyAppOpen',
+            app: {
+                id: "SoundManager.app",
+                name: "Sound Manager",
+                icon: `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/img/icons/control-panels/sound-manager/app.png`
+            },
+        })
+    }
 
     const mute = () => {
         player({
@@ -33,6 +47,7 @@ const ClassicyDesktopMenuWidgetSound: React.FC<ClassicyDesktopMenuWidgetSoundPro
                         classicyMenuStyles.classicyMenuItemNoImage
                     )}
                     onClick={mute}
+                    onDoubleClick={openSoundManager}
                 >
                     <img
                         src={playerState.disabled.includes('*') ? soundOffImg : soundOnImg}

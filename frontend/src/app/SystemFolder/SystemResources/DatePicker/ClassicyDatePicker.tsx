@@ -36,7 +36,6 @@ const ClassicyDatePicker: React.FC<ClassicyDatePickerProps> = React.forwardRef<H
             desktopEventDispatch({
                 type: 'ClassicyManagerDateTimeSet',
                 dateTime: selectedDate,
-                debug: true
             })
             if (onChangeFunc) {
                 onChangeFunc()

@@ -14,16 +14,13 @@ import ClassicyDatePicker from "@/app/SystemFolder/SystemResources/DatePicker/Cl
 import ClassicyTimePicker from "@/app/SystemFolder/SystemResources/TimePicker/ClassicyTimePicker";
 import {ClassicyStore} from "@/app/SystemFolder/ControlPanels/AppManager/ClassicyAppManager";
 
-export const DateAndTimeManager: React.FC = () => {
+export const DateAndTimeManagerApp: React.FC = () => {
     const appName: string = 'Date and Time Manager'
     const appId: string = 'DateAndTimeManager.app'
-    const appIcon: string = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/img/icons/control-panels/appearance-manager/app.png`
-    const packageIcon: string = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/img/icons/control-panels/appearance-manager/platinum.png`
+    const appIcon: string = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/img/icons/control-panels/date-time-manager/date-time-manager.png`
 
     const desktopContext = useDesktop(),
         desktopEventDispatch = useDesktopDispatch()
-
-    const player = useSoundDispatch()
 
     const [showAbout, setShowAbout] = React.useState(false)
 
@@ -162,7 +159,7 @@ export const DateAndTimeManager: React.FC = () => {
     ]
 
     return (
-        <ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow={'DateAndTimeManager_1'} openOnBoot={true}>
+        <ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow={'DateAndTimeManager_1'} openOnBoot={true} noDesktopIcon={true} addSystemMenu={true}>
             <ClassicyWindow
                 id={'DateAndTimeManager_1'}
                 title={appName}

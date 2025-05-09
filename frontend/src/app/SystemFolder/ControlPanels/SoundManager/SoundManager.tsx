@@ -16,6 +16,7 @@ import {
 } from '@/app/SystemFolder/SystemResources/SoundManager/ClassicySoundManagerContext'
 import ClassicyWindow from '@/app/SystemFolder/SystemResources/Window/ClassicyWindow'
 import React from 'react'
+import ClassicyButton from "@/app/SystemFolder/SystemResources/Button/ClassicyButton";
 
 export const SoundManager: React.FC = () => {
     const desktopEventDispatch = useDesktopDispatch()
@@ -81,7 +82,7 @@ export const SoundManager: React.FC = () => {
     }
 
     return (
-        <ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow={'SoundManager_1'} openOnBoot={true}>
+        <ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow={'SoundManager_1'} openOnBoot={true} noDesktopIcon={true} addSystemMenu={true}>
             <ClassicyWindow
                 id={'SoundManager_1'}
                 title={appName}
@@ -125,6 +126,9 @@ export const SoundManager: React.FC = () => {
                         ))}
                     </div>
                 </ClassicyDisclosure>
+                <ClassicyButton isDefault={false} onClick={quitApp}>
+                    Quit
+                </ClassicyButton>
             </ClassicyWindow>
             {showAbout && getClassicyAboutWindow({ appId, appName, appIcon, hideFunc: () => setShowAbout(false) })}
         </ClassicyApp>
