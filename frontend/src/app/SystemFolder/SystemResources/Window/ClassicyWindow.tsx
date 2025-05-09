@@ -357,7 +357,7 @@ const ClassicyWindow: React.FC<ClassicyWindowProps> = ({
                     ref={windowRef}
                     style={{
                         width: size[0] === 0 ? 'auto' : size[0],
-                        height: ws.collapsed ? '1em' : size[1] === 0 ? '1em' : size[1],
+                        height: ws.collapsed ? 'auto' : size[1] === 0 ? 'auto' : size[1],
                         left: ws.position[0],
                         top: ws.position[1],
                         minWidth: minimumSize[0],

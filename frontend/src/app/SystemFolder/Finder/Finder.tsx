@@ -24,7 +24,7 @@ const Finder = () => {
         const appIndex = desktop.System.Manager.App.apps.findIndex((app) => app.id === appId)
         const appData = desktop.System.Manager.App.apps[appIndex].data || {}
         if (!appData?.hasOwnProperty('openPaths')) {
-            appData["openPaths"] = ['Macintosh HD']
+            appData["openPaths"] = []
         }
         desktop.System.Manager.App.apps[appIndex].data = appData
         setOpenPaths(appData['openPaths'])
@@ -92,37 +92,27 @@ const Finder = () => {
 
     const fs = React.useMemo(() => new ClassicyFileSystem(''), [])
 
-    React.useEffect(() => {
-        const drives = fs.filterByType('', 'drive')
-
-        Object.entries(drives).forEach(([a, b]) => {
-            console.log(a)
-            const openFolderFunc = () => {
-                openFolder(a)
-            }
-            desktopEventDispatch({
-                type: 'ClassicyDesktopIconAdd',
-                app: {
-                    id: appId,
-                    name: a,
-                    icon: b['_icon'],
-                    onClickFunc: openFolderFunc,
-                },
-                kind: '_drive',
-            })
-        })
-
-        desktopEventDispatch({
-            type: 'ClassicyDesktopIconAdd',
-            app: {
-                id: 'finder_trash',
-                name: 'Trash',
-                icon: `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/img/icons/system/desktop/trash-full.png`,
-            },
-            kind: 'trash',
-            onClickFunc: emptyTrash,
-        })
-    }, [fs])
+    // React.useEffect(() => {
+    //     const drives = fs.filterByType('', 'drive')
+    //
+    //     Object.entries(drives).forEach(([a, b]) => {
+    //         console.log(a)
+    //         const openFolderFunc = () => {
+    //             openFolder(a)
+    //         }
+    //         desktopEventDispatch({
+    //             type: 'ClassicyDesktopIconAdd',
+    //             app: {
+    //                 id: appId,
+    //                 name: a,
+    //                 icon: b['_icon'],
+    //                 onClickFunc: openFolderFunc,
+    //             },
+    //             kind: '_drive',
+    //         })
+    //     })
+    //
+    // }, [fs])
 
     const getHeaderString = (dir) => {
         return (

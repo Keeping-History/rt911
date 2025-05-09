@@ -1,7 +1,9 @@
 import classicyDesktopMenuWidgetTimeStyles from '@/app/SystemFolder/SystemResources/Desktop/MenuBar/Widgets/Time/ClassicyDesktopMenuWidgetTime.module.scss'
 import classicyMenuStyles from '@/app/SystemFolder/SystemResources/Menu/ClassicyMenu.module.scss'
 import classNames from 'classnames'
-import React from 'react'
+import React, {useContext} from 'react'
+import {useDesktop, useDesktopDispatch} from "@/app/SystemFolder/ControlPanels/AppManager/ClassicyAppManagerContext";
+import {classicyDesktopStateEventReducer} from "@/app/SystemFolder/ControlPanels/AppManager/ClassicyAppManager";
 
 type ClassicyDesktopMenuWidgetTimeProps = {
     hide?: boolean
@@ -14,27 +16,28 @@ type ClassicyDesktopMenuWidgetTimeProps = {
 }
 
 const ClassicyDesktopMenuWidgetTime: React.FC<ClassicyDesktopMenuWidgetTimeProps> = ({
-    hide = false,
-    militaryTime = false,
-    displaySeconds = false,
-    displayPeriod = true,
-    displayDay = true,
-    displayLongDay = false,
-    flashSeparators = true,
-}) => {
+                                                                                         hide = false,
+                                                                                         militaryTime = false,
+                                                                                         displaySeconds = false,
+                                                                                         displayPeriod = true,
+                                                                                         displayDay = true,
+                                                                                         displayLongDay = false,
+                                                                                         flashSeparators = true,
+                                                                                     }) => {
+    const desktopContext = useDesktop()
+    const desktopDispatch = useDesktopDispatch()
     const [time, setTime] = React.useState({
-        day: new Date().getDay(),
-        minutes: new Date().getMinutes(),
-        hours: new Date().getHours() === 0 ? 12 : new Date().getHours(),
-        seconds: new Date().getSeconds(),
-        period: new Date().getHours() >= 12 ? ' PM' : ' AM',
+        day: new Date(desktopContext.System.Manager.DateAndTime.dateTime).getDay(),
+        minutes: new Date(desktopContext.System.Manager.DateAndTime.dateTime).getMinutes(),
+        hours: new Date(desktopContext.System.Manager.DateAndTime.dateTime).getHours() === 0 ? 12 : new Date().getHours(),
+        seconds: new Date(desktopContext.System.Manager.DateAndTime.dateTime).getSeconds(),
+        period: new Date(desktopContext.System.Manager.DateAndTime.dateTime).getHours() >= 12 ? ' PM' : ' AM',
     })
-
     const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
     React.useEffect(() => {
         const intervalId = setInterval(() => {
-            const date = new Date()
+            const date = new Date(desktopContext.System.Manager.DateAndTime.dateTime)
             setTime({
                 day: date.getDay(),
                 minutes: date.getMinutes(),
@@ -42,6 +45,7 @@ const ClassicyDesktopMenuWidgetTime: React.FC<ClassicyDesktopMenuWidgetTimeProps
                 seconds: date.getSeconds(),
                 period: date.getHours() >= 12 ? ' PM' : ' AM',
             })
+            desktopContext.System.Manager.DateAndTime.dateTime = date.toISOString()
         }, 1000)
 
         return () => clearInterval(intervalId)
@@ -68,6 +72,16 @@ const ClassicyDesktopMenuWidgetTime: React.FC<ClassicyDesktopMenuWidgetTimeProps
         return
     }
 
+    const openDateTimeManager = () => {
+        desktopDispatch({
+            type: 'ClassicyAppOpen',
+            app: {
+                id: "DateAndTimeManager.app",
+                name: "Date and Time Manager",
+            },
+        })
+
+    }
     return (
         <>
             {!hide && (
@@ -77,6 +91,7 @@ const ClassicyDesktopMenuWidgetTime: React.FC<ClassicyDesktopMenuWidgetTimeProps
                         classicyMenuStyles.classicyMenuItemNoImage,
                         classicyDesktopMenuWidgetTimeStyles.classicyDesktopMenuTime
                     )}
+                    onDoubleClick={openDateTimeManager}
                 >
                     {displayDay && (
                         <span>{displayLongDay ? daysOfWeek[time.day] : daysOfWeek[time.day].slice(0, 3)}&nbsp;</span>

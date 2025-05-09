@@ -17,26 +17,36 @@ type classicyPopUpMenuProps = {
     onChangeFunc?: any
 }
 const ClassicyPopUpMenu: React.FC<classicyPopUpMenuProps> = ({
-    id,
-    label,
-    options,
-    selected,
-    small = false,
-    onChangeFunc,
-}) => {
+                                                                 id,
+                                                                 label,
+                                                                 options,
+                                                                 selected,
+                                                                 small = false,
+                                                                 onChangeFunc,
+                                                             }) => {
+
+    const [selectedItem, setSelectedItem] = React.useState(selected)
+
+    const onChangeHandler = (e) => {
+        setSelectedItem(e.target.value)
+        if (onChangeFunc) {
+            onChangeFunc(e)
+        }
+    }
+
     return (
         <div className={classicyPopUpMenuStyle.classicyPopUpMenuWrapper}>
-            {label && <ClassicyControlLabel label={label}></ClassicyControlLabel>}
+            {label && <ClassicyControlLabel label={label} direction={"right"}></ClassicyControlLabel>}
             <div
-                style={{ flexGrow: '2' }}
+                style={{flexGrow: '2'}}
                 className={classNames(
                     classicyPopUpMenuStyle.classicyPopUpMenu,
                     small ? classicyPopUpMenuStyle.classicyPopUpMenuSmall : ''
                 )}
             >
-                <select id={id} tabIndex={0} value={selected} onChange={onChangeFunc}>
+                <select id={id} tabIndex={0} value={selectedItem} onChange={onChangeHandler}>
                     {options.map((o) => (
-                        <option key={o.value} value={o.value}>
+                        <option key={id + o.label + o.value} value={o.value}>
                             {o.label}
                         </option>
                     ))}

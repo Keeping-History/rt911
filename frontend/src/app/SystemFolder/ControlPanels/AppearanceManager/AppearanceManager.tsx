@@ -101,6 +101,7 @@ export const AppearanceManager: React.FC = () => {
                 appMenu={appMenu}
             >
                 <ClassicyControlLabel label={'The current Theme Package is Platinum'} icon={packageIcon} />
+                <br/>
                 <ClassicyPopUpMenu
                     id={'select_theme'}
                     label={'Selected Theme'}
@@ -108,7 +109,10 @@ export const AppearanceManager: React.FC = () => {
                     onChangeFunc={switchTheme}
                     selected={desktopContext.System.Manager.Appearance.activeTheme.id || 'default'}
                 />
+                <br/>
+
                 <ClassicyButton onClick={cleanupIcons}>Cleanup Icons</ClassicyButton>
+                <ClassicyButton onClick={quitApp}>Quit</ClassicyButton>
             </ClassicyWindow>
             {showAbout && getClassicyAboutWindow({ appId, appName, appIcon, hideFunc: () => setShowAbout(false) })}
         </ClassicyApp>

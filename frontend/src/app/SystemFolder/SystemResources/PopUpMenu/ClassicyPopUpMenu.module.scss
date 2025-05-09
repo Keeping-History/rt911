@@ -28,17 +28,18 @@
 
 .classicyPopUpMenu {
   font-family: var(--ui-font);
-  font-size: 1em;
+  font-size: .75em;
+
+  height: calc(var(--window-control-size) * 2.125);
 
   line-height: 1.1;
 
   position: relative;
   display: grid;
   align-items: center;
-  min-width: calc(var(--window-control-size) * 10);
+  min-width: calc(var(--window-control-size) * 5);
 
   @include appearance.platinumWindowDepressable;
-  margin: var(--window-control-size);
   cursor: pointer;
   user-select: none;
 

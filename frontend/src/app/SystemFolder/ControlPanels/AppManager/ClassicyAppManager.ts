@@ -6,11 +6,14 @@ import {
 } from '@/app/SystemFolder/ControlPanels/AppearanceManager/ClassicyAppearance'
 import {
     classicyDesktopEventHandler,
-    ClassicyStoreSystemDesktopManager,
+    ClassicyStoreSystemDesktopManager, ClassicyStoreSystemDesktopManagerIcon,
 } from '@/app/SystemFolder/SystemResources/Desktop/ClassicyDesktopManager'
 import { classicyWindowEventHandler } from '@/app/SystemFolder/SystemResources/Desktop/ClassicyDesktopWindowManagerContext'
 import { classicyDesktopIconEventHandler } from '@/app/SystemFolder/SystemResources/Desktop/ClassicyDesktopIconContext'
 import themesData from '@/app/SystemFolder/ControlPanels/AppearanceManager/styles/themes.json'
+import {
+    classicyDateTimeManagerEventHandler
+} from "@/app/SystemFolder/ControlPanels/DateAndTimeManager/DateAndTimeManager";
 
 export interface ClassicyStoreSystemAppManager extends ClassicyStoreSystemManager {
     apps: ClassicyStoreSystemApp[]
@@ -67,7 +70,13 @@ export interface ClassicyStoreSystem {
         Sound: ClassicyStoreSystemSoundManager
         App: ClassicyStoreSystemAppManager
         Appearance: ClassicyStoreSystemAppearanceManager
+        DateAndTime: ClassicyStoreSystemDateAndTimeManager
     }
+}
+
+export interface ClassicyStoreSystemDateAndTimeManager extends ClassicyStoreSystemManager {
+    dateTime: string
+    timeZoneOffset: number
 }
 
 export interface ClassicyStoreSystemManager {}
@@ -198,6 +207,8 @@ export const classicyDesktopStateEventReducer = (ds: ClassicyStore, action) => {
             ds = classicyDesktopIconEventHandler(ds, action)
         } else if (action.type.startsWith('ClassicyDesktop')) {
             ds = classicyDesktopEventHandler(ds, action)
+        } else if (action.type.startsWith('ClassicyManagerDateTime')) {
+            ds = classicyDateTimeManagerEventHandler(ds, action)
         }
     }
     if ('debug' in action) {
@@ -210,6 +221,10 @@ export const classicyDesktopStateEventReducer = (ds: ClassicyStore, action) => {
 export const DefaultDesktopState: ClassicyStore = {
     System: {
         Manager: {
+            DateAndTime: {
+                dateTime: new Date().toISOString(),
+                timeZoneOffset: new Date().getTimezoneOffset()
+            },
             Sound: {
                 volume: 100,
                 labels: {},

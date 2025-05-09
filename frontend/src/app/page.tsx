@@ -12,9 +12,9 @@ export default function Home() {
     return (
         <ClassicyDesktopProvider>
             <ClassicyDesktop>
-                <EPG/>
-                <QuickTimeMoviePlayer/>
-                <SimpleText/>
+                {/*<EPG/>*/}
+                {/*<QuickTimeMoviePlayer/>*/}
+                {/*<SimpleText/>*/}
             </ClassicyDesktop>
         </ClassicyDesktopProvider>
     )
