@@ -104,10 +104,29 @@ export const classicyDesktopEventHandler = (ds: ClassicyStore, action) => {
             }
             break
         }
-        case 'ClassicyDesktopTheme': {
+        case 'ClassicyDesktopChangeTheme': {
             ds.System.Manager.Appearance.activeTheme = ds.System.Manager.Appearance.availableThemes.find(
                 (a) => a.id == action.activeTheme
             )
+            break
+        }
+        case 'ClassicyDesktopChangeBackground': {
+            ds.System.Manager.Appearance.activeTheme.desktop.backgroundImage = action.backgroundImage
+            ds.System.Manager.Appearance.activeTheme.desktop.backgroundSize = "auto"
+            break
+        }
+        case 'ClassicyDesktopChangeFont': {
+            switch (action.fontType) {
+                case 'body':
+                    ds.System.Manager.Appearance.activeTheme.typography.body = action.font
+                    break
+                case 'ui':
+                    ds.System.Manager.Appearance.activeTheme.typography.ui = action.font
+                    break
+                case 'header':
+                    ds.System.Manager.Appearance.activeTheme.typography.header = action.font
+                    break
+            }
             break
         }
         case 'ClassicyDesktopLoadThemes': {

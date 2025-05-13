@@ -58,7 +58,7 @@ export type ClassicyThemeDesktop = {
     iconFontSize: number
     backgroundImage: string
     backgroundColor: number
-    backgroundSize: number
+    backgroundSize: number | string
     backgroundRepeat: string
     backgroundPosition: string | number
 }
@@ -118,7 +118,7 @@ const makeThemeStyle = (theme: ClassicyTheme) => {
         '--desktop-background-color': intToHex(theme.desktop.backgroundColor),
         '--desktop-background-repeat': theme.desktop.backgroundRepeat,
         '--desktop-background-position': theme.desktop.backgroundPosition,
-        '--desktop-background-size': intToPct(theme.desktop.backgroundSize),
+        '--desktop-background-size': typeof theme.desktop.backgroundSize === 'number' ? intToPct(theme.desktop.backgroundSize) : theme.desktop.backgroundSize,
     }
 }
 

@@ -111,16 +111,14 @@ export const SoundManager: React.FC = () => {
                         {getSoundLabelGroups().map((group: string) => (
                             <ClassicyControlGroup label={group} columns={true} key={appId + '_' + group}>
                                 {playerState.labels.map((item: ClassicySoundInfo) => (
-                                    <>
-                                        {item.group === group && (
-                                            <ClassicyCheckbox
-                                                key={appId + '_' + group + item.id}
-                                                id={'enable_sound_' + item.id}
-                                                label={item.label}
-                                                checked={playerState.disabled.includes('*')}
-                                            />
-                                        )}
-                                    </>
+                                    item.group === group && (
+                                        <ClassicyCheckbox
+                                            key={appId + '_' + group + item.id}
+                                            id={'enable_sound_' + item.id}
+                                            label={item.label}
+                                            checked={playerState.disabled.includes('*')}
+                                        />
+                                    )
                                 ))}
                             </ClassicyControlGroup>
                         ))}
