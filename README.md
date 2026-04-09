@@ -1,4 +1,6 @@
-# rt911
+# 911realtime.org
+
+## Note: An Update to 911realtime.org is coming for the 25th anniversary of the 9/11/2001 attacks. Stay tuned for more details.
 
 Project to collect multimedia from the September 11 Attacks and synchronize them into a common media player.
 
