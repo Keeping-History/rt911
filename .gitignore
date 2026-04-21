@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.DS_Store
+.env
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Large generated data files
+media-service/entries_media.json
+media-service/entries_news.json
+.claude/
