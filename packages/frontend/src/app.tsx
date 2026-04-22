@@ -33,6 +33,7 @@ createRoot(rootElement).render(
 					<News />
 					<PagerDecoder />
 					<TV />
+					<Controls />
 				</ClassicyDesktop>
 			</MediaStreamProvider>
 		</ClassicyAppManagerProvider>
