@@ -113,7 +113,12 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.DIRECTUS_ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.DIRECTUS_ADMIN_PASSWORD }}
           PSQL_URL: postgres://rt911:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/rt911-backend-db
-        run: node packages/backend/seed.mjs
+        run: |
+          ./cloud-sql-proxy --port=5433 civil-clarity-280121:us-central1:rt911-backend-db &
+          PROXY_PID=$!
+          sleep 5
+          node packages/backend/seed.mjs
+          kill $PROXY_PID || true
 
       # --- Backend: Deploy to Cloud Run (after seed so schema exists on startup) ---
       # Security note: --allow-unauthenticated is intentional for PR preview environments.
