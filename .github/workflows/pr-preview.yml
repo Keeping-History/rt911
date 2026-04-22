@@ -10,6 +10,10 @@ on:
       - closed
       - converted_to_draft
 
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     name: Deploy preview environment
