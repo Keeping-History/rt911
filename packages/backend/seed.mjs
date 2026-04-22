@@ -62,6 +62,17 @@ async function api(token, method, path, body) {
 }
 
 function psql(sql) {
+  const psqlUrl = process.env.PSQL_URL;
+  if (psqlUrl) {
+    const result = spawnSync("psql", [psqlUrl, "-v", "ON_ERROR_STOP=1"], {
+      input: sql,
+      encoding: "utf8",
+    });
+    if (result.status !== 0) {
+      throw new Error(`psql failed:\n${result.stderr || result.stdout}`);
+    }
+    return;
+  }
   const result = spawnSync(
     "docker",
     ["compose", "exec", "-T", "rt911-db", "psql", "-U", DB_USER, "-d", DB_DATABASE, "-v", "ON_ERROR_STOP=1"],
@@ -411,6 +422,12 @@ async function resolveNewsSource(token) {
 }
 
 async function importNewsItems(token, records, sourceId) {
+  const existing = await api(token, "GET", `/items/media_items?limit=1&fields=id&filter[source][_eq]=${sourceId}`);
+  if (existing.data.length > 0) {
+    console.log("News items already exist for this source, skipping.");
+    return;
+  }
+
   const existingSort = await api(token, "GET", "/items/media_items?limit=1&sort[]=-sort&fields[]=sort");
   const maxSort = existingSort.data?.[0]?.sort ?? 0;
 

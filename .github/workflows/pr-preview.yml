@@ -68,6 +68,66 @@ jobs:
             REDIS_URL=${{ secrets.REDIS_URL }}
             SECRET=${{ secrets.SECRET }}
 
+      # --- Directus: Deploy to Cloud Run ---
+      - name: Deploy Directus to Cloud Run
+        id: deploy-directus
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: rt911-directus-pr-${{ github.event.pull_request.number }}
+          image: directus/directus:latest
+          region: ${{ secrets.GCP_REGION }}
+          flags: --allow-unauthenticated --port=8055 --min-instances=0 --max-instances=1 --add-cloudsql-instances=civil-clarity-280121:us-central1:rt911-backend-db
+          env_vars: |
+            SECRET=${{ secrets.SECRET }}
+            DB_CLIENT=pg
+            DB_HOST=/cloudsql/civil-clarity-280121:us-central1:rt911-backend-db
+            DB_PORT=5432
+            DB_DATABASE=rt911-backend-db
+            DB_USER=rt911
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            ADMIN_EMAIL=${{ secrets.DIRECTUS_ADMIN_EMAIL }}
+            ADMIN_PASSWORD=${{ secrets.DIRECTUS_ADMIN_PASSWORD }}
+
+      # --- Seed: Wait for Directus, then seed schema + data ---
+      - name: Set up Node for seed
+        uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+
+      - name: Wait for Directus to be healthy
+        run: |
+          URL="${{ steps.deploy-directus.outputs.url }}/server/health"
+          for i in $(seq 1 30); do
+            STATUS=$(curl -sf "$URL" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || true)
+            if [ "$STATUS" = "ok" ]; then
+              echo "Directus is healthy."
+              exit 0
+            fi
+            echo "Waiting for Directus... ($i/30)"
+            sleep 10
+          done
+          echo "Directus did not become healthy in time."
+          exit 1
+
+      - name: Install Cloud SQL proxy and psql client
+        run: |
+          curl -fsSL https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64 -o cloud-sql-proxy
+          chmod +x cloud-sql-proxy
+          sudo apt-get install -y postgresql-client
+
+      - name: Start Cloud SQL proxy
+        run: |
+          ./cloud-sql-proxy --port=5433 civil-clarity-280121:us-central1:rt911-backend-db &
+          sleep 5
+
+      - name: Seed database
+        env:
+          DIRECTUS_URL: ${{ steps.deploy-directus.outputs.url }}
+          ADMIN_EMAIL: ${{ secrets.DIRECTUS_ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.DIRECTUS_ADMIN_PASSWORD }}
+          PSQL_URL: postgres://rt911:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/rt911-backend-db
+        run: node packages/backend/seed.mjs
+
       # --- Frontend: Build with backend URL baked in ---
       - name: Derive WebSocket URL from Cloud Run URL
         id: wss
@@ -180,9 +240,12 @@ jobs:
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Delete Cloud Run service
+      - name: Delete Cloud Run services
         run: |
           gcloud run services delete "rt911-pr-${{ github.event.pull_request.number }}" \
+            --region="${{ secrets.GCP_REGION }}" \
+            --quiet 2>/dev/null || true
+          gcloud run services delete "rt911-directus-pr-${{ github.event.pull_request.number }}" \
             --region="${{ secrets.GCP_REGION }}" \
             --quiet 2>/dev/null || true
 
