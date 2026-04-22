@@ -435,9 +435,9 @@ async function resolveNewsSource(token) {
 }
 
 async function importNewsItems(token, records, sourceId) {
-  const existing = await api(token, "GET", `/items/media_items?limit=1&fields=id&filter[source][_eq]=${sourceId}`);
+  const existing = await api(token, "GET", "/items/media_items?limit=1&fields=id&filter[format][_eq]=news");
   if (existing.data.length > 0) {
-    console.log("News items already exist for this source, skipping.");
+    console.log("News items already exist, skipping.");
     return;
   }
 

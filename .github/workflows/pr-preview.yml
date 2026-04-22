@@ -172,12 +172,16 @@ jobs:
         env:
           BUCKET: rt911-pr-${{ github.event.pull_request.number }}
         run: |
-          gsutil mb \
-            -p "${{ secrets.GCP_PROJECT_ID }}" \
-            -l "${{ secrets.GCP_REGION }}" \
-            "gs://$BUCKET" 2>/dev/null || true
-          gsutil iam ch allUsers:objectViewer "gs://$BUCKET"
-          gsutil web set -m index.html -e index.html "gs://$BUCKET"
+          gcloud storage buckets create "gs://$BUCKET" \
+            --project="${{ secrets.GCP_PROJECT_ID }}" \
+            --location="${{ secrets.GCP_REGION }}" \
+            --uniform-bucket-level-access 2>/dev/null || true
+          gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" \
+            --member=allUsers \
+            --role=roles/storage.objectViewer
+          gcloud storage buckets update "gs://$BUCKET" \
+            --web-main-page-suffix=index.html \
+            --web-error-page=index.html
 
       - name: Upload frontend to GCS
         env:
