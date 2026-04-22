@@ -29,14 +29,16 @@ export const Controls: React.FC = () => {
 		[appIcon],
 	);
 
-	const { dateTime, setDateTime } = useClassicyDateTime({ tick: true });
+	const { dateTime, setDateTime, tzOffset } = useClassicyDateTime({ tick: true });
 
 	// Playback state
 	const [isPlaying, setIsPlaying] = useState(false);
 
-	// Time entry form state — initialise from the current virtual clock
+	// Time entry form state — initialise from the current virtual clock in local time
 	const parseCurrentTime = useCallback(() => {
-		const d = new Date(dateTime);
+		// Shift UTC timestamp into local space so we display the Classicy local time
+		const localMs = new Date(dateTime).getTime() + tzOffset * 3_600_000;
+		const d = new Date(localMs);
 		let h = d.getUTCHours();
 		const ampm = h >= 12 ? "PM" : "AM";
 		h = h % 12 || 12;
@@ -46,7 +48,7 @@ export const Controls: React.FC = () => {
 			seconds: String(d.getUTCSeconds()).padStart(2, "0"),
 			ampm,
 		};
-	}, [dateTime]);
+	}, [dateTime, tzOffset]);
 
 	const [timeForm, setTimeForm] = useState(parseCurrentTime);
 
@@ -70,13 +72,16 @@ export const Controls: React.FC = () => {
 	// --- Time entry ---
 
 	const handleGo = useCallback(() => {
-		const h24 =
+		const localH24 =
 			(parseInt(timeForm.hours, 10) % 12) +
 			(timeForm.ampm === "PM" ? 12 : 0);
+		// User entered local time — convert to UTC by subtracting the tz offset.
+		// setUTCHours handles out-of-range values (e.g. -3 wraps to previous day 21:00).
+		const utcH = localH24 - tzOffset;
 		const base = new Date(dateTime);
-		base.setUTCHours(h24, parseInt(timeForm.minutes, 10), parseInt(timeForm.seconds, 10), 0);
+		base.setUTCHours(utcH, parseInt(timeForm.minutes, 10), parseInt(timeForm.seconds, 10), 0);
 		setDateTime(base);
-	}, [timeForm, dateTime, setDateTime]);
+	}, [timeForm, dateTime, tzOffset, setDateTime]);
 
 	return (
 		<ClassicyApp
