@@ -15,9 +15,7 @@
 			"es5-ext",
 			"esbuild"
 		],
-		"overrides": {
-			"classicy": "link:../classicy"
-		}
+		"overrides": {}
 	},
 	"volta": {
 		"node": "25.2.0"
