@@ -91,7 +91,7 @@ jobs:
           VITE_MEDIA_STREAM_URL: ${{ steps.wss.outputs.url }}
           VITE_PROXY_HOST: time-machine-proxy-723408812472.us-central1.run.app
           VITE_PROXY_PORT: 80
-        run: pnpm build
+        run: pnpm --filter ./packages/frontend build
 
       # --- Frontend: Deploy to GCS ---
       - name: Create GCS bucket (idempotent)
