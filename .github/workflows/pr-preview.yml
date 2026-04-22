@@ -24,8 +24,136 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Placeholder
-        run: echo "deploy job"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --- GCP Authentication (Workload Identity Federation) ---
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      # --- Backend: Docker build and push ---
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push backend image
+        env:
+          IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REGISTRY_REPO }}/backend:pr-${{ github.event.pull_request.number }}
+        run: |
+          docker build -t "$IMAGE" packages/backend
+          docker push "$IMAGE"
+
+      # --- Backend: Deploy to Cloud Run ---
+      - name: Deploy backend to Cloud Run
+        id: deploy-backend
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: rt911-pr-${{ github.event.pull_request.number }}
+          image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REGISTRY_REPO }}/backend:pr-${{ github.event.pull_request.number }}
+          region: ${{ secrets.GCP_REGION }}
+          flags: --allow-unauthenticated --port=8080 --min-instances=0 --max-instances=1
+          env_vars: |
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            REDIS_URL=${{ secrets.REDIS_URL }}
+            SECRET=${{ secrets.SECRET }}
+
+      # --- Frontend: Build with backend URL baked in ---
+      - name: Derive WebSocket URL from Cloud Run URL
+        id: wss
+        run: |
+          # Cloud Run outputs https://... — convert to wss://...host/stream
+          BACKEND_URL="${{ steps.deploy-backend.outputs.url }}"
+          WSS_URL="wss://${BACKEND_URL#https://}/stream"
+          echo "url=$WSS_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build frontend
+        env:
+          VITE_MEDIA_STREAM_URL: ${{ steps.wss.outputs.url }}
+          VITE_PROXY_HOST: time-machine-proxy-723408812472.us-central1.run.app
+          VITE_PROXY_PORT: 80
+        run: pnpm build
+
+      # --- Frontend: Deploy to GCS ---
+      - name: Create GCS bucket (idempotent)
+        env:
+          BUCKET: rt911-pr-${{ github.event.pull_request.number }}
+        run: |
+          gsutil mb \
+            -p "${{ secrets.GCP_PROJECT_ID }}" \
+            -l "${{ secrets.GCP_REGION }}" \
+            "gs://$BUCKET" 2>/dev/null || true
+          gsutil iam ch allUsers:objectViewer "gs://$BUCKET"
+          gsutil web set -m index.html -e index.html "gs://$BUCKET"
+
+      - name: Upload frontend to GCS
+        env:
+          BUCKET: rt911-pr-${{ github.event.pull_request.number }}
+        run: |
+          gsutil -m rsync -r -d packages/frontend/dist/ "gs://$BUCKET/"
+
+      # --- Notify: Post/update PR comment ---
+      - name: Post preview URLs as PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request.number;
+            const frontendUrl = `http://rt911-pr-${pr}.storage.googleapis.com/`;
+            const backendUrl = `${{ steps.deploy-backend.outputs.url }}`;
+            const marker = '<!-- pr-preview -->';
+            const body = [
+              marker,
+              '## Preview Environment',
+              '',
+              '| Service | URL |',
+              '|---|---|',
+              `| Frontend | [${frontendUrl}](${frontendUrl}) |`,
+              `| Backend | [${backendUrl}](${backendUrl}) |`,
+              '',
+              `*Last deployed: ${new Date().toUTCString()}*`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
 
   teardown:
     name: Destroy preview environment
