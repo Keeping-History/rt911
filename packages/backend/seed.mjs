@@ -37,14 +37,27 @@ const ONE_HOUR_SECONDS       = 3600;
 // ---------------------------------------------------------------------------
 
 async function getToken() {
-  const res = await fetch(`${DIRECTUS_URL}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
-  });
-  if (!res.ok) throw new Error(`Login failed: ${await res.text()}`);
-  const { data } = await res.json();
-  return data.access_token;
+  const MAX_ATTEMPTS = 20;
+  const RETRY_DELAY_MS = 10_000;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const res = await fetch(`${DIRECTUS_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+    });
+    if (res.ok) {
+      const { data } = await res.json();
+      return data.access_token;
+    }
+    const body = await res.text();
+    if (res.status === 503 && attempt < MAX_ATTEMPTS) {
+      console.log(`Directus not ready yet (attempt ${attempt}/${MAX_ATTEMPTS}), retrying in ${RETRY_DELAY_MS / 1000}s…`);
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      continue;
+    }
+    throw new Error(`Login failed: ${body}`);
+  }
 }
 
 async function api(token, method, path, body) {
