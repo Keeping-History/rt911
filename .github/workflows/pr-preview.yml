@@ -50,24 +50,6 @@ jobs:
           docker build -t "$IMAGE" packages/backend
           docker push "$IMAGE"
 
-      # --- Backend: Deploy to Cloud Run ---
-      # Security note: --allow-unauthenticated is intentional for PR preview environments.
-      # The backend connects to a shared staging database. This is an accepted trade-off:
-      # staging data is not sensitive, and SECRET must be a preview-specific value
-      # (never shared with production).
-      - name: Deploy backend to Cloud Run
-        id: deploy-backend
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: rt911-pr-${{ github.event.pull_request.number }}
-          image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REGISTRY_REPO }}/backend:pr-${{ github.event.pull_request.number }}
-          region: ${{ secrets.GCP_REGION }}
-          flags: --allow-unauthenticated --port=8080 --min-instances=0 --max-instances=1 --add-cloudsql-instances=civil-clarity-280121:us-central1:rt911-backend-db
-          env_vars: |
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
-            REDIS_URL=${{ secrets.REDIS_URL }}
-            SECRET=${{ secrets.SECRET }}
-
       # --- Directus: Deploy to Cloud Run ---
       - name: Deploy Directus to Cloud Run
         id: deploy-directus
@@ -127,6 +109,24 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.DIRECTUS_ADMIN_PASSWORD }}
           PSQL_URL: postgres://rt911:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/rt911-backend-db
         run: node packages/backend/seed.mjs
+
+      # --- Backend: Deploy to Cloud Run (after seed so schema exists on startup) ---
+      # Security note: --allow-unauthenticated is intentional for PR preview environments.
+      # The backend connects to a shared staging database. This is an accepted trade-off:
+      # staging data is not sensitive, and SECRET must be a preview-specific value
+      # (never shared with production).
+      - name: Deploy backend to Cloud Run
+        id: deploy-backend
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: rt911-pr-${{ github.event.pull_request.number }}
+          image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REGISTRY_REPO }}/backend:pr-${{ github.event.pull_request.number }}
+          region: ${{ secrets.GCP_REGION }}
+          flags: --allow-unauthenticated --port=8080 --min-instances=0 --max-instances=1 --add-cloudsql-instances=civil-clarity-280121:us-central1:rt911-backend-db
+          env_vars: |
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            REDIS_URL=${{ secrets.REDIS_URL }}
+            SECRET=${{ secrets.SECRET }}
 
       # --- Frontend: Build with backend URL baked in ---
       - name: Derive WebSocket URL from Cloud Run URL

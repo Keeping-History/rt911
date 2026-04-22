@@ -9,3 +9,4 @@ tsconfig.tsbuildinfo
 packages/backend/entries_media.json
 packages/backend/entries_news.json
 .claude/
+/packages/frontend/.vite
