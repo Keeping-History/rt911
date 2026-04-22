@@ -6,11 +6,7 @@ settings:
 
 importers:
 
-  .:
-    dependencies:
-      classicy:
-        specifier: link:../classicy
-        version: link:../classicy
+  .: {}
 
   packages/frontend:
     dependencies:
