@@ -11,8 +11,8 @@ importers:
   packages/frontend:
     dependencies:
       classicy:
-        specifier: ^0.7.0
-        version: 0.7.0(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
+        specifier: latest
+        version: 0.8.0(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
       classnames:
         specifier: ^2.5.1
         version: 2.5.1
@@ -1785,8 +1785,8 @@ packages:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
     engines: {node: '>= 14.16.0'}
 
-  classicy@0.7.0:
-    resolution: {integrity: sha512-Mz6tAE1/Z3cvbdha3HGiAmILuh/QmtQkHDfIEfAjPIQ2y4aobuweVTcYyMOzDmMsf9NZ8P3G0FgpR+LfUL7nbw==}
+  classicy@0.8.0:
+    resolution: {integrity: sha512-rRtlta0eyvbj5molhCZcxbkLd3LtlfhzoK0r+0z/ril+hQSlqH3U6OdF4Rzck5/aNcV5ld7KySGmnh1YbC11LQ==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
@@ -5199,7 +5199,7 @@ snapshots:
       readdirp: 4.1.2
     optional: true
 
-  classicy@0.7.0(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30):
+  classicy@0.8.0(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30):
     dependencies:
       '@analytics/google-tag-manager': 0.6.0
       '@mdxeditor/editor': 3.55.0(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
