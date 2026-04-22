@@ -51,6 +51,10 @@ jobs:
           docker push "$IMAGE"
 
       # --- Backend: Deploy to Cloud Run ---
+      # Security note: --allow-unauthenticated is intentional for PR preview environments.
+      # The backend connects to a shared staging database. This is an accepted trade-off:
+      # staging data is not sensitive, and SECRET must be a preview-specific value
+      # (never shared with production).
       - name: Deploy backend to Cloud Run
         id: deploy-backend
         uses: google-github-actions/deploy-cloudrun@v2
