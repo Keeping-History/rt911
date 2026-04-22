@@ -7,7 +7,7 @@ import {
 	useClassicyDateTime,
 } from "classicy";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react"; // useState used for timeForm
 import styles from "./Controls.module.scss";
 
 // How many minutes each skip/rewind step moves the clock
@@ -29,10 +29,7 @@ export const Controls: React.FC = () => {
 		[appIcon],
 	);
 
-	const { dateTime, setDateTime, tzOffset } = useClassicyDateTime({ tick: true });
-
-	// Playback state
-	const [isPlaying, setIsPlaying] = useState(false);
+	const { dateTime, setDateTime, tzOffset, paused, pause, resume } = useClassicyDateTime({ tick: true });
 
 	// Time entry form state — initialise from the current virtual clock in local time
 	const parseCurrentTime = useCallback(() => {
@@ -66,8 +63,8 @@ export const Controls: React.FC = () => {
 	const handleStepBack    = () => shiftTime(-STEP_MINUTES);
 	const handleStepForward = () => shiftTime(STEP_MINUTES);
 	const handleSkipForward = () => shiftTime(SKIP_MINUTES);
-	const handlePlay        = () => setIsPlaying(true);
-	const handlePause       = () => setIsPlaying(false);
+	const handlePlay        = () => resume();
+	const handlePause       = () => pause();
 
 	// --- Time entry ---
 
@@ -111,8 +108,8 @@ export const Controls: React.FC = () => {
 					<div className={styles.transport}>
 						<ClassicyButton onClickFunc={handleSkipBack}>«</ClassicyButton>
 						<ClassicyButton onClickFunc={handleStepBack}>‹</ClassicyButton>
-						<ClassicyButton onClickFunc={handlePlay}  disabled={isPlaying}>Play</ClassicyButton>
-						<ClassicyButton onClickFunc={handlePause} disabled={!isPlaying}>Pause</ClassicyButton>
+						<ClassicyButton onClickFunc={handlePlay}  disabled={!paused}>Play</ClassicyButton>
+						<ClassicyButton onClickFunc={handlePause} disabled={paused}>Pause</ClassicyButton>
 						<ClassicyButton onClickFunc={handleStepForward}>›</ClassicyButton>
 						<ClassicyButton onClickFunc={handleSkipForward}>»</ClassicyButton>
 					</div>
