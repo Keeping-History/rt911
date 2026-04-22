@@ -35,9 +35,10 @@ type Session struct {
 	rdb    *goredis.Client
 	logger *slog.Logger
 
-	mu          sync.Mutex
-	virtualTime time.Time
-	paused      bool
+	mu           sync.Mutex
+	virtualTime  time.Time
+	paused       bool
+	formatFilter map[string]struct{} // nil = send all formats
 
 	send      chan []byte
 	tickCh    chan struct{}
@@ -72,6 +73,42 @@ func (s *Session) Close() {
 	})
 }
 
+// SetFormatFilter sets the format whitelist for this session. A nil slice
+// means all formats are delivered (no filter).
+func (s *Session) SetFormatFilter(formats []string) {
+	s.mu.Lock()
+	if formats == nil {
+		s.formatFilter = nil
+	} else {
+		ff := make(map[string]struct{}, len(formats))
+		for _, f := range formats {
+			ff[f] = struct{}{}
+		}
+		s.formatFilter = ff
+	}
+	s.mu.Unlock()
+	s.send_(outMsg{Type: "filter_ack"})
+}
+
+// applyFormatFilter returns only items whose format matches the session's
+// whitelist. If no filter is set, all items are returned unchanged.
+func (s *Session) applyFormatFilter(items []model.MediaItem) []model.MediaItem {
+	s.mu.Lock()
+	ff := s.formatFilter
+	s.mu.Unlock()
+
+	if ff == nil {
+		return items
+	}
+	out := make([]model.MediaItem, 0, len(items))
+	for _, it := range items {
+		if _, ok := ff[it.Format]; ok {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
 // Init sets the client's starting virtual time and sends the initial snapshot.
 func (s *Session) Init(t time.Time, items []model.MediaItem) {
 	s.mu.Lock()
@@ -79,7 +116,7 @@ func (s *Session) Init(t time.Time, items []model.MediaItem) {
 	s.paused = false
 	s.mu.Unlock()
 
-	s.send_(outMsg{Type: "init_ack", Time: t.Format(time.RFC3339), Items: items})
+	s.send_(outMsg{Type: "init_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
 }
 
 // Seek moves the client's virtual clock to t and delivers the full set of
@@ -88,7 +125,7 @@ func (s *Session) Seek(t time.Time, items []model.MediaItem) {
 	s.mu.Lock()
 	s.virtualTime = t
 	s.mu.Unlock()
-	s.send_(outMsg{Type: "seek_ack", Time: t.Format(time.RFC3339), Items: items})
+	s.send_(outMsg{Type: "seek_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
 }
 
 // Pause freezes the client's virtual clock.
@@ -148,8 +185,9 @@ func (s *Session) RunTimePump() {
 				s.logger.Warn("cache lookup failed", "error", err)
 				continue
 			}
-			if len(items) > 0 {
-				s.send_(outMsg{Type: "items", Time: t.Format(time.RFC3339), Items: items})
+			filtered := s.applyFormatFilter(items)
+			if len(filtered) > 0 {
+				s.send_(outMsg{Type: "items", Time: t.Format(time.RFC3339), Items: filtered})
 			}
 		}
 	}

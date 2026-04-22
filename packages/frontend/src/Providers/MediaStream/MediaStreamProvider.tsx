@@ -9,6 +9,10 @@ import {
 } from "react";
 import { MediaStreamContext, type MediaItem } from "./MediaStreamContext";
 
+// Instant items (start_date = end_date or calc_duration = 0) are kept for
+// this many milliseconds after their start time before being pruned.
+const INSTANT_RETENTION_MS = 10 * 60 * 1000; // 10 minutes
+
 const WS_URL: string =
 	(import.meta.env.VITE_MEDIA_STREAM_URL as string | undefined) ??
 	"ws://localhost:8080/stream";
@@ -37,6 +41,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [items, setItems] = useState<MediaItem[]>([]);
 	const [connected, setConnected] = useState(false);
 
+	// Per-app format subscriptions. null = wants all formats.
+	const formatSubscriptions = useRef(new Map<string, string[] | null>());
+
 	const addItems = useCallback((incoming: MediaItem[]) => {
 		setItems((prev) => {
 			const byId = new Map(prev.map((i) => [i.id, i]));
@@ -61,13 +68,50 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		}
 	}, []);
 
-	// Prune expired items on every second tick
+	const sendFormatFilter = useCallback(() => {
+		const subs = formatSubscriptions.current;
+		// If no subscriptions or any app wants all formats → no filter
+		if (subs.size === 0 || [...subs.values()].some((f) => f === null)) {
+			send({ type: "filter", formats: null });
+			return;
+		}
+		const all = new Set<string>();
+		for (const formats of subs.values()) {
+			if (formats) for (const f of formats) all.add(f);
+		}
+		send({ type: "filter", formats: [...all] });
+	}, [send]);
+
+	const subscribeFormats = useCallback(
+		(appId: string, formats: string[] | null) => {
+			formatSubscriptions.current.set(appId, formats);
+			sendFormatFilter();
+		},
+		[sendFormatFilter],
+	);
+
+	const unsubscribeFormats = useCallback(
+		(appId: string) => {
+			formatSubscriptions.current.delete(appId);
+			sendFormatFilter();
+		},
+		[sendFormatFilter],
+	);
+
+	// Prune expired items on every second tick.
+	// Instant items (start_date = end_date or calc_duration = 0) are kept for
+	// INSTANT_RETENTION_MS after their start time instead of being pruned immediately.
 	useEffect(() => {
 		const now = localDate.getTime();
 		setItems((prev) =>
-			prev.filter(
-				(item) => !item.end_date || new Date(item.end_date).getTime() > now,
-			),
+			prev.filter((item) => {
+				if (!item.end_date) return true;
+				const endMs = new Date(item.end_date).getTime();
+				if (item.start_date === item.end_date || (item.calc_duration ?? -1) === 0) {
+					return now - endMs < INSTANT_RETENTION_MS;
+				}
+				return endMs > now;
+			}),
 		);
 	}, [localDate]);
 
@@ -130,9 +174,14 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (incoming.length === 0) return;
 
 			const now = localDateRef.current.getTime();
-			const fresh = incoming.filter(
-				(item) => !item.end_date || new Date(item.end_date).getTime() > now,
-			);
+			const fresh = incoming.filter((item) => {
+				if (!item.end_date) return true;
+				const endMs = new Date(item.end_date).getTime();
+				if (item.start_date === item.end_date || (item.calc_duration ?? -1) === 0) {
+					return now - endMs < INSTANT_RETENTION_MS;
+				}
+				return endMs > now;
+			});
 
 			setItems((prev) => {
 				const byId = new Map(prev.map((i) => [i.id, i]));
@@ -171,7 +220,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	}, []);
 
 	return (
-		<MediaStreamContext.Provider value={{ items, connected, addItems }}>
+		<MediaStreamContext.Provider value={{ items, connected, addItems, subscribeFormats, unsubscribeFormats }}>
 			{children}
 		</MediaStreamContext.Provider>
 	);

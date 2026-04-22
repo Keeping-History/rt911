@@ -28,6 +28,13 @@ type inMsg struct {
 	Time string `json:"time,omitempty"`
 }
 
+// filterMsg carries a format whitelist from the client.
+// Formats nil or empty means "send all formats".
+type filterMsg struct {
+	Type    string   `json:"type"`
+	Formats []string `json:"formats"`
+}
+
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
 func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) http.HandlerFunc {
@@ -129,6 +136,14 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.Heartbeat(t)
+
+			case "filter":
+				var fmsg filterMsg
+				if err := json.Unmarshal(raw, &fmsg); err != nil {
+					sess.SendError("malformed filter message")
+					continue
+				}
+				sess.SetFormatFilter(fmsg.Formats)
 
 			case "pause":
 				sess.Pause()

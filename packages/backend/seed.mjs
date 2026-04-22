@@ -24,8 +24,9 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "changeme";
 const DB_USER        = process.env.DB_USER        ?? "directus";
 const DB_DATABASE    = process.env.DB_DATABASE    ?? "directus";
 
-const MEDIA_DATA_PATH = process.env.MEDIA_DATA_PATH ?? join(__dirname, "entries_media.json");
-const NEWS_DATA_PATH  = process.env.NEWS_DATA_PATH  ?? join(__dirname, "entries_news.json");
+const MEDIA_DATA_PATH  = process.env.MEDIA_DATA_PATH  ?? join(__dirname, "entries_media.json");
+const NEWS_DATA_PATH   = process.env.NEWS_DATA_PATH   ?? join(__dirname, "entries_news.json");
+const PAGER_DATA_PATH  = process.env.PAGER_DATA_PATH  ?? join(__dirname, "pager_entries.json");
 
 const NEWS_SOURCE_NAME       = "History Commons";
 const DEFAULT_CALC_DURATION  = 300;  // 5 minutes in seconds
@@ -489,6 +490,105 @@ async function importNewsItems(token, records, sourceId) {
 }
 
 // ---------------------------------------------------------------------------
+// Pager import  (pager_entries.json)
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert an Eastern Daylight Time timestamp string ("YYYY-MM-DD HH:MM:SS")
+ * to a UTC timestamp string. All pager data is from 2001-09-11, which was in
+ * EDT (UTC-4).
+ */
+function etToUtc(etTimestamp) {
+  const [datePart, timePart] = etTimestamp.split(" ");
+  const dt = new Date(`${datePart}T${timePart}-04:00`);
+  const y  = dt.getUTCFullYear();
+  const mo = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const d  = String(dt.getUTCDate()).padStart(2, "0");
+  const h  = String(dt.getUTCHours()).padStart(2, "0");
+  const mi = String(dt.getUTCMinutes()).padStart(2, "0");
+  const s  = String(dt.getUTCSeconds()).padStart(2, "0");
+  return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+}
+
+async function importPagerSources(token, records) {
+  const providers = [...new Set(records.map((r) => r.provider).filter(Boolean))];
+  const existing  = await api(token, "GET", "/items/sources?limit=-1&fields=slug");
+  const existingSlugs = new Set(existing.data.map((s) => s.slug));
+
+  const toCreate = providers
+    .filter((p) => !existingSlugs.has(p))
+    .map((p) => ({ name: p, slug: p }));
+
+  if (toCreate.length > 0) {
+    console.log(`Importing ${toCreate.length} pager provider sources…`);
+    await api(token, "POST", "/items/sources", toCreate);
+  } else {
+    console.log("All pager provider sources already exist, skipping.");
+  }
+
+  const all = await api(token, "GET", "/items/sources?limit=-1&fields=id,slug");
+  return Object.fromEntries(all.data.map((s) => [s.slug, s.id]));
+}
+
+async function importPagerItems(token, records, sourceMap) {
+  const existing = await api(token, "GET", "/items/media_items?limit=1&fields=id&filter[format][_eq]=pager");
+  if (existing.data.length > 0) {
+    console.log("Pager items already exist, skipping.");
+    return;
+  }
+
+  const existingSort = await api(token, "GET", "/items/media_items?limit=1&sort[]=-sort&fields[]=sort");
+  const maxSort = existingSort.data?.[0]?.sort ?? 0;
+
+  const cols = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,content,sort`;
+  const BATCH = 500;
+
+  // Sort by timestamp for correct ordering
+  const sorted = [...records].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  console.log(`Importing ${sorted.length} pager items in batches of ${BATCH}…`);
+
+  for (let i = 0; i < sorted.length; i += BATCH) {
+    process.stdout.write(`  ${i + 1}–${Math.min(i + BATCH, sorted.length)} / ${sorted.length}\r`);
+    const batch = sorted.slice(i, i + BATCH);
+    const rows = batch.map((r, idx) => {
+      const utcTs  = etToUtc(r.timestamp);
+      const title  = r.message.length > 100 ? r.message.slice(0, 100) : r.message;
+      const content = JSON.stringify({
+        recipient_id: r.recipient_id ?? "",
+        id_type:      r.id_type      ?? "",
+        channel:      r.channel      ?? "",
+        mode:         r.mode         ?? "",
+        timestamp:    r.timestamp,
+      });
+      return `(${[
+        sqlVal(title.trim()),
+        sqlVal(r.message),
+        sqlVal(sourceMap[r.provider] ?? null),
+        sqlVal(utcTs),
+        sqlVal(utcTs),   // end_date = start_date (instant item)
+        sqlVal(0),       // calc_duration = 0
+        sqlVal("EDT"),
+        sqlVal(""),
+        sqlVal("pager"),
+        sqlVal(1),
+        sqlVal(0),
+        sqlVal(1),
+        sqlVal(0),
+        sqlVal(0),
+        sqlVal(null),    // image
+        sqlVal(null),    // image_caption
+        sqlVal(content),
+        sqlVal(maxSort + i + idx + 1),
+      ].join(",")})`;
+    }).join(",\n");
+
+    psql(`INSERT INTO media_items (${cols}) VALUES\n${rows};\n`);
+  }
+
+  console.log("\nDone.");
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -496,6 +596,9 @@ const mediaRecords = JSON.parse(readFileSync(MEDIA_DATA_PATH, "utf8"));
 const newsRecords  = JSON.parse(readFileSync(NEWS_DATA_PATH,  "utf8"));
 console.log(`Loaded ${mediaRecords.length} TV records from ${MEDIA_DATA_PATH}`);
 console.log(`Loaded ${newsRecords.length} news records from ${NEWS_DATA_PATH}`);
+console.log("Loading pager records (large file, may take a moment)…");
+const pagerRecords = JSON.parse(readFileSync(PAGER_DATA_PATH, "utf8"));
+console.log(`Loaded ${pagerRecords.length} pager records from ${PAGER_DATA_PATH}`);
 
 const token = await getToken();
 console.log("Authenticated.");
@@ -510,5 +613,9 @@ await importMediaItems(token, mediaRecords, sourceMap);
 console.log("\n--- News items (entries_news.json) ---");
 const newsSourceId = await resolveNewsSource(token);
 await importNewsItems(token, newsRecords, newsSourceId);
+
+console.log("\n--- Pager items (pager_entries.json) ---");
+const pagerSourceMap = await importPagerSources(token, pagerRecords);
+await importPagerItems(token, pagerRecords, pagerSourceMap);
 
 console.log("\nBootstrap complete. Directus is at", DIRECTUS_URL);

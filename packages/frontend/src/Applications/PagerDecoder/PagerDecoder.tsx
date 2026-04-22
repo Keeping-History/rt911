@@ -14,16 +14,11 @@ import {
 import { useContext, useEffect, useRef, useState } from "react";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./PagerDecoder.module.scss";
-import {
-	completedLineToPagerMediaItem,
-	nextPagerItemId,
-} from "./pagerMediaItem";
 import type {
 	PagerDecoderFilter,
 	PagerDecoderSettings,
 } from "./PagerDecoderContext";
 import { DEFAULT_PAGER_SETTINGS } from "./PagerDecoderContext";
-import { usePagerIndex } from "./usePagerIndex";
 import type { CompletedLine } from "./usePagerPlayback";
 import { usePagerPlayback } from "./usePagerPlayback";
 
@@ -52,11 +47,10 @@ export const PagerDecoder = () => {
 		}
 	}, [appState, dispatch]);
 
-	const { index, progress, error, uniqueValues } = usePagerIndex();
+	const { connected } = useContext(MediaStreamContext);
 	const isPaused =
 		appState?.windows?.find((w) => w.id === "pager-terminal")?.closed ?? false;
-	const { lines, streamingText, streamingMeta } = usePagerPlayback(
-		index,
+	const { lines, streamingText, streamingMeta, uniqueValues } = usePagerPlayback(
 		settings,
 		isPaused,
 	);
@@ -76,18 +70,6 @@ export const PagerDecoder = () => {
 		const el = terminalRef.current;
 		if (el) el.scrollTop = el.scrollHeight;
 	}, []);
-
-	const { addItems } = useContext(MediaStreamContext);
-	const injectedRef = useRef(new Set<string>());
-	useEffect(() => {
-		const fresh = lines.filter((l) => !injectedRef.current.has(l.id));
-		if (fresh.length === 0) return;
-		const mediaItems = fresh.map((l) => {
-			injectedRef.current.add(l.id);
-			return completedLineToPagerMediaItem(l, nextPagerItemId());
-		});
-		addItems(mediaItems);
-	}, [lines, addItems]);
 
 	// Track message completion timestamps for rolling msgs/min rate
 	const completionTimesRef = useRef<number[]>([]);
@@ -216,7 +198,12 @@ export const PagerDecoder = () => {
 				initialSize={[680, 480]}
 				initialPosition={[80, 60]}
 				appMenu={appMenu}
-				header={<p><span style={{color: "green"}}>&bull;</span> Connected to server 203.0.113.212::3871</p>}
+				header={
+					<p>
+						<span style={{ color: connected ? "green" : "red" }}>&bull;</span>
+						{" "}{connected ? "Connected to server 203.0.113.212::3871" : "Disconnected"}
+					</p>
+				}
 				scrollable={false}
 				resizable
 				growable
@@ -225,12 +212,8 @@ export const PagerDecoder = () => {
 			{filterBar}
 			<div className={styles.terminalOuter}>
 				<div className={styles.terminal} ref={terminalRef}>
-					{!index && (
-						<p className={styles.loading}>
-							{error
-								? `Error: ${error}`
-								: `Loading... ${Math.round(progress * 100)}%`}
-						</p>
+					{!connected && lines.length === 0 && (
+						<p className={styles.loading}>Waiting for server connection…</p>
 					)}
 					{lines.map((line) => (
 						<button
@@ -255,18 +238,16 @@ export const PagerDecoder = () => {
 							<span className={styles.cursor} aria-hidden="true" />
 						</div>
 					)}
-					{index && !streamingMeta && (
+					{connected && !streamingMeta && (
 						<span className={styles.cursor} aria-hidden="true" />
 					)}
 				</div>
 				<div className={styles.pagerStatusBar}>
 					{streamingMeta
 						? `Receiving from ${streamingMeta.provider}… | ${msgsPerMin}/min`
-						: index
+						: connected
 							? `${lines.length} message${lines.length !== 1 ? "s" : ""}`
-							: error
-								? `Error: ${error}`
-								: `Loading… ${Math.round(progress * 100)}%`}
+							: "Disconnected"}
 				</div>
 				</div>
 			</div>

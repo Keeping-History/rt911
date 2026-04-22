@@ -50,10 +50,16 @@ export interface MediaStreamContextValue {
 	items: MediaItem[];
 	connected: boolean;
 	addItems: (items: MediaItem[]) => void;
+	/** Register a set of desired formats for an app. null = want all formats. */
+	subscribeFormats: (appId: string, formats: string[] | null) => void;
+	/** Remove a previously registered format subscription. */
+	unsubscribeFormats: (appId: string) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	items: [],
 	connected: false,
 	addItems: () => {},
+	subscribeFormats: () => {},
+	unsubscribeFormats: () => {},
 });

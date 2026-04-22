@@ -45,12 +45,21 @@ func AllItems(ctx context.Context, pool *pgxpool.Pool) ([]model.MediaItem, error
 }
 
 // CurrentItems returns items active at time t (start_date ≤ t ≤ end_date).
+// Instant items — where start_date = end_date or calc_duration = 0 — are
+// included for a 5-minute lookback window so seek/init responses contain
+// recent pager traffic without returning the entire history.
 func CurrentItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model.MediaItem, error) {
 	return queryItems(ctx, pool,
 		selectFrom+`
-		 WHERE mi.start_date <= $1
-		   AND (mi.end_date IS NULL OR mi.end_date >= $1)
-		   AND mi.approved = 1
+		 WHERE mi.approved = 1
+		   AND (
+		     (mi.start_date <= $1 AND (mi.end_date IS NULL OR mi.end_date >= $1))
+		     OR (
+		       (mi.start_date = mi.end_date OR (mi.calc_duration IS NOT NULL AND mi.calc_duration = 0))
+		       AND mi.start_date <= $1
+		       AND mi.start_date >= $1 - INTERVAL '5 minutes'
+		     )
+		   )
 		 ORDER BY mi.start_date`, t)
 }
 

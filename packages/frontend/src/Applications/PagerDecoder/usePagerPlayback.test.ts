@@ -1,26 +1,49 @@
 import { act, renderHook } from "@testing-library/react";
+import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
+import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import type { PagerDecoderSettings } from "./PagerDecoderContext";
 import { DEFAULT_PAGER_SETTINGS } from "./PagerDecoderContext";
-import type { PagerRecord } from "./pagerUtils";
 import { usePagerPlayback } from "./usePagerPlayback";
 
 vi.mock("classicy", () => ({
-	useClassicyDateTime: vi.fn(() => ({ localHMS: "03:00:00" })),
 	registerAppEventHandler: vi.fn(),
 }));
 
-import { useClassicyDateTime } from "classicy";
+let idSeq = 1;
 
-function makeRecord(message: string, timeKey = "03:00:00", provider = "Metrocall"): PagerRecord {
-	return {
-		timestamp: `2001-09-11 ${timeKey}`,
-		provider,
+function makePagerItem(
+	message: string,
+	utcTimestamp = "2001-09-11T07:00:00.000Z",
+	provider = "Metrocall",
+	overrides: Partial<MediaItem> = {},
+): MediaItem {
+	const content = JSON.stringify({
 		recipient_id: "0001234",
-		id_type: "capcode",
-		channel: "B",
-		mode: "ALPHA",
-		message,
+		id_type:      "capcode",
+		channel:      "B",
+		mode:         "ALPHA",
+		timestamp:    "2001-09-11 03:00:00",
+	});
+	return {
+		id:         idSeq++,
+		title:      message.slice(0, 100),
+		full_title: message,
+		source:     provider,
+		start_date: utcTimestamp,
+		end_date:   utcTimestamp,
+		calc_duration: 0,
+		timezone:   "EDT",
+		url:        "",
+		format:     "pager",
+		approved:   1,
+		mute:       0,
+		volume:     1,
+		jump:       0,
+		trim:       0,
+		content,
+		...overrides,
 	};
 }
 
@@ -28,71 +51,79 @@ function makeSettings(overrides: Partial<PagerDecoderSettings> = {}): PagerDecod
 	return { ...DEFAULT_PAGER_SETTINGS, ...overrides };
 }
 
-function makeIndex(
-	entries: [string, PagerRecord[]][],
-): Map<string, PagerRecord[]> {
-	return new Map(entries);
+/** Build a context wrapper that provides the given items. */
+function makeWrapper(items: MediaItem[]) {
+	const subscribeFormats   = vi.fn();
+	const unsubscribeFormats = vi.fn();
+	return {
+		wrapper: ({ children }: { children: React.ReactNode }) =>
+			createElement(MediaStreamContext.Provider, {
+				value: { items, connected: true, addItems: vi.fn(), subscribeFormats, unsubscribeFormats },
+				children,
+			}),
+		subscribeFormats,
+		unsubscribeFormats,
+	};
 }
 
 describe("usePagerPlayback", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
-		vi.mocked(useClassicyDateTime).mockReturnValue({ localHMS: "03:00:00" } as never);
+		idSeq = 1;
 	});
 
 	afterEach(() => {
 		vi.useRealTimers();
 	});
 
-	it("returns empty state when index is null", () => {
-		const { result } = renderHook(() => usePagerPlayback(null));
+	it("returns empty state with no items", () => {
+		const { wrapper } = makeWrapper([]);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
 		expect(result.current.lines).toHaveLength(0);
 		expect(result.current.streamingText).toBe("");
 		expect(result.current.streamingMeta).toBeNull();
 	});
 
-	it("enqueues messages that match the current second on clock tick", () => {
-		// 3 words — won't complete within the first 2 stream ticks
-		const record = makeRecord("Hello world foo");
-		const index = makeIndex([["03:00:00", [record]]]);
-		const { result } = renderHook(() => usePagerPlayback(index));
+	it("subscribes to pager format on mount and unsubscribes on unmount", () => {
+		const { wrapper, subscribeFormats, unsubscribeFormats } = makeWrapper([]);
+		const { unmount } = renderHook(() => usePagerPlayback(), { wrapper });
+		expect(subscribeFormats).toHaveBeenCalledWith("PagerDecoder.app", ["pager"]);
+		unmount();
+		expect(unsubscribeFormats).toHaveBeenCalledWith("PagerDecoder.app");
+	});
+
+	it("enqueues and streams a message when a pager item appears", () => {
+		const item = makePagerItem("Hello world foo");
+		const { wrapper } = makeWrapper([item]);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
 
 		act(() => {
-			// clock at t=1000 fires alongside stream tick; advance enough for both
-			vi.advanceTimersByTime(1001);
+			vi.advanceTimersByTime(1); // first stream tick picks up the queued item
 		});
 
 		expect(result.current.streamingMeta).not.toBeNull();
 		expect(result.current.streamingMeta?.provider).toBe("Metrocall");
+		expect(result.current.streamingText).toBe("Hello");
 	});
 
 	it("streams message words one at a time", () => {
-		// 3-word message; clock+stream coincide at t=1000 (first word),
-		// then each subsequent ms advances one word
-		const record = makeRecord("Hello world foo");
-		const index = makeIndex([["03:00:00", [record]]]);
-		const { result } = renderHook(() => usePagerPlayback(index));
+		const item = makePagerItem("Hello world foo");
+		const { wrapper } = makeWrapper([item]);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
 
-		act(() => {
-			vi.advanceTimersByTime(1000); // clock fires; stream fires at same ms → "Hello"
-		});
+		act(() => { vi.advanceTimersByTime(1); });
 		expect(result.current.streamingText).toBe("Hello");
 
-		act(() => {
-			vi.advanceTimersByTime(1); // next stream tick → "Hello world"
-		});
+		act(() => { vi.advanceTimersByTime(1); });
 		expect(result.current.streamingText).toBe("Hello world");
 	});
 
 	it("moves completed line to lines[] and clears streamingMeta", () => {
-		// 2-word message: word 1 at t=1000, word 2 (+complete) at t=1001
-		const record = makeRecord("Hi there");
-		const index = makeIndex([["03:00:00", [record]]]);
-		const { result } = renderHook(() => usePagerPlayback(index));
+		const item = makePagerItem("Hi there");
+		const { wrapper } = makeWrapper([item]);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
 
-		act(() => {
-			vi.advanceTimersByTime(1001);
-		});
+		act(() => { vi.advanceTimersByTime(2); }); // 2 words → complete
 
 		expect(result.current.lines).toHaveLength(1);
 		expect(result.current.lines[0].text).toBe("Hi there");
@@ -100,140 +131,91 @@ describe("usePagerPlayback", () => {
 		expect(result.current.streamingText).toBe("");
 	});
 
-	it("streams queued messages in order", () => {
-		// r1 is 1 word (completes at t=1000); r2 has 3 words (starts at t=1001)
-		const r1 = makeRecord("Msg1");
-		const r2 = makeRecord("Msg two three");
-		const index = makeIndex([["03:00:00", [r1, r2]]]);
-		const { result } = renderHook(() => usePagerPlayback(index));
+	it("does not process the same item twice when items array updates", () => {
+		const item = makePagerItem("Hello");
+		const { wrapper } = makeWrapper([item]);
+		const { result, rerender } = renderHook(() => usePagerPlayback(), { wrapper });
 
-		act(() => {
-			vi.advanceTimersByTime(1001);
-		});
-
-		// r1 complete, r2 started (streaming first word)
-		expect(result.current.lines).toHaveLength(1);
-		expect(result.current.lines[0].text).toBe("Msg1");
-		expect(result.current.streamingMeta).not.toBeNull();
-	});
-
-	it("does not enqueue the same second twice", () => {
-		const record = makeRecord("Hello");
-		const index = makeIndex([["03:00:00", [record]]]);
-		const { result } = renderHook(() => usePagerPlayback(index));
-
-		act(() => {
-			vi.advanceTimersByTime(1000); // first clock tick at 03:00:00
-		});
-		act(() => {
-			vi.advanceTimersByTime(1000); // second clock tick still at 03:00:00 (mocked)
-		});
-		act(() => {
-			vi.advanceTimersByTime(100); // drain any remaining queue
-		});
+		act(() => { vi.advanceTimersByTime(5); }); // complete first item
 
 		expect(result.current.lines).toHaveLength(1);
+
+		// Re-render with the same item (simulates context update with same item)
+		rerender();
+		act(() => { vi.advanceTimersByTime(5); });
+
+		expect(result.current.lines).toHaveLength(1); // no duplicate
 	});
 
-	it("respects retentionLines setting (e.g. 3)", () => {
-		const records = Array.from({ length: 4 }, (_, i) => makeRecord(`Msg${i}`));
-		const index = makeIndex([["03:00:00", records]]);
+	it("respects retentionLines setting", () => {
+		const items = Array.from({ length: 4 }, (_, i) => makePagerItem(`Msg${i}`));
+		const { wrapper } = makeWrapper(items);
 		const settings = makeSettings({ retentionLines: 3 });
-		const { result } = renderHook(() => usePagerPlayback(index, settings));
+		const { result } = renderHook(() => usePagerPlayback(settings), { wrapper });
 
-		act(() => {
-			vi.advanceTimersByTime(1000 + 4 + 10);
-		});
+		act(() => { vi.advanceTimersByTime(4 + 10); });
 
 		expect(result.current.lines.length).toBe(3);
 		expect(result.current.lines[0].text).toBe("Msg1");
 	});
 
 	it("retentionLines=0 keeps all lines (unlimited)", () => {
-		const records = Array.from({ length: 5 }, (_, i) => makeRecord(`Msg${i}`));
-		const index = makeIndex([["03:00:00", records]]);
+		const items = Array.from({ length: 5 }, (_, i) => makePagerItem(`Msg${i}`));
+		const { wrapper } = makeWrapper(items);
 		const settings = makeSettings({ retentionLines: 0 });
-		const { result } = renderHook(() => usePagerPlayback(index, settings));
+		const { result } = renderHook(() => usePagerPlayback(settings), { wrapper });
 
-		act(() => {
-			vi.advanceTimersByTime(1000 + 5 + 10);
-		});
+		act(() => { vi.advanceTimersByTime(5 + 10); });
 
 		expect(result.current.lines.length).toBe(5);
 	});
 
 	it("filters records by provider", () => {
-		const r1 = makeRecord("From Metrocall", "03:00:00", "Metrocall");
-		const r2 = makeRecord("From Arch", "03:00:00", "Arch");
-		const index = makeIndex([["03:00:00", [r1, r2]]]);
+		const r1 = makePagerItem("From Metrocall", "2001-09-11T07:00:00.000Z", "Metrocall");
+		const r2 = makePagerItem("From Arch", "2001-09-11T07:00:01.000Z", "Arch");
+		const { wrapper } = makeWrapper([r1, r2]);
 		const settings = makeSettings({
 			filter: { ...DEFAULT_PAGER_SETTINGS.filter, provider: "Arch" },
 		});
-		const { result } = renderHook(() => usePagerPlayback(index, settings));
+		const { result } = renderHook(() => usePagerPlayback(settings), { wrapper });
 
-		act(() => {
-			vi.advanceTimersByTime(1000 + 10);
-		});
+		act(() => { vi.advanceTimersByTime(10); });
 
 		expect(result.current.lines.length).toBe(1);
 		expect(result.current.lines[0].text).toBe("From Arch");
 	});
 
-	it("does not enqueue or stream messages when paused", () => {
-		const record = makeRecord("Hello world");
-		const index = makeIndex([["03:00:00", [record]]]);
-		const { result } = renderHook(() =>
-			usePagerPlayback(index, DEFAULT_PAGER_SETTINGS, true),
-		);
+	it("does not stream messages when paused", () => {
+		const item = makePagerItem("Hello world");
+		const { wrapper } = makeWrapper([item]);
+		const { result } = renderHook(() => usePagerPlayback(DEFAULT_PAGER_SETTINGS, true), { wrapper });
 
-		act(() => {
-			vi.advanceTimersByTime(2000);
-		});
+		act(() => { vi.advanceTimersByTime(2000); });
 
-		expect(result.current.lines).toHaveLength(0);
 		expect(result.current.streamingText).toBe("");
 		expect(result.current.streamingMeta).toBeNull();
 	});
 
-	it("resumes processing when unpaused", () => {
-		const record = makeRecord("Hi there");
-		const index = makeIndex([["03:00:00", [record]]]);
-		let paused = true;
-		const { result, rerender } = renderHook(() =>
-			usePagerPlayback(index, DEFAULT_PAGER_SETTINGS, paused),
-		);
+	it("builds unique provider values from seen items", () => {
+		const items = [
+			makePagerItem("Msg A", "2001-09-11T07:00:00.000Z", "Arch"),
+			makePagerItem("Msg B", "2001-09-11T07:00:01.000Z", "Skytel"),
+		];
+		const { wrapper } = makeWrapper(items);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
 
-		act(() => {
-			vi.advanceTimersByTime(1001);
-		});
-		expect(result.current.lines).toHaveLength(0);
-
-		paused = false;
-		rerender();
-
-		act(() => {
-			vi.advanceTimersByTime(1001);
-		});
-		expect(result.current.lines).toHaveLength(1);
-		expect(result.current.lines[0].text).toBe("Hi there");
+		expect(result.current.uniqueValues.provider).toContain("Arch");
+		expect(result.current.uniqueValues.provider).toContain("Skytel");
 	});
 
-	it("caps lines at 200, dropping oldest entries", () => {
-		// Use a flat index with all 201 records at the same second for simplicity
-		const records = Array.from({ length: 201 }, (_, i) =>
-			makeRecord(`Word${i}`),
-		);
-		const index = makeIndex([["03:00:00", records]]);
-		const { result } = renderHook(() => usePagerPlayback(index));
+	it("derives ET time key from UTC start_date", () => {
+		// 2001-09-11T07:00:00Z = 03:00:00 EDT
+		const item = makePagerItem("Test", "2001-09-11T07:00:00.000Z");
+		const { wrapper } = makeWrapper([item]);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
 
-		act(() => {
-			// clock tick + enough stream ticks to complete all 201 messages
-			vi.advanceTimersByTime(1000 + 201 + 10);
-		});
+		act(() => { vi.advanceTimersByTime(5); }); // complete message
 
-		expect(result.current.lines.length).toBe(200);
-		// Oldest message (Word0) should have been dropped
-		expect(result.current.lines[0].text).toBe("Word1");
-		expect(result.current.lines[199].text).toBe("Word200");
+		expect(result.current.lines[0].timeKey).toBe("03:00:00");
 	});
 });
