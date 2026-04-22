@@ -9,6 +9,7 @@ import {
 } from "classicy";
 import { BlueBox } from "./Applications/BlueBox/BlueBox";
 import { Browser } from "./Applications/Browser/Browser";
+import { Controls } from "./Applications/Controls/Controls";
 import { Demo } from "./Applications/Demo/Demo";
 import { EPG } from "./Applications/EPG/EPG";
 import { News } from "./Applications/News/News";
@@ -25,6 +26,7 @@ createRoot(rootElement).render(
 				<ClassicyDesktop>
 					<Browser />
 					<BlueBox />
+					<Controls />
 					<Demo />
 					<SimpleText />
 					<EPG />

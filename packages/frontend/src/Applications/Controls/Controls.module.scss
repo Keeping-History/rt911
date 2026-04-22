@@ -1,0 +1,51 @@
+.controls {
+	display: flex;
+	flex-direction: column;
+	padding: var(--window-padding-size);
+	gap: calc(var(--window-padding-size) * 0.5);
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+}
+
+.transport {
+	display: flex;
+	flex-direction: row;
+	gap: calc(var(--window-padding-size) * 0.5);
+	justify-content: center;
+	align-items: center;
+}
+
+.divider {
+	margin: 0;
+	border: none;
+	border-top: 1px solid var(--color-system-07);
+}
+
+.timeEntry {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: calc(var(--window-padding-size) * 0.5);
+}
+
+.timeLabel {
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	white-space: nowrap;
+}
+
+.timeInput {
+	width: 2.5em;
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	text-align: center;
+	border: 1px solid var(--color-system-07);
+	padding: 2px 4px;
+}
+
+.ampmSelect {
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	border: 1px solid var(--color-system-07);
+	padding: 2px 2px;
+}
