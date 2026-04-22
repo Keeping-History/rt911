@@ -64,7 +64,7 @@ async function api(token, method, path, body) {
 function psql(sql) {
   const result = spawnSync(
     "docker",
-    ["compose", "exec", "-T", "database", "psql", "-U", DB_USER, "-d", DB_DATABASE, "-v", "ON_ERROR_STOP=1"],
+    ["compose", "exec", "-T", "rt911-db", "psql", "-U", DB_USER, "-d", DB_DATABASE, "-v", "ON_ERROR_STOP=1"],
     { input: sql, cwd: __dirname, encoding: "utf8" },
   );
   if (result.status !== 0) {

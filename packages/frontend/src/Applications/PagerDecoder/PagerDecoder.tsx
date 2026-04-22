@@ -144,7 +144,6 @@ export const PagerDecoder = () => {
 					placeholder="Provider"
 					label="Provider"
 					labelPosition="left"
-					labelSize="small"
 					size="mini"
 					options={toOptions(uniqueValues?.provider)}
 					selected={settings.filter.provider}

@@ -6,6 +6,6 @@ tsconfig.tsbuildinfo
 *.tsbuildinfo
 
 # Large generated data files
-media-service/entries_media.json
-media-service/entries_news.json
+packages/backend/entries_media.json
+packages/backend/entries_news.json
 .claude/

@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const DIRECTUS_URL   = process.env.DIRECTUS_URL   ?? "http://localhost:8055";
-const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    ?? "me@robbiebyrd.com";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "ButStayWok3!";
-const OUT_PATH = join(__dirname, "../src/Applications/EPG/testdata.json");
+const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    ?? "admin@example.com";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "changeme";
+const OUT_PATH = join(__dirname, "../frontend/src/Applications/EPG/testdata.json");
 
 const WINDOW_START = new Date("2001-09-10T00:00:00Z");
 const WINDOW_END   = new Date("2001-09-20T00:00:00Z");
@@ -28,8 +28,8 @@ async function run() {
   const params = new URLSearchParams({
     "limit": "-1",
     "filter[format][_eq]": "mp4",
-    "filter[start_date][_gte]": "2001-09-10 00:00:00",
-    "filter[start_date][_lte]": "2001-09-19 23:59:59",
+    "filter[start_date][_gte]": WINDOW_START,
+    "filter[start_date][_lte]": WINDOW_END,
     "sort[]": "start_date",
   });
   params.append("fields[]", "title");
