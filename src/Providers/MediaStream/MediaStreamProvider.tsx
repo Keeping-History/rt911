@@ -37,6 +37,14 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [items, setItems] = useState<MediaItem[]>([]);
 	const [connected, setConnected] = useState(false);
 
+	const addItems = useCallback((incoming: MediaItem[]) => {
+		setItems((prev) => {
+			const byId = new Map(prev.map((i) => [i.id, i]));
+			for (const item of incoming) byId.set(item.id, item);
+			return Array.from(byId.values());
+		});
+	}, []);
+
 	const wsRef = useRef<WebSocket | null>(null);
 	// Always-current localDate for use inside WS callbacks and intervals
 	const localDateRef = useRef(localDate);
@@ -163,7 +171,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	}, []);
 
 	return (
-		<MediaStreamContext.Provider value={{ items, connected }}>
+		<MediaStreamContext.Provider value={{ items, connected, addItems }}>
 			{children}
 		</MediaStreamContext.Provider>
 	);

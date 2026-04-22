@@ -11,8 +11,13 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./PagerDecoder.module.scss";
+import {
+	completedLineToPagerMediaItem,
+	nextPagerItemId,
+} from "./pagerMediaItem";
 import type {
 	PagerDecoderFilter,
 	PagerDecoderSettings,
@@ -71,6 +76,18 @@ export const PagerDecoder = () => {
 		const el = terminalRef.current;
 		if (el) el.scrollTop = el.scrollHeight;
 	}, []);
+
+	const { addItems } = useContext(MediaStreamContext);
+	const injectedRef = useRef(new Set<string>());
+	useEffect(() => {
+		const fresh = lines.filter((l) => !injectedRef.current.has(l.id));
+		if (fresh.length === 0) return;
+		const mediaItems = fresh.map((l) => {
+			injectedRef.current.add(l.id);
+			return completedLineToPagerMediaItem(l, nextPagerItemId());
+		});
+		addItems(mediaItems);
+	}, [lines, addItems]);
 
 	// Track message completion timestamps for rolling msgs/min rate
 	const completionTimesRef = useRef<number[]>([]);

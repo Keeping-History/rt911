@@ -49,9 +49,11 @@ export interface MediaItem {
 export interface MediaStreamContextValue {
 	items: MediaItem[];
 	connected: boolean;
+	addItems: (items: MediaItem[]) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	items: [],
 	connected: false,
+	addItems: () => {},
 });

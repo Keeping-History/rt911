@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "vite -d",
 		"build": "tsc -b && vite build",
+		"test": "vitest run",
 		"lint": "eslint .",
 		"preview": "vite preview",
 		"use:local": "npm link classicy",
@@ -16,25 +17,28 @@
 		"proxy:down": "cd timemachine && docker compose down"
 	},
 	"dependencies": {
-		"classicy": "*",
+		"classicy": "^0.6.58",
 		"dompurify": "^3.4.0",
 		"react": "^19.1.0",
-		"react-dom": "^19.1.0"
+		"react-dom": "^19.1.0",
+		"sass-embedded": "^1.99.0"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.39.1",
 		"@types/dompurify": "^3.0.5",
 		"@types/node": "^24.1.0",
-		"@types/react": "^19.2.5",
+		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react": "^5.1.1",
 		"eslint": "^9.39.1",
 		"eslint-plugin-react-hooks": "^7.0.1",
 		"eslint-plugin-react-refresh": "^0.5.0",
 		"globals": "^17.3.0",
+		"jsdom": "^29.0.2",
 		"typescript": "~5.9.3",
 		"typescript-eslint": "^8.46.4",
-		"vite": "^7.3.2"
+		"vite": "^7.3.2",
+		"vitest": "^4.1.4"
 	},
 	"volta": {
 		"node": "25.2.0"
