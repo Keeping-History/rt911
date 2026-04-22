@@ -543,8 +543,12 @@ async function importPagerItems(token, records, sourceMap) {
   const cols = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,content,sort`;
   const BATCH = 500;
 
-  // Sort by timestamp for correct ordering
-  const sorted = [...records].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  // Sort by timestamp for correct ordering; drop records with no message content
+  const valid  = records.filter((r) => r.message && r.message.trim() !== "");
+  const sorted = [...valid].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  if (valid.length !== records.length) {
+    console.warn(`Warning: ${records.length - valid.length} pager records skipped — empty message.`);
+  }
   console.log(`Importing ${sorted.length} pager items in batches of ${BATCH}…`);
 
   for (let i = 0; i < sorted.length; i += BATCH) {
