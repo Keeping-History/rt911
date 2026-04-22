@@ -1,0 +1,42 @@
+name: PR Preview
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - closed
+      - converted_to_draft
+
+jobs:
+  deploy:
+    name: Deploy preview environment
+    if: >
+      github.event.action != 'closed' &&
+      github.event.action != 'converted_to_draft' &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+
+    steps:
+      - name: Placeholder
+        run: echo "deploy job"
+
+  teardown:
+    name: Destroy preview environment
+    if: >
+      github.event.action == 'closed' ||
+      github.event.action == 'converted_to_draft'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Placeholder
+        run: echo "teardown job"
