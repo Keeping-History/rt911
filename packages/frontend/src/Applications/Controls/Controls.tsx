@@ -106,12 +106,12 @@ export const Controls: React.FC = () => {
 				<div className={styles.controls}>
 					{/* Transport row */}
 					<div className={styles.transport}>
-						<ClassicyButton onClickFunc={handleSkipBack}>«</ClassicyButton>
-						<ClassicyButton onClickFunc={handleStepBack}>‹</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleSkipBack}>«</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleStepBack}>‹</ClassicyButton>
 						<ClassicyButton onClickFunc={handlePlay}  disabled={!paused}>Play</ClassicyButton>
 						<ClassicyButton onClickFunc={handlePause} disabled={paused}>Pause</ClassicyButton>
-						<ClassicyButton onClickFunc={handleStepForward}>›</ClassicyButton>
-						<ClassicyButton onClickFunc={handleSkipForward}>»</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleStepForward}>›</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleSkipForward}>»</ClassicyButton>
 					</div>
 
 					<hr className={styles.divider} />
