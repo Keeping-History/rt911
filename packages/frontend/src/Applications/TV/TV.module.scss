@@ -64,8 +64,8 @@ $strip-height: calc(5em + 8px);
 
 .tvChannelTitleHolder {
   position: absolute;
-  top: var(--window-padding-size);
-  left: var(--window-padding-size);
+  top: var(--window-control-size);
+  left: var(--window-control-size);
   z-index: 1;
   background-color: var(--color-theme-06);
 }
