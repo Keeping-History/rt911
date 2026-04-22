@@ -163,7 +163,7 @@ jobs:
       - name: Build frontend
         env:
           VITE_MEDIA_STREAM_URL: ${{ steps.wss.outputs.url }}
-          VITE_PROXY_PROTOCOL: https:
+          VITE_PROXY_PROTOCOL: "https:"
           VITE_PROXY_HOST: time-machine-proxy-723408812472.us-central1.run.app
           VITE_PROXY_PORT: 443
         run: pnpm --filter ./packages/frontend build
