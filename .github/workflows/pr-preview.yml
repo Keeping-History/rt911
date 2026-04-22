@@ -62,7 +62,7 @@ jobs:
           service: rt911-pr-${{ github.event.pull_request.number }}
           image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REGISTRY_REPO }}/backend:pr-${{ github.event.pull_request.number }}
           region: ${{ secrets.GCP_REGION }}
-          flags: --allow-unauthenticated --port=8080 --min-instances=0 --max-instances=1
+          flags: --allow-unauthenticated --port=8080 --min-instances=0 --max-instances=1 --add-cloudsql-instances=civil-clarity-280121:us-central1:rt911-backend-db
           env_vars: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
             REDIS_URL=${{ secrets.REDIS_URL }}
