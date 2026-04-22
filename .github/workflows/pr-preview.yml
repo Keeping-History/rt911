@@ -166,5 +166,29 @@ jobs:
       id-token: write
 
     steps:
-      - name: Placeholder
-        run: echo "teardown job"
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Delete Cloud Run service
+        run: |
+          gcloud run services delete "rt911-pr-${{ github.event.pull_request.number }}" \
+            --region="${{ secrets.GCP_REGION }}" \
+            --quiet 2>/dev/null || true
+
+      - name: Delete backend Docker image
+        run: |
+          gcloud artifacts docker images delete \
+            "${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REGISTRY_REPO }}/backend:pr-${{ github.event.pull_request.number }}" \
+            --delete-tags \
+            --quiet 2>/dev/null || true
+
+      - name: Delete GCS bucket
+        run: |
+          gsutil rm -r "gs://rt911-pr-${{ github.event.pull_request.number }}" 2>/dev/null || true
