@@ -102,6 +102,11 @@ jobs:
           ./cloud-sql-proxy --port=5433 civil-clarity-280121:us-central1:rt911-backend-db &
           sleep 5
 
+      - name: Download seed data from GCS
+        run: |
+          gsutil cp gs://rt911-seed-data/entries_media.json packages/backend/entries_media.json
+          gsutil cp gs://rt911-seed-data/entries_news.json packages/backend/entries_news.json
+
       - name: Seed database
         env:
           DIRECTUS_URL: ${{ steps.deploy-directus.outputs.url }}
