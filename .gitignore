@@ -10,3 +10,5 @@ packages/backend/entries_media.json
 packages/backend/entries_news.json
 .claude/
 /packages/frontend/.vite
+/stories/archive
+/docs/superpowers
