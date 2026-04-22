@@ -17,7 +17,7 @@
 		"proxy:down": "cd timemachine && docker compose down"
 	},
 	"dependencies": {
-		"classicy": "^0.7.0",
+		"classicy": "latest",
 		"classnames": "^2.5.1",
 		"dompurify": "^3.4.0",
 		"react": "^19.1.0",
