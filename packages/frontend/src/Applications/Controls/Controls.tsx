@@ -2,6 +2,8 @@ import {
 	ClassicyApp,
 	ClassicyButton,
 	ClassicyIcons,
+	ClassicyPopUpMenu,
+	ClassicySpinner,
 	ClassicyWindow,
 	quitMenuItemHelper,
 	useClassicyDateTime,
@@ -97,9 +99,9 @@ export const Controls: React.FC = () => {
 				zoomable={false}
 				scrollable={false}
 				collapsable={true}
-				initialSize={[340, 110]}
+				initialSize={[340, 130]}
 				initialPosition={[300, 200]}
-				minimumSize={[340, 110]}
+				minimumSize={[340, 130]}
 				modal={false}
 				appMenu={appMenu}
 			>
@@ -118,38 +120,48 @@ export const Controls: React.FC = () => {
 
 					{/* Time entry row */}
 					<div className={styles.timeEntry}>
-						<label className={styles.timeLabel}>H:</label>
-						<input
-							className={styles.timeInput}
-							type="text"
-							maxLength={2}
-							value={timeForm.hours}
-							onChange={(e) => setTimeForm((f) => ({ ...f, hours: e.target.value }))}
+						<ClassicySpinner
+							id="pager-filter-retention"
+							labelTitle="H"
+							labelPosition="left"
+							labelSize="medium"
+							placeholder={parseInt(timeForm.hours, 10)}
+							prefillValue={parseInt(timeForm.hours, 10)}
+							onChangeFunc={(e) => setTimeForm((f) => ({ ...f, hours: e.target.value }))}
+							maxValue={24}
+							minValue={0}
 						/>
-						<label className={styles.timeLabel}>M:</label>
-						<input
-							className={styles.timeInput}
-							type="text"
-							maxLength={2}
-							value={timeForm.minutes}
-							onChange={(e) => setTimeForm((f) => ({ ...f, minutes: e.target.value }))}
+						<ClassicySpinner
+							id="pager-filter-retention"
+							labelTitle="M"
+							labelPosition="left"
+							labelSize="medium"
+							placeholder={parseInt(timeForm.minutes, 10)}
+							prefillValue={parseInt(timeForm.minutes, 10)}
+							onChangeFunc={(e) => setTimeForm((f) => ({ ...f, minutes: e.target.value }))}
+							maxValue={59}
+							minValue={0}
 						/>
-						<label className={styles.timeLabel}>S:</label>
-						<input
-							className={styles.timeInput}
-							type="text"
-							maxLength={2}
-							value={timeForm.seconds}
-							onChange={(e) => setTimeForm((f) => ({ ...f, seconds: e.target.value }))}
+						<ClassicySpinner
+							id="pager-filter-retention"
+							labelTitle="S"
+							labelPosition="left"
+							labelSize="medium"
+							placeholder={parseInt(timeForm.seconds, 10)}
+							prefillValue={parseInt(timeForm.seconds, 10)}
+							onChangeFunc={(e) => setTimeForm((f) => ({ ...f, seconds: e.target.value }))}
+							maxValue={59}
+							minValue={0}
 						/>
-						<select
-							className={styles.ampmSelect}
-							value={timeForm.ampm}
-							onChange={(e) => setTimeForm((f) => ({ ...f, ampm: e.target.value }))}
-						>
-							<option value="AM">AM</option>
-							<option value="PM">PM</option>
-						</select>
+						<ClassicyPopUpMenu
+							id={"am_or_pm"}
+							options={[
+								{ value: "AM", label: "AM" },
+								{ value: "PM", label: "PM" },
+							]}
+							selected={timeForm.ampm}
+							onChangeFunc={(e) => setTimeForm((f) => ({ ...f, ampm: e.target.value }))}
+							/>
 						<ClassicyButton onClickFunc={handleGo}>GO</ClassicyButton>
 					</div>
 				</div>
