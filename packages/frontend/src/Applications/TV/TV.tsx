@@ -31,13 +31,16 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const appIcon = ClassicyIcons.applications.epg.app as string;
 
 	const { items } = useMediaStream({ format: ["m3u8"], approved: true });
-	const { dateTime } = useClassicyDateTime();
+	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
 	const [showSettings, setShowSettings] = useState<boolean>(false);
 	const [activePlayer, setActivePlayer] = useState<number>(0);
 	// Browsers block autoplay with audio until the user interacts with the page.
 	// Track first interaction so the active player stays muted until then.
 	const [hasInteracted, setHasInteracted] = useState<boolean>(false);
+	const [multiSelectMode, setMultiSelectMode] = useState<boolean>(false);
+	const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
+	const [mutedGridPlayers, setMutedGridPlayers] = useState<number[]>([]);
 
 	// Underlying video elements per item — react-player 3.x forwards refs to
 	// the native <video> element, so we set currentTime directly for seeking.
@@ -46,6 +49,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Stable ref to the latest UTC dateTime string for use in config callbacks.
 	const dateTimeRef = useRef(dateTime);
 	dateTimeRef.current = dateTime;
+	// Stable ref to clockPaused so the health-check interval sees the latest value.
+	const clockPausedRef = useRef(clockPaused);
+	clockPausedRef.current = clockPaused;
 	// Stable ref to items so the seek effect never captures a stale closure.
 	const itemsRef = useRef(items);
 	itemsRef.current = items;
@@ -88,8 +94,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 				const el = videoRefs.current.get(item.id);
 				if (!el) continue;
 
-				// Resume if stalled or paused
-				if (el.paused || el.ended) {
+				// Resume if stalled or paused (skip when the system clock is paused)
+				if (!clockPausedRef.current && (el.paused || el.ended)) {
 					el.play().catch(() => {});
 				}
 
@@ -124,6 +130,40 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 
 		prevDateTimeRef.current = dateTime;
 	}, [dateTime]);
+
+	// Pause or resume all players when the system clock is paused/resumed.
+	// On pause: seek every player to the exact clock position so the freeze
+	// frame matches the displayed time. Resume is handled by playing={!clockPaused}.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: itemsRef/dateTimeRef/videoRefs are stable refs
+	useEffect(() => {
+		if (!clockPaused) return;
+		const nowMs = new Date(dateTimeRef.current).getTime();
+		for (const item of itemsRef.current) {
+			const el = videoRefs.current.get(item.id);
+			if (!el) continue;
+			el.currentTime = calcSeekSeconds(item, nowMs);
+		}
+	}, [clockPaused]);
+
+	const toggleMultiSelect = () => {
+		setMultiSelectMode((prev) => !prev);
+		setSelectedPlayers([]);
+		setMutedGridPlayers([]);
+	};
+
+	const togglePlayerSelection = (id: number) => {
+		setSelectedPlayers((prev) =>
+			prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+		);
+	};
+
+	const toggleGridPlayerMute = (id: number) => {
+		setMutedGridPlayers((prev) =>
+			prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+		);
+	};
+
+	const gridColumns = Math.ceil(Math.sqrt(Math.max(1, selectedPlayers.length)));
 
 	const appMenu = [
 		{
@@ -187,65 +227,155 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 				appMenu={appMenu}
 			>
 				<div className={styles.tvContainer}>
-					<div className={styles.tvMainArea} />
-					<div className={styles.tvThumbnailStrip}>
-						{items.slice(0, 12).map((item) => {
-							const isActive = item.id === activePlayer;
+					<div className={styles.tvMainArea}>
+						{multiSelectMode && selectedPlayers.length > 0 && (
+							<div
+								className={styles.tvMainGrid}
+								style={{ gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }}
+							>
+								{selectedPlayers.map((id) => {
+									const item = items.find((i) => i.id === id);
+									if (!item) return null;
+									const isGridMuted = !hasInteracted || mutedGridPlayers.includes(id);
+									return (
+										<div key={id} className={styles.tvGridPlayer}>
+											<div className={styles.tvChannelTitleHolder}>
+												<p className={styles.tvChannelTitle}>{item.source}</p>
+											</div>
+											<div className={styles.tvGridPlayerControls}>
+												<button
+													className={styles.tvGridPlayerControlBtn}
+													type="button"
+													onMouseUp={() => toggleGridPlayerMute(id)}
+												>
+													<img
+														src={isGridMuted
+															? ClassicyIcons.controlPanels.soundManager.soundMute as string
+															: ClassicyIcons.controlPanels.soundManager.soundOn as string}
+														alt={isGridMuted ? "Unmute" : "Mute"}
+													/>
+												</button>
+												<button
+													className={styles.tvGridPlayerControlBtn}
+													type="button"
+													onMouseUp={() => togglePlayerSelection(id)}
+												>
+													✕
+												</button>
+											</div>
+											<ReactPlayer
+												ref={(el: HTMLVideoElement | null) => {
+													if (el) videoRefs.current.set(id, el);
+													else videoRefs.current.delete(id);
+												}}
+												onReady={() => {}}
+												src={item.url}
+												playing={!clockPaused}
+												loop={false}
+												controls={false}
+												playsInline={true}
+												muted={isGridMuted}
+												volume={isGridMuted ? 0 : 1}
+												width="100%"
+												height="100%"
+												config={hlsActiveConfigsRef.current.get(id)}
+											/>
+										</div>
+									);
+								})}
+							</div>
+						)}
+					</div>
+					<div className={styles.tvBottomRow}>
+						<div className={styles.tvControlPanel}>
+							<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode}>
+								Grid
+							</ClassicyButton>
+						</div>
+						<div className={styles.tvThumbnailStrip}>
+							{items.slice(0, 12).map((item) => {
+								// In multi-select mode no thumbnail is "active" (no absolute overlay)
+								const isActive = !multiSelectMode && item.id === activePlayer;
+								const isSelected = selectedPlayers.includes(item.id);
 
-							// Build stable hls configs the first time each item is seen.
-							// Two configs per item — inactive (low quality) and active (ABR)
-							// — so switching active triggers a remount with the correct
-							// quality level while unchanged players keep a stable reference.
-							if (item.url.endsWith("m3u8") && !hlsInactiveConfigsRef.current.has(item.id)) {
-								const nowMs = new Date(dateTimeRef.current).getTime();
-								const startPosition = calcSeekSeconds(item, nowMs);
-								hlsInactiveConfigsRef.current.set(item.id, {
-									hls: { startLevel: 0, startPosition },
-								});
-								hlsActiveConfigsRef.current.set(item.id, {
-									hls: { startLevel: -1, startPosition },
-								});
-							}
-							const itemConfig = isActive
-								? hlsActiveConfigsRef.current.get(item.id)
-								: hlsInactiveConfigsRef.current.get(item.id);
+								// Build stable hls configs the first time each item is seen.
+								// Two configs per item — inactive (low quality) and active (ABR)
+								// — so switching active triggers a remount with the correct
+								// quality level while unchanged players keep a stable reference.
+								if (item.url.endsWith("m3u8") && !hlsInactiveConfigsRef.current.has(item.id)) {
+									const nowMs = new Date(dateTimeRef.current).getTime();
+									const startPosition = calcSeekSeconds(item, nowMs);
+									hlsInactiveConfigsRef.current.set(item.id, {
+										hls: { startLevel: 0, startPosition },
+									});
+									hlsActiveConfigsRef.current.set(item.id, {
+										hls: { startLevel: -1, startPosition },
+									});
+								}
 
-							return (
-								<button
-									key={item.id}
-									className={`${styles.tvPlayer}${isActive ? ` ${styles.tvPlayerActive}` : ""}`}
-									onClick={() => { setActivePlayer(item.id); setHasInteracted(true); }}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											setActivePlayer(item.id);
+								// Selected items in multi-select mode render their player in the grid
+								// (which owns the videoRef for health checks); thumbnail shows title only.
+								const renderThumbnailPlayer = !multiSelectMode || !isSelected;
+								const itemConfig = isActive
+									? hlsActiveConfigsRef.current.get(item.id)
+									: hlsInactiveConfigsRef.current.get(item.id);
+
+								return (
+									<button
+										key={item.id}
+										className={[
+											styles.tvPlayer,
+											isActive ? styles.tvPlayerActive : "",
+											isSelected ? styles.tvPlayerSelected : "",
+										]
+											.filter(Boolean)
+											.join(" ")}
+										onClick={() => {
+											if (multiSelectMode) {
+												togglePlayerSelection(item.id);
+											} else {
+												setActivePlayer(item.id);
+											}
 											setHasInteracted(true);
-										}
-									}}
-									type="button"
-								>
-									<div className={styles.tvChannelTitleHolder}>
-										<p className={styles.tvChannelTitle}>{item.source}</p>
-									</div>
-									<ReactPlayer
-										ref={(el: HTMLVideoElement | null) => {
-											if (el) videoRefs.current.set(item.id, el);
-											else videoRefs.current.delete(item.id);
 										}}
-										onReady={() => {}}
-										src={item.url}
-										playing={true}
-										loop={false}
-										controls={false}
-										playsInline={true}
-										muted={!(isActive && hasInteracted)}
-										volume={isActive && hasInteracted ? 1 : 0}
-										width="100%"
-										height="100%"
-										config={itemConfig}
-									/>
-								</button>
-							);
-						})}
+										onKeyDown={(e) => {
+											if (e.key === "Enter" || e.key === " ") {
+												if (multiSelectMode) {
+													togglePlayerSelection(item.id);
+												} else {
+													setActivePlayer(item.id);
+												}
+												setHasInteracted(true);
+											}
+										}}
+										type="button"
+									>
+										<div className={styles.tvChannelTitleHolder}>
+											<p className={styles.tvChannelTitle}>{item.source}</p>
+										</div>
+										{renderThumbnailPlayer && (
+											<ReactPlayer
+												ref={(el: HTMLVideoElement | null) => {
+													if (el) videoRefs.current.set(item.id, el);
+													else videoRefs.current.delete(item.id);
+												}}
+												onReady={() => {}}
+												src={item.url}
+												playing={!clockPaused}
+												loop={false}
+												controls={false}
+												playsInline={true}
+												muted={!(isActive && hasInteracted)}
+												volume={isActive && hasInteracted ? 1 : 0}
+												width="100%"
+												height="100%"
+												config={itemConfig}
+											/>
+										)}
+									</button>
+								);
+							})}
+						</div>
 					</div>
 				</div>
 			</ClassicyWindow>

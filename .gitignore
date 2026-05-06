@@ -12,3 +12,4 @@ packages/backend/entries_news.json
 /packages/frontend/.vite
 /stories/archive
 /docs/superpowers
+usenet/**

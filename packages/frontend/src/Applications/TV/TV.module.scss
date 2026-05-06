@@ -11,18 +11,95 @@ $strip-height: calc(5em + 8px);
   background: black;
 }
 
-// Spacer that fills remaining height above the strip; active player overlays this area
+// Fills remaining height above the strip; holds the main video area or the multi-select grid
 .tvMainArea {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// Grid shown in the main area when multi-select mode has selections
+.tvMainGrid {
+  flex: 1;
+  display: grid;
+  gap: var(--window-control-size);
+  padding: var(--window-padding-size);
+  background: black;
+  overflow: hidden;
+}
+
+.tvGridPlayer {
+  position: relative;
+  background: black;
+  overflow: hidden;
+}
+
+// Row of overlay controls (mute + dismiss) shown on grid cell hover
+.tvGridPlayerControls {
+  position: absolute;
+  top: var(--window-control-size);
+  right: var(--window-control-size);
+  z-index: 2;
+  display: flex;
+  flex-direction: row;
+  gap: calc(var(--window-padding-size) / 2);
+  opacity: 0;
+  transition: opacity 0.1s;
+
+  .tvGridPlayer:hover & {
+    opacity: 1;
+  }
+}
+
+.tvGridPlayerControlBtn {
+  width: calc(var(--window-control-size) * 2);
+  height: calc(var(--window-control-size) * 2);
+  padding: calc(var(--window-padding-size) / 2);
+  border: none;
+  background-color: var(--color-theme-06);
+  color: var(--color-theme-03);
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.75);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+// Wrapper row holding the control panel and thumbnail strip
+.tvBottomRow {
+  display: flex;
+  flex-direction: row;
+  height: 10vh;
+  flex-shrink: 0;
+}
+
+// Narrow column to the left of the thumbnail strip for control buttons
+.tvControlPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--window-padding-size) * 2);
+  background-color: var(--color-system-03);
+  border-right: 1px solid var(--color-system-05);
+  flex-shrink: 0;
+  gap: var(--window-control-size);
 }
 
 .tvThumbnailStrip {
-  height: 10vh;
+  flex: 1;
   display: flex;
   flex-direction: row;
   overflow-x: auto;
   overflow-y: hidden;
-  flex-shrink: 0;
   gap: var(--window-control-size);
   background-color: var(--color-system-03);
   padding: calc(var(--window-padding-size) * 2);
@@ -43,10 +120,7 @@ $strip-height: calc(5em + 8px);
     // Taken out of strip flow; overlays the main area above the strip
     position: absolute;
     top: 0;
-    left: 0;
-    right: 0;
-    bottom: $strip-height;
-    height: 75%;
+    height: calc(100% - 10vh);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -59,6 +133,11 @@ $strip-height: calc(5em + 8px);
         font-size: calc(var(--ui-font-size)*1.75);
       }
     }
+  }
+
+  &.tvPlayerSelected {
+    outline: 2px solid var(--color-theme-01);
+    outline-offset: -2px;
   }
 }
 

@@ -4,6 +4,18 @@ div {
 	overscroll-behavior: none;
 }
 
-html, body {
+html, body, #root {
+	overflow: hidden;
+}
+
+body {
+	margin: 1em !important;
+	height: calc(100vh - 2em) !important;
+	background-color: black;
+}
+
+#root {
+	width: 100%;
+	height: 100%;
 	overflow: hidden;
 }
