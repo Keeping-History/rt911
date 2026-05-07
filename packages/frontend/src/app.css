@@ -9,8 +9,7 @@ html, body, #root {
 }
 
 body {
-	margin: 1em !important;
-	height: calc(100vh - 2em) !important;
+	height: calc(100vh) !important;
 	background-color: black;
 }
 

@@ -5,6 +5,8 @@ import {
 	ClassicyIcons,
 	ClassicyWindow,
 	quitMenuItemHelper,
+	useAppManager,
+	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
 import type React from "react";
@@ -13,10 +15,16 @@ import ReactPlayer from "react-player";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
 import styles from "./TV.module.scss";
+import "./TVContext";
 
 /** Seconds into the media file that corresponds to the given wall-clock time. */
 function calcSeekSeconds(item: MediaItem, clockMs: number): number {
-	const startMs = new Date(item.start_date).getTime();
+	// Directus stores datetimes without a timezone suffix; force UTC so that
+	// JavaScript does not misinterpret them as local time.
+	const dateStr = /Z$|[+-]\d{2}:\d{2}$/.test(item.start_date)
+		? item.start_date
+		: item.start_date + "Z";
+	const startMs = new Date(dateStr).getTime();
 	const raw = (clockMs - startMs) / 1000 + item.jump;
 	// Do not cap by calc_duration — it may be inaccurate for archive streams.
 	// Let the player handle out-of-bounds positions natively.
@@ -30,6 +38,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const appId = "TV.app";
 	const appIcon = ClassicyIcons.applications.epg.app as string;
 
+	const desktopEventDispatch = useAppManagerDispatch();
+	const appState = useAppManager(
+		(state) => state.System.Manager.Applications.apps[appId],
+	);
+
 	const { items } = useMediaStream({ format: ["m3u8"], approved: true });
 	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
@@ -38,9 +51,15 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Browsers block autoplay with audio until the user interacts with the page.
 	// Track first interaction so the active player stays muted until then.
 	const [hasInteracted, setHasInteracted] = useState<boolean>(false);
-	const [multiSelectMode, setMultiSelectMode] = useState<boolean>(false);
-	const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
-	const [mutedGridPlayers, setMutedGridPlayers] = useState<number[]>([]);
+	const [multiSelectMode, setMultiSelectMode] = useState<boolean>(
+		(appState?.data?.multiSelectMode as boolean) ?? false,
+	);
+	const [selectedPlayers, setSelectedPlayers] = useState<number[]>(
+		(appState?.data?.selectedPlayers as number[]) ?? [],
+	);
+	const [mutedGridPlayers, setMutedGridPlayers] = useState<number[]>(
+		(appState?.data?.mutedGridPlayers as number[]) ?? [],
+	);
 
 	// Underlying video elements per item — react-player 3.x forwards refs to
 	// the native <video> element, so we set currentTime directly for seeking.
@@ -145,10 +164,23 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		}
 	}, [clockPaused]);
 
+	// Persist grid layout and mute state to app settings on every change.
+	useEffect(() => {
+		desktopEventDispatch({
+			type: "ClassicyAppTVSetGridState",
+			multiSelectMode,
+			selectedPlayers,
+			mutedGridPlayers,
+		});
+	}, [multiSelectMode, selectedPlayers, mutedGridPlayers, desktopEventDispatch]);
+
 	const toggleMultiSelect = () => {
-		setMultiSelectMode((prev) => !prev);
-		setSelectedPlayers([]);
-		setMutedGridPlayers([]);
+		setMultiSelectMode((prev) => {
+			const entering = !prev;
+			setSelectedPlayers(entering && activePlayer ? [activePlayer] : []);
+			setMutedGridPlayers([]);
+			return entering;
+		});
 	};
 
 	const togglePlayerSelection = (id: number) => {
@@ -158,12 +190,22 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	};
 
 	const toggleGridPlayerMute = (id: number) => {
+		setHasInteracted(true);
 		setMutedGridPlayers((prev) =>
 			prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
 		);
 	};
 
 	const gridColumns = Math.ceil(Math.sqrt(Math.max(1, selectedPlayers.length)));
+
+	/** Seek the given item's video element to the current clock position. */
+	const seekToCurrentTime = (item: MediaItem) => {
+		const el = videoRefs.current.get(item.id);
+		if (!el) return;
+		const elapsedRealMs = Date.now() - dateTimeUpdatedAtRef.current;
+		const nowMs = new Date(dateTimeRef.current).getTime() + elapsedRealMs;
+		el.currentTime = calcSeekSeconds(item, nowMs);
+	};
 
 	const appMenu = [
 		{
@@ -268,7 +310,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 													if (el) videoRefs.current.set(id, el);
 													else videoRefs.current.delete(id);
 												}}
-												onReady={() => {}}
+												onReady={() => seekToCurrentTime(item)}
 												src={item.url}
 												playing={!clockPaused}
 												loop={false}
@@ -359,7 +401,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 													if (el) videoRefs.current.set(item.id, el);
 													else videoRefs.current.delete(item.id);
 												}}
-												onReady={() => {}}
+												onReady={() => seekToCurrentTime(item)}
 												src={item.url}
 												playing={!clockPaused}
 												loop={false}

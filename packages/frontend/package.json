@@ -17,6 +17,7 @@
 		"proxy:down": "cd timemachine && docker compose down"
 	},
 	"dependencies": {
+		"audiomotion-analyzer": "^4.5.4",
 		"classicy": "latest",
 		"classnames": "^2.5.1",
 		"dompurify": "^3.4.0",

@@ -7,13 +7,13 @@ import {
 	ClassicyDesktop,
 	SimpleText,
 } from "classicy";
-import { BlueBox } from "./Applications/BlueBox/BlueBox";
 import { Browser } from "./Applications/Browser/Browser";
 import { Controls } from "./Applications/Controls/Controls";
 import { Demo } from "./Applications/Demo/Demo";
 import { EPG } from "./Applications/EPG/EPG";
 import { News } from "./Applications/News/News";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
+import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
 import { TV } from "./Applications/TV/TV";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
 
@@ -25,13 +25,13 @@ createRoot(rootElement).render(
 			<MediaStreamProvider>
 				<ClassicyDesktop>
 					<Browser />
-					<BlueBox />
 					<Controls />
 					<Demo />
 					<SimpleText />
 					<EPG />
 					<News />
 					<PagerDecoder />
+					<RadioScanner />
 					<TV />
 					<Controls />
 				</ClassicyDesktop>

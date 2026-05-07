@@ -142,7 +142,7 @@ async function createCollections(token) {
         { field: "end_date",      type: "dateTime", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
         { field: "timezone",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
         { field: "url",           type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
-        { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "mp3", "html", "modal", "news"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
+        { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "mp3", "html", "modal", "news", "pager"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
         { field: "image",         type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
         { field: "image_caption", type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
         { field: "content",       type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
