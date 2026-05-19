@@ -50,3 +50,21 @@
 	border: 1px solid var(--color-system-07);
 	padding: 2px 2px;
 }
+
+.settings {
+	display: flex;
+	flex-direction: column;
+	padding: var(--window-padding-size);
+	gap: var(--window-padding-size);
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	background-color: var(--color-system-02);
+}
+
+.settingsButtons {
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+	gap: calc(var(--window-padding-size) * 0.5);
+	padding-top: calc(var(--window-padding-size) * 0.5);
+}

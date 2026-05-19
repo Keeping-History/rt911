@@ -1,34 +1,69 @@
 import {
 	ClassicyApp,
 	ClassicyButton,
+	ClassicyControlGroup,
 	ClassicyIcons,
 	ClassicyPopUpMenu,
+	ClassicySlider,
 	ClassicySpinner,
 	ClassicyWindow,
 	quitMenuItemHelper,
 	useClassicyDateTime,
 } from "classicy";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react"; // useState used for timeForm
+import { type ChangeEvent, useCallback, useMemo, useState } from "react";
 import styles from "./Controls.module.scss";
 
-// How many minutes each skip/rewind step moves the clock
-const SKIP_MINUTES = 30;
-const STEP_MINUTES = 5;
+const DEFAULT_SKIP_MINUTES = 30;
+const DEFAULT_STEP_SECONDS = 300; // 5 minutes
+
+function formatSeconds(s: number): string {
+	if (s < 60) return `${s} sec`;
+	const min = Math.floor(s / 60);
+	const sec = s % 60;
+	return sec > 0 ? `${min} min ${sec} sec` : `${min} min`;
+}
 
 export const Controls: React.FC = () => {
 	const appName = "Controls";
 	const appId = "Controls.app";
 	const appIcon = ClassicyIcons.system.quicktime.controlPanel as string;
+
+	const [skipMinutes, setSkipMinutes] = useState(DEFAULT_SKIP_MINUTES);
+	const [stepSeconds, setStepSeconds] = useState(DEFAULT_STEP_SECONDS);
+	const [showSettings, setShowSettings] = useState(false);
+	const [settingsForm, setSettingsForm] = useState({
+		skipMinutes: DEFAULT_SKIP_MINUTES,
+		stepSeconds: DEFAULT_STEP_SECONDS,
+	});
+
+	const openSettings = useCallback(() => {
+		setSettingsForm({ skipMinutes, stepSeconds });
+		setShowSettings(true);
+	}, [skipMinutes, stepSeconds]);
+
+	const saveSettings = useCallback(() => {
+		setSkipMinutes(settingsForm.skipMinutes);
+		setStepSeconds(settingsForm.stepSeconds);
+		setShowSettings(false);
+	}, [settingsForm]);
+
 	const appMenu = useMemo(
 		() => [
 			{
 				id: "file",
 				title: "File",
-				menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
+				menuChildren: [
+					{
+						id: `${appId}_settings`,
+						title: "Settings\u2026",
+						onClickFunc: openSettings,
+					},
+					quitMenuItemHelper(appId, appName, appIcon),
+				],
 			},
 		],
-		[appIcon],
+		[appIcon, openSettings],
 	);
 
 	const { dateTime, setDateTime, tzOffset, paused, pause, resume } = useClassicyDateTime({ tick: true });
@@ -61,10 +96,10 @@ export const Controls: React.FC = () => {
 		[dateTime, setDateTime],
 	);
 
-	const handleSkipBack    = () => shiftTime(-SKIP_MINUTES);
-	const handleStepBack    = () => shiftTime(-STEP_MINUTES);
-	const handleStepForward = () => shiftTime(STEP_MINUTES);
-	const handleSkipForward = () => shiftTime(SKIP_MINUTES);
+	const handleSkipBack    = () => shiftTime(-skipMinutes);
+	const handleStepBack    = () => shiftTime(-(stepSeconds / 60));
+	const handleStepForward = () => shiftTime(stepSeconds / 60);
+	const handleSkipForward = () => shiftTime(skipMinutes);
 	const handlePlay        = () => resume();
 	const handlePause       = () => pause();
 
@@ -90,6 +125,70 @@ export const Controls: React.FC = () => {
 			defaultWindow={`${appId}_main`}
 			addSystemMenu={false}
 		>
+			{showSettings && (
+				<ClassicyWindow
+					id={`${appId}_settings`}
+					title="Settings"
+					appId={appId}
+					closable={true}
+					resizable={false}
+					zoomable={false}
+					scrollable={false}
+					collapsable={false}
+					initialSize={[300, 0]}
+					initialPosition={[250, 150]}
+					appMenu={appMenu}
+					onCloseFunc={() => setShowSettings(false)}
+				>
+					<div className={styles.settings}>
+						<ClassicyControlGroup label="Skip">
+							<ClassicySlider
+								id="controls_skip_minutes"
+								labelTitle="Duration:"
+								labelPosition="left"
+								labelSize="small"
+								value={settingsForm.skipMinutes}
+								min={1}
+								max={60}
+								step={1}
+								valueLabel={`${settingsForm.skipMinutes} min`}
+								onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+									setSettingsForm((f) => ({
+										...f,
+										skipMinutes: parseInt(e.target.value, 10),
+									}))
+								}
+							/>
+						</ClassicyControlGroup>
+						<ClassicyControlGroup label="Step">
+							<ClassicySlider
+								id="controls_step_seconds"
+								labelTitle="Duration:"
+								labelPosition="left"
+								value={settingsForm.stepSeconds}
+								min={1}
+								max={600}
+								step={1}
+								valueLabel={formatSeconds(settingsForm.stepSeconds)}
+								onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+									setSettingsForm((f) => ({
+										...f,
+										stepSeconds: parseInt(e.target.value, 10),
+									}))
+								}
+							/>
+						</ClassicyControlGroup>
+						<div className={styles.settingsButtons}>
+							<ClassicyButton onClickFunc={() => setShowSettings(false)}>
+								Cancel
+							</ClassicyButton>
+							<ClassicyButton isDefault={true} onClickFunc={saveSettings}>
+								Save
+							</ClassicyButton>
+						</div>
+					</div>
+				</ClassicyWindow>
+			)}
 			<ClassicyWindow
 				id={`${appId}_main`}
 				title={appName}
