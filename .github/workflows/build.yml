@@ -25,7 +25,7 @@ env:
   FE_VITE_PROXY_PROTOCOL: "https:"
   FE_VITE_PROXY_HOST: "timemachine.911realtime.org"
   FE_VITE_PROXY_PORT: "443"
-  FE_VITE_MEDIA_STREAM_URL: "wss://stream.beta.911realtime.org/stream"
+  FE_VITE_MEDIA_STREAM_URL: "wss://stream-beta.911realtime.org/stream"
 
 jobs:
   streamer:
