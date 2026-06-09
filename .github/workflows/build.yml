@@ -44,7 +44,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ghcr.io/keeping-history/rt911-streamer:${{ github.sha }}
-            ghcr.io/keeping-history/rt911-streamer:${{ github.ref_name }}
+            ghcr.io/keeping-history/rt911-streamer:${{ github.event_name == 'pull_request' && github.sha || github.ref_name }}
           cache-from: type=gha,scope=streamer
           cache-to: type=gha,mode=max,scope=streamer
 
@@ -70,6 +70,6 @@ jobs:
             VITE_MEDIA_STREAM_URL=${{ env.FE_VITE_MEDIA_STREAM_URL }}
           tags: |
             ghcr.io/keeping-history/rt911-frontend:${{ github.sha }}
-            ghcr.io/keeping-history/rt911-frontend:${{ github.ref_name }}
+            ghcr.io/keeping-history/rt911-frontend:${{ github.event_name == 'pull_request' && github.sha || github.ref_name }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
