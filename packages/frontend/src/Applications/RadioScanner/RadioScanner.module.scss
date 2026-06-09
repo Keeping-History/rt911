@@ -1,0 +1,211 @@
+.rsContainer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--color-theme-07);
+}
+
+// Main area above the station strip
+.rsMainArea {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// Single-station display shown when not in scanner mode
+.rsDisplay {
+  display: flex;
+  flex-direction: column;
+  justify-content: baseline;
+  padding: calc(var(--window-padding-size) * 4);
+  gap: var(--window-padding-size);
+  align-items: start;
+  z-index: 9;
+}
+
+.rsDisplaySource {
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.85);
+  color: var(--color-theme-02);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.rsDisplayTitle {
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 1.5);
+  color: var(--color-theme-01);
+  margin: 0;
+}
+
+.rsDisplayContent {
+  font-family: var(--ui-font);
+  font-size: var(--ui-font-size);
+  color: var(--color-theme-01);
+  margin: 0;
+}
+
+// Scanner mode grid
+.rsGrid {
+  flex: 1;
+  display: grid;
+  gap: var(--window-control-size);
+  padding: var(--window-padding-size);
+  background: var(--color-system-06);
+  overflow: hidden;
+}
+
+.rsGridStation {
+  position: relative;
+  background: var(--color-theme-07);
+  border: 1px solid var(--color-system-05);
+  padding: var(--window-padding-size);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(var(--window-padding-size) / 2);
+  overflow: hidden;
+  justify-content: flex-start;
+
+  p {
+    z-index: 9;
+  }
+}
+
+.rsGridStationControls {
+  position: absolute;
+  top: var(--window-control-size);
+  right: var(--window-control-size);
+  display: flex;
+  flex-direction: row;
+  gap: calc(var(--window-padding-size) / 2);
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 10;
+
+  .rsGridStation:hover & {
+    opacity: 1;
+  }
+}
+
+.rsGridControlBtn {
+  width: calc(var(--window-control-size) * 2);
+  height: calc(var(--window-control-size) * 2);
+  padding: calc(var(--window-padding-size) / 2);
+  border: none;
+  background-color: var(--color-theme-06);
+  color: var(--color-theme-03);
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.75);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.rsGridStationSource {
+  position: relative;
+  z-index: 1;
+  font-family: var(--ui-font);
+  font-size: clamp(.25rem, .75vw, 5rem);
+  color: var(--color-system-03);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.rsGridStationTitle {
+  position: relative;
+  z-index: 1;
+  font-family: var(--ui-font);
+  font-size: clamp(.25rem, 1vw, 5rem);
+  color: var(--color-system-02);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Bottom row: control panel + station strip
+.rsBottomRow {
+  display: flex;
+  flex-direction: row;
+  height: 10vh;
+  flex-shrink: 0;
+}
+
+.rsControlPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--window-padding-size) * 2);
+  background-color: var(--color-system-03);
+  border-right: 1px solid var(--color-system-05);
+  flex-shrink: 0;
+  gap: var(--window-control-size);
+}
+
+.rsStationStrip {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: var(--window-control-size);
+  background-color: var(--color-system-03);
+  padding: calc(var(--window-padding-size) * 2);
+}
+
+.rsStation {
+  position: relative;
+  flex-shrink: 0;
+  height: 90%;
+  min-width: 8em;
+  padding: var(--window-padding-size);
+  border: 1px solid var(--color-system-05);
+  background: var(--color-system-01);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: calc(var(--window-padding-size) / 2);
+  text-align: left;
+
+  &.rsStationActive {
+    background: var(--color-theme-01);
+    border-color: var(--color-theme-01);
+
+    .rsStationSource {
+      color: var(--color-theme-06);
+    }
+  }
+
+  &.rsStationSelected {
+    outline: 2px solid var(--color-theme-01);
+    outline-offset: -2px;
+  }
+}
+
+.rsStationSource {
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.75);
+  color: var(--color-system-06);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}

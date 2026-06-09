@@ -1,84 +1,15 @@
-# Project Specific Files
-cloud_sql_proxy
-start_db.sh
-
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-
-# IDE Files
-.history/
-*.code-workspace
-.vscode/
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-env/
-build/
-develop-eggs/
+node_modules/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*,cover
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-/backend/bin
-/backend/pyvenv.cfg
-/backend/static
-/.prettierrc
-node_modules
-/blog
-/frontend/.eslintrc.yml
-/package.json
-/package-lock.json
-
-# File Manager Files
 .DS_Store
 .env
+tsconfig.tsbuildinfo
+*.tsbuildinfo
 
-# Virtualenv related
-include/
-pip-selfcheck.json
-codealike.json
+# Large generated data files
+packages/backend/entries_media.json
+packages/backend/entries_news.json
+.claude/
+/packages/frontend/.vite
+/stories/archive
+/docs/superpowers
+usenet/**

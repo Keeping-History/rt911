@@ -1,0 +1,75 @@
+services:
+  rt911-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${DB_USER:-directus}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-directus}
+      POSTGRES_DB: ${DB_DATABASE:-directus}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DB_USER:-directus}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rt911-api:
+    image: directus/directus:latest
+    ports:
+      - "8055:8055"
+    depends_on:
+      rt911-db:
+        condition: service_healthy
+    environment:
+      SECRET: ${SECRET}
+      DB_CLIENT: pg
+      DB_HOST: rt911-db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-directus}
+      DB_USER: ${DB_USER:-directus}
+      DB_PASSWORD: ${DB_PASSWORD:-directus}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+    volumes:
+      - uploads:/directus/uploads
+
+  rt911-cache:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rt911-streamer:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      rt911-db:
+        condition: service_healthy
+      rt911-cache:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-directus}:${DB_PASSWORD:-directus}@rt911-db:5432/${DB_DATABASE:-directus}
+      REDIS_URL: redis://rt911-cache:6379
+      LISTEN_ADDR: ":8080"
+
+  rt911-timemachine:
+    image: robbiebyrd/time-machine-proxy:latest
+    env_file:
+      - .env
+    ports:
+      - "${TIMEMACHINE_PORT:-8765}:${TIMEMACHINE_PORT:-8765}"
+    volumes:
+      - ${HOST_CACHE_DIR:-timemachine-cache}:${CACHE_DIR:-/app/cache}
+    restart: unless-stopped
+
+
+volumes:
+  db_data:
+  uploads:
+  redis_data:
+  timemachine-cache:
