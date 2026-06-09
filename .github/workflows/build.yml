@@ -1,0 +1,75 @@
+name: Build and publish images
+
+# Builds the rt911 service images on GitHub-hosted runners (free, public repo)
+# and pushes them to GHCR. Deployment is handled by Argo CD Image Updater via
+# the Keeping-History/infra GitOps repo. No Google Cloud, no cluster creds here.
+#
+# Two images:
+#   ghcr.io/keeping-history/rt911-streamer   (Go WebSocket service)
+#   ghcr.io/keeping-history/rt911-frontend   (Vite SPA served by nginx)
+#
+# The frontend bakes its backend URLs in at build time (see FE_* env below).
+
+on:
+  push:
+    branches: [v2.0.0a1]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # Public backend URLs compiled into the frontend bundle.
+  FE_VITE_PROXY_PROTOCOL: "https:"
+  FE_VITE_PROXY_HOST: "timemachine.911realtime.org"
+  FE_VITE_PROXY_PORT: "443"
+  FE_VITE_MEDIA_STREAM_URL: "wss://stream.beta.911realtime.org/stream"
+
+jobs:
+  streamer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: packages/backend
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/keeping-history/rt911-streamer:${{ github.sha }}
+            ghcr.io/keeping-history/rt911-streamer:v2.0.0a1
+          cache-from: type=gha,scope=streamer
+          cache-to: type=gha,mode=max,scope=streamer
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/frontend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            VITE_PROXY_PROTOCOL=${{ env.FE_VITE_PROXY_PROTOCOL }}
+            VITE_PROXY_HOST=${{ env.FE_VITE_PROXY_HOST }}
+            VITE_PROXY_PORT=${{ env.FE_VITE_PROXY_PORT }}
+            VITE_MEDIA_STREAM_URL=${{ env.FE_VITE_MEDIA_STREAM_URL }}
+          tags: |
+            ghcr.io/keeping-history/rt911-frontend:${{ github.sha }}
+            ghcr.io/keeping-history/rt911-frontend:v2.0.0a1
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
