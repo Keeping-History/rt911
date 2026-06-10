@@ -4,4 +4,4 @@ WORKDIR /app
 COPY pyproject.toml .
 COPY video_grabber/ ./video_grabber/
 RUN pip install --no-cache-dir .
-CMD ["prefect", "worker", "start", "--pool", "video-grabber-pool"]
+CMD ["python", "-m", "video_grabber.serve"]

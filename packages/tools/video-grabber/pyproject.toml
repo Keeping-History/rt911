@@ -16,8 +16,6 @@ dependencies = [
     "boto3>=1.36",
     "tenacity>=8.2",
     "prefect>=3.0",
-    "prefect-kubernetes>=0.4",
-    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
