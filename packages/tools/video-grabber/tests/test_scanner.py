@@ -133,6 +133,25 @@ def test_crawl_fan_out_recurses_into_subcollection():
     assert mock_upsert.call_count == 2
 
 
+def test_crawl_commits_so_rows_are_persisted():
+    """Regression: SQLAlchemy 2.0's engine.connect() autobegins an implicit
+    transaction; without an explicit db.commit() every upserted row is
+    rolled back when the connection closes. The scanner now commits at
+    every progress checkpoint and once more on collection completion."""
+    session = make_session({
+        "sept_11_tv_archive": [SEPT_11_ITEM, UNKNOWN_NETWORK_ITEM],
+    })
+    db = MagicMock()
+
+    with patch("video_grabber.ia.scanner.upsert_job"):
+        crawl_collection(session, "sept_11_tv_archive", db)
+
+    assert db.commit.called, (
+        "Scanner must commit so upserted rows survive the connection close — "
+        "otherwise the whole crawl gets rolled back silently."
+    )
+
+
 def test_crawl_visited_set_prevents_cycles():
     """A collection that references itself should not loop."""
     cycle_col = {"identifier": "loop_col", "mediatype": "collection", "title": "loop"}
