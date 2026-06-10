@@ -100,10 +100,14 @@ def crawl_collection(
             upsert_job(db, item, collection=identifier)
             inserted += 1
         if seen % _LOG_EVERY == 0:
+            # Batch commit so rows become visible to other readers during the
+            # crawl and survive a worker restart mid-scan.
+            db.commit()
             _log.info(
                 "crawl_collection: %s — seen=%d upserted=%d nested=%d",
                 identifier, seen, inserted, nested,
             )
+    db.commit()
     _log.info(
         "crawl_collection: %s — DONE seen=%d upserted=%d nested=%d",
         identifier, seen, inserted, nested,
