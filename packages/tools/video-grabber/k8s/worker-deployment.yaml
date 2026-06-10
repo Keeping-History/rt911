@@ -3,11 +3,6 @@ kind: Deployment
 metadata:
   name: video-grabber-worker
   namespace: video-grabber
-  annotations:
-    # Image Updater: immutable SHA tags only (no floating :latest in production)
-    image-updater.argoproj.io/image-list: "worker=ghcr.io/keeping-history/video-grabber"
-    image-updater.argoproj.io/worker.update-strategy: digest
-    image-updater.argoproj.io/worker.allow-tags: "regexp:^[0-9a-f]{40}$"
 spec:
   replicas: 1
   selector:
