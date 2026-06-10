@@ -27,10 +27,23 @@ except ImportError:
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
 
 
+_ASYNCPG_PREFIX = "postgresql+asyncpg://"
+_PSYCOPG2_PREFIX = "postgresql+psycopg2://"
+
+
+def _sync_db_url(url: str) -> str:
+    """Force a sync psycopg2 driver. The shared Secret often uses the asyncpg
+    scheme (Prefect's own server requires it), which raises MissingGreenlet
+    inside sync flow code."""
+    if url.startswith(_ASYNCPG_PREFIX):
+        return _PSYCOPG2_PREFIX + url[len(_ASYNCPG_PREFIX):]
+    return url
+
+
 def get_db():
-    """Return a SQLAlchemy connection from DATABASE_URL env var."""
+    """Return a sync SQLAlchemy connection from DATABASE_URL env var."""
     cfg = Config()
-    engine = sa.create_engine(cfg.database_url)
+    engine = sa.create_engine(_sync_db_url(cfg.database_url))
     return engine.connect()
 
 

@@ -6,6 +6,28 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
+# --- _sync_db_url ---
+
+def test_sync_db_url_rewrites_asyncpg_to_psycopg2():
+    from video_grabber.pipeline.flows import _sync_db_url
+
+    rewritten = _sync_db_url("postgresql+asyncpg://u:p@h:5432/db")
+    assert rewritten == "postgresql+psycopg2://u:p@h:5432/db"
+
+
+def test_sync_db_url_passes_through_plain_postgresql():
+    from video_grabber.pipeline.flows import _sync_db_url
+
+    assert _sync_db_url("postgresql://u:p@h/db") == "postgresql://u:p@h/db"
+
+
+def test_sync_db_url_passes_through_explicit_psycopg2():
+    from video_grabber.pipeline.flows import _sync_db_url
+
+    url = "postgresql+psycopg2://u:p@h/db"
+    assert _sync_db_url(url) == url
+
+
 # --- transition_job ---
 
 def test_transition_job_updates_stage_and_logs():
