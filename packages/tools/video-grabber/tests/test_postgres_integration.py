@@ -113,15 +113,13 @@ def test_upsert_job_is_idempotent_on_duplicate_identifier(connection):
     item = {"identifier": "int-test-dup", "title": "first", "creator": "CNN"}
     upsert_job(connection, item, collection="test_collection_a")
     # Second upsert with same identifier but different collection — ON CONFLICT keeps the first.
-    upsert_job(connection, dict(item, title="second"), collection="test_collection_b")
+    upsert_job(connection, item, collection="test_collection_b")
     connection.commit()
 
     rows = connection.execute(
-        sa.text("SELECT title, collection FROM video_jobs WHERE ia_identifier = :id"),
+        sa.text("SELECT collection FROM video_jobs WHERE ia_identifier = :id"),
         {"id": "int-test-dup"},
     ).all()
-    # Title isn't a column on video_jobs; the only persisted-from-upsert title
-    # is inside ia_metadata. Just assert one row exists with the first collection.
     assert len(rows) == 1
     assert rows[0].collection == "test_collection_a"
 
