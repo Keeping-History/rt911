@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"classicy/streamer/internal/cache"
 	"classicy/streamer/internal/db"
@@ -26,10 +27,20 @@ func main() {
 	redisURL := env("REDIS_URL", "redis://localhost:6379")
 	rdb := cache.Connect(redisURL)
 
-	if err := cache.WarmCache(context.Background(), rdb, pool, logger); err != nil {
+	ctx := context.Background()
+
+	if err := cache.InstallTriggers(ctx, pool, logger); err != nil {
+		logger.Error("trigger install failed", "error", err)
+		os.Exit(1)
+	}
+
+	if err := cache.WarmCache(ctx, rdb, pool, logger); err != nil {
 		logger.Error("cache warm failed", "error", err)
 		os.Exit(1)
 	}
+
+	// Keep Redis in sync with media_items changes for the process lifetime.
+	go cache.Listen(ctx, dbURL, rdb, pool, logger)
 
 	hub := session.NewHub(logger)
 	go hub.Run()
@@ -39,6 +50,19 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, logger))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		readyCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := pool.Ping(readyCtx); err != nil {
+			http.Error(w, "postgres: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if err := rdb.Ping(readyCtx).Err(); err != nil {
+			http.Error(w, "redis: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	})
 

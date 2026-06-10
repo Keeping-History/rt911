@@ -64,10 +64,39 @@ func WarmCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, log
 	return nil
 }
 
-// ItemsAt returns items whose start_date falls within the second [t, t+1).
+// Upsert stores a single item in the cache, overwriting any existing entry.
+// Used by the NOTIFY listener to apply INSERT/UPDATE events incrementally.
+func Upsert(ctx context.Context, rdb *goredis.Client, it model.MediaItem) error {
+	data, err := json.Marshal(it)
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	id := strconv.Itoa(it.ID)
+	pipe := rdb.Pipeline()
+	pipe.HSet(ctx, keyItems, id, data)
+	pipe.ZAdd(ctx, keyByStart, goredis.Z{
+		Score:  float64(it.StartDate.Unix()),
+		Member: id,
+	})
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+// Forget removes an item from the cache. Used by the NOTIFY listener to
+// apply DELETE events and to evict rows whose approved flag flipped to 0.
+func Forget(ctx context.Context, rdb *goredis.Client, id int) error {
+	sid := strconv.Itoa(id)
+	pipe := rdb.Pipeline()
+	pipe.HDel(ctx, keyItems, sid)
+	pipe.ZRem(ctx, keyByStart, sid)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// ItemsAt returns items whose start_date Unix-second exactly equals t.Unix().
 func ItemsAt(ctx context.Context, rdb *goredis.Client, t time.Time) ([]model.MediaItem, error) {
 	lo := float64(t.Unix())
-	hi := lo // exact-second match
+	hi := lo
 
 	ids, err := rdb.ZRangeByScore(ctx, keyByStart, &goredis.ZRangeBy{
 		Min: strconv.FormatFloat(lo, 'f', 0, 64),

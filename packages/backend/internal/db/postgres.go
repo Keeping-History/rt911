@@ -44,6 +44,20 @@ func AllItems(ctx context.Context, pool *pgxpool.Pool) ([]model.MediaItem, error
 		selectFrom+` WHERE mi.approved = 1 ORDER BY mi.start_date`)
 }
 
+// ItemByID returns the row with the given id, regardless of approval state,
+// or nil if not found. The NOTIFY listener uses this to fetch the latest
+// version of a changed row; it treats an unapproved result as "evict from cache."
+func ItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.MediaItem, error) {
+	items, err := queryItems(ctx, pool, selectFrom+` WHERE mi.id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
 // CurrentItems returns items active at time t (start_date ≤ t ≤ end_date).
 // Instant items — where start_date = end_date or calc_duration = 0 — are
 // included for a 5-minute lookback window so seek/init responses contain
