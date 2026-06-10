@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prefect-ui
+  namespace: video-grabber
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # BasicAuth middleware — same pattern as bullboard in time-machine namespace
+    traefik.ingress.kubernetes.io/router.middlewares: video-grabber-prefect-auth@kubernetescrd
+spec:
+  tls:
+    - hosts:
+        - prefect-ui.dev.keepinghistory.org
+      secretName: prefect-ui-tls
+  rules:
+    - host: prefect-ui.dev.keepinghistory.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prefect-server
+                port:
+                  number: 4200
