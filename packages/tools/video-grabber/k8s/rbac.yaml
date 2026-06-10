@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: video-grabber-worker
+  namespace: video-grabber
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: video-grabber-worker
+  namespace: video-grabber
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: video-grabber-worker
+  namespace: video-grabber
+subjects:
+  - kind: ServiceAccount
+    name: video-grabber-worker
+    namespace: video-grabber
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: video-grabber-worker
+---
+# ClusterRole: namespaces list suppresses startup 403 noise
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: video-grabber-namespace-reader
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: video-grabber-namespace-reader
+subjects:
+  - kind: ServiceAccount
+    name: video-grabber-worker
+    namespace: video-grabber
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: video-grabber-namespace-reader

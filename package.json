@@ -15,7 +15,9 @@
 			"es5-ext",
 			"esbuild"
 		],
-		"overrides": {}
+		"overrides": {
+			"brace-expansion": ">=5.0.6"
+		}
 	},
 	"volta": {
 		"node": "25.2.0"

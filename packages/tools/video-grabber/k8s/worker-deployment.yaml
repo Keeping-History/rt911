@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-grabber-worker
+  namespace: video-grabber
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: video-grabber-worker
+  template:
+    metadata:
+      labels:
+        app: video-grabber-worker
+    spec:
+      serviceAccountName: video-grabber-worker
+      volumes:
+        - name: scratch
+          emptyDir:
+            sizeLimit: 50Gi
+      containers:
+        - name: worker
+          image: ghcr.io/keeping-history/video-grabber:latest
+          envFrom:
+            - configMapRef:
+                name: video-grabber-config
+            - secretRef:
+                name: video-grabber-secrets
+          volumeMounts:
+            - name: scratch
+              mountPath: /tmp/vg-scratch
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: video-grabber-config
+  namespace: video-grabber
+data:
+  PREFECT_API_URL: "http://prefect-server.video-grabber.svc.cluster.local:4200/api"
+  WASABI_ENDPOINT_URL: "https://s3.us-central-1.wasabisys.com"
+  WASABI_BUCKET: "files.911realtime.org"
+  DIRECTUS_URL: "http://directus.rt911.svc.cluster.local:8055"
+  IA_RATE_PER_SEC: "2"
+  MIN_DURATION_SECONDS: "720"
+  SCRATCH_DIR: "/tmp/vg-scratch"
