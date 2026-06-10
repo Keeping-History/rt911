@@ -5,8 +5,7 @@ Uses httpx-mock to simulate IA S3 responses without real network calls.
 import pytest
 import respx
 import httpx
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from video_grabber.pipeline.downloader import (
     download_item,

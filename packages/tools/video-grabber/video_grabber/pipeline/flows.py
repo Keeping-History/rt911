@@ -9,8 +9,7 @@ import os
 from pathlib import Path
 
 import sqlalchemy as sa
-from prefect import flow, task, get_run_logger
-from tenacity import retry, wait_exponential, stop_after_attempt
+from prefect import flow, get_run_logger
 
 from video_grabber.ia.scanner import crawl_collection
 from video_grabber.pipeline.downloader import download_item

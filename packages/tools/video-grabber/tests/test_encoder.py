@@ -4,14 +4,12 @@ subprocess.run is mocked — tests validate argument construction, output dir la
 no-upscale behavior, and master playlist structure.
 """
 import json
-import subprocess
 from pathlib import Path
-from unittest.mock import patch, call, MagicMock
+from unittest.mock import patch, MagicMock
 
 import pytest
 
-from video_grabber.video.encoder import encode_to_hls, probe_resolution, scale_keep_aspect
-from video_grabber.video.gap_filler import generate_gap_fmp4
+from video_grabber.video.encoder import encode_to_hls, scale_keep_aspect
 
 
 def fake_ffmpeg_success(*args, **kwargs):
@@ -80,7 +78,7 @@ def test_encode_creates_master_m3u8(tmp_path):
     src.write_bytes(b"fake")
     out = tmp_path / "out"
 
-    with patch("subprocess.run", side_effect=fake_ffmpeg_success) as mock_run, \
+    with patch("subprocess.run", side_effect=fake_ffmpeg_success), \
          patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
         master = encode_to_hls(src, out)
 

@@ -4,7 +4,6 @@ timezone resolution, and UTC conversion. No network calls.
 """
 import pytest
 from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo
 
 from video_grabber.ia.metadata import (
     extract_air_date_utc,

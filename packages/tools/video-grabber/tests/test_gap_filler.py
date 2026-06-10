@@ -5,7 +5,6 @@ subprocess.run is mocked — tests validate output dir layout and playlist struc
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 from video_grabber.video.gap_filler import generate_gap_fmp4
 

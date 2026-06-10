@@ -3,7 +3,6 @@ Tests for Wasabi S3 uploader using moto S3 mock.
 Verifies Content-Type, Cache-Control headers, wasabi_key tracking, and abort on failure.
 """
 import boto3
-import pytest
 from moto import mock_aws
 from pathlib import Path
 from unittest.mock import MagicMock, patch

@@ -3,7 +3,7 @@ Tests for Prefect flow orchestration.
 Uses @task/@flow directly with mocked pipeline components — no real Prefect server needed.
 """
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 
 # --- transition_job ---
@@ -61,7 +61,7 @@ def test_process_item_flow_transitions_to_complete_on_success():
     job.ia_identifier = "cnn-sep11-0800"
 
     with patch("video_grabber.pipeline.flows.get_job", return_value=job), \
-         patch("video_grabber.pipeline.flows.get_db") as mock_db, \
+         patch("video_grabber.pipeline.flows.get_db"), \
          patch("video_grabber.pipeline.flows.download_item") as mock_dl, \
          patch("video_grabber.pipeline.flows.encode_to_hls") as mock_enc, \
          patch("video_grabber.pipeline.flows.upload_hls_package") as mock_up, \

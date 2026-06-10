@@ -1,11 +1,9 @@
 """
 Tests for EPG assembler — 24-hour playlist builder and EPG JSON output.
 """
-import json
 from datetime import datetime, timezone, timedelta, date
 from unittest.mock import MagicMock
 
-import pytest
 
 from video_grabber.epg.assembler import assemble_day, REND_NAMES
 

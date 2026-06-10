@@ -2,13 +2,12 @@
 Tests for Directus media_items writer.
 Mocks HTTP calls — no real Directus instance required.
 """
-import pytest
 import respx
 import httpx
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
-from video_grabber.directus.writer import write_media_item, get_directus_token
+from video_grabber.directus.writer import write_media_item
 from video_grabber.config import Config
 
 

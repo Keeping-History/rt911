@@ -2,8 +2,7 @@
 Tests for IA collection scanner.
 All IA API calls are mocked — no real network requests.
 """
-import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 from video_grabber.ia.scanner import crawl_collection, is_candidate, upsert_job
 
 # --- rate limiting ---

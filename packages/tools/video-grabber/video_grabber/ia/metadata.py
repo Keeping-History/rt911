@@ -4,7 +4,6 @@ Ported from packages/backend/seed.mjs:parseTitleDate().
 """
 import re
 from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo
 
 from video_grabber.ia.channel_map import normalize_slug
 

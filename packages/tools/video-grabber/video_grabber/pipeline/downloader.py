@@ -6,7 +6,6 @@ Byte-range resume: sends Range header when partial file exists on disk.
 """
 from pathlib import Path
 import httpx
-import sqlalchemy as sa
 
 _IA_BASE = "https://archive.org"
 
