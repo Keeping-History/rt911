@@ -8,9 +8,14 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override sqlalchemy.url from env if set
+# Override sqlalchemy.url from env if set. The DATABASE_URL Secret is often
+# provisioned with the postgresql+asyncpg:// scheme to satisfy Prefect's
+# server, but Alembic runs synchronously and would raise MissingGreenlet
+# against asyncpg — rewrite to psycopg2 first.
 db_url = os.getenv("DATABASE_URL")
 if db_url:
+    if db_url.startswith("postgresql+asyncpg://"):
+        db_url = "postgresql+psycopg2://" + db_url[len("postgresql+asyncpg://"):]
     config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = None

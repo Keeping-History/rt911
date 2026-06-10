@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  namespace: video-grabber
+  annotations:
+    # Run before the main sync so the schema is at HEAD before the worker pod
+    # references it. Sync-wave 1 places this after db-init (wave 0, defaulted).
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-migrate
+          image: ghcr.io/keeping-history/video-grabber:latest
+          # The same env that the worker uses — same Secret, same DATABASE_URL.
+          # env.py rewrites the +asyncpg scheme to +psycopg2 before Alembic runs.
+          envFrom:
+            - secretRef:
+                name: video-grabber-secrets
+          command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
