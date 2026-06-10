@@ -10,18 +10,15 @@ Concurrency limits cap simultaneous flow runs so we stay within IA's
 volume by stacking parallel downloads. Default collision strategy in
 Prefect 3 is ENQUEUE, so excess runs queue rather than cancelling.
 
-PREFECT_LOGGING_EXTRA_LOGGERS makes Prefect capture our stdlib loggers
-so scanner progress (and other in-package log calls) surface in the
-Prefect UI alongside the engine's own messages. Must be set before
-`prefect` is imported.
+In-package modules (e.g. the scanner) receive ``get_run_logger()`` as
+an injected ``logger`` argument from the flow rather than relying on
+PREFECT_LOGGING_EXTRA_LOGGERS — that env var didn't surface the
+stdlib loggers in the Prefect UI reliably, and dependency injection
+avoids coupling pure modules to Prefect's runtime.
 """
-import os
+from prefect import serve
 
-os.environ.setdefault("PREFECT_LOGGING_EXTRA_LOGGERS", "video_grabber")
-
-from prefect import serve  # noqa: E402
-
-from video_grabber.pipeline.flows import process_item_flow, scan_collections_flow  # noqa: E402
+from video_grabber.pipeline.flows import process_item_flow, scan_collections_flow
 
 # One heavy IA download + ffmpeg encode at a time (50 GiB scratch is sized for one item).
 _PROCESS_ITEM_LIMIT = 1

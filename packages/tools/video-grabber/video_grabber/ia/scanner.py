@@ -5,6 +5,7 @@ Dedup is DB-level via ON CONFLICT (ia_identifier) DO NOTHING.
 """
 import logging
 import time
+from typing import Optional
 import sqlalchemy as sa
 
 from video_grabber.ia.channel_map import normalize_slug
@@ -12,7 +13,7 @@ from video_grabber.ia.channel_map import normalize_slug
 MIN_DURATION_SECONDS = 720  # 12 minutes
 
 _LOG_EVERY = 50  # progress log cadence inside crawl_collection
-_log = logging.getLogger(__name__)
+_default_log = logging.getLogger(__name__)
 
 
 def is_candidate(item: dict) -> bool:
@@ -68,19 +69,23 @@ def crawl_collection(
     db,
     visited: set[str] | None = None,
     sleep_sec: float = 0.0,
+    logger: Optional[logging.Logger] = None,
 ) -> None:
     """Recursively crawl an IA collection, writing video_jobs for leaf items.
 
     Emits progress logs every ``_LOG_EVERY`` items so operators can tell a
-    rate-limited-but-working scan apart from a hang.
+    rate-limited-but-working scan apart from a hang. The flow passes its
+    Prefect ``get_run_logger()`` so progress shows in the Prefect UI; tests
+    and direct-invocation get the stdlib module logger.
     """
+    log = logger if logger is not None else _default_log
     if visited is None:
         visited = set()
     if identifier in visited:
         return
     visited.add(identifier)
 
-    _log.info("crawl_collection: %s — searching", identifier)
+    log.info("crawl_collection: %s — searching", identifier)
     results = session.search_items(
         f"collection:{identifier}",
         fields=[
@@ -95,7 +100,7 @@ def crawl_collection(
         seen += 1
         if item.get("mediatype") == "collection":
             nested += 1
-            crawl_collection(session, item["identifier"], db, visited, sleep_sec)
+            crawl_collection(session, item["identifier"], db, visited, sleep_sec, logger=log)
         elif is_candidate(item):
             upsert_job(db, item, collection=identifier)
             inserted += 1
@@ -103,12 +108,12 @@ def crawl_collection(
             # Batch commit so rows become visible to other readers during the
             # crawl and survive a worker restart mid-scan.
             db.commit()
-            _log.info(
+            log.info(
                 "crawl_collection: %s — seen=%d upserted=%d nested=%d",
                 identifier, seen, inserted, nested,
             )
     db.commit()
-    _log.info(
+    log.info(
         "crawl_collection: %s — DONE seen=%d upserted=%d nested=%d",
         identifier, seen, inserted, nested,
     )
