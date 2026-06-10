@@ -187,14 +187,29 @@ write_media_item(job, job.wasabi_key, Config())
 
 ## Database migration needed
 
-Right now there's only `001_initial_schema`. To add a column or a new stage:
+Schema migrations run automatically on every ArgoCD sync via the `db-migrate` Job ([`k8s/migrate-job.yaml`](../k8s/migrate-job.yaml)) — a PreSync hook at sync-wave 1 (after `db-init`). To ship a new revision:
 
 1. `cd packages/tools/video-grabber`
-2. Author a new revision under `video_grabber/db/migrations/versions/` (manual — autogeneration isn't wired up).
-3. From a worker pod with `DATABASE_URL` set:
-   ```bash
-   alembic -c alembic.ini upgrade head
-   ```
-   There is no committed `alembic.ini`; supply one that points at `video_grabber/db/migrations`. (Filing this as a known gap.)
+2. Author a new revision under `video_grabber/db/migrations/versions/`. Hand-write the migration — `target_metadata` is `None`, so autogeneration is not wired up.
+3. Open a PR with the new revision file. On merge:
+   - CI rebuilds the image (migration code ships in `/app/video_grabber/db/migrations/`).
+   - ArgoCD Image Updater bumps the SHA in the infra repo.
+   - The next ArgoCD sync triggers the `db-migrate` PreSync hook, which runs `alembic -c /app/alembic.ini upgrade head` against the live database.
+   - The worker then rolls out with the schema already at the new HEAD.
 
-Or migrate from a developer laptop with `DATABASE_URL` port-forwarded to the in-cluster Postgres.
+To run migrations out of band (debugging, or against an unmanaged environment):
+
+```bash
+kubectl exec -n video-grabber deploy/video-grabber-worker -- \
+  alembic -c /app/alembic.ini upgrade head
+```
+
+Or from a developer laptop with `DATABASE_URL` port-forwarded:
+
+```bash
+cd packages/tools/video-grabber
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/video_grabber \
+  alembic upgrade head
+```
+
+`env.py` rewrites the `postgresql+asyncpg://` scheme to `postgresql+psycopg2://` automatically, so the same Secret can be reused without modification.
