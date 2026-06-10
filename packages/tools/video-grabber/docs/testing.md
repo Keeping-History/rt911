@@ -48,16 +48,29 @@ with patch("video_grabber.pipeline.flows.crawl_collection") as mock_crawl, \
 
 The `@flow` decorator is consumed at import time, but Prefect lets a flow run synchronously in-process during tests without a Prefect server.
 
-## Why no live integration suite
+## Postgres integration tests
 
-A live integration test would need:
+[`tests/test_postgres_integration.py`](../tests/test_postgres_integration.py) runs real SQL against a live Postgres — the schema is applied via `alembic upgrade head` once per module and every test executes inside a savepoint that's rolled back at teardown, so tests don't see each other's writes.
+
+The whole file is skipped when `TEST_DATABASE_URL` is unset, so a bare `pytest` from a developer laptop without Postgres still passes. CI's `build-video-grabber.yml` spins up a Postgres 16 service container and sets the env var, so these run on every PR.
+
+What this suite catches that the MagicMock'd unit tests can't:
+
+- **SQL syntax errors.** The `:ia_metadata::jsonb` bug from June 2026 — SQLAlchemy's `text()` bind-parser broke on the Postgres `::` cast operator and left the colon-prefixed name in the rendered SQL. MagicMock'd connections happily accepted the malformed string; Postgres did not. `test_upsert_job_writes_row_with_jsonb_metadata` round-trips a real insert + select.
+- **Missing commits.** Scanner upserts were silently rolled back because `SQLAlchemy 2.0`'s `engine.connect()` autobegins a transaction without auto-commit. Round-trip tests fail the moment a write doesn't reach disk.
+- **Driver scheme issues.** `test_sync_db_url_keeps_test_database_url_compatible` proves `_sync_db_url()` produces a connectable URL — guards against the `postgresql+asyncpg://` MissingGreenlet regression.
+- **Enum cast bugs.** Pipeline stage transitions exercise the `CAST(... AS pipeline_stage)` path against the live enum.
+
+## Why no IA / Wasabi / Directus / ffmpeg integration suite
+
+The external integrations still mock at the boundary:
 
 - An IA item we can re-download (slow, fragile).
 - A real Wasabi bucket with cleanup (costs money, leaks state on failure).
 - A real Directus instance (deployment-specific schema drift risk).
 - A real ffmpeg run on real footage (minutes per test).
 
-Given the small number of system boundaries and the well-mocked test suite, the trade-off has been to skip live integration tests and rely on staging deployments for end-to-end verification. If you reintroduce them, run them only in CI on `main` and gate them with a `pytest.mark.integration` marker that's deselected by default.
+The Postgres suite covers the highest-risk boundary (schema + SQL) without those trade-offs. If you add live tests for the others later, gate them with a `pytest.mark.integration` marker that's deselected by default and only run on `main`.
 
 ## Adding a test
 
