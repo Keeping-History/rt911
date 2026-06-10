@@ -105,7 +105,12 @@ def scan_collections_flow(collections: list[str] = ["sept_11_tv_archive", "911"]
     session = ArchiveSession()
     db = get_db()
     for coll in collections:
-        crawl_collection(session, coll, db, visited=set(), sleep_sec=sleep_sec)
+        crawl_collection(
+            session, coll, db,
+            visited=set(),
+            sleep_sec=sleep_sec,
+            logger=logger,
+        )
     logger.info("Scan complete")
 
 
