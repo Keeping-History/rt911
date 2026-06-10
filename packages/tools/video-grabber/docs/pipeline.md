@@ -32,7 +32,12 @@ discovered ─► metadata_extracted ─► downloading ─► downloaded ─►
 
 [`flows.py:87-96`](../video_grabber/pipeline/flows.py)
 
-Crawls each named IA collection recursively. Rate-limited by `IA_RATE_PER_SEC` (default 2/s, matching IA's bulk-access guidance). Items with `mediatype == "collection"` are recursed into; leaf items are passed to `upsert_job()` which uses `ON CONFLICT (ia_identifier) DO NOTHING` so reruns are free.
+Crawls each named IA collection recursively. Rate-limited at two levels:
+
+- **Per-call**: `IA_RATE_PER_SEC` (default 2/s) — the scanner sleeps `1 / IA_RATE_PER_SEC` between items, governing the serial rate inside one run.
+- **Per-deployment**: `concurrency_limit=1` in [`serve.py`](../video_grabber/serve.py) — only one `scan-collections` run executes at a time. A second trigger queues (Prefect `ENQUEUE` strategy) rather than stacking IA load.
+
+Items with `mediatype == "collection"` are recursed into; leaf items are passed to `upsert_job()` which uses `ON CONFLICT (ia_identifier) DO NOTHING` so reruns are free.
 
 ```python
 @flow(name="scan-collections")

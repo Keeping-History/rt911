@@ -14,12 +14,28 @@ The entrypoint is [`video_grabber/serve.py`](../video_grabber/serve.py):
 
 ```python
 serve(
-    process_item_flow.to_deployment(name="process-item"),
-    scan_collections_flow.to_deployment(name="scan-collections"),
+    process_item_flow.to_deployment(
+        name="process-item",
+        concurrency_limit=1,
+    ),
+    scan_collections_flow.to_deployment(
+        name="scan-collections",
+        concurrency_limit=1,
+    ),
 )
 ```
 
 This is idempotent — every pod restart re-registers the same two deployments, and Prefect deduplicates by name.
+
+### Concurrency limits
+
+Both deployments are pinned to `concurrency_limit=1` with Prefect's default `ENQUEUE` collision strategy. The effect:
+
+- A second trigger of either deployment while one is already running **queues** rather than cancelling — Prefect picks it up when the first finishes.
+- IA-facing HTTP calls stay under the bulk-access guideline (2 concurrent) because at most one downloader (`process-item`) plus one scanner (`scan-collections`) run at once.
+- The 50 GiB worker scratch volume only ever holds one in-flight item; no risk of two parallel 4–8 GiB downloads filling it.
+
+To raise these limits, edit `_PROCESS_ITEM_LIMIT` / `_SCAN_LIMIT` in `serve.py`. If you push `process-item` past 2, also revisit `worker-deployment.yaml`'s scratch sizing and `IA_RATE_PER_SEC`.
 
 ## Container image
 
