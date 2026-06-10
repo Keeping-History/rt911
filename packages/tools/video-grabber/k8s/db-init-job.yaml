@@ -17,8 +17,8 @@ spec:
             - sh
             - -c
             - |
-              psql "$POSTGRES_URL" -c "CREATE DATABASE IF NOT EXISTS video_grabber;" || true
-              psql "$POSTGRES_URL" -c "CREATE DATABASE IF NOT EXISTS prefect;" || true
+              psql "$POSTGRES_URL" -c "CREATE DATABASE video_grabber;" || true
+              psql "$POSTGRES_URL" -c "CREATE DATABASE prefect;" || true
           env:
             - name: POSTGRES_URL
               valueFrom:
