@@ -372,7 +372,8 @@ export const Browser = () => {
 								}
 							/>
 						</ClassicyControlGroup>
-						<ClassicyControlGroup label="Archive">
+						{/* Commenting out the Archive section for now */}
+						{/* <ClassicyControlGroup label="Archive">
 							<ClassicyInput
 								id="archive_time"
 								labelTitle="Archive Time:"
@@ -397,7 +398,7 @@ export const Browser = () => {
 									}))
 								}
 							/>
-						</ClassicyControlGroup>
+						</ClassicyControlGroup> */}
 						<div className="browserSettingsButtons">
 							<ClassicyButton
 								onClickFunc={() => setShowSettings(false)}

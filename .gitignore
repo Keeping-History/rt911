@@ -13,3 +13,4 @@ packages/backend/entries_news.json
 /stories/archive
 /docs/superpowers
 usenet/**
+/.github/instructions

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normalizeUrl } from "./browserUtils";
 
-export const DEFAULT_PROXY_ON = false;
+export const DEFAULT_PROXY_ON = true;
 export const DEFAULT_PROXY_PROTOCOL = import.meta.env.VITE_PROXY_PROTOCOL ?? "http:";
 export const DEFAULT_PROXY_HOST = import.meta.env.VITE_PROXY_HOST ?? "localhost";
 export const DEFAULT_PROXY_PORT = Number(import.meta.env.VITE_PROXY_PORT ?? 8765);
-export const DEFAULT_ARCHIVE_TIME = "20010911000000";
+export const DEFAULT_ARCHIVE_TIME = "20010912000000";
 export const DEFAULT_PROXY_PREFIX = "https://web.archive.org/web";
 export const DEFAULT_PROXY_PATH = "";
 
