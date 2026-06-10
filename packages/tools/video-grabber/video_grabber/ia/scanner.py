@@ -3,6 +3,7 @@ Recursive IA collection crawler that writes video_jobs rows.
 
 Dedup is DB-level via ON CONFLICT (ia_identifier) DO NOTHING.
 """
+import logging
 import time
 import sqlalchemy as sa
 
@@ -10,15 +11,26 @@ from video_grabber.ia.channel_map import normalize_slug
 
 MIN_DURATION_SECONDS = 720  # 12 minutes
 
+_LOG_EVERY = 50  # progress log cadence inside crawl_collection
+_log = logging.getLogger(__name__)
+
 
 def is_candidate(item: dict) -> bool:
-    """Return True if the item meets minimum duration. Network check is permissive —
-    unknown-network items go to pending_review rather than being dropped."""
-    raw = item.get("length") or ""
+    """Return True if the item is plausibly a long-form broadcast.
+
+    Many IA collections only expose ``length`` via the per-item metadata
+    endpoint, not the advancedsearch results, so an item with no ``length``
+    is treated as "unknown duration — let downstream stages verify" rather
+    than dropped. We only reject items whose ``length`` is set *and*
+    parseably shorter than ``MIN_DURATION_SECONDS``.
+    """
+    raw = item.get("length")
+    if raw is None or str(raw).strip() == "":
+        return True
     try:
         duration = float(str(raw).strip())
     except (ValueError, TypeError):
-        return False
+        return True
     return duration >= MIN_DURATION_SECONDS
 
 
@@ -52,13 +64,18 @@ def crawl_collection(
     visited: set[str] | None = None,
     sleep_sec: float = 0.0,
 ) -> None:
-    """Recursively crawl an IA collection, writing video_jobs for leaf items."""
+    """Recursively crawl an IA collection, writing video_jobs for leaf items.
+
+    Emits progress logs every ``_LOG_EVERY`` items so operators can tell a
+    rate-limited-but-working scan apart from a hang.
+    """
     if visited is None:
         visited = set()
     if identifier in visited:
         return
     visited.add(identifier)
 
+    _log.info("crawl_collection: %s — searching", identifier)
     results = session.search_items(
         f"collection:{identifier}",
         fields=[
@@ -66,13 +83,26 @@ def crawl_collection(
             "subject", "creator", "date", "length",
         ],
     )
+    seen = inserted = nested = 0
     for item in results:
         if sleep_sec:
             time.sleep(sleep_sec)
+        seen += 1
         if item.get("mediatype") == "collection":
+            nested += 1
             crawl_collection(session, item["identifier"], db, visited, sleep_sec)
         elif is_candidate(item):
             upsert_job(db, item, collection=identifier)
+            inserted += 1
+        if seen % _LOG_EVERY == 0:
+            _log.info(
+                "crawl_collection: %s — seen=%d upserted=%d nested=%d",
+                identifier, seen, inserted, nested,
+            )
+    _log.info(
+        "crawl_collection: %s — DONE seen=%d upserted=%d nested=%d",
+        identifier, seen, inserted, nested,
+    )
 
 
 def _json_dumps(obj) -> str:

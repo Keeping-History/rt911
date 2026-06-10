@@ -62,13 +62,25 @@ def test_candidate_unknown_network_not_filtered_to_false():
     assert is_candidate(UNKNOWN_NETWORK_ITEM) is True
 
 
-def test_candidate_zero_length():
+def test_candidate_none_length_is_accepted():
+    """Items with no length in the search response are treated as unknown
+    duration — accepted so downstream stages can verify, not dropped."""
     item = dict(SEPT_11_ITEM, length=None)
-    assert is_candidate(item) is False
+    assert is_candidate(item) is True
 
 
-def test_candidate_empty_length_string():
+def test_candidate_empty_length_string_is_accepted():
     item = dict(SEPT_11_ITEM, length="")
+    assert is_candidate(item) is True
+
+
+def test_candidate_unparseable_length_is_accepted():
+    item = dict(SEPT_11_ITEM, length="not-a-number")
+    assert is_candidate(item) is True
+
+
+def test_candidate_known_short_length_is_rejected():
+    item = dict(SEPT_11_ITEM, length="60")
     assert is_candidate(item) is False
 
 
