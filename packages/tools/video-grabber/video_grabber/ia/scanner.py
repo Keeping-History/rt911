@@ -44,7 +44,12 @@ def upsert_job(db, item: dict, *, collection: str) -> None:
         sa.text(
             """
             INSERT INTO video_jobs (ia_identifier, collection, stage, ia_metadata)
-            VALUES (:ia_identifier, :collection, CAST(:stage AS pipeline_stage), :ia_metadata::jsonb)
+            VALUES (
+                :ia_identifier,
+                :collection,
+                CAST(:stage AS pipeline_stage),
+                CAST(:ia_metadata AS jsonb)
+            )
             ON CONFLICT (ia_identifier) DO NOTHING
             """
         ),

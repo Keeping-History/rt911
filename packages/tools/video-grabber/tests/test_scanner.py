@@ -84,6 +84,28 @@ def test_candidate_known_short_length_is_rejected():
     assert is_candidate(item) is False
 
 
+# --- upsert_job SQL shape ---
+
+def test_upsert_job_sql_uses_cast_not_double_colon():
+    """Regression: ``:ia_metadata::jsonb`` confused SQLAlchemy text()'s
+    bind-parameter parser into leaving ``:ia_metadata`` un-substituted in
+    the rendered SQL, causing Postgres to raise ``syntax error at or near
+    ":"``. The fix is to use the explicit ``CAST(:ia_metadata AS jsonb)``
+    form (mirroring the pre-existing CAST on :stage)."""
+    from video_grabber.ia.scanner import upsert_job
+
+    db = MagicMock()
+    upsert_job(db, {"identifier": "x", "title": "t"}, collection="c")
+
+    stmt_arg = db.execute.call_args[0][0]
+    sql = str(stmt_arg)
+    assert "CAST(:ia_metadata AS jsonb)" in sql
+    assert "::jsonb" not in sql, (
+        "Postgres ::jsonb cast next to a :bindparam name breaks "
+        "SQLAlchemy text() substitution — use CAST(... AS jsonb) instead."
+    )
+
+
 # --- crawl_collection ---
 
 def make_session(items_per_call: dict[str, list]):
