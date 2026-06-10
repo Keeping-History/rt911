@@ -20,6 +20,8 @@ spec:
           ports:
             - containerPort: 4200
           env:
+            - name: PREFECT_UI_API_URL
+              value: "https://prefect-ui.dev.keepinghistory.org/api"
             - name: PREFECT_API_DATABASE_CONNECTION_URL
               valueFrom:
                 secretKeyRef:
