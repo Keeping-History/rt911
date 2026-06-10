@@ -1,9 +1,9 @@
 """
 Recursive IA collection crawler that writes video_jobs rows.
 
-Rate limiting is enforced externally by the Prefect flow (IA_RATE_PER_SEC).
 Dedup is DB-level via ON CONFLICT (ia_identifier) DO NOTHING.
 """
+import time
 import sqlalchemy as sa
 
 from video_grabber.ia.channel_map import normalize_slug
@@ -50,6 +50,7 @@ def crawl_collection(
     identifier: str,
     db,
     visited: set[str] | None = None,
+    sleep_sec: float = 0.0,
 ) -> None:
     """Recursively crawl an IA collection, writing video_jobs for leaf items."""
     if visited is None:
@@ -66,8 +67,10 @@ def crawl_collection(
         ],
     )
     for item in results:
+        if sleep_sec:
+            time.sleep(sleep_sec)
         if item.get("mediatype") == "collection":
-            crawl_collection(session, item["identifier"], db, visited)
+            crawl_collection(session, item["identifier"], db, visited, sleep_sec)
         elif is_candidate(item):
             upsert_job(db, item, collection=identifier)
 

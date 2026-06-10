@@ -88,10 +88,12 @@ def transition_job(db, job_id: str, to_stage: str, *, from_stage: str = None, er
 @flow(name="scan-collections")
 def scan_collections_flow(collections: list[str] = ["sept_11_tv_archive", "911"]):
     logger = get_run_logger()
+    cfg = Config()
+    sleep_sec = 1.0 / cfg.ia_rate_per_sec if cfg.ia_rate_per_sec > 0 else 0.0
     session = ArchiveSession()
     db = get_db()
     for coll in collections:
-        crawl_collection(session, coll, db, visited=set())
+        crawl_collection(session, coll, db, visited=set(), sleep_sec=sleep_sec)
     logger.info("Scan complete")
 
 

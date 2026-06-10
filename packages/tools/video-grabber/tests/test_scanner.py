@@ -6,6 +6,8 @@ import pytest
 from unittest.mock import MagicMock, patch, call
 from video_grabber.ia.scanner import crawl_collection, is_candidate, upsert_job
 
+# --- rate limiting ---
+
 
 SEPT_11_ITEM = {
     "identifier": "cnn-sep11-0800",
@@ -158,6 +160,35 @@ def test_crawl_subcollection_items_inserted_with_correct_collection():
     mock_upsert.assert_called_once()
     _, kwargs = mock_upsert.call_args
     assert kwargs["collection"] == "sept_11_subset"
+
+
+def test_crawl_rate_limiting_sleeps_per_item():
+    """sleep_sec is called once per item (leaf or subcollection) encountered."""
+    session = make_session({
+        "root": [SEPT_11_ITEM, SHORT_ITEM, SUB_COLLECTION],
+        "sept_11_subset": [SEPT_11_ITEM],
+    })
+    db = MagicMock()
+
+    with patch("video_grabber.ia.scanner.time") as mock_time, \
+         patch("video_grabber.ia.scanner.upsert_job"):
+        crawl_collection(session, "root", db, sleep_sec=0.5)
+
+    # root has 3 items + sept_11_subset has 1 item = 4 sleeps total
+    assert mock_time.sleep.call_count == 4
+    mock_time.sleep.assert_called_with(0.5)
+
+
+def test_crawl_no_sleep_by_default():
+    """Default sleep_sec=0 means time.sleep is never called."""
+    session = make_session({"root": [SEPT_11_ITEM]})
+    db = MagicMock()
+
+    with patch("video_grabber.ia.scanner.time") as mock_time, \
+         patch("video_grabber.ia.scanner.upsert_job"):
+        crawl_collection(session, "root", db)
+
+    mock_time.sleep.assert_not_called()
 
 
 # --- upsert_job ---
