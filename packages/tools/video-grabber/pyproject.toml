@@ -25,6 +25,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "moto[s3]>=5.0",
+    "respx>=0.21",
     "ruff>=0.4",
     "black>=24.0",
 ]
