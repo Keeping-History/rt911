@@ -31,7 +31,7 @@ ENV VITE_PROXY_PROTOCOL=$VITE_PROXY_PROTOCOL \
 # `tsc` type errors. Type-checking still runs via the repo's own `build`/CI.
 RUN pnpm --filter @rt911/frontend exec vite build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 COPY packages/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/packages/frontend/dist /usr/share/nginx/html
 EXPOSE 80
