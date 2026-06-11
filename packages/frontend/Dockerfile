@@ -6,7 +6,7 @@
 #
 # The VITE_* args are inlined into the static bundle at build time (Vite reads
 # VITE_-prefixed vars from the environment), so the image is environment-specific.
-FROM node:25-bookworm AS build
+FROM node:26-bookworm AS build
 WORKDIR /repo
 RUN npm install -g pnpm@10.17.0
 
