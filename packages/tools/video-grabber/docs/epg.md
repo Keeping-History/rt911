@@ -1,10 +1,18 @@
 # EPG assembler
 
-The EPG (Electronic Program Guide) assembler builds the artifacts that the frontend consumes: a 24-hour HLS master playlist per channel per day, three rendition playlists, and a JSON document describing the schedule grid. Implementation: [`video_grabber/epg/assembler.py`](../video_grabber/epg/assembler.py).
+The EPG (Electronic Program Guide) assembler builds the artifacts that the frontend consumes: an HLS master playlist + three rendition playlists per channel, and a JSON document describing the schedule grid. Implementation: [`video_grabber/epg/assembler.py`](../video_grabber/epg/assembler.py).
+
+> **Continuous streams:** the assembler's primary entry point is
+> `assemble_range(channel, window_start, window_end, db)`, which stitches an
+> arbitrary UTC window (e.g. Sep 9 → Sep 18) into one continuous, isochronous,
+> `#EXT-X-PROGRAM-DATE-TIME`-anchored stream per channel. `assemble_day` is a
+> thin 24-hour wrapper. See **[channel-stitching.md](./channel-stitching.md)**
+> for the full feature (scheduler + assembler + gap filler + `build-channel`
+> flow); this page documents the playlist/JSON mechanics both entry points share.
 
 ## What it produces
 
-For one call to `assemble_day(channel, day, db)`:
+For one call to `assemble_day(channel, day, db)` (or `assemble_range`):
 
 ```python
 playlists, epg_channel = assemble_day(channel, day, db)
@@ -24,18 +32,19 @@ playlists, epg_channel = assemble_day(channel, day, db)
 # }
 ```
 
-The `epg_channel` shape matches the `EPGChannel[]` contract that `EPG.tsx` in the frontend expects. The `playlists` map is keyed by the names the upload step writes as `<key>.m3u8` files in `epg/<channel-slug>/<YYYYMMDD>/`.
+The `epg_channel` shape matches the `EPGChannel[]` contract that `EPG.tsx` in the frontend expects. The `playlists` map is keyed by the names the upload step writes as `<key>.m3u8` files in `epg/<channel-slug>/` (channel-level; one canonical stream per channel, regenerated in place).
 
-## The 24-hour stitch
+## The stitch
 
-For each programmed slot in `schedule_slots` for the day:
+Walking a forward-only `cursor` across the window, for each programmed slot in `schedule_slots`:
 
-1. If there's time between the previous cursor and `slot.starts_at` → emit a gap (see below).
+1. If there's time between the cursor and `slot.starts_at` → emit a gap (see below).
 2. Emit a `#EXT-X-DISCONTINUITY` plus a new `#EXT-X-MAP:URI=…/init.mp4` for the slot's rendition.
-3. Reference each 6-second segment of the slot's HLS package by absolute URL on Wasabi: `https://files.911realtime.org/hls/<slug>/<yyyymmdd>/<ia_id>/<rend>/seg0000.m4s`.
-4. If `slot.duration % 6 != 0`, emit one shorter trailing segment to absorb the remainder.
+3. Emit `#EXT-X-PROGRAM-DATE-TIME:<slot.starts_at>` — the absolute wall-clock anchor re-established after the PTS reset (see [channel-stitching.md](./channel-stitching.md)).
+4. Reference each 6-second segment of the slot's HLS package by absolute URL on Wasabi, dated by the slot's own air date: `https://files.911realtime.org/hls/<slug>/<slot YYYYMMDD>/<ia_id>/<rend>/seg0000.m4s`.
+5. If `slot.duration % 6 != 0`, emit one shorter trailing segment to absorb the remainder.
 
-After the last slot, if `cursor < window_end`, a trailing gap fills to midnight UTC. Finally, `#EXT-X-ENDLIST` closes each rendition.
+After the last slot, if `cursor < window_end`, a trailing gap fills to the window end. Finally, `#EXT-X-ENDLIST` closes each rendition (`PLAYLIST-TYPE:VOD`).
 
 ## Gap playlists
 
@@ -43,13 +52,14 @@ Gaps use the same fMP4/CMAF format as content (see [`gap_filler.py`](../video_gr
 
 ```
 #EXT-X-DISCONTINUITY
-#EXT-X-MAP:URI="https://files.911realtime.org/hls/cnn/20010911/_gap/full/init.mp4"
+#EXT-X-MAP:URI="https://files.911realtime.org/hls/cnn/_gap/full/init.mp4"
+#EXT-X-PROGRAM-DATE-TIME:2001-09-11T10:00:00+00:00
 #EXTINF:6,
-https://files.911realtime.org/hls/cnn/20010911/_gap/full/seg_gap_6s.m4s
+https://files.911realtime.org/hls/cnn/_gap/full/seg_gap_6s.m4s
 …
 ```
 
-`_append_gap()` ([`assembler.py:113-123`](../video_grabber/epg/assembler.py)) cuts the gap into N × 6s segments and one trailing remainder segment (`seg_gap_<remainder>s.m4s`). The set of gap segment durations the assembler can produce is bounded — typically `seg_gap_6s.m4s`, `seg_gap_1s.m4s` through `seg_gap_5s.m4s`, etc. The gap-filler step needs to have generated each of these once and uploaded them to `_gap/<rend>/`. Otherwise the playlist references a 404 and hls.js stalls.
+`_append_gap()` cuts the gap into N × 6s segments and one trailing remainder segment (`seg_gap_<remainder>s.m4s`). The set of gap segment durations is bounded: `G % 6 ∈ {1,2,3,4,5}`, so `seg_gap_6s.m4s` plus `seg_gap_1s.m4s`–`seg_gap_5s.m4s` cover every gap length. The gap package is **channel-level and date-independent** (`hls/<slug>/_gap/`), generated once per `build-channel` run by [`gap_filler.py`](../video_grabber/video/gap_filler.py). If a referenced segment is missing the playlist 404s and hls.js stalls.
 
 ## Why every slot boundary has `#EXT-X-DISCONTINUITY`
 
@@ -87,11 +97,11 @@ Gap slot:
 
 ## What the assembler does **not** do
 
-- It does not upload the playlists. The caller is expected to write `playlists[*]` to `epg/<slug>/<yyyymmdd>/<*>.m3u8` on Wasabi.
-- It does not generate gap segments. Those come from `gap_filler.py` and must be uploaded to `_gap/<rend>/` before any day-playlist that references them is served.
+- It does not upload the playlists. The `build-channel` flow writes `playlists[*]` to `epg/<slug>/<*>.m3u8` on Wasabi (see [channel-stitching.md](./channel-stitching.md)).
+- It does not generate gap segments. Those come from `gap_filler.py` and must be uploaded to `hls/<slug>/_gap/<rend>/` before any playlist that references them is served (the `build-channel` flow does both).
 - It does not re-fetch from IA or re-validate URLs. It trusts the URL convention.
-- It does not write to `schedule_slots`. Slot insertion is a manual step today (or done by a future scheduler flow that does not yet exist).
+- It does not write to `schedule_slots`. That is the scheduler's job (`epg/scheduler.py`, `build_schedule()`); the assembler only reads slots via `_fetch_slots()`.
 
 ## Testing
 
-`tests/test_epg.py` and `tests/test_epg_json.py` exercise the assembler with mock slot lists. The unit tests pass an explicit `slots=[...]` so the DB query path is bypassed; integration coverage of `_fetch_slots()` is light.
+`tests/test_epg.py` and `tests/test_epg_json.py` exercise the `assemble_day` wrapper + EPG grid; `tests/test_epg_range.py` covers `assemble_range` (isochronicity, PDT, per-air-date prefixes). The unit tests pass an explicit `slots=[...]` so the DB query path is bypassed; integration coverage of `_fetch_slots()` is light.

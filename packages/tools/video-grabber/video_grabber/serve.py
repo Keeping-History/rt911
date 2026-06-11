@@ -19,6 +19,7 @@ avoids coupling pure modules to Prefect's runtime.
 from prefect import serve
 
 from video_grabber.pipeline.flows import (
+    build_channel_flow,
     dispatch_discovered_flow,
     process_item_flow,
     scan_collections_flow,
@@ -30,6 +31,9 @@ _PROCESS_ITEM_LIMIT = 1
 _SCAN_LIMIT = 1
 # One dispatcher at a time so two operators don't both drain the queue in parallel.
 _DISPATCH_LIMIT = 1
+# Channel assembly is ffmpeg-light (tiny gap segments) but writes shared
+# playlists; one at a time keeps per-channel publishes from racing.
+_BUILD_CHANNEL_LIMIT = 2
 
 
 def main() -> None:
@@ -45,6 +49,10 @@ def main() -> None:
         dispatch_discovered_flow.to_deployment(
             name="dispatch-discovered",
             concurrency_limit=_DISPATCH_LIMIT,
+        ),
+        build_channel_flow.to_deployment(
+            name="build-channel",
+            concurrency_limit=_BUILD_CHANNEL_LIMIT,
         ),
     )
 

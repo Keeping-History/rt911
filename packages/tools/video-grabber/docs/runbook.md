@@ -157,16 +157,31 @@ If you see intermittent 401s rather than uniform 401s, somebody set `DIRECTUS_AP
 
 Symptom: `master.m3u8` loads, video starts, freezes after the first segment.
 
-Likely cause: a gap segment referenced in the playlist isn't actually on Wasabi. The assembler emits `seg_gap_<remainder>s.m4s` for fractional-duration gaps; if `gap_filler.py` only pre-generated a 6-second gap, any 1–5 second remainder reference 404s.
+Likely cause: a gap segment referenced in the playlist isn't actually on Wasabi. The assembler emits `seg_gap_<remainder>s.m4s` for fractional-duration gaps; if the gap package is incomplete, any 1–5 second remainder reference 404s.
 
-Check the playlist for `seg_gap_*` and verify those keys exist:
+Check the channel-level gap package (now date-independent at `hls/<slug>/_gap/`):
 
 ```bash
-aws s3 ls s3://files.911realtime.org/hls/cnn/20010911/_gap/full/ \
+aws s3 ls s3://files.911realtime.org/hls/cnn/_gap/full/ \
   --endpoint-url https://s3.us-central-1.wasabisys.com
+# expect: init.mp4, seg_gap_6s.m4s, seg_gap_1s.m4s … seg_gap_5s.m4s
 ```
 
-Regenerate the missing durations with `gap_filler.generate_gap_fmp4()` and re-upload.
+Re-run `build-channel` (below) — it regenerates and re-uploads the gap package every run. See [channel-stitching.md](./channel-stitching.md). (Also verify segment-reuse playback if this is the *first* time serving a stitched stream — the canonical 6s segment is referenced repeatedly and contiguous reuse in hls.js is not yet browser-verified.)
+
+## Rebuild a channel's continuous stream
+
+After more programs for a channel reach `complete`, regenerate its stitched stream. Idempotent — safe to run any time.
+
+```bash
+# channel_id from: SELECT id, slug FROM channels WHERE slug = 'cnn';
+prefect deployment run 'build-channel/build-channel' \
+  -p channel_id=<uuid> \
+  -p window_start=2001-09-09T00:00:00+00:00 \
+  -p window_end=2001-09-18T00:00:00+00:00
+```
+
+This populates `schedule_slots`, assembles `epg/<slug>/{master,full,mid,thumb}.m3u8`, uploads the gap package, and upserts the per-channel Directus row (keyed by `content.channel_stream`). A near-all-gap result means few programs are `complete` for that channel yet — check `SELECT count(*) FROM programs WHERE channel_id = '<uuid>'`.
 
 ## Frontend isn't seeing a new program
 

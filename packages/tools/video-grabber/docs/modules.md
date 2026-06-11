@@ -115,7 +115,7 @@ Generates fMP4 segments of solid blue (`#0000f5`, the EBU colour-bar "no signal"
 
 Critical: **the thumb rung keeps audio (8kbps mono)** even though no human listens to a 160×120 stream. hls.js requires every rendition in the master playlist to expose the same audio profile, so dropping audio on thumb causes silent-rung fallbacks to behave incorrectly. Don't "optimize" this.
 
-Outputs the same directory layout as `encoder.py` so the EPG assembler can treat real content and gap content interchangeably.
+`generate_gap_fmp4(output_dir, *, remainder_seconds=(1,2,3,4,5))` emits, per rendition, a shared `init.mp4` + the canonical `seg_gap_6s.m4s` + one `seg_gap_<n>s.m4s` per remainder — the exact segments the assembler references to fill a gap of any length (`⌊G/6⌋ × 6s + G%6`). Each segment is encoded standalone with a forced IDR at frame 0 (`-force_key_frames expr:eq(n,0)`) so it decodes independently. No master/index playlist is produced. See [channel-stitching.md](./channel-stitching.md).
 
 ## `video_grabber.storage`
 
@@ -129,7 +129,9 @@ Wasabi-specific boto3 client. Three quirks that all exist for one bug each:
 2. **`request_checksum_calculation="when_required"`** — boto3 ≥ 1.36 started injecting `x-amz-checksum-*` headers on every PUT. Wasabi rejects unrecognized checksum algorithms with HTTP 400. This setting reverts boto3 to the pre-1.36 behavior.
 3. **`response_checksum_validation="when_required"`** — same root cause, GET path.
 
-Upload key layout: `hls/<channel-slug>/<YYYYMMDD>/<ia-identifier>/<file>`. Returns the `master.m3u8` key so the caller can write it to `video_jobs.wasabi_key`.
+Upload key layout: `hls/<channel-slug>/<YYYYMMDD>/<ia-identifier>/<file>`. `upload_hls_package()` returns the `master.m3u8` key so the caller can write it to `video_jobs.wasabi_key`.
+
+Two generic helpers back the channel-stitching feature: `upload_tree(local_dir, key_prefix, cfg)` (uploads a directory tree, used for the gap package → `hls/<slug>/_gap/`) and `upload_text(content, key, cfg)` (PUTs a string, used for the assembled `epg/<slug>/*.m3u8` playlists). `upload_hls_package` is now a thin wrapper over `upload_tree`.
 
 `Content-Type` and `Cache-Control` are set per extension:
 
@@ -157,9 +159,11 @@ Static Bearer token only — see the `.env.example` warning about session-token 
 
 The `content` field is `json.dumps({"ia_identifier": …})`. Directus stores it as a JSON column; the round-trip through `json.dumps` is required because the field's schema is `string`, not `json`, in this project's Directus config.
 
+`upsert_channel_media_item(channel, master_url, window_start, cfg)` is the channel-stitching counterpart: it writes/PATCHes **one** row per channel, keyed by `content.channel_stream == slug` (not `ia_identifier`), pointing at the assembled `epg/<slug>/master.m3u8`. See [channel-stitching.md](./channel-stitching.md).
+
 ## `video_grabber.epg`
 
-See [epg.md](./epg.md) — large enough to warrant its own document.
+See [epg.md](./epg.md) (playlist/JSON mechanics) and [channel-stitching.md](./channel-stitching.md) (the full continuous-stream feature). Contains `assembler.py` (`assemble_range`/`assemble_day`) and `scheduler.py` (`build_schedule`/`resolve_slots` — lays `programs` onto `schedule_slots` with the first-wins-clip overlap policy).
 
 ## `video_grabber.db`
 

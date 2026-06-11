@@ -45,19 +45,14 @@ def _make_s3_client(cfg: Config):
     )
 
 
-def upload_hls_package(job, encoded_dir: Path, cfg: Config) -> str:
-    """Upload all files in encoded_dir to Wasabi. Returns the master.m3u8 key."""
-    s3 = _make_s3_client(cfg)
-    prefix = (
-        f"hls/{job.channel.slug}"
-        f"/{job.program.air_date.strftime('%Y%m%d')}"
-        f"/{job.ia_identifier}"
-    )
-
-    for path in sorted(encoded_dir.rglob("*")):
+def upload_tree(local_dir: Path, key_prefix: str, cfg: Config, *, s3=None) -> None:
+    """Upload every file under ``local_dir`` to ``<bucket>/<key_prefix>/...``,
+    preserving relative paths and applying per-suffix content-type/cache-control."""
+    s3 = s3 or _make_s3_client(cfg)
+    for path in sorted(local_dir.rglob("*")):
         if not path.is_file():
             continue
-        key = f"{prefix}/{path.relative_to(encoded_dir)}"
+        key = f"{key_prefix}/{path.relative_to(local_dir)}"
         content_type, cache_control = _CONTENT_TYPES.get(
             path.suffix, ("application/octet-stream", "max-age=31536000")
         )
@@ -69,4 +64,28 @@ def upload_hls_package(job, encoded_dir: Path, cfg: Config) -> str:
             ExtraArgs={"ContentType": content_type, "CacheControl": cache_control},
         )
 
+
+def upload_text(content: str, key: str, cfg: Config, *, s3=None) -> None:
+    """Upload a string (e.g. an assembled .m3u8) to ``<bucket>/<key>``."""
+    s3 = s3 or _make_s3_client(cfg)
+    content_type, cache_control = _CONTENT_TYPES.get(
+        Path(key).suffix, ("application/octet-stream", "max-age=5")
+    )
+    s3.put_object(
+        Bucket=cfg.wasabi_bucket,
+        Key=key,
+        Body=content.encode("utf-8"),
+        ContentType=content_type,
+        CacheControl=cache_control,
+    )
+
+
+def upload_hls_package(job, encoded_dir: Path, cfg: Config) -> str:
+    """Upload all files in encoded_dir to Wasabi. Returns the master.m3u8 key."""
+    prefix = (
+        f"hls/{job.channel.slug}"
+        f"/{job.program.air_date.strftime('%Y%m%d')}"
+        f"/{job.ia_identifier}"
+    )
+    upload_tree(encoded_dir, prefix, cfg)
     return f"{prefix}/master.m3u8"

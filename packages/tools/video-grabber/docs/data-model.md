@@ -75,19 +75,21 @@ Index: `idx_transitions_job` on `job_id`.
 
 ### `schedule_slots`
 
-Consumed by the EPG assembler ([`epg/assembler.py`](../video_grabber/epg/assembler.py)). One row per programmed slot on a channel/day.
+Written by the scheduler ([`epg/scheduler.py`](../video_grabber/epg/scheduler.py), `build_schedule()`) and consumed by the EPG assembler ([`epg/assembler.py`](../video_grabber/epg/assembler.py)). One row per programmed slot on a channel; the scheduler guarantees the rows are sorted, non-overlapping, and clamped to the build window (see [channel-stitching.md](./channel-stitching.md)).
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `channel_id` | UUID FK → `channels.id` | |
-| `program_id` | UUID FK → `programs.id` | NULL when `is_gap` is true. |
-| `starts_at` | timestamptz | |
+| `program_id` | UUID FK → `programs.id` | The slot's content. |
+| `starts_at` | timestamptz | Scheduler guarantees `starts_at >= previous ends_at`. |
 | `ends_at` | timestamptz | |
-| `segment_url` | text | Optional override for the slot's playlist URL. |
-| `is_gap` | boolean | `false` default; assembler does not currently use this flag (it computes gaps from time ranges). |
+| `segment_url` | text | Unused by channel stitching. |
+| `is_gap` | boolean | Always `false` — gaps are **not** stored; the assembler synthesizes them from the spaces between slots. |
 
 Index: `idx_slots_channel_time` on `(channel_id, starts_at, ends_at)`.
+
+`build_schedule()` is idempotent: it deletes a channel's existing in-window slots and re-inserts the resolved set, so re-running after more programs complete just folds them in. Gap rows are never written.
 
 ## The `pipeline_stage` enum
 

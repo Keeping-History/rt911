@@ -2,7 +2,7 @@
 
 Internet Archive broadcast → HLS pipeline for the 911realtime.org TV recordings.
 
-This package crawls the Internet Archive's 9/11 broadcast collections, downloads the best-quality source file for each candidate item, transcodes it to 3-rendition ABR HLS (CMAF/fMP4), uploads the package to Wasabi S3, and registers the finished asset with Directus. A separate EPG assembler stitches per-channel 24-hour playlists with blue "no signal" gap fillers between programs.
+This package crawls the Internet Archive's 9/11 broadcast collections, downloads the best-quality source file for each candidate item, transcodes it to 3-rendition ABR HLS (CMAF/fMP4), uploads the package to Wasabi S3, and registers the finished asset with Directus. A separate **channel-stitching** tier assembles those per-program packages into one continuous, seekable HLS stream per channel across the Sep 9–18 2001 timeline, with blue "no signal" gap fillers between programs so the media timeline stays isochronous with wall-clock.
 
 ## When to use this package
 
@@ -35,10 +35,11 @@ prefect worker start --pool video-grabber-pool
 ## Document index
 
 - [Architecture overview](./architecture.md) — components, end-to-end flow, why the boundaries are where they are.
-- [Pipeline stages](./pipeline.md) — the six Prefect flows and the `pipeline_stage` state machine.
+- [Pipeline stages](./pipeline.md) — the Prefect flows (scan, process-item, dispatch, build-channel) and the `pipeline_stage` state machine.
 - [Data model](./data-model.md) — Postgres tables, the `pipeline_stage` enum, and the audit log.
 - [Module guide](./modules.md) — per-package responsibilities (`ia`, `video`, `storage`, `directus`).
-- [EPG assembler](./epg.md) — 24-hour HLS day-playlists, gap inserts, EPG JSON contract.
+- [EPG assembler](./epg.md) — HLS playlist + EPG JSON mechanics (discontinuities, gap inserts, master playlist).
+- [Channel stitching](./channel-stitching.md) — continuous per-channel streams: scheduler, isochronous timeline, `PROGRAM-DATE-TIME`, gap package, `build-channel` flow.
 - [Deployment](./deployment.md) — Kubernetes manifests, Docker image, ArgoCD pre-sync.
 - [Configuration](./configuration.md) — environment variables, secrets, ConfigMap.
 - [Runbook](./runbook.md) — common ops: rescan, retry, manual review, broken playlists.

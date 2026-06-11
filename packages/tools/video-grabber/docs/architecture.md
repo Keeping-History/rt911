@@ -23,10 +23,12 @@ video-grabber is a six-stage Prefect pipeline that turns raw Internet Archive br
                   │
                   └─► pending_review  (unrecognized channel; needs human triage)
 
-complete ─► writes Directus media_items row ─► Wasabi-hosted master.m3u8
+complete ─► writes Directus media_items row ─► Wasabi-hosted per-program master.m3u8
 
-EPG assembler  (separate flow, runs daily)
-   schedule_slots + channels ─► per-channel day-playlist + EPG JSON
+Channel stitching  (build-channel flow — the assembly tier)
+   programs ─► scheduler ─► schedule_slots ─► assembler ─► continuous per-channel
+   stream (epg/<slug>/*.m3u8, gaps filled, PROGRAM-DATE-TIME anchored) + EPG JSON
+   ─► one Directus media_items row per channel
 ```
 
 ## Component map
@@ -39,13 +41,14 @@ EPG assembler  (separate flow, runs daily)
 | `pipeline/flows.py` | Prefect flow definitions, stage transitions, error capture. | Postgres, all worker modules |
 | `pipeline/downloader.py` | Pick the best source file, resumable byte-range download. | Internet Archive HTTP API |
 | `video/encoder.py` | 3-rendition ABR HLS via ffmpeg/ffprobe. | local ffmpeg/ffprobe |
-| `video/gap_filler.py` | Blue (`#0000f5`) silent fMP4 segments matching encoder rungs. | local ffmpeg |
-| `storage/wasabi.py` | Upload HLS package with the right `Content-Type` and `Cache-Control`. | Wasabi S3 |
-| `directus/writer.py` | Idempotent `POST /items/media_items`, channel→source resolution. | Directus HTTP API |
-| `epg/assembler.py` | Build per-channel 24-hour master + rendition playlists with gap inserts. | Postgres |
+| `video/gap_filler.py` | Bounded blue (`#0000f5`) silent fMP4 gap package (canonical 6s + 1–5s remainders) matching encoder rungs. | local ffmpeg |
+| `storage/wasabi.py` | Upload HLS package / tree / text with the right `Content-Type` and `Cache-Control`. | Wasabi S3 |
+| `directus/writer.py` | Idempotent per-program (`POST`) and per-channel (`upsert`) `media_items` writes, channel→source resolution. | Directus HTTP API |
+| `epg/scheduler.py` | Lay `programs` onto a non-overlapping `schedule_slots` timeline (first-wins-clip). | Postgres |
+| `epg/assembler.py` | Stitch slots into continuous per-channel rendition playlists + master with gap inserts and `PROGRAM-DATE-TIME`. | Postgres |
 | `db/migrations/` | Alembic schema; `001_initial_schema` defines all tables and the stage enum. | Postgres |
 
-Everything outside `epg/` is on the IA → Wasabi → Directus path. `epg/` is the read path that the frontend consumes.
+Everything outside `epg/` is on the IA → Wasabi → Directus acquisition path. `epg/` is the assembly tier (scheduler + assembler) that produces the continuous streams the frontend consumes. See [channel-stitching.md](./channel-stitching.md).
 
 ## Boundaries and why
 
@@ -57,7 +60,7 @@ Everything outside `epg/` is on the IA → Wasabi → Directus path. `epg/` is t
 
 **Directus is the public catalog; Postgres is the pipeline log.** The pipeline never reads from Directus — it only writes one record per successful job into `media_items` with the Wasabi URL. If Directus is unavailable, the job sits in `uploading`/`complete` and the writer retries on the next flow run (the idempotency check makes this safe — `directus/writer.py:31-39`).
 
-**EPG assembly is decoupled from pipeline.** It reads `schedule_slots` and writes flat playlist files. It never modifies job state and can be rerun freely.
+**Channel stitching is decoupled from the acquisition pipeline.** The `build-channel` flow reads `programs` (via the scheduler) and `schedule_slots`, then writes flat playlist files + one per-channel Directus row. It never modifies `video_jobs` state and is fully idempotent, so it can be rerun freely as more programs complete.
 
 ## Why six stages
 

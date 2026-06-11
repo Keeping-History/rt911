@@ -6,6 +6,7 @@ Worker image: prefecthq/prefect:3-python3.12-kubernetes
 PREFECT_API_URL: http://prefect-server.video-grabber.svc.cluster.local:4200/api
 """
 import os
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,8 +18,11 @@ from video_grabber.ia.scanner import crawl_collection
 from video_grabber.pipeline.downloader import download_item
 from video_grabber.pipeline.resolve import resolve_job
 from video_grabber.video.encoder import encode_to_hls
-from video_grabber.storage.wasabi import upload_hls_package
-from video_grabber.directus.writer import write_media_item
+from video_grabber.video.gap_filler import generate_gap_fmp4
+from video_grabber.storage.wasabi import upload_hls_package, upload_tree, upload_text
+from video_grabber.directus.writer import write_media_item, upsert_channel_media_item
+from video_grabber.epg.assembler import assemble_range
+from video_grabber.epg.scheduler import build_schedule
 from video_grabber.config import Config
 
 try:
@@ -211,6 +215,52 @@ def process_item_flow(job_id: str):
     except Exception as exc:
         transition_job(db, job_id, "failed", from_stage=None, error=str(exc))
         raise
+
+
+def _load_channel(db, channel_id: str):
+    """Load a channel row as the namespace assemble_range / Directus expect."""
+    row = db.execute(
+        sa.text("SELECT id, slug, display_name, timezone FROM channels WHERE id = :id"),
+        {"id": channel_id},
+    ).mappings().fetchone()
+    if row is None:
+        raise ValueError(f"channels row not found: {channel_id}")
+    return SimpleNamespace(**dict(row))
+
+
+@flow(name="build-channel")
+def build_channel_flow(channel_id: str, window_start: str, window_end: str):
+    """Stitch a channel's programs into one continuous HLS stream over a window.
+
+    schedule → assemble → publish. Run after process-item has uploaded the
+    channel's program segments; re-run any time to fold in newly-completed
+    programs (every step is idempotent). ``window_start`` / ``window_end`` are
+    ISO-8601 UTC strings, e.g. "2001-09-09T00:00:00+00:00".
+    """
+    logger = get_run_logger()
+    db = get_db()
+    cfg = Config()
+    ws = datetime.fromisoformat(window_start)
+    we = datetime.fromisoformat(window_end)
+    channel = _load_channel(db, channel_id)
+
+    n_slots = build_schedule(channel_id, ws, we, db)
+    logger.info("build-channel %s: %d slots scheduled", channel.slug, n_slots)
+
+    playlists, _epg = assemble_range(channel, ws, we, db)
+
+    # Channel-level blue gap package (date-independent); cheap to regenerate.
+    gap_dir = _SCRATCH / f"_gap_{channel.slug}"
+    generate_gap_fmp4(gap_dir)
+    upload_tree(gap_dir, f"hls/{channel.slug}/_gap", cfg)
+
+    base = f"epg/{channel.slug}"
+    for name in ("master", "full", "mid", "thumb"):
+        upload_text(playlists[name], f"{base}/{name}.m3u8", cfg)
+
+    master_url = f"{base}/master.m3u8"
+    upsert_channel_media_item(channel, master_url, ws, cfg)
+    logger.info("build-channel %s: published %s", channel.slug, master_url)
 
 
 @flow(name="dispatch-discovered")

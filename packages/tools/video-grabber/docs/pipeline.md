@@ -26,7 +26,9 @@ discovered ─► metadata_extracted ─► downloading ─► downloaded ─►
 | `complete` | `process_item_flow` | Wasabi key written to `video_jobs.wasabi_key`; Directus `media_items` row inserted. |
 | `failed` | `process_item_flow` (`except` branch) | Exception captured in `video_jobs.error_message`. |
 
-## The two flows
+## The flows
+
+Registered in [`serve.py`](../video_grabber/serve.py): `scan-collections`, `process-item`, `dispatch-discovered` (drains the `discovered` queue by triggering `process-item` runs), and `build-channel` (the assembly tier — see below).
 
 ### `scan-collections`
 
@@ -56,6 +58,17 @@ One run per `video_jobs.id`. Walks `downloading → downloaded → encoding → 
 @flow(name="process-item")
 def process_item_flow(job_id: str):
 ```
+
+### `build-channel`
+
+The assembly tier: stitches a channel's completed program packages into one continuous, seekable HLS stream over a UTC window (schedule → assemble → publish → Directus upsert). Unlike the acquisition flows it does not transition `video_jobs` — it reads `programs`/`schedule_slots` and writes Wasabi playlists + one Directus row per channel. Idempotent; re-run any time more programs complete.
+
+```python
+@flow(name="build-channel")
+def build_channel_flow(channel_id: str, window_start: str, window_end: str):
+```
+
+Full design (scheduler overlap policy, the isochronous/`PROGRAM-DATE-TIME` invariant, gap package, Wasabi layout): **[channel-stitching.md](./channel-stitching.md)**.
 
 ## Atomic transitions
 

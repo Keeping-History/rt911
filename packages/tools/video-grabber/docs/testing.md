@@ -18,12 +18,15 @@ pytest
 | `test_metadata.py` | Air-date parsing across ISO and named-month formats, AM/PM, TZ resolution, default-EDT fallback. |
 | `test_downloader.py` | `select_best_file()` priority, skip-pattern filtering, byte-range `Range` header on resume. |
 | `test_encoder.py` | `scale_keep_aspect()` math, `probe_resolution()` with mocked ffprobe, the per-rendition ffmpeg command shape. |
-| `test_gap_filler.py` | Gap segment dimensions per rendition, audio retention on the thumb rung. |
+| `test_gap_filler.py` | Gap package layout (canonical 6s + 1–5s remainders per rendition), ffmpeg flags: blue, fmp4, forced keyframe at frame 0, thumb audio retention. |
 | `test_uploader.py` | Wasabi `upload_hls_package()` with `moto[s3]`: key layout, `Content-Type` and `Cache-Control` per extension. |
 | `test_directus_writer.py` | Idempotency check (early return on existing item), payload shape, source-id resolution, approved-flag logic. |
 | `test_flows.py` | `transition_job()` writes both UPDATE and INSERT; `scan_collections_flow()` and `process_item_flow()` orchestration with all components patched. |
-| `test_epg.py`, `test_epg_json.py` | EPG assembler with mock slots: gap insertion, discontinuity tags, EPG JSON grid shape. |
-| `test_migrations.py` | Alembic revision sanity. |
+| `test_epg.py`, `test_epg_json.py` | EPG assembler (`assemble_day` wrapper) with mock slots: gap insertion, discontinuity tags, EPG JSON grid shape. |
+| `test_epg_range.py` | `assemble_range`: isochronicity across a 9-day window, `#EXT-X-PROGRAM-DATE-TIME` per discontinuity, per-air-date segment prefixes, channel-level paths. |
+| `test_scheduler.py` | `resolve_slots` contract: sorted, non-overlapping, window-clamped (policy-agnostic invariants the assembler depends on). |
+| `test_build_channel.py` | `build_channel_flow` wiring: schedule → assemble → gap upload → publish 4 playlists → Directus upsert, all collaborators patched. |
+| `test_migrations.py` | Alembic revision sanity (requires a live Postgres; errors without one). |
 
 ## Mocking strategy
 
