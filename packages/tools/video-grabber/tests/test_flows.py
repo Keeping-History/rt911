@@ -146,3 +146,52 @@ def test_process_item_flow_transitions_through_all_stages():
     assert "encoded" in stages
     assert "uploading" in stages
     assert "complete" in stages
+
+
+# --- dispatch_discovered_flow ---
+
+def test_dispatch_discovered_flow_no_discovered_jobs_is_noop():
+    from video_grabber.pipeline.flows import dispatch_discovered_flow
+
+    db = MagicMock()
+    db.execute.return_value.first.return_value = None
+
+    with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
+         patch("video_grabber.pipeline.flows.run_deployment") as mock_run, \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        dispatch_discovered_flow.fn(max_runs=10)
+
+    mock_run.assert_not_called()
+
+
+def test_dispatch_discovered_flow_dispatches_one_per_iteration():
+    from video_grabber.pipeline.flows import dispatch_discovered_flow
+
+    # Two discovered rows, then empty — flow should dispatch twice then exit.
+    rows = [MagicMock(id="job-a"), MagicMock(id="job-b"), None]
+    db = MagicMock()
+    db.execute.return_value.first.side_effect = rows
+
+    with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
+         patch("video_grabber.pipeline.flows.run_deployment") as mock_run, \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        dispatch_discovered_flow.fn(max_runs=10)
+
+    assert mock_run.call_count == 2
+    assert mock_run.call_args_list[0].kwargs["parameters"] == {"job_id": "job-a"}
+    assert mock_run.call_args_list[1].kwargs["parameters"] == {"job_id": "job-b"}
+
+
+def test_dispatch_discovered_flow_respects_max_runs_cap():
+    from video_grabber.pipeline.flows import dispatch_discovered_flow
+
+    # Endless supply of rows — flow must still stop at max_runs.
+    db = MagicMock()
+    db.execute.return_value.first.return_value = MagicMock(id="job-x")
+
+    with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
+         patch("video_grabber.pipeline.flows.run_deployment") as mock_run, \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        dispatch_discovered_flow.fn(max_runs=3)
+
+    assert mock_run.call_count == 3

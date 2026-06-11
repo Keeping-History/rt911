@@ -3,11 +3,34 @@ Resumable download worker for Internet Archive broadcast files.
 
 File preference: .mp4 (full-res) > .mpg/.mpeg2 > .ogv/.avi
 Byte-range resume: sends Range header when partial file exists on disk.
+
+Both the metadata call and the streaming download set explicit timeouts
+and retry on transient httpx errors. The metadata endpoint is fast but
+prone to intermittent 5 s timeouts; the streaming download disables the
+read timeout so a slow chunk doesn't kill an in-progress 4–8 GiB pull.
 """
 from pathlib import Path
 import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 _IA_BASE = "https://archive.org"
+
+_TRANSIENT_HTTP_ERRORS = (
+    httpx.TimeoutException,
+    httpx.ConnectError,
+    httpx.RemoteProtocolError,
+    httpx.NetworkError,
+)
+
+_METADATA_TIMEOUT = 30.0  # seconds — small JSON payload, generous enough for IA blips
+# read=None disables the per-chunk read timeout for streaming downloads; connect
+# stays bounded so we still notice an outright unreachable host.
+_DOWNLOAD_TIMEOUT = httpx.Timeout(connect=30.0, read=None, write=None, pool=None)
 
 # Format preference order (lower index = higher priority)
 _FORMAT_PRIORITY = {
@@ -22,9 +45,15 @@ _FORMAT_PRIORITY = {
 _SKIP_PATTERNS = ("512kb", "256kb", "128kb", "_small", "_tiny", "_thumb")
 
 
+@retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=2, max=15),
+    retry=retry_if_exception_type(_TRANSIENT_HTTP_ERRORS),
+    reraise=True,
+)
 def get_ia_files(ia_identifier: str) -> list[dict]:
     url = f"{_IA_BASE}/metadata/{ia_identifier}/files"
-    resp = httpx.get(url, follow_redirects=True)
+    resp = httpx.get(url, follow_redirects=True, timeout=_METADATA_TIMEOUT)
     resp.raise_for_status()
     return resp.json().get("result", [])
 
@@ -59,7 +88,10 @@ def download_item(job, dest_dir: Path) -> Path:
     offset = dest.stat().st_size if dest.exists() else 0
     headers = {"Range": f"bytes={offset}-"} if offset else {}
 
-    with httpx.stream("GET", url, headers=headers, follow_redirects=True) as r:
+    with httpx.stream(
+        "GET", url, headers=headers,
+        follow_redirects=True, timeout=_DOWNLOAD_TIMEOUT,
+    ) as r:
         r.raise_for_status()
         mode = "ab" if offset else "wb"
         with dest.open(mode) as f:
