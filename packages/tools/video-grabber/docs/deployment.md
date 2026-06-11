@@ -91,7 +91,7 @@ Defined inline in `worker-deployment.yaml`:
 PREFECT_API_URL: "http://prefect-server.video-grabber.svc.cluster.local:4200/api"
 WASABI_ENDPOINT_URL: "https://s3.us-central-1.wasabisys.com"
 WASABI_BUCKET: "files.911realtime.org"
-DIRECTUS_URL: "http://directus.rt911.svc.cluster.local:8055"
+DIRECTUS_URL: "http://rt911-api.rt911.svc.cluster.local:8055"
 IA_RATE_PER_SEC: "2"
 MIN_DURATION_SECONDS: "720"
 SCRATCH_DIR: "/tmp/vg-scratch"
