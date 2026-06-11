@@ -28,6 +28,60 @@ def test_sync_db_url_passes_through_explicit_psycopg2():
     assert _sync_db_url(url) == url
 
 
+# --- get_job ---
+
+def _mock_db_returning(mapping):
+    """Build a MagicMock db whose execute(...).mappings().fetchone() yields `mapping`."""
+    db = MagicMock()
+    db.execute.return_value.mappings.return_value.fetchone.return_value = mapping
+    return db
+
+
+def test_get_job_flattens_channel_and_program_into_namespaces():
+    from video_grabber.pipeline.flows import get_job
+    from datetime import datetime, timezone
+
+    row = {
+        "id": "job-001",
+        "ia_identifier": "cnn-sep11-0800",
+        "stage": "uploading",
+        "channel_id": "chan-1",
+        "program_id": "prog-1",
+        "channel_slug": "cnn",
+        "channel_display_name": "CNN",
+        "channel_timezone": "America/New_York",
+        "program_title": "Live Coverage",
+        "program_description": "Broadcast",
+        "program_air_date": datetime(2001, 9, 11, 12, 0, tzinfo=timezone.utc),
+        "program_duration_seconds": 3600,
+        "passed_through_review": False,
+    }
+
+    with patch("video_grabber.pipeline.flows.get_db", return_value=_mock_db_returning(row)):
+        job = get_job("job-001")
+
+    # Nested relationship objects the downstream stages dereference.
+    assert job.channel.slug == "cnn"
+    assert job.channel.timezone == "America/New_York"
+    assert job.program.title == "Live Coverage"
+    assert job.program.duration_seconds == 3600
+    # Flat video_jobs columns remain at the top level.
+    assert job.ia_identifier == "cnn-sep11-0800"
+    assert job.id == "job-001"
+    assert job.passed_through_review is False
+    # Aliased columns must not leak onto the top-level object.
+    assert not hasattr(job, "channel_slug")
+    assert not hasattr(job, "program_title")
+
+
+def test_get_job_raises_when_row_missing():
+    from video_grabber.pipeline.flows import get_job
+
+    with patch("video_grabber.pipeline.flows.get_db", return_value=_mock_db_returning(None)):
+        with pytest.raises(ValueError, match="not found"):
+            get_job("nope")
+
+
 # --- transition_job ---
 
 def test_transition_job_updates_stage_and_logs():

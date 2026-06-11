@@ -7,6 +7,7 @@ PREFECT_API_URL: http://prefect-server.video-grabber.svc.cluster.local:4200/api
 """
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import sqlalchemy as sa
 from prefect import flow, get_run_logger
@@ -49,12 +50,63 @@ def get_db():
 
 
 def get_job(job_id: str):
+    """Load a video_jobs row joined with its channel and program.
+
+    Returns a SimpleNamespace whose shape matches what the downstream
+    pipeline stages expect: the flat ``video_jobs`` columns at the top
+    level, plus nested ``.channel`` and ``.program`` objects (the related
+    rows reached via the ``channel_id`` / ``program_id`` foreign keys).
+    A bare ``SELECT *`` row only carries the FK ids, so accessing
+    ``job.channel`` on it raises NoSuchColumnError.
+
+    ``passed_through_review`` is not a stored column; it is derived from
+    the audit trail — true iff the job ever transitioned into the
+    ``pending_review`` stage. It gates Directus ``approved`` (0 = awaiting
+    human sign-off, 1 = auto-approved).
+    """
     db = get_db()
-    result = db.execute(
-        sa.text("SELECT * FROM video_jobs WHERE id = :id"),
+    row = db.execute(
+        sa.text(
+            """
+            SELECT
+                j.*,
+                c.slug             AS channel_slug,
+                c.display_name     AS channel_display_name,
+                c.timezone         AS channel_timezone,
+                p.title            AS program_title,
+                p.description      AS program_description,
+                p.air_date         AS program_air_date,
+                p.duration_seconds AS program_duration_seconds,
+                EXISTS (
+                    SELECT 1 FROM pipeline_transitions t
+                    WHERE t.job_id = j.id
+                      AND t.to_stage = 'pending_review'
+                ) AS passed_through_review
+            FROM video_jobs j
+            LEFT JOIN channels c ON c.id = j.channel_id
+            LEFT JOIN programs p ON p.id = j.program_id
+            WHERE j.id = :id
+            """
+        ),
         {"id": job_id},
+    ).mappings().fetchone()
+
+    if row is None:
+        raise ValueError(f"video_jobs row not found: {job_id}")
+
+    m = dict(row)
+    channel = SimpleNamespace(
+        slug=m.pop("channel_slug"),
+        display_name=m.pop("channel_display_name"),
+        timezone=m.pop("channel_timezone"),
     )
-    return result.fetchone()
+    program = SimpleNamespace(
+        title=m.pop("program_title"),
+        description=m.pop("program_description"),
+        air_date=m.pop("program_air_date"),
+        duration_seconds=m.pop("program_duration_seconds"),
+    )
+    return SimpleNamespace(channel=channel, program=program, **m)
 
 
 def transition_job(db, job_id: str, to_stage: str, *, from_stage: str = None, error: str = None) -> None:
