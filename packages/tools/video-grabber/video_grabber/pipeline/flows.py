@@ -132,7 +132,7 @@ def process_item_flow(job_id: str):
         encode_dir = scratch / "encoded"
 
         transition_job(db, job_id, "encoding", from_stage="downloaded")
-        encode_to_hls(local_path, encode_dir)
+        encode_to_hls(local_path, encode_dir, logger=logger)
 
         transition_job(db, job_id, "encoded", from_stage="encoding")
 
