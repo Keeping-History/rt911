@@ -106,6 +106,32 @@ def _probe(path: Path):
     )
 
 
+def probe_duration_seconds(path: Path) -> int:
+    """Return whole-second media duration via ffprobe, or 0 if unavailable.
+
+    Reads the container ``format.duration`` rather than a stream duration:
+    MPEG program streams (.mpg) frequently report ``N/A`` at the stream
+    level but carry a reliable duration on the format. Truncates to whole
+    seconds to match the ``programs.duration_seconds`` integer column.
+    """
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "quiet", "-print_format", "json",
+            "-show_format", str(path),
+        ],
+        capture_output=True,
+    )
+    try:
+        data = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError:
+        return 0
+    raw = data.get("format", {}).get("duration")
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return 0
+
+
 def encode_to_hls(
     input_path: Path,
     output_dir: Path,
