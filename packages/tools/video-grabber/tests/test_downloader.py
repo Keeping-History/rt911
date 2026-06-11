@@ -165,3 +165,36 @@ def test_get_ia_files_returns_list():
     files = get_ia_files("test-id-001")
     assert len(files) == 3
     assert files[0]["name"] == "broadcast.mp4"
+
+
+@respx.mock
+def test_get_ia_files_retries_on_transient_timeout():
+    """Regression: process-item emerald-leopard failed because IA returned
+    httpx.ReadTimeout on the metadata call. get_ia_files now retries with
+    exponential backoff; only persistent failures propagate."""
+    route = respx.get("https://archive.org/metadata/timeout-id/files")
+    route.side_effect = [
+        httpx.ReadTimeout("simulated transient"),
+        httpx.ReadTimeout("simulated transient"),
+        httpx.Response(200, json={"result": IA_FILES_MP4}),
+    ]
+
+    # Patch tenacity's sleep so the test doesn't actually wait.
+    with patch("tenacity.nap.time.sleep"):
+        files = get_ia_files("timeout-id")
+
+    assert len(files) == 3
+    assert route.call_count == 3
+
+
+@respx.mock
+def test_get_ia_files_gives_up_after_persistent_timeouts():
+    route = respx.get("https://archive.org/metadata/dead-id/files")
+    route.side_effect = httpx.ReadTimeout("simulated persistent")
+
+    with patch("tenacity.nap.time.sleep"):
+        with pytest.raises(httpx.ReadTimeout):
+            get_ia_files("dead-id")
+
+    # 4 attempts per stop_after_attempt(4) — the final raise reraises the last error.
+    assert route.call_count == 4

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import sqlalchemy as sa
 from prefect import flow, get_run_logger
+from prefect.deployments import run_deployment
 
 from video_grabber.ia.scanner import crawl_collection
 from video_grabber.pipeline.downloader import download_item
@@ -151,3 +152,42 @@ def process_item_flow(job_id: str):
     except Exception as exc:
         transition_job(db, job_id, "failed", from_stage=None, error=str(exc))
         raise
+
+
+@flow(name="dispatch-discovered")
+def dispatch_discovered_flow(max_runs: int = 100) -> None:
+    """Drain the ``stage='discovered'`` queue by triggering process-item runs.
+
+    Each dispatch is a blocking ``run_deployment`` call — the next job only
+    starts once the current one finishes (or fails). That keeps the queue
+    depth at zero and surfaces failures immediately to the operator instead
+    of letting hundreds of broken runs pile up.
+
+    ``max_runs`` bounds a single dispatcher invocation so the flow itself
+    has a definite end; trigger it again to drain more. Default 100 is
+    enough for a typical batch but small enough that an operator who spots
+    a bug can stop, fix, and rerun.
+    """
+    logger = get_run_logger()
+    db = get_db()
+    processed = 0
+    while processed < max_runs:
+        row = db.execute(
+            sa.text(
+                "SELECT id FROM video_jobs "
+                "WHERE stage = 'discovered' "
+                "ORDER BY created_at LIMIT 1"
+            )
+        ).first()
+        if row is None:
+            logger.info("dispatch-discovered: queue empty after %d runs", processed)
+            return
+        job_id = str(row.id)
+        logger.info("dispatch-discovered: dispatching process-item job_id=%s", job_id)
+        # Blocks until the process-item run reaches a terminal state.
+        run_deployment(
+            name="process-item/process-item",
+            parameters={"job_id": job_id},
+        )
+        processed += 1
+    logger.info("dispatch-discovered: hit max_runs=%d cap", max_runs)
