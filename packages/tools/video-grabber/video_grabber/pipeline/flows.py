@@ -15,6 +15,7 @@ from prefect.deployments import run_deployment
 
 from video_grabber.ia.scanner import crawl_collection
 from video_grabber.pipeline.downloader import download_item
+from video_grabber.pipeline.resolve import resolve_job
 from video_grabber.video.encoder import encode_to_hls
 from video_grabber.storage.wasabi import upload_hls_package
 from video_grabber.directus.writer import write_media_item
@@ -181,6 +182,12 @@ def process_item_flow(job_id: str):
         local_path = download_item(job, scratch)
 
         transition_job(db, job_id, "downloaded", from_stage="downloading")
+
+        # Bare video_jobs rows carry no channel/program. Derive and link them
+        # from the IA metadata + downloaded media before any stage that needs
+        # job.channel.* or job.program.* (upload prefix, Directus media_item).
+        job = resolve_job(job, db, media_path=local_path)
+
         encode_dir = scratch / "encoded"
 
         transition_job(db, job_id, "encoding", from_stage="downloaded")

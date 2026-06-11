@@ -139,6 +139,7 @@ def test_process_item_flow_transitions_to_complete_on_success():
     with patch("video_grabber.pipeline.flows.get_job", return_value=job), \
          patch("video_grabber.pipeline.flows.get_db"), \
          patch("video_grabber.pipeline.flows.download_item") as mock_dl, \
+         patch("video_grabber.pipeline.flows.resolve_job", return_value=job), \
          patch("video_grabber.pipeline.flows.encode_to_hls") as mock_enc, \
          patch("video_grabber.pipeline.flows.upload_hls_package") as mock_up, \
          patch("video_grabber.pipeline.flows.write_media_item"), \
@@ -185,6 +186,7 @@ def test_process_item_flow_transitions_through_all_stages():
     with patch("video_grabber.pipeline.flows.get_job", return_value=job), \
          patch("video_grabber.pipeline.flows.get_db"), \
          patch("video_grabber.pipeline.flows.download_item", return_value=MagicMock()), \
+         patch("video_grabber.pipeline.flows.resolve_job", return_value=job), \
          patch("video_grabber.pipeline.flows.encode_to_hls", return_value=MagicMock()), \
          patch("video_grabber.pipeline.flows.upload_hls_package", return_value="some/key"), \
          patch("video_grabber.pipeline.flows.write_media_item"), \
