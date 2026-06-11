@@ -142,6 +142,69 @@ def test_write_media_item_idempotent_on_existing():
 
 
 @respx.mock
+def test_idempotency_filters_on_exact_content_blob():
+    """content is a plain text column, so the idempotency check must match the
+    exact serialized JSON via filter[content][_eq], not traverse into it."""
+    cfg = make_cfg()
+    job = make_job()
+
+    captured = {}
+
+    def capture_get(request):
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"data": []})
+
+    respx.get("http://directus:8055/items/media_items").mock(side_effect=capture_get)
+    respx.get("http://directus:8055/items/sources").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": 1}]})
+    )
+    respx.post("http://directus:8055/items/media_items").mock(
+        return_value=httpx.Response(200, json={"data": {}})
+    )
+
+    write_media_item(job, "some/key", cfg)
+
+    assert captured["params"].get("filter[content][_eq]") == (
+        '{"ia_identifier": "cnn-sep11-0800"}'
+    )
+    assert "filter[content][ia_identifier][_eq]" not in captured["params"]
+
+
+@respx.mock
+def test_source_lookup_upper_cases_slug():
+    """sources.slug is stored upper-cased; the lower-cased channel slug must be
+    upper-cased for the lookup to resolve."""
+    cfg = make_cfg()
+    job = make_job()  # channel.slug == "cnn"
+
+    captured = {}
+
+    respx.get("http://directus:8055/items/media_items").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+
+    def capture_sources(request):
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"data": [{"id": 11, "slug": "CNN"}]})
+
+    respx.get("http://directus:8055/items/sources").mock(side_effect=capture_sources)
+
+    posted = {}
+
+    def capture_post(request):
+        import json
+        posted.update(json.loads(request.content))
+        return httpx.Response(200, json={"data": {}})
+
+    respx.post("http://directus:8055/items/media_items").mock(side_effect=capture_post)
+
+    write_media_item(job, "some/key", cfg)
+
+    assert captured["params"].get("filter[slug][_eq]") == "CNN"
+    assert posted.get("source") == 11
+
+
+@respx.mock
 def test_write_media_item_uses_static_token():
     cfg = make_cfg()
     job = make_job()
