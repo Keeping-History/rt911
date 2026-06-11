@@ -259,11 +259,23 @@ def test_encode_logs_progress_at_least_once_per_rendition(tmp_path):
          patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
         encode_to_hls(src, out, logger=logger)
 
-    info_msgs = " ".join(str(c.args) for c in logger.info.call_args_list)
-    assert "starting rendition full" in info_msgs
-    assert "starting rendition mid" in info_msgs
-    assert "starting rendition thumb" in info_msgs
-    # Each rendition's progress=end forces one log line.
-    assert info_msgs.count("encode %s: t=") == 3
-    assert "rendition full done" in info_msgs
-    assert "rendition thumb done" in info_msgs
+    # Render each call's format-string with its args so 'starting rendition %s' + 'full'
+    # becomes the literal 'starting rendition full' our substring checks expect.
+    rendered = []
+    for call in logger.info.call_args_list:
+        args = call.args
+        if len(args) > 1:
+            rendered.append(args[0] % args[1:])
+        else:
+            rendered.append(args[0])
+    joined = " | ".join(rendered)
+
+    assert "starting rendition full" in joined
+    assert "starting rendition mid" in joined
+    assert "starting rendition thumb" in joined
+    # Each rendition's progress=end forces one progress log line.
+    assert sum(1 for m in rendered if m.startswith("encode full: t=")) == 1
+    assert sum(1 for m in rendered if m.startswith("encode mid: t=")) == 1
+    assert sum(1 for m in rendered if m.startswith("encode thumb: t=")) == 1
+    assert "rendition full done" in joined
+    assert "rendition thumb done" in joined
