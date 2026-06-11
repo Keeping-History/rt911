@@ -281,7 +281,7 @@ export const useBrowserNavigation = ({
 				}
 			}
 		},
-		[archiveTime, proxyBase, proxyConfig.protocol, proxyEnabled],
+		[archiveTime, proxyBase, proxyConfig.path, proxyConfig.protocol, proxyEnabled],
 	);
 
 	// Load default page on mount

@@ -17,6 +17,12 @@ export interface BrowserHistoryEntry {
 	visitedAt: string;
 }
 
+export interface BrowserHomePage {
+	url: string;
+	label: string;
+	icon: string;
+}
+
 const MAX_HISTORY = 500;
 
 export const classicyBrowserEventHandler = (
@@ -51,11 +57,11 @@ export const classicyBrowserEventHandler = (
 			if (!("history" in appData)) {
 				appData = { ...appData, history: [] };
 			}
-			const normalizedUrl = normalizeUrl(action.url);
+			const normalizedUrl = normalizeUrl(action.url as string);
 			const history: BrowserHistoryEntry[] = (appData.history as BrowserHistoryEntry[]).filter(
 				(h: BrowserHistoryEntry) => normalizeUrl(h.url) !== normalizedUrl,
 			);
-			history.push({ url: action.url, visitedAt: new Date().toISOString() });
+			history.push({ url: action.url as string, visitedAt: new Date().toISOString() });
 			appData = { ...appData, history: history.slice(-MAX_HISTORY) };
 			break;
 		}

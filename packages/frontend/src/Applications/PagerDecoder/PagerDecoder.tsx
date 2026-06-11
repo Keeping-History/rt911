@@ -35,7 +35,8 @@ export const PagerDecoder = () => {
 	);
 
 	const settings: PagerDecoderSettings =
-		appState?.data?.settings ?? DEFAULT_PAGER_SETTINGS;
+		(appState?.data?.settings as PagerDecoderSettings | undefined) ??
+		DEFAULT_PAGER_SETTINGS;
 
 	useEffect(() => {
 		if (!appState) return;

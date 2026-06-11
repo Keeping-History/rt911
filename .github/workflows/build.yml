@@ -28,6 +28,24 @@ env:
   FE_VITE_MEDIA_STREAM_URL: "wss://stream-beta.911realtime.org/stream"
 
 jobs:
+  # Type-check, lint and unit-test the frontend. The Docker image build only runs
+  # `vite build` (transpile-only), so without this job tsc/eslint/vitest never run
+  # in CI and can regress silently.
+  frontend-checks:
+    name: frontend-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v2
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm --filter @rt911/frontend exec tsc -b
+      - name: Lint
+        run: pnpm --filter @rt911/frontend exec eslint .
+      - name: Test
+        run: pnpm --filter @rt911/frontend run test
+
   streamer:
     runs-on: ubuntu-latest
     steps:

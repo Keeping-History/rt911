@@ -216,7 +216,6 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			wsRef.current = null;
 		};
 		// Intentionally runs once on mount; localDateRef carries the live value
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	return (

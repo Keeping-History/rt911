@@ -100,9 +100,12 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 	);
 
 	// When the timezone changes, snap the grid to "now" in the new timezone.
+	// Intentionally keyed only on tzOffset: depending on localNow/gridTimeWidth
+	// would re-snap on every clock tick or width change and fight the user's scroll.
 	useEffect(() => {
 		setGridStartTime(roundDownToNearestMinuntes(localNow(), gridTimeWidth));
-	}, [tzOffset]); // intentionally omit localNow — only snap on tz change
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [tzOffset]);
 
 	const gridEndTime = useMemo(() => {
 		const endTime = new Date(gridStartTime);
@@ -282,7 +285,7 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 				</Fragment>
 			);
 		});
-	}, [getProgramData]);
+	}, [getProgramData, gridData]);
 
 	return (
 		<ClassicyApp

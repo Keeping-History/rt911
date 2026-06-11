@@ -50,7 +50,7 @@ export const classicyPagerDecoderEventHandler = (
 			if (!appData) appData = {};
 			appData.settings = {
 				...(appData.settings ?? DEFAULT_PAGER_SETTINGS),
-				...action.settings,
+				...(action.settings as Partial<PagerDecoderSettings>),
 			};
 			break;
 		}

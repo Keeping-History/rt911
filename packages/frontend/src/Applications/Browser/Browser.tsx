@@ -23,7 +23,7 @@ import {
 
 import "./Browser.scss";
 import "./BrowserContext";
-import type { BrowserFavorite } from "./BrowserContext";
+import type { BrowserFavorite, BrowserHomePage } from "./BrowserContext";
 import {
 	DEFAULT_PROXY_CONFIG,
 	type TimeMachineProxyConfig,
@@ -119,7 +119,8 @@ export const Browser = () => {
 	);
 
 	const proxyConfig: TimeMachineProxyConfig =
-		appState?.data?.proxyConfig ?? DEFAULT_PROXY_CONFIG;
+		(appState?.data?.proxyConfig as TimeMachineProxyConfig | undefined) ??
+		DEFAULT_PROXY_CONFIG;
 
 	const normalizeDomain = useCallback((url: string): string => {
 		try {
@@ -130,11 +131,17 @@ export const Browser = () => {
 		}
 	}, []);
 
-	const homePage = appState?.data?.homePage ?? {
-		url: DEFAULT_URL,
-		label: DEFAULT_HOME_LABEL,
-		icon: DEFAULT_HOME_ICON,
-	};
+	// Memoized so the windowIcon useMemo below has a stable dependency; without
+	// this the `?? {…}` fallback is a fresh object every render.
+	const homePage: BrowserHomePage = useMemo(
+		() =>
+			(appState?.data?.homePage as BrowserHomePage | undefined) ?? {
+				url: DEFAULT_URL,
+				label: DEFAULT_HOME_LABEL,
+				icon: DEFAULT_HOME_ICON,
+			},
+		[appState?.data?.homePage],
+	);
 
 	useEffect(() => {
 		if (!appState) return;

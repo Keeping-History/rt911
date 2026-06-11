@@ -12,7 +12,7 @@ export const BlueBox = () => {
 
   const quitApp = useCallback(() => {
     desktopEventDispatch(quitAppHelper(appId, appName, appIcon));
-  }, [desktopEventDispatch]);
+  }, [desktopEventDispatch, appIcon]);
 
   const appMenu = useMemo(
     () => [

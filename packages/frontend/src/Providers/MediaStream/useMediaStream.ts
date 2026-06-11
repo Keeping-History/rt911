@@ -60,7 +60,6 @@ export function useMediaStream(filter?: MediaStreamFilter): MediaStreamContextVa
 
 	const items = useMemo(
 		() => (filter ? applyFilter(ctx.items, filter) : ctx.items),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[ctx.items, filter],
 	);
 
