@@ -1,0 +1,39 @@
+name: Dependabot auto-merge
+
+# Enables auto-merge on low-risk Dependabot PRs. This does NOT merge immediately:
+# `gh pr merge --auto` only queues the PR, and GitHub completes the merge once the
+# branch's required status checks pass (configured via branch protection on main).
+# If CI goes red, the PR stays open for manual review.
+#
+# Scope is intentionally conservative — patch updates only. To also auto-merge
+# minor bumps, add 'version-update:semver-minor' to the condition below. Never
+# auto-merge 'version-update:semver-major'.
+
+on: pull_request
+
+permissions:
+  contents: write       # complete the merge
+  pull-requests: write  # enable auto-merge on the PR
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    # Only act on Dependabot's own PRs.
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        # Pinned to a commit SHA (v3.1.0) for supply-chain safety — the
+        # github-actions ecosystem in dependabot.yml keeps this pin updated.
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for patch updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        # --squash matches this repo's squash-merge history and keeps the
+        # "chore(deps): ..." PR title as the resulting commit.
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

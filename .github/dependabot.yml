@@ -1,0 +1,89 @@
+# Dependabot configuration
+# https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+#
+# Conventions used across every ecosystem below:
+#   - schedule.interval: weekly  -> one batch of PRs per week (security fixes still ship ASAP)
+#   - commit-message: prefix "chore" + include "scope" -> "chore(deps): ..." / "chore(deps-dev): ..."
+#     to match this repo's Conventional Commit style.
+#   - groups with update-types [minor, patch] -> bundle safe bumps into one PR per ecosystem;
+#     major versions break out into their own PRs for individual review.
+version: 2
+
+updates:
+  # --- JavaScript / TypeScript (pnpm workspace: root + packages/frontend) ---
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # --- Go modules (packages/backend) ---
+  - package-ecosystem: "gomod"
+    directory: "/packages/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      gomod-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # --- Python (packages/tools/video-grabber, PEP 621 pyproject.toml) ---
+  - package-ecosystem: "pip"
+    directory: "/packages/tools/video-grabber"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      pip-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # --- Docker base images (one block, all three Dockerfiles) ---
+  - package-ecosystem: "docker"
+    directories:
+      - "/packages/frontend"
+      - "/packages/backend"
+      - "/packages/tools/video-grabber"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      docker-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # --- GitHub Actions (.github/workflows) ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"

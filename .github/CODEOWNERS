@@ -1,0 +1,31 @@
+# Code owners — https://docs.github.com/articles/about-code-owners
+#
+# GitHub auto-requests review from the owner when a PR touches a matching path.
+# This is the supported replacement for the deprecated `reviewers:` key in
+# dependabot.yml. The paths below mirror the manifests/lockfiles that each
+# Dependabot ecosystem block edits, so its PRs land on the right reviewer.
+#
+# Note: on a single-owner repo GitHub won't request review from the PR author,
+# so this mainly takes effect once collaborators or a team handle are added.
+
+# Fallback owner for everything not matched below.
+*                                       @robbiebyrd
+
+# npm / pnpm (root workspace + frontend)
+/package.json                           @robbiebyrd
+/pnpm-lock.yaml                         @robbiebyrd
+/pnpm-workspace.yaml                    @robbiebyrd
+
+# Go modules
+/packages/backend/go.mod                @robbiebyrd
+/packages/backend/go.sum                @robbiebyrd
+
+# Python (pip) + its Dockerfile
+/packages/tools/video-grabber/          @robbiebyrd
+
+# Docker base images
+/packages/frontend/Dockerfile           @robbiebyrd
+/packages/backend/Dockerfile            @robbiebyrd
+
+# GitHub Actions workflows
+/.github/workflows/                      @robbiebyrd
