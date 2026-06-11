@@ -1,7 +1,10 @@
 """
 Tests for FFmpeg encoder and gap filler.
-subprocess.run is mocked — tests validate argument construction, output dir layout,
-no-upscale behavior, and master playlist structure.
+
+ffmpeg is invoked via subprocess.Popen (so we can stream `-progress pipe:1`
+output); ffprobe still uses subprocess.run. Tests mock both at the boundary
+and verify argument construction, output-dir layout, no-upscale behavior,
+master playlist structure, and the progress-streaming code path.
 """
 import json
 from pathlib import Path
@@ -12,53 +15,66 @@ import pytest
 from video_grabber.video.encoder import encode_to_hls, scale_keep_aspect
 
 
-def fake_ffmpeg_success(*args, **kwargs):
-    """Mock subprocess.run: creates expected output files for each rendition."""
-    cmd = args[0]
-    # Find the output m3u8 path (last argument)
-    out_m3u8 = Path(cmd[-1])
-    out_m3u8.parent.mkdir(parents=True, exist_ok=True)
-    out_m3u8.write_text("#EXTM3U\n#EXT-X-ENDLIST\n")
-    # Create init.mp4 and a segment
-    (out_m3u8.parent / "init.mp4").write_bytes(b"fakemp4")
-    (out_m3u8.parent / "seg0000.m4s").write_bytes(b"fakeseg")
-    return MagicMock(returncode=0, stderr=b"")
+def _make_fake_popen(
+    progress_lines: list[str] | None = None,
+    returncode: int = 0,
+    stderr_text: str = "",
+):
+    """Build a fake subprocess.Popen factory that materialises the m3u8
+    output file (so encode_to_hls's downstream file checks succeed) and
+    streams ``progress_lines`` through its stdout."""
+    if progress_lines is None:
+        progress_lines = [
+            "frame=10\n", "fps=30\n", "out_time_us=10000000\n",
+            "speed=1.5x\n", "progress=continue\n",
+            "frame=20\n", "progress=end\n",
+        ]
+
+    def factory(cmd, **kwargs):
+        out_m3u8 = Path(cmd[-1])
+        out_m3u8.parent.mkdir(parents=True, exist_ok=True)
+        out_m3u8.write_text("#EXTM3U\n#EXT-X-ENDLIST\n")
+        (out_m3u8.parent / "init.mp4").write_bytes(b"fakemp4")
+        (out_m3u8.parent / "seg0000.m4s").write_bytes(b"fakeseg")
+
+        proc = MagicMock()
+        proc.stdout = iter(progress_lines)
+        proc.stderr = MagicMock()
+        proc.stderr.read.return_value = stderr_text
+        proc.returncode = returncode
+        proc.wait = MagicMock()
+        return proc
+
+    return factory
 
 
 def fake_ffprobe_success(*args, **kwargs):
     return MagicMock(
         returncode=0,
-        stdout=json.dumps({
-            "streams": [{"width": 720, "height": 480}]
-        }).encode(),
+        stdout=json.dumps({"streams": [{"width": 720, "height": 480}]}).encode(),
     )
 
 
 def fake_ffprobe_small(*args, **kwargs):
     return MagicMock(
         returncode=0,
-        stdout=json.dumps({
-            "streams": [{"width": 320, "height": 240}]
-        }).encode(),
+        stdout=json.dumps({"streams": [{"width": 320, "height": 240}]}).encode(),
     )
 
 
 # --- scale_keep_aspect ---
 
 def test_scale_keep_aspect_no_upscale():
-    # Source smaller than rung: cap at source
     w, h = scale_keep_aspect(320, 240, 854, 480)
     assert w <= 320 and h <= 240
 
 
 def test_scale_keep_aspect_downscale():
-    # Source larger than rung: scale down
     w, h = scale_keep_aspect(1280, 720, 854, 480)
     assert w <= 854 and h <= 480
 
 
 def test_scale_keep_aspect_even_dimensions():
-    # Output must always be even (H.264 requirement)
     w, h = scale_keep_aspect(321, 241, 854, 480)
     assert w % 2 == 0
     assert h % 2 == 0
@@ -78,7 +94,7 @@ def test_encode_creates_master_m3u8(tmp_path):
     src.write_bytes(b"fake")
     out = tmp_path / "out"
 
-    with patch("subprocess.run", side_effect=fake_ffmpeg_success), \
+    with patch("subprocess.Popen", side_effect=_make_fake_popen()), \
          patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
         master = encode_to_hls(src, out)
 
@@ -91,7 +107,7 @@ def test_encode_creates_three_rendition_dirs(tmp_path):
     src.write_bytes(b"fake")
     out = tmp_path / "out"
 
-    with patch("subprocess.run", side_effect=fake_ffmpeg_success), \
+    with patch("subprocess.Popen", side_effect=_make_fake_popen()), \
          patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
         encode_to_hls(src, out)
 
@@ -102,59 +118,56 @@ def test_encode_creates_three_rendition_dirs(tmp_path):
 
 
 def test_encode_no_upscale_small_source(tmp_path):
-    """Source at 320x240 must not be upscaled to 854x480 for full rendition."""
     src = tmp_path / "source.mp4"
     src.write_bytes(b"fake")
     out = tmp_path / "out"
 
-    captured_args = []
+    captured_cmds = []
+    factory = _make_fake_popen()
 
-    def capture_ffmpeg(*args, **kwargs):
-        captured_args.append(args[0][:])
-        return fake_ffmpeg_success(*args, **kwargs)
+    def capture(cmd, **kwargs):
+        captured_cmds.append(list(cmd))
+        return factory(cmd, **kwargs)
 
-    with patch("subprocess.run", side_effect=capture_ffmpeg), \
+    with patch("subprocess.Popen", side_effect=capture), \
          patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_small):
         encode_to_hls(src, out)
 
-    # Check full rendition ffmpeg call for scale filter
     full_cmd = next(
-        (c for c in captured_args if "/full/index.m3u8" in " ".join(str(a) for a in c)),
+        (c for c in captured_cmds if "/full/index.m3u8" in " ".join(str(a) for a in c)),
         None,
     )
     assert full_cmd is not None
-    # Find -vf argument
     vf_idx = full_cmd.index("-vf")
     vf_str = full_cmd[vf_idx + 1]
-    # Scale target should be <= 320x240
     assert "854" not in vf_str, "Should not upscale 320x240 source to 854 wide"
-    assert "320" in vf_str or "scale=" in vf_str
+    assert "scale=" in vf_str
 
 
 def test_encode_thumb_audio_present(tmp_path):
-    """Thumb rendition must include audio flags (not stripped)."""
     src = tmp_path / "source.mp4"
     src.write_bytes(b"fake")
     out = tmp_path / "out"
 
-    captured_args = []
+    captured_cmds = []
+    factory = _make_fake_popen()
 
-    def capture(*args, **kwargs):
-        captured_args.append(args[0][:])
-        return fake_ffmpeg_success(*args, **kwargs)
+    def capture(cmd, **kwargs):
+        captured_cmds.append(list(cmd))
+        return factory(cmd, **kwargs)
 
-    with patch("subprocess.run", side_effect=capture), \
+    with patch("subprocess.Popen", side_effect=capture), \
          patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
         encode_to_hls(src, out)
 
     thumb_cmd = next(
-        (c for c in captured_args if "/thumb/index.m3u8" in " ".join(str(a) for a in c)),
+        (c for c in captured_cmds if "/thumb/index.m3u8" in " ".join(str(a) for a in c)),
         None,
     )
     assert thumb_cmd is not None
     cmd_str = " ".join(str(a) for a in thumb_cmd)
-    assert "-c:a" in cmd_str, "Thumb must have audio codec flag"
-    assert "-an" not in cmd_str, "Thumb must NOT strip audio"
+    assert "-c:a" in cmd_str
+    assert "-an" not in cmd_str, "Thumb must NOT strip audio (hls.js requires audio in all renditions)"
 
 
 def test_encode_uses_fmp4_hls_type(tmp_path):
@@ -162,19 +175,19 @@ def test_encode_uses_fmp4_hls_type(tmp_path):
     src.write_bytes(b"fake")
     out = tmp_path / "out"
 
-    captured_args = []
+    captured_cmds = []
+    factory = _make_fake_popen()
 
-    def capture(*args, **kwargs):
-        captured_args.append(args[0][:])
-        return fake_ffmpeg_success(*args, **kwargs)
+    def capture(cmd, **kwargs):
+        captured_cmds.append(list(cmd))
+        return factory(cmd, **kwargs)
 
-    with patch("subprocess.run", side_effect=capture), \
+    with patch("subprocess.Popen", side_effect=capture), \
          patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
         encode_to_hls(src, out)
 
-    for cmd in captured_args:
-        cmd_str = " ".join(str(a) for a in cmd)
-        assert "fmp4" in cmd_str, "All renditions must use fMP4 segment type"
+    for cmd in captured_cmds:
+        assert "fmp4" in " ".join(str(a) for a in cmd), "All renditions must use fMP4"
 
 
 def test_encode_master_playlist_has_three_entries(tmp_path):
@@ -182,7 +195,7 @@ def test_encode_master_playlist_has_three_entries(tmp_path):
     src.write_bytes(b"fake")
     out = tmp_path / "out"
 
-    with patch("subprocess.run", side_effect=fake_ffmpeg_success), \
+    with patch("subprocess.Popen", side_effect=_make_fake_popen()), \
          patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
         master = encode_to_hls(src, out)
 
@@ -197,7 +210,60 @@ def test_encode_ffmpeg_error_raises(tmp_path):
     src.write_bytes(b"fake")
     out = tmp_path / "out"
 
-    with patch("subprocess.run", return_value=MagicMock(returncode=1, stderr=b"error")), \
+    fail_factory = _make_fake_popen(returncode=1, stderr_text="ffmpeg blew up")
+
+    with patch("subprocess.Popen", side_effect=fail_factory), \
          patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
         with pytest.raises(RuntimeError, match="FFmpeg failed"):
             encode_to_hls(src, out)
+
+
+# --- progress streaming ---
+
+def test_encode_passes_progress_flags(tmp_path):
+    """Every ffmpeg invocation must include -progress pipe:1 so we can stream
+    machine-parseable progress events back to the operator."""
+    src = tmp_path / "source.mp4"
+    src.write_bytes(b"fake")
+    out = tmp_path / "out"
+
+    captured_cmds = []
+    factory = _make_fake_popen()
+
+    def capture(cmd, **kwargs):
+        captured_cmds.append(list(cmd))
+        return factory(cmd, **kwargs)
+
+    with patch("subprocess.Popen", side_effect=capture), \
+         patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
+        encode_to_hls(src, out)
+
+    assert len(captured_cmds) == 3
+    for cmd in captured_cmds:
+        assert "-progress" in cmd
+        assert cmd[cmd.index("-progress") + 1] == "pipe:1"
+        assert "-nostats" in cmd
+
+
+def test_encode_logs_progress_at_least_once_per_rendition(tmp_path):
+    """The terminal 'progress=end' event must always flush a log line so
+    every rendition produces at least one progress entry plus its start/done
+    bookends."""
+    src = tmp_path / "source.mp4"
+    src.write_bytes(b"fake")
+    out = tmp_path / "out"
+
+    logger = MagicMock()
+
+    with patch("subprocess.Popen", side_effect=_make_fake_popen()), \
+         patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
+        encode_to_hls(src, out, logger=logger)
+
+    info_msgs = " ".join(str(c.args) for c in logger.info.call_args_list)
+    assert "starting rendition full" in info_msgs
+    assert "starting rendition mid" in info_msgs
+    assert "starting rendition thumb" in info_msgs
+    # Each rendition's progress=end forces one log line.
+    assert info_msgs.count("encode %s: t=") == 3
+    assert "rendition full done" in info_msgs
+    assert "rendition thumb done" in info_msgs
