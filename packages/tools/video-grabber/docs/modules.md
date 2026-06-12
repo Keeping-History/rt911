@@ -74,10 +74,10 @@ Talks to the public IA HTTP API (`https://archive.org`), not the Python SDK, to 
 
 `select_best_file()` orders candidates by format priority (`.mp4` > `.mpg`/`.mpeg2` > `.avi` > `.ogv`) and skips known low-quality derivatives (anything containing `512kb`, `256kb`, `128kb`, `_small`, `_tiny`, `_thumb`). Raises `ValueError` when nothing qualifies.
 
-`download_item()` is the streaming download with resume support:
+`download_item(job, dest_dir, cfg=None, *, logger=None)` fetches the best source. When `cfg` is passed it tries Wasabi first, then falls back to Internet Archive:
 
-- If the destination file already exists, sends `Range: bytes=<size>-` and appends.
-- Streams 1 MiB chunks with `httpx.stream` (no full-buffer load).
+- **Wasabi-first reuse.** A prior effort grabbed ~700 of these sources into the bucket at `download/<ia_identifier>/<file>`. `find_wasabi_source()` checks for `download/<id>/<best.name>` and reuses it **only if `head_object` ContentLength byte-matches IA's reported `size`** (a truncated or different cut falls through to IA). When it matches, the file is pulled with `s3.download_file` — in-region, no IA rate limit. ~13% of the current queue (711 of ~5,600 jobs) hits this fast path. Note the IA *metadata* call still happens (it provides the authoritative size to verify against); only the multi-GB *file* transfer is skipped.
+- **IA streaming download** (the fallback, also used when `cfg` is None): if the destination file already exists, sends `Range: bytes=<size>-` and appends; streams 1 MiB chunks with `httpx.stream` (no full-buffer load).
 - Calls `update_bytes_downloaded()` per chunk — the actual DB write is currently a no-op stub; the live progress counter is reserved for a future "what % done" view.
 
 ## `video_grabber.video`

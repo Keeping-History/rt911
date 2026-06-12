@@ -10,7 +10,10 @@ prone to intermittent 5 s timeouts; the streaming download disables the
 read timeout so a slow chunk doesn't kill an in-progress 4–8 GiB pull.
 """
 from pathlib import Path
+from typing import Optional
+
 import httpx
+from botocore.exceptions import ClientError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -18,7 +21,13 @@ from tenacity import (
     wait_exponential,
 )
 
+from video_grabber.storage.wasabi import _make_s3_client
+
 _IA_BASE = "https://archive.org"
+
+# Many sources were grabbed in a prior effort and already live in the Wasabi
+# bucket under this prefix as download/<ia_identifier>/<file>.
+_WASABI_DOWNLOAD_PREFIX = "download"
 
 _TRANSIENT_HTTP_ERRORS = (
     httpx.TimeoutException,
@@ -77,14 +86,54 @@ def select_best_file(files: list[dict]) -> dict:
     return candidates[0][0]
 
 
-def download_item(job, dest_dir: Path) -> Path:
-    """Download the best file for the job with byte-range resume support."""
+def find_wasabi_source(ia_identifier: str, best: dict, cfg, *, s3=None) -> Optional[str]:
+    """Return the ``download/<id>/<name>`` key of an already-grabbed source whose
+    size matches IA's reported size, or None.
+
+    The size check is the verification gate: a prior download could be truncated
+    or a different cut, so we only reuse a byte-for-byte match against IA's
+    authoritative ``size``. Without a usable size we decline (re-download).
+    """
+    try:
+        expected = int(best.get("size") or 0)
+    except (TypeError, ValueError):
+        expected = 0
+    if not expected:
+        return None
+
+    s3 = s3 or _make_s3_client(cfg)
+    key = f"{_WASABI_DOWNLOAD_PREFIX}/{ia_identifier}/{best['name']}"
+    try:
+        head = s3.head_object(Bucket=cfg.wasabi_bucket, Key=key)
+    except ClientError:
+        return None
+    return key if head["ContentLength"] == expected else None
+
+
+def download_item(job, dest_dir: Path, cfg=None, *, logger=None) -> Path:
+    """Fetch the best source file for the job.
+
+    If ``cfg`` is given, first look for an already-grabbed, size-verified copy in
+    the Wasabi ``download/`` prefix and pull that (in-region, no IA rate limit);
+    otherwise fall back to a byte-range-resumable download from Internet Archive.
+    """
     files = get_ia_files(job.ia_identifier)
     best = select_best_file(files)
-    url = f"{_IA_BASE}/download/{job.ia_identifier}/{best['name']}"
     dest = dest_dir / job.ia_identifier / best["name"]
     dest.parent.mkdir(parents=True, exist_ok=True)
 
+    if cfg is not None:
+        s3 = _make_s3_client(cfg)
+        key = find_wasabi_source(job.ia_identifier, best, cfg, s3=s3)
+        if key:
+            if logger:
+                logger.info("download: reusing grabbed source from Wasabi %s", key)
+            s3.download_file(cfg.wasabi_bucket, key, str(dest))
+            return dest
+        if logger:
+            logger.info("download: %s not in Wasabi, pulling from IA", job.ia_identifier)
+
+    url = f"{_IA_BASE}/download/{job.ia_identifier}/{best['name']}"
     offset = dest.stat().st_size if dest.exists() else 0
     headers = {"Range": f"bytes={offset}-"} if offset else {}
 

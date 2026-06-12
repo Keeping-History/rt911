@@ -198,3 +198,90 @@ def test_get_ia_files_gives_up_after_persistent_timeouts():
 
     # 4 attempts per stop_after_attempt(4) — the final raise reraises the last error.
     assert route.call_count == 4
+
+
+# --- Wasabi-first source reuse ---
+
+from botocore.exceptions import ClientError  # noqa: E402
+from video_grabber.pipeline.downloader import find_wasabi_source  # noqa: E402
+
+
+def make_cfg():
+    cfg = MagicMock()
+    cfg.wasabi_bucket = "files.911realtime.org"
+    return cfg
+
+
+def test_find_wasabi_source_matches_on_size():
+    s3 = MagicMock()
+    s3.head_object.return_value = {"ContentLength": 1073741824}
+    key = find_wasabi_source(
+        "cnn-sep11-0800", {"name": "broadcast.mp4", "size": "1073741824"},
+        make_cfg(), s3=s3,
+    )
+    assert key == "download/cnn-sep11-0800/broadcast.mp4"
+
+
+def test_find_wasabi_source_none_on_size_mismatch():
+    s3 = MagicMock()
+    s3.head_object.return_value = {"ContentLength": 999}
+    assert find_wasabi_source(
+        "x", {"name": "x.mp4", "size": "1073741824"}, make_cfg(), s3=s3
+    ) is None
+
+
+def test_find_wasabi_source_none_when_missing():
+    s3 = MagicMock()
+    s3.head_object.side_effect = ClientError(
+        {"Error": {"Code": "404"}}, "HeadObject"
+    )
+    assert find_wasabi_source(
+        "x", {"name": "x.mp4", "size": "100"}, make_cfg(), s3=s3
+    ) is None
+
+
+def test_find_wasabi_source_none_without_size():
+    s3 = MagicMock()
+    assert find_wasabi_source("x", {"name": "x.mp4"}, make_cfg(), s3=s3) is None
+    s3.head_object.assert_not_called()  # no size -> don't even look
+
+
+@respx.mock
+def test_download_reuses_wasabi_when_present(tmp_path):
+    """With a size-verified Wasabi copy, pull from S3 and never touch the IA file
+    endpoint (no respx route for it — a fall-through would raise)."""
+    job = make_job()
+    respx.get("https://archive.org/metadata/cnn-sep11-0800/files").mock(
+        return_value=httpx.Response(200, json={"result": IA_FILES_MP4})
+    )
+    s3 = MagicMock()
+    s3.head_object.return_value = {"ContentLength": 1073741824}
+    s3.download_file.side_effect = lambda b, k, p: __import__("pathlib").Path(p).write_bytes(b"wasabi")
+
+    with patch("video_grabber.pipeline.downloader._make_s3_client", return_value=s3), \
+         patch("video_grabber.pipeline.downloader.update_bytes_downloaded"):
+        result = download_item(job, tmp_path, make_cfg())
+
+    assert result.read_bytes() == b"wasabi"
+    assert s3.download_file.call_args.args[1] == "download/cnn-sep11-0800/broadcast.mp4"
+
+
+@respx.mock
+def test_download_falls_back_to_ia_when_size_mismatch(tmp_path):
+    job = make_job()
+    content = b"from-ia" * 100
+    respx.get("https://archive.org/metadata/cnn-sep11-0800/files").mock(
+        return_value=httpx.Response(200, json={"result": IA_FILES_MP4})
+    )
+    respx.get("https://archive.org/download/cnn-sep11-0800/broadcast.mp4").mock(
+        return_value=httpx.Response(200, content=content)
+    )
+    s3 = MagicMock()
+    s3.head_object.return_value = {"ContentLength": 12345}  # mismatch -> ignore copy
+
+    with patch("video_grabber.pipeline.downloader._make_s3_client", return_value=s3), \
+         patch("video_grabber.pipeline.downloader.update_bytes_downloaded"):
+        result = download_item(job, tmp_path, make_cfg())
+
+    assert result.read_bytes() == content
+    s3.download_file.assert_not_called()

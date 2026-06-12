@@ -186,7 +186,7 @@ def process_item_flow(job_id: str):
 
     try:
         transition_job(db, job_id, "downloading", from_stage=str(job.stage))
-        local_path = download_item(job, scratch)
+        local_path = download_item(job, scratch, cfg, logger=logger)
 
         transition_job(db, job_id, "downloaded", from_stage="downloading")
 

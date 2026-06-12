@@ -54,6 +54,8 @@ Default collections are the two pre-imported IA sets. Pass any IA collection ID 
 
 One run per `video_jobs.id`. Walks `downloading → downloaded → encoding → encoded → uploading → complete`, calling `transition_job()` between each step. On exception, transitions to `failed` and re-raises so Prefect marks the run as failed.
 
+The `downloading` step reuses an already-grabbed source from Wasabi `download/<id>/` when one exists and byte-matches IA's reported size, skipping the Internet Archive transfer (see [downloader.py](./modules.md#downloaderpy)); otherwise it pulls from IA.
+
 ```python
 @flow(name="process-item")
 def process_item_flow(job_id: str):
