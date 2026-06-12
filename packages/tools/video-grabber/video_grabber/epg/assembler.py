@@ -20,6 +20,7 @@ Every slot boundary gets #EXT-X-DISCONTINUITY + absolute #EXT-X-MAP URL +
 #EXT-X-PROGRAM-DATE-TIME.
 """
 from datetime import datetime, date, timedelta, timezone
+from types import SimpleNamespace
 from typing import Optional
 
 WASABI_BASE = "https://files.911realtime.org"
@@ -171,13 +172,34 @@ def _append_slot(rend_lines: dict, slot, slot_prefix: str) -> None:
 
 
 def _fetch_slots(db, channel_id: str, window_start: datetime, window_end: datetime) -> list:
+    """Load the channel's in-window slots joined to their program.
+
+    A bare ``SELECT *`` only carries ``program_id``; the assembler dereferences
+    ``slot.program.ia_identifier`` / ``.title`` / ``.description``, so the row
+    must be reshaped into the nested namespace those accesses expect (the same
+    pattern ``flows.get_job`` uses for its channel/program relationships).
+    """
     from sqlalchemy import text
-    result = db.execute(
+    rows = db.execute(
         text(
-            "SELECT * FROM schedule_slots "
-            "WHERE channel_id = :cid AND starts_at >= :ws AND ends_at <= :we "
-            "ORDER BY starts_at"
+            "SELECT s.starts_at, s.ends_at, "
+            "       p.ia_identifier, p.title, p.description "
+            "FROM schedule_slots s "
+            "JOIN programs p ON p.id = s.program_id "
+            "WHERE s.channel_id = :cid AND s.starts_at >= :ws AND s.ends_at <= :we "
+            "ORDER BY s.starts_at"
         ),
         {"cid": str(channel_id), "ws": window_start, "we": window_end},
-    )
-    return result.fetchall()
+    ).mappings().all()
+    return [
+        SimpleNamespace(
+            starts_at=r["starts_at"],
+            ends_at=r["ends_at"],
+            program=SimpleNamespace(
+                ia_identifier=r["ia_identifier"],
+                title=r["title"],
+                description=r["description"],
+            ),
+        )
+        for r in rows
+    ]

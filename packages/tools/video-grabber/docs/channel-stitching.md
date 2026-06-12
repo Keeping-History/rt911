@@ -176,12 +176,21 @@ prefect deployment run 'build-channel/build-channel' \
 ## Directus output
 
 `upsert_channel_media_item` ([`directus/writer.py`](../video_grabber/directus/writer.py))
-writes/patches exactly **one** `media_items` row per channel, keyed by
-`content.channel_stream == channel.slug` (distinct from the per-program
-`ia_identifier` key). Fields: `title`/`full_title` = channel display name,
-`source` = resolved `sources.id` for the slug, `start_date` = window start,
-`url` = `https://files.911realtime.org/epg/<slug>/master.m3u8`, `format` =
-`m3u8`, `approved` = 1. Re-runs PATCH the existing row in place.
+writes/patches exactly **one** `media_items` row per channel, keyed (for
+idempotency) on the playlist **`url`** — `https://files.911realtime.org/epg/<slug>/master.m3u8`,
+fixed and unique per channel. It does *not* key on a `content` subfield:
+`content` is stored as an opaque JSON string, so `filter[content][channel_stream]`
+traverses a non-existent field and Directus returns **403** (only a whole-blob
+`filter[content][_eq]` works, as `write_media_item` uses). Fields:
+`title`/`full_title` = channel display name, `source` = resolved `sources.id`
+for the slug, `start_date` = window start, `format` = `m3u8`, `approved` = 1,
+and `content` = `{"channel_stream": <slug>}` (written as a marker, not queried).
+Re-runs PATCH the existing row in place.
+
+> This was caught by the first live `build-channel` run — unit tests had mocked
+> Directus, and the real instance's permission/schema rejected the subfield
+> filter. The same run also caught that `_fetch_slots` must JOIN `programs`
+> (the assembler dereferences `slot.program.*`).
 
 ## Data model
 
@@ -210,9 +219,14 @@ epg/<slug>/{master,full,mid,thumb}.m3u8                          # stitched stre
 ## What's verified vs. open
 
 **Verified:** gap package generates with real ffmpeg and every segment is an
-independently-decodable fMP4 with video+audio (ffprobe). 151 unit tests pass
+independently-decodable fMP4 with video+audio (ffprobe). 156 unit tests pass
 (isochronicity across a 9-day window, PDT-per-discontinuity, per-air-date
-prefixes, scheduler contract, gap layout, flow wiring).
+prefixes, scheduler contract, gap layout, flow wiring, `_fetch_slots` JOIN,
+url-keyed idempotency). **Live end-to-end run done for WETA** (Sep 9–18 window,
+32 Sep-11 programs seeded from the pre-video-grabber backup): 33 `schedule_slots`
+written, 4 playlists + 21 gap objects uploaded to Wasabi, one Directus row
+upserted. That run is what surfaced the `_fetch_slots` JOIN and the Directus
+url-idempotency fixes.
 
 **Open / not yet done:**
 
@@ -220,11 +234,13 @@ prefixes, scheduler contract, gap layout, flow wiring).
   references one `seg_gap_6s.m4s` repeated N times; individually valid, but
   contiguous reuse in hls.js needs a playback check. If it glitches, the fix is
   localized to the gap layout (e.g. discontinuity-delimited loop).
-- **No live end-to-end run yet** — only mocked unit tests; no real Wasabi/
-  Directus writes performed.
-- **Content-gated.** Only 1 program (WETA) is `complete` today, so a real
-  `build-channel` run yields a near-all-gap stream until the ~5,600-item
-  acquisition queue is processed.
+- **Program segments are not encoded for backup-seeded content.** The WETA test
+  used pre-video-grabber backup data, so the playlists reference
+  `hls/weta/<date>/<ia>/…` program segments that don't exist on Wasabi (404).
+  The playlist structure and gap fill are real; actual program playback needs
+  content run through the new download→encode→upload pipeline.
+- **Content-gated.** Real (playable) streams wait on the ~5,600-item acquisition
+  queue being processed.
 - **Frontend cutover pending.** `TV.tsx` still consumes per-program items and
   seeks per-program. To use these continuous streams, `calcSeekSeconds` →
   `(clock − window_start)/1000` and `items` become one-per-channel (drop the

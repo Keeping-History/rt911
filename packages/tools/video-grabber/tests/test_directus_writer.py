@@ -225,3 +225,63 @@ def test_write_media_item_uses_static_token():
 
     write_media_item(job, "some/key", cfg)
     assert "static-token-xyz" in captured_headers.get("authorization", "")
+
+
+# --- upsert_channel_media_item (channel-stitching) ---
+
+@respx.mock
+def test_upsert_channel_keys_on_url_not_content_subfield():
+    """The channel-stream idempotency check must filter by the top-level url,
+    never a content subfield (content is an opaque JSON string -> 403)."""
+    from video_grabber.directus.writer import upsert_channel_media_item
+
+    cfg = make_cfg()
+    channel = MagicMock(slug="weta", display_name="WETA", timezone="EDT")
+    captured = {}
+
+    def capture_get(request):
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"data": []})
+
+    respx.get("http://directus:8055/items/media_items").mock(side_effect=capture_get)
+    respx.get("http://directus:8055/items/sources").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": 18}]})
+    )
+    post = respx.post("http://directus:8055/items/media_items").mock(
+        return_value=httpx.Response(200, json={"data": {"id": 1}})
+    )
+
+    upsert_channel_media_item(channel, "epg/weta/master.m3u8",
+                              datetime(2001, 9, 9, tzinfo=timezone.utc), cfg)
+
+    assert captured["params"].get("filter[url][_eq]") == \
+        "https://files.911realtime.org/epg/weta/master.m3u8"
+    assert "filter[content][channel_stream][_eq]" not in captured["params"]
+    assert post.called
+
+
+@respx.mock
+def test_upsert_channel_patches_when_row_exists():
+    """An existing row (same url) is PATCHed in place, not duplicated."""
+    from video_grabber.directus.writer import upsert_channel_media_item
+
+    cfg = make_cfg()
+    channel = MagicMock(slug="weta", display_name="WETA", timezone="EDT")
+
+    respx.get("http://directus:8055/items/media_items").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": 460681}]})
+    )
+    respx.get("http://directus:8055/items/sources").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": 18}]})
+    )
+    post = respx.post("http://directus:8055/items/media_items").mock(
+        return_value=httpx.Response(200, json={"data": {}})
+    )
+    patch = respx.patch("http://directus:8055/items/media_items/460681").mock(
+        return_value=httpx.Response(200, json={"data": {"id": 460681}})
+    )
+
+    upsert_channel_media_item(channel, "epg/weta/master.m3u8",
+                              datetime(2001, 9, 9, tzinfo=timezone.utc), cfg)
+
+    assert patch.called and not post.called

@@ -103,3 +103,26 @@ def test_master_url_is_channel_level():
     playlists, _ = assemble_range(ch, WINDOW_START, WINDOW_END, None, slots=[])
     assert "/epg/cnn/full.m3u8" in playlists["master"]
     assert playlists["master"].count("EXT-X-STREAM-INF") == 3
+
+
+def test_fetch_slots_path_reshapes_joined_rows():
+    """assemble_range without slots= must read schedule_slots JOIN programs and
+    expose slot.program.* — the integration path unit tests otherwise bypass."""
+    from unittest.mock import MagicMock
+
+    row = {
+        "starts_at": datetime(2001, 9, 11, 12, 30, tzinfo=timezone.utc),
+        "ends_at": datetime(2001, 9, 11, 13, 0, tzinfo=timezone.utc),
+        "ia_identifier": "WETA_20010911_123000_Demo",
+        "title": "Demo",
+        "description": "Desc",
+    }
+    db = MagicMock()
+    db.execute.return_value.mappings.return_value.all.return_value = [row]
+
+    ch = make_channel("weta")
+    playlists, epg = assemble_range(ch, WINDOW_START, WINDOW_END, db)  # no slots=
+
+    assert "/weta/20010911/WETA_20010911_123000_Demo/full/" in playlists["full"]
+    assert any(g["title"] == "Demo" for g in epg["grid"])
+    assert _count_playlist_duration(playlists["full"]) == WINDOW_SECS

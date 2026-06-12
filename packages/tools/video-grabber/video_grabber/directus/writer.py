@@ -81,10 +81,15 @@ def write_media_item(job, wasabi_url: str, cfg: Config) -> None:
 def upsert_channel_media_item(channel, master_url: str, window_start, cfg: Config) -> None:
     """Upsert the single continuous-stream media_item for a channel.
 
-    Keyed by ``content.channel_stream == channel.slug`` (distinct from the
-    per-program ``ia_identifier`` key) so there is exactly one row per channel,
-    pointing at the assembled ``epg/<slug>/master.m3u8`` playlist. Re-runs PATCH
-    the existing row in place as more content is acquired.
+    Idempotent on the playlist ``url`` (``epg/<slug>/master.m3u8``), which is
+    fixed and unique per channel — so there is exactly one row per channel and
+    re-runs PATCH it in place as more content is acquired. ``url`` is a normal
+    indexed field; we key on it rather than ``content`` because ``content`` is
+    stored as an opaque JSON *string*. It can only be matched as a whole blob
+    (``filter[content][_eq]``, as ``write_media_item`` does); traversing into a
+    subfield (``filter[content][channel_stream]``) 403s. The
+    ``content.channel_stream`` marker is still written for downstream consumers,
+    just not queried.
     """
     token = get_directus_token(cfg)
     headers = {
@@ -107,7 +112,7 @@ def upsert_channel_media_item(channel, master_url: str, window_start, cfg: Confi
 
     resp = httpx.get(
         f"{cfg.directus_url}/items/media_items",
-        params={"filter[content][channel_stream][_eq]": channel.slug, "fields": "id"},
+        params={"filter[url][_eq]": url, "fields": "id"},
         headers=headers,
     )
     resp.raise_for_status()
