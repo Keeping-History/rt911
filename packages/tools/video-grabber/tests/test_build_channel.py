@@ -20,15 +20,18 @@ def test_build_channel_flow_wires_schedule_assemble_publish():
         "mid": "#EXTM3U mid\n",
         "thumb": "#EXTM3U thumb\n",
     }
+    epg_channel = {"name": "CNN", "callSign": "CNN", "grid": []}
 
     with patch.object(flows, "get_db", return_value=MagicMock()), \
          patch.object(flows, "Config", return_value=MagicMock()), \
          patch.object(flows, "_load_channel", return_value=channel), \
          patch.object(flows, "build_schedule", return_value=7) as m_sched, \
-         patch.object(flows, "assemble_range", return_value=(playlists, {})) as m_asm, \
+         patch.object(flows, "assemble_range", return_value=(playlists, epg_channel)) as m_asm, \
          patch.object(flows, "generate_gap_fmp4") as m_gap, \
          patch.object(flows, "upload_tree") as m_tree, \
          patch.object(flows, "upload_text") as m_text, \
+         patch.object(flows, "list_keys", return_value=["epg/cnn.json"]) as m_list, \
+         patch.object(flows, "read_text", return_value='{"name": "CNN", "grid": []}'), \
          patch.object(flows, "upsert_channel_media_item") as m_upsert:
 
         flows.build_channel_flow(
@@ -47,15 +50,19 @@ def test_build_channel_flow_wires_schedule_assemble_publish():
     m_tree.assert_called_once()
     assert m_tree.call_args.args[1] == "hls/cnn/_gap"
 
-    # All four playlists published under epg/<slug>/.
     published = {c.args[1] for c in m_text.call_args_list}
-    assert published == {
-        "epg/cnn/master.m3u8",
-        "epg/cnn/full.m3u8",
-        "epg/cnn/mid.m3u8",
-        "epg/cnn/thumb.m3u8",
-    }
+    # Four HLS playlists under playlists/<slug>/.
+    assert {
+        "playlists/cnn/master.m3u8",
+        "playlists/cnn/full.m3u8",
+        "playlists/cnn/mid.m3u8",
+        "playlists/cnn/thumb.m3u8",
+    } <= published
+    # Per-channel EPG JSON + the combined guide.
+    assert "epg/cnn.json" in published
+    assert "epg/guide.json" in published
+    m_list.assert_called_once()  # guide rebuilt by listing per-channel json
 
-    # Directus upserted with the master URL.
+    # Directus upserted with the master playlist URL.
     m_upsert.assert_called_once()
-    assert m_upsert.call_args.args[1] == "epg/cnn/master.m3u8"
+    assert m_upsert.call_args.args[1] == "playlists/cnn/master.m3u8"

@@ -251,11 +251,11 @@ def test_upsert_channel_keys_on_url_not_content_subfield():
         return_value=httpx.Response(200, json={"data": {"id": 1}})
     )
 
-    upsert_channel_media_item(channel, "epg/weta/master.m3u8",
+    upsert_channel_media_item(channel, "playlists/weta/master.m3u8",
                               datetime(2001, 9, 9, tzinfo=timezone.utc), cfg)
 
     assert captured["params"].get("filter[url][_eq]") == \
-        "https://files.911realtime.org/epg/weta/master.m3u8"
+        "https://files.911realtime.org/playlists/weta/master.m3u8"
     assert "filter[content][channel_stream][_eq]" not in captured["params"]
     assert post.called
 
@@ -281,7 +281,7 @@ def test_upsert_channel_patches_when_row_exists():
         return_value=httpx.Response(200, json={"data": {"id": 460681}})
     )
 
-    upsert_channel_media_item(channel, "epg/weta/master.m3u8",
+    upsert_channel_media_item(channel, "playlists/weta/master.m3u8",
                               datetime(2001, 9, 9, tzinfo=timezone.utc), cfg)
 
     assert patch.called and not post.called

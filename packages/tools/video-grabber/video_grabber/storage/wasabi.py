@@ -18,6 +18,7 @@ _CONTENT_TYPES: dict[str, tuple[str, str]] = {
     ".m3u8": ("application/vnd.apple.mpegurl", "max-age=5"),
     ".mp4": ("video/mp4", "max-age=31536000"),   # init.mp4
     ".m4s": ("video/iso.segment", "max-age=31536000"),
+    ".json": ("application/json", "max-age=5"),  # EPG guide; changes as content lands
 }
 
 _TRANSFER_CONFIG = TransferConfig(
@@ -78,6 +79,29 @@ def upload_text(content: str, key: str, cfg: Config, *, s3=None) -> None:
         ContentType=content_type,
         CacheControl=cache_control,
     )
+
+
+def read_text(key: str, cfg: Config, *, s3=None) -> str:
+    """Read an object's body as a UTF-8 string."""
+    s3 = s3 or _make_s3_client(cfg)
+    obj = s3.get_object(Bucket=cfg.wasabi_bucket, Key=key)
+    return obj["Body"].read().decode("utf-8")
+
+
+def list_keys(prefix: str, cfg: Config, *, s3=None) -> list[str]:
+    """Return all object keys under ``prefix`` (paginated)."""
+    s3 = s3 or _make_s3_client(cfg)
+    keys: list[str] = []
+    token = None
+    while True:
+        kw = {"Bucket": cfg.wasabi_bucket, "Prefix": prefix}
+        if token:
+            kw["ContinuationToken"] = token
+        resp = s3.list_objects_v2(**kw)
+        keys.extend(o["Key"] for o in resp.get("Contents", []))
+        if not resp.get("IsTruncated"):
+            return keys
+        token = resp["NextContinuationToken"]
 
 
 def upload_hls_package(job, encoded_dir: Path, cfg: Config) -> str:

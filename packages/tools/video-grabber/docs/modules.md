@@ -131,7 +131,7 @@ Wasabi-specific boto3 client. Three quirks that all exist for one bug each:
 
 Upload key layout: `hls/<channel-slug>/<YYYYMMDD>/<ia-identifier>/<file>`. `upload_hls_package()` returns the `master.m3u8` key so the caller can write it to `video_jobs.wasabi_key`.
 
-Two generic helpers back the channel-stitching feature: `upload_tree(local_dir, key_prefix, cfg)` (uploads a directory tree, used for the gap package → `hls/<slug>/_gap/`) and `upload_text(content, key, cfg)` (PUTs a string, used for the assembled `epg/<slug>/*.m3u8` playlists). `upload_hls_package` is now a thin wrapper over `upload_tree`.
+Four generic helpers back the channel-stitching feature: `upload_tree(local_dir, key_prefix, cfg)` (uploads a directory tree, used for the gap package → `hls/<slug>/_gap/`), `upload_text(content, key, cfg)` (PUTs a string — the `playlists/<slug>/*.m3u8` playlists and the `epg/*.json` guide), and `read_text(key, cfg)` + `list_keys(prefix, cfg)` (used by `_rebuild_epg_guide` to reassemble `epg/guide.json`). `upload_hls_package` is now a thin wrapper over `upload_tree`.
 
 `Content-Type` and `Cache-Control` are set per extension:
 
@@ -159,7 +159,7 @@ Static Bearer token only — see the `.env.example` warning about session-token 
 
 The `content` field is `json.dumps({"ia_identifier": …})`. Directus stores it as a JSON column; the round-trip through `json.dumps` is required because the field's schema is `string`, not `json`, in this project's Directus config.
 
-`upsert_channel_media_item(channel, master_url, window_start, cfg)` is the channel-stitching counterpart: it writes/PATCHes **one** row per channel, keyed by `content.channel_stream == slug` (not `ia_identifier`), pointing at the assembled `epg/<slug>/master.m3u8`. See [channel-stitching.md](./channel-stitching.md).
+`upsert_channel_media_item(channel, master_url, window_start, cfg)` is the channel-stitching counterpart: it writes/PATCHes **one** row per channel, keyed for idempotency on the top-level `url` (`playlists/<slug>/master.m3u8`) — not a `content` subfield, which 403s since `content` is an opaque JSON string. See [channel-stitching.md](./channel-stitching.md).
 
 ## `video_grabber.epg`
 

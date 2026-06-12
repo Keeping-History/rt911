@@ -101,7 +101,7 @@ def test_gap_package_is_channel_level():
 def test_master_url_is_channel_level():
     ch = make_channel("cnn")
     playlists, _ = assemble_range(ch, WINDOW_START, WINDOW_END, None, slots=[])
-    assert "/epg/cnn/full.m3u8" in playlists["master"]
+    assert "/playlists/cnn/full.m3u8" in playlists["master"]
     assert playlists["master"].count("EXT-X-STREAM-INF") == 3
 
 

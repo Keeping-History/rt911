@@ -27,7 +27,7 @@ complete ─► writes Directus media_items row ─► Wasabi-hosted per-program
 
 Channel stitching  (build-channel flow — the assembly tier)
    programs ─► scheduler ─► schedule_slots ─► assembler ─► continuous per-channel
-   stream (epg/<slug>/*.m3u8, gaps filled, PROGRAM-DATE-TIME anchored) + EPG JSON
+   stream (playlists/<slug>/*.m3u8, gaps filled, PROGRAM-DATE-TIME anchored) + EPG guide (epg/guide.json)
    ─► one Directus media_items row per channel
 ```
 

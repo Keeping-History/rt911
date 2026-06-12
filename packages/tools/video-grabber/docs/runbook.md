@@ -181,7 +181,7 @@ prefect deployment run 'build-channel/build-channel' \
   -p window_end=2001-09-18T00:00:00+00:00
 ```
 
-This populates `schedule_slots`, assembles `epg/<slug>/{master,full,mid,thumb}.m3u8`, uploads the gap package, and upserts the per-channel Directus row (keyed by `content.channel_stream`). A near-all-gap result means few programs are `complete` for that channel yet — check `SELECT count(*) FROM programs WHERE channel_id = '<uuid>'`.
+This populates `schedule_slots`, assembles `playlists/<slug>/{master,full,mid,thumb}.m3u8`, writes the EPG guide (`epg/<slug>.json` + rebuilt `epg/guide.json`), uploads the gap package, and upserts the per-channel Directus row (keyed on the playlist `url`). A near-all-gap result means few programs are `complete` for that channel yet — check `SELECT count(*) FROM programs WHERE channel_id = '<uuid>'`.
 
 ## Frontend isn't seeing a new program
 

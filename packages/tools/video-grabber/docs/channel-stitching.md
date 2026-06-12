@@ -37,10 +37,12 @@ subtraction exact across the whole window and every program splice.
 
 ```
 programs (PG) ──► scheduler ──► schedule_slots (PG) ──► assembler ──► 4 playlists ─┐
-                  (overlap                              (stitch +                   │
+                  (overlap                              (stitch +     + epg_channel │
                    policy)                               PROGRAM-DATE-TIME)         ▼
    gap_filler ──────────────────────────────► hls/<slug>/_gap/  (blue filler)   Wasabi
-                                                                                    │
+                                                              playlists/<slug>/*.m3u8 │
+                                                              epg/<slug>.json ────────┤
+                                                              epg/guide.json          │
                                                             build-channel flow ─────┘──► Directus
                                                                                          (1 row/channel)
 ```
@@ -87,8 +89,9 @@ playlists = {"master": "...", "full": "...", "mid": "...", "thumb": "..."}
 epg_channel = {"name", "number", "callSign", "location", "icon", "grid": [...]}
 ```
 
-`epg_channel` matches the `EPGChannel[]` contract `EPG.tsx` consumes. The
-`playlists` map is published as `epg/<slug>/<key>.m3u8`.
+`epg_channel` matches the `EPGChannel` contract `EPG.tsx` consumes (see
+[The EPG guide JSON](#the-epg-guide-json)). The `playlists` map is published as
+`playlists/<slug>/<key>.m3u8`.
 
 For each scheduled slot, walking a forward-only `cursor`:
 
@@ -117,9 +120,10 @@ uploader), so the assembler derives the date prefix from `slot.starts_at`, not
 from the window — correct across a multi-day range.
 
 **Published paths are channel-level.** The stitched playlists go to
-`epg/<slug>/{master,full,mid,thumb}.m3u8` (one canonical stream per channel,
-regenerated in place), and the gap package is `hls/<slug>/_gap/` (date-
-independent — the blue filler is identical regardless of date).
+`playlists/<slug>/{master,full,mid,thumb}.m3u8` (one canonical stream per
+channel, regenerated in place), and the gap package is `hls/<slug>/_gap/` (date-
+independent — the blue filler is identical regardless of date). The `epg/`
+prefix is reserved for the JSON guide, not playlists.
 
 ### 3. Gap filler — `video/gap_filler.py`
 
@@ -155,10 +159,12 @@ Encoding details that matter:
 (`window_*` are ISO-8601 UTC strings):
 
 1. `build_schedule(...)` → populate `schedule_slots`.
-2. `assemble_range(...)` → build the 4 playlists + EPG grid.
+2. `assemble_range(...)` → build the 4 playlists + the `epg_channel` grid.
 3. `generate_gap_fmp4(...)` → `upload_tree(..., "hls/<slug>/_gap")`.
-4. `upload_text(...)` each playlist → `epg/<slug>/<name>.m3u8`.
-5. `upsert_channel_media_item(...)` → one Directus row per channel.
+4. `upload_text(...)` each playlist → `playlists/<slug>/<name>.m3u8`.
+5. `upload_text(...)` the grid → `epg/<slug>.json`, then `_rebuild_epg_guide(...)`
+   re-assembles `epg/guide.json` (see [The EPG guide JSON](#the-epg-guide-json)).
+6. `upsert_channel_media_item(...)` → one Directus row per channel.
 
 Every step is idempotent, so the flow is safe to re-run any time more programs
 complete. Registered in [`serve.py`](../video_grabber/serve.py) as the
@@ -177,7 +183,7 @@ prefect deployment run 'build-channel/build-channel' \
 
 `upsert_channel_media_item` ([`directus/writer.py`](../video_grabber/directus/writer.py))
 writes/patches exactly **one** `media_items` row per channel, keyed (for
-idempotency) on the playlist **`url`** — `https://files.911realtime.org/epg/<slug>/master.m3u8`,
+idempotency) on the playlist **`url`** — `https://files.911realtime.org/playlists/<slug>/master.m3u8`,
 fixed and unique per channel. It does *not* key on a `content` subfield:
 `content` is stored as an opaque JSON string, so `filter[content][channel_stream]`
 traverses a non-existent field and Directus returns **403** (only a whole-blob
@@ -211,10 +217,63 @@ latter is the ffprobe'd true length set at [resolve](../video_grabber/pipeline/r
 ## Wasabi layout
 
 ```
-hls/<slug>/<YYYYMMDD>/<ia_id>/<rend>/{init.mp4,seg0000.m4s,…}   # per-program (uploader)
+hls/<slug>/<YYYYMMDD>/<ia_id>/<rend>/{init.mp4,seg0000.m4s,…}   # per-program segments (uploader)
 hls/<slug>/_gap/<rend>/{init.mp4,seg_gap_6s.m4s,seg_gap_1s.m4s…} # gap package (build-channel)
-epg/<slug>/{master,full,mid,thumb}.m3u8                          # stitched stream (build-channel)
+playlists/<slug>/{master,full,mid,thumb}.m3u8                   # stitched HLS stream (build-channel)
+epg/<slug>.json                                                 # per-channel EPGChannel (build-channel)
+epg/guide.json                                                  # combined EPGChannel[] the frontend reads
 ```
+
+> **Naming:** `playlists/` holds the HLS m3u8s; `epg/` holds the JSON program
+> guide. (Earlier the m3u8s lived under `epg/` — confusing, since EPG means the
+> *guide*, not the video.)
+
+## The EPG guide JSON
+
+`assemble_range` returns an `epg_channel` dict alongside the playlists; the
+`build-channel` flow publishes it so the [EPG frontend](../../../frontend/src/Applications/EPG/EPG.tsx)
+can render the TV Guide grid. Two artifacts:
+
+- **`epg/<slug>.json`** — one channel's `EPGChannel`, the source of truth per
+  channel, rewritten on every `build-channel` run.
+- **`epg/guide.json`** — the combined **`EPGChannel[]`** array the frontend
+  consumes. `_rebuild_epg_guide()` lists every `epg/<slug>.json`, parses them,
+  sorts by `name`, and writes the array. Rebuilt on every channel build so the
+  guide reflects all channels published so far.
+
+The shape matches the `EPGChannel` / `EPGProgram` TypeScript contract in
+`EPG.tsx`:
+
+```jsonc
+// epg/guide.json — EPGChannel[]
+[
+  {
+    "name": "WETA", "callSign": "WETA", "number": "", "location": "", "icon": "weta",
+    "grid": [
+      { "title": "Sesame Street", "description": "…", "fullTitle": "WETA_20010911_120000_Sesame_Street",
+        "start": "2001-09-11T12:00:00+00:00", "end": "2001-09-11T12:59:54+00:00" },
+      { "title": "[No Signal]", "start": "…", "end": "…" }   // gap entries carry only title/start/end
+    ]
+  }
+]
+```
+
+Program entries carry `title`, `description`, `fullTitle` (the IA identifier, a
+stable click-through key), `start`, `end`; gap entries carry only `title`
+(`[No Signal]`), `start`, `end`. `start`/`end` are ISO-8601 UTC; `EPG.tsx`
+parses both `Z` and `+00:00` via `Date.parse`.
+
+> **Frontend wiring is the remaining step.** `EPG.tsx` currently *static-imports*
+> a baked-in `testdata.json` at build time. To consume the live guide it must
+> `fetch` `https://files.911realtime.org/epg/guide.json` at runtime (with a
+> loading state) instead — the analogue of the `TV.tsx` cutover. The backend now
+> produces the file; the frontend swap is not yet done.
+
+> **Concurrency note:** `_rebuild_epg_guide` is a list-then-write; with the
+> `build-channel` concurrency limit of 2, two simultaneous builds could race and
+> one guide write could momentarily miss the other's just-written channel. It
+> self-heals on the next build. If that ever matters, move the rebuild to a
+> dedicated single-concurrency step.
 
 ## What's verified vs. open
 
@@ -222,11 +281,12 @@ epg/<slug>/{master,full,mid,thumb}.m3u8                          # stitched stre
 independently-decodable fMP4 with video+audio (ffprobe). 156 unit tests pass
 (isochronicity across a 9-day window, PDT-per-discontinuity, per-air-date
 prefixes, scheduler contract, gap layout, flow wiring, `_fetch_slots` JOIN,
-url-keyed idempotency). **Live end-to-end run done for WETA** (Sep 9–18 window,
-32 Sep-11 programs seeded from the pre-video-grabber backup): 33 `schedule_slots`
-written, 4 playlists + 21 gap objects uploaded to Wasabi, one Directus row
-upserted. That run is what surfaced the `_fetch_slots` JOIN and the Directus
-url-idempotency fixes.
+url-keyed idempotency, EPG guide rebuild). **Live end-to-end run done for WETA**
+(Sep 9–18 window, 32 Sep-11 programs seeded from the pre-video-grabber backup):
+33 `schedule_slots` written, 4 playlists under `playlists/weta/` + 21 gap objects
+uploaded to Wasabi, `epg/weta.json` + `epg/guide.json` (33-program grid) written,
+one Directus row upserted. That run surfaced the `_fetch_slots` JOIN and the
+Directus url-idempotency fixes.
 
 **Open / not yet done:**
 
@@ -255,6 +315,6 @@ url-idempotency fixes.
 | `tests/test_epg.py`, `tests/test_epg_json.py` | The `assemble_day` 24h wrapper + EPG grid contract. |
 | `tests/test_scheduler.py` | `resolve_slots` invariants (sorted, non-overlapping, clamped). |
 | `tests/test_gap_filler.py` | Gap package layout + ffmpeg flags (blue, fmp4, forced keyframe, thumb audio). |
-| `tests/test_build_channel.py` | `build_channel_flow` wiring (schedule → assemble → publish → upsert). |
+| `tests/test_build_channel.py` | `build_channel_flow` wiring: playlists → `playlists/<slug>/`, EPG JSON → `epg/<slug>.json` + `epg/guide.json` rebuild, Directus upsert. |
 
 Run: `pip install -e ".[dev]" && pytest` from the package root.

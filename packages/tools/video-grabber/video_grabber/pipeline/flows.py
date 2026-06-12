@@ -5,6 +5,7 @@ Work pool type: kubernetes (prefect work-pool create video-pipeline --type kuber
 Worker image: prefecthq/prefect:3-python3.12-kubernetes
 PREFECT_API_URL: http://prefect-server.video-grabber.svc.cluster.local:4200/api
 """
+import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -19,7 +20,9 @@ from video_grabber.pipeline.downloader import download_item
 from video_grabber.pipeline.resolve import resolve_job
 from video_grabber.video.encoder import encode_to_hls
 from video_grabber.video.gap_filler import generate_gap_fmp4
-from video_grabber.storage.wasabi import upload_hls_package, upload_tree, upload_text
+from video_grabber.storage.wasabi import (
+    upload_hls_package, upload_tree, upload_text, read_text, list_keys,
+)
 from video_grabber.directus.writer import write_media_item, upsert_channel_media_item
 from video_grabber.epg.assembler import assemble_range
 from video_grabber.epg.scheduler import build_schedule
@@ -247,20 +250,40 @@ def build_channel_flow(channel_id: str, window_start: str, window_end: str):
     n_slots = build_schedule(channel_id, ws, we, db)
     logger.info("build-channel %s: %d slots scheduled", channel.slug, n_slots)
 
-    playlists, _epg = assemble_range(channel, ws, we, db)
+    playlists, epg_channel = assemble_range(channel, ws, we, db)
 
     # Channel-level blue gap package (date-independent); cheap to regenerate.
     gap_dir = _SCRATCH / f"_gap_{channel.slug}"
     generate_gap_fmp4(gap_dir)
     upload_tree(gap_dir, f"hls/{channel.slug}/_gap", cfg)
 
-    base = f"epg/{channel.slug}"
+    # HLS playlists under playlists/<slug>/ (the EPG JSON guide lives in epg/).
+    base = f"playlists/{channel.slug}"
     for name in ("master", "full", "mid", "thumb"):
         upload_text(playlists[name], f"{base}/{name}.m3u8", cfg)
 
+    # EPG guide: per-channel JSON + the combined EPGChannel[] the frontend reads.
+    upload_text(json.dumps(epg_channel), f"epg/{channel.slug}.json", cfg)
+    _rebuild_epg_guide(cfg)
+
     master_url = f"{base}/master.m3u8"
     upsert_channel_media_item(channel, master_url, ws, cfg)
-    logger.info("build-channel %s: published %s", channel.slug, master_url)
+    logger.info("build-channel %s: published %s + EPG guide", channel.slug, master_url)
+
+
+def _rebuild_epg_guide(cfg: Config) -> None:
+    """Assemble per-channel ``epg/<slug>.json`` files into ``epg/guide.json``,
+    the single ``EPGChannel[]`` array the EPG frontend consumes. Sorted by name
+    for stable ordering. Re-run on every channel build so the guide reflects all
+    channels published so far.
+    """
+    channels = []
+    for key in sorted(list_keys("epg/", cfg)):
+        if not key.endswith(".json") or key == "epg/guide.json":
+            continue
+        channels.append(json.loads(read_text(key, cfg)))
+    channels.sort(key=lambda c: c.get("name", ""))
+    upload_text(json.dumps(channels), "epg/guide.json", cfg)
 
 
 @flow(name="dispatch-discovered")

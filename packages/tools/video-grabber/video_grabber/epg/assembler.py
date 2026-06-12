@@ -46,7 +46,7 @@ def assemble_range(
     slots: pre-fetched list (for testing); if None, fetched from db.
     Returns (playlists, epg_channel_dict).
 
-    The published playlist URL is channel-level (``epg/<slug>/``) because the
+    The published playlist URL is channel-level (``playlists/<slug>/``) because the
     product serves one continuous stream per channel, regenerated in place as
     more content is acquired. The blue gap package is likewise channel-level
     (``hls/<slug>/_gap``) — its content is date-independent.
@@ -107,7 +107,7 @@ def assemble_range(
     for r in REND_NAMES:
         rend_lines[r].append("#EXT-X-ENDLIST")
 
-    channel_prefix = f"{WASABI_BASE}/epg/{channel.slug}"
+    channel_prefix = f"{WASABI_BASE}/playlists/{channel.slug}"
     master_lines = ["#EXTM3U", "#EXT-X-INDEPENDENT-SEGMENTS"]
     for r in REND_NAMES:
         master_lines += [

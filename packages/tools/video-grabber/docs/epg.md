@@ -32,7 +32,7 @@ playlists, epg_channel = assemble_day(channel, day, db)
 # }
 ```
 
-The `epg_channel` shape matches the `EPGChannel[]` contract that `EPG.tsx` in the frontend expects. The `playlists` map is keyed by the names the upload step writes as `<key>.m3u8` files in `epg/<channel-slug>/` (channel-level; one canonical stream per channel, regenerated in place).
+The `epg_channel` shape matches the `EPGChannel[]` contract that `EPG.tsx` in the frontend expects — see [channel-stitching.md](./channel-stitching.md#the-epg-guide-json) for how `build-channel` publishes it as `epg/<slug>.json` + `epg/guide.json`. The `playlists` map is keyed by the names the upload step writes as `<key>.m3u8` files in `playlists/<channel-slug>/` (channel-level; one canonical stream per channel, regenerated in place).
 
 ## The stitch
 
@@ -97,7 +97,7 @@ Gap slot:
 
 ## What the assembler does **not** do
 
-- It does not upload the playlists. The `build-channel` flow writes `playlists[*]` to `epg/<slug>/<*>.m3u8` on Wasabi (see [channel-stitching.md](./channel-stitching.md)).
+- It does not upload the playlists. The `build-channel` flow writes `playlists[*]` to `playlists/<slug>/<*>.m3u8` on Wasabi, and the `epg_channel` grid to `epg/<slug>.json` + `epg/guide.json` (see [channel-stitching.md](./channel-stitching.md)).
 - It does not generate gap segments. Those come from `gap_filler.py` and must be uploaded to `hls/<slug>/_gap/<rend>/` before any playlist that references them is served (the `build-channel` flow does both).
 - It does not re-fetch from IA or re-validate URLs. It trusts the URL convention.
 - It does not write to `schedule_slots`. That is the scheduler's job (`epg/scheduler.py`, `build_schedule()`); the assembler only reads slots via `_fetch_slots()`.
