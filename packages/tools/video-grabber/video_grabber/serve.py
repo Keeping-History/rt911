@@ -25,8 +25,11 @@ from video_grabber.pipeline.flows import (
     scan_collections_flow,
 )
 
-# One heavy IA download + ffmpeg encode at a time (50 GiB scratch is sized for one item).
-_PROCESS_ITEM_LIMIT = 1
+# Two concurrent download+encode pipelines. The worker pod is sized to give each
+# ~4 CPU cores (limit 8) so the two encodes run at full speed rather than
+# time-slicing; 50 GiB scratch comfortably holds two in-flight items (~a few GiB
+# each). Raise in lockstep with the pod CPU limit in infra worker.yaml.
+_PROCESS_ITEM_LIMIT = 2
 # Scanner is serial by design; per-call rate-limit lives in IA_RATE_PER_SEC.
 _SCAN_LIMIT = 1
 # One dispatcher at a time so two operators don't both drain the queue in parallel.
