@@ -196,8 +196,8 @@ def test_get_ia_files_gives_up_after_persistent_timeouts():
         with pytest.raises(httpx.ReadTimeout):
             get_ia_files("dead-id")
 
-    # 4 attempts per stop_after_attempt(4) — the final raise reraises the last error.
-    assert route.call_count == 4
+    # 5 attempts per stop_after_attempt(5) — the final raise reraises the last error.
+    assert route.call_count == 5
 
 
 # --- Wasabi-first source reuse ---

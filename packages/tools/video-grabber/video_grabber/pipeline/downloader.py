@@ -18,7 +18,7 @@ from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
-    wait_exponential,
+    wait_random_exponential,
 )
 
 from video_grabber.storage.wasabi import _make_s3_client
@@ -54,9 +54,13 @@ _FORMAT_PRIORITY = {
 _SKIP_PATTERNS = ("512kb", "256kb", "128kb", "_small", "_tiny", "_thumb")
 
 
+# Full-jitter backoff (random in [0, exp]) rather than a deterministic ramp:
+# a batch of jobs that all time out against an overloaded archive.org would,
+# with a fixed schedule, retry in lockstep and re-stampede it at the same
+# instants. Jitter spreads the retries out so IA can recover between waves.
 @retry(
-    stop=stop_after_attempt(4),
-    wait=wait_exponential(multiplier=1, min=2, max=15),
+    stop=stop_after_attempt(5),
+    wait=wait_random_exponential(multiplier=1, max=20),
     retry=retry_if_exception_type(_TRANSIENT_HTTP_ERRORS),
     reraise=True,
 )

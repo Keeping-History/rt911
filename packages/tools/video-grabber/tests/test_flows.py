@@ -251,3 +251,44 @@ def test_dispatch_discovered_flow_respects_max_runs_cap():
         dispatch_discovered_flow.fn(max_runs=3)
 
     assert mock_run.call_count == 3
+
+
+def test_dispatch_requeues_failed_job_and_bumps_retry_count():
+    from video_grabber.pipeline.flows import dispatch_discovered_flow
+
+    # A retryable failed job, then an empty queue: the dispatcher must spend a
+    # retry (bump retry_count, flip back to discovered) and re-dispatch it.
+    failed = MagicMock(id="job-f", stage="failed", retry_count=1)
+    db = MagicMock()
+    db.execute.return_value.first.side_effect = [failed, None]
+
+    with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
+         patch("video_grabber.pipeline.flows.run_deployment") as mock_run, \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        dispatch_discovered_flow.fn(max_runs=10, max_retries=3)
+
+    # Re-dispatched the failed job exactly once.
+    assert mock_run.call_count == 1
+    assert mock_run.call_args_list[0].kwargs["parameters"] == {"job_id": "job-f"}
+    # And issued the retry_count bump UPDATE before dispatching.
+    all_sql = " ".join(c.args[0].text for c in db.execute.call_args_list)
+    assert "retry_count = retry_count + 1" in all_sql
+
+
+def test_dispatch_skips_failed_jobs_over_retry_budget():
+    from video_grabber.pipeline.flows import dispatch_discovered_flow
+
+    # The SELECT itself filters out failed jobs at/over the retry cap, so an
+    # exhausted job is simply never returned — modeled here as an empty queue.
+    db = MagicMock()
+    db.execute.return_value.first.return_value = None
+
+    with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
+         patch("video_grabber.pipeline.flows.run_deployment") as mock_run, \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        dispatch_discovered_flow.fn(max_runs=10, max_retries=3)
+
+    mock_run.assert_not_called()
+    # The selecting query must carry the retry-budget guard.
+    select_sql = " ".join(c.args[0].text for c in db.execute.call_args_list)
+    assert "retry_count < :max_retries" in select_sql

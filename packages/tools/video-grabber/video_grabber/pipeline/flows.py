@@ -175,9 +175,18 @@ def scan_collections_flow(collections: list[str] = ["sept_11_tv_archive", "911"]
     logger.info("Scan complete")
 
 
-@flow(name="process-item")
+@flow(name="process-item", retries=2, retry_delay_seconds=[30, 120])
 def process_item_flow(job_id: str):
-    """Download → encode → upload for a single video_jobs row."""
+    """Download → encode → upload for a single video_jobs row.
+
+    Flow-level ``retries`` give transient failures (an Internet Archive
+    handshake timeout, a Wasabi/Directus blip) a couple of in-place reattempts
+    with a backoff before the job is left in ``failed`` for the dispatcher to
+    requeue on the next pass. Every stage is idempotent — download resumes via
+    byte-range, encode/upload/Directus overwrite — so re-running the flow body
+    is safe. The dominant failure mode (IA metadata fetch) fails before the
+    expensive encode, so a retry there is cheap.
+    """
     logger = get_run_logger()
     db = get_db()
     job = get_job(job_id)
@@ -287,8 +296,19 @@ def _rebuild_epg_guide(cfg: Config) -> None:
 
 
 @flow(name="dispatch-discovered")
-def dispatch_discovered_flow(max_runs: int = 100) -> None:
-    """Drain the ``stage='discovered'`` queue by triggering process-item runs.
+def dispatch_discovered_flow(max_runs: int = 100, max_retries: int = 3) -> None:
+    """Drain the work queue by triggering process-item runs.
+
+    Fresh ``discovered`` jobs are dispatched first; once they are exhausted the
+    dispatcher re-queues jobs that previously landed in ``failed`` but still
+    have retry budget (``retry_count < max_retries``). This is what makes a
+    full run self-healing: a transient failure (e.g. an Internet Archive
+    handshake timeout during a large batch) is reattempted automatically
+    instead of being stranded in ``failed`` until someone re-triggers it by
+    hand. Re-queuing bumps ``retry_count`` and flips the row back to
+    ``discovered``, so a job that keeps failing is retried at most
+    ``max_retries`` times and then left in ``failed`` for human inspection —
+    the bump is what bounds the loop.
 
     Each dispatch is a blocking ``run_deployment`` call — the next job only
     starts once the current one finishes (or fails). That keeps the queue
@@ -304,18 +324,44 @@ def dispatch_discovered_flow(max_runs: int = 100) -> None:
     db = get_db()
     processed = 0
     while processed < max_runs:
+        # Prefer fresh work (stage='discovered' sorts as FALSE = 0) over
+        # retryable failures (TRUE = 1); break ties by age.
         row = db.execute(
             sa.text(
-                "SELECT id FROM video_jobs "
-                "WHERE stage = 'discovered' "
-                "ORDER BY created_at LIMIT 1"
-            )
+                """
+                SELECT id, stage, retry_count
+                FROM video_jobs
+                WHERE stage = 'discovered'
+                   OR (stage = 'failed' AND retry_count < :max_retries)
+                ORDER BY (stage = 'failed'), created_at
+                LIMIT 1
+                """
+            ),
+            {"max_retries": max_retries},
         ).first()
         if row is None:
             logger.info("dispatch-discovered: queue empty after %d runs", processed)
             return
         job_id = str(row.id)
-        logger.info("dispatch-discovered: dispatching process-item job_id=%s", job_id)
+        if row.stage == "failed":
+            # Spend one retry and flip back to discovered *before* dispatching,
+            # so a repeat failure is bounded by the bumped retry_count rather
+            # than re-selecting the same row forever.
+            db.execute(
+                sa.text(
+                    "UPDATE video_jobs "
+                    "SET stage = 'discovered', retry_count = retry_count + 1, "
+                    "last_transition_at = now() WHERE id = :id"
+                ),
+                {"id": job_id},
+            )
+            db.commit()
+            logger.info(
+                "dispatch-discovered: retrying failed job_id=%s (attempt %d/%d)",
+                job_id, row.retry_count + 1, max_retries,
+            )
+        else:
+            logger.info("dispatch-discovered: dispatching process-item job_id=%s", job_id)
         # Blocks until the process-item run reaches a terminal state.
         run_deployment(
             name="process-item/process-item",
