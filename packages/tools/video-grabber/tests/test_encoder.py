@@ -279,3 +279,52 @@ def test_encode_logs_progress_at_least_once_per_rendition(tmp_path):
     assert sum(1 for m in rendered if m.startswith("encode thumb: t=")) == 1
     assert "rendition full done" in joined
     assert "rendition thumb done" in joined
+
+
+# --- VAAPI hardware path ---
+
+def test_encode_vaapi_path_when_device_set(tmp_path, monkeypatch):
+    """With VAAPI_DEVICE set, renditions encode with h264_vaapi + hwupload."""
+    monkeypatch.setenv("VAAPI_DEVICE", "/dev/dri/renderD128")
+    src = tmp_path / "source.mp4"
+    src.write_bytes(b"fake")
+    out = tmp_path / "out"
+    captured = []
+    factory = _make_fake_popen()
+
+    def capture(cmd, **kwargs):
+        captured.append(list(cmd))
+        return factory(cmd, **kwargs)
+
+    with patch("subprocess.Popen", side_effect=capture), \
+         patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
+        encode_to_hls(src, out)
+
+    full = next(c for c in captured if "/full/index.m3u8" in " ".join(map(str, c)))
+    s = " ".join(map(str, full))
+    assert "-vaapi_device /dev/dri/renderD128" in s
+    assert "h264_vaapi" in s and "hwupload" in s
+    assert "libx264" not in s
+    # fMP4 HLS layout unchanged so the stitcher still consumes it
+    assert "-hls_segment_type fmp4" in s and "init.mp4" in s
+
+
+def test_encode_software_path_when_no_device(tmp_path, monkeypatch):
+    """Without VAAPI_DEVICE, falls back to libx264 software encode."""
+    monkeypatch.delenv("VAAPI_DEVICE", raising=False)
+    src = tmp_path / "source.mp4"
+    src.write_bytes(b"fake")
+    out = tmp_path / "out"
+    captured = []
+    factory = _make_fake_popen()
+
+    def capture(cmd, **kwargs):
+        captured.append(list(cmd))
+        return factory(cmd, **kwargs)
+
+    with patch("subprocess.Popen", side_effect=capture), \
+         patch("video_grabber.video.encoder._probe", side_effect=fake_ffprobe_success):
+        encode_to_hls(src, out)
+
+    s = " ".join(map(str, captured[0]))
+    assert "libx264" in s and "h264_vaapi" not in s

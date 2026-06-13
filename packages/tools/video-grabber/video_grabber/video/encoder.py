@@ -14,6 +14,7 @@ at a single ``stage='encoding'`` row for 30+ minutes.
 """
 import json
 import logging
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -52,6 +53,23 @@ _COMMON_FLAGS = [
     "-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
     "-c:a", "aac", "-ar", "44100",
 ]
+
+# Hardware (VAAPI) encode path. Enabled by setting VAAPI_DEVICE to a render
+# node (e.g. /dev/dri/renderD128) on a host with an AMD/Intel iGPU. The VCN
+# hardware encoder runs ~10x faster than libx264 preset slow and barely touches
+# the CPU. Falls back to the software path above when VAAPI_DEVICE is unset.
+_VAAPI_COMMON = [
+    "-c:v", "h264_vaapi", "-profile:v", "main", "-level", "31",
+    "-r", "29.97", "-g", "60", "-keyint_min", "60",
+    "-c:a", "aac", "-ar", "44100",
+]
+# Per-rendition VBR rate control, capped to match the bandwidth ladder
+# advertised in the master playlist / EPG assembler.
+_VAAPI_RATE = {
+    "full":  ["-rc_mode", "VBR", "-b:v", "2000k", "-maxrate", "2500k", "-bufsize", "5000k"],
+    "mid":   ["-rc_mode", "VBR", "-b:v", "300k",  "-maxrate", "350k",  "-bufsize", "700k"],
+    "thumb": ["-rc_mode", "VBR", "-b:v", "128k",  "-maxrate", "160k",  "-bufsize", "320k"],
+}
 
 _HLS_FLAGS = [
     "-hls_time", "6", "-hls_list_size", "0", "-hls_playlist_type", "vod",
@@ -145,8 +163,12 @@ def encode_to_hls(
     invocations.
     """
     log = logger if logger is not None else _default_log
+    vaapi_device = os.getenv("VAAPI_DEVICE")
     src_w, src_h = probe_resolution(input_path)
-    log.info("encode: source resolution %dx%d", src_w, src_h)
+    log.info(
+        "encode: source resolution %dx%d (%s)",
+        src_w, src_h, f"VAAPI {vaapi_device}" if vaapi_device else "software x264",
+    )
     master_lines = ["#EXTM3U", "#EXT-X-INDEPENDENT-SEGMENTS"]
 
     for rend in RENDITIONS:
@@ -154,20 +176,38 @@ def encode_to_hls(
         rend_dir = output_dir / rend["name"]
         rend_dir.mkdir(parents=True, exist_ok=True)
 
-        vf = (
-            f"yadif=mode=0:parity=-1:deint=1,"
-            f"scale={out_w}:{out_h}:flags=lanczos"
-        )
-        cmd = (
-            ["ffmpeg", "-y"]
-            + _PROGRESS_FLAGS
-            + ["-i", str(input_path), "-vf", vf]
-            + _COMMON_FLAGS
-            + rend["v_flags"]
-            + rend["a_flags"]
-            + _HLS_FLAGS
-            + ["-hls_segment_filename", "seg%04d.m4s", str(rend_dir / "index.m3u8")]
-        )
+        if vaapi_device:
+            # Deinterlace + scale on CPU (cheap), then hand frames to the GPU
+            # encoder. `hwupload` needs the device declared via -vaapi_device.
+            vf = (
+                f"yadif=mode=0:parity=-1:deint=1,"
+                f"scale={out_w}:{out_h}:flags=lanczos,format=nv12,hwupload"
+            )
+            cmd = (
+                ["ffmpeg", "-y"]
+                + _PROGRESS_FLAGS
+                + ["-vaapi_device", vaapi_device, "-i", str(input_path), "-vf", vf]
+                + _VAAPI_COMMON
+                + _VAAPI_RATE[rend["name"]]
+                + rend["a_flags"]
+                + _HLS_FLAGS
+                + ["-hls_segment_filename", "seg%04d.m4s", str(rend_dir / "index.m3u8")]
+            )
+        else:
+            vf = (
+                f"yadif=mode=0:parity=-1:deint=1,"
+                f"scale={out_w}:{out_h}:flags=lanczos"
+            )
+            cmd = (
+                ["ffmpeg", "-y"]
+                + _PROGRESS_FLAGS
+                + ["-i", str(input_path), "-vf", vf]
+                + _COMMON_FLAGS
+                + rend["v_flags"]
+                + rend["a_flags"]
+                + _HLS_FLAGS
+                + ["-hls_segment_filename", "seg%04d.m4s", str(rend_dir / "index.m3u8")]
+            )
         log.info("encode: starting rendition %s (%dx%d)", rend["name"], out_w, out_h)
         t0 = time.monotonic()
         _run_ffmpeg_with_progress(cmd, label=rend["name"], cwd=rend_dir, logger=log)
