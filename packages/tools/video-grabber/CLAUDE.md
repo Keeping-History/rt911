@@ -32,22 +32,34 @@ landing code on `main` (CI builds the image) then rolling the Deployment to the 
      and `:latest`.
 2. **Wait for the image.** Watch the run with `gh run watch` / `gh run list`. The image
    tag is the full commit SHA (`git rev-parse HEAD`).
-3. **Roll the worker** to the new SHA (do NOT use `--job-variable image`; the pipeline
-   runs in the worker pod via an in-pod Prefect runner, no work pool):
+3. **GitOps rolls the worker — do NOT `kubectl set image`.** The cluster runs ArgoCD with
+   `automated.selfHeal: true`, so any imperative change to the live Deployment is reverted
+   within seconds. The app (`kubectl -n argocd get application video-grabber`) syncs from a
+   **separate repo**: `github.com/Keeping-History/infra`, path `apps/video-grabber`, branch
+   `main` (cloned locally at `/home/robbiebyrd/infra`). The deployed image SHA is pinned by a
+   kustomize override in `apps/video-grabber/.argocd-source-video-grabber.yaml`
+   (the `worker.yaml`/`kustomization.yaml` `newTag` is just `latest` and is overridden by it).
+   Infra-side automation watches GHCR and commits the SHA bump there — the
+   `build: automatic update of video-grabber` commits — after which ArgoCD auto-syncs and
+   rolls the worker. So normally **just landing on `main` and waiting ~a few minutes** ships it.
+   To force/expedite, edit the SHA in `.argocd-source-video-grabber.yaml`, commit + push to
+   infra `main` (self-merge is fine), then let auto-sync run (or trigger a refresh).
+4. **Verify:**
    ```sh
-   SHA=$(git rev-parse HEAD)
-   kubectl -n video-grabber set image deploy/video-grabber-worker \
-     worker=ghcr.io/keeping-history/video-grabber:$SHA
-   kubectl -n video-grabber rollout status deploy/video-grabber-worker
+   kubectl -n argocd get application video-grabber -o jsonpath='{.status.sync.status} {.status.health.status}{"\n"}'
+   kubectl -n video-grabber get deploy video-grabber-worker \
+     -o jsonpath='{.spec.template.spec.containers[0].image}'   # should be the new SHA
    ```
-4. **Schema changes only:** also update + run the migrate Job
-   (`k8s/migrate-job.yaml`, runs `alembic upgrade head`) before rolling the worker.
+5. **Schema changes only:** bump the migrate Job (`apps/video-grabber/migrate-job.yaml`,
+   runs `alembic upgrade head`) in the infra repo as well; it deploys via the same ArgoCD app.
 
 The k3s cluster is **local to the dev host** — `kubectl` works directly (the
 `open /etc/rancher/k3s/config.yaml: permission denied` warnings are harmless and can
 be ignored). Namespace is `video-grabber`. Prefect server + worker run there;
 `prefect-server` is reachable in-cluster at
-`http://prefect-server.video-grabber.svc.cluster.local:4200/api`.
+`http://prefect-server.video-grabber.svc.cluster.local:4200/api`. The worker runs on the
+`encode-1` node (Ryzen iGPU) and the pipeline executes in-pod via a Prefect runner — there
+is no work pool, so `--job-variable image` does nothing; the image comes from GitOps only.
 
 ## Operating the pipeline
 
