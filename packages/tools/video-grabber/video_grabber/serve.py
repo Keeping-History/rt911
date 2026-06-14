@@ -26,23 +26,26 @@ from video_grabber.pipeline.flows import (
     scan_collections_flow,
 )
 
-# Two concurrent download+encode pipelines. The worker pod is sized to give each
-# ~4 CPU cores (limit 8) so the two encodes run at full speed rather than
-# time-slicing; 50 GiB scratch comfortably holds two in-flight items (~a few GiB
-# each). Raise in lockstep with the pod CPU limit in infra worker.yaml.
-_PROCESS_ITEM_LIMIT = 2
+# Four concurrent download+encode pipelines. These jobs are largely
+# download-bound (pulling the ~200 MB .ogv derivative from IA) with VAAPI doing
+# the video encode on the iGPU, so concurrency overlaps the network waits and
+# 4x measurably beats 2x in practice. Keep the pod CPU limit and 50 GiB scratch
+# in lockstep in infra worker.yaml (each in-flight item is ~a few GiB; raise pod
+# CPU so the per-job decode/scale/audio work isn't CFS-throttled at this width).
+_PROCESS_ITEM_LIMIT = 4
 # Scanner is serial by design; per-call rate-limit lives in IA_RATE_PER_SEC.
 _SCAN_LIMIT = 1
-# Two concurrent dispatchers, to actually saturate the two-encode pipeline
+# Four concurrent dispatchers, to actually saturate the four-encode pipeline
 # (_PROCESS_ITEM_LIMIT). Each dispatcher is blocking — it drives one process-item
-# at a time — so it takes two dispatchers to keep two encodes running; a single
-# one only ever reaches 1x. The two share the queue via stage transitions
-# (process-item flips a job to 'downloading' at start, so the other dispatcher
-# stops seeing it). A rare double-pick of the same job is possible in the brief
-# window before that flip, but harmless: upload + Directus writes are idempotent,
-# so the worst case is one wasted re-encode. (If that waste ever matters, claim
-# rows atomically with SELECT ... FOR UPDATE SKIP LOCKED in the dispatcher.)
-_DISPATCH_LIMIT = 2
+# at a time — so it takes N dispatchers to keep N encodes running; a single one
+# only ever reaches 1x. They share the queue via stage transitions (process-item
+# flips a job to 'downloading' at start, so the others stop seeing it). A rare
+# double-pick of the same job is possible in the brief window before that flip;
+# it is harmless (upload + Directus are idempotent) and a completed-on-disk copy
+# is now reused rather than re-fetched, so the worst case is one wasted re-encode.
+# Raising the ceiling does not by itself start N dispatchers — that is still an
+# operational step (launch N dispatch-discovered runs, or add a schedule).
+_DISPATCH_LIMIT = 4
 # Channel assembly is ffmpeg-light (tiny gap segments) but writes shared
 # playlists; one at a time keeps per-channel publishes from racing.
 _BUILD_CHANNEL_LIMIT = 2
