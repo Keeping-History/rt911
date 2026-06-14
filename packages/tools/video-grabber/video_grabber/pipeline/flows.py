@@ -313,21 +313,21 @@ def _rebuild_epg_guide(cfg: Config) -> None:
 def dispatch_discovered_flow(max_runs: int = 100, max_retries: int = 3) -> None:
     """Drain the work queue by triggering process-item runs.
 
-    Fresh ``discovered`` jobs are dispatched first; once they are exhausted the
-    dispatcher re-queues jobs that previously landed in ``failed`` but still
-    have retry budget (``retry_count < max_retries``). This is what makes a
-    full run self-healing: a transient failure (e.g. an Internet Archive
-    handshake timeout during a large batch) is reattempted automatically
-    instead of being stranded in ``failed`` until someone re-triggers it by
-    hand. Re-queuing bumps ``retry_count`` and flips the row back to
-    ``discovered``, so a job that keeps failing is retried at most
-    ``max_retries`` times and then left in ``failed`` for human inspection —
-    the bump is what bounds the loop.
+    Each iteration *atomically claims* one job (flips it to ``downloading`` via
+    an UPDATE over ``SELECT ... FOR UPDATE SKIP LOCKED``) and then blocks on a
+    ``run_deployment`` for it. The atomic claim is what makes it safe to run
+    several dispatchers at once for N-way throughput: two dispatchers can never
+    grab the same row, so there are no duplicate encodes or scratch-cleanup
+    crashes. Fresh ``discovered`` jobs are claimed before retryable ``failed``
+    jobs (``retry_count < max_retries``); claiming a failed job spends one retry
+    (``retry_count++``), so a job that keeps failing is retried at most
+    ``max_retries`` times and then left in ``failed`` for human inspection. This
+    is what makes a full run self-healing — a transient failure is reattempted
+    automatically instead of being stranded.
 
-    Each dispatch is a blocking ``run_deployment`` call — the next job only
-    starts once the current one finishes (or fails). That keeps the queue
-    depth at zero and surfaces failures immediately to the operator instead
-    of letting hundreds of broken runs pile up.
+    Each dispatch is a blocking ``run_deployment`` call — a single dispatcher
+    only starts the next job once the current one finishes (or fails), keeping
+    queue depth at zero; run several dispatchers for more concurrency.
 
     ``max_runs`` bounds a single dispatcher invocation so the flow itself
     has a definite end; trigger it again to drain more. Default 100 is
@@ -338,44 +338,43 @@ def dispatch_discovered_flow(max_runs: int = 100, max_retries: int = 3) -> None:
     db = get_db()
     processed = 0
     while processed < max_runs:
-        # Prefer fresh work (stage='discovered' sorts as FALSE = 0) over
-        # retryable failures (TRUE = 1); break ties by age.
+        # Atomically claim the next job. A single UPDATE whose target is chosen
+        # by SELECT ... FOR UPDATE SKIP LOCKED flips the row to 'downloading'
+        # before any other dispatcher can see it, so concurrent dispatchers never
+        # double-pick the same job. (Double-picks used to waste a duplicate encode
+        # and then crash when one run's scratch cleanup deleted the dir the other
+        # was still using.) Fresh 'discovered' work (sorts FALSE=0) is claimed
+        # before retryable 'failed' jobs (TRUE=1); claiming a failed job spends
+        # one retry (retry_count++ via the CASE on the OLD stage), which bounds
+        # the retry loop. SKIP LOCKED means each concurrent dispatcher gets a
+        # distinct row instead of blocking on the same one.
         row = db.execute(
             sa.text(
                 """
-                SELECT id, stage, retry_count
-                FROM video_jobs
-                WHERE stage = 'discovered'
-                   OR (stage = 'failed' AND retry_count < :max_retries)
-                ORDER BY (stage = 'failed'), created_at
-                LIMIT 1
+                UPDATE video_jobs SET
+                    stage = 'downloading',
+                    retry_count = retry_count
+                        + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
+                    last_transition_at = now()
+                WHERE id = (
+                    SELECT id FROM video_jobs
+                    WHERE stage = 'discovered'
+                       OR (stage = 'failed' AND retry_count < :max_retries)
+                    ORDER BY (stage = 'failed'), created_at
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                )
+                RETURNING id
                 """
             ),
             {"max_retries": max_retries},
         ).first()
+        db.commit()
         if row is None:
             logger.info("dispatch-discovered: queue empty after %d runs", processed)
             return
         job_id = str(row.id)
-        if row.stage == "failed":
-            # Spend one retry and flip back to discovered *before* dispatching,
-            # so a repeat failure is bounded by the bumped retry_count rather
-            # than re-selecting the same row forever.
-            db.execute(
-                sa.text(
-                    "UPDATE video_jobs "
-                    "SET stage = 'discovered', retry_count = retry_count + 1, "
-                    "last_transition_at = now() WHERE id = :id"
-                ),
-                {"id": job_id},
-            )
-            db.commit()
-            logger.info(
-                "dispatch-discovered: retrying failed job_id=%s (attempt %d/%d)",
-                job_id, row.retry_count + 1, max_retries,
-            )
-        else:
-            logger.info("dispatch-discovered: dispatching process-item job_id=%s", job_id)
+        logger.info("dispatch-discovered: claimed + dispatching job_id=%s", job_id)
         # Blocks until the process-item run reaches a terminal state.
         run_deployment(
             name="process-item/process-item",
