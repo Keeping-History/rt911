@@ -30,6 +30,15 @@ KNOWN_CHANNELS: dict[str, str] = {
 # Local affiliate call-sign pattern: W/K followed by 3 uppercase letters
 _LOCAL_CALL_SIGN = re.compile(r"\b([WK][A-Z]{3})\b")
 
+# Channel-code prefix of an IA identifier, e.g. "ANT1" in
+# "ANT1_20010914_010000_Antenna_1_Greece". The Sept-11 archive names every
+# capture <CHANNEL>_<YYYYMMDD>_<HHMMSS>_<desc>, so the leading token is a clean,
+# stable per-channel code. Used as a last-resort slug source for broadcasters
+# not in KNOWN_CHANNELS (mostly international feeds: NHK, CCTV3, ANT1, WORLDNET,
+# …). Requires a leading letter so a date- or number-led identifier never
+# becomes a "channel".
+_IDENT_PREFIX = re.compile(r"^([A-Za-z][A-Za-z0-9]{1,15})_")
+
 
 def normalize_slug(item: dict) -> str | None:
     """Return a channel slug from IA item metadata, or None if unrecognized."""
@@ -42,7 +51,14 @@ def normalize_slug(item: dict) -> str | None:
         slug = _slug_from_text(value)
         if slug:
             return slug
-    return None
+    # Last resort: the identifier's channel-code prefix. Only reached when the
+    # human-readable fields named no known network and carried no call sign.
+    return _slug_from_identifier(item.get("identifier", ""))
+
+
+def _slug_from_identifier(identifier: str) -> str | None:
+    m = _IDENT_PREFIX.match(identifier or "")
+    return m.group(1).lower() if m else None
 
 
 def _slug_from_text(text: str) -> str | None:

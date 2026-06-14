@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from prefect import flow, get_run_logger
 from prefect.deployments import run_deployment
 
+from video_grabber.ia.channel_map import normalize_slug
 from video_grabber.ia.scanner import crawl_collection
 from video_grabber.pipeline.downloader import download_item
 from video_grabber.pipeline.resolve import resolve_job
@@ -374,3 +375,68 @@ def dispatch_discovered_flow(max_runs: int = 100, max_retries: int = 3) -> None:
         )
         processed += 1
     logger.info("dispatch-discovered: hit max_runs=%d cap", max_runs)
+
+
+@flow(name="requeue-pending-review")
+def requeue_pending_review_flow(max_jobs: int = 20000, dry_run: bool = False) -> dict:
+    """Re-evaluate ``pending_review`` jobs and promote the now-recognized ones.
+
+    A job lands in ``pending_review`` when ``normalize_slug`` can't derive a
+    channel from its metadata at scan time. Once the channel map gains coverage
+    (e.g. the identifier-prefix fallback for international feeds), this flow
+    re-checks each parked job against the *current* mapping and flips the ones
+    that now resolve back to ``discovered`` so the dispatcher processes them.
+
+    Idempotent: a job that still doesn't resolve is left untouched. Pass
+    ``dry_run=True`` first to preview how many would be promoted without
+    changing anything. Returns ``{"promoted": n, "evaluated": m}``.
+    """
+    logger = get_run_logger()
+    db = get_db()
+    rows = db.execute(
+        sa.text(
+            "SELECT id, ia_identifier, ia_metadata FROM video_jobs "
+            "WHERE stage = 'pending_review' ORDER BY created_at LIMIT :n"
+        ),
+        {"n": max_jobs},
+    ).mappings().all()
+
+    to_promote: list[str] = []
+    for r in rows:
+        meta = r["ia_metadata"] or {}
+        if isinstance(meta, str):
+            try:
+                meta = json.loads(meta)
+            except json.JSONDecodeError:
+                meta = {}
+        # The stored blob carries "identifier", but fall back to the column so
+        # the identifier-prefix rule still fires on older/sparse metadata.
+        meta.setdefault("identifier", r["ia_identifier"])
+        if normalize_slug(meta):
+            to_promote.append(str(r["id"]))
+
+    logger.info(
+        "requeue-pending-review: %d of %d evaluated jobs now resolve to a channel%s",
+        len(to_promote), len(rows), " (dry run — no changes made)" if dry_run else "",
+    )
+    if to_promote and not dry_run:
+        worker = os.getenv("HOSTNAME", "unknown")
+        db.execute(
+            sa.text(
+                "UPDATE video_jobs SET stage = 'discovered', last_transition_at = now() "
+                "WHERE id = ANY(CAST(:ids AS uuid[]))"
+            ),
+            {"ids": to_promote},
+        )
+        # Audit trail, mirroring transition_job but in one bulk insert.
+        db.execute(
+            sa.text(
+                "INSERT INTO pipeline_transitions (job_id, from_stage, to_stage, worker_id) "
+                "SELECT unnest(CAST(:ids AS uuid[])), "
+                "CAST('pending_review' AS pipeline_stage), "
+                "CAST('discovered' AS pipeline_stage), :worker"
+            ),
+            {"ids": to_promote, "worker": worker},
+        )
+        db.commit()
+    return {"promoted": len(to_promote), "evaluated": len(rows)}
