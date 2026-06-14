@@ -342,26 +342,27 @@ def test_dispatch_discovered_flow_respects_max_runs_cap():
     assert mock_run.call_count == 3
 
 
-def test_dispatch_requeues_failed_job_and_bumps_retry_count():
+def test_dispatch_claims_atomically_and_bumps_failed_retry():
     from video_grabber.pipeline.flows import dispatch_discovered_flow
 
-    # A retryable failed job, then an empty queue: the dispatcher must spend a
-    # retry (bump retry_count, flip back to discovered) and re-dispatch it.
-    failed = MagicMock(id="job-f", stage="failed", retry_count=1)
+    # One claimable job, then empty. The dispatcher claims atomically and
+    # dispatches it; the claim bumps retry_count for failed jobs via a CASE.
+    claimed = MagicMock(id="job-f")
     db = MagicMock()
-    db.execute.return_value.first.side_effect = [failed, None]
+    db.execute.return_value.first.side_effect = [claimed, None]
 
     with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
          patch("video_grabber.pipeline.flows.run_deployment") as mock_run, \
          patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
         dispatch_discovered_flow.fn(max_runs=10, max_retries=3)
 
-    # Re-dispatched the failed job exactly once.
     assert mock_run.call_count == 1
     assert mock_run.call_args_list[0].kwargs["parameters"] == {"job_id": "job-f"}
-    # And issued the retry_count bump UPDATE before dispatching.
+    # The claim is a single atomic UPDATE with row locking + the failed-retry bump.
     all_sql = " ".join(c.args[0].text for c in db.execute.call_args_list)
-    assert "retry_count = retry_count + 1" in all_sql
+    assert "FOR UPDATE SKIP LOCKED" in all_sql
+    assert "retry_count = retry_count" in all_sql
+    assert "WHEN stage = 'failed'" in all_sql
 
 
 def test_dispatch_skips_failed_jobs_over_retry_budget():
