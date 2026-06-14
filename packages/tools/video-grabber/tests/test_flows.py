@@ -129,6 +129,16 @@ def test_scan_collections_flow_calls_crawl_for_each_collection():
 
 # --- process_item_flow: state transitions ---
 
+def test_process_item_retry_delay_is_scalar():
+    # The Prefect server stores a flow's retry delay in
+    # empirical_policy.retry_delay, which only accepts an int for flows — a list
+    # (valid for tasks) 422s at run init and crashes every run. Guard against a
+    # regression to the list form.
+    from video_grabber.pipeline.flows import process_item_flow
+
+    assert isinstance(process_item_flow.retry_delay_seconds, (int, float))
+
+
 def test_process_item_flow_transitions_to_complete_on_success():
     from video_grabber.pipeline.flows import process_item_flow
 

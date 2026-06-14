@@ -175,7 +175,7 @@ def scan_collections_flow(collections: list[str] = ["sept_11_tv_archive", "911"]
     logger.info("Scan complete")
 
 
-@flow(name="process-item", retries=2, retry_delay_seconds=[30, 120])
+@flow(name="process-item", retries=2, retry_delay_seconds=60)
 def process_item_flow(job_id: str):
     """Download → encode → upload for a single video_jobs row.
 
@@ -186,6 +186,11 @@ def process_item_flow(job_id: str):
     byte-range, encode/upload/Directus overwrite — so re-running the flow body
     is safe. The dominant failure mode (IA metadata fetch) fails before the
     expensive encode, so a retry there is cheap.
+
+    ``retry_delay_seconds`` must be a SCALAR here, not a per-retry list: the
+    Prefect server stores it in ``empirical_policy.retry_delay`` which only
+    accepts an int for flows (a list 422s at run init and crashes the engine).
+    Per-retry lists are a task-only feature.
     """
     logger = get_run_logger()
     db = get_db()
