@@ -7,6 +7,7 @@ PREFECT_API_URL: http://prefect-server.video-grabber.svc.cluster.local:4200/api
 """
 import json
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -233,6 +234,13 @@ def process_item_flow(job_id: str):
     except Exception as exc:
         transition_job(db, job_id, "failed", from_stage=None, error=str(exc))
         raise
+    finally:
+        # Reclaim the per-job scratch (downloaded source + encoded HLS). Without
+        # this every processed job leaks its files into the 50 GiB scratch
+        # emptyDir until the kubelet evicts the pod for exceeding sizeLimit,
+        # which orphans every in-flight run. Runs on success AND failure; the
+        # source is re-downloadable and the HLS is already uploaded.
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 def _load_channel(db, channel_id: str):
