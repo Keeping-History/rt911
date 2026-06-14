@@ -154,7 +154,27 @@ def download_item(job, dest_dir: Path, cfg=None, *, logger=None) -> Path:
             logger.info("download: %s not in Wasabi, pulling from IA", job.ia_identifier)
 
     url = f"{_IA_BASE}/download/{job.ia_identifier}/{best['name']}"
+    try:
+        expected = int(best.get("size") or 0)
+    except (TypeError, ValueError):
+        expected = 0
     offset = dest.stat().st_size if dest.exists() else 0
+
+    # A prior attempt may have already fetched the whole file — a flow retry
+    # after a later-stage failure, or a second dispatcher that double-picked the
+    # same job and lost the race. Requesting ``Range: bytes=<size>-`` on a
+    # complete file makes IA return 416 Range Not Satisfiable, which would fail
+    # the job spuriously. Short-circuit when the local copy already matches IA's
+    # size; if it is somehow larger (corrupt), discard and re-fetch from scratch.
+    if expected and offset == expected:
+        if logger:
+            logger.info("download: %s already complete on disk (%d bytes)",
+                        job.ia_identifier, offset)
+        return dest
+    if expected and offset > expected:
+        dest.unlink()
+        offset = 0
+
     headers = {"Range": f"bytes={offset}-"} if offset else {}
 
     with httpx.stream(
