@@ -49,8 +49,41 @@ def test_ogv_fallback():
 
 
 def test_no_files_raises():
-    with pytest.raises(ValueError, match="no suitable file"):
+    with pytest.raises(ValueError, match="no downloadable file"):
         select_best_file([])
+
+
+# Stream-only items: full-res original is private; only derivatives are public.
+IA_FILES_STREAM_ONLY = [
+    {"name": "V08553-05.mpg", "format": "MPEG2", "size": "1073741824", "private": "true"},
+    {"name": "V08553-05.ogv", "format": "Ogg Video", "size": "211524456"},
+    {"name": "V08553-05_512kb.mp4", "format": "512Kb MPEG4", "size": "180118431"},
+]
+
+IA_FILES_PRIVATE_PLUS_LOWQ_ONLY = [
+    {"name": "V1.mpg", "format": "MPEG2", "size": "1073741824", "private": "true"},
+    {"name": "V1_512kb.mp4", "format": "512Kb MPEG4", "size": "180000000"},
+    {"name": "V1_256kb.mp4", "format": "256Kb MPEG4", "size": "90000000"},
+]
+
+
+def test_skips_private_original_prefers_public_ogv():
+    # The private original must be skipped; the .ogv beats the 512kb mp4.
+    best = select_best_file(IA_FILES_STREAM_ONLY)
+    assert best["name"] == "V08553-05.ogv"
+
+
+def test_falls_back_to_low_bitrate_mp4_when_only_public_option():
+    # No full-quality public file -> take the largest low-bitrate derivative.
+    best = select_best_file(IA_FILES_PRIVATE_PLUS_LOWQ_ONLY)
+    assert best["name"] == "V1_512kb.mp4"
+
+
+def test_all_private_raises():
+    with pytest.raises(ValueError, match="no downloadable file"):
+        select_best_file([
+            {"name": "a.mpg", "format": "MPEG2", "size": "1", "private": "true"},
+        ])
 
 
 # --- download_item ---
