@@ -22,6 +22,7 @@ from video_grabber.pipeline.flows import (
     build_channel_flow,
     dispatch_discovered_flow,
     process_item_flow,
+    requeue_pending_review_flow,
     scan_collections_flow,
 )
 
@@ -45,6 +46,8 @@ _DISPATCH_LIMIT = 2
 # Channel assembly is ffmpeg-light (tiny gap segments) but writes shared
 # playlists; one at a time keeps per-channel publishes from racing.
 _BUILD_CHANNEL_LIMIT = 2
+# DB-only re-classification of the pending_review backlog; serial is plenty.
+_REQUEUE_LIMIT = 1
 
 
 def main() -> None:
@@ -64,6 +67,10 @@ def main() -> None:
         build_channel_flow.to_deployment(
             name="build-channel",
             concurrency_limit=_BUILD_CHANNEL_LIMIT,
+        ),
+        requeue_pending_review_flow.to_deployment(
+            name="requeue-pending-review",
+            concurrency_limit=_REQUEUE_LIMIT,
         ),
     )
 

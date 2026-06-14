@@ -216,6 +216,49 @@ def test_process_item_flow_transitions_through_all_stages():
 
 # --- dispatch_discovered_flow ---
 
+def test_requeue_pending_review_promotes_only_resolvable_jobs():
+    from video_grabber.pipeline.flows import requeue_pending_review_flow
+
+    rows = [
+        # Resolves via identifier-prefix fallback.
+        {"id": "j1", "ia_identifier": "ANT1_20010914_010000_x",
+         "ia_metadata": {"identifier": "ANT1_20010914_010000_x", "title": "Antenna 1 Greece"}},
+        # No leading-letter prefix and no network in fields -> stays parked.
+        {"id": "j2", "ia_identifier": "20010911_0900_x",
+         "ia_metadata": {"identifier": "20010911_0900_x", "title": ""}},
+    ]
+    db = MagicMock()
+    db.execute.return_value.mappings.return_value.all.return_value = rows
+
+    with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        result = requeue_pending_review_flow.fn(dry_run=False)
+
+    assert result == {"promoted": 1, "evaluated": 2}
+    sql = " ".join(c.args[0].text for c in db.execute.call_args_list if c.args)
+    assert "UPDATE video_jobs SET stage = 'discovered'" in sql
+    assert "INSERT INTO pipeline_transitions" in sql
+
+
+def test_requeue_pending_review_dry_run_makes_no_changes():
+    from video_grabber.pipeline.flows import requeue_pending_review_flow
+
+    rows = [{"id": "j1", "ia_identifier": "NHK_20010914_010000_x",
+             "ia_metadata": {"identifier": "NHK_20010914_010000_x"}}]
+    db = MagicMock()
+    db.execute.return_value.mappings.return_value.all.return_value = rows
+
+    with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        result = requeue_pending_review_flow.fn(dry_run=True)
+
+    assert result == {"promoted": 1, "evaluated": 1}
+    # dry run: only the SELECT ran, no UPDATE/INSERT, no commit.
+    sql = " ".join(c.args[0].text for c in db.execute.call_args_list if c.args)
+    assert "UPDATE" not in sql and "INSERT" not in sql
+    db.commit.assert_not_called()
+
+
 def test_dispatch_discovered_flow_no_discovered_jobs_is_noop():
     from video_grabber.pipeline.flows import dispatch_discovered_flow
 
