@@ -186,6 +186,42 @@ def test_process_item_flow_transitions_to_failed_on_download_error():
     assert "failed" in stages
 
 
+def test_process_item_flow_cleans_scratch_on_success():
+    from video_grabber.pipeline import flows
+
+    job = MagicMock(id="job-001", ia_identifier="cnn-sep11-0800")
+    with patch("video_grabber.pipeline.flows.get_job", return_value=job), \
+         patch("video_grabber.pipeline.flows.get_db"), \
+         patch("video_grabber.pipeline.flows.download_item", return_value=MagicMock()), \
+         patch("video_grabber.pipeline.flows.resolve_job", return_value=job), \
+         patch("video_grabber.pipeline.flows.encode_to_hls", return_value=MagicMock()), \
+         patch("video_grabber.pipeline.flows.upload_hls_package", return_value="k"), \
+         patch("video_grabber.pipeline.flows.write_media_item"), \
+         patch("video_grabber.pipeline.flows.transition_job"), \
+         patch("video_grabber.pipeline.flows.shutil.rmtree") as mock_rm, \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        flows.process_item_flow.fn("job-001")
+
+    assert mock_rm.called
+    assert str(mock_rm.call_args[0][0]).endswith("cnn-sep11-0800")
+
+
+def test_process_item_flow_cleans_scratch_on_failure():
+    from video_grabber.pipeline import flows
+
+    job = MagicMock(id="job-001", ia_identifier="cnn-sep11-0800")
+    with patch("video_grabber.pipeline.flows.get_job", return_value=job), \
+         patch("video_grabber.pipeline.flows.get_db"), \
+         patch("video_grabber.pipeline.flows.download_item", side_effect=Exception("boom")), \
+         patch("video_grabber.pipeline.flows.transition_job"), \
+         patch("video_grabber.pipeline.flows.shutil.rmtree") as mock_rm, \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        with pytest.raises(Exception, match="boom"):
+            flows.process_item_flow.fn("job-001")
+
+    assert mock_rm.called  # scratch reclaimed even when the job fails
+
+
 def test_process_item_flow_transitions_through_all_stages():
     from video_grabber.pipeline.flows import process_item_flow
 
