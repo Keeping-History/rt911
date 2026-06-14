@@ -32,8 +32,16 @@ from video_grabber.pipeline.flows import (
 _PROCESS_ITEM_LIMIT = 2
 # Scanner is serial by design; per-call rate-limit lives in IA_RATE_PER_SEC.
 _SCAN_LIMIT = 1
-# One dispatcher at a time so two operators don't both drain the queue in parallel.
-_DISPATCH_LIMIT = 1
+# Two concurrent dispatchers, to actually saturate the two-encode pipeline
+# (_PROCESS_ITEM_LIMIT). Each dispatcher is blocking — it drives one process-item
+# at a time — so it takes two dispatchers to keep two encodes running; a single
+# one only ever reaches 1x. The two share the queue via stage transitions
+# (process-item flips a job to 'downloading' at start, so the other dispatcher
+# stops seeing it). A rare double-pick of the same job is possible in the brief
+# window before that flip, but harmless: upload + Directus writes are idempotent,
+# so the worst case is one wasted re-encode. (If that waste ever matters, claim
+# rows atomically with SELECT ... FOR UPDATE SKIP LOCKED in the dispatcher.)
+_DISPATCH_LIMIT = 2
 # Channel assembly is ffmpeg-light (tiny gap segments) but writes shared
 # playlists; one at a time keeps per-channel publishes from racing.
 _BUILD_CHANNEL_LIMIT = 2
