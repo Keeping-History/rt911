@@ -72,22 +72,38 @@ def get_ia_files(ia_identifier: str) -> list[dict]:
 
 
 def select_best_file(files: list[dict]) -> dict:
-    """Return the best source file by format priority. Raises ValueError if none qualify."""
+    """Return the best *downloadable* source file. Raises ValueError if none qualify.
+
+    Skips ``private`` files. Stream-only items (most of the Sept-11 news archive)
+    mark the full-res original ``private=true`` — it 401s for everyone, with or
+    without credentials — while still exposing public ``.ogv`` / low-bitrate
+    ``.mp4`` derivatives. Among downloadable files we prefer a full-quality source
+    over a low-bitrate derivative (``_SKIP_PATTERNS``), then by container format,
+    then by larger size. So a public original wins when present; for a stream-only
+    item the largest non-low-bitrate derivative (typically the ``.ogv``) is taken,
+    with the ``512kb``/etc. mp4 only as a last resort.
+    """
     candidates = []
     for f in files:
+        if str(f.get("private", "")).lower() == "true":
+            continue
         name = f.get("name", "").lower()
         suffix = "." + name.rsplit(".", 1)[-1] if "." in name else ""
         if suffix not in _FORMAT_PRIORITY:
             continue
-        if any(pat in name for pat in _SKIP_PATTERNS):
-            continue
-        candidates.append((f, _FORMAT_PRIORITY[suffix]))
+        is_low_bitrate = any(pat in name for pat in _SKIP_PATTERNS)
+        try:
+            size = int(f.get("size") or 0)
+        except (TypeError, ValueError):
+            size = 0
+        candidates.append((is_low_bitrate, _FORMAT_PRIORITY[suffix], -size, f))
 
     if not candidates:
-        raise ValueError("no suitable file found in IA item")
+        raise ValueError("no downloadable file found in IA item")
 
-    candidates.sort(key=lambda x: x[1])
-    return candidates[0][0]
+    # Full-quality before low-bitrate, then format priority, then larger size.
+    candidates.sort(key=lambda c: (c[0], c[1], c[2]))
+    return candidates[0][3]
 
 
 def find_wasabi_source(ia_identifier: str, best: dict, cfg, *, s3=None) -> Optional[str]:
