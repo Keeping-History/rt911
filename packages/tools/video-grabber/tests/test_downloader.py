@@ -147,6 +147,31 @@ def test_download_resume_sends_range_header(tmp_path):
 
 
 @respx.mock
+def test_download_skips_when_file_already_complete(tmp_path):
+    """Regression: a complete file on disk (from a prior attempt or a
+    double-picked job) must NOT trigger a Range request — IA returns 416 for a
+    range at EOF. We short-circuit and return the existing file."""
+    job = make_job()
+    full = b"z" * 4096
+    dest_dir = tmp_path / job.ia_identifier
+    dest_dir.mkdir(parents=True)
+    (dest_dir / "broadcast.mp4").write_bytes(full)
+
+    respx.get(
+        "https://archive.org/metadata/cnn-sep11-0800/files"
+    ).mock(return_value=httpx.Response(200, json={"result": [
+        {"name": "broadcast.mp4", "format": "MPEG4", "size": str(len(full))},
+    ]}))
+    dl_route = respx.get("https://archive.org/download/cnn-sep11-0800/broadcast.mp4")
+
+    with patch("video_grabber.pipeline.downloader.update_bytes_downloaded"):
+        result = download_item(job, tmp_path)
+
+    assert result.read_bytes() == full
+    assert not dl_route.called  # never hit the download endpoint
+
+
+@respx.mock
 def test_download_updates_bytes_downloaded(tmp_path):
     job = make_job()
     content = b"a" * 2 * 1024 * 1024  # 2 MB
