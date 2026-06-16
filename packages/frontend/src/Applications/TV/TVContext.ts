@@ -8,15 +8,28 @@ export const classicyTVEventHandler = (
 	action: ActionMessage,
 ) => {
 	if (!ds.System.Manager.Applications.apps[appId]) return ds;
-	if (action.type !== "ClassicyAppTVSetGridState") return ds;
+	const appData = ds.System.Manager.Applications.apps[appId].data ?? {};
 
-	ds.System.Manager.Applications.apps[appId].data = {
-		...(ds.System.Manager.Applications.apps[appId].data ?? {}),
-		multiSelectMode: action.multiSelectMode,
-		selectedPlayers: action.selectedPlayers,
-		mutedGridPlayers: action.mutedGridPlayers,
-	};
-	return ds;
+	switch (action.type) {
+		case "ClassicyAppTVSetGridState":
+			ds.System.Manager.Applications.apps[appId].data = {
+				...appData,
+				multiSelectMode: action.multiSelectMode,
+				selectedPlayers: action.selectedPlayers,
+				mutedGridPlayers: action.mutedGridPlayers,
+			};
+			return ds;
+		// Channels the user has turned off in Settings. Stored as a blacklist of
+		// `source` slugs so any channel that appears later defaults to enabled.
+		case "ClassicyAppTVSetDisabledChannels":
+			ds.System.Manager.Applications.apps[appId].data = {
+				...appData,
+				disabledChannels: action.disabledChannels,
+			};
+			return ds;
+		default:
+			return ds;
+	}
 };
 
 registerAppEventHandler("ClassicyAppTV", classicyTVEventHandler);

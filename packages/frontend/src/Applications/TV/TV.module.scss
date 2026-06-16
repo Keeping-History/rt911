@@ -158,3 +158,19 @@ $strip-height: calc(5em + 8px);
   padding: 0 var(--window-padding-size);
   color: var(--color-theme-03);
 }
+
+.tvSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  padding: 0.5em;
+  background-color: var(--color-system-02);
+}
+
+.tvSettingsButtons {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 0.5em;
+  padding-top: 0.5em;
+}
