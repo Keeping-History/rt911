@@ -67,6 +67,8 @@ export interface MediaStreamContextValue {
 	items: MediaItem[];
 	/** Pager items received while subscribed to the pager channel. */
 	pagerItems: PagerItem[];
+	/** mp3 (Radio) items received while subscribed to the mp3 channel. Same shape as items. */
+	mp3Items: MediaItem[];
 	connected: boolean;
 	addItems: (items: MediaItem[]) => void;
 	/** Register a set of desired formats for an app. null = want all formats. */
@@ -77,15 +79,22 @@ export interface MediaStreamContextValue {
 	subscribePager: (appId: string) => void;
 	/** Drop a pager-channel subscription. Unsubscribes server-side when the last app leaves. */
 	unsubscribePager: (appId: string) => void;
+	/** Opt into mp3-channel delivery. Ref-counted by appId. */
+	subscribeMp3: (appId: string) => void;
+	/** Drop an mp3-channel subscription. Unsubscribes server-side when the last app leaves. */
+	unsubscribeMp3: (appId: string) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	items: [],
 	pagerItems: [],
+	mp3Items: [],
 	connected: false,
 	addItems: () => {},
 	subscribeFormats: () => {},
 	unsubscribeFormats: () => {},
 	subscribePager: () => {},
 	unsubscribePager: () => {},
+	subscribeMp3: () => {},
+	unsubscribeMp3: () => {},
 });

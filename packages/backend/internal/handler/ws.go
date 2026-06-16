@@ -35,8 +35,8 @@ type filterMsg struct {
 	Formats []string `json:"formats"`
 }
 
-// channelMsg carries the channel name for subscribe/unsubscribe. Currently the
-// only valid channel is "pager".
+// channelMsg carries the channel name for subscribe/unsubscribe. Valid channels
+// are "pager" and "mp3".
 type channelMsg struct {
 	Type    string `json:"type"`
 	Channel string `json:"channel"`
@@ -121,7 +121,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.Init(t, items)
-				sendPagerSnapshot(r, sess, pool, t, logger)
+				sendSubscribedSnapshots(r, sess, pool, t, logger)
 
 			case "seek":
 				t, err := parseTime(msg.Time)
@@ -136,7 +136,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.Seek(t, items)
-				sendPagerSnapshot(r, sess, pool, t, logger)
+				sendSubscribedSnapshots(r, sess, pool, t, logger)
 
 			case "heartbeat":
 				t, err := parseTime(msg.Time)
@@ -160,15 +160,15 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					sess.SendError("malformed subscribe message")
 					continue
 				}
-				if cmsg.Channel != session.ChannelPager {
+				if !knownChannel(cmsg.Channel) {
 					sess.SendError(fmt.Sprintf("unknown channel %q", cmsg.Channel))
 					continue
 				}
 				sess.Subscribe(cmsg.Channel)
 				// Deliver an immediate snapshot at the current virtual time so the
-				// client gets recent pager traffic without waiting for the next tick.
+				// client gets the active items without waiting for the next tick.
 				if t, ok := sess.VirtualTime(); ok {
-					sendPagerSnapshot(r, sess, pool, t, logger)
+					sendChannelSnapshot(r, sess, pool, cmsg.Channel, t, logger)
 				}
 
 			case "unsubscribe":
@@ -177,7 +177,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					sess.SendError("malformed unsubscribe message")
 					continue
 				}
-				if cmsg.Channel != session.ChannelPager {
+				if !knownChannel(cmsg.Channel) {
 					sess.SendError(fmt.Sprintf("unknown channel %q", cmsg.Channel))
 					continue
 				}
@@ -226,4 +226,42 @@ func sendPagerSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Poo
 		return
 	}
 	sess.SendPager(t, items)
+}
+
+// sendMp3Snapshot delivers the mp3 items active at t (overlap window) to the
+// session if it is subscribed to the mp3 channel. Unlike pager, mp3 is durational
+// audio, so the snapshot returns the recording playing at t (start ≤ t ≤ end) and
+// the Radio app resumes it mid-file via the jump offset.
+func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelMp3) {
+		return
+	}
+	items, err := db.CurrentMp3Items(r.Context(), pool, t)
+	if err != nil {
+		logger.Warn("current mp3 items query failed", "error", err)
+		return
+	}
+	sess.SendMp3(t, items)
+}
+
+// knownChannel reports whether ch is a valid subscription channel.
+func knownChannel(ch string) bool {
+	return ch == session.ChannelPager || ch == session.ChannelMp3
+}
+
+// sendChannelSnapshot delivers the subscribe-time snapshot for a single channel.
+func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, channel string, t time.Time, logger *slog.Logger) {
+	switch channel {
+	case session.ChannelPager:
+		sendPagerSnapshot(r, sess, pool, t, logger)
+	case session.ChannelMp3:
+		sendMp3Snapshot(r, sess, pool, t, logger)
+	}
+}
+
+// sendSubscribedSnapshots delivers snapshots for every channel the session is
+// subscribed to. Called from init and seek; each helper no-ops if unsubscribed.
+func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+	sendPagerSnapshot(r, sess, pool, t, logger)
+	sendMp3Snapshot(r, sess, pool, t, logger)
 }

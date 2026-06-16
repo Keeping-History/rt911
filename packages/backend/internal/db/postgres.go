@@ -151,6 +151,51 @@ func queryPagerItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...
 	return out, rows.Err()
 }
 
+// mp3SelectFrom is the shared SELECT … FROM clause for mp3 queries. mp3 items
+// reuse the MediaItem shape (same columns as media_items) but live in their own
+// mp3_items table, delivered on the opt-in "mp3" channel.
+const mp3SelectFrom = `
+	SELECT mi.id, mi.title, mi.full_title, s.slug,
+	       mi.start_date, mi.end_date, mi.calc_duration, mi.timezone,
+	       mi.url, mi.format, mi.approved, mi.mute,
+	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption,
+	       mi.content, mi.sort
+	FROM mp3_items mi
+	LEFT JOIN sources s ON s.id = mi.source`
+
+// AllMp3Items loads every approved mp3 item ordered by start_date (cache warming).
+func AllMp3Items(ctx context.Context, pool *pgxpool.Pool) ([]model.MediaItem, error) {
+	return queryItems(ctx, pool,
+		mp3SelectFrom+` WHERE mi.approved = 1 ORDER BY mi.start_date`)
+}
+
+// Mp3ItemByID returns the row with the given id regardless of approval state, or
+// nil if not found. The NOTIFY listener uses this to fetch the latest version of
+// a changed row; an unapproved result means "evict from cache."
+func Mp3ItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.MediaItem, error) {
+	items, err := queryItems(ctx, pool, mp3SelectFrom+` WHERE mi.id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
+// CurrentMp3Items returns approved mp3 items active at time t (start_date ≤ t ≤
+// end_date). Unlike pager, mp3 items are durational audio: a radio recording
+// playing at t must appear when the client seeks to t so it can resume mid-file
+// via the jump offset. Used by the init/seek/subscribe snapshot paths.
+func CurrentMp3Items(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model.MediaItem, error) {
+	return queryItems(ctx, pool,
+		mp3SelectFrom+`
+		 WHERE mi.approved = 1
+		   AND mi.start_date <= $1
+		   AND (mi.end_date IS NULL OR mi.end_date >= $1)
+		 ORDER BY mi.start_date`, t)
+}
+
 func derefStr(dst *string, src *string) {
 	if src != nil {
 		*dst = *src

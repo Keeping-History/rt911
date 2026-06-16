@@ -57,6 +57,36 @@ func TestSubscribeUnsubscribePagerChannel(t *testing.T) {
 	}
 }
 
+func TestSendMp3EmitsFrameWithMediaItems(t *testing.T) {
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 15, 26, 0, 0, time.UTC)
+
+	s.SendMp3(at, []model.MediaItem{{ID: 5821, Title: "ID Rountree", Format: "mp3", URL: "x.mp3"}})
+
+	m := recvType(t, s)
+	if m.Type != "mp3" {
+		t.Fatalf("expected mp3 frame, got %q", m.Type)
+	}
+	if len(m.Items) != 1 || m.Items[0].Title != "ID Rountree" {
+		t.Fatalf("expected one mp3 media item, got %+v", m.Items)
+	}
+	if len(m.Pager) != 0 {
+		t.Fatalf("mp3 frame must not carry pager payload, got %+v", m.Pager)
+	}
+}
+
+func TestMp3ChannelIndependentOfPager(t *testing.T) {
+	s := newTestSession(t)
+	s.Subscribe(ChannelMp3)
+	_ = recvType(t, s) // drain subscribe_ack
+	if !s.Subscribed(ChannelMp3) {
+		t.Fatal("expected mp3 subscription")
+	}
+	if s.Subscribed(ChannelPager) {
+		t.Fatal("subscribing mp3 must not subscribe pager")
+	}
+}
+
 func TestSendPagerEmptyBatchSendsNothing(t *testing.T) {
 	s := newTestSession(t)
 

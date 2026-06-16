@@ -17,6 +17,18 @@ import {
 // this many milliseconds after their start time before being pruned.
 const INSTANT_RETENTION_MS = 10 * 60 * 1000; // 10 minutes
 
+// Whether a media-shaped item should still be retained at wall time `now`.
+// Long items live until their end_date passes; instant items linger for
+// INSTANT_RETENTION_MS after their start. Shared by media `items` and `mp3Items`.
+function keepMediaItem(item: MediaItem, now: number): boolean {
+	if (!item.end_date) return true;
+	const endMs = new Date(item.end_date).getTime();
+	if (item.start_date === item.end_date || (item.calc_duration ?? -1) === 0) {
+		return now - endMs < INSTANT_RETENTION_MS;
+	}
+	return endMs > now;
+}
+
 const WS_URL: string =
 	(import.meta.env.VITE_MEDIA_STREAM_URL as string | undefined) ??
 	"ws://localhost:8080/stream";
@@ -36,7 +48,17 @@ interface WsPagerMessage {
 	pager: PagerItem[];
 }
 
-type WsIncomingMessage = WsItemsMessage | WsPagerMessage | { type: string };
+// mp3 frames reuse the items field but carry a distinct "mp3" type.
+interface WsMp3Message {
+	type: "mp3";
+	items: MediaItem[];
+}
+
+type WsIncomingMessage =
+	| WsItemsMessage
+	| WsPagerMessage
+	| WsMp3Message
+	| { type: string };
 
 interface MediaStreamProviderProps {
 	children: ReactNode;
@@ -49,14 +71,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 
 	const [items, setItems] = useState<MediaItem[]>([]);
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
+	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
 	const [connected, setConnected] = useState(false);
 
 	// Per-app format subscriptions. null = wants all formats.
 	const formatSubscriptions = useRef(new Map<string, string[] | null>());
 
-	// Ref-counted pager-channel subscribers. The server only delivers pager
+	// Ref-counted channel subscribers. The server only delivers a channel's
 	// items while at least one app is subscribed.
 	const pagerSubscribers = useRef(new Set<string>());
+	const mp3Subscribers = useRef(new Set<string>());
 
 	const addItems = useCallback((incoming: MediaItem[]) => {
 		setItems((prev) => {
@@ -132,21 +156,32 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	const subscribeMp3 = useCallback(
+		(appId: string) => {
+			const wasEmpty = mp3Subscribers.current.size === 0;
+			mp3Subscribers.current.add(appId);
+			if (wasEmpty) send({ type: "subscribe", channel: "mp3" });
+		},
+		[send],
+	);
+
+	const unsubscribeMp3 = useCallback(
+		(appId: string) => {
+			mp3Subscribers.current.delete(appId);
+			if (mp3Subscribers.current.size === 0) {
+				send({ type: "unsubscribe", channel: "mp3" });
+				setMp3Items([]);
+			}
+		},
+		[send],
+	);
+
 	// Prune expired items on every second tick.
-	// Instant items (start_date = end_date or calc_duration = 0) are kept for
-	// INSTANT_RETENTION_MS after their start time instead of being pruned immediately.
 	useEffect(() => {
 		const now = localDate.getTime();
-		setItems((prev) =>
-			prev.filter((item) => {
-				if (!item.end_date) return true;
-				const endMs = new Date(item.end_date).getTime();
-				if (item.start_date === item.end_date || (item.calc_duration ?? -1) === 0) {
-					return now - endMs < INSTANT_RETENTION_MS;
-				}
-				return endMs > now;
-			}),
-		);
+		setItems((prev) => prev.filter((item) => keepMediaItem(item, now)));
+		// mp3 items are durational audio — same retention rules as media items.
+		setMp3Items((prev) => prev.filter((item) => keepMediaItem(item, now)));
 		// Pager items are always instant — retain by start_date.
 		setPagerItems((prev) =>
 			prev.filter((p) => now - new Date(p.start_date).getTime() < INSTANT_RETENTION_MS),
@@ -185,10 +220,13 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 					time: localDateRef.current.toISOString(),
 				}),
 			);
-			// Re-establish the pager subscription after a reconnect — the server
+			// Re-establish channel subscriptions after a reconnect — the server
 			// does not remember subscriptions across connections.
 			if (pagerSubscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "pager" }));
+			}
+			if (mp3Subscribers.current.size > 0) {
+				ws.send(JSON.stringify({ type: "subscribe", channel: "mp3" }));
 			}
 			heartbeatId = setInterval(() => {
 				if (ws.readyState === WebSocket.OPEN) {
@@ -227,20 +265,27 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "mp3") {
+				const incomingMp3 = (msg as WsMp3Message).items;
+				if (!incomingMp3 || incomingMp3.length === 0) return;
+				const nowMp3 = localDateRef.current.getTime();
+				const freshMp3 = incomingMp3.filter((item) => keepMediaItem(item, nowMp3));
+				if (freshMp3.length === 0) return;
+				setMp3Items((prev) => {
+					const byId = new Map(prev.map((i) => [i.id, i]));
+					for (const item of freshMp3) byId.set(item.id, item);
+					return Array.from(byId.values());
+				});
+				return;
+			}
+
 			if (msg.type !== "items" && msg.type !== "init_ack" && msg.type !== "seek_ack") return;
 
 			const incoming = (msg as WsItemsMessage).items;
 			if (incoming.length === 0) return;
 
 			const now = localDateRef.current.getTime();
-			const fresh = incoming.filter((item) => {
-				if (!item.end_date) return true;
-				const endMs = new Date(item.end_date).getTime();
-				if (item.start_date === item.end_date || (item.calc_duration ?? -1) === 0) {
-					return now - endMs < INSTANT_RETENTION_MS;
-				}
-				return endMs > now;
-			});
+			const fresh = incoming.filter((item) => keepMediaItem(item, now));
 
 			setItems((prev) => {
 				const byId = new Map(prev.map((i) => [i.id, i]));
@@ -282,12 +327,15 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			value={{
 				items,
 				pagerItems,
+				mp3Items,
 				connected,
 				addItems,
 				subscribeFormats,
 				unsubscribeFormats,
 				subscribePager,
 				unsubscribePager,
+				subscribeMp3,
+				unsubscribeMp3,
 			}}
 		>
 			{children}
