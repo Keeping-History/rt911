@@ -60,6 +60,15 @@ func main() {
 		go cache.ListenMp3(ctx, dbURL, rdb, pool, logger)
 	}
 
+	// news (News app) — same opt-in side-channel pattern, best-effort init.
+	if err := cache.InstallNewsTriggers(ctx, pool, logger); err != nil {
+		logger.Warn("news trigger install failed; news channel disabled", "error", err)
+	} else if err := cache.WarmNewsCache(ctx, rdb, pool, logger); err != nil {
+		logger.Warn("news cache warm failed; news channel disabled", "error", err)
+	} else {
+		go cache.ListenNews(ctx, dbURL, rdb, pool, logger)
+	}
+
 	// Keep Redis in sync with media_items changes for the process lifetime.
 	go cache.Listen(ctx, dbURL, rdb, pool, logger)
 
