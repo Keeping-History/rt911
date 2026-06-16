@@ -1,6 +1,8 @@
 import {
 	ClassicyApp,
 	ClassicyButton,
+	ClassicyCheckbox,
+	ClassicyControlGroup,
 	ClassicyControlLabel,
 	ClassicyIcons,
 	ClassicyWindow,
@@ -10,12 +12,21 @@ import {
 	useClassicyDateTime,
 } from "classicy";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactPlayer from "react-player";
-import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
+import type {
+	MediaItem,
+	MediaStreamFilter,
+} from "../../Providers/MediaStream/MediaStreamContext";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
 import styles from "./TV.module.scss";
 import "./TVContext";
+
+// Every approved HLS channel in the stream, before any per-channel selection.
+// Hoisted to a module constant so its reference is stable across renders —
+// useMediaStream memoizes on the filter object, so an inline literal would
+// re-filter on every render.
+const ALL_CHANNELS_FILTER: MediaStreamFilter = { format: ["m3u8"], approved: true };
 
 /** Seconds into the media file that corresponds to the given wall-clock time. */
 function calcSeekSeconds(item: MediaItem, clockMs: number): number {
@@ -43,10 +54,46 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		(state) => state.System.Manager.Applications.apps[appId],
 	);
 
-	const { items } = useMediaStream({ format: ["m3u8"], approved: true });
+	// Unfiltered-by-source list, used only to enumerate which channels exist so
+	// Settings can list them all (even ones the user has currently disabled).
+	const { items: allChannelItems } = useMediaStream(ALL_CHANNELS_FILTER);
 	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
+	// Persisted blacklist of channels the user has switched off.
+	const disabledChannels = useMemo(
+		() => (appState?.data?.disabledChannels as string[] | undefined) ?? [],
+		[appState?.data?.disabledChannels],
+	);
+
+	// Distinct channel slugs currently present in the stream, sorted for a stable
+	// Settings list. `source` is optional on MediaItem, so empties are dropped.
+	const availableChannels = useMemo(() => {
+		const seen = new Set<string>();
+		for (const item of allChannelItems) {
+			if (item.source) seen.add(item.source);
+		}
+		return [...seen].sort();
+	}, [allChannelItems]);
+
+	// The channels left enabled = everything present minus the blacklist. This is
+	// the whitelist handed to the streaming filter below.
+	const enabledChannels = useMemo(
+		() => availableChannels.filter((c) => !disabledChannels.includes(c)),
+		[availableChannels, disabledChannels],
+	);
+
+	// The filter actually driving the player grid. Passing `source` here is what
+	// "passes the settings through to the streaming filter" — useMediaStream's
+	// applyFilter drops any item whose source isn't in the enabled whitelist.
+	const tvFilter = useMemo<MediaStreamFilter>(
+		() => ({ ...ALL_CHANNELS_FILTER, source: enabledChannels }),
+		[enabledChannels],
+	);
+	const { items } = useMediaStream(tvFilter);
+
 	const [showSettings, setShowSettings] = useState<boolean>(false);
+	// Settings form: local working copy of the disabled set, committed on Save.
+	const [channelForm, setChannelForm] = useState<string[]>(disabledChannels);
 	const [activePlayer, setActivePlayer] = useState<number>(0);
 	// Browsers block autoplay with audio until the user interacts with the page.
 	// Track first interaction so the active player stays muted until then.
@@ -87,9 +134,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const hlsInactiveConfigsRef = useRef<Map<number, object>>(new Map());
 	const hlsActiveConfigsRef = useRef<Map<number, object>>(new Map());
 
-	// Select the first item once items arrive
+	// Select the first item once items arrive, and re-home the active player if its
+	// channel was disabled in Settings (its item drops out of the filtered list).
 	useEffect(() => {
-		if (activePlayer === 0 && items.length > 0) {
+		if (items.length === 0) return;
+		if (!items.some((i) => i.id === activePlayer)) {
 			setActivePlayer(items[0].id);
 		}
 	}, [items, activePlayer]);
@@ -207,11 +256,46 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		el.currentTime = calcSeekSeconds(item, nowMs);
 	};
 
+	// Re-sync the working copy from persisted state, reveal the window, and focus
+	// it so the modal is keyboard-ready the instant it opens (mirrors Browser).
+	const openSettings = useCallback(() => {
+		setChannelForm(disabledChannels);
+		setShowSettings(true);
+		desktopEventDispatch({
+			type: "ClassicyWindowFocus",
+			app: { id: appId },
+			window: { id: `${appId}_settings` },
+		});
+	}, [disabledChannels, desktopEventDispatch]);
+
+	const saveSettings = useCallback(() => {
+		desktopEventDispatch({
+			type: "ClassicyAppTVSetDisabledChannels",
+			disabledChannels: channelForm,
+		});
+		setShowSettings(false);
+	}, [channelForm, desktopEventDispatch]);
+
+	// A checked box means the channel is ON, so toggling drops it from / adds it
+	// to the disabled list.
+	const toggleChannel = useCallback((channel: string, enabled: boolean) => {
+		setChannelForm((prev) =>
+			enabled ? prev.filter((c) => c !== channel) : [...prev, channel],
+		);
+	}, []);
+
 	const appMenu = [
 		{
 			id: "file",
 			title: "File",
-			menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
+			menuChildren: [
+				{
+					id: `${appId}_settings`,
+					title: "Settings…",
+					onClickFunc: openSettings,
+				},
+				quitMenuItemHelper(appId, appName, appIcon),
+			],
 		},
 	];
 
@@ -225,31 +309,45 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			{showSettings && (
 				<ClassicyWindow
 					id={`${appId}_settings`}
-					title={appName}
+					title={"Settings"}
 					appId={appId}
-					closable={false}
+					closable={true}
 					resizable={false}
 					zoomable={false}
-					scrollable={false}
+					scrollable={true}
 					collapsable={false}
-					initialSize={[200, 100]}
-					initialPosition={[100, 100]}
-					minimumSize={[200, 100]}
+					initialSize={[300, 0]}
+					initialPosition={[150, 120]}
 					modal={true}
-					hidden={true}
 					appMenu={appMenu}
+					onCloseFunc={() => setShowSettings(false)}
 				>
-					<div
-						style={{
-							display: "flex",
-							justifyContent: "center",
-							flexDirection: "column",
-						}}
-					>
-						<ClassicyControlLabel label={"Nothing Here"}></ClassicyControlLabel>
-						<ClassicyButton onClickFunc={() => setShowSettings(!showSettings)}>
-							Close
-						</ClassicyButton>
+					<div className={styles.tvSettings}>
+						<ClassicyControlGroup label="Channels" columns={true}>
+							{availableChannels.length === 0 ? (
+								<ClassicyControlLabel label="No channels available." />
+							) : (
+								availableChannels.map((channel) => (
+									<ClassicyCheckbox
+										key={channel}
+										id={`tv_channel_${channel}`}
+										label={channel}
+										checked={!channelForm.includes(channel)}
+										onClickFunc={(checked: boolean) =>
+											toggleChannel(channel, checked)
+										}
+									/>
+								))
+							)}
+						</ClassicyControlGroup>
+						<div className={styles.tvSettingsButtons}>
+							<ClassicyButton onClickFunc={() => setShowSettings(false)}>
+								Cancel
+							</ClassicyButton>
+							<ClassicyButton isDefault={true} onClickFunc={saveSettings}>
+								Save
+							</ClassicyButton>
+						</div>
 					</div>
 				</ClassicyWindow>
 			)}
