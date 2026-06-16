@@ -108,6 +108,20 @@ func PagerItemsAt(ctx context.Context, rdb *goredis.Client, t time.Time) ([]mode
 	return fetchPagerByIDs(ctx, rdb, ids)
 }
 
+// PagerItemsInRange returns pager items whose start_date Unix-second is in the
+// half-open interval [lo, hi). Used by the windowing refill path; the forward-only
+// pacing invariant is re-imposed client-side by the reveal gate, not here.
+func PagerItemsInRange(ctx context.Context, rdb *goredis.Client, lo, hi time.Time) ([]model.PagerItem, error) {
+	ids, err := rdb.ZRangeByScore(ctx, keyPagerByStart, &goredis.ZRangeBy{
+		Min: strconv.FormatInt(lo.Unix(), 10),
+		Max: "(" + strconv.FormatInt(hi.Unix(), 10), // exclusive upper bound
+	}).Result()
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	return fetchPagerByIDs(ctx, rdb, ids)
+}
+
 func fetchPagerByIDs(ctx context.Context, rdb *goredis.Client, ids []string) ([]model.PagerItem, error) {
 	vals, err := rdb.HMGet(ctx, keyPagerItems, ids...).Result()
 	if err != nil {

@@ -60,16 +60,45 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `unsubscribe_ack` | `channel`                     | Reply to `unsubscribe`.                                |
 | `pause_ack`       | —                             | Reply to `pause`.                                      |
 | `resume_ack`      | —                             | Reply to `resume`.                                     |
-| `items`           | `time`, `items[]`             | Each tick that produces ≥ 1 media item after filtering.|
-| `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) and each tick that produces ≥ 1 pager item while subscribed. |
-| `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) and each tick that produces ≥ 1 mp3 item while subscribed. Reuses the `items` field. |
-| `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) and each tick that produces ≥ 1 news item while subscribed. Reuses the `items` field. |
+| `items`           | `time`, `items[]`             | A forward **window** of media items (default 300 s) sent when the session refills; client buffers and reveals each at its `start_date`. |
+| `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) + a forward **window** (default 600 s) per refill while subscribed. Client reveal-gate preserves forward-only pacing. |
+| `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) + a forward **window** (default 300 s) per refill while subscribed. Reuses the `items` field. |
+| `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `error`           | `message`                     | Reply to a malformed or unrecognised request.          |
 
 The frame-level `time` field is a string (RFC3339 UTC, e.g. `"2001-09-11T08:46:00Z"`) in both the
 logical and wire forms. The `time.Time` date fields **inside** `items[]`/`pager[]` (`start_date`,
 `end_date`) ride the binary msgpack timestamp ext on the wire and decode to ISO strings on the
 client. `items[]` and `pager[]` are documented in [`data-model.md`](./data-model.md).
+
+---
+
+## Look-ahead windowing (server pacing + client reveal gate)
+
+The server does **not** send one frame per virtual second. Each channel sends a **forward window**
+of upcoming items in a single frame, then stays silent until the window needs refilling. This cuts
+each session's Redis lookups from 1/second to ~1/window and de-syncs the per-tick burst — the
+scaling lever for thousands of concurrent sessions, each at its own (unpinned) virtual time.
+
+- **Window sizes are per-channel** (server constants, not negotiated): media/mp3 = **300 s**,
+  pager/news = **600 s**. A channel refills once the virtual clock comes within a **30 s lead** of
+  the last window's upper edge, so the client's buffer never drains. Windows are half-open
+  `[lo, hi)` and contiguous — no gaps, no cross-window duplicates.
+- **A frame's `items[]`/`pager[]` therefore contains future-dated items**, not just items active
+  at `time`. The client **must buffer** them keyed by `id` and surface each only when its virtual
+  clock reaches the item's `start_date`. This client reveal-gate is what preserves the deliberately
+  **forward-only** pager/news pacing — windowing moves *where* pacing happens (now client-side), it
+  does not remove it. Do not hand windowed items to consumer apps until due.
+- **`init_ack`/`seek_ack` snapshots are unchanged** — they carry the active-now overlap set (incl.
+  the 5-min instant lookback) from Postgres so the client has immediate playable state. The first
+  tick after init/seek then refills the forward window; a few boundary items may arrive twice
+  (snapshot + first window), so the client **dedups by `id`**.
+- **`seek`** (large jump) and **`filter`** change reset the relevant horizon server-side and the
+  client clears the corresponding buffer, so stale-timeline / stale-filter future items never
+  surface. **`pause`** freezes refills (the buffer stays valid); **`resume`** continues.
+- **Window size is bounded only by client buffer memory, not freshness** — the dataset is purely
+  historical and immutable, so there is no edit-staleness within a window. There is intentionally
+  **no push-invalidation** of an in-flight window.
 
 ---
 
@@ -182,10 +211,13 @@ Response:
 ```
 
 Pager items live in their own table and are **not** delivered by default. After subscribing, the
-server delivers them on the `pager` channel: an immediate snapshot of just the requested second
-`[t, t+1s)` (if the session has been `init`ed) followed by one `pager` frame per virtual second
-that produces pager traffic. Delivery is **forward-only** — no backward lookback, and never a bulk
-future window — so the client renders pages paced by the virtual clock rather than all at once.
+server delivers them on the `pager` channel: an immediate boundary snapshot of the requested second
+`[t, t+1s)` (if the session has been `init`ed), followed by **forward windows** (see
+[Look-ahead windowing](#look-ahead-windowing-server-pacing--client-reveal-gate)) refilled as the
+clock advances. Delivery is **forward-only** — no backward lookback. Although a window is sent ahead
+in bulk on the wire, the **client reveal-gate** holds each page until its `start_date`, so pages
+still render paced by the virtual clock rather than all at once. This pacing invariant is enforced
+client-side; consumer apps never receive a not-yet-due page.
 
 Valid channels are `"pager"`, `"mp3"` and `"news"`; any other value yields
 `{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
@@ -238,9 +270,9 @@ Pager frames stop after the ack.
 }
 ```
 
-Like `items`, `pager` frames are sent at most once per virtual second and only when at least one
-pager item is present — empty seconds produce no frame. The `pager[]` payload mirrors
-`internal/model/pager.go`.
+Like `items`, `pager` frames are sent once per **window refill** (not per second) and only when the
+window contains at least one pager item — empty windows produce no frame. The `pager[]` payload is a
+forward window the client reveal-gates by `start_date`, and mirrors `internal/model/pager.go`.
 
 ### `pause`
 
@@ -296,7 +328,9 @@ Sent by the server, not in response to any client message:
 }
 ```
 
-`items` frames are sent at most once per virtual second, and only when at least one item survives the format filter. Empty seconds produce no frame.
+`items` frames are sent once per **window refill** (roughly every `windowSeconds − lead`, ~270 s by
+default), carrying the forward window of media items that survive the format filter. An empty window
+produces no frame. The client buffers the window and reveals each item at its `start_date`.
 
 ### `error`
 
@@ -334,13 +368,13 @@ client> {"type":"filter","formats":["pager"]}
 server> {"type":"filter_ack"}
 
 client> {"type":"init","time":"2001-09-11T08:46:00Z"}
-server> {"type":"init_ack","time":"2001-09-11T08:46:00Z","items":[<2 instant pager items from lookback>]}
+server> {"type":"init_ack","time":"2001-09-11T08:46:00Z","items":[<active-now snapshot>]}
 
-  ... 1 second wall time passes ...
-server> {"type":"items","time":"2001-09-11T08:46:01Z","items":[<pager msg fired this second>]}
+  ... first tick refills the forward window in ONE frame ...
+server> {"type":"items","time":"2001-09-11T08:46:01Z","items":[<every media item in [08:46:00, 08:51:01)>]}
 
-  ... 5 seconds pass with no pager traffic ...
-  (no frames sent — silence is meaningful)
+  ... the client buffers that window and reveals each item at its start_date ...
+  ... no further frames until the clock nears the window's edge (~270 s later) ...
 
 client> {"type":"heartbeat","time":"2001-09-11T08:46:06Z"}
 server> {"type":"heartbeat_ack","time":"2001-09-11T08:46:06Z"}

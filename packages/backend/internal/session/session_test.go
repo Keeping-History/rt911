@@ -160,3 +160,101 @@ func TestVirtualTimeNotReadyBeforeInit(t *testing.T) {
 		t.Fatalf("expected virtual time %s ready, got %s ok=%v", at, got, ok)
 	}
 }
+
+func TestInitResetsAllHorizons(t *testing.T) {
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
+	s.Init(at, nil)
+	_ = recvType(t, s) // drain init_ack
+
+	if !s.mediaHorizon.Equal(at) || !s.pagerHorizon.Equal(at) ||
+		!s.mp3Horizon.Equal(at) || !s.newsHorizon.Equal(at) {
+		t.Fatalf("Init must reset every horizon to t; got media=%v pager=%v mp3=%v news=%v",
+			s.mediaHorizon, s.pagerHorizon, s.mp3Horizon, s.newsHorizon)
+	}
+}
+
+func TestPlanRefillWindowsAreHalfOpenContiguousAndLeadTriggered(t *testing.T) {
+	base := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
+	horizon := base // freshly init'd to t
+
+	// First tick after init (vTime = base+1s): clock is within leadSeconds of the
+	// horizon, so a refill is due covering [horizon, vTime+window).
+	v := base.Add(1 * time.Second)
+	lo, hi, due := planRefill(&horizon, v, windowMedia)
+	if !due {
+		t.Fatal("first tick after init must refill")
+	}
+	if !lo.Equal(base) {
+		t.Fatalf("lo must be the old horizon (base), got %v", lo)
+	}
+	if !hi.Equal(v.Add(windowMedia)) {
+		t.Fatalf("hi must be vTime+window, got %v", hi)
+	}
+	if !horizon.Equal(hi) {
+		t.Fatalf("horizon must advance to hi, got %v", horizon)
+	}
+
+	// A tick deep inside the buffered window is a no-op (no Redis lookup).
+	if _, _, due := planRefill(&horizon, base.Add(2*time.Second), windowMedia); due {
+		t.Fatal("a tick well inside the window must not refill")
+	}
+
+	// Once the clock comes within leadSeconds of the horizon, the next refill
+	// fires and its lower edge equals the previous upper edge — contiguous, no gap
+	// and no overlap.
+	prevHi := horizon
+	atLead := horizon.Add(-leadSeconds) // vTime+lead == horizon (boundary)
+	lo2, _, due := planRefill(&horizon, atLead, windowMedia)
+	if !due {
+		t.Fatal("refill must fire at the lead boundary")
+	}
+	if !lo2.Equal(prevHi) {
+		t.Fatalf("windows must be contiguous: lo2=%v != prevHi=%v", lo2, prevHi)
+	}
+}
+
+// TestWindowingCutsLookupFrequency characterizes the scaling win: over a virtual
+// hour, a single session issues ~one Redis lookup per (window − lead) seconds
+// instead of one per second. This is the per-session multiplier behind the
+// per-tick burst flattening at thousands of spread sessions.
+func TestWindowingCutsLookupFrequency(t *testing.T) {
+	base := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
+	horizon := base // freshly init'd
+	const ticks = 3600
+
+	refills, v := 0, base
+	for i := 0; i < ticks; i++ {
+		v = v.Add(time.Second)
+		if _, _, due := planRefill(&horizon, v, windowMedia); due {
+			refills++
+		}
+	}
+
+	// windowMedia=300s, lead=30s → refill cadence ≈ 270s → ~14 refills/hour,
+	// vs 3600 per-second lookups: ~250× fewer Redis ops (≈ window×).
+	if refills < 10 || refills > 20 {
+		t.Fatalf("expected ~14 windowed refills over %d ticks, got %d (cadence regression)", ticks, refills)
+	}
+	t.Logf("windowing: %d refills over %d ticks — %.0f× fewer Redis lookups than per-second",
+		refills, ticks, float64(ticks)/float64(refills))
+}
+
+func TestPlanChannelRefillRequiresSubscription(t *testing.T) {
+	s := newTestSession(t)
+	base := time.Date(2001, 9, 11, 12, 46, 0, 0, time.UTC)
+	s.pagerHorizon = base
+	v := base.Add(1 * time.Second)
+
+	// Unsubscribed: never refills, even when the clock is at the horizon.
+	if _, _, due := s.planChannelRefill(ChannelPager, &s.pagerHorizon, v, windowPager); due {
+		t.Fatal("an unsubscribed channel must never refill")
+	}
+
+	s.Subscribe(ChannelPager)
+	_ = recvType(t, s)    // drain subscribe_ack
+	s.pagerHorizon = base // Subscribe reset it to virtualTime (zero, not init'd)
+	if _, _, due := s.planChannelRefill(ChannelPager, &s.pagerHorizon, v, windowPager); !due {
+		t.Fatal("a subscribed channel at its horizon must refill")
+	}
+}

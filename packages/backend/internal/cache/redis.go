@@ -11,8 +11,8 @@ import (
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 
-	goredis "github.com/redis/go-redis/v9"
 	"github.com/jackc/pgx/v5/pgxpool"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 const (
@@ -124,6 +124,21 @@ func ItemsAt(ctx context.Context, rdb *goredis.Client, t time.Time) ([]model.Med
 	ids, err := rdb.ZRangeByScore(ctx, keyByStart, &goredis.ZRangeBy{
 		Min: strconv.FormatFloat(lo, 'f', 0, 64),
 		Max: strconv.FormatFloat(hi, 'f', 0, 64),
+	}).Result()
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	return fetchByIDs(ctx, rdb, ids)
+}
+
+// ItemsInRange returns items whose start_date Unix-second is in the half-open
+// interval [lo, hi). Half-open coverage lets the session refill contiguous
+// windows ([horizon, horizon+window)) with no gaps and no cross-window
+// duplicates — the windowing refill path uses this instead of per-second ItemsAt.
+func ItemsInRange(ctx context.Context, rdb *goredis.Client, lo, hi time.Time) ([]model.MediaItem, error) {
+	ids, err := rdb.ZRangeByScore(ctx, keyByStart, &goredis.ZRangeBy{
+		Min: strconv.FormatInt(lo.Unix(), 10),
+		Max: "(" + strconv.FormatInt(hi.Unix(), 10), // exclusive upper bound
 	}).Result()
 	if err != nil || len(ids) == 0 {
 		return nil, err

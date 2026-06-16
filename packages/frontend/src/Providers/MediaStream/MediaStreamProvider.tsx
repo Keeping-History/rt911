@@ -13,6 +13,19 @@ import {
 	type PagerItem,
 } from "./MediaStreamContext";
 import { decodeWireMessage } from "./wireCodec";
+import { drainDue, partitionByDue } from "./revealBuffer";
+
+// Merge incoming items into a prior list, de-duplicating by id (last write wins).
+function mergeById<T extends { id: number }>(prev: T[], incoming: T[]): T[] {
+	const byId = new Map(prev.map((i) => [i.id, i]));
+	for (const item of incoming) byId.set(item.id, item);
+	return Array.from(byId.values());
+}
+
+// Pager items are instant — retained by start_date within the instant window.
+function keepPagerItem(item: PagerItem, now: number): boolean {
+	return now - new Date(item.start_date).getTime() < INSTANT_RETENTION_MS;
+}
 
 // Instant items (start_date = end_date or calc_duration = 0) are kept for
 // this many milliseconds after their start time before being pruned.
@@ -91,6 +104,14 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const mp3Subscribers = useRef(new Set<string>());
 	const newsSubscribers = useRef(new Set<string>());
 
+	// Reveal buffers: not-yet-due items from a windowed frame, keyed by id. The
+	// per-second effect promotes each into live state when the virtual clock
+	// reaches its start_date — this is what preserves forward-only pacing.
+	const mediaBuffer = useRef(new Map<number, MediaItem>());
+	const pagerBuffer = useRef(new Map<number, PagerItem>());
+	const mp3Buffer = useRef(new Map<number, MediaItem>());
+	const newsBuffer = useRef(new Map<number, MediaItem>());
+
 	const addItems = useCallback((incoming: MediaItem[]) => {
 		setItems((prev) => {
 			const byId = new Map(prev.map((i) => [i.id, i]));
@@ -116,6 +137,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	}, []);
 
 	const sendFormatFilter = useCallback(() => {
+		// The server refills the media window under the new whitelist; drop buffered
+		// media selected under the old filter so it can't surface.
+		mediaBuffer.current.clear();
 		const subs = formatSubscriptions.current;
 		// If no subscriptions or any app wants all formats → no filter
 		if (subs.size === 0 || [...subs.values()].some((f) => f === null)) {
@@ -160,6 +184,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (pagerSubscribers.current.size === 0) {
 				send({ type: "unsubscribe", channel: "pager" });
 				setPagerItems([]);
+				pagerBuffer.current.clear();
 			}
 		},
 		[send],
@@ -180,6 +205,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (mp3Subscribers.current.size === 0) {
 				send({ type: "unsubscribe", channel: "mp3" });
 				setMp3Items([]);
+				mp3Buffer.current.clear();
 			}
 		},
 		[send],
@@ -200,23 +226,31 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (newsSubscribers.current.size === 0) {
 				send({ type: "unsubscribe", channel: "news" });
 				setNewsItems([]);
+				newsBuffer.current.clear();
 			}
 		},
 		[send],
 	);
 
-	// Prune expired items on every second tick.
+	// On every second tick: reveal buffered items the clock has now reached, then
+	// prune expired ones. drainDue mutates the buffer (removing promoted entries);
+	// the merged-then-filtered state both surfaces newly-due items and drops
+	// expired ones in a single pass, keyed by the same `now`.
 	useEffect(() => {
 		const now = localDate.getTime();
-		setItems((prev) => prev.filter((item) => keepMediaItem(item, now)));
+
+		const dueMedia = drainDue(mediaBuffer.current, now);
+		const dueMp3 = drainDue(mp3Buffer.current, now);
+		const dueNews = drainDue(newsBuffer.current, now);
+		const duePager = drainDue(pagerBuffer.current, now);
+
+		setItems((prev) => mergeById(prev, dueMedia).filter((item) => keepMediaItem(item, now)));
 		// mp3 items are durational audio — same retention rules as media items.
-		setMp3Items((prev) => prev.filter((item) => keepMediaItem(item, now)));
+		setMp3Items((prev) => mergeById(prev, dueMp3).filter((item) => keepMediaItem(item, now)));
 		// news items reuse the same retention rules (mostly instant headlines).
-		setNewsItems((prev) => prev.filter((item) => keepMediaItem(item, now)));
+		setNewsItems((prev) => mergeById(prev, dueNews).filter((item) => keepMediaItem(item, now)));
 		// Pager items are always instant — retain by start_date.
-		setPagerItems((prev) =>
-			prev.filter((p) => now - new Date(p.start_date).getTime() < INSTANT_RETENTION_MS),
-		);
+		setPagerItems((prev) => mergeById(prev, duePager).filter((p) => keepPagerItem(p, now)));
 	}, [localDate]);
 
 	// Detect manual time changes and send seek; ignore tick-driven minute boundaries
@@ -225,6 +259,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		const nowMs = new Date(dateTime).getTime();
 
 		if (Math.abs(nowMs - prevMs) > SEEK_THRESHOLD_MS) {
+			// The server sends a fresh window for the new instant; drop buffered
+			// items from the old timeline so they never surface.
+			mediaBuffer.current.clear();
+			pagerBuffer.current.clear();
+			mp3Buffer.current.clear();
+			newsBuffer.current.clear();
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
 		}
 
@@ -286,47 +326,39 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			// Each frame is now a forward *window*: items already due surface
+			// immediately; future items wait in the reveal buffer until the clock
+			// reaches their start_date (preserving forward-only pacing). init_ack /
+			// seek_ack snapshots are all active-now, so they land entirely in `due`.
+			const now = localDateRef.current.getTime();
+
 			if (msg.type === "pager") {
 				const incomingPager = (msg as WsPagerMessage).pager;
 				if (!incomingPager || incomingPager.length === 0) return;
-				const nowPager = localDateRef.current.getTime();
-				const freshPager = incomingPager.filter(
-					(p) => nowPager - new Date(p.start_date).getTime() < INSTANT_RETENTION_MS,
-				);
-				if (freshPager.length === 0) return;
-				setPagerItems((prev) => {
-					const byId = new Map(prev.map((p) => [p.id, p]));
-					for (const p of freshPager) byId.set(p.id, p);
-					return Array.from(byId.values());
-				});
+				const { due, future } = partitionByDue(incomingPager, now);
+				for (const p of future) pagerBuffer.current.set(p.id, p);
+				const fresh = due.filter((p) => keepPagerItem(p, now));
+				if (fresh.length > 0) setPagerItems((prev) => mergeById(prev, fresh));
 				return;
 			}
 
 			if (msg.type === "mp3") {
 				const incomingMp3 = (msg as WsMp3Message).items;
 				if (!incomingMp3 || incomingMp3.length === 0) return;
-				const nowMp3 = localDateRef.current.getTime();
-				const freshMp3 = incomingMp3.filter((item) => keepMediaItem(item, nowMp3));
-				if (freshMp3.length === 0) return;
-				setMp3Items((prev) => {
-					const byId = new Map(prev.map((i) => [i.id, i]));
-					for (const item of freshMp3) byId.set(item.id, item);
-					return Array.from(byId.values());
-				});
+				const { due, future } = partitionByDue(incomingMp3, now);
+				for (const item of future) mp3Buffer.current.set(item.id, item);
+				const fresh = due.filter((item) => keepMediaItem(item, now));
+				if (fresh.length > 0) setMp3Items((prev) => mergeById(prev, fresh));
 				return;
 			}
 
 			if (msg.type === "news") {
 				const incomingNews = (msg as WsNewsMessage).items;
 				if (!incomingNews || incomingNews.length === 0) return;
-				const nowNews = localDateRef.current.getTime();
-				const freshNews = incomingNews.filter((item) => keepMediaItem(item, nowNews));
-				if (freshNews.length === 0) return;
-				setNewsItems((prev) => {
-					const byId = new Map(prev.map((i) => [i.id, i]));
-					for (const item of freshNews) byId.set(item.id, item);
-					return Array.from(byId.values());
-				});
+				const { due, future } = partitionByDue(incomingNews, now);
+				for (const item of future) newsBuffer.current.set(item.id, item);
+				const fresh = due.filter((item) => keepMediaItem(item, now));
+				if (fresh.length > 0) setNewsItems((prev) => mergeById(prev, fresh));
 				return;
 			}
 
@@ -335,16 +367,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			const incoming = (msg as WsItemsMessage).items;
 			if (incoming.length === 0) return;
 
-			const now = localDateRef.current.getTime();
-			const fresh = incoming.filter((item) => keepMediaItem(item, now));
-
-			setItems((prev) => {
-				const byId = new Map(prev.map((i) => [i.id, i]));
-				for (const item of fresh) {
-					byId.set(item.id, item);
-				}
-				return Array.from(byId.values());
-			});
+			const { due, future } = partitionByDue(incoming, now);
+			for (const item of future) mediaBuffer.current.set(item.id, item);
+			const fresh = due.filter((item) => keepMediaItem(item, now));
+			if (fresh.length > 0) setItems((prev) => mergeById(prev, fresh));
 		};
 
 		ws.onclose = () => {

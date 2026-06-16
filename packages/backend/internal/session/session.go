@@ -29,6 +29,25 @@ const (
 	ChannelNews  = "news"
 )
 
+// Look-ahead windowing. Instead of one Redis lookup + frame per virtual second,
+// each channel refills a forward window of items in a single range query and the
+// client reveal-gates them by its virtual clock. This cuts Redis lookups from
+// 1/second to ~1/window per channel and de-syncs the per-tick burst — the failure
+// mode at thousands of spread (unpinned) sessions.
+//
+// Windows are per-channel: dense media uses a shorter window; sparse instant
+// channels (pager/news) use a longer one to refill even less often. leadSeconds
+// is the shared headroom — a channel refills this far before its buffer drains so
+// the client never starves. Data is immutable historical, so window size is
+// bounded only by client buffer memory, not freshness.
+const (
+	leadSeconds = 30 * time.Second
+	windowMedia = 300 * time.Second
+	windowPager = 600 * time.Second
+	windowMp3   = 300 * time.Second
+	windowNews  = 600 * time.Second
+)
+
 // outMsg is the envelope for every server→client message.
 type outMsg struct {
 	Type    string            `json:"type"`
@@ -51,6 +70,14 @@ type Session struct {
 	paused        bool
 	formatFilter  map[string]struct{} // nil = send all formats
 	subscriptions map[string]struct{} // opt-in delivery channels (e.g. "pager")
+
+	// Per-channel look-ahead high-water marks: the exclusive upper edge of the
+	// last window sent on each channel. Channels are subscribed at different
+	// times, so each refills independently. All guarded by mu.
+	mediaHorizon time.Time
+	pagerHorizon time.Time
+	mp3Horizon   time.Time
+	newsHorizon  time.Time
 
 	send      chan []byte
 	tickCh    chan struct{}
@@ -98,6 +125,10 @@ func (s *Session) SetFormatFilter(formats []string) {
 		}
 		s.formatFilter = ff
 	}
+	// Refill the media window from the current instant under the new whitelist;
+	// the client clears its media buffer so future items selected under the old
+	// filter don't surface.
+	s.mediaHorizon = s.virtualTime
 	s.mu.Unlock()
 	s.send_(outMsg{Type: "filter_ack"})
 }
@@ -131,8 +162,28 @@ func (s *Session) Subscribe(channel string) {
 		s.subscriptions = make(map[string]struct{})
 	}
 	s.subscriptions[channel] = struct{}{}
+	// Point this channel's horizon at the current instant so its first tick sends
+	// a forward window. Before init virtualTime is zero and ticks are no-ops; Init
+	// resets all horizons, so a subscribe-before-init is covered there.
+	if h := s.horizonFor(channel); h != nil {
+		*h = s.virtualTime
+	}
 	s.mu.Unlock()
 	s.send_(outMsg{Type: "subscribe_ack", Channel: channel})
+}
+
+// horizonFor returns a pointer to the named channel's horizon, or nil for an
+// unknown channel. Caller must hold s.mu.
+func (s *Session) horizonFor(channel string) *time.Time {
+	switch channel {
+	case ChannelPager:
+		return &s.pagerHorizon
+	case ChannelMp3:
+		return &s.mp3Horizon
+	case ChannelNews:
+		return &s.newsHorizon
+	}
+	return nil
 }
 
 // Unsubscribe stops delivery for the named channel and acks.
@@ -190,10 +241,15 @@ func (s *Session) SendNews(t time.Time, items []model.MediaItem) {
 }
 
 // Init sets the client's starting virtual time and sends the initial snapshot.
+// The snapshot (active-now items, incl. the 5-min instant lookback) gives the
+// client immediate playable state; resetting all horizons to t makes the first
+// tick refill the forward window [t, t+window). A few boundary items may arrive
+// twice (snapshot + first window) — the client dedups by id.
 func (s *Session) Init(t time.Time, items []model.MediaItem) {
 	s.mu.Lock()
 	s.virtualTime = t
 	s.paused = false
+	s.resetHorizons(t)
 	s.mu.Unlock()
 
 	s.send_(outMsg{Type: "init_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
@@ -201,11 +257,22 @@ func (s *Session) Init(t time.Time, items []model.MediaItem) {
 
 // Seek moves the client's virtual clock to t and delivers the full set of
 // items that are active at that time so the client can resync immediately.
+// Like Init, horizons reset to t so windows refill forward from the new instant.
 func (s *Session) Seek(t time.Time, items []model.MediaItem) {
 	s.mu.Lock()
 	s.virtualTime = t
+	s.resetHorizons(t)
 	s.mu.Unlock()
 	s.send_(outMsg{Type: "seek_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
+}
+
+// resetHorizons points every channel's high-water mark at t so the next tick
+// refills a fresh forward window. Caller must hold s.mu.
+func (s *Session) resetHorizons(t time.Time) {
+	s.mediaHorizon = t
+	s.pagerHorizon = t
+	s.mp3Horizon = t
+	s.newsHorizon = t
 }
 
 // Pause freezes the client's virtual clock.
@@ -251,6 +318,10 @@ func (s *Session) RunTimePump() {
 		case <-s.done:
 			return
 		case <-s.tickCh:
+			// Decide refills under the lock (horizons are shared with the
+			// readPump's Init/Seek/Subscribe/Filter), then do all Redis I/O and
+			// sends after releasing it (hard rules #2/#3). Most ticks refill
+			// nothing — the lookups happen ~once per window, not per second.
 			s.mu.Lock()
 			if s.paused || s.virtualTime.IsZero() {
 				s.mu.Unlock()
@@ -258,50 +329,67 @@ func (s *Session) RunTimePump() {
 			}
 			s.virtualTime = s.virtualTime.Add(time.Second)
 			t := s.virtualTime
+			mediaLo, mediaHi, doMedia := planRefill(&s.mediaHorizon, t, windowMedia)
+			pagerLo, pagerHi, doPager := s.planChannelRefill(ChannelPager, &s.pagerHorizon, t, windowPager)
+			mp3Lo, mp3Hi, doMp3 := s.planChannelRefill(ChannelMp3, &s.mp3Horizon, t, windowMp3)
+			newsLo, newsHi, doNews := s.planChannelRefill(ChannelNews, &s.newsHorizon, t, windowNews)
 			s.mu.Unlock()
 
-			items, err := cache.ItemsAt(ctx, s.rdb, t)
-			if err != nil {
-				s.logger.Warn("cache lookup failed", "error", err)
-			} else {
-				filtered := s.applyFormatFilter(items)
-				if len(filtered) > 0 {
+			if doMedia {
+				if items, err := cache.ItemsInRange(ctx, s.rdb, mediaLo, mediaHi); err != nil {
+					s.logger.Warn("media range lookup failed", "error", err)
+				} else if filtered := s.applyFormatFilter(items); len(filtered) > 0 {
 					s.send_(outMsg{Type: "items", Time: t.Format(time.RFC3339), Items: filtered})
 				}
 			}
 
-			// Pager items ride a separate Redis cache and an opt-in channel, so
-			// the media tick above never scans the large pager set.
-			if s.Subscribed(ChannelPager) {
-				pagerItems, err := cache.PagerItemsAt(ctx, s.rdb, t)
-				if err != nil {
-					s.logger.Warn("pager cache lookup failed", "error", err)
+			// Each side channel rides its own Redis cache and refills its own
+			// forward window. SendPager/SendMp3/SendNews suppress empty batches.
+			if doPager {
+				if items, err := cache.PagerItemsInRange(ctx, s.rdb, pagerLo, pagerHi); err != nil {
+					s.logger.Warn("pager range lookup failed", "error", err)
 				} else {
-					s.SendPager(t, pagerItems)
+					s.SendPager(t, items)
 				}
 			}
-
-			// mp3 items (Radio app) ride their own opt-in channel and Redis cache.
-			if s.Subscribed(ChannelMp3) {
-				mp3Items, err := cache.Mp3ItemsAt(ctx, s.rdb, t)
-				if err != nil {
-					s.logger.Warn("mp3 cache lookup failed", "error", err)
+			if doMp3 {
+				if items, err := cache.Mp3ItemsInRange(ctx, s.rdb, mp3Lo, mp3Hi); err != nil {
+					s.logger.Warn("mp3 range lookup failed", "error", err)
 				} else {
-					s.SendMp3(t, mp3Items)
+					s.SendMp3(t, items)
 				}
 			}
-
-			// news items (News app) ride their own opt-in channel and Redis cache.
-			if s.Subscribed(ChannelNews) {
-				newsItems, err := cache.NewsItemsAt(ctx, s.rdb, t)
-				if err != nil {
-					s.logger.Warn("news cache lookup failed", "error", err)
+			if doNews {
+				if items, err := cache.NewsItemsInRange(ctx, s.rdb, newsLo, newsHi); err != nil {
+					s.logger.Warn("news range lookup failed", "error", err)
 				} else {
-					s.SendNews(t, newsItems)
+					s.SendNews(t, items)
 				}
 			}
 		}
 	}
+}
+
+// planRefill reports whether a window refill is due for the given horizon and, if
+// so, returns the half-open [lo, hi) range to fetch and advances *horizon to hi.
+// A refill fires once the clock comes within leadSeconds of the horizon, so the
+// client's buffer is topped up before it drains. Caller must hold s.mu.
+func planRefill(horizon *time.Time, vTime time.Time, window time.Duration) (lo, hi time.Time, due bool) {
+	if vTime.Add(leadSeconds).Before(*horizon) {
+		return time.Time{}, time.Time{}, false
+	}
+	lo, hi = *horizon, vTime.Add(window)
+	*horizon = hi
+	return lo, hi, true
+}
+
+// planChannelRefill is planRefill gated on an active subscription: an unsubscribed
+// channel never refills. Caller must hold s.mu.
+func (s *Session) planChannelRefill(channel string, horizon *time.Time, vTime time.Time, window time.Duration) (lo, hi time.Time, due bool) {
+	if _, ok := s.subscriptions[channel]; !ok {
+		return time.Time{}, time.Time{}, false
+	}
+	return planRefill(horizon, vTime, window)
 }
 
 // encodeMsg serialises an outbound envelope as a MessagePack binary frame.
