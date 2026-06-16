@@ -74,7 +74,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 
 	// Unfiltered-by-source list, used only to enumerate which channels exist so
 	// Settings can list them all (even ones the user has currently disabled).
-	const { items: allChannelItems } = useMediaStream(ALL_CHANNELS_FILTER);
+	// `sources.video` is the authoritative, time-independent list from the server.
+	const { items: allChannelItems, sources } = useMediaStream(ALL_CHANNELS_FILTER);
 	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
 	// Persisted blacklist of channels the user has switched off.
@@ -83,15 +84,17 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		[appState?.data?.disabledChannels],
 	);
 
-	// Distinct channel slugs currently present in the stream, sorted for a stable
-	// Settings list. `source` is optional on MediaItem, so empties are dropped.
+	// Distinct channel slugs available for selection, sorted for a stable Settings
+	// list. Seeded from the server's complete `sources.video` list (every channel,
+	// regardless of virtual time) and unioned with anything already seen in-stream
+	// so the list is populated even before the `sources` frame arrives.
 	const availableChannels = useMemo(() => {
-		const seen = new Set<string>();
+		const seen = new Set<string>(sources.video);
 		for (const item of allChannelItems) {
 			if (item.source) seen.add(item.source);
 		}
 		return [...seen].sort();
-	}, [allChannelItems]);
+	}, [allChannelItems, sources.video]);
 
 	// The channels left enabled = everything present minus the blacklist. This is
 	// the whitelist handed to the streaming filter below.

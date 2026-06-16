@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
 	MediaStreamContext,
 	type PagerItem,
@@ -59,7 +59,8 @@ export function usePagerPlayback(
 	settings: PagerDecoderSettings = DEFAULT_PAGER_SETTINGS,
 	paused = false,
 ): PlaybackState {
-	const { pagerItems, subscribePager, unsubscribePager } = useContext(MediaStreamContext);
+	const { pagerItems, subscribePager, unsubscribePager, sources } =
+		useContext(MediaStreamContext);
 
 	// Opt into the pager channel so the server delivers pager items to this session.
 	useEffect(() => {
@@ -179,5 +180,17 @@ export function usePagerPlayback(
 		return () => clearInterval(streamId);
 	}, []);
 
-	return { lines, streamingText, streamingMeta, uniqueValues };
+	// The provider filter list is the server's complete, time-independent provider
+	// set (sources.pager) unioned with any providers already seen in-stream — so
+	// the dropdown is fully populated immediately, not only after items scroll past.
+	const mergedUniqueValues = useMemo<PlaybackState["uniqueValues"]>(
+		() => ({
+			provider: [...new Set([...sources.pager, ...uniqueValues.provider])].sort(),
+			id_type: uniqueValues.id_type,
+			channel: uniqueValues.channel,
+		}),
+		[sources.pager, uniqueValues],
+	);
+
+	return { lines, streamingText, streamingMeta, uniqueValues: mergedUniqueValues };
 }

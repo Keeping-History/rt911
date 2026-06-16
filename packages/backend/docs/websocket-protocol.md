@@ -64,6 +64,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) + a forward **window** (default 600 s) per refill while subscribed. Client reveal-gate preserves forward-only pacing. |
 | `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) + a forward **window** (default 300 s) per refill while subscribed. Reuses the `items` field. |
 | `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
+| `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`). Not resent on `seek`. |
 | `error`           | `message`                     | Reply to a malformed or unrecognised request.          |
 
 The frame-level `time` field is a string (RFC3339 UTC, e.g. `"2001-09-11T08:46:00Z"`) in both the
@@ -231,6 +232,30 @@ resume the recording mid-file via the `jump` offset.
 The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Most news is
 instant, so its snapshot uses the media overlap-plus-5-minute-instant-lookback window — a seek to
 `t` shows headlines from the preceding minutes.
+
+### `sources`
+
+Sent once, unprompted, right after `init_ack` (and again after any reconnect's
+`init_ack`). Carries the **time-independent** set of selectable sources for each
+client-side filter, so a filter UI can list every option up front instead of only
+those that have scrolled past in the current virtual-time window.
+
+```json
+{
+  "type": "sources",
+  "sources": {
+    "video": ["BBC", "CNN", "MSNBC", "WETA"],
+    "pager": ["Arch", "Skytel"]
+  }
+}
+```
+
+- `video` — source slugs with at least one approved `m3u8` media item (the TV app's channel filter).
+- `pager` — providers across all approved pager items (the Pager app's provider filter).
+
+Each list is derived from **actual usage** in its table: the `sources` table does not record which
+media type a source belongs to, so membership is inferred from the rows that reference it. The lists
+do not depend on the virtual clock, so `seek` does not resend them.
 
 ### `unsubscribe`
 

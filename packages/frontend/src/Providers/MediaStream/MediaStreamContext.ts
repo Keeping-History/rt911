@@ -63,6 +63,19 @@ export interface PagerItem {
 	approved?: number;
 }
 
+/**
+ * Time-independent sets of selectable sources for each filter, delivered once by
+ * the server on the `sources` frame (see the streamer's websocket-protocol.md).
+ * Unlike the source values derived from streamed items, these list every option
+ * across all history — so filter UIs are complete regardless of the virtual clock.
+ */
+export interface AvailableSources {
+	/** Source slugs with approved video (m3u8) media — the TV channel filter. */
+	video: string[];
+	/** Providers across approved pager items — the Pager provider filter. */
+	pager: string[];
+}
+
 export interface MediaStreamContextValue {
 	items: MediaItem[];
 	/** Pager items received while subscribed to the pager channel. */
@@ -71,6 +84,8 @@ export interface MediaStreamContextValue {
 	mp3Items: MediaItem[];
 	/** news items received while subscribed to the news channel. Same shape as items. */
 	newsItems: MediaItem[];
+	/** All selectable sources per filter, sent once by the server at init. */
+	sources: AvailableSources;
 	connected: boolean;
 	addItems: (items: MediaItem[]) => void;
 	/** Register a set of desired formats for an app. null = want all formats. */
@@ -96,6 +111,7 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	pagerItems: [],
 	mp3Items: [],
 	newsItems: [],
+	sources: { video: [], pager: [] },
 	connected: false,
 	addItems: () => {},
 	subscribeFormats: () => {},
