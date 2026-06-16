@@ -138,7 +138,7 @@ async function createCollections(token) {
     { field: "end_date",      type: "dateTime", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
     { field: "timezone",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
     { field: "url",           type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
-    { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "html", "modal"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
+    { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "modal"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
     { field: "image",         type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
     { field: "image_caption", type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
     { field: "content",       type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
@@ -345,11 +345,13 @@ async function importMediaItems(token, records, sourceMap) {
     console.log("media_items already has records, skipping TV import.");
     return;
   }
-  // mp3 lives in its own table/channel — keep it out of media_items.
-  const nonMp3 = records.filter((r) => r.format !== "mp3");
+  // mp3 lives in its own table/channel; html entries are duplicates of news
+  // items (same History Commons articles) — keep both out of media_items.
+  const EXCLUDED = new Set(["mp3", "html"]);
+  const tvOnly = records.filter((r) => !EXCLUDED.has(r.format));
   widenMediaLikeColumns("media_items");
-  console.log(`Importing ${nonMp3.length} TV media items (excluding mp3) in batches of 500…`);
-  insertMediaLikeRecords("media_items", nonMp3, sourceMap);
+  console.log(`Importing ${tvOnly.length} TV media items (excluding mp3 + html) in batches of 500…`);
+  insertMediaLikeRecords("media_items", tvOnly, sourceMap);
 }
 
 async function importMp3Items(token, records, sourceMap) {
@@ -480,7 +482,13 @@ function parseTitleDate(title) {
 }
 
 function transformNewsEntry(entry, sort, sourceId) {
-  const { startDate, parsedEndDate, durationSeconds } = parseTitleDate(entry.title ?? "");
+  let { startDate, parsedEndDate, durationSeconds } = parseTitleDate(entry.title ?? "");
+
+  // Clock times parsed from titles are Eastern (EDT for the 9/11-era data); store
+  // UTC like every other stream. Date-only entries (midnight) carry no real
+  // time-of-day, so they stay naive — only convert when a time was parsed.
+  if (startDate && !startDate.endsWith(" 00:00:00")) startDate = etToUtc(startDate);
+  if (parsedEndDate && !parsedEndDate.endsWith(" 00:00:00")) parsedEndDate = etToUtc(parsedEndDate);
 
   const calcDuration =
     durationSeconds !== null && durationSeconds > 0 && durationSeconds < ONE_HOUR_SECONDS

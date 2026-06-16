@@ -155,7 +155,9 @@ CREATE INDEX news_items_start_date_idx ON news_items (start_date);
 ```
 
 News is mostly **instant** (`start_date = end_date` — a headline at a moment), with a few
-durational entries. Kept in its own Redis keyspace (`news:items` / `news:by_start`); the
+durational entries. Timestamps are **UTC**: clock times parsed from titles are Eastern (EDT for
+the 9/11-era data) and converted to UTC on import (`transformNewsEntry` → `etToUtc`), matching
+every other stream; date-only historical entries stay at naive midnight. Kept in its own Redis keyspace (`news:items` / `news:by_start`); the
 subscribe/init/seek snapshot uses the same **overlap + 5-minute instant lookback** window as
 `CurrentItems`, so a seek to `t` shows stories from the preceding minutes. The tick path then
 delivers news starting at each forward second.
@@ -170,13 +172,14 @@ delivers news starting at each forward second.
 | ------- | ------------------------------------------------------------------------- |
 | `m3u8`  | HLS live-stream playlists (e.g. archived TV broadcasts).                  |
 | `mp4`   | On-demand video files.                                                    |
-| `html`  | Inline HTML to render.                                                    |
 | `modal` | Modal/overlay events — fire on `start_date` and show until dismissed.     |
 | `usenet`| Usenet posts imported via `import-usenet.mjs`.                            |
 
 Pager, mp3 and news are no longer `media_items.format`s — they live in `pager_items` /
 `mp3_items` / `news_items` and ride the `pager` / `mp3` / `news` subscription channels (see
-[`websocket-protocol.md`](./websocket-protocol.md)).
+[`websocket-protocol.md`](./websocket-protocol.md)). The former `html` format was dropped: those
+529 rows were duplicate History Commons articles already present in `news_items` (matched by
+`url`), so the seed no longer imports them.
 
 The streamer does **not** enforce this vocabulary — it passes whatever `format` it reads straight to the client. The frontend chooses how to render unknown formats. The format filter (Section 3.7 of `SPEC.md`) matches exact strings.
 
