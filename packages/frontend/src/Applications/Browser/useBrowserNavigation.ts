@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { normalizeUrl } from "./browserUtils";
+import { normalizeUrl, stripProxyUrl } from "./browserUtils";
 
 export const DEFAULT_PROXY_ON = true;
 export const DEFAULT_PROXY_PROTOCOL = import.meta.env.VITE_PROXY_PROTOCOL ?? "http:";
@@ -53,8 +53,8 @@ const extractOriginalUrl = (href: string, proxyHost: string): string | null => {
 		/* not a valid URL, fall through */
 	}
 
-	// Archive.org link — extract the original URL after the timestamp
-	const match = href.match(/\/web\/\d+\*?\/(.+)/);
+	// Path-form proxy link: /web/<original> or /web/<timestamp>/<original>.
+	const match = href.match(/\/web\/(?:\d+\*?\/)?(https?:\/\/.+)$/i);
 	return match ? match[1] : null;
 };
 
@@ -296,7 +296,10 @@ export const useBrowserNavigation = ({
 	}, []);
 
 	const navigateTo = useCallback(
-		(url: string) => {
+		(rawUrl: string) => {
+			// De-proxy first so history, the address bar, and the fetch all use the
+			// original URL — proxy-rewritten links resolve to <proxyHost>/web/<url>.
+			const url = stripProxyUrl(rawUrl, proxyHost);
 			// Skip if already on this page (normalize trailing slash and www.)
 			setHistory((h) => {
 				const idx = historyIndexRef.current;
@@ -312,7 +315,7 @@ export const useBrowserNavigation = ({
 			onRecordVisit(url);
 			fetchPage(url);
 		},
-		[fetchPage, onRecordVisit],
+		[fetchPage, onRecordVisit, proxyHost],
 	);
 
 	// Stable refs so handleContentClick doesn't churn
