@@ -38,6 +38,7 @@ func WarmPagerCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool
 	}
 
 	pipe := rdb.Pipeline()
+	count := 0
 	for _, it := range items {
 		data, err := json.Marshal(it)
 		if err != nil {
@@ -49,6 +50,10 @@ func WarmPagerCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool
 			Score:  float64(it.StartDate.Unix()),
 			Member: id,
 		})
+		count++
+		if pipe, err = flushIfFull(ctx, rdb, pipe, count); err != nil {
+			return fmt.Errorf("pipeline exec: %w", err)
+		}
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("pipeline exec: %w", err)

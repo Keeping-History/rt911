@@ -2,10 +2,13 @@ package cache
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
 	"classicy/streamer/internal/model"
+
+	goredis "github.com/redis/go-redis/v9"
 )
 
 func TestUpsertPagerThenPagerItemsAt(t *testing.T) {
@@ -62,6 +65,37 @@ func TestForgetPagerRemovesItem(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("expected no items after ForgetPager, got %+v", got)
+	}
+}
+
+// flushIfFull must flush at every chunk boundary and the caller's trailing
+// Exec must persist the remainder — across a count that is not a chunk multiple,
+// every item is written exactly once.
+func TestFlushIfFullWritesAllAcrossChunks(t *testing.T) {
+	rdb, done := newTestRedis(t)
+	defer done()
+	ctx := context.Background()
+
+	total := pipelineChunk*2 + 37 // spans two full chunks plus a partial remainder
+	pipe := rdb.Pipeline()
+	for i := 0; i < total; i++ {
+		pipe.HSet(ctx, keyPagerItems, strconv.Itoa(i), "x")
+		pipe.ZAdd(ctx, keyPagerByStart, goredis.Z{Score: float64(i), Member: strconv.Itoa(i)})
+		var err error
+		if pipe, err = flushIfFull(ctx, rdb, pipe, i+1); err != nil {
+			t.Fatalf("flushIfFull at %d: %v", i, err)
+		}
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		t.Fatalf("final Exec: %v", err)
+	}
+
+	n, err := rdb.ZCard(ctx, keyPagerByStart).Result()
+	if err != nil {
+		t.Fatalf("ZCard: %v", err)
+	}
+	if n != int64(total) {
+		t.Fatalf("expected %d members, got %d", total, n)
 	}
 }
 

@@ -131,12 +131,18 @@ func resync(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, logger
 	}
 
 	pipe := rdb.Pipeline()
+	n := 0
 	removed := 0
 	for _, id := range cacheIDs {
 		if _, ok := liveIDs[id]; !ok {
 			pipe.HDel(ctx, keyItems, id)
 			pipe.ZRem(ctx, keyByStart, id)
 			removed++
+			n++
+			var err error
+			if pipe, err = flushIfFull(ctx, rdb, pipe, n); err != nil {
+				return fmt.Errorf("pipeline exec: %w", err)
+			}
 		}
 	}
 	for _, it := range liveItems {
@@ -147,6 +153,10 @@ func resync(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, logger
 		id := strconv.Itoa(it.ID)
 		pipe.HSet(ctx, keyItems, id, data)
 		pipe.ZAdd(ctx, keyByStart, goredis.Z{Score: float64(it.StartDate.Unix()), Member: id})
+		n++
+		if pipe, err = flushIfFull(ctx, rdb, pipe, n); err != nil {
+			return fmt.Errorf("pipeline exec: %w", err)
+		}
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("pipeline exec: %w", err)
