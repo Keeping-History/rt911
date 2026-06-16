@@ -41,7 +41,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `seek`        | `time`            | Move the virtual clock to a new instant.      |
 | `heartbeat`   | `time`            | Report client's current virtual time.         |
 | `filter`      | `formats[]`       | Whitelist media formats.                      |
-| `subscribe`   | `channel`         | Opt into a side channel (`pager` or `mp3`).   |
+| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
@@ -63,6 +63,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `items`           | `time`, `items[]`             | Each tick that produces ≥ 1 media item after filtering.|
 | `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) and each tick that produces ≥ 1 pager item while subscribed. |
 | `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) and each tick that produces ≥ 1 mp3 item while subscribed. Reuses the `items` field. |
+| `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) and each tick that produces ≥ 1 news item while subscribed. Reuses the `items` field. |
 | `error`           | `message`                     | Reply to a malformed or unrecognised request.          |
 
 The frame-level `time` field is a string (RFC3339 UTC, e.g. `"2001-09-11T08:46:00Z"`) in both the
@@ -186,14 +187,18 @@ server delivers them on the `pager` channel: an immediate snapshot of just the r
 that produces pager traffic. Delivery is **forward-only** — no backward lookback, and never a bulk
 future window — so the client renders pages paced by the virtual clock rather than all at once.
 
-Valid channels are `"pager"` and `"mp3"`; any other value yields
-`{"type":"error","message":"unknown channel \"…\""}`. (News and HTML channels are planned.)
+Valid channels are `"pager"`, `"mp3"` and `"news"`; any other value yields
+`{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
 Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
 
 The `mp3` channel (Radio app) behaves the same but carries `MediaItem`s on `mp3`-typed frames
 (reusing the `items` field), and — because mp3 is durational audio — its snapshot returns the
 items **active at** `t` (`start_date ≤ t ≤ end_date`), not a single second, so the client can
 resume the recording mid-file via the `jump` offset.
+
+The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Most news is
+instant, so its snapshot uses the media overlap-plus-5-minute-instant-lookback window — a seek to
+`t` shows headlines from the preceding minutes.
 
 ### `unsubscribe`
 

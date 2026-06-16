@@ -49,9 +49,14 @@ interface WsPagerMessage {
 	pager: PagerItem[];
 }
 
-// mp3 frames reuse the items field but carry a distinct "mp3" type.
+// mp3 and news frames reuse the items field but carry a distinct type.
 interface WsMp3Message {
 	type: "mp3";
+	items: MediaItem[];
+}
+
+interface WsNewsMessage {
+	type: "news";
 	items: MediaItem[];
 }
 
@@ -59,6 +64,7 @@ type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
 	| WsMp3Message
+	| WsNewsMessage
 	| { type: string };
 
 interface MediaStreamProviderProps {
@@ -73,6 +79,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [items, setItems] = useState<MediaItem[]>([]);
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
+	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
 	const [connected, setConnected] = useState(false);
 
 	// Per-app format subscriptions. null = wants all formats.
@@ -82,6 +89,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	// items while at least one app is subscribed.
 	const pagerSubscribers = useRef(new Set<string>());
 	const mp3Subscribers = useRef(new Set<string>());
+	const newsSubscribers = useRef(new Set<string>());
 
 	const addItems = useCallback((incoming: MediaItem[]) => {
 		setItems((prev) => {
@@ -177,12 +185,34 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	const subscribeNews = useCallback(
+		(appId: string) => {
+			const wasEmpty = newsSubscribers.current.size === 0;
+			newsSubscribers.current.add(appId);
+			if (wasEmpty) send({ type: "subscribe", channel: "news" });
+		},
+		[send],
+	);
+
+	const unsubscribeNews = useCallback(
+		(appId: string) => {
+			newsSubscribers.current.delete(appId);
+			if (newsSubscribers.current.size === 0) {
+				send({ type: "unsubscribe", channel: "news" });
+				setNewsItems([]);
+			}
+		},
+		[send],
+	);
+
 	// Prune expired items on every second tick.
 	useEffect(() => {
 		const now = localDate.getTime();
 		setItems((prev) => prev.filter((item) => keepMediaItem(item, now)));
 		// mp3 items are durational audio — same retention rules as media items.
 		setMp3Items((prev) => prev.filter((item) => keepMediaItem(item, now)));
+		// news items reuse the same retention rules (mostly instant headlines).
+		setNewsItems((prev) => prev.filter((item) => keepMediaItem(item, now)));
 		// Pager items are always instant — retain by start_date.
 		setPagerItems((prev) =>
 			prev.filter((p) => now - new Date(p.start_date).getTime() < INSTANT_RETENTION_MS),
@@ -232,6 +262,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (mp3Subscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "mp3" }));
 			}
+			if (newsSubscribers.current.size > 0) {
+				ws.send(JSON.stringify({ type: "subscribe", channel: "news" }));
+			}
 			heartbeatId = setInterval(() => {
 				if (ws.readyState === WebSocket.OPEN) {
 					ws.send(
@@ -278,6 +311,20 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				setMp3Items((prev) => {
 					const byId = new Map(prev.map((i) => [i.id, i]));
 					for (const item of freshMp3) byId.set(item.id, item);
+					return Array.from(byId.values());
+				});
+				return;
+			}
+
+			if (msg.type === "news") {
+				const incomingNews = (msg as WsNewsMessage).items;
+				if (!incomingNews || incomingNews.length === 0) return;
+				const nowNews = localDateRef.current.getTime();
+				const freshNews = incomingNews.filter((item) => keepMediaItem(item, nowNews));
+				if (freshNews.length === 0) return;
+				setNewsItems((prev) => {
+					const byId = new Map(prev.map((i) => [i.id, i]));
+					for (const item of freshNews) byId.set(item.id, item);
 					return Array.from(byId.values());
 				});
 				return;
@@ -332,6 +379,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				items,
 				pagerItems,
 				mp3Items,
+				newsItems,
 				connected,
 				addItems,
 				subscribeFormats,
@@ -340,6 +388,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				unsubscribePager,
 				subscribeMp3,
 				unsubscribeMp3,
+				subscribeNews,
+				unsubscribeNews,
 			}}
 		>
 			{children}

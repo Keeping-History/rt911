@@ -138,7 +138,7 @@ async function createCollections(token) {
     { field: "end_date",      type: "dateTime", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
     { field: "timezone",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
     { field: "url",           type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
-    { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "html", "modal", "news"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
+    { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "html", "modal"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
     { field: "image",         type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
     { field: "image_caption", type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
     { field: "content",       type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
@@ -199,6 +199,21 @@ async function createCollections(token) {
   }
   await ensureNumericFields("mp3_items");
 
+  // news_items — News app entries live in their own table (not media_items),
+  // same shape as media_items, delivered on the opt-in "news" channel.
+  if (!names.includes("news_items")) {
+    console.log("Creating collection: news_items");
+    await api(token, "POST", "/collections", {
+      collection: "news_items",
+      meta: { icon: "feed", sort_field: "sort", note: "News / history entries" },
+      schema: {},
+      fields: mediaLikeBaseFields,
+    });
+  } else {
+    console.log("Collection news_items already exists, skipping.");
+  }
+  await ensureNumericFields("news_items");
+
   // pager_items — pager traffic lives in its own table (not media_items). Every
   // pager item is "instant": a start_date with no duration/end_date. provider is
   // a plain text column, not a sources FK.
@@ -231,7 +246,7 @@ async function createCollections(token) {
 
 async function createRelations(token) {
   const existing = await api(token, "GET", "/relations");
-  for (const collection of ["media_items", "mp3_items"]) {
+  for (const collection of ["media_items", "mp3_items", "news_items"]) {
     const alreadyLinked = existing.data.some(
       (r) => r.collection === collection && r.field === "source",
     );
@@ -509,16 +524,18 @@ async function resolveNewsSource(token) {
 }
 
 async function importNewsItems(token, records, sourceId) {
-  const existing = await api(token, "GET", "/items/media_items?limit=1&fields=id&filter[format][_eq]=news");
+  const existing = await api(token, "GET", "/items/news_items?limit=1&fields=id");
   if (existing.data.length > 0) {
-    console.log("News items already exist, skipping.");
+    console.log("news_items already has records, skipping news import.");
     return;
   }
 
-  const existingSort = await api(token, "GET", "/items/media_items?limit=1&sort[]=-sort&fields[]=sort");
+  widenMediaLikeColumns("news_items");
+
+  const existingSort = await api(token, "GET", "/items/news_items?limit=1&sort[]=-sort&fields[]=sort");
   const maxSort = existingSort.data?.[0]?.sort ?? 0;
 
-  const cols = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,content,sort`;
+  const cols = MEDIA_LIKE_COLS;
   const BATCH = 500;
 
   const transformed = records.map((entry, i) => transformNewsEntry(entry, maxSort + i + 1, sourceId));
@@ -556,7 +573,7 @@ async function importNewsItems(token, records, sourceId) {
       sqlVal(r.sort),
     ].join(",")})`).join(",\n");
 
-    psql(`INSERT INTO media_items (${cols}) VALUES\n${rows};\n`);
+    psql(`INSERT INTO news_items (${cols}) VALUES\n${rows};\n`);
   }
 
   console.log("\nDone.");

@@ -9,9 +9,18 @@ import {
 	useAppManagerDispatch,
 } from "classicy";
 import type React from "react";
-import { type ChangeEvent, useCallback, useMemo, useState } from "react";
-import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
-import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
+import {
+	type ChangeEvent,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
+import {
+	MediaStreamContext,
+	type MediaItem,
+} from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./News.module.scss";
 
 export const News: React.FC = () => {
@@ -40,7 +49,12 @@ export const News: React.FC = () => {
 	const [thumbStyle, setThumbStyle] = useState<"small" | "large">("small");
 	const [openDocuments, setOpenDocuments] = useState<number[]>([]);
 
-	const { items } = useMediaStream({ format: "news", approved: true });
+	// News is delivered on its own opt-in channel; subscribe on mount.
+	const { newsItems: items, subscribeNews, unsubscribeNews } = useContext(MediaStreamContext);
+	useEffect(() => {
+		subscribeNews(appId);
+		return () => unsubscribeNews(appId);
+	}, [subscribeNews, unsubscribeNews, appId]);
 
 	const entries = useMemo(
 		() =>

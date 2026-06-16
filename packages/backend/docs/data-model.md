@@ -1,6 +1,6 @@
 # Data model
 
-The streamer reads four Directus-managed Postgres tables: `sources`, `media_items`, `pager_items`, and `mp3_items`. It never writes to them. Schema definition lives in [`seed.mjs`](../seed.mjs); this document is the authoritative reference for what the streamer expects to see.
+The streamer reads five Directus-managed Postgres tables: `sources`, `media_items`, `pager_items`, `mp3_items`, and `news_items`. It never writes to them. Schema definition lives in [`seed.mjs`](../seed.mjs); this document is the authoritative reference for what the streamer expects to see.
 
 ---
 
@@ -144,6 +144,24 @@ mid-file. The tick path then delivers items starting at each forward second.
 
 ---
 
+## `news_items`
+
+Same columns as `media_items` (news reuses the MediaItem shape) but in its own table, delivered on
+the opt-in `news` channel for the News app:
+
+```sql
+CREATE TABLE news_items (LIKE media_items INCLUDING ALL);  -- same shape; format is always 'news'
+CREATE INDEX news_items_start_date_idx ON news_items (start_date);
+```
+
+News is mostly **instant** (`start_date = end_date` — a headline at a moment), with a few
+durational entries. Kept in its own Redis keyspace (`news:items` / `news:by_start`); the
+subscribe/init/seek snapshot uses the same **overlap + 5-minute instant lookback** window as
+`CurrentItems`, so a seek to `t` shows stories from the preceding minutes. The tick path then
+delivers news starting at each forward second.
+
+---
+
 ## Format vocabulary
 
 `media_items.format` is a free-text column. The Directus admin UI presents these choices (from `seed.mjs`):
@@ -154,11 +172,11 @@ mid-file. The tick path then delivers items starting at each forward second.
 | `mp4`   | On-demand video files.                                                    |
 | `html`  | Inline HTML to render.                                                    |
 | `modal` | Modal/overlay events — fire on `start_date` and show until dismissed.     |
-| `news`  | News article entries from `entries_news.json`.                            |
 | `usenet`| Usenet posts imported via `import-usenet.mjs`.                            |
 
-Pager and mp3 are no longer `media_items.format`s — they live in `pager_items` / `mp3_items` and
-ride the `pager` / `mp3` subscription channels (see [`websocket-protocol.md`](./websocket-protocol.md)).
+Pager, mp3 and news are no longer `media_items.format`s — they live in `pager_items` /
+`mp3_items` / `news_items` and ride the `pager` / `mp3` / `news` subscription channels (see
+[`websocket-protocol.md`](./websocket-protocol.md)).
 
 The streamer does **not** enforce this vocabulary — it passes whatever `format` it reads straight to the client. The frontend chooses how to render unknown formats. The format filter (Section 3.7 of `SPEC.md`) matches exact strings.
 

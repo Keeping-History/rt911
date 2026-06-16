@@ -196,6 +196,57 @@ func CurrentMp3Items(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]mo
 		 ORDER BY mi.start_date`, t)
 }
 
+// newsSelectFrom is the shared SELECT … FROM clause for news queries. News items
+// reuse the MediaItem shape (same columns as media_items) but live in their own
+// news_items table, delivered on the opt-in "news" channel.
+const newsSelectFrom = `
+	SELECT mi.id, mi.title, mi.full_title, s.slug,
+	       mi.start_date, mi.end_date, mi.calc_duration, mi.timezone,
+	       mi.url, mi.format, mi.approved, mi.mute,
+	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption,
+	       mi.content, mi.sort
+	FROM news_items mi
+	LEFT JOIN sources s ON s.id = mi.source`
+
+// AllNewsItems loads every approved news item ordered by start_date (cache warming).
+func AllNewsItems(ctx context.Context, pool *pgxpool.Pool) ([]model.MediaItem, error) {
+	return queryItems(ctx, pool,
+		newsSelectFrom+` WHERE mi.approved = 1 ORDER BY mi.start_date`)
+}
+
+// NewsItemByID returns the row with the given id regardless of approval state, or
+// nil if not found. The NOTIFY listener uses this to fetch the latest version of
+// a changed row; an unapproved result means "evict from cache."
+func NewsItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.MediaItem, error) {
+	items, err := queryItems(ctx, pool, newsSelectFrom+` WHERE mi.id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
+// CurrentNewsItems returns approved news items active at time t. Most news is
+// "instant" (start_date = end_date), so — like CurrentItems — instant items are
+// included for a 5-minute lookback window so a seek to t still shows headlines
+// fired in the preceding minutes. Used by the init/seek/subscribe snapshot paths.
+func CurrentNewsItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model.MediaItem, error) {
+	return queryItems(ctx, pool,
+		newsSelectFrom+`
+		 WHERE mi.approved = 1
+		   AND (
+		     (mi.start_date <= $1 AND (mi.end_date IS NULL OR mi.end_date >= $1))
+		     OR (
+		       (mi.start_date = mi.end_date OR (mi.calc_duration IS NOT NULL AND mi.calc_duration = 0))
+		       AND mi.start_date <= $1
+		       AND mi.start_date >= $1 - INTERVAL '5 minutes'
+		     )
+		   )
+		 ORDER BY mi.start_date`, t)
+}
+
 func derefStr(dst *string, src *string) {
 	if src != nil {
 		*dst = *src
