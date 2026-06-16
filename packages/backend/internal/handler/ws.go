@@ -67,7 +67,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					return
 				case msg := <-sess.Send():
 					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-					if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					if err := conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
 						sess.Close()
 						return
 					}

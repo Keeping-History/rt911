@@ -50,6 +50,7 @@ Each `Session` also runs two more goroutines under the WebSocket handler: a `wri
 6. **All times are UTC `time.Time`.** Wire format is RFC3339 (or one of the fallbacks in `parseTime`). Never compare formatted strings; always parse first.
 7. **Nullable text columns are `*string` at scan time.** Directus emits `NULL` for empty strings; pgx cannot scan `NULL` into a non-pointer string. Use `derefStr` like `queryItems` already does — don't shortcut to `&it.Field` directly.
 8. **No backwards-compat shims.** This service has one consumer (the frontend in `packages/frontend/`). If you change the wire protocol, update the frontend in the same commit; do not add `if msg.Version == "v1"` branches.
+   - **The wire is split by direction.** Server→client frames are **binary MessagePack** (`websocket.BinaryMessage`); `send_` encodes via `encodeMsg` (msgpack with `SetCustomStructTag("json")`, so the json tags stay the wire field names and `time.Time` rides the timestamp ext). Client→server frames stay **JSON text** (`json.Unmarshal` in `ws.go`). Don't reintroduce text output (`websocket.TextMessage` / `json.Marshal` on the outbound path), and don't flip inbound to binary — the asymmetry is intentional (the win is the 1 Hz item fan-out; control frames are tiny). See [`docs/websocket-protocol.md`](./docs/websocket-protocol.md).
 
 ---
 
