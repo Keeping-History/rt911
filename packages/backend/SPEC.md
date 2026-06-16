@@ -21,9 +21,10 @@ The frontend at [911realtime.org](https://911realtime.org) lets users pick any m
 | Media item      | A row in `media_items`. Has a `start_date`, `end_date`, `format`, `url`. |
 | Pager item      | A row in `pager_items`. An instant pager message; its own table/cache.  |
 | mp3 item        | A row in `mp3_items`. Durational audio (Radio app); its own table/cache. |
+| news item       | A row in `news_items`. History/news entries (News app); its own table.   |
 | Source          | A row in `sources` (TV network, news outlet, …).                        |
-| Format          | One of `m3u8`, `mp4`, `html`, `modal`, `news`, `usenet`.                 |
-| Channel         | An opt-in delivery stream a session subscribes to. `pager` or `mp3`.    |
+| Format          | One of `m3u8`, `mp4`, `html`, `modal`, `usenet`.                         |
+| Channel         | An opt-in delivery stream a session subscribes to. `pager`, `mp3`, `news`. |
 | Session         | One WebSocket connection. Holds the virtual clock, a format filter, and channel subscriptions. |
 | Tick            | A 1 Hz signal that advances virtual time by exactly one second.        |
 
@@ -87,9 +88,9 @@ The frontend at [911realtime.org](https://911realtime.org) lets users pick any m
 ### 3.8 Subscription channels (subscribe / unsubscribe)
 
 Channels are opt-in side streams that live in their own tables, Redis keyspaces and NOTIFY
-pipelines, and are delivered only to sessions that subscribe. There are two: **`pager`** and
-**`mp3`** (News and HTML are planned). Both share the subscribe/unsubscribe protocol below; they
-differ only in payload shape and snapshot window.
+pipelines, and are delivered only to sessions that subscribe. There are three: **`pager`**,
+**`mp3`** and **`news`** (HTML is planned). All share the subscribe/unsubscribe protocol below;
+they differ only in payload shape and snapshot window.
 
 **mp3** (`mp3_items`, `mp3:items` / `mp3:by_start`, `mp3_items_changed`) carries Radio-app audio.
 mp3 reuses the `MediaItem` shape and is delivered on `mp3`-typed frames (reusing the `items`
@@ -97,6 +98,12 @@ field). Because mp3 is **durational** audio, its subscribe/init/seek snapshot re
 **active at** `t` (`start_date ≤ t ≤ end_date`) — the recording playing at `t` — so the Radio app
 can resume mid-file via the `jump` offset. (This is the key difference from pager, which is
 forward-only.) The tick path then delivers items starting at each forward second.
+
+**news** (`news_items`, `news:items` / `news:by_start`, `news_items_changed`) carries News-app
+entries. Like mp3 it reuses the `MediaItem` shape and `news`-typed frames. Most news is **instant**
+(`start_date = end_date`), so its snapshot uses the same overlap-plus-5-minute-instant-lookback
+window as the media `CurrentItems` query — a seek to `t` still shows headlines fired in the
+preceding minutes.
 
 **pager** (`pager_items`, `pager:items` / `pager:by_start`, `pager_items_changed`):
 
@@ -128,11 +135,11 @@ forward-only.) The tick path then delivers items starting at each forward second
 - A dedicated listener goroutine (`cache.Listen`) consumes notifications and applies the change to Redis: INSERT/UPDATE re-fetches the row and `HSET`/`ZADD`s it; DELETE (and approval-revoked UPDATE) `HDEL`/`ZREM`s it.
 - The listener reconnects with exponential backoff (1s → 30s cap). Every successful (re)connect runs a full resync — load all approved rows from Postgres, prune cache entries that no longer exist, upsert the rest. This guarantees notifications dropped during a disconnect are recovered.
 - Propagation latency from a Postgres commit to a cached value is bounded by NOTIFY delivery + one round-trip pgx + one Redis pipeline — typically under 50 ms.
-- `pager_items` and `mp3_items` each have an identical, independent pipeline:
-  `cache.InstallPagerTriggers` / `cache.ListenPager` and `cache.InstallMp3Triggers` /
-  `cache.ListenMp3` keep their own keyspaces in sync via the `pager_items_changed` /
-  `mp3_items_changed` channels. All three listeners run as separate goroutines and never touch
-  each other's keyspace.
+- `pager_items`, `mp3_items` and `news_items` each have an identical, independent pipeline:
+  `cache.InstallPagerTriggers` / `ListenPager`, `InstallMp3Triggers` / `ListenMp3`, and
+  `InstallNewsTriggers` / `ListenNews` keep their own keyspaces in sync via the
+  `pager_items_changed` / `mp3_items_changed` / `news_items_changed` channels. All four listeners
+  (incl. media) run as separate goroutines and never touch each other's keyspace.
 
 ### 3.11 Health
 

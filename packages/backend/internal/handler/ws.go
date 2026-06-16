@@ -36,7 +36,7 @@ type filterMsg struct {
 }
 
 // channelMsg carries the channel name for subscribe/unsubscribe. Valid channels
-// are "pager" and "mp3".
+// are "pager", "mp3" and "news".
 type channelMsg struct {
 	Type    string `json:"type"`
 	Channel string `json:"channel"`
@@ -244,9 +244,25 @@ func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool,
 	sess.SendMp3(t, items)
 }
 
+// sendNewsSnapshot delivers the news items active at t to the session if it is
+// subscribed to the news channel. Like the media path, the snapshot uses an
+// overlap window plus a 5-minute lookback for instant headlines (most news is
+// instant), so a seek to t still shows recently-fired stories.
+func sendNewsSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelNews) {
+		return
+	}
+	items, err := db.CurrentNewsItems(r.Context(), pool, t)
+	if err != nil {
+		logger.Warn("current news items query failed", "error", err)
+		return
+	}
+	sess.SendNews(t, items)
+}
+
 // knownChannel reports whether ch is a valid subscription channel.
 func knownChannel(ch string) bool {
-	return ch == session.ChannelPager || ch == session.ChannelMp3
+	return ch == session.ChannelPager || ch == session.ChannelMp3 || ch == session.ChannelNews
 }
 
 // sendChannelSnapshot delivers the subscribe-time snapshot for a single channel.
@@ -256,6 +272,8 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 		sendPagerSnapshot(r, sess, pool, t, logger)
 	case session.ChannelMp3:
 		sendMp3Snapshot(r, sess, pool, t, logger)
+	case session.ChannelNews:
+		sendNewsSnapshot(r, sess, pool, t, logger)
 	}
 }
 
@@ -264,4 +282,5 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
 	sendPagerSnapshot(r, sess, pool, t, logger)
 	sendMp3Snapshot(r, sess, pool, t, logger)
+	sendNewsSnapshot(r, sess, pool, t, logger)
 }

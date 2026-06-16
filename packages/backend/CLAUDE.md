@@ -86,9 +86,9 @@ Each `Session` also runs two more goroutines under the WebSocket handler: a `wri
 
 ### Add a new media format
 
-Formats are just strings (`m3u8`, `mp4`, `html`, `modal`, `news`, `usenet`). Adding a new one requires no backend change unless filtering or schema validation depends on the list — currently neither does. Update the seed script's `select-dropdown` choices in `seed.mjs` if you want it editable in Directus.
+Formats are just strings (`m3u8`, `mp4`, `html`, `modal`, `usenet`). Adding a new one requires no backend change unless filtering or schema validation depends on the list — currently neither does. Update the seed script's `select-dropdown` choices in `seed.mjs` if you want it editable in Directus.
 
-> `pager` and `mp3` are **not** formats — each lives in its own table (`pager_items` / `mp3_items`) and is delivered on an opt-in subscription channel (`subscribe`/`unsubscribe`), with parallel `db`/`cache` code (`*ItemsAt`, distinct `pager:*` / `mp3:*` Redis keys, `ListenPager` / `ListenMp3`) and a dedicated server→client frame. pager has its own `PagerItem` model (instant, forward-only single-second snapshot); mp3 **reuses `MediaItem`** (durational, overlap snapshot) and rides `mp3`-typed frames reusing the `items` field. News and HTML are slated to follow the same extract-into-channel pattern — generalise the `Session.subscriptions` set, don't special-case each one.
+> `pager`, `mp3` and `news` are **not** formats — each lives in its own table (`pager_items` / `mp3_items` / `news_items`) and is delivered on an opt-in subscription channel (`subscribe`/`unsubscribe`), with parallel `db`/`cache` code (`*ItemsAt`, distinct `pager:*` / `mp3:*` / `news:*` Redis keys, `ListenPager` / `ListenMp3` / `ListenNews`) and a dedicated server→client frame. pager has its own `PagerItem` model (instant, forward-only single-second snapshot); mp3 and news **reuse `MediaItem`** and ride `mp3`/`news`-typed frames reusing the `items` field — mp3 uses a pure overlap snapshot (durational audio), news uses the media overlap+5-min-instant-lookback (mostly instant headlines). HTML is slated to follow the same extract-into-channel pattern — generalise the `Session.subscriptions` set, don't special-case each one.
 
 ### Add a new subscription channel (pager-style)
 

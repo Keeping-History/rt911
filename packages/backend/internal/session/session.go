@@ -22,10 +22,11 @@ const (
 )
 
 // Opt-in subscription channels. Each is a side stream a session must subscribe
-// to; nothing on a channel is delivered by default. News and HTML are planned.
+// to; nothing on a channel is delivered by default. HTML is planned.
 const (
 	ChannelPager = "pager"
 	ChannelMp3   = "mp3"
+	ChannelNews  = "news"
 )
 
 // outMsg is the envelope for every server→client message.
@@ -178,6 +179,16 @@ func (s *Session) SendMp3(t time.Time, items []model.MediaItem) {
 	s.send_(outMsg{Type: "mp3", Time: t.Format(time.RFC3339), Items: items})
 }
 
+// SendNews delivers a batch of news items at time t on the news channel. Like
+// mp3, news reuses the MediaItem shape and the Items field, with a distinct
+// "news" type so the client routes it to the News app. No frame for an empty batch.
+func (s *Session) SendNews(t time.Time, items []model.MediaItem) {
+	if len(items) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "news", Time: t.Format(time.RFC3339), Items: items})
+}
+
 // Init sets the client's starting virtual time and sends the initial snapshot.
 func (s *Session) Init(t time.Time, items []model.MediaItem) {
 	s.mu.Lock()
@@ -277,6 +288,16 @@ func (s *Session) RunTimePump() {
 					s.logger.Warn("mp3 cache lookup failed", "error", err)
 				} else {
 					s.SendMp3(t, mp3Items)
+				}
+			}
+
+			// news items (News app) ride their own opt-in channel and Redis cache.
+			if s.Subscribed(ChannelNews) {
+				newsItems, err := cache.NewsItemsAt(ctx, s.rdb, t)
+				if err != nil {
+					s.logger.Warn("news cache lookup failed", "error", err)
+				} else {
+					s.SendNews(t, newsItems)
 				}
 			}
 		}

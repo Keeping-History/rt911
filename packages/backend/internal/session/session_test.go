@@ -91,6 +91,33 @@ func TestMp3ChannelIndependentOfPager(t *testing.T) {
 	}
 }
 
+func TestSendNewsEmitsFrameWithMediaItems(t *testing.T) {
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 13, 30, 0, 0, time.UTC)
+
+	s.SendNews(at, []model.MediaItem{{ID: 9001, Title: "Headline", Format: "news"}})
+
+	m := recvType(t, s)
+	if m.Type != "news" {
+		t.Fatalf("expected news frame, got %q", m.Type)
+	}
+	if len(m.Items) != 1 || m.Items[0].Title != "Headline" {
+		t.Fatalf("expected one news media item, got %+v", m.Items)
+	}
+}
+
+func TestChannelsAreIndependent(t *testing.T) {
+	s := newTestSession(t)
+	s.Subscribe(ChannelNews)
+	_ = recvType(t, s) // drain subscribe_ack
+	if !s.Subscribed(ChannelNews) {
+		t.Fatal("expected news subscription")
+	}
+	if s.Subscribed(ChannelMp3) || s.Subscribed(ChannelPager) {
+		t.Fatal("subscribing news must not subscribe mp3 or pager")
+	}
+}
+
 func TestSendPagerEmptyBatchSendsNothing(t *testing.T) {
 	s := newTestSession(t)
 
