@@ -12,6 +12,7 @@ import {
 	type MediaItem,
 	type PagerItem,
 } from "./MediaStreamContext";
+import { decodeWireMessage } from "./wireCodec";
 
 // Instant items (start_date = end_date or calc_duration = 0) are kept for
 // this many milliseconds after their start time before being pruned.
@@ -205,6 +206,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		let active = true;
 		let heartbeatId: ReturnType<typeof setInterval>;
 		const ws = new WebSocket(WS_URL);
+		// Must be set synchronously at construction (not in onopen) so the first
+		// binary frame arrives as an ArrayBuffer, not a Blob.
+		ws.binaryType = "arraybuffer";
 		wsRef.current = ws;
 
 		ws.onopen = () => {
@@ -240,11 +244,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}, HEARTBEAT_INTERVAL_MS);
 		};
 
-		ws.onmessage = (event: MessageEvent<string>) => {
+		ws.onmessage = (event: MessageEvent<ArrayBuffer>) => {
 			if (!active) return;
 			let msg: WsIncomingMessage;
 			try {
-				msg = JSON.parse(event.data) as WsIncomingMessage;
+				msg = decodeWireMessage<WsIncomingMessage>(event.data);
 			} catch {
 				return;
 			}

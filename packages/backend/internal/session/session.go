@@ -1,10 +1,10 @@
 package session
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"log/slog"
 	"sync"
 	"time"
@@ -13,6 +13,7 @@ import (
 	"classicy/streamer/internal/model"
 
 	goredis "github.com/redis/go-redis/v9"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 const (
@@ -282,6 +283,21 @@ func (s *Session) RunTimePump() {
 	}
 }
 
+// encodeMsg serialises an outbound envelope as a MessagePack binary frame.
+// SetCustomStructTag("json") reuses the existing json: struct tags as msgpack
+// field names, so the wire keys (and the frontend TS interfaces) stay identical.
+// time.Time fields encode as the msgpack timestamp extension; the client decodes
+// them back to ISO strings.
+func encodeMsg(m outMsg) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := msgpack.NewEncoder(&buf)
+	enc.SetCustomStructTag("json")
+	if err := enc.Encode(m); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 func (s *Session) send_(m outMsg) {
 	// Don't write to a closed session.
 	select {
@@ -290,7 +306,7 @@ func (s *Session) send_(m outMsg) {
 	default:
 	}
 
-	data, err := json.Marshal(m)
+	data, err := encodeMsg(m)
 	if err != nil {
 		return
 	}

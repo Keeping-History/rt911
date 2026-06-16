@@ -1,13 +1,15 @@
 package session
 
 import (
-	"encoding/json"
+	"bytes"
 	"io"
 	"log/slog"
 	"testing"
 	"time"
 
 	"classicy/streamer/internal/model"
+
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 func newTestSession(t *testing.T) *Session {
@@ -23,8 +25,10 @@ func recvType(t *testing.T, s *Session) outMsg {
 	select {
 	case data := <-s.send:
 		var m outMsg
-		if err := json.Unmarshal(data, &m); err != nil {
-			t.Fatalf("unmarshal outbound: %v", err)
+		dec := msgpack.NewDecoder(bytes.NewReader(data))
+		dec.SetCustomStructTag("json")
+		if err := dec.Decode(&m); err != nil {
+			t.Fatalf("decode outbound: %v", err)
 		}
 		return m
 	default:

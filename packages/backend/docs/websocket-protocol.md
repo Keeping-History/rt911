@@ -1,12 +1,27 @@
 # WebSocket protocol
 
-Wire-level reference for `/stream`. All frames are JSON-encoded text frames. Binary frames are not used.
+Wire-level reference for `/stream`. The protocol is **split by direction**:
+
+- **Server → client** frames are **binary MessagePack** (`websocket.BinaryMessage`). `time.Time`
+  fields are encoded with the msgpack timestamp extension; everything else uses the existing `json:`
+  struct tags as field names (via `Encoder.SetCustomStructTag("json")`), so the wire keys are
+  identical to the previous JSON encoding. There is no version handshake — the single consumer
+  (`packages/frontend/`) decodes binary unconditionally (CLAUDE.md hard rule #8).
+- **Client → server** frames stay **JSON-encoded text frames** — they are tiny and infrequent, so
+  binary buys nothing. The read loop ignores frame type and unmarshals JSON.
+
+The JSON shapes shown below describe the **logical** payload of each frame. Server→client examples
+are the decoded form; on the wire they are MessagePack, with timestamps as the binary ext rather
+than RFC3339 strings (the client's extension codec decodes them back to ISO strings).
 
 ---
 
 ## Connection
 
 Endpoint: `ws://host:8080/stream` (plain WS) or `wss://…` behind TLS termination.
+
+A browser client must set `ws.binaryType = "arraybuffer"` synchronously at construction so inbound
+binary frames arrive as `ArrayBuffer` (not `Blob`) before the first frame can be delivered.
 
 The handshake currently accepts every origin (`CheckOrigin: func(r) bool { return true }` in `internal/handler/ws.go`). Lock this down at the reverse proxy in production — there is no per-connection auth.
 
@@ -50,7 +65,10 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) and each tick that produces ≥ 1 mp3 item while subscribed. Reuses the `items` field. |
 | `error`           | `message`                     | Reply to a malformed or unrecognised request.          |
 
-All `time` values are RFC3339 UTC (e.g. `"2001-09-11T08:46:00Z"`). `items[]` and `pager[]` are documented in [`data-model.md`](./data-model.md).
+The frame-level `time` field is a string (RFC3339 UTC, e.g. `"2001-09-11T08:46:00Z"`) in both the
+logical and wire forms. The `time.Time` date fields **inside** `items[]`/`pager[]` (`start_date`,
+`end_date`) ride the binary msgpack timestamp ext on the wire and decode to ISO strings on the
+client. `items[]` and `pager[]` are documented in [`data-model.md`](./data-model.md).
 
 ---
 
