@@ -14,3 +14,12 @@ packages/backend/entries_news.json
 /docs/superpowers
 usenet/**
 /.github/instructions
+
+# local secret/credential files (never commit)
+/bind.txt
+/login-info.txt
+*.secret
+.history
+.pnpm-store
+.remember
+plans/archive
