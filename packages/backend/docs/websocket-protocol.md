@@ -20,31 +20,36 @@ Once the upgrade succeeds, the server creates a `Session` and registers it with 
 
 Every client message is a JSON object with at least a `type` field. Additional fields depend on the type.
 
-| Type        | Additional fields | Purpose                                       |
-| ----------- | ----------------- | --------------------------------------------- |
-| `init`      | `time`            | Set the virtual clock and request a snapshot. |
-| `seek`      | `time`            | Move the virtual clock to a new instant.      |
-| `heartbeat` | `time`            | Report client's current virtual time.         |
-| `filter`    | `formats[]`       | Whitelist media formats.                      |
-| `pause`     | —                 | Stop advancing virtual time.                  |
-| `resume`    | —                 | Resume advancing virtual time.                |
+| Type          | Additional fields | Purpose                                       |
+| ------------- | ----------------- | --------------------------------------------- |
+| `init`        | `time`            | Set the virtual clock and request a snapshot. |
+| `seek`        | `time`            | Move the virtual clock to a new instant.      |
+| `heartbeat`   | `time`            | Report client's current virtual time.         |
+| `filter`      | `formats[]`       | Whitelist media formats.                      |
+| `subscribe`   | `channel`         | Opt into an opt-in side channel (`pager`).    |
+| `unsubscribe` | `channel`         | Leave a side channel.                         |
+| `pause`       | —                 | Stop advancing virtual time.                  |
+| `resume`      | —                 | Resume advancing virtual time.                |
 
 All unknown `type` values produce an `error` reply but do not terminate the session.
 
 ### Server → client
 
-| Type            | Fields                        | When sent                                              |
-| --------------- | ----------------------------- | ------------------------------------------------------ |
-| `init_ack`      | `time`, `items[]`             | Reply to `init`.                                       |
-| `seek_ack`      | `time`, `items[]`             | Reply to `seek`.                                       |
-| `heartbeat_ack` | `time`                        | Reply to `heartbeat`. `time` is server's vTime.        |
-| `filter_ack`    | —                             | Reply to `filter`.                                     |
-| `pause_ack`     | —                             | Reply to `pause`.                                      |
-| `resume_ack`    | —                             | Reply to `resume`.                                     |
-| `items`         | `time`, `items[]`             | Each tick that produces ≥ 1 item after filtering.      |
-| `error`         | `message`                     | Reply to a malformed or unrecognised request.          |
+| Type              | Fields                        | When sent                                              |
+| ----------------- | ----------------------------- | ------------------------------------------------------ |
+| `init_ack`        | `time`, `items[]`             | Reply to `init`.                                       |
+| `seek_ack`        | `time`, `items[]`             | Reply to `seek`.                                       |
+| `heartbeat_ack`   | `time`                        | Reply to `heartbeat`. `time` is server's vTime.        |
+| `filter_ack`      | —                             | Reply to `filter`.                                     |
+| `subscribe_ack`   | `channel`                     | Reply to `subscribe`.                                  |
+| `unsubscribe_ack` | `channel`                     | Reply to `unsubscribe`.                                |
+| `pause_ack`       | —                             | Reply to `pause`.                                      |
+| `resume_ack`      | —                             | Reply to `resume`.                                     |
+| `items`           | `time`, `items[]`             | Each tick that produces ≥ 1 media item after filtering.|
+| `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) and each tick that produces ≥ 1 pager item while subscribed. |
+| `error`           | `message`                     | Reply to a malformed or unrecognised request.          |
 
-All `time` values are RFC3339 UTC (e.g. `"2001-09-11T08:46:00Z"`). `items[]` is documented in [`data-model.md`](./data-model.md).
+All `time` values are RFC3339 UTC (e.g. `"2001-09-11T08:46:00Z"`). `items[]` and `pager[]` are documented in [`data-model.md`](./data-model.md).
 
 ---
 
@@ -139,6 +144,73 @@ Response:
 After this acks, every `init_ack`, `seek_ack`, and `items` frame contains only items whose `format` is in the whitelist. To clear the filter, send `formats: []` or `formats: null`.
 
 The filter does not affect items already delivered — it's a forward-looking switch. If you want to refresh the visible set after changing the filter, issue a `seek` to the current virtual time.
+
+The `filter` whitelist only ever applies to `items` (media) frames. Pager delivery is governed by `subscribe`/`unsubscribe`, not the format filter.
+
+### `subscribe`
+
+Request:
+
+```json
+{ "type": "subscribe", "channel": "pager" }
+```
+
+Response:
+
+```json
+{ "type": "subscribe_ack", "channel": "pager" }
+```
+
+Pager items live in their own table and are **not** delivered by default. After subscribing, the
+server delivers them on the `pager` channel: an immediate snapshot (the 5-minute lookback window
+at the current virtual time, if the session has been `init`ed) followed by one `pager` frame per
+virtual second that produces pager traffic.
+
+`"pager"` is currently the only valid channel; any other value yields
+`{"type":"error","message":"unknown channel \"…\""}`. (News, MP3, and HTML channels are planned.)
+Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
+
+### `unsubscribe`
+
+Request:
+
+```json
+{ "type": "unsubscribe", "channel": "pager" }
+```
+
+Response:
+
+```json
+{ "type": "unsubscribe_ack", "channel": "pager" }
+```
+
+Pager frames stop after the ack.
+
+### Server-initiated / snapshot `pager`
+
+```json
+{
+  "type": "pager",
+  "time": "2001-09-11T12:46:01Z",
+  "pager": [
+    {
+      "id": 99821,
+      "start_date": "2001-09-11T12:46:01Z",
+      "provider": "Metrocall",
+      "recipient_id": "1060278",
+      "id_type": "",
+      "channel": "B",
+      "mode": "ALPHA",
+      "message": "Service is not responding. Stopped.",
+      "approved": 1
+    }
+  ]
+}
+```
+
+Like `items`, `pager` frames are sent at most once per virtual second and only when at least one
+pager item is present — empty seconds produce no frame. The `pager[]` payload mirrors
+`internal/model/pager.go`.
 
 ### `pause`
 

@@ -46,20 +46,46 @@ export interface MediaItem {
 	sort?: number;
 }
 
+/**
+ * A single historical pager message, delivered on the opt-in "pager" channel.
+ * Unlike MediaItem, pager items are instant (a start_date with no duration) and
+ * carry pager-specific metadata as first-class fields — no content JSON to parse.
+ */
+export interface PagerItem {
+	id: number;
+	start_date: string;
+	provider?: string;
+	recipient_id?: string;
+	id_type?: string;
+	channel?: string;
+	mode?: string;
+	message: string;
+	approved?: number;
+}
+
 export interface MediaStreamContextValue {
 	items: MediaItem[];
+	/** Pager items received while subscribed to the pager channel. */
+	pagerItems: PagerItem[];
 	connected: boolean;
 	addItems: (items: MediaItem[]) => void;
 	/** Register a set of desired formats for an app. null = want all formats. */
 	subscribeFormats: (appId: string, formats: string[] | null) => void;
 	/** Remove a previously registered format subscription. */
 	unsubscribeFormats: (appId: string) => void;
+	/** Opt into pager-channel delivery. Ref-counted by appId. */
+	subscribePager: (appId: string) => void;
+	/** Drop a pager-channel subscription. Unsubscribes server-side when the last app leaves. */
+	unsubscribePager: (appId: string) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	items: [],
+	pagerItems: [],
 	connected: false,
 	addItems: () => {},
 	subscribeFormats: () => {},
 	unsubscribeFormats: () => {},
+	subscribePager: () => {},
+	unsubscribePager: () => {},
 });

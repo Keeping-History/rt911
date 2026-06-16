@@ -20,12 +20,18 @@ const (
 	driftThresh = 3 * time.Second
 )
 
+// ChannelPager is the opt-in subscription channel for pager items. News, MP3,
+// and HTML channels are planned and will be added alongside it.
+const ChannelPager = "pager"
+
 // outMsg is the envelope for every server→client message.
 type outMsg struct {
-	Type  string           `json:"type"`
-	Time  string           `json:"time,omitempty"`
-	Items []model.MediaItem `json:"items,omitempty"`
-	Msg   string           `json:"message,omitempty"`
+	Type    string            `json:"type"`
+	Time    string            `json:"time,omitempty"`
+	Channel string            `json:"channel,omitempty"`
+	Items   []model.MediaItem `json:"items,omitempty"`
+	Pager   []model.PagerItem `json:"pager,omitempty"`
+	Msg     string            `json:"message,omitempty"`
 }
 
 // Session holds all state for a single connected client.
@@ -35,10 +41,11 @@ type Session struct {
 	rdb    *goredis.Client
 	logger *slog.Logger
 
-	mu           sync.Mutex
-	virtualTime  time.Time
-	paused       bool
-	formatFilter map[string]struct{} // nil = send all formats
+	mu            sync.Mutex
+	virtualTime   time.Time
+	paused        bool
+	formatFilter  map[string]struct{} // nil = send all formats
+	subscriptions map[string]struct{} // opt-in delivery channels (e.g. "pager")
 
 	send      chan []byte
 	tickCh    chan struct{}
@@ -107,6 +114,53 @@ func (s *Session) applyFormatFilter(items []model.MediaItem) []model.MediaItem {
 		}
 	}
 	return out
+}
+
+// Subscribe opts this session into delivery for the named channel and acks.
+// Channels are opt-in side streams (currently "pager"; news/mp3/html are
+// planned). For channels that carry a snapshot, the caller (handler) sends the
+// initial batch, since that requires a Postgres query.
+func (s *Session) Subscribe(channel string) {
+	s.mu.Lock()
+	if s.subscriptions == nil {
+		s.subscriptions = make(map[string]struct{})
+	}
+	s.subscriptions[channel] = struct{}{}
+	s.mu.Unlock()
+	s.send_(outMsg{Type: "subscribe_ack", Channel: channel})
+}
+
+// Unsubscribe stops delivery for the named channel and acks.
+func (s *Session) Unsubscribe(channel string) {
+	s.mu.Lock()
+	delete(s.subscriptions, channel)
+	s.mu.Unlock()
+	s.send_(outMsg{Type: "unsubscribe_ack", Channel: channel})
+}
+
+// Subscribed reports whether this session currently receives the named channel.
+func (s *Session) Subscribed(channel string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.subscriptions[channel]
+	return ok
+}
+
+// VirtualTime returns the session's current virtual time. ok is false before
+// the session has been initialised (virtual time still zero).
+func (s *Session) VirtualTime() (t time.Time, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.virtualTime, !s.virtualTime.IsZero()
+}
+
+// SendPager delivers a batch of pager items at time t. No frame is sent for an
+// empty batch — silence is meaningful, exactly as with media items frames.
+func (s *Session) SendPager(t time.Time, items []model.PagerItem) {
+	if len(items) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "pager", Time: t.Format(time.RFC3339), Pager: items})
 }
 
 // Init sets the client's starting virtual time and sends the initial snapshot.
@@ -183,11 +237,22 @@ func (s *Session) RunTimePump() {
 			items, err := cache.ItemsAt(ctx, s.rdb, t)
 			if err != nil {
 				s.logger.Warn("cache lookup failed", "error", err)
-				continue
+			} else {
+				filtered := s.applyFormatFilter(items)
+				if len(filtered) > 0 {
+					s.send_(outMsg{Type: "items", Time: t.Format(time.RFC3339), Items: filtered})
+				}
 			}
-			filtered := s.applyFormatFilter(items)
-			if len(filtered) > 0 {
-				s.send_(outMsg{Type: "items", Time: t.Format(time.RFC3339), Items: filtered})
+
+			// Pager items ride a separate Redis cache and an opt-in channel, so
+			// the media tick above never scans the large pager set.
+			if s.Subscribed(ChannelPager) {
+				pagerItems, err := cache.PagerItemsAt(ctx, s.rdb, t)
+				if err != nil {
+					s.logger.Warn("pager cache lookup failed", "error", err)
+					continue
+				}
+				s.SendPager(t, pagerItems)
 			}
 		}
 	}

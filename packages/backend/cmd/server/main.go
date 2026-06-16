@@ -39,6 +39,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Pager is an opt-in side channel backed by its own table and cache. Its
+	// init is best-effort: a missing pager_items table or a pager cache failure
+	// must not take down media streaming (and it smooths rollout ordering).
+	if err := cache.InstallPagerTriggers(ctx, pool, logger); err != nil {
+		logger.Warn("pager trigger install failed; pager channel disabled", "error", err)
+	} else if err := cache.WarmPagerCache(ctx, rdb, pool, logger); err != nil {
+		logger.Warn("pager cache warm failed; pager channel disabled", "error", err)
+	} else {
+		go cache.ListenPager(ctx, dbURL, rdb, pool, logger)
+	}
+
 	// Keep Redis in sync with media_items changes for the process lifetime.
 	go cache.Listen(ctx, dbURL, rdb, pool, logger)
 

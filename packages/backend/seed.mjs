@@ -142,7 +142,7 @@ async function createCollections(token) {
         { field: "end_date",      type: "dateTime", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
         { field: "timezone",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
         { field: "url",           type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
-        { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "mp3", "html", "modal", "news", "pager"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
+        { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "mp3", "html", "modal", "news"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
         { field: "image",         type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
         { field: "image_caption", type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
         { field: "content",       type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
@@ -174,6 +174,35 @@ async function createCollections(token) {
     }
     console.log(`Creating field: media_items.${fieldDef.field}`);
     await api(token, "POST", "/fields/media_items", fieldDef);
+  }
+
+  // pager_items — pager traffic lives in its own table (not media_items). Every
+  // pager item is "instant": a start_date with no duration/end_date. provider is
+  // a plain text column, not a sources FK.
+  if (!names.includes("pager_items")) {
+    console.log("Creating collection: pager_items");
+    await api(token, "POST", "/collections", {
+      collection: "pager_items",
+      meta: { icon: "pager", sort_field: "sort", note: "Historical pager messages" },
+      schema: {},
+      fields: [
+        { field: "id",           type: "integer",  schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true, readonly: true } },
+        { field: "start_date",   type: "dateTime", schema: { is_nullable: false }, meta: { required: true, interface: "datetime", width: "half" } },
+        { field: "provider",     type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+        { field: "recipient_id", type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+        { field: "id_type",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+        { field: "channel",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+        { field: "mode",         type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+        { field: "message",      type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
+      ],
+    });
+
+    // approved as integer (1/0) added individually — the bulk endpoint creates
+    // string columns when type is in the bulk payload (same caveat as media_items).
+    await api(token, "POST", "/fields/pager_items", { field: "approved", type: "integer", schema: { default_value: 1 }, meta: { interface: "input", width: "half", note: "1 = approved, 0 = pending" } });
+    await api(token, "POST", "/fields/pager_items", { field: "sort", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", hidden: true } });
+  } else {
+    console.log("Collection pager_items already exists, skipping.");
   }
 }
 
@@ -510,40 +539,29 @@ function etToUtc(etTimestamp) {
   return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
 }
 
-async function importPagerSources(token, records) {
-  const providers = [...new Set(records.map((r) => r.provider).filter(Boolean))];
-  const existing  = await api(token, "GET", "/items/sources?limit=-1&fields=slug");
-  const existingSlugs = new Set(existing.data.map((s) => s.slug));
-
-  const toCreate = providers
-    .filter((p) => !existingSlugs.has(p))
-    .map((p) => ({ name: p, slug: p }));
-
-  if (toCreate.length > 0) {
-    console.log(`Importing ${toCreate.length} pager provider sources…`);
-    await api(token, "POST", "/items/sources", toCreate);
-  } else {
-    console.log("All pager provider sources already exist, skipping.");
-  }
-
-  const all = await api(token, "GET", "/items/sources?limit=-1&fields=id,slug");
-  return Object.fromEntries(all.data.map((s) => [s.slug, s.id]));
-}
-
-async function importPagerItems(token, records, sourceMap) {
-  const existing = await api(token, "GET", "/items/media_items?limit=1&fields=id&filter[format][_eq]=pager");
+async function importPagerItems(token, records) {
+  const existing = await api(token, "GET", "/items/pager_items?limit=1&fields=id");
   if (existing.data.length > 0) {
-    console.log("Pager items already exist, skipping.");
+    console.log("pager_items already has records, skipping pager import.");
     return;
   }
 
-  const existingSort = await api(token, "GET", "/items/media_items?limit=1&sort[]=-sort&fields[]=sort");
-  const maxSort = existingSort.data?.[0]?.sort ?? 0;
+  // Widen text columns — Directus creates string fields as varchar(255), too
+  // short for long pager messages.
+  psql(`
+    ALTER TABLE pager_items
+      ALTER COLUMN provider     TYPE text,
+      ALTER COLUMN recipient_id TYPE text,
+      ALTER COLUMN id_type      TYPE text,
+      ALTER COLUMN channel      TYPE text,
+      ALTER COLUMN mode         TYPE text,
+      ALTER COLUMN message      TYPE text;
+  `);
 
-  const cols = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,content,sort`;
+  const cols = `start_date,provider,recipient_id,id_type,channel,mode,message,approved,sort`;
   const BATCH = 500;
 
-  // Sort by timestamp for correct ordering; drop records with no message content
+  // Sort by timestamp for correct ordering; drop records with no message content.
   const valid  = records.filter((r) => r.message && r.message.trim() !== "");
   const sorted = [...valid].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   if (valid.length !== records.length) {
@@ -555,38 +573,21 @@ async function importPagerItems(token, records, sourceMap) {
     process.stdout.write(`  ${i + 1}–${Math.min(i + BATCH, sorted.length)} / ${sorted.length}\r`);
     const batch = sorted.slice(i, i + BATCH);
     const rows = batch.map((r, idx) => {
-      const utcTs  = etToUtc(r.timestamp);
-      const title  = r.message.length > 100 ? r.message.slice(0, 100) : r.message;
-      const content = JSON.stringify({
-        recipient_id: r.recipient_id ?? "",
-        id_type:      r.id_type      ?? "",
-        channel:      r.channel      ?? "",
-        mode:         r.mode         ?? "",
-        timestamp:    r.timestamp,
-      });
+      const utcTs = etToUtc(r.timestamp);   // pager data is EDT; store UTC like media
       return `(${[
-        sqlVal(title.trim()),
-        sqlVal(r.message),
-        sqlVal(sourceMap[r.provider] ?? null),
         sqlVal(utcTs),
-        sqlVal(utcTs),   // end_date = start_date (instant item)
-        sqlVal(0),       // calc_duration = 0
-        sqlVal("EDT"),
-        sqlVal(""),
-        sqlVal("pager"),
+        sqlVal(r.provider     ?? null),
+        sqlVal(r.recipient_id ?? null),
+        sqlVal(r.id_type      ?? null),
+        sqlVal(r.channel      ?? null),
+        sqlVal(r.mode         ?? null),
+        sqlVal(r.message),
         sqlVal(1),
-        sqlVal(0),
-        sqlVal(1),
-        sqlVal(0),
-        sqlVal(0),
-        sqlVal(null),    // image
-        sqlVal(null),    // image_caption
-        sqlVal(content),
-        sqlVal(maxSort + i + idx + 1),
+        sqlVal(i + idx + 1),
       ].join(",")})`;
     }).join(",\n");
 
-    psql(`INSERT INTO media_items (${cols}) VALUES\n${rows};\n`);
+    psql(`INSERT INTO pager_items (${cols}) VALUES\n${rows};\n`);
   }
 
   console.log("\nDone.");
@@ -619,7 +620,6 @@ const newsSourceId = await resolveNewsSource(token);
 await importNewsItems(token, newsRecords, newsSourceId);
 
 console.log("\n--- Pager items (pager_entries.json) ---");
-const pagerSourceMap = await importPagerSources(token, pagerRecords);
-await importPagerItems(token, pagerRecords, pagerSourceMap);
+await importPagerItems(token, pagerRecords);
 
 console.log("\nBootstrap complete. Directus is at", DIRECTUS_URL);

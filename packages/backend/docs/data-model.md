@@ -1,6 +1,6 @@
 # Data model
 
-The streamer reads two Directus-managed Postgres tables: `sources` and `media_items`. It never writes to them. Schema definition lives in [`seed.mjs`](../seed.mjs); this document is the authoritative reference for what the streamer expects to see.
+The streamer reads three Directus-managed Postgres tables: `sources`, `media_items`, and `pager_items`. It never writes to them. Schema definition lives in [`seed.mjs`](../seed.mjs); this document is the authoritative reference for what the streamer expects to see.
 
 ---
 
@@ -51,6 +51,8 @@ CREATE INDEX media_items_start_date_idx ON media_items (start_date);
 
 (Directus initially creates string columns as `varchar(255)`; `seed.mjs` widens the long ones to `text` via `ALTER TABLE`.)
 
+> **Pager note:** pager traffic used to live here as `format = 'pager'` rows. It now has its own `pager_items` table (see below) and is delivered on the opt-in `pager` subscription channel, not the format filter.
+
 ### Column reference
 
 | Column          | Type          | Required | Streamer use                                                              |
@@ -81,6 +83,49 @@ All `text` columns marked "no" above are nullable. Directus inserts empty string
 
 ---
 
+## `pager_items`
+
+```sql
+CREATE TABLE pager_items (
+  id            serial PRIMARY KEY,
+  start_date    timestamptz NOT NULL,           -- UTC; pager data is recorded EDT and converted on import
+  provider      text,                            -- e.g. Metrocall, Arch, Skytel, Skytael
+  recipient_id  text,
+  id_type       text,
+  channel       text,
+  mode          text,                            -- e.g. ALPHA
+  message       text,
+  approved      integer DEFAULT 1,
+  sort          integer
+);
+
+CREATE INDEX pager_items_start_date_idx ON pager_items (start_date);
+```
+
+Every pager item is **instant** — a `start_date` with no `end_date`/`calc_duration`. Unlike the
+old design, pager metadata is stored as first-class columns (no `content` JSON), and `provider`
+is plain text rather than a `sources` FK. The streamer keeps `pager_items` in a separate Redis
+keyspace (`pager:items` / `pager:by_start`) so the ~447k-row pager set never burdens the 1 Hz
+media tick path, and delivers it only to sessions that `subscribe` to the `pager` channel.
+
+| Column         | Type        | Required | Streamer use                                                       |
+| -------------- | ----------- | -------- | ------------------------------------------------------------------ |
+| `id`           | int         | yes      | Stable identity, Redis HASH key in `pager:items`.                  |
+| `start_date`   | timestamptz | yes      | Redis ZSET score; 5-minute lookback window on subscribe/init/seek. |
+| `provider`     | text        | no       | Pager network name.                                                |
+| `recipient_id` | text        | no       | Destination capcode/ID.                                            |
+| `id_type`      | text        | no       | Recipient ID classification.                                       |
+| `channel`      | text        | no       | Pager channel.                                                     |
+| `mode`         | text        | no       | Encoding mode (e.g. `ALPHA`).                                       |
+| `message`      | text        | no       | The page body.                                                     |
+| `approved`     | int         | yes      | `approved = 1` is the universal `WHERE` clause; 0 hides the row.   |
+| `sort`         | int         | no       | Stable display order tiebreaker.                                   |
+
+Pager `approved` flips behave exactly like `media_items`: the `pager_items_changed` NOTIFY
+trigger re-fetches and `UpsertPager`/`ForgetPager`s the row in the pager cache.
+
+---
+
 ## Format vocabulary
 
 `media_items.format` is a free-text column. The Directus admin UI presents these choices (from `seed.mjs`):
@@ -93,8 +138,10 @@ All `text` columns marked "no" above are nullable. Directus inserts empty string
 | `html`  | Inline HTML to render.                                                    |
 | `modal` | Modal/overlay events — fire on `start_date` and show until dismissed.     |
 | `news`  | News article entries from `entries_news.json`.                            |
-| `pager` | POCSAG/FLEX pager messages from `pager_entries.json`.                     |
 | `usenet`| Usenet posts imported via `import-usenet.mjs`.                            |
+
+Pager is no longer a `media_items.format` — it lives in `pager_items` and rides the `pager`
+subscription channel (see [`websocket-protocol.md`](./websocket-protocol.md)).
 
 The streamer does **not** enforce this vocabulary — it passes whatever `format` it reads straight to the client. The frontend chooses how to render unknown formats. The format filter (Section 3.7 of `SPEC.md`) matches exact strings.
 
@@ -148,7 +195,7 @@ The cache warm filter is `WHERE mi.approved = 1`, so unapproved items aren't in 
 
 Three import paths populate `media_items`:
 
-1. **`seed.mjs`** — bootstraps Directus collections, then imports `entries_media.json` (TV / m3u8 broadcast records), `entries_news.json` (news entries with title-parsed dates), and `pager_entries.json` (pager traffic).
+1. **`seed.mjs`** — bootstraps Directus collections, then imports `entries_media.json` (TV / m3u8 broadcast records) and `entries_news.json` (news entries with title-parsed dates) into `media_items`, and `pager_entries.json` (pager traffic, EDT→UTC converted) into `pager_items`.
 2. **`import-usenet.mjs`** — streams `out.NNN.json` NDJSON files and inserts them with `format = "usenet"`. The newsgroup name becomes the source slug.
 3. **Directus admin UI** — manual edits and additions. The streamer picks these up automatically via the `media_items_changed` NOTIFY trigger installed by `cache.InstallTriggers` at boot; see [`components/cache.md`](./components/cache.md).
 

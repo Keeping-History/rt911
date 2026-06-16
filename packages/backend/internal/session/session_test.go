@@ -1,0 +1,101 @@
+package session
+
+import (
+	"encoding/json"
+	"io"
+	"log/slog"
+	"testing"
+	"time"
+
+	"classicy/streamer/internal/model"
+)
+
+func newTestSession(t *testing.T) *Session {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	hub := NewHub(logger)
+	return NewSession(hub, nil, logger)
+}
+
+// recvType drains one queued outbound message and returns its decoded envelope.
+func recvType(t *testing.T, s *Session) outMsg {
+	t.Helper()
+	select {
+	case data := <-s.send:
+		var m outMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("unmarshal outbound: %v", err)
+		}
+		return m
+	default:
+		t.Fatal("expected an outbound message, got none")
+		return outMsg{}
+	}
+}
+
+func TestSubscribeUnsubscribePagerChannel(t *testing.T) {
+	s := newTestSession(t)
+
+	if s.Subscribed(ChannelPager) {
+		t.Fatal("new session should not be subscribed to pager")
+	}
+
+	s.Subscribe(ChannelPager)
+	if !s.Subscribed(ChannelPager) {
+		t.Fatal("expected pager subscription after Subscribe")
+	}
+	if ack := recvType(t, s); ack.Type != "subscribe_ack" || ack.Channel != ChannelPager {
+		t.Fatalf("expected subscribe_ack for pager, got %+v", ack)
+	}
+
+	s.Unsubscribe(ChannelPager)
+	if s.Subscribed(ChannelPager) {
+		t.Fatal("expected no pager subscription after Unsubscribe")
+	}
+	if ack := recvType(t, s); ack.Type != "unsubscribe_ack" || ack.Channel != ChannelPager {
+		t.Fatalf("expected unsubscribe_ack for pager, got %+v", ack)
+	}
+}
+
+func TestSendPagerEmptyBatchSendsNothing(t *testing.T) {
+	s := newTestSession(t)
+
+	s.SendPager(time.Now(), nil)
+	select {
+	case <-s.send:
+		t.Fatal("empty pager batch must not produce a frame")
+	default:
+	}
+}
+
+func TestSendPagerEmitsFrame(t *testing.T) {
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 12, 46, 0, 0, time.UTC)
+
+	s.SendPager(at, []model.PagerItem{{ID: 1, Message: "page one", StartDate: at}})
+
+	m := recvType(t, s)
+	if m.Type != "pager" {
+		t.Fatalf("expected pager frame, got %q", m.Type)
+	}
+	if len(m.Pager) != 1 || m.Pager[0].Message != "page one" {
+		t.Fatalf("expected one pager item 'page one', got %+v", m.Pager)
+	}
+	if m.Time != at.Format(time.RFC3339) {
+		t.Fatalf("expected time %s, got %s", at.Format(time.RFC3339), m.Time)
+	}
+}
+
+func TestVirtualTimeNotReadyBeforeInit(t *testing.T) {
+	s := newTestSession(t)
+	if _, ok := s.VirtualTime(); ok {
+		t.Fatal("virtual time should not be ready before init")
+	}
+
+	at := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
+	s.Init(at, nil)
+	got, ok := s.VirtualTime()
+	if !ok || !got.Equal(at) {
+		t.Fatalf("expected virtual time %s ready, got %s ok=%v", at, got, ok)
+	}
+}

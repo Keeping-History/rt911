@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
-import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
+import type { PagerItem } from "../../Providers/MediaStream/MediaStreamContext";
 import type { PagerDecoderSettings } from "./PagerDecoderContext";
 import { DEFAULT_PAGER_SETTINGS } from "./PagerDecoderContext";
 import { usePagerPlayback } from "./usePagerPlayback";
@@ -17,32 +17,18 @@ function makePagerItem(
 	message: string,
 	utcTimestamp = "2001-09-11T07:00:00.000Z",
 	provider = "Metrocall",
-	overrides: Partial<MediaItem> = {},
-): MediaItem {
-	const content = JSON.stringify({
+	overrides: Partial<PagerItem> = {},
+): PagerItem {
+	return {
+		id:           idSeq++,
+		start_date:   utcTimestamp,
+		provider,
 		recipient_id: "0001234",
 		id_type:      "capcode",
 		channel:      "B",
 		mode:         "ALPHA",
-		timestamp:    "2001-09-11 03:00:00",
-	});
-	return {
-		id:         idSeq++,
-		title:      message.slice(0, 100),
-		full_title: message,
-		source:     provider,
-		start_date: utcTimestamp,
-		end_date:   utcTimestamp,
-		calc_duration: 0,
-		timezone:   "EDT",
-		url:        "",
-		format:     "pager",
-		approved:   1,
-		mute:       0,
-		volume:     1,
-		jump:       0,
-		trim:       0,
-		content,
+		message,
+		approved:     1,
 		...overrides,
 	};
 }
@@ -51,18 +37,27 @@ function makeSettings(overrides: Partial<PagerDecoderSettings> = {}): PagerDecod
 	return { ...DEFAULT_PAGER_SETTINGS, ...overrides };
 }
 
-/** Build a context wrapper that provides the given items. */
-function makeWrapper(items: MediaItem[]) {
-	const subscribeFormats   = vi.fn();
-	const unsubscribeFormats = vi.fn();
+/** Build a context wrapper that provides the given pager items. */
+function makeWrapper(pagerItems: PagerItem[]) {
+	const subscribePager   = vi.fn();
+	const unsubscribePager = vi.fn();
 	return {
 		wrapper: ({ children }: { children: React.ReactNode }) =>
 			createElement(MediaStreamContext.Provider, {
-				value: { items, connected: true, addItems: vi.fn(), subscribeFormats, unsubscribeFormats },
+				value: {
+					items: [],
+					pagerItems,
+					connected: true,
+					addItems: vi.fn(),
+					subscribeFormats: vi.fn(),
+					unsubscribeFormats: vi.fn(),
+					subscribePager,
+					unsubscribePager,
+				},
 				children,
 			}),
-		subscribeFormats,
-		unsubscribeFormats,
+		subscribePager,
+		unsubscribePager,
 	};
 }
 
@@ -84,12 +79,12 @@ describe("usePagerPlayback", () => {
 		expect(result.current.streamingMeta).toBeNull();
 	});
 
-	it("subscribes to pager format on mount and unsubscribes on unmount", () => {
-		const { wrapper, subscribeFormats, unsubscribeFormats } = makeWrapper([]);
+	it("subscribes to the pager channel on mount and unsubscribes on unmount", () => {
+		const { wrapper, subscribePager, unsubscribePager } = makeWrapper([]);
 		const { unmount } = renderHook(() => usePagerPlayback(), { wrapper });
-		expect(subscribeFormats).toHaveBeenCalledWith("PagerDecoder.app", ["pager"]);
+		expect(subscribePager).toHaveBeenCalledWith("PagerDecoder.app");
 		unmount();
-		expect(unsubscribeFormats).toHaveBeenCalledWith("PagerDecoder.app");
+		expect(unsubscribePager).toHaveBeenCalledWith("PagerDecoder.app");
 	});
 
 	it("enqueues and streams a message when a pager item appears", () => {
