@@ -20,6 +20,24 @@ const (
 	keyByStart = "media:by_start" // ZSET  score=unix_start, member=id
 )
 
+// pipelineChunk bounds how many items we buffer into a single Redis pipeline
+// before flushing. Warm/resync touch the full dataset (hundreds of thousands of
+// rows × 2 commands each); one giant Exec exceeds the client write timeout, so
+// we flush in chunks. See flushIfFull.
+const pipelineChunk = 2000
+
+// flushIfFull executes and replaces pipe once count is a non-zero multiple of
+// pipelineChunk. Returns the pipe to keep using (a fresh one after a flush).
+func flushIfFull(ctx context.Context, rdb *goredis.Client, pipe goredis.Pipeliner, count int) (goredis.Pipeliner, error) {
+	if count > 0 && count%pipelineChunk == 0 {
+		if _, err := pipe.Exec(ctx); err != nil {
+			return nil, err
+		}
+		return rdb.Pipeline(), nil
+	}
+	return pipe, nil
+}
+
 // Connect parses a Redis URL and returns a client.
 func Connect(url string) *goredis.Client {
 	opt, err := goredis.ParseURL(url)
@@ -44,6 +62,7 @@ func WarmCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, log
 	}
 
 	pipe := rdb.Pipeline()
+	count := 0
 	for _, it := range items {
 		data, err := json.Marshal(it)
 		if err != nil {
@@ -55,6 +74,10 @@ func WarmCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, log
 			Score:  float64(it.StartDate.Unix()),
 			Member: id,
 		})
+		count++
+		if pipe, err = flushIfFull(ctx, rdb, pipe, count); err != nil {
+			return fmt.Errorf("pipeline exec: %w", err)
+		}
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("pipeline exec: %w", err)
