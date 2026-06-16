@@ -128,29 +128,21 @@ async function createCollections(token) {
     console.log("Collection sources already exists, skipping.");
   }
 
-  if (!names.includes("media_items")) {
-    console.log("Creating collection: media_items");
-    await api(token, "POST", "/collections", {
-      collection: "media_items",
-      meta: { icon: "movie", sort_field: "sort", note: "Scheduled broadcast media" },
-      schema: {},
-      fields: [
-        { field: "id",            type: "integer",  schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true, readonly: true } },
-        { field: "title",         type: "string",   schema: { is_nullable: false }, meta: { required: true, interface: "input", width: "half" } },
-        { field: "full_title",    type: "string",   schema: {}, meta: { interface: "input", width: "half" } },
-        { field: "start_date",    type: "dateTime", schema: { is_nullable: false }, meta: { required: true, interface: "datetime", width: "half" } },
-        { field: "end_date",      type: "dateTime", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
-        { field: "timezone",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-        { field: "url",           type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
-        { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "mp3", "html", "modal", "news"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
-        { field: "image",         type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-        { field: "image_caption", type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-        { field: "content",       type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
-      ],
-    });
-  } else {
-    console.log("Collection media_items already exists, skipping.");
-  }
+  // media_items and mp3_items share the same shape — mp3 reuses the MediaItem
+  // model, it just lives in its own table and rides the opt-in "mp3" channel.
+  const mediaLikeBaseFields = [
+    { field: "id",            type: "integer",  schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true, readonly: true } },
+    { field: "title",         type: "string",   schema: { is_nullable: false }, meta: { required: true, interface: "input", width: "half" } },
+    { field: "full_title",    type: "string",   schema: {}, meta: { interface: "input", width: "half" } },
+    { field: "start_date",    type: "dateTime", schema: { is_nullable: false }, meta: { required: true, interface: "datetime", width: "half" } },
+    { field: "end_date",      type: "dateTime", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
+    { field: "timezone",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+    { field: "url",           type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
+    { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "html", "modal", "news"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
+    { field: "image",         type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+    { field: "image_caption", type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+    { field: "content",       type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
+  ];
 
   // Numeric fields added individually — the bulk collection endpoint silently creates
   // string columns instead of numeric ones when type is specified in the bulk payload.
@@ -165,16 +157,47 @@ async function createCollections(token) {
     { field: "sort",          type: "integer", schema: { is_nullable: true },    meta: { interface: "input", hidden: true } },
   ];
 
-  const existingFields = await api(token, "GET", "/fields/media_items");
-  const existingFieldNames = new Set(existingFields.data.map((f) => f.field));
-  for (const fieldDef of numericFields) {
-    if (existingFieldNames.has(fieldDef.field)) {
-      console.log(`Field media_items.${fieldDef.field} already exists, skipping.`);
-      continue;
+  // Add the integer/float fields to a collection, skipping any that already exist.
+  async function ensureNumericFields(collection) {
+    const existing = await api(token, "GET", `/fields/${collection}`);
+    const have = new Set(existing.data.map((f) => f.field));
+    for (const fieldDef of numericFields) {
+      if (have.has(fieldDef.field)) {
+        console.log(`Field ${collection}.${fieldDef.field} already exists, skipping.`);
+        continue;
+      }
+      console.log(`Creating field: ${collection}.${fieldDef.field}`);
+      await api(token, "POST", `/fields/${collection}`, fieldDef);
     }
-    console.log(`Creating field: media_items.${fieldDef.field}`);
-    await api(token, "POST", "/fields/media_items", fieldDef);
   }
+
+  if (!names.includes("media_items")) {
+    console.log("Creating collection: media_items");
+    await api(token, "POST", "/collections", {
+      collection: "media_items",
+      meta: { icon: "movie", sort_field: "sort", note: "Scheduled broadcast media" },
+      schema: {},
+      fields: mediaLikeBaseFields,
+    });
+  } else {
+    console.log("Collection media_items already exists, skipping.");
+  }
+  await ensureNumericFields("media_items");
+
+  // mp3_items — Radio app audio lives in its own table (not media_items), same
+  // shape as media_items, delivered on the opt-in "mp3" channel.
+  if (!names.includes("mp3_items")) {
+    console.log("Creating collection: mp3_items");
+    await api(token, "POST", "/collections", {
+      collection: "mp3_items",
+      meta: { icon: "radio", sort_field: "sort", note: "Radio (mp3) audio streams" },
+      schema: {},
+      fields: mediaLikeBaseFields,
+    });
+  } else {
+    console.log("Collection mp3_items already exists, skipping.");
+  }
+  await ensureNumericFields("mp3_items");
 
   // pager_items — pager traffic lives in its own table (not media_items). Every
   // pager item is "instant": a start_date with no duration/end_date. provider is
@@ -208,21 +231,23 @@ async function createCollections(token) {
 
 async function createRelations(token) {
   const existing = await api(token, "GET", "/relations");
-  const alreadyLinked = existing.data.some(
-    (r) => r.collection === "media_items" && r.field === "source",
-  );
-  if (alreadyLinked) {
-    console.log("Relation media_items.source → sources already exists, skipping.");
-    return;
+  for (const collection of ["media_items", "mp3_items"]) {
+    const alreadyLinked = existing.data.some(
+      (r) => r.collection === collection && r.field === "source",
+    );
+    if (alreadyLinked) {
+      console.log(`Relation ${collection}.source → sources already exists, skipping.`);
+      continue;
+    }
+    console.log(`Creating relation: ${collection}.source → sources.id`);
+    await api(token, "POST", "/relations", {
+      collection,
+      field: "source",
+      related_collection: "sources",
+      schema: { on_delete: "SET NULL" },
+      meta: { one_collection: "sources", one_field: null, sort_field: null },
+    });
   }
-  console.log("Creating relation: media_items.source → sources.id");
-  await api(token, "POST", "/relations", {
-    collection: "media_items",
-    field: "source",
-    related_collection: "sources",
-    schema: { on_delete: "SET NULL" },
-    meta: { one_collection: "sources", one_field: null, sort_field: null },
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -249,17 +274,13 @@ async function importSources(token, records) {
   return Object.fromEntries(all.data.map((s) => [s.slug, s.id]));
 }
 
-async function importMediaItems(token, records, sourceMap) {
-  const existing = await api(token, "GET", "/items/media_items?limit=1&fields=id");
-  if (existing.data.length > 0) {
-    console.log("media_items already has records, skipping TV import.");
-    return;
-  }
+const MEDIA_LIKE_COLS = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,content,sort`;
 
-  // Widen varchar columns — Directus creates string fields as varchar(255) which is
-  // too short for content/url/etc.
+// Widen varchar columns — Directus creates string fields as varchar(255) which is
+// too short for content/url/etc. Applies to any media-shaped table.
+function widenMediaLikeColumns(table) {
   psql(`
-    ALTER TABLE media_items
+    ALTER TABLE ${table}
       ALTER COLUMN title          TYPE text,
       ALTER COLUMN full_title     TYPE text,
       ALTER COLUMN timezone       TYPE text,
@@ -269,12 +290,11 @@ async function importMediaItems(token, records, sourceMap) {
       ALTER COLUMN image_caption  TYPE text,
       ALTER COLUMN content        TYPE text;
   `);
+}
 
+// Insert media-shaped records into the given table in batches.
+function insertMediaLikeRecords(table, records, sourceMap) {
   const BATCH = 500;
-  console.log(`Importing ${records.length} TV media items in batches of ${BATCH}…`);
-
-  const cols = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,content,sort`;
-
   for (let i = 0; i < records.length; i += BATCH) {
     process.stdout.write(`  ${i + 1}–${Math.min(i + BATCH, records.length)} / ${records.length}\r`);
     const batch = records.slice(i, i + BATCH);
@@ -299,10 +319,34 @@ async function importMediaItems(token, records, sourceMap) {
       sqlVal(r.sort),
     ].join(",")})`).join(",\n");
 
-    psql(`INSERT INTO media_items (${cols}) VALUES\n${rows};\n`);
+    psql(`INSERT INTO ${table} (${MEDIA_LIKE_COLS}) VALUES\n${rows};\n`);
   }
-
   console.log("\nDone.");
+}
+
+async function importMediaItems(token, records, sourceMap) {
+  const existing = await api(token, "GET", "/items/media_items?limit=1&fields=id");
+  if (existing.data.length > 0) {
+    console.log("media_items already has records, skipping TV import.");
+    return;
+  }
+  // mp3 lives in its own table/channel — keep it out of media_items.
+  const nonMp3 = records.filter((r) => r.format !== "mp3");
+  widenMediaLikeColumns("media_items");
+  console.log(`Importing ${nonMp3.length} TV media items (excluding mp3) in batches of 500…`);
+  insertMediaLikeRecords("media_items", nonMp3, sourceMap);
+}
+
+async function importMp3Items(token, records, sourceMap) {
+  const existing = await api(token, "GET", "/items/mp3_items?limit=1&fields=id");
+  if (existing.data.length > 0) {
+    console.log("mp3_items already has records, skipping mp3 import.");
+    return;
+  }
+  const mp3 = records.filter((r) => r.format === "mp3");
+  widenMediaLikeColumns("mp3_items");
+  console.log(`Importing ${mp3.length} mp3 items in batches of 500…`);
+  insertMediaLikeRecords("mp3_items", mp3, sourceMap);
 }
 
 // ---------------------------------------------------------------------------
@@ -614,6 +658,9 @@ await createRelations(token);
 console.log("\n--- TV media items (entries_media.json) ---");
 const sourceMap = await importSources(token, mediaRecords);
 await importMediaItems(token, mediaRecords, sourceMap);
+
+console.log("\n--- mp3 / Radio items (entries_media.json) ---");
+await importMp3Items(token, mediaRecords, sourceMap);
 
 console.log("\n--- News items (entries_news.json) ---");
 const newsSourceId = await resolveNewsSource(token);

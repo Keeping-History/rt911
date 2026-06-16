@@ -50,6 +50,16 @@ func main() {
 		go cache.ListenPager(ctx, dbURL, rdb, pool, logger)
 	}
 
+	// mp3 (Radio app) is likewise an opt-in side channel with its own table and
+	// cache; init is best-effort so it can never take down media streaming.
+	if err := cache.InstallMp3Triggers(ctx, pool, logger); err != nil {
+		logger.Warn("mp3 trigger install failed; mp3 channel disabled", "error", err)
+	} else if err := cache.WarmMp3Cache(ctx, rdb, pool, logger); err != nil {
+		logger.Warn("mp3 cache warm failed; mp3 channel disabled", "error", err)
+	} else {
+		go cache.ListenMp3(ctx, dbURL, rdb, pool, logger)
+	}
+
 	// Keep Redis in sync with media_items changes for the process lifetime.
 	go cache.Listen(ctx, dbURL, rdb, pool, logger)
 

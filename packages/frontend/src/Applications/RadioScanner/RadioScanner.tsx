@@ -9,9 +9,11 @@ import {
 	useClassicyDateTime,
 } from "classicy";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
-import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
-import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
+import { useContext, useEffect, useRef, useState } from "react";
+import {
+	MediaStreamContext,
+	type MediaItem,
+} from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
 import { WaveformVisualizer } from "./WaveformVisualizer";
@@ -40,7 +42,14 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 		(state) => state.System.Manager.Applications.apps[appId],
 	);
 
-	const { items } = useMediaStream({ format: ["mp3"], approved: true });
+	// mp3 audio is delivered on its own opt-in channel; subscribe on mount so the
+	// server streams the Radio stations (and the one playing at the current time).
+	const { mp3Items: items, subscribeMp3, unsubscribeMp3 } = useContext(MediaStreamContext);
+	useEffect(() => {
+		subscribeMp3(appId);
+		return () => unsubscribeMp3(appId);
+	}, [subscribeMp3, unsubscribeMp3, appId]);
+
 	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
 	const [activeStation, setActiveStation] = useState<number>(0);

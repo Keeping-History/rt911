@@ -20,9 +20,12 @@ const (
 	driftThresh = 3 * time.Second
 )
 
-// ChannelPager is the opt-in subscription channel for pager items. News, MP3,
-// and HTML channels are planned and will be added alongside it.
-const ChannelPager = "pager"
+// Opt-in subscription channels. Each is a side stream a session must subscribe
+// to; nothing on a channel is delivered by default. News and HTML are planned.
+const (
+	ChannelPager = "pager"
+	ChannelMp3   = "mp3"
+)
 
 // outMsg is the envelope for every server→client message.
 type outMsg struct {
@@ -163,6 +166,17 @@ func (s *Session) SendPager(t time.Time, items []model.PagerItem) {
 	s.send_(outMsg{Type: "pager", Time: t.Format(time.RFC3339), Pager: items})
 }
 
+// SendMp3 delivers a batch of mp3 items at time t on the mp3 channel. mp3 items
+// reuse the MediaItem shape, so the frame reuses the Items field but carries a
+// distinct "mp3" type so the client routes it to the Radio app, not the default
+// media stream. No frame is sent for an empty batch.
+func (s *Session) SendMp3(t time.Time, items []model.MediaItem) {
+	if len(items) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "mp3", Time: t.Format(time.RFC3339), Items: items})
+}
+
 // Init sets the client's starting virtual time and sends the initial snapshot.
 func (s *Session) Init(t time.Time, items []model.MediaItem) {
 	s.mu.Lock()
@@ -250,9 +264,19 @@ func (s *Session) RunTimePump() {
 				pagerItems, err := cache.PagerItemsAt(ctx, s.rdb, t)
 				if err != nil {
 					s.logger.Warn("pager cache lookup failed", "error", err)
-					continue
+				} else {
+					s.SendPager(t, pagerItems)
 				}
-				s.SendPager(t, pagerItems)
+			}
+
+			// mp3 items (Radio app) ride their own opt-in channel and Redis cache.
+			if s.Subscribed(ChannelMp3) {
+				mp3Items, err := cache.Mp3ItemsAt(ctx, s.rdb, t)
+				if err != nil {
+					s.logger.Warn("mp3 cache lookup failed", "error", err)
+				} else {
+					s.SendMp3(t, mp3Items)
+				}
 			}
 		}
 	}
