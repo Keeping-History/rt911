@@ -110,6 +110,48 @@ func TestUpsertOverwritesAndMovesScore(t *testing.T) {
 	}
 }
 
+func TestItemsInRangeIsHalfOpen(t *testing.T) {
+	rdb, done := newTestRedis(t)
+	defer done()
+	ctx := context.Background()
+
+	base := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
+	// Items at the lower edge, inside, and exactly at the (exclusive) upper edge.
+	at := func(id, offsetSec int) model.MediaItem {
+		return model.MediaItem{ID: id, Title: "x", Approved: 1, StartDate: base.Add(time.Duration(offsetSec) * time.Second)}
+	}
+	for _, it := range []model.MediaItem{at(1, 0), at(2, 60), at(3, 120), at(4, 300)} {
+		if err := Upsert(ctx, rdb, it); err != nil {
+			t.Fatalf("Upsert: %v", err)
+		}
+	}
+
+	// [base, base+300s): lo inclusive (id 1), interior (2,3), hi exclusive (id 4 excluded).
+	got, err := ItemsInRange(ctx, rdb, base, base.Add(300*time.Second))
+	if err != nil {
+		t.Fatalf("ItemsInRange: %v", err)
+	}
+	ids := map[int]bool{}
+	for _, it := range got {
+		ids[it.ID] = true
+	}
+	if !ids[1] || !ids[2] || !ids[3] {
+		t.Fatalf("expected ids 1,2,3 in [base, base+300s), got %+v", ids)
+	}
+	if ids[4] {
+		t.Fatalf("upper bound must be exclusive: id 4 at base+300s should be absent, got %+v", ids)
+	}
+
+	// A window starting at id 2's second includes it (lo inclusive).
+	got, err = ItemsInRange(ctx, rdb, base.Add(60*time.Second), base.Add(120*time.Second))
+	if err != nil {
+		t.Fatalf("ItemsInRange second window: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != 2 {
+		t.Fatalf("expected only id 2 in [base+60s, base+120s), got %+v", got)
+	}
+}
+
 func TestItemsAtEmptySecondReturnsNothing(t *testing.T) {
 	rdb, done := newTestRedis(t)
 	defer done()

@@ -109,6 +109,21 @@ func Mp3ItemsAt(ctx context.Context, rdb *goredis.Client, t time.Time) ([]model.
 	return fetchMp3ByIDs(ctx, rdb, ids)
 }
 
+// Mp3ItemsInRange returns mp3 items whose start_date Unix-second is in the
+// half-open interval [lo, hi). The windowing refill path queries forward windows
+// with this; recordings already playing at the window's lower edge are covered by
+// the init/seek/subscribe overlap snapshot (CurrentMp3Items), not here.
+func Mp3ItemsInRange(ctx context.Context, rdb *goredis.Client, lo, hi time.Time) ([]model.MediaItem, error) {
+	ids, err := rdb.ZRangeByScore(ctx, keyMp3ByStart, &goredis.ZRangeBy{
+		Min: strconv.FormatInt(lo.Unix(), 10),
+		Max: "(" + strconv.FormatInt(hi.Unix(), 10), // exclusive upper bound
+	}).Result()
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	return fetchMp3ByIDs(ctx, rdb, ids)
+}
+
 func fetchMp3ByIDs(ctx context.Context, rdb *goredis.Client, ids []string) ([]model.MediaItem, error) {
 	vals, err := rdb.HMGet(ctx, keyMp3Items, ids...).Result()
 	if err != nil {
