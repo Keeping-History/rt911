@@ -6,6 +6,7 @@ import {
 	ClassicyWindow,
 	quitMenuItemHelper,
 	useAppManager,
+	useAppManagerDispatch,
 } from "classicy";
 import classNames from "classnames";
 import type React from "react";
@@ -17,6 +18,15 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import {
+	tvExitGrid,
+	tvPause,
+	tvResume,
+	tvSetGridChannels,
+	tvSetMuted,
+	tvSetVolumeLimit,
+	tvTuneChannel,
+} from "../TV/TVContext";
 import epgStyles from "./EPG.module.scss";
 import data from "./testdata.json" with { type: "json" };
 
@@ -78,6 +88,16 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 	const dateTime      = useAppManager((s) => s.System.Manager.DateAndTime.dateTime);
 	const timeZoneOffset = useAppManager((s) => s.System.Manager.DateAndTime.timeZoneOffset);
 	const tzOffset = parseInt(timeZoneOffset, 10);
+
+	const desktopEventDispatch = useAppManagerDispatch();
+
+	// Ask the TV app to tune to a channel. EPG channels are keyed by call sign
+	// (name); the TV resolves that against the stream's `source` slug. This is a
+	// fire-and-forget cross-app event — EPG never imports the TV component.
+	const tuneToChannel = useCallback(
+		(channelName: string) => desktopEventDispatch(tvTuneChannel(channelName)),
+		[desktopEventDispatch],
+	);
 
 	const [showSettings, setShowSettings] = useState<boolean>(false);
 
@@ -179,6 +199,14 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 						style={{
 							gridRowStart: channelIndex + 2,
 							gridColumn: `${gridProgramStart + 2}/ span ${gridProgramEnd}`,
+							cursor: "pointer",
+						}}
+						role="button"
+						tabIndex={0}
+						title={`Watch ${channel.name} on TV`}
+						onClick={() => tuneToChannel(channel.name)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") tuneToChannel(channel.name);
 						}}
 					>
 						<div className={epgStyles.epgEntryTitle}>
@@ -208,7 +236,7 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 				);
 			});
 		},
-		[gridWidth, minutesPerGrid, gridStartTime, gridEndTime, currentTime, toLocal],
+		[gridWidth, minutesPerGrid, gridStartTime, gridEndTime, currentTime, toLocal, tuneToChannel],
 	);
 
 	const epgHeader = useMemo(() => {
@@ -270,6 +298,14 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 							gridRowStart: channelIndex + 2,
 							gridColumnStart: 1,
 							gridColumnEnd: 2,
+							cursor: "pointer",
+						}}
+						role="button"
+						tabIndex={0}
+						title={`Watch ${channel.name} on TV`}
+						onClick={() => tuneToChannel(channel.name)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") tuneToChannel(channel.name);
 						}}
 					>
 						<img
@@ -285,7 +321,7 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 				</Fragment>
 			);
 		});
-	}, [getProgramData, gridData]);
+	}, [getProgramData, gridData, tuneToChannel]);
 
 	return (
 		<ClassicyApp
@@ -353,6 +389,52 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 						<ClassicyButton onClickFunc={jumpBack}>&lt;&lt;</ClassicyButton>
 						<ClassicyButton onClickFunc={jumpToNow}>Now</ClassicyButton>
 						<ClassicyButton onClickFunc={jumpForward}>&gt;&gt;</ClassicyButton>
+					</div>
+					{/* TV remote-control test bar: every button is a fire-and-forget
+					    cross-app event handled by the TV app (see TVContext). */}
+					<div style={{ display: "flex", flexWrap: "wrap", alignItems: "center" }}>
+						<ClassicyControlLabel label="TV Remote:" />
+						<ClassicyButton
+							onClickFunc={() =>
+								desktopEventDispatch(
+									tvSetGridChannels(["CNN", "MSNBC", "BBC", "WETA"]),
+								)
+							}
+						>
+							Grid
+						</ClassicyButton>
+						<ClassicyButton onClickFunc={() => desktopEventDispatch(tvExitGrid())}>
+							Single
+						</ClassicyButton>
+						<ClassicyButton onClickFunc={() => desktopEventDispatch(tvPause())}>
+							Pause
+						</ClassicyButton>
+						<ClassicyButton onClickFunc={() => desktopEventDispatch(tvResume())}>
+							Play
+						</ClassicyButton>
+						<ClassicyButton onClickFunc={() => desktopEventDispatch(tvSetMuted(true))}>
+							Mute
+						</ClassicyButton>
+						<ClassicyButton
+							onClickFunc={() => desktopEventDispatch(tvSetMuted(false))}
+						>
+							Unmute
+						</ClassicyButton>
+						<ClassicyButton
+							onClickFunc={() => desktopEventDispatch(tvSetVolumeLimit(1))}
+						>
+							Vol 100%
+						</ClassicyButton>
+						<ClassicyButton
+							onClickFunc={() => desktopEventDispatch(tvSetVolumeLimit(0.5))}
+						>
+							Vol 50%
+						</ClassicyButton>
+						<ClassicyButton
+							onClickFunc={() => desktopEventDispatch(tvSetVolumeLimit(0.25))}
+						>
+							Vol 25%
+						</ClassicyButton>
 					</div>
 					<div
 						className={epgStyles.epgHolder}

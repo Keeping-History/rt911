@@ -20,7 +20,25 @@ import type {
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
 import styles from "./TV.module.scss";
-import "./TVContext";
+import {
+	type TVChannelRef,
+	type TVRemoteCommand,
+	tvPause,
+	tvResume,
+	tvSetMuted,
+} from "./TVContext";
+
+/** Resolve a remote channel reference (numeric id or `source` name) to an item id. */
+function resolveChannelId(
+	channel: TVChannelRef,
+	pool: MediaItem[],
+): number | undefined {
+	if (typeof channel === "number") {
+		return pool.find((i) => i.id === channel)?.id;
+	}
+	const lc = channel.toLowerCase();
+	return pool.find((i) => i.source?.toLowerCase() === lc)?.id;
+}
 
 // Every approved HLS channel in the stream, before any per-channel selection.
 // Hoisted to a module constant so its reference is stable across renders —
@@ -91,6 +109,16 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	);
 	const { items } = useMediaStream(tvFilter);
 
+	// --- Remote-control state, driven by ClassicyAppTV* events (see TVContext) ---
+	// Persistent settings, read straight from app data each render.
+	const volumeLimit = (appState?.data?.volumeLimit as number | undefined) ?? 1;
+	const overallMuted = (appState?.data?.overallMuted as boolean | undefined) ?? false;
+	// TV-local pause — independent of the global clock, which keeps running so
+	// resume can jump forward to live time.
+	const tvPaused = (appState?.data?.tvPaused as boolean | undefined) ?? false;
+	// One-shot view command (tune / grid / exitGrid), applied once per seq.
+	const command = appState?.data?.command as TVRemoteCommand | undefined;
+
 	const [showSettings, setShowSettings] = useState<boolean>(false);
 	// Settings form: local working copy of the disabled set, committed on Save.
 	const [channelForm, setChannelForm] = useState<string[]>(disabledChannels);
@@ -118,6 +146,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Stable ref to clockPaused so the health-check interval sees the latest value.
 	const clockPausedRef = useRef(clockPaused);
 	clockPausedRef.current = clockPaused;
+	// Same for the TV-local pause set by the remote (separate from the clock).
+	const tvPausedRef = useRef(tvPaused);
+	tvPausedRef.current = tvPaused;
 	// Stable ref to items so the seek effect never captures a stale closure.
 	const itemsRef = useRef(items);
 	itemsRef.current = items;
@@ -162,8 +193,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 				const el = videoRefs.current.get(item.id);
 				if (!el) continue;
 
-				// Resume if stalled or paused (skip when the system clock is paused)
-				if (!clockPausedRef.current && (el.paused || el.ended)) {
+				// Resume if stalled or paused (skip when the clock or the TV is paused)
+				if (!clockPausedRef.current && !tvPausedRef.current && (el.paused || el.ended)) {
 					el.play().catch(() => {});
 				}
 
@@ -212,6 +243,64 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			el.currentTime = calcSeekSeconds(item, nowMs);
 		}
 	}, [clockPaused]);
+
+	// When the TV-local pause is released, jump every player forward to the live
+	// clock instant — resume "catches up" to now rather than continuing from the
+	// frozen frame. Pausing itself needs no seek (the frame is already correct).
+	// biome-ignore lint/correctness/useExhaustiveDependencies: itemsRef/dateTimeRef/videoRefs are stable refs
+	useEffect(() => {
+		if (tvPaused) return;
+		const elapsedRealMs = Date.now() - dateTimeUpdatedAtRef.current;
+		const nowMs = new Date(dateTimeRef.current).getTime() + elapsedRealMs;
+		for (const item of itemsRef.current) {
+			const el = videoRefs.current.get(item.id);
+			if (el) el.currentTime = calcSeekSeconds(item, nowMs);
+		}
+	}, [tvPaused]);
+
+	// Apply each remote view command (tune / grid / exitGrid) exactly once,
+	// tracked by its monotonic seq. If the referenced channel isn't in the stream
+	// yet, the seq is left unconsumed so the effect retries when `items` updates —
+	// this lets a command issued before the stream loaded still land.
+	const lastCommandSeqRef = useRef(0);
+	useEffect(() => {
+		if (!command || command.seq <= lastCommandSeqRef.current) return;
+
+		if (command.kind === "exitGrid") {
+			lastCommandSeqRef.current = command.seq;
+			setMultiSelectMode(false);
+			return;
+		}
+
+		if (command.kind === "tune" && command.channel !== undefined) {
+			const id = resolveChannelId(command.channel, items);
+			if (id === undefined) return; // not in stream yet — retry on next update
+			lastCommandSeqRef.current = command.seq;
+			setMultiSelectMode(false);
+			setActivePlayer(id);
+			setHasInteracted(true);
+		} else if (command.kind === "grid" && command.channels) {
+			const ids = command.channels
+				.map((c) => resolveChannelId(c, items))
+				.filter((x): x is number => x !== undefined);
+			if (ids.length === 0) return; // none resolved yet — retry
+			lastCommandSeqRef.current = command.seq;
+			setMultiSelectMode(true);
+			setSelectedPlayers(ids);
+			setMutedGridPlayers([]);
+			setHasInteracted(true);
+		} else {
+			lastCommandSeqRef.current = command.seq;
+			return;
+		}
+
+		// Bring the TV's main window forward so the tuned channel is visible.
+		desktopEventDispatch({
+			type: "ClassicyWindowFocus",
+			app: { id: appId },
+			window: { id: `${appId}_main` },
+		});
+	}, [command, items, desktopEventDispatch]);
 
 	// Persist grid layout and mute state to app settings on every change.
 	useEffect(() => {
@@ -376,7 +465,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								{selectedPlayers.map((id) => {
 									const item = items.find((i) => i.id === id);
 									if (!item) return null;
-									const isGridMuted = !hasInteracted || mutedGridPlayers.includes(id);
+									const isGridMuted =
+										overallMuted || !hasInteracted || mutedGridPlayers.includes(id);
 									return (
 										<div key={id} className={styles.tvGridPlayer}>
 											<div className={styles.tvChannelTitleHolder}>
@@ -410,12 +500,12 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												}}
 												onReady={() => seekToCurrentTime(item)}
 												src={item.url}
-												playing={!clockPaused}
+												playing={!clockPaused && !tvPaused}
 												loop={false}
 												controls={false}
 												playsInline={true}
 												muted={isGridMuted}
-												volume={isGridMuted ? 0 : 1}
+												volume={isGridMuted ? 0 : volumeLimit}
 												width="100%"
 												height="100%"
 												config={hlsActiveConfigsRef.current.get(id)}
@@ -430,6 +520,23 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 						<div className={styles.tvControlPanel}>
 							<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode}>
 								Grid
+							</ClassicyButton>
+							<ClassicyButton
+								onClickFunc={() =>
+									desktopEventDispatch(tvPaused ? tvResume() : tvPause())
+								}
+								depressed={tvPaused}
+							>
+								{tvPaused ? "Play" : "Pause"}
+							</ClassicyButton>
+							<ClassicyButton
+								onClickFunc={() => {
+									setHasInteracted(true);
+									desktopEventDispatch(tvSetMuted(!overallMuted));
+								}}
+								depressed={overallMuted}
+							>
+								Mute
 							</ClassicyButton>
 						</div>
 						<div className={styles.tvThumbnailStrip}>
@@ -501,12 +608,14 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												}}
 												onReady={() => seekToCurrentTime(item)}
 												src={item.url}
-												playing={!clockPaused}
+												playing={!clockPaused && !tvPaused}
 												loop={false}
 												controls={false}
 												playsInline={true}
-												muted={!(isActive && hasInteracted)}
-												volume={isActive && hasInteracted ? 1 : 0}
+												muted={overallMuted || !(isActive && hasInteracted)}
+												volume={
+													overallMuted || !(isActive && hasInteracted) ? 0 : volumeLimit
+												}
 												width="100%"
 												height="100%"
 												config={itemConfig}
