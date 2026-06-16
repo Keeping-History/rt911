@@ -162,9 +162,10 @@ Response:
 ```
 
 Pager items live in their own table and are **not** delivered by default. After subscribing, the
-server delivers them on the `pager` channel: an immediate snapshot (the 5-minute lookback window
-at the current virtual time, if the session has been `init`ed) followed by one `pager` frame per
-virtual second that produces pager traffic.
+server delivers them on the `pager` channel: an immediate snapshot of just the requested second
+`[t, t+1s)` (if the session has been `init`ed) followed by one `pager` frame per virtual second
+that produces pager traffic. Delivery is **forward-only** — no backward lookback, and never a bulk
+future window — so the client renders pages paced by the virtual clock rather than all at once.
 
 `"pager"` is currently the only valid channel; any other value yields
 `{"type":"error","message":"unknown channel \"…\""}`. (News, MP3, and HTML channels are planned.)

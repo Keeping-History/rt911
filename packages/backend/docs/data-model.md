@@ -111,7 +111,7 @@ media tick path, and delivers it only to sessions that `subscribe` to the `pager
 | Column         | Type        | Required | Streamer use                                                       |
 | -------------- | ----------- | -------- | ------------------------------------------------------------------ |
 | `id`           | int         | yes      | Stable identity, Redis HASH key in `pager:items`.                  |
-| `start_date`   | timestamptz | yes      | Redis ZSET score; 5-minute lookback window on subscribe/init/seek. |
+| `start_date`   | timestamptz | yes      | Redis ZSET score; forward-only delivery (snapshot is the requested second only). |
 | `provider`     | text        | no       | Pager network name.                                                |
 | `recipient_id` | text        | no       | Destination capcode/ID.                                            |
 | `id_type`      | text        | no       | Recipient ID classification.                                       |

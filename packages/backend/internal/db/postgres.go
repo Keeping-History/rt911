@@ -105,16 +105,19 @@ func PagerItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.Page
 	return &items[0], nil
 }
 
-// CurrentPagerItems returns approved pager items whose start_date falls within
-// the 5-minute lookback window [t-5m, t]. Pager items are instant, so this is
-// the pager equivalent of CurrentItems and is used by the init/seek/subscribe
-// snapshot paths.
+// CurrentPagerItems returns approved pager items in the single requested second
+// [t, t+1s), used by the init/seek/subscribe snapshot paths. Pager is delivered
+// forward-only: no backward lookback (so subscribing doesn't dump prior traffic)
+// and no bulk future window (so the client renders messages paced by the tick,
+// not all at once). Everything after t arrives second-by-second via the 1 Hz
+// tick path (cache.PagerItemsAt); this snapshot just covers the boundary second
+// the first tick would otherwise skip.
 func CurrentPagerItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model.PagerItem, error) {
 	return queryPagerItems(ctx, pool,
 		pagerSelectFrom+`
 		 WHERE pi.approved = 1
-		   AND pi.start_date <= $1
-		   AND pi.start_date >= $1 - INTERVAL '5 minutes'
+		   AND pi.start_date >= $1
+		   AND pi.start_date < $1 + INTERVAL '1 second'
 		 ORDER BY pi.start_date`, t)
 }
 
