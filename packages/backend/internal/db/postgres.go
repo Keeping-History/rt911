@@ -77,6 +77,77 @@ func CurrentItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model
 		 ORDER BY mi.start_date`, t)
 }
 
+// pagerSelectFrom is the shared SELECT … FROM clause for all pager queries.
+// provider is a plain text column on pager_items (not a sources FK), so no JOIN
+// is needed here.
+const pagerSelectFrom = `
+	SELECT pi.id, pi.start_date, pi.provider, pi.recipient_id,
+	       pi.id_type, pi.channel, pi.mode, pi.message, pi.approved
+	FROM pager_items pi`
+
+// AllPagerItems loads every approved pager item ordered by start_date (cache warming).
+func AllPagerItems(ctx context.Context, pool *pgxpool.Pool) ([]model.PagerItem, error) {
+	return queryPagerItems(ctx, pool,
+		pagerSelectFrom+` WHERE pi.approved = 1 ORDER BY pi.start_date`)
+}
+
+// PagerItemByID returns the row with the given id, regardless of approval state,
+// or nil if not found. The NOTIFY listener uses this to fetch the latest version
+// of a changed row; an unapproved result means "evict from cache."
+func PagerItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.PagerItem, error) {
+	items, err := queryPagerItems(ctx, pool, pagerSelectFrom+` WHERE pi.id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
+// CurrentPagerItems returns approved pager items whose start_date falls within
+// the 5-minute lookback window [t-5m, t]. Pager items are instant, so this is
+// the pager equivalent of CurrentItems and is used by the init/seek/subscribe
+// snapshot paths.
+func CurrentPagerItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model.PagerItem, error) {
+	return queryPagerItems(ctx, pool,
+		pagerSelectFrom+`
+		 WHERE pi.approved = 1
+		   AND pi.start_date <= $1
+		   AND pi.start_date >= $1 - INTERVAL '5 minutes'
+		 ORDER BY pi.start_date`, t)
+}
+
+func queryPagerItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.PagerItem, error) {
+	rows, err := pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.PagerItem
+	for rows.Next() {
+		var it model.PagerItem
+		// Nullable text columns scan into pointer locals — Directus stores empty
+		// strings as NULL and pgx cannot scan NULL into a non-pointer string.
+		var provider, recipientID, idType, channel, mode, message *string
+		if err := rows.Scan(
+			&it.ID, &it.StartDate, &provider, &recipientID,
+			&idType, &channel, &mode, &message, &it.Approved,
+		); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		derefStr(&it.Provider, provider)
+		derefStr(&it.RecipientID, recipientID)
+		derefStr(&it.IDType, idType)
+		derefStr(&it.Channel, channel)
+		derefStr(&it.Mode, mode)
+		derefStr(&it.Message, message)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
 func derefStr(dst *string, src *string) {
 	if src != nil {
 		*dst = *src

@@ -7,7 +7,11 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { MediaStreamContext, type MediaItem } from "./MediaStreamContext";
+import {
+	MediaStreamContext,
+	type MediaItem,
+	type PagerItem,
+} from "./MediaStreamContext";
 
 // Instant items (start_date = end_date or calc_duration = 0) are kept for
 // this many milliseconds after their start time before being pruned.
@@ -27,7 +31,12 @@ interface WsItemsMessage {
 	items: MediaItem[];
 }
 
-type WsIncomingMessage = WsItemsMessage | { type: string };
+interface WsPagerMessage {
+	type: "pager";
+	pager: PagerItem[];
+}
+
+type WsIncomingMessage = WsItemsMessage | WsPagerMessage | { type: string };
 
 interface MediaStreamProviderProps {
 	children: ReactNode;
@@ -39,10 +48,15 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const { localDate, dateTime } = useClassicyDateTime({ tick: true });
 
 	const [items, setItems] = useState<MediaItem[]>([]);
+	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
 	const [connected, setConnected] = useState(false);
 
 	// Per-app format subscriptions. null = wants all formats.
 	const formatSubscriptions = useRef(new Map<string, string[] | null>());
+
+	// Ref-counted pager-channel subscribers. The server only delivers pager
+	// items while at least one app is subscribed.
+	const pagerSubscribers = useRef(new Set<string>());
 
 	const addItems = useCallback((incoming: MediaItem[]) => {
 		setItems((prev) => {
@@ -98,6 +112,26 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[sendFormatFilter],
 	);
 
+	const subscribePager = useCallback(
+		(appId: string) => {
+			const wasEmpty = pagerSubscribers.current.size === 0;
+			pagerSubscribers.current.add(appId);
+			if (wasEmpty) send({ type: "subscribe", channel: "pager" });
+		},
+		[send],
+	);
+
+	const unsubscribePager = useCallback(
+		(appId: string) => {
+			pagerSubscribers.current.delete(appId);
+			if (pagerSubscribers.current.size === 0) {
+				send({ type: "unsubscribe", channel: "pager" });
+				setPagerItems([]);
+			}
+		},
+		[send],
+	);
+
 	// Prune expired items on every second tick.
 	// Instant items (start_date = end_date or calc_duration = 0) are kept for
 	// INSTANT_RETENTION_MS after their start time instead of being pruned immediately.
@@ -112,6 +146,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				}
 				return endMs > now;
 			}),
+		);
+		// Pager items are always instant — retain by start_date.
+		setPagerItems((prev) =>
+			prev.filter((p) => now - new Date(p.start_date).getTime() < INSTANT_RETENTION_MS),
 		);
 	}, [localDate]);
 
@@ -147,6 +185,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 					time: localDateRef.current.toISOString(),
 				}),
 			);
+			// Re-establish the pager subscription after a reconnect — the server
+			// does not remember subscriptions across connections.
+			if (pagerSubscribers.current.size > 0) {
+				ws.send(JSON.stringify({ type: "subscribe", channel: "pager" }));
+			}
 			heartbeatId = setInterval(() => {
 				if (ws.readyState === WebSocket.OPEN) {
 					ws.send(
@@ -165,6 +208,22 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			try {
 				msg = JSON.parse(event.data) as WsIncomingMessage;
 			} catch {
+				return;
+			}
+
+			if (msg.type === "pager") {
+				const incomingPager = (msg as WsPagerMessage).pager;
+				if (!incomingPager || incomingPager.length === 0) return;
+				const nowPager = localDateRef.current.getTime();
+				const freshPager = incomingPager.filter(
+					(p) => nowPager - new Date(p.start_date).getTime() < INSTANT_RETENTION_MS,
+				);
+				if (freshPager.length === 0) return;
+				setPagerItems((prev) => {
+					const byId = new Map(prev.map((p) => [p.id, p]));
+					for (const p of freshPager) byId.set(p.id, p);
+					return Array.from(byId.values());
+				});
 				return;
 			}
 
@@ -219,7 +278,18 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	}, []);
 
 	return (
-		<MediaStreamContext.Provider value={{ items, connected, addItems, subscribeFormats, unsubscribeFormats }}>
+		<MediaStreamContext.Provider
+			value={{
+				items,
+				pagerItems,
+				connected,
+				addItems,
+				subscribeFormats,
+				unsubscribeFormats,
+				subscribePager,
+				unsubscribePager,
+			}}
+		>
 			{children}
 		</MediaStreamContext.Provider>
 	);

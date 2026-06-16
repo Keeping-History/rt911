@@ -1,5 +1,8 @@
 import { useContext, useEffect, useRef, useState } from "react";
-import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
+import {
+	MediaStreamContext,
+	type PagerItem,
+} from "../../Providers/MediaStream/MediaStreamContext";
 import type { PagerDecoderSettings } from "./PagerDecoderContext";
 import { DEFAULT_PAGER_SETTINGS } from "./PagerDecoderContext";
 import type { PagerRecord } from "./pagerUtils";
@@ -32,28 +35,18 @@ function utcIsoToETTimeKey(isoUtc: string): string {
 	return `${h}:${m}:${s}`;
 }
 
-/** Convert a pager MediaItem's content JSON + top-level fields to a PagerRecord. */
-function mediaItemToPagerRecord(item: {
-	start_date: string;
-	full_title: string;
-	source?: string;
-	content?: string;
-}): PagerRecord | null {
-	if (!item.full_title) return null;
-	let meta: { recipient_id?: string; id_type?: string; channel?: string; mode?: string; timestamp?: string } = {};
-	try {
-		if (item.content) meta = JSON.parse(item.content) as typeof meta;
-	} catch {
-		// malformed content — use defaults
-	}
+/** Convert a PagerItem from the pager channel to a PagerRecord. The streamer now
+ *  delivers pager metadata as first-class fields, so there is no content JSON to parse. */
+function pagerItemToPagerRecord(item: PagerItem): PagerRecord | null {
+	if (!item.message) return null;
 	return {
-		timestamp: meta.timestamp ?? item.start_date,
-		provider:  item.source     ?? "",
-		recipient_id: meta.recipient_id ?? "",
-		id_type:      meta.id_type      ?? "",
-		channel:      meta.channel      ?? "",
-		mode:         meta.mode         ?? "ALPHA",
-		message:      item.full_title,
+		timestamp: item.start_date,
+		provider:  item.provider     ?? "",
+		recipient_id: item.recipient_id ?? "",
+		id_type:      item.id_type      ?? "",
+		channel:      item.channel      ?? "",
+		mode:         item.mode         ?? "ALPHA",
+		message:      item.message,
 	};
 }
 
@@ -66,13 +59,13 @@ export function usePagerPlayback(
 	settings: PagerDecoderSettings = DEFAULT_PAGER_SETTINGS,
 	paused = false,
 ): PlaybackState {
-	const { items, subscribeFormats, unsubscribeFormats } = useContext(MediaStreamContext);
+	const { pagerItems, subscribePager, unsubscribePager } = useContext(MediaStreamContext);
 
-	// Register with the MediaStream provider to receive only pager items from the server
+	// Opt into the pager channel so the server delivers pager items to this session.
 	useEffect(() => {
-		subscribeFormats("PagerDecoder.app", ["pager"]);
-		return () => unsubscribeFormats("PagerDecoder.app");
-	}, [subscribeFormats, unsubscribeFormats]);
+		subscribePager("PagerDecoder.app");
+		return () => unsubscribePager("PagerDecoder.app");
+	}, [subscribePager, unsubscribePager]);
 
 	const [lines, setLines] = useState<CompletedLine[]>([]);
 	const [streamingText, setStreamingText] = useState("");
@@ -101,16 +94,15 @@ export function usePagerPlayback(
 	const pausedRef = useRef(paused);
 	pausedRef.current = paused;
 
-	// Watch incoming items for new pager entries
+	// Watch incoming pager items for new entries
 	useEffect(() => {
-		const pagerItems = items.filter((i) => i.format === "pager");
 		let hasNewUnique = false;
 
 		for (const item of pagerItems) {
 			if (seenIdsRef.current.has(item.id)) continue;
 			seenIdsRef.current.add(item.id);
 
-			const record = mediaItemToPagerRecord(item);
+			const record = pagerItemToPagerRecord(item);
 			if (!record) continue;
 
 			// Track unique values regardless of current filter
@@ -142,7 +134,7 @@ export function usePagerPlayback(
 				channel:  [...uniqueChannels.current].sort(),
 			});
 		}
-	}, [items]);
+	}, [pagerItems]);
 
 	// Stream tick: advance one word every ms
 	useEffect(() => {

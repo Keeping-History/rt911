@@ -35,6 +35,13 @@ type filterMsg struct {
 	Formats []string `json:"formats"`
 }
 
+// channelMsg carries the channel name for subscribe/unsubscribe. Currently the
+// only valid channel is "pager".
+type channelMsg struct {
+	Type    string `json:"type"`
+	Channel string `json:"channel"`
+}
+
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
 func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) http.HandlerFunc {
@@ -114,6 +121,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.Init(t, items)
+				sendPagerSnapshot(r, sess, pool, t, logger)
 
 			case "seek":
 				t, err := parseTime(msg.Time)
@@ -128,6 +136,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.Seek(t, items)
+				sendPagerSnapshot(r, sess, pool, t, logger)
 
 			case "heartbeat":
 				t, err := parseTime(msg.Time)
@@ -144,6 +153,35 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.SetFormatFilter(fmsg.Formats)
+
+			case "subscribe":
+				var cmsg channelMsg
+				if err := json.Unmarshal(raw, &cmsg); err != nil {
+					sess.SendError("malformed subscribe message")
+					continue
+				}
+				if cmsg.Channel != session.ChannelPager {
+					sess.SendError(fmt.Sprintf("unknown channel %q", cmsg.Channel))
+					continue
+				}
+				sess.Subscribe(cmsg.Channel)
+				// Deliver an immediate snapshot at the current virtual time so the
+				// client gets recent pager traffic without waiting for the next tick.
+				if t, ok := sess.VirtualTime(); ok {
+					sendPagerSnapshot(r, sess, pool, t, logger)
+				}
+
+			case "unsubscribe":
+				var cmsg channelMsg
+				if err := json.Unmarshal(raw, &cmsg); err != nil {
+					sess.SendError("malformed unsubscribe message")
+					continue
+				}
+				if cmsg.Channel != session.ChannelPager {
+					sess.SendError(fmt.Sprintf("unknown channel %q", cmsg.Channel))
+					continue
+				}
+				sess.Unsubscribe(cmsg.Channel)
 
 			case "pause":
 				sess.Pause()
@@ -173,4 +211,19 @@ func parseTime(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("cannot parse %q as a timestamp", s)
+}
+
+// sendPagerSnapshot delivers the current pager lookback window to the session if
+// it is subscribed to the pager channel. Called from init, seek, and subscribe.
+// Pager snapshots use Postgres (like media init/seek), not the Redis tick cache.
+func sendPagerSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelPager) {
+		return
+	}
+	items, err := db.CurrentPagerItems(r.Context(), pool, t)
+	if err != nil {
+		logger.Warn("current pager items query failed", "error", err)
+		return
+	}
+	sess.SendPager(t, items)
 }

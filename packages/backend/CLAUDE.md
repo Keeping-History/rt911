@@ -85,7 +85,19 @@ Each `Session` also runs two more goroutines under the WebSocket handler: a `wri
 
 ### Add a new media format
 
-Formats are just strings (`m3u8`, `mp4`, `mp3`, `html`, `modal`, `news`, `pager`, `usenet`). Adding a new one requires no backend change unless filtering or schema validation depends on the list — currently neither does. Update the seed script's `select-dropdown` choices in `seed.mjs` if you want it editable in Directus.
+Formats are just strings (`m3u8`, `mp4`, `mp3`, `html`, `modal`, `news`, `usenet`). Adding a new one requires no backend change unless filtering or schema validation depends on the list — currently neither does. Update the seed script's `select-dropdown` choices in `seed.mjs` if you want it editable in Directus.
+
+> `pager` is **not** a format — pager traffic lives in its own `pager_items` table and is delivered on the opt-in `pager` subscription channel (`subscribe`/`unsubscribe`). It has parallel `model/db/cache` code (`PagerItem`, `AllPagerItems`/`PagerItemsAt`, `pager:*` Redis keys, `ListenPager`) and a `pager` server→client frame. News, MP3 (Radio), and HTML are slated to follow the same extract-into-channel pattern — generalise the `Session.subscriptions` set, don't special-case each one.
+
+### Add a new subscription channel (pager-style)
+
+Pager is the reference implementation of an opt-in side channel that lives in its own table. To add another (e.g. `news`, `mp3`, `html`):
+
+1. New table + Directus collection in `seed.mjs`; new `internal/model` struct (or reuse `MediaItem` if the shape matches).
+2. Mirror the pager `db` queries (`All*`, `*ByID`, `Current*`) and `cache` files (`*.go` with distinct Redis keys + `*_listen.go` with a distinct NOTIFY channel).
+3. Wire warm/trigger/listen into `cmd/server/main.go` as a **non-fatal** block (a side channel must never take down media streaming).
+4. Add the channel name as a `session.Channel*` const; the `subscribe`/`unsubscribe` handler cases and `Session.subscriptions` set already generalise — just extend the valid-channel check and the tick/snapshot delivery.
+5. Update the frontend `MediaStreamProvider` (ref-counted subscription + frame handling) and the consuming app, in the same PR (hard rule #8).
 
 ### Add a new column to `media_items`
 

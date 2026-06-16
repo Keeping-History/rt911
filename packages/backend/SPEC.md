@@ -19,9 +19,11 @@ The frontend at [911realtime.org](https://911realtime.org) lets users pick any m
 | Virtual time    | A `time.Time` chosen by the client; the streamer ticks it at 1 Hz.      |
 | Wall time       | The actual current moment. Equals 1 tick per second of virtual time.    |
 | Media item      | A row in `media_items`. Has a `start_date`, `end_date`, `format`, `url`. |
-| Source          | A row in `sources` (TV network, news outlet, pager provider, …).        |
-| Format          | One of `m3u8`, `mp4`, `mp3`, `html`, `modal`, `news`, `pager`, `usenet`. |
-| Session         | One WebSocket connection. Holds the virtual clock and a format filter. |
+| Pager item      | A row in `pager_items`. An instant pager message; its own table/cache.  |
+| Source          | A row in `sources` (TV network, news outlet, …).                        |
+| Format          | One of `m3u8`, `mp4`, `mp3`, `html`, `modal`, `news`, `usenet`.          |
+| Channel         | An opt-in delivery stream a session subscribes to. Currently `pager`.   |
+| Session         | One WebSocket connection. Holds the virtual clock, a format filter, and channel subscriptions. |
 | Tick            | A 1 Hz signal that advances virtual time by exactly one second.        |
 
 ---
@@ -81,18 +83,41 @@ The frontend at [911realtime.org](https://911realtime.org) lets users pick any m
 - `formats: []` or `formats: null` removes the filter (all formats delivered).
 - Replies `{"type":"filter_ack"}`.
 
-### 3.8 Errors
+### 3.8 Pager channel (subscribe / unsubscribe)
+
+- Pager messages live in their own `pager_items` table with a dedicated Redis cache
+  (`pager:items` / `pager:by_start`) and NOTIFY pipeline (`pager_items_changed`). They are
+  **opt-in**: a session receives no pager items until it subscribes.
+- `{"type":"subscribe","channel":"pager"}` opts the session in and replies
+  `{"type":"subscribe_ack","channel":"pager"}`. If the session already has a virtual time, the
+  server immediately delivers a snapshot — the 5-minute pager lookback at the current virtual
+  time — as a `pager` frame.
+- While subscribed, each tick that produces ≥ 1 pager item (via `cache.PagerItemsAt`, Redis-only
+  on the tick path) sends `{"type":"pager","time":"…","pager":[…]}`. Empty seconds send nothing.
+- `init` and `seek` additionally deliver a pager snapshot when the session is subscribed.
+- `{"type":"unsubscribe","channel":"pager"}` stops delivery and replies
+  `{"type":"unsubscribe_ack","channel":"pager"}`.
+- `"pager"` is currently the only valid channel; any other value yields an `error`. Subscriptions
+  are per-connection and not remembered across reconnects. (News, MP3, and HTML are planned to
+  follow the same extract-into-channel pattern.)
+- Pager init is **best-effort**: if `pager_items` is missing or the pager cache cannot be warmed
+  at boot, the streamer logs a warning, disables the pager channel, and continues serving media.
+
+### 3.9 Errors
 
 - Malformed JSON, unknown message types, and unparseable timestamps are reported as `{"type":"error","message":"…"}`. They never terminate the session — the client may correct course and try again.
 
-### 3.9 Cache sync with Postgres
+### 3.10 Cache sync with Postgres
 
 - At boot, the streamer installs a Postgres trigger on `media_items` that fires `NOTIFY media_items_changed` with `{op, id}` for every INSERT, UPDATE, and DELETE.
 - A dedicated listener goroutine (`cache.Listen`) consumes notifications and applies the change to Redis: INSERT/UPDATE re-fetches the row and `HSET`/`ZADD`s it; DELETE (and approval-revoked UPDATE) `HDEL`/`ZREM`s it.
 - The listener reconnects with exponential backoff (1s → 30s cap). Every successful (re)connect runs a full resync — load all approved rows from Postgres, prune cache entries that no longer exist, upsert the rest. This guarantees notifications dropped during a disconnect are recovered.
 - Propagation latency from a Postgres commit to a cached value is bounded by NOTIFY delivery + one round-trip pgx + one Redis pipeline — typically under 50 ms.
+- `pager_items` has an identical, independent pipeline: `cache.InstallPagerTriggers` /
+  `cache.ListenPager` keep `pager:items` / `pager:by_start` in sync via the `pager_items_changed`
+  channel. The two listeners run as separate goroutines and never touch each other's keyspace.
 
-### 3.10 Health
+### 3.11 Health
 
 - `GET /health` returns `200 OK` unconditionally as long as the HTTP server is running. Used by Docker and Kubernetes liveness probes. It does **not** check Redis or Postgres reachability — those are checked once at boot and then assumed; if a downstream goes away, the streamer logs and continues serving until it cannot.
 
