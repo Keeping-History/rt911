@@ -90,11 +90,13 @@ The frontend at [911realtime.org](https://911realtime.org) lets users pick any m
   **opt-in**: a session receives no pager items until it subscribes.
 - `{"type":"subscribe","channel":"pager"}` opts the session in and replies
   `{"type":"subscribe_ack","channel":"pager"}`. If the session already has a virtual time, the
-  server immediately delivers a snapshot — the 5-minute pager lookback at the current virtual
-  time — as a `pager` frame.
+  server delivers a snapshot of just the requested second `[t, t+1s)` as a `pager` frame.
+- Pager is **forward-only**: the snapshot never looks backward (subscribing does not dump prior
+  traffic) and is never a bulk future window (so the client renders pages paced by the clock, not
+  all at once). Everything after `t` arrives second-by-second via the tick path.
 - While subscribed, each tick that produces ≥ 1 pager item (via `cache.PagerItemsAt`, Redis-only
   on the tick path) sends `{"type":"pager","time":"…","pager":[…]}`. Empty seconds send nothing.
-- `init` and `seek` additionally deliver a pager snapshot when the session is subscribed.
+- `init` and `seek` additionally deliver the requested-second pager snapshot when subscribed.
 - `{"type":"unsubscribe","channel":"pager"}` stops delivery and replies
   `{"type":"unsubscribe_ack","channel":"pager"}`.
 - `"pager"` is currently the only valid channel; any other value yields an `error`. Subscriptions
