@@ -11,7 +11,7 @@
  *   node bootstrap.mjs
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -777,13 +777,24 @@ async function migratePagerSources(token) {
 // Main
 // ---------------------------------------------------------------------------
 
-const mediaRecords = JSON.parse(readFileSync(MEDIA_DATA_PATH, "utf8"));
-const newsRecords  = JSON.parse(readFileSync(NEWS_DATA_PATH,  "utf8"));
-console.log(`Loaded ${mediaRecords.length} TV records from ${MEDIA_DATA_PATH}`);
-console.log(`Loaded ${newsRecords.length} news records from ${NEWS_DATA_PATH}`);
-console.log("Loading pager records (large file, may take a moment)…");
-const pagerRecords = JSON.parse(readFileSync(PAGER_DATA_PATH, "utf8"));
-console.log(`Loaded ${pagerRecords.length} pager records from ${PAGER_DATA_PATH}`);
+// Load a seed dataset, tolerating a missing file. The import functions already
+// skip when their table is populated, and the schema/backfill work doesn't touch
+// these files — so against an already-seeded Directus the data is unused, and the
+// seed image needn't bake it in. A fresh full seed supplies the files via the
+// *_DATA_PATH env vars (or by mounting them).
+function loadJsonOrEmpty(path, label) {
+  if (!existsSync(path)) {
+    console.warn(`Seed data not found at ${path} — skipping ${label} import (schema + backfill still run).`);
+    return [];
+  }
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+const mediaRecords = loadJsonOrEmpty(MEDIA_DATA_PATH, "TV media");
+const newsRecords  = loadJsonOrEmpty(NEWS_DATA_PATH, "news");
+console.log(`Loaded ${mediaRecords.length} TV records, ${newsRecords.length} news records`);
+const pagerRecords = loadJsonOrEmpty(PAGER_DATA_PATH, "pager");
+console.log(`Loaded ${pagerRecords.length} pager records`);
 
 const token = await getToken();
 console.log("Authenticated.");

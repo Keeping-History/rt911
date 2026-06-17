@@ -1,0 +1,65 @@
+name: Build rt911-seed
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/backend/seed.mjs"
+      - "packages/backend/Dockerfile.seed"
+      - ".github/workflows/build-rt911-seed.yml"
+  pull_request:
+    paths:
+      - "packages/backend/seed.mjs"
+      - "packages/backend/Dockerfile.seed"
+      - ".github/workflows/build-rt911-seed.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/backend
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # seed.mjs has no dependencies; a syntax check is the meaningful gate.
+      - name: Syntax-check seed.mjs
+        run: node --check seed.mjs
+
+  build:
+    name: Build and push
+    runs-on: ubuntu-latest
+    needs: check
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: packages/backend
+          file: packages/backend/Dockerfile.seed
+          push: true
+          tags: |
+            ghcr.io/keeping-history/rt911-seed:${{ github.sha }}
+            ghcr.io/keeping-history/rt911-seed:latest
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
