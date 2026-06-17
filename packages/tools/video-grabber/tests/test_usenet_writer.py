@@ -101,13 +101,22 @@ def test_write_group_replaces_and_bulk_inserts():
 
     respx.patch("http://directus:8055/items/sources/5").mock(side_effect=cap_patch)
 
-    records = [{"message_id": f"<{i}@x>", "start_date": "2001-09-11T00:00:00+00:00"} for i in range(600)]
+    # 20 records × ~100 KB body = ~2 MB → must split into several size-based batches,
+    # each under the Directus payload limit.
+    records = [{"message_id": f"<{i}@x>", "start_date": "2001-09-11T00:00:00+00:00", "body": "x" * 100_000}
+               for i in range(20)]
     source_id, count = writer.write_group("ntl.talk", records, cfg)
 
     assert source_id == 5
-    assert count == 600
-    assert delete_route.called                 # group cleared before insert
-    assert len(posts) == 2                      # 600 rows → two 500-chunked batches
-    assert len(posts[0]) == 500 and len(posts[1]) == 100
-    assert all(row["source"] == 5 for row in posts[0])
-    assert count_patch == {"message_count": 600}  # precomputed count stored on source
+    assert count == 20
+    assert delete_route.called                                  # group cleared before insert
+    assert sum(len(b) for b in posts) == 20                     # every row posted, exactly once
+    assert len(posts) >= 2                                      # split by size
+    assert all(len(json.dumps(b)) <= writer._MAX_BATCH_BYTES for b in posts)  # each under limit
+    assert all(row["source"] == 5 for batch in posts for row in batch)
+    assert count_patch == {"message_count": 20}                 # precomputed count stored on source
+
+
+def test_message_payload_caps_body():
+    p = writer.message_payload({"body": "x" * 300_000, "start_date": "2001-01-01T00:00:00+00:00"}, 1)
+    assert len(p["body"]) == writer._BODY_LIMIT

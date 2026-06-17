@@ -19,7 +19,12 @@ import httpx
 from video_grabber.config import Config
 
 _USENET_SOURCE_TYPE = "usenet"
-_BULK_CHUNK = 500
+# Directus rejects an oversized request ("request entity too large", ~1 MB default
+# MAX_PAYLOAD_SIZE). Message bodies vary wildly, so batch by serialized *size*, not
+# a fixed row count, staying under the limit. A single message is also capped so one
+# huge (binary/attachment) post can't exceed the limit on its own.
+_MAX_BATCH_BYTES = 900_000
+_BODY_LIMIT = 200_000
 
 
 def _headers(cfg: Config) -> dict:
@@ -79,10 +84,25 @@ def message_payload(record: dict, source_id: int) -> dict:
         "in_reply_to": _clean(record.get("in_reply_to")),
         "thread_id": _clean(record.get("thread_id")),
         "parent_id": _clean(record.get("parent_id")),
-        "body": _clean(record.get("body")),
+        "body": _clean(record.get("body"), _BODY_LIMIT),
         "date_source": _clean(record.get("date_source")),
         "approved": 1,
     }
+
+
+def _size_batches(payloads: list[dict]):
+    """Yield batches whose serialized JSON stays under _MAX_BATCH_BYTES."""
+    batch: list[dict] = []
+    size = 2  # the enclosing [] brackets
+    for p in payloads:
+        psize = len(json.dumps(p)) + 1  # + comma
+        if batch and size + psize > _MAX_BATCH_BYTES:
+            yield batch
+            batch, size = [], 2
+        batch.append(p)
+        size += psize
+    if batch:
+        yield batch
 
 
 def upsert_source(newsgroup: str, cfg: Config, *, client=httpx) -> int | None:
@@ -132,10 +152,10 @@ def write_group(newsgroup: str, records: list[dict], cfg: Config, *, client=http
     delete_group_messages(source_id, cfg, client=client)
 
     payloads = [message_payload(r, source_id) for r in records]
-    for i in range(0, len(payloads), _BULK_CHUNK):
+    for batch in _size_batches(payloads):
         resp = client.post(
             f"{cfg.directus_url}/items/usenet_items",
-            content=json.dumps(payloads[i:i + _BULK_CHUNK]),
+            content=json.dumps(batch),
             headers=headers,
         )
         _raise(resp, "usenet_items insert")
