@@ -19,6 +19,19 @@ from video_grabber.usenet import threader
 _MBOX_PARSER = os.getenv("MBOX_PARSER", "mbox_parser.py")
 _TAG_RE = re.compile(r"<[^>]+>")
 
+# Above this message count, the memory-heavy usenetarchive build (repack-zstd
+# dictionary training) OOM-kills the worker, so we fall back to header-based
+# threading. Tunable without a rebuild.
+_MAX_THREADIFY_MESSAGES = int(os.getenv("USENET_MAX_THREADIFY_MESSAGES", "100000"))
+
+# A valid newsgroup name is dot-separated components, each starting and ending
+# alphanumeric (interior +, _, - allowed). Malformed Newsgroups: headers (seen in
+# bundled archives) yield junk like "-h", "!.!", ".blur", "1", "0000000001" — this
+# pattern + the "must contain a letter" check below reject those.
+_NEWSGROUP_RE = re.compile(
+    r"[A-Za-z0-9](?:[A-Za-z0-9+_-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9+_-]*[A-Za-z0-9])?)*"
+)
+
 
 def run_mbox_parser(mbox_path, before: str, out_path, *, python: str = "python3", logger=None) -> str:
     """Run mbox_parser over one archive, emitting JSONL (one message per line)."""
@@ -36,13 +49,26 @@ def _first(value):
     return value
 
 
-def _newsgroup_of(headers: dict, fallback: str) -> str:
-    """The group a message belongs to: first of the Newsgroups header, else the
-    mbox's own group (the per-group archive already scopes it)."""
-    ng = _first(headers.get("newsgroups"))
-    if ng:
-        return ng.split(",")[0].strip()
-    return fallback
+def valid_newsgroup(name) -> bool:
+    """True if name is a well-formed newsgroup (dotted, alphanumeric-bounded
+    components, contains at least one letter)."""
+    if not name:
+        return False
+    name = name.strip()
+    return bool(_NEWSGROUP_RE.fullmatch(name)) and any(c.isalpha() for c in name)
+
+
+def _newsgroup_of(headers: dict, fallback: str):
+    """The group a message belongs to: the first *valid* group in the Newsgroups
+    header (crossposts are comma-separated), else the mbox's own group if valid,
+    else None — which the caller drops, so junk group names never reach Directus."""
+    raw = _first(headers.get("newsgroups"))
+    if raw:
+        for cand in raw.split(","):
+            cand = cand.strip()
+            if valid_newsgroup(cand):
+                return cand
+    return fallback if valid_newsgroup(fallback) else None
 
 
 def _body_of(body: dict) -> str | None:
@@ -80,21 +106,58 @@ def parser_record_to_message(rec: dict, thread_index: dict, fallback_group: str)
     }
 
 
+def header_thread_index(records: list[dict]) -> dict[str, dict]:
+    """Thread purely from References/In-Reply-To headers (jwz-style), no usenetarchive.
+
+    Fallback for groups too large to run the memory-heavy full archive build. Loses
+    only the quote-restored links; header-based parent/child threading is kept. The
+    parent is the last id in References (the immediate ancestor), else In-Reply-To.
+    """
+    parents: dict[str, str] = {}
+    for rec in records:
+        h = rec.get("headers", {})
+        mid = _first(h.get("message-id"))
+        if not mid:
+            continue
+        refs = (_first(h.get("references")) or "").split()
+        parents[mid] = refs[-1] if refs else (_first(h.get("in-reply-to")) or "")
+    return threader.build_thread_index(parents)
+
+
 def process_archive(mbox_path, before: str, workdir, fallback_group: str, *, logger=None) -> dict[str, list[dict]]:
-    """Parse + thread one mbox, returning {newsgroup: [message dicts]}."""
+    """Parse + thread one mbox, returning {newsgroup: [message dicts]}.
+
+    Messages with no valid newsgroup are dropped; oversized archives use header-based
+    threading instead of the OOM-prone usenetarchive build.
+    """
     work = Path(workdir)
     work.mkdir(parents=True, exist_ok=True)
     jsonl = work / "messages.jsonl"
-
     run_mbox_parser(mbox_path, before, jsonl, logger=logger)
-    thread_index = threader.thread_mbox(str(mbox_path), str(work / "uat"), logger=logger)
 
-    groups: dict[str, list[dict]] = {}
+    records: list[dict] = []
     with open(jsonl, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
-            if not line:
-                continue
-            msg = parser_record_to_message(json.loads(line), thread_index, fallback_group)
-            groups.setdefault(msg["newsgroup"], []).append(msg)
+            if line:
+                records.append(json.loads(line))
+
+    if len(records) > _MAX_THREADIFY_MESSAGES:
+        if logger:
+            logger.warning("usenet process: %d messages > %d — header-based threading (skipping usenetarchive)",
+                           len(records), _MAX_THREADIFY_MESSAGES)
+        thread_index = header_thread_index(records)
+    else:
+        thread_index = threader.thread_mbox(str(mbox_path), str(work / "uat"), logger=logger)
+
+    groups: dict[str, list[dict]] = {}
+    skipped = 0
+    for rec in records:
+        msg = parser_record_to_message(rec, thread_index, fallback_group)
+        if msg["newsgroup"] is None:
+            skipped += 1
+            continue
+        groups.setdefault(msg["newsgroup"], []).append(msg)
+    if skipped and logger:
+        logger.info("usenet process: skipped %d messages with no valid newsgroup", skipped)
     return groups

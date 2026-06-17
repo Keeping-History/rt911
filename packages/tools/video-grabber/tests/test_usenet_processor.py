@@ -70,3 +70,68 @@ def test_process_archive_groups_by_newsgroup(tmp_path):
     assert set(groups) == {"ntl.talk", "ntl.gaming"}
     assert len(groups["ntl.talk"]) == 2
     assert groups["ntl.gaming"][0]["message_id"] == "3@x"
+
+
+def test_valid_newsgroup_accepts_and_rejects():
+    for ok in ["comp.lang.c", "ntl.support.modems", "japan.chat", "24hoursupport",
+               "bit.listserv.skeptic", "0.test", "a.b-c.d_e", "NetSet.TV.star_trek"]:
+        assert processor.valid_newsgroup(ok), ok
+    for bad in ["", "-h", "!.!", ".blur", "1", "0000000001", "1.1.1.1", ".a", "a.", "a..b", None]:
+        assert not processor.valid_newsgroup(bad), bad
+
+
+def test_newsgroup_of_picks_first_valid_crosspost_then_fallback_then_none():
+    assert processor._newsgroup_of({"newsgroups": "!.!, comp.lang.c"}, "fb.k") == "comp.lang.c"
+    assert processor._newsgroup_of({"newsgroups": "!junk"}, "comp.lang.c") == "comp.lang.c"
+    assert processor._newsgroup_of({"newsgroups": "1"}, "-h") is None
+
+
+def test_header_thread_index_from_references():
+    records = [
+        {"headers": {"message-id": "<a@x>"}},
+        {"headers": {"message-id": "<b@x>", "references": "<a@x>"}},
+        {"headers": {"message-id": "<c@x>", "references": "<a@x> <b@x>"}},
+    ]
+    idx = processor.header_thread_index(records)
+    assert idx["a@x"] == {"parent": None, "thread": "a@x"}
+    assert idx["c@x"] == {"parent": "b@x", "thread": "a@x"}
+
+
+def _write_jsonl(records):
+    def fake_parser(mbox_path, before, out_path, **kw):
+        with open(out_path, "w", encoding="utf-8") as fh:
+            for r in records:
+                fh.write(json.dumps(r) + "\n")
+        return str(out_path)
+    return fake_parser
+
+
+def test_process_archive_skips_junk_newsgroups(tmp_path):
+    records = [
+        {"headers": {"newsgroups": "ntl.talk", "message-id": "<1@x>"}, "body": {}},
+        {"headers": {"newsgroups": "!.!", "message-id": "<2@x>"}, "body": {}},  # junk → dropped
+    ]
+    # invalid fallback ("1") too, so the junk-header message has no valid group and is dropped
+    with mock.patch.object(processor, "run_mbox_parser", side_effect=_write_jsonl(records)), \
+         mock.patch.object(processor.threader, "thread_mbox", return_value={}):
+        groups = processor.process_archive("/in/x.mbox", "2001-09-21", str(tmp_path), "1")
+    assert set(groups) == {"ntl.talk"}
+    assert len(groups["ntl.talk"]) == 1
+
+
+def test_process_archive_uses_header_threading_when_large(tmp_path, monkeypatch):
+    monkeypatch.setattr(processor, "_MAX_THREADIFY_MESSAGES", 2)
+    records = [{"headers": {"newsgroups": "ntl.talk", "message-id": f"<{i}@x>",
+                            "references": "" if i == 0 else "<0@x>"}, "body": {}} for i in range(5)]
+    called = {"thread_mbox": False}
+
+    def boom(*a, **k):
+        called["thread_mbox"] = True
+        return {}
+
+    with mock.patch.object(processor, "run_mbox_parser", side_effect=_write_jsonl(records)), \
+         mock.patch.object(processor.threader, "thread_mbox", side_effect=boom):
+        groups = processor.process_archive("/in/x.mbox", "2001-09-21", str(tmp_path), "fb.k")
+
+    assert called["thread_mbox"] is False                       # usenetarchive skipped (too large)
+    assert any(m["parent_id"] == "0@x" for m in groups["ntl.talk"])  # header threading linked replies
