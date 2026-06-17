@@ -44,6 +44,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
+| `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
 
@@ -254,6 +255,11 @@ backlog for the new group and restarts windowing; an empty `newsgroups` set deli
 message carries its `newsgroup`, `subject`, `author`, `references`/`in_reply_to`, and (once threaded)
 `thread_id`/`parent_id` on `usenet`-typed frames in the `usenet` field.
 
+To read **further back** than the initial ≤500, send `usenet_more` with the oldest `start_date` the
+client holds as `before`; the server replies with the next ≤500 older messages on a normal `usenet`
+frame (all are ≤ the clock, so the client merges them straight in). Unlike the other channels, the
+usenet channel reads Postgres directly (messages carry full bodies, too large to cache in Redis).
+
 ### `sources`
 
 Sent once, unprompted, right after `init_ack` (and again after any reconnect's
@@ -267,14 +273,14 @@ those that have scrolled past in the current virtual-time window.
   "sources": {
     "video": ["BBC", "CNN", "MSNBC", "WETA"],
     "pager": ["Arch", "Skytel"],
-    "usenet": ["ntl.support.modems", "ntl.talk"]
+    "usenet": [{"name": "ntl.support.modems", "count": 1234}, {"name": "ntl.talk", "count": 56}]
   }
 }
 ```
 
 - `video` — source slugs with at least one approved `m3u8` media item (the TV app's channel filter).
 - `pager` — providers across all approved pager items (the Pager app's provider filter).
-- `usenet` — newsgroup names from the `usenet_groups` catalogue (the Newsgroups app's browse/filter list).
+- `usenet` — newsgroups (sources of type `usenet`) with a precomputed `count`, for the Newsgroups app's browse list.
 
 Each list is derived from **actual usage** in its table: the `sources` table does not record which
 media type a source belongs to, so membership is inferred from the rows that reference it. The lists

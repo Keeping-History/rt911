@@ -93,13 +93,19 @@ export interface UsenetItem {
  * Unlike the source values derived from streamed items, these list every option
  * across all history — so filter UIs are complete regardless of the virtual clock.
  */
+/** A browseable newsgroup: name + precomputed message count. */
+export interface NewsgroupSource {
+	name: string;
+	count: number;
+}
+
 export interface AvailableSources {
 	/** Source slugs with approved video (m3u8) media — the TV channel filter. */
 	video: string[];
 	/** Providers across approved pager items — the Pager provider filter. */
 	pager: string[];
-	/** Newsgroup names (sources of type "usenet") — the Newsgroups browse list. */
-	usenet: string[];
+	/** Newsgroups (sources of type "usenet") with message counts — the browse list. */
+	usenet: NewsgroupSource[];
 }
 
 export interface MediaStreamContextValue {
@@ -138,6 +144,8 @@ export interface MediaStreamContextValue {
 	unsubscribeUsenet: (appId: string) => void;
 	/** Set the newsgroup(s) the client is viewing; only these are streamed. Empty = none. */
 	setUsenetGroups: (groups: string[]) => void;
+	/** Request the page of messages older than `before` for a group (backlog pagination). */
+	requestUsenetOlder: (newsgroup: string, before: string) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -160,4 +168,5 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	subscribeUsenet: () => {},
 	unsubscribeUsenet: () => {},
 	setUsenetGroups: () => {},
+	requestUsenetOlder: () => {},
 });

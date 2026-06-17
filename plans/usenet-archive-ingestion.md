@@ -208,3 +208,17 @@ The newsgroups feature spans more than ingestion (tracked in memory `project-use
 - **Pager → `sources` (`type="pager"`) migration** — ✅ done (backend reads provider via sources
   join; `seed.mjs` adds the `source` FK + `migratePagerSources` idempotent backfill that keeps the
   legacy `provider` column as the import field/audit trail).
+
+## Automation & follow-ups (done)
+
+- **scan-usenet** → one-shot trigger: `k8s/usenet-scan-job.yaml` (`run_deployment`, fire-and-forget).
+  Apply once to kick off scanning; not an ArgoCD hook (one-time, not per-sync).
+- **dispatch-usenet** → scheduled every 5 min in `serve.py` (`interval=300`); each run drains the
+  queue then stops, so the pipeline self-drives after the one-time scan.
+- **Backlog pagination** → `usenet_more {newsgroups, before}` message + `db.OlderUsenetItems`;
+  frontend "Load older messages" button.
+- **Per-group counts** → precomputed `message_count` on the `sources` row (set by the writer),
+  surfaced as `sources.usenet: [{name, count}]` and shown in the browse list.
+- **Spam filtering** → skipped (usenetarchive `filter-spam` available but not wired, per decision).
+- **Seed as a Job** → `packages/backend/Dockerfile.seed` + `k8s/seed-job.yaml` (node + psql-client;
+  runs `node seed.mjs` against in-cluster Directus/Postgres; idempotent).

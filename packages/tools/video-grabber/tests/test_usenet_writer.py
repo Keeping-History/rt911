@@ -86,6 +86,13 @@ def test_write_group_replaces_and_bulk_inserts():
         return httpx.Response(200, json={"data": []})
 
     respx.post("http://directus:8055/items/usenet_items").mock(side_effect=cap_post)
+    count_patch = {}
+
+    def cap_patch(request):
+        count_patch.update(json.loads(request.content))
+        return httpx.Response(200, json={"data": {}})
+
+    respx.patch("http://directus:8055/items/sources/5").mock(side_effect=cap_patch)
 
     records = [{"message_id": f"<{i}@x>", "start_date": "2001-09-11T00:00:00+00:00"} for i in range(600)]
     source_id, count = writer.write_group("ntl.talk", records, cfg)
@@ -96,3 +103,4 @@ def test_write_group_replaces_and_bulk_inserts():
     assert len(posts) == 2                      # 600 rows → two 500-chunked batches
     assert len(posts[0]) == 500 and len(posts[1]) == 100
     assert all(row["source"] == 5 for row in posts[0])
+    assert count_patch == {"message_count": 600}  # precomputed count stored on source

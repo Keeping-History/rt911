@@ -62,6 +62,8 @@ _REQUEUE_LIMIT = 1
 _USENET_SCAN_LIMIT = 1
 _USENET_PROCESS_LIMIT = 4
 _USENET_DISPATCH_LIMIT = 4
+# Re-run the (bounded, idempotent) dispatcher every 5 minutes to keep the queue draining.
+_USENET_DISPATCH_INTERVAL = 300
 
 
 def main() -> None:
@@ -94,9 +96,14 @@ def main() -> None:
             name="process-usenet-item",
             concurrency_limit=_USENET_PROCESS_LIMIT,
         ),
+        # Scheduled every 5 minutes: each run drains discovered/failed jobs until
+        # the queue empties, then returns (a no-op when empty). This is what makes
+        # the pipeline self-draining after a one-time scan — no manual dispatch.
+        # Overlapping runs (up to the concurrency limit) give N-way throughput.
         dispatch_usenet_flow.to_deployment(
             name="dispatch-usenet",
             concurrency_limit=_USENET_DISPATCH_LIMIT,
+            interval=_USENET_DISPATCH_INTERVAL,
         ),
     )
 
