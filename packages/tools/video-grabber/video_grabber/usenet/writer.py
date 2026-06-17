@@ -45,13 +45,26 @@ def _naive_utc(value) -> str | None:
 
 
 def _clean(s, limit=None):
-    """Empty/whitespace → None; optionally truncate. Keeps NULLs out of text columns."""
+    """Empty → None; strip NUL bytes; optionally truncate.
+
+    Postgres text columns cannot store NUL (\\x00) — a single one anywhere in a
+    bulk insert 400s the whole batch — and old Usenet messages do contain them
+    (binary/mis-encoded bodies). mbox_parser repairs surrogates but not NUL, so
+    strip it here, the last hop before Directus.
+    """
     if not s:
         return None
-    s = s.strip()
+    s = s.replace("\x00", "").strip()
     if not s:
         return None
     return s[:limit] if limit else s
+
+
+def _raise(resp, what: str) -> None:
+    """raise_for_status that includes the Directus response body (which carries the
+    actual validation error) so a failed write is diagnosable from the job log."""
+    if resp.status_code >= 400:
+        raise RuntimeError(f"directus {what} failed ({resp.status_code}): {resp.text[:600]}")
 
 
 def message_payload(record: dict, source_id: int) -> dict:
@@ -125,7 +138,7 @@ def write_group(newsgroup: str, records: list[dict], cfg: Config, *, client=http
             content=json.dumps(payloads[i:i + _BULK_CHUNK]),
             headers=headers,
         )
-        resp.raise_for_status()
+        _raise(resp, "usenet_items insert")
 
     # Store the precomputed group size on the source row (the corpus is historical,
     # so this count is stable) — the streamer surfaces it in the browse list.
@@ -135,5 +148,5 @@ def write_group(newsgroup: str, records: list[dict], cfg: Config, *, client=http
             content=json.dumps({"message_count": len(payloads)}),
             headers=headers,
         )
-        resp.raise_for_status()
+        _raise(resp, "source count update")
     return source_id, len(payloads)

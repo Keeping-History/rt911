@@ -22,6 +22,13 @@ def test_naive_utc_strips_offset():
     assert writer._naive_utc(None) is None
 
 
+def test_clean_strips_nul_bytes():
+    # Postgres text can't store NUL; a single one 400s the whole bulk insert.
+    assert writer._clean("a\x00b") == "ab"
+    assert writer._clean("\x00\x00") is None
+    assert writer.message_payload({"body": "x\x00y", "start_date": "2001-01-01T00:00:00+00:00"}, 1)["body"] == "xy"
+
+
 def test_message_payload_maps_and_cleans():
     rec = {
         "start_date": "2001-09-11T13:30:00+00:00",
