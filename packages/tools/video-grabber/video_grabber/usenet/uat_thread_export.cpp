@@ -32,12 +32,21 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Message-ids are stored StringCompress-packed in the archive; UnpackMsgId
+    // decompresses them back to the plain "<...@...>" form so they join with the
+    // message-ids mbox_parser produces. (GetMessageId returns the packed bytes.)
+    char midbuf[1024];
+    char pidbuf[1024];
     const uint32_t n = (uint32_t)archive->NumberOfMessages();
     for (uint32_t i = 0; i < n; i++) {
-        const char* msgid = (const char*)archive->GetMessageId(i);
+        archive->UnpackMsgId(archive->GetMessageId(i), midbuf);
         int32_t parent = archive->GetParent(i);
-        const char* pid = (parent >= 0) ? (const char*)archive->GetMessageId((uint32_t)parent) : "";
-        printf("%s\t%s\n", msgid, pid);
+        const char* pid = "";
+        if (parent >= 0) {
+            archive->UnpackMsgId(archive->GetMessageId((uint32_t)parent), pidbuf);
+            pid = pidbuf;
+        }
+        printf("%s\t%s\n", midbuf, pid);
     }
     return 0;
 }

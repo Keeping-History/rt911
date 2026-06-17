@@ -30,11 +30,22 @@ def test_thread_root_groups_siblings_under_dangling_parent():
     assert threader.thread_root("<c@x>", parents) == "<root@x>"
 
 
-def test_build_thread_index():
-    parents = {"<a@x>": "", "<b@x>": "<a@x>"}
+def test_normalize_msgid_strips_brackets():
+    assert threader.normalize_msgid("<a@x>") == "a@x"
+    assert threader.normalize_msgid(" <a@x> ") == "a@x"
+    assert threader.normalize_msgid("a@x") == "a@x"   # usenetarchive form (no <>)
+    assert threader.normalize_msgid(None) == ""
+
+
+def test_build_thread_index_normalizes():
+    # usenetarchive emits bracket-less ids; the index is bracket-normalised so it
+    # joins mbox_parser records (which keep the <>).
+    parents = {"a@x": "", "b@x": "a@x"}
     idx = threader.build_thread_index(parents)
-    assert idx["<a@x>"] == {"parent": None, "thread": "<a@x>"}
-    assert idx["<b@x>"] == {"parent": "<a@x>", "thread": "<a@x>"}
+    assert idx["a@x"] == {"parent": None, "thread": "a@x"}
+    assert idx["b@x"] == {"parent": "a@x", "thread": "a@x"}
+    # bracketed input normalises to the same keys
+    assert set(threader.build_thread_index({"<a@x>": "", "<b@x>": "<a@x>"})) == {"a@x", "b@x"}
 
 
 def test_build_threaded_archive_runs_pipeline_in_order(tmp_path):
@@ -56,10 +67,12 @@ def test_build_threaded_archive_runs_pipeline_in_order(tmp_path):
         "repack-zstd", "lexicon", "lexsort", "threadify",
     ]
     # import reads the (plain) mbox; the threaded archive is the dedup output,
-    # reused in place by every later step and returned.
+    # reused in place by every later step (which take arch as their final arg).
     assert calls[0][1] == "/in/group.mbox"
     assert arch.endswith("/arch")
-    assert all(c[1] == arch for c in calls[2:])  # every in-place step targets arch
+    assert all(c[-1] == arch for c in calls[2:])  # every in-place step targets arch
+    repack = next(c for c in calls if c[0] == "repack-zstd")
+    assert "-s" in repack  # dict-size cap (bounds memory) is passed
 
 
 def test_bin_honours_usenetarchive_bin_env(monkeypatch):
@@ -117,4 +130,4 @@ def test_thread_mbox_end_to_end(tmp_path):
     with mock.patch("video_grabber.usenet.threader.subprocess.run", side_effect=fake_run):
         index = threader.thread_mbox("/in/group.mbox", str(tmp_path))
 
-    assert index["<b@x>"] == {"parent": "<a@x>", "thread": "<a@x>"}
+    assert index["b@x"] == {"parent": "a@x", "thread": "a@x"}

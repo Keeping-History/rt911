@@ -59,7 +59,9 @@ def _body_of(body: dict) -> str | None:
 def parser_record_to_message(rec: dict, thread_index: dict, fallback_group: str) -> dict:
     """Map one mbox_parser JSONL record + thread index → a writer message dict."""
     h = rec.get("headers", {})
-    mid = _first(h.get("message-id"))
+    # Normalise the Message-ID (drop <>) so it joins the thread index and stays
+    # consistent with the thread_id/parent_id the index supplies.
+    mid = threader.normalize_msgid(_first(h.get("message-id")))
     ti = thread_index.get(mid) if mid else None
     return {
         "newsgroup": _newsgroup_of(h, fallback_group),
@@ -67,12 +69,12 @@ def parser_record_to_message(rec: dict, thread_index: dict, fallback_group: str)
         "date_source": rec.get("date_source"),
         "subject": _first(h.get("subject")),
         "author": _first(h.get("from")),
-        "message_id": mid,
+        "message_id": mid or None,
         "references": _first(h.get("references")),
         "in_reply_to": _first(h.get("in-reply-to")),
         # thread_id falls back to the message's own id (a singleton thread) when the
         # oracle has no entry; parent_id is None for roots.
-        "thread_id": (ti or {}).get("thread") or mid,
+        "thread_id": (ti or {}).get("thread") or (mid or None),
         "parent_id": (ti or {}).get("parent"),
         "body": _body_of(rec.get("body", {})),
     }

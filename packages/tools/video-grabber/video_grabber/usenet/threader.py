@@ -38,6 +38,11 @@ _default_log = logging.getLogger(__name__)
 # the stock usenetarchive binaries.
 _THREAD_EXPORT_BIN = "uat-thread-export"
 
+# repack-zstd needs ~10× the dictionary size in RAM; the default sizing OOM-kills
+# the worker on large groups. -s caps the dict at 2^power bytes (here 16 MiB),
+# which bounds memory at a small compression-ratio cost.
+_ZSTD_DICT_POWER = "24"
+
 # threadify requires a *complete* archive (it opens it via libuat Archive::Open,
 # which needs the zstd store + lexicon + string + connectivity + msgid files), so
 # the build must run the full usenetarchive pipeline in dependency order, not just
@@ -45,14 +50,18 @@ _THREAD_EXPORT_BIN = "uat-thread-export"
 #   extract-msgid → mid*; connectivity → conn*/toplevel; extract-msgmeta → str*;
 #   repack-zstd → zstd; lexicon → lex* (needs conn); lexsort → sorted lex
 #   (threadify requires lexsort); then threadify restores connectivity.
+#
+# Each entry is (extra-args, accepted-exit-codes). threadify returns 1 when it
+# matched messages (a "re-run sort/lexsort" signal) and 0 only when it changed
+# nothing — both are success, so 1 must not be treated as an error.
 _INPLACE_STEPS = (
-    "extract-msgid",
-    "connectivity",
-    "extract-msgmeta",
-    "repack-zstd",
-    "lexicon",
-    "lexsort",
-    "threadify",
+    ("extract-msgid", [], (0,)),
+    ("connectivity", [], (0,)),
+    ("extract-msgmeta", [], (0,)),
+    ("repack-zstd", ["-s", _ZSTD_DICT_POWER], (0,)),
+    ("lexicon", [], (0,)),
+    ("lexsort", [], (0,)),
+    ("threadify", [], (0, 1)),
 )
 
 
@@ -62,15 +71,17 @@ def _bin(name: str) -> str:
     return os.path.join(bindir, name) if bindir else name
 
 
-def _run(args: list[str], logger: logging.Logger) -> None:
+def _run(args: list[str], logger: logging.Logger, ok_codes: tuple[int, ...] = (0,)) -> None:
     """Run a usenetarchive step; raise with the tool's captured stderr on failure.
 
-    Including stderr in the message is what makes a failed step diagnosable from the
-    Prefect job's error_message (the bare CalledProcessError repr does not carry it).
+    ok_codes lists the exit codes that count as success (some tools, e.g. threadify,
+    use a non-zero code to signal "work done"). Including stderr in the raised
+    message is what makes a real failure diagnosable from the Prefect job's
+    error_message (the bare CalledProcessError repr does not carry it).
     """
     logger.info("usenet threader: %s", " ".join(args))
     proc = subprocess.run(args, capture_output=True, text=True, check=False)
-    if proc.returncode != 0:
+    if proc.returncode not in ok_codes:
         tail = (proc.stderr or proc.stdout or "").strip()[-500:]
         raise RuntimeError(f"{Path(args[0]).name} failed (rc={proc.returncode}): {tail}")
 
@@ -122,8 +133,8 @@ def build_threaded_archive(mbox_path: str, workdir: str, logger: logging.Logger 
     arch = work / "arch"
     _run([_bin("import-source-mbox"), plain, str(raw)], log)
     _run([_bin("kill-duplicates"), str(raw), str(arch)], log)
-    for step in _INPLACE_STEPS:
-        _run([_bin(step), str(arch)], log)
+    for name, extra, ok in _INPLACE_STEPS:
+        _run([_bin(name), *extra, str(arch)], log, ok_codes=ok)
     return str(arch)
 
 
@@ -169,16 +180,31 @@ def thread_root(msgid: str, parents: dict[str, str]) -> str:
         cur = parent
 
 
+def normalize_msgid(msgid: str | None) -> str:
+    """Strip surrounding angle brackets + whitespace from a Message-ID.
+
+    usenetarchive's extract-msgid stores the id *between* the `<` and `>`, while
+    mbox_parser keeps the raw header form (`<...>`). Normalising both ends lets the
+    thread index join the parser records (otherwise every message looks like a
+    singleton). Applied to message_id/thread_id/parent_id so they stay consistent.
+    """
+    if not msgid:
+        return ""
+    return msgid.strip().lstrip("<").rstrip(">").strip()
+
+
 def build_thread_index(parents: dict[str, str]) -> dict[str, dict]:
     """Turn a parent map into {message_id: {"parent": <msgid|None>, "thread": <root msgid>}}.
 
-    This is what the writer joins onto mbox_parser records by message_id to fill
-    usenet_items.parent_id and thread_id.
+    Keys and values are bracket-normalised so the writer can join them onto
+    mbox_parser records (whose ids keep the <>) to fill parent_id and thread_id.
     """
     index: dict[str, dict] = {}
     for msgid in parents:
-        parent = parents.get(msgid) or None
-        index[msgid] = {"parent": parent, "thread": thread_root(msgid, parents)}
+        index[normalize_msgid(msgid)] = {
+            "parent": normalize_msgid(parents.get(msgid)) or None,
+            "thread": normalize_msgid(thread_root(msgid, parents)),
+        }
     return index
 
 

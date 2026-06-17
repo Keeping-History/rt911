@@ -19,13 +19,15 @@ def test_parser_record_to_message_maps_and_joins_thread():
         },
         "body": {"text_plain": ["line1", "line2"], "text_html": []},
     }
-    index = {"<b@x>": {"parent": "<a@x>", "thread": "<a@x>"}}
+    # thread index is bracket-normalised (as build_thread_index produces)
+    index = {"b@x": {"parent": "a@x", "thread": "a@x"}}
     msg = processor.parser_record_to_message(rec, index, fallback_group="fallback")
     assert msg["newsgroup"] == "ntl.support.modems"
     assert msg["start_date"] == "2000-11-25T23:34:13+00:00"
-    assert msg["message_id"] == "<b@x>"
-    assert msg["thread_id"] == "<a@x>"
-    assert msg["parent_id"] == "<a@x>"
+    assert msg["message_id"] == "b@x"        # <> stripped to match the index
+    assert msg["thread_id"] == "a@x"
+    assert msg["parent_id"] == "a@x"
+    assert msg["references"] == "<a@x>"       # raw header kept as-is
     assert msg["body"] == "line1\nline2"
 
 
@@ -37,8 +39,8 @@ def test_message_falls_back_to_own_id_and_group_and_html():
     }
     msg = processor.parser_record_to_message(rec, {}, fallback_group="comp.lang.c")
     assert msg["newsgroup"] == "comp.lang.c"        # no Newsgroups header → fallback
-    assert msg["message_id"] == "<solo@x>"          # list flattened
-    assert msg["thread_id"] == "<solo@x>"           # no oracle entry → own id (singleton)
+    assert msg["message_id"] == "solo@x"            # list flattened + <> stripped
+    assert msg["thread_id"] == "solo@x"             # no oracle entry → own id (singleton)
     assert msg["parent_id"] is None
     assert msg["body"] == "hello world"             # HTML stripped
 
@@ -67,4 +69,4 @@ def test_process_archive_groups_by_newsgroup(tmp_path):
 
     assert set(groups) == {"ntl.talk", "ntl.gaming"}
     assert len(groups["ntl.talk"]) == 2
-    assert groups["ntl.gaming"][0]["message_id"] == "<3@x>"
+    assert groups["ntl.gaming"][0]["message_id"] == "3@x"
