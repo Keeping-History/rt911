@@ -11,7 +11,7 @@
  *   node bootstrap.mjs
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -115,17 +115,34 @@ async function createCollections(token) {
     console.log("Creating collection: sources");
     await api(token, "POST", "/collections", {
       collection: "sources",
-      meta: { icon: "radio", note: "Broadcast sources / networks" },
+      meta: { icon: "radio", note: "Sources / networks / newsgroups, classified by type" },
       schema: {},
       fields: [
         { field: "id",          type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true, readonly: true } },
         { field: "name",        type: "string",  schema: { is_nullable: false }, meta: { required: true, interface: "input", width: "half" } },
         { field: "slug",        type: "string",  schema: { is_nullable: false, is_unique: true }, meta: { required: true, interface: "input", width: "half" } },
+        // type discriminates what kind of source a row is, so one table can back
+        // every channel's filter: "video" (TV), "pager", "usenet" (newsgroup), …
+        { field: "type",        type: "string",  schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["video", "pager", "usenet"].map((v) => ({ text: v, value: v })) } } },
         { field: "description", type: "text",    schema: {}, meta: { interface: "input-multiline" } },
       ],
     });
+    // message_count is precomputed per source (used by usenet newsgroups — the
+    // corpus is historical/immutable, so the count is stable). Integer added
+    // individually (bulk endpoint creates string columns).
+    await api(token, "POST", "/fields/sources", { field: "message_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", readonly: true, note: "Precomputed item count (usenet)" } });
   } else {
     console.log("Collection sources already exists, skipping.");
+    // Ensure the type/message_count columns exist on a pre-existing sources collection.
+    const have = new Set((await api(token, "GET", "/fields/sources")).data.map((f) => f.field));
+    if (!have.has("type")) {
+      console.log("Adding field: sources.type");
+      await api(token, "POST", "/fields/sources", { field: "type", type: "string", schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["video", "pager", "usenet"].map((v) => ({ text: v, value: v })) } } });
+    }
+    if (!have.has("message_count")) {
+      console.log("Adding field: sources.message_count");
+      await api(token, "POST", "/fields/sources", { field: "message_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", readonly: true, note: "Precomputed item count (usenet)" } });
+    }
   }
 
   // media_items and mp3_items share the same shape — mp3 reuses the MediaItem
@@ -239,14 +256,78 @@ async function createCollections(token) {
     // string columns when type is in the bulk payload (same caveat as media_items).
     await api(token, "POST", "/fields/pager_items", { field: "approved", type: "integer", schema: { default_value: 1 }, meta: { interface: "input", width: "half", note: "1 = approved, 0 = pending" } });
     await api(token, "POST", "/fields/pager_items", { field: "sort", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", hidden: true } });
+    // source FK into sources (type="pager"), backfilled from provider by
+    // migratePagerSources. provider is kept as the import field + audit trail.
+    await api(token, "POST", "/fields/pager_items", { field: "source", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", display: "related-values", width: "half", note: "Provider (sources row, type=pager)" } });
   } else {
     console.log("Collection pager_items already exists, skipping.");
+    // Ensure the source FK exists on a pre-existing pager_items (migration).
+    const have = new Set((await api(token, "GET", "/fields/pager_items")).data.map((f) => f.field));
+    if (!have.has("source")) {
+      console.log("Adding field: pager_items.source");
+      await api(token, "POST", "/fields/pager_items", { field: "source", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", display: "related-values", width: "half", note: "Provider (sources row, type=pager)" } });
+    }
+  }
+
+  // usenet_items — Usenet messages, one row per post. Like pager_items, each post
+  // is "instant": a start_date (the posting time, the streamer's schedule key) with
+  // no duration/end_date. The newsgroup is NOT stored inline — it is a row in the
+  // shared sources table (type="usenet") that usenet_items.source references, the
+  // same way media_items/news_items/mp3_items link their source. message_id is NOT
+  // unique (crossposts repeat it). references/in_reply_to are kept raw so threading
+  // can be derived; thread_id/parent_id are populated by the threading stage
+  // (usenetarchive). See plans/usenet-archive-ingestion.md for the producer.
+  if (!names.includes("usenet_items")) {
+    console.log("Creating collection: usenet_items");
+    await api(token, "POST", "/collections", {
+      collection: "usenet_items",
+      meta: { icon: "article", sort_field: "sort", note: "Usenet messages" },
+      schema: {},
+      fields: [
+        { field: "id",           type: "integer",  schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true, readonly: true } },
+        { field: "start_date",   type: "dateTime", schema: { is_nullable: false }, meta: { required: true, interface: "datetime", width: "half", note: "Posting time (UTC); the streamer's schedule key" } },
+        { field: "subject",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
+        { field: "author",       type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "From header (name + email)" } },
+        { field: "message_id",   type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Message-ID (not unique: crossposts repeat)" } },
+        { field: "references",   type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline", note: "Raw References header (thread ancestry)" } },
+        { field: "in_reply_to",  type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "In-Reply-To (parent message-id)" } },
+        { field: "thread_id",    type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Set by threading stage; null until then" } },
+        { field: "parent_id",    type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Parent message-id within thread" } },
+        { field: "body",         type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
+        { field: "date_source",  type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Header the start_date came from (QA)" } },
+      ],
+    });
+    // Integer columns added individually (bulk endpoint creates strings). source
+    // is the FK into sources (type="usenet"); the relation is wired in createRelations.
+    await api(token, "POST", "/fields/usenet_items", { field: "source",   type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", display: "related-values", width: "half", note: "Newsgroup (sources row, type=usenet)" } });
+    await api(token, "POST", "/fields/usenet_items", { field: "approved", type: "integer", schema: { default_value: 1 }, meta: { interface: "input", width: "half", note: "1 = approved, 0 = pending" } });
+    await api(token, "POST", "/fields/usenet_items", { field: "sort",     type: "integer", schema: { is_nullable: true }, meta: { interface: "input", hidden: true } });
+
+    // Widen text columns (Directus makes varchar(255), too short for some From/
+    // Message-ID/subject headers) and index the per-group time lookups the streamer
+    // does — the usenet channel reads Postgres directly (no Redis cache), so this
+    // (source, start_date) index is what keeps CurrentUsenetItems/UsenetItemsInRange
+    // fast. Done in the fresh-create branch so it never rewrites a populated table.
+    psql(`
+      ALTER TABLE usenet_items
+        ALTER COLUMN subject     TYPE text,
+        ALTER COLUMN author      TYPE text,
+        ALTER COLUMN message_id  TYPE text,
+        ALTER COLUMN in_reply_to TYPE text,
+        ALTER COLUMN thread_id   TYPE text,
+        ALTER COLUMN parent_id   TYPE text,
+        ALTER COLUMN date_source TYPE text;
+      CREATE INDEX IF NOT EXISTS idx_usenet_items_source_start
+        ON usenet_items (source, start_date);
+    `);
+  } else {
+    console.log("Collection usenet_items already exists, skipping.");
   }
 }
 
 async function createRelations(token) {
   const existing = await api(token, "GET", "/relations");
-  for (const collection of ["media_items", "mp3_items", "news_items"]) {
+  for (const collection of ["media_items", "mp3_items", "news_items", "usenet_items", "pager_items"]) {
     const alreadyLinked = existing.data.some(
       (r) => r.collection === collection && r.field === "source",
     );
@@ -276,7 +357,7 @@ async function importSources(token, records) {
 
   const toCreate = slugs
     .filter((s) => s && !existingSlugs.has(s))
-    .map((s) => ({ name: s, slug: s }));
+    .map((s) => ({ name: s, slug: s, type: "video" }));
 
   if (toCreate.length === 0) {
     console.log("All sources already exist, skipping.");
@@ -662,17 +743,58 @@ async function importPagerItems(token, records) {
   console.log("\nDone.");
 }
 
+// migratePagerSources backfills pager_items.source from the legacy provider text
+// column: it creates one sources row (type="pager") per distinct provider and
+// points each pager_items.source at it. Idempotent — safe on fresh installs (run
+// after the import) and on already-deployed data. The provider column is left in
+// place as the import field + audit trail; the backend now reads the provider via
+// the source join (db.AvailablePagerProviders / pagerSelectFrom).
+async function migratePagerSources(token) {
+  // The relation/field must exist first; createCollections + createRelations handle
+  // that. Only attempt the data backfill if the table actually has the columns.
+  const fields = new Set((await api(token, "GET", "/fields/pager_items")).data.map((f) => f.field));
+  if (!fields.has("source") || !fields.has("provider")) {
+    console.log("pager_items missing source/provider column, skipping pager source backfill.");
+    return;
+  }
+  console.log("Backfilling pager_items.source from provider…");
+  psql(`
+    INSERT INTO sources (name, slug, type)
+    SELECT DISTINCT provider, provider, 'pager'
+    FROM pager_items
+    WHERE provider IS NOT NULL AND provider <> ''
+    ON CONFLICT (slug) DO NOTHING;
+
+    UPDATE pager_items pi
+    SET source = s.id
+    FROM sources s
+    WHERE s.slug = pi.provider AND s.type = 'pager' AND pi.source IS DISTINCT FROM s.id;
+  `);
+  console.log("Pager source backfill done.");
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
-const mediaRecords = JSON.parse(readFileSync(MEDIA_DATA_PATH, "utf8"));
-const newsRecords  = JSON.parse(readFileSync(NEWS_DATA_PATH,  "utf8"));
-console.log(`Loaded ${mediaRecords.length} TV records from ${MEDIA_DATA_PATH}`);
-console.log(`Loaded ${newsRecords.length} news records from ${NEWS_DATA_PATH}`);
-console.log("Loading pager records (large file, may take a moment)…");
-const pagerRecords = JSON.parse(readFileSync(PAGER_DATA_PATH, "utf8"));
-console.log(`Loaded ${pagerRecords.length} pager records from ${PAGER_DATA_PATH}`);
+// Load a seed dataset, tolerating a missing file. The import functions already
+// skip when their table is populated, and the schema/backfill work doesn't touch
+// these files — so against an already-seeded Directus the data is unused, and the
+// seed image needn't bake it in. A fresh full seed supplies the files via the
+// *_DATA_PATH env vars (or by mounting them).
+function loadJsonOrEmpty(path, label) {
+  if (!existsSync(path)) {
+    console.warn(`Seed data not found at ${path} — skipping ${label} import (schema + backfill still run).`);
+    return [];
+  }
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+const mediaRecords = loadJsonOrEmpty(MEDIA_DATA_PATH, "TV media");
+const newsRecords  = loadJsonOrEmpty(NEWS_DATA_PATH, "news");
+console.log(`Loaded ${mediaRecords.length} TV records, ${newsRecords.length} news records`);
+const pagerRecords = loadJsonOrEmpty(PAGER_DATA_PATH, "pager");
+console.log(`Loaded ${pagerRecords.length} pager records`);
 
 const token = await getToken();
 console.log("Authenticated.");
@@ -693,5 +815,6 @@ await importNewsItems(token, newsRecords, newsSourceId);
 
 console.log("\n--- Pager items (pager_entries.json) ---");
 await importPagerItems(token, pagerRecords);
+await migratePagerSources(token);
 
 console.log("\nBootstrap complete. Directus is at", DIRECTUS_URL);

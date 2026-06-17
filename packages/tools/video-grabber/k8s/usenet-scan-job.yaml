@@ -1,0 +1,42 @@
+# One-shot Job that kicks off a single scan-usenet run, then exits. Apply it once
+# (e.g. after the worker is deployed) to enumerate the IA collections into
+# usenet_jobs; the scheduled dispatch-usenet flow then drains the queue on its own.
+#
+#   kubectl apply -f k8s/usenet-scan-job.yaml
+#
+# Re-applying re-triggers a scan — harmless (the scan is idempotent via
+# ON CONFLICT), but delete the completed Job first:
+#   kubectl -n video-grabber delete job usenet-scan --ignore-not-found
+#
+# NOTE: this is intentionally NOT an ArgoCD hook — scanning is a one-time action,
+# not something to re-run on every sync.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: usenet-scan
+  namespace: video-grabber
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400  # auto-clean a day after completion
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: video-grabber-worker
+      containers:
+        - name: trigger
+          image: ghcr.io/keeping-history/video-grabber:latest
+          # PREFECT_API_URL (config) lets run_deployment reach the server; the
+          # bounded scan flow itself runs in the worker's serve() process.
+          envFrom:
+            - configMapRef:
+                name: video-grabber-config
+            - secretRef:
+                name: video-grabber-secrets
+          # timeout=0 → create the flow run and return immediately (fire-and-forget).
+          command:
+            - python
+            - -c
+            - |
+              from prefect.deployments import run_deployment
+              run_deployment(name="scan-usenet/scan-usenet", timeout=0)
+              print("scan-usenet triggered")

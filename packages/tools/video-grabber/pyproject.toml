@@ -20,7 +20,9 @@ dependencies = [
     # ('PrefectRouter' object has no attribute 'routes'), which 500s the test
     # Prefect API and fails test_build_channel. 0.136.x matches the known-good
     # worker image. Revisit when Prefect supports fastapi >=0.137.
-    "fastapi<0.138",
+    # NB: dependabot #114 loosened this to <0.138 and re-broke CI on main; keep <0.137
+    # (add a dependabot ignore for fastapi major/minor if it keeps reopening).
+    "fastapi<0.137",
 ]
 
 [project.optional-dependencies]

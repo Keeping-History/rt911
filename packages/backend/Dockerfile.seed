@@ -1,0 +1,19 @@
+# Image for the one-shot Directus seed Job (`node seed.mjs`).
+#
+# seed.mjs has no npm dependencies (node builtins + global fetch), but it shells
+# out to `psql` for the raw-SQL steps (column widening, the usenet index, the pager
+# backfill), so the image bundles the Postgres client.
+#
+# No seed data is baked in: against an already-seeded Directus the import datasets
+# are unused (the imports skip populated tables, and the backfill reads the live
+# pager_items table), and seed.mjs tolerates the files being absent. For a fresh
+# full seed, supply the JSONs via the MEDIA_DATA_PATH / NEWS_DATA_PATH /
+# PAGER_DATA_PATH env vars pointing at a mounted volume.
+#
+# Built automatically by .github/workflows/build-rt911-seed.yml.
+FROM node:22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /seed
+COPY seed.mjs ./
+CMD ["node", "seed.mjs"]

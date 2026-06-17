@@ -64,16 +64,48 @@ export interface PagerItem {
 }
 
 /**
+ * A single archived Usenet message, delivered on the opt-in "usenet" channel.
+ * Like pager items they are instant (a start_date with no duration). Unlike the
+ * other channels, delivery is filtered server-side by newsgroup — the client
+ * declares which group(s) it is viewing via setUsenetGroups, and only those are
+ * streamed (a group can hold millions of messages). thread_id/parent_id carry the
+ * restored thread structure for building the conversation tree.
+ */
+export interface UsenetItem {
+	id: number;
+	start_date: string;
+	newsgroup?: string;
+	subject?: string;
+	author?: string;
+	message_id?: string;
+	references?: string;
+	in_reply_to?: string;
+	thread_id?: string;
+	parent_id?: string;
+	body?: string;
+	date_source?: string;
+	approved?: number;
+}
+
+/**
  * Time-independent sets of selectable sources for each filter, delivered once by
  * the server on the `sources` frame (see the streamer's websocket-protocol.md).
  * Unlike the source values derived from streamed items, these list every option
  * across all history — so filter UIs are complete regardless of the virtual clock.
  */
+/** A browseable newsgroup: name + precomputed message count. */
+export interface NewsgroupSource {
+	name: string;
+	count: number;
+}
+
 export interface AvailableSources {
 	/** Source slugs with approved video (m3u8) media — the TV channel filter. */
 	video: string[];
 	/** Providers across approved pager items — the Pager provider filter. */
 	pager: string[];
+	/** Newsgroups (sources of type "usenet") with message counts — the browse list. */
+	usenet: NewsgroupSource[];
 }
 
 export interface MediaStreamContextValue {
@@ -84,6 +116,8 @@ export interface MediaStreamContextValue {
 	mp3Items: MediaItem[];
 	/** news items received while subscribed to the news channel. Same shape as items. */
 	newsItems: MediaItem[];
+	/** usenet messages received for the currently-viewed newsgroup(s). */
+	usenetItems: UsenetItem[];
 	/** All selectable sources per filter, sent once by the server at init. */
 	sources: AvailableSources;
 	connected: boolean;
@@ -104,6 +138,14 @@ export interface MediaStreamContextValue {
 	subscribeNews: (appId: string) => void;
 	/** Drop a news-channel subscription. Unsubscribes server-side when the last app leaves. */
 	unsubscribeNews: (appId: string) => void;
+	/** Opt into usenet-channel delivery. Ref-counted by appId. */
+	subscribeUsenet: (appId: string) => void;
+	/** Drop a usenet-channel subscription. Unsubscribes server-side when the last app leaves. */
+	unsubscribeUsenet: (appId: string) => void;
+	/** Set the newsgroup(s) the client is viewing; only these are streamed. Empty = none. */
+	setUsenetGroups: (groups: string[]) => void;
+	/** Request the page of messages older than `before` for a group (backlog pagination). */
+	requestUsenetOlder: (newsgroup: string, before: string) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -111,7 +153,8 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	pagerItems: [],
 	mp3Items: [],
 	newsItems: [],
-	sources: { video: [], pager: [] },
+	usenetItems: [],
+	sources: { video: [], pager: [], usenet: [] },
 	connected: false,
 	addItems: () => {},
 	subscribeFormats: () => {},
@@ -122,4 +165,8 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	unsubscribeMp3: () => {},
 	subscribeNews: () => {},
 	unsubscribeNews: () => {},
+	subscribeUsenet: () => {},
+	unsubscribeUsenet: () => {},
+	setUsenetGroups: () => {},
+	requestUsenetOlder: () => {},
 });

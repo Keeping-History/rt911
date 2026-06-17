@@ -1,0 +1,49 @@
+# One-shot Job that runs `node seed.mjs` against the EXISTING in-cluster Directus
+# (rt911-api) + Postgres (rt911-db). Creates/upgrades the schema (usenet_items,
+# sources.type + message_count, the pager source FK, the usenet index) and runs the
+# imports + pager backfill. Idempotent — existing collections/data are skipped, so
+# it is safe to re-run.
+#
+#   # build + push the image first (see Dockerfile.seed):
+#   docker build -f Dockerfile.seed -t ghcr.io/keeping-history/rt911-seed:latest .
+#   docker push ghcr.io/keeping-history/rt911-seed:latest
+#   kubectl apply -f k8s/seed-job.yaml
+#   # re-run: kubectl -n rt911 delete job directus-seed --ignore-not-found
+#
+# Reuses the same rt911-config ConfigMap + rt911-secrets Secret that rt911-api
+# itself reads, so the admin login and DB credentials are always in sync with the
+# running Directus — no separate copy of secrets to maintain.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: directus-seed
+  namespace: rt911
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400  # auto-clean a day after completion
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: ghcr.io/keeping-history/rt911-seed:latest
+          # ADMIN_EMAIL, DB_HOST/PORT/USER/DATABASE come from rt911-config;
+          # ADMIN_PASSWORD, DB_PASSWORD come from rt911-secrets (same wiring as rt911-api).
+          envFrom:
+            - configMapRef:
+                name: rt911-config
+            - secretRef:
+                name: rt911-secrets
+          env:
+            # Talk to Directus over the in-cluster service (no TLS/ingress hop).
+            - name: DIRECTUS_URL
+              value: "http://rt911-api.rt911.svc.cluster.local:8055"
+          # Build PSQL_URL from the DB_* parts so seed.mjs's raw-SQL steps connect
+          # directly (its docker-compose fallback can't work in-cluster). Composing
+          # it here avoids depending on the DATABASE_URL secret's driver scheme.
+          command:
+            - sh
+            - -c
+            - |
+              export PSQL_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_DATABASE}"
+              exec node seed.mjs

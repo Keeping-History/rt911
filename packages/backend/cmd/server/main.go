@@ -69,6 +69,11 @@ func main() {
 		go cache.ListenNews(ctx, dbURL, rdb, pool, logger)
 	}
 
+	// usenet (Newsgroups app) is intentionally NOT cached in Redis: messages carry
+	// full bodies and the corpus is far too large to warm. The channel reads
+	// Postgres directly (per-group, gated by what the client is viewing) — see
+	// session.RunTimePump and db.UsenetItemsInRange.
+
 	// Keep Redis in sync with media_items changes for the process lifetime.
 	go cache.Listen(ctx, dbURL, rdb, pool, logger)
 

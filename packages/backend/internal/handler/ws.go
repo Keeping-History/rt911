@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"classicy/streamer/internal/db"
+	"classicy/streamer/internal/model"
 	"classicy/streamer/internal/session"
 
 	"github.com/gorilla/websocket"
@@ -36,10 +37,25 @@ type filterMsg struct {
 }
 
 // channelMsg carries the channel name for subscribe/unsubscribe. Valid channels
-// are "pager", "mp3" and "news".
+// are "pager", "mp3", "news" and "usenet".
 type channelMsg struct {
 	Type    string `json:"type"`
 	Channel string `json:"channel"`
+}
+
+// usenetFilterMsg carries the set of newsgroups the client is currently viewing.
+// The usenet channel only delivers messages from these groups (empty = none).
+type usenetFilterMsg struct {
+	Type       string   `json:"type"`
+	Newsgroups []string `json:"newsgroups"`
+}
+
+// usenetMoreMsg requests the page of messages older than `before` (the oldest the
+// client currently holds) for the viewed newsgroup(s) — backlog pagination.
+type usenetMoreMsg struct {
+	Type       string   `json:"type"`
+	Newsgroups []string `json:"newsgroups"`
+	Before     string   `json:"before"`
 }
 
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
@@ -52,7 +68,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 			return
 		}
 
-		sess := session.NewSession(hub, rdb, logger)
+		sess := session.NewSession(hub, rdb, pool, logger)
 		hub.Register(sess)
 
 		// writePump — runs until the session closes or a write fails.
@@ -154,6 +170,32 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.SetFormatFilter(fmsg.Formats)
+
+			case "usenet_filter":
+				var umsg usenetFilterMsg
+				if err := json.Unmarshal(raw, &umsg); err != nil {
+					sess.SendError("malformed usenet_filter message")
+					continue
+				}
+				sess.SetUsenetGroups(umsg.Newsgroups)
+				// Deliver the backlog for the newly-selected group(s) at the current
+				// virtual time so the client immediately sees messages up to "now".
+				if t, ok := sess.VirtualTime(); ok {
+					sendUsenetSnapshot(r, sess, pool, t, logger)
+				}
+
+			case "usenet_more":
+				var umsg usenetMoreMsg
+				if err := json.Unmarshal(raw, &umsg); err != nil {
+					sess.SendError("malformed usenet_more message")
+					continue
+				}
+				before, err := parseTime(umsg.Before)
+				if err != nil {
+					sess.SendError("invalid time: " + err.Error())
+					continue
+				}
+				sendUsenetOlder(r, sess, pool, umsg.Newsgroups, before, logger)
 
 			case "subscribe":
 				var cmsg channelMsg
@@ -261,10 +303,55 @@ func sendNewsSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool
 	sess.SendNews(t, items)
 }
 
+// usenetSnapshotLimit bounds the backlog returned when a client opens a newsgroup:
+// the most recent N messages up to the virtual clock. A group's full history can be
+// large, so older messages are fetched on demand (pagination, future work).
+const usenetSnapshotLimit = 500
+
+// sendUsenetSnapshot delivers the backlog (most recent messages up to t) for every
+// newsgroup the session is currently viewing, if it is subscribed to the usenet
+// channel. Called from init, seek, subscribe, and usenet_filter. Reads Postgres
+// (like the other snapshots), filtered to the active group(s) so a large group
+// never floods the client.
+func sendUsenetSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelUsenet) {
+		return
+	}
+	var batch []model.UsenetItem
+	for _, g := range sess.ActiveUsenetGroups() {
+		items, err := db.CurrentUsenetItems(r.Context(), pool, g, t, usenetSnapshotLimit)
+		if err != nil {
+			logger.Warn("current usenet items query failed", "group", g, "error", err)
+			continue
+		}
+		batch = append(batch, items...)
+	}
+	sess.SendUsenet(t, batch)
+}
+
+// sendUsenetOlder delivers the page of messages older than `before` for the given
+// newsgroup(s) if the session is subscribed to usenet. All such messages are ≤ the
+// virtual clock, so they ride the normal usenet frame and the client merges them in.
+func sendUsenetOlder(r *http.Request, sess *session.Session, pool *pgxpool.Pool, newsgroups []string, before time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelUsenet) {
+		return
+	}
+	var batch []model.UsenetItem
+	for _, g := range newsgroups {
+		items, err := db.OlderUsenetItems(r.Context(), pool, g, before, usenetSnapshotLimit)
+		if err != nil {
+			logger.Warn("older usenet items query failed", "group", g, "error", err)
+			continue
+		}
+		batch = append(batch, items...)
+	}
+	sess.SendUsenet(before, batch)
+}
+
 // sendSources delivers the time-independent available-source lists for client
-// filters (TV channels, pager providers). Called once per init — sources don't
-// change with virtual time, so seek does not resend them. Failures are non-fatal:
-// a missing list only degrades a filter UI, it must not break streaming.
+// filters (TV channels, pager providers, newsgroups). Called once per init —
+// sources don't change with virtual time, so seek does not resend them. Failures
+// are non-fatal: a missing list only degrades a filter UI, it must not break streaming.
 func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, logger *slog.Logger) {
 	video, err := db.AvailableVideoSources(r.Context(), pool)
 	if err != nil {
@@ -274,12 +361,17 @@ func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, log
 	if err != nil {
 		logger.Warn("available pager providers query failed", "error", err)
 	}
-	sess.SendSources(video, providers)
+	newsgroups, err := db.AvailableNewsgroups(r.Context(), pool)
+	if err != nil {
+		logger.Warn("available newsgroups query failed", "error", err)
+	}
+	sess.SendSources(video, providers, newsgroups)
 }
 
 // knownChannel reports whether ch is a valid subscription channel.
 func knownChannel(ch string) bool {
-	return ch == session.ChannelPager || ch == session.ChannelMp3 || ch == session.ChannelNews
+	return ch == session.ChannelPager || ch == session.ChannelMp3 ||
+		ch == session.ChannelNews || ch == session.ChannelUsenet
 }
 
 // sendChannelSnapshot delivers the subscribe-time snapshot for a single channel.
@@ -291,6 +383,8 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 		sendMp3Snapshot(r, sess, pool, t, logger)
 	case session.ChannelNews:
 		sendNewsSnapshot(r, sess, pool, t, logger)
+	case session.ChannelUsenet:
+		sendUsenetSnapshot(r, sess, pool, t, logger)
 	}
 }
 
@@ -300,4 +394,5 @@ func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpo
 	sendPagerSnapshot(r, sess, pool, t, logger)
 	sendMp3Snapshot(r, sess, pool, t, logger)
 	sendNewsSnapshot(r, sess, pool, t, logger)
+	sendUsenetSnapshot(r, sess, pool, t, logger)
 }

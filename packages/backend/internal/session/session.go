@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -24,9 +26,10 @@ const (
 // Opt-in subscription channels. Each is a side stream a session must subscribe
 // to; nothing on a channel is delivered by default. HTML is planned.
 const (
-	ChannelPager = "pager"
-	ChannelMp3   = "mp3"
-	ChannelNews  = "news"
+	ChannelPager  = "pager"
+	ChannelMp3    = "mp3"
+	ChannelNews   = "news"
+	ChannelUsenet = "usenet"
 )
 
 // Look-ahead windowing. Instead of one Redis lookup + frame per virtual second,
@@ -41,37 +44,44 @@ const (
 // the client never starves. Data is immutable historical, so window size is
 // bounded only by client buffer memory, not freshness.
 const (
-	leadSeconds = 30 * time.Second
-	windowMedia = 300 * time.Second
-	windowPager = 600 * time.Second
-	windowMp3   = 300 * time.Second
-	windowNews  = 600 * time.Second
+	leadSeconds  = 30 * time.Second
+	windowMedia  = 300 * time.Second
+	windowPager  = 600 * time.Second
+	windowMp3    = 300 * time.Second
+	windowNews   = 600 * time.Second
+	windowUsenet = 600 * time.Second
 )
 
 // SourceList carries the time-independent set of selectable sources for each
 // client-side filter. The sources table does not record which media type a source
 // belongs to, so each list is derived from actual usage in its table.
 type SourceList struct {
-	Video []string `json:"video"` // TV: sources of approved m3u8 media items
-	Pager []string `json:"pager"` // Pager: providers of approved pager items
+	Video  []string                `json:"video"`  // TV: sources of approved m3u8 media items
+	Pager  []string                `json:"pager"`  // Pager: providers of approved pager items
+	Usenet []model.NewsgroupSource `json:"usenet"` // Newsgroups: name + precomputed message count
 }
 
 // outMsg is the envelope for every server→client message.
 type outMsg struct {
-	Type    string            `json:"type"`
-	Time    string            `json:"time,omitempty"`
-	Channel string            `json:"channel,omitempty"`
-	Items   []model.MediaItem `json:"items,omitempty"`
-	Pager   []model.PagerItem `json:"pager,omitempty"`
-	Sources *SourceList       `json:"sources,omitempty"`
-	Msg     string            `json:"message,omitempty"`
+	Type    string             `json:"type"`
+	Time    string             `json:"time,omitempty"`
+	Channel string             `json:"channel,omitempty"`
+	Items   []model.MediaItem  `json:"items,omitempty"`
+	Pager   []model.PagerItem  `json:"pager,omitempty"`
+	Usenet  []model.UsenetItem `json:"usenet,omitempty"`
+	Sources *SourceList        `json:"sources,omitempty"`
+	Msg     string             `json:"message,omitempty"`
 }
 
 // Session holds all state for a single connected client.
 type Session struct {
-	id     string
-	hub    *Hub
-	rdb    *goredis.Client
+	id  string
+	hub *Hub
+	rdb *goredis.Client
+	// pool backs the usenet channel only: usenet messages are too large to cache in
+	// Redis, so its windowed delivery reads Postgres directly (see UsenetItemsInRange).
+	// Every other channel uses Redis via the tick path (hard rule #4).
+	pool   *pgxpool.Pool
 	logger *slog.Logger
 
 	mu            sync.Mutex
@@ -83,10 +93,16 @@ type Session struct {
 	// Per-channel look-ahead high-water marks: the exclusive upper edge of the
 	// last window sent on each channel. Channels are subscribed at different
 	// times, so each refills independently. All guarded by mu.
-	mediaHorizon time.Time
-	pagerHorizon time.Time
-	mp3Horizon   time.Time
-	newsHorizon  time.Time
+	mediaHorizon  time.Time
+	pagerHorizon  time.Time
+	mp3Horizon    time.Time
+	newsHorizon   time.Time
+	usenetHorizon time.Time
+
+	// usenetGroups is the set of newsgroups the client is currently viewing. The
+	// usenet channel is delivered only for these groups — a group can hold millions
+	// of messages, so nothing is sent until the client selects one. Guarded by mu.
+	usenetGroups map[string]struct{}
 
 	send      chan []byte
 	tickCh    chan struct{}
@@ -94,12 +110,13 @@ type Session struct {
 	closeOnce sync.Once
 }
 
-func NewSession(hub *Hub, rdb *goredis.Client, logger *slog.Logger) *Session {
+func NewSession(hub *Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) *Session {
 	id := newID()
 	return &Session{
 		id:     id,
 		hub:    hub,
 		rdb:    rdb,
+		pool:   pool,
 		logger: logger.With("session", id),
 		send:   make(chan []byte, sendBuf),
 		tickCh: make(chan struct{}, 1),
@@ -191,6 +208,8 @@ func (s *Session) horizonFor(channel string) *time.Time {
 		return &s.mp3Horizon
 	case ChannelNews:
 		return &s.newsHorizon
+	case ChannelUsenet:
+		return &s.usenetHorizon
 	}
 	return nil
 }
@@ -249,12 +268,62 @@ func (s *Session) SendNews(t time.Time, items []model.MediaItem) {
 	s.send_(outMsg{Type: "news", Time: t.Format(time.RFC3339), Items: items})
 }
 
+// SendUsenet delivers a batch of Usenet messages at time t on the usenet channel.
+// Each message carries its own newsgroup so the client routes it to the right
+// group view. No frame is sent for an empty batch.
+func (s *Session) SendUsenet(t time.Time, items []model.UsenetItem) {
+	if len(items) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "usenet", Time: t.Format(time.RFC3339), Usenet: items})
+}
+
+// SetUsenetGroups replaces the set of newsgroups the client is viewing on the
+// usenet channel and acks. Resetting the usenet horizon to the current virtual time
+// makes the next tick refill a fresh forward window for the new group(s); the
+// handler follows up with a backlog snapshot (messages up to now). An empty set
+// means "view nothing" — the channel then delivers no messages, which is the point:
+// a group can hold millions of messages, so we never stream one the client isn't
+// looking at.
+func (s *Session) SetUsenetGroups(groups []string) {
+	s.mu.Lock()
+	g := make(map[string]struct{}, len(groups))
+	for _, name := range groups {
+		if name != "" {
+			g[name] = struct{}{}
+		}
+	}
+	s.usenetGroups = g
+	s.usenetHorizon = s.virtualTime
+	s.mu.Unlock()
+	s.send_(outMsg{Type: "usenet_filter_ack"})
+}
+
+// ActiveUsenetGroups returns the newsgroups the client is currently viewing.
+func (s *Session) ActiveUsenetGroups() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.usenetGroupsLocked()
+}
+
+// usenetGroupsLocked returns the active newsgroups as a slice. Caller holds s.mu.
+func (s *Session) usenetGroupsLocked() []string {
+	if len(s.usenetGroups) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(s.usenetGroups))
+	for g := range s.usenetGroups {
+		out = append(out, g)
+	}
+	return out
+}
+
 // SendSources delivers the available-source lists for the client's filters. The
 // lists are derived from all history (not the current window), so the client's
 // filter UIs are complete regardless of virtual time. Sent once per init; sources
 // don't change with the virtual clock, so seek does not resend them.
-func (s *Session) SendSources(video, pager []string) {
-	s.send_(outMsg{Type: "sources", Sources: &SourceList{Video: video, Pager: pager}})
+func (s *Session) SendSources(video, pager []string, usenet []model.NewsgroupSource) {
+	s.send_(outMsg{Type: "sources", Sources: &SourceList{Video: video, Pager: pager, Usenet: usenet}})
 }
 
 // Init sets the client's starting virtual time and sends the initial snapshot.
@@ -290,6 +359,7 @@ func (s *Session) resetHorizons(t time.Time) {
 	s.pagerHorizon = t
 	s.mp3Horizon = t
 	s.newsHorizon = t
+	s.usenetHorizon = t
 }
 
 // Pause freezes the client's virtual clock.
@@ -350,6 +420,11 @@ func (s *Session) RunTimePump() {
 			pagerLo, pagerHi, doPager := s.planChannelRefill(ChannelPager, &s.pagerHorizon, t, windowPager)
 			mp3Lo, mp3Hi, doMp3 := s.planChannelRefill(ChannelMp3, &s.mp3Horizon, t, windowMp3)
 			newsLo, newsHi, doNews := s.planChannelRefill(ChannelNews, &s.newsHorizon, t, windowNews)
+			usenetLo, usenetHi, doUsenet := s.planChannelRefill(ChannelUsenet, &s.usenetHorizon, t, windowUsenet)
+			var usenetGroups []string
+			if doUsenet {
+				usenetGroups = s.usenetGroupsLocked()
+			}
 			s.mu.Unlock()
 
 			if doMedia {
@@ -382,6 +457,21 @@ func (s *Session) RunTimePump() {
 				} else {
 					s.SendNews(t, items)
 				}
+			}
+			// usenet refills per active group, reading Postgres directly (not Redis):
+			// messages carry full bodies and are too large to cache, and delivery is
+			// gated to the group(s) the client is viewing, so the query volume is low.
+			if doUsenet && len(usenetGroups) > 0 && s.pool != nil {
+				var batch []model.UsenetItem
+				for _, g := range usenetGroups {
+					items, err := db.UsenetItemsInRange(ctx, s.pool, g, usenetLo, usenetHi)
+					if err != nil {
+						s.logger.Warn("usenet range lookup failed", "group", g, "error", err)
+						continue
+					}
+					batch = append(batch, items...)
+				}
+				s.SendUsenet(t, batch)
 			}
 		}
 	}

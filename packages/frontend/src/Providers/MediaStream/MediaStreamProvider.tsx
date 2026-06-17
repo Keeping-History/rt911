@@ -12,6 +12,7 @@ import {
 	MediaStreamContext,
 	type MediaItem,
 	type PagerItem,
+	type UsenetItem,
 } from "./MediaStreamContext";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
@@ -74,6 +75,12 @@ interface WsNewsMessage {
 	items: MediaItem[];
 }
 
+// usenet messages ride their own field (not items) and carry per-message newsgroup.
+interface WsUsenetMessage {
+	type: "usenet";
+	usenet: UsenetItem[];
+}
+
 interface WsSourcesMessage {
 	type: "sources";
 	sources: AvailableSources;
@@ -84,6 +91,7 @@ type WsIncomingMessage =
 	| WsPagerMessage
 	| WsMp3Message
 	| WsNewsMessage
+	| WsUsenetMessage
 	| WsSourcesMessage
 	| { type: string };
 
@@ -100,7 +108,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
-	const [sources, setSources] = useState<AvailableSources>({ video: [], pager: [] });
+	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
+	const [sources, setSources] = useState<AvailableSources>({ video: [], pager: [], usenet: [] });
 	const [connected, setConnected] = useState(false);
 
 	// Per-app format subscriptions. null = wants all formats.
@@ -111,6 +120,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const pagerSubscribers = useRef(new Set<string>());
 	const mp3Subscribers = useRef(new Set<string>());
 	const newsSubscribers = useRef(new Set<string>());
+	const usenetSubscribers = useRef(new Set<string>());
+	// The newsgroup(s) the client is currently viewing — resent on reconnect.
+	const usenetGroups = useRef<string[]>([]);
 
 	// Reveal buffers: not-yet-due items from a windowed frame, keyed by id. The
 	// per-second effect promotes each into live state when the virtual clock
@@ -119,6 +131,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const pagerBuffer = useRef(new Map<number, PagerItem>());
 	const mp3Buffer = useRef(new Map<number, MediaItem>());
 	const newsBuffer = useRef(new Map<number, MediaItem>());
+	const usenetBuffer = useRef(new Map<number, UsenetItem>());
 
 	const addItems = useCallback((incoming: MediaItem[]) => {
 		setItems((prev) => {
@@ -240,6 +253,49 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	const subscribeUsenet = useCallback(
+		(appId: string) => {
+			const wasEmpty = usenetSubscribers.current.size === 0;
+			usenetSubscribers.current.add(appId);
+			if (wasEmpty) send({ type: "subscribe", channel: "usenet" });
+		},
+		[send],
+	);
+
+	const unsubscribeUsenet = useCallback(
+		(appId: string) => {
+			usenetSubscribers.current.delete(appId);
+			if (usenetSubscribers.current.size === 0) {
+				send({ type: "unsubscribe", channel: "usenet" });
+				usenetGroups.current = [];
+				setUsenetItems([]);
+				usenetBuffer.current.clear();
+			}
+		},
+		[send],
+	);
+
+	// Set the newsgroup(s) being viewed. The server resends a backlog for the new
+	// group(s), so the current items + buffer are cleared to avoid mixing groups.
+	const setUsenetGroups = useCallback(
+		(groups: string[]) => {
+			usenetGroups.current = groups;
+			setUsenetItems([]);
+			usenetBuffer.current.clear();
+			send({ type: "usenet_filter", newsgroups: groups });
+		},
+		[send],
+	);
+
+	// Request the next page of older messages for a group; the server replies on the
+	// usenet frame (all older items are ≤ clock, so they merge straight in).
+	const requestUsenetOlder = useCallback(
+		(newsgroup: string, before: string) => {
+			send({ type: "usenet_more", newsgroups: [newsgroup], before });
+		},
+		[send],
+	);
+
 	// On every second tick: reveal buffered items the clock has now reached, then
 	// prune expired ones. drainDue mutates the buffer (removing promoted entries);
 	// the merged-then-filtered state both surfaces newly-due items and drops
@@ -251,6 +307,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		const dueMp3 = drainDue(mp3Buffer.current, now);
 		const dueNews = drainDue(newsBuffer.current, now);
 		const duePager = drainDue(pagerBuffer.current, now);
+		const dueUsenet = drainDue(usenetBuffer.current, now);
 
 		setItems((prev) => mergeById(prev, dueMedia).filter((item) => keepMediaItem(item, now)));
 		// mp3 items are durational audio — same retention rules as media items.
@@ -259,6 +316,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		setNewsItems((prev) => mergeById(prev, dueNews).filter((item) => keepMediaItem(item, now)));
 		// Pager items are always instant — retain by start_date.
 		setPagerItems((prev) => mergeById(prev, duePager).filter((p) => keepPagerItem(p, now)));
+		// Usenet messages are not time-pruned: a reader keeps browsing the group's
+		// backlog. They are cleared only on group change, unsubscribe, or seek.
+		if (dueUsenet.length > 0) setUsenetItems((prev) => mergeById(prev, dueUsenet));
 	}, [localDate]);
 
 	// Detect manual time changes and send seek; ignore tick-driven minute boundaries
@@ -273,6 +333,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerBuffer.current.clear();
 			mp3Buffer.current.clear();
 			newsBuffer.current.clear();
+			// The server resends a fresh usenet backlog for the active group(s) at the
+			// new instant; drop the old-timeline messages so they don't linger.
+			usenetBuffer.current.clear();
+			setUsenetItems([]);
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
 		}
 
@@ -313,6 +377,13 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (newsSubscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "news" }));
 			}
+			if (usenetSubscribers.current.size > 0) {
+				ws.send(JSON.stringify({ type: "subscribe", channel: "usenet" }));
+				// Restore the viewed-group filter so the backlog comes back after reconnect.
+				if (usenetGroups.current.length > 0) {
+					ws.send(JSON.stringify({ type: "usenet_filter", newsgroups: usenetGroups.current }));
+				}
+			}
 			heartbeatId = setInterval(() => {
 				if (ws.readyState === WebSocket.OPEN) {
 					ws.send(
@@ -348,6 +419,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 					setSources({
 						video: incoming.video ?? [],
 						pager: incoming.pager ?? [],
+						usenet: incoming.usenet ?? [],
 					});
 				}
 				return;
@@ -380,6 +452,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				for (const item of future) newsBuffer.current.set(item.id, item);
 				const fresh = due.filter((item) => keepMediaItem(item, now));
 				if (fresh.length > 0) setNewsItems((prev) => mergeById(prev, fresh));
+				return;
+			}
+
+			if (msg.type === "usenet") {
+				const incomingUsenet = (msg as WsUsenetMessage).usenet;
+				if (!incomingUsenet || incomingUsenet.length === 0) return;
+				const { due, future } = partitionByDue(incomingUsenet, now);
+				for (const item of future) usenetBuffer.current.set(item.id, item);
+				// Backlog + due items surface immediately; no time-prune (see tick effect).
+				if (due.length > 0) setUsenetItems((prev) => mergeById(prev, due));
 				return;
 			}
 
@@ -427,6 +509,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				pagerItems,
 				mp3Items,
 				newsItems,
+				usenetItems,
 				sources,
 				connected,
 				addItems,
@@ -438,6 +521,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				unsubscribeMp3,
 				subscribeNews,
 				unsubscribeNews,
+				subscribeUsenet,
+				unsubscribeUsenet,
+				setUsenetGroups,
+				requestUsenetOlder,
 			}}
 		>
 			{children}

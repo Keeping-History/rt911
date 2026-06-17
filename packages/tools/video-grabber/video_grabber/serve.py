@@ -25,6 +25,11 @@ from video_grabber.pipeline.flows import (
     requeue_pending_review_flow,
     scan_collections_flow,
 )
+from video_grabber.usenet.flows import (
+    dispatch_usenet_flow,
+    process_usenet_item_flow,
+    scan_usenet_flow,
+)
 
 # Four concurrent download+encode pipelines. These jobs are largely
 # download-bound (pulling the ~200 MB .ogv derivative from IA) with VAAPI doing
@@ -51,6 +56,14 @@ _DISPATCH_LIMIT = 4
 _BUILD_CHANNEL_LIMIT = 2
 # DB-only re-classification of the pending_review backlog; serial is plenty.
 _REQUEUE_LIMIT = 1
+# Usenet: scan is serial (IA rate-limited). Processing is download + a C++ thread
+# pass + bulk Directus writes per archive — light on CPU/disk vs. video encode, so a
+# wider fan-out is fine. Dispatchers are blocking, so it takes N to keep N running.
+_USENET_SCAN_LIMIT = 1
+_USENET_PROCESS_LIMIT = 4
+_USENET_DISPATCH_LIMIT = 4
+# Re-run the (bounded, idempotent) dispatcher every 5 minutes to keep the queue draining.
+_USENET_DISPATCH_INTERVAL = 300
 
 
 def main() -> None:
@@ -74,6 +87,23 @@ def main() -> None:
         requeue_pending_review_flow.to_deployment(
             name="requeue-pending-review",
             concurrency_limit=_REQUEUE_LIMIT,
+        ),
+        scan_usenet_flow.to_deployment(
+            name="scan-usenet",
+            concurrency_limit=_USENET_SCAN_LIMIT,
+        ),
+        process_usenet_item_flow.to_deployment(
+            name="process-usenet-item",
+            concurrency_limit=_USENET_PROCESS_LIMIT,
+        ),
+        # Scheduled every 5 minutes: each run drains discovered/failed jobs until
+        # the queue empties, then returns (a no-op when empty). This is what makes
+        # the pipeline self-draining after a one-time scan — no manual dispatch.
+        # Overlapping runs (up to the concurrency limit) give N-way throughput.
+        dispatch_usenet_flow.to_deployment(
+            name="dispatch-usenet",
+            concurrency_limit=_USENET_DISPATCH_LIMIT,
+            interval=_USENET_DISPATCH_INTERVAL,
         ),
     )
 
