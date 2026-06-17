@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-mbox_to_json.py — Parse MBOX newsgroup archives and export to JSON.
+mbox_parser.py — Parse MBOX newsgroup archives and export to JSON.
 
 Usage:
-    python mbox_to_json.py [--before DATE] [--output FILE] [--output-break N] [--delete] PATH [PATH ...]
+    python mbox_parser.py [--before DATE] [--output FILE] [--output-break N] [--delete] PATH [PATH ...]
 
 Arguments:
     PATH               One or more MBOX files, compressed archives (.gz, .tgz,
                        .tar.gz, .zip), or directories to scan recursively.
     --before DATE      Exclude messages after this date (ISO 8601: YYYY-MM-DD or
-                       YYYY-MM-DDTHH:MM:SS). Messages with no parseable date are
-                       always included.
+                       YYYY-MM-DDTHH:MM:SS). Messages with no parseable posting
+                       date are always skipped (they cannot be scheduled).
     --output FILE      Output file path (default: stdout)
     --output-break N   Split output into multiple files every N records. Requires
                        --output. Files are named by inserting a zero-padded part
@@ -24,16 +24,19 @@ import argparse
 import contextlib
 import gzip
 import json
-import mailbox
+import re
 import sys
 import tarfile
 import tempfile
 import zipfile
 from datetime import datetime, timezone
 from email.header import decode_header, make_header
+from email.parser import BytesParser
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Iterator, List, Optional, Tuple  # List kept for collect_inputs signature
+
+from dateutil import parser as dateutil_parser
 
 
 def decode_header_value(raw: str) -> str:
@@ -52,6 +55,69 @@ def _decode_payload(payload: bytes, charset: str) -> str:
         return payload.decode(charset, errors="replace")
     except (LookupError, TypeError):
         return payload.decode("latin-1", errors="replace")
+
+
+# Named time-zone abbreviations dateutil will not resolve on its own. Usenet
+# headers (Date, NNTP-Posting-Date, X-Google-ArrivalTime) routinely carry these
+# instead of a numeric offset; without a map dateutil drops them to naive.
+_TZ_ABBREVIATIONS = {
+    "UT": 0, "GMT": 0, "UTC": 0, "Z": 0,
+    "EST": -5 * 3600, "EDT": -4 * 3600,
+    "CST": -6 * 3600, "CDT": -5 * 3600,
+    "MST": -7 * 3600, "MDT": -6 * 3600,
+    "PST": -8 * 3600, "PDT": -7 * 3600,
+}
+
+# Date-bearing headers, in the order we trust them: the author's claimed send
+# time first, then server-stamped arrival times as fallbacks.
+_DATE_HEADERS = ("Date", "NNTP-Posting-Date", "X-Received-Date", "X-Google-ArrivalTime")
+
+
+def _to_utc(dt: datetime) -> datetime:
+    """Normalise a datetime to an aware UTC datetime.
+
+    A naive datetime is assumed to be UTC. In this corpus naive values come from
+    the RFC 2822 '-0000' zone, which per RFC 5322 means "UTC, offset unverified".
+    Treating it as UTC keeps the StartDate the streamer schedules on consistent;
+    leaving it naive would emit a non-RFC3339 timestamp the Go backend rejects.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_date_value(raw: Optional[str]) -> Optional[datetime]:
+    """Parse one date-header value into an aware UTC datetime, or None."""
+    if not raw:
+        return None
+    raw = raw.strip()
+    # RFC 2822 first — covers the bulk, including named US zones (EST/CDT/…) and
+    # trailing comments like "... GMT (news6-win.server.ntlworld.com)".
+    try:
+        return _to_utc(parsedate_to_datetime(raw))
+    except (TypeError, ValueError):
+        pass
+    # Everything else (slash dates like 2000/07/11, "2000-11-25 15:45:54 PST")
+    # via dateutil, with an explicit abbreviation map so named zones resolve
+    # rather than silently going naive. fuzzy=True tolerates trailing tokens.
+    try:
+        dt = dateutil_parser.parse(raw, tzinfos=_TZ_ABBREVIATIONS, fuzzy=True)
+        return _to_utc(dt)
+    except (ValueError, OverflowError, TypeError):
+        return None
+
+
+def extract_message_datetime(message) -> Tuple[Optional[datetime], Optional[str]]:
+    """Return (aware UTC datetime, source header name) for a message.
+
+    Tries each header in _DATE_HEADERS until one parses. Returns (None, None)
+    when the message carries no usable timestamp at all.
+    """
+    for header in _DATE_HEADERS:
+        dt = _parse_date_value(message.get(header))
+        if dt is not None:
+            return dt, header
+    return None, None
 
 
 def extract_body(message) -> dict:
@@ -133,19 +199,16 @@ def message_to_dict(message, source_file: str) -> dict:
         else:
             headers[normalized_key] = decoded
 
-    # Parse the Date header into an ISO 8601 string if possible
-    date_str = message.get("Date")
-    date_iso = None
-    if date_str:
-        try:
-            dt = parsedate_to_datetime(date_str)
-            date_iso = dt.isoformat()
-        except Exception:
-            pass
+    # Resolve a posting time as an aware UTC datetime, falling back across
+    # headers. date_iso is always RFC3339 with an offset (or None if no header
+    # parsed); date_source records which header it came from for QA.
+    dt, date_source = extract_message_datetime(message)
+    date_iso = dt.isoformat() if dt is not None else None
 
     return {
         "source_file": source_file,
         "date_iso": date_iso,
+        "date_source": date_source,
         "headers": headers,
         "body": extract_body(message),
     }
@@ -248,33 +311,67 @@ def _resolve_paths(path: str) -> Iterator[List[Tuple[str, str]]]:
         yield [(path, path)]
 
 
-def parse_mbox(path: str, source_name: str = None) -> Iterator[dict]:
-    """Yield message dicts from a single MBOX file."""
-    label = source_name or path
+# A real mbox separator is "From <envelope>": in these Google-archived Usenet
+# exports the envelope is the article's signed-integer id (`From -3684...`); a
+# standard Unix mbox uses an address (`From user@host  Day Mon ...`). Requiring
+# one of those forms — *and* a header line immediately after (see below) —
+# rejects unescaped mboxo body lines like "From a satisfied customer." or
+# "From 1 January 2000 ..." that would otherwise truncate a message.
+_FROM_SEPARATOR = re.compile(rb"^From (-?\d+|\S+@\S+)(\s|$)")
+# RFC 5322 field name: one or more printable ASCII chars excluding space and
+# colon, followed by a colon. Used to confirm a real header block follows a
+# "From " line before we accept it as a message boundary.
+_HEADER_LINE = re.compile(rb"^[\x21-\x39\x3b-\x7e]+:")
+
+
+def iter_mbox_messages(path: str, label: str) -> Iterator:
+    """Yield email.message.Message objects from one mbox file.
+
+    Unlike the stdlib mailbox.mbox, this splits on a "From " line only when the
+    next line looks like an RFC 822 header. Google-archived Usenet mboxes are
+    mboxo (bodies are not "From "-escaped), so the naive splitter truncates any
+    message whose body contains a line like "From a satisfied customer." and
+    orphans the remainder. Header validation keeps each message whole.
+    """
     try:
-        mbox = mailbox.mbox(path)
-    except Exception as exc:
+        with open(path, "rb") as fh:
+            raw = fh.read()
+    except OSError as exc:
         print(f"Warning: cannot open '{label}': {exc}", file=sys.stderr)
         return
-    try:
-        mbox_iter = iter(mbox)
-        i = 0
-        while True:
-            try:
-                message = next(mbox_iter)
-            except StopIteration:
-                break
-            except Exception as exc:
-                print(f"Warning: skipping message {i} in '{label}': {exc}", file=sys.stderr)
-                i += 1
-                continue
-            try:
-                yield message_to_dict(message, source_file=label)
-            except Exception as exc:
-                print(f"Warning: skipping message {i} in '{label}': {exc}", file=sys.stderr)
-            i += 1
-    finally:
-        mbox.close()
+
+    parser = BytesParser()
+    lines = raw.split(b"\n")
+    block: List[bytes] = []
+
+    def emit(buf: List[bytes]):
+        if not buf:
+            return None
+        return parser.parsebytes(b"\n".join(buf))
+
+    for i, line in enumerate(lines):
+        if _FROM_SEPARATOR.match(line):
+            nxt = lines[i + 1] if i + 1 < len(lines) else b""
+            if _HEADER_LINE.match(nxt):
+                msg = emit(block)
+                if msg is not None:
+                    yield msg
+                block = []
+                continue  # drop the "From " envelope line itself
+        block.append(line)
+    msg = emit(block)
+    if msg is not None:
+        yield msg
+
+
+def parse_mbox(path: str, source_name: str = "") -> Iterator[dict]:
+    """Yield message dicts from a single MBOX file."""
+    label = source_name if source_name != "" else path
+    for i, message in enumerate(iter_mbox_messages(path, label)):
+        try:
+            yield message_to_dict(message, source_file=label)
+        except Exception as exc:  # noqa: BLE001 — never let one bad message abort a file
+            print(f"Warning: skipping message {i} in '{label}': {exc}", file=sys.stderr)
 
 
 def _split_path(base: str, part: int) -> str:
@@ -385,6 +482,7 @@ def main() -> None:
 
     total_written = 0
     total_filtered = 0
+    total_undated = 0
     try:
         if not jsonl:
             out.write("[\n")
@@ -393,6 +491,12 @@ def main() -> None:
                 for real_path, display_name in entries:
                     file_count = 0
                     for record in parse_mbox(real_path, source_name=display_name):
+                        # A record with no resolvable posting time can never be
+                        # scheduled by the streamer (StartDate drives delivery),
+                        # so drop it rather than emit an unschedulable row.
+                        if record.get("date_iso") is None:
+                            total_undated += 1
+                            continue
                         if cutoff is not None:
                             dt = message_date(record)
                             if dt is not None and dt > cutoff:
@@ -418,7 +522,12 @@ def main() -> None:
         if args.output:
             out.close()
 
-    if total_filtered > 0:
+    if total_undated > 0:
+        print(
+            f"Skipped {total_undated:,} messages with no parseable posting date",
+            file=sys.stderr,
+        )
+    if total_filtered > 0 and cutoff is not None:
         print(
             f"Excluded {total_filtered:,} messages after {cutoff.date().isoformat()} "
             f"({total_written:,} remaining)",

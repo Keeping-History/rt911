@@ -12,6 +12,7 @@ import { Controls } from "./Applications/Controls/Controls";
 import { Demo } from "./Applications/Demo/Demo";
 import { EPG } from "./Applications/EPG/EPG";
 import { News } from "./Applications/News/News";
+import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
 import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
 import { TV } from "./Applications/TV/TV";
@@ -30,6 +31,7 @@ createRoot(rootElement).render(
 					<SimpleText />
 					<EPG />
 					<News />
+					<Newsgroups />
 					<PagerDecoder />
 					<RadioScanner />
 					<TV />

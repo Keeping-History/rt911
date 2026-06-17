@@ -53,3 +53,8 @@ data:
   IA_RATE_PER_SEC: "2"
   MIN_DURATION_SECONDS: "720"
   SCRATCH_DIR: "/tmp/vg-scratch"
+  # Usenet newsgroup ingestion. The usenetarchive binaries + mbox_parser are baked
+  # into the image at /usr/local/bin (see Dockerfile ENV), so those defaults need no
+  # override here; collections + cutoff are configurable.
+  USENET_COLLECTIONS: "usenethistorical,giganews"
+  USENET_BEFORE: "2001-09-21"
