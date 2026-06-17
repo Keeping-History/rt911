@@ -50,6 +50,14 @@ type usenetFilterMsg struct {
 	Newsgroups []string `json:"newsgroups"`
 }
 
+// usenetMoreMsg requests the page of messages older than `before` (the oldest the
+// client currently holds) for the viewed newsgroup(s) — backlog pagination.
+type usenetMoreMsg struct {
+	Type       string   `json:"type"`
+	Newsgroups []string `json:"newsgroups"`
+	Before     string   `json:"before"`
+}
+
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
 func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) http.HandlerFunc {
@@ -175,6 +183,19 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 				if t, ok := sess.VirtualTime(); ok {
 					sendUsenetSnapshot(r, sess, pool, t, logger)
 				}
+
+			case "usenet_more":
+				var umsg usenetMoreMsg
+				if err := json.Unmarshal(raw, &umsg); err != nil {
+					sess.SendError("malformed usenet_more message")
+					continue
+				}
+				before, err := parseTime(umsg.Before)
+				if err != nil {
+					sess.SendError("invalid time: " + err.Error())
+					continue
+				}
+				sendUsenetOlder(r, sess, pool, umsg.Newsgroups, before, logger)
 
 			case "subscribe":
 				var cmsg channelMsg
@@ -306,6 +327,25 @@ func sendUsenetSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Po
 		batch = append(batch, items...)
 	}
 	sess.SendUsenet(t, batch)
+}
+
+// sendUsenetOlder delivers the page of messages older than `before` for the given
+// newsgroup(s) if the session is subscribed to usenet. All such messages are ≤ the
+// virtual clock, so they ride the normal usenet frame and the client merges them in.
+func sendUsenetOlder(r *http.Request, sess *session.Session, pool *pgxpool.Pool, newsgroups []string, before time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelUsenet) {
+		return
+	}
+	var batch []model.UsenetItem
+	for _, g := range newsgroups {
+		items, err := db.OlderUsenetItems(r.Context(), pool, g, before, usenetSnapshotLimit)
+		if err != nil {
+			logger.Warn("older usenet items query failed", "group", g, "error", err)
+			continue
+		}
+		batch = append(batch, items...)
+	}
+	sess.SendUsenet(before, batch)
 }
 
 // sendSources delivers the time-independent available-source lists for client

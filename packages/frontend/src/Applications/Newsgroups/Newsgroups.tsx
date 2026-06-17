@@ -17,7 +17,7 @@ export const Newsgroups = () => {
 	const appName = "Newsgroups";
 	const appIcon = ClassicyIcons.applications.internetExplorer.mailbox;
 
-	const { groups, selectedGroup, selectGroup, thread, connected } = useNewsgroups(appId);
+	const { groups, selectedGroup, selectGroup, thread, loadOlder, connected } = useNewsgroups(appId);
 
 	const [openMessages, setOpenMessages] = useState<UsenetItem[]>([]);
 	const openMessage = (item: UsenetItem) =>
@@ -64,12 +64,13 @@ export const Newsgroups = () => {
 						)}
 						{groups.map((g) => (
 							<button
-								key={g}
+								key={g.name}
 								type="button"
-								className={`${styles.groupRow} ${g === selectedGroup ? styles.active : ""}`}
-								onClick={() => selectGroup(g)}
+								className={`${styles.groupRow} ${g.name === selectedGroup ? styles.active : ""}`}
+								onClick={() => selectGroup(g.name)}
 							>
-								{g}
+								<span className={styles.groupName}>{g.name}</span>
+								{g.count > 0 && <span className={styles.groupCount}>{g.count.toLocaleString()}</span>}
 							</button>
 						))}
 					</div>
@@ -77,6 +78,11 @@ export const Newsgroups = () => {
 						{!selectedGroup && <p className={styles.hint}>Select a newsgroup to read.</p>}
 						{selectedGroup && thread.length === 0 && (
 							<p className={styles.hint}>No messages up to the current time.</p>
+						)}
+						{selectedGroup && thread.length > 0 && (
+							<button type="button" className={styles.loadOlder} onClick={loadOlder}>
+								↑ Load older messages
+							</button>
 						)}
 						{thread.map(({ item, depth }) => (
 							<button

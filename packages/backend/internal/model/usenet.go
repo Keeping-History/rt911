@@ -2,6 +2,13 @@ package model
 
 import "time"
 
+// NewsgroupSource is a browseable newsgroup in the available-sources list: its
+// name plus a precomputed message count (stored on the sources row by ingestion).
+type NewsgroupSource struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
 // UsenetItem represents a single archived Usenet (newsgroup) message. Like
 // PagerItem it is "instant" — a start_date (the posting time) with no duration —
 // so the cache and delivery paths treat it as a point in time. Newsgroup is the

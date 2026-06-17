@@ -287,6 +287,15 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	// Request the next page of older messages for a group; the server replies on the
+	// usenet frame (all older items are ≤ clock, so they merge straight in).
+	const requestUsenetOlder = useCallback(
+		(newsgroup: string, before: string) => {
+			send({ type: "usenet_more", newsgroups: [newsgroup], before });
+		},
+		[send],
+	);
+
 	// On every second tick: reveal buffered items the clock has now reached, then
 	// prune expired ones. drainDue mutates the buffer (removing promoted entries);
 	// the merged-then-filtered state both surfaces newly-due items and drops
@@ -515,6 +524,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				subscribeUsenet,
 				unsubscribeUsenet,
 				setUsenetGroups,
+				requestUsenetOlder,
 			}}
 		>
 			{children}

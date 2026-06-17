@@ -1,0 +1,18 @@
+# Image for the one-shot Directus seed Job (`node seed.mjs`).
+#
+# seed.mjs has no npm dependencies (node builtins + global fetch), but it shells
+# out to `psql` for the raw-SQL steps (column widening, the usenet index, the pager
+# backfill), so the image bundles the Postgres client. It also reads the three seed
+# JSONs at startup, so they must be present in the build context:
+#   - pager_entries.json is committed.
+#   - entries_media.json / entries_news.json are fetched from GCS (gs://rt911-seed-data,
+#     see upload-seed-data.sh) — pull them into packages/backend/ before building.
+#
+# Build (from packages/backend, after fetching the media/news JSONs):
+#   docker build -f Dockerfile.seed -t ghcr.io/keeping-history/rt911-seed:latest .
+FROM node:22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /seed
+COPY seed.mjs entries_media.json entries_news.json pager_entries.json ./
+CMD ["node", "seed.mjs"]

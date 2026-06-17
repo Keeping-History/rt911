@@ -1,0 +1,52 @@
+# One-shot Job that runs `node seed.mjs` against the in-cluster Directus + Postgres.
+# Creates/upgrades the schema (usenet_items, sources.type + message_count, the
+# pager source FK, the usenet index) and runs the imports + pager backfill.
+# Idempotent — existing collections/data are skipped, so it is safe to re-run.
+#
+#   # build + push the image first (see Dockerfile.seed):
+#   docker build -f Dockerfile.seed -t ghcr.io/keeping-history/rt911-seed:latest .
+#   docker push ghcr.io/keeping-history/rt911-seed:latest
+#   kubectl apply -f k8s/seed-job.yaml
+#   # clean up before re-running:
+#   kubectl -n rt911 delete job directus-seed --ignore-not-found
+#
+# Runs in the rt911 namespace (where Directus + its Postgres live). The secret name
+# and keys below are placeholders — point them at the actual Directus admin / DB
+# credentials secret in the rt911 namespace.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: directus-seed
+  namespace: rt911
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400  # auto-clean a day after completion
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: ghcr.io/keeping-history/rt911-seed:latest
+          env:
+            # Directus REST API (schema + data import) — the in-cluster service.
+            - name: DIRECTUS_URL
+              value: "http://rt911-api.rt911.svc.cluster.local:8055"
+            # Admin login the seed uses for the Directus API.
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: rt911-directus
+                  key: ADMIN_EMAIL
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rt911-directus
+                  key: ADMIN_PASSWORD
+            # Direct Postgres connection for the raw-SQL steps (widen/index/backfill).
+            # Without PSQL_URL, seed.mjs falls back to `docker compose exec` and fails
+            # in-cluster — so this must be set.
+            - name: PSQL_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rt911-directus
+                  key: PSQL_URL

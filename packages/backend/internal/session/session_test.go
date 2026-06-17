@@ -82,7 +82,7 @@ func TestSendMp3EmitsFrameWithMediaItems(t *testing.T) {
 func TestSendSourcesEmitsSourceLists(t *testing.T) {
 	s := newTestSession(t)
 
-	s.SendSources([]string{"BBC", "CNN", "WETA"}, []string{"Arch", "Skytel"}, []string{"ntl.support.modems"})
+	s.SendSources([]string{"BBC", "CNN", "WETA"}, []string{"Arch", "Skytel"}, []model.NewsgroupSource{{Name: "ntl.support.modems", Count: 5}})
 
 	m := recvType(t, s)
 	if m.Type != "sources" {
@@ -97,7 +97,7 @@ func TestSendSourcesEmitsSourceLists(t *testing.T) {
 	if len(m.Sources.Pager) != 2 || m.Sources.Pager[1] != "Skytel" {
 		t.Fatalf("unexpected pager providers: %+v", m.Sources.Pager)
 	}
-	if len(m.Sources.Usenet) != 1 || m.Sources.Usenet[0] != "ntl.support.modems" {
+	if len(m.Sources.Usenet) != 1 || m.Sources.Usenet[0].Name != "ntl.support.modems" || m.Sources.Usenet[0].Count != 5 {
 		t.Fatalf("unexpected usenet newsgroups: %+v", m.Sources.Usenet)
 	}
 	if len(m.Items) != 0 || len(m.Pager) != 0 {

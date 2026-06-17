@@ -63,6 +63,7 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					subscribeUsenet: vi.fn(),
 					unsubscribeUsenet: vi.fn(),
 					setUsenetGroups: vi.fn(),
+					requestUsenetOlder: vi.fn(),
 					sources: { video: [], pager: [], usenet: [] },
 				},
 				children,

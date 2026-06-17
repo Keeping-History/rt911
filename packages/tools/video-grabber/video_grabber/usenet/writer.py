@@ -126,4 +126,14 @@ def write_group(newsgroup: str, records: list[dict], cfg: Config, *, client=http
             headers=headers,
         )
         resp.raise_for_status()
+
+    # Store the precomputed group size on the source row (the corpus is historical,
+    # so this count is stable) — the streamer surfaces it in the browse list.
+    if source_id is not None:
+        resp = client.patch(
+            f"{cfg.directus_url}/items/sources/{source_id}",
+            content=json.dumps({"message_count": len(payloads)}),
+            headers=headers,
+        )
+        resp.raise_for_status()
     return source_id, len(payloads)

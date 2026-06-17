@@ -127,13 +127,21 @@ async function createCollections(token) {
         { field: "description", type: "text",    schema: {}, meta: { interface: "input-multiline" } },
       ],
     });
+    // message_count is precomputed per source (used by usenet newsgroups — the
+    // corpus is historical/immutable, so the count is stable). Integer added
+    // individually (bulk endpoint creates string columns).
+    await api(token, "POST", "/fields/sources", { field: "message_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", readonly: true, note: "Precomputed item count (usenet)" } });
   } else {
     console.log("Collection sources already exists, skipping.");
-    // Ensure the type column exists on a pre-existing sources collection.
+    // Ensure the type/message_count columns exist on a pre-existing sources collection.
     const have = new Set((await api(token, "GET", "/fields/sources")).data.map((f) => f.field));
     if (!have.has("type")) {
       console.log("Adding field: sources.type");
       await api(token, "POST", "/fields/sources", { field: "type", type: "string", schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["video", "pager", "usenet"].map((v) => ({ text: v, value: v })) } } });
+    }
+    if (!have.has("message_count")) {
+      console.log("Adding field: sources.message_count");
+      await api(token, "POST", "/fields/sources", { field: "message_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", readonly: true, note: "Precomputed item count (usenet)" } });
     }
   }
 

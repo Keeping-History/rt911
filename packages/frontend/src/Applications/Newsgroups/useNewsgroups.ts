@@ -1,16 +1,21 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
+import {
+	MediaStreamContext,
+	type NewsgroupSource,
+} from "../../Providers/MediaStream/MediaStreamContext";
 import { buildThreadTree, type ThreadNode } from "./newsgroupUtils";
 
 export interface NewsgroupsState {
-	/** Newsgroup names available to browse (sources of type "usenet"). */
-	groups: string[];
+	/** Newsgroups available to browse (sources of type "usenet"), with counts. */
+	groups: NewsgroupSource[];
 	/** The currently-opened group, or null when browsing the group list. */
 	selectedGroup: string | null;
 	/** Open a group (server starts streaming it) or null to close. */
 	selectGroup: (group: string | null) => void;
 	/** The opened group's messages as a threaded, depth-annotated list. */
 	thread: ThreadNode[];
+	/** Fetch the page of messages older than the oldest currently shown. */
+	loadOlder: () => void;
 	connected: boolean;
 }
 
@@ -26,6 +31,7 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 		subscribeUsenet,
 		unsubscribeUsenet,
 		setUsenetGroups,
+		requestUsenetOlder,
 		connected,
 	} = useContext(MediaStreamContext);
 
@@ -52,5 +58,15 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 	);
 	const thread = useMemo(() => buildThreadTree(messages), [messages]);
 
-	return { groups: sources.usenet, selectedGroup, selectGroup, thread, connected };
+	// Page back from the oldest message currently held for this group.
+	const loadOlder = useCallback(() => {
+		if (!selectedGroup || messages.length === 0) return;
+		let oldest = messages[0].start_date;
+		for (const m of messages) {
+			if (new Date(m.start_date).getTime() < new Date(oldest).getTime()) oldest = m.start_date;
+		}
+		requestUsenetOlder(selectedGroup, oldest);
+	}, [selectedGroup, messages, requestUsenetOlder]);
+
+	return { groups: sources.usenet, selectedGroup, selectGroup, thread, loadOlder, connected };
 }

@@ -328,6 +328,20 @@ func CurrentUsenetItems(ctx context.Context, pool *pgxpool.Pool, newsgroup strin
 		 LIMIT $3`, newsgroup, t, limit)
 }
 
+// OlderUsenetItems returns up to `limit` approved messages in one newsgroup whose
+// start_date is strictly before `before`, newest-first — the next page back when a
+// reader scrolls past the initial backlog snapshot. The client passes the oldest
+// start_date it currently holds as `before`.
+func OlderUsenetItems(ctx context.Context, pool *pgxpool.Pool, newsgroup string, before time.Time, limit int) ([]model.UsenetItem, error) {
+	return queryUsenetItems(ctx, pool,
+		usenetSelectFrom+`
+		 WHERE ui.approved = 1
+		   AND s.slug = $1
+		   AND ui.start_date < $2
+		 ORDER BY ui.start_date DESC
+		 LIMIT $3`, newsgroup, before, limit)
+}
+
 // usenetWindowLimit caps a single forward-window query. Historical newsgroup
 // traffic is sparse, so a window rarely approaches this — it is only a guard
 // against a pathologically busy group flooding one frame.
@@ -350,18 +364,32 @@ func UsenetItemsInRange(ctx context.Context, pool *pgxpool.Pool, newsgroup strin
 		 LIMIT $4`, newsgroup, lo, hi, usenetWindowLimit)
 }
 
-// AvailableNewsgroups returns the sorted set of newsgroup names from the sources
-// catalogue (rows of type="usenet"), independent of time. Populates the Newsgroups
-// app's group-browse list and the usenet filter. Reading the catalogue is far
-// cheaper than SELECT DISTINCT over the whole usenet_items message table.
+// AvailableNewsgroups returns the sorted newsgroups from the sources catalogue
+// (rows of type="usenet"), each with its precomputed message_count, independent of
+// time. Populates the Newsgroups app's group-browse list and the usenet filter.
+// Reading the catalogue is far cheaper than aggregating the whole message table.
 const usenetSourceType = "usenet"
 
-func AvailableNewsgroups(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
-	return queryStrings(ctx, pool, `
-		SELECT slug
+func AvailableNewsgroups(ctx context.Context, pool *pgxpool.Pool) ([]model.NewsgroupSource, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT slug, COALESCE(message_count, 0)
 		FROM sources
 		WHERE type = $1 AND slug IS NOT NULL AND slug <> ''
 		ORDER BY slug`, usenetSourceType)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.NewsgroupSource
+	for rows.Next() {
+		var ns model.NewsgroupSource
+		if err := rows.Scan(&ns.Name, &ns.Count); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		out = append(out, ns)
+	}
+	return out, rows.Err()
 }
 
 func queryUsenetItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.UsenetItem, error) {
