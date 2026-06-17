@@ -11,6 +11,12 @@ Also stitches per-channel continuous HLS streams + EPG guide JSON.
 - `video_grabber/video/` — `encoder.py` (libx264 + h264_vaapi paths), `gap_filler.py`.
 - `video_grabber/epg/` — `assembler.py`, `scheduler.py` (channel stitching).
 - `video_grabber/{storage,directus,ia,db}/` — Wasabi S3, Directus writer, IA scan, migrations.
+- `video_grabber/usenet/` — a **second, independent pipeline**: ingest Usenet newsgroup
+  archives from IA, thread them with usenetarchive (C++), write to Directus. Own state
+  table (`usenet_jobs`, migration `002`) and Prefect flows (`scan-usenet`/`process-usenet-item`/
+  `dispatch-usenet`). See [`docs/usenet-ingestion.md`](docs/usenet-ingestion.md) — read it before
+  touching the threading pipeline; it documents the required usenetarchive build sequence and the
+  non-obvious gotchas (compressed-input, exit codes, packed msgids, OOM, NUL bytes, payload size).
 - `k8s/` — deployment manifests (see Deploy below).
 - `tests/` — pytest. `test_migrations.py` needs a live Postgres; it **errors** (not
   fails) when none is reachable — that's an environment gap, not a regression.
