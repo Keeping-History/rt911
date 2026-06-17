@@ -98,12 +98,13 @@ func AvailableVideoSources(ctx context.Context, pool *pgxpool.Pool) ([]string, e
 }
 
 // pagerSelectFrom is the shared SELECT … FROM clause for all pager queries.
-// provider is a plain text column on pager_items (not a sources FK), so no JOIN
-// is needed here.
+// provider is resolved to its sources.slug via a LEFT JOIN (source rows of
+// type="pager"), the same way media/news/usenet resolve their source.
 const pagerSelectFrom = `
-	SELECT pi.id, pi.start_date, pi.provider, pi.recipient_id,
+	SELECT pi.id, pi.start_date, s.slug, pi.recipient_id,
 	       pi.id_type, pi.channel, pi.mode, pi.message, pi.approved
-	FROM pager_items pi`
+	FROM pager_items pi
+	LEFT JOIN sources s ON s.id = pi.source`
 
 // AllPagerItems loads every approved pager item ordered by start_date (cache warming).
 func AllPagerItems(ctx context.Context, pool *pgxpool.Pool) ([]model.PagerItem, error) {
@@ -141,15 +142,15 @@ func CurrentPagerItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]
 		 ORDER BY pi.start_date`, t)
 }
 
-// AvailablePagerProviders returns the distinct, sorted set of providers across all
-// approved pager items, independent of time. Populates the Pager app's provider
-// filter. provider is a plain text column (not a sources FK), so no join is needed.
+// AvailablePagerProviders returns the sorted set of pager providers from the
+// sources catalogue (rows of type="pager"), independent of time. Populates the
+// Pager app's provider filter.
 func AvailablePagerProviders(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
 	return queryStrings(ctx, pool, `
-		SELECT DISTINCT provider
-		FROM pager_items
-		WHERE approved = 1 AND provider IS NOT NULL AND provider <> ''
-		ORDER BY provider`)
+		SELECT slug
+		FROM sources
+		WHERE type = 'pager' AND slug IS NOT NULL AND slug <> ''
+		ORDER BY slug`)
 }
 
 func queryPagerItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.PagerItem, error) {
@@ -276,6 +277,104 @@ func CurrentNewsItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]m
 		     )
 		   )
 		 ORDER BY mi.start_date`, t)
+}
+
+// usenetSelectFrom is the shared SELECT … FROM clause for Usenet message queries.
+// The newsgroup is resolved to its sources.slug via a LEFT JOIN (source rows of
+// type="usenet"), so the client and the per-group cache key both use the
+// human-readable group name — exactly how the media queries resolve their source.
+// "references" is double-quoted — it is a reserved word in Postgres and cannot
+// appear as a bare column name even when table-qualified.
+const usenetSelectFrom = `
+	SELECT ui.id, ui.start_date, s.slug, ui.subject, ui.author,
+	       ui.message_id, ui."references", ui.in_reply_to, ui.thread_id,
+	       ui.parent_id, ui.body, ui.date_source, ui.approved
+	FROM usenet_items ui
+	LEFT JOIN sources s ON s.id = ui.source`
+
+// AllUsenetItems loads every approved Usenet message ordered by start_date
+// (cache warming). The per-group cache index is built from the resolved slug.
+func AllUsenetItems(ctx context.Context, pool *pgxpool.Pool) ([]model.UsenetItem, error) {
+	return queryUsenetItems(ctx, pool,
+		usenetSelectFrom+` WHERE ui.approved = 1 ORDER BY ui.start_date`)
+}
+
+// UsenetItemByID returns the row with the given id regardless of approval state,
+// or nil if not found. The NOTIFY listener uses this to fetch the latest version
+// of a changed row; an unapproved result means "evict from cache."
+func UsenetItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.UsenetItem, error) {
+	items, err := queryUsenetItems(ctx, pool, usenetSelectFrom+` WHERE ui.id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
+// CurrentUsenetItems returns the most recent `limit` approved messages in a single
+// newsgroup whose start_date is at or before t — the backlog a client sees when it
+// opens a group. Ordered newest-first so the LIMIT keeps the freshest messages;
+// the client sorts for display. Bounded by `limit` because a group's full history
+// can be large; older messages are fetched on demand (pagination, future work).
+func CurrentUsenetItems(ctx context.Context, pool *pgxpool.Pool, newsgroup string, t time.Time, limit int) ([]model.UsenetItem, error) {
+	return queryUsenetItems(ctx, pool,
+		usenetSelectFrom+`
+		 WHERE ui.approved = 1
+		   AND s.slug = $1
+		   AND ui.start_date <= $2
+		 ORDER BY ui.start_date DESC
+		 LIMIT $3`, newsgroup, t, limit)
+}
+
+// AvailableNewsgroups returns the sorted set of newsgroup names from the sources
+// catalogue (rows of type="usenet"), independent of time. Populates the Newsgroups
+// app's group-browse list and the usenet filter. Reading the catalogue is far
+// cheaper than SELECT DISTINCT over the whole usenet_items message table.
+const usenetSourceType = "usenet"
+
+func AvailableNewsgroups(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
+	return queryStrings(ctx, pool, `
+		SELECT slug
+		FROM sources
+		WHERE type = $1 AND slug IS NOT NULL AND slug <> ''
+		ORDER BY slug`, usenetSourceType)
+}
+
+func queryUsenetItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.UsenetItem, error) {
+	rows, err := pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.UsenetItem
+	for rows.Next() {
+		var it model.UsenetItem
+		// Nullable text columns scan into pointer locals — Directus stores empty
+		// strings as NULL and pgx cannot scan NULL into a non-pointer string.
+		var newsgroup, subject, author, messageID, references, inReplyTo, threadID, parentID, body, dateSource *string
+		if err := rows.Scan(
+			&it.ID, &it.StartDate, &newsgroup, &subject, &author,
+			&messageID, &references, &inReplyTo, &threadID,
+			&parentID, &body, &dateSource, &it.Approved,
+		); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		derefStr(&it.Newsgroup, newsgroup)
+		derefStr(&it.Subject, subject)
+		derefStr(&it.Author, author)
+		derefStr(&it.MessageID, messageID)
+		derefStr(&it.References, references)
+		derefStr(&it.InReplyTo, inReplyTo)
+		derefStr(&it.ThreadID, threadID)
+		derefStr(&it.ParentID, parentID)
+		derefStr(&it.Body, body)
+		derefStr(&it.DateSource, dateSource)
+		out = append(out, it)
+	}
+	return out, rows.Err()
 }
 
 func derefStr(dst *string, src *string) {

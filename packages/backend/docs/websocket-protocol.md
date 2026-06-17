@@ -41,8 +41,9 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `seek`        | `time`            | Move the virtual clock to a new instant.      |
 | `heartbeat`   | `time`            | Report client's current virtual time.         |
 | `filter`      | `formats[]`       | Whitelist media formats.                      |
-| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`). |
+| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
+| `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
 
@@ -64,7 +65,9 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) + a forward **window** (default 600 s) per refill while subscribed. Client reveal-gate preserves forward-only pacing. |
 | `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) + a forward **window** (default 300 s) per refill while subscribed. Reuses the `items` field. |
 | `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
-| `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`). Not resent on `seek`. |
+| `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
+| `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
+| `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`, `sources.usenet`). Not resent on `seek`. |
 | `error`           | `message`                     | Reply to a malformed or unrecognised request.          |
 
 The frame-level `time` field is a string (RFC3339 UTC, e.g. `"2001-09-11T08:46:00Z"`) in both the
@@ -220,7 +223,7 @@ in bulk on the wire, the **client reveal-gate** holds each page until its `start
 still render paced by the virtual clock rather than all at once. This pacing invariant is enforced
 client-side; consumer apps never receive a not-yet-due page.
 
-Valid channels are `"pager"`, `"mp3"` and `"news"`; any other value yields
+Valid channels are `"pager"`, `"mp3"`, `"news"` and `"usenet"`; any other value yields
 `{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
 Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
 
@@ -232,6 +235,24 @@ resume the recording mid-file via the `jump` offset.
 The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Most news is
 instant, so its snapshot uses the media overlap-plus-5-minute-instant-lookback window — a seek to
 `t` shows headlines from the preceding minutes.
+
+### `usenet_filter` and the `usenet` channel
+
+The `usenet` channel (Newsgroups app) is unique in that it is **filtered server-side by newsgroup**.
+A single newsgroup can hold millions of messages, so the channel delivers nothing until the client
+declares which group(s) it is viewing:
+
+```json
+{ "type": "usenet_filter", "newsgroups": ["ntl.support.modems"] }
+```
+
+The server acks with `{"type":"usenet_filter_ack"}`, then (if subscribed) sends a **backlog snapshot**
+— the most recent ≤500 messages in those group(s) with `start_date ≤ t` — so opening a group
+immediately shows its history up to the virtual clock. As the clock advances, new messages arrive via
+forward **windows** queried from that group's own time index. Selecting a different group resends the
+backlog for the new group and restarts windowing; an empty `newsgroups` set delivers nothing. Each
+message carries its `newsgroup`, `subject`, `author`, `references`/`in_reply_to`, and (once threaded)
+`thread_id`/`parent_id` on `usenet`-typed frames in the `usenet` field.
 
 ### `sources`
 
@@ -245,13 +266,15 @@ those that have scrolled past in the current virtual-time window.
   "type": "sources",
   "sources": {
     "video": ["BBC", "CNN", "MSNBC", "WETA"],
-    "pager": ["Arch", "Skytel"]
+    "pager": ["Arch", "Skytel"],
+    "usenet": ["ntl.support.modems", "ntl.talk"]
   }
 }
 ```
 
 - `video` — source slugs with at least one approved `m3u8` media item (the TV app's channel filter).
 - `pager` — providers across all approved pager items (the Pager app's provider filter).
+- `usenet` — newsgroup names from the `usenet_groups` catalogue (the Newsgroups app's browse/filter list).
 
 Each list is derived from **actual usage** in its table: the `sources` table does not record which
 media type a source belongs to, so membership is inferred from the rows that reference it. The lists

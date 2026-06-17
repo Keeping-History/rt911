@@ -82,7 +82,7 @@ func TestSendMp3EmitsFrameWithMediaItems(t *testing.T) {
 func TestSendSourcesEmitsSourceLists(t *testing.T) {
 	s := newTestSession(t)
 
-	s.SendSources([]string{"BBC", "CNN", "WETA"}, []string{"Arch", "Skytel"})
+	s.SendSources([]string{"BBC", "CNN", "WETA"}, []string{"Arch", "Skytel"}, []string{"ntl.support.modems"})
 
 	m := recvType(t, s)
 	if m.Type != "sources" {
@@ -96,6 +96,9 @@ func TestSendSourcesEmitsSourceLists(t *testing.T) {
 	}
 	if len(m.Sources.Pager) != 2 || m.Sources.Pager[1] != "Skytel" {
 		t.Fatalf("unexpected pager providers: %+v", m.Sources.Pager)
+	}
+	if len(m.Sources.Usenet) != 1 || m.Sources.Usenet[0] != "ntl.support.modems" {
+		t.Fatalf("unexpected usenet newsgroups: %+v", m.Sources.Usenet)
 	}
 	if len(m.Items) != 0 || len(m.Pager) != 0 {
 		t.Fatalf("sources frame must not carry item payloads, got items=%+v pager=%+v", m.Items, m.Pager)
@@ -279,5 +282,75 @@ func TestPlanChannelRefillRequiresSubscription(t *testing.T) {
 	s.pagerHorizon = base // Subscribe reset it to virtualTime (zero, not init'd)
 	if _, _, due := s.planChannelRefill(ChannelPager, &s.pagerHorizon, v, windowPager); !due {
 		t.Fatal("a subscribed channel at its horizon must refill")
+	}
+}
+
+func TestSendUsenetEmitsFrameWithUsenetItems(t *testing.T) {
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 9, 0, 0, 0, time.UTC)
+
+	s.SendUsenet(at, []model.UsenetItem{{ID: 7001, Newsgroup: "ntl.talk", Subject: "Re: hi", ThreadID: "<root@x>"}})
+
+	m := recvType(t, s)
+	if m.Type != "usenet" {
+		t.Fatalf("expected usenet frame, got %q", m.Type)
+	}
+	if len(m.Usenet) != 1 || m.Usenet[0].Subject != "Re: hi" || m.Usenet[0].Newsgroup != "ntl.talk" {
+		t.Fatalf("expected one usenet item, got %+v", m.Usenet)
+	}
+	if len(m.Items) != 0 || len(m.Pager) != 0 {
+		t.Fatalf("usenet frame must not carry other payloads, got items=%+v pager=%+v", m.Items, m.Pager)
+	}
+}
+
+// SendUsenet suppresses empty batches, exactly like the other channel sends.
+func TestSendUsenetSuppressesEmptyBatch(t *testing.T) {
+	s := newTestSession(t)
+	s.SendUsenet(time.Now(), nil)
+	select {
+	case <-s.send:
+		t.Fatal("empty usenet batch must not emit a frame")
+	default:
+	}
+}
+
+func TestSetUsenetGroupsTracksActiveAndAcks(t *testing.T) {
+	s := newTestSession(t)
+
+	s.SetUsenetGroups([]string{"ntl.support.modems", "", "ntl.talk"})
+	if ack := recvType(t, s); ack.Type != "usenet_filter_ack" {
+		t.Fatalf("expected usenet_filter_ack, got %+v", ack)
+	}
+	groups := s.ActiveUsenetGroups()
+	if len(groups) != 2 { // empty name dropped
+		t.Fatalf("expected 2 active groups, got %+v", groups)
+	}
+
+	// Selecting an empty set means "view nothing" — the channel then delivers none.
+	s.SetUsenetGroups(nil)
+	_ = recvType(t, s) // drain ack
+	if g := s.ActiveUsenetGroups(); len(g) != 0 {
+		t.Fatalf("expected no active groups after clearing, got %+v", g)
+	}
+}
+
+// An unsubscribed usenet channel never refills, even with active groups selected.
+func TestUsenetRefillRequiresSubscription(t *testing.T) {
+	s := newTestSession(t)
+	v := time.Date(2001, 9, 20, 12, 0, 0, 0, time.UTC)
+	s.virtualTime = v
+	s.SetUsenetGroups([]string{"ntl.talk"})
+	_ = recvType(t, s) // drain ack
+
+	s.usenetHorizon = v
+	if _, _, due := s.planChannelRefill(ChannelUsenet, &s.usenetHorizon, v, windowUsenet); due {
+		t.Fatal("usenet must not refill without a subscription")
+	}
+
+	s.Subscribe(ChannelUsenet)
+	_ = recvType(t, s) // drain subscribe_ack
+	s.usenetHorizon = v
+	if _, _, due := s.planChannelRefill(ChannelUsenet, &s.usenetHorizon, v, windowUsenet); !due {
+		t.Fatal("a subscribed usenet channel at its horizon must refill")
 	}
 }

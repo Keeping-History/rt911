@@ -69,6 +69,16 @@ func main() {
 		go cache.ListenNews(ctx, dbURL, rdb, pool, logger)
 	}
 
+	// usenet (Newsgroups app) — opt-in side channel sharded per newsgroup, same
+	// best-effort init so a missing usenet_items table never breaks media streaming.
+	if err := cache.InstallUsenetTriggers(ctx, pool, logger); err != nil {
+		logger.Warn("usenet trigger install failed; usenet channel disabled", "error", err)
+	} else if err := cache.WarmUsenetCache(ctx, rdb, pool, logger); err != nil {
+		logger.Warn("usenet cache warm failed; usenet channel disabled", "error", err)
+	} else {
+		go cache.ListenUsenet(ctx, dbURL, rdb, pool, logger)
+	}
+
 	// Keep Redis in sync with media_items changes for the process lifetime.
 	go cache.Listen(ctx, dbURL, rdb, pool, logger)
 

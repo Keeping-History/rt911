@@ -19,3 +19,15 @@ class Config:
     directus_api_token: str = field(default_factory=lambda: os.getenv("DIRECTUS_API_TOKEN", ""))
     ia_rate_per_sec: int = field(default_factory=lambda: _int("IA_RATE_PER_SEC", 2))
     min_duration_seconds: int = field(default_factory=lambda: _int("MIN_DURATION_SECONDS", 720))
+
+    # --- Usenet newsgroup ingestion ---
+    # IA collections to scan for newsgroup mbox archives. usenethistorical is
+    # entirely pre-2001; giganews is large and straddles the cutoff (trimmed per
+    # message at the process stage). See plans/usenet-archive-ingestion.md.
+    usenet_collections: str = field(default_factory=lambda: os.getenv("USENET_COLLECTIONS", "usenethistorical,giganews"))
+    # Per-message cutoff passed to mbox_parser --before. Keep messages on or before
+    # this date (exclusive of later), so the replay never reveals "future" posts.
+    usenet_before: str = field(default_factory=lambda: os.getenv("USENET_BEFORE", "2001-09-21"))
+
+    def usenet_collection_list(self) -> list[str]:
+        return [c.strip() for c in self.usenet_collections.split(",") if c.strip()]

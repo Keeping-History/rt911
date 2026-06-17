@@ -5,9 +5,11 @@ on:
     branches: [main]
     paths:
       - "packages/tools/video-grabber/**"
+      - "packages/tools/mbox_parser/**"
   pull_request:
     paths:
       - "packages/tools/video-grabber/**"
+      - "packages/tools/mbox_parser/**"
   workflow_dispatch:
 
 permissions:
@@ -63,6 +65,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      # The image bundles the sibling mbox_parser tool, which lives outside the
+      # build context (packages/tools/video-grabber). Copy it in first.
+      - name: Vendor mbox_parser into build context
+        run: cp packages/tools/mbox_parser/mbox_parser.py packages/tools/video-grabber/mbox_parser.py
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
