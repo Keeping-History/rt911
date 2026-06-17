@@ -122,6 +122,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 				}
 				sess.Init(t, items)
 				sendSubscribedSnapshots(r, sess, pool, t, logger)
+				sendSources(r, sess, pool, logger)
 
 			case "seek":
 				t, err := parseTime(msg.Time)
@@ -258,6 +259,22 @@ func sendNewsSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool
 		return
 	}
 	sess.SendNews(t, items)
+}
+
+// sendSources delivers the time-independent available-source lists for client
+// filters (TV channels, pager providers). Called once per init — sources don't
+// change with virtual time, so seek does not resend them. Failures are non-fatal:
+// a missing list only degrades a filter UI, it must not break streaming.
+func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, logger *slog.Logger) {
+	video, err := db.AvailableVideoSources(r.Context(), pool)
+	if err != nil {
+		logger.Warn("available video sources query failed", "error", err)
+	}
+	providers, err := db.AvailablePagerProviders(r.Context(), pool)
+	if err != nil {
+		logger.Warn("available pager providers query failed", "error", err)
+	}
+	sess.SendSources(video, providers)
 }
 
 // knownChannel reports whether ch is a valid subscription channel.

@@ -59,6 +59,7 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					newsItems: [],
 					subscribeNews: vi.fn(),
 					unsubscribeNews: vi.fn(),
+					sources: { video: [], pager: [] },
 				},
 				children,
 			}),

@@ -48,6 +48,14 @@ const (
 	windowNews  = 600 * time.Second
 )
 
+// SourceList carries the time-independent set of selectable sources for each
+// client-side filter. The sources table does not record which media type a source
+// belongs to, so each list is derived from actual usage in its table.
+type SourceList struct {
+	Video []string `json:"video"` // TV: sources of approved m3u8 media items
+	Pager []string `json:"pager"` // Pager: providers of approved pager items
+}
+
 // outMsg is the envelope for every server→client message.
 type outMsg struct {
 	Type    string            `json:"type"`
@@ -55,6 +63,7 @@ type outMsg struct {
 	Channel string            `json:"channel,omitempty"`
 	Items   []model.MediaItem `json:"items,omitempty"`
 	Pager   []model.PagerItem `json:"pager,omitempty"`
+	Sources *SourceList       `json:"sources,omitempty"`
 	Msg     string            `json:"message,omitempty"`
 }
 
@@ -238,6 +247,14 @@ func (s *Session) SendNews(t time.Time, items []model.MediaItem) {
 		return
 	}
 	s.send_(outMsg{Type: "news", Time: t.Format(time.RFC3339), Items: items})
+}
+
+// SendSources delivers the available-source lists for the client's filters. The
+// lists are derived from all history (not the current window), so the client's
+// filter UIs are complete regardless of virtual time. Sent once per init; sources
+// don't change with the virtual clock, so seek does not resend them.
+func (s *Session) SendSources(video, pager []string) {
+	s.send_(outMsg{Type: "sources", Sources: &SourceList{Video: video, Pager: pager}})
 }
 
 // Init sets the client's starting virtual time and sends the initial snapshot.

@@ -77,6 +77,26 @@ func CurrentItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model
 		 ORDER BY mi.start_date`, t)
 }
 
+// videoFormat is the media_items.format value the TV app plays. The TV's source
+// filter is derived from items of this format only — media_items also holds
+// non-video formats (html/modal/usenet) the TV never shows, and the sources table
+// does not record which media type a source belongs to, so usage is the only signal.
+const videoFormat = "m3u8"
+
+// AvailableVideoSources returns the distinct, sorted source slugs that have at
+// least one approved video (m3u8) media item, independent of time. It populates
+// the TV app's channel filter with every selectable channel up front, rather than
+// only those that have scrolled past in the current virtual-time window.
+func AvailableVideoSources(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
+	return queryStrings(ctx, pool, `
+		SELECT DISTINCT s.slug
+		FROM media_items mi
+		JOIN sources s ON s.id = mi.source
+		WHERE mi.approved = 1 AND mi.format = $1
+		  AND s.slug IS NOT NULL AND s.slug <> ''
+		ORDER BY s.slug`, videoFormat)
+}
+
 // pagerSelectFrom is the shared SELECT … FROM clause for all pager queries.
 // provider is a plain text column on pager_items (not a sources FK), so no JOIN
 // is needed here.
@@ -119,6 +139,17 @@ func CurrentPagerItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]
 		   AND pi.start_date >= $1
 		   AND pi.start_date < $1 + INTERVAL '1 second'
 		 ORDER BY pi.start_date`, t)
+}
+
+// AvailablePagerProviders returns the distinct, sorted set of providers across all
+// approved pager items, independent of time. Populates the Pager app's provider
+// filter. provider is a plain text column (not a sources FK), so no join is needed.
+func AvailablePagerProviders(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
+	return queryStrings(ctx, pool, `
+		SELECT DISTINCT provider
+		FROM pager_items
+		WHERE approved = 1 AND provider IS NOT NULL AND provider <> ''
+		ORDER BY provider`)
 }
 
 func queryPagerItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.PagerItem, error) {
@@ -251,6 +282,26 @@ func derefStr(dst *string, src *string) {
 	if src != nil {
 		*dst = *src
 	}
+}
+
+// queryStrings runs a query selecting a single non-null text column and returns
+// the values in row order. Used by the distinct-source helpers.
+func queryStrings(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]string, error) {
+	rows, err := pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
 }
 
 func queryItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.MediaItem, error) {

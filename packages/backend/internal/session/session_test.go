@@ -79,6 +79,29 @@ func TestSendMp3EmitsFrameWithMediaItems(t *testing.T) {
 	}
 }
 
+func TestSendSourcesEmitsSourceLists(t *testing.T) {
+	s := newTestSession(t)
+
+	s.SendSources([]string{"BBC", "CNN", "WETA"}, []string{"Arch", "Skytel"})
+
+	m := recvType(t, s)
+	if m.Type != "sources" {
+		t.Fatalf("expected sources frame, got %q", m.Type)
+	}
+	if m.Sources == nil {
+		t.Fatal("expected sources payload, got nil")
+	}
+	if len(m.Sources.Video) != 3 || m.Sources.Video[0] != "BBC" {
+		t.Fatalf("unexpected video sources: %+v", m.Sources.Video)
+	}
+	if len(m.Sources.Pager) != 2 || m.Sources.Pager[1] != "Skytel" {
+		t.Fatalf("unexpected pager providers: %+v", m.Sources.Pager)
+	}
+	if len(m.Items) != 0 || len(m.Pager) != 0 {
+		t.Fatalf("sources frame must not carry item payloads, got items=%+v pager=%+v", m.Items, m.Pager)
+	}
+}
+
 func TestMp3ChannelIndependentOfPager(t *testing.T) {
 	s := newTestSession(t)
 	s.Subscribe(ChannelMp3)

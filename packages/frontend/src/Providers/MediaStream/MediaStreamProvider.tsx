@@ -8,6 +8,7 @@ import {
 	useState,
 } from "react";
 import {
+	type AvailableSources,
 	MediaStreamContext,
 	type MediaItem,
 	type PagerItem,
@@ -73,11 +74,17 @@ interface WsNewsMessage {
 	items: MediaItem[];
 }
 
+interface WsSourcesMessage {
+	type: "sources";
+	sources: AvailableSources;
+}
+
 type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
 	| WsMp3Message
 	| WsNewsMessage
+	| WsSourcesMessage
 	| { type: string };
 
 interface MediaStreamProviderProps {
@@ -93,6 +100,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
+	const [sources, setSources] = useState<AvailableSources>({ video: [], pager: [] });
 	const [connected, setConnected] = useState(false);
 
 	// Per-app format subscriptions. null = wants all formats.
@@ -332,6 +340,19 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// seek_ack snapshots are all active-now, so they land entirely in `due`.
 			const now = localDateRef.current.getTime();
 
+			// Time-independent source lists for filters — sent once at init. Replace
+			// wholesale (the server always sends the complete set).
+			if (msg.type === "sources") {
+				const incoming = (msg as WsSourcesMessage).sources;
+				if (incoming) {
+					setSources({
+						video: incoming.video ?? [],
+						pager: incoming.pager ?? [],
+					});
+				}
+				return;
+			}
+
 			if (msg.type === "pager") {
 				const incomingPager = (msg as WsPagerMessage).pager;
 				if (!incomingPager || incomingPager.length === 0) return;
@@ -406,6 +427,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				pagerItems,
 				mp3Items,
 				newsItems,
+				sources,
 				connected,
 				addItems,
 				subscribeFormats,
