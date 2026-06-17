@@ -60,7 +60,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 			return
 		}
 
-		sess := session.NewSession(hub, rdb, logger)
+		sess := session.NewSession(hub, rdb, pool, logger)
 		hub.Register(sess)
 
 		// writePump — runs until the session closes or a write fails.

@@ -328,6 +328,28 @@ func CurrentUsenetItems(ctx context.Context, pool *pgxpool.Pool, newsgroup strin
 		 LIMIT $3`, newsgroup, t, limit)
 }
 
+// usenetWindowLimit caps a single forward-window query. Historical newsgroup
+// traffic is sparse, so a window rarely approaches this — it is only a guard
+// against a pathologically busy group flooding one frame.
+const usenetWindowLimit = 1000
+
+// UsenetItemsInRange returns approved messages in one newsgroup whose start_date is
+// in the half-open interval [lo, hi). Unlike the other channels this reads Postgres
+// directly (not Redis): usenet messages carry full bodies and are far too large to
+// warm into the cache, and delivery is gated by the group the client is viewing —
+// so the per-tick query volume is tiny and an index on (source, start_date) serves
+// it. The client reveal-gates the window by its virtual clock.
+func UsenetItemsInRange(ctx context.Context, pool *pgxpool.Pool, newsgroup string, lo, hi time.Time) ([]model.UsenetItem, error) {
+	return queryUsenetItems(ctx, pool,
+		usenetSelectFrom+`
+		 WHERE ui.approved = 1
+		   AND s.slug = $1
+		   AND ui.start_date >= $2
+		   AND ui.start_date < $3
+		 ORDER BY ui.start_date
+		 LIMIT $4`, newsgroup, lo, hi, usenetWindowLimit)
+}
+
 // AvailableNewsgroups returns the sorted set of newsgroup names from the sources
 // catalogue (rows of type="usenet"), independent of time. Populates the Newsgroups
 // app's group-browse list and the usenet filter. Reading the catalogue is far
