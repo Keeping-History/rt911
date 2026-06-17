@@ -765,6 +765,13 @@ async function migratePagerSources(token) {
     WHERE provider IS NOT NULL AND provider <> ''
     ON CONFLICT (slug) DO NOTHING;
 
+    -- A provider may already exist as a source created before the type column
+    -- (type IS NULL); the INSERT above skips it (ON CONFLICT), so claim it as
+    -- pager here — otherwise the FK backfill below matches nothing.
+    UPDATE sources SET type = 'pager'
+    WHERE type IS NULL
+      AND slug IN (SELECT DISTINCT provider FROM pager_items WHERE provider IS NOT NULL AND provider <> '');
+
     UPDATE pager_items pi
     SET source = s.id
     FROM sources s

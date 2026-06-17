@@ -66,6 +66,8 @@ def transition_usenet_job(db, job_id: str, to_stage: str, *, error: str = None, 
     if error is not None:
         sets.append("error_message = :error")
         params["error"] = error
+    else:
+        sets.append("error_message = NULL")  # clear a stale error on a clean transition
     if message_count is not None:
         sets.append("message_count = :mc")
         params["mc"] = message_count

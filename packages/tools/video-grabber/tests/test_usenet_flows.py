@@ -23,7 +23,8 @@ def test_transition_sets_stage_only():
     sql, params = db.calls[0]
     assert "stage = CAST(:stage AS usenet_stage)" in sql
     assert params["stage"] == "processed" and params["job_id"] == "j1"
-    assert "error_message" not in sql and "message_count" not in sql
+    assert "error_message = NULL" in sql       # stale error cleared on a clean transition
+    assert ":error" not in sql and "message_count" not in sql
     assert db.commits == 1
 
 
