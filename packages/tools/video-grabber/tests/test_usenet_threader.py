@@ -48,15 +48,18 @@ def test_build_threaded_archive_runs_pipeline_in_order(tmp_path):
         arch = threader.build_threaded_archive("/in/group.mbox", str(tmp_path))
 
     steps = [c[0] for c in calls]  # binary name of each step
+    # Full build: threadify needs the complete archive (Archive::Open), so every
+    # derived-data step must run, in dependency order, before it.
     assert steps == [
         "import-source-mbox", "kill-duplicates",
-        "extract-msgid", "connectivity", "threadify",
+        "extract-msgid", "connectivity", "extract-msgmeta",
+        "repack-zstd", "lexicon", "lexsort", "threadify",
     ]
-    # import reads the mbox; the threaded archive is the dedup output, reused by the
-    # in-place steps and returned.
+    # import reads the (plain) mbox; the threaded archive is the dedup output,
+    # reused in place by every later step and returned.
     assert calls[0][1] == "/in/group.mbox"
     assert arch.endswith("/arch")
-    assert calls[2][1] == arch and calls[3][1] == arch and calls[4][1] == arch
+    assert all(c[1] == arch for c in calls[2:])  # every in-place step targets arch
 
 
 def test_bin_honours_usenetarchive_bin_env(monkeypatch):
@@ -64,6 +67,43 @@ def test_bin_honours_usenetarchive_bin_env(monkeypatch):
     assert threader._bin("threadify") == "/opt/uat/bin/threadify"
     monkeypatch.delenv("USENETARCHIVE_BIN")
     assert threader._bin("threadify") == "threadify"
+
+
+def test_ensure_plain_mbox_unzips(tmp_path):
+    import logging
+    import zipfile
+    zp = tmp_path / "g.mbox.zip"
+    with zipfile.ZipFile(zp, "w") as z:
+        z.writestr("g.mbox", "From 1\nSubject: hi\n\nbody\n")
+    out = threader._ensure_plain_mbox(str(zp), tmp_path / "w", logging.getLogger("t"))
+    assert out.endswith("g.mbox")
+    assert "From 1" in open(out).read()
+
+
+def test_ensure_plain_mbox_gunzips(tmp_path):
+    import gzip
+    import logging
+    gp = tmp_path / "g.mbox.gz"
+    with gzip.open(gp, "wb") as f:
+        f.write(b"From 1\nSubject: hi\n\nbody\n")
+    out = threader._ensure_plain_mbox(str(gp), tmp_path / "w", logging.getLogger("t"))
+    assert "From 1" in open(out).read()
+
+
+def test_ensure_plain_mbox_passes_through_plain(tmp_path):
+    import logging
+    assert threader._ensure_plain_mbox("/in/g.mbox", tmp_path, logging.getLogger("t")) == "/in/g.mbox"
+
+
+def test_run_raises_with_stderr(tmp_path):
+    import logging
+    with mock.patch("video_grabber.usenet.threader.subprocess.run",
+                    return_value=mock.Mock(returncode=1, stdout="", stderr="Cannot open /x/arch")):
+        try:
+            threader._run(["/usr/local/bin/threadify", "/x/arch"], logging.getLogger("t"))
+            assert False, "expected failure"
+        except RuntimeError as e:
+            assert "threadify failed" in str(e) and "Cannot open" in str(e)
 
 
 def test_thread_mbox_end_to_end(tmp_path):

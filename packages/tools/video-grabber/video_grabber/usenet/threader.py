@@ -6,20 +6,30 @@ stays the parser of record (dates, body, cutoff), and this wrapper supplies the
 restored thread links — including the quote-matched ones threadify recovers for
 messages whose headers lost them. The two join on message_id downstream.
 
-Pipeline per archive (see plans/usenet-archive-ingestion.md, Stage 3):
+Pipeline per archive (see plans/usenet-archive-ingestion.md, Stage 3). threadify
+opens the archive via libuat Archive::Open, which needs the *full* derived data
+set, so the build runs the complete usenetarchive sequence — not just connectivity:
 
+    (decompress .zip/.gz → plain .mbox)
     import-source-mbox <mbox> <raw>
     kill-duplicates    <raw>  <arch>
-    extract-msgid      <arch>            # msgid table (in place)
-    connectivity       <arch>            # dependency graph + Date parse (in place)
-    threadify          <arch>            # restore missing links (in place)
+    extract-msgid      <arch>   # mid* table
+    connectivity       <arch>   # conn* graph + toplevel + Date parse  [needs msgid]
+    extract-msgmeta    <arch>   # str* (From/Subject)
+    repack-zstd        <arch>   # zstd message store (zmeta/zdata/zdict)
+    lexicon            <arch>   # lex* word index  [needs connectivity]
+    lexsort            <arch>   # sort lex*
+    threadify          <arch>   # restore missing links  [needs lexsort]
     uat-thread-export  <arch>  > TSV     # our libuat tool: msgid \t parent_msgid
 
 The binaries are resolved from USENETARCHIVE_BIN (a directory) if set, else PATH.
 """
+import gzip
 import logging
 import os
+import shutil
 import subprocess
+import zipfile
 from pathlib import Path
 
 _default_log = logging.getLogger(__name__)
@@ -27,6 +37,23 @@ _default_log = logging.getLogger(__name__)
 # Our custom libuat tool (uat_thread_export.cpp), built into the image alongside
 # the stock usenetarchive binaries.
 _THREAD_EXPORT_BIN = "uat-thread-export"
+
+# threadify requires a *complete* archive (it opens it via libuat Archive::Open,
+# which needs the zstd store + lexicon + string + connectivity + msgid files), so
+# the build must run the full usenetarchive pipeline in dependency order, not just
+# connectivity. Each step operates in place on the archive dir.
+#   extract-msgid → mid*; connectivity → conn*/toplevel; extract-msgmeta → str*;
+#   repack-zstd → zstd; lexicon → lex* (needs conn); lexsort → sorted lex
+#   (threadify requires lexsort); then threadify restores connectivity.
+_INPLACE_STEPS = (
+    "extract-msgid",
+    "connectivity",
+    "extract-msgmeta",
+    "repack-zstd",
+    "lexicon",
+    "lexsort",
+    "threadify",
+)
 
 
 def _bin(name: str) -> str:
@@ -36,30 +63,67 @@ def _bin(name: str) -> str:
 
 
 def _run(args: list[str], logger: logging.Logger) -> None:
-    """Run a usenetarchive step, raising CalledProcessError with captured stderr."""
+    """Run a usenetarchive step; raise with the tool's captured stderr on failure.
+
+    Including stderr in the message is what makes a failed step diagnosable from the
+    Prefect job's error_message (the bare CalledProcessError repr does not carry it).
+    """
     logger.info("usenet threader: %s", " ".join(args))
     proc = subprocess.run(args, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
-        raise subprocess.CalledProcessError(proc.returncode, args, proc.stdout, proc.stderr)
+        tail = (proc.stderr or proc.stdout or "").strip()[-500:]
+        raise RuntimeError(f"{Path(args[0]).name} failed (rc={proc.returncode}): {tail}")
+
+
+def _ensure_plain_mbox(mbox_path: str, workdir: Path, logger: logging.Logger) -> str:
+    """Decompress a .mbox.zip / .mbox.gz to a plain mbox file.
+
+    import-source-mbox does NOT decompress — handed a zip/gz it reads the compressed
+    bytes as an empty mbox ("0 files processed"), producing an empty archive that
+    every later step then fails on. usenethistorical ships .mbox.zip, giganews .gz.
+    """
+    low = str(mbox_path).lower()
+    if low.endswith(".zip"):
+        dest = workdir / "extracted"
+        dest.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(mbox_path) as z:
+            z.extractall(dest)
+        files = [f for f in dest.rglob("*") if f.is_file()]
+        if not files:
+            raise RuntimeError(f"empty zip archive: {mbox_path}")
+        # Prefer a .mbox member, else the largest file.
+        mbox = next((f for f in files if f.suffix.lower() == ".mbox"),
+                    max(files, key=lambda f: f.stat().st_size))
+        logger.info("usenet threader: unzipped %s → %s", mbox_path, mbox)
+        return str(mbox)
+    if low.endswith(".gz"):
+        out = workdir / "archive.mbox"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(mbox_path, "rb") as fin, open(out, "wb") as fout:
+            shutil.copyfileobj(fin, fout)
+        logger.info("usenet threader: gunzipped %s → %s", mbox_path, out)
+        return str(out)
+    return str(mbox_path)
 
 
 def build_threaded_archive(mbox_path: str, workdir: str, logger: logging.Logger | None = None) -> str:
-    """Run the import → dedup → connectivity → threadify pipeline.
+    """Build a fully-processed, threaded usenetarchive and return its directory.
 
-    Returns the path of the threaded LZ4 archive directory (ready for export).
-    workdir must not already contain the `raw`/`arch` outputs (the tools refuse to
-    overwrite an existing destination).
+    Decompresses the input, imports it, then runs the full derived-data pipeline so
+    threadify (and uat-thread-export) can open it. workdir must not already contain
+    the raw/arch outputs (the tools refuse to overwrite an existing destination).
     """
     log = logger or _default_log
     work = Path(workdir)
+    work.mkdir(parents=True, exist_ok=True)
+    plain = _ensure_plain_mbox(mbox_path, work / "src", log)
+
     raw = work / "raw"
     arch = work / "arch"
-
-    _run([_bin("import-source-mbox"), str(mbox_path), str(raw)], log)
+    _run([_bin("import-source-mbox"), plain, str(raw)], log)
     _run([_bin("kill-duplicates"), str(raw), str(arch)], log)
-    _run([_bin("extract-msgid"), str(arch)], log)
-    _run([_bin("connectivity"), str(arch)], log)
-    _run([_bin("threadify"), str(arch)], log)
+    for step in _INPLACE_STEPS:
+        _run([_bin(step), str(arch)], log)
     return str(arch)
 
 

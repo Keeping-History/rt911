@@ -29,7 +29,8 @@ RUN cd usenetarchive && \
     cmake -B build -DCMAKE_BUILD_TYPE=Release -DMARCH_NATIVE=OFF \
           -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/build/bin && \
     cmake --build build -j"$(nproc)" --target \
-          import-source-mbox kill-duplicates extract-msgid connectivity threadify uat-thread-export
+          import-source-mbox kill-duplicates extract-msgid connectivity \
+          extract-msgmeta repack-zstd lexicon lexsort threadify uat-thread-export
 
 # ---- runtime image ---------------------------------------------------------
 FROM python:3.14-slim
@@ -46,6 +47,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=uat-builder \
         /build/bin/import-source-mbox /build/bin/kill-duplicates \
         /build/bin/extract-msgid /build/bin/connectivity \
+        /build/bin/extract-msgmeta /build/bin/repack-zstd \
+        /build/bin/lexicon /build/bin/lexsort \
         /build/bin/threadify /build/bin/uat-thread-export \
         /usr/local/bin/
 WORKDIR /app
