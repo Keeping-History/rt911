@@ -294,6 +294,24 @@ async function createCollections(token) {
     await api(token, "POST", "/fields/usenet_items", { field: "source",   type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", display: "related-values", width: "half", note: "Newsgroup (sources row, type=usenet)" } });
     await api(token, "POST", "/fields/usenet_items", { field: "approved", type: "integer", schema: { default_value: 1 }, meta: { interface: "input", width: "half", note: "1 = approved, 0 = pending" } });
     await api(token, "POST", "/fields/usenet_items", { field: "sort",     type: "integer", schema: { is_nullable: true }, meta: { interface: "input", hidden: true } });
+
+    // Widen text columns (Directus makes varchar(255), too short for some From/
+    // Message-ID/subject headers) and index the per-group time lookups the streamer
+    // does — the usenet channel reads Postgres directly (no Redis cache), so this
+    // (source, start_date) index is what keeps CurrentUsenetItems/UsenetItemsInRange
+    // fast. Done in the fresh-create branch so it never rewrites a populated table.
+    psql(`
+      ALTER TABLE usenet_items
+        ALTER COLUMN subject     TYPE text,
+        ALTER COLUMN author      TYPE text,
+        ALTER COLUMN message_id  TYPE text,
+        ALTER COLUMN in_reply_to TYPE text,
+        ALTER COLUMN thread_id   TYPE text,
+        ALTER COLUMN parent_id   TYPE text,
+        ALTER COLUMN date_source TYPE text;
+      CREATE INDEX IF NOT EXISTS idx_usenet_items_source_start
+        ON usenet_items (source, start_date);
+    `);
   } else {
     console.log("Collection usenet_items already exists, skipping.");
   }

@@ -16,7 +16,7 @@ func newTestSession(t *testing.T) *Session {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub := NewHub(logger)
-	return NewSession(hub, nil, logger)
+	return NewSession(hub, nil, nil, logger)
 }
 
 // recvType drains one queued outbound message and returns its decoded envelope.

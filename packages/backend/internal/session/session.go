@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -73,9 +75,13 @@ type outMsg struct {
 
 // Session holds all state for a single connected client.
 type Session struct {
-	id     string
-	hub    *Hub
-	rdb    *goredis.Client
+	id  string
+	hub *Hub
+	rdb *goredis.Client
+	// pool backs the usenet channel only: usenet messages are too large to cache in
+	// Redis, so its windowed delivery reads Postgres directly (see UsenetItemsInRange).
+	// Every other channel uses Redis via the tick path (hard rule #4).
+	pool   *pgxpool.Pool
 	logger *slog.Logger
 
 	mu            sync.Mutex
@@ -104,12 +110,13 @@ type Session struct {
 	closeOnce sync.Once
 }
 
-func NewSession(hub *Hub, rdb *goredis.Client, logger *slog.Logger) *Session {
+func NewSession(hub *Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) *Session {
 	id := newID()
 	return &Session{
 		id:     id,
 		hub:    hub,
 		rdb:    rdb,
+		pool:   pool,
 		logger: logger.With("session", id),
 		send:   make(chan []byte, sendBuf),
 		tickCh: make(chan struct{}, 1),
@@ -451,12 +458,13 @@ func (s *Session) RunTimePump() {
 					s.SendNews(t, items)
 				}
 			}
-			// usenet refills per active group — each group has its own time-index
-			// ZSET, so we only scan the group(s) the client is actually viewing.
-			if doUsenet && len(usenetGroups) > 0 {
+			// usenet refills per active group, reading Postgres directly (not Redis):
+			// messages carry full bodies and are too large to cache, and delivery is
+			// gated to the group(s) the client is viewing, so the query volume is low.
+			if doUsenet && len(usenetGroups) > 0 && s.pool != nil {
 				var batch []model.UsenetItem
 				for _, g := range usenetGroups {
-					items, err := cache.UsenetItemsInRange(ctx, s.rdb, g, usenetLo, usenetHi)
+					items, err := db.UsenetItemsInRange(ctx, s.pool, g, usenetLo, usenetHi)
 					if err != nil {
 						s.logger.Warn("usenet range lookup failed", "group", g, "error", err)
 						continue
