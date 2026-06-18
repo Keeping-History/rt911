@@ -19,6 +19,7 @@ import type {
 	PagerDecoderSettings,
 } from "./PagerDecoderContext";
 import { DEFAULT_PAGER_SETTINGS } from "./PagerDecoderContext";
+import { isoToTimeKey } from "./pagerUtils";
 import type { CompletedLine } from "./usePagerPlayback";
 import { usePagerPlayback } from "./usePagerPlayback";
 
@@ -225,7 +226,7 @@ export const PagerDecoder = () => {
 							type="button"
 						>
 							<span className={styles.meta}>
-								[{line.timeKey}] {line.provider}{" "}
+								[{isoToTimeKey(line.timestamp)}] {line.provider}{" "}
 							</span>
 							{line.text}
 						</button>
@@ -233,7 +234,7 @@ export const PagerDecoder = () => {
 					{streamingMeta && (
 						<div className={styles.line}>
 							<span className={styles.meta}>
-								[{streamingMeta.timeKey}] {streamingMeta.provider}{" "}
+								[{isoToTimeKey(streamingMeta.timestamp)}] {streamingMeta.provider}{" "}
 							</span>
 							{streamingText}
 							<span className={styles.cursor} aria-hidden="true" />

@@ -10,7 +10,8 @@ import { matchesFilter } from "./pagerUtils";
 
 export interface CompletedLine {
 	id: string;
-	timeKey: string;
+	/** Raw UTC ISO timestamp; the view formats it in the user's selected timezone. */
+	timestamp: string;
 	provider: string;
 	text: string;
 	record: PagerRecord;
@@ -19,20 +20,8 @@ export interface CompletedLine {
 export interface PlaybackState {
 	lines: CompletedLine[];
 	streamingText: string;
-	streamingMeta: { timeKey: string; provider: string } | null;
+	streamingMeta: { timestamp: string; provider: string } | null;
 	uniqueValues: { provider: string[]; id_type: string[]; channel: string[] };
-}
-
-/** Extract the original ET HH:MM:SS from a UTC ISO timestamp.
- *  Pager data was recorded in EDT (UTC-4). */
-function utcIsoToETTimeKey(isoUtc: string): string {
-	const utcMs = new Date(isoUtc).getTime();
-	const edtMs = utcMs - 4 * 3600 * 1000;
-	const d = new Date(edtMs);
-	const h = String(d.getUTCHours()).padStart(2, "0");
-	const m = String(d.getUTCMinutes()).padStart(2, "0");
-	const s = String(d.getUTCSeconds()).padStart(2, "0");
-	return `${h}:${m}:${s}`;
 }
 
 /** Convert a PagerItem from the pager channel to a PagerRecord. The streamer now
@@ -52,7 +41,6 @@ function pagerItemToPagerRecord(item: PagerItem): PagerRecord | null {
 
 interface StreamingItem {
 	record: PagerRecord;
-	timeKey: string;
 }
 
 export function usePagerPlayback(
@@ -71,7 +59,7 @@ export function usePagerPlayback(
 	const [lines, setLines] = useState<CompletedLine[]>([]);
 	const [streamingText, setStreamingText] = useState("");
 	const [streamingMeta, setStreamingMeta] = useState<{
-		timeKey: string;
+		timestamp: string;
 		provider: string;
 	} | null>(null);
 
@@ -122,10 +110,7 @@ export function usePagerPlayback(
 
 			if (!matchesFilter(record, settingsRef.current.filter)) continue;
 
-			queueRef.current.push({
-				record,
-				timeKey: utcIsoToETTimeKey(item.start_date),
-			});
+			queueRef.current.push({ record });
 		}
 
 		if (hasNewUnique) {
@@ -147,7 +132,7 @@ export function usePagerPlayback(
 				if (!next) return;
 				currentItemRef.current = next;
 				wordIndexRef.current = 0;
-				setStreamingMeta({ timeKey: next.timeKey, provider: next.record.provider });
+				setStreamingMeta({ timestamp: next.record.timestamp, provider: next.record.provider });
 				setStreamingText("");
 			}
 
@@ -159,11 +144,11 @@ export function usePagerPlayback(
 
 			if (wordIndexRef.current >= words.length) {
 				const completed: CompletedLine = {
-					id:       `${item.timeKey}-${item.record.recipient_id}-${Date.now()}`,
-					timeKey:  item.timeKey,
-					provider: item.record.provider,
-					text:     item.record.message,
-					record:   item.record,
+					id:        `${item.record.timestamp}-${item.record.recipient_id}-${Date.now()}`,
+					timestamp: item.record.timestamp,
+					provider:  item.record.provider,
+					text:      item.record.message,
+					record:    item.record,
 				};
 				const retention = settingsRef.current.retentionLines;
 				setLines((prev) => {

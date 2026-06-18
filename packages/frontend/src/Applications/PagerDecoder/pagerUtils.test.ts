@@ -1,11 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
 	extractTimeKey,
+	isoToTimeKey,
 	matchesFilter,
 	matchesWildcard,
 	parseJsonlLine,
 } from "./pagerUtils";
 import type { PagerDecoderFilter } from "./PagerDecoderContext";
+
+describe("isoToTimeKey", () => {
+	// The streamer delivers timestamps already in the displayed wall-clock space
+	// (positioned against the virtual clock), so the view reads the ISO's UTC
+	// fields directly — no timezone offset is applied here.
+	it("extracts HH:MM:SS from the UTC fields of an ISO timestamp", () => {
+		expect(isoToTimeKey("2001-09-11T09:25:07.000Z")).toBe("09:25:07");
+	});
+
+	it("zero-pads single-digit components", () => {
+		expect(isoToTimeKey("2001-09-11T04:05:06.000Z")).toBe("04:05:06");
+	});
+
+	it("returns an empty string for an unparseable timestamp", () => {
+		expect(isoToTimeKey("not-a-date")).toBe("");
+	});
+});
 
 describe("extractTimeKey", () => {
 	it("extracts HH:MM:SS from a valid timestamp", () => {

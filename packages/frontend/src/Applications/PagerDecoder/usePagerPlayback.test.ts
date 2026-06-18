@@ -215,14 +215,15 @@ describe("usePagerPlayback", () => {
 		expect(result.current.uniqueValues.provider).toContain("Skytel");
 	});
 
-	it("derives ET time key from UTC start_date", () => {
-		// 2001-09-11T07:00:00Z = 03:00:00 EDT
+	it("preserves the raw UTC timestamp on completed lines for the view to format", () => {
+		// Timezone conversion is the view's job (utcIsoToTimeKey); the hook keeps
+		// the raw instant so it can be rendered in the user's selected zone.
 		const item = makePagerItem("Test", "2001-09-11T07:00:00.000Z");
 		const { wrapper } = makeWrapper([item]);
 		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
 
 		act(() => { vi.advanceTimersByTime(5); }); // complete message
 
-		expect(result.current.lines[0].timeKey).toBe("03:00:00");
+		expect(result.current.lines[0].timestamp).toBe("2001-09-11T07:00:00.000Z");
 	});
 });
