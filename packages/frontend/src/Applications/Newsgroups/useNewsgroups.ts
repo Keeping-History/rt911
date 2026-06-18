@@ -7,6 +7,7 @@ import {
 	allFolderPaths,
 	buildGroupTree,
 	filterGroups,
+	flatGroupRows,
 	flattenGroupTree,
 	type GroupRow,
 } from "./groupTree";
@@ -82,18 +83,16 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 	const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
 	const [groupQuery, setGroupQuery] = useState("");
 
-	const groupTree = useMemo(
-		() => buildGroupTree(filterGroups(sources.usenet, groupQuery)),
-		[sources.usenet, groupQuery],
-	);
-	// While filtering, reveal the whole (already-narrowed) tree so matches are
-	// visible without manual drilling; otherwise honor the user's expand state.
+	// Expand All / Collapse All act on the full (unfiltered) tree.
+	const groupTree = useMemo(() => buildGroupTree(sources.usenet), [sources.usenet]);
+	// While a filter is active, show matches as a flat list (full names, no
+	// nesting); otherwise show the tree honoring the user's expand state.
 	const groupRows = useMemo(() => {
-		const expanded = groupQuery.trim()
-			? new Set(allFolderPaths(groupTree))
-			: expandedGroups;
-		return flattenGroupTree(groupTree, expanded);
-	}, [groupTree, expandedGroups, groupQuery]);
+		if (groupQuery.trim()) {
+			return flatGroupRows(filterGroups(sources.usenet, groupQuery));
+		}
+		return flattenGroupTree(groupTree, expandedGroups);
+	}, [sources.usenet, groupTree, expandedGroups, groupQuery]);
 
 	const toggleGroupNode = useCallback((path: string) => {
 		setExpandedGroups((prev) => {

@@ -105,6 +105,29 @@ export function flattenGroupTree(nodes: GroupTreeNode[], expanded: Set<string>):
 	return rows;
 }
 
+/**
+ * Render newsgroups as a flat list of leaf rows (full name as the label, no
+ * nesting) — the view used while a search filter is active, where hierarchy
+ * would only get in the way. Sorted alphabetically by full name.
+ */
+export function flatGroupRows(groups: NewsgroupSource[]): GroupRow[] {
+	return [...groups]
+		.sort((a, b) => a.name.localeCompare(b.name))
+		.map((g) => ({
+			node: {
+				segment: g.name,
+				path: g.name,
+				isGroup: true,
+				ownCount: g.count,
+				totalCount: g.count,
+				children: [],
+			},
+			depth: 0,
+			hasChildren: false,
+			collapsed: false,
+		}));
+}
+
 /** Every node path that has children — the set to expand for "Expand All". */
 export function allFolderPaths(nodes: GroupTreeNode[]): string[] {
 	const paths: string[] = [];

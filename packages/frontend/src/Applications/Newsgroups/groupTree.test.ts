@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { NewsgroupSource } from "../../Providers/MediaStream/MediaStreamContext";
-import { allFolderPaths, buildGroupTree, filterGroups, flattenGroupTree } from "./groupTree";
+import {
+	allFolderPaths,
+	buildGroupTree,
+	filterGroups,
+	flatGroupRows,
+	flattenGroupTree,
+} from "./groupTree";
 
 const src = (name: string, count = 0): NewsgroupSource => ({ name, count });
 
@@ -115,6 +121,24 @@ describe("filterGroups", () => {
 
 	it("returns nothing when no group matches", () => {
 		expect(filterGroups(groups, "zzz")).toEqual([]);
+	});
+});
+
+describe("flatGroupRows", () => {
+	it("renders one depth-0 leaf row per group, full name as label, sorted", () => {
+		const rows = flatGroupRows([src("rec.arts", 2), src("comp.lang.c", 5)]);
+		expect(rows.map((r) => r.node.path)).toEqual(["comp.lang.c", "rec.arts"]);
+		const first = rows[0];
+		expect(first.depth).toBe(0);
+		expect(first.hasChildren).toBe(false);
+		expect(first.collapsed).toBe(false);
+		expect(first.node.segment).toBe("comp.lang.c"); // full name, not just last segment
+		expect(first.node.isGroup).toBe(true);
+		expect(first.node.ownCount).toBe(5);
+	});
+
+	it("returns an empty list for no groups", () => {
+		expect(flatGroupRows([])).toEqual([]);
 	});
 });
 

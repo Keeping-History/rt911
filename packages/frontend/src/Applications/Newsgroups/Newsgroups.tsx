@@ -87,20 +87,20 @@ export const Newsgroups = () => {
 				<div className={styles.layout}>
 					<div className={styles.groupList}>
 						<div className={styles.paneTitle}>Newsgroups</div>
-						<div className={styles.treeSearch}>
-							<ClassicyInput
-								id="newsgroup-filter"
-								placeholder="Filter newsgroups…"
-								labelDisabled
-								onChangeFunc={(e) => setGroupQuery(e.target.value)}
-							/>
-						</div>
-						<div className={styles.treeToolbar}>
+						<div className={styles.treeSearch} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+							<div style={{width: "75%"}}>
+								<ClassicyInput
+									id="newsgroup-filter"
+									placeholder="Filter newsgroups…"
+									labelDisabled
+									onChangeFunc={(e) => setGroupQuery(e.target.value)}
+								/>
+							</div>
 							<ClassicyButton buttonSize="medium" onClickFunc={expandAllGroups}>
-								Expand All
+								+
 							</ClassicyButton>
 							<ClassicyButton buttonSize="medium" onClickFunc={collapseAllGroups}>
-								Collapse All
+								-
 							</ClassicyButton>
 						</div>
 						{groups.length === 0 && (
