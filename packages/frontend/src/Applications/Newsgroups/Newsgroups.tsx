@@ -9,15 +9,29 @@ import {
 } from "classicy";
 import { useState } from "react";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
+import { DisclosureTriangle } from "./DisclosureTriangle";
 import styles from "./Newsgroups.module.scss";
+import type { SortField } from "./newsgroupUtils";
 import { useNewsgroups } from "./useNewsgroups";
+
+/** Compact "YYYY-MM-DD HH:mm" for the date column; blank for an unparseable date. */
+const fmtDate = (iso: string): string => {
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return "";
+	const p = (n: number) => String(n).padStart(2, "0");
+	return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 export const Newsgroups = () => {
 	const appId = "Newsgroups.app";
 	const appName = "Newsgroups";
 	const appIcon = ClassicyIcons.applications.internetExplorer.mailbox;
 
-	const { groups, selectedGroup, selectGroup, thread, loadOlder, connected } = useNewsgroups(appId);
+	const { groups, selectedGroup, selectGroup, rows, sort, setSort, toggleThread, loadOlder, connected } =
+		useNewsgroups(appId);
+
+	const sortMark = (field: SortField) =>
+		sort.field === field ? (sort.dir === "asc" ? " ▲" : " ▼") : "";
 
 	const [openMessages, setOpenMessages] = useState<UsenetItem[]>([]);
 	const openMessage = (item: UsenetItem) =>
@@ -76,27 +90,63 @@ export const Newsgroups = () => {
 					</div>
 					<div className={styles.messageList}>
 						{!selectedGroup && <p className={styles.hint}>Select a newsgroup to read.</p>}
-						{selectedGroup && thread.length === 0 && (
+						{selectedGroup && rows.length === 0 && (
 							<p className={styles.hint}>No messages up to the current time.</p>
 						)}
-						{selectedGroup && thread.length > 0 && (
+						{selectedGroup && rows.length > 0 && (
+							<div className={styles.headerRow}>
+								<button type="button" className={styles.colHeader} onClick={() => setSort("subject")}>
+									Subject{sortMark("subject")}
+								</button>
+								<button type="button" className={styles.colHeader} onClick={() => setSort("author")}>
+									Author{sortMark("author")}
+								</button>
+								<button type="button" className={styles.colHeader} onClick={() => setSort("date")}>
+									Date{sortMark("date")}
+								</button>
+							</div>
+						)}
+						{rows.map((row) => (
+							<div
+								key={row.item.id}
+								className={styles.row}
+								role="button"
+								tabIndex={0}
+								onDoubleClick={() => openMessage(row.item)}
+								onKeyDown={(e) => e.key === "Enter" && openMessage(row.item)}
+							>
+								<span className={styles.subjectCell} style={{ paddingLeft: 6 + row.depth * 18 }}>
+									{row.isRoot && row.hasChildren ? (
+										<button
+											type="button"
+											className={styles.triangle}
+											aria-label={row.collapsed ? "Expand thread" : "Collapse thread"}
+											onClick={(e) => {
+												e.stopPropagation();
+												toggleThread(row.threadKey);
+											}}
+										>
+											<DisclosureTriangle open={!row.collapsed} />
+										</button>
+									) : (
+										<span className={styles.triangleSpacer} />
+									)}
+									{row.isRoot && row.hasChildren && (
+										<span className={styles.count}>{row.count}</span>
+									)}
+									<span className={styles.subject}>
+										{row.item.subject?.trim() || "(no subject)"}
+									</span>
+								</span>
+								<span className={styles.authorCell}>{row.item.author}</span>
+								<span className={styles.dateCell}>{fmtDate(row.displayDate)}</span>
+							</div>
+						))}
+						{selectedGroup && rows.length > 0 && (
 							<button type="button" className={styles.loadOlder} onClick={loadOlder}>
 								↑ Load older messages
 							</button>
 						)}
-						{thread.map(({ item, depth }) => (
-							<button
-								key={item.id}
-								type="button"
-								className={styles.messageRow}
-								style={{ paddingLeft: 8 + depth * 18 }}
-								onDoubleClick={() => openMessage(item)}
-								onKeyDown={(e) => e.key === "Enter" && openMessage(item)}
-							>
-								<span className={styles.subject}>{item.subject?.trim() || "(no subject)"}</span>
-								<span className={styles.author}>{item.author}</span>
-							</button>
-						))}
 					</div>
 				</div>
 			</ClassicyWindow>

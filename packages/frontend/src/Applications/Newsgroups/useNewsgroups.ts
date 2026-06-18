@@ -3,7 +3,21 @@ import {
 	MediaStreamContext,
 	type NewsgroupSource,
 } from "../../Providers/MediaStream/MediaStreamContext";
-import { buildThreadTree, type ThreadNode } from "./newsgroupUtils";
+import {
+	buildThreads,
+	flattenThreads,
+	type RenderRow,
+	type SortField,
+	type SortSpec,
+	sortThreads,
+} from "./newsgroupUtils";
+
+/** Direction a freshly-clicked column adopts: dates open newest-first, text A→Z. */
+const DEFAULT_DIR: Record<SortField, SortSpec["dir"]> = {
+	date: "desc",
+	subject: "asc",
+	author: "asc",
+};
 
 export interface NewsgroupsState {
 	/** Newsgroups available to browse (sources of type "usenet"), with counts. */
@@ -12,8 +26,14 @@ export interface NewsgroupsState {
 	selectedGroup: string | null;
 	/** Open a group (server starts streaming it) or null to close. */
 	selectGroup: (group: string | null) => void;
-	/** The opened group's messages as a threaded, depth-annotated list. */
-	thread: ThreadNode[];
+	/** The opened group's messages as sorted, collapsible render rows. */
+	rows: RenderRow[];
+	/** Active column sort (default: newest thread activity first). */
+	sort: SortSpec;
+	/** Click a column header: flip direction if active, else its sensible default. */
+	setSort: (field: SortField) => void;
+	/** Expand or collapse one thread by its stable key. */
+	toggleThread: (key: string) => void;
 	/** Fetch the page of messages older than the oldest currently shown. */
 	loadOlder: () => void;
 	connected: boolean;
@@ -36,6 +56,9 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 	} = useContext(MediaStreamContext);
 
 	const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+	const [sort, setSortSpec] = useState<SortSpec>({ field: "date", dir: "desc" });
+	// Threads default to collapsed; this set holds the ones the user has expanded.
+	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
 	useEffect(() => {
 		subscribeUsenet(appId);
@@ -46,9 +69,27 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 		(group: string | null) => {
 			setSelectedGroup(group);
 			setUsenetGroups(group ? [group] : []);
+			setExpanded(new Set()); // a fresh group starts fully collapsed
 		},
 		[setUsenetGroups],
 	);
+
+	const setSort = useCallback((field: SortField) => {
+		setSortSpec((prev) =>
+			prev.field === field
+				? { field, dir: prev.dir === "asc" ? "desc" : "asc" }
+				: { field, dir: DEFAULT_DIR[field] },
+		);
+	}, []);
+
+	const toggleThread = useCallback((key: string) => {
+		setExpanded((prev) => {
+			const next = new Set(prev);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
+			return next;
+		});
+	}, []);
 
 	// usenetItems are already filtered server-side to the viewed group; the extra
 	// guard keeps the view clean if a stale frame from a prior group slips in.
@@ -56,7 +97,10 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 		() => (selectedGroup ? usenetItems.filter((m) => m.newsgroup === selectedGroup) : []),
 		[usenetItems, selectedGroup],
 	);
-	const thread = useMemo(() => buildThreadTree(messages), [messages]);
+	const rows = useMemo(
+		() => flattenThreads(sortThreads(buildThreads(messages), sort), expanded),
+		[messages, sort, expanded],
+	);
 
 	// Page back from the oldest message currently held for this group.
 	const loadOlder = useCallback(() => {
@@ -68,5 +112,15 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 		requestUsenetOlder(selectedGroup, oldest);
 	}, [selectedGroup, messages, requestUsenetOlder]);
 
-	return { groups: sources.usenet, selectedGroup, selectGroup, thread, loadOlder, connected };
+	return {
+		groups: sources.usenet,
+		selectedGroup,
+		selectGroup,
+		rows,
+		sort,
+		setSort,
+		toggleThread,
+		loadOlder,
+		connected,
+	};
 }
