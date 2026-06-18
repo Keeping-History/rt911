@@ -138,6 +138,34 @@ describe("usePagerPlayback", () => {
 		expect(result.current.streamingText).toBe("");
 	});
 
+	it("clearLines() empties completed lines and the in-progress stream", () => {
+		const item = makePagerItem("Mid stream word");
+		const { wrapper } = makeWrapper([item]);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
+
+		// Complete one line, then begin streaming a second one.
+		act(() => { vi.advanceTimersByTime(3); }); // 3 words → first line completes
+		expect(result.current.lines).toHaveLength(1);
+
+		act(() => { result.current.clearLines(); });
+
+		expect(result.current.lines).toHaveLength(0);
+		expect(result.current.streamingText).toBe("");
+		expect(result.current.streamingMeta).toBeNull();
+	});
+
+	it("does not re-stream historical items after clearLines()", () => {
+		const item = makePagerItem("Hi there");
+		const { wrapper } = makeWrapper([item]);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
+
+		act(() => { vi.advanceTimersByTime(2); }); // complete the item
+		act(() => { result.current.clearLines(); });
+		act(() => { vi.advanceTimersByTime(10); }); // a cleared item must not reappear
+
+		expect(result.current.lines).toHaveLength(0);
+	});
+
 	it("does not process the same item twice when items array updates", () => {
 		const item = makePagerItem("Hello");
 		const { wrapper } = makeWrapper([item]);

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
 	MediaStreamContext,
 	type PagerItem,
@@ -22,6 +22,10 @@ export interface PlaybackState {
 	streamingText: string;
 	streamingMeta: { timestamp: string; provider: string } | null;
 	uniqueValues: { provider: string[]; id_type: string[]; channel: string[] };
+	/** Wipe the visible terminal: completed lines, the in-progress stream, and any
+	 *  queued-but-not-yet-rendered items. Already-seen IDs stay remembered so cleared
+	 *  history is not re-streamed when the context array re-renders. */
+	clearLines: () => void;
 }
 
 /** Convert a PagerItem from the pager channel to a PagerRecord. The streamer now
@@ -77,6 +81,15 @@ export function usePagerPlayback(
 		id_type:  [],
 		channel:  [],
 	});
+
+	const clearLines = useCallback(() => {
+		queueRef.current = [];
+		currentItemRef.current = null;
+		wordIndexRef.current = 0;
+		setLines([]);
+		setStreamingText("");
+		setStreamingMeta(null);
+	}, []);
 
 	const settingsRef = useRef(settings);
 	settingsRef.current = settings;
@@ -177,5 +190,5 @@ export function usePagerPlayback(
 		[sources.pager, uniqueValues],
 	);
 
-	return { lines, streamingText, streamingMeta, uniqueValues: mergedUniqueValues };
+	return { lines, streamingText, streamingMeta, uniqueValues: mergedUniqueValues, clearLines };
 }

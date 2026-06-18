@@ -1,5 +1,6 @@
 import {
 	ClassicyApp,
+	ClassicyButton,
 	ClassicyControlGroup,
 	ClassicyIcons,
 	ClassicyInput,
@@ -52,10 +53,13 @@ export const PagerDecoder = () => {
 	const { connected } = useContext(MediaStreamContext);
 	const isPaused =
 		appState?.windows?.find((w) => w.id === "pager-terminal")?.closed ?? false;
-	const { lines, streamingText, streamingMeta, uniqueValues } = usePagerPlayback(
-		settings,
-		isPaused,
-	);
+	const { lines, streamingText, streamingMeta, uniqueValues, clearLines } =
+		usePagerPlayback(settings, isPaused);
+
+	// View-only ordering. `lines` is stored oldest→newest; `newestFirst` flips the
+	// presentation so the most recent message sits at the top instead of the bottom.
+	const [newestFirst, setNewestFirst] = useState(false);
+	const displayedLines = newestFirst ? [...lines].reverse() : lines;
 
 	const [detailLines, setDetailLines] = useState<CompletedLine[]>([]);
 	const openDetail = (line: CompletedLine) => {
@@ -68,10 +72,11 @@ export const PagerDecoder = () => {
 	};
 
 	const terminalRef = useRef<HTMLDivElement>(null);
+	// Keep the newest message in view: scroll to whichever edge it lives on.
 	useEffect(() => {
 		const el = terminalRef.current;
-		if (el) el.scrollTop = el.scrollHeight;
-	}, []);
+		if (el) el.scrollTop = newestFirst ? 0 : el.scrollHeight;
+	}, [lines.length, newestFirst]);
 
 	// Track message completion timestamps for rolling msgs/min rate
 	const completionTimesRef = useRef<number[]>([]);
@@ -175,6 +180,30 @@ export const PagerDecoder = () => {
 					onChangeFunc={(e) => updateRetention(e.target.value)}
 				/>
 			</div>
+			<div className={styles.filterField}>
+				<ClassicyButton buttonSize="small" onClickFunc={clearLines}>
+					Clear
+				</ClassicyButton>
+				<ClassicyButton
+					buttonSize="small"
+					depressed={newestFirst}
+					onClickFunc={() => setNewestFirst((v) => !v)}
+				>
+					<span style={{ fontSize: "var(--body-font-size)" }}>
+						{newestFirst ? "▲" : "▼"}
+					</span>
+				</ClassicyButton>
+			</div>
+		</div>
+	);
+
+	const streamingBlock = streamingMeta && (
+		<div className={styles.line}>
+			<span className={styles.meta}>
+				[{isoToTimeKey(streamingMeta.timestamp)}] {streamingMeta.provider}{" "}
+			</span>
+			{streamingText}
+			<span className={styles.cursor} aria-hidden="true" />
 		</div>
 	);
 
@@ -217,7 +246,9 @@ export const PagerDecoder = () => {
 					{!connected && lines.length === 0 && (
 						<p className={styles.loading}>Waiting for server connection…</p>
 					)}
-					{lines.map((line) => (
+					{/* The in-progress message is the newest, so it leads when newest-first. */}
+					{newestFirst && streamingBlock}
+					{displayedLines.map((line) => (
 						<button
 							key={line.id}
 							className={styles.line}
@@ -231,15 +262,7 @@ export const PagerDecoder = () => {
 							{line.text}
 						</button>
 					))}
-					{streamingMeta && (
-						<div className={styles.line}>
-							<span className={styles.meta}>
-								[{isoToTimeKey(streamingMeta.timestamp)}] {streamingMeta.provider}{" "}
-							</span>
-							{streamingText}
-							<span className={styles.cursor} aria-hidden="true" />
-						</div>
-					)}
+					{!newestFirst && streamingBlock}
 					{connected && !streamingMeta && (
 						<span className={styles.cursor} aria-hidden="true" />
 					)}
