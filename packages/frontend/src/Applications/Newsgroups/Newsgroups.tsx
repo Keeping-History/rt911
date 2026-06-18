@@ -1,5 +1,6 @@
 import {
 	ClassicyApp,
+	ClassicyButton,
 	ClassicyControlGroup,
 	ClassicyIcons,
 	ClassicyInput,
@@ -27,8 +28,23 @@ export const Newsgroups = () => {
 	const appName = "Newsgroups";
 	const appIcon = ClassicyIcons.applications.internetExplorer.mailbox;
 
-	const { groups, selectedGroup, selectGroup, rows, sort, setSort, toggleThread, loadOlder, connected } =
-		useNewsgroups(appId);
+	const {
+		groups,
+		groupRows,
+		groupQuery,
+		setGroupQuery,
+		toggleGroupNode,
+		expandAllGroups,
+		collapseAllGroups,
+		selectedGroup,
+		selectGroup,
+		rows,
+		sort,
+		setSort,
+		toggleThread,
+		loadOlder,
+		connected,
+	} = useNewsgroups(appId);
 
 	const sortMark = (field: SortField) =>
 		sort.field === field ? (sort.dir === "asc" ? " ▲" : " ▼") : "";
@@ -71,22 +87,68 @@ export const Newsgroups = () => {
 				<div className={styles.layout}>
 					<div className={styles.groupList}>
 						<div className={styles.paneTitle}>Newsgroups</div>
+						<div className={styles.treeSearch}>
+							<ClassicyInput
+								id="newsgroup-filter"
+								placeholder="Filter newsgroups…"
+								labelDisabled
+								onChangeFunc={(e) => setGroupQuery(e.target.value)}
+							/>
+						</div>
+						<div className={styles.treeToolbar}>
+							<ClassicyButton buttonSize="medium" onClickFunc={expandAllGroups}>
+								Expand All
+							</ClassicyButton>
+							<ClassicyButton buttonSize="medium" onClickFunc={collapseAllGroups}>
+								Collapse All
+							</ClassicyButton>
+						</div>
 						{groups.length === 0 && (
 							<p className={styles.hint}>
 								{connected ? "Loading newsgroups…" : "Waiting for server…"}
 							</p>
 						)}
-						{groups.map((g) => (
-							<button
-								key={g.name}
-								type="button"
-								className={`${styles.groupRow} ${g.name === selectedGroup ? styles.active : ""}`}
-								onClick={() => selectGroup(g.name)}
-							>
-								<span className={styles.groupName}>{g.name}</span>
-								{g.count > 0 && <span className={styles.groupCount}>{g.count.toLocaleString()}</span>}
-							</button>
-						))}
+						{groups.length > 0 && groupRows.length === 0 && (
+							<p className={styles.hint}>No newsgroups match “{groupQuery.trim()}”.</p>
+						)}
+						{groupRows.map(({ node, depth, hasChildren, collapsed }) => {
+							const displayCount = node.isGroup ? node.ownCount : node.totalCount;
+							// A real group reads on click; a pure namespace toggles its subtree.
+							const activate = () =>
+								node.isGroup ? selectGroup(node.path) : toggleGroupNode(node.path);
+							const isActive = node.isGroup && node.path === selectedGroup;
+							return (
+								<div
+									key={node.path}
+									role="button"
+									tabIndex={0}
+									className={`${styles.treeRow} ${isActive ? styles.active : ""}`}
+									style={{ paddingLeft: 6 + depth * 16 }}
+									onClick={activate}
+									onKeyDown={(e) => e.key === "Enter" && activate()}
+								>
+									{hasChildren ? (
+										<button
+											type="button"
+											className={styles.treeToggle}
+											aria-label={collapsed ? "Expand" : "Collapse"}
+											onClick={(e) => {
+												e.stopPropagation();
+												toggleGroupNode(node.path);
+											}}
+										>
+											<DisclosureTriangle open={!collapsed} />
+										</button>
+									) : (
+										<span className={styles.treeSpacer} />
+									)}
+									<span className={styles.groupName}>{node.segment}</span>
+									{displayCount > 0 && (
+										<span className={styles.groupCount}>{displayCount.toLocaleString()}</span>
+									)}
+								</div>
+							);
+						})}
 					</div>
 					<div className={styles.messageList}>
 						{!selectedGroup && <p className={styles.hint}>Select a newsgroup to read.</p>}
@@ -143,9 +205,9 @@ export const Newsgroups = () => {
 							</div>
 						))}
 						{selectedGroup && rows.length > 0 && (
-							<button type="button" className={styles.loadOlder} onClick={loadOlder}>
-								↑ Load older messages
-							</button>
+							<ClassicyButton onClickFunc={loadOlder} buttonSize={"medium"}>
+								Check For More
+							</ClassicyButton>
 						)}
 					</div>
 				</div>

@@ -4,6 +4,13 @@ import {
 	type NewsgroupSource,
 } from "../../Providers/MediaStream/MediaStreamContext";
 import {
+	allFolderPaths,
+	buildGroupTree,
+	filterGroups,
+	flattenGroupTree,
+	type GroupRow,
+} from "./groupTree";
+import {
 	buildThreads,
 	flattenThreads,
 	type RenderRow,
@@ -22,6 +29,18 @@ const DEFAULT_DIR: Record<SortField, SortSpec["dir"]> = {
 export interface NewsgroupsState {
 	/** Newsgroups available to browse (sources of type "usenet"), with counts. */
 	groups: NewsgroupSource[];
+	/** The newsgroup list as a flattened dot-notation tree honoring expand state. */
+	groupRows: GroupRow[];
+	/** Current newsgroup-name filter (substring match). */
+	groupQuery: string;
+	/** Update the newsgroup-name filter. */
+	setGroupQuery: (query: string) => void;
+	/** Expand or collapse one tree folder by its dotted path. */
+	toggleGroupNode: (path: string) => void;
+	/** Expand every folder in the newsgroup tree. */
+	expandAllGroups: () => void;
+	/** Collapse the newsgroup tree back to its top level. */
+	collapseAllGroups: () => void;
 	/** The currently-opened group, or null when browsing the group list. */
 	selectedGroup: string | null;
 	/** Open a group (server starts streaming it) or null to close. */
@@ -59,6 +78,39 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 	const [sort, setSortSpec] = useState<SortSpec>({ field: "date", dir: "desc" });
 	// Threads default to collapsed; this set holds the ones the user has expanded.
 	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+	// Newsgroup tree folders default collapsed; this set holds the expanded paths.
+	const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
+	const [groupQuery, setGroupQuery] = useState("");
+
+	const groupTree = useMemo(
+		() => buildGroupTree(filterGroups(sources.usenet, groupQuery)),
+		[sources.usenet, groupQuery],
+	);
+	// While filtering, reveal the whole (already-narrowed) tree so matches are
+	// visible without manual drilling; otherwise honor the user's expand state.
+	const groupRows = useMemo(() => {
+		const expanded = groupQuery.trim()
+			? new Set(allFolderPaths(groupTree))
+			: expandedGroups;
+		return flattenGroupTree(groupTree, expanded);
+	}, [groupTree, expandedGroups, groupQuery]);
+
+	const toggleGroupNode = useCallback((path: string) => {
+		setExpandedGroups((prev) => {
+			const next = new Set(prev);
+			if (next.has(path)) next.delete(path);
+			else next.add(path);
+			return next;
+		});
+	}, []);
+
+	const expandAllGroups = useCallback(() => {
+		setExpandedGroups(new Set(allFolderPaths(groupTree)));
+	}, [groupTree]);
+
+	const collapseAllGroups = useCallback(() => {
+		setExpandedGroups(new Set());
+	}, []);
 
 	useEffect(() => {
 		subscribeUsenet(appId);
@@ -114,6 +166,12 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 
 	return {
 		groups: sources.usenet,
+		groupRows,
+		groupQuery,
+		setGroupQuery,
+		toggleGroupNode,
+		expandAllGroups,
+		collapseAllGroups,
 		selectedGroup,
 		selectGroup,
 		rows,

@@ -37,26 +37,66 @@
 // author/date columns so every row aligns without a single shared grid container.
 $msg-cols: minmax(0, 1fr) 160px 132px;
 
-.groupRow {
+.treeSearch {
+  padding: 4px 8px;
+  background: var(--color-system-04);
+
+  input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+.treeToolbar {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-system-07);
+  background: var(--color-system-04);
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   width: 100%;
   text-align: left;
   background: none;
   border: none;
   border-top: 1px solid var(--color-theme-05);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px 8px 4px 0;
   font-size: 12px;
   color: var(--color-system-07);
   box-sizing: border-box;
 }
 
-.groupRow:hover {
+.treeRow:hover {
   background: var(--color-theme-05);
   color: var(--color-system-07);
+}
+
+.treeToggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  svg {
+    width: 7px;
+    height: 12px;
+  }
+}
+
+.treeSpacer {
+  flex: 0 0 auto;
+  width: 14px;
 }
 
 .active {
@@ -65,6 +105,8 @@ $msg-cols: minmax(0, 1fr) 160px 132px;
 }
 
 .groupName {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
