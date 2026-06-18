@@ -56,6 +56,33 @@ def test_scan_collection_upserts_one_row_per_item():
     assert db.commits >= 1  # final commit at minimum
 
 
+def test_scan_collection_drains_search_before_db_writes():
+    """Regression: the scanner must fully drain the IA search cursor before any
+    per-item DB write. Holding the scraping cursor open across slow per-item
+    upserts expires it (~400 items on a loaded worker), truncating large
+    collections — giganews scanned only ~400 of 25,328."""
+    state = {"drained": False}
+
+    def gen():
+        for i in range(5):
+            yield {"identifier": f"usenet-{i}", "mediatype": "texts"}
+        state["drained"] = True  # set only once the generator is fully consumed
+
+    class GenSession:
+        def search_items(self, query, fields=None):
+            return gen()
+
+    class AssertDrainedDB(FakeDB):
+        def execute(self, stmt, params):
+            assert state["drained"], "search cursor not fully drained before DB write"
+            super().execute(stmt, params)
+
+    db = AssertDrainedDB()
+    n = scanner.scan_collection(GenSession(), "giganews", db)
+    assert n == 5
+    assert len(db.rows) == 5
+
+
 def test_scan_collection_recurses_nested_collections():
     session = FakeSession({
         "root": [
