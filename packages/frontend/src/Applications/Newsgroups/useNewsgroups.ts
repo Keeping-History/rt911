@@ -10,6 +10,8 @@ import {
 	flatGroupRows,
 	flattenGroupTree,
 	type GroupRow,
+	type GroupSortField,
+	sortGroupTree,
 } from "./groupTree";
 import {
 	buildThreads,
@@ -46,6 +48,10 @@ export interface NewsgroupsState {
 	treeView: boolean;
 	/** Toggle between the dot-notation tree and a flat list of full names. */
 	toggleTreeView: () => void;
+	/** How the newsgroup list is ordered: by name (A→Z) or by message count. */
+	groupSort: GroupSortField;
+	/** Change the newsgroup-list ordering. */
+	setGroupSort: (field: GroupSortField) => void;
 	/** The currently-opened group, or null when browsing the group list. */
 	selectedGroup: string | null;
 	/** Open a group (server starts streaming it) or null to close. */
@@ -87,17 +93,18 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 	const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
 	const [groupQuery, setGroupQuery] = useState("");
 	const [treeView, setTreeView] = useState(true);
+	const [groupSort, setGroupSort] = useState<GroupSortField>("name");
 
 	// Expand All / Collapse All act on the full (unfiltered) tree.
 	const groupTree = useMemo(() => buildGroupTree(sources.usenet), [sources.usenet]);
 	// Show a flat list when tree view is off or a filter is active; otherwise the
-	// tree honoring the user's expand state.
+	// tree honoring the user's expand state. Either view is ordered by groupSort.
 	const groupRows = useMemo(() => {
 		if (!treeView || groupQuery.trim()) {
-			return flatGroupRows(filterGroups(sources.usenet, groupQuery));
+			return flatGroupRows(filterGroups(sources.usenet, groupQuery), groupSort);
 		}
-		return flattenGroupTree(groupTree, expandedGroups);
-	}, [sources.usenet, groupTree, expandedGroups, groupQuery, treeView]);
+		return flattenGroupTree(sortGroupTree(groupTree, groupSort), expandedGroups);
+	}, [sources.usenet, groupTree, expandedGroups, groupQuery, treeView, groupSort]);
 
 	const toggleTreeView = useCallback(() => setTreeView((v) => !v), []);
 
@@ -180,6 +187,8 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 		collapseAllGroups,
 		treeView,
 		toggleTreeView,
+		groupSort,
+		setGroupSort,
 		selectedGroup,
 		selectGroup,
 		rows,

@@ -34,7 +34,13 @@ export interface GroupRow {
 	collapsed: boolean;
 }
 
+/** How the newsgroup list is ordered: A→Z by name, or busiest groups first. */
+export type GroupSortField = "name" | "count";
+
 const bySegment = (a: GroupTreeNode, b: GroupTreeNode) => a.segment.localeCompare(b.segment);
+// Most messages first; equal counts fall back to alphabetical so order is stable.
+const byCount = (a: GroupTreeNode, b: GroupTreeNode) =>
+	b.totalCount - a.totalCount || a.segment.localeCompare(b.segment);
 
 /**
  * Build a dot-notation tree from a flat list of newsgroups. Every path segment
@@ -87,6 +93,20 @@ export function buildGroupTree(groups: NewsgroupSource[]): GroupTreeNode[] {
 }
 
 /**
+ * Re-order tree siblings at every depth by the chosen field. "name" is a no-op
+ * since buildGroupTree already sorts alphabetically; "count" returns a fresh tree
+ * (new node objects) ordered by descending totalCount, leaving the input untouched.
+ */
+export function sortGroupTree(nodes: GroupTreeNode[], field: GroupSortField): GroupTreeNode[] {
+	if (field === "name") return nodes;
+	const sortLevel = (level: GroupTreeNode[]): GroupTreeNode[] =>
+		[...level]
+			.sort(byCount)
+			.map((node) => ({ ...node, children: sortLevel(node.children) }));
+	return sortLevel(nodes);
+}
+
+/**
  * Flatten the tree into depth-annotated rows, revealing a node's children only
  * when its path is in `expanded`. Roots are always emitted, so an empty set
  * renders the tree collapsed to its top level.
@@ -108,11 +128,19 @@ export function flattenGroupTree(nodes: GroupTreeNode[], expanded: Set<string>):
 /**
  * Render newsgroups as a flat list of leaf rows (full name as the label, no
  * nesting) — the view used while a search filter is active, where hierarchy
- * would only get in the way. Sorted alphabetically by full name.
+ * would only get in the way. Sorted by full name (A→Z) or descending count.
  */
-export function flatGroupRows(groups: NewsgroupSource[]): GroupRow[] {
+export function flatGroupRows(
+	groups: NewsgroupSource[],
+	field: GroupSortField = "name",
+): GroupRow[] {
+	const cmp =
+		field === "count"
+			? (a: NewsgroupSource, b: NewsgroupSource) =>
+					b.count - a.count || a.name.localeCompare(b.name)
+			: (a: NewsgroupSource, b: NewsgroupSource) => a.name.localeCompare(b.name);
 	return [...groups]
-		.sort((a, b) => a.name.localeCompare(b.name))
+		.sort(cmp)
 		.map((g) => ({
 			node: {
 				segment: g.name,

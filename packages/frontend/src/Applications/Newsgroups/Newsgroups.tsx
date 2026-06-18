@@ -4,6 +4,7 @@ import {
 	ClassicyControlGroup,
 	ClassicyIcons,
 	ClassicyInput,
+	ClassicyPopUpMenu,
 	ClassicyTextEditor,
 	ClassicyWindow,
 	quitMenuItemHelper,
@@ -11,6 +12,7 @@ import {
 import { useState } from "react";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { DisclosureTriangle } from "./DisclosureTriangle";
+import type { GroupSortField } from "./groupTree";
 import styles from "./Newsgroups.module.scss";
 import type { SortField } from "./newsgroupUtils";
 import { useNewsgroups } from "./useNewsgroups";
@@ -38,6 +40,8 @@ export const Newsgroups = () => {
 		collapseAllGroups,
 		treeView,
 		toggleTreeView,
+		groupSort,
+		setGroupSort,
 		selectedGroup,
 		selectGroup,
 		rows,
@@ -50,6 +54,11 @@ export const Newsgroups = () => {
 
 	const sortMark = (field: SortField) =>
 		sort.field === field ? (sort.dir === "asc" ? " ▲" : " ▼") : "";
+
+	// Draft search text: typing no longer filters live; the filter only updates
+	// when the user presses Go (or Enter), committing the draft to groupQuery.
+	const [searchText, setSearchText] = useState("");
+	const runSearch = () => setGroupQuery(searchText.trim());
 
 	const [openMessages, setOpenMessages] = useState<UsenetItem[]>([]);
 	const openMessage = (item: UsenetItem) =>
@@ -89,24 +98,51 @@ export const Newsgroups = () => {
 				<div className={styles.layout}>
 					<div className={styles.groupList}>
 						<div className={styles.paneTitle}>Newsgroups</div>
-						<div className={styles.treeSearch} style={{ display: "flex", gap: 4, alignItems: "center" }}>
-							<div style={{width: "75%"}}>
-								<ClassicyInput
-									id="newsgroup-filter"
-									placeholder="Filter newsgroups…"
-									labelDisabled
-									onChangeFunc={(e) => setGroupQuery(e.target.value)}
-								/>
+						<div className={styles.treeSearch}>
+							{/* Row 1: the name filter and its Go button (search runs on Go/Enter). */}
+							<div
+								className={styles.searchRow}
+								onKeyDown={(e) => e.key === "Enter" && runSearch()}
+							>
+								<div className={styles.searchInput}>
+									<ClassicyInput
+										id="newsgroup-filter"
+										placeholder="Filter newsgroups…"
+										labelDisabled
+										prefillValue={searchText}
+										onChangeFunc={(e) => setSearchText(e.target.value)}
+									/>
+								</div>
+								<ClassicyButton buttonSize="small" onClickFunc={runSearch}>
+									<span style={{ fontSize: "var(--body-font-size)" }}>Go</span>
+								</ClassicyButton>
 							</div>
-							<ClassicyButton  buttonSize="small" onClickFunc={expandAllGroups}>
-								<span style={{fontSize: "var(--body-font-size)"}}>+</span>
-							</ClassicyButton>
-							<ClassicyButton  buttonSize="small" onClickFunc={collapseAllGroups}>
-								<span style={{fontSize: "var(--body-font-size)"}}>-</span>
-							</ClassicyButton>
-							<ClassicyButton buttonSize="small" depressed={treeView} onClickFunc={toggleTreeView}>
-								<span style={{fontSize: "var(--body-font-size)"}}>/</span>
-							</ClassicyButton>
+							{/* Row 2: expand/collapse/view toggles and the list sort selector. */}
+							<div className={styles.searchRow}>
+								<ClassicyButton buttonSize="small" onClickFunc={expandAllGroups}>
+									<span style={{ fontSize: "var(--body-font-size)" }}>+</span>
+								</ClassicyButton>
+								<ClassicyButton buttonSize="small" onClickFunc={collapseAllGroups}>
+									<span style={{ fontSize: "var(--body-font-size)" }}>-</span>
+								</ClassicyButton>
+								<ClassicyButton buttonSize="small" depressed={treeView} onClickFunc={toggleTreeView}>
+									<span style={{ fontSize: "var(--body-font-size)" }}>/</span>
+								</ClassicyButton>
+								<div className={styles.sortField}>
+									<ClassicyPopUpMenu
+										id="newsgroup-sort"
+										label="Sort"
+										labelPosition="left"
+										size="mini"
+										options={[
+											{ value: "name", label: "Name" },
+											{ value: "count", label: "Messages" },
+										]}
+										selected={groupSort}
+										onChangeFunc={(e) => setGroupSort(e.target.value as GroupSortField)}
+									/>
+								</div>
+							</div>
 						</div>
 						<div className={styles.groupScroll}>
 							{groups.length === 0 && (

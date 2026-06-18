@@ -57,6 +57,29 @@ $msg-cols: minmax(0, 1fr) 160px 132px;
   }
 }
 
+// Each control line inside the search area; rows stack with a small gap.
+.searchRow {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+
+  & + & {
+    margin-top: 4px;
+  }
+}
+
+// The filter input grows to fill the row, leaving the Go button at its natural size.
+.searchInput {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// Sort selector takes the remaining space after the toolbar buttons.
+.sortField {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .treeToolbar {
   flex: 0 0 auto;
   display: flex;

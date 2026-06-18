@@ -6,6 +6,7 @@ import {
 	filterGroups,
 	flatGroupRows,
 	flattenGroupTree,
+	sortGroupTree,
 } from "./groupTree";
 
 const src = (name: string, count = 0): NewsgroupSource => ({ name, count });
@@ -139,6 +140,42 @@ describe("flatGroupRows", () => {
 
 	it("returns an empty list for no groups", () => {
 		expect(flatGroupRows([])).toEqual([]);
+	});
+
+	it("sorts by descending count when field is \"count\", tie-broken by name", () => {
+		const rows = flatGroupRows(
+			[src("alt.small", 2), src("comp.big", 99), src("rec.same", 2)],
+			"count",
+		);
+		expect(rows.map((r) => r.node.path)).toEqual(["comp.big", "alt.small", "rec.same"]);
+	});
+});
+
+describe("sortGroupTree", () => {
+	it("leaves alphabetical order untouched when field is \"name\"", () => {
+		const tree = buildGroupTree([src("comp.lang.python", 1), src("comp.lang.c", 9)]);
+		const sorted = sortGroupTree(tree, "name");
+		expect(sorted[0].children[0].children.map((n) => n.segment)).toEqual(["c", "python"]);
+	});
+
+	it("orders siblings at every depth by descending totalCount when field is \"count\"", () => {
+		// comp.lang.python has more messages than comp.lang.c; rec outranks comp at root.
+		const tree = buildGroupTree([
+			src("comp.lang.c", 1),
+			src("comp.lang.python", 50),
+			src("rec.arts", 200),
+		]);
+		const sorted = sortGroupTree(tree, "count");
+		expect(sorted.map((n) => n.segment)).toEqual(["rec", "comp"]);
+		const lang = sorted.find((n) => n.segment === "comp")!.children[0];
+		expect(lang.children.map((n) => n.segment)).toEqual(["python", "c"]);
+	});
+
+	it("does not mutate the input tree", () => {
+		const tree = buildGroupTree([src("a.low", 1), src("a.high", 9)]);
+		const before = tree[0].children.map((n) => n.segment);
+		sortGroupTree(tree, "count");
+		expect(tree[0].children.map((n) => n.segment)).toEqual(before);
 	});
 });
 
