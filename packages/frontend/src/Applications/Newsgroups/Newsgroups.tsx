@@ -36,6 +36,8 @@ export const Newsgroups = () => {
 		toggleGroupNode,
 		expandAllGroups,
 		collapseAllGroups,
+		treeView,
+		toggleTreeView,
 		selectedGroup,
 		selectGroup,
 		rows,
@@ -96,11 +98,14 @@ export const Newsgroups = () => {
 									onChangeFunc={(e) => setGroupQuery(e.target.value)}
 								/>
 							</div>
-							<ClassicyButton buttonSize="medium" onClickFunc={expandAllGroups}>
-								+
+							<ClassicyButton  buttonSize="small" onClickFunc={expandAllGroups}>
+								<span style={{fontSize: "var(--body-font-size)"}}>+</span>
 							</ClassicyButton>
-							<ClassicyButton buttonSize="medium" onClickFunc={collapseAllGroups}>
-								-
+							<ClassicyButton  buttonSize="small" onClickFunc={collapseAllGroups}>
+								<span style={{fontSize: "var(--body-font-size)"}}>-</span>
+							</ClassicyButton>
+							<ClassicyButton buttonSize="small" depressed={treeView} onClickFunc={toggleTreeView}>
+								<span style={{fontSize: "var(--body-font-size)"}}>/</span>
 							</ClassicyButton>
 						</div>
 						<div className={styles.groupScroll}>

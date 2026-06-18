@@ -42,6 +42,10 @@ export interface NewsgroupsState {
 	expandAllGroups: () => void;
 	/** Collapse the newsgroup tree back to its top level. */
 	collapseAllGroups: () => void;
+	/** Whether the newsgroup list is shown as a tree (false = flat list). */
+	treeView: boolean;
+	/** Toggle between the dot-notation tree and a flat list of full names. */
+	toggleTreeView: () => void;
 	/** The currently-opened group, or null when browsing the group list. */
 	selectedGroup: string | null;
 	/** Open a group (server starts streaming it) or null to close. */
@@ -82,17 +86,20 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 	// Newsgroup tree folders default collapsed; this set holds the expanded paths.
 	const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
 	const [groupQuery, setGroupQuery] = useState("");
+	const [treeView, setTreeView] = useState(true);
 
 	// Expand All / Collapse All act on the full (unfiltered) tree.
 	const groupTree = useMemo(() => buildGroupTree(sources.usenet), [sources.usenet]);
-	// While a filter is active, show matches as a flat list (full names, no
-	// nesting); otherwise show the tree honoring the user's expand state.
+	// Show a flat list when tree view is off or a filter is active; otherwise the
+	// tree honoring the user's expand state.
 	const groupRows = useMemo(() => {
-		if (groupQuery.trim()) {
+		if (!treeView || groupQuery.trim()) {
 			return flatGroupRows(filterGroups(sources.usenet, groupQuery));
 		}
 		return flattenGroupTree(groupTree, expandedGroups);
-	}, [sources.usenet, groupTree, expandedGroups, groupQuery]);
+	}, [sources.usenet, groupTree, expandedGroups, groupQuery, treeView]);
+
+	const toggleTreeView = useCallback(() => setTreeView((v) => !v), []);
 
 	const toggleGroupNode = useCallback((path: string) => {
 		setExpandedGroups((prev) => {
@@ -171,6 +178,8 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 		toggleGroupNode,
 		expandAllGroups,
 		collapseAllGroups,
+		treeView,
+		toggleTreeView,
 		selectedGroup,
 		selectGroup,
 		rows,
