@@ -103,52 +103,54 @@ export const Newsgroups = () => {
 								-
 							</ClassicyButton>
 						</div>
-						{groups.length === 0 && (
-							<p className={styles.hint}>
-								{connected ? "Loading newsgroups…" : "Waiting for server…"}
-							</p>
-						)}
-						{groups.length > 0 && groupRows.length === 0 && (
-							<p className={styles.hint}>No newsgroups match “{groupQuery.trim()}”.</p>
-						)}
-						{groupRows.map(({ node, depth, hasChildren, collapsed }) => {
-							const displayCount = node.isGroup ? node.ownCount : node.totalCount;
-							// A real group reads on click; a pure namespace toggles its subtree.
-							const activate = () =>
-								node.isGroup ? selectGroup(node.path) : toggleGroupNode(node.path);
-							const isActive = node.isGroup && node.path === selectedGroup;
-							return (
-								<div
-									key={node.path}
-									role="button"
-									tabIndex={0}
-									className={`${styles.treeRow} ${isActive ? styles.active : ""}`}
-									style={{ paddingLeft: 6 + depth * 16 }}
-									onClick={activate}
-									onKeyDown={(e) => e.key === "Enter" && activate()}
-								>
-									{hasChildren ? (
-										<button
-											type="button"
-											className={styles.treeToggle}
-											aria-label={collapsed ? "Expand" : "Collapse"}
-											onClick={(e) => {
-												e.stopPropagation();
-												toggleGroupNode(node.path);
-											}}
-										>
-											<DisclosureTriangle open={!collapsed} />
-										</button>
-									) : (
-										<span className={styles.treeSpacer} />
-									)}
-									<span className={styles.groupName}>{node.segment}</span>
-									{displayCount > 0 && (
-										<span className={styles.groupCount}>{displayCount.toLocaleString()}</span>
-									)}
-								</div>
-							);
-						})}
+						<div className={styles.groupScroll}>
+							{groups.length === 0 && (
+								<p className={styles.hint}>
+									{connected ? "Loading newsgroups…" : "Waiting for server…"}
+								</p>
+							)}
+							{groups.length > 0 && groupRows.length === 0 && (
+								<p className={styles.hint}>No newsgroups match “{groupQuery.trim()}”.</p>
+							)}
+							{groupRows.map(({ node, depth, hasChildren, collapsed }) => {
+								const displayCount = node.isGroup ? node.ownCount : node.totalCount;
+								// A real group reads on click; a pure namespace toggles its subtree.
+								const activate = () =>
+									node.isGroup ? selectGroup(node.path) : toggleGroupNode(node.path);
+								const isActive = node.isGroup && node.path === selectedGroup;
+								return (
+									<div
+										key={node.path}
+										role="button"
+										tabIndex={0}
+										className={`${styles.treeRow} ${isActive ? styles.active : ""}`}
+										style={{ paddingLeft: 6 + depth * 16 }}
+										onClick={activate}
+										onKeyDown={(e) => e.key === "Enter" && activate()}
+									>
+										{hasChildren ? (
+											<button
+												type="button"
+												className={styles.treeToggle}
+												aria-label={collapsed ? "Expand" : "Collapse"}
+												onClick={(e) => {
+													e.stopPropagation();
+													toggleGroupNode(node.path);
+												}}
+											>
+												<DisclosureTriangle open={!collapsed} />
+											</button>
+										) : (
+											<span className={styles.treeSpacer} />
+										)}
+										<span className={styles.groupName}>{node.segment}</span>
+										{displayCount > 0 && (
+											<span className={styles.groupCount}>{displayCount.toLocaleString()}</span>
+										)}
+									</div>
+								);
+							})}
+						</div>
 					</div>
 					<div className={styles.messageList}>
 						{!selectedGroup && <p className={styles.hint}>Select a newsgroup to read.</p>}
