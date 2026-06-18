@@ -13,8 +13,8 @@ import { EPG } from "./Applications/EPG/EPG";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
-import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
-import { TV } from "./Applications/TV/TV";
+// import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
+// import { TV } from "./Applications/TV/TV";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
 
 const rootElement = document.getElementById("root");
@@ -31,8 +31,8 @@ createRoot(rootElement).render(
 					<News />
 					<Newsgroups />
 					<PagerDecoder />
-					<RadioScanner />
-					<TV />
+					{/* <RadioScanner /> */}
+					{/* <TV /> */}
 					<Controls />
 				</ClassicyDesktop>
 			</MediaStreamProvider>
