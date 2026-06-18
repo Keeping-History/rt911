@@ -93,15 +93,23 @@ def scan_collection(
         return 0
     visited.add(identifier)
 
+    if sleep_sec:
+        time.sleep(sleep_sec)
     log.info("usenet scan: %s — searching", identifier)
-    results = session.search_items(
+    # Fully drain the IA search cursor *before* any per-item DB write. The scraping
+    # cursor expires if it is held open across slow per-item upserts (each commit,
+    # on a loaded shared worker) — which silently truncated large collections:
+    # giganews (25,328 items) stopped at ~400. Materializing the result list first
+    # keeps the cursor short-lived, then the slow upserts run against memory. The
+    # old per-item sleep made it worse (slower loop, longer-held cursor) and is
+    # dropped; sleep_sec now throttles between *searches* instead.
+    items = list(session.search_items(
         f"collection:{identifier}",
         fields=["identifier", "mediatype", "title", "format", "collection"],
-    )
+    ))
+    log.info("usenet scan: %s — %d items found, upserting", identifier, len(items))
     seen = inserted = nested = 0
-    for item in results:
-        if sleep_sec:
-            time.sleep(sleep_sec)
+    for item in items:
         seen += 1
         if item.get("mediatype") == "collection":
             nested += 1
