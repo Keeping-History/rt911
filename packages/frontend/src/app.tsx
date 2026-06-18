@@ -9,7 +9,7 @@ import {
 } from "classicy";
 import { Browser } from "./Applications/Browser/Browser";
 import { Controls } from "./Applications/Controls/Controls";
-import { EPG } from "./Applications/EPG/EPG";
+// import { EPG } from "./Applications/EPG/EPG";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
@@ -27,7 +27,7 @@ createRoot(rootElement).render(
 					<Browser />
 					<Controls />
 					<SimpleText />
-					<EPG />
+					{/* <EPG /> */}
 					<News />
 					<Newsgroups />
 					<PagerDecoder />
