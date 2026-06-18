@@ -13,7 +13,7 @@ import { EPG } from "./Applications/EPG/EPG";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
-// import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
+import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
 // import { TV } from "./Applications/TV/TV";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
 
@@ -31,7 +31,7 @@ createRoot(rootElement).render(
 					<News />
 					<Newsgroups />
 					<PagerDecoder />
-					{/* <RadioScanner /> */}
+					<RadioScanner />
 					{/* <TV /> */}
 					<Controls />
 				</ClassicyDesktop>
