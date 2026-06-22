@@ -9,9 +9,8 @@ import {
 	ClassicyWindow,
 	quitMenuItemHelper,
 } from "classicy";
-import { useContext, useState } from "react";
+import { useEffect, useState } from "react";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
-import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import { DisclosureTriangle } from "./DisclosureTriangle";
 import type { GroupSortField } from "./groupTree";
 import styles from "./Newsgroups.module.scss";
@@ -49,6 +48,9 @@ export const Newsgroups = () => {
 		toggleThread,
 		loadOlder,
 		connected,
+		bodies,
+		bodyErrors,
+		requestBody,
 	} = useNewsgroups(appId);
 
 	const sortMark = (field: SortField) =>
@@ -59,15 +61,18 @@ export const Newsgroups = () => {
 	const [searchText, setSearchText] = useState("");
 	const runSearch = () => setGroupQuery(searchText.trim());
 
-	const { usenetBodies, requestUsenetBody } = useContext(MediaStreamContext);
-
 	const [openMessages, setOpenMessages] = useState<UsenetItem[]>([]);
 	const openMessage = (item: UsenetItem) => {
 		setOpenMessages((prev) => (prev.some((m) => m.id === item.id) ? prev : [...prev, item]));
-		requestUsenetBody(item.id);
 	};
 	const closeMessage = (id: number) =>
 		setOpenMessages((prev) => prev.filter((m) => m.id !== id));
+
+	// Each open message window needs its body fetched on demand (bodies no longer
+	// ride the list frames). requestBody de-dupes, so re-running on any change is safe.
+	useEffect(() => {
+		for (const m of openMessages) requestBody(m.id);
+	}, [openMessages, requestBody]);
 
 	const appMenu = [
 		{
@@ -279,7 +284,17 @@ export const Newsgroups = () => {
 						</ClassicyControlGroup>
 						<div className={styles.detailBody}>
 							<ClassicyControlGroup label="Body">
-								<ClassicyTextEditor id={`${m.id}-body`} border prefillValue={usenetBodies[m.id] ?? ""} autoHeight disabled />
+								<ClassicyTextEditor
+									id={`${m.id}-body`}
+									border
+									prefillValue={
+										m.id in bodies
+											? bodies[m.id]
+											: bodyErrors[m.id] ?? "Loading message…"
+									}
+									autoHeight
+									disabled
+								/>
 							</ClassicyControlGroup>
 						</div>
 					</div>

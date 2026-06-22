@@ -67,6 +67,12 @@ export interface NewsgroupsState {
 	/** Fetch the page of messages older than the oldest currently shown. */
 	loadOlder: () => void;
 	connected: boolean;
+	/** Fetched message bodies by id (on-demand; empty until a window opens). */
+	bodies: Record<number, string>;
+	/** Failure messages for bodies that could not be fetched, by id. */
+	bodyErrors: Record<number, string>;
+	/** Request one message's body by id; no-ops if cached or in flight. */
+	requestBody: (id: number) => void;
 }
 
 /**
@@ -83,6 +89,9 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 		setUsenetGroups,
 		requestUsenetOlder,
 		connected,
+		usenetBodies,
+		usenetBodyErrors,
+		requestUsenetBody,
 	} = useContext(MediaStreamContext);
 
 	const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -197,5 +206,8 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 		toggleThread,
 		loadOlder,
 		connected,
+		bodies: usenetBodies,
+		bodyErrors: usenetBodyErrors,
+		requestBody: requestUsenetBody,
 	};
 }
