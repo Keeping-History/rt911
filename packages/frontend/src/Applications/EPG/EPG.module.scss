@@ -25,12 +25,14 @@
   border-radius: 0 !important;
 
   // Clip anything that doesn't fit so a long title/description can never paint
-  // over the neighbouring program. Establish a query container on the inline
-  // (width) axis so the title and description can react to this cell's actual
-  // rendered width — cells are sized by program duration and the window is
-  // resizable, so a fixed breakpoint in px wouldn't track real layout.
+  // over the neighbouring program. Clipping also zeroes the grid track's auto
+  // minimum, so every 5-minute column stays exactly equal width and a 30-minute
+  // program reliably fills a full 30-minute slot regardless of its text length.
+  //
+  // NOTE: the container query lives on .epgEntryText below, NOT here. Putting
+  // `container-type: inline-size` on this grid item applies size containment,
+  // which stops it contributing to track sizing and collapses the columns.
   overflow: hidden;
-  container: epgEntry / inline-size;
 
   & > * {
     z-index: 100;
@@ -38,14 +40,19 @@
 }
 
 // Stacks the title above the description and takes the space left over by the
-// icons. `min-width: 0` lets it shrink below its content width inside the flex
-// row, which is what makes ellipsis/line-clamp on the children actually engage.
+// icons. Its width comes from flex-fill (not content), so it's a safe place to
+// establish the query container: the title and description can react to this
+// cell's actual rendered width — cells are sized by program duration and the
+// window is resizable, so a fixed px breakpoint wouldn't track real layout.
+// `min-width: 0` lets it shrink below its content width inside the flex row,
+// which is what makes the ellipsis/line-clamp on the children actually engage.
 .epgEntryText {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-width: 0;
   overflow: hidden;
+  container: epgEntry / inline-size;
 }
 
 .epgEntryIcon {
