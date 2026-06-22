@@ -364,11 +364,13 @@ func sendUsenetOlder(r *http.Request, sess *session.Session, pool *pgxpool.Pool,
 }
 
 // sendUsenetBody fetches one message's body by id and replies on the usenet_body
-// frame. Only approved messages are served; a missing/unapproved id or a query
-// error sends an empty body with an explanatory message so the client shows an
-// error line rather than hanging on "loading". No-ops if not subscribed to usenet.
+// frame. Only approved messages are served; a missing/unapproved id, a query
+// error, or a request from a client not subscribed to usenet all send an empty
+// body with an explanatory message so the client shows an error line rather than
+// hanging on "loading" — a body request always gets a reply.
 func sendUsenetBody(r *http.Request, sess *session.Session, pool *pgxpool.Pool, id int, logger *slog.Logger) {
 	if !sess.Subscribed(session.ChannelUsenet) {
+		sess.SendUsenetBody(id, "", "message unavailable")
 		return
 	}
 	item, err := db.UsenetItemByID(r.Context(), pool, id)
