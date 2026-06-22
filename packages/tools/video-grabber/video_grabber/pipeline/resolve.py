@@ -88,7 +88,7 @@ def _air_date_from_identifier(identifier: str) -> Optional[datetime]:
         return None
 
 
-def _air_date(meta: dict) -> datetime:
+def _air_date(meta: dict, channel_slug: str | None = None) -> datetime:
     """Resolve the program's UTC air time.
 
     Priority: the UTC timestamp embedded in the identifier → the human title →
@@ -107,7 +107,8 @@ def _air_date(meta: dict) -> datetime:
         return from_ident
 
     parsed = extract_air_date_utc(
-        meta.get("title", ""), meta.get("description", "") or ""
+        meta.get("title", ""), meta.get("description", "") or "",
+        channel_slug=channel_slug,
     )
     if parsed is not None:
         return parsed
@@ -157,7 +158,7 @@ def resolve_job(job, db, media_path: Optional[Path] = None):
 
     display_name = _DISPLAY_NAMES.get(slug, slug.upper())
     tz = _timezone_abbr(meta)
-    air_date = _air_date(meta)
+    air_date = _air_date(meta, slug)
     title = _program_title(meta)
     description = meta.get("description")
     duration = probe_duration_seconds(media_path) if media_path is not None else 0

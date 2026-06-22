@@ -16,10 +16,18 @@ overlaps is the one real policy decision in this module — it lives in
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
+
+# An EPG-grid recording embeds an explicit air time in its identifier, e.g.
+# "CNN_20010911_210000_Inside_Politics". The other archive source uses a
+# generic continuous-coverage form ("cnn200109111545-1626") with no such
+# timestamp — those are the "Television News" captures that should yield to a
+# named scheduled program when the two overlap (see resolve_slots).
+_SCHEDULED_TS = re.compile(r"_\d{8}_\d{6}(?:_|$)")
 
 
 @dataclass(frozen=True)
@@ -33,6 +41,13 @@ class ScheduledProgram:
     @property
     def natural_end(self) -> datetime:
         return self.air_date + timedelta(seconds=self.duration_seconds)
+
+    @property
+    def is_scheduled(self) -> bool:
+        """True for EPG-grid recordings (identifier carries an explicit
+        ``_YYYYMMDD_HHMMSS``). These outrank generic live-coverage captures on
+        overlap, so a named program always claims its airtime."""
+        return bool(_SCHEDULED_TS.search(self.ia_identifier or ""))
 
 
 @dataclass(frozen=True)
@@ -94,12 +109,22 @@ def resolve_slots(
 ) -> list[ResolvedSlot]:
     """Turn raw, possibly-overlapping programs into a clean slot timeline.
 
-    Policy: **first-wins (clip)**. Programs are processed in ``air_date`` order;
-    whoever claims the air first keeps it, and a later program that overlaps has
-    its start clipped to the running cursor. This is the most forgiving choice
-    for archive content, where ``air_date`` is heuristically derived (see
-    resolve.py) and small overlaps are usually timing error rather than a real
-    contest — clipping preserves as much footage as fits instead of dropping it.
+    Policy: **priority tiers, then first-wins (clip)**. Programs are placed in
+    two passes:
+
+    1. *Scheduled* programs (``is_scheduled`` — EPG-grid recordings with an
+       explicit identifier timestamp) are laid down first, in ``air_date``
+       order, each clipped to the running cursor. A named program therefore
+       always claims its airtime.
+    2. *Generic* live-coverage captures (the "Television News" form) then fill
+       only the gaps the scheduled pass left open, clipped to each free span.
+
+    Within a tier the rule is the forgiving first-wins clip — ``air_date`` is
+    heuristically derived (see resolve.py) and small overlaps are usually timing
+    error, so clipping preserves as much footage as fits. The cross-tier
+    priority is the real decision: where the two archive sources double-cover
+    the same minutes (the Sep 11-13 breaking-news window), the scheduled program
+    wins and the generic feed is relegated to the leftover gaps.
 
     Guarantees the assembler's forward-only cursor depends on — the returned
     list is sorted by ``starts_at``, non-overlapping, and clamped to
@@ -108,15 +133,58 @@ def resolve_slots(
     at least one segment long.
     """
     slots: list[ResolvedSlot] = []
-    cursor = window_start
-    for p in sorted(programs, key=lambda p: p.air_date):
-        start = max(p.air_date, cursor)
-        end = min(p.natural_end, window_end)
-        if (end - start).total_seconds() < _MIN_SLOT_SECONDS:
-            continue  # entirely before the cursor, past the window, or too short
-        slots.append(ResolvedSlot(p.program_id, start, end))
-        cursor = end
+    occupied: list[tuple[datetime, datetime]] = []  # sorted, merged
+
+    def place(candidates: list[ScheduledProgram]) -> None:
+        for p in sorted(candidates, key=lambda p: p.air_date):
+            lo = max(p.air_date, window_start)
+            hi = min(p.natural_end, window_end)
+            for span_start, span_end in _free_spans(occupied, lo, hi):
+                if (span_end - span_start).total_seconds() < _MIN_SLOT_SECONDS:
+                    continue
+                slots.append(ResolvedSlot(p.program_id, span_start, span_end))
+                _occupy(occupied, span_start, span_end)
+
+    place([p for p in programs if p.is_scheduled])
+    place([p for p in programs if not p.is_scheduled])
+    slots.sort(key=lambda s: s.starts_at)
     return slots
+
+
+def _free_spans(
+    occupied: list[tuple[datetime, datetime]], lo: datetime, hi: datetime
+) -> list[tuple[datetime, datetime]]:
+    """Maximal sub-spans of ``[lo, hi)`` not covered by ``occupied`` (which must
+    be sorted and merged)."""
+    spans: list[tuple[datetime, datetime]] = []
+    cursor = lo
+    for start, end in occupied:
+        if end <= cursor or start >= hi:
+            continue
+        if start > cursor:
+            spans.append((cursor, min(start, hi)))
+        cursor = max(cursor, end)
+        if cursor >= hi:
+            break
+    if cursor < hi:
+        spans.append((cursor, hi))
+    return spans
+
+
+def _occupy(
+    occupied: list[tuple[datetime, datetime]], start: datetime, end: datetime
+) -> None:
+    """Insert ``[start, end)`` and re-merge so ``occupied`` stays sorted and
+    overlap-free (the invariant ``_free_spans`` relies on)."""
+    occupied.append((start, end))
+    occupied.sort()
+    merged: list[tuple[datetime, datetime]] = []
+    for a, b in occupied:
+        if merged and a <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+        else:
+            merged.append((a, b))
+    occupied[:] = merged
 
 
 def _fetch_programs(

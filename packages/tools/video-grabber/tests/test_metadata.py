@@ -145,6 +145,27 @@ def test_resolve_unknown_abbr_falls_back_to_edt():
     assert tz.utcoffset(datetime(2001, 9, 11)) == timedelta(hours=-4)
 
 
+def test_resolve_ambiguous_cst_uses_china_for_cctv3():
+    # "CST" means China Standard Time (+8) for CCTV3, not US Central (-6).
+    tz = resolve_timezone("CST", "cctv3")
+    assert tz.utcoffset(datetime(2001, 9, 11)) == timedelta(hours=8)
+
+
+def test_resolve_ambiguous_cst_stays_us_central_for_us_channel():
+    # A US channel with no canonical override keeps the literal US reading.
+    tz = resolve_timezone("CST", "cbs-news")
+    assert tz.utcoffset(datetime(2001, 9, 11)) == timedelta(hours=-6)
+
+
+def test_air_date_uses_channel_to_disambiguate_cst():
+    # Same title, two channels: China (+8) vs US Central (-6).
+    title = "China Central TV : CCTV3 : September 11, 2001 4:00am CST"
+    cn = extract_air_date_utc(title, "", channel_slug="cctv3")
+    assert cn == datetime(2001, 9, 10, 20, 0, tzinfo=timezone.utc)  # 4am +8
+    us = extract_air_date_utc(title, "", channel_slug="tcn")
+    assert us == datetime(2001, 9, 11, 10, 0, tzinfo=timezone.utc)  # 4am -6
+
+
 # ---------------------------------------------------------------------------
 # Channel slug extraction
 # ---------------------------------------------------------------------------
