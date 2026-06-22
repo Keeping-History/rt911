@@ -24,9 +24,28 @@
   border: 0 !important;
   border-radius: 0 !important;
 
+  // Clip anything that doesn't fit so a long title/description can never paint
+  // over the neighbouring program. Establish a query container on the inline
+  // (width) axis so the title and description can react to this cell's actual
+  // rendered width — cells are sized by program duration and the window is
+  // resizable, so a fixed breakpoint in px wouldn't track real layout.
+  overflow: hidden;
+  container: epgEntry / inline-size;
+
   & > * {
     z-index: 100;
   }
+}
+
+// Stacks the title above the description and takes the space left over by the
+// icons. `min-width: 0` lets it shrink below its content width inside the flex
+// row, which is what makes ellipsis/line-clamp on the children actually engage.
+.epgEntryText {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .epgEntryIcon {
@@ -40,19 +59,47 @@
 }
 
 .epgEntryTitle {
-  font-size: calc(var(--ui-font-size) * 1);
+  // Scale the title with the cell's width: narrow cells get a smaller title so
+  // it keeps fitting, while wide cells cap out near the normal UI size. `cqi`
+  // is 1% of the container's inline size, and clamp() pins it between a legible
+  // floor and the original size. Combined with the 2-line clamp + ellipsis
+  // below, the title always settles neatly inside the cell instead of clipping.
+  font-size: clamp(calc(var(--ui-font-size) * 0.7), 6cqi, calc(var(--ui-font-size) * 1));
   font-weight: bold;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 .epgEntryDescription {
+  // Hidden by default; only revealed once the cell is wide enough to show a
+  // meaningful amount of the synopsis (see the @container rule below). When
+  // shown it's bounded to two lines with an ellipsis — paired with the
+  // character cap in EPG.tsx so neither the DOM nor the layout overflows.
+  display: none;
   font-size: calc(var(--ui-font-size) * 0.75);
   font-weight: normal;
-  overflow: clip;
-  width: auto;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+// ~220px is about where a description can fit a readable couple of lines (the
+// ~100-char heuristic in EPG.tsx); below it the synopsis is dropped so only the
+// title competes for the cramped space.
+@container epgEntry (min-width: 220px) {
+  .epgEntryDescription {
+    display: -webkit-box;
+  }
 }
 
 .epgEntryIcons {
+  flex: 0 0 auto;
   overflow: hidden;
 }
 

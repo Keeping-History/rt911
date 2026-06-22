@@ -31,6 +31,17 @@ import epgStyles from "./EPG.module.scss";
 
 const EPG_GUIDE_URL = "https://files.911realtime.org/epg/guide.json";
 
+// Hard cap on how many characters of a program description we ever put in the
+// DOM. Past this we slice and append an ellipsis so a runaway synopsis can't
+// blow out a cell. (CSS additionally hides the description entirely in cells
+// too narrow to show it legibly — see EPG.module.scss.) The exact number is a
+// readability heuristic: ~100 chars is roughly two comfortable lines in a
+// medium-width program cell.
+const DESCRIPTION_CHAR_LIMIT = 100;
+
+const truncate = (text: string, limit: number) =>
+	text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
+
 interface ClassicyEPGProps {
 	minutesPerGrid?: number; // in Minutes
 	gridTimeWidth?: number; // in Minutes
@@ -231,11 +242,13 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 							if (e.key === "Enter" || e.key === " ") tuneToChannel(channel.name);
 						}}
 					>
-						<div className={epgStyles.epgEntryTitle}>
-							{gridItem.title}
-							<div className={epgStyles.epgEntryDescription}>
-								{gridItem.description}
-							</div>
+						<div className={epgStyles.epgEntryText}>
+							<div className={epgStyles.epgEntryTitle}>{gridItem.title}</div>
+							{gridItem.description && (
+								<div className={epgStyles.epgEntryDescription}>
+									{truncate(gridItem.description, DESCRIPTION_CHAR_LIMIT)}
+								</div>
+							)}
 						</div>
 						<div className={epgStyles.epgEntryIcons}>
 							{gridItem.icons?.map((icon) => {
