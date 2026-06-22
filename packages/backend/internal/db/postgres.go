@@ -292,6 +292,16 @@ const usenetSelectFrom = `
 	FROM usenet_items ui
 	LEFT JOIN sources s ON s.id = ui.source`
 
+// usenetListSelectFrom mirrors usenetSelectFrom without ui.body: list views
+// (snapshot/window/pagination) carry only headers. The body is fetched on demand
+// per message via UsenetItemByID — see plans/usenet-on-demand-bodies.md.
+const usenetListSelectFrom = `
+	SELECT ui.id, ui.start_date, s.slug, ui.subject, ui.author,
+	       ui.message_id, ui."references", ui.in_reply_to, ui.thread_id,
+	       ui.parent_id, ui.date_source, ui.approved
+	FROM usenet_items ui
+	LEFT JOIN sources s ON s.id = ui.source`
+
 // AllUsenetItems loads every approved Usenet message ordered by start_date
 // (cache warming). The per-group cache index is built from the resolved slug.
 func AllUsenetItems(ctx context.Context, pool *pgxpool.Pool) ([]model.UsenetItem, error) {
@@ -319,8 +329,8 @@ func UsenetItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.Use
 // the client sorts for display. Bounded by `limit` because a group's full history
 // can be large; older messages are fetched on demand (pagination, future work).
 func CurrentUsenetItems(ctx context.Context, pool *pgxpool.Pool, newsgroup string, t time.Time, limit int) ([]model.UsenetItem, error) {
-	return queryUsenetItems(ctx, pool,
-		usenetSelectFrom+`
+	return queryUsenetListItems(ctx, pool,
+		usenetListSelectFrom+`
 		 WHERE ui.approved = 1
 		   AND s.slug = $1
 		   AND ui.start_date <= $2
@@ -333,8 +343,8 @@ func CurrentUsenetItems(ctx context.Context, pool *pgxpool.Pool, newsgroup strin
 // reader scrolls past the initial backlog snapshot. The client passes the oldest
 // start_date it currently holds as `before`.
 func OlderUsenetItems(ctx context.Context, pool *pgxpool.Pool, newsgroup string, before time.Time, limit int) ([]model.UsenetItem, error) {
-	return queryUsenetItems(ctx, pool,
-		usenetSelectFrom+`
+	return queryUsenetListItems(ctx, pool,
+		usenetListSelectFrom+`
 		 WHERE ui.approved = 1
 		   AND s.slug = $1
 		   AND ui.start_date < $2
@@ -347,15 +357,16 @@ func OlderUsenetItems(ctx context.Context, pool *pgxpool.Pool, newsgroup string,
 // against a pathologically busy group flooding one frame.
 const usenetWindowLimit = 1000
 
-// UsenetItemsInRange returns approved messages in one newsgroup whose start_date is
-// in the half-open interval [lo, hi). Unlike the other channels this reads Postgres
-// directly (not Redis): usenet messages carry full bodies and are far too large to
-// warm into the cache, and delivery is gated by the group the client is viewing —
-// so the per-tick query volume is tiny and an index on (source, start_date) serves
-// it. The client reveal-gates the window by its virtual clock.
+// UsenetItemsInRange returns approved header-only messages (no body — see
+// usenetListSelectFrom) in one newsgroup whose start_date is in the half-open
+// interval [lo, hi). Unlike the other channels this reads Postgres directly (not
+// Redis): usenet history is too large to warm into the cache, and delivery is gated
+// by the group the client is viewing — so the per-tick query volume is tiny and an
+// index on (source, start_date) serves it. Bodies are fetched on demand via
+// UsenetItemByID. The client reveal-gates the window by its virtual clock.
 func UsenetItemsInRange(ctx context.Context, pool *pgxpool.Pool, newsgroup string, lo, hi time.Time) ([]model.UsenetItem, error) {
-	return queryUsenetItems(ctx, pool,
-		usenetSelectFrom+`
+	return queryUsenetListItems(ctx, pool,
+		usenetListSelectFrom+`
 		 WHERE ui.approved = 1
 		   AND s.slug = $1
 		   AND ui.start_date >= $2
@@ -421,6 +432,40 @@ func queryUsenetItems(ctx context.Context, pool *pgxpool.Pool, q string, args ..
 		derefStr(&it.ThreadID, threadID)
 		derefStr(&it.ParentID, parentID)
 		derefStr(&it.Body, body)
+		derefStr(&it.DateSource, dateSource)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// queryUsenetListItems scans header-only Usenet rows (no body column) for the list
+// views. It mirrors queryUsenetItems minus the body scan target; Body stays empty.
+func queryUsenetListItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.UsenetItem, error) {
+	rows, err := pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.UsenetItem
+	for rows.Next() {
+		var it model.UsenetItem
+		var newsgroup, subject, author, messageID, references, inReplyTo, threadID, parentID, dateSource *string
+		if err := rows.Scan(
+			&it.ID, &it.StartDate, &newsgroup, &subject, &author,
+			&messageID, &references, &inReplyTo, &threadID,
+			&parentID, &dateSource, &it.Approved,
+		); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		derefStr(&it.Newsgroup, newsgroup)
+		derefStr(&it.Subject, subject)
+		derefStr(&it.Author, author)
+		derefStr(&it.MessageID, messageID)
+		derefStr(&it.References, references)
+		derefStr(&it.InReplyTo, inReplyTo)
+		derefStr(&it.ThreadID, threadID)
+		derefStr(&it.ParentID, parentID)
 		derefStr(&it.DateSource, dateSource)
 		out = append(out, it)
 	}
