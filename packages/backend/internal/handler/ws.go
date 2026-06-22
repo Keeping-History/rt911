@@ -58,6 +58,13 @@ type usenetMoreMsg struct {
 	Before     string   `json:"before"`
 }
 
+// usenetBodyMsg requests the full body of one archived message by id. The body is
+// no longer carried in list frames; the client fetches it when a message opens.
+type usenetBodyMsg struct {
+	Type string `json:"type"`
+	ID   int    `json:"id"`
+}
+
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
 func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) http.HandlerFunc {
@@ -196,6 +203,14 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sendUsenetOlder(r, sess, pool, umsg.Newsgroups, before, logger)
+
+			case "usenet_body":
+				var umsg usenetBodyMsg
+				if err := json.Unmarshal(raw, &umsg); err != nil {
+					sess.SendError("malformed usenet_body message")
+					continue
+				}
+				sendUsenetBody(r, sess, pool, umsg.ID, logger)
 
 			case "subscribe":
 				var cmsg channelMsg
@@ -346,6 +361,27 @@ func sendUsenetOlder(r *http.Request, sess *session.Session, pool *pgxpool.Pool,
 		batch = append(batch, items...)
 	}
 	sess.SendUsenet(before, batch)
+}
+
+// sendUsenetBody fetches one message's body by id and replies on the usenet_body
+// frame. Only approved messages are served; a missing/unapproved id or a query
+// error sends an empty body with an explanatory message so the client shows an
+// error line rather than hanging on "loading". No-ops if not subscribed to usenet.
+func sendUsenetBody(r *http.Request, sess *session.Session, pool *pgxpool.Pool, id int, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelUsenet) {
+		return
+	}
+	item, err := db.UsenetItemByID(r.Context(), pool, id)
+	if err != nil {
+		logger.Warn("usenet body query failed", "id", id, "error", err)
+		sess.SendUsenetBody(id, "", "message unavailable")
+		return
+	}
+	if item == nil || item.Approved != 1 {
+		sess.SendUsenetBody(id, "", "message unavailable")
+		return
+	}
+	sess.SendUsenetBody(id, item.Body, "")
 }
 
 // sendSources delivers the time-independent available-source lists for client

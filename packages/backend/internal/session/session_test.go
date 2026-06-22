@@ -334,6 +334,43 @@ func TestSetUsenetGroupsTracksActiveAndAcks(t *testing.T) {
 	}
 }
 
+// SendUsenetBody emits the single-body frame with id + body, no other payload.
+func TestSendUsenetBodyEmitsBodyFrame(t *testing.T) {
+	s := newTestSession(t)
+
+	s.SendUsenetBody(7001, "Hello, world.\n", "")
+
+	m := recvType(t, s)
+	if m.Type != "usenet_body" {
+		t.Fatalf("expected usenet_body frame, got %q", m.Type)
+	}
+	if m.ID != 7001 || m.Body != "Hello, world.\n" {
+		t.Fatalf("unexpected body frame: id=%d body=%q", m.ID, m.Body)
+	}
+	if m.Msg != "" {
+		t.Fatalf("success frame must not carry an error message, got %q", m.Msg)
+	}
+	if len(m.Usenet) != 0 || len(m.Items) != 0 {
+		t.Fatalf("body frame must not carry list payloads, got usenet=%+v items=%+v", m.Usenet, m.Items)
+	}
+}
+
+// On failure the frame carries the error message and an empty body, so the
+// client can distinguish "unavailable" from a genuinely empty body.
+func TestSendUsenetBodyEmitsErrorFrame(t *testing.T) {
+	s := newTestSession(t)
+
+	s.SendUsenetBody(7002, "", "message unavailable")
+
+	m := recvType(t, s)
+	if m.Type != "usenet_body" || m.ID != 7002 {
+		t.Fatalf("unexpected frame: %+v", m)
+	}
+	if m.Body != "" || m.Msg != "message unavailable" {
+		t.Fatalf("expected empty body + error message, got body=%q msg=%q", m.Body, m.Msg)
+	}
+}
+
 // An unsubscribed usenet channel never refills, even with active groups selected.
 func TestUsenetRefillRequiresSubscription(t *testing.T) {
 	s := newTestSession(t)

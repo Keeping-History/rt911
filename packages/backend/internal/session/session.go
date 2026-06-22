@@ -71,6 +71,9 @@ type outMsg struct {
 	Usenet  []model.UsenetItem `json:"usenet,omitempty"`
 	Sources *SourceList        `json:"sources,omitempty"`
 	Msg     string             `json:"message,omitempty"`
+	// ID/Body carry a single on-demand Usenet article body (usenet_body frame).
+	ID   int    `json:"id,omitempty"`
+	Body string `json:"body,omitempty"`
 }
 
 // Session holds all state for a single connected client.
@@ -276,6 +279,14 @@ func (s *Session) SendUsenet(t time.Time, items []model.UsenetItem) {
 		return
 	}
 	s.send_(outMsg{Type: "usenet", Time: t.Format(time.RFC3339), Usenet: items})
+}
+
+// SendUsenetBody delivers a single article body in reply to a usenet_body request.
+// On success errMsg is "" and body carries the text; on failure errMsg explains why
+// and body is empty, letting the client tell "unavailable" apart from an empty body.
+// Touches no shared state, so no lock — same shape as the other Send* helpers.
+func (s *Session) SendUsenetBody(id int, body, errMsg string) {
+	s.send_(outMsg{Type: "usenet_body", ID: id, Body: body, Msg: errMsg})
 }
 
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the

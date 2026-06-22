@@ -45,6 +45,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
+| `usenet_body` | `id`              | Request the full body of one message by id (bodies are no longer in list frames). |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
 
@@ -68,6 +69,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
+| `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`, `sources.usenet`). Not resent on `seek`. |
 | `error`           | `message`                     | Reply to a malformed or unrecognised request.          |
 
@@ -258,7 +260,15 @@ message carries its `newsgroup`, `subject`, `author`, `references`/`in_reply_to`
 To read **further back** than the initial ≤500, send `usenet_more` with the oldest `start_date` the
 client holds as `before`; the server replies with the next ≤500 older messages on a normal `usenet`
 frame (all are ≤ the clock, so the client merges them straight in). Unlike the other channels, the
-usenet channel reads Postgres directly (messages carry full bodies, too large to cache in Redis).
+usenet channel reads Postgres directly — bodies are too large to cache in Redis, and (per the next
+paragraph) are not sent in list frames at all but fetched on demand via `usenet_body`.
+
+Message **bodies are not included in `usenet` list frames** (snapshot, window, or
+`usenet_more` page) — those carry only headers (subject/author/date/threading).
+To read a message, send `usenet_body` with its `id`; the server replies on a
+`usenet_body` frame with `{id, body}`, or `{id, message}` (empty body) when the id
+is missing/unapproved or the query fails. This keeps list frames small and the
+per-tick Postgres window cheap.
 
 ### `sources`
 
