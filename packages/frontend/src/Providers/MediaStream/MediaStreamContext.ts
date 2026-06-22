@@ -82,7 +82,6 @@ export interface UsenetItem {
 	in_reply_to?: string;
 	thread_id?: string;
 	parent_id?: string;
-	body?: string;
 	date_source?: string;
 	approved?: number;
 }
@@ -118,6 +117,12 @@ export interface MediaStreamContextValue {
 	newsItems: MediaItem[];
 	/** usenet messages received for the currently-viewed newsgroup(s). */
 	usenetItems: UsenetItem[];
+	/** Fetched Usenet article bodies, keyed by message id (on-demand). */
+	usenetBodies: Record<number, string>;
+	/** Failure messages for body fetches that could not be served, keyed by id. */
+	usenetBodyErrors: Record<number, string>;
+	/** Request one message's body by id; no-ops if already fetched or in flight. */
+	requestUsenetBody: (id: number) => void;
 	/** All selectable sources per filter, sent once by the server at init. */
 	sources: AvailableSources;
 	connected: boolean;
@@ -154,6 +159,9 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	mp3Items: [],
 	newsItems: [],
 	usenetItems: [],
+	usenetBodies: {},
+	usenetBodyErrors: {},
+	requestUsenetBody: () => {},
 	sources: { video: [], pager: [], usenet: [] },
 	connected: false,
 	addItems: () => {},

@@ -16,6 +16,11 @@ import {
 } from "./MediaStreamContext";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
+import {
+	applyUsenetBodyFrame,
+	emptyUsenetBodyState,
+	type UsenetBodyFrame,
+} from "./usenetBodyCache";
 
 // Merge incoming items into a prior list, de-duplicating by id (last write wins).
 function mergeById<T extends { id: number }>(prev: T[], incoming: T[]): T[] {
@@ -81,6 +86,13 @@ interface WsUsenetMessage {
 	usenet: UsenetItem[];
 }
 
+interface WsUsenetBodyMessage {
+	type: "usenet_body";
+	id: number;
+	body?: string;
+	message?: string;
+}
+
 interface WsSourcesMessage {
 	type: "sources";
 	sources: AvailableSources;
@@ -92,6 +104,7 @@ type WsIncomingMessage =
 	| WsMp3Message
 	| WsNewsMessage
 	| WsUsenetMessage
+	| WsUsenetBodyMessage
 	| WsSourcesMessage
 	| { type: string };
 
@@ -109,6 +122,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
 	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
+	const [usenetBodyState, setUsenetBodyState] = useState(emptyUsenetBodyState);
+	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
+	// fetches when a window re-renders before its body arrives.
+	const usenetBodyInflight = useRef(new Set<number>());
 	const [sources, setSources] = useState<AvailableSources>({ video: [], pager: [], usenet: [] });
 	const [connected, setConnected] = useState(false);
 
@@ -296,6 +313,23 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	// Fetch one message body on demand. Skips ids already cached, already errored,
+	// or already in flight; bodies are immutable so a cached one is never refetched.
+	const requestUsenetBody = useCallback(
+		(id: number) => {
+			if (
+				id in usenetBodyState.bodies ||
+				id in usenetBodyState.errors ||
+				usenetBodyInflight.current.has(id)
+			) {
+				return;
+			}
+			usenetBodyInflight.current.add(id);
+			send({ type: "usenet_body", id });
+		},
+		[send, usenetBodyState],
+	);
+
 	// On every second tick: reveal buffered items the clock has now reached, then
 	// prune expired ones. drainDue mutates the buffer (removing promoted entries);
 	// the merged-then-filtered state both surfaces newly-due items and drops
@@ -384,6 +418,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 					ws.send(JSON.stringify({ type: "usenet_filter", newsgroups: usenetGroups.current }));
 				}
 			}
+			// Body requests do not survive a reconnect; clear in-flight markers so
+			// any open message window re-requests on its next render.
+			usenetBodyInflight.current.clear();
 			heartbeatId = setInterval(() => {
 				if (ws.readyState === WebSocket.OPEN) {
 					ws.send(
@@ -465,6 +502,15 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "usenet_body") {
+				const frame = msg as WsUsenetBodyMessage;
+				usenetBodyInflight.current.delete(frame.id);
+				setUsenetBodyState((prev) =>
+					applyUsenetBodyFrame(prev, frame as UsenetBodyFrame),
+				);
+				return;
+			}
+
 			if (msg.type !== "items" && msg.type !== "init_ack" && msg.type !== "seek_ack") return;
 
 			const incoming = (msg as WsItemsMessage).items;
@@ -510,6 +556,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				mp3Items,
 				newsItems,
 				usenetItems,
+				usenetBodies: usenetBodyState.bodies,
+				usenetBodyErrors: usenetBodyState.errors,
+				requestUsenetBody,
 				sources,
 				connected,
 				addItems,

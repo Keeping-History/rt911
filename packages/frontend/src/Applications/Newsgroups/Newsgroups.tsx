@@ -9,8 +9,9 @@ import {
 	ClassicyWindow,
 	quitMenuItemHelper,
 } from "classicy";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
+import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import { DisclosureTriangle } from "./DisclosureTriangle";
 import type { GroupSortField } from "./groupTree";
 import styles from "./Newsgroups.module.scss";
@@ -58,9 +59,13 @@ export const Newsgroups = () => {
 	const [searchText, setSearchText] = useState("");
 	const runSearch = () => setGroupQuery(searchText.trim());
 
+	const { usenetBodies, requestUsenetBody } = useContext(MediaStreamContext);
+
 	const [openMessages, setOpenMessages] = useState<UsenetItem[]>([]);
-	const openMessage = (item: UsenetItem) =>
+	const openMessage = (item: UsenetItem) => {
 		setOpenMessages((prev) => (prev.some((m) => m.id === item.id) ? prev : [...prev, item]));
+		requestUsenetBody(item.id);
+	};
 	const closeMessage = (id: number) =>
 		setOpenMessages((prev) => prev.filter((m) => m.id !== id));
 
@@ -274,7 +279,7 @@ export const Newsgroups = () => {
 						</ClassicyControlGroup>
 						<div className={styles.detailBody}>
 							<ClassicyControlGroup label="Body">
-								<ClassicyTextEditor id={`${m.id}-body`} border prefillValue={m.body ?? ""} autoHeight disabled />
+								<ClassicyTextEditor id={`${m.id}-body`} border prefillValue={usenetBodies[m.id] ?? ""} autoHeight disabled />
 							</ClassicyControlGroup>
 						</div>
 					</div>
