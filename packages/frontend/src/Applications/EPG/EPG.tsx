@@ -28,7 +28,8 @@ import {
 	tvTuneChannel,
 } from "../TV/TVContext";
 import epgStyles from "./EPG.module.scss";
-import data from "./testdata.json" with { type: "json" };
+
+const EPG_GUIDE_URL = "https://files.911realtime.org/epg/guide.json";
 
 interface ClassicyEPGProps {
 	minutesPerGrid?: number; // in Minutes
@@ -101,7 +102,28 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 
 	const [showSettings, setShowSettings] = useState<boolean>(false);
 
-	const gridData = data as EPGChannel[];
+	// EPG schedule is fetched at runtime from the files proxy rather than bundled.
+	// Starts empty (renders zero rows) and populates once the fetch resolves.
+	const [gridData, setGridData] = useState<EPGChannel[]>([]);
+
+	useEffect(() => {
+		const controller = new AbortController();
+		fetch(EPG_GUIDE_URL, { signal: controller.signal })
+			.then((response) => {
+				if (!response.ok) {
+					throw new Error(`${response.status} ${response.statusText}`);
+				}
+				return response.json();
+			})
+			.then((json) => setGridData(json as EPGChannel[]))
+			.catch((err) => {
+				// Ignore the abort thrown on unmount; surface real failures.
+				if (err.name !== "AbortError") {
+					console.error("Failed to load EPG guide:", err);
+				}
+			});
+		return () => controller.abort();
+	}, []);
 
 	// Shift a UTC ms timestamp into "local space" so it can be compared against
 	// gridStartTime (which is also stored in local space).
