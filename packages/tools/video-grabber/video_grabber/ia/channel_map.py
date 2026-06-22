@@ -41,32 +41,61 @@ _IDENT_PREFIX = re.compile(r"^([A-Za-z][A-Za-z0-9]{1,15})_")
 
 
 def normalize_slug(item: dict) -> str | None:
-    """Return a channel slug from IA item metadata, or None if unrecognized."""
+    """Return a channel slug from IA item metadata, or None if unrecognized.
+
+    Priority:
+      1. A *known network* named in creator/subject/title (e.g. "ABC News").
+      2. The IA identifier's channel-code prefix (``CNN_``, ``WETA_``, ``ANT1_``,
+         …) — the authoritative per-capture broadcaster code in the Sept-11
+         archive.
+      3. A bare W/K call sign found in the text — last resort only.
+
+    Step 2 must precede step 3: the ``[WK][A-Z]{3}`` call-sign pattern also
+    matches ordinary four-letter title words ("WOLF" in *Wolf Blitzer*, "KING"
+    in *Larry King Live*, "WITH"/"WALL"/"WILD"/"WIND"/…), which previously minted
+    bogus channels out of program titles. The identifier prefix is unambiguous,
+    so trust it before guessing from free text.
+    """
     for field in ("creator", "subject", "title"):
-        value = item.get(field, "")
-        if isinstance(value, list):
-            value = " ".join(value)
-        if not value:
-            continue
-        slug = _slug_from_text(value)
+        slug = _known_network(_as_text(item.get(field)))
         if slug:
             return slug
-    # Last resort: the identifier's channel-code prefix. Only reached when the
-    # human-readable fields named no known network and carried no call sign.
-    return _slug_from_identifier(item.get("identifier", ""))
+
+    ident = _slug_from_identifier(item.get("identifier", ""))
+    if ident:
+        return ident
+
+    for field in ("creator", "subject", "title"):
+        slug = _call_sign(_as_text(item.get(field)))
+        if slug:
+            return slug
+    return None
+
+
+def _as_text(value) -> str:
+    if isinstance(value, list):
+        return " ".join(value)
+    return value or ""
 
 
 def _slug_from_identifier(identifier: str) -> str | None:
     m = _IDENT_PREFIX.match(identifier or "")
-    return m.group(1).lower() if m else None
+    if not m:
+        return None
+    raw = m.group(1).lower()
+    # Normalize aliases (e.g. an "ABC_" prefix -> abc-news); unknown codes
+    # (nhk, weta, ant1, …) pass through unchanged.
+    return KNOWN_CHANNELS.get(raw, raw)
 
 
-def _slug_from_text(text: str) -> str | None:
+def _known_network(text: str) -> str | None:
     lower = text.lower()
     for pattern, slug in KNOWN_CHANNELS.items():
         if pattern in lower:
             return slug
-    m = _LOCAL_CALL_SIGN.search(text.upper())
-    if m:
-        return m.group(1).lower()
     return None
+
+
+def _call_sign(text: str) -> str | None:
+    m = _LOCAL_CALL_SIGN.search(text.upper())
+    return m.group(1).lower() if m else None
