@@ -116,6 +116,7 @@ def test_fetch_slots_path_reshapes_joined_rows():
         "ia_identifier": "WETA_20010911_123000_Demo",
         "title": "Demo",
         "description": "Desc",
+        "wasabi_key": "hls/weta/20010911/WETA_20010911_123000_Demo/master.m3u8",
     }
     db = MagicMock()
     db.execute.return_value.mappings.return_value.all.return_value = [row]
@@ -126,3 +127,31 @@ def test_fetch_slots_path_reshapes_joined_rows():
     assert "/weta/20010911/WETA_20010911_123000_Demo/full/" in playlists["full"]
     assert any(g["title"] == "Demo" for g in epg["grid"])
     assert _count_playlist_duration(playlists["full"]) == WINDOW_SECS
+
+
+def test_segment_path_uses_stored_upload_key_after_reassignment():
+    """A program reassigned to a new channel keeps its segments at the original
+    upload location (keyed by the slug at encode time). assemble_range must path
+    them from the stored ``segment_base``, not the program's current slug — else
+    every reassigned program points at a dead URL."""
+    ch = make_channel("cnn")  # program now lives on cnn...
+    slot = make_slot(
+        "CNN_20010911_010000_Larry_King_Live",
+        datetime(2001, 9, 11, 1, 0, tzinfo=timezone.utc),
+        1800,
+    )
+    # ...but its segments were uploaded while it was mis-slugged "king".
+    slot.program.segment_base = "hls/king/20010911/CNN_20010911_010000_Larry_King_Live"
+    playlists, _ = assemble_range(ch, WINDOW_START, WINDOW_END, None, slots=[slot])
+    full = playlists["full"]
+    assert "/hls/king/20010911/CNN_20010911_010000_Larry_King_Live/full/" in full
+    assert "/hls/cnn/20010911/" not in full  # never under the new slug
+
+
+def test_segment_path_falls_back_to_slug_without_key():
+    """With no stored key (segment_base=None), fall back to the slug-based path."""
+    ch = make_channel("cnn")
+    slot = make_slot("prog-x", datetime(2001, 9, 11, 1, 0, tzinfo=timezone.utc), 1800)
+    slot.program.segment_base = None
+    playlists, _ = assemble_range(ch, WINDOW_START, WINDOW_END, None, slots=[slot])
+    assert "/hls/cnn/20010911/prog-x/full/" in playlists["full"]
