@@ -38,8 +38,6 @@ export const Newsgroups = () => {
 		toggleGroupNode,
 		expandAllGroups,
 		collapseAllGroups,
-		treeView,
-		toggleTreeView,
 		groupSort,
 		setGroupSort,
 		selectedGroup,
@@ -124,9 +122,6 @@ export const Newsgroups = () => {
 								</ClassicyButton>
 								<ClassicyButton buttonSize="small" onClickFunc={collapseAllGroups}>
 									<span style={{ fontSize: "var(--body-font-size)" }}>-</span>
-								</ClassicyButton>
-								<ClassicyButton buttonSize="small" depressed={treeView} onClickFunc={toggleTreeView}>
-									<span style={{ fontSize: "var(--body-font-size)" }}>/</span>
 								</ClassicyButton>
 								<div className={styles.sortField}>
 									<ClassicyPopUpMenu
