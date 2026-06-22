@@ -19,6 +19,7 @@ Gap logic ported from packages/backend/gen-epg.mjs:65-101.
 Every slot boundary gets #EXT-X-DISCONTINUITY + absolute #EXT-X-MAP URL +
 #EXT-X-PROGRAM-DATE-TIME.
 """
+import posixpath
 from datetime import datetime, date, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
@@ -79,12 +80,21 @@ def assemble_range(
                 "end": slot.starts_at.isoformat(),
             })
 
-        # Segments live under the program's own air date (== slot.starts_at),
-        # matching the upload path in storage/wasabi.py.
-        slot_yyyymmdd = slot.starts_at.strftime("%Y%m%d")
-        slot_prefix = (
-            f"{WASABI_BASE}/hls/{channel.slug}/{slot_yyyymmdd}/{slot.program.ia_identifier}"
-        )
+        # Segments live at their original upload location (storage/wasabi.py),
+        # which is keyed by the channel slug *at encode time*. That slug can
+        # later change when a program is reassigned to its correct channel, so
+        # path the segments from the authoritative stored upload key — otherwise
+        # every reassigned program points at a dead URL under the new slug. Fall
+        # back to reconstructing from the current slug when no key is recorded
+        # (e.g. unit tests that hand-build slots).
+        seg_base = getattr(slot.program, "segment_base", None)
+        if isinstance(seg_base, str) and seg_base:
+            slot_prefix = f"{WASABI_BASE}/{seg_base}"
+        else:
+            slot_yyyymmdd = slot.starts_at.strftime("%Y%m%d")
+            slot_prefix = (
+                f"{WASABI_BASE}/hls/{channel.slug}/{slot_yyyymmdd}/{slot.program.ia_identifier}"
+            )
         _append_slot(rend_lines, slot, slot_prefix)
         epg_grid.append({
             "title": slot.program.title,
@@ -180,10 +190,16 @@ def _fetch_slots(db, channel_id: str, window_start: datetime, window_end: dateti
     pattern ``flows.get_job`` uses for its channel/program relationships).
     """
     from sqlalchemy import text
+    # Pull the program's actual upload key via a scalar subquery (rather than a
+    # JOIN) so a program with more than one video_jobs row can't multiply the
+    # slot into duplicate segments. Newest uploaded key wins.
     rows = db.execute(
         text(
             "SELECT s.starts_at, s.ends_at, "
-            "       p.ia_identifier, p.title, p.description "
+            "       p.ia_identifier, p.title, p.description, "
+            "       (SELECT v.wasabi_key FROM video_jobs v "
+            "        WHERE v.program_id = p.id AND v.wasabi_key IS NOT NULL "
+            "        ORDER BY v.last_transition_at DESC LIMIT 1) AS wasabi_key "
             "FROM schedule_slots s "
             "JOIN programs p ON p.id = s.program_id "
             "WHERE s.channel_id = :cid AND s.starts_at >= :ws AND s.ends_at <= :we "
@@ -199,7 +215,23 @@ def _fetch_slots(db, channel_id: str, window_start: datetime, window_end: dateti
                 ia_identifier=r["ia_identifier"],
                 title=r["title"],
                 description=r["description"],
+                segment_base=_segment_base(r["wasabi_key"]),
             ),
         )
         for r in rows
     ]
+
+
+def _segment_base(wasabi_key: Optional[str]) -> Optional[str]:
+    """The directory holding a program's rendition folders, taken from its
+    stored upload key (e.g.
+    ``hls/king/20010911/CNN_..._Larry_King_Live/master.m3u8`` ->
+    ``hls/king/20010911/CNN_..._Larry_King_Live``).
+
+    This is the *actual* upload location — keyed by the channel slug at encode
+    time — and stays correct after a program is reassigned to a different
+    channel, where ``channel.slug`` no longer matches the stored path.
+    """
+    if not wasabi_key:
+        return None
+    return posixpath.dirname(wasabi_key)
