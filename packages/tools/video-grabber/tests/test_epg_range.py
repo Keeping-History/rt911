@@ -155,3 +155,118 @@ def test_segment_path_falls_back_to_slug_without_key():
     slot.program.segment_base = None
     playlists, _ = assemble_range(ch, WINDOW_START, WINDOW_END, None, slots=[slot])
     assert "/hls/cnn/20010911/prog-x/full/" in playlists["full"]
+
+
+# --- accurate #EXTINF (the QuickTime-drift fix) ---------------------------------
+
+def _extinfs(playlist: str) -> list[float]:
+    return [float(ln.split(":")[1].rstrip(","))
+            for ln in playlist.splitlines() if ln.startswith("#EXTINF:")]
+
+
+def _fake_wasabi(monkeypatch, index_text):
+    """Inject a boto3-free stand-in for storage.wasabi so the assembler's lazy
+    import resolves to it (the real module imports boto3, absent in unit env)."""
+    import sys
+    import types
+
+    mod = types.ModuleType("video_grabber.storage.wasabi")
+    mod._make_s3_client = lambda cfg: object()
+    mod.read_text = lambda key, cfg, s3=None: index_text
+    monkeypatch.setitem(sys.modules, "video_grabber.storage.wasabi", mod)
+
+
+def test_program_extinf_comes_from_real_index_when_cfg_present(monkeypatch):
+    """With cfg set, the assembler reads the program's uploaded index.m3u8 and
+    emits its *real* fractional EXTINF + segment names — not a synthesized
+    integer-6s layout. This is what keeps a sample-timestamp player locked to
+    the playlist timeline."""
+    real_index = (
+        "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:6\n"
+        '#EXT-X-MAP:URI="init.mp4"\n'
+        "#EXTINF:6.006006,\nseg0000.m4s\n"
+        "#EXTINF:6.006006,\nseg0001.m4s\n"
+        "#EXTINF:4.004000,\nseg0002.m4s\n"
+        "#EXT-X-ENDLIST\n"
+    )
+    _fake_wasabi(monkeypatch, real_index)
+
+    ch = make_channel("cnn")
+    # Slot span (20s) exceeds the program (16.016s) so no segment is clipped —
+    # the real fractional EXTINF pass through verbatim (clipping has its own test).
+    slot = make_slot("CNN_x", datetime(2001, 9, 11, 1, 0, tzinfo=timezone.utc), 20)
+    slot.program.segment_base = "hls/king/20010911/CNN_x"
+    playlists, _ = assemble_range(
+        ch, WINDOW_START, WINDOW_END, None, slots=[slot], cfg=object(),
+    )
+    full = playlists["full"]
+    # Real segment names + fractional EXTINF appear verbatim.
+    assert "/hls/king/20010911/CNN_x/full/seg0000.m4s" in full
+    assert "#EXTINF:6.006," in full   # %g trims 6.006006 -> 6.006
+    assert "#EXTINF:4.004," in full
+    # The synthesized integer fallback ("seg0000.m4s" via range + EXTINF:6) is
+    # not what produced these — verify a fractional value is present.
+    assert any(abs(d - 6.006006) < 1e-3 for d in _extinfs(full))
+
+
+def test_clipped_slot_drops_segments_past_its_window(monkeypatch):
+    """A slot shorter than its program (scheduler clipped an overlap) emits only
+    whole segments up to the slot span; the rest are dropped, not overrun."""
+    # Program is 18s of real media (3x6s) but the slot is only ~12s.
+    real_index = (
+        "#EXTM3U\n"
+        "#EXTINF:6.006,\nseg0000.m4s\n"
+        "#EXTINF:6.006,\nseg0001.m4s\n"
+        "#EXTINF:6.006,\nseg0002.m4s\n#EXT-X-ENDLIST\n"
+    )
+    _fake_wasabi(monkeypatch, real_index)
+
+    ch = make_channel("cnn")
+    slot = make_slot("CNN_x", datetime(2001, 9, 11, 1, 0, tzinfo=timezone.utc), 12)
+    slot.program.segment_base = "hls/cnn/20010911/CNN_x"
+    playlists, _ = assemble_range(
+        ch, WINDOW_START, WINDOW_END, None, slots=[slot], cfg=object(),
+    )
+    full = playlists["full"]
+    assert "/CNN_x/full/seg0001.m4s" in full       # fills the 12s slot
+    assert "/CNN_x/full/seg0002.m4s" not in full    # 3rd would overrun the slot
+    # The program's EXTINF total lands on the slot span exactly (final segment
+    # clipped), so cumulative time stays equal to wall-clock at the boundary.
+    prog_extinfs = [
+        float(ln.split(":")[1].rstrip(","))
+        for ln, nxt in zip(full.splitlines(), full.splitlines()[1:])
+        if ln.startswith("#EXTINF:") and "/CNN_x/full/" in nxt
+    ]
+    assert abs(sum(prog_extinfs) - 12.0) < 1e-6
+
+
+def test_gap_extinf_uses_measured_tile_durations():
+    """gap_durations makes the blue tiles carry their true ~6.029s length and
+    sizes the fill by real media, so EXTINF sums track wall-clock without the
+    +0.029s/tile bias that drifted QuickTime."""
+    ch = make_channel("cnn")
+    gap_durations = {6: 6.029, 5: 5.027, 4: 4.027, 3: 3.026, 2: 2.025, 1: 1.024}
+    playlists, _ = assemble_range(
+        ch, WINDOW_START, WINDOW_END, None, slots=[], cfg=None,
+        gap_durations=gap_durations,
+    )
+    full = playlists["full"]
+    durs = _extinfs(full)
+    # Tiles carry the real measured duration, not an integer.
+    assert any(abs(d - 6.029) < 1e-4 for d in durs)
+    # Real media total stays within half a tile of the wall-clock window — the
+    # systematic drift is gone (a 9-day all-gap window is ~777600s).
+    assert abs(sum(durs) - WINDOW_SECS) < 6.029
+
+
+def test_plan_gap_tiles_sizes_by_real_duration():
+    from video_grabber.epg.assembler import _plan_gap_tiles
+
+    durs = {6: 6.029, 5: 5.027, 4: 4.027, 3: 3.026, 2: 2.025, 1: 1.024}
+    # Legacy (None): exact integer fill.
+    legacy = _plan_gap_tiles(20.0, None)
+    assert [lbl for lbl, _ in legacy] == [6, 6, 6, 2]
+    assert sum(d for _, d in legacy) == 20.0
+    # Accurate: real-duration tiling lands within half a tile of the target.
+    accurate = _plan_gap_tiles(20.0, durs)
+    assert abs(sum(d for _, d in accurate) - 20.0) < 6.029 / 2 + 0.01

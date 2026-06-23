@@ -28,6 +28,7 @@ def test_build_channel_flow_wires_schedule_assemble_publish():
          patch.object(flows, "build_schedule", return_value=7) as m_sched, \
          patch.object(flows, "assemble_range", return_value=(playlists, epg_channel)) as m_asm, \
          patch.object(flows, "generate_gap_fmp4") as m_gap, \
+         patch.object(flows, "gap_segment_durations", return_value={6: 6.029}), \
          patch.object(flows, "upload_tree") as m_tree, \
          patch.object(flows, "upload_text") as m_text, \
          patch.object(flows, "list_keys", return_value=["epg/cnn.json"]) as m_list, \
