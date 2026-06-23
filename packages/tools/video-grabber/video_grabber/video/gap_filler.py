@@ -16,7 +16,9 @@ Each segment is encoded standalone with a forced IDR at frame 0 so it decodes
 independently — a hard HLS requirement that the encoder's ``-g 60`` default
 would otherwise violate for sub-2-second segments.
 """
+import json
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Iterable
 
@@ -81,3 +83,46 @@ def _encode_gap_segment(rend: dict, rend_dir: Path, secs: int, *, write_init: bo
     (rend_dir / "index.m3u8").unlink(missing_ok=True)
     if not write_init:
         (rend_dir / "init_tmp.mp4").unlink(missing_ok=True)
+
+
+def gap_segment_durations(output_dir: Path) -> dict[int, float]:
+    """Measure each gap tile's *real* fMP4 duration, keyed by its labelled
+    seconds (e.g. ``{6: 6.029, 4: 4.027, ...}``).
+
+    The tiles are labelled by integer seconds but a 29.97 fps + AAC fragment
+    can't land on an exact integer duration, so ``seg_gap_6s.m4s`` is really
+    ~6.029 s. The assembler needs these true values to write honest ``#EXTINF``
+    (and to size gaps by real media, not the integer label) — otherwise a
+    player that advances by sample timestamps drifts ahead of the playlist
+    timeline by ~0.5 % of all dead air, which over a multi-day mostly-gap
+    stream is minutes. Durations are identical across renditions (same frame
+    timing), so the ``full`` rendition is authoritative.
+    """
+    full_dir = output_dir / "full"
+    init = full_dir / "init.mp4"
+    durations: dict[int, float] = {}
+    for secs in (_SEGMENT_DURATION, *REMAINDER_SECONDS):
+        seg = full_dir / f"seg_gap_{secs}s.m4s"
+        if init.exists() and seg.exists():
+            durations[secs] = _probe_fragment_seconds(init, seg, fallback=float(secs))
+    return durations
+
+
+def _probe_fragment_seconds(init: Path, seg: Path, *, fallback: float) -> float:
+    """Real duration of a standalone fMP4 fragment. The ``.m4s`` only decodes
+    with its ``init.mp4`` moov, so concatenate the two before probing."""
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+        tmp.write(init.read_bytes())
+        tmp.write(seg.read_bytes())
+        tmp_path = Path(tmp.name)
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(tmp_path)],
+            capture_output=True,
+        )
+        data = json.loads(result.stdout or "{}")
+        return float(data.get("format", {}).get("duration"))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return fallback
+    finally:
+        tmp_path.unlink(missing_ok=True)

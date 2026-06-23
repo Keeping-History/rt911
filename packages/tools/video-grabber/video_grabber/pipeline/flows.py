@@ -21,7 +21,7 @@ from video_grabber.ia.scanner import crawl_collection
 from video_grabber.pipeline.downloader import download_item
 from video_grabber.pipeline.resolve import resolve_job
 from video_grabber.video.encoder import encode_to_hls
-from video_grabber.video.gap_filler import generate_gap_fmp4
+from video_grabber.video.gap_filler import generate_gap_fmp4, gap_segment_durations
 from video_grabber.storage.wasabi import (
     upload_hls_package, upload_tree, upload_text, read_text, list_keys,
 )
@@ -273,12 +273,18 @@ def build_channel_flow(channel_id: str, window_start: str, window_end: str):
     n_slots = build_schedule(channel_id, ws, we, db)
     logger.info("build-channel %s: %d slots scheduled", channel.slug, n_slots)
 
-    playlists, epg_channel = assemble_range(channel, ws, we, db)
-
     # Channel-level blue gap package (date-independent); cheap to regenerate.
+    # Build it first and measure each tile's true sub-second length so the
+    # assembler can write honest #EXTINF for both gaps and programs — keeping
+    # sample-timestamp players (QuickTime) locked to the playlist timeline.
     gap_dir = _SCRATCH / f"_gap_{channel.slug}"
     generate_gap_fmp4(gap_dir)
+    gap_durations = gap_segment_durations(gap_dir)
     upload_tree(gap_dir, f"hls/{channel.slug}/_gap", cfg)
+
+    playlists, epg_channel = assemble_range(
+        channel, ws, we, db, cfg=cfg, gap_durations=gap_durations
+    )
 
     # HLS playlists under playlists/<slug>/ (the EPG JSON guide lives in epg/).
     base = f"playlists/{channel.slug}"
