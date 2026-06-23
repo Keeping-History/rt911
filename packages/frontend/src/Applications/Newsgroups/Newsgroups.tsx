@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { DisclosureTriangle } from "./DisclosureTriangle";
 import type { GroupSortField } from "./groupTree";
+import { messageBodyView } from "./messageBodyView";
 import styles from "./Newsgroups.module.scss";
 import type { SortField } from "./newsgroupUtils";
 import { useNewsgroups } from "./useNewsgroups";
@@ -284,17 +285,22 @@ export const Newsgroups = () => {
 						</ClassicyControlGroup>
 						<div className={styles.detailBody}>
 							<ClassicyControlGroup label="Body">
-								<ClassicyTextEditor
-									id={`${m.id}-body`}
-									border
-									prefillValue={
-										m.id in bodies
-											? bodies[m.id]
-											: bodyErrors[m.id] ?? "Loading message…"
-									}
-									autoHeight
-									disabled
-								/>
+								{(() => {
+									// ClassicyTextEditor is uncontrolled (snapshots prefillValue at
+									// mount), but the body arrives after the window opens — so key it
+									// by view state to force a remount when the body lands.
+									const view = messageBodyView(m.id, bodies, bodyErrors);
+									return (
+										<ClassicyTextEditor
+											key={view.key}
+											id={`${m.id}-body`}
+											border
+											prefillValue={view.value}
+											autoHeight
+											disabled
+										/>
+									);
+								})()}
 							</ClassicyControlGroup>
 						</div>
 					</div>
