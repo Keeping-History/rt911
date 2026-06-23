@@ -195,10 +195,17 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 				const itemStart = new Date(itemStartLocal);
 				const itemEnd   = new Date(itemEndLocal);
 
-				let gridProgramStart =
-					(itemStartLocal - gridStartTime.getTime()) / 60000 / minutesPerGrid;
-				let gridProgramEnd =
-					(itemEndLocal - itemStartLocal) / 60000 / minutesPerGrid;
+				// Snap to whole grid slots. Source timestamps carry second-level
+				// jitter (e.g. 11:00:01, 11:30:04, 11:29:56), so the raw quotients are
+				// fractional. CSS rejects a non-integer grid line or `span`, dropping
+				// the whole `grid-column` — which left such programs unplaced and piled
+				// up at the grid's auto-flow origin instead of at their real time.
+				let gridProgramStart = Math.round(
+					(itemStartLocal - gridStartTime.getTime()) / 60000 / minutesPerGrid,
+				);
+				let gridProgramEnd = Math.round(
+					(itemEndLocal - itemStartLocal) / 60000 / minutesPerGrid,
+				);
 
 				if (gridProgramStart < 0) {
 					gridProgramEnd = gridProgramStart + gridProgramEnd;
