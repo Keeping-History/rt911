@@ -138,7 +138,7 @@ export const Newsgroups = () => {
 										id="newsgroup-sort"
 										label="Sort"
 										labelPosition="left"
-										size="mini"
+										size="small"
 										options={[
 											{ value: "name", label: "Name" },
 											{ value: "count", label: "Messages" },
