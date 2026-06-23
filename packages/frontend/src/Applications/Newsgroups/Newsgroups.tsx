@@ -127,10 +127,10 @@ export const Newsgroups = () => {
 							</div>
 							{/* Row 2: expand/collapse/view toggles and the list sort selector. */}
 							<div className={styles.searchRow}>
-								<ClassicyButton buttonSize="small" onClickFunc={expandAllGroups}>
+								<ClassicyButton buttonSize="small" onClickFunc={expandAllGroups} padding="sm" margin="sm">
 									<span style={{ fontSize: "var(--body-font-size)" }}>+</span>
 								</ClassicyButton>
-								<ClassicyButton buttonSize="small" onClickFunc={collapseAllGroups}>
+								<ClassicyButton buttonSize="small" onClickFunc={collapseAllGroups} padding="sm" margin="sm">
 									<span style={{ fontSize: "var(--body-font-size)" }}>-</span>
 								</ClassicyButton>
 								<div className={styles.sortField}>
