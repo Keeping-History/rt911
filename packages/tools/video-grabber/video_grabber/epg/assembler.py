@@ -113,7 +113,20 @@ def assemble_range(
             slot_prefix = (
                 f"{WASABI_BASE}/hls/{channel.slug}/{slot_yyyymmdd}/{slot.program.ia_identifier}"
             )
-        _append_slot(rend_lines, slot, slot_prefix, program_segs)
+        filled = _append_slot(rend_lines, slot, slot_prefix, program_segs)
+        # The slot's wall-clock span is sized from the source .mpg probe, which
+        # over-reports vs the actual encoded HLS, so a program's real segments
+        # can fall short of the slot. Blue-pad the shortfall to keep cumulative
+        # #EXTINF equal to wall-clock (the legacy integer path "filled" it with
+        # segment URLs that 404). Only the accurate path under-fills; the
+        # integer fallback already covers the whole span.
+        slot_secs = (slot.ends_at - slot.starts_at).total_seconds()
+        pad = slot_secs - filled
+        if pad > 1.0:
+            _append_gap(
+                rend_lines, slot.starts_at + timedelta(seconds=filled),
+                pad, gap_prefix, gap_durations,
+            )
         epg_grid.append({
             "title": slot.program.title,
             "description": slot.program.description,
@@ -235,7 +248,9 @@ def _plan_gap_tiles(
 def _append_slot(
     rend_lines: dict, slot, slot_prefix: str,
     program_segs: Optional[list[tuple[str, float]]] = None,
-) -> None:
+) -> float:
+    """Append a program slot's segments, returning the wall-clock seconds filled
+    (so the caller can blue-pad any shortfall to the slot's span)."""
     slot_secs = (slot.ends_at - slot.starts_at).total_seconds()
     emitted = _clip_program_segments(program_segs, slot_secs) if program_segs else None
 
@@ -247,7 +262,7 @@ def _append_slot(
             for name, dur in emitted:
                 rend_lines[r].append(f"#EXTINF:{_fmt(dur)},")
                 rend_lines[r].append(f"{slot_prefix}/{r}/{name}")
-        return
+        return sum(dur for _, dur in emitted)
 
     # Fallback: synthesize an integer-second layout from the slot duration. Used
     # in tests (no cfg) and when a program's index.m3u8 can't be read.
@@ -262,6 +277,7 @@ def _append_slot(
         if remainder:
             rend_lines[r].append(f"#EXTINF:{remainder},")
             rend_lines[r].append(f"{slot_prefix}/{r}/seg{n_segs:04d}.m4s")
+    return float(n_segs * _SEGMENT_DURATION + remainder)
 
 
 def _clip_program_segments(
