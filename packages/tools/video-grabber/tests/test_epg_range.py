@@ -240,6 +240,38 @@ def test_clipped_slot_drops_segments_past_its_window(monkeypatch):
     assert abs(sum(prog_extinfs) - 12.0) < 1e-6
 
 
+def test_short_program_is_blue_padded_to_slot_span(monkeypatch):
+    """A program whose real encoded media falls short of its slot (the slot was
+    sized from the over-reporting .mpg probe) gets the remainder blue-padded, so
+    cumulative #EXTINF still equals the slot's wall-clock span — no under-fill,
+    no 404 tail segments."""
+    # Program is only 12.012s of real media but the slot is 60s.
+    real_index = (
+        "#EXTM3U\n"
+        "#EXTINF:6.006,\nseg0000.m4s\n"
+        "#EXTINF:6.006,\nseg0001.m4s\n#EXT-X-ENDLIST\n"
+    )
+    _fake_wasabi(monkeypatch, real_index)
+
+    ch = make_channel("cnn")
+    slot = make_slot("CNN_x", datetime(2001, 9, 11, 1, 0, tzinfo=timezone.utc), 60)
+    slot.program.segment_base = "hls/cnn/20010911/CNN_x"
+    gap_durations = {6: 6.029, 5: 5.028, 4: 4.027, 3: 3.026, 2: 2.025, 1: 1.024}
+    playlists, _ = assemble_range(
+        ch, WINDOW_START, WINDOW_END, None, slots=[slot],
+        cfg=object(), gap_durations=gap_durations,
+    )
+    full = playlists["full"]
+    assert "/CNN_x/full/seg0001.m4s" in full           # real program segments
+    assert "/cnn/_gap/full/seg_gap_6s.m4s" in full       # blue pad fills the rest
+    # No phantom program segments past the real two (the legacy 404 tail).
+    assert "/CNN_x/full/seg0002.m4s" not in full
+    # The whole window's real media still equals wall-clock (slot fully filled).
+    # Sum raw fractional EXTINF — the round-to-int _count helper would shed the
+    # 0.029s/tile across ~130k gap tiles.
+    assert abs(sum(_extinfs(full)) - WINDOW_SECS) < 6.5
+
+
 def test_gap_extinf_uses_measured_tile_durations():
     """gap_durations makes the blue tiles carry their true ~6.029s length and
     sizes the fill by real media, so EXTINF sums track wall-clock without the
