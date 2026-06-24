@@ -14,7 +14,7 @@ import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
 import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
-// import { TV } from "./Applications/TV/TV";
+import { TV } from "./Applications/TV/TV";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
 
 const rootElement = document.getElementById("root");
@@ -32,7 +32,7 @@ createRoot(rootElement).render(
 					<Newsgroups />
 					<PagerDecoder />
 					<RadioScanner />
-					{/* <TV /> */}
+					<TV />
 					<Controls />
 				</ClassicyDesktop>
 			</MediaStreamProvider>

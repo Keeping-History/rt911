@@ -231,6 +231,24 @@ async function createCollections(token) {
   }
   await ensureNumericFields("news_items");
 
+  // tv_channels — the stitched continuous HLS channels (one row per channel,
+  // each pointing at its playlists/<slug>/master.m3u8), same shape as media_items.
+  // The TV app's main video channel reads from this table (the streamer's
+  // selectFrom / media_items_changed listener point here), separating the 23
+  // channel streams from media_items' per-program clips.
+  if (!names.includes("tv_channels")) {
+    console.log("Creating collection: tv_channels");
+    await api(token, "POST", "/collections", {
+      collection: "tv_channels",
+      meta: { icon: "live_tv", sort_field: "sort", note: "Stitched continuous HLS channels" },
+      schema: {},
+      fields: mediaLikeBaseFields,
+    });
+  } else {
+    console.log("Collection tv_channels already exists, skipping.");
+  }
+  await ensureNumericFields("tv_channels");
+
   // pager_items — pager traffic lives in its own table (not media_items). Every
   // pager item is "instant": a start_date with no duration/end_date. provider is
   // a plain text column, not a sources FK.
@@ -327,7 +345,7 @@ async function createCollections(token) {
 
 async function createRelations(token) {
   const existing = await api(token, "GET", "/relations");
-  for (const collection of ["media_items", "mp3_items", "news_items", "usenet_items", "pager_items"]) {
+  for (const collection of ["media_items", "mp3_items", "news_items", "tv_channels", "usenet_items", "pager_items"]) {
     const alreadyLinked = existing.data.some(
       (r) => r.collection === collection && r.field === "source",
     );
