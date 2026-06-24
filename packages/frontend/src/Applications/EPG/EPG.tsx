@@ -19,12 +19,12 @@ import {
 	useState,
 } from "react";
 import {
-	tvExitGrid,
-	tvPause,
-	tvResume,
-	tvSetGridChannels,
-	tvSetMuted,
-	tvSetVolumeLimit,
+	// tvExitGrid,
+	// tvPause,
+	// tvResume,
+	// tvSetGridChannels,
+	// tvSetMuted,
+	// tvSetVolumeLimit,
 	tvTuneChannel,
 } from "../TV/TVContext";
 import epgStyles from "./EPG.module.scss";
