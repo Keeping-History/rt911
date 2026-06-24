@@ -143,10 +143,10 @@ def test_gap_map_uses_rendition_specific_url():
 
     playlists, _ = assemble_day(ch, date(2001, 9, 11), db, slots=slots)
 
-    # Gap segments should reference _gap.v2/{rend}/init.mp4
-    assert "_gap.v2/full/init.mp4" in playlists["full"]
-    assert "_gap.v2/mid/init.mp4" in playlists["mid"]
-    assert "_gap.v2/thumb/init.mp4" in playlists["thumb"]
+    # Gap segments should reference the shared pool's _gap.v3/{rend}/init.mp4
+    assert "_gap.v3/full/init.mp4" in playlists["full"]
+    assert "_gap.v3/mid/init.mp4" in playlists["mid"]
+    assert "_gap.v3/thumb/init.mp4" in playlists["thumb"]
 
 
 def test_master_playlist_has_three_streams():

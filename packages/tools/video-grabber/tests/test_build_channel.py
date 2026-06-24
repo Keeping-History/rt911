@@ -27,9 +27,7 @@ def test_build_channel_flow_wires_schedule_assemble_publish():
          patch.object(flows, "_load_channel", return_value=channel), \
          patch.object(flows, "build_schedule", return_value=7) as m_sched, \
          patch.object(flows, "assemble_range", return_value=(playlists, epg_channel)) as m_asm, \
-         patch.object(flows, "generate_gap_fmp4") as m_gap, \
-         patch.object(flows, "gap_segment_durations", return_value={6: 6.029}), \
-         patch.object(flows, "upload_tree") as m_tree, \
+         patch.object(flows, "_ensure_gap_pool") as m_gap, \
          patch.object(flows, "upload_text") as m_text, \
          patch.object(flows, "list_keys", return_value=["epg/cnn.json"]) as m_list, \
          patch.object(flows, "read_text", return_value='{"name": "CNN", "grid": []}'), \
@@ -46,10 +44,8 @@ def test_build_channel_flow_wires_schedule_assemble_publish():
     # Assembler ran for the channel.
     m_asm.assert_called_once()
 
-    # Gap package generated once and uploaded to the channel-level _gap prefix.
+    # Shared gap pool ensured once (idempotent upload lives inside it).
     m_gap.assert_called_once()
-    m_tree.assert_called_once()
-    assert m_tree.call_args.args[1] == "hls/cnn/_gap.v2"
 
     published = {c.args[1] for c in m_text.call_args_list}
     # Four HLS playlists under playlists/<slug>/.

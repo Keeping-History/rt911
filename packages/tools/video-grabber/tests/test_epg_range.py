@@ -2,6 +2,7 @@
 Tests for assemble_range — the continuous multi-day per-channel stitcher and
 its #EXT-X-PROGRAM-DATE-TIME wall-clock anchoring.
 """
+import re
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
 
@@ -90,12 +91,15 @@ def test_slot_segment_url_uses_program_air_date_not_window():
     assert "/cnn/20010911/prog-a/full/" in playlists["full"]
 
 
-def test_gap_package_is_channel_level():
+def test_gap_uses_shared_sequenced_pool():
     ch = make_channel("cnn")
     playlists, _ = assemble_range(ch, WINDOW_START, WINDOW_END, None, slots=[])
-    # Empty window => one big gap, referencing the date-independent _gap package.
-    assert "/hls/cnn/_gap.v2/full/" in playlists["full"]
-    assert _count_playlist_duration(playlists["full"]) == WINDOW_SECS
+    full = playlists["full"]
+    # Empty window => one big gap, referencing the shared (channel-independent)
+    # sequenced pool by tile index, starting at seg0000 after each discontinuity.
+    assert "/hls/_gap.v3/full/seg0000.m4s" in full
+    assert "/hls/cnn/_gap" not in full  # not the old per-channel package
+    assert _count_playlist_duration(full) == WINDOW_SECS
 
 
 def test_master_url_is_channel_level():
@@ -256,49 +260,45 @@ def test_short_program_is_blue_padded_to_slot_span(monkeypatch):
     ch = make_channel("cnn")
     slot = make_slot("CNN_x", datetime(2001, 9, 11, 1, 0, tzinfo=timezone.utc), 60)
     slot.program.segment_base = "hls/cnn/20010911/CNN_x"
-    gap_durations = {6: 6.029, 5: 5.028, 4: 4.027, 3: 3.026, 2: 2.025, 1: 1.024}
     playlists, _ = assemble_range(
-        ch, WINDOW_START, WINDOW_END, None, slots=[slot],
-        cfg=object(), gap_durations=gap_durations,
+        ch, WINDOW_START, WINDOW_END, None, slots=[slot], cfg=object(),
     )
     full = playlists["full"]
     assert "/CNN_x/full/seg0001.m4s" in full           # real program segments
-    assert "/cnn/_gap.v2/full/seg_gap_6s.m4s" in full    # blue pad fills the rest
+    assert "/hls/_gap.v3/full/seg0000.m4s" in full      # blue pad fills the rest
     # No phantom program segments past the real two (the legacy 404 tail).
     assert "/CNN_x/full/seg0002.m4s" not in full
     # The whole window's real media still equals wall-clock (slot fully filled).
-    # Sum raw fractional EXTINF — the round-to-int _count helper would shed the
-    # 0.029s/tile across ~130k gap tiles.
     assert abs(sum(_extinfs(full)) - WINDOW_SECS) < 6.5
 
 
-def test_gap_extinf_uses_measured_tile_durations():
-    """gap_durations makes the blue tiles carry their true ~6.029s length and
-    sizes the fill by real media, so EXTINF sums track wall-clock without the
-    +0.029s/tile bias that drifted QuickTime."""
+def test_gap_tiles_are_referenced_in_sequence():
+    """The gap references the pool by ascending index (seg0000, seg0001, …) so
+    each tile carries an increasing fMP4 sequence_number/tfdt — the thing that
+    stops conformant players (VLC) flagging the dead air and drifting."""
     ch = make_channel("cnn")
-    gap_durations = {6: 6.029, 5: 5.027, 4: 4.027, 3: 3.026, 2: 2.025, 1: 1.024}
-    playlists, _ = assemble_range(
-        ch, WINDOW_START, WINDOW_END, None, slots=[], cfg=None,
-        gap_durations=gap_durations,
-    )
+    # A 5-minute gap = 50 tiles, well under POOL_TILES (one run, no reset).
+    slots = [make_slot("p", datetime(2001, 9, 11, 0, 5, tzinfo=timezone.utc), 60)]
+    playlists, _ = assemble_range(ch, WINDOW_START, WINDOW_END, None, slots=slots)
     full = playlists["full"]
-    durs = _extinfs(full)
-    # Tiles carry the real measured duration, not an integer.
-    assert any(abs(d - 6.029) < 1e-4 for d in durs)
-    # Real media total stays within half a tile of the wall-clock window — the
-    # systematic drift is gone (a 9-day all-gap window is ~777600s).
-    assert abs(sum(durs) - WINDOW_SECS) < 6.029
+    seen = [int(m) for m in re.findall(r"/_gap\.v3/full/seg(\d{4})\.m4s", full)]
+    leading = seen[: seen.index(max(seen[:60])) + 1]  # first run's tile indices
+    # Within a run the indices ascend 0,1,2,… (not a single repeated tile).
+    assert leading[:5] == [0, 1, 2, 3, 4]
+    assert max(seen) > 1  # not the old single-tile repeat
 
 
-def test_plan_gap_tiles_sizes_by_real_duration():
-    from video_grabber.epg.assembler import _plan_gap_tiles
-
-    durs = {6: 6.029, 5: 5.027, 4: 4.027, 3: 3.026, 2: 2.025, 1: 1.024}
-    # Legacy (None): exact integer fill.
-    legacy = _plan_gap_tiles(20.0, None)
-    assert [lbl for lbl, _ in legacy] == [6, 6, 6, 2]
-    assert sum(d for _, d in legacy) == 20.0
-    # Accurate: real-duration tiling lands within half a tile of the target.
-    accurate = _plan_gap_tiles(20.0, durs)
-    assert abs(sum(d for _, d in accurate) - 20.0) < 6.029 / 2 + 0.01
+def test_long_gap_resets_pool_with_discontinuity():
+    """A gap longer than POOL_TILES restarts at seg0000 behind a fresh
+    discontinuity so the bounded pool is reused — verified safe in VLC."""
+    from video_grabber.epg.assembler import POOL_TILES, TILE_SECONDS
+    ch = make_channel("cnn")
+    # Empty window => one enormous gap spanning many pool lengths.
+    playlists, _ = assemble_range(ch, WINDOW_START, WINDOW_END, None, slots=[])
+    full = playlists["full"]
+    # seg0000 recurs once per run; the run length is POOL_TILES.
+    runs = full.count("/_gap.v3/full/seg0000.m4s")
+    expected_runs = -(-WINDOW_SECS // (POOL_TILES * TILE_SECONDS))  # ceil
+    assert runs == expected_runs
+    # Each run is preceded by a discontinuity (full-rendition count).
+    assert full.count("#EXT-X-DISCONTINUITY") == runs

@@ -21,12 +21,13 @@ from video_grabber.ia.scanner import crawl_collection
 from video_grabber.pipeline.downloader import download_item
 from video_grabber.pipeline.resolve import resolve_job
 from video_grabber.video.encoder import encode_to_hls
-from video_grabber.video.gap_filler import generate_gap_fmp4, gap_segment_durations
+from video_grabber.video.gap_filler import generate_gap_pool, POOL_TILES, POOL_VERSION
 from video_grabber.storage.wasabi import (
     upload_hls_package, upload_tree, upload_text, read_text, list_keys,
+    _make_s3_client,
 )
 from video_grabber.directus.writer import write_media_item, upsert_channel_media_item
-from video_grabber.epg.assembler import assemble_range, GAP_PACKAGE
+from video_grabber.epg.assembler import assemble_range
 from video_grabber.epg.scheduler import build_schedule
 from video_grabber.config import Config
 
@@ -273,18 +274,10 @@ def build_channel_flow(channel_id: str, window_start: str, window_end: str):
     n_slots = build_schedule(channel_id, ws, we, db)
     logger.info("build-channel %s: %d slots scheduled", channel.slug, n_slots)
 
-    # Channel-level blue gap package (date-independent); cheap to regenerate.
-    # Build it first and measure each tile's true sub-second length so the
-    # assembler can write honest #EXTINF for both gaps and programs — keeping
-    # sample-timestamp players (QuickTime) locked to the playlist timeline.
-    gap_dir = _SCRATCH / f"_gap_{channel.slug}"
-    generate_gap_fmp4(gap_dir)
-    gap_durations = gap_segment_durations(gap_dir)
-    upload_tree(gap_dir, f"hls/{channel.slug}/{GAP_PACKAGE}", cfg)
+    # Shared sequenced blue gap pool (channel-independent); uploaded once.
+    _ensure_gap_pool(cfg)
 
-    playlists, epg_channel = assemble_range(
-        channel, ws, we, db, cfg=cfg, gap_durations=gap_durations
-    )
+    playlists, epg_channel = assemble_range(channel, ws, we, db, cfg=cfg)
 
     # HLS playlists under playlists/<slug>/ (the EPG JSON guide lives in epg/).
     base = f"playlists/{channel.slug}"
@@ -298,6 +291,23 @@ def build_channel_flow(channel_id: str, window_start: str, window_end: str):
     master_url = f"{base}/master.m3u8"
     upsert_channel_media_item(channel, master_url, ws, cfg)
     logger.info("build-channel %s: published %s + EPG guide", channel.slug, master_url)
+
+
+def _ensure_gap_pool(cfg: Config) -> None:
+    """Upload the shared sequenced gap pool once. Idempotent: the pool is
+    channel-independent blue tiles, so once present (checked via the last tile)
+    every channel build reuses it. Concurrent first-builds may both upload it —
+    the bytes are identical, so a redundant overwrite is harmless."""
+    s3 = _make_s3_client(cfg)
+    marker = f"hls/{POOL_VERSION}/full/seg{POOL_TILES - 1:04d}.m4s"
+    try:
+        s3.head_object(Bucket=cfg.wasabi_bucket, Key=marker)
+        return
+    except Exception:
+        pass
+    pool_dir = _SCRATCH / POOL_VERSION
+    generate_gap_pool(pool_dir)
+    upload_tree(pool_dir, f"hls/{POOL_VERSION}", cfg, s3=s3)
 
 
 def _rebuild_epg_guide(cfg: Config) -> None:
