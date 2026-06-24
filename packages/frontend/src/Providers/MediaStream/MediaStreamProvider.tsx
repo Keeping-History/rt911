@@ -16,6 +16,7 @@ import {
 } from "./MediaStreamContext";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
+import { keepMediaItem, keepPagerItem } from "./retention";
 import { virtualUtcMs } from "./virtualClock";
 import {
 	applyUsenetBodyFrame,
@@ -28,27 +29,6 @@ function mergeById<T extends { id: number }>(prev: T[], incoming: T[]): T[] {
 	const byId = new Map(prev.map((i) => [i.id, i]));
 	for (const item of incoming) byId.set(item.id, item);
 	return Array.from(byId.values());
-}
-
-// Pager items are instant — retained by start_date within the instant window.
-function keepPagerItem(item: PagerItem, now: number): boolean {
-	return now - new Date(item.start_date).getTime() < INSTANT_RETENTION_MS;
-}
-
-// Instant items (start_date = end_date or calc_duration = 0) are kept for
-// this many milliseconds after their start time before being pruned.
-const INSTANT_RETENTION_MS = 10 * 60 * 1000; // 10 minutes
-
-// Whether a media-shaped item should still be retained at wall time `now`.
-// Long items live until their end_date passes; instant items linger for
-// INSTANT_RETENTION_MS after their start. Shared by media `items` and `mp3Items`.
-function keepMediaItem(item: MediaItem, now: number): boolean {
-	if (!item.end_date) return true;
-	const endMs = new Date(item.end_date).getTime();
-	if (item.start_date === item.end_date || (item.calc_duration ?? -1) === 0) {
-		return now - endMs < INSTANT_RETENTION_MS;
-	}
-	return endMs > now;
 }
 
 const WS_URL: string =
