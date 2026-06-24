@@ -289,7 +289,7 @@ def build_channel_flow(channel_id: str, window_start: str, window_end: str):
     _rebuild_epg_guide(cfg)
 
     master_url = f"{base}/master.m3u8"
-    upsert_channel_media_item(channel, master_url, ws, cfg)
+    upsert_channel_media_item(channel, master_url, ws, we, cfg)
     logger.info("build-channel %s: published %s + EPG guide", channel.slug, master_url)
 
 

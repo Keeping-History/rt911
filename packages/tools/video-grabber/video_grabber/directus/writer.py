@@ -78,7 +78,9 @@ def write_media_item(job, wasabi_url: str, cfg: Config) -> None:
     resp.raise_for_status()
 
 
-def upsert_channel_media_item(channel, master_url: str, window_start, cfg: Config) -> None:
+def upsert_channel_media_item(
+    channel, master_url: str, window_start, window_end, cfg: Config
+) -> None:
     """Upsert the single continuous-stream row for a channel into ``tv_channels``.
 
     The stitched per-channel HLS streams live in their own ``tv_channels`` table
@@ -90,6 +92,11 @@ def upsert_channel_media_item(channel, master_url: str, window_start, cfg: Confi
     than ``content`` because ``content`` is stored as an opaque JSON *string* that
     can only be matched as a whole blob. The ``content.channel_stream`` marker is
     still written for downstream consumers, just not queried.
+
+    ``start_date``/``end_date`` span the whole assembled window and
+    ``calc_duration`` is its length in seconds — the channel stream is continuous
+    across that span (gaps are blue-filled), so it is "active" for the entire
+    window, not just an instant.
     """
     token = get_directus_token(cfg)
     headers = {
@@ -103,6 +110,8 @@ def upsert_channel_media_item(channel, master_url: str, window_start, cfg: Confi
         "full_title": channel.display_name,
         "source": _resolve_source_id(channel.slug, headers, cfg),
         "start_date": window_start.strftime("%Y-%m-%dT%H:%M:%S"),
+        "end_date": window_end.strftime("%Y-%m-%dT%H:%M:%S"),
+        "calc_duration": int((window_end - window_start).total_seconds()),
         "timezone": channel.timezone,
         "url": url,
         "format": "m3u8",
