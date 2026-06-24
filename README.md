@@ -4,7 +4,11 @@
 
 A project to collect multimedia from the September 11 attacks and synchronize it into a common media player, so the day can be experienced as it unfolded — in real time, across television, radio, pagers, and the web.
 
+> 🚧 **Try the beta:** A preview of the version 2 rewrite is live at **<https://beta.911realtime.org>**. Come explore it, and if you run into bugs or have ideas, please [file an issue](https://github.com/Keeping-History/rt911/issues/new) — your feedback helps shape the anniversary release.
+
 - **Visit the site:** <https://911realtime.org>
+- **Try the beta:** <https://beta.911realtime.org>
+- **Report an issue:** <https://github.com/Keeping-History/rt911/issues/new>
 - **Why did we build this?** <https://youtu.be/q1ukl6G_s_M>
 
 ## About
