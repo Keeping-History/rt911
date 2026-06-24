@@ -1,6 +1,7 @@
 import AudioMotionAnalyzer from "audiomotion-analyzer";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { keepAudioContextAlive } from "./audioContextKeepAlive";
 
 interface WaveformVisualizerProps {
 	audioEl: HTMLAudioElement | null;
@@ -57,6 +58,10 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 			}
 		}
 		entry.ctx.resume().catch(() => {});
+		// Browsers suspend a backgrounded tab's AudioContext, which silences the
+		// audio routed through it; keep it resumed so switching tabs doesn't pause
+		// the station. Detached on cleanup.
+		const stopKeepAlive = keepAudioContextAlive(entry.ctx);
 
 		const { mode, radial, fillAlpha, lineWidth, barSpace } = VIZ_MODES[modeIndexRef.current];
 		let motion: AudioMotionAnalyzer;
@@ -81,6 +86,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 			motion.connectInput(entry.source);
 			motionRef.current = motion;
 		} catch {
+			stopKeepAlive();
 			return;
 		}
 
@@ -92,6 +98,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 			// Stop animation only — do NOT call destroy(), which closes the
 			// AudioContext and permanently silences the audio element.
 			motion.stop();
+			stopKeepAlive();
 			motionRef.current = null;
 		};
 	}, [audioEl]);
