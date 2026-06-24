@@ -46,6 +46,15 @@ function resolveChannelId(
 // re-filter on every render.
 const ALL_CHANNELS_FILTER: MediaStreamFilter = { format: ["m3u8"], approved: true };
 
+// HLS quality tiers. hls.js orders levels by ascending bitrate, and the encoder
+// ships a fixed 3-rendition ladder (thumb 136k, mid 396k, full 2628k), so:
+//   0 = thumb (lowest), 1 = mid (one down), 2 = full (highest).
+// The single focused video plays HIGHEST; a multi-video grid plays ONE_DOWN to
+// keep concurrent bandwidth/decoding sane; thumbnails play LOWEST.
+const QUALITY_LOWEST = 0;
+const QUALITY_ONE_DOWN = 1;
+const QUALITY_HIGHEST = 2;
+
 /** Seconds into the media file that corresponds to the given wall-clock time. */
 function calcSeekSeconds(item: MediaItem, clockMs: number): number {
 	// Directus stores datetimes without a timezone suffix; force UTC so that
@@ -160,13 +169,23 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// check can compute an accurate sub-minute Classicy time between updates.
 	const dateTimeUpdatedAtRef = useRef<number>(Date.now());
 
-	// Per-item hls config objects. Two maps are kept so the config reference
-	// changes only when isActive changes, triggering a ReactPlayer remount to
-	// switch quality levels. startPosition is computed once at first render.
-	// Inactive: startLevel 0 (lowest quality, saves bandwidth for thumbnails).
-	// Active:   startLevel -1 (ABR, ramps up to highest available quality).
-	const hlsInactiveConfigsRef = useRef<Map<number, object>>(new Map());
-	const hlsActiveConfigsRef = useRef<Map<number, object>>(new Map());
+	// Per-item hls config, cached with the quality level it was built for. The
+	// config object reference is stable while a player's tier is unchanged, and
+	// is rebuilt (new reference → ReactPlayer remount at the new startLevel) only
+	// when the player's tier actually changes. startPosition is recomputed on each
+	// rebuild so a tier change resumes at the live clock; onReady re-seeks anyway.
+	const hlsConfigsRef = useRef<Map<number, { level: number; config: object }>>(
+		new Map(),
+	);
+	const hlsConfigFor = (item: MediaItem, level: number): object | undefined => {
+		if (!item.url.endsWith("m3u8")) return undefined;
+		const cached = hlsConfigsRef.current.get(item.id);
+		if (cached && cached.level === level) return cached.config;
+		const nowMs = new Date(dateTimeRef.current).getTime();
+		const config = { hls: { startLevel: level, startPosition: calcSeekSeconds(item, nowMs) } };
+		hlsConfigsRef.current.set(item.id, { level, config });
+		return config;
+	};
 
 	// Select the first item once items arrive, and re-home the active player if its
 	// channel was disabled in Settings (its item drops out of the filtered list).
@@ -348,6 +367,41 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		el.currentTime = calcSeekSeconds(item, nowMs);
 	};
 
+	// Pin an hls.js player to a fixed quality level. `startLevel` only sets the
+	// INITIAL level — hls.js ABR would otherwise drift it (e.g. ramp a thumbnail
+	// up to full on a fast connection), defeating the tiers. ReactPlayer wraps
+	// hls-video-element, which exposes the hls.js instance as `.api`; setting
+	// `currentLevel` switches it to manual mode (ABR off) and holds the tier.
+	// Called from onReady, which re-fires after the config-remount on tier change.
+	const pinHlsLevel = useCallback((id: number, level: number) => {
+		const el = videoRefs.current.get(id) as
+			| (HTMLVideoElement & { api?: { currentLevel: number } })
+			| undefined;
+		if (el?.api && el.api.currentLevel !== level) el.api.currentLevel = level;
+	}, []);
+
+	// The quality tier for a player: the single focused video (the active channel,
+	// or a grid of one) plays HIGHEST; a multi-video grid plays ONE_DOWN; every
+	// other thumbnail plays LOWEST. Single source of truth for the config startLevel,
+	// the onReady pin, and the re-pin effect below.
+	const levelForItem = useCallback(
+		(item: MediaItem): number => {
+			if (multiSelectMode) {
+				if (!selectedPlayers.includes(item.id)) return QUALITY_LOWEST;
+				return selectedPlayers.length <= 1 ? QUALITY_HIGHEST : QUALITY_ONE_DOWN;
+			}
+			return item.id === activePlayer ? QUALITY_HIGHEST : QUALITY_LOWEST;
+		},
+		[multiSelectMode, selectedPlayers, activePlayer],
+	);
+
+	// Re-pin every loaded player whenever the tiering inputs change (active channel,
+	// selection set, grid mode) — currentLevel sticks without needing a remount.
+	// onReady covers the initial pin for players that load after this runs.
+	useEffect(() => {
+		for (const item of items) pinHlsLevel(item.id, levelForItem(item));
+	}, [items, levelForItem, pinHlsLevel]);
+
 	// Re-sync the working copy from persisted state, reveal the window, and focus
 	// it so the modal is keyboard-ready the instant it opens (mirrors Browser).
 	const openSettings = useCallback(() => {
@@ -501,7 +555,10 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 													if (el) videoRefs.current.set(id, el);
 													else videoRefs.current.delete(id);
 												}}
-												onReady={() => seekToCurrentTime(item)}
+												onReady={() => {
+													seekToCurrentTime(item);
+													pinHlsLevel(id, levelForItem(item));
+												}}
 												src={item.url}
 												playing={!clockPaused && !tvPaused}
 												loop={false}
@@ -511,7 +568,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												volume={isGridMuted ? 0 : volumeLimit}
 												width="100%"
 												height="100%"
-												config={hlsActiveConfigsRef.current.get(id)}
+												config={hlsConfigFor(item, levelForItem(item))}
 											/>
 										</div>
 									);
@@ -548,27 +605,12 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								const isActive = !multiSelectMode && item.id === activePlayer;
 								const isSelected = selectedPlayers.includes(item.id);
 
-								// Build stable hls configs the first time each item is seen.
-								// Two configs per item — inactive (low quality) and active (ABR)
-								// — so switching active triggers a remount with the correct
-								// quality level while unchanged players keep a stable reference.
-								if (item.url.endsWith("m3u8") && !hlsInactiveConfigsRef.current.has(item.id)) {
-									const nowMs = new Date(dateTimeRef.current).getTime();
-									const startPosition = calcSeekSeconds(item, nowMs);
-									hlsInactiveConfigsRef.current.set(item.id, {
-										hls: { startLevel: 0, startPosition },
-									});
-									hlsActiveConfigsRef.current.set(item.id, {
-										hls: { startLevel: -1, startPosition },
-									});
-								}
-
 								// Selected items in multi-select mode render their player in the grid
 								// (which owns the videoRef for health checks); thumbnail shows title only.
 								const renderThumbnailPlayer = !multiSelectMode || !isSelected;
-								const itemConfig = isActive
-									? hlsActiveConfigsRef.current.get(item.id)
-									: hlsInactiveConfigsRef.current.get(item.id);
+								// The single focused (active) channel plays full quality; every
+								// other thumbnail plays lowest. Grid players are sized separately.
+								const itemConfig = hlsConfigFor(item, levelForItem(item));
 
 								return (
 									<button
@@ -609,7 +651,10 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 													if (el) videoRefs.current.set(item.id, el);
 													else videoRefs.current.delete(item.id);
 												}}
-												onReady={() => seekToCurrentTime(item)}
+												onReady={() => {
+													seekToCurrentTime(item);
+													pinHlsLevel(item.id, levelForItem(item));
+												}}
 												src={item.url}
 												playing={!clockPaused && !tvPaused}
 												loop={false}
