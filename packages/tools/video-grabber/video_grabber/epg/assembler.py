@@ -24,15 +24,15 @@ from datetime import datetime, date, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
 
+from video_grabber.video.gap_filler import POOL_TILES, POOL_VERSION, TILE_SECONDS
+
 WASABI_BASE = "https://files.911realtime.org"
 
-# Versioned gap-package directory. **Bump the version whenever the gap fragment
-# encoding changes.** The tiles are served with a 1-year max-age at a fixed URL,
-# so re-uploading a corrected tile to the same key never reaches a client: the
-# CDN, the nginx proxy, and crucially the viewer's OS URL cache (AVFoundation's
-# NSURLCache survives an app quit) all keep serving the stale tile for a year. A
-# new path is the only thing that misses every cache layer at once.
-GAP_PACKAGE = "_gap.v2"
+# Shared, channel-independent sequenced gap pool (see gap_filler). A gap is filled
+# by referencing this pool's tiles IN ORDER so each carries an increasing fMP4
+# sequence_number/tfdt; ``POOL_VERSION`` is in the path so an encoding change
+# lands at a fresh URL that misses every cache layer (CDN, proxy, viewer OS cache).
+GAP_POOL_PREFIX = f"{WASABI_BASE}/hls/{POOL_VERSION}"
 
 REND_NAMES = ["full", "mid", "thumb"]
 REND_BANDWIDTHS = {"full": 2628000, "mid": 396000, "thumb": 136000}
@@ -49,7 +49,6 @@ def assemble_range(
     *,
     slots: Optional[list] = None,
     cfg=None,
-    gap_durations: Optional[dict[int, float]] = None,
 ) -> tuple[dict[str, str], dict]:
     """
     Build continuous HLS playlists and EPG JSON for ``channel`` across
@@ -60,17 +59,14 @@ def assemble_range(
 
     The published playlist URL is channel-level (``playlists/<slug>/``) because the
     product serves one continuous stream per channel, regenerated in place as
-    more content is acquired. The blue gap package is likewise channel-level
-    (``hls/<slug>/_gap``) — its content is date-independent.
+    more content is acquired. Dead air is filled from the shared sequenced gap
+    pool (see :mod:`gap_filler`) so each gap tile carries an increasing fMP4
+    sequence_number/tfdt and conformant players track the timeline.
 
-    ``cfg`` / ``gap_durations`` enable *accurate* ``#EXTINF``: with ``cfg`` the
-    assembler reads each program's real per-segment durations from its uploaded
-    ``index.m3u8``; ``gap_durations`` (from :func:`gap_filler.gap_segment_durations`)
-    gives the blue tiles' true sub-second lengths. When both are absent the
-    assembler falls back to a synthesized integer-second timeline (the legacy
-    behaviour the unit tests exercise). Honest ``#EXTINF`` keeps a player that
-    advances by sample timestamps (AVFoundation/QuickTime) locked to the
-    playlist timeline instead of creeping ahead by ~0.5 % of all dead air.
+    ``cfg`` enables *accurate* program ``#EXTINF``: the assembler reads each
+    program's real per-segment durations from its uploaded ``index.m3u8`` and
+    paths segments from the stored upload key. Without ``cfg`` it falls back to a
+    synthesized integer-second layout (the path the unit tests exercise).
     """
     if slots is None:
         slots = _fetch_slots(db, channel.id, window_start, window_end)
@@ -79,7 +75,7 @@ def assemble_range(
     if cfg is not None:
         from video_grabber.storage.wasabi import _make_s3_client
         s3 = _make_s3_client(cfg)
-    gap_prefix = f"{WASABI_BASE}/hls/{channel.slug}/{GAP_PACKAGE}"
+    gap_prefix = GAP_POOL_PREFIX
 
     rend_lines: dict[str, list[str]] = {
         r: [
@@ -97,7 +93,7 @@ def assemble_range(
     for slot in slots:
         if slot.starts_at > cursor:
             gap_secs = (slot.starts_at - cursor).total_seconds()
-            _append_gap(rend_lines, cursor, gap_secs, gap_prefix, gap_durations)
+            _append_gap(rend_lines, cursor, gap_secs, gap_prefix)
             epg_grid.append({
                 "title": "[No Signal]",
                 "start": cursor.isoformat(),
@@ -134,7 +130,7 @@ def assemble_range(
         if pad > 1.0:
             _append_gap(
                 rend_lines, slot.starts_at + timedelta(seconds=filled),
-                pad, gap_prefix, gap_durations,
+                pad, gap_prefix,
             )
         epg_grid.append({
             "title": slot.program.title,
@@ -147,7 +143,7 @@ def assemble_range(
 
     if cursor < window_end:
         gap_secs = (window_end - cursor).total_seconds()
-        _append_gap(rend_lines, cursor, gap_secs, gap_prefix, gap_durations)
+        _append_gap(rend_lines, cursor, gap_secs, gap_prefix)
         epg_grid.append({
             "title": "[No Signal]",
             "start": cursor.isoformat(),
@@ -186,15 +182,11 @@ def assemble_day(
     *,
     slots: Optional[list] = None,
     cfg=None,
-    gap_durations: Optional[dict[int, float]] = None,
 ) -> tuple[dict[str, str], dict]:
     """24-hour special case of :func:`assemble_range` (one UTC midnight-to-midnight day)."""
     window_start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
     window_end = window_start + timedelta(days=1)
-    return assemble_range(
-        channel, window_start, window_end, db,
-        slots=slots, cfg=cfg, gap_durations=gap_durations,
-    )
+    return assemble_range(channel, window_start, window_end, db, slots=slots, cfg=cfg)
 
 
 def _fmt(secs: float) -> str:
@@ -206,52 +198,32 @@ def _fmt(secs: float) -> str:
 
 def _append_gap(
     rend_lines: dict, gap_start: datetime, gap_secs: float, gap_prefix: str,
-    gap_durations: Optional[dict[int, float]] = None,
 ) -> None:
-    tiles = _plan_gap_tiles(gap_secs, gap_durations)
-    for r in REND_NAMES:
-        rend_lines[r].append("#EXT-X-DISCONTINUITY")
-        rend_lines[r].append(f'#EXT-X-MAP:URI="{gap_prefix}/{r}/init.mp4"')
-        rend_lines[r].append(f"#EXT-X-PROGRAM-DATE-TIME:{gap_start.isoformat()}")
-        for label, dur in tiles:
-            rend_lines[r].append(f"#EXTINF:{_fmt(dur)},")
-            rend_lines[r].append(f"{gap_prefix}/{r}/seg_gap_{label}s.m4s")
-
-
-def _plan_gap_tiles(
-    gap_secs: float, gap_durations: Optional[dict[int, float]]
-) -> list[tuple[int, float]]:
-    """Choose blue tiles to fill a gap, returning ``(label_secs, extinf)`` pairs.
-
-    Legacy (``gap_durations is None``): exact integer fill — ⌊G/6⌋ six-second
-    tiles plus one remainder — labelled at their nominal seconds, so the
-    timeline stays integer-isochronous for the unit tests.
-
-    Accurate: tiles are really ~6.029 s, so size the fill by *real* duration
-    (⌊G / real_6s⌋ tiles) and pick the single remainder tile whose real length
-    best closes the leftover. ``#EXTINF`` carries the true durations, so the sum
-    tracks wall-clock to within half a tile with no systematic per-tile bias.
-    """
-    if not gap_durations:
-        n_segs, remainder = divmod(int(gap_secs), _SEGMENT_DURATION)
-        tiles = [(_SEGMENT_DURATION, float(_SEGMENT_DURATION))] * n_segs
-        if remainder:
-            tiles.append((remainder, float(remainder)))
-        return tiles
-
-    d6 = gap_durations.get(_SEGMENT_DURATION, float(_SEGMENT_DURATION))
-    n_segs = int(gap_secs // d6)
-    tiles = [(_SEGMENT_DURATION, d6)] * n_segs
-    remaining = gap_secs - n_segs * d6
-    best_label, best_err = None, abs(remaining)
-    for label, real in sorted(gap_durations.items()):
-        if label == _SEGMENT_DURATION:
-            continue
-        if abs(real - remaining) < best_err:
-            best_err, best_label = abs(real - remaining), label
-    if best_label is not None:
-        tiles.append((best_label, gap_durations[best_label]))
-    return tiles
+    """Fill ``gap_secs`` of dead air by referencing the shared sequenced pool's
+    tiles in order (seg0000, seg0001, …) so each carries an increasing fMP4
+    sequence_number/tfdt. Every ``POOL_TILES`` tiles the run resets with a fresh
+    ``#EXT-X-DISCONTINUITY`` + ``#EXT-X-PROGRAM-DATE-TIME``, letting the bounded
+    pool be reused (and re-anchored to wall-clock) for arbitrarily long gaps. The
+    final tile's ``#EXTINF`` is clipped so the gap fills its span exactly; the
+    cumulative timeline therefore stays equal to wall-clock."""
+    remaining = gap_secs
+    run_start = gap_start
+    while remaining > 1e-6:
+        for r in REND_NAMES:
+            rend_lines[r].append("#EXT-X-DISCONTINUITY")
+            rend_lines[r].append(f'#EXT-X-MAP:URI="{gap_prefix}/{r}/init.mp4"')
+            rend_lines[r].append(f"#EXT-X-PROGRAM-DATE-TIME:{run_start.isoformat()}")
+        run_filled = 0.0
+        k = 0
+        while k < POOL_TILES and remaining > 1e-6:
+            dur = TILE_SECONDS if TILE_SECONDS <= remaining else remaining
+            for r in REND_NAMES:
+                rend_lines[r].append(f"#EXTINF:{_fmt(dur)},")
+                rend_lines[r].append(f"{gap_prefix}/{r}/seg{k:04d}.m4s")
+            remaining -= dur
+            run_filled += dur
+            k += 1
+        run_start = run_start + timedelta(seconds=run_filled)
 
 
 def _append_slot(
