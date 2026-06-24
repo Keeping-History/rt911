@@ -8,9 +8,20 @@ For each of the 3 renditions this produces, in ``output_dir/<rend>/``:
 
 assembler.py composes any gap of G seconds as ⌊G/6⌋ copies of ``seg_gap_6s``
 plus one ``seg_gap_<G%6>s`` remainder, so this small, bounded package fills a
-gap of any length. Color #0000f5, codec-matched to real content (main@3.1,
-29.97 fps) so hls.js level-switches seamlessly across the splice. Silent audio
-is retained in every rendition because hls.js requires audio in all of them.
+gap of any length. Color #0000f5, main@3.1. Silent audio is retained in every
+rendition because hls.js requires audio in all of them.
+
+**30 fps, no B-frames (``-bf 0``).** Because a gap is the *same* fragment
+repeated, a timestamp-based player (AVFoundation/QuickTime) can only position
+each copy by its presentation extent, so that extent MUST equal the fragment's
+``#EXTINF``. A 29.97 fps B-frame encode left the video's presented extent
+running ~0.066 s past the container (B-frame reorder delay + 29.97 rounding),
+and the assembler labelled the tile by the container duration — a ~0.043 s/tile
+mismatch that accumulated across tens of thousands of gap tiles into *minutes*
+of seek drift over a multi-day stream. ``-bf 0`` removes the reorder and
+``rate=30`` lands 180 frames on exactly 6.000 s, so video-end == audio-end ==
+container (== ``#EXTINF``): zero per-tile drift. Real program fragments are a
+continuous encode with chained decode times, so they don't have this problem.
 
 Each segment is encoded standalone with a forced IDR at frame 0 so it decodes
 independently — a hard HLS requirement that the encoder's ``-g 60`` default
@@ -59,11 +70,14 @@ def _encode_gap_segment(rend: dict, rend_dir: Path, secs: int, *, write_init: bo
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-f", "lavfi", "-i",
-        f"color=c=0x0000f5:size={rend['width']}x{rend['height']}:rate=29.97",
+        f"color=c=0x0000f5:size={rend['width']}x{rend['height']}:rate=30",
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-t", str(secs),
         "-c:v", "libx264", "-profile:v", "main", "-level:v", "3.1",
         "-pix_fmt", "yuv420p",
+        # No B-frames: the presented extent must equal #EXTINF for a repeated
+        # fragment, and B-frame reorder delay would push it past the container.
+        "-bf", "0",
         # Standalone segment: force a keyframe at frame 0, no scene-cut splits.
         "-g", "9999", "-keyint_min", "9999", "-sc_threshold", "0",
         "-force_key_frames", "expr:eq(n,0)",
