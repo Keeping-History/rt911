@@ -434,7 +434,7 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 					</div>
 					{/* TV remote-control test bar: every button is a fire-and-forget
 					    cross-app event handled by the TV app (see TVContext). */}
-					<div style={{ display: "flex", flexWrap: "wrap", alignItems: "center" }}>
+					{/* <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center" }}>
 						<ClassicyControlLabel label="TV Remote:" />
 						<ClassicyButton
 							onClickFunc={() =>
@@ -477,7 +477,7 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 						>
 							Vol 25%
 						</ClassicyButton>
-					</div>
+					</div> */}
 					<div
 						className={epgStyles.epgHolder}
 						style={{ borderTop: "1px solid var(--color-system-07)" }}
