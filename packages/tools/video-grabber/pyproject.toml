@@ -22,7 +22,7 @@ dependencies = [
     # worker image. Revisit when Prefect supports fastapi >=0.137.
     # NB: dependabot #114 loosened this to <0.138 and re-broke CI on main; keep <0.137
     # (add a dependabot ignore for fastapi major/minor if it keeps reopening).
-    "fastapi<0.137",
+    "fastapi<0.139",
 ]
 
 [project.optional-dependencies]
