@@ -25,6 +25,15 @@ from types import SimpleNamespace
 from typing import Optional
 
 WASABI_BASE = "https://files.911realtime.org"
+
+# Versioned gap-package directory. **Bump the version whenever the gap fragment
+# encoding changes.** The tiles are served with a 1-year max-age at a fixed URL,
+# so re-uploading a corrected tile to the same key never reaches a client: the
+# CDN, the nginx proxy, and crucially the viewer's OS URL cache (AVFoundation's
+# NSURLCache survives an app quit) all keep serving the stale tile for a year. A
+# new path is the only thing that misses every cache layer at once.
+GAP_PACKAGE = "_gap.v2"
+
 REND_NAMES = ["full", "mid", "thumb"]
 REND_BANDWIDTHS = {"full": 2628000, "mid": 396000, "thumb": 136000}
 REND_RESOLUTIONS = {"full": "854x480", "mid": "320x240", "thumb": "160x120"}
@@ -70,7 +79,7 @@ def assemble_range(
     if cfg is not None:
         from video_grabber.storage.wasabi import _make_s3_client
         s3 = _make_s3_client(cfg)
-    gap_prefix = f"{WASABI_BASE}/hls/{channel.slug}/_gap"
+    gap_prefix = f"{WASABI_BASE}/hls/{channel.slug}/{GAP_PACKAGE}"
 
     rend_lines: dict[str, list[str]] = {
         r: [

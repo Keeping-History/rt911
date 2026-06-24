@@ -49,7 +49,7 @@ def test_build_channel_flow_wires_schedule_assemble_publish():
     # Gap package generated once and uploaded to the channel-level _gap prefix.
     m_gap.assert_called_once()
     m_tree.assert_called_once()
-    assert m_tree.call_args.args[1] == "hls/cnn/_gap"
+    assert m_tree.call_args.args[1] == "hls/cnn/_gap.v2"
 
     published = {c.args[1] for c in m_text.call_args_list}
     # Four HLS playlists under playlists/<slug>/.

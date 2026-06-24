@@ -94,7 +94,7 @@ def test_gap_package_is_channel_level():
     ch = make_channel("cnn")
     playlists, _ = assemble_range(ch, WINDOW_START, WINDOW_END, None, slots=[])
     # Empty window => one big gap, referencing the date-independent _gap package.
-    assert "/hls/cnn/_gap/full/" in playlists["full"]
+    assert "/hls/cnn/_gap.v2/full/" in playlists["full"]
     assert _count_playlist_duration(playlists["full"]) == WINDOW_SECS
 
 
@@ -263,7 +263,7 @@ def test_short_program_is_blue_padded_to_slot_span(monkeypatch):
     )
     full = playlists["full"]
     assert "/CNN_x/full/seg0001.m4s" in full           # real program segments
-    assert "/cnn/_gap/full/seg_gap_6s.m4s" in full       # blue pad fills the rest
+    assert "/cnn/_gap.v2/full/seg_gap_6s.m4s" in full    # blue pad fills the rest
     # No phantom program segments past the real two (the legacy 404 tail).
     assert "/CNN_x/full/seg0002.m4s" not in full
     # The whole window's real media still equals wall-clock (slot fully filled).
