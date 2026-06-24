@@ -21,7 +21,21 @@ const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Root element not found");
 createRoot(rootElement).render(
 	<StrictMode>
-		<ClassicyAppManagerProvider>
+		<ClassicyAppManagerProvider
+			defaultState={{
+				System: {
+					Manager: {
+						DateAndTime: {
+							// Boot the desktop clock at 8:40 AM US Eastern on
+							// 2001-09-11 (EDT, UTC-4 → 12:40 UTC). Seed-only: applies
+							// on a fresh visit; persisted state wins on reload.
+							dateTime: "2001-09-11T12:40:00.000Z",
+							timeZoneOffset: "-4",
+						},
+					},
+				},
+			}}
+		>
 			<MediaStreamProvider>
 				<ClassicyDesktop>
 					<Browser />
