@@ -2,6 +2,7 @@
 Tests for Directus media_items writer.
 Mocks HTTP calls — no real Directus instance required.
 """
+import json
 import respx
 import httpx
 from datetime import datetime, timezone
@@ -243,21 +244,28 @@ def test_upsert_channel_keys_on_url_not_content_subfield():
         captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"data": []})
 
+    def capture_post(request):
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"data": {"id": 1}})
+
     respx.get("http://directus:8055/items/tv_channels").mock(side_effect=capture_get)
     respx.get("http://directus:8055/items/sources").mock(
         return_value=httpx.Response(200, json={"data": [{"id": 18}]})
     )
-    post = respx.post("http://directus:8055/items/tv_channels").mock(
-        return_value=httpx.Response(200, json={"data": {"id": 1}})
-    )
+    post = respx.post("http://directus:8055/items/tv_channels").mock(side_effect=capture_post)
 
     upsert_channel_media_item(channel, "playlists/weta/master.m3u8",
-                              datetime(2001, 9, 9, tzinfo=timezone.utc), cfg)
+                              datetime(2001, 9, 9, tzinfo=timezone.utc),
+                              datetime(2001, 9, 18, tzinfo=timezone.utc), cfg)
 
     assert captured["params"].get("filter[url][_eq]") == \
         "https://files.911realtime.org/playlists/weta/master.m3u8"
     assert "filter[content][channel_stream][_eq]" not in captured["params"]
     assert post.called
+    # The channel row spans the whole window with a calculated duration.
+    assert captured["body"]["start_date"] == "2001-09-09T00:00:00"
+    assert captured["body"]["end_date"] == "2001-09-18T00:00:00"
+    assert captured["body"]["calc_duration"] == 9 * 86400
 
 
 @respx.mock
@@ -282,6 +290,7 @@ def test_upsert_channel_patches_when_row_exists():
     )
 
     upsert_channel_media_item(channel, "playlists/weta/master.m3u8",
-                              datetime(2001, 9, 9, tzinfo=timezone.utc), cfg)
+                              datetime(2001, 9, 9, tzinfo=timezone.utc),
+                              datetime(2001, 9, 18, tzinfo=timezone.utc), cfg)
 
     assert patch.called and not post.called
