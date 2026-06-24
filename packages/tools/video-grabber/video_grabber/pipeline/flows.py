@@ -26,7 +26,7 @@ from video_grabber.storage.wasabi import (
     upload_hls_package, upload_tree, upload_text, read_text, list_keys,
 )
 from video_grabber.directus.writer import write_media_item, upsert_channel_media_item
-from video_grabber.epg.assembler import assemble_range
+from video_grabber.epg.assembler import assemble_range, GAP_PACKAGE
 from video_grabber.epg.scheduler import build_schedule
 from video_grabber.config import Config
 
@@ -280,7 +280,7 @@ def build_channel_flow(channel_id: str, window_start: str, window_end: str):
     gap_dir = _SCRATCH / f"_gap_{channel.slug}"
     generate_gap_fmp4(gap_dir)
     gap_durations = gap_segment_durations(gap_dir)
-    upload_tree(gap_dir, f"hls/{channel.slug}/_gap", cfg)
+    upload_tree(gap_dir, f"hls/{channel.slug}/{GAP_PACKAGE}", cfg)
 
     playlists, epg_channel = assemble_range(
         channel, ws, we, db, cfg=cfg, gap_durations=gap_durations
