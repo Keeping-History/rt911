@@ -39,7 +39,7 @@ jobs:
         working-directory: packages/tools/video-grabber
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -64,7 +64,7 @@ jobs:
     if: github.event_name != 'pull_request'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # The image bundles the sibling mbox_parser tool, which lives outside the
       # build context (packages/tools/video-grabber). Copy it in first.
