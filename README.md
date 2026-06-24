@@ -135,7 +135,10 @@ Variables prefixed with `VITE_` (e.g. `VITE_PROXY_HOST`, `VITE_MEDIA_STREAM_URL`
 ## Sponsorship
 
 <a href="https://www.hivelocity.net">
-  <img src="https://www.hivelocity.net/wp-content/uploads/2021/08/logo-color-volvo.svg" alt="Hivelocity" height="48">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hivelocity-logo-dark.svg">
+    <img src=".github/assets/hivelocity-logo-light.svg" alt="Hivelocity" height="44">
+  </picture>
 </a>
 
 Hosting for this project is generously provided by **[Hivelocity](https://www.hivelocity.net)**, a provider of bare-metal dedicated servers, cloud, and colocation across 40+ global data centers.
