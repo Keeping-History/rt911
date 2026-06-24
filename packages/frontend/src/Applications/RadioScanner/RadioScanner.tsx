@@ -16,6 +16,7 @@ import {
 } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
+import { shouldStationPlay } from "./radioPlayback";
 import { WaveformVisualizer } from "./WaveformVisualizer";
 
 /** Seconds into the audio file that corresponds to the given wall-clock time. */
@@ -82,6 +83,15 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	itemsRef.current = items;
 	const dateTimeUpdatedAtRef = useRef<number>(Date.now());
 
+	// Live refs for the playback selection so the once-created health-check
+	// interval always reads current state when deciding what may play.
+	const activeStationRef = useRef(activeStation);
+	activeStationRef.current = activeStation;
+	const scannerModeRef = useRef(scannerMode);
+	scannerModeRef.current = scannerMode;
+	const selectedStationsRef = useRef(selectedStations);
+	selectedStationsRef.current = selectedStations;
+
 	// Select the first station once items arrive.
 	useEffect(() => {
 		if (activeStation === 0 && items.length > 0) {
@@ -105,6 +115,22 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 				const el = audioRefs.current.get(item.id);
 				if (!el) continue;
 
+				// Only the allowed station(s) stay playing; everything else is
+				// paused so a single source is audible at a time. Reads refs since
+				// this interval closure is created once.
+				const allowed = shouldStationPlay(
+					{
+						scannerMode: scannerModeRef.current,
+						activeStation: activeStationRef.current,
+						selectedStations: selectedStationsRef.current,
+					},
+					item.id,
+				);
+				if (!allowed) {
+					if (!el.paused) el.pause();
+					continue;
+				}
+
 				if (!clockPausedRef.current && (el.paused || el.ended)) {
 					el.play().catch(() => {});
 				}
@@ -118,6 +144,21 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 
 		return () => clearInterval(healthId);
 	}, []);
+
+	// Enforce single-station playback the instant the selection changes: pause
+	// every element that is no longer allowed to play (the previously-active
+	// station) and (re)start the ones that are. Muting alone never stopped the
+	// old station — see radioPlayback.ts.
+	useEffect(() => {
+		const sel = { scannerMode, activeStation, selectedStations };
+		for (const [id, el] of audioRefs.current) {
+			if (shouldStationPlay(sel, id)) {
+				if (!clockPausedRef.current) el.play().catch(() => {});
+			} else if (!el.paused) {
+				el.pause();
+			}
+		}
+	}, [activeStation, scannerMode, selectedStations]);
 
 	// Seek all mounted players whenever the stored dateTime changes.
 	useEffect(() => {
@@ -145,10 +186,19 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 		for (const item of itemsRef.current) {
 			const el = audioRefs.current.get(item.id);
 			if (!el) continue;
+			const allowed = shouldStationPlay(
+				{
+					scannerMode: scannerModeRef.current,
+					activeStation: activeStationRef.current,
+					selectedStations: selectedStationsRef.current,
+				},
+				item.id,
+			);
 			if (clockPaused) {
 				el.pause();
 				el.currentTime = calcSeekSeconds(item, nowMs);
-			} else {
+			} else if (allowed) {
+				// Resume only the allowed station(s) — never revive the others.
 				el.play().catch(() => {});
 			}
 		}
@@ -408,7 +458,14 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 												onCanPlay={(e) => {
 													const el = e.currentTarget;
 													seekToCurrentTime(item);
-													if (!clockPausedRef.current) el.play().catch(() => {});
+													if (
+														!clockPausedRef.current &&
+														shouldStationPlay(
+															{ scannerMode, activeStation, selectedStations },
+															item.id,
+														)
+													)
+														el.play().catch(() => {});
 												}}
 											/>
 										)}
