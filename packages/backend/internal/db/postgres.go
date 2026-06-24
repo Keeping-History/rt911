@@ -10,16 +10,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// selectFrom is the shared SELECT … FROM clause for all item queries.
-// source is resolved to sources.slug via a LEFT JOIN so the client receives
-// the human-readable slug instead of the raw integer foreign-key.
+// selectFrom is the shared SELECT … FROM clause for the main video channel.
+// It reads tv_channels (the stitched per-channel HLS streams), not media_items;
+// the row shape is identical (MediaItem). source is resolved to sources.slug via
+// a LEFT JOIN so the client receives the human-readable slug instead of the raw
+// integer foreign-key. The mi alias is kept for query-suffix compatibility.
 const selectFrom = `
 	SELECT mi.id, mi.title, mi.full_title, s.slug,
 	       mi.start_date, mi.end_date, mi.calc_duration, mi.timezone,
 	       mi.url, mi.format, mi.approved, mi.mute,
 	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption,
 	       mi.content, mi.sort
-	FROM media_items mi
+	FROM tv_channels mi
 	LEFT JOIN sources s ON s.id = mi.source`
 
 // Connect opens a pgx connection pool and verifies connectivity.
@@ -77,20 +79,18 @@ func CurrentItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model
 		 ORDER BY mi.start_date`, t)
 }
 
-// videoFormat is the media_items.format value the TV app plays. The TV's source
-// filter is derived from items of this format only — media_items also holds
-// non-video formats (html/modal/usenet) the TV never shows, and the sources table
-// does not record which media type a source belongs to, so usage is the only signal.
+// videoFormat is the tv_channels.format value the TV app plays. The TV's source
+// filter is derived from approved channels of this format.
 const videoFormat = "m3u8"
 
 // AvailableVideoSources returns the distinct, sorted source slugs that have at
-// least one approved video (m3u8) media item, independent of time. It populates
+// least one approved video (m3u8) channel, independent of time. It populates
 // the TV app's channel filter with every selectable channel up front, rather than
 // only those that have scrolled past in the current virtual-time window.
 func AvailableVideoSources(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
 	return queryStrings(ctx, pool, `
 		SELECT DISTINCT s.slug
-		FROM media_items mi
+		FROM tv_channels mi
 		JOIN sources s ON s.id = mi.source
 		WHERE mi.approved = 1 AND mi.format = $1
 		  AND s.slug IS NOT NULL AND s.slug <> ''

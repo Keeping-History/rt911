@@ -74,7 +74,7 @@ func main() {
 	// Postgres directly (per-group, gated by what the client is viewing) — see
 	// session.RunTimePump and db.UsenetItemsInRange.
 
-	// Keep Redis in sync with media_items changes for the process lifetime.
+	// Keep Redis in sync with tv_channels changes for the process lifetime.
 	go cache.Listen(ctx, dbURL, rdb, pool, logger)
 
 	hub := session.NewHub(logger)

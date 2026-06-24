@@ -243,11 +243,11 @@ def test_upsert_channel_keys_on_url_not_content_subfield():
         captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"data": []})
 
-    respx.get("http://directus:8055/items/media_items").mock(side_effect=capture_get)
+    respx.get("http://directus:8055/items/tv_channels").mock(side_effect=capture_get)
     respx.get("http://directus:8055/items/sources").mock(
         return_value=httpx.Response(200, json={"data": [{"id": 18}]})
     )
-    post = respx.post("http://directus:8055/items/media_items").mock(
+    post = respx.post("http://directus:8055/items/tv_channels").mock(
         return_value=httpx.Response(200, json={"data": {"id": 1}})
     )
 
@@ -268,16 +268,16 @@ def test_upsert_channel_patches_when_row_exists():
     cfg = make_cfg()
     channel = MagicMock(slug="weta", display_name="WETA", timezone="EDT")
 
-    respx.get("http://directus:8055/items/media_items").mock(
+    respx.get("http://directus:8055/items/tv_channels").mock(
         return_value=httpx.Response(200, json={"data": [{"id": 460681}]})
     )
     respx.get("http://directus:8055/items/sources").mock(
         return_value=httpx.Response(200, json={"data": [{"id": 18}]})
     )
-    post = respx.post("http://directus:8055/items/media_items").mock(
+    post = respx.post("http://directus:8055/items/tv_channels").mock(
         return_value=httpx.Response(200, json={"data": {}})
     )
-    patch = respx.patch("http://directus:8055/items/media_items/460681").mock(
+    patch = respx.patch("http://directus:8055/items/tv_channels/460681").mock(
         return_value=httpx.Response(200, json={"data": {"id": 460681}})
     )
 
