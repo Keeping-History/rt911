@@ -166,36 +166,20 @@
   gap: var(--window-control-size);
   background-color: var(--color-system-03);
   padding: calc(var(--window-padding-size) * 2);
-}
 
-.rsStation {
-  position: relative;
-  flex-shrink: 0;
-  height: 90%;
-  min-width: 8em;
-  padding: var(--window-padding-size);
-  border: 1px solid var(--color-system-05);
-  background: var(--color-system-01);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: calc(var(--window-padding-size) / 2);
-  text-align: left;
-
-  &.rsStationActive {
-    background: var(--color-theme-01);
-    border-color: var(--color-theme-01);
-
-    .rsStationSource {
-      color: var(--color-theme-06);
-    }
-  }
-
-  &.rsStationSelected {
-    outline: 2px solid var(--color-theme-01);
-    outline-offset: -2px;
+  // Stations are ClassicyButtons. The pressed/active and selected look comes
+  // from the button's own `depressed` state; here we only size each one for
+  // the horizontal strip and stack its label/player vertically.
+  :global(.classicyButton) {
+    flex-shrink: 0;
+    height: 90%;
+    min-width: 8em;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: calc(var(--window-padding-size) / 2);
+    text-align: left;
   }
 }
 

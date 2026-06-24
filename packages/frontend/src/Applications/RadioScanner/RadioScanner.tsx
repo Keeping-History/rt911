@@ -415,16 +415,10 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 								const renderPlayer = !scannerMode || !isSelected;
 
 								return (
-									<button
+									<ClassicyButton
 										key={item.id}
-										className={[
-											styles.rsStation,
-											isActive ? styles.rsStationActive : "",
-											isSelected ? styles.rsStationSelected : "",
-										]
-											.filter(Boolean)
-											.join(" ")}
-										onClick={() => {
+										depressed={isActive || isSelected}
+										onClickFunc={() => {
 											if (scannerMode) {
 												toggleStationSelection(item.id);
 											} else {
@@ -432,17 +426,6 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 											}
 											setHasInteracted(true);
 										}}
-										onKeyDown={(e) => {
-											if (e.key === "Enter" || e.key === " ") {
-												if (scannerMode) {
-													toggleStationSelection(item.id);
-												} else {
-													setActiveStation(item.id);
-												}
-												setHasInteracted(true);
-											}
-										}}
-										type="button"
 									>
 										<p className={styles.rsStationSource}>{item.source}</p>
 										{renderPlayer && (
@@ -469,7 +452,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 												}}
 											/>
 										)}
-									</button>
+									</ClassicyButton>
 								);
 							})}
 						</div>
