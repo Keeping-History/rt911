@@ -16,6 +16,7 @@ import {
 } from "./MediaStreamContext";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
+import { virtualUtcMs } from "./virtualClock";
 import {
 	applyUsenetBodyFrame,
 	emptyUsenetBodyState,
@@ -115,7 +116,7 @@ interface MediaStreamProviderProps {
 export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	children,
 }) => {
-	const { localDate, dateTime } = useClassicyDateTime({ tick: true });
+	const { localDate, dateTime, tzOffset } = useClassicyDateTime({ tick: true });
 
 	const [items, setItems] = useState<MediaItem[]>([]);
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
@@ -159,13 +160,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	}, []);
 
 	const wsRef = useRef<WebSocket | null>(null);
-	// Always-current localDate for use inside WS callbacks and intervals
-	const localDateRef = useRef(localDate);
+	// Always-current virtual *UTC* instant (ms) for use inside WS callbacks and
+	// intervals. localDate is the tz-shifted display clock; the stream lives in
+	// UTC (item start_dates, the backend, seek, calcSeekSeconds), so we strip the
+	// offset back off. Mismatching these is what kept short-lived radio/news items
+	// trapped in the reveal buffer — see virtualClock.ts.
+	const utcMsRef = useRef(virtualUtcMs(localDate, tzOffset));
 	const prevDateTimeRef = useRef(dateTime);
 
 	useEffect(() => {
-		localDateRef.current = localDate;
-	}, [localDate]);
+		utcMsRef.current = virtualUtcMs(localDate, tzOffset);
+	}, [localDate, tzOffset]);
 
 	const send = useCallback((msg: object) => {
 		const ws = wsRef.current;
@@ -335,7 +340,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	// the merged-then-filtered state both surfaces newly-due items and drops
 	// expired ones in a single pass, keyed by the same `now`.
 	useEffect(() => {
-		const now = localDate.getTime();
+		const now = virtualUtcMs(localDate, tzOffset);
 
 		const dueMedia = drainDue(mediaBuffer.current, now);
 		const dueMp3 = drainDue(mp3Buffer.current, now);
@@ -353,7 +358,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		// Usenet messages are not time-pruned: a reader keeps browsing the group's
 		// backlog. They are cleared only on group change, unsubscribe, or seek.
 		if (dueUsenet.length > 0) setUsenetItems((prev) => mergeById(prev, dueUsenet));
-	}, [localDate]);
+	}, [localDate, tzOffset]);
 
 	// Detect manual time changes and send seek; ignore tick-driven minute boundaries
 	useEffect(() => {
@@ -397,7 +402,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			ws.send(
 				JSON.stringify({
 					type: "init",
-					time: localDateRef.current.toISOString(),
+					time: new Date(utcMsRef.current).toISOString(),
 				}),
 			);
 			// Re-establish channel subscriptions after a reconnect — the server
@@ -426,7 +431,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 					ws.send(
 						JSON.stringify({
 							type: "heartbeat",
-							time: localDateRef.current.toISOString(),
+							time: new Date(utcMsRef.current).toISOString(),
 						}),
 					);
 				}
@@ -446,7 +451,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// immediately; future items wait in the reveal buffer until the clock
 			// reaches their start_date (preserving forward-only pacing). init_ack /
 			// seek_ack snapshots are all active-now, so they land entirely in `due`.
-			const now = localDateRef.current.getTime();
+			const now = utcMsRef.current;
 
 			// Time-independent source lists for filters — sent once at init. Replace
 			// wholesale (the server always sends the complete set).
@@ -545,7 +550,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			wsRef.current = null;
 		};
-		// Intentionally runs once on mount; localDateRef carries the live value
+		// Intentionally runs once on mount; utcMsRef carries the live value
 	}, []);
 
 	return (
