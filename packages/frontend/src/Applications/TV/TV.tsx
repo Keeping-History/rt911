@@ -543,7 +543,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 							</ClassicyButton>
 						</div>
 						<div className={styles.tvThumbnailStrip}>
-							{items.slice(0, 12).map((item) => {
+							{items.map((item) => {
 								// In multi-select mode no thumbnail is "active" (no absolute overlay)
 								const isActive = !multiSelectMode && item.id === activePlayer;
 								const isSelected = selectedPlayers.includes(item.id);
