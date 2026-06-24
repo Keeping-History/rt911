@@ -578,7 +578,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					</div>
 					<div className={styles.tvBottomRow}>
 						<div className={styles.tvControlPanel}>
-							<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small">
+							<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
 								Grid
 							</ClassicyButton>
 							<ClassicyButton
@@ -587,6 +587,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								}
 								depressed={tvPaused}
 								buttonSize="small"
+								margin="sm" padding="sm"
 							>
 								{tvPaused ? "Play" : "Pause"}
 							</ClassicyButton>
@@ -597,6 +598,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								}}
 								depressed={overallMuted}
 								buttonSize="small"
+								margin="sm" padding="sm"
 							>
 								Mute
 							</ClassicyButton>
