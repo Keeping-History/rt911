@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { normalizeUrl, stripProxyUrl } from "./browserUtils";
+import type { BrowserHistoryEntry } from "./BrowserContext";
+import {
+	isNavigableUrl,
+	normalizeUrl,
+	resolveLinkTarget,
+	stripProxyUrl,
+} from "./browserUtils";
 
 export const DEFAULT_PROXY_ON = true;
 export const DEFAULT_PROXY_PROTOCOL = import.meta.env.VITE_PROXY_PROTOCOL ?? "http:";
@@ -39,32 +45,6 @@ const formatArchiveTime = (time: string): string => {
 		timeStyle: "short",
 		timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 	});
-};
-
-const extractOriginalUrl = (href: string, proxyHost: string): string | null => {
-	// Proxy URL — extract the url query param (match on hostname, since default
-	// ports like 443 are omitted by URL parser, making port comparison unreliable)
-	try {
-		const parsed = new URL(href);
-		if (parsed.hostname === proxyHost && parsed.searchParams.has("url")) {
-			return parsed.searchParams.get("url");
-		}
-	} catch {
-		/* not a valid URL, fall through */
-	}
-
-	// Path-form proxy link: /web/<original> or /web/<timestamp>/<original>.
-	const match = href.match(/\/web\/(?:\d+\*?\/)?(https?:\/\/.+)$/i);
-	return match ? match[1] : null;
-};
-
-const isNavigableUrl = (href: string): boolean => {
-	try {
-		const url = new URL(href);
-		return url.protocol === "http:" || url.protocol === "https:";
-	} catch {
-		return false;
-	}
 };
 
 interface ProxyFetchResult {
@@ -195,6 +175,8 @@ interface UseBrowserNavigationOptions {
 	proxyConfig: TimeMachineProxyConfig;
 	onShowError: () => void;
 	onRecordVisit: (url: string) => void;
+	/** Persisted visit log, used to color previously-visited links. */
+	visitedHistory: BrowserHistoryEntry[];
 }
 
 export const useBrowserNavigation = ({
@@ -202,6 +184,7 @@ export const useBrowserNavigation = ({
 	proxyConfig,
 	onShowError,
 	onRecordVisit,
+	visitedHistory,
 }: UseBrowserNavigationOptions) => {
 	const proxyBase = useMemo(
 		() => `${proxyConfig.protocol}//${proxyConfig.host}:${proxyConfig.port}`,
@@ -365,34 +348,38 @@ export const useBrowserNavigation = ({
 	const handleContentClick = useCallback(
 		(link: { href: string; rawHref: string }) => {
 			if (!link.rawHref) return;
-
-			// First check if the resolved href is a proxy/archive URL we can extract
-			const originalUrl = extractOriginalUrl(link.href, proxyHost);
-			if (originalUrl && isNavigableUrl(originalUrl)) {
-				navigateToRef.current(originalUrl);
-				return;
-			}
-
-			// Resolve relative URLs against the current page URL
 			const currentUrl = historyRef.current[historyIndexRef.current];
-			try {
-				const resolved = new URL(link.rawHref, currentUrl).href;
-				if (isNavigableUrl(resolved)) {
-					navigateToRef.current(resolved);
-					return;
-				}
-			} catch {
-				/* invalid URL, fall through */
-			}
-
-			if (isNavigableUrl(link.href)) {
-				navigateToRef.current(link.href);
-			}
+			const target = resolveLinkTarget(
+				link.href,
+				link.rawHref,
+				currentUrl,
+				proxyHost,
+			);
+			if (target) navigateToRef.current(target);
 		},
 		[proxyHost],
 	);
 
+	// Set of normalized URLs the user has already visited, for link coloring.
+	const visitedUrls = useMemo(
+		() => new Set(visitedHistory.map((h) => normalizeUrl(h.url))),
+		[visitedHistory],
+	);
+
+	// Resolve a link the same way a click would, then check it against history.
+	// Stays a callback (not bound to a specific anchor) so ShadowContent can run
+	// it across every link as pages and history change.
+	const isVisited = useCallback(
+		(href: string, rawHref: string): boolean => {
+			const currentUrl = historyRef.current[historyIndexRef.current];
+			const target = resolveLinkTarget(href, rawHref, currentUrl, proxyHost);
+			return target ? visitedUrls.has(normalizeUrl(target)) : false;
+		},
+		[proxyHost, visitedUrls],
+	);
+
 	return {
+		isVisited,
 		htmlContent,
 		pageTitle,
 		addressBarValue,
