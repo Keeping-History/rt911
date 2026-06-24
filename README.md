@@ -61,9 +61,6 @@ pnpm use:published   # remove the link and install from npm
 
 The desktop includes the following apps. Click any desktop icon or use the Apple menu to open them.
 
-### Demo
-An interactive showcase of every Classicy UI component — buttons, checkboxes, radio inputs, text fields, spinners, pop-up menus, progress bars, balloon help tooltips, tabs, and disclosure sections. Start here to explore what the library offers.
-
 ### Browser
 A retro web browser powered by the [TimeMachine Web Proxy](https://hub.docker.com/r/robbiebyrd/time-machine-proxy). Fetches archived snapshots of websites from the Wayback Machine and renders them in a Mac OS 8-style browser window with back/forward navigation, visited-link memory, and a favorites bar.
 
