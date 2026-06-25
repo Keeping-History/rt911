@@ -48,6 +48,13 @@ RUN cd whisper.cpp && \
     cmake -B build -DGGML_VULKAN=1 -DGGML_NATIVE=OFF -DCMAKE_BUILD_TYPE=Release && \
     cmake --build build -j"$(nproc)" --target whisper-cli && \
     cp build/bin/whisper-cli /build/whisper-cli
+# whisper.cpp's default build is shared-library: whisper-cli dynamically links
+# libwhisper.so.1 and the libggml*.so backends (incl. libggml-vulkan.so). Collect
+# every produced .so so the runtime image can resolve them — the binary alone 127s
+# with "cannot open shared object file". find is layout-agnostic across whisper
+# versions (libs live under build/src and build/ggml/src/**).
+RUN mkdir -p /build/whisper-libs && \
+    find /build/whisper.cpp/build -name '*.so*' -type f -exec cp -av {} /build/whisper-libs/ \;
 RUN cd whisper.cpp && bash ./models/download-ggml-model.sh medium.en && \
     mkdir -p /opt/models && cp models/ggml-medium.en.bin /opt/models/
 
@@ -60,7 +67,7 @@ FROM python:3.14-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg ca-certificates \
         mesa-va-drivers libva2 libva-drm2 vainfo \
-        libvulkan1 mesa-vulkan-drivers \
+        libvulkan1 mesa-vulkan-drivers libgomp1 \
         liblz4-dev libzstd-dev libicu-dev libgmime-3.0-dev libcurl4-openssl-dev libncurses-dev \
     && rm -rf /var/lib/apt/lists/*
 # usenetarchive pipeline binaries + our thread exporter.
@@ -71,8 +78,11 @@ COPY --from=uat-builder \
         /build/bin/lexicon /build/bin/lexsort \
         /build/bin/threadify /build/bin/uat-thread-export \
         /usr/local/bin/
-# whisper.cpp Vulkan CLI + the medium.en model.
+# whisper.cpp Vulkan CLI + its shared libs (libwhisper/libggml*) + the medium.en
+# model. ldconfig registers /usr/local/lib so the dynamic linker finds the .so set.
 COPY --from=whisper-builder /build/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=whisper-builder /build/whisper-libs/ /usr/local/lib/
+RUN ldconfig
 COPY --from=whisper-builder /opt/models/ /opt/models/
 WORKDIR /app
 COPY pyproject.toml .
