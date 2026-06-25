@@ -32,7 +32,7 @@ from video_grabber.directus.writer import (
 )
 from video_grabber.storage import wasabi
 from video_grabber.transcribe.audio import extract_audio
-from video_grabber.transcribe.srt import Cue, merge, parse_srt, render_srt, render_vtt, shift
+from video_grabber.transcribe.srt import Cue, dedupe_consecutive, merge, parse_srt, render_srt, render_vtt, shift
 from video_grabber.transcribe.whisper import transcribe_wav
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
@@ -163,6 +163,13 @@ def transcribe_item_flow(job_id: str) -> None:
         out_base = scratch / "out"
         srt_path = transcribe_wav(wav, out_base, cfg)
         vtt_path = out_base.with_suffix(".vtt")
+
+        # Overwrite both files with hallucination-loop-cleaned cues. Whisper
+        # sometimes repeats a phrase over silence at the end of a file; keeping
+        # only the first occurrence of each consecutive identical cue removes it.
+        clean_cues = dedupe_consecutive(parse_srt(srt_path.read_text()))
+        srt_path.write_text(render_srt(clean_cues))
+        vtt_path.write_text(render_vtt(clean_cues))
 
         if job.kind == "tv":
             base_key = f"{cfg.subtitles_prefix}/programs/{job.source_key}"

@@ -1,5 +1,6 @@
 from video_grabber.transcribe.srt import (
     Cue,
+    dedupe_consecutive,
     parse_srt,
     shift,
     merge,
@@ -54,3 +55,47 @@ def test_render_vtt_has_header_and_dot_millis():
     out = render_vtt([Cue(1.0, 2.5, "Hi")])
     assert out.startswith("WEBVTT\n\n")
     assert "00:00:01.000 --> 00:00:02.500" in out
+
+
+def test_dedupe_consecutive_removes_loop():
+    # Simulates a whisper hallucination loop: phrase repeated 5× at end.
+    phrase = " Oh, my goodness, there's another plane."
+    cues = [
+        Cue(0.0, 1.0, "Intro"),
+        Cue(1.0, 2.0, "Middle content"),
+        Cue(2.0, 3.0, phrase),
+        Cue(3.0, 4.0, phrase),
+        Cue(4.0, 5.0, phrase),
+        Cue(5.0, 6.0, phrase),
+        Cue(6.0, 7.0, phrase),
+    ]
+    result = dedupe_consecutive(cues)
+    assert len(result) == 3
+    assert result[0].text == "Intro"
+    assert result[1].text == "Middle content"
+    assert result[2].text == phrase
+
+
+def test_dedupe_consecutive_keeps_non_consecutive_repeats():
+    # Legitimately repeated phrase separated by other content is kept.
+    cues = [
+        Cue(0.0, 1.0, "Hello"),
+        Cue(1.0, 2.0, "World"),
+        Cue(2.0, 3.0, "Hello"),
+    ]
+    assert dedupe_consecutive(cues) == cues
+
+
+def test_dedupe_consecutive_handles_whitespace_variants():
+    cues = [
+        Cue(0.0, 1.0, "Line one"),
+        Cue(1.0, 2.0, " Line one "),   # leading/trailing space — same after strip
+        Cue(2.0, 3.0, "Line two"),
+    ]
+    result = dedupe_consecutive(cues)
+    assert len(result) == 2
+    assert result[1].text == "Line two"
+
+
+def test_dedupe_consecutive_empty():
+    assert dedupe_consecutive([]) == []

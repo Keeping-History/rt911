@@ -209,6 +209,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Stable ref to items so the seek effect never captures a stale closure.
 	const itemsRef = useRef(items);
 	itemsRef.current = items;
+	// Stable ref to captionsOn so onReady callbacks always see the current value.
+	const captionsOnRef = useRef(captionsOn);
+	captionsOnRef.current = captionsOn;
 	// Latest per-player volumes mirrored to a ref so persistence can read fresh
 	// values without making volume changes a persist trigger — a drag updates
 	// the ref every tick but only commits to the store on release.
@@ -486,6 +489,37 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		for (const item of items) capHlsLevel(item.id, levelForItem(item));
 	}, [items, levelForItem, capHlsLevel]);
 
+	// Inject or remove a <track> on the inner <video> element exposed by hls.js.
+	// ReactPlayer renders hls-video-element (a web component whose shadow DOM owns
+	// the real <video>); JSX <track> children don't reach it. el.api is the hls.js
+	// instance; el.api.media is the <video> hls.js attached to — the only reliable
+	// handle for programmatic text-track management.
+	const applyCaption = useCallback((id: number, item: MediaItem) => {
+		type HlsEl = HTMLVideoElement & { api?: { media?: HTMLVideoElement } };
+		const el = videoRefs.current.get(id) as HlsEl | undefined;
+		const inner = el?.api?.media ?? (el?.querySelector("video") as HTMLVideoElement | null);
+		if (!inner) return;
+		inner.querySelector("track[data-cc]")?.remove();
+		if (!captionsOnRef.current) return;
+		const url = vttUrl(item.subtitles);
+		if (!url) return;
+		const trackEl = document.createElement("track");
+		trackEl.setAttribute("data-cc", "true");
+		trackEl.kind = "subtitles";
+		trackEl.srclang = "en";
+		trackEl.label = "English";
+		trackEl.src = url;
+		trackEl.default = true;
+		inner.appendChild(trackEl);
+		// Force showing — browsers default new tracks to 'disabled'.
+		const added = Array.from(inner.textTracks).find((t) => t.label === "English");
+		if (added) added.mode = "showing";
+	}, []);
+
+	useEffect(() => {
+		for (const item of items) applyCaption(item.id, item);
+	}, [captionsOn, items, applyCaption]);
+
 	// Re-sync the working copy from persisted state, reveal the window, and focus
 	// it so the modal is keyboard-ready the instant it opens (mirrors Browser).
 	const openSettings = useCallback(() => {
@@ -665,6 +699,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												onReady={() => {
 													seekToCurrentTime(item);
 													capHlsLevel(id, levelForItem(item));
+													applyCaption(id, item);
 												}}
 												src={item.url}
 												playing={!clockPaused && !tvPaused}
@@ -681,17 +716,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												height="100%"
 												config={hlsConfigFor(item, levelForItem(item))}
 												crossOrigin="anonymous"
-											>
-												{captionsOn && vttUrl(item.subtitles) && (
-													<track
-														kind="subtitles"
-														srcLang="en"
-														label="English"
-														src={vttUrl(item.subtitles)}
-														default
-													/>
-												)}
-											</ReactPlayer>
+											/>
 										</div>
 									);
 								})}
@@ -809,6 +834,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 													seekToCurrentTime(item);
 													capHlsLevel(item.id, levelForItem(item));
 													markLoaded(item.id);
+													applyCaption(item.id, item);
 												}}
 												src={item.url}
 												playing={!clockPaused && !tvPaused}
@@ -823,17 +849,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												height="100%"
 												config={itemConfig}
 												crossOrigin="anonymous"
-											>
-												{captionsOn && vttUrl(item.subtitles) && (
-													<track
-														kind="subtitles"
-														srcLang="en"
-														label="English"
-														src={vttUrl(item.subtitles)}
-														default
-													/>
-												)}
-											</ReactPlayer>
+											/>
 										)}
 									</button>
 								);

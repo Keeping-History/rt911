@@ -50,6 +50,22 @@ def shift(cues: list[Cue], offset_seconds: float) -> list[Cue]:
     return [Cue(c.start + offset_seconds, c.end + offset_seconds, c.text) for c in cues]
 
 
+def dedupe_consecutive(cues: list[Cue]) -> list[Cue]:
+    """Drop consecutive cues whose stripped text is identical.
+
+    Whisper hallucination loops produce a run of identical phrases at the end
+    of a transcription (usually over silence or low-confidence audio). Keeping
+    only the first occurrence of each consecutive run removes the artifact while
+    preserving legitimately repeated phrases that are separated by other content."""
+    if not cues:
+        return cues
+    result = [cues[0]]
+    for cue in cues[1:]:
+        if cue.text.strip() != result[-1].text.strip():
+            result.append(cue)
+    return result
+
+
 def merge(blocks: list[list[Cue]]) -> list[Cue]:
     flat = [c for block in blocks for c in block if c.text.strip()]
     return sorted(flat, key=lambda c: (c.start, c.end))
