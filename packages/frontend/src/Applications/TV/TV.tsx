@@ -23,6 +23,7 @@ import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
 import styles from "./TV.module.scss";
 import { bufferCapsForLevel } from "./staggerLoad";
+import { useStaggeredLoad } from "./useStaggeredLoad";
 import {
 	type TVChannelRef,
 	type TVRemoteCommand,
@@ -179,6 +180,20 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Underlying video elements per item — react-player 3.x forwards refs to
 	// the native <video> element, so we set currentTime directly for seeking.
 	const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
+	// Scroll container = IntersectionObserver root for staggered thumbnail loading.
+	const stripRef = useRef<HTMLDivElement>(null);
+	// In single-channel mode the active (enlarged) channel loads first; in grid
+	// mode the selected players render in the grid and are not queued here.
+	const priorityIds = useMemo(
+		() => (multiSelectMode ? selectedPlayers : [activePlayer]),
+		[multiSelectMode, selectedPlayers, activePlayer],
+	);
+	const channelIds = useMemo(() => items.map((i) => i.id), [items]);
+	const { shouldMount, markLoaded, observe } = useStaggeredLoad({
+		ids: channelIds,
+		priorityIds,
+		rootRef: stripRef,
+	});
 	const prevDateTimeRef = useRef(dateTime);
 	// Stable ref to the latest UTC dateTime string for use in config callbacks.
 	const dateTimeRef = useRef(dateTime);
@@ -721,7 +736,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								}
 							/>
 						</div>
-						<div className={styles.tvThumbnailStrip}>
+						<div className={styles.tvThumbnailStrip} ref={stripRef}>
 							{items.map((item) => {
 								// In multi-select mode no thumbnail is "active" (no absolute overlay)
 								const isActive = !multiSelectMode && item.id === activePlayer;
@@ -737,6 +752,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								return (
 									<button
 										key={item.id}
+										ref={(el) => observe(item.id, el)}
 										className={[
 											styles.tvPlayer,
 											isActive ? styles.tvPlayerActive : "",
@@ -767,7 +783,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										<div className={styles.tvChannelTitleHolder}>
 											<p className={styles.tvChannelTitle}>{item.source}</p>
 										</div>
-										{renderThumbnailPlayer && (
+										{renderThumbnailPlayer && shouldMount(item.id) && (
 											<ReactPlayer
 												ref={(el: HTMLVideoElement | null) => {
 													if (el) videoRefs.current.set(item.id, el);
@@ -776,6 +792,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												onReady={() => {
 													seekToCurrentTime(item);
 													capHlsLevel(item.id, levelForItem(item));
+													markLoaded(item.id);
 												}}
 												src={item.url}
 												playing={!clockPaused && !tvPaused}
