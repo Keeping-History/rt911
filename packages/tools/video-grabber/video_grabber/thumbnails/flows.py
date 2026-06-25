@@ -58,15 +58,19 @@ def generate_thumbnails_flow() -> None:
     channels = _channel_rows(cfg)
     ok = skipped = 0
     for slug, master_url in channels:
-        seg_url = find_thumb_segment(master_url, virtual_now)
-        if not seg_url:
+        try:
+            seg_url = find_thumb_segment(master_url, virtual_now)
+            if not seg_url:
+                skipped += 1
+                continue
+            jpeg = capture_frame(seg_url)
+            if not jpeg:
+                skipped += 1
+                continue
+            upload_thumbnail(slug, jpeg, cfg)
+            ok += 1
+        except Exception as exc:
+            logger.warning("thumbnail error for %s: %s", slug, exc)
             skipped += 1
-            continue
-        jpeg = capture_frame(seg_url)
-        if not jpeg:
-            skipped += 1
-            continue
-        upload_thumbnail(slug, jpeg, cfg)
-        ok += 1
 
     logger.info("thumbnails: %d uploaded, %d skipped (no segment/capture)", ok, skipped)
