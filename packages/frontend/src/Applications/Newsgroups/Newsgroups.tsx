@@ -206,15 +206,17 @@ export const Newsgroups = () => {
 						)}
 						{selectedGroup && rows.length > 0 && (
 							<div className={styles.headerRow}>
-								<button type="button" className={styles.colHeader} onClick={() => setSort("subject")}>
-									Subject{sortMark("subject")}
-								</button>
-								<button type="button" className={styles.colHeader} onClick={() => setSort("author")}>
-									Author{sortMark("author")}
-								</button>
-								<button type="button" className={styles.colHeader} onClick={() => setSort("date")}>
-									Date{sortMark("date")}
-								</button>
+								{(["subject", "author", "date"] as SortField[]).map((field) => (
+									<button
+										key={field}
+										type="button"
+										className={`${styles.colHeader} ${sort.field === field ? styles.colHeaderSelected : ""}`}
+										onClick={() => setSort(field)}
+									>
+										{field.charAt(0).toUpperCase() + field.slice(1)}
+										{sortMark(field)}
+									</button>
+								))}
 							</div>
 						)}
 						{rows.map((row) => (
