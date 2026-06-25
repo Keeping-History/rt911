@@ -126,7 +126,7 @@ $strip-height: calc(5em + 8px);
   padding: calc(var(--window-padding-size) * 2);
 }
 
-// Visible players live here — off-screen thumbnails are unmounted by useStaggeredLoad;
+// Thumbnail strip entries — each shows a static JPEG still that refreshes every 4 s.
 .tvPlayer {
   position: relative;
   flex-shrink: 0;
@@ -178,6 +178,14 @@ $strip-height: calc(5em + 8px);
   margin: 0;
   padding: 0 var(--window-padding-size);
   color: var(--color-theme-03);
+}
+
+.tvThumbnailImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
 }
 
 .tvSettings {
