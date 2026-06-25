@@ -4,12 +4,13 @@ from types import SimpleNamespace
 
 from video_grabber.config import Config
 from video_grabber.thumbnails.clock import virtual_utc_now
-from video_grabber.thumbnails.m3u8 import _find_segment_in_playlist, find_thumb_segment
+from video_grabber.thumbnails.flows import _channel_rows, generate_thumbnails_flow
 from video_grabber.thumbnails.generator import (
     capture_frame,
     ensure_offline_placeholder,
     upload_thumbnail,
 )
+from video_grabber.thumbnails.m3u8 import _find_segment_in_playlist, find_thumb_segment
 import respx
 import httpx as _httpx
 
@@ -188,3 +189,85 @@ def test_ensure_offline_placeholder_uploads_when_missing(monkeypatch):
     assert len(put_calls) == 1
     assert put_calls[0]["Key"] == "thumbnails/offline.jpg"
     assert put_calls[0]["CacheControl"] == "max-age=31536000"
+
+
+# ---------------------------------------------------------------------------
+# Task 4: Prefect flow + registration
+# ---------------------------------------------------------------------------
+
+
+def test_channel_rows_returns_urls_and_slugs():
+    cfg = make_cfg()
+    with respx.mock:
+        respx.get(f"{cfg.directus_url}/items/tv_channels").mock(
+            return_value=_httpx.Response(200, json={"data": [
+                {"url": "https://files.911realtime.org/playlists/cnn/master.m3u8"},
+                {"url": "https://files.911realtime.org/playlists/weta/master.m3u8"},
+                {"url": "https://files.911realtime.org/playlists/abc/master.m3u8"},
+            ]})
+        )
+        rows = _channel_rows(cfg)
+    assert rows == [
+        ("cnn", "https://files.911realtime.org/playlists/cnn/master.m3u8"),
+        ("weta", "https://files.911realtime.org/playlists/weta/master.m3u8"),
+        ("abc", "https://files.911realtime.org/playlists/abc/master.m3u8"),
+    ]
+
+
+def test_generate_thumbnails_flow_uploads_for_found_segments(monkeypatch):
+    uploaded = {}
+
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows.ensure_offline_placeholder", lambda cfg: None
+    )
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows.virtual_utc_now",
+        lambda cfg: datetime(2001, 9, 11, 12, 0, 3, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows._channel_rows",
+        lambda cfg: [("cnn", "https://files.911realtime.org/playlists/cnn/master.m3u8")],
+    )
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows.find_thumb_segment",
+        lambda url, vt: "https://files.911realtime.org/hls/cnn/seg.m4s",
+    )
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows.capture_frame",
+        lambda url: b"\xff\xd8\xff",
+    )
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows.upload_thumbnail",
+        lambda slug, data, cfg: uploaded.update({slug: data}),
+    )
+
+    generate_thumbnails_flow()
+    assert "cnn" in uploaded
+    assert uploaded["cnn"] == b"\xff\xd8\xff"
+
+
+def test_generate_thumbnails_flow_skips_upload_when_capture_fails(monkeypatch):
+    uploaded = {}
+
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows.ensure_offline_placeholder", lambda cfg: None
+    )
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows.virtual_utc_now",
+        lambda cfg: datetime(2001, 9, 11, 12, 0, 3, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows._channel_rows",
+        lambda cfg: [("offline_ch", "https://files.911realtime.org/playlists/offline_ch/master.m3u8")],
+    )
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows.find_thumb_segment",
+        lambda url, vt: None,  # no segment found
+    )
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.flows.upload_thumbnail",
+        lambda slug, data, cfg: uploaded.update({slug: data}),
+    )
+
+    generate_thumbnails_flow()
+    assert "offline_ch" not in uploaded  # frontend falls back to offline.jpg
