@@ -21,6 +21,7 @@ type MediaItem struct {
 	Trim         int        `json:"trim"`
 	Image        string     `json:"image,omitempty"`
 	ImageCaption string     `json:"image_caption,omitempty"`
+	Subtitles    string     `json:"subtitles,omitempty"`
 	Content      string     `json:"content,omitempty"`
 	Sort         *int       `json:"sort,omitempty"`
 }
