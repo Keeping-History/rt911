@@ -154,7 +154,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	);
 	// Per-player volume (0..1) keyed by item id. A missing entry plays at full
 	// (1.0), still capped by the universal volumeLimit. Persisted alongside the
-	// mute set through ClassicyAppTVSetGridState.
+	// mute set through ClassicyAppTVSetGridState — but only on slider release,
+	// not on every drag tick (see persistGridState).
 	const [gridPlayerVolumes, setGridPlayerVolumes] = useState<
 		Record<number, number>
 	>((appState?.data?.gridPlayerVolumes as Record<number, number>) ?? {});
@@ -175,6 +176,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Stable ref to items so the seek effect never captures a stale closure.
 	const itemsRef = useRef(items);
 	itemsRef.current = items;
+	// Latest per-player volumes mirrored to a ref so persistence can read fresh
+	// values without making volume changes a persist trigger — a drag updates
+	// the ref every tick but only commits to the store on release.
+	const gridPlayerVolumesRef = useRef(gridPlayerVolumes);
+	gridPlayerVolumesRef.current = gridPlayerVolumes;
 
 	// Track the real-clock instant when dateTime last changed so the health
 	// check can compute an accurate sub-minute Classicy time between updates.
@@ -333,23 +339,25 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		});
 	}, [command, items, desktopEventDispatch]);
 
-	// Persist grid layout, mute state, and per-player volumes to app settings on
-	// every change.
-	useEffect(() => {
+	// Persist grid layout, mute state, and the current per-player volumes. Volumes
+	// are read from the ref rather than closed over, so this callback's identity
+	// only changes when layout/mute change — a volume drag does not re-fire the
+	// effect below. The final dragged value is committed explicitly on release.
+	const persistGridState = useCallback(() => {
 		desktopEventDispatch({
 			type: "ClassicyAppTVSetGridState",
 			multiSelectMode,
 			selectedPlayers,
 			mutedGridPlayers,
-			gridPlayerVolumes,
+			gridPlayerVolumes: gridPlayerVolumesRef.current,
 		});
-	}, [
-		multiSelectMode,
-		selectedPlayers,
-		mutedGridPlayers,
-		gridPlayerVolumes,
-		desktopEventDispatch,
-	]);
+	}, [multiSelectMode, selectedPlayers, mutedGridPlayers, desktopEventDispatch]);
+
+	// Persist on mount and whenever layout/mute change (volumes ride along from
+	// the ref). Per-player volume drags persist via persistGridState on release.
+	useEffect(() => {
+		persistGridState();
+	}, [persistGridState]);
 
 	const toggleMultiSelect = () => {
 		setMultiSelectMode((prev) => {
@@ -587,6 +595,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 															parseFloat(e.target.value),
 														)
 													}
+													onPointerUp={persistGridState}
+													onKeyUp={persistGridState}
 												/>
 											</div>
 											<ReactPlayer
