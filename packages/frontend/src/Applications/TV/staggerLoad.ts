@@ -20,3 +20,61 @@ export function computeConcurrency(
 	const raw = nav.deviceMemory ?? fromCores ?? STAGGER_THRESHOLD;
 	return Math.min(8, Math.max(2, Math.round(raw)));
 }
+
+export type LoadPhase = "idle" | "loading" | "loaded";
+
+/** True once a player should have a live <ReactPlayer> in the DOM. */
+export function shouldMount(phase: Map<number, LoadPhase>, id: number): boolean {
+	const p = phase.get(id);
+	return p === "loading" || p === "loaded";
+}
+
+/** Mark a player's initial load complete (called from onReady). */
+export function markLoaded(
+	prev: Map<number, LoadPhase>,
+	id: number,
+): Map<number, LoadPhase> {
+	if (prev.get(id) !== "loading") return prev;
+	const next = new Map(prev);
+	next.set(id, "loaded");
+	return next;
+}
+
+/** Recompute load phases. Prunes off-screen players to idle (unmount), keeps
+ *  `loading` within `concurrency`, and promotes visible idle players —
+ *  priority ids first — into freed slots. `loaded` players do not consume
+ *  budget; they have finished their initial fetch. */
+export function reconcile(
+	prev: Map<number, LoadPhase>,
+	opts: { visibleIds: number[]; priorityIds: number[]; concurrency: number },
+): Map<number, LoadPhase> {
+	const { visibleIds, priorityIds, concurrency } = opts;
+	const visible = new Set(visibleIds);
+	const next = new Map<number, LoadPhase>();
+
+	// Carry forward only still-visible players; drop the rest (they unmount).
+	let loadingCount = 0;
+	for (const id of visibleIds) {
+		const p = prev.get(id);
+		if (p === "loading" || p === "loaded") {
+			next.set(id, p);
+			if (p === "loading") loadingCount++;
+		} else {
+			next.set(id, "idle");
+		}
+	}
+
+	// Promote idle visible players into free slots, priority first.
+	const ordered = [
+		...priorityIds.filter((id) => visible.has(id)),
+		...visibleIds.filter((id) => !priorityIds.includes(id)),
+	];
+	for (const id of ordered) {
+		if (loadingCount >= concurrency) break;
+		if (next.get(id) === "idle") {
+			next.set(id, "loading");
+			loadingCount++;
+		}
+	}
+	return next;
+}
