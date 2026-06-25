@@ -18,6 +18,7 @@ import type {
 	MediaItem,
 	MediaStreamFilter,
 } from "../../Providers/MediaStream/MediaStreamContext";
+import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
 import styles from "./TV.module.scss";
 import {
@@ -131,6 +132,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// One-shot view command (tune / grid / exitGrid), applied once per seq.
 	const command = appState?.data?.command as TVRemoteCommand | undefined;
 
+	const [captionsOn, setCaptionsOn] = useState<boolean>(false);
 	const [showSettings, setShowSettings] = useState<boolean>(false);
 	// Settings form: local working copy of the disabled set, committed on Save.
 	const [channelForm, setChannelForm] = useState<string[]>(disabledChannels);
@@ -569,7 +571,18 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												width="100%"
 												height="100%"
 												config={hlsConfigFor(item, levelForItem(item))}
-											/>
+												crossOrigin="anonymous"
+											>
+												{captionsOn && vttUrl(item.subtitles) && (
+													<track
+														kind="subtitles"
+														srcLang="en"
+														label="English"
+														src={vttUrl(item.subtitles)}
+														default
+													/>
+												)}
+											</ReactPlayer>
 										</div>
 									);
 								})}
@@ -601,6 +614,14 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								margin="sm" padding="sm"
 							>
 								Mute
+							</ClassicyButton>
+							<ClassicyButton
+								onClickFunc={() => setCaptionsOn((v) => !v)}
+								depressed={captionsOn}
+								buttonSize="small"
+								margin="sm" padding="sm"
+							>
+								{captionsOn ? "CC On" : "CC Off"}
 							</ClassicyButton>
 						</div>
 						<div className={styles.tvThumbnailStrip}>
@@ -671,7 +692,18 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												width="100%"
 												height="100%"
 												config={itemConfig}
-											/>
+												crossOrigin="anonymous"
+											>
+												{captionsOn && vttUrl(item.subtitles) && (
+													<track
+														kind="subtitles"
+														srcLang="en"
+														label="English"
+														src={vttUrl(item.subtitles)}
+														default
+													/>
+												)}
+											</ReactPlayer>
 										)}
 									</button>
 								);

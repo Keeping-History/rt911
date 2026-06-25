@@ -13,6 +13,7 @@ import { useContext, useEffect, useRef, useState } from "react";
 import {
 	MediaStreamContext,
 	type MediaItem,
+	vttUrl,
 } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
@@ -53,6 +54,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 
 	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
+	const [captionsOn, setCaptionsOn] = useState<boolean>(false);
 	const [activeStation, setActiveStation] = useState<number>(0);
 	const [hasInteracted, setHasInteracted] = useState<boolean>(false);
 	const [scannerMode, setScannerMode] = useState<boolean>(
@@ -386,7 +388,16 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 															.catch(() => {});
 													}
 												}}
-											/>
+											>
+												{captionsOn && vttUrl(item.subtitles) && (
+													<track
+														kind="subtitles"
+														srcLang="en"
+														label="English"
+														src={vttUrl(item.subtitles)}
+													/>
+												)}
+											</audio>
 											{/* Per-station key: only this visualizer remounts when its
 											    audio element becomes ready; other stations unaffected. */}
 											<WaveformVisualizer
@@ -405,6 +416,12 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 						<div className={styles.rsControlPanel}>
 							<ClassicyButton onClickFunc={toggleScanner} depressed={scannerMode}>
 								Scan
+							</ClassicyButton>
+							<ClassicyButton
+								onClickFunc={() => setCaptionsOn((v) => !v)}
+								depressed={captionsOn}
+							>
+								{captionsOn ? "CC On" : "CC Off"}
 							</ClassicyButton>
 						</div>
 						<div className={styles.rsStationStrip}>
@@ -450,7 +467,16 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 													)
 														el.play().catch(() => {});
 												}}
-											/>
+											>
+												{captionsOn && vttUrl(item.subtitles) && (
+													<track
+														kind="subtitles"
+														srcLang="en"
+														label="English"
+														src={vttUrl(item.subtitles)}
+													/>
+												)}
+											</audio>
 										)}
 									</ClassicyButton>
 								);

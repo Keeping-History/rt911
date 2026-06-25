@@ -42,8 +42,16 @@ export interface MediaItem {
 	trim: number;
 	image?: string;
 	image_caption?: string;
+	/** Public URL to the .srt subtitle file; the .vtt sibling is derived for <track>. */
+	subtitles?: string;
 	content?: string;
 	sort?: number;
+}
+
+/** HTML5 <track> needs WebVTT; the producer writes a .vtt next to every .srt. */
+export function vttUrl(srtUrl?: string): string | undefined {
+	if (!srtUrl) return undefined;
+	return srtUrl.replace(/\.srt$/i, ".vtt");
 }
 
 /**
