@@ -164,6 +164,7 @@ $msg-cols: minmax(0, 1fr) 160px 132px;
   text-align: left;
   border: none;
   cursor: pointer;
+  font-family: var(--body-font);
   font-size: calc(var(--ui-font-size) * 0.8);
   font-weight: 400;
   font-stretch: condensed;
