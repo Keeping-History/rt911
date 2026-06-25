@@ -26,6 +26,7 @@ _CONTENT_TYPES: dict[str, tuple[str, str]] = {
     # over-revalidation rather than splitting the mapping.
     ".vtt": ("text/vtt", "max-age=300"),
     ".srt": ("application/x-subrip", "max-age=300"),
+    ".jpg": ("image/jpeg", "max-age=30"),   # channel thumbnails; refreshed every ~30 s
 }
 
 _TRANSFER_CONFIG = TransferConfig(
