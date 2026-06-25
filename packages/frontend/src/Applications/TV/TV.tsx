@@ -27,6 +27,7 @@ import {
 	tvResume,
 	tvSetMuted,
 } from "./TVContext";
+import { resolveGridVolume } from "./volume";
 
 /** Resolve a remote channel reference (numeric id or `source` name) to an item id. */
 function resolveChannelId(
@@ -147,6 +148,12 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const [mutedGridPlayers, setMutedGridPlayers] = useState<number[]>(
 		(appState?.data?.mutedGridPlayers as number[]) ?? [],
 	);
+	// Per-player volume (0..1) keyed by item id. A missing entry plays at full
+	// (1.0), still capped by the universal volumeLimit. Persisted alongside the
+	// mute set through ClassicyAppTVSetGridState.
+	const [gridPlayerVolumes, setGridPlayerVolumes] = useState<
+		Record<number, number>
+	>((appState?.data?.gridPlayerVolumes as Record<number, number>) ?? {});
 
 	// Underlying video elements per item — react-player 3.x forwards refs to
 	// the native <video> element, so we set currentTime directly for seeking.
@@ -324,15 +331,23 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		});
 	}, [command, items, desktopEventDispatch]);
 
-	// Persist grid layout and mute state to app settings on every change.
+	// Persist grid layout, mute state, and per-player volumes to app settings on
+	// every change.
 	useEffect(() => {
 		desktopEventDispatch({
 			type: "ClassicyAppTVSetGridState",
 			multiSelectMode,
 			selectedPlayers,
 			mutedGridPlayers,
+			gridPlayerVolumes,
 		});
-	}, [multiSelectMode, selectedPlayers, mutedGridPlayers, desktopEventDispatch]);
+	}, [
+		multiSelectMode,
+		selectedPlayers,
+		mutedGridPlayers,
+		gridPlayerVolumes,
+		desktopEventDispatch,
+	]);
 
 	const toggleMultiSelect = () => {
 		setMultiSelectMode((prev) => {
@@ -354,6 +369,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		setMutedGridPlayers((prev) =>
 			prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
 		);
+	};
+
+	const setGridPlayerVolume = (id: number, volume: number) => {
+		setHasInteracted(true);
+		setGridPlayerVolumes((prev) => ({ ...prev, [id]: volume }));
 	};
 
 	const gridColumns = Math.ceil(Math.sqrt(Math.max(1, selectedPlayers.length)));
@@ -550,6 +570,22 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 													✕
 												</button>
 											</div>
+											<div className={styles.tvGridPlayerVolume}>
+												<input
+													type="range"
+													min={0}
+													max={1}
+													step={0.05}
+													value={gridPlayerVolumes[id] ?? 1}
+													aria-label={`Volume for ${item.source}`}
+													onChange={(e) =>
+														setGridPlayerVolume(
+															id,
+															parseFloat(e.target.value),
+														)
+													}
+												/>
+											</div>
 											<ReactPlayer
 												ref={(el: HTMLVideoElement | null) => {
 													if (el) videoRefs.current.set(id, el);
@@ -565,7 +601,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												controls={false}
 												playsInline={true}
 												muted={isGridMuted}
-												volume={isGridMuted ? 0 : volumeLimit}
+												volume={resolveGridVolume(
+													gridPlayerVolumes[id],
+													volumeLimit,
+													isGridMuted,
+												)}
 												width="100%"
 												height="100%"
 												config={hlsConfigFor(item, levelForItem(item))}

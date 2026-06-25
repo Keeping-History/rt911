@@ -73,6 +73,29 @@ $strip-height: calc(5em + 8px);
   }
 }
 
+// Per-player volume slider, revealed on grid-cell hover (bottom edge)
+.tvGridPlayerVolume {
+  position: absolute;
+  bottom: var(--window-control-size);
+  left: var(--window-control-size);
+  right: var(--window-control-size);
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.1s;
+  background-color: var(--color-theme-06);
+  padding: calc(var(--window-padding-size) / 2);
+
+  .tvGridPlayer:hover & {
+    opacity: 1;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    display: block;
+    margin: 0;
+  }
+}
+
 // Wrapper row holding the control panel and thumbnail strip
 .tvBottomRow {
   display: flex;
