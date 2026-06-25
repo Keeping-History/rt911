@@ -32,6 +32,27 @@ createRoot(rootElement).render(
 							dateTime: "2001-09-11T12:40:00.000Z",
 							timeZoneOffset: "-4",
 						},
+						Applications: {
+							apps: {
+								"TV.app": {
+									data: {
+										// Hide lower-priority / non-US channels by default.
+										// Users can re-enable any of these via TV Settings.
+										disabledChannels: [
+											"ANT1",
+											"AZT",
+											"BET",
+											"CCTV3",
+											"IRAQ",
+											"MCM",
+											"MSNBC",
+											"PSC",
+											"WETA",
+										],
+									},
+								},
+							},
+						},
 					},
 				},
 			}}
