@@ -5,6 +5,7 @@ import {
 	ClassicyControlGroup,
 	ClassicyControlLabel,
 	ClassicyIcons,
+	ClassicySlider,
 	ClassicyWindow,
 	quitMenuItemHelper,
 	useAppManager,
@@ -26,6 +27,7 @@ import {
 	tvPause,
 	tvResume,
 	tvSetMuted,
+	tvSetVolumeLimit,
 } from "./TVContext";
 import { resolveGridVolume } from "./volume";
 
@@ -642,6 +644,22 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 							>
 								Mute
 							</ClassicyButton>
+							<ClassicySlider
+								id="tv_universal_volume"
+								labelTitle="Volume"
+								labelPosition="left"
+								labelSize="small"
+								value={volumeLimit}
+								min={0}
+								max={1}
+								step={0.05}
+								valueLabel={`${Math.round(volumeLimit * 100)}%`}
+								onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
+									desktopEventDispatch(
+										tvSetVolumeLimit(parseFloat(e.target.value)),
+									)
+								}
+							/>
 						</div>
 						<div className={styles.tvThumbnailStrip}>
 							{items.map((item) => {
