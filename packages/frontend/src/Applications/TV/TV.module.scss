@@ -126,7 +126,7 @@ $strip-height: calc(5em + 8px);
   padding: calc(var(--window-padding-size) * 2);
 }
 
-// All players live here in the DOM permanently — active one floats up via absolute position
+// Visible players live here — off-screen thumbnails are unmounted by useStaggeredLoad;
 .tvPlayer {
   position: relative;
   flex-shrink: 0;

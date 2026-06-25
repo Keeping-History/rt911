@@ -50,8 +50,13 @@ export function useStaggeredLoad(opts: {
 	// Pure: recompute phases from a base map + current visibility/priority/budget.
 	const recompute = useCallback((base: Map<number, LoadPhase>) => {
 		const { ids, priorityIds, concurrency, small } = cfg.current;
-		const visibleIds = small ? ids : ids.filter((id) => visible.current.has(id));
-		return reconcile(base, { visibleIds, priorityIds, concurrency });
+		// Priority IDs (e.g. the focused player) are treated as always-visible so
+		// they mount even when scrolled out of the strip's scroll rect — otherwise
+		// the active channel could be pruned if its thumbnail scrolls off-screen.
+		const effectiveVisible = small
+			? ids
+			: ids.filter((id) => visible.current.has(id) || priorityIds.includes(id));
+		return reconcile(base, { visibleIds: effectiveVisible, priorityIds, concurrency });
 	}, []);
 
 	// Build the observer once per root (and when crossing the stagger threshold);

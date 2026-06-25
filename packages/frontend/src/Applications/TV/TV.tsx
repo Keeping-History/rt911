@@ -182,11 +182,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
 	// Scroll container = IntersectionObserver root for staggered thumbnail loading.
 	const stripRef = useRef<HTMLDivElement>(null);
-	// In single-channel mode the active (enlarged) channel loads first; in grid
-	// mode the selected players render in the grid and are not queued here.
+	// In single-channel mode the focused (enlarged) channel loads first; in grid
+	// mode the selected players render as title-only (no <ReactPlayer>) so they
+	// must NOT enter the queue — they would never call markLoaded and would jam
+	// concurrency slots indefinitely.
 	const priorityIds = useMemo(
-		() => (multiSelectMode ? selectedPlayers : [activePlayer]),
-		[multiSelectMode, selectedPlayers, activePlayer],
+		() => (multiSelectMode ? [] : [activePlayer]),
+		[multiSelectMode, activePlayer],
 	);
 	const channelIds = useMemo(() => items.map((i) => i.id), [items]);
 	const { shouldMount, markLoaded, observe } = useStaggeredLoad({
@@ -443,9 +445,23 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// at segment boundaries. Idempotent guard avoids redundant ABR re-evaluations.
 	const capHlsLevel = useCallback((id: number, level: number) => {
 		const el = videoRefs.current.get(id) as
-			| (HTMLVideoElement & { api?: { autoLevelCapping: number } })
+			| (HTMLVideoElement & {
+					api?: {
+						autoLevelCapping: number;
+						config: { maxBufferLength: number; backBufferLength: number; maxBufferSize: number };
+					};
+			  })
 			| undefined;
-		if (el?.api && el.api.autoLevelCapping !== level) el.api.autoLevelCapping = level;
+		if (!el?.api || el.api.autoLevelCapping === level) return;
+		el.api.autoLevelCapping = level;
+		// Buffer caps must be updated at runtime (not just at construction) because
+		// hlsConfigFor caches the config object — baking in level-0 caps for all
+		// players on the first render. hls.js re-reads config.maxBufferLength etc. on
+		// each buffering tick, so mutating here takes effect without a remount.
+		const caps = bufferCapsForLevel(level);
+		el.api.config.maxBufferLength = caps.maxBufferLength;
+		el.api.config.backBufferLength = caps.backBufferLength;
+		el.api.config.maxBufferSize = caps.maxBufferSize;
 	}, []);
 
 	// The quality ceiling for a player: the single focused video (the active channel,
