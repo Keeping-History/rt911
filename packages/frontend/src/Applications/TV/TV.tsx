@@ -584,21 +584,26 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												</button>
 											</div>
 											<div className={styles.tvGridPlayerVolume}>
-												<input
-													type="range"
+												<ClassicySlider
+													id={`tv_grid_volume_${id}`}
+													ariaLabel={`Volume for ${item.source}`}
+													value={gridPlayerVolumes[id] ?? 1}
 													min={0}
 													max={1}
 													step={0.05}
-													value={gridPlayerVolumes[id] ?? 1}
-													aria-label={`Volume for ${item.source}`}
-													onChange={(e) =>
+													labelSize="small"
+													valueLabel={`${Math.round(
+														(gridPlayerVolumes[id] ?? 1) * 100,
+													)}%`}
+													onChangeFunc={(
+														e: React.ChangeEvent<HTMLInputElement>,
+													) =>
 														setGridPlayerVolume(
 															id,
 															parseFloat(e.target.value),
 														)
 													}
-													onPointerUp={persistGridState}
-													onKeyUp={persistGridState}
+													onCommitFunc={persistGridState}
 												/>
 											</div>
 											<ReactPlayer

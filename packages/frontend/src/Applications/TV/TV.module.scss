@@ -88,12 +88,6 @@ $strip-height: calc(5em + 8px);
   .tvGridPlayer:hover & {
     opacity: 1;
   }
-
-  input[type="range"] {
-    width: 100%;
-    display: block;
-    margin: 0;
-  }
 }
 
 // Wrapper row holding the control panel and thumbnail strip
