@@ -15,37 +15,65 @@ import respx
 import httpx as _httpx
 
 
-def _cfg(real_iso: str, virtual_iso: str = "2001-09-11T12:40:00+00:00") -> Config:
+_WINDOW_JSON = {"data": [{"start_date": "2001-09-09T00:00:00", "end_date": "2001-09-18T00:00:00"}]}
+_WINDOW_START = datetime(2001, 9, 9, tzinfo=timezone.utc)
+_WINDOW_END = datetime(2001, 9, 18, tzinfo=timezone.utc)
+_WINDOW_DURATION = _WINDOW_END - _WINDOW_START  # 9 days
+
+
+def _cfg(real_iso: str) -> Config:
     c = Config()
     c.virtual_epoch_real = real_iso
-    c.virtual_epoch_virtual = virtual_iso
     return c
 
 
-def test_virtual_utc_now_at_epoch_matches_virtual_start():
-    """When real clock == epoch_real, virtual_now == epoch_virtual."""
+def _mock_client(json_data):
+    """Minimal httpx-alike returning a fixed JSON response for any GET."""
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return json_data
+
+    class _Client:
+        def get(self, *_a, **_kw):
+            return _Resp()
+
+    return _Client()
+
+
+def test_virtual_utc_now_at_epoch_matches_window_start():
+    """When real clock == epoch_real, virtual_now == start_date."""
     now_real = datetime.now(timezone.utc)
-    cfg = _cfg(now_real.isoformat(), "2001-09-11T12:40:00+00:00")
-    result = virtual_utc_now(cfg)
-    assert abs((result - datetime(2001, 9, 11, 12, 40, tzinfo=timezone.utc)).total_seconds()) < 2
+    cfg = _cfg(now_real.isoformat())
+    result = virtual_utc_now(cfg, client=_mock_client(_WINDOW_JSON))
+    assert abs((result - _WINDOW_START).total_seconds()) < 2
 
 
 def test_virtual_utc_now_advances_proportionally():
-    """One real hour after epoch_real → virtual_now is one hour after epoch_virtual."""
-    # Simulate 1 hour after epoch_real by patching: we can't freeze time here, so
-    # test the math by calling with a cfg whose epoch is 1 hour in the past.
+    """One real hour after epoch_real → virtual_now is one hour after start_date."""
     now = datetime.now(timezone.utc)
     past = now - timedelta(hours=1)
-    cfg = _cfg(past.isoformat(), "2001-09-11T12:40:00+00:00")
-    result = virtual_utc_now(cfg)
-    expected = datetime(2001, 9, 11, 13, 40, tzinfo=timezone.utc)
-    assert abs((result - expected).total_seconds()) < 5  # allow ~5s for real elapsed
+    cfg = _cfg(past.isoformat())
+    result = virtual_utc_now(cfg, client=_mock_client(_WINDOW_JSON))
+    expected = _WINDOW_START + timedelta(hours=1)
+    assert abs((result - expected).total_seconds()) < 5
 
 
 def test_virtual_utc_now_returns_aware_utc():
     cfg = _cfg(datetime.now(timezone.utc).isoformat())
-    result = virtual_utc_now(cfg)
+    result = virtual_utc_now(cfg, client=_mock_client(_WINDOW_JSON))
     assert result.tzinfo is not None
+
+
+def test_virtual_utc_now_loops_through_window():
+    """After exactly one full 9-day window of real time, virtual_now wraps back to start_date."""
+    epoch_real = datetime.now(timezone.utc) - _WINDOW_DURATION
+    cfg = _cfg(epoch_real.isoformat())
+    result = virtual_utc_now(cfg, client=_mock_client(_WINDOW_JSON))
+    assert abs((result - _WINDOW_START).total_seconds()) < 5
 
 
 # Synthetic playlist: two slots separated by a discontinuity.
