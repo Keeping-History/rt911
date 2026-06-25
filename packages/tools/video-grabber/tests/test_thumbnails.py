@@ -1,8 +1,17 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
+
 from video_grabber.config import Config
 from video_grabber.thumbnails.clock import virtual_utc_now
 from video_grabber.thumbnails.m3u8 import _find_segment_in_playlist, find_thumb_segment
-import respx, httpx as _httpx
+from video_grabber.thumbnails.generator import (
+    capture_frame,
+    ensure_offline_placeholder,
+    upload_thumbnail,
+)
+import respx
+import httpx as _httpx
 
 
 def _cfg(real_iso: str, virtual_iso: str = "2001-09-11T12:40:00+00:00") -> Config:
@@ -96,3 +105,86 @@ def test_find_thumb_segment_fetches_correct_url():
     t = datetime(2001, 9, 11, 12, 0, 3, tzinfo=timezone.utc)
     result = find_thumb_segment(master, t)
     assert result == "https://files.911realtime.org/hls/cnn/20010911/cnn-a/seg-000001.m4s"
+
+
+# ---------------------------------------------------------------------------
+# Task 3: frame capture, offline placeholder, Wasabi upload
+# ---------------------------------------------------------------------------
+
+def make_cfg() -> Config:
+    return Config()
+
+
+def test_capture_frame_returns_bytes_on_success(monkeypatch, tmp_path):
+    fake_jpeg = b"\xff\xd8\xff\xe0fake"
+
+    def fake_run(args, **kw):
+        # ffmpeg writes to args[-1]; write our fake bytes there
+        Path(args[-1]).write_bytes(fake_jpeg)
+        return SimpleNamespace(returncode=0, stderr=b"")
+
+    monkeypatch.setattr("video_grabber.thumbnails.generator.subprocess.run", fake_run)
+    result = capture_frame("https://files.911realtime.org/hls/cnn/seg.m4s")
+    assert result == fake_jpeg
+
+
+def test_capture_frame_returns_none_on_ffmpeg_failure(monkeypatch):
+    def fake_run(args, **kw):
+        return SimpleNamespace(returncode=1, stderr=b"decoder error")
+
+    monkeypatch.setattr("video_grabber.thumbnails.generator.subprocess.run", fake_run)
+    result = capture_frame("https://files.911realtime.org/hls/cnn/seg.m4s")
+    assert result is None
+
+
+def test_upload_thumbnail_puts_correct_key_and_headers():
+    uploads = {}
+
+    class FakeS3:
+        def put_object(self, **kw):
+            uploads[kw["Key"]] = kw
+
+    upload_thumbnail("cnn", b"\xff\xd8\xff", make_cfg(), s3=FakeS3())
+    assert "thumbnails/cnn.jpg" in uploads
+    assert uploads["thumbnails/cnn.jpg"]["ContentType"] == "image/jpeg"
+    assert uploads["thumbnails/cnn.jpg"]["CacheControl"] == "max-age=30"
+    assert uploads["thumbnails/cnn.jpg"]["Body"] == b"\xff\xd8\xff"
+
+
+def test_ensure_offline_placeholder_skips_if_exists():
+    put_calls = []
+
+    class FakeS3:
+        def head_object(self, **kw):
+            pass  # no exception → object exists
+
+        def put_object(self, **kw):
+            put_calls.append(kw)
+
+    ensure_offline_placeholder(make_cfg(), s3=FakeS3())
+    assert put_calls == []  # must NOT upload when it already exists
+
+
+def test_ensure_offline_placeholder_uploads_when_missing(monkeypatch):
+    put_calls = []
+    fake_jpeg = b"\xff\xd8\xff\xe0blue"
+
+    class NoSuchKey(Exception):
+        pass
+
+    class FakeS3:
+        exceptions = SimpleNamespace(ClientError=NoSuchKey)
+
+        def head_object(self, **kw):
+            raise NoSuchKey("not found")
+
+        def put_object(self, **kw):
+            put_calls.append(kw)
+
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.generator.generate_offline_jpeg", lambda: fake_jpeg
+    )
+    ensure_offline_placeholder(make_cfg(), s3=FakeS3())
+    assert len(put_calls) == 1
+    assert put_calls[0]["Key"] == "thumbnails/offline.jpg"
+    assert put_calls[0]["CacheControl"] == "max-age=31536000"
