@@ -32,6 +32,25 @@ RUN cd usenetarchive && \
           import-source-mbox kill-duplicates extract-msgid connectivity \
           extract-msgmeta repack-zstd lexicon lexsort threadify uat-thread-export
 
+# ---- whisper.cpp (Vulkan) build stage -------------------------------------
+# Builds whisper-cli with the Vulkan backend so ASR runs on the encode-1 AMD
+# iGPU (RADV). MARCH_NATIVE stays off — the binary must run on the encode node,
+# not the CI builder. The medium.en ggml model is fetched here and copied into
+# the runtime image at /opt/models (deterministic; no runtime network fetch).
+FROM python:3.14-slim AS whisper-builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git ca-certificates curl build-essential cmake \
+        libvulkan-dev glslc spirv-headers \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+RUN git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git
+RUN cd whisper.cpp && \
+    cmake -B build -DGGML_VULKAN=1 -DGGML_NATIVE=OFF -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build build -j"$(nproc)" --target whisper-cli && \
+    cp build/bin/whisper-cli /build/whisper-cli
+RUN cd whisper.cpp && bash ./models/download-ggml-model.sh medium.en && \
+    mkdir -p /opt/models && cp models/ggml-medium.en.bin /opt/models/
+
 # ---- runtime image ---------------------------------------------------------
 FROM python:3.14-slim
 # ffmpeg + the VAAPI runtime (video encode path) plus the shared libs the
@@ -41,6 +60,7 @@ FROM python:3.14-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg ca-certificates \
         mesa-va-drivers libva2 libva-drm2 vainfo \
+        libvulkan1 mesa-vulkan-drivers \
         liblz4-dev libzstd-dev libicu-dev libgmime-3.0-dev libcurl4-openssl-dev libncurses-dev \
     && rm -rf /var/lib/apt/lists/*
 # usenetarchive pipeline binaries + our thread exporter.
@@ -51,6 +71,9 @@ COPY --from=uat-builder \
         /build/bin/lexicon /build/bin/lexsort \
         /build/bin/threadify /build/bin/uat-thread-export \
         /usr/local/bin/
+# whisper.cpp Vulkan CLI + the medium.en model.
+COPY --from=whisper-builder /build/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=whisper-builder /opt/models/ /opt/models/
 WORKDIR /app
 COPY pyproject.toml .
 COPY video_grabber/ ./video_grabber/
@@ -60,5 +83,7 @@ COPY alembic.ini .
 COPY mbox_parser.py /usr/local/bin/mbox_parser.py
 RUN pip install --no-cache-dir . python-dateutil
 ENV USENETARCHIVE_BIN=/usr/local/bin \
-    MBOX_PARSER=/usr/local/bin/mbox_parser.py
+    MBOX_PARSER=/usr/local/bin/mbox_parser.py \
+    WHISPER_BIN=/usr/local/bin/whisper-cli \
+    WHISPER_MODEL=/opt/models/ggml-medium.en.bin
 CMD ["python", "-m", "video_grabber.serve"]

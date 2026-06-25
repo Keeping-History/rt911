@@ -1,5 +1,6 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	activeSegments,
 	calcSeekSeconds,
@@ -15,6 +16,7 @@ interface StationPlayerProps {
 	muted: boolean;
 	clockPaused: boolean;
 	showWaveform: boolean;
+	captionsOn?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	muted,
 	clockPaused,
 	showWaveform,
+	captionsOn,
 }) => {
 	const segments = activeSegments(station, nowMs);
 	const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
@@ -137,7 +140,16 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 							})
 							.catch(() => {});
 					}}
-				/>
+				>
+					{captionsOn && vttUrl(item.subtitles) && (
+						<track
+							kind="subtitles"
+							srcLang="en"
+							label="English"
+							src={vttUrl(item.subtitles)}
+						/>
+					)}
+				</audio>
 			))}
 			{showWaveform && primary && (
 				<WaveformVisualizer

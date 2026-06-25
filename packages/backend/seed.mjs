@@ -158,6 +158,7 @@ async function createCollections(token) {
     { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "modal"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
     { field: "image",         type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
     { field: "image_caption", type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+    { field: "subtitles",     type: "text",     schema: { is_nullable: true }, meta: { interface: "input", width: "full", note: "Public URL to the .srt subtitle file" } },
     { field: "content",       type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
   ];
 
@@ -388,7 +389,7 @@ async function importSources(token, records) {
   return Object.fromEntries(all.data.map((s) => [s.slug, s.id]));
 }
 
-const MEDIA_LIKE_COLS = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,content,sort`;
+const MEDIA_LIKE_COLS = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,subtitles,content,sort`;
 
 // Widen varchar columns — Directus creates string fields as varchar(255) which is
 // too short for content/url/etc. Applies to any media-shaped table.
@@ -402,6 +403,7 @@ function widenMediaLikeColumns(table) {
       ALTER COLUMN format         TYPE text,
       ALTER COLUMN image          TYPE text,
       ALTER COLUMN image_caption  TYPE text,
+      ALTER COLUMN subtitles      TYPE text,
       ALTER COLUMN content        TYPE text;
   `);
 }
@@ -429,6 +431,7 @@ function insertMediaLikeRecords(table, records, sourceMap) {
       sqlVal(r.trim),
       sqlVal(r.image || null),
       sqlVal(r.image_caption || null),
+      sqlVal(r.subtitles || null),
       sqlVal(r.content || null),
       sqlVal(r.sort),
     ].join(",")})`).join(",\n");
@@ -676,6 +679,7 @@ async function importNewsItems(token, records, sourceId) {
       sqlVal(r.trim),
       sqlVal(r.image),
       sqlVal(r.image_caption),
+      sqlVal(r.subtitles),
       sqlVal(r.content),
       sqlVal(r.sort),
     ].join(",")})`).join(",\n");

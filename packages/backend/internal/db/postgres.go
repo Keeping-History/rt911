@@ -19,7 +19,7 @@ const selectFrom = `
 	SELECT mi.id, mi.title, mi.full_title, s.slug,
 	       mi.start_date, mi.end_date, mi.calc_duration, mi.timezone,
 	       mi.url, mi.format, mi.approved, mi.mute,
-	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption,
+	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption, mi.subtitles,
 	       mi.content, mi.sort
 	FROM tv_channels mi
 	LEFT JOIN sources s ON s.id = mi.source`
@@ -190,7 +190,7 @@ const mp3SelectFrom = `
 	SELECT mi.id, mi.title, mi.full_title, s.slug,
 	       mi.start_date, mi.end_date, mi.calc_duration, mi.timezone,
 	       mi.url, mi.format, mi.approved, mi.mute,
-	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption,
+	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption, mi.subtitles,
 	       mi.content, mi.sort
 	FROM mp3_items mi
 	LEFT JOIN sources s ON s.id = mi.source`
@@ -235,7 +235,7 @@ const newsSelectFrom = `
 	SELECT mi.id, mi.title, mi.full_title, s.slug,
 	       mi.start_date, mi.end_date, mi.calc_duration, mi.timezone,
 	       mi.url, mi.format, mi.approved, mi.mute,
-	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption,
+	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption, mi.subtitles,
 	       mi.content, mi.sort
 	FROM news_items mi
 	LEFT JOIN sources s ON s.id = mi.source`
@@ -510,12 +510,12 @@ func queryItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) 
 		var it model.MediaItem
 		// Use pointer locals for all nullable string columns — the DB stores
 		// empty strings as NULL and pgx cannot scan NULL into a non-pointer string.
-		var fullTitle, timezone, url, format, image, imageCaption, content *string
+		var fullTitle, timezone, url, format, image, imageCaption, subtitles, content *string
 		if err := rows.Scan(
 			&it.ID, &it.Title, &fullTitle, &it.Source,
 			&it.StartDate, &it.EndDate, &it.CalcDuration, &timezone,
 			&url, &format, &it.Approved, &it.Mute,
-			&it.Volume, &it.Jump, &it.Trim, &image, &imageCaption,
+			&it.Volume, &it.Jump, &it.Trim, &image, &imageCaption, &subtitles,
 			&content, &it.Sort,
 		); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
@@ -526,6 +526,7 @@ func queryItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) 
 		derefStr(&it.Format, format)
 		derefStr(&it.Image, image)
 		derefStr(&it.ImageCaption, imageCaption)
+		derefStr(&it.Subtitles, subtitles)
 		derefStr(&it.Content, content)
 		out = append(out, it)
 	}

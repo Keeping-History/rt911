@@ -17,6 +17,11 @@ Also stitches per-channel continuous HLS streams + EPG guide JSON.
   `dispatch-usenet`). See [`docs/usenet-ingestion.md`](docs/usenet-ingestion.md) — read it before
   touching the threading pipeline; it documents the required usenetarchive build sequence and the
   non-obvious gotchas (compressed-input, exit codes, packed msgids, OOM, NUL bytes, payload size).
+- `video_grabber/transcribe/` — a **third pipeline**: transcribe encoded TV programs +
+  radio MP3s with whisper.cpp (Vulkan/iGPU) into per-channel and per-MP3 SRT/VTT,
+  register in Directus (`subtitles` column). Own state table (`transcribe_jobs`,
+  migration `003`) and flows (`scan-transcribe`/`transcribe-item`/`dispatch-transcribe`/
+  `build-channel-subtitles`). See [`docs/transcription.md`](docs/transcription.md).
 - `k8s/` — deployment manifests (see Deploy below).
 - `tests/` — pytest. `test_migrations.py` needs a live Postgres; it **errors** (not
   fails) when none is reachable — that's an environment gap, not a regression.

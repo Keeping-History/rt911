@@ -38,6 +38,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 
 	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
+	const [captionsOn, setCaptionsOn] = useState<boolean>(false);
 	const [activeStation, setActiveStation] = useState<string>(
 		sanitizeActiveStation(appState?.data?.activeStation),
 	);
@@ -199,6 +200,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 									muted={mutedStations.includes(activeStationObj.key)}
 									clockPaused={clockPaused}
 									showWaveform={showWaveform}
+									captionsOn={captionsOn}
 								/>
 							</>
 						)}
@@ -248,6 +250,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 												muted={isMuted}
 												clockPaused={clockPaused}
 												showWaveform={showWaveform}
+												captionsOn={captionsOn}
 											/>
 										</div>
 									);
@@ -261,6 +264,12 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 						<div className={styles.rsControlPanel}>
 							<ClassicyButton onClickFunc={toggleScanner} depressed={scannerMode}>
 								Scan
+							</ClassicyButton>
+							<ClassicyButton
+								onClickFunc={() => setCaptionsOn((v) => !v)}
+								depressed={captionsOn}
+							>
+								{captionsOn ? "CC On" : "CC Off"}
 							</ClassicyButton>
 						</div>
 						<div className={styles.rsStationStrip}>
