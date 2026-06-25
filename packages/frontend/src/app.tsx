@@ -22,6 +22,7 @@ if (!rootElement) throw new Error("Root element not found");
 createRoot(rootElement).render(
 	<StrictMode>
 		<ClassicyAppManagerProvider
+			gaMeasurementIds={["G-YV25XK2Y3R"]}
 			defaultState={{
 				System: {
 					Manager: {
