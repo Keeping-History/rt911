@@ -39,10 +39,14 @@ export const News: React.FC = () => {
 	);
 
 	const desktopEventDispatch = useAppManagerDispatch();
-	const dateTime    = useAppManager((s) => s.System.Manager.DateAndTime.dateTime);
+	const dateTime       = useAppManager((s) => s.System.Manager.DateAndTime.dateTime);
 	const timeZoneOffset = useAppManager((s) => s.System.Manager.DateAndTime.timeZoneOffset);
-	const appState    = useAppManager((s) => s.System.Manager.Applications.apps[appId]);
-	const appWindows  = useAppManager((s) => s.System.Manager.Applications.apps[appId]?.windows ?? []);
+	// Boolean selector: the full apps[appId] object changes reference on every window
+	// interaction (move, focus, z-order), causing a re-render each time.
+	const isRunning  = useAppManager((s) => appId in (s.System.Manager.Applications.apps ?? {}));
+	// Omit the ?? [] fallback from the selector — a fresh [] on every call is a new
+	// reference that would make openDocumentDetails/getWindowOpenOffset always unstable.
+	const appWindows = useAppManager((s) => s.System.Manager.Applications.apps[appId]?.windows);
 	const paddingSize = useAppManager((s) => s.System.Manager.Appearance.activeTheme.measurements.window.paddingSize);
 
 	const [limit, setLimit] = useState<number>(10);
@@ -53,10 +57,10 @@ export const News: React.FC = () => {
 	// News is delivered on its own opt-in channel; subscribe only while the app is open.
 	const { newsItems: items, subscribeNews, unsubscribeNews } = useContext(MediaStreamContext);
 	useEffect(() => {
-		if (!appState) return;
+		if (!isRunning) return;
 		subscribeNews(appId);
 		return () => unsubscribeNews(appId);
-	}, [appState, subscribeNews, unsubscribeNews, appId]);
+	}, [isRunning, subscribeNews, unsubscribeNews, appId]);
 
 	const entries = useMemo(
 		() =>
@@ -84,7 +88,7 @@ export const News: React.FC = () => {
 
 	const openDocumentDetails = useCallback((docId: number) => {
 		setOpenDocuments((prev) => Array.from(new Set([...prev, docId])));
-		const ws = appWindows.find(
+		const ws = (appWindows ?? []).find(
 			(w: { id: string }) => w.id === `${appId}_newsitem_${docId}`,
 		);
 		if (ws) {
@@ -93,7 +97,7 @@ export const News: React.FC = () => {
 		}
 	}, [appWindows, desktopEventDispatch]);
 
-	const paginate = (direction: "forward" | "back" | "now") => {
+	const paginate = useCallback((direction: "forward" | "back" | "now") => {
 		if (direction === "now") {
 			setOffset(0);
 		} else if (direction === "back") {
@@ -105,7 +109,7 @@ export const News: React.FC = () => {
 		} else {
 			setOffset(0);
 		}
-	};
+	}, [filteredEntries.length, entries.length, offset, limit]);
 
 	const formatDate = useCallback(
 		(dateStr: string | undefined, options: Intl.DateTimeFormatOptions): string => {
@@ -129,7 +133,7 @@ export const News: React.FC = () => {
 	);
 
 	const getWindowOpenOffset = useCallback(
-		() => (appWindows.filter((w: { closed: boolean }) => !w.closed).length ?? 0) * paddingSize,
+		() => ((appWindows ?? []).filter((w: { closed: boolean }) => !w.closed).length ?? 0) * paddingSize,
 		[appWindows, paddingSize],
 	);
 
@@ -340,7 +344,7 @@ export const News: React.FC = () => {
 			{openDocuments.map((docId: number) => (
 				<ClassicyWindow
 					onCloseFunc={() => {
-						setOpenDocuments(openDocuments.filter((d) => d !== docId));
+						setOpenDocuments((prev) => prev.filter((d) => d !== docId));
 					}}
 					id={`${appId}_newsitem_${docId}`}
 					key={`${appId}_newsitem_${docId}`}
