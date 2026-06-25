@@ -16,6 +16,7 @@ export const classicyRadioScannerEventHandler = (
 		scannerMode: action.scannerMode,
 		selectedStations: action.selectedStations,
 		mutedStations: action.mutedStations,
+		mutedItems: action.mutedItems,
 		showWaveform: action.showWaveform,
 	};
 	return ds;

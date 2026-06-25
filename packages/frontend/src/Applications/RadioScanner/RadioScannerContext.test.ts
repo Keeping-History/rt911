@@ -13,7 +13,7 @@ function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 }
 
 describe("classicyRadioScannerEventHandler", () => {
-	it("persists activeStation, scannerMode, selectedStations, mutedStations, showWaveform", () => {
+	it("persists activeStation, scannerMode, selectedStations, mutedStations, mutedItems, showWaveform", () => {
 		const ds = storeWithApp();
 		const out = classicyRadioScannerEventHandler(ds, {
 			type: "ClassicyAppRadioScannerSetState",
@@ -21,6 +21,7 @@ describe("classicyRadioScannerEventHandler", () => {
 			scannerMode: true,
 			selectedStations: ["ATC", "Rutgers"],
 			mutedStations: ["Rutgers"],
+			mutedItems: [101, 102],
 			showWaveform: false,
 		});
 		const data = out.System.Manager.Applications.apps["RadioScanner.app"].data;
@@ -29,6 +30,7 @@ describe("classicyRadioScannerEventHandler", () => {
 			scannerMode: true,
 			selectedStations: ["ATC", "Rutgers"],
 			mutedStations: ["Rutgers"],
+			mutedItems: [101, 102],
 			showWaveform: false,
 		});
 	});
