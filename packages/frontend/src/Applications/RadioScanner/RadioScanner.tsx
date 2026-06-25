@@ -9,27 +9,13 @@ import {
 	useClassicyDateTime,
 } from "classicy";
 import type React from "react";
-import { useContext, useEffect, useRef, useState } from "react";
-import {
-	MediaStreamContext,
-	type MediaItem,
-} from "../../Providers/MediaStream/MediaStreamContext";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
-import { shouldStationPlay } from "./radioPlayback";
-import { WaveformVisualizer } from "./WaveformVisualizer";
-
-/** Seconds into the audio file that corresponds to the given wall-clock time. */
-function calcSeekSeconds(item: MediaItem, clockMs: number): number {
-	// Directus stores datetimes without a timezone suffix; force UTC so that
-	// JavaScript does not misinterpret them as local time.
-	const dateStr = /Z$|[+-]\d{2}:\d{2}$/.test(item.start_date)
-		? item.start_date
-		: item.start_date + "Z";
-	const startMs = new Date(dateStr).getTime();
-	const raw = (clockMs - startMs) / 1000 + item.jump;
-	return Math.max(0, raw);
-}
+import { sanitizeActiveStation, sanitizeStationKeys } from "./radioPlayback";
+import { StationPlayer } from "./StationPlayer";
+import { activeSegments, groupStations, primarySegment } from "./stationGrouping";
 
 type RadioScannerProps = Record<string, never>;
 
@@ -43,8 +29,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 		(state) => state.System.Manager.Applications.apps[appId],
 	);
 
-	// mp3 audio is delivered on its own opt-in channel; subscribe on mount so the
-	// server streams the Radio stations (and the one playing at the current time).
+	// mp3 audio is delivered on its own opt-in channel; subscribe on mount.
 	const { mp3Items: items, subscribeMp3, unsubscribeMp3 } = useContext(MediaStreamContext);
 	useEffect(() => {
 		subscribeMp3(appId);
@@ -53,203 +38,82 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 
 	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
-	const [activeStation, setActiveStation] = useState<number>(0);
-	const [hasInteracted, setHasInteracted] = useState<boolean>(false);
+	const [activeStation, setActiveStation] = useState<string>(
+		sanitizeActiveStation(appState?.data?.activeStation),
+	);
 	const [scannerMode, setScannerMode] = useState<boolean>(
 		(appState?.data?.scannerMode as boolean) ?? false,
 	);
-	const [selectedStations, setSelectedStations] = useState<number[]>(
-		(appState?.data?.selectedStations as number[]) ?? [],
+	const [selectedStations, setSelectedStations] = useState<string[]>(
+		sanitizeStationKeys(appState?.data?.selectedStations),
 	);
-	const [mutedStations, setMutedStations] = useState<number[]>(
-		(appState?.data?.mutedStations as number[]) ?? [],
+	const [mutedStations, setMutedStations] = useState<string[]>(
+		sanitizeStationKeys(appState?.data?.mutedStations),
 	);
-	// Per-station version counter — incremented in onLoadedMetadata so only
-	// the affected WaveformVisualizer remounts, not all of them.
-	const [readyVersions, setReadyVersions] = useState<Map<number, number>>(
-		new Map(),
+	const [showWaveform, setShowWaveform] = useState<boolean>(
+		(appState?.data?.showWaveform as boolean) ?? true,
 	);
 
-	const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
-	// Stable ref to mutedStations for use inside play().then() closures.
-	const mutedStationsRef = useRef(mutedStations);
-	mutedStationsRef.current = mutedStations;
-	const prevDateTimeRef = useRef(dateTime);
+	// Fine virtual clock: the stored dateTime advances per minute, so add the
+	// real time elapsed since its last update to recover sub-minute precision.
 	const dateTimeRef = useRef(dateTime);
 	dateTimeRef.current = dateTime;
 	const clockPausedRef = useRef(clockPaused);
 	clockPausedRef.current = clockPaused;
-	const itemsRef = useRef(items);
-	itemsRef.current = items;
 	const dateTimeUpdatedAtRef = useRef<number>(Date.now());
-
-	// Live refs for the playback selection so the once-created health-check
-	// interval always reads current state when deciding what may play.
-	const activeStationRef = useRef(activeStation);
-	activeStationRef.current = activeStation;
-	const scannerModeRef = useRef(scannerMode);
-	scannerModeRef.current = scannerMode;
-	const selectedStationsRef = useRef(selectedStations);
-	selectedStationsRef.current = selectedStations;
-
-	// Select the first station once items arrive.
-	useEffect(() => {
-		if (activeStation === 0 && items.length > 0) {
-			setActiveStation(items[0].id);
-		}
-	}, [items, activeStation]);
-
-	// Record the real-clock instant each time the Classicy dateTime is updated.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: trigger-only dep
 	useEffect(() => {
 		dateTimeUpdatedAtRef.current = Date.now();
 	}, [dateTime]);
 
-	// Periodic health check: ensure every player is playing and in sync.
-	useEffect(() => {
-		const healthId = setInterval(() => {
-			const elapsedRealMs = Date.now() - dateTimeUpdatedAtRef.current;
-			const nowMs = new Date(dateTimeRef.current).getTime() + elapsedRealMs;
-
-			for (const item of itemsRef.current) {
-				const el = audioRefs.current.get(item.id);
-				if (!el) continue;
-
-				// Only the allowed station(s) stay playing; everything else is
-				// paused so a single source is audible at a time. Reads refs since
-				// this interval closure is created once.
-				const allowed = shouldStationPlay(
-					{
-						scannerMode: scannerModeRef.current,
-						activeStation: activeStationRef.current,
-						selectedStations: selectedStationsRef.current,
-					},
-					item.id,
-				);
-				if (!allowed) {
-					if (!el.paused) el.pause();
-					continue;
-				}
-
-				if (!clockPausedRef.current && (el.paused || el.ended)) {
-					el.play().catch(() => {});
-				}
-
-				const expected = calcSeekSeconds(item, nowMs);
-				if (Math.abs(el.currentTime - expected) > 30) {
-					el.currentTime = expected;
-				}
-			}
-		}, 15_000);
-
-		return () => clearInterval(healthId);
+	const getNowMs = useCallback(() => {
+		const elapsed = clockPausedRef.current
+			? 0
+			: Date.now() - dateTimeUpdatedAtRef.current;
+		return new Date(dateTimeRef.current).getTime() + elapsed;
 	}, []);
+	const nowMs = getNowMs();
 
-	// Enforce single-station playback the instant the selection changes: pause
-	// every element that is no longer allowed to play (the previously-active
-	// station) and (re)start the ones that are. Muting alone never stopped the
-	// old station — see radioPlayback.ts.
+	const stations = groupStations(items);
+
+	// Select the first station once stations arrive (single-station mode).
 	useEffect(() => {
-		const sel = { scannerMode, activeStation, selectedStations };
-		for (const [id, el] of audioRefs.current) {
-			if (shouldStationPlay(sel, id)) {
-				if (!clockPausedRef.current) el.play().catch(() => {});
-			} else if (!el.paused) {
-				el.pause();
-			}
+		if (activeStation === "" && stations.length > 0) {
+			setActiveStation(stations[0].key);
 		}
-	}, [activeStation, scannerMode, selectedStations]);
+	}, [stations, activeStation]);
 
-	// Seek all mounted players whenever the stored dateTime changes.
-	useEffect(() => {
-		const prevMs = new Date(prevDateTimeRef.current).getTime();
-		const nowMs = new Date(dateTime).getTime();
-		const delta = nowMs - prevMs;
-		const isNaturalMinuteTick = delta > 0 && Math.abs(delta - 60_000) < 3_000;
-
-		if (!isNaturalMinuteTick && prevMs !== nowMs) {
-			for (const item of itemsRef.current) {
-				const el = audioRefs.current.get(item.id);
-				if (el) {
-					el.currentTime = calcSeekSeconds(item, nowMs);
-				}
-			}
-		}
-
-		prevDateTimeRef.current = dateTime;
-	}, [dateTime]);
-
-	// Pause or resume all players when the system clock is paused/resumed.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: itemsRef/dateTimeRef/audioRefs are stable refs
-	useEffect(() => {
-		const nowMs = new Date(dateTimeRef.current).getTime();
-		for (const item of itemsRef.current) {
-			const el = audioRefs.current.get(item.id);
-			if (!el) continue;
-			const allowed = shouldStationPlay(
-				{
-					scannerMode: scannerModeRef.current,
-					activeStation: activeStationRef.current,
-					selectedStations: selectedStationsRef.current,
-				},
-				item.id,
-			);
-			if (clockPaused) {
-				el.pause();
-				el.currentTime = calcSeekSeconds(item, nowMs);
-			} else if (allowed) {
-				// Resume only the allowed station(s) — never revive the others.
-				el.play().catch(() => {});
-			}
-		}
-	}, [clockPaused]);
-
-	// Persist scanner layout and mute state to app settings on every change.
+	// Persist scanner layout, mute and waveform state on every change.
 	useEffect(() => {
 		desktopEventDispatch({
 			type: "ClassicyAppRadioScannerSetState",
+			activeStation,
 			scannerMode,
 			selectedStations,
 			mutedStations,
+			showWaveform,
 		});
-	}, [scannerMode, selectedStations, mutedStations, desktopEventDispatch]);
-
-	/** Seek the given item's audio element to the current clock position. */
-	const seekToCurrentTime = (item: MediaItem) => {
-		const el = audioRefs.current.get(item.id);
-		if (!el) return;
-		const elapsedRealMs = Date.now() - dateTimeUpdatedAtRef.current;
-		const nowMs = new Date(dateTimeRef.current).getTime() + elapsedRealMs;
-		el.currentTime = calcSeekSeconds(item, nowMs);
-	};
+	}, [activeStation, scannerMode, selectedStations, mutedStations, showWaveform, desktopEventDispatch]);
 
 	const toggleScanner = () => {
 		setScannerMode((prev) => {
 			const entering = !prev;
 			setSelectedStations(entering && activeStation ? [activeStation] : []);
 			setMutedStations([]);
-			// Clicking Scan IS a user interaction — allow audio to play.
-			if (entering) setHasInteracted(true);
 			return entering;
 		});
 	};
 
-	const toggleStationSelection = (id: number) => {
+	const toggleStationSelection = (key: string) => {
 		setSelectedStations((prev) =>
-			prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+			prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key],
 		);
 	};
 
-	// effectivelyMuted reflects what the button currently shows, so the toggle
-	// always moves in the opposite direction. el.volume is set immediately for
-	// instant response; state update keeps the button icon in sync.
-	const toggleStationMute = (id: number, effectivelyMuted: boolean) => {
-		setHasInteracted(true);
+	const toggleStationMute = (key: string) => {
 		setMutedStations((prev) =>
-			effectivelyMuted ? prev.filter((p) => p !== id) : [...prev, id],
+			prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key],
 		);
-		const el = audioRefs.current.get(id);
-		if (el) el.volume = effectivelyMuted ? 1 : 0;
 	};
 
 	const gridColumns = Math.ceil(Math.sqrt(Math.max(1, selectedStations.length)));
@@ -260,9 +124,24 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 			title: "File",
 			menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
 		},
+		{
+			id: "view",
+			title: "View",
+			menuChildren: [
+				{
+					id: "toggle-waveform",
+					// ClassicyMenuItem has no `checked` field; prefix a ✓ when on.
+					title: `${showWaveform ? "✓ " : "  "}Show Waveform`,
+					onClickFunc: () => setShowWaveform((v) => !v),
+				},
+			],
+		},
 	];
 
-	const activeItem = items.find((i) => i.id === activeStation);
+	const activeStationObj = stations.find((s) => s.key === activeStation);
+	const activeDisplaySegment = activeStationObj
+		? primarySegment(activeSegments(activeStationObj, nowMs))
+		: null;
 
 	return (
 		<ClassicyApp
@@ -288,42 +167,50 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 			>
 				<div className={styles.rsContainer}>
 					<div className={styles.rsMainArea}>
-						{/* Waveform visualizer background — only shown in single-station mode */}
-						{!scannerMode && activeItem && (
-							<WaveformVisualizer
-								key={`waveform-main-${activeStation}`}
-								audioEl={audioRefs.current.get(activeStation) ?? null}
-							/>
+						{/* Single-station mode: info display + one station player */}
+						{!scannerMode && activeStationObj && (
+							<>
+								<div className={styles.rsDisplay}>
+									<p className={styles.rsDisplaySource}>{activeStationObj.label}</p>
+									{activeDisplaySegment && (
+										<>
+											<p className={styles.rsDisplayTitle}>{activeDisplaySegment.title}</p>
+											{activeDisplaySegment.content && (
+												<p className={styles.rsDisplayContent}>
+													{activeDisplaySegment.content}
+												</p>
+											)}
+										</>
+									)}
+								</div>
+								<StationPlayer
+									station={activeStationObj}
+									nowMs={nowMs}
+									getNowMs={getNowMs}
+									muted={mutedStations.includes(activeStationObj.key)}
+									clockPaused={clockPaused}
+									showWaveform={showWaveform}
+								/>
+							</>
 						)}
 
-						{/* Single-station info display */}
-						{!scannerMode && activeItem && (
-							<div className={styles.rsDisplay}>
-								<p className={styles.rsDisplaySource}>{activeItem.source}</p>
-								<p className={styles.rsDisplayTitle}>{activeItem.title}</p>
-								{activeItem.content && (
-									<p className={styles.rsDisplayContent}>{activeItem.content}</p>
-								)}
-							</div>
-						)}
-
-						{/* Scanner mode: grid of active stations */}
+						{/* Scanner mode: grid of selected stations, each its own player */}
 						{scannerMode && selectedStations.length > 0 && (
 							<div
 								className={styles.rsGrid}
 								style={{ gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }}
 							>
-								{selectedStations.map((id) => {
-									const item = items.find((i) => i.id === id);
-									if (!item) return null;
-									const isMuted = mutedStations.includes(id);
+								{selectedStations.map((key) => {
+									const station = stations.find((s) => s.key === key);
+									if (!station) return null;
+									const isMuted = mutedStations.includes(key);
 									return (
-										<div key={id} className={styles.rsGridStation}>
+										<div key={key} className={styles.rsGridStation}>
 											<div className={styles.rsGridStationControls}>
 												<button
 													className={styles.rsGridControlBtn}
 													type="button"
-													onMouseUp={() => toggleStationMute(id, isMuted)}
+													onMouseUp={() => toggleStationMute(key)}
 												>
 													<img
 														src={
@@ -339,59 +226,19 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 												<button
 													className={styles.rsGridControlBtn}
 													type="button"
-													onMouseUp={() => toggleStationSelection(id)}
+													onMouseUp={() => toggleStationSelection(key)}
 												>
 													✕
 												</button>
 											</div>
-											<p className={styles.rsGridStationSource}>{item.source}</p>
-											<p className={styles.rsGridStationTitle}>{item.title}</p>
-											<audio
-												ref={(el) => {
-													if (el) {
-														// Start muted so the browser permits autoplay.
-														// onCanPlay switches to volume-based control after
-														// play() resolves so the Web Audio API can read samples.
-														el.muted = true;
-														audioRefs.current.set(id, el);
-													} else {
-														audioRefs.current.delete(id);
-													}
-												}}
-												src={item.url}
-												crossOrigin="anonymous"
-												style={{ display: "none" }}
-												onLoadedMetadata={() => {
-													// Seek once when metadata loads. Using onLoadedMetadata
-													// (fires once per load) instead of onCanPlay avoids a
-													// seek → canplay → seek loop.
-													seekToCurrentTime(item);
-													setReadyVersions((prev) => {
-														const next = new Map(prev);
-														next.set(id, (prev.get(id) ?? 0) + 1);
-														return next;
-													});
-												}}
-												onCanPlay={(e) => {
-													const el = e.currentTarget;
-													if (!clockPausedRef.current) {
-														el.play()
-															.then(() => {
-																// Now playing: drop the muted flag and use
-																// volume instead so the AnalyserNode gets data.
-																el.muted = false;
-																el.volume =
-																	mutedStationsRef.current.includes(id) ? 0 : 1;
-															})
-															.catch(() => {});
-													}
-												}}
-											/>
-											{/* Per-station key: only this visualizer remounts when its
-											    audio element becomes ready; other stations unaffected. */}
-											<WaveformVisualizer
-												key={`waveform-${id}-${readyVersions.get(id) ?? 0}`}
-												audioEl={audioRefs.current.get(id) ?? null}
+											<p className={styles.rsGridStationSource}>{station.label}</p>
+											<StationPlayer
+												station={station}
+												nowMs={nowMs}
+												getNowMs={getNowMs}
+												muted={isMuted}
+												clockPaused={clockPaused}
+												showWaveform={showWaveform}
 											/>
 										</div>
 									);
@@ -400,7 +247,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 						)}
 					</div>
 
-					{/* Bottom row: control panel + station strip */}
+					{/* Bottom row: control panel + one button per station */}
 					<div className={styles.rsBottomRow}>
 						<div className={styles.rsControlPanel}>
 							<ClassicyButton onClickFunc={toggleScanner} depressed={scannerMode}>
@@ -408,50 +255,19 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 							</ClassicyButton>
 						</div>
 						<div className={styles.rsStationStrip}>
-							{items.slice(0, 12).map((item) => {
-								const isActive = !scannerMode && item.id === activeStation;
-								const isSelected = selectedStations.includes(item.id);
-								// Selected stations in scanner mode render their player in the grid
-								const renderPlayer = !scannerMode || !isSelected;
-
+							{stations.map((station) => {
+								const isActive = !scannerMode && station.key === activeStation;
+								const isSelected = selectedStations.includes(station.key);
 								return (
 									<ClassicyButton
-										key={item.id}
+										key={station.key}
 										depressed={isActive || isSelected}
 										onClickFunc={() => {
-											if (scannerMode) {
-												toggleStationSelection(item.id);
-											} else {
-												setActiveStation(item.id);
-											}
-											setHasInteracted(true);
+											if (scannerMode) toggleStationSelection(station.key);
+											else setActiveStation(station.key);
 										}}
 									>
-										<p className={styles.rsStationSource}>{item.source}</p>
-										{renderPlayer && (
-											<audio
-												ref={(el) => {
-													if (el) audioRefs.current.set(item.id, el);
-													else audioRefs.current.delete(item.id);
-												}}
-												src={item.url}
-												crossOrigin="anonymous"
-												style={{ display: "none" }}
-												muted={!(isActive && hasInteracted)}
-												onCanPlay={(e) => {
-													const el = e.currentTarget;
-													seekToCurrentTime(item);
-													if (
-														!clockPausedRef.current &&
-														shouldStationPlay(
-															{ scannerMode, activeStation, selectedStations },
-															item.id,
-														)
-													)
-														el.play().catch(() => {});
-												}}
-											/>
-										)}
+										<p className={styles.rsStationSource}>{station.label}</p>
 									</ClassicyButton>
 								);
 							})}
