@@ -110,6 +110,9 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 					el.muted = true;
 					audioRefs.current.set(id, el);
 				} else {
+					// Explicitly pause before losing the reference — removing an
+					// <audio> element from the DOM does not stop browser playback.
+					audioRefs.current.get(id)?.pause();
 					audioRefs.current.delete(id);
 				}
 			};

@@ -26,38 +26,42 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	const appIcon = ClassicyIcons.controlPanels.soundManager.app as string;
 
 	const desktopEventDispatch = useAppManagerDispatch();
+	// Narrow to .data so that focus-only writes (apps[appId].focused) don't
+	// create a new reference — Immer preserves .data when only siblings change.
 	const appState = useAppManager(
-		(state) => state.System.Manager.Applications.apps[appId],
+		(state) => state.System.Manager.Applications.apps[appId]?.data as Record<string, unknown> | undefined,
 	);
 
-	// mp3 audio is delivered on its own opt-in channel; subscribe only while the app is open.
+	// mp3 audio is delivered on its own opt-in channel; subscribe while mounted.
+	// Mount-only: the component only renders when the app is open, so there is no
+	// need to re-subscribe on every appState change (focus writes, data persist).
 	const { mp3Items: items, subscribeMp3, unsubscribeMp3 } = useContext(MediaStreamContext);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-only
 	useEffect(() => {
-		if (!appState) return;
 		subscribeMp3(appId);
 		return () => unsubscribeMp3(appId);
-	}, [appState, subscribeMp3, unsubscribeMp3, appId]);
+	}, [subscribeMp3, unsubscribeMp3, appId]);
 
 	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
 	const [captionsOn, setCaptionsOn] = useState<boolean>(false);
 	const [activeStation, setActiveStation] = useState<string>(
-		sanitizeActiveStation(appState?.data?.activeStation),
+		sanitizeActiveStation(appState?.activeStation),
 	);
 	const [scannerMode, setScannerMode] = useState<boolean>(
-		(appState?.data?.scannerMode as boolean) ?? false,
+		(appState?.scannerMode as boolean) ?? false,
 	);
 	const [selectedStations, setSelectedStations] = useState<string[]>(
-		sanitizeStationKeys(appState?.data?.selectedStations),
+		sanitizeStationKeys(appState?.selectedStations),
 	);
 	const [mutedStations, setMutedStations] = useState<string[]>(
-		sanitizeStationKeys(appState?.data?.mutedStations),
+		sanitizeStationKeys(appState?.mutedStations),
 	);
 	const [mutedItems, setMutedItems] = useState<number[]>(
-		sanitizeItemIds(appState?.data?.mutedItems),
+		sanitizeItemIds(appState?.mutedItems),
 	);
 	const [showWaveform, setShowWaveform] = useState<boolean>(
-		(appState?.data?.showWaveform as boolean) ?? true,
+		(appState?.showWaveform as boolean) ?? true,
 	);
 
 	// Fine virtual clock: the stored dateTime advances per minute, so add the
