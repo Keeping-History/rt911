@@ -53,13 +53,13 @@ def get_db():
 
 
 def get_transcribe_job(job_id: str):
-    db = get_db()
-    row = db.execute(
-        sa.text("SELECT * FROM transcribe_jobs WHERE id = :id"), {"id": job_id}
-    ).mappings().fetchone()
-    if row is None:
-        raise ValueError(f"transcribe_jobs row not found: {job_id}")
-    return SimpleNamespace(**dict(row))
+    with get_db() as db:
+        row = db.execute(
+            sa.text("SELECT * FROM transcribe_jobs WHERE id = :id"), {"id": job_id}
+        ).mappings().fetchone()
+        if row is None:
+            raise ValueError(f"transcribe_jobs row not found: {job_id}")
+        return SimpleNamespace(**dict(row))
 
 
 def transition_transcribe_job(db, job_id, to_stage, *, error=None, srt_key=None) -> None:
@@ -98,40 +98,39 @@ def scan_transcribe_flow() -> None:
     """Enumerate work into transcribe_jobs. Idempotent (source_key UNIQUE)."""
     logger = get_run_logger()
     cfg = Config()
-    db = get_db()
+    with get_db() as db:
+        # TV: every completed program with an uploaded master playlist.
+        tv_rows = db.execute(sa.text("""
+            SELECT p.ia_identifier, p.air_date, c.slug AS channel_slug, j.wasabi_key
+            FROM video_jobs j
+            JOIN programs p ON p.id = j.program_id
+            JOIN channels c ON c.id = j.channel_id
+            WHERE j.stage = 'complete' AND j.wasabi_key IS NOT NULL
+        """)).mappings().all()
+        tv_n = 0
+        for r in tv_rows:
+            src_url = f"{_WASABI_BASE}/{r['wasabi_key']}"
+            res = db.execute(sa.text("""
+                INSERT INTO transcribe_jobs (kind, source_key, channel_slug, source_url, stage)
+                VALUES ('tv', :sk, :slug, :url, 'pending')
+                ON CONFLICT (source_key) DO NOTHING
+            """), {"sk": r["ia_identifier"], "slug": r["channel_slug"], "url": src_url})
+            tv_n += res.rowcount or 0
+        db.commit()
 
-    # TV: every completed program with an uploaded master playlist.
-    tv_rows = db.execute(sa.text("""
-        SELECT p.ia_identifier, p.air_date, c.slug AS channel_slug, j.wasabi_key
-        FROM video_jobs j
-        JOIN programs p ON p.id = j.program_id
-        JOIN channels c ON c.id = j.channel_id
-        WHERE j.stage = 'complete' AND j.wasabi_key IS NOT NULL
-    """)).mappings().all()
-    tv_n = 0
-    for r in tv_rows:
-        src_url = f"{_WASABI_BASE}/{r['wasabi_key']}"
-        res = db.execute(sa.text("""
-            INSERT INTO transcribe_jobs (kind, source_key, channel_slug, source_url, stage)
-            VALUES ('tv', :sk, :slug, :url, 'pending')
-            ON CONFLICT (source_key) DO NOTHING
-        """), {"sk": r["ia_identifier"], "slug": r["channel_slug"], "url": src_url})
-        tv_n += res.rowcount or 0
-    db.commit()
-
-    # mp3: every audio/ object in the bucket.
-    mp3_keys = [k for k in wasabi.list_keys("audio/", cfg) if k.lower().endswith(".mp3")]
-    mp3_n = 0
-    for key in mp3_keys:
-        src_url = f"{_WASABI_BASE}/{key}"
-        res = db.execute(sa.text("""
-            INSERT INTO transcribe_jobs (kind, source_key, source_url, stage)
-            VALUES ('mp3', :sk, :url, 'pending')
-            ON CONFLICT (source_key) DO NOTHING
-        """), {"sk": key, "url": src_url})
-        mp3_n += res.rowcount or 0
-    db.commit()
-    logger.info("scan-transcribe: +%d tv, +%d mp3 new jobs", tv_n, mp3_n)
+        # mp3: every audio/ object in the bucket.
+        mp3_keys = [k for k in wasabi.list_keys("audio/", cfg) if k.lower().endswith(".mp3")]
+        mp3_n = 0
+        for key in mp3_keys:
+            src_url = f"{_WASABI_BASE}/{key}"
+            res = db.execute(sa.text("""
+                INSERT INTO transcribe_jobs (kind, source_key, source_url, stage)
+                VALUES ('mp3', :sk, :url, 'pending')
+                ON CONFLICT (source_key) DO NOTHING
+            """), {"sk": key, "url": src_url})
+            mp3_n += res.rowcount or 0
+        db.commit()
+        logger.info("scan-transcribe: +%d tv, +%d mp3 new jobs", tv_n, mp3_n)
 
 
 @flow(name="transcribe-item", retries=1, retry_delay_seconds=60)
@@ -142,7 +141,7 @@ def transcribe_item_flow(job_id: str) -> None:
     cfg = Config()
     db = get_db()
     job = get_transcribe_job(job_id)
-    scratch = _SCRATCH / "transcribe" / job.id.__str__()
+    scratch = _SCRATCH / "transcribe" / str(job.id)
     try:
         transition_transcribe_job(db, job_id, "transcribing")
         wav = extract_audio(job.source_url, scratch / "audio.wav")
@@ -169,6 +168,7 @@ def transcribe_item_flow(job_id: str) -> None:
         raise
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
+        db.close()
 
 
 @flow(name="build-channel-subtitles")
@@ -179,28 +179,27 @@ def build_channel_subtitles_flow(channel_slug: str) -> None:
     Re-runnable: regenerates the whole channel SRT from current 'done' programs."""
     logger = get_run_logger()
     cfg = Config()
-    db = get_db()
+    with get_db() as db:
+        ws_row = db.execute(sa.text("""
+            SELECT start_date FROM tv_channels
+            WHERE content = :marker
+        """), {"marker": json.dumps({"channel_stream": channel_slug})}).mappings().fetchone()
+        if ws_row is None:
+            logger.warning("build-channel-subtitles: no tv_channels row for %s; skipping", channel_slug)
+            return
+        window_start = ws_row["start_date"]
 
-    ws_row = db.execute(sa.text("""
-        SELECT start_date FROM tv_channels
-        WHERE content = :marker
-    """), {"marker": json.dumps({"channel_stream": channel_slug})}).mappings().fetchone()
-    if ws_row is None:
-        logger.warning("build-channel-subtitles: no tv_channels row for %s; skipping", channel_slug)
-        return
-    window_start = ws_row["start_date"]
-
-    rows = db.execute(sa.text("""
-        SELECT p.air_date, t.srt_key
-        FROM transcribe_jobs t
-        JOIN programs p ON p.ia_identifier = t.source_key
-        WHERE t.kind = 'tv' AND t.channel_slug = :slug
-          AND t.stage = 'done' AND t.srt_key IS NOT NULL
-        ORDER BY p.air_date
-    """), {"slug": channel_slug}).mappings().all()
-    if not rows:
-        logger.info("build-channel-subtitles: %s has no done programs yet", channel_slug)
-        return
+        rows = db.execute(sa.text("""
+            SELECT p.air_date, t.srt_key
+            FROM transcribe_jobs t
+            JOIN programs p ON p.ia_identifier = t.source_key
+            WHERE t.kind = 'tv' AND t.channel_slug = :slug
+              AND t.stage = 'done' AND t.srt_key IS NOT NULL
+            ORDER BY p.air_date
+        """), {"slug": channel_slug}).mappings().all()
+        if not rows:
+            logger.info("build-channel-subtitles: %s has no done programs yet", channel_slug)
+            return
 
     programs = [(r["air_date"], wasabi.read_text(r["srt_key"], cfg)) for r in rows]
     cues = build_channel_cues(window_start, programs)
@@ -221,29 +220,30 @@ def dispatch_transcribe_flow(max_runs: int = 1000, max_retries: int = 3) -> None
     Same atomic-claim pattern as the video/usenet dispatchers. Pending work is
     claimed before retryable failed jobs; a failed claim spends one retry."""
     logger = get_run_logger()
-    db = get_db()
     processed = 0
-    while processed < max_runs:
-        row = db.execute(sa.text("""
-            UPDATE transcribe_jobs SET
-                stage = 'transcribing',
-                retry_count = retry_count + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
-                last_transition_at = now()
-            WHERE id = (
-                SELECT id FROM transcribe_jobs
-                WHERE stage = 'pending'
-                   OR (stage = 'failed' AND retry_count < :max_retries)
-                ORDER BY (stage = 'failed'), created_at
-                FOR UPDATE SKIP LOCKED
-                LIMIT 1
-            )
-            RETURNING id
-        """), {"max_retries": max_retries}).first()
-        db.commit()
-        if row is None:
-            logger.info("dispatch-transcribe: queue empty after %d runs", processed)
-            return
-        job_id = str(row.id)
-        run_deployment(name="transcribe-item/transcribe-item", parameters={"job_id": job_id})
-        processed += 1
+    with get_db() as db:
+        while processed < max_runs:
+            row = db.execute(sa.text("""
+                UPDATE transcribe_jobs SET
+                    stage = 'transcribing',
+                    retry_count = retry_count + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
+                    last_transition_at = now()
+                WHERE id = (
+                    SELECT id FROM transcribe_jobs
+                    WHERE stage = 'pending'
+                       OR (stage = 'failed' AND retry_count < :max_retries)
+                    ORDER BY (stage = 'failed'), created_at
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                )
+                RETURNING id
+            """), {"max_retries": max_retries}).first()
+            db.commit()
+            if row is None:
+                logger.info("dispatch-transcribe: queue empty after %d runs", processed)
+                return
+            job_id = str(row.id)
+            logger.info("dispatch-transcribe: claimed + dispatching job_id=%s", job_id)
+            run_deployment(name="transcribe-item/transcribe-item", parameters={"job_id": job_id})
+            processed += 1
     logger.info("dispatch-transcribe: hit max_runs=%d cap", max_runs)
