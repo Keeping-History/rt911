@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	sanitizeActiveStation,
+	sanitizeItemIds,
 	sanitizeStationKeys,
 	shouldStationPlay,
 } from "./radioPlayback";
@@ -45,5 +46,15 @@ describe("sanitizeActiveStation", () => {
 		expect(sanitizeActiveStation("ATC")).toBe("ATC");
 		expect(sanitizeActiveStation(7)).toBe("");
 		expect(sanitizeActiveStation(undefined)).toBe("");
+	});
+});
+
+describe("sanitizeItemIds", () => {
+	it("keeps only finite numbers (drops strings, NaN, Infinity)", () => {
+		expect(sanitizeItemIds([1, "2", 3, Number.NaN, Number.POSITIVE_INFINITY, 4])).toEqual([1, 3, 4]);
+	});
+	it("returns [] for non-arrays / undefined", () => {
+		expect(sanitizeItemIds(undefined)).toEqual([]);
+		expect(sanitizeItemIds("nope")).toEqual([]);
 	});
 });

@@ -27,3 +27,10 @@ export function sanitizeStationKeys(value: unknown): string[] {
 export function sanitizeActiveStation(value: unknown): string {
 	return typeof value === "string" ? value : "";
 }
+
+/** Keep only finite numbers — drops anything malformed from persisted state. */
+export function sanitizeItemIds(value: unknown): number[] {
+	return Array.isArray(value)
+		? value.filter((v): v is number => typeof v === "number" && Number.isFinite(v))
+		: [];
+}
