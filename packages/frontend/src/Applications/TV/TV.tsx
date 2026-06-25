@@ -50,6 +50,53 @@ function resolveChannelId(
 // re-filter on every render.
 const ALL_CHANNELS_FILTER: MediaStreamFilter = { format: ["m3u8"], approved: true };
 
+// Caption style options — CSS var names resolved at injection time because
+// the ::cue pseudo-element doesn't inherit custom properties from the cascade.
+const FONT_VARS: [string, string][] = [
+	["--header-font", "Header"],
+	["--body-font", "Body"],
+	["--ui-font", "UI"],
+];
+const COLOR_VARS = [
+	...Array.from({ length: 7 }, (_, i) => `--color-theme-0${i + 1}`),
+	...Array.from({ length: 7 }, (_, i) => `--color-system-0${i + 1}`),
+];
+
+interface CaptionStyle {
+	font: string;
+	color: string;
+	colorOpacity: number;
+	bgColor: string;
+	bgOpacity: number;
+	size: number;
+}
+
+const DEFAULT_CAPTION_STYLE: CaptionStyle = {
+	font: "--ui-font",
+	color: "--color-system-07",
+	colorOpacity: 1,
+	bgColor: "--color-system-01",
+	bgOpacity: 0.75,
+	size: 100,
+};
+
+function resolveCssVar(name: string): string {
+	return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function toRgba(cssVarName: string, opacity: number): string {
+	const raw = resolveCssVar(cssVarName);
+	const m = raw.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+	if (m) return `rgba(${m[1]},${m[2]},${m[3]},${opacity})`;
+	if (raw.startsWith("#") && raw.length === 7) {
+		const r = Number.parseInt(raw.slice(1, 3), 16);
+		const g = Number.parseInt(raw.slice(3, 5), 16);
+		const b = Number.parseInt(raw.slice(5, 7), 16);
+		return `rgba(${r},${g},${b},${opacity})`;
+	}
+	return raw;
+}
+
 // HLS quality ceilings. hls.js orders levels by ascending bitrate, and the encoder
 // ships a fixed 3-rendition ladder (thumb 136k, mid 396k, full 2628k), so:
 //   0 = thumb (lowest), 1 = mid (one down), 2 = full (highest).
@@ -142,6 +189,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const command = appState?.data?.command as TVRemoteCommand | undefined;
 
 	const [captionsOn, setCaptionsOn] = useState<boolean>(false);
+	const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(DEFAULT_CAPTION_STYLE);
 	const [thumbTick, setThumbTick] = useState(0);
 	const [showSettings, setShowSettings] = useState<boolean>(false);
 	// Settings form: local working copy of the disabled set, committed on Save.
@@ -201,6 +249,24 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Stable ref to captionsOn so onReady callbacks always see the current value.
 	const captionsOnRef = useRef(captionsOn);
 	captionsOnRef.current = captionsOn;
+
+	// Inject a ::cue style tag whenever captions or their style settings change.
+	// CSS custom properties don't inherit into ::cue, so we resolve each var to
+	// its computed rgb() value and write it as a literal into the <style> tag.
+	useEffect(() => {
+		let el = document.getElementById("cc-cue-style") as HTMLStyleElement | null;
+		if (!el) {
+			el = document.createElement("style");
+			el.id = "cc-cue-style";
+			document.head.appendChild(el);
+		}
+		if (!captionsOn) {
+			el.textContent = "";
+			return;
+		}
+		const font = resolveCssVar(captionStyle.font);
+		el.textContent = `::cue { font-family: ${font || "sans-serif"}, sans-serif; color: ${toRgba(captionStyle.color, captionStyle.colorOpacity)}; background-color: ${toRgba(captionStyle.bgColor, captionStyle.bgOpacity)}; font-size: ${captionStyle.size}%; }`;
+	}, [captionsOn, captionStyle]);
 	// Latest per-player volumes mirrored to a ref so persistence can read fresh
 	// values without making volume changes a persist trigger — a drag updates
 	// the ref every tick but only commits to the store on release.
@@ -561,6 +627,91 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					onCloseFunc={() => setShowSettings(false)}
 				>
 					<div className={styles.tvSettings}>
+						<ClassicyControlGroup label="Captions" columns={false}>
+							<ClassicyControlLabel label="Font" />
+							<div className={styles.captionFontRow}>
+								{FONT_VARS.map(([varName, label]) => (
+									<ClassicyButton
+										key={varName}
+										depressed={captionStyle.font === varName}
+										buttonSize="small"
+										margin="sm"
+										padding="sm"
+										onClickFunc={() => setCaptionStyle((s) => ({ ...s, font: varName }))}
+									>
+										{label}
+									</ClassicyButton>
+								))}
+							</div>
+							<ClassicyControlLabel label="Text Color" />
+							<div className={styles.captionSwatches}>
+								{COLOR_VARS.map((v) => (
+									<button
+										type="button"
+										key={v}
+										className={`${styles.captionSwatch} ${captionStyle.color === v ? styles.captionSwatchSelected : ""}`}
+										style={{ backgroundColor: `var(${v})` }}
+										title={v}
+										onClick={() => setCaptionStyle((s) => ({ ...s, color: v }))}
+									/>
+								))}
+							</div>
+							<ClassicySlider
+								id="cc_text_opacity"
+								labelTitle="Text Opacity"
+								ariaLabel="Caption text opacity"
+								value={captionStyle.colorOpacity}
+								min={0}
+								max={1}
+								step={0.05}
+								labelSize="small"
+								valueLabel={`${Math.round(captionStyle.colorOpacity * 100)}%`}
+								onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
+									setCaptionStyle((s) => ({ ...s, colorOpacity: parseFloat(e.target.value) }))
+								}
+							/>
+							<ClassicyControlLabel label="Background Color" />
+							<div className={styles.captionSwatches}>
+								{COLOR_VARS.map((v) => (
+									<button
+										type="button"
+										key={v}
+										className={`${styles.captionSwatch} ${captionStyle.bgColor === v ? styles.captionSwatchSelected : ""}`}
+										style={{ backgroundColor: `var(${v})` }}
+										title={v}
+										onClick={() => setCaptionStyle((s) => ({ ...s, bgColor: v }))}
+									/>
+								))}
+							</div>
+							<ClassicySlider
+								id="cc_bg_opacity"
+								labelTitle="Background Opacity"
+								ariaLabel="Caption background opacity"
+								value={captionStyle.bgOpacity}
+								min={0}
+								max={1}
+								step={0.05}
+								labelSize="small"
+								valueLabel={`${Math.round(captionStyle.bgOpacity * 100)}%`}
+								onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
+									setCaptionStyle((s) => ({ ...s, bgOpacity: parseFloat(e.target.value) }))
+								}
+							/>
+							<ClassicySlider
+								id="cc_size"
+								labelTitle="Size"
+								ariaLabel="Caption font size"
+								value={captionStyle.size}
+								min={50}
+								max={200}
+								step={10}
+								labelSize="small"
+								valueLabel={`${captionStyle.size}%`}
+								onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
+									setCaptionStyle((s) => ({ ...s, size: parseFloat(e.target.value) }))
+								}
+							/>
+						</ClassicyControlGroup>
 						<ClassicyControlGroup label="Channels" columns={true}>
 							{availableChannels.length === 0 ? (
 								<ClassicyControlLabel label="No channels available." />
