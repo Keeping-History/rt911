@@ -8,7 +8,11 @@ import httpx
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-from video_grabber.directus.writer import write_media_item
+from video_grabber.directus.writer import (
+    patch_mp3_subtitles,
+    patch_tv_channel_subtitles,
+    write_media_item,
+)
 from video_grabber.config import Config
 
 
@@ -294,3 +298,60 @@ def test_upsert_channel_patches_when_row_exists():
                               datetime(2001, 9, 18, tzinfo=timezone.utc), cfg)
 
     assert patch.called and not post.called
+
+
+# --- subtitle PATCH helpers ---
+
+
+def _cfg():
+    c = Config()
+    c.directus_url = "http://directus"
+    c.directus_api_token = "tok"
+    return c
+
+
+def test_patch_mp3_subtitles_patches_matched_row():
+    seen = {}
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            assert "/items/mp3_items" in str(request.url)
+            return httpx.Response(200, json={"data": [{"id": 7}]})
+        seen["url"] = str(request.url)
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"data": {"id": 7}})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    ok = patch_mp3_subtitles(
+        "https://files.911realtime.org/audio/x.mp3",
+        "https://files.911realtime.org/subtitles/audio/x.srt",
+        _cfg(), client=client,
+    )
+    assert ok is True
+    assert seen["url"].endswith("/items/mp3_items/7")
+    assert seen["body"]["subtitles"].endswith("/subtitles/audio/x.srt")
+
+
+def test_patch_mp3_subtitles_no_match_returns_false():
+    def handler(request):
+        return httpx.Response(200, json={"data": []})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    ok = patch_mp3_subtitles("u", "s", _cfg(), client=client)
+    assert ok is False
+
+
+def test_patch_tv_channel_subtitles_matches_channel_marker():
+    seen = {}
+    def handler(request):
+        if request.method == "GET":
+            assert "channel_stream" in str(request.url) or "content" in str(request.url)
+            return httpx.Response(200, json={"data": [{"id": 3}]})
+        seen["url"] = str(request.url)
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"data": {"id": 3}})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    ok = patch_tv_channel_subtitles(
+        "cnn", "https://files.911realtime.org/subtitles/cnn/channel.srt",
+        _cfg(), client=client,
+    )
+    assert ok is True
+    assert seen["url"].endswith("/items/tv_channels/3")
+    assert seen["body"]["subtitles"].endswith("/subtitles/cnn/channel.srt")

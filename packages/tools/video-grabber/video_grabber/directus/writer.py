@@ -155,3 +155,64 @@ def _resolve_source_id(slug: str, headers: dict, cfg: Config) -> int | None:
     resp.raise_for_status()
     data = resp.json().get("data", [])
     return data[0]["id"] if data else None
+
+
+def _auth_headers(cfg: Config) -> dict:
+    return {
+        "Authorization": f"Bearer {get_directus_token(cfg)}",
+        "Content-Type": "application/json",
+    }
+
+
+def patch_mp3_subtitles(mp3_url: str, srt_url: str, cfg: Config, *, client=httpx) -> bool:
+    """Attach ``srt_url`` to the ``mp3_items`` row whose ``url`` == ``mp3_url``.
+
+    Keyed on ``url`` exactly like ``upsert_channel_media_item`` keys tv_channels —
+    a normal indexed field, unlike the opaque ``content`` JSON string. Idempotent:
+    re-running just re-PATCHes the same value. Returns False if no row matched."""
+    headers = _auth_headers(cfg)
+    resp = client.get(
+        f"{cfg.directus_url}/items/mp3_items",
+        params={"filter[url][_eq]": mp3_url, "fields": "id"},
+        headers=headers,
+    )
+    resp.raise_for_status()
+    data = resp.json().get("data") or []
+    if not data:
+        return False
+    item_id = data[0]["id"]
+    resp = client.patch(
+        f"{cfg.directus_url}/items/mp3_items/{item_id}",
+        content=json.dumps({"subtitles": srt_url}),
+        headers=headers,
+    )
+    resp.raise_for_status()
+    return True
+
+
+def patch_tv_channel_subtitles(channel_slug: str, srt_url: str, cfg: Config, *, client=httpx) -> bool:
+    """Attach ``srt_url`` to the ``tv_channels`` row for ``channel_slug``.
+
+    Matches on the ``content`` marker ``{"channel_stream": slug}`` that
+    ``upsert_channel_media_item`` writes — ``content`` is an opaque JSON *string*
+    so it is matched as a whole blob (``_eq``), not traversed. Returns False if no
+    row matched (channel not yet assembled)."""
+    headers = _auth_headers(cfg)
+    marker = json.dumps({"channel_stream": channel_slug})
+    resp = client.get(
+        f"{cfg.directus_url}/items/tv_channels",
+        params={"filter[content][_eq]": marker, "fields": "id"},
+        headers=headers,
+    )
+    resp.raise_for_status()
+    data = resp.json().get("data") or []
+    if not data:
+        return False
+    item_id = data[0]["id"]
+    resp = client.patch(
+        f"{cfg.directus_url}/items/tv_channels/{item_id}",
+        content=json.dumps({"subtitles": srt_url}),
+        headers=headers,
+    )
+    resp.raise_for_status()
+    return True
