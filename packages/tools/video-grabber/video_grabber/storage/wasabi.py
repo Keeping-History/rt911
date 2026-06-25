@@ -19,6 +19,13 @@ _CONTENT_TYPES: dict[str, tuple[str, str]] = {
     ".mp4": ("video/mp4", "max-age=31536000"),   # init.mp4
     ".m4s": ("video/iso.segment", "max-age=31536000"),
     ".json": ("application/json", "max-age=5"),  # EPG guide; changes as content lands
+    # Subtitle files. max-age=300 (5 min) because the per-channel SRT/VTT is
+    # regenerated in-place as more programs finish (like .m3u8 playlists), so we
+    # need a short TTL to avoid stale captions. Per-program/per-MP3 files are
+    # immutable in practice but share the same suffix, so we accept the minor
+    # over-revalidation rather than splitting the mapping.
+    ".vtt": ("text/vtt", "max-age=300"),
+    ".srt": ("application/x-subrip", "max-age=300"),
 }
 
 _TRANSFER_CONFIG = TransferConfig(

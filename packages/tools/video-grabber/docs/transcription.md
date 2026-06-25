@@ -50,7 +50,7 @@ There are four Prefect flows. Run them in this sequence:
 | Step | Flow | What it does |
 |---|---|---|
 | 1 | `scan-transcribe` | Enumerates every `video_jobs` row with `stage='complete'` and a non-null `wasabi_key`, plus every `audio/*.mp3` key in Wasabi. Inserts into `transcribe_jobs` with `ON CONFLICT (source_key) DO NOTHING` — idempotent. |
-| 2 | `dispatch-transcribe` | Atomically claims one pending or retryable-failed job at a time and blocks on `transcribe-item` for it. Drains the whole queue before returning. Run two instances in parallel (the concurrency cap is 2) to keep both GPUs busy. |
+| 2 | `dispatch-transcribe` | Atomically claims one pending or retryable-failed job at a time and blocks on `transcribe-item` for it. Drains the whole queue before returning. Run two instances in parallel to saturate the GPU ceiling. **Note:** the real parallelism ceiling is `_TRANSCRIBE_ITEM_LIMIT = 2` (concurrent `transcribe-item` runs) in `serve.py` — raising `_TRANSCRIBE_DISPATCH_LIMIT` alone does not increase GPU utilisation; you must also raise `_TRANSCRIBE_ITEM_LIMIT`. |
 | (2a) | `transcribe-item` | Invoked by `dispatch-transcribe` per job. Extracts audio, runs whisper, uploads SRT/VTT, patches `mp3_items` for MP3 jobs. TV Directus write is deferred to step 3. |
 | 3 | `build-channel-subtitles` | Per-channel post-processing: reads each done program's per-unit SRT from Wasabi, offsets the cues onto the channel timeline, merges all programs, uploads the channel SRT/VTT, and PATCHes `tv_channels.subtitles`. Re-runnable. |
 
@@ -120,12 +120,12 @@ video-encoding backlog is idle.
 
 ### Configuration knobs
 
-| Env var | Default (in image) | Meaning |
-|---|---|---|
-| `WHISPER_BIN` | `/usr/local/bin/whisper-cli` | Path to the whisper-cli binary |
-| `WHISPER_MODEL` | `/opt/models/ggml-medium.en.bin` | Path to the ggml model file |
-| `WHISPER_THREADS` | `4` | CPU threads passed to `-t` |
-| `SUBTITLES_PREFIX` | `subtitles` | Wasabi key prefix for all subtitle files |
+| Env var | Default source | Default value | Meaning |
+|---|---|---|---|
+| `WHISPER_BIN` | Dockerfile `ENV` | `/usr/local/bin/whisper-cli` | Path to the whisper-cli binary |
+| `WHISPER_MODEL` | Dockerfile `ENV` | `/opt/models/ggml-medium.en.bin` | Path to the ggml model file |
+| `WHISPER_THREADS` | `config.py` | `4` | CPU threads passed to `-t`; override via env var if needed |
+| `SUBTITLES_PREFIX` | `config.py` | `subtitles` | Wasabi key prefix for all subtitle files; override via env var if needed |
 
 ---
 
@@ -158,11 +158,14 @@ Both the `.srt` and `.vtt` are uploaded by `transcribe-item` and
 `build-channel-subtitles` from the same whisper output — no conversion is needed
 because whisper.cpp writes both natively (`--output-srt --output-vtt`).
 
-The `hls-video-element` web component must forward its `<track>` child to the
-inner `<video>` element for captions to fire. If it does not (some versions slot
-the child into the shadow DOM's light children without forwarding), the imperative
-fallback is to add the track via `videoElement.addTextTrack()` / a dynamically
-appended `<track>` on the inner `<video>` directly.
+**Open item — not yet verified in a live browser.** The `hls-video-element` web
+component must forward its `<track>` child to the inner `<video>` element for captions
+to fire. Whether the version in use does this has not been confirmed against a live
+subtitle artifact. If it does not (some versions slot the child into the shadow DOM's
+light children without forwarding), the imperative fallback is to add the track via
+`videoElement.addTextTrack()` / a dynamically appended `<track>` on the inner `<video>`
+directly. This should be tested once the CORS prerequisite (see below) and a real `.vtt`
+upload are in place.
 
 ---
 
@@ -214,7 +217,7 @@ print(dict(db.execute(sa.text(
 
 ### 2. Drain the queue
 
-Trigger two `dispatch-transcribe` runs (matching the concurrency cap of 2):
+Trigger two `dispatch-transcribe` runs (matching `_TRANSCRIBE_ITEM_LIMIT = 2`, the GPU-contention ceiling):
 
 ```python
 from prefect.deployments import run_deployment
@@ -360,7 +363,8 @@ blocks it and captions do not appear, even though the VTT file exists in Wasabi.
   `Access-Control-Allow-Origin: *` on all paths it reaches — no per-object
   configuration is needed once a path is admitted.
 - **Does not prove:** that `subtitles/` objects are currently accessible (they are
-  not), or that the `.vtt` MIME type is served correctly (untested; nginx-s3-gateway
-  proxies the `Content-Type` from Wasabi's object metadata, which should be
-  `text/vtt` if uploaded with the right content type — worth confirming after
-  first upload).
+  not — the infra change above is still required). The `.vtt` MIME type question
+  is resolved: `_CONTENT_TYPES` in `wasabi.py` maps `.vtt` → `text/vtt` and
+  `.srt` → `application/x-subrip`, so Wasabi object metadata will carry the
+  correct content type from the first upload. nginx-s3-gateway proxies the stored
+  `Content-Type` verbatim, so no further configuration is needed on that side.
