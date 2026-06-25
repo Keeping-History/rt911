@@ -13,7 +13,6 @@ transcribe_jobs:
 The per-channel offset relies on the assembler's isochronous invariant: a program
 airing at air_date sits at (air_date − tv_channels.start_date) seconds in the
 stream (see ../epg/assembler.py and docs/transcription.md)."""
-import json
 import os
 import shutil
 from datetime import datetime, timezone
@@ -27,6 +26,7 @@ from prefect.deployments import run_deployment
 from video_grabber.config import Config
 from video_grabber.directus.writer import (
     _WASABI_BASE,
+    get_tv_channel_start_date,
     patch_mp3_subtitles,
     patch_tv_channel_subtitles,
 )
@@ -201,16 +201,12 @@ def build_channel_subtitles_flow(channel_slug: str) -> None:
     Re-runnable: regenerates the whole channel SRT from current 'done' programs."""
     logger = get_run_logger()
     cfg = Config()
-    with get_db() as db:
-        ws_row = db.execute(sa.text("""
-            SELECT start_date FROM tv_channels
-            WHERE content = :marker
-        """), {"marker": json.dumps({"channel_stream": channel_slug})}).mappings().fetchone()
-        if ws_row is None:
-            logger.warning("build-channel-subtitles: no tv_channels row for %s; skipping", channel_slug)
-            return
-        window_start = ws_row["start_date"]
+    window_start = get_tv_channel_start_date(channel_slug, cfg)
+    if window_start is None:
+        logger.warning("build-channel-subtitles: no tv_channels row for %s; skipping", channel_slug)
+        return
 
+    with get_db() as db:
         rows = db.execute(sa.text("""
             SELECT p.air_date, t.srt_key
             FROM transcribe_jobs t

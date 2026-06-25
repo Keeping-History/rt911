@@ -190,6 +190,23 @@ def patch_mp3_subtitles(mp3_url: str, srt_url: str, cfg: Config, *, client=httpx
     return True
 
 
+def get_tv_channel_start_date(channel_slug: str, cfg: Config, *, client=httpx):
+    """Return the start_date (naive UTC datetime) for the tv_channels row, or None."""
+    from datetime import datetime
+    headers = _auth_headers(cfg)
+    marker = json.dumps({"channel_stream": channel_slug})
+    resp = client.get(
+        f"{cfg.directus_url}/items/tv_channels",
+        params={"filter[content][_eq]": marker, "fields": "start_date"},
+        headers=headers,
+    )
+    resp.raise_for_status()
+    data = resp.json().get("data") or []
+    if not data:
+        return None
+    return datetime.strptime(data[0]["start_date"], "%Y-%m-%dT%H:%M:%S")
+
+
 def patch_tv_channel_subtitles(channel_slug: str, srt_url: str, cfg: Config, *, client=httpx) -> bool:
     """Attach ``srt_url`` to the ``tv_channels`` row for ``channel_slug``.
 
