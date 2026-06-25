@@ -1,22 +1,29 @@
-// Single source of truth for which radio stations may have audio playing.
+// Single source of truth for which radio *stations* may have audio playing.
 //
-// The Radio Scanner has two modes:
-//   - Scan mode: the user hand-picks a grid of stations that all play together.
-//   - Single-station mode (default): exactly one station — the active one —
-//     plays, so switching stations must silence the previous one.
-//
-// Playback was previously gated only by the `muted` prop, which never paused the
-// previous element (and React does not reliably re-apply `muted` on re-render),
-// so the old station kept playing after a switch. Centralising the rule here and
-// pausing everything it excludes is what enforces "one station at a time".
+// A "station" is a group of MediaItems sharing a source (see stationGrouping.ts),
+// identified by a string key. The Radio Scanner has two modes:
+//   - Scan mode: the user hand-picks stations that all play together.
+//   - Single-station mode (default): exactly one station — the active one — plays.
 export interface PlaybackSelection {
 	scannerMode: boolean;
-	activeStation: number;
-	selectedStations: number[];
+	activeStation: string;
+	selectedStations: string[];
 }
 
-export function shouldStationPlay(sel: PlaybackSelection, id: number): boolean {
+export function shouldStationPlay(sel: PlaybackSelection, key: string): boolean {
 	return sel.scannerMode
-		? sel.selectedStations.includes(id)
-		: id === sel.activeStation;
+		? sel.selectedStations.includes(key)
+		: key === sel.activeStation;
+}
+
+/** Keep only string entries — drops legacy numeric ids from old persisted state. */
+export function sanitizeStationKeys(value: unknown): string[] {
+	return Array.isArray(value)
+		? value.filter((v): v is string => typeof v === "string")
+		: [];
+}
+
+/** Coerce a persisted active-station value to a string key ('' for legacy ids). */
+export function sanitizeActiveStation(value: unknown): string {
+	return typeof value === "string" ? value : "";
 }
