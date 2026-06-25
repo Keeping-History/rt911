@@ -22,6 +22,7 @@ import type {
 import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
 import styles from "./TV.module.scss";
+import { bufferCapsForLevel } from "./staggerLoad";
 import {
 	type TVChannelRef,
 	type TVRemoteCommand,
@@ -211,7 +212,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		let config = hlsConfigsRef.current.get(item.id);
 		if (!config) {
 			const nowMs = new Date(dateTimeRef.current).getTime();
-			config = { hls: { startLevel: level, startPosition: calcSeekSeconds(item, nowMs) } };
+			config = {
+				hls: {
+					startLevel: level,
+					startPosition: calcSeekSeconds(item, nowMs),
+					...bufferCapsForLevel(level),
+				},
+			};
 			hlsConfigsRef.current.set(item.id, config);
 		}
 		return config;

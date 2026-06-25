@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STAGGER_THRESHOLD, computeConcurrency } from "./staggerLoad";
+import { STAGGER_THRESHOLD, computeConcurrency, bufferCapsForLevel } from "./staggerLoad";
 import { type LoadPhase, markLoaded, reconcile, shouldMount } from "./staggerLoad";
 
 describe("computeConcurrency", () => {
@@ -97,6 +97,21 @@ describe("shouldMount", () => {
 		expect(shouldMount(p, 2)).toBe(true);
 		expect(shouldMount(p, 3)).toBe(false);
 		expect(shouldMount(p, 4)).toBe(false);
+	});
+});
+
+describe("bufferCapsForLevel", () => {
+	it("keeps thumbnails (lowest tier) on a tiny buffer", () => {
+		const caps = bufferCapsForLevel(0);
+		expect(caps.maxBufferLength).toBeLessThanOrEqual(6);
+		expect(caps.backBufferLength).toBe(0);
+		expect(caps.maxBufferSize).toBeLessThanOrEqual(10 * 1000 * 1000);
+	});
+
+	it("gives the focused player (highest tier) a larger buffer than a thumbnail", () => {
+		expect(bufferCapsForLevel(2).maxBufferLength).toBeGreaterThan(
+			bufferCapsForLevel(0).maxBufferLength,
+		);
 	});
 });
 

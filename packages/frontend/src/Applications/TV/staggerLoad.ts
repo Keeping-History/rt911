@@ -78,3 +78,20 @@ export function reconcile(
 	}
 	return next;
 }
+
+/** hls.js buffer caps per quality tier. Thumbnails hold only a few seconds and
+ *  no back-buffer so each idle instance's memory stays small; the focused
+ *  player gets a roomier forward buffer. Levels match TV.tsx's QUALITY_*. */
+export function bufferCapsForLevel(level: number): {
+	maxBufferLength: number;
+	backBufferLength: number;
+	maxBufferSize: number;
+} {
+	if (level >= 2) {
+		return { maxBufferLength: 30, backBufferLength: 10, maxBufferSize: 60 * 1000 * 1000 };
+	}
+	if (level === 1) {
+		return { maxBufferLength: 10, backBufferLength: 0, maxBufferSize: 20 * 1000 * 1000 };
+	}
+	return { maxBufferLength: 6, backBufferLength: 0, maxBufferSize: 10 * 1000 * 1000 };
+}
