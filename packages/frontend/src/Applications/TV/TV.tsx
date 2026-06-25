@@ -129,7 +129,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 
 	// --- Remote-control state, driven by ClassicyAppTV* events (see TVContext) ---
 	// Persistent settings, read straight from app data each render.
-	const volumeLimit = (appState?.data?.volumeLimit as number | undefined) ?? 1;
+	// The universal volume ceiling persisted in app data. The slider edits a live
+	// local copy (volumeLimit below) so a drag updates audio immediately without
+	// dispatching once per tick; the committed value persists on release.
+	const persistedVolumeLimit =
+		(appState?.data?.volumeLimit as number | undefined) ?? 1;
 	const overallMuted = (appState?.data?.overallMuted as boolean | undefined) ?? false;
 	// TV-local pause — independent of the global clock, which keeps running so
 	// resume can jump forward to live time.
@@ -161,6 +165,15 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const [gridPlayerVolumes, setGridPlayerVolumes] = useState<
 		Record<number, number>
 	>((appState?.data?.gridPlayerVolumes as Record<number, number>) ?? {});
+	// Live universal volume ceiling driving every player. Seeded from the persisted
+	// value and updated on each slider tick for immediate audio response, but only
+	// written back to the store on slider release (see the slider's onCommitFunc).
+	// Re-synced whenever the persisted value changes externally — e.g. a remote
+	// tvSetVolumeLimit command, or our own commit landing in app data.
+	const [volumeLimit, setVolumeLimit] = useState(persistedVolumeLimit);
+	useEffect(() => {
+		setVolumeLimit(persistedVolumeLimit);
+	}, [persistedVolumeLimit]);
 
 	// Underlying video elements per item — react-player 3.x forwards refs to
 	// the native <video> element, so we set currentTime directly for seeking.
@@ -694,9 +707,10 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								step={0.05}
 								valueLabel={`${Math.round(volumeLimit * 100)}%`}
 								onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
-									desktopEventDispatch(
-										tvSetVolumeLimit(parseFloat(e.target.value)),
-									)
+									setVolumeLimit(parseFloat(e.target.value))
+								}
+								onCommitFunc={(v) =>
+									desktopEventDispatch(tvSetVolumeLimit(v))
 								}
 							/>
 						</div>
