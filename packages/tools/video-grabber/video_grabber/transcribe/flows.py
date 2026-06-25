@@ -16,7 +16,7 @@ stream (see ../epg/assembler.py and docs/transcription.md)."""
 import json
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -79,14 +79,29 @@ def transition_transcribe_job(db, job_id, to_stage, *, error=None, srt_key=None)
 
 # ---- pure merge helper (unit-tested) --------------------------------------
 
+def _as_utc(dt: datetime) -> datetime:
+    """Return *dt* as an aware UTC datetime.
+
+    Naive datetimes (e.g. from Postgres ``timestamp WITHOUT time zone``) are
+    assumed to already be in UTC and are tagged with ``timezone.utc``.  Aware
+    datetimes are converted to UTC."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
 def build_channel_cues(window_start: datetime, programs: list[tuple[datetime, str]]) -> list[Cue]:
     """Offset each program's cues by (air_date − window_start) and merge.
 
     ``programs`` is ``[(air_date, srt_text), …]``. Returns merged, time-sorted cues
-    on the channel's stitched-stream timeline."""
+    on the channel's stitched-stream timeline.
+
+    Both naive and aware datetimes are accepted.  Naive values are treated as UTC
+    (matching the assembler's isochronous invariant) so that production rows from
+    ``tv_channels.start_date`` (``timestamp WITHOUT time zone``) and
+    ``programs.air_date`` (``timestamptz``) can be mixed without raising TypeError."""
+    ws_utc = _as_utc(window_start)
     blocks: list[list[Cue]] = []
     for air_date, srt_text in programs:
-        offset = (air_date - window_start).total_seconds()
+        offset = (_as_utc(air_date) - ws_utc).total_seconds()
         blocks.append(shift(parse_srt(srt_text), offset))
     return merge(blocks)
 
@@ -159,7 +174,14 @@ def transcribe_item_flow(job_id: str) -> None:
         wasabi.upload_text(vtt_path.read_text(), f"{base_key}.vtt", cfg)
 
         if job.kind == "mp3":
-            patch_mp3_subtitles(job.source_url, f"{_WASABI_BASE}/{srt_key}", cfg)
+            matched = patch_mp3_subtitles(job.source_url, f"{_WASABI_BASE}/{srt_key}", cfg)
+            if not matched:
+                logger.warning(
+                    "transcribe-item: patch_mp3_subtitles found no mp3_items row for "
+                    "source_url=%s source_key=%s — SRT/VTT uploaded but Directus not updated",
+                    job.source_url,
+                    job.source_key,
+                )
 
         transition_transcribe_job(db, job_id, "done", srt_key=srt_key)
         logger.info("transcribe-item: %s %s → %s", job.kind, job.source_key, srt_key)
