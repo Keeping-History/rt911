@@ -362,6 +362,23 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		prevDateTimeRef.current = dateTime;
 	}, [dateTime, send]);
 
+	// Once the socket is OPEN, re-request the window for the current instant.
+	// The active video channels are long-running stitched HLS streams (one row in
+	// tv_channels per channel, started days ago) so they are delivered ONLY by the
+	// init/seek snapshot — CurrentItems matches items overlapping the instant,
+	// whereas the per-second refill is keyed by start_date over a forward window
+	// and never re-sends an already-running channel. On the initial connect the
+	// onopen `init` can run before the virtual clock has settled on its seeded
+	// instant, and the clock-settle seek above is dropped while the socket is still
+	// CONNECTING (send() no-ops unless OPEN) — leaving video empty with no recovery
+	// until a manual date change. Issuing a seek for the freshest clock value once
+	// connected guarantees the active channels arrive on every (re)connect.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: utcMsRef is a stable ref read for its latest value
+	useEffect(() => {
+		if (!connected) return;
+		send({ type: "seek", time: new Date(utcMsRef.current).toISOString() });
+	}, [connected, send]);
+
 	// WebSocket lifecycle: connect once, heartbeat inside onopen
 	useEffect(() => {
 		let active = true;
