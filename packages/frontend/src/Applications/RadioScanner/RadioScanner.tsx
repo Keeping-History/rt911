@@ -11,11 +11,12 @@ import {
 import type React from "react";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
+import { NowPlayingList } from "./NowPlayingList";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
-import { sanitizeActiveStation, sanitizeStationKeys } from "./radioPlayback";
+import { sanitizeActiveStation, sanitizeItemIds, sanitizeStationKeys } from "./radioPlayback";
 import { StationPlayer } from "./StationPlayer";
-import { activeSegments, groupStations, primarySegment } from "./stationGrouping";
+import { activeSegments, groupStations } from "./stationGrouping";
 
 type RadioScannerProps = Record<string, never>;
 
@@ -50,6 +51,9 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	);
 	const [mutedStations, setMutedStations] = useState<string[]>(
 		sanitizeStationKeys(appState?.data?.mutedStations),
+	);
+	const [mutedItems, setMutedItems] = useState<number[]>(
+		sanitizeItemIds(appState?.data?.mutedItems),
 	);
 	const [showWaveform, setShowWaveform] = useState<boolean>(
 		(appState?.data?.showWaveform as boolean) ?? true,
@@ -101,14 +105,18 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 			scannerMode,
 			selectedStations,
 			mutedStations,
+			mutedItems,
 			showWaveform,
 		});
-	}, [activeStation, scannerMode, selectedStations, mutedStations, showWaveform, desktopEventDispatch]);
+	}, [activeStation, scannerMode, selectedStations, mutedStations, mutedItems, showWaveform, desktopEventDispatch]);
 
 	const toggleScanner = () => {
 		setScannerMode((prev) => {
 			const entering = !prev;
 			setSelectedStations(entering && activeStation ? [activeStation] : []);
+			// Station-level mutes are scoped to the scan-mode grid, so reset them on
+			// a mode switch. Per-file mutes (mutedItems) are station-agnostic and
+			// intentionally preserved across mode switches.
 			setMutedStations([]);
 			return entering;
 		});
@@ -123,6 +131,12 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	const toggleStationMute = (key: string) => {
 		setMutedStations((prev) =>
 			prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key],
+		);
+	};
+
+	const toggleItemMute = (id: number) => {
+		setMutedItems((prev) =>
+			prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
 		);
 	};
 
@@ -149,9 +163,6 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	];
 
 	const activeStationObj = stations.find((s) => s.key === activeStation);
-	const activeDisplaySegment = activeStationObj
-		? primarySegment(activeSegments(activeStationObj, nowMs))
-		: null;
 
 	return (
 		<ClassicyApp
@@ -177,27 +188,23 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 			>
 				<div className={styles.rsContainer}>
 					<div className={styles.rsMainArea}>
-						{/* Single-station mode: info display + one station player */}
+						{/* Single-station mode: now-playing list + one station player */}
 						{!scannerMode && activeStationObj && (
 							<>
 								<div className={styles.rsDisplay}>
 									<p className={styles.rsDisplaySource}>{activeStationObj.label}</p>
-									{activeDisplaySegment && (
-										<>
-											<p className={styles.rsDisplayTitle}>{activeDisplaySegment.title}</p>
-											{activeDisplaySegment.content && (
-												<p className={styles.rsDisplayContent}>
-													{activeDisplaySegment.content}
-												</p>
-											)}
-										</>
-									)}
+									<NowPlayingList
+										segments={activeSegments(activeStationObj, nowMs)}
+										mutedItems={mutedItems}
+										onToggleMute={toggleItemMute}
+									/>
 								</div>
 								<StationPlayer
 									station={activeStationObj}
 									nowMs={nowMs}
 									getNowMs={getNowMs}
-									muted={mutedStations.includes(activeStationObj.key)}
+									stationMuted={mutedStations.includes(activeStationObj.key)}
+									mutedItems={mutedItems}
 									clockPaused={clockPaused}
 									showWaveform={showWaveform}
 									captionsOn={captionsOn}
@@ -243,11 +250,17 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 												</button>
 											</div>
 											<p className={styles.rsGridStationSource}>{station.label}</p>
+											<NowPlayingList
+												segments={activeSegments(station, nowMs)}
+												mutedItems={mutedItems}
+												onToggleMute={toggleItemMute}
+											/>
 											<StationPlayer
 												station={station}
 												nowMs={nowMs}
 												getNowMs={getNowMs}
-												muted={isMuted}
+												stationMuted={isMuted}
+												mutedItems={mutedItems}
 												clockPaused={clockPaused}
 												showWaveform={showWaveform}
 												captionsOn={captionsOn}
