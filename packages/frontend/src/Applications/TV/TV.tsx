@@ -669,6 +669,14 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								>
 									Mute
 								</ClassicyButton>
+								<ClassicyButton
+									onClickFunc={() => setCaptionsOn((v) => !v)}
+									depressed={captionsOn}
+									buttonSize="small"
+									margin="sm" padding="sm"
+								>
+									{captionsOn ? "CC On" : "CC Off"}
+								</ClassicyButton>
 							</div>
 							<ClassicySlider
 								id="tv_universal_volume"
@@ -686,14 +694,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 									)
 								}
 							/>
-							<ClassicyButton
-								onClickFunc={() => setCaptionsOn((v) => !v)}
-								depressed={captionsOn}
-								buttonSize="small"
-								margin="sm" padding="sm"
-							>
-								{captionsOn ? "CC On" : "CC Off"}
-							</ClassicyButton>
 						</div>
 						<div className={styles.tvThumbnailStrip}>
 							{items.map((item) => {
