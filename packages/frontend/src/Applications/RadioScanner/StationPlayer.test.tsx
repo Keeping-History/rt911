@@ -68,4 +68,24 @@ describe("StationPlayer", () => {
 		rerender(<StationPlayer {...props} clockPaused={true} />);
 		expect(pauseSpy).toHaveBeenCalled();
 	});
+
+	it("re-render does not re-mute an element that onCanPlay already unmuted", () => {
+		// Verify Fix 1: stable ref callbacks mean React only invokes the ref on
+		// real mount/unmount, so a playing (unmuted) element stays unmuted across
+		// ordinary re-renders (e.g. clock tick, prop change).
+		const nowMs = t("2001-09-11T12:47:00Z");
+		const props = { station, nowMs, getNowMs: () => nowMs, muted: false, clockPaused: false, showWaveform: false };
+		const { container, rerender } = render(<StationPlayer {...props} />);
+
+		// Grab one of the mounted <audio> elements and simulate onCanPlay unmuting.
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		expect(audio).not.toBeNull();
+		audio.muted = false; // simulate what onCanPlay does after play() resolves
+
+		// Re-render with the same nowMs (same in-window segments → no unmount).
+		rerender(<StationPlayer {...props} />);
+
+		// The element must still be unmuted — the stable ref was NOT re-invoked.
+		expect(audio.muted).toBe(false);
+	});
 });

@@ -86,6 +86,28 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 		}
 	}, [nowMs, station]);
 
+	// Stable per-segment ref callbacks: a fixed identity means React invokes the
+	// callback only on real mount/unmount, so a playing element is never re-muted
+	// by an ordinary re-render (onCanPlay unmutes; we must not clobber that).
+	const refCallbacks = useRef<Map<number, (el: HTMLAudioElement | null) => void>>(new Map());
+	const audioRef = (id: number) => {
+		let cb = refCallbacks.current.get(id);
+		if (!cb) {
+			cb = (el: HTMLAudioElement | null) => {
+				if (el) {
+					// Start muted so the browser permits autoplay; onCanPlay switches
+					// to volume-based control after play() resolves.
+					el.muted = true;
+					audioRefs.current.set(id, el);
+				} else {
+					audioRefs.current.delete(id);
+				}
+			};
+			refCallbacks.current.set(id, cb);
+		}
+		return cb;
+	};
+
 	const primary = primarySegment(segments);
 
 	return (
@@ -93,16 +115,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 			{segments.map((item) => (
 				<audio
 					key={item.id}
-					ref={(el) => {
-						if (el) {
-							// Start muted so the browser permits autoplay; onCanPlay
-							// switches to volume control after play() resolves.
-							el.muted = true;
-							audioRefs.current.set(item.id, el);
-						} else {
-							audioRefs.current.delete(item.id);
-						}
-					}}
+					ref={audioRef(item.id)}
 					src={item.url}
 					crossOrigin="anonymous"
 					style={{ display: "none" }}

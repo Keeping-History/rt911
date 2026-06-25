@@ -9,7 +9,7 @@ import {
 	useClassicyDateTime,
 } from "classicy";
 import type React from "react";
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
@@ -74,7 +74,16 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	}, []);
 	const nowMs = getNowMs();
 
-	const stations = groupStations(items);
+	// The stored dateTime only advances per minute, but in-window segment
+	// membership must update promptly as segments start/end. Re-render every
+	// second so nowMs (and the mounted players) track the clock at ~1s.
+	const [, setTick] = useState(0);
+	useEffect(() => {
+		const id = setInterval(() => setTick((n) => n + 1), 1000);
+		return () => clearInterval(id);
+	}, []);
+
+	const stations = useMemo(() => groupStations(items), [items]);
 
 	// Select the first station once stations arrive (single-station mode).
 	useEffect(() => {
