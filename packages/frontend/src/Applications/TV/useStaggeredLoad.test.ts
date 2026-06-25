@@ -14,11 +14,12 @@ let lastObserver: {
 beforeEach(() => {
 	lastObserver = null;
 	class MockIO {
-		cb: (entries: IOEntry[]) => void;
 		elements = new Set<Element>();
 		constructor(cb: (entries: IOEntry[]) => void) {
-			this.cb = cb;
-			lastObserver = this;
+			// Capture cb and the elements Set reference (not `this`) so tests can
+			// drive IO events; the Set is shared by reference so mutations via
+			// observe/unobserve are visible through lastObserver.
+			lastObserver = { cb, elements: this.elements };
 		}
 		observe(el: Element) { this.elements.add(el); }
 		unobserve(el: Element) { this.elements.delete(el); }
