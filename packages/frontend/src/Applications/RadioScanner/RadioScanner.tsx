@@ -30,12 +30,13 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 		(state) => state.System.Manager.Applications.apps[appId],
 	);
 
-	// mp3 audio is delivered on its own opt-in channel; subscribe on mount.
+	// mp3 audio is delivered on its own opt-in channel; subscribe only while the app is open.
 	const { mp3Items: items, subscribeMp3, unsubscribeMp3 } = useContext(MediaStreamContext);
 	useEffect(() => {
+		if (!appState) return;
 		subscribeMp3(appId);
 		return () => unsubscribeMp3(appId);
-	}, [subscribeMp3, unsubscribeMp3, appId]);
+	}, [appState, subscribeMp3, unsubscribeMp3, appId]);
 
 	const { dateTime, paused: clockPaused } = useClassicyDateTime();
 

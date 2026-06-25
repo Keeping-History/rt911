@@ -8,6 +8,7 @@ import {
 	ClassicyTextEditor,
 	ClassicyWindow,
 	quitMenuItemHelper,
+	useAppManager,
 } from "classicy";
 import { useEffect, useState } from "react";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
@@ -31,6 +32,8 @@ export const Newsgroups = () => {
 	const appName = "Newsgroups";
 	const appIcon = ClassicyIcons.applications.internetExplorer.mailbox;
 
+	const appState = useAppManager((s) => s.System.Manager.Applications.apps[appId]);
+
 	const {
 		groups,
 		groupRows,
@@ -52,7 +55,7 @@ export const Newsgroups = () => {
 		bodies,
 		bodyErrors,
 		requestBody,
-	} = useNewsgroups(appId);
+	} = useNewsgroups(appId, !!appState);
 
 	const sortMark = (field: SortField) =>
 		sort.field === field ? (sort.dir === "asc" ? " ▲" : " ▼") : "";

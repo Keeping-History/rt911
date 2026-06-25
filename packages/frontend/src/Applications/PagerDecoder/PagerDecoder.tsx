@@ -54,7 +54,7 @@ export const PagerDecoder = () => {
 	const isPaused =
 		appState?.windows?.find((w) => w.id === "pager-terminal")?.closed ?? false;
 	const { lines, streamingText, streamingMeta, uniqueValues, clearLines } =
-		usePagerPlayback(settings, isPaused);
+		usePagerPlayback(settings, isPaused, !!appState);
 
 	// View-only ordering. `lines` is stored oldest→newest; `newestFirst` flips the
 	// presentation so the most recent message sits at the top instead of the bottom.

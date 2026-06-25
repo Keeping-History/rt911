@@ -80,7 +80,7 @@ export interface NewsgroupsState {
  * (which tells the server what to stream — a group can be huge, so nothing flows
  * until one is opened), and threading of the received messages.
  */
-export function useNewsgroups(appId: string): NewsgroupsState {
+export function useNewsgroups(appId: string, isRunning = false): NewsgroupsState {
 	const {
 		sources,
 		usenetItems,
@@ -134,10 +134,12 @@ export function useNewsgroups(appId: string): NewsgroupsState {
 		setExpandedGroups(new Set());
 	}, []);
 
+	// Opt into the usenet channel only while the app is open.
 	useEffect(() => {
+		if (!isRunning) return;
 		subscribeUsenet(appId);
 		return () => unsubscribeUsenet(appId);
-	}, [appId, subscribeUsenet, unsubscribeUsenet]);
+	}, [isRunning, appId, subscribeUsenet, unsubscribeUsenet]);
 
 	const selectGroup = useCallback(
 		(group: string | null) => {

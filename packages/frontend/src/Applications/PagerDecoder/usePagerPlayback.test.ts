@@ -94,12 +94,18 @@ describe("usePagerPlayback", () => {
 		expect(result.current.streamingMeta).toBeNull();
 	});
 
-	it("subscribes to the pager channel on mount and unsubscribes on unmount", () => {
+	it("subscribes to the pager channel when running and unsubscribes on unmount", () => {
 		const { wrapper, subscribePager, unsubscribePager } = makeWrapper([]);
-		const { unmount } = renderHook(() => usePagerPlayback(), { wrapper });
+		const { unmount } = renderHook(() => usePagerPlayback(undefined, false, true), { wrapper });
 		expect(subscribePager).toHaveBeenCalledWith("PagerDecoder.app");
 		unmount();
 		expect(unsubscribePager).toHaveBeenCalledWith("PagerDecoder.app");
+	});
+
+	it("does not subscribe when isRunning is false", () => {
+		const { wrapper, subscribePager } = makeWrapper([]);
+		renderHook(() => usePagerPlayback(undefined, false, false), { wrapper });
+		expect(subscribePager).not.toHaveBeenCalled();
 	});
 
 	it("enqueues and streams a message when a pager item appears", () => {

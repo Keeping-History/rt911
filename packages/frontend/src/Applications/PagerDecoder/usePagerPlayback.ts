@@ -50,15 +50,17 @@ interface StreamingItem {
 export function usePagerPlayback(
 	settings: PagerDecoderSettings = DEFAULT_PAGER_SETTINGS,
 	paused = false,
+	isRunning = false,
 ): PlaybackState {
 	const { pagerItems, subscribePager, unsubscribePager, sources } =
 		useContext(MediaStreamContext);
 
-	// Opt into the pager channel so the server delivers pager items to this session.
+	// Opt into the pager channel only while the app is open.
 	useEffect(() => {
+		if (!isRunning) return;
 		subscribePager("PagerDecoder.app");
 		return () => unsubscribePager("PagerDecoder.app");
-	}, [subscribePager, unsubscribePager]);
+	}, [isRunning, subscribePager, unsubscribePager]);
 
 	const [lines, setLines] = useState<CompletedLine[]>([]);
 	const [streamingText, setStreamingText] = useState("");

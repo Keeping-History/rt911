@@ -41,6 +41,7 @@ export const News: React.FC = () => {
 	const desktopEventDispatch = useAppManagerDispatch();
 	const dateTime    = useAppManager((s) => s.System.Manager.DateAndTime.dateTime);
 	const timeZoneOffset = useAppManager((s) => s.System.Manager.DateAndTime.timeZoneOffset);
+	const appState    = useAppManager((s) => s.System.Manager.Applications.apps[appId]);
 	const appWindows  = useAppManager((s) => s.System.Manager.Applications.apps[appId]?.windows ?? []);
 	const paddingSize = useAppManager((s) => s.System.Manager.Appearance.activeTheme.measurements.window.paddingSize);
 
@@ -49,12 +50,13 @@ export const News: React.FC = () => {
 	const [thumbStyle, setThumbStyle] = useState<"small" | "large">("small");
 	const [openDocuments, setOpenDocuments] = useState<number[]>([]);
 
-	// News is delivered on its own opt-in channel; subscribe on mount.
+	// News is delivered on its own opt-in channel; subscribe only while the app is open.
 	const { newsItems: items, subscribeNews, unsubscribeNews } = useContext(MediaStreamContext);
 	useEffect(() => {
+		if (!appState) return;
 		subscribeNews(appId);
 		return () => unsubscribeNews(appId);
-	}, [subscribeNews, unsubscribeNews, appId]);
+	}, [appState, subscribeNews, unsubscribeNews, appId]);
 
 	const entries = useMemo(
 		() =>
