@@ -116,6 +116,11 @@ $strip-height: calc(5em + 8px);
   flex-shrink: 0;
 }
 
+.tvControlButtons {
+  display: flex;
+  flex-direction: column;
+}
+
 .tvThumbnailStrip {
   flex: 1;
   display: flex;

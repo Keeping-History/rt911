@@ -644,30 +644,32 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					</div>
 					<div className={styles.tvBottomRow}>
 						<div className={styles.tvControlPanel}>
-							<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
-								Grid
-							</ClassicyButton>
-							<ClassicyButton
-								onClickFunc={() =>
-									desktopEventDispatch(tvPaused ? tvResume() : tvPause())
-								}
-								depressed={tvPaused}
-								buttonSize="small"
-								margin="sm" padding="sm"
-							>
-								{tvPaused ? "Play" : "Pause"}
-							</ClassicyButton>
-							<ClassicyButton
-								onClickFunc={() => {
-									setHasInteracted(true);
-									desktopEventDispatch(tvSetMuted(!overallMuted));
-								}}
-								depressed={overallMuted}
-								buttonSize="small"
-								margin="sm" padding="sm"
-							>
-								Mute
-							</ClassicyButton>
+							<div className={styles.tvControlButtons}>
+								<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
+									Grid
+								</ClassicyButton>
+								<ClassicyButton
+									onClickFunc={() =>
+										desktopEventDispatch(tvPaused ? tvResume() : tvPause())
+									}
+									depressed={tvPaused}
+									buttonSize="small"
+									margin="sm" padding="sm"
+								>
+									{tvPaused ? "Play" : "Pause"}
+								</ClassicyButton>
+								<ClassicyButton
+									onClickFunc={() => {
+										setHasInteracted(true);
+										desktopEventDispatch(tvSetMuted(!overallMuted));
+									}}
+									depressed={overallMuted}
+									buttonSize="small"
+									margin="sm" padding="sm"
+								>
+									Mute
+								</ClassicyButton>
+							</div>
 							<ClassicySlider
 								id="tv_universal_volume"
 								labelTitle="Volume"
