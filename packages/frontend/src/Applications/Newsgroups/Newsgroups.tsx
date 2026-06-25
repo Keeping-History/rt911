@@ -10,7 +10,7 @@ import {
 	quitMenuItemHelper,
 	useAppManager,
 } from "classicy";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { DisclosureTriangle } from "./DisclosureTriangle";
 import type { GroupSortField } from "./groupTree";
@@ -32,7 +32,10 @@ export const Newsgroups = () => {
 	const appName = "Newsgroups";
 	const appIcon = ClassicyIcons.applications.internetExplorer.mailbox;
 
-	const appState = useAppManager((s) => s.System.Manager.Applications.apps[appId]);
+	// Select only a boolean — the full app-state object changes reference on every
+	// classicy window interaction (focus, z-order), which would re-render this
+	// component on every click even when nothing relevant changed.
+	const isRunning = useAppManager((s) => appId in (s.System.Manager.Applications.apps ?? {}));
 
 	const {
 		groups,
@@ -55,7 +58,7 @@ export const Newsgroups = () => {
 		bodies,
 		bodyErrors,
 		requestBody,
-	} = useNewsgroups(appId, !!appState);
+	} = useNewsgroups(appId, isRunning);
 
 	const sortMark = (field: SortField) =>
 		sort.field === field ? (sort.dir === "asc" ? " ▲" : " ▼") : "";
@@ -78,13 +81,10 @@ export const Newsgroups = () => {
 		for (const m of openMessages) requestBody(m.id);
 	}, [openMessages, requestBody]);
 
-	const appMenu = [
-		{
-			id: "file",
-			title: "File",
-			menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
-		},
-	];
+	const appMenu = useMemo(
+		() => [{ id: "file", title: "File", menuChildren: [quitMenuItemHelper(appId, appName, appIcon)] }],
+		[appId, appName, appIcon],
+	);
 
 	return (
 		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="newsgroups-main">

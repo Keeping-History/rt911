@@ -4,6 +4,7 @@ import {
 	type ReactNode,
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 } from "react";
@@ -550,34 +551,63 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		// Intentionally runs once on mount; utcMsRef carries the live value
 	}, []);
 
+	// Memoize the context value so consumers only re-render when specific data
+	// changes — not on every provider render (which happens every clock tick and
+	// on every classicy state update such as window-focus changes).
+	const contextValue = useMemo(
+		() => ({
+			items,
+			pagerItems,
+			mp3Items,
+			newsItems,
+			usenetItems,
+			usenetBodies: usenetBodyState.bodies,
+			usenetBodyErrors: usenetBodyState.errors,
+			requestUsenetBody,
+			sources,
+			connected,
+			addItems,
+			subscribeFormats,
+			unsubscribeFormats,
+			subscribePager,
+			unsubscribePager,
+			subscribeMp3,
+			unsubscribeMp3,
+			subscribeNews,
+			unsubscribeNews,
+			subscribeUsenet,
+			unsubscribeUsenet,
+			setUsenetGroups,
+			requestUsenetOlder,
+		}),
+		[
+			items,
+			pagerItems,
+			mp3Items,
+			newsItems,
+			usenetItems,
+			usenetBodyState,
+			requestUsenetBody,
+			sources,
+			connected,
+			addItems,
+			subscribeFormats,
+			unsubscribeFormats,
+			subscribePager,
+			unsubscribePager,
+			subscribeMp3,
+			unsubscribeMp3,
+			subscribeNews,
+			unsubscribeNews,
+			subscribeUsenet,
+			unsubscribeUsenet,
+			setUsenetGroups,
+			requestUsenetOlder,
+		],
+	);
+
 	return (
-		<MediaStreamContext.Provider
-			value={{
-				items,
-				pagerItems,
-				mp3Items,
-				newsItems,
-				usenetItems,
-				usenetBodies: usenetBodyState.bodies,
-				usenetBodyErrors: usenetBodyState.errors,
-				requestUsenetBody,
-				sources,
-				connected,
-				addItems,
-				subscribeFormats,
-				unsubscribeFormats,
-				subscribePager,
-				unsubscribePager,
-				subscribeMp3,
-				unsubscribeMp3,
-				subscribeNews,
-				unsubscribeNews,
-				subscribeUsenet,
-				unsubscribeUsenet,
-				setUsenetGroups,
-				requestUsenetOlder,
-			}}
-		>
+		<MediaStreamContext.Provider value={contextValue}>
 			{children}
 		</MediaStreamContext.Provider>
 	);
