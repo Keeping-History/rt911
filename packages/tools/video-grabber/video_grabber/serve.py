@@ -25,6 +25,12 @@ from video_grabber.pipeline.flows import (
     requeue_pending_review_flow,
     scan_collections_flow,
 )
+from video_grabber.transcribe.flows import (
+    build_channel_subtitles_flow,
+    dispatch_transcribe_flow,
+    scan_transcribe_flow,
+    transcribe_item_flow,
+)
 from video_grabber.usenet.flows import (
     dispatch_usenet_flow,
     process_usenet_item_flow,
@@ -64,6 +70,14 @@ _USENET_PROCESS_LIMIT = 4
 _USENET_DISPATCH_LIMIT = 4
 # Re-run the (bounded, idempotent) dispatcher every 5 minutes to keep the queue draining.
 _USENET_DISPATCH_INTERVAL = 300
+# Transcription shares the encode-1 iGPU with VAAPI video encode (whisper Vulkan
+# vs. h264_vaapi). The encode backlog is drained, so 2 concurrent transcribes is
+# safe; raise only if encoding is idle. scan/dispatch are serial; channel merge
+# writes one shared per-channel SRT so keep it at 1.
+_TRANSCRIBE_ITEM_LIMIT = 2
+_TRANSCRIBE_SCAN_LIMIT = 1
+_TRANSCRIBE_DISPATCH_LIMIT = 2
+_BUILD_CHANNEL_SUBS_LIMIT = 1
 
 
 def main() -> None:
@@ -104,6 +118,22 @@ def main() -> None:
             name="dispatch-usenet",
             concurrency_limit=_USENET_DISPATCH_LIMIT,
             interval=_USENET_DISPATCH_INTERVAL,
+        ),
+        transcribe_item_flow.to_deployment(
+            name="transcribe-item",
+            concurrency_limit=_TRANSCRIBE_ITEM_LIMIT,
+        ),
+        scan_transcribe_flow.to_deployment(
+            name="scan-transcribe",
+            concurrency_limit=_TRANSCRIBE_SCAN_LIMIT,
+        ),
+        dispatch_transcribe_flow.to_deployment(
+            name="dispatch-transcribe",
+            concurrency_limit=_TRANSCRIBE_DISPATCH_LIMIT,
+        ),
+        build_channel_subtitles_flow.to_deployment(
+            name="build-channel-subtitles",
+            concurrency_limit=_BUILD_CHANNEL_SUBS_LIMIT,
         ),
     )
 
