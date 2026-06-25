@@ -1,8 +1,12 @@
-import { render } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { cleanup, render } from "@testing-library/react";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { StationPlayer } from "./StationPlayer";
 import type { Station } from "./stationGrouping";
+
+// rt911 has no global test setup, so testing-library does not auto-clean the
+// DOM between tests; do it explicitly to keep renders isolated.
+afterEach(cleanup);
 
 function item(over: Partial<MediaItem>): MediaItem {
 	return {
@@ -15,12 +19,8 @@ const t = (s: string) => new Date(s).getTime();
 let playSpy: ReturnType<typeof vi.spyOn>;
 let pauseSpy: ReturnType<typeof vi.spyOn>;
 beforeAll(() => {
-	playSpy = vi
-		.spyOn(window.HTMLMediaElement.prototype, "play")
-		.mockResolvedValue(undefined);
-	pauseSpy = vi
-		.spyOn(window.HTMLMediaElement.prototype, "pause")
-		.mockImplementation(() => {});
+	playSpy = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+	pauseSpy = vi.spyOn(window.HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
 });
 afterAll(() => {
 	playSpy.mockRestore();
@@ -36,56 +36,64 @@ const station: Station = {
 		item({ id: 3, url: "c.mp3", start_date: "2001-09-11T13:00:00Z", end_date: "2001-09-11T13:05:00Z" }),
 	],
 };
+const base = {
+	station,
+	nowMs: t("2001-09-11T12:47:00Z"),
+	getNowMs: () => t("2001-09-11T12:47:00Z"),
+	stationMuted: false,
+	mutedItems: [] as number[],
+	clockPaused: false,
+	showWaveform: false,
+};
 
 describe("StationPlayer", () => {
 	it("renders one <audio> per in-window segment with its url (overlap → both)", () => {
-		const { container } = render(
-			<StationPlayer station={station} nowMs={t("2001-09-11T12:47:00Z")} getNowMs={() => t("2001-09-11T12:47:00Z")} muted={false} clockPaused={false} showWaveform={false} />,
-		);
+		const { container } = render(<StationPlayer {...base} />);
 		const audios = Array.from(container.querySelectorAll("audio"));
 		expect(audios.map((a) => a.getAttribute("src")).sort()).toEqual(["a.mp3", "b.mp3"]);
 	});
 
 	it("renders no <audio> in a gap between segments", () => {
 		const { container } = render(
-			<StationPlayer station={station} nowMs={t("2001-09-11T12:57:00Z")} getNowMs={() => t("2001-09-11T12:57:00Z")} muted={false} clockPaused={false} showWaveform={false} />,
+			<StationPlayer {...base} nowMs={t("2001-09-11T12:57:00Z")} getNowMs={() => t("2001-09-11T12:57:00Z")} />,
 		);
 		expect(container.querySelectorAll("audio")).toHaveLength(0);
 	});
 
 	it("renders no waveform control when showWaveform is false, and one when true", () => {
-		const props = { station, nowMs: t("2001-09-11T12:47:00Z"), getNowMs: () => t("2001-09-11T12:47:00Z"), muted: false, clockPaused: false };
-		const { queryByText, rerender } = render(<StationPlayer {...props} showWaveform={false} />);
-		expect(queryByText("Bars")).toBeNull(); // WaveformVisualizer's mode button
-		rerender(<StationPlayer {...props} showWaveform={true} />);
+		const { queryByText, rerender } = render(<StationPlayer {...base} showWaveform={false} />);
+		expect(queryByText("Bars")).toBeNull();
+		rerender(<StationPlayer {...base} showWaveform={true} />);
 		expect(queryByText("Bars")).not.toBeNull();
 	});
 
 	it("pauses mounted elements when the clock pauses", () => {
-		const props = { station, nowMs: t("2001-09-11T12:47:00Z"), getNowMs: () => t("2001-09-11T12:47:00Z"), muted: false, showWaveform: false };
-		const { rerender } = render(<StationPlayer {...props} clockPaused={false} />);
+		const { rerender } = render(<StationPlayer {...base} clockPaused={false} />);
 		pauseSpy.mockClear();
-		rerender(<StationPlayer {...props} clockPaused={true} />);
+		rerender(<StationPlayer {...base} clockPaused={true} />);
 		expect(pauseSpy).toHaveBeenCalled();
 	});
 
 	it("re-render does not re-mute an element that onCanPlay already unmuted", () => {
-		// Verify Fix 1: stable ref callbacks mean React only invokes the ref on
-		// real mount/unmount, so a playing (unmuted) element stays unmuted across
-		// ordinary re-renders (e.g. clock tick, prop change).
-		const nowMs = t("2001-09-11T12:47:00Z");
-		const props = { station, nowMs, getNowMs: () => nowMs, muted: false, clockPaused: false, showWaveform: false };
-		const { container, rerender } = render(<StationPlayer {...props} />);
-
-		// Grab one of the mounted <audio> elements and simulate onCanPlay unmuting.
+		const { container, rerender } = render(<StationPlayer {...base} />);
 		const audio = container.querySelector("audio") as HTMLAudioElement;
 		expect(audio).not.toBeNull();
-		audio.muted = false; // simulate what onCanPlay does after play() resolves
-
-		// Re-render with the same nowMs (same in-window segments → no unmount).
-		rerender(<StationPlayer {...props} />);
-
-		// The element must still be unmuted — the stable ref was NOT re-invoked.
+		audio.muted = false; // simulate onCanPlay unmute
+		rerender(<StationPlayer {...base} />);
 		expect(audio.muted).toBe(false);
+	});
+
+	it("sets volume 0 for files in mutedItems and 1 for others", () => {
+		const { container } = render(<StationPlayer {...base} mutedItems={[1]} />);
+		const audios = Array.from(container.querySelectorAll("audio")) as HTMLAudioElement[];
+		const bySrc = new Map(audios.map((a) => [a.getAttribute("src"), a.volume]));
+		expect(bySrc.get("a.mp3")).toBe(0); // id 1 muted
+		expect(bySrc.get("b.mp3")).toBe(1); // id 2 not muted
+	});
+
+	it("sets volume 0 for all files when the station is muted", () => {
+		const { container } = render(<StationPlayer {...base} stationMuted={true} />);
+		const audios = Array.from(container.querySelectorAll("audio")) as HTMLAudioElement[];
+		expect(audios.every((a) => a.volume === 0)).toBe(true);
 	});
 });

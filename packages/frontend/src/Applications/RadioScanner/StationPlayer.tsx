@@ -13,7 +13,8 @@ interface StationPlayerProps {
 	station: Station;
 	nowMs: number;
 	getNowMs: () => number;
-	muted: boolean;
+	stationMuted: boolean;
+	mutedItems: number[];
 	clockPaused: boolean;
 	showWaveform: boolean;
 	captionsOn?: boolean;
@@ -29,7 +30,8 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	station,
 	nowMs,
 	getNowMs,
-	muted,
+	stationMuted,
+	mutedItems,
 	clockPaused,
 	showWaveform,
 	captionsOn,
@@ -40,8 +42,10 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	// remounts once its element is actually ready (not before).
 	const [readyVersions, setReadyVersions] = useState<Map<number, number>>(new Map());
 
-	const mutedRef = useRef(muted);
-	mutedRef.current = muted;
+	const stationMutedRef = useRef(stationMuted);
+	stationMutedRef.current = stationMuted;
+	const mutedItemsRef = useRef(mutedItems);
+	mutedItemsRef.current = mutedItems;
 	const clockPausedRef = useRef(clockPaused);
 	clockPausedRef.current = clockPaused;
 	const getNowMsRef = useRef(getNowMs);
@@ -63,10 +67,13 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 		return () => clearInterval(id);
 	}, [station]);
 
-	// Apply mute volume immediately to all mounted elements.
+	// Apply mute volume immediately: a file is silenced if its station is muted
+	// or the file itself is muted.
 	useEffect(() => {
-		for (const [, el] of audioRefs.current) el.volume = muted ? 0 : 1;
-	}, [muted]);
+		for (const [id, el] of audioRefs.current) {
+			el.volume = stationMuted || mutedItems.includes(id) ? 0 : 1;
+		}
+	}, [stationMuted, mutedItems]);
 
 	// Pause/resume all mounted elements when the clock pauses/resumes.
 	useEffect(() => {
@@ -136,7 +143,10 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 						el.play()
 							.then(() => {
 								el.muted = false;
-								el.volume = mutedRef.current ? 0 : 1;
+								el.volume =
+									stationMutedRef.current || mutedItemsRef.current.includes(item.id)
+										? 0
+										: 1;
 							})
 							.catch(() => {});
 					}}
