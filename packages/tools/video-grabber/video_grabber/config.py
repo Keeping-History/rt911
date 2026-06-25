@@ -35,5 +35,17 @@ class Config:
     # this date (exclusive of later), so the replay never reveals "future" posts.
     usenet_before: str = field(default_factory=lambda: os.getenv("USENET_BEFORE", "2001-09-21"))
 
+    # --- Channel thumbnail generation ---
+    # When the classicy virtual clock was last initialised (real-time ISO timestamp).
+    # Set this to the actual deployment time when rolling out; used to compute the
+    # current virtual time for HLS segment selection.
+    virtual_epoch_real: str = field(
+        default_factory=lambda: os.getenv("VIRTUAL_EPOCH_REAL", "2026-06-25T13:00:00+00:00")
+    )
+    # What the virtual clock was set to at that real-time moment (virtual ISO timestamp).
+    virtual_epoch_virtual: str = field(
+        default_factory=lambda: os.getenv("VIRTUAL_EPOCH_VIRTUAL", "2001-09-11T12:40:00+00:00")
+    )
+
     def usenet_collection_list(self) -> list[str]:
         return [c.strip() for c in self.usenet_collections.split(",") if c.strip()]
