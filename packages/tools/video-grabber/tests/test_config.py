@@ -64,3 +64,14 @@ def test_min_duration_seconds_is_int(monkeypatch):
     cfg = Config()
     assert cfg.min_duration_seconds == 600
     assert type(cfg.min_duration_seconds) is int
+
+
+def test_config_has_transcription_defaults(monkeypatch):
+    for k in ("WHISPER_BIN", "WHISPER_MODEL", "WHISPER_THREADS", "SUBTITLES_PREFIX"):
+        monkeypatch.delenv(k, raising=False)
+    from video_grabber.config import Config
+    cfg = Config()
+    assert cfg.whisper_bin == "whisper-cli"
+    assert cfg.whisper_model.endswith("ggml-medium.en.bin")
+    assert cfg.whisper_threads == 4
+    assert cfg.subtitles_prefix == "subtitles"

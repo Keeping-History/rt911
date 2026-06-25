@@ -20,6 +20,12 @@ class Config:
     ia_rate_per_sec: int = field(default_factory=lambda: _int("IA_RATE_PER_SEC", 2))
     min_duration_seconds: int = field(default_factory=lambda: _int("MIN_DURATION_SECONDS", 720))
 
+    # --- Audio transcription (whisper.cpp) ---
+    whisper_bin: str = field(default_factory=lambda: os.getenv("WHISPER_BIN", "whisper-cli"))
+    whisper_model: str = field(default_factory=lambda: os.getenv("WHISPER_MODEL", "/opt/models/ggml-medium.en.bin"))
+    whisper_threads: int = field(default_factory=lambda: _int("WHISPER_THREADS", 4))
+    subtitles_prefix: str = field(default_factory=lambda: os.getenv("SUBTITLES_PREFIX", "subtitles"))
+
     # --- Usenet newsgroup ingestion ---
     # IA collections to scan for newsgroup mbox archives. usenethistorical is
     # entirely pre-2001; giganews is large and straddles the cutoff (trimmed per
