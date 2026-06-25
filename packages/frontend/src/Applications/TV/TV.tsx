@@ -49,11 +49,13 @@ function resolveChannelId(
 // re-filter on every render.
 const ALL_CHANNELS_FILTER: MediaStreamFilter = { format: ["m3u8"], approved: true };
 
-// HLS quality tiers. hls.js orders levels by ascending bitrate, and the encoder
+// HLS quality ceilings. hls.js orders levels by ascending bitrate, and the encoder
 // ships a fixed 3-rendition ladder (thumb 136k, mid 396k, full 2628k), so:
 //   0 = thumb (lowest), 1 = mid (one down), 2 = full (highest).
-// The single focused video plays HIGHEST; a multi-video grid plays ONE_DOWN to
-// keep concurrent bandwidth/decoding sane; thumbnails play LOWEST.
+// These are ABR *ceilings* (autoLevelCapping), not forced levels: the single
+// focused video is capped at HIGHEST, a multi-video grid at ONE_DOWN (to keep
+// concurrent bandwidth/decoding sane), thumbnails at LOWEST. ABR adapts beneath
+// each ceiling, so quality rises and falls gracefully instead of hard-switching.
 const QUALITY_LOWEST = 0;
 const QUALITY_ONE_DOWN = 1;
 const QUALITY_HIGHEST = 2;
@@ -178,21 +180,19 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// check can compute an accurate sub-minute Classicy time between updates.
 	const dateTimeUpdatedAtRef = useRef<number>(Date.now());
 
-	// Per-item hls config, cached with the quality level it was built for. The
-	// config object reference is stable while a player's tier is unchanged, and
-	// is rebuilt (new reference → ReactPlayer remount at the new startLevel) only
-	// when the player's tier actually changes. startPosition is recomputed on each
-	// rebuild so a tier change resumes at the live clock; onReady re-seeks anyway.
-	const hlsConfigsRef = useRef<Map<number, { level: number; config: object }>>(
-		new Map(),
-	);
+	// Per-item hls config, built once and kept by a stable reference so the player
+	// never remounts. `startLevel` is the player's tier at first sight — a sensible
+	// initial quality — but tier *changes* are handled by adjusting the ABR ceiling
+	// (capHlsLevel), so the picture glides between levels instead of reloading.
+	const hlsConfigsRef = useRef<Map<number, object>>(new Map());
 	const hlsConfigFor = (item: MediaItem, level: number): object | undefined => {
 		if (!item.url.endsWith("m3u8")) return undefined;
-		const cached = hlsConfigsRef.current.get(item.id);
-		if (cached && cached.level === level) return cached.config;
-		const nowMs = new Date(dateTimeRef.current).getTime();
-		const config = { hls: { startLevel: level, startPosition: calcSeekSeconds(item, nowMs) } };
-		hlsConfigsRef.current.set(item.id, { level, config });
+		let config = hlsConfigsRef.current.get(item.id);
+		if (!config) {
+			const nowMs = new Date(dateTimeRef.current).getTime();
+			config = { hls: { startLevel: level, startPosition: calcSeekSeconds(item, nowMs) } };
+			hlsConfigsRef.current.set(item.id, config);
+		}
 		return config;
 	};
 
@@ -389,23 +389,24 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		el.currentTime = calcSeekSeconds(item, nowMs);
 	};
 
-	// Pin an hls.js player to a fixed quality level. `startLevel` only sets the
-	// INITIAL level — hls.js ABR would otherwise drift it (e.g. ramp a thumbnail
-	// up to full on a fast connection), defeating the tiers. ReactPlayer wraps
-	// hls-video-element, which exposes the hls.js instance as `.api`; setting
-	// `currentLevel` switches it to manual mode (ABR off) and holds the tier.
-	// Called from onReady, which re-fires after the config-remount on tier change.
-	const pinHlsLevel = useCallback((id: number, level: number) => {
+	// Cap an hls.js player's quality at its tier *ceiling*, leaving ABR enabled so
+	// it gracefully ramps up to the cap and degrades below it as bandwidth allows —
+	// never a forced, buffer-flushing switch. ReactPlayer wraps hls-video-element,
+	// which exposes the hls.js instance as `.api`; `autoLevelCapping` is the max
+	// level the ABR controller may pick (ABR stays auto, currentLevel untouched).
+	// Setting it just steers future fragment selection, so up/down moves smoothly
+	// at segment boundaries. Idempotent guard avoids redundant ABR re-evaluations.
+	const capHlsLevel = useCallback((id: number, level: number) => {
 		const el = videoRefs.current.get(id) as
-			| (HTMLVideoElement & { api?: { currentLevel: number } })
+			| (HTMLVideoElement & { api?: { autoLevelCapping: number } })
 			| undefined;
-		if (el?.api && el.api.currentLevel !== level) el.api.currentLevel = level;
+		if (el?.api && el.api.autoLevelCapping !== level) el.api.autoLevelCapping = level;
 	}, []);
 
-	// The quality tier for a player: the single focused video (the active channel,
-	// or a grid of one) plays HIGHEST; a multi-video grid plays ONE_DOWN; every
-	// other thumbnail plays LOWEST. Single source of truth for the config startLevel,
-	// the onReady pin, and the re-pin effect below.
+	// The quality ceiling for a player: the single focused video (the active channel,
+	// or a grid of one) is capped at HIGHEST; a multi-video grid at ONE_DOWN; every
+	// other thumbnail at LOWEST. Single source of truth for the config startLevel,
+	// the onReady cap, and the re-cap effect below.
 	const levelForItem = useCallback(
 		(item: MediaItem): number => {
 			if (multiSelectMode) {
@@ -417,12 +418,12 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		[multiSelectMode, selectedPlayers, activePlayer],
 	);
 
-	// Re-pin every loaded player whenever the tiering inputs change (active channel,
-	// selection set, grid mode) — currentLevel sticks without needing a remount.
-	// onReady covers the initial pin for players that load after this runs.
+	// Re-cap every loaded player whenever the tiering inputs change (active channel,
+	// selection set, grid mode); ABR then glides toward the new ceiling. onReady
+	// covers the initial cap for players that load after this runs.
 	useEffect(() => {
-		for (const item of items) pinHlsLevel(item.id, levelForItem(item));
-	}, [items, levelForItem, pinHlsLevel]);
+		for (const item of items) capHlsLevel(item.id, levelForItem(item));
+	}, [items, levelForItem, capHlsLevel]);
 
 	// Re-sync the working copy from persisted state, reveal the window, and focus
 	// it so the modal is keyboard-ready the instant it opens (mirrors Browser).
@@ -595,7 +596,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												}}
 												onReady={() => {
 													seekToCurrentTime(item);
-													pinHlsLevel(id, levelForItem(item));
+													capHlsLevel(id, levelForItem(item));
 												}}
 												src={item.url}
 												playing={!clockPaused && !tvPaused}
@@ -715,7 +716,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												}}
 												onReady={() => {
 													seekToCurrentTime(item);
-													pinHlsLevel(item.id, levelForItem(item));
+													capHlsLevel(item.id, levelForItem(item));
 												}}
 												src={item.url}
 												playing={!clockPaused && !tvPaused}
