@@ -66,7 +66,6 @@ const COLOR_VARS = [
 	...Array.from({ length: 7 }, (_, i) => `--color-system-0${i + 1}`),
 ];
 
-
 function resolveCssVar(name: string): string {
 	return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
