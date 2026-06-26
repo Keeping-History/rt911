@@ -13,6 +13,7 @@ RUN npm install -g pnpm@10.17.0
 # Manifests first for dependency-layer caching (backend is Go-only, no manifest).
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/frontend/package.json packages/frontend/
+ENV HUSKY=0
 RUN pnpm install --frozen-lockfile
 
 # Source + build-time public config.
