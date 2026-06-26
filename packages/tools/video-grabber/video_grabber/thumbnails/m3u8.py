@@ -44,22 +44,38 @@ def _find_segment_in_playlist(playlist_text: str, virtual_time: datetime) -> str
     return None
 
 
+def _find_map_uri(playlist_text: str) -> str | None:
+    """Return the URI from the first ``#EXT-X-MAP`` tag, or None."""
+    for line in playlist_text.splitlines():
+        line = line.strip()
+        if line.startswith("#EXT-X-MAP:URI="):
+            return line[len("#EXT-X-MAP:URI="):].strip('"')
+    return None
+
+
 def find_thumb_segment(
     master_url: str,
     virtual_time: datetime,
     *,
     client=httpx,
-) -> str | None:
-    """Download the thumb variant playlist and return the segment URL for ``virtual_time``.
+) -> tuple[str | None, str | None]:
+    """Download the thumb variant playlist and return ``(init_url, seg_url)`` for ``virtual_time``.
+
+    ``init_url`` is the ``#EXT-X-MAP`` initialization segment URI (required to
+    decode fMP4 fragments); it is None for non-fragmented playlists.
+    Both values are None if the request fails or no segment covers the given time.
 
     Derives the thumb playlist URL from the master URL by replacing
-    ``master.m3u8`` with ``thumb.m3u8``. Returns None if the
-    request fails or no segment covers the given time.
+    ``master.m3u8`` with ``thumb.m3u8``.
     """
     thumb_url = master_url.replace("master.m3u8", "thumb.m3u8")
     try:
         resp = client.get(thumb_url, timeout=10)
         resp.raise_for_status()
     except Exception:
-        return None
-    return _find_segment_in_playlist(resp.text, virtual_time)
+        return None, None
+    text = resp.text
+    seg_url = _find_segment_in_playlist(text, virtual_time)
+    if seg_url is None:
+        return None, None
+    return _find_map_uri(text), seg_url

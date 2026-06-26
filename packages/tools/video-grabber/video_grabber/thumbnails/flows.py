@@ -59,11 +59,11 @@ def generate_thumbnails_flow() -> None:
     ok = skipped = 0
     for slug, master_url in channels:
         try:
-            seg_url = find_thumb_segment(master_url, virtual_now)
+            init_url, seg_url = find_thumb_segment(master_url, virtual_now)
             if not seg_url:
                 skipped += 1
                 continue
-            jpeg = capture_frame(seg_url)
+            jpeg = capture_frame(seg_url, init_url)
             if not jpeg:
                 skipped += 1
                 continue

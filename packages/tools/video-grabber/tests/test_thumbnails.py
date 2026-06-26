@@ -132,8 +132,34 @@ def test_find_thumb_segment_fetches_correct_url():
     thumb_url = "https://files.911realtime.org/playlists/cnn/thumb.m3u8"
     respx.get(thumb_url).mock(return_value=_httpx.Response(200, text=SAMPLE_PLAYLIST))
     t = datetime(2001, 9, 11, 12, 0, 3, tzinfo=timezone.utc)
-    result = find_thumb_segment(master, t)
-    assert result == "https://files.911realtime.org/hls/cnn/20010911/cnn-a/seg-000001.m4s"
+    init_url, seg_url = find_thumb_segment(master, t)
+    # SAMPLE_PLAYLIST has no #EXT-X-MAP tag
+    assert init_url is None
+    assert seg_url == "https://files.911realtime.org/hls/cnn/20010911/cnn-a/seg-000001.m4s"
+
+
+FMPG4_PLAYLIST = """\
+#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-TARGETDURATION:6
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXT-X-MAP:URI="https://files.911realtime.org/hls/cnn/thumb/init.mp4"
+#EXT-X-PROGRAM-DATE-TIME:2001-09-11T12:00:00+00:00
+#EXTINF:6.000,
+https://files.911realtime.org/hls/cnn/thumb/seg0001.m4s
+#EXT-X-ENDLIST
+"""
+
+
+@respx.mock
+def test_find_thumb_segment_returns_init_url_for_fmp4():
+    master = "https://files.911realtime.org/playlists/cnn/master.m3u8"
+    thumb_url = "https://files.911realtime.org/playlists/cnn/thumb.m3u8"
+    respx.get(thumb_url).mock(return_value=_httpx.Response(200, text=FMPG4_PLAYLIST))
+    t = datetime(2001, 9, 11, 12, 0, 3, tzinfo=timezone.utc)
+    init_url, seg_url = find_thumb_segment(master, t)
+    assert init_url == "https://files.911realtime.org/hls/cnn/thumb/init.mp4"
+    assert seg_url == "https://files.911realtime.org/hls/cnn/thumb/seg0001.m4s"
 
 
 # ---------------------------------------------------------------------------

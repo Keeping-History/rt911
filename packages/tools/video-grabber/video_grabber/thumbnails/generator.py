@@ -15,32 +15,46 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import httpx
+
 from video_grabber.config import Config
 from video_grabber.storage.wasabi import _make_s3_client
 
 
-def capture_frame(segment_url: str) -> bytes | None:
-    """Download ``segment_url`` and return the first frame as 160×120 JPEG bytes.
+def capture_frame(segment_url: str, init_url: str | None = None) -> bytes | None:
+    """Return the first frame of ``segment_url`` as 160×120 JPEG bytes, or None on error.
 
-    Returns None if ffmpeg exits non-zero (e.g. network error, bad segment).
+    When ``init_url`` is provided (fMP4 / CMAF streams) both the initialization
+    segment and the media fragment are downloaded and concatenated before being
+    piped to ffmpeg via stdin, because ``.m4s`` fragments cannot be decoded
+    without the codec headers in the init segment.
     """
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "thumb.jpg"
-        result = subprocess.run(
-            [
-                "ffmpeg", "-y", "-loglevel", "error",
-                "-i", segment_url,
-                "-vframes", "1",
-                "-vf", "scale=160:120",
-                "-q:v", "5",
-                str(out),
-            ],
-            capture_output=True,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            return None
-        if not out.exists():
+        if init_url:
+            try:
+                combined = httpx.get(init_url, timeout=10).content + httpx.get(segment_url, timeout=10).content
+            except Exception:
+                return None
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-loglevel", "error",
+                 "-i", "pipe:0",
+                 "-vframes", "1", "-vf", "scale=160:120", "-q:v", "5",
+                 str(out)],
+                input=combined,
+                capture_output=True,
+                timeout=30,
+            )
+        else:
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-loglevel", "error",
+                 "-i", segment_url,
+                 "-vframes", "1", "-vf", "scale=160:120", "-q:v", "5",
+                 str(out)],
+                capture_output=True,
+                timeout=30,
+            )
+        if result.returncode != 0 or not out.exists():
             return None
         return out.read_bytes()
 
