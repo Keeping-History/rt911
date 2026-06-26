@@ -82,7 +82,7 @@ $strip-height: calc(5em + 8px);
   z-index: 2;
   opacity: 0;
   transition: opacity 0.1s;
-  background-color: var(--color-theme-06);
+  background-color: var(--color-system-03);
   padding: calc(var(--window-padding-size) / 2);
 
   .tvGridPlayer:hover & {

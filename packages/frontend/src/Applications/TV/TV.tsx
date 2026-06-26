@@ -769,6 +769,34 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			>
 				<div className={styles.tvContainer}>
 					<div className={styles.tvMainArea}>
+						{!multiSelectMode && (() => {
+							const item = items.find((i) => i.id === activePlayer);
+							if (!item) return null;
+							return (
+								<ReactPlayer
+									ref={(el: HTMLVideoElement | null) => {
+										if (el) videoRefs.current.set(item.id, el);
+										else videoRefs.current.delete(item.id);
+									}}
+									onReady={() => {
+										seekToCurrentTime(item);
+										capHlsLevel(item.id, levelForItem(item));
+										applyCaption(item.id, item);
+									}}
+									src={item.url}
+									playing={!clockPaused && !tvPaused}
+									loop={false}
+									controls={false}
+									playsInline={true}
+									muted={overallMuted || !hasInteracted}
+									volume={volumeLimit}
+									width="100%"
+									height="100%"
+									config={hlsConfigFor(item, levelForItem(item))}
+									crossOrigin="anonymous"
+								/>
+							);
+						})()}
 						{multiSelectMode && selectedPlayers.length > 0 && (
 							<div
 								className={styles.tvMainGrid}
@@ -929,8 +957,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										key={item.id}
 										className={[
 											styles.tvPlayer,
-											isActive ? styles.tvPlayerActive : "",
-											isSelected ? styles.tvPlayerSelected : "",
+											isActive || isSelected ? styles.tvPlayerSelected : "",
 										]
 											.filter(Boolean)
 											.join(" ")}
