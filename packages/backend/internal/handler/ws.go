@@ -387,7 +387,7 @@ func sendUsenetBody(r *http.Request, sess *session.Session, pool *pgxpool.Pool, 
 }
 
 // sendSources delivers the time-independent available-source lists for client
-// filters (TV channels, pager providers, newsgroups). Called once per init —
+// filters (TV channels, RadioScanner audio stations, pager providers, newsgroups). Called once per init —
 // sources don't change with virtual time, so seek does not resend them. Failures
 // are non-fatal: a missing list only degrades a filter UI, it must not break streaming.
 func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, logger *slog.Logger) {
