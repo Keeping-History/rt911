@@ -961,6 +961,36 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 									desktopEventDispatch(tvSetVolumeLimit(v))
 								}
 							/>
+							<div className={styles.tvChannelButtons}>
+								<ClassicyButton
+									onClickFunc={() => {
+										if (items.length === 0) return;
+										const idx = items.findIndex((i) => i.id === activePlayer);
+										const prev = (idx - 1 + items.length) % items.length;
+										setActivePlayer(items[prev].id);
+										setHasInteracted(true);
+									}}
+									buttonSize="small"
+									margin="sm"
+									padding="sm"
+								>
+									▲
+								</ClassicyButton>
+								<ClassicyButton
+									onClickFunc={() => {
+										if (items.length === 0) return;
+										const idx = items.findIndex((i) => i.id === activePlayer);
+										const next = (idx + 1) % items.length;
+										setActivePlayer(items[next].id);
+										setHasInteracted(true);
+									}}
+									buttonSize="small"
+									margin="sm"
+									padding="sm"
+								>
+									▼
+								</ClassicyButton>
+							</div>
 						</div>
 						<div className={styles.tvThumbnailStrip}>
 							{items.map((item) => {
