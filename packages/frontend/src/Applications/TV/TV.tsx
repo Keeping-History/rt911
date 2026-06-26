@@ -186,6 +186,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const [activePlayer, setActivePlayer] = useState<number>(
 		(appState?.data?.activePlayer as number | undefined) ?? 0,
 	);
+	// True while the main player is buffering or not yet ready; shows the TV-static overlay.
+	const [mainPlayerBuffering, setMainPlayerBuffering] = useState(true);
 	// Browsers block autoplay with audio until the user interacts with the page.
 	// Track first interaction so the active player stays muted until then.
 	const [hasInteracted, setHasInteracted] = useState<boolean>(false);
@@ -295,6 +297,12 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			setActivePlayer(items[0].id);
 		}
 	}, [items, activePlayer]);
+
+	// Show the loading overlay whenever we switch channels.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on channel change
+	useEffect(() => {
+		setMainPlayerBuffering(true);
+	}, [activePlayer]);
 
 	// Record the real-clock instant each time the Classicy dateTime is updated.
 	// dateTime is an intentional trigger dep; Date.now() is what we capture.
@@ -775,28 +783,40 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 							const item = items.find((i) => i.id === activePlayer);
 							if (!item) return null;
 							return (
-								<ReactPlayer
-									ref={(el: HTMLVideoElement | null) => {
-										if (el) videoRefs.current.set(item.id, el);
-										else videoRefs.current.delete(item.id);
-									}}
-									onReady={() => {
-										seekToCurrentTime(item);
-										capHlsLevel(item.id, levelForItem(item));
-										applyCaption(item.id, item);
-									}}
-									src={item.url}
-									playing={!clockPaused && !tvPaused}
-									loop={false}
-									controls={false}
-									playsInline={true}
-									muted={overallMuted || !hasInteracted}
-									volume={volumeLimit}
-									width="100%"
-									height="100%"
-									config={hlsConfigFor(item, levelForItem(item))}
-									crossOrigin="anonymous"
-								/>
+								<>
+									{mainPlayerBuffering && (
+										<img
+											src="/loading.webp"
+											className={styles.tvLoadingOverlay}
+											alt=""
+										/>
+									)}
+									<ReactPlayer
+										ref={(el: HTMLVideoElement | null) => {
+											if (el) videoRefs.current.set(item.id, el);
+											else videoRefs.current.delete(item.id);
+										}}
+										onReady={() => {
+											setMainPlayerBuffering(false);
+											seekToCurrentTime(item);
+											capHlsLevel(item.id, levelForItem(item));
+											applyCaption(item.id, item);
+										}}
+										onWaiting={() => setMainPlayerBuffering(true)}
+										onPlaying={() => setMainPlayerBuffering(false)}
+										src={item.url}
+										playing={!clockPaused && !tvPaused}
+										loop={false}
+										controls={false}
+										playsInline={true}
+										muted={overallMuted || !hasInteracted}
+										volume={volumeLimit}
+										width="100%"
+										height="100%"
+										config={hlsConfigFor(item, levelForItem(item))}
+										crossOrigin="anonymous"
+									/>
+								</>
 							);
 						})()}
 						{multiSelectMode && selectedPlayers.length > 0 && (

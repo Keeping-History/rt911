@@ -17,6 +17,18 @@ $strip-height: calc(5em + 8px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+// TV-static animation shown while the main player is buffering or switching channels.
+.tvLoadingOverlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 10;
+  pointer-events: none;
 }
 
 // Grid shown in the main area when multi-select mode has selections
