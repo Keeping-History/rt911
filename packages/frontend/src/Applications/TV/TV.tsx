@@ -638,6 +638,28 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					<div className={styles.tvSettings}>
 						<ClassicyTabs tabs={[
 							{
+								title: "Channels",
+								children: (
+									<div className={styles.tvSettingsChannels}>
+										{availableChannels.length === 0 ? (
+											<ClassicyControlLabel label="No channels available." />
+										) : (
+											availableChannels.map((channel) => (
+												<ClassicyCheckbox
+													key={channel}
+													id={`tv_channel_${channel}`}
+													label={channel}
+													checked={!channelForm.includes(channel)}
+													onClickFunc={(checked: boolean) =>
+														toggleChannel(channel, checked)
+													}
+												/>
+											))
+										)}
+									</div>
+								),
+							},
+							{
 								title: "Captions",
 								children: (
 									<>
@@ -725,28 +747,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 											}
 										/>
 									</>
-								),
-							},
-							{
-								title: "Channels",
-								children: (
-									<div className={styles.tvSettingsChannels}>
-										{availableChannels.length === 0 ? (
-											<ClassicyControlLabel label="No channels available." />
-										) : (
-											availableChannels.map((channel) => (
-												<ClassicyCheckbox
-													key={channel}
-													id={`tv_channel_${channel}`}
-													label={channel}
-													checked={!channelForm.includes(channel)}
-													onClickFunc={(checked: boolean) =>
-														toggleChannel(channel, checked)
-													}
-												/>
-											))
-										)}
-									</div>
 								),
 							},
 						]} />
