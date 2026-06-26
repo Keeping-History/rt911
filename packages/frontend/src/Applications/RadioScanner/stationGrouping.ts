@@ -66,3 +66,26 @@ export function primarySegment(segments: MediaItem[]): MediaItem | null {
 		toMs(cur.start_date) > toMs(best.start_date) ? cur : best,
 	);
 }
+
+/**
+ * Build the full station list from the time-independent audio source catalogue,
+ * overlaying active items. Sources with no active items have an empty items array
+ * (OFFLINE). Sources that appear in items but not in audioSources are appended at
+ * the end (defensive — should not happen in practice).
+ */
+export function mergeWithSources(audioSources: string[], items: MediaItem[]): Station[] {
+	const order: string[] = [...audioSources];
+	const byKey = new Map<string, Station>();
+	for (const key of audioSources) {
+		byKey.set(key, { key, label: key, items: [] });
+	}
+	for (const it of items) {
+		const key = stationKey(it);
+		if (!byKey.has(key)) {
+			byKey.set(key, { key, label: key, items: [] });
+			order.push(key);
+		}
+		(byKey.get(key) as Station).items.push(it);
+	}
+	return order.map((k) => byKey.get(k) as Station);
+}

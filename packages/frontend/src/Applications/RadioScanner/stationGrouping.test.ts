@@ -4,6 +4,7 @@ import {
 	activeSegments,
 	calcSeekSeconds,
 	groupStations,
+	mergeWithSources,
 	primarySegment,
 	type Station,
 } from "./stationGrouping";
@@ -109,5 +110,30 @@ describe("calcSeekSeconds", () => {
 		const it1 = item({ start_date: "2001-09-11T12:40:00Z", jump: 2 });
 		expect(calcSeekSeconds(it1, new Date("2001-09-11T12:40:30Z").getTime())).toBe(32);
 		expect(calcSeekSeconds(it1, new Date("2001-09-11T12:39:00Z").getTime())).toBe(0); // floored
+	});
+});
+
+describe("mergeWithSources", () => {
+	it("lists all audioSources even when no items are present", () => {
+		const stations = mergeWithSources(["ATC", "Rutgers"], []);
+		expect(stations.map((s) => s.key)).toEqual(["ATC", "Rutgers"]);
+		expect(stations.every((s) => s.items.length === 0)).toBe(true);
+	});
+
+	it("overlays active items onto matching sources", () => {
+		const i = item({ id: 1, source: "ATC" });
+		const stations = mergeWithSources(["ATC", "Rutgers"], [i]);
+		expect(stations.find((s) => s.key === "ATC")?.items.map((x) => x.id)).toEqual([1]);
+		expect(stations.find((s) => s.key === "Rutgers")?.items).toEqual([]);
+	});
+
+	it("preserves audioSources order, appending unknown sources at the end", () => {
+		const i = item({ id: 1, source: "NewStation" });
+		const stations = mergeWithSources(["ATC", "Rutgers"], [i]);
+		expect(stations.map((s) => s.key)).toEqual(["ATC", "Rutgers", "NewStation"]);
+	});
+
+	it("returns empty list when both audioSources and items are empty", () => {
+		expect(mergeWithSources([], [])).toEqual([]);
 	});
 });
