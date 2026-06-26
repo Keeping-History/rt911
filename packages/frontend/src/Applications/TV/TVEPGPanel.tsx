@@ -22,9 +22,28 @@ import {
 	useState,
 } from "react";
 import { tvTuneChannel } from "./TVContext";
-import type { EPGChannel, EPGProgram } from "../EPG/EPG";
-import epgStyles from "../EPG/EPG.module.scss";
+import epgStyles from "./TVEPGPanel.module.scss";
 import styles from "./TV.module.scss";
+
+export type EPGProgram = {
+	title: string;
+	description?: string;
+	notes?: string;
+	start: string;
+	end: string;
+	icons?: string[];
+	selected?: boolean;
+};
+
+export type EPGChannel = {
+	name: string;
+	title?: string;
+	number: string;
+	callSign: string;
+	location: string;
+	icon: string;
+	grid: EPGProgram[];
+};
 
 const EPG_GUIDE_URL = "https://files.911realtime.org/epg/guide.json";
 const DESCRIPTION_CHAR_LIMIT = 100;
