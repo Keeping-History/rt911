@@ -16,7 +16,7 @@ import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
 import { sanitizeActiveStation, sanitizeItemIds, sanitizeStationKeys } from "./radioPlayback";
 import { StationPlayer } from "./StationPlayer";
-import { activeSegments, groupStations } from "./stationGrouping";
+import { activeSegments, mergeWithSources } from "./stationGrouping";
 
 type RadioScannerProps = Record<string, never>;
 
@@ -35,7 +35,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	// mp3 audio is delivered on its own opt-in channel; subscribe while mounted.
 	// Mount-only: the component only renders when the app is open, so there is no
 	// need to re-subscribe on every appState change (focus writes, data persist).
-	const { mp3Items: items, subscribeMp3, unsubscribeMp3 } = useContext(MediaStreamContext);
+	const { mp3Items: items, subscribeMp3, unsubscribeMp3, sources } = useContext(MediaStreamContext);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-only
 	useEffect(() => {
 		subscribeMp3(appId);
@@ -93,7 +93,10 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 		return () => clearInterval(id);
 	}, []);
 
-	const stations = useMemo(() => groupStations(items), [items]);
+	const stations = useMemo(
+		() => mergeWithSources(sources.audio, items),
+		[sources.audio, items],
+	);
 
 	// Select the first station once stations arrive (single-station mode).
 	useEffect(() => {
@@ -304,6 +307,9 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 										}}
 									>
 										<p className={styles.rsStationSource}>{station.label}</p>
+										{station.items.length === 0 && (
+											<p className={styles.rsStationOffline}>OFFLINE</p>
+										)}
 									</ClassicyButton>
 								);
 							})}
