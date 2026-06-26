@@ -203,6 +203,8 @@
 	gap: 2px;
 	position: relative;
 	z-index: 1;
+  background: rgba(255,255,255,.5);
+  padding: var(--window-padding-size);
 }
 
 .rsNowPlayingRow {
@@ -231,6 +233,7 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+  color: var(--color-system-01);
 }
 
 .rsNowPlayingEmpty {

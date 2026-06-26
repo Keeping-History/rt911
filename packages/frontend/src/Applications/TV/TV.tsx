@@ -2,10 +2,10 @@ import {
 	ClassicyApp,
 	ClassicyButton,
 	ClassicyCheckbox,
-	ClassicyControlGroup,
 	ClassicyControlLabel,
 	ClassicyIcons,
 	ClassicySlider,
+	ClassicyTabs,
 	ClassicyWindow,
 	quitMenuItemHelper,
 	useAppManager,
@@ -627,108 +627,120 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					onCloseFunc={() => setShowSettings(false)}
 				>
 					<div className={styles.tvSettings}>
-						<ClassicyControlGroup label="Captions" columns={false}>
-							<ClassicyControlLabel label="Font" />
-							<div className={styles.captionFontRow}>
-								{FONT_VARS.map(([varName, label]) => (
-									<ClassicyButton
-										key={varName}
-										depressed={captionStyle.font === varName}
-										buttonSize="small"
-										margin="sm"
-										padding="sm"
-										onClickFunc={() => setCaptionStyle((s) => ({ ...s, font: varName }))}
-									>
-										{label}
-									</ClassicyButton>
-								))}
-							</div>
-							<ClassicyControlLabel label="Text Color" />
-							<div className={styles.captionSwatches}>
-								{COLOR_VARS.map((v) => (
-									<button
-										type="button"
-										key={v}
-										className={`${styles.captionSwatch} ${captionStyle.color === v ? styles.captionSwatchSelected : ""}`}
-										style={{ backgroundColor: `var(${v})` }}
-										title={v}
-										onClick={() => setCaptionStyle((s) => ({ ...s, color: v }))}
-									/>
-								))}
-							</div>
-							<ClassicySlider
-								id="cc_text_opacity"
-								labelTitle="Text Opacity"
-								ariaLabel="Caption text opacity"
-								value={captionStyle.colorOpacity}
-								min={0}
-								max={1}
-								step={0.05}
-								labelSize="small"
-								valueLabel={`${Math.round(captionStyle.colorOpacity * 100)}%`}
-								onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
-									setCaptionStyle((s) => ({ ...s, colorOpacity: parseFloat(e.target.value) }))
-								}
-							/>
-							<ClassicyControlLabel label="Background Color" />
-							<div className={styles.captionSwatches}>
-								{COLOR_VARS.map((v) => (
-									<button
-										type="button"
-										key={v}
-										className={`${styles.captionSwatch} ${captionStyle.bgColor === v ? styles.captionSwatchSelected : ""}`}
-										style={{ backgroundColor: `var(${v})` }}
-										title={v}
-										onClick={() => setCaptionStyle((s) => ({ ...s, bgColor: v }))}
-									/>
-								))}
-							</div>
-							<ClassicySlider
-								id="cc_bg_opacity"
-								labelTitle="Background Opacity"
-								ariaLabel="Caption background opacity"
-								value={captionStyle.bgOpacity}
-								min={0}
-								max={1}
-								step={0.05}
-								labelSize="small"
-								valueLabel={`${Math.round(captionStyle.bgOpacity * 100)}%`}
-								onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
-									setCaptionStyle((s) => ({ ...s, bgOpacity: parseFloat(e.target.value) }))
-								}
-							/>
-							<ClassicySlider
-								id="cc_size"
-								labelTitle="Size"
-								ariaLabel="Caption font size"
-								value={captionStyle.size}
-								min={50}
-								max={200}
-								step={10}
-								labelSize="small"
-								valueLabel={`${captionStyle.size}%`}
-								onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
-									setCaptionStyle((s) => ({ ...s, size: parseFloat(e.target.value) }))
-								}
-							/>
-						</ClassicyControlGroup>
-						<ClassicyControlGroup label="Channels" columns={true}>
-							{availableChannels.length === 0 ? (
-								<ClassicyControlLabel label="No channels available." />
-							) : (
-								availableChannels.map((channel) => (
-									<ClassicyCheckbox
-										key={channel}
-										id={`tv_channel_${channel}`}
-										label={channel}
-										checked={!channelForm.includes(channel)}
-										onClickFunc={(checked: boolean) =>
-											toggleChannel(channel, checked)
-										}
-									/>
-								))
-							)}
-						</ClassicyControlGroup>
+						<ClassicyTabs tabs={[
+							{
+								title: "Captions",
+								children: (
+									<>
+										<ClassicyControlLabel label="Font" />
+										<div className={styles.captionFontRow}>
+											{FONT_VARS.map(([varName, label]) => (
+												<ClassicyButton
+													key={varName}
+													depressed={captionStyle.font === varName}
+													buttonSize="small"
+													margin="sm"
+													padding="sm"
+													onClickFunc={() => setCaptionStyle((s) => ({ ...s, font: varName }))}
+												>
+													{label}
+												</ClassicyButton>
+											))}
+										</div>
+										<ClassicyControlLabel label="Text Color" />
+										<div className={styles.captionSwatches}>
+											{COLOR_VARS.map((v) => (
+												<button
+													type="button"
+													key={v}
+													className={`${styles.captionSwatch} ${captionStyle.color === v ? styles.captionSwatchSelected : ""}`}
+													style={{ backgroundColor: `var(${v})` }}
+													title={v}
+													onClick={() => setCaptionStyle((s) => ({ ...s, color: v }))}
+												/>
+											))}
+										</div>
+										<ClassicySlider
+											id="cc_text_opacity"
+											labelTitle="Text Opacity"
+											ariaLabel="Caption text opacity"
+											value={captionStyle.colorOpacity}
+											min={0}
+											max={1}
+											step={0.05}
+											labelSize="small"
+											valueLabel={`${Math.round(captionStyle.colorOpacity * 100)}%`}
+											onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
+												setCaptionStyle((s) => ({ ...s, colorOpacity: parseFloat(e.target.value) }))
+											}
+										/>
+										<ClassicyControlLabel label="Background Color" />
+										<div className={styles.captionSwatches}>
+											{COLOR_VARS.map((v) => (
+												<button
+													type="button"
+													key={v}
+													className={`${styles.captionSwatch} ${captionStyle.bgColor === v ? styles.captionSwatchSelected : ""}`}
+													style={{ backgroundColor: `var(${v})` }}
+													title={v}
+													onClick={() => setCaptionStyle((s) => ({ ...s, bgColor: v }))}
+												/>
+											))}
+										</div>
+										<ClassicySlider
+											id="cc_bg_opacity"
+											labelTitle="Background Opacity"
+											ariaLabel="Caption background opacity"
+											value={captionStyle.bgOpacity}
+											min={0}
+											max={1}
+											step={0.05}
+											labelSize="small"
+											valueLabel={`${Math.round(captionStyle.bgOpacity * 100)}%`}
+											onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
+												setCaptionStyle((s) => ({ ...s, bgOpacity: parseFloat(e.target.value) }))
+											}
+										/>
+										<ClassicySlider
+											id="cc_size"
+											labelTitle="Size"
+											ariaLabel="Caption font size"
+											value={captionStyle.size}
+											min={50}
+											max={200}
+											step={10}
+											labelSize="small"
+											valueLabel={`${captionStyle.size}%`}
+											onChangeFunc={(e: React.ChangeEvent<HTMLInputElement>) =>
+												setCaptionStyle((s) => ({ ...s, size: parseFloat(e.target.value) }))
+											}
+										/>
+									</>
+								),
+							},
+							{
+								title: "Channels",
+								children: (
+									<div className={styles.tvSettingsChannels}>
+										{availableChannels.length === 0 ? (
+											<ClassicyControlLabel label="No channels available." />
+										) : (
+											availableChannels.map((channel) => (
+												<ClassicyCheckbox
+													key={channel}
+													id={`tv_channel_${channel}`}
+													label={channel}
+													checked={!channelForm.includes(channel)}
+													onClickFunc={(checked: boolean) =>
+														toggleChannel(channel, checked)
+													}
+												/>
+											))
+										)}
+									</div>
+								),
+							},
+						]} />
 						<div className={styles.tvSettingsButtons}>
 							<ClassicyButton onClickFunc={() => setShowSettings(false)}>
 								Cancel

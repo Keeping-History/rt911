@@ -194,12 +194,11 @@ $strip-height: calc(5em + 8px);
   gap: 0.25em;
   padding: 0.5em;
   background-color: var(--color-system-02);
+}
 
-  // ClassicyControlGroup sets columns:1 when columns={true}; override to fill
-  // the available width with multiple columns of checkboxes.
-  :global(.classicyControlGroupFieldsetColumns) {
-    column-count: 3;
-  }
+.tvSettingsChannels {
+  column-count: 3;
+  column-gap: 0.5em;
 }
 
 .tvSettingsButtons {
