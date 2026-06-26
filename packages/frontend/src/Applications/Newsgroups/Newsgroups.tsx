@@ -30,7 +30,7 @@ const fmtDate = (iso: string): string => {
 export const Newsgroups = () => {
 	const appId = "Newsgroups.app";
 	const appName = "Newsgroups";
-	const appIcon = ClassicyIcons.applications.internetExplorer.mailbox;
+	const appIcon = ClassicyIcons.applications.usenet.app;
 
 	// Select only a boolean — the full app-state object changes reference on every
 	// classicy window interaction (focus, z-order), which would re-render this
