@@ -1,0 +1,2 @@
+pnpm update classicy --latest --recursive --silent
+git add pnpm-lock.yaml

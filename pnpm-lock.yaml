@@ -9,7 +9,11 @@ overrides:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      husky:
+        specifier: ^9.1.7
+        version: 9.1.7
 
   packages/frontend:
     dependencies:
@@ -21,7 +25,7 @@ importers:
         version: 4.5.4
       classicy:
         specifier: latest
-        version: 0.13.0(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.30)
+        version: 0.13.1(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.30)
       classnames:
         specifier: ^2.5.1
         version: 2.5.1
@@ -1787,8 +1791,8 @@ packages:
     resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
     engines: {node: '>= 20.19.0'}
 
-  classicy@0.13.0:
-    resolution: {integrity: sha512-r8j8TVTD0Qnid1jgoTObU5KMWbDUpJuEVBN+Jw7O/0gnxIU4kiZgOEeUTBmzidUmylJioy0mhaFgPBcN8Gk6fA==}
+  classicy@0.13.1:
+    resolution: {integrity: sha512-oP+gy4uNZ1zeKiAVGMPkutiw8dMswVIVWKsTWVcJxWa54A/drbwlIJ1sjSjmGZv/E18vNmBbHQ/DLl5F8+m4yw==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
@@ -2134,6 +2138,11 @@ packages:
 
   html-entities@2.6.0:
     resolution: {integrity: sha512-kig+rMn/QOVRvr7c86gQ8lWXq+Hkv6CbAH1hLu+RG338StTpE8Z0b44SDVaqVu7HGKf27frdmUYEs9hTUX/cLQ==}
+
+  husky@9.1.7:
+    resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
@@ -5211,7 +5220,7 @@ snapshots:
       readdirp: 5.0.0
     optional: true
 
-  classicy@0.13.0(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.30):
+  classicy@0.13.1(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.30):
     dependencies:
       '@analytics/google-tag-manager': 0.6.0
       '@mdxeditor/editor': 3.55.0(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.30)
@@ -5642,6 +5651,8 @@ snapshots:
       - '@noble/hashes'
 
   html-entities@2.6.0: {}
+
+  husky@9.1.7: {}
 
   ieee754@1.2.1: {}
 
