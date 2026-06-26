@@ -966,8 +966,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 									onClickFunc={() => {
 										if (items.length === 0) return;
 										const idx = items.findIndex((i) => i.id === activePlayer);
-										const prev = (idx - 1 + items.length) % items.length;
-										setActivePlayer(items[prev].id);
+										const next = (idx + 1) % items.length;
+										setActivePlayer(items[next].id);
 										setHasInteracted(true);
 									}}
 									buttonSize="small"
@@ -980,8 +980,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 									onClickFunc={() => {
 										if (items.length === 0) return;
 										const idx = items.findIndex((i) => i.id === activePlayer);
-										const next = (idx + 1) % items.length;
-										setActivePlayer(items[next].id);
+										const prev = (idx - 1 + items.length) % items.length;
+										setActivePlayer(items[prev].id);
 										setHasInteracted(true);
 									}}
 									buttonSize="small"
