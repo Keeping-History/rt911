@@ -35,7 +35,7 @@ from video_grabber.transcribe.flows import (
     scan_transcribe_flow,
     transcribe_item_flow,
 )
-from video_grabber.thumbnails.flows import generate_thumbnails_flow
+from video_grabber.thumbnails.batch_flow import batch_thumbnails_flow
 from video_grabber.usenet.flows import (
     dispatch_usenet_flow,
     process_usenet_item_flow,
@@ -83,8 +83,7 @@ _TRANSCRIBE_ITEM_LIMIT = 2
 _TRANSCRIBE_SCAN_LIMIT = 1
 _TRANSCRIBE_DISPATCH_LIMIT = 2
 _BUILD_CHANNEL_SUBS_LIMIT = 1
-_THUMBNAIL_LIMIT = 1
-_THUMBNAIL_INTERVAL = 30  # seconds; match Wasabi thumbnail max-age
+_THUMBNAIL_LIMIT = 1  # one batch run at a time; manually triggered from Prefect UI
 
 
 def _start_transcribe_workers() -> None:
@@ -178,10 +177,9 @@ def main() -> None:
             name="build-channel-subtitles",
             concurrency_limit=_BUILD_CHANNEL_SUBS_LIMIT,
         ),
-        generate_thumbnails_flow.to_deployment(
-            name="generate-thumbnails",
+        batch_thumbnails_flow.to_deployment(
+            name="batch-thumbnails",
             concurrency_limit=_THUMBNAIL_LIMIT,
-            interval=_THUMBNAIL_INTERVAL,
         ),
     )
 

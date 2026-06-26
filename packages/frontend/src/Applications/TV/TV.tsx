@@ -180,7 +180,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(
 		(appState?.data?.captionStyle as CaptionStyle | undefined) ?? DEFAULT_CAPTION_STYLE,
 	);
-	const [thumbTick, setThumbTick] = useState(0);
 	const [showSettings, setShowSettings] = useState<boolean>(false);
 	// Settings form: local working copy of the disabled set, committed on Save.
 	const [channelForm, setChannelForm] = useState<string[]>(disabledChannels);
@@ -216,11 +215,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		setVolumeLimit(persistedVolumeLimit);
 	}, [persistedVolumeLimit]);
 
-	// Refresh thumbnail images every 4 s by bumping the cache-busting tick.
-	useEffect(() => {
-		const id = setInterval(() => setThumbTick((t) => t + 1), 4000);
-		return () => clearInterval(id);
-	}, []);
+	// Round the current virtual clock to the nearest 30-second boundary.
+	// Thumbnails are pre-generated for every 30-second slot, keyed by Unix epoch seconds.
+	const thumbTs = Math.floor(new Date(dateTime).getTime() / 1000 / 30) * 30;
 
 	// Underlying video elements per item — react-player 3.x forwards refs to
 	// the native <video> element, so we set currentTime directly for seeking.
@@ -770,6 +767,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 				minimumSize={[600, 300]}
 				modal={false}
 				appMenu={appMenu}
+				dimContents={false}
 			>
 				<div className={styles.tvContainer}>
 					<div className={styles.tvMainArea}>
@@ -993,7 +991,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												className={styles.tvThumbnailImage}
 												src={`https://files.911realtime.org/thumbnails/${
 													item.source?.toLowerCase() ?? "offline"
-												}.jpg?t=${thumbTick}`}
+												}/${thumbTs}.jpg`}
 												onError={(e) => {
 													e.currentTarget.src =
 														"https://files.911realtime.org/thumbnails/offline.jpg";

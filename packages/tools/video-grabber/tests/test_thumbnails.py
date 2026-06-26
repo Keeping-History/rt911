@@ -7,10 +7,12 @@ from video_grabber.thumbnails.clock import virtual_utc_now
 from video_grabber.thumbnails.flows import _channel_rows, generate_thumbnails_flow
 from video_grabber.thumbnails.generator import (
     capture_frame,
+    capture_frame_from_bytes,
     ensure_offline_placeholder,
     upload_thumbnail,
 )
 from video_grabber.thumbnails.m3u8 import _find_segment_in_playlist, find_thumb_segment
+from video_grabber.thumbnails.batch_flow import _parse_all_segments, _select_boundary_items
 import respx
 import httpx as _httpx
 
@@ -326,3 +328,106 @@ def test_generate_thumbnails_flow_skips_upload_when_capture_fails(monkeypatch):
 
     generate_thumbnails_flow()
     assert "offline_ch" not in uploaded  # frontend falls back to offline.jpg
+
+
+# ---------------------------------------------------------------------------
+# Batch flow: segment parsing + boundary selection
+# ---------------------------------------------------------------------------
+
+# Playlist with two discontinuous slots; segments are 6 seconds.
+# Slot A starts at 2001-09-11T12:00:00Z (unix 1000209600).
+# Slot B starts at 2001-09-11T12:01:00Z (unix 1000209660).
+BATCH_PLAYLIST = """\
+#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-TARGETDURATION:6
+#EXT-X-MAP:URI="https://files.911realtime.org/hls/cnn/thumb/init.mp4"
+#EXT-X-PROGRAM-DATE-TIME:2001-09-11T12:00:00+00:00
+#EXTINF:6.000,
+https://files.911realtime.org/hls/cnn/thumb/seg0001.m4s
+#EXTINF:6.000,
+https://files.911realtime.org/hls/cnn/thumb/seg0002.m4s
+#EXTINF:6.000,
+https://files.911realtime.org/hls/cnn/thumb/seg0003.m4s
+#EXTINF:6.000,
+https://files.911realtime.org/hls/cnn/thumb/seg0004.m4s
+#EXTINF:6.000,
+https://files.911realtime.org/hls/cnn/thumb/seg0005.m4s
+#EXT-X-DISCONTINUITY
+#EXT-X-PROGRAM-DATE-TIME:2001-09-11T12:01:00+00:00
+#EXTINF:6.000,
+https://files.911realtime.org/hls/cnn/thumb/seg0006_gap.v3.m4s
+#EXTINF:6.000,
+https://files.911realtime.org/hls/cnn/thumb/seg0007.m4s
+#EXT-X-ENDLIST
+"""
+# Slot A: seg0001 starts at unix=1000209600 (a 30-s boundary!).
+# seg0002 @ +6, seg0003 @ +12, seg0004 @ +18, seg0005 @ +24.
+# The next 30-s boundary is at 1000209630 (+30), which falls in seg0006 but
+# seg0006 is a gap — so it should be skipped.
+# Slot B: seg0006 (gap) @ 1000209660, seg0007 @ 1000209666.
+# Next boundary after 1000209660 = 1000209690 — but no segment covers that, so nothing emitted.
+# Expected boundary items: just (1000209600, seg0001.m4s).
+
+
+def test_parse_all_segments_counts():
+    segs = _parse_all_segments(BATCH_PLAYLIST)
+    assert len(segs) == 7
+
+
+def test_parse_all_segments_first_entry():
+    segs = _parse_all_segments(BATCH_PLAYLIST)
+    unix_ts, dur, is_gap, url = segs[0]
+    assert unix_ts == 1000209600
+    assert dur == 6.0
+    assert not is_gap
+    assert "seg0001" in url
+
+
+def test_parse_all_segments_gap_detected():
+    segs = _parse_all_segments(BATCH_PLAYLIST)
+    _, _, is_gap, url = segs[5]  # seg0006_gap.v3
+    assert is_gap
+    assert "_gap.v3" in url
+
+
+def test_parse_all_segments_discontinuity_resets_time():
+    segs = _parse_all_segments(BATCH_PLAYLIST)
+    unix_ts, _, _, _ = segs[5]  # first in slot B = 1000209660
+    assert unix_ts == 1000209660
+
+
+def test_select_boundary_items_skips_gaps():
+    segs = _parse_all_segments(BATCH_PLAYLIST)
+    boundaries = _select_boundary_items(segs)
+    urls = [url for _, url in boundaries]
+    assert not any("_gap.v3" in u for u in urls)
+
+
+def test_select_boundary_items_correct_boundary():
+    segs = _parse_all_segments(BATCH_PLAYLIST)
+    boundaries = _select_boundary_items(segs)
+    assert len(boundaries) == 1
+    ts, url = boundaries[0]
+    assert ts == 1000209600
+    assert "seg0001" in url
+
+
+def test_capture_frame_from_bytes_returns_jpeg(monkeypatch, tmp_path):
+    fake_jpeg = b"\xff\xd8\xff\xe0batch"
+
+    def fake_run(args, **kw):
+        Path(args[-1]).write_bytes(fake_jpeg)
+        return SimpleNamespace(returncode=0, stderr=b"")
+
+    monkeypatch.setattr("video_grabber.thumbnails.generator.subprocess.run", fake_run)
+    result = capture_frame_from_bytes(b"\x00init\x00seg")
+    assert result == fake_jpeg
+
+
+def test_capture_frame_from_bytes_returns_none_on_ffmpeg_failure(monkeypatch):
+    monkeypatch.setattr(
+        "video_grabber.thumbnails.generator.subprocess.run",
+        lambda args, **kw: SimpleNamespace(returncode=1, stderr=b"error"),
+    )
+    assert capture_frame_from_bytes(b"\x00") is None

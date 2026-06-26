@@ -59,6 +59,28 @@ def capture_frame(segment_url: str, init_url: str | None = None) -> bytes | None
         return out.read_bytes()
 
 
+def capture_frame_from_bytes(combined: bytes) -> bytes | None:
+    """Return the first frame of already-concatenated init+segment bytes as 160×120 JPEG.
+
+    Used by the batch thumbnail flow to avoid re-downloading the init segment for
+    every segment — the caller downloads it once per channel and reuses the bytes.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "thumb.jpg"
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error",
+             "-i", "pipe:0",
+             "-vframes", "1", "-vf", "scale=160:120", "-q:v", "5",
+             str(out)],
+            input=combined,
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != 0 or not out.exists():
+            return None
+        return out.read_bytes()
+
+
 def generate_offline_jpeg() -> bytes:
     """Return a 160×120 JPEG of solid blue (0x0000f5), matching the gap-filler."""
     result = subprocess.run(
