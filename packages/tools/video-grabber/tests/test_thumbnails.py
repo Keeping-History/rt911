@@ -284,11 +284,12 @@ def test_generate_thumbnails_flow_uploads_for_found_segments(monkeypatch):
     )
     monkeypatch.setattr(
         "video_grabber.thumbnails.flows.find_thumb_segment",
-        lambda url, vt: "https://files.911realtime.org/hls/cnn/seg.m4s",
+        lambda url, vt: ("https://files.911realtime.org/hls/cnn/thumb/init.mp4",
+                         "https://files.911realtime.org/hls/cnn/seg.m4s"),
     )
     monkeypatch.setattr(
         "video_grabber.thumbnails.flows.capture_frame",
-        lambda url: b"\xff\xd8\xff",
+        lambda url, init_url=None: b"\xff\xd8\xff",
     )
     monkeypatch.setattr(
         "video_grabber.thumbnails.flows.upload_thumbnail",
@@ -316,7 +317,7 @@ def test_generate_thumbnails_flow_skips_upload_when_capture_fails(monkeypatch):
     )
     monkeypatch.setattr(
         "video_grabber.thumbnails.flows.find_thumb_segment",
-        lambda url, vt: None,  # no segment found
+        lambda url, vt: (None, None),  # no segment found
     )
     monkeypatch.setattr(
         "video_grabber.thumbnails.flows.upload_thumbnail",
