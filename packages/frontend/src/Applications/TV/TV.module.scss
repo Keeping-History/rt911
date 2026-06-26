@@ -21,6 +21,9 @@ $strip-height: calc(5em + 8px);
 }
 
 // TV-static animation shown while the main player is buffering or switching channels.
+// Default state is invisible (opacity: 0, fading out). The .tvLoadingOverlayVisible
+// modifier makes it appear instantly (no transition in), so the static cuts on
+// immediately but fades off smoothly when the video is ready.
 .tvLoadingOverlay {
   position: absolute;
   inset: 0;
@@ -29,6 +32,13 @@ $strip-height: calc(5em + 8px);
   object-fit: cover;
   z-index: 10;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+
+  &.tvLoadingOverlayVisible {
+    opacity: 1;
+    transition: none;
+  }
 }
 
 // Grid shown in the main area when multi-select mode has selections
@@ -69,7 +79,7 @@ $strip-height: calc(5em + 8px);
   height: calc(var(--window-control-size) * 2);
   padding: calc(var(--window-padding-size) / 2);
   border: none;
-  background-color: var(--color-theme-06);
+  background-color: var(--color-system-03);
   color: var(--color-theme-03);
   font-family: var(--ui-font);
   font-size: calc(var(--ui-font-size) * 0.75);
@@ -189,7 +199,7 @@ $strip-height: calc(5em + 8px);
   font-size: calc(var(--ui-font-size) * .75);
   margin: 0;
   padding: 0 var(--window-padding-size);
-  color: var(--color-theme-03);
+  color: var(--color-theme-02);
 }
 
 .tvThumbnailImage {

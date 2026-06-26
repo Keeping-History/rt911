@@ -784,13 +784,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 							if (!item) return null;
 							return (
 								<>
-									{mainPlayerBuffering && (
-										<img
-											src="/loading.webp"
-											className={styles.tvLoadingOverlay}
-											alt=""
-										/>
-									)}
+									<img
+										src="/loading.webp"
+										className={`${styles.tvLoadingOverlay}${mainPlayerBuffering ? ` ${styles.tvLoadingOverlayVisible}` : ""}`}
+										alt=""
+									/>
 									<ReactPlayer
 										ref={(el: HTMLVideoElement | null) => {
 											if (el) videoRefs.current.set(item.id, el);
