@@ -129,7 +129,7 @@ def test_find_segment_in_playlist_after_stream_end():
 @respx.mock
 def test_find_thumb_segment_fetches_correct_url():
     master = "https://files.911realtime.org/playlists/cnn/master.m3u8"
-    thumb_url = "https://files.911realtime.org/playlists/cnn/thumb/playlist.m3u8"
+    thumb_url = "https://files.911realtime.org/playlists/cnn/thumb.m3u8"
     respx.get(thumb_url).mock(return_value=_httpx.Response(200, text=SAMPLE_PLAYLIST))
     t = datetime(2001, 9, 11, 12, 0, 3, tzinfo=timezone.utc)
     result = find_thumb_segment(master, t)

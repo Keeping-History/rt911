@@ -53,10 +53,10 @@ def find_thumb_segment(
     """Download the thumb variant playlist and return the segment URL for ``virtual_time``.
 
     Derives the thumb playlist URL from the master URL by replacing
-    ``master.m3u8`` with ``thumb/playlist.m3u8``. Returns None if the
+    ``master.m3u8`` with ``thumb.m3u8``. Returns None if the
     request fails or no segment covers the given time.
     """
-    thumb_url = master_url.replace("master.m3u8", "thumb/playlist.m3u8")
+    thumb_url = master_url.replace("master.m3u8", "thumb.m3u8")
     try:
         resp = client.get(thumb_url, timeout=10)
         resp.raise_for_status()
