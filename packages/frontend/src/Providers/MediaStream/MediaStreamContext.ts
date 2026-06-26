@@ -109,6 +109,8 @@ export interface NewsgroupSource {
 export interface AvailableSources {
 	/** Source slugs with approved video (m3u8) media — the TV channel filter. */
 	video: string[];
+	/** Source slugs with approved audio (MP3) media — the RadioScanner offline stations filter. */
+	audio: string[];
 	/** Providers across approved pager items — the Pager provider filter. */
 	pager: string[];
 	/** Newsgroups (sources of type "usenet") with message counts — the browse list. */
@@ -170,7 +172,7 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	usenetBodies: {},
 	usenetBodyErrors: {},
 	requestUsenetBody: () => {},
-	sources: { video: [], pager: [], usenet: [] },
+	sources: { video: [], audio: [], pager: [], usenet: [] },
 	connected: false,
 	addItems: () => {},
 	subscribeFormats: () => {},

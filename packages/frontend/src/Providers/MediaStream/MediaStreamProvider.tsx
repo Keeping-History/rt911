@@ -108,7 +108,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
 	// fetches when a window re-renders before its body arrives.
 	const usenetBodyInflight = useRef(new Set<number>());
-	const [sources, setSources] = useState<AvailableSources>({ video: [], pager: [], usenet: [] });
+	const [sources, setSources] = useState<AvailableSources>({ video: [], audio: [], pager: [], usenet: [] });
 	const [connected, setConnected] = useState(false);
 
 	// Per-app format subscriptions. null = wants all formats.
@@ -458,6 +458,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				if (incoming) {
 					setSources({
 						video: incoming.video ?? [],
+						audio: incoming.audio ?? [],
 						pager: incoming.pager ?? [],
 						usenet: incoming.usenet ?? [],
 					});
