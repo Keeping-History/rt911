@@ -20,6 +20,26 @@ $strip-height: calc(5em + 8px);
   position: relative;
 }
 
+// EPG grid panel — sits above the video player, scrollable, dismisses on channel click or Close.
+.tvEpgOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow-y: auto;
+  background: var(--color-system-03);
+  display: flex;
+  flex-direction: column;
+}
+
+.tvEpgToolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: calc(var(--window-padding-size) * 0.5);
+  border-bottom: 1px solid var(--color-system-05);
+  flex-shrink: 0;
+}
+
 // TV-static animation shown while the main player is buffering or switching channels.
 // Default state is invisible (opacity: 0, fading out). The .tvLoadingOverlayVisible
 // modifier makes it appear instantly (no transition in), so the static cuts on

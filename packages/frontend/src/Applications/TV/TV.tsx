@@ -35,6 +35,7 @@ import {
 	tvSetVolumeLimit,
 } from "./TVContext";
 import { resolveGridVolume } from "./volume";
+import { TVEPGPanel } from "./TVEPGPanel";
 
 /** Resolve a remote channel reference (numeric id or `source` name) to an item id. */
 function resolveChannelId(
@@ -181,6 +182,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		(appState?.data?.captionStyle as CaptionStyle | undefined) ?? DEFAULT_CAPTION_STYLE,
 	);
 	const [showSettings, setShowSettings] = useState<boolean>(false);
+	const [showEpg, setShowEpg] = useState<boolean>(false);
 	// Settings form: local working copy of the disabled set, committed on Save.
 	const [channelForm, setChannelForm] = useState<string[]>(disabledChannels);
 	const [activePlayer, setActivePlayer] = useState<number>(
@@ -779,6 +781,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			>
 				<div className={styles.tvContainer}>
 					<div className={styles.tvMainArea}>
+						{showEpg && (
+							<TVEPGPanel onClose={() => setShowEpg(false)} />
+						)}
 						{!multiSelectMode && (() => {
 							const item = items.find((i) => i.id === activePlayer);
 							if (!item) return null;
@@ -989,6 +994,15 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 									padding="sm"
 								>
 									▼
+								</ClassicyButton>
+								<ClassicyButton
+									onClickFunc={() => setShowEpg((v) => !v)}
+									depressed={showEpg}
+									buttonSize="small"
+									margin="sm"
+									padding="sm"
+								>
+									EPG
 								</ClassicyButton>
 							</div>
 						</div>

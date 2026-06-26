@@ -1,7 +1,6 @@
 import {
 	ClassicyApp,
 	ClassicyButton,
-	ClassicyControlLabel,
 	ClassicyIcons,
 	ClassicyWindow,
 	quitMenuItemHelper,
@@ -110,8 +109,6 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 		(channelName: string) => desktopEventDispatch(tvTuneChannel(channelName)),
 		[desktopEventDispatch],
 	);
-
-	const [showSettings, setShowSettings] = useState<boolean>(false);
 
 	// EPG schedule is fetched at runtime from the files proxy rather than bundled.
 	// Starts empty (renders zero rows) and populates once the fetch resolves.
@@ -372,37 +369,6 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 			icon={appIcon}
 			defaultWindow={`${appId}_main`}
 		>
-			{showSettings && (
-				<ClassicyWindow
-					id={`${appId}_settings`}
-					title={appName}
-					appId={appId}
-					closable={false}
-					resizable={false}
-					zoomable={false}
-					scrollable={false}
-					collapsable={false}
-					initialSize={[200, 100]}
-					initialPosition={[100, 100]}
-					minimumSize={[200, 100]}
-					modal={true}
-					hidden={true}
-					appMenu={appMenu}
-				>
-					<div
-						style={{
-							display: "flex",
-							justifyContent: "center",
-							flexDirection: "column",
-						}}
-					>
-						<ClassicyControlLabel label={"Nothing Here"}></ClassicyControlLabel>
-						<ClassicyButton onClickFunc={() => setShowSettings(!showSettings)}>
-							Close
-						</ClassicyButton>
-					</div>
-				</ClassicyWindow>
-			)}
 			<ClassicyWindow
 				id={`${appId}_main`}
 				title={appName}
@@ -425,9 +391,6 @@ export const EPG: React.FC<ClassicyEPGProps> = ({
 					}}
 				>
 					<div>
-						<ClassicyButton onClickFunc={() => setShowSettings(!showSettings)}>
-							Settings
-						</ClassicyButton>
 						<ClassicyButton onClickFunc={jumpBack}>&lt;&lt;</ClassicyButton>
 						<ClassicyButton onClickFunc={jumpToNow}>Now</ClassicyButton>
 						<ClassicyButton onClickFunc={jumpForward}>&gt;&gt;</ClassicyButton>
