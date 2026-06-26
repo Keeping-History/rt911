@@ -1,6 +1,24 @@
 import type { ActionMessage, ClassicyStore } from "classicy";
 import { registerAppEventHandler } from "classicy";
 
+export interface CaptionStyle {
+	font: string;
+	color: string;
+	colorOpacity: number;
+	bgColor: string;
+	bgOpacity: number;
+	size: number;
+}
+
+export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
+	font: "--ui-font",
+	color: "--color-system-07",
+	colorOpacity: 1,
+	bgColor: "--color-system-01",
+	bgOpacity: 0.75,
+	size: 100,
+};
+
 export const TV_APP_ID = "TV.app";
 const appId = TV_APP_ID;
 
@@ -63,6 +81,22 @@ export const tvResume = (): ActionMessage => ({ type: "ClassicyAppTVPlay" });
 
 /** Alias for {@link tvResume} — there is no separate "from a stop" state. */
 export const tvPlay = tvResume;
+
+/** Set whether closed captions are on and their display style. */
+export const tvSetCaptionState = (
+	captionsOn: boolean,
+	captionStyle: CaptionStyle,
+): ActionMessage => ({
+	type: "ClassicyAppTVSetCaptionState",
+	captionsOn,
+	captionStyle,
+});
+
+/** Persist which channel is the active single-view player. */
+export const tvSetActivePlayer = (activePlayer: number): ActionMessage => ({
+	type: "ClassicyAppTVSetActivePlayer",
+	activePlayer,
+});
 
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 
@@ -137,6 +171,19 @@ export const classicyTVEventHandler = (
 		// position is always derived from the Classicy clock.
 		case "ClassicyAppTVPlay":
 			apps[appId].data = { ...appData, tvPaused: false };
+			return ds;
+		case "ClassicyAppTVSetCaptionState":
+			apps[appId].data = {
+				...appData,
+				captionsOn: action.captionsOn as boolean,
+				captionStyle: action.captionStyle as CaptionStyle,
+			};
+			return ds;
+		case "ClassicyAppTVSetActivePlayer":
+			apps[appId].data = {
+				...appData,
+				activePlayer: action.activePlayer as number,
+			};
 			return ds;
 		default:
 			return ds;
