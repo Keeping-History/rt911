@@ -23,10 +23,14 @@ import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
 import styles from "./TV.module.scss";
 import {
+	type CaptionStyle,
+	DEFAULT_CAPTION_STYLE,
 	type TVChannelRef,
 	type TVRemoteCommand,
 	tvPause,
 	tvResume,
+	tvSetActivePlayer,
+	tvSetCaptionState,
 	tvSetMuted,
 	tvSetVolumeLimit,
 } from "./TVContext";
@@ -62,23 +66,6 @@ const COLOR_VARS = [
 	...Array.from({ length: 7 }, (_, i) => `--color-system-0${i + 1}`),
 ];
 
-interface CaptionStyle {
-	font: string;
-	color: string;
-	colorOpacity: number;
-	bgColor: string;
-	bgOpacity: number;
-	size: number;
-}
-
-const DEFAULT_CAPTION_STYLE: CaptionStyle = {
-	font: "--ui-font",
-	color: "--color-system-07",
-	colorOpacity: 1,
-	bgColor: "--color-system-01",
-	bgOpacity: 0.75,
-	size: 100,
-};
 
 function resolveCssVar(name: string): string {
 	return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -188,13 +175,19 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// One-shot view command (tune / grid / exitGrid), applied once per seq.
 	const command = appState?.data?.command as TVRemoteCommand | undefined;
 
-	const [captionsOn, setCaptionsOn] = useState<boolean>(false);
-	const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(DEFAULT_CAPTION_STYLE);
+	const [captionsOn, setCaptionsOn] = useState<boolean>(
+		(appState?.data?.captionsOn as boolean | undefined) ?? false,
+	);
+	const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(
+		(appState?.data?.captionStyle as CaptionStyle | undefined) ?? DEFAULT_CAPTION_STYLE,
+	);
 	const [thumbTick, setThumbTick] = useState(0);
 	const [showSettings, setShowSettings] = useState<boolean>(false);
 	// Settings form: local working copy of the disabled set, committed on Save.
 	const [channelForm, setChannelForm] = useState<string[]>(disabledChannels);
-	const [activePlayer, setActivePlayer] = useState<number>(0);
+	const [activePlayer, setActivePlayer] = useState<number>(
+		(appState?.data?.activePlayer as number | undefined) ?? 0,
+	);
 	// Browsers block autoplay with audio until the user interacts with the page.
 	// Track first interaction so the active player stays muted until then.
 	const [hasInteracted, setHasInteracted] = useState<boolean>(false);
@@ -454,6 +447,18 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	useEffect(() => {
 		persistGridState();
 	}, [persistGridState]);
+
+	const persistCaptionState = useCallback(() => {
+		desktopEventDispatch(tvSetCaptionState(captionsOn, captionStyle));
+	}, [captionsOn, captionStyle, desktopEventDispatch]);
+
+	useEffect(() => {
+		persistCaptionState();
+	}, [persistCaptionState]);
+
+	useEffect(() => {
+		desktopEventDispatch(tvSetActivePlayer(activePlayer));
+	}, [activePlayer, desktopEventDispatch]);
 
 	const toggleMultiSelect = () => {
 		setMultiSelectMode((prev) => {
