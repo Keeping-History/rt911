@@ -57,6 +57,7 @@ const (
 // belongs to, so each list is derived from actual usage in its table.
 type SourceList struct {
 	Video  []string                `json:"video"`  // TV: sources of approved m3u8 media items
+	Audio  []string                `json:"audio"`  // RadioScanner: sources of approved mp3 items
 	Pager  []string                `json:"pager"`  // Pager: providers of approved pager items
 	Usenet []model.NewsgroupSource `json:"usenet"` // Newsgroups: name + precomputed message count
 }
@@ -330,11 +331,10 @@ func (s *Session) usenetGroupsLocked() []string {
 }
 
 // SendSources delivers the available-source lists for the client's filters. The
-// lists are derived from all history (not the current window), so the client's
-// filter UIs are complete regardless of virtual time. Sent once per init; sources
-// don't change with the virtual clock, so seek does not resend them.
-func (s *Session) SendSources(video, pager []string, usenet []model.NewsgroupSource) {
-	s.send_(outMsg{Type: "sources", Sources: &SourceList{Video: video, Pager: pager, Usenet: usenet}})
+// lists are time-independent, so this is called once after init_ack. Failures
+// in the caller are non-fatal: a missing list only degrades a filter UI.
+func (s *Session) SendSources(video, audio, pager []string, usenet []model.NewsgroupSource) {
+	s.send_(outMsg{Type: "sources", Sources: &SourceList{Video: video, Audio: audio, Pager: pager, Usenet: usenet}})
 }
 
 // Init sets the client's starting virtual time and sends the initial snapshot.

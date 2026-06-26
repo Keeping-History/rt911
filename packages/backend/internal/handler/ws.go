@@ -395,6 +395,10 @@ func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, log
 	if err != nil {
 		logger.Warn("available video sources query failed", "error", err)
 	}
+	audio, err := db.AvailableAudioSources(r.Context(), pool)
+	if err != nil {
+		logger.Warn("available audio sources query failed", "error", err)
+	}
 	providers, err := db.AvailablePagerProviders(r.Context(), pool)
 	if err != nil {
 		logger.Warn("available pager providers query failed", "error", err)
@@ -403,7 +407,7 @@ func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, log
 	if err != nil {
 		logger.Warn("available newsgroups query failed", "error", err)
 	}
-	sess.SendSources(video, providers, newsgroups)
+	sess.SendSources(video, audio, providers, newsgroups)
 }
 
 // knownChannel reports whether ch is a valid subscription channel.

@@ -97,6 +97,19 @@ func AvailableVideoSources(ctx context.Context, pool *pgxpool.Pool) ([]string, e
 		ORDER BY s.slug`, videoFormat)
 }
 
+// AvailableAudioSources returns the distinct, sorted source slugs that have at
+// least one approved mp3 item, independent of time. It populates the RadioScanner
+// app's station strip with every selectable station up front, rather than only
+// those that have scrolled past in the current virtual-time window.
+func AvailableAudioSources(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
+	return queryStrings(ctx, pool, `
+		SELECT DISTINCT s.slug
+		FROM mp3_items mi
+		JOIN sources s ON s.id = mi.source
+		WHERE mi.approved = 1 AND s.slug IS NOT NULL AND s.slug <> ''
+		ORDER BY s.slug`)
+}
+
 // pagerSelectFrom is the shared SELECT … FROM clause for all pager queries.
 // provider is resolved to its sources.slug via a LEFT JOIN (source rows of
 // type="pager"), the same way media/news/usenet resolve their source.

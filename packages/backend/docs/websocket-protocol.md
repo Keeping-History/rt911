@@ -282,6 +282,7 @@ those that have scrolled past in the current virtual-time window.
   "type": "sources",
   "sources": {
     "video": ["BBC", "CNN", "MSNBC", "WETA"],
+    "audio": ["ATC", "Rutgers"],
     "pager": ["Arch", "Skytel"],
     "usenet": [{"name": "ntl.support.modems", "count": 1234}, {"name": "ntl.talk", "count": 56}]
   }
@@ -289,6 +290,7 @@ those that have scrolled past in the current virtual-time window.
 ```
 
 - `video` — source slugs with at least one approved `m3u8` media item (the TV app's channel filter).
+- `audio` — source slugs with at least one approved mp3 item (the RadioScanner app's station strip).
 - `pager` — providers across all approved pager items (the Pager app's provider filter).
 - `usenet` — newsgroups (sources of type `usenet`) with a precomputed `count`, for the Newsgroups app's browse list.
 
