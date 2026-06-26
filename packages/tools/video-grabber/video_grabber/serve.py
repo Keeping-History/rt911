@@ -16,6 +16,10 @@ PREFECT_LOGGING_EXTRA_LOGGERS — that env var didn't surface the
 stdlib loggers in the Prefect UI reliably, and dependency injection
 avoids coupling pure modules to Prefect's runtime.
 """
+import subprocess
+import sys
+
+import sqlalchemy as sa
 from prefect import serve
 
 from video_grabber.pipeline.flows import (
@@ -83,7 +87,43 @@ _THUMBNAIL_LIMIT = 1
 _THUMBNAIL_INTERVAL = 30  # seconds; match Wasabi thumbnail max-age
 
 
+def _start_transcribe_workers() -> None:
+    """Reset stuck transcription jobs and spawn one dispatch worker per slot.
+
+    Called once at pod startup, before serve() blocks. Any job left in
+    'transcribing' from the previous pod session is reset to 'failed' so the
+    dispatcher retries it. Workers write to /tmp/transcribe-worker-N.log."""
+    from video_grabber.config import Config
+    from video_grabber.transcribe.flows import _sync_db_url
+
+    cfg = Config()
+    engine = sa.create_engine(_sync_db_url(cfg.database_url))
+    with engine.connect() as db:
+        result = db.execute(sa.text("""
+            UPDATE transcribe_jobs
+            SET stage = CAST('failed' AS transcribe_stage),
+                error_message = 'reset: pod restarted'
+            WHERE stage = 'transcribing'
+            RETURNING id
+        """))
+        db.commit()
+        n = result.rowcount
+    engine.dispose()
+    if n:
+        print(f"[serve] reset {n} stuck transcribing job(s) to failed", flush=True)
+
+    for i in range(_TRANSCRIBE_DISPATCH_LIMIT):
+        log = open(f"/tmp/transcribe-worker-{i}.log", "w")  # noqa: SIM115
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "video_grabber.transcribe.dispatch_worker", str(i)],
+            stdout=log,
+            stderr=log,
+        )
+        print(f"[serve] started transcribe-worker-{i} pid={proc.pid}", flush=True)
+
+
 def main() -> None:
+    _start_transcribe_workers()
     serve(
         process_item_flow.to_deployment(
             name="process-item",
