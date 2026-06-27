@@ -243,38 +243,28 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Stable ref to captionsOn so onReady callbacks always see the current value.
 	const captionsOnRef = useRef(captionsOn);
 	captionsOnRef.current = captionsOn;
-	// Stable ref to activePlayer so applyCaption (empty deps) knows which is the main view.
-	const activePlayerRef = useRef(activePlayer);
-	activePlayerRef.current = activePlayer;
-	// Stable ref to multiSelectMode for the same reason.
-	const multiSelectModeRef = useRef(multiSelectMode);
-	multiSelectModeRef.current = multiSelectMode;
+	// Per-player subtitle text for the styled overlay divs. Keyed by MediaItem id.
+	// All players (single-view and grid) use mode="hidden" + timeupdate polling so that
+	// font/color/size/opacity settings apply to both views without ::cue gymnastics.
+	const [subtitleTexts, setSubtitleTexts] = useState<Record<number, string>>({});
+	// Maps player id → { inner video element, timeupdate handler } for cleanup.
+	const cueListenersRef = useRef<Map<number, { inner: HTMLVideoElement; handler: EventListener }>>(new Map());
 
-	// Active cue text for the main player — displayed in our own overlay div so that
-	// font/color/size settings apply reliably on all browsers. Native ::cue is suppressed
-	// by keeping the track in mode="hidden"; only the overlay div is visible.
-	const [mainSubtitleText, setMainSubtitleText] = useState("");
-	// Stable setter ref so applyCaption (empty deps) can call it without stale closure.
-	const setSubtitleTextRef = useRef(setMainSubtitleText);
-	setSubtitleTextRef.current = setMainSubtitleText;
-	// Current cuechange listener so we can remove it before adding a new one.
-	const activeCueListenerRef = useRef<{ track: TextTrack; handler: EventListener } | null>(null);
-
-	// Clear the subtitle overlay immediately when the viewed channel changes.
+	// Clear all subtitle overlays and timeupdate listeners when the viewed channel changes.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional on activePlayer change
 	useEffect(() => {
-		setMainSubtitleText("");
-		if (activeCueListenerRef.current) {
-			activeCueListenerRef.current.track.removeEventListener("cuechange", activeCueListenerRef.current.handler);
-			activeCueListenerRef.current = null;
+		setSubtitleTexts({});
+		for (const { inner, handler } of cueListenersRef.current.values()) {
+			inner.removeEventListener("timeupdate", handler);
 		}
+		cueListenersRef.current.clear();
 	}, [activePlayer]);
 
-	// Remove the cuechange listener on unmount.
+	// Remove all timeupdate listeners on unmount.
 	useEffect(() => {
 		return () => {
-			if (activeCueListenerRef.current) {
-				activeCueListenerRef.current.track.removeEventListener("cuechange", activeCueListenerRef.current.handler);
+			for (const { inner, handler } of cueListenersRef.current.values()) {
+				inner.removeEventListener("timeupdate", handler);
 			}
 		};
 	}, []);
@@ -576,30 +566,34 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// instance; el.api.media is the <video> hls.js attached to. On Safari, hls.js
 	// is not used and el.api is null, so we fall back to the shadow root query.
 	//
-	// For the main (single-view) player we set mode="hidden" so cues load silently
-	// and fire cuechange events, then display them in our own styled overlay div.
-	// This bypasses ::cue entirely, which doesn't work reliably inside shadow DOM
-	// on Safari or Chrome. Grid players use native mode="showing" (no overlay).
+	// All players (single-view and grid) use mode="hidden" so the browser never
+	// renders native captions. We listen to timeupdate — more reliable than cuechange
+	// on programmatically-injected tracks in shadow DOM — and display the active cue
+	// text in our own styled overlay div so all caption style settings take effect.
 	const applyCaption = useCallback((id: number, item: MediaItem) => {
 		type HlsEl = HTMLVideoElement & { api?: { media?: HTMLVideoElement } };
 		const el = videoRefs.current.get(id) as HlsEl | undefined;
 		const inner =
 			el?.api?.media ??
 			(el?.shadowRoot?.querySelector("video") as HTMLVideoElement | null);
-
-		// Always clean up any live cue listener before changing track state.
-		if (activeCueListenerRef.current) {
-			activeCueListenerRef.current.track.removeEventListener("cuechange", activeCueListenerRef.current.handler);
-			activeCueListenerRef.current = null;
-		}
-
 		if (!inner) return;
-		inner.querySelector("track[data-cc]")?.remove();
 
-		if (!captionsOnRef.current) {
-			setSubtitleTextRef.current("");
-			return;
+		// Remove the old track and any existing timeupdate listener for this player.
+		inner.querySelector("track[data-cc]")?.remove();
+		const existing = cueListenersRef.current.get(id);
+		if (existing) {
+			existing.inner.removeEventListener("timeupdate", existing.handler);
+			cueListenersRef.current.delete(id);
 		}
+		setSubtitleTexts((prev) => {
+			if (!(id in prev)) return prev;
+			const next = { ...prev };
+			delete next[id];
+			return next;
+		});
+
+		if (!captionsOnRef.current) return;
+
 		const url = vttUrl(item.subtitles);
 		if (!url) return;
 
@@ -613,25 +607,20 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 
 		const track = trackEl.track;
 		if (!track) return;
+		// Hidden: cues load and activeCues updates, but the browser never renders them.
+		track.mode = "hidden";
 
-		const isMainPlayer = !multiSelectModeRef.current && id === activePlayerRef.current;
-		if (isMainPlayer) {
-			// Hidden mode: cues load and cuechange fires, but the browser doesn't render them.
-			// We render our own styled overlay so font/color/size/opacity settings apply.
-			track.mode = "hidden";
-			const handler = () => {
-				const active = Array.from(track.activeCues ?? []);
-				const text = active
-					.map((c) => (c as VTTCue).text.replace(/<[^>]*>/g, ""))
-					.join("\n");
-				setSubtitleTextRef.current(text);
-			};
-			track.addEventListener("cuechange", handler);
-			activeCueListenerRef.current = { track, handler };
-		} else {
-			// Grid / thumbnail players: use native rendering (no styled overlay for these).
-			track.mode = "showing";
-		}
+		// timeupdate fires after activeCues is updated (spec §4.8.10.8), so reading
+		// activeCues here is reliable even on Safari with native HLS.
+		const handler = () => {
+			const active = Array.from(track.activeCues ?? []);
+			const text = active
+				.map((c) => (c as VTTCue).text.replace(/<[^>]*>/g, ""))
+				.join("\n");
+			setSubtitleTexts((prev) => (prev[id] === text ? prev : { ...prev, [id]: text }));
+		};
+		inner.addEventListener("timeupdate", handler);
+		cueListenersRef.current.set(id, { inner, handler });
 	}, []);
 
 	useEffect(() => {
@@ -886,12 +875,12 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										config={hlsConfigFor(item, levelForItem(item))}
 										crossOrigin="anonymous"
 									/>
-									{captionsOn && mainSubtitleText && (
+									{captionsOn && subtitleTexts[item.id] && (
 										<div
 											className={styles.subtitleOverlay}
 											style={subtitleOverlayStyle}
 										>
-											{mainSubtitleText}
+											{subtitleTexts[item.id]}
 										</div>
 									)}
 								</>
@@ -982,6 +971,14 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												config={hlsConfigFor(item, levelForItem(item))}
 												crossOrigin="anonymous"
 											/>
+											{captionsOn && subtitleTexts[id] && (
+												<div
+													className={styles.subtitleOverlay}
+													style={subtitleOverlayStyle}
+												>
+													{subtitleTexts[id]}
+												</div>
+											)}
 										</div>
 									);
 								})}
