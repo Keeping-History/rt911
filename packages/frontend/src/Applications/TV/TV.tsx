@@ -84,6 +84,22 @@ function toRgba(cssVarName: string, opacity: number): string {
 	return raw;
 }
 
+function buildCueStyle(style: CaptionStyle): string {
+	const font = resolveCssVar(style.font);
+	return `::cue { font-family: ${font || "sans-serif"}, sans-serif; color: ${toRgba(style.color, style.colorOpacity)}; background-color: ${toRgba(style.bgColor, style.bgOpacity)}; font-size: ${style.size}%; }`;
+}
+
+function setShadowCueStyle(shadowRoot: ShadowRoot | null, cssText: string) {
+	if (!shadowRoot) return;
+	let el = shadowRoot.getElementById("cc-cue-style") as HTMLStyleElement | null;
+	if (!el) {
+		el = document.createElement("style");
+		el.id = "cc-cue-style";
+		shadowRoot.appendChild(el);
+	}
+	el.textContent = cssText;
+}
+
 // HLS quality ceilings. hls.js orders levels by ascending bitrate, and the encoder
 // ships a fixed 3-rendition ladder (thumb 136k, mid 396k, full 2628k), so:
 //   0 = thumb (lowest), 1 = mid (one down), 2 = full (highest).
@@ -242,23 +258,30 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Stable ref to captionsOn so onReady callbacks always see the current value.
 	const captionsOnRef = useRef(captionsOn);
 	captionsOnRef.current = captionsOn;
+	// Stable ref to captionStyle so applyCaption (with empty deps) injects the latest style.
+	const captionStyleRef = useRef(captionStyle);
+	captionStyleRef.current = captionStyle;
 
 	// Inject a ::cue style tag whenever captions or their style settings change.
 	// CSS custom properties don't inherit into ::cue, so we resolve each var to
 	// its computed rgb() value and write it as a literal into the <style> tag.
+	// The <video> lives inside hls-video-element's shadow DOM, so we must also
+	// inject into each player's shadow root — host-document ::cue doesn't pierce
+	// the shadow boundary.
 	useEffect(() => {
+		const cueText = captionsOn ? buildCueStyle(captionStyle) : "";
+
 		let el = document.getElementById("cc-cue-style") as HTMLStyleElement | null;
 		if (!el) {
 			el = document.createElement("style");
 			el.id = "cc-cue-style";
 			document.head.appendChild(el);
 		}
-		if (!captionsOn) {
-			el.textContent = "";
-			return;
+		el.textContent = cueText;
+
+		for (const playerEl of videoRefs.current.values()) {
+			setShadowCueStyle(playerEl.shadowRoot, cueText);
 		}
-		const font = resolveCssVar(captionStyle.font);
-		el.textContent = `::cue { font-family: ${font || "sans-serif"}, sans-serif; color: ${toRgba(captionStyle.color, captionStyle.colorOpacity)}; background-color: ${toRgba(captionStyle.bgColor, captionStyle.bgOpacity)}; font-size: ${captionStyle.size}%; }`;
 	}, [captionsOn, captionStyle]);
 	// Latest per-player volumes mirrored to a ref so persistence can read fresh
 	// values without making volume changes a persist trigger — a drag updates
@@ -543,14 +566,19 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Inject or remove a <track> on the inner <video> element exposed by hls.js.
 	// ReactPlayer renders hls-video-element (a web component whose shadow DOM owns
 	// the real <video>); JSX <track> children don't reach it. el.api is the hls.js
-	// instance; el.api.media is the <video> hls.js attached to — the only reliable
-	// handle for programmatic text-track management.
+	// instance; el.api.media is the <video> hls.js attached to. On Safari, native
+	// HLS support means hls.js is not used and el.api is null, so we fall back to
+	// the shadow root query. We also inject ::cue styles directly into the shadow
+	// root because host-document styles don't cross the shadow boundary.
 	const applyCaption = useCallback((id: number, item: MediaItem) => {
 		type HlsEl = HTMLVideoElement & { api?: { media?: HTMLVideoElement } };
 		const el = videoRefs.current.get(id) as HlsEl | undefined;
-		const inner = el?.api?.media ?? (el?.querySelector("video") as HTMLVideoElement | null);
+		const inner =
+			el?.api?.media ??
+			(el?.shadowRoot?.querySelector("video") as HTMLVideoElement | null);
 		if (!inner) return;
 		inner.querySelector("track[data-cc]")?.remove();
+		setShadowCueStyle(el?.shadowRoot ?? null, captionsOnRef.current ? buildCueStyle(captionStyleRef.current) : "");
 		if (!captionsOnRef.current) return;
 		const url = vttUrl(item.subtitles);
 		if (!url) return;
