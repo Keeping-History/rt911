@@ -23,7 +23,7 @@ type RadioScannerProps = Record<string, never>;
 export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	const appName = "Radio Scanner";
 	const appId = "RadioScanner.app";
-	const appIcon = ClassicyIcons.controlPanels.soundManager.app as string;
+	const appIcon = ClassicyIcons.applications.radio.app as string;
 
 	const desktopEventDispatch = useAppManagerDispatch();
 	// Narrow to .data so that focus-only writes (apps[appId].focused) don't
