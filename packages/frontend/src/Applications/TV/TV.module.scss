@@ -139,6 +139,7 @@ $strip-height: calc(5em + 8px);
   height: 10vh;
   flex-shrink: 0;
   min-height: 95px;
+  border-top: 1px solid var(--color-window-border);
 }
 
 // Narrow column to the left of the thumbnail strip for control buttons
