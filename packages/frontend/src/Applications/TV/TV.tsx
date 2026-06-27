@@ -68,7 +68,8 @@ const COLOR_VARS = [
 ];
 
 function resolveCssVar(name: string): string {
-	return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+	const el = document.getElementById("classicyDesktop") ?? document.documentElement;
+	return getComputedStyle(el).getPropertyValue(name).trim();
 }
 
 function toRgba(cssVarName: string, opacity: number): string {
