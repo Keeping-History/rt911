@@ -29,7 +29,7 @@ const MAX_WILDCARD_LENGTH = 25;
 export const PagerDecoder = () => {
 	const appId = "PagerDecoder.app";
 	const appName = "Pager Decoder";
-	const appIcon = ClassicyIcons.applications.internetExplorer.mailbox;
+	const appIcon = ClassicyIcons.applications.pager.app;
 
 	const dispatch = useAppManagerDispatch();
 	const appState = useAppManager(
