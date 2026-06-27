@@ -195,7 +195,6 @@
 }
 
 .epgHolder {
-  position: sticky;
-  top: 0;
+  position: relative;
   width: calc(100% - var(--window-border-size) * 2);
 }

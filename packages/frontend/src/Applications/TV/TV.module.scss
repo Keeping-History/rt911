@@ -31,13 +31,20 @@ $strip-height: calc(5em + 8px);
   flex-direction: column;
 }
 
+.tvEpgStickyBlock {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  flex-shrink: 0;
+}
+
 .tvEpgToolbar {
   display: flex;
   flex-direction: row;
   align-items: center;
   padding: calc(var(--window-padding-size) * 0.5);
   border-bottom: 1px solid var(--color-system-05);
-  flex-shrink: 0;
+  background: var(--color-system-03);
 }
 
 // TV-static animation shown while the main player is buffering or switching channels.

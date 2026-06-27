@@ -257,24 +257,29 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 
 	return (
 		<div className={styles.tvEpgOverlay}>
-			<div className={styles.tvEpgToolbar}>
-				<ClassicyButton onClickFunc={jumpBack} buttonSize="small" margin="sm" padding="sm">
-					&lt;&lt;
-				</ClassicyButton>
-				<ClassicyButton onClickFunc={jumpToNow} buttonSize="small" margin="sm" padding="sm">
-					Now
-				</ClassicyButton>
-				<ClassicyButton onClickFunc={jumpForward} buttonSize="small" margin="sm" padding="sm">
-					&gt;&gt;
-				</ClassicyButton>
-				<ClassicyButton onClickFunc={onClose} buttonSize="small" margin="sm" padding="sm">
-					Close
-				</ClassicyButton>
+			<div className={styles.tvEpgStickyBlock}>
+				<div className={styles.tvEpgToolbar}>
+					<ClassicyButton onClickFunc={jumpBack} buttonSize="small" margin="sm" padding="sm">
+						&lt;&lt;
+					</ClassicyButton>
+					<ClassicyButton onClickFunc={jumpToNow} buttonSize="small" margin="sm" padding="sm">
+						Now
+					</ClassicyButton>
+					<ClassicyButton onClickFunc={jumpForward} buttonSize="small" margin="sm" padding="sm">
+						&gt;&gt;
+					</ClassicyButton>
+					<ClassicyButton onClickFunc={onClose} buttonSize="small" margin="sm" padding="sm">
+						Close
+					</ClassicyButton>
+				</div>
+				<div
+					className={classNames(epgStyles.epgGridSetup)}
+					style={{ gridTemplateColumns, backgroundColor: "var(--color-white)", borderTop: "1px solid var(--color-system-07)" }}
+				>
+					{epgHeader}
+				</div>
 			</div>
-			<div
-				className={epgStyles.epgHolder}
-				style={{ borderTop: "1px solid var(--color-system-07)" }}
-			>
+			<div className={epgStyles.epgHolder}>
 				{gridStartTime < currentTime && currentTime < gridEndTime && (
 					<div
 						className={classNames(epgStyles.epgGridSetup, epgStyles.epgIndicatorHolder)}
@@ -288,12 +293,6 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 						</div>
 					</div>
 				)}
-				<div
-					className={classNames(epgStyles.epgGridSetup)}
-					style={{ gridTemplateColumns, backgroundColor: "var(--color-white)", position: "relative" }}
-				>
-					{epgHeader}
-				</div>
 				<div
 					className={classNames(epgStyles.epgGridSetup, epgStyles.epgGridSetupBorder, epgStyles.epgGridAnimatedBackground)}
 					style={{
