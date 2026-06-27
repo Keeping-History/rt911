@@ -84,21 +84,6 @@ function toRgba(cssVarName: string, opacity: number): string {
 	return raw;
 }
 
-function buildCueStyle(style: CaptionStyle): string {
-	const font = resolveCssVar(style.font);
-	return `::cue { font-family: ${font || "sans-serif"}, sans-serif; color: ${toRgba(style.color, style.colorOpacity)}; background-color: ${toRgba(style.bgColor, style.bgOpacity)}; font-size: ${style.size}%; }`;
-}
-
-function setShadowCueStyle(shadowRoot: ShadowRoot | null, cssText: string) {
-	if (!shadowRoot) return;
-	let el = shadowRoot.getElementById("cc-cue-style") as HTMLStyleElement | null;
-	if (!el) {
-		el = document.createElement("style");
-		el.id = "cc-cue-style";
-		shadowRoot.appendChild(el);
-	}
-	el.textContent = cssText;
-}
 
 // HLS quality ceilings. hls.js orders levels by ascending bitrate, and the encoder
 // ships a fixed 3-rendition ladder (thumb 136k, mid 396k, full 2628k), so:
@@ -258,31 +243,53 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Stable ref to captionsOn so onReady callbacks always see the current value.
 	const captionsOnRef = useRef(captionsOn);
 	captionsOnRef.current = captionsOn;
-	// Stable ref to captionStyle so applyCaption (with empty deps) injects the latest style.
-	const captionStyleRef = useRef(captionStyle);
-	captionStyleRef.current = captionStyle;
+	// Stable ref to activePlayer so applyCaption (empty deps) knows which is the main view.
+	const activePlayerRef = useRef(activePlayer);
+	activePlayerRef.current = activePlayer;
+	// Stable ref to multiSelectMode for the same reason.
+	const multiSelectModeRef = useRef(multiSelectMode);
+	multiSelectModeRef.current = multiSelectMode;
 
-	// Inject a ::cue style tag whenever captions or their style settings change.
-	// CSS custom properties don't inherit into ::cue, so we resolve each var to
-	// its computed rgb() value and write it as a literal into the <style> tag.
-	// The <video> lives inside hls-video-element's shadow DOM, so we must also
-	// inject into each player's shadow root — host-document ::cue doesn't pierce
-	// the shadow boundary.
+	// Active cue text for the main player — displayed in our own overlay div so that
+	// font/color/size settings apply reliably on all browsers. Native ::cue is suppressed
+	// by keeping the track in mode="hidden"; only the overlay div is visible.
+	const [mainSubtitleText, setMainSubtitleText] = useState("");
+	// Stable setter ref so applyCaption (empty deps) can call it without stale closure.
+	const setSubtitleTextRef = useRef(setMainSubtitleText);
+	setSubtitleTextRef.current = setMainSubtitleText;
+	// Current cuechange listener so we can remove it before adding a new one.
+	const activeCueListenerRef = useRef<{ track: TextTrack; handler: EventListener } | null>(null);
+
+	// Clear the subtitle overlay immediately when the viewed channel changes.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional on activePlayer change
 	useEffect(() => {
-		const cueText = captionsOn ? buildCueStyle(captionStyle) : "";
-
-		let el = document.getElementById("cc-cue-style") as HTMLStyleElement | null;
-		if (!el) {
-			el = document.createElement("style");
-			el.id = "cc-cue-style";
-			document.head.appendChild(el);
+		setMainSubtitleText("");
+		if (activeCueListenerRef.current) {
+			activeCueListenerRef.current.track.removeEventListener("cuechange", activeCueListenerRef.current.handler);
+			activeCueListenerRef.current = null;
 		}
-		el.textContent = cueText;
+	}, [activePlayer]);
 
-		for (const playerEl of videoRefs.current.values()) {
-			setShadowCueStyle(playerEl.shadowRoot, cueText);
-		}
-	}, [captionsOn, captionStyle]);
+	// Remove the cuechange listener on unmount.
+	useEffect(() => {
+		return () => {
+			if (activeCueListenerRef.current) {
+				activeCueListenerRef.current.track.removeEventListener("cuechange", activeCueListenerRef.current.handler);
+			}
+		};
+	}, []);
+
+	// Compute the overlay's inline style from captionStyle — re-evaluates whenever
+	// the user changes a setting, without any ::cue / shadow-DOM gymnastics.
+	const subtitleOverlayStyle = useMemo(() => {
+		const font = resolveCssVar(captionStyle.font);
+		return {
+			fontFamily: `${font || "sans-serif"}, sans-serif`,
+			fontSize: `${captionStyle.size}%`,
+			color: toRgba(captionStyle.color, captionStyle.colorOpacity),
+			backgroundColor: toRgba(captionStyle.bgColor, captionStyle.bgOpacity),
+		} as React.CSSProperties;
+	}, [captionStyle]);
 	// Latest per-player volumes mirrored to a ref so persistence can read fresh
 	// values without making volume changes a persist trigger — a drag updates
 	// the ref every tick but only commits to the store on release.
@@ -566,33 +573,65 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Inject or remove a <track> on the inner <video> element exposed by hls.js.
 	// ReactPlayer renders hls-video-element (a web component whose shadow DOM owns
 	// the real <video>); JSX <track> children don't reach it. el.api is the hls.js
-	// instance; el.api.media is the <video> hls.js attached to. On Safari, native
-	// HLS support means hls.js is not used and el.api is null, so we fall back to
-	// the shadow root query. We also inject ::cue styles directly into the shadow
-	// root because host-document styles don't cross the shadow boundary.
+	// instance; el.api.media is the <video> hls.js attached to. On Safari, hls.js
+	// is not used and el.api is null, so we fall back to the shadow root query.
+	//
+	// For the main (single-view) player we set mode="hidden" so cues load silently
+	// and fire cuechange events, then display them in our own styled overlay div.
+	// This bypasses ::cue entirely, which doesn't work reliably inside shadow DOM
+	// on Safari or Chrome. Grid players use native mode="showing" (no overlay).
 	const applyCaption = useCallback((id: number, item: MediaItem) => {
 		type HlsEl = HTMLVideoElement & { api?: { media?: HTMLVideoElement } };
 		const el = videoRefs.current.get(id) as HlsEl | undefined;
 		const inner =
 			el?.api?.media ??
 			(el?.shadowRoot?.querySelector("video") as HTMLVideoElement | null);
+
+		// Always clean up any live cue listener before changing track state.
+		if (activeCueListenerRef.current) {
+			activeCueListenerRef.current.track.removeEventListener("cuechange", activeCueListenerRef.current.handler);
+			activeCueListenerRef.current = null;
+		}
+
 		if (!inner) return;
 		inner.querySelector("track[data-cc]")?.remove();
-		setShadowCueStyle(el?.shadowRoot ?? null, captionsOnRef.current ? buildCueStyle(captionStyleRef.current) : "");
-		if (!captionsOnRef.current) return;
+
+		if (!captionsOnRef.current) {
+			setSubtitleTextRef.current("");
+			return;
+		}
 		const url = vttUrl(item.subtitles);
 		if (!url) return;
+
 		const trackEl = document.createElement("track");
 		trackEl.setAttribute("data-cc", "true");
 		trackEl.kind = "subtitles";
 		trackEl.srclang = "en";
 		trackEl.label = "English";
 		trackEl.src = url;
-		trackEl.default = true;
 		inner.appendChild(trackEl);
-		// Force showing — browsers default new tracks to 'disabled'.
-		const added = Array.from(inner.textTracks).find((t) => t.label === "English");
-		if (added) added.mode = "showing";
+
+		const track = trackEl.track;
+		if (!track) return;
+
+		const isMainPlayer = !multiSelectModeRef.current && id === activePlayerRef.current;
+		if (isMainPlayer) {
+			// Hidden mode: cues load and cuechange fires, but the browser doesn't render them.
+			// We render our own styled overlay so font/color/size/opacity settings apply.
+			track.mode = "hidden";
+			const handler = () => {
+				const active = Array.from(track.activeCues ?? []);
+				const text = active
+					.map((c) => (c as VTTCue).text.replace(/<[^>]*>/g, ""))
+					.join("\n");
+				setSubtitleTextRef.current(text);
+			};
+			track.addEventListener("cuechange", handler);
+			activeCueListenerRef.current = { track, handler };
+		} else {
+			// Grid / thumbnail players: use native rendering (no styled overlay for these).
+			track.mode = "showing";
+		}
 	}, []);
 
 	useEffect(() => {
@@ -847,6 +886,14 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										config={hlsConfigFor(item, levelForItem(item))}
 										crossOrigin="anonymous"
 									/>
+									{captionsOn && mainSubtitleText && (
+										<div
+											className={styles.subtitleOverlay}
+											style={subtitleOverlayStyle}
+										>
+											{mainSubtitleText}
+										</div>
+									)}
 								</>
 							);
 						})()}
@@ -945,7 +992,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 						<div className={styles.tvControlPanel}>
 							<div className={styles.tvControlButtons}>
 								<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
-									Grid
+									MultiView
 								</ClassicyButton>
 								<ClassicyButton
 									onClickFunc={() =>
