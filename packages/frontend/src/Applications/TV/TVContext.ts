@@ -12,10 +12,10 @@ export interface CaptionStyle {
 
 export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
 	font: "--ui-font",
-	color: "--color-system-07",
+	color: "--color-system-01",
 	colorOpacity: 1,
-	bgColor: "--color-system-01",
-	bgOpacity: 0.75,
+	bgColor: "--color-system-07",
+	bgOpacity: 0.8,
 	size: 100,
 };
 
