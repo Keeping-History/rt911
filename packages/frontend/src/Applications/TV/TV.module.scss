@@ -225,8 +225,8 @@ $strip-height: calc(5em + 8px);
 }
 
 .tvChannelTitle {
-  font-family: var(--ui-font);
-  font-size: calc(var(--ui-font-size) * .75);
+  font-family: var(--digital-font);
+  font-size: calc(var(--digital-font-size) * .75);
   margin: 0;
   padding: 0 var(--window-padding-size);
   color: var(--color-theme-02);
