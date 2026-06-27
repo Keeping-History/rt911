@@ -4,6 +4,8 @@ so both collections produce consistent slugs.
 
 Normalization priority: creator field → subject field → regex on title.
 """
+from __future__ import annotations
+
 import re
 
 KNOWN_CHANNELS: dict[str, str] = {
@@ -25,6 +27,8 @@ KNOWN_CHANNELS: dict[str, str] = {
     "cspan": "c-span",
     "univision": "univision",
     "telemundo": "telemundo",
+    "cctv3": "cctv4",
+    "cctv4": "cctv4",
 }
 
 # Local affiliate call-sign pattern: W/K followed by 3 uppercase letters

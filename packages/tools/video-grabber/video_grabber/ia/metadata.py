@@ -2,6 +2,8 @@
 Metadata extraction — air date parsing, channel slug, timezone resolution.
 Ported from packages/backend/seed.mjs:parseTitleDate().
 """
+from __future__ import annotations
+
 import re
 from datetime import datetime, timezone, timedelta
 
@@ -32,7 +34,7 @@ _TZABBR: dict[str, timedelta] = {
 _DEFAULT_OFFSET = timedelta(hours=-4)
 
 # Some abbreviations are genuinely ambiguous across regions. "CST" is US Central
-# (-6) in a US title but China Standard Time (+8) for CCTV3; "CT" likewise. When
+# (-6) in a US title but China Standard Time (+8) for CCTV4; "CT" likewise. When
 # one of these appears for a channel with a known canonical timezone, trust the
 # channel's region over the literal abbreviation.
 _AMBIGUOUS_ABBR: frozenset[str] = frozenset({"CST", "CT"})
@@ -44,7 +46,7 @@ _AMBIGUOUS_ABBR: frozenset[str] = frozenset({"CST", "CT"})
 # exact. (Most channels resolve air time from the UTC identifier timestamp and
 # never reach this path; this is the authoritative fallback when they do.)
 _CHANNEL_OFFSET: dict[str, timedelta] = {
-    "cctv3": timedelta(hours=8),   # China Standard Time
+    "cctv4": timedelta(hours=8),   # China Standard Time
     "nhk": timedelta(hours=9),     # Japan Standard Time
     "bbc": timedelta(hours=1),     # British Summer Time
     "mcm": timedelta(hours=2),     # Central European Summer Time
@@ -111,7 +113,7 @@ def extract_air_date_utc(
     """Parse air date from title then description; return UTC datetime or None.
 
     ``channel_slug`` disambiguates region-ambiguous timezone abbreviations in
-    the title (e.g. CCTV3's "CST" is China, not US Central)."""
+    the title (e.g. CCTV4's "CST" is China, not US Central)."""
     for text in (title, description):
         if not text:
             continue

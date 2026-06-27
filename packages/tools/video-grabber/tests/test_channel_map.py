@@ -23,7 +23,7 @@ def test_identifier_prefix_fallback_for_international_feed():
          "title": "Antenna 1 Greece : ANT1 : September 13, 2001"}
     ) == "ant1"
     assert normalize_slug({"identifier": "NHK_20010914_010000_News"}) == "nhk"
-    assert normalize_slug({"identifier": "CCTV3_20010914_010000_x"}) == "cctv3"
+    assert normalize_slug({"identifier": "CCTV3_20010914_010000_x"}) == "cctv4"
 
 
 def test_identifier_prefix_requires_leading_letter():
