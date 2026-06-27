@@ -138,6 +138,7 @@ $strip-height: calc(5em + 8px);
   flex-direction: row;
   height: 10vh;
   flex-shrink: 0;
+  min-height: 95px;
 }
 
 // Narrow column to the left of the thumbnail strip for control buttons
