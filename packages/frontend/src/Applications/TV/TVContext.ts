@@ -3,18 +3,18 @@ import { registerAppEventHandler } from "classicy";
 
 export interface CaptionStyle {
 	font: string;
-	color: string;
+	color: number;
 	colorOpacity: number;
-	bgColor: string;
+	bgColor: number;
 	bgOpacity: number;
 	size: number;
 }
 
 export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
 	font: "--ui-font",
-	color: "--color-system-01",
+	color: 16777215, // white
 	colorOpacity: 1,
-	bgColor: "--color-system-07",
+	bgColor: 0, // black
 	bgOpacity: 0.8,
 	size: 100,
 };

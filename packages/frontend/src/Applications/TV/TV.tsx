@@ -2,11 +2,14 @@ import {
 	ClassicyApp,
 	ClassicyButton,
 	ClassicyCheckbox,
+	ClassicyColorPicker,
 	ClassicyControlLabel,
 	ClassicyIcons,
 	ClassicySlider,
 	ClassicyTabs,
 	ClassicyWindow,
+	MAC_OS_8_CRAYONS,
+	intToRgb,
 	quitMenuItemHelper,
 	useAppManager,
 	useAppManagerDispatch,
@@ -62,27 +65,10 @@ const FONT_VARS: [string, string][] = [
 	["--body-font", "Body"],
 	["--ui-font", "UI"],
 ];
-const COLOR_VARS = [
-	...Array.from({ length: 7 }, (_, i) => `--color-theme-0${i + 1}`),
-	...Array.from({ length: 7 }, (_, i) => `--color-system-0${i + 1}`),
-];
 
 function resolveCssVar(name: string): string {
 	const el = document.getElementById("classicyDesktop") ?? document.documentElement;
 	return getComputedStyle(el).getPropertyValue(name).trim();
-}
-
-function toRgba(cssVarName: string, opacity: number): string {
-	const raw = resolveCssVar(cssVarName);
-	const m = raw.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-	if (m) return `rgba(${m[1]},${m[2]},${m[3]},${opacity})`;
-	if (raw.startsWith("#") && raw.length === 7) {
-		const r = Number.parseInt(raw.slice(1, 3), 16);
-		const g = Number.parseInt(raw.slice(3, 5), 16);
-		const b = Number.parseInt(raw.slice(5, 7), 16);
-		return `rgba(${r},${g},${b},${opacity})`;
-	}
-	return raw;
 }
 
 
@@ -275,11 +261,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const [subtitleOverlayStyle, setSubtitleOverlayStyle] = useState<React.CSSProperties>({});
 	useEffect(() => {
 		const font = resolveCssVar(captionStyle.font);
+		const { r: cr, g: cg, b: cb } = intToRgb(captionStyle.color);
+		const { r: br, g: bg, b: bb } = intToRgb(captionStyle.bgColor);
 		setSubtitleOverlayStyle({
 			fontFamily: `${font || "sans-serif"}, sans-serif`,
 			fontSize: `${captionStyle.size}%`,
-			color: toRgba(captionStyle.color, captionStyle.colorOpacity),
-			backgroundColor: toRgba(captionStyle.bgColor, captionStyle.bgOpacity),
+			color: `rgba(${cr},${cg},${cb},${captionStyle.colorOpacity})`,
+			backgroundColor: `rgba(${br},${bg},${bb},${captionStyle.bgOpacity})`,
 		});
 	}, [captionStyle]);
 	// Latest per-player volumes mirrored to a ref so persistence can read fresh
@@ -738,19 +726,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												</ClassicyButton>
 											))}
 										</div>
-										<ClassicyControlLabel label="Text Color" />
-										<div className={styles.captionSwatches}>
-											{COLOR_VARS.map((v) => (
-												<button
-													type="button"
-													key={v}
-													className={`${styles.captionSwatch} ${captionStyle.color === v ? styles.captionSwatchSelected : ""}`}
-													style={{ backgroundColor: `var(${v})` }}
-													title={v}
-													onClick={() => setCaptionStyle((s) => ({ ...s, color: v }))}
-												/>
-											))}
-										</div>
+										<ClassicyColorPicker
+											id="cc_text_color"
+											labelTitle="Text Color"
+											value={captionStyle.color}
+											crayons={MAC_OS_8_CRAYONS}
+											onChangeFunc={(color) => setCaptionStyle((s) => ({ ...s, color }))}
+										/>
 										<ClassicySlider
 											id="cc_text_opacity"
 											labelTitle="Text Opacity"
@@ -765,19 +747,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												setCaptionStyle((s) => ({ ...s, colorOpacity: parseFloat(e.target.value) }))
 											}
 										/>
-										<ClassicyControlLabel label="Background Color" />
-										<div className={styles.captionSwatches}>
-											{COLOR_VARS.map((v) => (
-												<button
-													type="button"
-													key={v}
-													className={`${styles.captionSwatch} ${captionStyle.bgColor === v ? styles.captionSwatchSelected : ""}`}
-													style={{ backgroundColor: `var(${v})` }}
-													title={v}
-													onClick={() => setCaptionStyle((s) => ({ ...s, bgColor: v }))}
-												/>
-											))}
-										</div>
+										<ClassicyColorPicker
+											id="cc_bg_color"
+											labelTitle="Background Color"
+											value={captionStyle.bgColor}
+											crayons={MAC_OS_8_CRAYONS}
+											onChangeFunc={(color) => setCaptionStyle((s) => ({ ...s, bgColor: color }))}
+										/>
 										<ClassicySlider
 											id="cc_bg_opacity"
 											labelTitle="Background Opacity"

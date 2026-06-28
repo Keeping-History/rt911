@@ -292,29 +292,3 @@ $strip-height: calc(5em + 8px);
   gap: 0.25em;
   margin-bottom: 0.25em;
 }
-
-.captionSwatches {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
-  margin-bottom: 0.25em;
-}
-
-.captionSwatch {
-  width: 100%;
-  aspect-ratio: 1;
-  border: 1px solid var(--color-system-05);
-  border-radius: 2px;
-  cursor: pointer;
-  padding: 0;
-  outline: none;
-
-  &:hover {
-    border-color: var(--color-system-07);
-  }
-}
-
-.captionSwatchSelected {
-  outline: 4px solid var(--color-theme-03);
-  outline-offset: 2px;
-}
