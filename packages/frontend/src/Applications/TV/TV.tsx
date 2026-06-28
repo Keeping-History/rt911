@@ -270,16 +270,17 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		};
 	}, []);
 
-	// Compute the overlay's inline style from captionStyle — re-evaluates whenever
-	// the user changes a setting, without any ::cue / shadow-DOM gymnastics.
-	const subtitleOverlayStyle = useMemo(() => {
+	// useEffect (not useMemo) so CSS custom properties are resolved post-mount,
+	// when the theme variables are actually available in computed styles.
+	const [subtitleOverlayStyle, setSubtitleOverlayStyle] = useState<React.CSSProperties>({});
+	useEffect(() => {
 		const font = resolveCssVar(captionStyle.font);
-		return {
+		setSubtitleOverlayStyle({
 			fontFamily: `${font || "sans-serif"}, sans-serif`,
 			fontSize: `${captionStyle.size}%`,
 			color: toRgba(captionStyle.color, captionStyle.colorOpacity),
 			backgroundColor: toRgba(captionStyle.bgColor, captionStyle.bgOpacity),
-		} as React.CSSProperties;
+		});
 	}, [captionStyle]);
 	// Latest per-player volumes mirrored to a ref so persistence can read fresh
 	// values without making volume changes a persist trigger — a drag updates
