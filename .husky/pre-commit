@@ -1,2 +1,4 @@
+#!/bin/sh
+export PATH="$HOME/.local/share/mise/shims:$PATH"
 pnpm update classicy --latest --recursive --silent
 git add pnpm-lock.yaml

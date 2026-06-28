@@ -283,10 +283,11 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 					{/* Bottom row: control panel + one button per station */}
 					<div className={styles.rsBottomRow}>
 						<div className={styles.rsControlPanel}>
-							<ClassicyButton onClickFunc={toggleScanner} depressed={scannerMode}>
+							<ClassicyButton buttonSize="small" onClickFunc={toggleScanner} depressed={scannerMode}>
 								Scan
 							</ClassicyButton>
 							<ClassicyButton
+								buttonSize="small"
 								onClickFunc={() => setCaptionsOn((v) => !v)}
 								depressed={captionsOn}
 							>
