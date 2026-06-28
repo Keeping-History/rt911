@@ -138,7 +138,7 @@ function drawWave(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: nu
  */
 export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
-	const [modeIndex, setModeIndex] = useState(0);
+	const [modeIndex, setModeIndex] = useState(3);
 	const modeIndexRef = useRef(modeIndex);
 	modeIndexRef.current = modeIndex;
 
