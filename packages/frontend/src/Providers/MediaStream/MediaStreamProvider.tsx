@@ -15,6 +15,7 @@ import {
 	type PagerItem,
 	type UsenetItem,
 } from "./MediaStreamContext";
+import { trackAck } from "./ackTracking";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
 import { keepMediaItem, keepPagerItem } from "./retention";
@@ -43,6 +44,7 @@ const SEEK_THRESHOLD_MS = 90_000;
 
 interface WsItemsMessage {
 	type: "items" | "init_ack" | "seek_ack";
+	time?: string;
 	items: MediaItem[];
 }
 
@@ -516,6 +518,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 
 			if (msg.type !== "items" && msg.type !== "init_ack" && msg.type !== "seek_ack") return;
+
+			trackAck(msg.type, (msg as WsItemsMessage).time);
 
 			const incoming = (msg as WsItemsMessage).items;
 			if (incoming.length === 0) return;
