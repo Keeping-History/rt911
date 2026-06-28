@@ -12,12 +12,12 @@ import {
 } from "classicy";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
+import { trackAppToggle } from "../../openreplay";
 import { DisclosureTriangle } from "./DisclosureTriangle";
 import type { GroupSortField } from "./groupTree";
 import { messageBodyView } from "./messageBodyView";
 import styles from "./Newsgroups.module.scss";
 import type { SortField } from "./newsgroupUtils";
-import { trackAppToggle } from "../../openreplay";
 import { useNewsgroups } from "./useNewsgroups";
 
 /** Compact "YYYY-MM-DD HH:mm" for the date column; blank for an unparseable date. */
