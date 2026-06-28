@@ -37,6 +37,7 @@ import {
 	tvSetMuted,
 	tvSetVolumeLimit,
 } from "./TVContext";
+import { trackChannelChange } from "../../openreplay";
 import { resolveGridVolume } from "./volume";
 import { TVEPGPanel } from "./TVEPGPanel";
 
@@ -300,6 +301,18 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		}
 		return config;
 	};
+
+	const prevActivePlayerRef = useRef<number | undefined>(undefined);
+	useEffect(() => {
+		const prev = prevActivePlayerRef.current;
+		prevActivePlayerRef.current = activePlayer;
+		if (prev === undefined || prev === activePlayer) return;
+		const fromSource =
+			items.find((i) => i.id === prev)?.source ?? "unknown";
+		const toSource =
+			items.find((i) => i.id === activePlayer)?.source ?? "unknown";
+		trackChannelChange(fromSource, toSource);
+	}, [activePlayer, items]);
 
 	// Select the first item once items arrive, and re-home the active player if its
 	// channel was disabled in Settings (its item drops out of the filtered list).
