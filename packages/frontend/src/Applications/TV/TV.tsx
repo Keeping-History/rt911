@@ -1085,10 +1085,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								const isActive = !multiSelectMode && item.id === activePlayer;
 								const isSelected = selectedPlayers.includes(item.id);
 
-								// Selected items in multi-select mode render their player in the grid
-								// (which owns the videoRef for health checks); thumbnail shows title only.
-								const renderThumbnailPlayer = !multiSelectMode || !isSelected;
-
 								return (
 									<button
 										key={item.id}
@@ -1121,19 +1117,17 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										<div className={styles.tvChannelTitleHolder}>
 											<p className={styles.tvChannelTitle}>{item.source}</p>
 										</div>
-										{renderThumbnailPlayer && (
-											<img
-												className={styles.tvThumbnailImage}
-												src={`https://files.911realtime.org/thumbnails/${
-													item.source?.toLowerCase() ?? "offline"
-												}/${thumbTs}.jpg`}
-												onError={(e) => {
-													e.currentTarget.src =
-														"https://files.911realtime.org/thumbnails/offline.jpg";
-												}}
-												alt=""
-											/>
-										)}
+										<img
+											className={styles.tvThumbnailImage}
+											src={`https://files.911realtime.org/thumbnails/${
+												item.source?.toLowerCase() ?? "offline"
+											}/${thumbTs}.jpg`}
+											onError={(e) => {
+												e.currentTarget.src =
+													"https://files.911realtime.org/thumbnails/offline.jpg";
+											}}
+											alt=""
+										/>
 									</button>
 								);
 							})}
