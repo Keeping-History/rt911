@@ -12,6 +12,7 @@ import {
 } from "classicy";
 import type React from "react";
 import { type ChangeEvent, useCallback, useMemo, useState } from "react";
+import { trackPauseResume, trackVirtualTimeSet } from "../../openreplay";
 import styles from "./Controls.module.scss";
 
 const DEFAULT_SKIP_MINUTES = 30;
@@ -100,8 +101,8 @@ export const Controls: React.FC = () => {
 	const handleStepBack    = () => shiftTime(-(stepSeconds / 60));
 	const handleStepForward = () => shiftTime(stepSeconds / 60);
 	const handleSkipForward = () => shiftTime(skipMinutes);
-	const handlePlay        = () => resume();
-	const handlePause       = () => pause();
+	const handlePlay        = () => { resume();  trackPauseResume("resume", dateTime); };
+	const handlePause       = () => { pause();   trackPauseResume("pause",  dateTime); };
 
 	// --- Time entry ---
 
@@ -115,6 +116,7 @@ export const Controls: React.FC = () => {
 		const base = new Date(dateTime);
 		base.setUTCHours(utcH, parseInt(timeForm.minutes, 10), parseInt(timeForm.seconds, 10), 0);
 		setDateTime(base);
+		trackVirtualTimeSet(base.toISOString(), "seek");
 	}, [timeForm, dateTime, tzOffset, setDateTime]);
 
 	return (
