@@ -1045,34 +1045,38 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								}
 							/>
 							<div className={styles.tvChannelButtons}>
-								<ClassicyButton
-									onClickFunc={() => {
-										if (items.length === 0) return;
-										const idx = items.findIndex((i) => i.id === activePlayer);
-										const next = (idx + 1) % items.length;
-										setActivePlayer(items[next].id);
-										setHasInteracted(true);
-									}}
-									buttonSize="small"
-									margin="sm"
-									padding="sm"
-								>
-									▲
-								</ClassicyButton>
-								<ClassicyButton
-									onClickFunc={() => {
-										if (items.length === 0) return;
-										const idx = items.findIndex((i) => i.id === activePlayer);
-										const prev = (idx - 1 + items.length) % items.length;
-										setActivePlayer(items[prev].id);
-										setHasInteracted(true);
-									}}
-									buttonSize="small"
-									margin="sm"
-									padding="sm"
-								>
-									▼
-								</ClassicyButton>
+								{!multiSelectMode && (
+									<>
+										<ClassicyButton
+											onClickFunc={() => {
+												if (items.length === 0) return;
+												const idx = items.findIndex((i) => i.id === activePlayer);
+												const next = (idx + 1) % items.length;
+												setActivePlayer(items[next].id);
+												setHasInteracted(true);
+											}}
+											buttonSize="small"
+											margin="sm"
+											padding="sm"
+										>
+											▲
+										</ClassicyButton>
+										<ClassicyButton
+											onClickFunc={() => {
+												if (items.length === 0) return;
+												const idx = items.findIndex((i) => i.id === activePlayer);
+												const prev = (idx - 1 + items.length) % items.length;
+												setActivePlayer(items[prev].id);
+												setHasInteracted(true);
+											}}
+											buttonSize="small"
+											margin="sm"
+											padding="sm"
+										>
+											▼
+										</ClassicyButton>
+									</>
+								)}
 								<ClassicyButton
 									onClickFunc={() => setShowEpg((v) => !v)}
 									depressed={showEpg}
