@@ -15,6 +15,9 @@ import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
 import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
 import { TV } from "./Applications/TV/TV";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
+import { initTracker } from "./openreplay";
+
+initTracker();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Root element not found");
@@ -67,7 +70,6 @@ createRoot(rootElement).render(
 					<PagerDecoder />
 					<RadioScanner />
 					<TV />
-					<Controls />
 				</ClassicyDesktop>
 			</MediaStreamProvider>
 		</ClassicyAppManagerProvider>
