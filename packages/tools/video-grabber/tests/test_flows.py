@@ -111,7 +111,7 @@ def test_scan_collections_flow_calls_crawl_for_each_collection():
     from video_grabber.pipeline.flows import scan_collections_flow
 
     with patch("video_grabber.pipeline.flows.crawl_collection") as mock_crawl, \
-         patch("video_grabber.pipeline.flows.ArchiveSession") as mock_session_cls, \
+         patch("video_grabber.pipeline.flows.IASearch") as mock_session_cls, \
          patch("video_grabber.pipeline.flows.get_db") as mock_db, \
          patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
 

@@ -25,10 +25,7 @@ from video_grabber.usenet.processor import process_archive
 from video_grabber.usenet.scanner import scan_collections
 from video_grabber.usenet.writer import write_group
 
-try:
-    from internetarchive import ArchiveSession
-except ImportError:
-    ArchiveSession = None  # not required in test environment
+from video_grabber.ia.search import IASearch
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
 
@@ -81,7 +78,7 @@ def scan_usenet_flow(collections: list[str] | None = None) -> None:
     cfg = Config()
     collections = collections or cfg.usenet_collection_list()
     sleep_sec = 1.0 / cfg.ia_rate_per_sec if cfg.ia_rate_per_sec > 0 else 0.0
-    session = ArchiveSession()
+    session = IASearch()
     db = get_db()
     total = scan_collections(session, collections, db, sleep_sec=sleep_sec, logger=logger)
     logger.info("scan-usenet: complete, %d items enumerated", total)

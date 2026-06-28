@@ -31,10 +31,7 @@ from video_grabber.epg.assembler import assemble_range
 from video_grabber.epg.scheduler import build_schedule
 from video_grabber.config import Config
 
-try:
-    from internetarchive import ArchiveSession
-except ImportError:
-    ArchiveSession = None  # not required in test environment
+from video_grabber.ia.search import IASearch
 
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
@@ -166,7 +163,7 @@ def scan_collections_flow(collections: list[str] = ["sept_11_tv_archive", "911"]
     logger = get_run_logger()
     cfg = Config()
     sleep_sec = 1.0 / cfg.ia_rate_per_sec if cfg.ia_rate_per_sec > 0 else 0.0
-    session = ArchiveSession()
+    session = IASearch()
     db = get_db()
     for coll in collections:
         crawl_collection(
