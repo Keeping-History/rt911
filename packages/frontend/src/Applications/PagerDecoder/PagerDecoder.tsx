@@ -14,6 +14,7 @@ import {
 } from "classicy";
 import { useContext, useEffect, useRef, useState } from "react";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
+import { trackAppToggle } from "../../openreplay";
 import styles from "./PagerDecoder.module.scss";
 import type {
 	PagerDecoderFilter,
@@ -35,6 +36,21 @@ export const PagerDecoder = () => {
 	const appState = useAppManager(
 		(state) => state.System.Manager.Applications.apps[appId],
 	);
+
+	const isOpen = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
+	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (prevIsOpenRef.current === undefined) {
+			prevIsOpenRef.current = isOpen;
+			return;
+		}
+		if (prevIsOpenRef.current === isOpen) return;
+		prevIsOpenRef.current = isOpen;
+		trackAppToggle(appId, isOpen ? "open" : "close");
+	}, [isOpen]);
 
 	const settings: PagerDecoderSettings =
 		(appState?.data?.settings as PagerDecoderSettings | undefined) ??

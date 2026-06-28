@@ -10,13 +10,14 @@ import {
 	quitMenuItemHelper,
 	useAppManager,
 } from "classicy";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { DisclosureTriangle } from "./DisclosureTriangle";
 import type { GroupSortField } from "./groupTree";
 import { messageBodyView } from "./messageBodyView";
 import styles from "./Newsgroups.module.scss";
 import type { SortField } from "./newsgroupUtils";
+import { trackAppToggle } from "../../openreplay";
 import { useNewsgroups } from "./useNewsgroups";
 
 /** Compact "YYYY-MM-DD HH:mm" for the date column; blank for an unparseable date. */
@@ -36,6 +37,21 @@ export const Newsgroups = () => {
 	// classicy window interaction (focus, z-order), which would re-render this
 	// component on every click even when nothing relevant changed.
 	const isRunning = useAppManager((s) => appId in (s.System.Manager.Applications.apps ?? {}));
+
+	const isOpen = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
+	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (prevIsOpenRef.current === undefined) {
+			prevIsOpenRef.current = isOpen;
+			return;
+		}
+		if (prevIsOpenRef.current === isOpen) return;
+		prevIsOpenRef.current = isOpen;
+		trackAppToggle(appId, isOpen ? "open" : "close");
+	}, [isOpen]);
 
 	const {
 		groups,

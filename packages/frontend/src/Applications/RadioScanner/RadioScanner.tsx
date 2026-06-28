@@ -14,6 +14,7 @@ import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamConte
 import { NowPlayingList } from "./NowPlayingList";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
+import { trackAppToggle } from "../../openreplay";
 import { sanitizeActiveStation, sanitizeItemIds, sanitizeStationKeys } from "./radioPlayback";
 import { StationPlayer } from "./StationPlayer";
 import { activeSegments, mergeWithSources } from "./stationGrouping";
@@ -31,6 +32,21 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	const appState = useAppManager(
 		(state) => state.System.Manager.Applications.apps[appId]?.data as Record<string, unknown> | undefined,
 	);
+
+	const isOpen = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
+	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (prevIsOpenRef.current === undefined) {
+			prevIsOpenRef.current = isOpen;
+			return;
+		}
+		if (prevIsOpenRef.current === isOpen) return;
+		prevIsOpenRef.current = isOpen;
+		trackAppToggle(appId, isOpen ? "open" : "close");
+	}, [isOpen]);
 
 	// mp3 audio is delivered on its own opt-in channel; subscribe while mounted.
 	// Mount-only: the component only renders when the app is open, so there is no

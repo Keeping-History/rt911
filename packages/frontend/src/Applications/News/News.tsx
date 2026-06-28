@@ -15,12 +15,14 @@ import {
 	useContext,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 import {
 	MediaStreamContext,
 	type MediaItem,
 } from "../../Providers/MediaStream/MediaStreamContext";
+import { trackAppToggle } from "../../openreplay";
 import styles from "./News.module.scss";
 
 export const News: React.FC = () => {
@@ -48,6 +50,21 @@ export const News: React.FC = () => {
 	// reference that would make openDocumentDetails/getWindowOpenOffset always unstable.
 	const appWindows = useAppManager((s) => s.System.Manager.Applications.apps[appId]?.windows);
 	const paddingSize = useAppManager((s) => s.System.Manager.Appearance.activeTheme.measurements.window.paddingSize);
+
+	const isOpen = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
+	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (prevIsOpenRef.current === undefined) {
+			prevIsOpenRef.current = isOpen;
+			return;
+		}
+		if (prevIsOpenRef.current === isOpen) return;
+		prevIsOpenRef.current = isOpen;
+		trackAppToggle(appId, isOpen ? "open" : "close");
+	}, [isOpen]);
 
 	const [limit, setLimit] = useState<number>(10);
 	const [offset, setOffset] = useState<number>(0);

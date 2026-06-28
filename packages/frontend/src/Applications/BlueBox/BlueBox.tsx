@@ -1,5 +1,6 @@
-import { ClassicyApp, ClassicyWindow, quitAppHelper, useAppManagerDispatch } from 'classicy';
-import { useCallback, useMemo } from 'react';
+import { ClassicyApp, ClassicyWindow, quitAppHelper, useAppManager, useAppManagerDispatch } from 'classicy';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { trackAppToggle } from '../../openreplay';
 import './BlueBox.scss';
 import infiniteMacIcon from './infinite-mac.png';
 
@@ -9,6 +10,21 @@ export const BlueBox = () => {
   const appIcon = infiniteMacIcon;
 
   const desktopEventDispatch = useAppManagerDispatch();
+
+  const isOpen = useAppManager(
+    (state) =>
+      state.System.Manager.Applications.apps[appId]?.open ?? false,
+  );
+  const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (prevIsOpenRef.current === undefined) {
+      prevIsOpenRef.current = isOpen;
+      return;
+    }
+    if (prevIsOpenRef.current === isOpen) return;
+    prevIsOpenRef.current = isOpen;
+    trackAppToggle(appId, isOpen ? 'open' : 'close');
+  }, [isOpen]);
 
   const quitApp = useCallback(() => {
     desktopEventDispatch(quitAppHelper(appId, appName, appIcon));

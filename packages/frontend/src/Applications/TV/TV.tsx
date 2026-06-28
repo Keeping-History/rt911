@@ -37,7 +37,7 @@ import {
 	tvSetMuted,
 	tvSetVolumeLimit,
 } from "./TVContext";
-import { trackChannelChange } from "../../openreplay";
+import { trackAppToggle, trackChannelChange } from "../../openreplay";
 import { resolveGridVolume } from "./volume";
 import { TVEPGPanel } from "./TVEPGPanel";
 
@@ -109,6 +109,21 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const appState = useAppManager(
 		(state) => state.System.Manager.Applications.apps[appId],
 	);
+
+	const isOpen = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
+	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (prevIsOpenRef.current === undefined) {
+			prevIsOpenRef.current = isOpen;
+			return;
+		}
+		if (prevIsOpenRef.current === isOpen) return;
+		prevIsOpenRef.current = isOpen;
+		trackAppToggle(appId, isOpen ? "open" : "close");
+	}, [isOpen]);
 
 	// Unfiltered-by-source list, used only to enumerate which channels exist so
 	// Settings can list them all (even ones the user has currently disabled).

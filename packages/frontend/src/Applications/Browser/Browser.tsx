@@ -21,6 +21,7 @@ import {
 	useState,
 } from "react";
 
+import { trackAppToggle } from "../../openreplay";
 import "./Browser.scss";
 import "./BrowserContext";
 import type {
@@ -159,6 +160,21 @@ export const Browser = () => {
 	const appState = useAppManager(
 		(state) => state.System.Manager.Applications.apps[appId],
 	);
+
+	const isOpen = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
+	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (prevIsOpenRef.current === undefined) {
+			prevIsOpenRef.current = isOpen;
+			return;
+		}
+		if (prevIsOpenRef.current === isOpen) return;
+		prevIsOpenRef.current = isOpen;
+		trackAppToggle(appId, isOpen ? "open" : "close");
+	}, [isOpen]);
 
 	const favorites = useAppManager(
 		(state) => (state.System.Manager.Applications.apps[appId]?.data?.favorites ?? []) as BrowserFavorite[],
