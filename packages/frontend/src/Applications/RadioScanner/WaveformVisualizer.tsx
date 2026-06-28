@@ -1,4 +1,3 @@
-import AudioMotionAnalyzer from "audiomotion-analyzer";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { keepAudioContextAlive } from "./audioContextKeepAlive";
@@ -16,28 +15,134 @@ const audioContextMap = new WeakMap<
 >();
 
 const VIZ_MODES = [
-	{ label: "Bars",     mode: 3,  radial: false, fillAlpha: 0,   lineWidth: 0, barSpace: 0.4 },
-	{ label: "Spectrum", mode: 0,  radial: false, fillAlpha: 0.5, lineWidth: 2, barSpace: 0   },
-	{ label: "Radial",   mode: 4,  radial: true,  fillAlpha: 0.3, lineWidth: 0, barSpace: 0.3 },
-	{ label: "Wave",     mode: 10, radial: false, fillAlpha: 0.3, lineWidth: 2, barSpace: 0   },
+	{ label: "Bars" },
+	{ label: "Spectrum" },
+	{ label: "Radial" },
+	{ label: "Wave" },
 ] as const;
 
+// Matches var(--color-theme-02) fallback used on the toggle button.
+const COLOR_BRIGHT = "rgba(0,210,90,0.9)";
+const COLOR_DIM = "rgba(0,180,70,0.3)";
+
+function linearGrad(d: CanvasRenderingContext2D, h: number): CanvasGradient {
+	const g = d.createLinearGradient(0, 0, 0, h);
+	g.addColorStop(0, COLOR_BRIGHT);
+	g.addColorStop(1, COLOR_DIM);
+	return g;
+}
+
+function drawBars(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: number) {
+	const buf = new Uint8Array(a.frequencyBinCount);
+	a.getByteFrequencyData(buf);
+	d.clearRect(0, 0, w, h);
+	const g = linearGrad(d, h);
+	const n = Math.min(buf.length, Math.floor(w / 4));
+	const bw = (w / n) * 0.6;
+	const gap = (w / n) * 0.4;
+	for (let i = 0; i < n; i++) {
+		const bh = (buf[Math.floor((i / n) * buf.length)] / 255) * h;
+		d.fillStyle = g;
+		d.fillRect(i * (bw + gap), h - bh, bw, bh);
+	}
+}
+
+function drawSpectrum(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: number) {
+	const buf = new Uint8Array(a.frequencyBinCount);
+	a.getByteFrequencyData(buf);
+	d.clearRect(0, 0, w, h);
+	const g = linearGrad(d, h);
+	const last = buf.length - 1;
+
+	d.beginPath();
+	d.moveTo(0, h);
+	for (let i = 0; i < buf.length; i++) d.lineTo((i / last) * w, h - (buf[i] / 255) * h);
+	d.lineTo(w, h);
+	d.closePath();
+	d.globalAlpha = 0.5;
+	d.fillStyle = g;
+	d.fill();
+
+	d.globalAlpha = 1;
+	d.beginPath();
+	d.moveTo(0, h - (buf[0] / 255) * h);
+	for (let i = 1; i < buf.length; i++) d.lineTo((i / last) * w, h - (buf[i] / 255) * h);
+	d.strokeStyle = COLOR_BRIGHT;
+	d.lineWidth = 2;
+	d.stroke();
+}
+
+function drawRadial(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: number) {
+	const buf = new Uint8Array(a.frequencyBinCount);
+	a.getByteFrequencyData(buf);
+	d.clearRect(0, 0, w, h);
+
+	const cx = w / 2;
+	const cy = h / 2;
+	const r0 = Math.min(w, h) * 0.15;
+	const maxH = Math.min(w, h) * 0.35;
+	const n = 128;
+	const bw = ((2 * Math.PI * r0) / n) * 0.7;
+
+	// Radial gradient: dim at center, bright at outer edge of bars.
+	const g = d.createRadialGradient(cx, cy, r0, cx, cy, r0 + maxH);
+	g.addColorStop(0, COLOR_DIM);
+	g.addColorStop(1, COLOR_BRIGHT);
+
+	d.globalAlpha = 0.85;
+	for (let i = 0; i < n; i++) {
+		const bh = (buf[Math.floor((i / n) * buf.length * 0.75)] / 255) * maxH;
+		if (bh < 1) continue;
+		d.save();
+		d.translate(cx, cy);
+		d.rotate((i / n) * 2 * Math.PI - Math.PI / 2);
+		d.fillStyle = g;
+		d.fillRect(-bw / 2, r0, bw, bh);
+		d.restore();
+	}
+	d.globalAlpha = 1;
+}
+
+function drawWave(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: number) {
+	const buf = new Uint8Array(a.fftSize);
+	a.getByteTimeDomainData(buf);
+	d.clearRect(0, 0, w, h);
+	const g = linearGrad(d, h);
+	const sw = w / buf.length;
+
+	d.beginPath();
+	d.moveTo(0, h / 2);
+	for (let i = 0; i < buf.length; i++) d.lineTo(i * sw, ((buf[i] - 128) / 128) * (h / 2) + h / 2);
+	d.lineTo(w, h / 2);
+	d.lineTo(w, h);
+	d.lineTo(0, h);
+	d.closePath();
+	d.globalAlpha = 0.3;
+	d.fillStyle = g;
+	d.fill();
+
+	d.globalAlpha = 1;
+	d.beginPath();
+	d.moveTo(0, ((buf[0] - 128) / 128) * (h / 2) + h / 2);
+	for (let i = 1; i < buf.length; i++) d.lineTo(i * sw, ((buf[i] - 128) / 128) * (h / 2) + h / 2);
+	d.strokeStyle = COLOR_BRIGHT;
+	d.lineWidth = 2;
+	d.stroke();
+}
+
 /**
- * Renders a real-time audio visualizer using audiomotion-analyzer. Uses
- * overlay mode so the canvas is absolutely positioned and transparent,
- * acting as a background layer inside the nearest positioned ancestor.
- * A small toggle button cycles through four visualization modes.
+ * Renders a real-time audio visualizer using the Web Audio API and Canvas 2D.
+ * Uses overlay mode so the canvas is absolutely positioned inside the nearest
+ * positioned ancestor. A small toggle button cycles through four visualization
+ * modes.
  */
 export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
-	const motionRef = useRef<AudioMotionAnalyzer | null>(null);
 	const [modeIndex, setModeIndex] = useState(0);
-	// Ref keeps the creation closure current without making modeIndex a dep.
 	const modeIndexRef = useRef(modeIndex);
 	modeIndexRef.current = modeIndex;
 
-	// Create/destroy the audiomotion instance when the audio element changes.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: modeIndex intentionally excluded — handled by separate effect
+	// biome-ignore lint/correctness/useExhaustiveDependencies: modeIndex intentionally excluded — read each frame via ref
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container || !audioEl) return;
@@ -58,62 +163,60 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 			}
 		}
 		entry.ctx.resume().catch(() => {});
-		// Browsers suspend a backgrounded tab's AudioContext, which silences the
-		// audio routed through it; keep it resumed so switching tabs doesn't pause
-		// the station. Detached on cleanup.
 		const stopKeepAlive = keepAudioContextAlive(entry.ctx);
 
-		const { mode, radial, fillAlpha, lineWidth, barSpace } = VIZ_MODES[modeIndexRef.current];
-		let motion: AudioMotionAnalyzer;
-		try {
-			motion = new AudioMotionAnalyzer(container, {
-				audioCtx: entry.ctx,
-				// Audio already routes to speakers via source → destination above.
-				// Disable audiomotion's own connection to avoid doubling the signal.
-				connectSpeakers: false,
-				// overlay: true makes the canvas position:absolute with a transparent
-				// background so it layers over sibling content inside the container.
-				overlay: true,
-				gradient: "classic",
-				mode,
-				radial,
-				fillAlpha,
-				lineWidth,
-				barSpace,
-				smoothing: 0.8,
-				showScaleX: false,
-			});
-			motion.connectInput(entry.source);
-			motionRef.current = motion;
-		} catch {
+		// Capture source for cleanup closure; entry may theoretically change.
+		const { source } = entry;
+
+		const analyser = entry.ctx.createAnalyser();
+		analyser.fftSize = 2048;
+		analyser.smoothingTimeConstant = 0.8;
+		source.connect(analyser);
+
+		const canvas = document.createElement("canvas");
+		canvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;";
+		container.appendChild(canvas);
+
+		const resize = () => {
+			canvas.width = container.clientWidth;
+			canvas.height = container.clientHeight;
+		};
+		resize();
+		const ro = new ResizeObserver(resize);
+		ro.observe(container);
+
+		const ctx2d = canvas.getContext("2d");
+		if (!ctx2d) {
+			canvas.remove();
+			ro.disconnect();
 			stopKeepAlive();
 			return;
 		}
 
+		let rafId: number;
+		const draw = () => {
+			rafId = requestAnimationFrame(draw);
+			const w = canvas.width;
+			const h = canvas.height;
+			if (w === 0 || h === 0) return;
+			const mode = VIZ_MODES[modeIndexRef.current].label;
+			if (mode === "Bars") drawBars(ctx2d, analyser, w, h);
+			else if (mode === "Spectrum") drawSpectrum(ctx2d, analyser, w, h);
+			else if (mode === "Radial") drawRadial(ctx2d, analyser, w, h);
+			else drawWave(ctx2d, analyser, w, h);
+		};
+		draw();
+
 		return () => {
-			// Remove the canvas from the DOM before stopping so that React
-			// StrictMode's double-invoke doesn't leave a stale canvas behind
-			// when the effect re-runs.
-			motion.canvas.remove();
-			// Stop animation only — do NOT call destroy(), which closes the
-			// AudioContext and permanently silences the audio element.
-			motion.stop();
+			cancelAnimationFrame(rafId);
+			ro.disconnect();
+			// Remove canvas before stopping so StrictMode's double-invoke doesn't
+			// leave a stale canvas when the effect re-runs.
+			canvas.remove();
+			source.disconnect(analyser);
 			stopKeepAlive();
-			motionRef.current = null;
 		};
 	}, [audioEl]);
-
-	// Update the live instance's properties when the mode changes.
-	useEffect(() => {
-		const motion = motionRef.current;
-		if (!motion) return;
-		const { mode, radial, fillAlpha, lineWidth, barSpace } = VIZ_MODES[modeIndex];
-		motion.mode = mode;
-		motion.radial = radial;
-		motion.fillAlpha = fillAlpha;
-		motion.lineWidth = lineWidth;
-		motion.barSpace = barSpace;
-	}, [modeIndex]);
 
 	return (
 		<div
