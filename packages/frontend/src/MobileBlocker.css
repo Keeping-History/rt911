@@ -21,7 +21,7 @@
 	background-color: var(--color-window-frame, #cccccc);
 	border: 1px solid var(--color-error, #ff0000);
 	box-shadow:
-		inset -1px -1px var(--color-system-05, #808080),
+		inset -1px -1px var(--color-system-03),
 		inset 1px 1px var(--color-window-border-outset, #ffffff),
 		1px 1px 0 0 #000000;
 	padding: 5px;
@@ -45,9 +45,15 @@
 	justify-content: center;
 	font-family: var(--ui-font, Geneva, "Helvetica Neue", Helvetica, Arial, sans-serif);
 	font-size: var(--ui-font-size, 12px);
-	color: var(--color-system-05, #808080);
+	color: var(--color-system-03, #808080);
 	user-select: none;
 	margin-bottom: 5px;
+}
+
+.mobileBlockerTitleBar span {
+	color: var(--color-black, #000);
+	background-color: var(--color-system-03);
+	padding: 0 var(--window-control-size);
 }
 
 /* White inset content area with Platinum inner bevel */
@@ -55,7 +61,7 @@
 	background-color: var(--color-window-document, #ffffff);
 	border: 1px solid var(--color-window-border, #000000);
 	box-shadow:
-		-1px -1px var(--color-system-05, #808080),
+		-1px -1px var(--color-system-03, #808080),
 		1px 1px var(--color-window-border-outset, #ffffff);
 	display: flex;
 	flex-direction: row;
