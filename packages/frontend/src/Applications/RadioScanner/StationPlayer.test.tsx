@@ -62,9 +62,9 @@ describe("StationPlayer", () => {
 
 	it("renders no waveform control when showWaveform is false, and one when true", () => {
 		const { queryByText, rerender } = render(<StationPlayer {...base} showWaveform={false} />);
-		expect(queryByText("Bars")).toBeNull();
+		expect(queryByText("Wave")).toBeNull();
 		rerender(<StationPlayer {...base} showWaveform={true} />);
-		expect(queryByText("Bars")).not.toBeNull();
+		expect(queryByText("Wave")).not.toBeNull();
 	});
 
 	it("pauses mounted elements when the clock pauses", () => {
