@@ -237,6 +237,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	const getUpcomingMp3Items = useCallback(
+		(): MediaItem[] => Array.from(mp3Buffer.current.values()),
+		[],
+	);
+
 	const subscribeNews = useCallback(
 		(appId: string) => {
 			const wasEmpty = newsSubscribers.current.size === 0;
@@ -578,6 +583,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribePager,
 			subscribeMp3,
 			unsubscribeMp3,
+			getUpcomingMp3Items,
 			subscribeNews,
 			unsubscribeNews,
 			subscribeUsenet,
@@ -602,6 +608,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribePager,
 			subscribeMp3,
 			unsubscribeMp3,
+			getUpcomingMp3Items,
 			subscribeNews,
 			unsubscribeNews,
 			subscribeUsenet,

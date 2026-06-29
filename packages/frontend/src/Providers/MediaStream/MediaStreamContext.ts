@@ -149,6 +149,8 @@ export interface MediaStreamContextValue {
 	subscribeMp3: (appId: string) => void;
 	/** Drop an mp3-channel subscription. Unsubscribes server-side when the last app leaves. */
 	unsubscribeMp3: (appId: string) => void;
+	/** Snapshot of mp3 items waiting in the reveal buffer (start_date still in the future). */
+	getUpcomingMp3Items: () => MediaItem[];
 	/** Opt into news-channel delivery. Ref-counted by appId. */
 	subscribeNews: (appId: string) => void;
 	/** Drop a news-channel subscription. Unsubscribes server-side when the last app leaves. */
@@ -181,6 +183,7 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	unsubscribePager: () => {},
 	subscribeMp3: () => {},
 	unsubscribeMp3: () => {},
+	getUpcomingMp3Items: () => [],
 	subscribeNews: () => {},
 	unsubscribeNews: () => {},
 	subscribeUsenet: () => {},

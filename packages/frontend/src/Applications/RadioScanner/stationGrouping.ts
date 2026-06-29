@@ -67,6 +67,36 @@ export function primarySegment(segments: MediaItem[]): MediaItem | null {
 	);
 }
 
+/** Up to `count` not-yet-started items for `station`, sorted earliest-first. */
+export function upcomingSegments(
+	station: Station,
+	upcoming: MediaItem[],
+	nowMs: number,
+	count = 5,
+): MediaItem[] {
+	return upcoming
+		.filter((item) => stationKey(item) === station.key && toMs(item.start_date) > nowMs)
+		.sort((a, b) => toMs(a.start_date) - toMs(b.start_date))
+		.slice(0, count);
+}
+
+/** Up to `count` ended items for `station` from the history list, most recent first. */
+export function previousSegments(
+	station: Station,
+	history: MediaItem[],
+	nowMs: number,
+	count = 5,
+): MediaItem[] {
+	return history
+		.filter((item) => {
+			if (stationKey(item) !== station.key) return false;
+			const end = effectiveEndMs(item);
+			return end !== null && end <= nowMs;
+		})
+		.sort((a, b) => toMs(b.start_date) - toMs(a.start_date))
+		.slice(0, count);
+}
+
 /**
  * Build the full station list from the time-independent audio source catalogue,
  * overlaying active items. Sources with no active items have an empty items array

@@ -56,6 +56,7 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					unsubscribePager,
 					subscribeMp3: vi.fn(),
 					unsubscribeMp3: vi.fn(),
+					getUpcomingMp3Items: vi.fn(() => []),
 					newsItems: [],
 					subscribeNews: vi.fn(),
 					unsubscribeNews: vi.fn(),

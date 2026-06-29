@@ -7,27 +7,19 @@ import {
 } from "./radioPlayback";
 
 describe("shouldStationPlay", () => {
-	it("single-station mode: only the active station may play", () => {
-		const sel = { scannerMode: false, activeStation: "ATC", selectedStations: ["X", "Y"] };
+	it("returns true only for the active station", () => {
+		const sel = { activeStation: "ATC" };
 		expect(shouldStationPlay(sel, "ATC")).toBe(true);
-		expect(shouldStationPlay(sel, "X")).toBe(false); // selectedStations ignored off-scan
-		expect(shouldStationPlay(sel, "Nope")).toBe(false);
+		expect(shouldStationPlay(sel, "Rutgers")).toBe(false);
+		expect(shouldStationPlay(sel, "")).toBe(false);
 	});
 
 	it("switching the active station silences the previous one", () => {
-		const before = { scannerMode: false, activeStation: "ATC", selectedStations: [] };
-		const after = { scannerMode: false, activeStation: "Rutgers", selectedStations: [] };
+		const before = { activeStation: "ATC" };
+		const after = { activeStation: "Rutgers" };
 		expect(shouldStationPlay(before, "ATC")).toBe(true);
 		expect(shouldStationPlay(after, "ATC")).toBe(false);
 		expect(shouldStationPlay(after, "Rutgers")).toBe(true);
-	});
-
-	it("scan mode: every selected station may play, others may not", () => {
-		const sel = { scannerMode: true, activeStation: "ATC", selectedStations: ["Rutgers", "Newark"] };
-		expect(shouldStationPlay(sel, "Rutgers")).toBe(true);
-		expect(shouldStationPlay(sel, "Newark")).toBe(true);
-		expect(shouldStationPlay(sel, "ATC")).toBe(false); // activeStation ignored in scan
-		expect(shouldStationPlay(sel, "Nope")).toBe(false);
 	});
 });
 

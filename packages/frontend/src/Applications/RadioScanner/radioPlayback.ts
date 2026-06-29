@@ -1,19 +1,12 @@
-// Single source of truth for which radio *stations* may have audio playing.
+// Single source of truth for which radio *station* is active.
 //
-// A "station" is a group of MediaItems sharing a source (see stationGrouping.ts),
-// identified by a string key. The Radio Scanner has two modes:
-//   - Scan mode: the user hand-picks stations that all play together.
-//   - Single-station mode (default): exactly one station — the active one — plays.
+// The Radio Scanner plays one station at a time — the active one.
 export interface PlaybackSelection {
-	scannerMode: boolean;
 	activeStation: string;
-	selectedStations: string[];
 }
 
 export function shouldStationPlay(sel: PlaybackSelection, key: string): boolean {
-	return sel.scannerMode
-		? sel.selectedStations.includes(key)
-		: key === sel.activeStation;
+	return key === sel.activeStation;
 }
 
 /** Keep only string entries — drops legacy numeric ids from old persisted state. */

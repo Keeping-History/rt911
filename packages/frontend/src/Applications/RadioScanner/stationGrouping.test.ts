@@ -5,8 +5,10 @@ import {
 	calcSeekSeconds,
 	groupStations,
 	mergeWithSources,
+	previousSegments,
 	primarySegment,
 	type Station,
+	upcomingSegments,
 } from "./stationGrouping";
 
 // Minimal MediaItem factory — only the fields the helpers read matter.
@@ -110,6 +112,88 @@ describe("calcSeekSeconds", () => {
 		const it1 = item({ start_date: "2001-09-11T12:40:00Z", jump: 2 });
 		expect(calcSeekSeconds(it1, new Date("2001-09-11T12:40:30Z").getTime())).toBe(32);
 		expect(calcSeekSeconds(it1, new Date("2001-09-11T12:39:00Z").getTime())).toBe(0); // floored
+	});
+});
+
+describe("upcomingSegments", () => {
+	const t = (s: string) => new Date(s).getTime();
+	const station = (key: string): Station => ({ key, label: key, items: [] });
+
+	it("returns items in the future for the matching station, sorted earliest-first", () => {
+		const upcoming = [
+			item({ id: 1, source: "ATC", start_date: "2001-09-11T13:00:00Z" }),
+			item({ id: 2, source: "ATC", start_date: "2001-09-11T12:50:00Z" }),
+			item({ id: 3, source: "Rutgers", start_date: "2001-09-11T13:10:00Z" }),
+		];
+		const now = t("2001-09-11T12:45:00Z");
+		const result = upcomingSegments(station("ATC"), upcoming, now);
+		expect(result.map((i) => i.id)).toEqual([2, 1]);
+	});
+
+	it("excludes items whose start_date is not in the future", () => {
+		const upcoming = [
+			item({ id: 1, source: "ATC", start_date: "2001-09-11T12:40:00Z" }),
+		];
+		const now = t("2001-09-11T12:45:00Z");
+		expect(upcomingSegments(station("ATC"), upcoming, now)).toEqual([]);
+	});
+
+	it("limits results to count", () => {
+		const upcoming = Array.from({ length: 8 }, (_, i) =>
+			item({ id: i + 1, source: "ATC", start_date: `2001-09-11T1${i}:00:00Z` }),
+		).filter((x) => x.start_date > "2001-09-11T12:00:00Z");
+		const now = t("2001-09-11T09:00:00Z");
+		expect(upcomingSegments(station("ATC"), upcoming, now, 3)).toHaveLength(3);
+	});
+
+	it("returns empty for empty upcoming list", () => {
+		expect(upcomingSegments(station("ATC"), [], new Date("2001-09-11T12:00:00Z").getTime())).toEqual([]);
+	});
+});
+
+describe("previousSegments", () => {
+	const t = (s: string) => new Date(s).getTime();
+	const station = (key: string): Station => ({ key, label: key, items: [] });
+
+	it("returns ended items for the matching station, most recent first", () => {
+		const history = [
+			item({ id: 1, source: "ATC", start_date: "2001-09-11T12:00:00Z", end_date: "2001-09-11T12:10:00Z" }),
+			item({ id: 2, source: "ATC", start_date: "2001-09-11T12:20:00Z", end_date: "2001-09-11T12:30:00Z" }),
+			item({ id: 3, source: "Rutgers", start_date: "2001-09-11T12:00:00Z", end_date: "2001-09-11T12:05:00Z" }),
+		];
+		const now = t("2001-09-11T12:45:00Z");
+		const result = previousSegments(station("ATC"), history, now);
+		expect(result.map((i) => i.id)).toEqual([2, 1]);
+	});
+
+	it("excludes currently active items (end_date in the future)", () => {
+		const history = [
+			item({ id: 1, source: "ATC", start_date: "2001-09-11T12:00:00Z", end_date: "2001-09-11T12:50:00Z" }),
+		];
+		const now = t("2001-09-11T12:45:00Z");
+		expect(previousSegments(station("ATC"), history, now)).toEqual([]);
+	});
+
+	it("excludes items with no knowable end", () => {
+		const history = [item({ id: 1, source: "ATC", start_date: "2001-09-11T12:00:00Z" })];
+		const now = t("2001-09-11T12:45:00Z");
+		expect(previousSegments(station("ATC"), history, now)).toEqual([]);
+	});
+
+	it("uses calc_duration when end_date is absent", () => {
+		const history = [
+			item({ id: 1, source: "ATC", start_date: "2001-09-11T12:00:00Z", calc_duration: 300 }),
+		];
+		const now = t("2001-09-11T12:10:00Z");
+		expect(previousSegments(station("ATC"), history, now).map((i) => i.id)).toEqual([1]);
+	});
+
+	it("limits results to count", () => {
+		const history = Array.from({ length: 8 }, (_, i) =>
+			item({ id: i + 1, source: "ATC", start_date: `2001-09-11T${String(i).padStart(2, "0")}:00:00Z`, end_date: `2001-09-11T${String(i).padStart(2, "0")}:05:00Z` }),
+		);
+		const now = t("2001-09-11T12:00:00Z");
+		expect(previousSegments(station("ATC"), history, now, 3)).toHaveLength(3);
 	});
 });
 

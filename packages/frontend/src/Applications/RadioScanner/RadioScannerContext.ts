@@ -13,9 +13,6 @@ export const classicyRadioScannerEventHandler = (
 	ds.System.Manager.Applications.apps[appId].data = {
 		...(ds.System.Manager.Applications.apps[appId].data ?? {}),
 		activeStation: action.activeStation,
-		scannerMode: action.scannerMode,
-		selectedStations: action.selectedStations,
-		mutedStations: action.mutedStations,
 		mutedItems: action.mutedItems,
 		showWaveform: action.showWaveform,
 	};
