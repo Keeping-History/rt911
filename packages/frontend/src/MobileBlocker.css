@@ -1,9 +1,10 @@
+/* Full-viewport overlay — hidden on desktop, shown on touch devices */
 .mobileBlocker {
 	display: none;
 	position: fixed;
 	inset: 0;
 	z-index: 999999;
-	background: var(--color-window-frame, #dddddd);
+	background: var(--color-window-frame, #cccccc);
 	align-items: center;
 	justify-content: center;
 	pointer-events: all;
@@ -13,4 +14,66 @@
 	.mobileBlocker {
 		display: flex;
 	}
+}
+
+/* Outer window shell — Platinum error style (red border + 3D bevel) */
+.mobileBlockerDialog {
+	background-color: var(--color-window-frame, #cccccc);
+	border: 1px solid var(--color-error, #ff0000);
+	box-shadow:
+		inset -1px -1px var(--color-system-05, #808080),
+		inset 1px 1px var(--color-window-border-outset, #ffffff),
+		1px 1px 0 0 #000000;
+	padding: 5px;
+	width: 380px;
+	max-width: 90vw;
+}
+
+/* Red pinstripe title bar (matches classicy's $title-bar-center-red) */
+.mobileBlockerTitleBar {
+	height: 18px;
+	background-color: #f7cecd;
+	background-image: repeating-linear-gradient(
+		180deg,
+		#ef8c89 0px,
+		#ef8c89 1px,
+		#f9dada 1px,
+		#f9dada 2px
+	);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--ui-font, Geneva, "Helvetica Neue", Helvetica, Arial, sans-serif);
+	font-size: var(--ui-font-size, 12px);
+	color: var(--color-system-05, #808080);
+	user-select: none;
+	margin-bottom: 5px;
+}
+
+/* White inset content area with Platinum inner bevel */
+.mobileBlockerBody {
+	background-color: var(--color-window-document, #ffffff);
+	border: 1px solid var(--color-window-border, #000000);
+	box-shadow:
+		-1px -1px var(--color-system-05, #808080),
+		1px 1px var(--color-window-border-outset, #ffffff);
+	display: flex;
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 1rem;
+	padding: 1rem;
+}
+
+.mobileBlockerIcon {
+	width: 32px;
+	height: 32px;
+	flex-shrink: 0;
+}
+
+.mobileBlockerText {
+	margin: 0;
+	font-family: var(--ui-font, Geneva, "Helvetica Neue", Helvetica, Arial, sans-serif);
+	font-size: var(--ui-font-size, 12px);
+	line-height: 1.5;
+	color: var(--color-black, #000000);
 }
