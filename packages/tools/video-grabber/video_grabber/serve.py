@@ -18,6 +18,8 @@ avoids coupling pure modules to Prefect's runtime.
 """
 import subprocess
 import sys
+import threading
+import time
 
 import sqlalchemy as sa
 from prefect import serve
@@ -76,49 +78,100 @@ _USENET_DISPATCH_LIMIT = 4
 # Re-run the (bounded, idempotent) dispatcher every 5 minutes to keep the queue draining.
 _USENET_DISPATCH_INTERVAL = 300
 # Transcription shares the encode-1 iGPU with VAAPI video encode (whisper Vulkan
-# vs. h264_vaapi). Encode backlog is fully drained; encode-1 is at ~5% CPU / 2% RAM
-# so iGPU is idle. Raised to 6 concurrent slots. Revert if encode backlog returns.
-# scan/dispatch are serial; channel merge writes one shared per-channel SRT so keep at 1.
-_TRANSCRIBE_ITEM_LIMIT = 6
+# vs. h264_vaapi). 6 concurrent whisper-Vulkan instances destabilised the iGPU —
+# workers crashed silently (native SIGSEGV/SIGKILL, not OOM; the node had 96% RAM
+# free), each orphaning its job and losing its slot until all 6 were dead and the
+# pipeline stalled. Held at 3 to ease GPU contention; the supervisor below makes a
+# crash self-healing rather than terminal. scan/dispatch are serial; channel merge
+# writes one shared per-channel SRT so keep at 1.
+_TRANSCRIBE_ITEM_LIMIT = 3
 _TRANSCRIBE_SCAN_LIMIT = 1
-_TRANSCRIBE_DISPATCH_LIMIT = 6
+_TRANSCRIBE_DISPATCH_LIMIT = 3
 _BUILD_CHANNEL_SUBS_LIMIT = 1
+# A live worker heartbeats its claimed job's last_transition_at every minute, so a
+# 'transcribing' row untouched for this long means its worker died — recover it.
+# Well above the 60s heartbeat but far below the ~1h46m max real transcription, so
+# it never reclaims a job a slow-but-alive worker is still running.
+_TRANSCRIBE_STALE_MINUTES = 5
+_TRANSCRIBE_SUPERVISE_INTERVAL = 20
+_TRANSCRIBE_MAX_RETRIES = 3
 _THUMBNAIL_LIMIT = 1  # one batch run at a time; manually triggered from Prefect UI
 
 
-def _start_transcribe_workers() -> None:
-    """Reset stuck transcription jobs and spawn one dispatch worker per slot.
+def _recover_orphaned_transcribing(engine, stale_minutes: int) -> int:
+    """Re-queue 'transcribing' jobs whose worker died mid-transcription.
 
-    Called once at pod startup, before serve() blocks. Any job left in
-    'transcribing' from the previous pod session is reset to 'failed' so the
-    dispatcher retries it. Workers write to /tmp/transcribe-worker-N.log."""
+    A worker that crashes (native SIGSEGV / SIGKILL) never runs the flow's
+    except/finally, so its job is stuck in 'transcribing'. Live workers heartbeat
+    last_transition_at every minute, so a row untouched for ``stale_minutes`` has
+    no live worker → recover it: back to 'pending' to retry, or to 'failed' once
+    retries are exhausted (kept for diagnosis), bumping retry_count either way.
+    ``stale_minutes=0`` recovers every 'transcribing' row — used at boot, when no
+    worker is running yet so all of them are orphans."""
+    with engine.begin() as db:
+        res = db.execute(sa.text("""
+            UPDATE transcribe_jobs
+               SET stage = CASE WHEN retry_count < :max
+                                THEN CAST('pending' AS transcribe_stage)
+                                ELSE CAST('failed'  AS transcribe_stage) END,
+                   retry_count = retry_count + 1,
+                   error_message = 'recovered: worker died/stalled mid-transcription',
+                   last_transition_at = now()
+             WHERE stage = 'transcribing'
+               AND last_transition_at < now() - (:mins * interval '1 minute')
+            RETURNING id
+        """), {"max": _TRANSCRIBE_MAX_RETRIES, "mins": stale_minutes})
+        return res.rowcount
+
+
+def _spawn_transcribe_worker(i: int) -> subprocess.Popen:
+    log = open(f"/tmp/transcribe-worker-{i}.log", "w")  # noqa: SIM115
+    return subprocess.Popen(
+        [sys.executable, "-m", "video_grabber.transcribe.dispatch_worker", str(i)],
+        stdout=log,
+        stderr=log,
+    )
+
+
+def _start_transcribe_workers() -> None:
+    """Spawn one dispatch worker per slot and supervise them.
+
+    Called once at pod startup, before serve() blocks. A background supervisor
+    thread (a) respawns any worker that dies — a native whisper/Vulkan crash would
+    otherwise permanently lose a slot — and (b) periodically re-queues jobs orphaned
+    in 'transcribing' by such a crash. Workers write to /tmp/transcribe-worker-N.log."""
     from video_grabber.config import Config
     from video_grabber.transcribe.flows import _sync_db_url
 
     cfg = Config()
     engine = sa.create_engine(_sync_db_url(cfg.database_url))
-    with engine.connect() as db:
-        result = db.execute(sa.text("""
-            UPDATE transcribe_jobs
-            SET stage = CAST('failed' AS transcribe_stage),
-                error_message = 'reset: pod restarted'
-            WHERE stage = 'transcribing'
-            RETURNING id
-        """))
-        db.commit()
-        n = result.rowcount
-    engine.dispose()
-    if n:
-        print(f"[serve] reset {n} stuck transcribing job(s) to failed", flush=True)
 
+    # On boot no worker is running, so every 'transcribing' row is an orphan.
+    n = _recover_orphaned_transcribing(engine, 0)
+    if n:
+        print(f"[serve] recovered {n} orphaned transcribing job(s) at startup", flush=True)
+
+    procs = {}
     for i in range(_TRANSCRIBE_DISPATCH_LIMIT):
-        log = open(f"/tmp/transcribe-worker-{i}.log", "w")  # noqa: SIM115
-        proc = subprocess.Popen(
-            [sys.executable, "-m", "video_grabber.transcribe.dispatch_worker", str(i)],
-            stdout=log,
-            stderr=log,
-        )
-        print(f"[serve] started transcribe-worker-{i} pid={proc.pid}", flush=True)
+        procs[i] = _spawn_transcribe_worker(i)
+        print(f"[serve] started transcribe-worker-{i} pid={procs[i].pid}", flush=True)
+
+    def supervise() -> None:
+        while True:
+            time.sleep(_TRANSCRIBE_SUPERVISE_INTERVAL)
+            try:
+                for i, proc in list(procs.items()):
+                    if proc.poll() is not None:
+                        print(f"[serve] transcribe-worker-{i} died (exit={proc.returncode}); "
+                              "respawning", flush=True)
+                        procs[i] = _spawn_transcribe_worker(i)
+                recovered = _recover_orphaned_transcribing(engine, _TRANSCRIBE_STALE_MINUTES)
+                if recovered:
+                    print(f"[serve] recovered {recovered} stalled transcribing job(s)", flush=True)
+            except Exception as exc:  # noqa: BLE001 — supervisor must never die
+                print(f"[serve] transcribe supervisor error: {exc}", flush=True)
+
+    threading.Thread(target=supervise, daemon=True, name="transcribe-supervisor").start()
 
 
 def main() -> None:
