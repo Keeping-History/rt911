@@ -399,3 +399,168 @@ func TestUsenetRefillRequiresSubscription(t *testing.T) {
 		t.Fatal("a subscribed usenet channel at its horizon must refill")
 	}
 }
+
+func TestSeekResetsHorizonsAndEmitsAck(t *testing.T) {
+	s := newTestSession(t)
+	base := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
+	seek := base.Add(30 * time.Minute)
+
+	s.Init(base, nil)
+	_ = recvType(t, s) // drain init_ack
+
+	s.Seek(seek, []model.MediaItem{{ID: 1, Title: "x", Approved: 1, StartDate: seek}})
+
+	m := recvType(t, s)
+	if m.Type != "seek_ack" {
+		t.Fatalf("expected seek_ack, got %q", m.Type)
+	}
+	if m.Time != seek.Format(time.RFC3339) {
+		t.Fatalf("seek_ack time: want %s, got %s", seek.Format(time.RFC3339), m.Time)
+	}
+	if len(m.Items) != 1 || m.Items[0].ID != 1 {
+		t.Fatalf("seek_ack must carry items, got %+v", m.Items)
+	}
+
+	s.mu.Lock()
+	allReset := s.mediaHorizon.Equal(seek) && s.pagerHorizon.Equal(seek) &&
+		s.mp3Horizon.Equal(seek) && s.newsHorizon.Equal(seek) && s.usenetHorizon.Equal(seek)
+	s.mu.Unlock()
+	if !allReset {
+		t.Fatal("Seek must reset every channel horizon to the new virtual time")
+	}
+}
+
+func TestPauseEmitsPauseAck(t *testing.T) {
+	s := newTestSession(t)
+	s.Pause()
+
+	if m := recvType(t, s); m.Type != "pause_ack" {
+		t.Fatalf("expected pause_ack, got %q", m.Type)
+	}
+	s.mu.Lock()
+	paused := s.paused
+	s.mu.Unlock()
+	if !paused {
+		t.Fatal("Pause must set paused=true")
+	}
+}
+
+func TestResumeAfterPauseEmitsResumeAck(t *testing.T) {
+	s := newTestSession(t)
+	s.Pause()
+	_ = recvType(t, s) // drain pause_ack
+
+	s.Resume()
+
+	if m := recvType(t, s); m.Type != "resume_ack" {
+		t.Fatalf("expected resume_ack, got %q", m.Type)
+	}
+	s.mu.Lock()
+	paused := s.paused
+	s.mu.Unlock()
+	if paused {
+		t.Fatal("Resume must clear paused")
+	}
+}
+
+func TestHeartbeatWithinDriftDoesNotCorrect(t *testing.T) {
+	s := newTestSession(t)
+	base := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
+	s.Init(base, nil)
+	_ = recvType(t, s) // drain init_ack
+
+	// 1s drift is below driftThresh (3s) — virtual time must not change.
+	s.Heartbeat(base.Add(time.Second))
+	_ = recvType(t, s) // drain heartbeat_ack
+
+	if got, _ := s.VirtualTime(); !got.Equal(base) {
+		t.Fatalf("small drift must not correct virtual time: want %v, got %v", base, got)
+	}
+}
+
+func TestHeartbeatExceedingDriftCorrects(t *testing.T) {
+	s := newTestSession(t)
+	base := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
+	s.Init(base, nil)
+	_ = recvType(t, s) // drain init_ack
+
+	// 10s drift exceeds driftThresh (3s) — virtual time must snap to clientTime.
+	clientTime := base.Add(10 * time.Second)
+	s.Heartbeat(clientTime)
+
+	if m := recvType(t, s); m.Type != "heartbeat_ack" {
+		t.Fatalf("expected heartbeat_ack, got %q", m.Type)
+	}
+	if got, _ := s.VirtualTime(); !got.Equal(clientTime) {
+		t.Fatalf("large drift must correct virtual time: want %v, got %v", clientTime, got)
+	}
+}
+
+func TestSetFormatFilterFiltersItems(t *testing.T) {
+	s := newTestSession(t)
+	s.SetFormatFilter([]string{"m3u8"})
+	_ = recvType(t, s) // drain filter_ack
+
+	items := []model.MediaItem{
+		{ID: 1, Format: "m3u8", Approved: 1},
+		{ID: 2, Format: "mp4", Approved: 1},
+		{ID: 3, Format: "m3u8", Approved: 1},
+	}
+	got := s.applyFormatFilter(items)
+	if len(got) != 2 || got[0].ID != 1 || got[1].ID != 3 {
+		t.Fatalf("filter(m3u8): expected ids [1,3], got %+v", got)
+	}
+}
+
+func TestSetFormatFilterNilAllowsAll(t *testing.T) {
+	s := newTestSession(t)
+	s.SetFormatFilter([]string{"m3u8"})
+	_ = recvType(t, s)
+
+	s.SetFormatFilter(nil)
+	_ = recvType(t, s)
+
+	items := []model.MediaItem{
+		{ID: 1, Format: "m3u8", Approved: 1},
+		{ID: 2, Format: "mp4", Approved: 1},
+	}
+	if got := s.applyFormatFilter(items); len(got) != 2 {
+		t.Fatalf("nil filter must pass all items, got %+v", got)
+	}
+}
+
+func TestSendErrorEmitsErrorFrame(t *testing.T) {
+	s := newTestSession(t)
+	s.SendError("something went wrong")
+
+	m := recvType(t, s)
+	if m.Type != "error" {
+		t.Fatalf("expected error frame, got %q", m.Type)
+	}
+	if m.Msg != "something went wrong" {
+		t.Fatalf("expected error message, got %q", m.Msg)
+	}
+}
+
+func TestCloseIsIdempotent(t *testing.T) {
+	s := newTestSession(t)
+
+	// Multiple Close calls must not panic.
+	s.Close()
+	s.Close()
+	s.Close()
+
+	select {
+	case <-s.Done():
+	default:
+		t.Fatal("Done() channel must be closed after Close()")
+	}
+}
+
+// TestSendToClosedSessionDropsMessage verifies send_ on a closed session
+// does not block or panic — the done guard in send_ must fire first.
+func TestSendToClosedSessionDropsMessage(t *testing.T) {
+	s := newTestSession(t)
+	s.Close()
+	s.SendError("after close") // must not panic or block
+}

@@ -48,7 +48,23 @@ jobs:
       - name: Test
         run: pnpm --filter @rt911/frontend run test
 
+  streamer-test:
+    name: streamer-test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/backend/go.mod
+          cache-dependency-path: packages/backend/go.sum
+      - name: Test
+        run: go test ./...
+
   streamer:
+    needs: [streamer-test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
