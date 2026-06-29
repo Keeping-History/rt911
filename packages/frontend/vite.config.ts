@@ -10,6 +10,12 @@ export default defineConfig({
 			"Cross-Origin-Opener-Policy": "same-origin",
 			"Cross-Origin-Embedder-Policy": "credentialless",
 		},
+		proxy: {
+			"/feedback": {
+				target: "http://localhost:8080",
+				changeOrigin: true,
+			},
+		},
 	},
 	build: {
 		sourcemap: true,
