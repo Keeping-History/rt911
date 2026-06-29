@@ -14,6 +14,7 @@ import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
 import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
 import { TV } from "./Applications/TV/TV";
+import { MobileBlocker } from "./MobileBlocker";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
 import { initTracker } from "./openreplay";
 
@@ -62,6 +63,7 @@ createRoot(rootElement).render(
 		>
 			<MediaStreamProvider>
 				<ClassicyDesktop>
+					<MobileBlocker />
 					<Browser />
 					<Controls />
 					<SimpleText />
