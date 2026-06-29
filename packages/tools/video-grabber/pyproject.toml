@@ -15,13 +15,9 @@ dependencies = [
     "boto3>=1.36",
     "tenacity>=8.2",
     "prefect>=3.0",
-    # Pin fastapi: 0.137.0 breaks Prefect 3.7.4's server startup
-    # ('PrefectRouter' object has no attribute 'routes'), which 500s the test
-    # Prefect API and fails test_build_channel. 0.136.x matches the known-good
-    # worker image. Revisit when Prefect supports fastapi >=0.137.
-    # NB: dependabot #114 loosened this to <0.138 and re-broke CI on main; keep <0.137
-    # (add a dependabot ignore for fastapi major/minor if it keeps reopening).
-    "fastapi<0.137",
+    # fastapi<0.137 was required for Prefect 3.7.4 (PrefectRouter compat bug).
+    # Prefect 3.7.6 fixed it; <0.139 verified green via dependabot PR #132.
+    "fastapi<0.139",
 ]
 
 [project.optional-dependencies]
