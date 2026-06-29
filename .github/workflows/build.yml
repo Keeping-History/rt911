@@ -69,6 +69,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=streamer
 
   frontend:
+    needs: frontend-checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
