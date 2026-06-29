@@ -76,12 +76,12 @@ _USENET_DISPATCH_LIMIT = 4
 # Re-run the (bounded, idempotent) dispatcher every 5 minutes to keep the queue draining.
 _USENET_DISPATCH_INTERVAL = 300
 # Transcription shares the encode-1 iGPU with VAAPI video encode (whisper Vulkan
-# vs. h264_vaapi). The encode backlog is drained, so 2 concurrent transcribes is
-# safe; raise only if encoding is idle. scan/dispatch are serial; channel merge
-# writes one shared per-channel SRT so keep it at 1.
-_TRANSCRIBE_ITEM_LIMIT = 2
+# vs. h264_vaapi). Encode backlog is fully drained; encode-1 is at ~5% CPU / 2% RAM
+# so iGPU is idle. Raised to 6 concurrent slots. Revert if encode backlog returns.
+# scan/dispatch are serial; channel merge writes one shared per-channel SRT so keep at 1.
+_TRANSCRIBE_ITEM_LIMIT = 6
 _TRANSCRIBE_SCAN_LIMIT = 1
-_TRANSCRIBE_DISPATCH_LIMIT = 2
+_TRANSCRIBE_DISPATCH_LIMIT = 6
 _BUILD_CHANNEL_SUBS_LIMIT = 1
 _THUMBNAIL_LIMIT = 1  # one batch run at a time; manually triggered from Prefect UI
 
