@@ -2,14 +2,23 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockEvent = vi.fn();
 const mockStart = vi.fn();
+const mockGetSessionURL = vi.fn();
+const mockGetSessionID = vi.fn();
 
 vi.mock("@openreplay/tracker", () => ({
 	default: vi.fn(function () {
-		return { event: mockEvent, start: mockStart };
+		return {
+			event: mockEvent,
+			start: mockStart,
+			getSessionURL: mockGetSessionURL,
+			getSessionID:  mockGetSessionID,
+		};
 	}),
 }));
 
 import {
+	getSessionID,
+	getSessionURL,
 	initTracker,
 	trackAppToggle,
 	trackChannelChange,
@@ -28,6 +37,14 @@ describe("openreplay", () => {
 			expect(() =>
 				trackPauseResume("pause", "2001-09-11T12:46:00Z"),
 			).not.toThrow();
+		});
+
+		it("getSessionURL returns undefined when tracker is uninitialised", () => {
+			expect(getSessionURL()).toBeUndefined();
+		});
+
+		it("getSessionID returns undefined when tracker is uninitialised", () => {
+			expect(getSessionID()).toBeUndefined();
 		});
 	});
 
@@ -88,6 +105,23 @@ describe("openreplay", () => {
 				action: "pause",
 				virtualTime: "2001-09-11T12:46:00Z",
 			});
+		});
+
+		it("getSessionURL passes options object and returns the URL", () => {
+			mockGetSessionURL.mockReturnValue("https://openreplay.test/s/abc123");
+			expect(getSessionURL()).toBe("https://openreplay.test/s/abc123");
+			expect(mockGetSessionURL).toHaveBeenCalledWith({ withCurrentTime: false });
+		});
+
+		it("getSessionURL passes withCurrentTime=true when requested", () => {
+			mockGetSessionURL.mockReturnValue("https://openreplay.test/s/abc123?t=42");
+			expect(getSessionURL(true)).toBe("https://openreplay.test/s/abc123?t=42");
+			expect(mockGetSessionURL).toHaveBeenCalledWith({ withCurrentTime: true });
+		});
+
+		it("getSessionID returns the session id string", () => {
+			mockGetSessionID.mockReturnValue("session-xyz");
+			expect(getSessionID()).toBe("session-xyz");
 		});
 	});
 

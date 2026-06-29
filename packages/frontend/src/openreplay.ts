@@ -40,3 +40,11 @@ export function trackPauseResume(
 ): void {
 	tracker?.event("pause_resume", { action, virtualTime });
 }
+
+export function getSessionURL(withCurrentTime = false): string | undefined {
+	return tracker?.getSessionURL({ withCurrentTime });
+}
+
+export function getSessionID(): string | null | undefined {
+	return tracker?.getSessionID();
+}
