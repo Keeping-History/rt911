@@ -33,6 +33,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({
     const [title,       setTitle]       = useState("");
     const [description, setDescription] = useState("");
     const [attachments, setAttachments] = useState<File[]>([]);
+    const [screenshotError, setScreenshotError] = useState<string | null>(null);
     const fileInputRef = useRef<ClassicyFileInputHandle>(null);
 
     const canSubmit = !submitting
@@ -42,8 +43,13 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({
         && description.trim() !== "";
 
     const handleScreenshot = useCallback(async () => {
-        const file = await onCaptureScreenshot();
-        fileInputRef.current?.addFiles([file]);
+        setScreenshotError(null);
+        try {
+            const file = await onCaptureScreenshot();
+            fileInputRef.current?.addFiles([file]);
+        } catch (err) {
+            setScreenshotError(err instanceof Error ? err.message : "Screenshot failed.");
+        }
     }, [onCaptureScreenshot]);
 
     const handleSubmit = useCallback(() => {
@@ -107,6 +113,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({
                     {submitting ? "Sending…" : "Send Feedback"}
                 </ClassicyButton>
             </div>
+            {screenshotError && <div className={styles.fbError}>{screenshotError}</div>}
             {error && <div className={styles.fbError}>{error}</div>}
         </div>
     );
