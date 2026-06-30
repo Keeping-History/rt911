@@ -135,3 +135,44 @@ def test_process_archive_uses_header_threading_when_large(tmp_path, monkeypatch)
 
     assert called["thread_mbox"] is False                       # usenetarchive skipped (too large)
     assert any(m["parent_id"] == "0@x" for m in groups["ntl.talk"])  # header threading linked replies
+
+
+def test_process_archive_uses_header_threading_when_tiny(tmp_path, monkeypatch):
+    # Archives below the zstd dictionary-training floor (repack-zstd SIGSEGVs on
+    # too few samples) must skip the usenetarchive build and thread from headers.
+    monkeypatch.setattr(processor, "_MIN_THREADIFY_MESSAGES", 8)
+    records = [{"headers": {"newsgroups": "ntl.talk", "message-id": f"<{i}@x>",
+                            "references": "" if i == 0 else "<0@x>"}, "body": {}} for i in range(3)]
+    called = {"thread_mbox": False}
+
+    def boom(*a, **k):
+        called["thread_mbox"] = True
+        return {}
+
+    with mock.patch.object(processor, "run_mbox_parser", side_effect=_write_jsonl(records)), \
+         mock.patch.object(processor.threader, "thread_mbox", side_effect=boom):
+        groups = processor.process_archive("/in/x.mbox", "2001-09-21", str(tmp_path), "fb.k")
+
+    assert called["thread_mbox"] is False                       # usenetarchive skipped (too small)
+    assert any(m["parent_id"] == "0@x" for m in groups["ntl.talk"])  # header threading still linked replies
+
+
+def test_process_archive_falls_back_when_threader_crashes(tmp_path, monkeypatch):
+    # If the usenetarchive build crashes for any reason (a repack-zstd/lexicon
+    # SIGSEGV the count check didn't pre-empt), the job must degrade to header
+    # threading and still produce records — not fail the whole archive.
+    monkeypatch.setattr(processor, "_MIN_THREADIFY_MESSAGES", 0)
+    monkeypatch.setattr(processor, "_MAX_THREADIFY_MESSAGES", 10_000)
+    records = [{"headers": {"newsgroups": "ntl.talk", "message-id": f"<{i}@x>",
+                            "references": "" if i == 0 else "<0@x>"}, "body": {}} for i in range(20)]
+
+    def crash(*a, **k):
+        raise RuntimeError("repack-zstd failed (rc=-11): Building dictionary")
+
+    with mock.patch.object(processor, "run_mbox_parser", side_effect=_write_jsonl(records)), \
+         mock.patch.object(processor.threader, "thread_mbox", side_effect=crash):
+        groups = processor.process_archive("/in/x.mbox", "2001-09-21", str(tmp_path), "fb.k")
+
+    assert "ntl.talk" in groups
+    assert len(groups["ntl.talk"]) == 20                        # all messages survived the crash
+    assert any(m["parent_id"] == "0@x" for m in groups["ntl.talk"])  # header threading linked replies
