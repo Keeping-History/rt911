@@ -126,6 +126,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	return (
 		<>
 			{segments.map((item) => (
+				// eslint-disable-next-line jsx-a11y/media-has-caption -- live radio stream segments; no caption track is available
 				<audio
 					key={item.id}
 					ref={audioRef(item.id)}

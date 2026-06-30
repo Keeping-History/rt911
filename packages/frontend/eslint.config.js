@@ -3,6 +3,7 @@ import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 
 // Flat config (ESLint 9+/10). Restores `eslint .`, which previously had no
 // config file. Plugins and their rules are wired explicitly rather than via the
@@ -30,4 +31,7 @@ export default tseslint.config(
 			],
 		},
 	},
+	// Ensures every interactive element has an accessible role or label so that
+	// Playwright locators like getByRole() and getByLabel() work reliably.
+	jsxA11y.flatConfigs.recommended,
 );

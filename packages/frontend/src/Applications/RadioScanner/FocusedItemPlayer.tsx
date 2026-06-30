@@ -40,7 +40,7 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({ item, onDi
 				<p className={styles.rsFocusedLabel}>Playing</p>
 				<p className={styles.rsFocusedTitle}>{item.full_title || item.title}</p>
 			</div>
-			{/* biome-ignore lint/a11y/useMediaCaptions: historical playback, no transcript */}
+			{/* eslint-disable-next-line jsx-a11y/media-has-caption -- historical radio playback; no caption track exists for these recordings */}
 			<audio ref={audioRef} src={item.url} crossOrigin="anonymous" style={{ display: "none" }} />
 			<div className={styles.rsFocusedControls}>
 				<ClassicyButton buttonSize="small" onClickFunc={togglePlay}>
