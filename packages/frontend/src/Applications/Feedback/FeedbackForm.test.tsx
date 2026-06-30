@@ -98,7 +98,7 @@ describe("FeedbackForm", () => {
         await waitFor(() => expect(screen.getByText(/exceeds 5 mb/i)).not.toBeNull());
     });
 
-    it("calls onCaptureScreenshot and prepends the result to attachments", async () => {
+    it("calls onCaptureScreenshot and appends the result to attachments", async () => {
         const screenshotFile = new File(["png"], "screenshot.png", { type: "image/png" });
         const onCapture = vi.fn().mockResolvedValue(screenshotFile);
         render(<FeedbackForm onSubmit={noop} submitting={false} error={null} onCaptureScreenshot={onCapture} />);
