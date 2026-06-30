@@ -1,0 +1,3 @@
+store-dir=.pnpm-store
+use-hard-links=true
+prefer-frozen-lockfile=false
