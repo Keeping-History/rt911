@@ -1,0 +1,106 @@
+.fbForm {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    min-width: 440px;
+}
+
+.fbField {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+
+    label {
+        font-weight: bold;
+        font-size: 11px;
+    }
+
+    input,
+    textarea {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 11px;
+        padding: 2px 4px;
+        resize: vertical;
+    }
+}
+
+.fbAttachments {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    label {
+        font-weight: bold;
+        font-size: 11px;
+    }
+}
+
+.fbThumbs {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.fbThumb {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #ddd;
+    padding: 2px 4px;
+    font-size: 11px;
+}
+
+.fbRemoveBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 11px;
+    line-height: 1;
+}
+
+.fbBtn {
+    cursor: pointer;
+    padding: 2px 8px;
+    font-size: 11px;
+}
+
+.fbFileError {
+    color: #c00;
+    font-size: 11px;
+}
+
+.fbActions {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+.fbError {
+    color: #c00;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.fbSuccess {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    align-items: center;
+    text-align: center;
+    font-size: 12px;
+}
+
+.fbSuccessLink {
+    color: #00f;
+    text-decoration: underline;
+    cursor: pointer;
+}
