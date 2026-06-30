@@ -127,6 +127,8 @@ jobs:
       - uses: jdx/mise-action@v4
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Type-check E2E
+        run: pnpm --filter @rt911/frontend exec tsc --project tsconfig.e2e.json --noEmit
       - name: Install Playwright browsers
         run: pnpm --filter @rt911/frontend exec playwright install --with-deps chromium
       - name: Run E2E tests
@@ -156,6 +158,6 @@ jobs:
             } catch (e) {
               body = `⚠️ **Playwright E2E** — results unavailable (dev server failed to start or tests crashed before writing output)\n\n[Run logs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
             }
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               ...context.repo, issue_number: context.issue.number, body
             });
