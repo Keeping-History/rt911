@@ -22,6 +22,7 @@
 		"classicy": "latest",
 		"classnames": "^2.5.1",
 		"dompurify": "^3.4.11",
+		"html2canvas-pro": "^2.2.1",
 		"react": "^19.2.7",
 		"react-dom": "^19.2.7",
 		"react-player": "^3.4.0",
