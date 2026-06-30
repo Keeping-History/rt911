@@ -5,9 +5,12 @@ test('feedback form submits and shows success screen', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveTitle(/911realtime/i);
 
-  // TODO: Replace this comment with the codegen-captured steps to open the Feedback window.
-  // Run: pnpm --filter @rt911/frontend run codegen http://localhost:5173
-  // Then click whatever opens the Feedback app in the Classicy desktop and copy the generated steps here.
+  // Open the Feedback app — the desktop icon is a role="button" named "Feedback".
+  // Double-click dispatches onDoubleClick → launchIcon → opens the app window.
+  await page.getByRole('button', { name: 'Feedback' }).dblclick();
+  // Wait for the form to be visible before filling — Playwright auto-waits but an
+  // explicit wait makes the failure message clearer if the window fails to open.
+  await expect(page.getByLabel('Name')).toBeVisible();
 
   // Intercept the feedback POST — use **/feedback to match the absolute URL
   // (useFeedback builds: `${VITE_FEEDBACK_URL}/feedback` — not a same-origin path)
@@ -25,8 +28,8 @@ test('feedback form submits and shows success screen', async ({ page }) => {
   await page.getByLabel('Title').fill('E2E test submission');
   await page.getByLabel('Description').fill('This is a test feedback submission from Playwright.');
 
-  // Submit button uses onMouseUp — .click() will not trigger the handler
-  await page.getByRole('button', { name: /send feedback/i }).dispatchEvent('mouseup');
+  // Submit button uses ClassicyButton (onClick) — .click() triggers the handler correctly.
+  await page.getByRole('button', { name: /send feedback/i }).click();
 
   // Soft assertions: collect all UI failures, none abort the test
   await expect.soft(page.getByText(/thanks for your feedback/i)).toBeVisible();
