@@ -84,6 +84,15 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, logger))
+	mux.HandleFunc("/feedback", handler.NewFeedbackHandler(
+		env("GITHUB_API_URL", "https://api.github.com"),
+		env("S3_ENDPOINT", "https://s3.wasabisys.com"),
+		env("S3_BUCKET", "rt911-feedback"),
+		env("S3_ACCESS_KEY", ""),
+		env("S3_SECRET_KEY", ""),
+		env("GITHUB_TOKEN", ""),
+		logger,
+	))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
