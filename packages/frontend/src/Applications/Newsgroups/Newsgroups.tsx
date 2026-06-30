@@ -128,8 +128,10 @@ export const Newsgroups = () => {
 						<div className={styles.paneTitle}>Newsgroups</div>
 						<div className={styles.treeSearch}>
 							{/* Row 1: the name filter and its Go button (search runs on Go/Enter). */}
+							{/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- role="search" is a landmark; onKeyDown captures Enter from the input inside, supplementing the visible Go button */}
 							<div
 								className={styles.searchRow}
+								role="search"
 								onKeyDown={(e) => e.key === "Enter" && runSearch()}
 							>
 								<div className={styles.searchInput}>
