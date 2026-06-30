@@ -31,11 +31,7 @@ export default tseslint.config(
 			],
 		},
 	},
-	// Use flatConfigs.recommended (eslint-plugin-jsx-a11y >= 6.10) to ensure
-	// every interactive element has an accessible role or label for Playwright
-	// locators like getByRole() and getByLabel() to work reliably.
-	jsxA11y.flatConfigs?.recommended ?? {
-		plugins: { "jsx-a11y": jsxA11y },
-		rules: { ...jsxA11y.configs.recommended.rules },
-	},
+	// Ensures every interactive element has an accessible role or label so that
+	// Playwright locators like getByRole() and getByLabel() work reliably.
+	jsxA11y.flatConfigs.recommended,
 );
