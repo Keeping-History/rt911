@@ -26,7 +26,7 @@ describe("FeedbackSuccess", () => {
 				onReset={onReset}
 			/>,
 		);
-		fireEvent.mouseUp(screen.getByRole("button", { name: /send another/i }));
+		fireEvent.click(screen.getByRole("button", { name: /send another/i }));
 		expect(onReset).toHaveBeenCalledOnce();
 	});
 });

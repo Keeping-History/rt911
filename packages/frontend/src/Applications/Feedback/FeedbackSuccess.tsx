@@ -1,3 +1,4 @@
+import { ClassicyButton } from "classicy";
 import type React from "react";
 import styles from "./Feedback.module.scss";
 
@@ -17,8 +18,6 @@ export const FeedbackSuccess: React.FC<FeedbackSuccessProps> = ({ issueUrl, onRe
 		>
 			View your GitHub issue
 		</a>
-		<button type="button" className={styles.fbBtn} onMouseUp={onReset}>
-			Send Another Feedback
-		</button>
+		<ClassicyButton onClickFunc={onReset}>Send Another Feedback</ClassicyButton>
 	</div>
 );
