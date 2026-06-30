@@ -8,6 +8,7 @@ import {
 	SimpleText,
 } from "classicy";
 import { Browser } from "./Applications/Browser/Browser";
+import { Feedback } from "./Applications/Feedback/Feedback";
 import { Controls } from "./Applications/Controls/Controls";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
@@ -66,6 +67,7 @@ createRoot(rootElement).render(
 					<MobileBlocker />
 					<Browser />
 					<Controls />
+					<Feedback />
 					<SimpleText />
 					<News />
 					<Newsgroups />
