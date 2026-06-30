@@ -24,7 +24,5 @@ export default defineConfig({
     command: 'pnpm dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
-    // Playwright resolves this relative to playwright.config.ts (packages/frontend/).
-    // If workspace hoisting causes issues, add: cwd: path.resolve(__dirname)
   },
 });
