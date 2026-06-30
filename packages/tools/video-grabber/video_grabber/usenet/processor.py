@@ -24,6 +24,14 @@ _TAG_RE = re.compile(r"<[^>]+>")
 # threading. Tunable without a rebuild.
 _MAX_THREADIFY_MESSAGES = int(os.getenv("USENET_MAX_THREADIFY_MESSAGES", "100000"))
 
+# Below this message count, repack-zstd's zstd dictionary trainer (ZDICT) SIGSEGVs:
+# it needs a minimum number of samples and crashes on tiny archives (empirically
+# ≤5 messages segfault, ≥7 are safe; default 8 clears the boundary with margin).
+# This was ~6.5k of the usenet failures — all tiny giganews groups. Such archives
+# have nothing for threadify's quote-matcher to recover anyway, so header-based
+# threading is a lossless substitute here. Tunable without a rebuild.
+_MIN_THREADIFY_MESSAGES = int(os.getenv("USENET_MIN_THREADIFY_MESSAGES", "8"))
+
 # A valid newsgroup name is dot-separated components, each starting and ending
 # alphanumeric (interior +, _, - allowed). Malformed Newsgroups: headers (seen in
 # bundled archives) yield junk like "-h", "!.!", ".blur", "1", "0000000001" — this
@@ -147,8 +155,22 @@ def process_archive(mbox_path, before: str, workdir, fallback_group: str, *, log
             logger.warning("usenet process: %d messages > %d — header-based threading (skipping usenetarchive)",
                            len(records), _MAX_THREADIFY_MESSAGES)
         thread_index = header_thread_index(records)
+    elif len(records) < _MIN_THREADIFY_MESSAGES:
+        if logger:
+            logger.warning("usenet process: %d messages < %d — header-based threading (repack-zstd SIGSEGVs on tiny archives)",
+                           len(records), _MIN_THREADIFY_MESSAGES)
+        thread_index = header_thread_index(records)
     else:
-        thread_index = threader.thread_mbox(str(mbox_path), str(work / "uat"), logger=logger)
+        # The usenetarchive C++ build can still crash on archives the count checks
+        # don't pre-empt (e.g. enough messages but too little total content for
+        # ZDICT, or a lexicon/repack SIGSEGV). Degrade to header threading rather
+        # than failing the whole archive — only the quote-restored links are lost.
+        try:
+            thread_index = threader.thread_mbox(str(mbox_path), str(work / "uat"), logger=logger)
+        except Exception as exc:  # noqa: BLE001 — any build crash falls back, by design
+            if logger:
+                logger.warning("usenet process: usenetarchive build failed (%s) — header-based threading", exc)
+            thread_index = header_thread_index(records)
 
     groups: dict[str, list[dict]] = {}
     skipped = 0
