@@ -117,7 +117,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: tick is the intended dependency
 	const upcomingItems = useMemo(
 		() => getUpcomingMp3Items(),
-		[tick, getUpcomingMp3Items],
+		[tick, getUpcomingMp3Items], // eslint-disable-line react-hooks/exhaustive-deps
 	);
 
 	// Select the first station once stations arrive.

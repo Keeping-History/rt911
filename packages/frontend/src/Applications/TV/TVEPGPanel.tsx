@@ -105,7 +105,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: snap only on tz change
 	useEffect(() => {
 		setGridStartTime(roundDownToNearest(localNow(), GRID_TIME_WIDTH));
-	}, [tzOffset]);
+	}, [tzOffset]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const gridEndTime = useMemo(() => {
 		const d = new Date(gridStartTime);
@@ -199,7 +199,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 				);
 			});
 		},
-		[GRID_WIDTH, MINUTES_PER_GRID, gridStartTime, gridEndTime, currentTime, toLocal, tuneToChannel],
+		[gridStartTime, gridEndTime, currentTime, toLocal, tuneToChannel],
 	);
 
 	const epgHeader = useMemo(() => {

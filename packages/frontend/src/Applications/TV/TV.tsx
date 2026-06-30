@@ -265,8 +265,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 
 	// Remove all timeupdate listeners on unmount.
 	useEffect(() => {
+		const cueListeners = cueListenersRef.current;
 		return () => {
-			for (const { inner, handler } of cueListenersRef.current.values()) {
+			for (const { inner, handler } of cueListeners.values()) {
 				inner.removeEventListener("timeupdate", handler);
 			}
 		};
