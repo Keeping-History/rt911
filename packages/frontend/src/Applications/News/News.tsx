@@ -8,6 +8,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import classNames from "classnames";
 import type React from "react";
 import {
 	type ChangeEvent,
@@ -178,10 +179,8 @@ export const News: React.FC = () => {
 				modal={false}
 				appMenu={appMenu}
 			>
-				<div style={{}} className={styles.newsHeader}>
-					<div
-						style={{ flexGrow: 1, marginLeft: "var(--window-padding-size)" }}
-					>
+				<div className={styles.newsHeader}>
+					<div className={styles.newsPerPageWrap}>
 						<ClassicyPopUpMenu
 							id={"per_page"}
 							label={"Per Page"}
@@ -199,7 +198,7 @@ export const News: React.FC = () => {
 							selected={limit.toString()}
 						/>
 					</div>
-					<div style={{ flexGrow: 1 }}>
+					<div className={styles.newsThumbSizeWrap}>
 						<ClassicyPopUpMenu
 							id={"thumb_size"}
 							label={"Size"}
@@ -224,41 +223,19 @@ export const News: React.FC = () => {
 						&gt;&gt;
 					</ClassicyButton>
 				</div>
-				<div style={{ padding: ".5em" }}>
-					<h1
-						style={{
-							padding: "0",
-							margin: 0,
-							backgroundImage:
-								"linear-gradient(.25turn, white, var(--color-system-05))",
-						}}
-					>
+				<div className={styles.newsBody}>
+					<h1 className={styles.newsTitle}>
 						Latest News
 					</h1>
 					{displayEntries.length > 0 && (
-						<div
-							style={{
-								display: "flex",
-								justifyContent: "space-between",
-							}}
-						>
-							<p
-								style={{
-									fontFamily: "var(--ui-font)",
-									fontSize: "calc(var(--ui-font-size) * .8)",
-								}}
-							>
+						<div className={styles.newsMeta}>
+							<p className={styles.newsMetaText}>
 								From{" "}
 								{formatDate(displayEntries.at(0)?.start_date, { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric" })}{" "}
 								to{" "}
 								{formatDate(displayEntries.at(-1)?.end_date, { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric" })}
 							</p>
-							<p
-								style={{
-									fontFamily: "var(--ui-font)",
-									fontSize: "calc(var(--ui-font-size) * .8)",
-								}}
-							>
+							<p className={styles.newsMetaText}>
 								Total Articles:{" "}
 								{
 									entries.filter((e) => {
@@ -273,54 +250,28 @@ export const News: React.FC = () => {
 					)}
 					<hr />
 
-					<ul
-						style={{
-							fontFamily: "var(--header-font)",
-							padding: "0 calc(var(--window-control-size) * 2)",
-						}}
-					>
+					<ul className={styles.newsList}>
 						{displayEntries.map((entry) => (
 							<li
 								key={entry.id}
-								style={{
-									display: "flex",
-									flexDirection: "row",
-									gap: "var(--window-control-size)",
-									margin: "0",
-									borderBottom: "1px solid black",
-									padding: "calc(var(--window-control-size) ) 0",
-									listStyle:
-										!entry.image || thumbStyle === "small" ? "outside" : "none",
-									fontSize:
-										thumbStyle === "small"
-											? "var(--ui-font-size)"
-											: "calc(var(--ui-font-size)*2)",
-								}}
+								className={classNames(styles.newsListItem, {
+									[styles.newsListItemLarge]: thumbStyle === "large",
+									[styles.newsListItemNoBullet]:
+										Boolean(entry.image) && thumbStyle === "large",
+								})}
 							>
 								{entry.image && (
 									<img
 										src={entry.image}
-										style={{
-											width: thumbStyle === "small" ? "10%" : "100%",
-											aspectRatio: thumbStyle === "small" ? 1 : "auto",
-											objectFit: "cover",
-											float: "right",
-											marginBottom: "var(--window-control-size)",
-											marginLeft: "var(--window-control-size)",
-											borderRadius: "calc(var(--window-control-size)/2)",
-										}}
+										className={classNames(styles.newsThumb, {
+											[styles.newsThumbLarge]: thumbStyle === "large",
+										})}
 										alt="Thumbnail"
 									/>
 								)}
 								<button
 									type="button"
-									style={{
-										background: "none",
-										border: "none",
-										padding: 0,
-										cursor: "pointer",
-										textAlign: "left",
-									}}
+									className={styles.newsListItemButton}
 									onClick={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
@@ -328,24 +279,17 @@ export const News: React.FC = () => {
 									}}
 								>
 									<h1
-										style={{
-											fontSize:
-												thumbStyle === "small"
-													? "calc(var(--ui-font-size))"
-													: "calc(var(--ui-header-size))",
-										}}
+										className={classNames(styles.newsListItemTitle, {
+											[styles.newsListItemTitleLarge]: thumbStyle === "large",
+										})}
 									>
 										{entry.title}
 									</h1>
 								</button>
 								<span
-									style={{
-										fontFamily: "var(--ui-font)",
-										fontSize:
-											thumbStyle === "small"
-												? "calc(var(--ui-font-size)*.7)"
-												: "calc(var(--ui-font-size)*1)",
-									}}
+									className={classNames(styles.newsListItemDate, {
+										[styles.newsListItemDateLarge]: thumbStyle === "large",
+									})}
 								>
 									{" "}
 									{formatDate(entry.start_date, { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric", second: "numeric" })}{" "}
@@ -378,32 +322,22 @@ export const News: React.FC = () => {
 					modal={false}
 					appMenu={appMenu}
 				>
-					<div style={{ padding: ".5em" }}>
-						<h1
-							style={{
-								margin: "var(--window-padding-size) 0",
-								fontFamily: "var(--header-font)",
-							}}
-						>
+					<div className={styles.newsBody}>
+						<h1 className={styles.newsDetailTitle}>
 							{getDoc(docId)?.title}
 						</h1>
-						<h6
-							style={{
-								margin: "var(--window-padding-size) 0",
-								fontFamily: "var(--ui-font)",
-							}}
-						>
+						<h6 className={styles.newsDetailMeta}>
 							{formatDate(getDoc(docId)?.start_date, { month: "numeric", day: "numeric", year: "numeric" })}{" "}
 							{formatDate(getDoc(docId)?.start_date, { hour: "numeric", minute: "numeric", second: "numeric" })} -{" "}
 							{getDoc(docId)?.source}
 						</h6>
 
-						<hr style={{ borderTop: "black 1px solid" }} />
+						<hr className={styles.newsDetailDivider} />
 						{getDoc(docId)?.image && (
 							<figure>
 								<img
 									src={getDoc(docId)?.image}
-									style={{ width: "100%" }}
+									className={styles.newsDetailImage}
 									alt=""
 								/>
 								<figcaption className={styles.newsCaption}>
@@ -411,23 +345,12 @@ export const News: React.FC = () => {
 								</figcaption>
 							</figure>
 						)}
-						<div
-							style={{
-								display: "flex",
-								flexDirection: "row",
-								gap: "var(--window-padding-size)",
-							}}
-						>
-							<p
-								style={{
-									fontSize: "var(--ui-font-size)",
-									color: "var(--color-theme-05)",
-								}}
-							>
+						<div className={styles.newsDetailContentRow}>
+							<p className={styles.newsDetailBullet}>
 								•••
 							</p>
 							<div
-								style={{ fontFamily: "var(--body-font)" }}
+								className={styles.newsDetailBody}
 								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus media_items table via the MediaStream provider.
 								dangerouslySetInnerHTML={{
 									__html: getDoc(docId)?.content || "",

@@ -13,7 +13,133 @@
 
 }
 
+.newsPerPageWrap {
+  flex-grow: 1;
+  margin-left: var(--window-padding-size);
+}
+
+.newsThumbSizeWrap {
+  flex-grow: 1;
+}
+
+.newsBody {
+  padding: .5em;
+}
+
+.newsTitle {
+  padding: 0;
+  margin: 0;
+  background-image: linear-gradient(.25turn, white, var(--color-system-05));
+}
+
+.newsMeta {
+  display: flex;
+  justify-content: space-between;
+}
+
+.newsMetaText {
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * .8);
+}
+
+.newsList {
+  font-family: var(--header-font);
+  padding: 0 calc(var(--window-control-size) * 2);
+}
+
+.newsListItem {
+  display: flex;
+  flex-direction: row;
+  gap: var(--window-control-size);
+  margin: 0;
+  border-bottom: 1px solid black;
+  padding: calc(var(--window-control-size)) 0;
+  list-style: outside;
+  font-size: var(--ui-font-size);
+
+  &.newsListItemLarge {
+    font-size: calc(var(--ui-font-size) * 2);
+  }
+
+  &.newsListItemNoBullet {
+    list-style: none;
+  }
+}
+
+.newsThumb {
+  object-fit: cover;
+  float: right;
+  margin-bottom: var(--window-control-size);
+  margin-left: var(--window-control-size);
+  border-radius: calc(var(--window-control-size) / 2);
+  width: 10%;
+  aspect-ratio: 1;
+
+  &.newsThumbLarge {
+    width: 100%;
+    aspect-ratio: auto;
+  }
+}
+
+.newsListItemButton {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.newsListItemTitle {
+  font-size: var(--ui-font-size);
+
+  &.newsListItemTitleLarge {
+    font-size: var(--ui-header-size);
+  }
+}
+
+.newsListItemDate {
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * .7);
+
+  &.newsListItemDateLarge {
+    font-size: var(--ui-font-size);
+  }
+}
+
+.newsDetailTitle {
+  margin: var(--window-padding-size) 0;
+  font-family: var(--header-font);
+}
+
+.newsDetailMeta {
+  margin: var(--window-padding-size) 0;
+  font-family: var(--ui-font);
+}
+
+.newsDetailDivider {
+  border-top: black 1px solid;
+}
+
+.newsDetailImage {
+  width: 100%;
+}
+
 .newsCaption {
   font-family: var(--ui-font);
   font-size: var(--body-font-size);
+}
+
+.newsDetailContentRow {
+  display: flex;
+  flex-direction: row;
+  gap: var(--window-padding-size);
+}
+
+.newsDetailBullet {
+  font-size: var(--ui-font-size);
+  color: var(--color-theme-05);
+}
+
+.newsDetailBody {
+  font-family: var(--body-font);
 }
