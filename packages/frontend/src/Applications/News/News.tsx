@@ -172,8 +172,8 @@ export const News: React.FC = () => {
 				zoomable={true}
 				scrollable={true}
 				collapsable={true}
-				initialSize={[500, 300]}
-				initialPosition={[300, 50]}
+				initialSize={["75%", "75%"]}
+				initialPosition={["left", "top"]}
 				minimumSize={[500, 300]}
 				modal={false}
 				appMenu={appMenu}

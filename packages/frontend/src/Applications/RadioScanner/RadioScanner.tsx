@@ -197,8 +197,8 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 				zoomable={true}
 				scrollable={false}
 				collapsable={true}
-				initialSize={[700, 400]}
-				initialPosition={[150, 80]}
+				initialSize={["50%", "50%"]}
+				initialPosition={["left", "top"]}
 				minimumSize={[500, 280]}
 				modal={false}
 				appMenu={appMenu}

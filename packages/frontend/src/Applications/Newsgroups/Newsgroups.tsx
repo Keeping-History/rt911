@@ -109,8 +109,8 @@ export const Newsgroups = () => {
 				title="Newsgroups"
 				appId={appId}
 				icon={appIcon}
-				initialSize={[720, 520]}
-				initialPosition={[100, 70]}
+				initialSize={["75%", "75%"]}
+				initialPosition={["left", "top"]}
 				appMenu={appMenu}
 				header={
 					<p>
@@ -292,7 +292,7 @@ export const Newsgroups = () => {
 					title={m.subject?.trim() || "(no subject)"}
 					appId={appId}
 					icon={appIcon}
-					initialSize={[520, 420]}
+					initialSize={["75%", "75%"]}
 					initialPosition={[220 + i * 20, 150 + i * 20]}
 					appMenu={appMenu}
 					resizable

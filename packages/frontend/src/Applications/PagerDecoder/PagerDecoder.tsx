@@ -242,8 +242,8 @@ export const PagerDecoder = () => {
 				id="pager-terminal"
 				title="Pager Decoder"
 				appId={appId}
-				initialSize={[680, 480]}
-				initialPosition={[80, 60]}
+				initialSize={["75%", "75%"]}
+				initialPosition={["left", "top"]}
 				appMenu={appMenu}
 				header={
 					<p>
@@ -300,7 +300,7 @@ export const PagerDecoder = () => {
 					title="Message Details"
 					appId={appId}
 					icon={appIcon}
-					initialSize={[420, 340]}
+					initialSize={["50%", "50%"]}
 					initialPosition={[200 + i * 20, 160 + i * 20]}
 					appMenu={appMenu}
 					resizable={false}

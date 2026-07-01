@@ -835,8 +835,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 				zoomable={true}
 				scrollable={false}
 				collapsable={true}
-				initialSize={[800, 400]}
-				initialPosition={[100, 50]}
+				initialSize={["75%", "75%"]}
+				initialPosition={["left", "top"]}
 				minimumSize={[600, 300]}
 				modal={false}
 				appMenu={appMenu}

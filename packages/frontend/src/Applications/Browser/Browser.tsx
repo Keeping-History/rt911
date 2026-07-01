@@ -372,8 +372,8 @@ export const Browser = () => {
 					zoomable={false}
 					scrollable={false}
 					collapsable={false}
-					initialSize={["50%", "50%"]}
-					initialPosition={["left", "top"]}
+					initialSize={[350, 0]}
+					initialPosition={[250, 150]}
 					appMenu={appMenu}
 					onCloseFunc={() => setShowSettings(false)}
 				>
@@ -514,8 +514,8 @@ export const Browser = () => {
 				icon={windowIcon}
 				appId={appId}
 				scrollable={false}
-				initialSize={[100, 500]}
-				initialPosition={[100, 100]}
+				initialSize={["50%", "50%"]}
+				initialPosition={["left", "top"]}
 				appMenu={appMenu}
 				growable={true}
 			>
