@@ -64,8 +64,8 @@ export const Feedback: React.FC = () => {
 				zoomable={false}
 				scrollable={false}
 				collapsable={false}
-				initialSize={["25%", "25%"]}
-				initialPosition={["left", "top"]}
+				initialSize={["45%", 0]}
+				initialPosition={[250, 150]}
 				modal={false}
 				appMenu={appMenu}
 			>
