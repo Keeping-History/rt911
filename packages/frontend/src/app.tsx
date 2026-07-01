@@ -5,7 +5,6 @@ import "classicy/dist/classicy.css";
 import {
 	ClassicyAppManagerProvider,
 	ClassicyDesktop,
-	SimpleText,
 } from "classicy";
 import { DefaultFileSystem } from "./data/DefaultFileSystem";
 import { Browser } from "./Applications/Browser/Browser";
@@ -71,7 +70,6 @@ createRoot(rootElement).render(
 					<Browser />
 					<Controls />
 					<Feedback />
-					<SimpleText />
 					<News />
 					<Newsgroups />
 					<PagerDecoder />
