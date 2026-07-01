@@ -142,4 +142,13 @@
 
 .newsDetailBody {
   font-family: var(--body-font);
+
+  // Citation icons (e.g. the PDF-source icon) embedded in article HTML come in
+  // at their native pixel size; scale them to the surrounding text's line
+  // height instead of the raw asset dimensions.
+  img {
+    height: 1em;
+    width: auto;
+    vertical-align: middle;
+  }
 }
