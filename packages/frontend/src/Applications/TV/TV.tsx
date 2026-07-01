@@ -422,7 +422,14 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: itemsRef/dateTimeRef/videoRefs are stable refs
 	useEffect(() => {
 		if (!clockPaused) return;
-		const nowMs = new Date(dateTimeRef.current).getTime();
+		// dateTimeRef only updates on minute boundaries, so without compensating
+		// for real time elapsed since the last one, the freeze frame can land up
+		// to a minute behind the time actually shown on the menu bar clock.
+		const nowMs = resolveVirtualNowMs(
+			dateTimeRef.current,
+			dateTimeUpdatedAtRef.current,
+			Date.now(),
+		);
 		for (const item of itemsRef.current) {
 			const el = videoRefs.current.get(item.id);
 			if (!el) continue;
