@@ -622,7 +622,7 @@ const photoEntries: ClassicyFileSystemTree = Object.fromEntries(
 	ICP_PHOTOS.map(([originalFilename, displayName, size]) => [
 		displayName,
 		{
-			_type: ClassicyFileSystemEntryFileType.File,
+			_type: ClassicyFileSystemEntryFileType.Image,
 			_mimeType: "image/jpeg",
 			_icon: ClassicyIcons.system.files.photo,
 			_url: `${ICP_PHOTO_BASE_URL}/${originalFilename}`,
