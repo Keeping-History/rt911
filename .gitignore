@@ -28,3 +28,4 @@ packages/frontend/.husky/_/post-commit
 **/.husky/_/post-commit
 /packages/frontend/playwright-report/
 /packages/frontend/test-results/
+.playwright-mcp
