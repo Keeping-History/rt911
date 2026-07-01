@@ -7,6 +7,7 @@ import {
 	ClassicyDesktop,
 	SimpleText,
 } from "classicy";
+import { DefaultFileSystem } from "./data/DefaultFileSystem";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";
 import { Controls } from "./Applications/Controls/Controls";
@@ -27,6 +28,8 @@ createRoot(rootElement).render(
 	<StrictMode>
 		<ClassicyAppManagerProvider
 			gaMeasurementIds={["G-YV25XK2Y3R"]}
+			defaultFileSystem={DefaultFileSystem}
+			defaultFileSystemMode="exclusive"
 			defaultState={{
 				System: {
 					Manager: {
