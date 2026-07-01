@@ -65,6 +65,18 @@ pnpm use:published   # remove the link and install from npm
 
 The desktop includes the following apps. Click any desktop icon or use the Apple menu to open them.
 
+### Finder
+The classic Mac OS file browser for the desktop's virtual file system. Double-click **Macintosh HD** to browse into **Documents**, which holds 49 archived newspaper front pages from September 11, 2001 and a photo archive from the International Center of Photography.
+
+### PDF Viewer
+Opens PDF documents in place — used to read the archived newspaper front pages under Documents → Newspapers.
+
+### Picture Viewer
+Opens image files in place — used to view the International Center of Photography archive under Documents → Photos.
+
+### Movie Player
+A QuickTime-style movie player for video files opened from the Finder.
+
 ### Browser
 A retro web browser powered by the [TimeMachine Web Proxy](https://hub.docker.com/r/robbiebyrd/time-machine-proxy). Fetches archived snapshots of websites from the Wayback Machine and renders them in a Mac OS 8-style browser window with back/forward navigation, visited-link memory, and a favorites bar.
 
