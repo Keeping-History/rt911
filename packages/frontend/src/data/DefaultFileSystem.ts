@@ -635,6 +635,15 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 	"Macintosh HD": {
 		_type: ClassicyFileSystemEntryFileType.Drive,
 		_icon: ClassicyIcons.system.drives.disk,
+		"System Folder": {
+			_type: ClassicyFileSystemEntryFileType.Directory,
+			_icon: ClassicyIcons.system.folders.directory,
+			"Finder": {
+				_type: ClassicyFileSystemEntryFileType.File,
+				_icon: ClassicyIcons.system.macos,
+				_system: true,
+			},
+		},
 		Documents: {
 			_type: ClassicyFileSystemEntryFileType.Directory,
 			_icon: ClassicyIcons.system.folders.directory,
