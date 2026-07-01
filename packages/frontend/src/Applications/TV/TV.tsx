@@ -38,6 +38,7 @@ import {
 	tvSetVolumeLimit,
 } from "./TVContext";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
+import { resolveVirtualNowMs } from "./clockDrift";
 import { resolveGridVolume } from "./volume";
 import { TVEPGPanel } from "./TVEPGPanel";
 
@@ -306,7 +307,18 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		if (!item.url.endsWith("m3u8")) return undefined;
 		let config = hlsConfigsRef.current.get(item.id);
 		if (!config) {
-			const nowMs = new Date(dateTimeRef.current).getTime();
+			// dateTimeRef only updates on minute boundaries, so it can be up to a
+			// minute stale by the time a channel is first opened — e.g. right after
+			// page load, before this channel is ever viewed. Without compensating
+			// for that here, hls.js buffers starting from the stale position, then
+			// onReady's seekToCurrentTime immediately yanks it forward to the real
+			// position — a large, disruptive re-seek that briefly shows a corrupted
+			// frame instead of video.
+			const nowMs = resolveVirtualNowMs(
+				dateTimeRef.current,
+				dateTimeUpdatedAtRef.current,
+				Date.now(),
+			);
 			config = {
 				hls: {
 					startLevel: level,
@@ -357,8 +369,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// time between the minute-boundary Zustand updates.
 	useEffect(() => {
 		const healthId = setInterval(() => {
-			const elapsedRealMs = Date.now() - dateTimeUpdatedAtRef.current;
-			const nowMs = new Date(dateTimeRef.current).getTime() + elapsedRealMs;
+			const nowMs = resolveVirtualNowMs(
+				dateTimeRef.current,
+				dateTimeUpdatedAtRef.current,
+				Date.now(),
+			);
 
 			for (const item of itemsRef.current) {
 				const el = videoRefs.current.get(item.id);
@@ -421,8 +436,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: itemsRef/dateTimeRef/videoRefs are stable refs
 	useEffect(() => {
 		if (tvPaused) return;
-		const elapsedRealMs = Date.now() - dateTimeUpdatedAtRef.current;
-		const nowMs = new Date(dateTimeRef.current).getTime() + elapsedRealMs;
+		const nowMs = resolveVirtualNowMs(
+			dateTimeRef.current,
+			dateTimeUpdatedAtRef.current,
+			Date.now(),
+		);
 		for (const item of itemsRef.current) {
 			const el = videoRefs.current.get(item.id);
 			if (el) el.currentTime = calcSeekSeconds(item, nowMs);
@@ -538,8 +556,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const seekToCurrentTime = (item: MediaItem) => {
 		const el = videoRefs.current.get(item.id);
 		if (!el) return;
-		const elapsedRealMs = Date.now() - dateTimeUpdatedAtRef.current;
-		const nowMs = new Date(dateTimeRef.current).getTime() + elapsedRealMs;
+		const nowMs = resolveVirtualNowMs(
+			dateTimeRef.current,
+			dateTimeUpdatedAtRef.current,
+			Date.now(),
+		);
 		el.currentTime = calcSeekSeconds(item, nowMs);
 	};
 
