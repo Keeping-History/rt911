@@ -134,7 +134,7 @@ jobs:
       - name: Run E2E tests
         run: pnpm --filter @rt911/frontend exec playwright test
       - name: Upload report artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
