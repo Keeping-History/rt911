@@ -206,7 +206,11 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 				<div className={styles.rsContainer}>
 					<div className={styles.rsMainArea}>
 						{focusedItem ? (
-							<FocusedItemPlayer item={focusedItem} onDismiss={() => setFocusedItem(null)} />
+							<FocusedItemPlayer
+								item={focusedItem}
+								onDismiss={() => setFocusedItem(null)}
+								showWaveform={showWaveform}
+							/>
 						) : (
 							activeStationObj && (
 								<>
