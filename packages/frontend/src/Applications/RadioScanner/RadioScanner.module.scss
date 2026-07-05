@@ -31,7 +31,7 @@
 
 .rsDisplaySource {
   font-family: var(--ui-font);
-  font-size: calc(var(--ui-font-size) * 0.85);
+  font-size: calc(var(--ui-font-size) * 2);
   color: var(--color-theme-02);
   margin: 0;
   text-transform: uppercase;
@@ -124,12 +124,13 @@
 	margin: 0;
 	padding: 0;
 	display: flex;
-	flex-direction: column;
+	flex-direction: row;
 	gap: 2px;
 	position: relative;
 	z-index: 1;
   background: rgba(255,255,255,.5);
   padding: var(--window-padding-size);
+  gap: var(--window-control-size);
 }
 
 .rsNowPlayingRow {
@@ -168,7 +169,7 @@
 
 // Coming Up / Previous schedule sections
 .rsScheduleSection {
-  width: 100%;
+  width: 50%;
 }
 
 .rsScheduleLabel {
@@ -184,10 +185,19 @@
   list-style: none;
   margin: 0;
   padding: var(--window-padding-size);
-  display: flex;
-  flex-direction: column;
   gap: 1px;
   background: rgba(255,255,255,.5);
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  width: 95%;
+
+  img {
+    width: 16px;
+		height: 16px;
+  }
 }
 
 .rsScheduleItem {
@@ -195,8 +205,13 @@
   font-size: calc(var(--ui-font-size) / 1.3);
   color: var(--color-system-01);
   white-space: nowrap;
-  overflow: hidden;
   text-overflow: ellipsis;
+  height: auto;
+  padding: var(--window-padding-size);
+
+  &:nth-child(odd) {
+    background: rgba(255,255,255,.25);
+  }
 }
 
 .rsScheduleBtn {

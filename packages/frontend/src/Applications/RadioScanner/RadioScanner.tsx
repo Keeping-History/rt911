@@ -1,15 +1,22 @@
 import {
-	ClassicyApp,
-	ClassicyButton,
-	ClassicyIcons,
-	ClassicyWindow,
-	quitMenuItemHelper,
-	useAppManager,
-	useAppManagerDispatch,
-	useClassicyDateTime,
+    ClassicyApp,
+    ClassicyButton,
+    ClassicyIcons,
+    ClassicyWindow,
+    quitMenuItemHelper,
+    useAppManager,
+    useAppManagerDispatch,
+    useClassicyDateTime,
 } from "classicy";
 import type React from "react";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { FocusedItemPlayer } from "./FocusedItemPlayer";
@@ -19,7 +26,12 @@ import "./RadioScannerContext";
 import { trackAppToggle } from "../../openreplay";
 import { sanitizeActiveStation, sanitizeItemIds } from "./radioPlayback";
 import { StationPlayer } from "./StationPlayer";
-import { activeSegments, mergeWithSources, previousSegments, upcomingSegments } from "./stationGrouping";
+import {
+    activeSegments,
+    mergeWithSources,
+    previousSegments,
+    upcomingSegments,
+} from "./stationGrouping";
 
 type RadioScannerProps = Record<string, never>;
 
@@ -27,293 +39,383 @@ type RadioScannerProps = Record<string, never>;
 const CONTINUOUS_STATIONS = new Set(["WCBS", "WINS"]);
 
 export const RadioScanner: React.FC<RadioScannerProps> = () => {
-	const appName = "Radio Scanner";
-	const appId = "RadioScanner.app";
-	const appIcon = ClassicyIcons.applications.radio.app as string;
+    const appName = "Radio Scanner";
+    const appId = "RadioScanner.app";
+    const appIcon = ClassicyIcons.applications.radio.app as string;
 
-	const desktopEventDispatch = useAppManagerDispatch();
-	const appState = useAppManager(
-		(state) => state.System.Manager.Applications.apps[appId]?.data as Record<string, unknown> | undefined,
-	);
+    const desktopEventDispatch = useAppManagerDispatch();
+    const appState = useAppManager(
+        (state) =>
+            state.System.Manager.Applications.apps[appId]?.data as
+                | Record<string, unknown>
+                | undefined,
+    );
 
-	const isOpen = useAppManager(
-		(state) =>
-			state.System.Manager.Applications.apps[appId]?.open ?? false,
-	);
-	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
-	useEffect(() => {
-		if (prevIsOpenRef.current === undefined) {
-			prevIsOpenRef.current = isOpen;
-			return;
-		}
-		if (prevIsOpenRef.current === isOpen) return;
-		prevIsOpenRef.current = isOpen;
-		trackAppToggle(appId, isOpen ? "open" : "close");
-	}, [isOpen]);
+    const isOpen = useAppManager(
+        (state) => state.System.Manager.Applications.apps[appId]?.open ?? false,
+    );
+    const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+    useEffect(() => {
+        if (prevIsOpenRef.current === undefined) {
+            prevIsOpenRef.current = isOpen;
+            return;
+        }
+        if (prevIsOpenRef.current === isOpen) return;
+        prevIsOpenRef.current = isOpen;
+        trackAppToggle(appId, isOpen ? "open" : "close");
+    }, [isOpen]);
 
-	const { mp3Items: items, mp3History, subscribeMp3, unsubscribeMp3, sources, getUpcomingMp3Items } = useContext(MediaStreamContext);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-only
-	useEffect(() => {
-		subscribeMp3(appId);
-		return () => unsubscribeMp3(appId);
-	}, [subscribeMp3, unsubscribeMp3, appId]);
+    const {
+        mp3Items: items,
+        mp3History,
+        subscribeMp3,
+        unsubscribeMp3,
+        sources,
+        getUpcomingMp3Items,
+    } = useContext(MediaStreamContext);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-only
+    useEffect(() => {
+        subscribeMp3(appId);
+        return () => unsubscribeMp3(appId);
+    }, [subscribeMp3, unsubscribeMp3, appId]);
 
-	const { dateTime, paused: clockPaused } = useClassicyDateTime();
+    const { dateTime, paused: clockPaused } = useClassicyDateTime();
 
-	const [captionsOn, setCaptionsOn] = useState<boolean>(false);
-	const [activeStation, setActiveStation] = useState<string>(
-		sanitizeActiveStation(appState?.activeStation),
-	);
-	const [mutedItems, setMutedItems] = useState<number[]>(
-		sanitizeItemIds(appState?.mutedItems),
-	);
-	const [showWaveform, setShowWaveform] = useState<boolean>(
-		(appState?.showWaveform as boolean) ?? true,
-	);
-	const [focusedItem, setFocusedItem] = useState<MediaItem | null>(null);
+    const [captionsOn, setCaptionsOn] = useState<boolean>(false);
+    const [activeStation, setActiveStation] = useState<string>(
+        sanitizeActiveStation(appState?.activeStation),
+    );
+    const [mutedItems, setMutedItems] = useState<number[]>(
+        sanitizeItemIds(appState?.mutedItems),
+    );
+    const [showWaveform, setShowWaveform] = useState<boolean>(
+        (appState?.showWaveform as boolean) ?? true,
+    );
+    const [focusedItem, setFocusedItem] = useState<MediaItem | null>(null);
 
-	// Accumulate all mp3Items ever received so previousSegments can access them
-	// even after they expire from the live stream.
-	const seenItemsRef = useRef<Map<number, MediaItem>>(new Map());
-	useEffect(() => {
-		for (const item of items) {
-			seenItemsRef.current.set(item.id, item);
-		}
-	}, [items]);
+    // Accumulate all mp3Items ever received so previousSegments can access them
+    // even after they expire from the live stream.
+    const seenItemsRef = useRef<Map<number, MediaItem>>(new Map());
+    useEffect(() => {
+        for (const item of items) {
+            seenItemsRef.current.set(item.id, item);
+        }
+    }, [items]);
 
-	// Fine virtual clock: the stored dateTime advances per minute, so add the
-	// real time elapsed since its last update to recover sub-minute precision.
-	const dateTimeRef = useRef(dateTime);
-	dateTimeRef.current = dateTime;
-	const clockPausedRef = useRef(clockPaused);
-	clockPausedRef.current = clockPaused;
-	const dateTimeUpdatedAtRef = useRef<number>(Date.now());
-	// biome-ignore lint/correctness/useExhaustiveDependencies: trigger-only dep
-	useEffect(() => {
-		dateTimeUpdatedAtRef.current = Date.now();
-	}, [dateTime]);
+    // Fine virtual clock: the stored dateTime advances per minute, so add the
+    // real time elapsed since its last update to recover sub-minute precision.
+    const dateTimeRef = useRef(dateTime);
+    dateTimeRef.current = dateTime;
+    const clockPausedRef = useRef(clockPaused);
+    clockPausedRef.current = clockPaused;
+    const dateTimeUpdatedAtRef = useRef<number>(Date.now());
+    // biome-ignore lint/correctness/useExhaustiveDependencies: trigger-only dep
+    useEffect(() => {
+        dateTimeUpdatedAtRef.current = Date.now();
+    }, [dateTime]);
 
-	const getNowMs = useCallback(() => {
-		const elapsed = clockPausedRef.current
-			? 0
-			: Date.now() - dateTimeUpdatedAtRef.current;
-		return new Date(dateTimeRef.current).getTime() + elapsed;
-	}, []);
-	const nowMs = getNowMs();
+    const getNowMs = useCallback(() => {
+        const elapsed = clockPausedRef.current
+            ? 0
+            : Date.now() - dateTimeUpdatedAtRef.current;
+        return new Date(dateTimeRef.current).getTime() + elapsed;
+    }, []);
+    const nowMs = getNowMs();
 
-	// Re-render every second so nowMs tracks the clock at ~1s resolution.
-	const [tick, setTick] = useState(0);
-	useEffect(() => {
-		const id = setInterval(() => setTick((n) => n + 1), 1000);
-		return () => clearInterval(id);
-	}, []);
+    // Re-render every second so nowMs tracks the clock at ~1s resolution.
+    const [tick, setTick] = useState(0);
+    useEffect(() => {
+        const id = setInterval(() => setTick((n) => n + 1), 1000);
+        return () => clearInterval(id);
+    }, []);
 
-	const stations = useMemo(
-		() => mergeWithSources(sources.audio, items),
-		[sources.audio, items],
-	);
+    const stations = useMemo(
+        () => mergeWithSources(sources.audio, items),
+        [sources.audio, items],
+    );
 
-	// Snapshot of items waiting in the reveal buffer — refreshed every second.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: tick is the intended dependency
-	const upcomingItems = useMemo(
-		() => getUpcomingMp3Items(),
-		[tick, getUpcomingMp3Items], // eslint-disable-line react-hooks/exhaustive-deps
-	);
+    // Snapshot of items waiting in the reveal buffer — refreshed every second.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: tick is the intended dependency
+    const upcomingItems = useMemo(
+        () => getUpcomingMp3Items(),
+        [tick, getUpcomingMp3Items], // eslint-disable-line react-hooks/exhaustive-deps
+    );
 
-	// Select the first station once stations arrive.
-	useEffect(() => {
-		if (activeStation === "" && stations.length > 0) {
-			setActiveStation(stations[0].key);
-		}
-	}, [stations, activeStation]);
+    // Select the first station once stations arrive.
+    useEffect(() => {
+        if (activeStation === "" && stations.length > 0) {
+            setActiveStation(stations[0].key);
+        }
+    }, [stations, activeStation]);
 
-	// Persist state on every change.
-	useEffect(() => {
-		desktopEventDispatch({
-			type: "ClassicyAppRadioScannerSetState",
-			activeStation,
-			mutedItems,
-			showWaveform,
-		});
-	}, [activeStation, mutedItems, showWaveform, desktopEventDispatch]);
+    // Persist state on every change.
+    useEffect(() => {
+        desktopEventDispatch({
+            type: "ClassicyAppRadioScannerSetState",
+            activeStation,
+            mutedItems,
+            showWaveform,
+        });
+    }, [activeStation, mutedItems, showWaveform, desktopEventDispatch]);
 
-	const toggleItemMute = (id: number) => {
-		setMutedItems((prev) =>
-			prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
-		);
-	};
+    const toggleItemMute = (id: number) => {
+        setMutedItems((prev) =>
+            prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+        );
+    };
 
-	const appMenu = [
-		{
-			id: "file",
-			title: "File",
-			menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
-		},
-		{
-			id: "view",
-			title: "View",
-			menuChildren: [
-				{
-					id: "toggle-waveform",
-					title: `${showWaveform ? "✓ " : "  "}Show Waveform`,
-					onClickFunc: () => setShowWaveform((v) => !v),
-				},
-			],
-		},
-	];
+    const appMenu = [
+        {
+            id: "file",
+            title: "File",
+            menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
+        },
+        {
+            id: "view",
+            title: "View",
+            menuChildren: [
+                {
+                    id: "toggle-waveform",
+                    title: `${showWaveform ? "✓ " : "  "}Show Waveform`,
+                    onClickFunc: () => setShowWaveform((v) => !v),
+                },
+            ],
+        },
+    ];
 
-	const activeStationObj = stations.find((s) => s.key === activeStation);
+    const activeStationObj = stations.find((s) => s.key === activeStation);
 
-	const showSchedule = activeStation !== "" && !CONTINUOUS_STATIONS.has(activeStation);
+    const showSchedule =
+        activeStation !== "" && !CONTINUOUS_STATIONS.has(activeStation);
 
-	const upcomingList = showSchedule && activeStationObj
-		? upcomingSegments(activeStationObj, upcomingItems, nowMs)
-		: [];
+    const upcomingList =
+        showSchedule && activeStationObj
+            ? upcomingSegments(activeStationObj, upcomingItems, nowMs)
+            : [];
 
-	// Previous = the server's full back-catalogue (everything started before the
-	// snapshot instant) plus items seen live since (which cover the gap between
-	// history snapshots). Later-seen copies win the id merge; previousSegments
-	// keeps only entries that have actually ended by nowMs.
-	const previousList = showSchedule && activeStationObj
-		? previousSegments(
-			activeStationObj,
-			Array.from(
-				new Map(
-					[...mp3History, ...seenItemsRef.current.values()].map((i) => [i.id, i]),
-				).values(),
-			),
-			nowMs,
-		)
-		: [];
+    // Previous = the server's full back-catalogue (everything started before the
+    // snapshot instant) plus items seen live since (which cover the gap between
+    // history snapshots). Later-seen copies win the id merge; previousSegments
+    // keeps only entries that have actually ended by nowMs.
+    const previousList =
+        showSchedule && activeStationObj
+            ? previousSegments(
+                  activeStationObj,
+                  Array.from(
+                      new Map(
+                          [...mp3History, ...seenItemsRef.current.values()].map(
+                              (i) => [i.id, i],
+                          ),
+                      ).values(),
+                  ),
+                  nowMs,
+              )
+            : [];
 
-	// Online stations first, offline stations last.
-	const sortedStations = useMemo(() => {
-		const online = stations.filter((s) => activeSegments(s, nowMs).length > 0);
-		const offline = stations.filter((s) => activeSegments(s, nowMs).length === 0);
-		return [...online, ...offline];
-	}, [stations, nowMs]);
+    // Online stations first, offline stations last.
+    const sortedStations = useMemo(() => {
+        const online = stations.filter(
+            (s) => activeSegments(s, nowMs).length > 0,
+        );
+        const offline = stations.filter(
+            (s) => activeSegments(s, nowMs).length === 0,
+        );
+        return [...online, ...offline];
+    }, [stations, nowMs]);
 
-	return (
-		<ClassicyApp
-			id={appId}
-			name={appName}
-			icon={appIcon}
-			defaultWindow={`${appId}_main`}
-		>
-			<ClassicyWindow
-				id={`${appId}_main`}
-				title={appName}
-				appId={appId}
-				closable={true}
-				resizable={true}
-				zoomable={true}
-				scrollable={false}
-				collapsable={true}
-				initialSize={["50%", "50%"]}
-				initialPosition={["left", "top"]}
-				minimumSize={[500, 280]}
-				modal={false}
-				appMenu={appMenu}
-			>
-				<div className={styles.rsContainer}>
-					<div className={styles.rsMainArea}>
-						{focusedItem ? (
-							<FocusedItemPlayer
-								item={focusedItem}
-								onDismiss={() => setFocusedItem(null)}
-								showWaveform={showWaveform}
-							/>
-						) : (
-							activeStationObj && (
-								<>
-									<div className={styles.rsDisplay}>
-										<p className={styles.rsDisplaySource}>{activeStationObj.label}</p>
-										<NowPlayingList
-											segments={activeSegments(activeStationObj, nowMs)}
-											mutedItems={mutedItems}
-											onToggleMute={toggleItemMute}
-										/>
-										{upcomingList.length > 0 && (
-											<div className={styles.rsScheduleSection}>
-												<p className={styles.rsScheduleLabel}>Coming Up</p>
-												<ul className={styles.rsScheduleList}>
-													{upcomingList.map((item) => (
-														<li key={item.id} className={styles.rsScheduleItem}>
-															{item.full_title || item.title}
-														</li>
-													))}
-												</ul>
+    return (
+        <ClassicyApp
+            id={appId}
+            name={appName}
+            icon={appIcon}
+            defaultWindow={`${appId}_main`}
+        >
+            <ClassicyWindow
+                id={`${appId}_main`}
+                title={appName}
+                appId={appId}
+                closable={true}
+                resizable={true}
+                zoomable={true}
+                scrollable={false}
+                collapsable={true}
+                initialSize={["50%", "50%"]}
+                initialPosition={["left", "top"]}
+                minimumSize={[500, 280]}
+                modal={false}
+                appMenu={appMenu}
+            >
+                <div className={styles.rsContainer}>
+                    <div className={styles.rsMainArea}>
+                        {focusedItem ? (
+                            <FocusedItemPlayer
+                                item={focusedItem}
+                                onDismiss={() => setFocusedItem(null)}
+                                showWaveform={showWaveform}
+                            />
+                        ) : (
+                            activeStationObj && (
+                                <>
+                                    <div className={styles.rsDisplay}>
+                                        <p className={styles.rsDisplaySource}>
+                                            {activeStationObj.label}
+                                        </p>
+                                        <NowPlayingList
+                                            segments={activeSegments(
+                                                activeStationObj,
+                                                nowMs,
+                                            )}
+                                            mutedItems={mutedItems}
+                                            onToggleMute={toggleItemMute}
+                                        />
+                                        <div style={{ display: "flex", flexDirection: "row", width: "100%", minHeight: "30%", maxHeight: "60", gap: "var(--window-control-size)" }}>
+                                                <div
+                                                    className={
+                                                        styles.rsScheduleSection
+                                                    }
+                                                >
+                                                    <p
+                                                        className={
+                                                            styles.rsScheduleLabel
+                                                        }
+                                                    >
+                                                        Coming Up
+                                                    </p>
+                                            {upcomingList.length > 0 && (
+                                                    <ul
+                                                        className={
+                                                            styles.rsScheduleList
+                                                        }
+                                                    >
+                                                        {upcomingList.map(
+                                                            (item) => (
+                                                                <li
+                                                                    key={
+                                                                        item.id
+                                                                    }
+                                                                    className={
+                                                                        styles.rsScheduleItem
+                                                                    }
+                                                                >
+																	<img src={ ClassicyIcons.controlPanels.soundManager.sound33} alt={item.title} />
+                                                                    {item.full_title ||
+                                                                        item.title}
+                                                                </li>
+                                                            ),
+                                                        )}
+                                                    </ul>
+                                            )}
 											</div>
-										)}
-										{previousList.length > 0 && (
-											<div className={styles.rsScheduleSection}>
-												<p className={styles.rsScheduleLabel}>Previous</p>
-												<ul className={styles.rsScheduleList}>
-													{previousList.map((item) => (
-														<li key={item.id} className={styles.rsScheduleItem}>
-															<button
-																type="button"
-																className={styles.rsScheduleBtn}
-																onMouseUp={() => setFocusedItem(item)}
-															>
-																{item.full_title || item.title}
-															</button>
-														</li>
-													))}
-												</ul>
-											</div>
-										)}
-									</div>
-									<StationPlayer
-										station={activeStationObj}
-										nowMs={nowMs}
-										getNowMs={getNowMs}
-										stationMuted={false}
-										mutedItems={mutedItems}
-										clockPaused={clockPaused}
-										showWaveform={showWaveform}
-										captionsOn={captionsOn}
-									/>
-								</>
-							)
-						)}
-					</div>
+                                            {previousList.length > 0 && (
+                                                <div
+                                                    className={
+                                                        styles.rsScheduleSection
+                                                    }
+                                                >
+                                                    <p
+                                                        className={
+                                                            styles.rsScheduleLabel
+                                                        }
+                                                    >
+                                                        Previous
+                                                    </p>
+                                                    <ul
+                                                        className={
+                                                            styles.rsScheduleList
+                                                        }
+                                                    >
+                                                        {previousList.map(
+                                                            (item) => (
+                                                                <li
+                                                                    key={
+                                                                        item.id
+                                                                    }
+                                                                    className={
+                                                                        styles.rsScheduleItem
+                                                                    }
+                                                                >
+																	<img src={ ClassicyIcons.controlPanels.soundManager.sound33} alt={item.title} />
+                                                                    <button
+                                                                        type="button"
+                                                                        className={
+                                                                            styles.rsScheduleBtn
+                                                                        }
+                                                                        onMouseUp={() =>
+                                                                            setFocusedItem(
+                                                                                item,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        {item.full_title ||
+                                                                            item.title}
+                                                                    </button>
+                                                                </li>
+                                                            ),
+                                                        )}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>{" "}
+                                    </div>
+                                    <StationPlayer
+                                        station={activeStationObj}
+                                        nowMs={nowMs}
+                                        getNowMs={getNowMs}
+                                        stationMuted={false}
+                                        mutedItems={mutedItems}
+                                        clockPaused={clockPaused}
+                                        showWaveform={showWaveform}
+                                        captionsOn={captionsOn}
+                                    />
+                                </>
+                            )
+                        )}
+                    </div>
 
-					{/* Bottom row: control panel + one button per station */}
-					<div className={styles.rsBottomRow}>
-						<div className={styles.rsControlPanel}>
-							<ClassicyButton
-								buttonSize="small"
-								onClickFunc={() => setCaptionsOn((v) => !v)}
-								depressed={captionsOn}
-							>
-								{captionsOn ? "CC On" : "CC Off"}
-							</ClassicyButton>
-						</div>
-						<div className={styles.rsStationStrip}>
-							{sortedStations.map((station) => {
-								const isActive = station.key === activeStation;
-								const isOnline = activeSegments(station, nowMs).length > 0;
-								return (
-									<ClassicyButton
-										key={station.key}
-										depressed={isActive}
-										onClickFunc={() => {
-											setActiveStation(station.key);
-											setFocusedItem(null);
-										}}
-									>
-										<p className={styles.rsStationSource}>{station.label}</p>
-										{!isOnline && (
-											<p className={styles.rsStationOffline}>OFFLINE</p>
-										)}
-									</ClassicyButton>
-								);
-							})}
-						</div>
-					</div>
-				</div>
-			</ClassicyWindow>
-		</ClassicyApp>
-	);
+                    {/* Bottom row: control panel + one button per station */}
+                    <div className={styles.rsBottomRow}>
+                        <div className={styles.rsControlPanel}>
+                            <ClassicyButton
+                                buttonSize="small"
+                                onClickFunc={() => setCaptionsOn((v) => !v)}
+                                depressed={captionsOn}
+                            >
+                                {captionsOn ? "CC On" : "CC Off"}
+                            </ClassicyButton>
+                        </div>
+                        <div className={styles.rsStationStrip}>
+                            {sortedStations.map((station) => {
+                                const isActive = station.key === activeStation;
+                                const isOnline =
+                                    activeSegments(station, nowMs).length > 0;
+                                return (
+                                    <ClassicyButton
+                                        key={station.key}
+                                        depressed={isActive}
+                                        onClickFunc={() => {
+                                            setActiveStation(station.key);
+                                            setFocusedItem(null);
+                                        }}
+                                    >
+                                        <p className={styles.rsStationSource}>
+                                            {station.label}
+                                        </p>
+                                        {!isOnline && (
+                                            <p
+                                                className={
+                                                    styles.rsStationOffline
+                                                }
+                                            >
+                                                OFFLINE
+                                            </p>
+                                        )}
+                                    </ClassicyButton>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </ClassicyWindow>
+        </ClassicyApp>
+    );
 };
