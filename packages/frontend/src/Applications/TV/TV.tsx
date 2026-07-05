@@ -767,7 +767,10 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										className={`${styles.tvLoadingOverlay}${mainPlayerBuffering ? ` ${styles.tvLoadingOverlayVisible}` : ""}`}
 										alt=""
 									/>
+									{/* Keyed by channel: onMediaElement only fires on mount/unmount, so a
+									    channel switch must remount the embed to re-register videoRefs. */}
 									<QuickTimeVideoEmbed
+										key={item.id}
 										appId={appId}
 										name={item.source ?? String(item.id)}
 										url={item.url}
