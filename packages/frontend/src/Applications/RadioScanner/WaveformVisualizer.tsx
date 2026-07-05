@@ -234,7 +234,6 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 					position: "absolute",
 					bottom: "var(--window-padding-size, 6px)",
 					right: "var(--window-padding-size, 6px)",
-					zIndex: 1,
 					pointerEvents: "auto",
 					opacity: 0.5,
 					background: "transparent",
@@ -244,6 +243,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 					fontFamily: "var(--ui-font)",
 					color: "var(--color-theme-02, rgba(0, 210, 90, 0.8))",
 					padding: "2px 4px",
+					zIndex: 999,
 				}}
 			>
 				{VIZ_MODES[modeIndex].label}

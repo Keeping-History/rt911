@@ -268,7 +268,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                             mutedItems={mutedItems}
                                             onToggleMute={toggleItemMute}
                                         />
-                                        <div style={{ display: "flex", flexDirection: "row", width: "100%", minHeight: "30%", maxHeight: "60", gap: "var(--window-control-size)" }}>
+                                        <div style={{ display: "flex", flexDirection: "row", width: "100%", minHeight: "30%", maxHeight: "60%", gap: "var(--window-control-size)" }}>
                                                 <div
                                                     className={
                                                         styles.rsScheduleSection
