@@ -248,23 +248,6 @@ $strip-height: calc(5em + 8px);
   pointer-events: none;
 }
 
-// Custom subtitle overlay for the main player. Lives in the light DOM above the
-// video so we can style it with ordinary CSS — bypasses ::cue and shadow-DOM issues.
-.subtitleOverlay {
-  position: absolute;
-  bottom: 10%;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 80%;
-  text-align: center;
-  padding: 0.2em 0.5em;
-  border-radius: 2px;
-  z-index: 5;
-  white-space: pre-line;
-  pointer-events: none;
-  line-height: 1.4;
-}
-
 .tvSettings {
   display: flex;
   flex-direction: column;

@@ -9,7 +9,7 @@ import {
 	ClassicyTabs,
 	ClassicyWindow,
 	MAC_OS_8_CRAYONS,
-	intToRgb,
+	QuickTimeVideoEmbed,
 	quitMenuItemHelper,
 	useAppManager,
 	useAppManagerDispatch,
@@ -17,7 +17,6 @@ import {
 } from "classicy";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ReactPlayer from "react-player";
 import type {
 	MediaItem,
 	MediaStreamFilter,
@@ -67,12 +66,6 @@ const FONT_VARS: [string, string][] = [
 	["--body-font", "Body"],
 	["--ui-font", "UI"],
 ];
-
-function resolveCssVar(name: string): string {
-	const el = document.getElementById("classicyDesktop") ?? document.documentElement;
-	return getComputedStyle(el).getPropertyValue(name).trim();
-}
-
 
 // HLS quality ceilings. hls.js orders levels by ascending bitrate, and the encoder
 // ships a fixed 3-rendition ladder (thumb 136k, mid 396k, full 2628k), so:
@@ -228,8 +221,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Thumbnails are pre-generated for every 30-second slot, keyed by Unix epoch seconds.
 	const thumbTs = Math.floor(new Date(dateTime).getTime() / 1000 / 30) * 30;
 
-	// Underlying video elements per item — react-player 3.x forwards refs to
-	// the native <video> element, so we set currentTime directly for seeking.
+	// Underlying video elements per item — QuickTimeVideoEmbed's onMediaElement
+	// hands back the native <video> element, so we set currentTime directly for seeking.
 	const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
 	const prevDateTimeRef = useRef(dateTime);
 	// Stable ref to the latest UTC dateTime string for use in config callbacks.
@@ -244,50 +237,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Stable ref to items so the seek effect never captures a stale closure.
 	const itemsRef = useRef(items);
 	itemsRef.current = items;
-	// Stable ref to captionsOn so onReady callbacks always see the current value.
-	const captionsOnRef = useRef(captionsOn);
-	captionsOnRef.current = captionsOn;
-	// Per-player subtitle text for the styled overlay divs. Keyed by MediaItem id.
-	// All players (single-view and grid) use mode="hidden" + timeupdate polling so that
-	// font/color/size/opacity settings apply to both views without ::cue gymnastics.
-	const [subtitleTexts, setSubtitleTexts] = useState<Record<number, string>>({});
-	// Maps player id → { inner video element, timeupdate handler } for cleanup.
-	const cueListenersRef = useRef<Map<number, { inner: HTMLVideoElement; handler: EventListener }>>(new Map());
-
-	// Clear all subtitle overlays and timeupdate listeners when the viewed channel changes.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional on activePlayer change
-	useEffect(() => {
-		setSubtitleTexts({});
-		for (const { inner, handler } of cueListenersRef.current.values()) {
-			inner.removeEventListener("timeupdate", handler);
-		}
-		cueListenersRef.current.clear();
-	}, [activePlayer]);
-
-	// Remove all timeupdate listeners on unmount.
-	useEffect(() => {
-		const cueListeners = cueListenersRef.current;
-		return () => {
-			for (const { inner, handler } of cueListeners.values()) {
-				inner.removeEventListener("timeupdate", handler);
-			}
-		};
-	}, []);
-
-	// useEffect (not useMemo) so CSS custom properties are resolved post-mount,
-	// when the theme variables are actually available in computed styles.
-	const [subtitleOverlayStyle, setSubtitleOverlayStyle] = useState<React.CSSProperties>({});
-	useEffect(() => {
-		const font = resolveCssVar(captionStyle.font);
-		const { r: cr, g: cg, b: cb } = intToRgb(captionStyle.color);
-		const { r: br, g: bg, b: bb } = intToRgb(captionStyle.bgColor);
-		setSubtitleOverlayStyle({
-			fontFamily: `${font || "sans-serif"}, sans-serif`,
-			fontSize: `${captionStyle.size}%`,
-			color: `rgba(${cr},${cg},${cb},${captionStyle.colorOpacity})`,
-			backgroundColor: `rgba(${br},${bg},${bb},${captionStyle.bgOpacity})`,
-		});
-	}, [captionStyle]);
 	// Latest per-player volumes mirrored to a ref so persistence can read fresh
 	// values without making volume changes a persist trigger — a drag updates
 	// the ref every tick but only commits to the store on release.
@@ -573,8 +522,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 
 	// Cap an hls.js player's quality at its tier *ceiling*, leaving ABR enabled so
 	// it gracefully ramps up to the cap and degrades below it as bandwidth allows —
-	// never a forced, buffer-flushing switch. ReactPlayer wraps hls-video-element,
-	// which exposes the hls.js instance as `.api`; `autoLevelCapping` is the max
+	// never a forced, buffer-flushing switch. QuickTimeVideoEmbed renders
+	// hls-video-element, which exposes the hls.js instance as `.api`; `autoLevelCapping` is the max
 	// level the ABR controller may pick (ABR stays auto, currentLevel untouched).
 	// Setting it just steers future fragment selection, so up/down moves smoothly
 	// at segment boundaries. Idempotent guard avoids redundant ABR re-evaluations.
@@ -606,73 +555,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	useEffect(() => {
 		for (const item of items) capHlsLevel(item.id, levelForItem(item));
 	}, [items, levelForItem, capHlsLevel]);
-
-	// Inject or remove a <track> on the inner <video> element exposed by hls.js.
-	// ReactPlayer renders hls-video-element (a web component whose shadow DOM owns
-	// the real <video>); JSX <track> children don't reach it. el.api is the hls.js
-	// instance; el.api.media is the <video> hls.js attached to. On Safari, hls.js
-	// is not used and el.api is null, so we fall back to the shadow root query.
-	//
-	// All players (single-view and grid) use mode="hidden" so the browser never
-	// renders native captions. We listen to timeupdate — more reliable than cuechange
-	// on programmatically-injected tracks in shadow DOM — and display the active cue
-	// text in our own styled overlay div so all caption style settings take effect.
-	const applyCaption = useCallback((id: number, item: MediaItem) => {
-		type HlsEl = HTMLVideoElement & { api?: { media?: HTMLVideoElement } };
-		const el = videoRefs.current.get(id) as HlsEl | undefined;
-		const inner =
-			el?.api?.media ??
-			(el?.shadowRoot?.querySelector("video") as HTMLVideoElement | null);
-		if (!inner) return;
-
-		// Remove the old track and any existing timeupdate listener for this player.
-		inner.querySelector("track[data-cc]")?.remove();
-		const existing = cueListenersRef.current.get(id);
-		if (existing) {
-			existing.inner.removeEventListener("timeupdate", existing.handler);
-			cueListenersRef.current.delete(id);
-		}
-		setSubtitleTexts((prev) => {
-			if (!(id in prev)) return prev;
-			const next = { ...prev };
-			delete next[id];
-			return next;
-		});
-
-		if (!captionsOnRef.current) return;
-
-		const url = vttUrl(item.subtitles);
-		if (!url) return;
-
-		const trackEl = document.createElement("track");
-		trackEl.setAttribute("data-cc", "true");
-		trackEl.kind = "subtitles";
-		trackEl.srclang = "en";
-		trackEl.label = "English";
-		trackEl.src = url;
-		inner.appendChild(trackEl);
-
-		const track = trackEl.track;
-		if (!track) return;
-		// Hidden: cues load and activeCues updates, but the browser never renders them.
-		track.mode = "hidden";
-
-		// timeupdate fires after activeCues is updated (spec §4.8.10.8), so reading
-		// activeCues here is reliable even on Safari with native HLS.
-		const handler = () => {
-			const active = Array.from(track.activeCues ?? []);
-			const text = active
-				.map((c) => (c as VTTCue).text.replace(/<[^>]*>/g, ""))
-				.join("\n");
-			setSubtitleTexts((prev) => (prev[id] === text ? prev : { ...prev, [id]: text }));
-		};
-		inner.addEventListener("timeupdate", handler);
-		cueListenersRef.current.set(id, { inner, handler });
-	}, []);
-
-	useEffect(() => {
-		for (const item of items) applyCaption(item.id, item);
-	}, [captionsOn, items, applyCaption]);
 
 	// Re-sync the working copy from persisted state, reveal the window, and focus
 	// it so the modal is keyboard-ready the instant it opens (mirrors Browser).
@@ -885,8 +767,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										className={`${styles.tvLoadingOverlay}${mainPlayerBuffering ? ` ${styles.tvLoadingOverlayVisible}` : ""}`}
 										alt=""
 									/>
-									<ReactPlayer
-										ref={(el: HTMLVideoElement | null) => {
+									<QuickTimeVideoEmbed
+										appId={appId}
+										name={item.source ?? String(item.id)}
+										url={item.url}
+										type="video"
+										hideControls
+										onMediaElement={(el) => {
 											if (el) videoRefs.current.set(item.id, el);
 											else videoRefs.current.delete(item.id);
 										}}
@@ -894,30 +781,19 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 											setMainPlayerBuffering(false);
 											seekToCurrentTime(item);
 											capHlsLevel(item.id, levelForItem(item));
-											applyCaption(item.id, item);
 										}}
 										onWaiting={() => setMainPlayerBuffering(true)}
 										onPlaying={() => setMainPlayerBuffering(false)}
-										src={item.url}
 										playing={!clockPaused && !tvPaused}
-										loop={false}
-										controls={false}
-										playsInline={true}
 										muted={overallMuted || !hasInteracted}
 										volume={volumeLimit}
-										width="100%"
-										height="100%"
-										config={hlsConfigFor(item, levelForItem(item))}
+										captionsEnabled={captionsOn}
+										captionStyle={captionStyle}
+										subtitlesUrl={vttUrl(item.subtitles)}
+										options={hlsConfigFor(item, levelForItem(item))}
 										crossOrigin="anonymous"
+										playsInline
 									/>
-									{captionsOn && subtitleTexts[item.id] && (
-										<div
-											className={styles.subtitleOverlay}
-											style={subtitleOverlayStyle}
-										>
-											{subtitleTexts[item.id]}
-										</div>
-									)}
 								</>
 							);
 						})()}
@@ -980,40 +856,34 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 													onCommitFunc={persistGridState}
 												/>
 											</div>
-											<ReactPlayer
-												ref={(el: HTMLVideoElement | null) => {
+											<QuickTimeVideoEmbed
+												appId={appId}
+												name={item.source ?? String(id)}
+												url={item.url}
+												type="video"
+												hideControls
+												onMediaElement={(el) => {
 													if (el) videoRefs.current.set(id, el);
 													else videoRefs.current.delete(id);
 												}}
 												onReady={() => {
 													seekToCurrentTime(item);
 													capHlsLevel(id, levelForItem(item));
-													applyCaption(id, item);
 												}}
-												src={item.url}
 												playing={!clockPaused && !tvPaused}
-												loop={false}
-												controls={false}
-												playsInline={true}
 												muted={isGridMuted}
 												volume={resolveGridVolume(
 													gridPlayerVolumes[id],
 													volumeLimit,
 													isGridMuted,
 												)}
-												width="100%"
-												height="100%"
-												config={hlsConfigFor(item, levelForItem(item))}
+												captionsEnabled={captionsOn}
+												captionStyle={captionStyle}
+												subtitlesUrl={vttUrl(item.subtitles)}
+												options={hlsConfigFor(item, levelForItem(item))}
 												crossOrigin="anonymous"
+												playsInline
 											/>
-											{captionsOn && subtitleTexts[id] && (
-												<div
-													className={styles.subtitleOverlay}
-													style={subtitleOverlayStyle}
-												>
-													{subtitleTexts[id]}
-												</div>
-											)}
 										</div>
 									);
 								})}
