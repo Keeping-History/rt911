@@ -2,6 +2,8 @@ import { ClassicyIcons } from "classicy";
 import type React from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./RadioScanner.module.scss";
+import MarqueeText from "react-marquee-text"
+import "react-marquee-text/dist/styles.css"
 
 interface NowPlayingListProps {
 	segments: MediaItem[];
@@ -39,7 +41,9 @@ export const NowPlayingList: React.FC<NowPlayingListProps> = ({
 						>
 							<img src={isMuted ? soundMute : soundOn} alt={isMuted ? "Unmute" : "Mute"} />
 						</button>
-						<span className={styles.rsNowPlayingTitle}>{item.full_title || item.title}</span>
+						<MarqueeText direction="right" duration={10}>
+							<span className={styles.rsNowPlayingTitle}>{item.full_title || item.title}</span>
+						</MarqueeText>
 					</li>
 				);
 			})}

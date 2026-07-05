@@ -32,6 +32,7 @@ import {
     previousSegments,
     upcomingSegments,
 } from "./stationGrouping";
+import MarqueeText from "react-marquee-text";
 
 type RadioScannerProps = Record<string, never>;
 
@@ -401,13 +402,15 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                             {station.label}
                                         </p>
                                         {!isOnline && (
-                                            <p
-                                                className={
-                                                    styles.rsStationOffline
-                                                }
-                                            >
-                                                OFFLINE
-                                            </p>
+                                                <p
+                                                    className={
+                                                        styles.rsStationOffline
+                                                    }
+                                                >
+                                                <MarqueeText duration={5} direction="right" textSpacing={"95%"}>
+                                                        OFFLINE
+                                                </MarqueeText>
+                                                </p>
                                         )}
                                     </ClassicyButton>
                                 );
