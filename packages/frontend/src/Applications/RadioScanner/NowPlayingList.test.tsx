@@ -4,6 +4,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // rt911 has no global test setup, so testing-library does not auto-clean the
 // DOM between tests; do it explicitly to keep document-level queries isolated.
 afterEach(cleanup);
+
+// react-marquee-text measures element widths to size its clone track; jsdom
+// reports zero widths, which crashes its mount effect. The marquee is purely
+// presentational here, so render children directly.
+vi.mock("react-marquee-text", () => ({
+	default: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+}));
+
+import type React from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { NowPlayingList } from "./NowPlayingList";
 
