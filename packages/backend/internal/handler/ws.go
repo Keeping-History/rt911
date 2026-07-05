@@ -300,6 +300,17 @@ func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool,
 		return
 	}
 	sess.SendMp3(t, items)
+
+	// The Radio app's "Previous" list shows a station's full past schedule, which
+	// the live stream never covers (snapshots are active-only, windows are
+	// forward-only). Deliver the complete history up to t alongside the snapshot;
+	// the frame always sends (even empty) so a backward seek resets the client.
+	history, err := db.Mp3ItemHistory(r.Context(), pool, t)
+	if err != nil {
+		logger.Warn("mp3 history query failed", "error", err)
+		return
+	}
+	sess.SendMp3History(t, history)
 }
 
 // sendNewsSnapshot delivers the news items active at t to the session if it is

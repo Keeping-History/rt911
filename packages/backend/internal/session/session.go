@@ -262,6 +262,14 @@ func (s *Session) SendMp3(t time.Time, items []model.MediaItem) {
 	s.send_(outMsg{Type: "mp3", Time: t.Format(time.RFC3339), Items: items})
 }
 
+// SendMp3History delivers the full past mp3 schedule (every item started by t)
+// on the mp3_history frame. Unlike SendMp3, an empty batch IS sent: the client
+// replaces its history state wholesale on every frame, so after a backward seek
+// an empty frame is what clears out entries from the abandoned timeline.
+func (s *Session) SendMp3History(t time.Time, items []model.MediaItem) {
+	s.send_(outMsg{Type: "mp3_history", Time: t.Format(time.RFC3339), Items: items})
+}
+
 // SendNews delivers a batch of news items at time t on the news channel. Like
 // mp3, news reuses the MediaItem shape and the Items field, with a distinct
 // "news" type so the client routes it to the News app. No frame for an empty batch.

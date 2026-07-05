@@ -59,6 +59,13 @@ interface WsMp3Message {
 	items: MediaItem[];
 }
 
+// The complete mp3 back-catalogue up to the snapshot instant, sent with each mp3
+// snapshot. Replaces client history state wholesale; may be empty (items omitted).
+interface WsMp3HistoryMessage {
+	type: "mp3_history";
+	items?: MediaItem[];
+}
+
 interface WsNewsMessage {
 	type: "news";
 	items: MediaItem[];
@@ -86,6 +93,7 @@ type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
 	| WsMp3Message
+	| WsMp3HistoryMessage
 	| WsNewsMessage
 	| WsUsenetMessage
 	| WsUsenetBodyMessage
@@ -104,6 +112,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [items, setItems] = useState<MediaItem[]>([]);
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
+	const [mp3History, setMp3History] = useState<MediaItem[]>([]);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
 	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
 	const [usenetBodyState, setUsenetBodyState] = useState(emptyUsenetBodyState);
@@ -231,6 +240,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (mp3Subscribers.current.size === 0) {
 				send({ type: "unsubscribe", channel: "mp3" });
 				setMp3Items([]);
+				setMp3History([]);
 				mp3Buffer.current.clear();
 			}
 		},
@@ -493,6 +503,14 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "mp3_history") {
+				// The full back-catalogue up to the snapshot instant. Replace wholesale
+				// (each frame is complete, and an empty one clears after a backward
+				// seek); skip the reveal buffer and retention — history is already past.
+				setMp3History((msg as WsMp3HistoryMessage).items ?? []);
+				return;
+			}
+
 			if (msg.type === "news") {
 				const incomingNews = (msg as WsNewsMessage).items;
 				if (!incomingNews || incomingNews.length === 0) return;
@@ -569,6 +587,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			items,
 			pagerItems,
 			mp3Items,
+			mp3History,
 			newsItems,
 			usenetItems,
 			usenetBodies: usenetBodyState.bodies,
@@ -595,6 +614,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			items,
 			pagerItems,
 			mp3Items,
+			mp3History,
 			newsItems,
 			usenetItems,
 			usenetBodyState,

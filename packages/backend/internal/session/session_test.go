@@ -79,6 +79,42 @@ func TestSendMp3EmitsFrameWithMediaItems(t *testing.T) {
 	}
 }
 
+func TestSendMp3HistoryEmitsFrameWithMediaItems(t *testing.T) {
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 15, 26, 0, 0, time.UTC)
+
+	s.SendMp3History(at, []model.MediaItem{
+		{ID: 5801, Title: "ATC 0834", Format: "mp3", URL: "a.mp3"},
+		{ID: 5810, Title: "ATC 0851", Format: "mp3", URL: "b.mp3"},
+	})
+
+	m := recvType(t, s)
+	if m.Type != "mp3_history" {
+		t.Fatalf("expected mp3_history frame, got %q", m.Type)
+	}
+	if len(m.Items) != 2 || m.Items[0].Title != "ATC 0834" {
+		t.Fatalf("expected two mp3 history items, got %+v", m.Items)
+	}
+}
+
+func TestSendMp3HistorySendsEmptyBatch(t *testing.T) {
+	// Unlike SendMp3, an empty history frame must still be sent — the client
+	// replaces its history wholesale, and an empty frame is what clears state
+	// after a seek to before the first recording.
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 10, 0, 0, 0, time.UTC)
+
+	s.SendMp3History(at, nil)
+
+	m := recvType(t, s)
+	if m.Type != "mp3_history" {
+		t.Fatalf("expected mp3_history frame, got %q", m.Type)
+	}
+	if len(m.Items) != 0 {
+		t.Fatalf("expected empty items, got %+v", m.Items)
+	}
+}
+
 func TestSendSourcesEmitsSourceLists(t *testing.T) {
 	s := newTestSession(t)
 

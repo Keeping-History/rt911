@@ -51,7 +51,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 		trackAppToggle(appId, isOpen ? "open" : "close");
 	}, [isOpen]);
 
-	const { mp3Items: items, subscribeMp3, unsubscribeMp3, sources, getUpcomingMp3Items } = useContext(MediaStreamContext);
+	const { mp3Items: items, mp3History, subscribeMp3, unsubscribeMp3, sources, getUpcomingMp3Items } = useContext(MediaStreamContext);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-only
 	useEffect(() => {
 		subscribeMp3(appId);
@@ -170,8 +170,20 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
 		? upcomingSegments(activeStationObj, upcomingItems, nowMs)
 		: [];
 
+	// Previous = the server's full back-catalogue (everything started before the
+	// snapshot instant) plus items seen live since (which cover the gap between
+	// history snapshots). Later-seen copies win the id merge; previousSegments
+	// keeps only entries that have actually ended by nowMs.
 	const previousList = showSchedule && activeStationObj
-		? previousSegments(activeStationObj, Array.from(seenItemsRef.current.values()), nowMs)
+		? previousSegments(
+			activeStationObj,
+			Array.from(
+				new Map(
+					[...mp3History, ...seenItemsRef.current.values()].map((i) => [i.id, i]),
+				).values(),
+			),
+			nowMs,
+		)
 		: [];
 
 	// Online stations first, offline stations last.

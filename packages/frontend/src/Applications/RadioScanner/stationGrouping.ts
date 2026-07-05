@@ -80,12 +80,11 @@ export function upcomingSegments(
 		.slice(0, count);
 }
 
-/** Up to `count` ended items for `station` from the history list, most recent first. */
+/** Every ended item for `station` from the history list, most recent first. */
 export function previousSegments(
 	station: Station,
 	history: MediaItem[],
 	nowMs: number,
-	count = 5,
 ): MediaItem[] {
 	return history
 		.filter((item) => {
@@ -93,8 +92,7 @@ export function previousSegments(
 			const end = effectiveEndMs(item);
 			return end !== null && end <= nowMs;
 		})
-		.sort((a, b) => toMs(b.start_date) - toMs(a.start_date))
-		.slice(0, count);
+		.sort((a, b) => toMs(b.start_date) - toMs(a.start_date));
 }
 
 /**

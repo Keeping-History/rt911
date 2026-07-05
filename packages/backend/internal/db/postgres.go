@@ -241,6 +241,21 @@ func CurrentMp3Items(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]mo
 		 ORDER BY mi.start_date`, t)
 }
 
+// Mp3ItemHistory returns every approved mp3 item that has started by time t,
+// ordered by start_date. It backs the Radio app's "Previous" list, which shows
+// the full past schedule of a station — not just a recent window — so the query
+// is unbounded on the low side. The whole table is small (hundreds of metadata
+// rows), so delivering it wholesale on init/seek/subscribe is cheap; revisit
+// with a per-station LIMIT if the catalogue ever grows by orders of magnitude.
+// Items still active at t also match (the client decides what has "ended").
+func Mp3ItemHistory(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model.MediaItem, error) {
+	return queryItems(ctx, pool,
+		mp3SelectFrom+`
+		 WHERE mi.approved = 1
+		   AND mi.start_date <= $1
+		 ORDER BY mi.start_date`, t)
+}
+
 // newsSelectFrom is the shared SELECT … FROM clause for news queries. News items
 // reuse the MediaItem shape (same columns as media_items) but live in their own
 // news_items table, delivered on the opt-in "news" channel.

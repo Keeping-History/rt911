@@ -123,6 +123,13 @@ export interface MediaStreamContextValue {
 	pagerItems: PagerItem[];
 	/** mp3 (Radio) items received while subscribed to the mp3 channel. Same shape as items. */
 	mp3Items: MediaItem[];
+	/**
+	 * The complete mp3 back-catalogue up to the virtual clock (every item with
+	 * start_date ≤ t), replaced wholesale on each mp3_history frame (subscribe/
+	 * init/seek). Unlike mp3Items it is never reveal-gated or retention-pruned —
+	 * it backs the Radio app's full "Previous" schedule.
+	 */
+	mp3History: MediaItem[];
 	/** news items received while subscribed to the news channel. Same shape as items. */
 	newsItems: MediaItem[];
 	/** usenet messages received for the currently-viewed newsgroup(s). */
@@ -169,6 +176,7 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	items: [],
 	pagerItems: [],
 	mp3Items: [],
+	mp3History: [],
 	newsItems: [],
 	usenetItems: [],
 	usenetBodies: {},

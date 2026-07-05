@@ -66,6 +66,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `items`           | `time`, `items[]`             | A forward **window** of media items (default 300 s) sent when the session refills; client buffers and reveals each at its `start_date`. |
 | `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) + a forward **window** (default 600 s) per refill while subscribed. Client reveal-gate preserves forward-only pacing. |
 | `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) + a forward **window** (default 300 s) per refill while subscribed. Reuses the `items` field. |
+| `mp3_history`     | `time`, `items[]`             | The **complete** mp3 back-catalogue up to `t` (every approved item with `start_date ≤ t`), sent with each mp3 snapshot (subscribe/init/seek). Backs the Radio app's "Previous" list. Replace client state wholesale — the frame is sent even when empty so a backward seek clears it. Not reveal-gated or retention-pruned. |
 | `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
@@ -233,7 +234,12 @@ Subscriptions are not remembered across reconnects — re-`subscribe` after reco
 The `mp3` channel (Radio app) behaves the same but carries `MediaItem`s on `mp3`-typed frames
 (reusing the `items` field), and — because mp3 is durational audio — its snapshot returns the
 items **active at** `t` (`start_date ≤ t ≤ end_date`), not a single second, so the client can
-resume the recording mid-file via the `jump` offset.
+resume the recording mid-file via the `jump` offset. Each mp3 snapshot is followed by an
+`mp3_history` frame carrying **every** approved mp3 item with `start_date ≤ t` — the full past
+schedule backing the Radio app's "Previous" list, which the live stream (active-only snapshots,
+forward-only windows) never covers. The client replaces its history state wholesale per frame
+(sent even when empty), and it is exempt from the reveal gate and retention pruning: history is
+by definition already in the past.
 
 The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Most news is
 instant, so its snapshot uses the media overlap-plus-5-minute-instant-lookback window — a seek to

@@ -188,12 +188,12 @@ describe("previousSegments", () => {
 		expect(previousSegments(station("ATC"), history, now).map((i) => i.id)).toEqual([1]);
 	});
 
-	it("limits results to count", () => {
+	it("returns the full history with no cap", () => {
 		const history = Array.from({ length: 8 }, (_, i) =>
 			item({ id: i + 1, source: "ATC", start_date: `2001-09-11T${String(i).padStart(2, "0")}:00:00Z`, end_date: `2001-09-11T${String(i).padStart(2, "0")}:05:00Z` }),
 		);
 		const now = t("2001-09-11T12:00:00Z");
-		expect(previousSegments(station("ATC"), history, now, 3)).toHaveLength(3);
+		expect(previousSegments(station("ATC"), history, now)).toHaveLength(8);
 	});
 });
 
