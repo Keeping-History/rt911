@@ -41,7 +41,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `seek`        | `time`            | Move the virtual clock to a new instant.      |
 | `heartbeat`   | `time`            | Report client's current virtual time.         |
 | `filter`      | `formats[]`       | Whitelist media formats.                      |
-| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`). |
+| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
@@ -69,6 +69,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `mp3_history`     | `time`, `items[]`             | The **complete** mp3 back-catalogue up to `t` (every approved item with `start_date ≤ t`), sent with each mp3 snapshot (subscribe/init/seek). Backs the Radio app's "Previous" list. Replace client state wholesale — the frame is sent even when empty so a backward seek clears it. Not reveal-gated or retention-pruned. |
 | `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
+| `flights`         | `time`, `flights[]`           | Flights snapshot (airborne picture covering `[t−90s, t]`) on subscribe/init/seek, plus a forward **window** (default 300 s) per refill while subscribed. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`, `sources.usenet`). Not resent on `seek`. |
@@ -227,7 +228,7 @@ in bulk on the wire, the **client reveal-gate** holds each page until its `start
 still render paced by the virtual clock rather than all at once. This pacing invariant is enforced
 client-side; consumer apps never receive a not-yet-due page.
 
-Valid channels are `"pager"`, `"mp3"`, `"news"` and `"usenet"`; any other value yields
+Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"` and `"flights"`; any other value yields
 `{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
 Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
 
@@ -244,6 +245,16 @@ by definition already in the past.
 The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Most news is
 instant, so its snapshot uses the media overlap-plus-5-minute-instant-lookback window — a seek to
 `t` shows headlines from the preceding minutes.
+
+The `flights` channel carries `FlightPosition`s on `flights`-typed frames (its own field, not a
+reuse of `items`). Flight positions are per-minute aircraft samples, so — unlike pager's
+single-second snapshot — the subscribe/init/seek snapshot covers the half-open window
+`[t−90s, t+1s)`: any flight airborne at `t` has a sample within the preceding 90 seconds (positions
+are recorded once a minute), so this window reconstructs the current airborne picture. The client
+reveals it immediately since every row's `start_date ≤ t`. Forward refills use a 300 s window, same
+as media. See [`flights` field reference](#server-initiated--snapshot-flights) below for the shape
+of `FlightPosition`, and [`flight_tracks` is not streamed](#flight_tracks-is-not-on-the-wire) for how
+per-flight route geometry is fetched instead.
 
 ### `usenet_filter` and the `usenet` channel
 
@@ -345,6 +356,58 @@ Pager frames stop after the ack.
 Like `items`, `pager` frames are sent once per **window refill** (not per second) and only when the
 window contains at least one pager item — empty windows produce no frame. The `pager[]` payload is a
 forward window the client reveal-gates by `start_date`, and mirrors `internal/model/pager.go`.
+
+### Server-initiated / snapshot `flights`
+
+```json
+{
+  "type": "flights",
+  "time": "2001-09-11T08:46:01Z",
+  "flights": [
+    {
+      "id": 44219,
+      "flight": "AA11",
+      "carrier": "AA",
+      "start_date": "2001-09-11T08:46:00Z",
+      "lat": 40.7128,
+      "lon": -73.9931,
+      "alt_ft": 30575,
+      "phase": "enroute",
+      "diverted": false
+    }
+  ]
+}
+```
+
+`FlightPosition` fields (mirrors `internal/model/flight.go`):
+
+| Field        | Type      | Notes                                                        |
+| ------------ | --------- | ------------------------------------------------------------- |
+| `id`         | int       | Row id (`flight_positions.id`).                                |
+| `flight`     | string    | Flight number, e.g. `"AA11"`.                                  |
+| `carrier`    | string?   | Omitted when empty.                                            |
+| `start_date` | timestamp | The sample's UTC instant (`flight_positions.utc`); instant, no `end_date` — like pager. |
+| `lat`        | float     | Degrees.                                                       |
+| `lon`        | float     | Degrees.                                                       |
+| `alt_ft`     | int       | Altitude in feet.                                              |
+| `phase`      | string?   | `taxi` / `climb` / `enroute` / `descent` / … Omitted when empty. |
+| `diverted`   | bool?     | Omitted when `false`.                                          |
+
+Like `pager`/`mp3`/`news`, `flights` frames are sent once per **window refill** and only when the
+window (or snapshot) contains at least one position — empty batches produce no frame. Because the
+snapshot window `[t−90s, t+1s)` and the first forward window can both contain a flight's most
+recent sample, the client must **dedup by `id`** (keeping the newest `start_date` per id) in
+addition to the reveal-gate it already applies to pager/media items.
+
+`run_id`, `et_seconds`, `clock_seconds`, and `flight_date` (pipeline provenance from
+`packages/tools/flight-recon`) are deliberately not on the wire — the client never needs them.
+
+#### `flight_tracks` is not on the wire
+
+Per-flight route geometry (`flight_tracks.geometry`, a GeoJSON LineString) is **not** part of the
+`flights` channel. It's static per-flight metadata, not a time-windowed stream, so apps that need a
+flight's full track (e.g. drawing a route on a map) fetch it on demand from Directus REST —
+`GET /items/flight_tracks?filter[flight][_eq]=AA11` — rather than having the streamer replay it.
 
 ### `pause`
 
