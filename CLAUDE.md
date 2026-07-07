@@ -10,7 +10,7 @@ The **version 2** rewrite of 911realtime.org: a Mac OS 8-style desktop, built on
 |---|---|---|
 | `packages/frontend` | Vite + React + TypeScript desktop SPA | [`packages/frontend/CLAUDE.md`](packages/frontend/CLAUDE.md) |
 | `packages/backend` | Go WebSocket "streamer" — drives a per-client virtual clock over Postgres/Redis | [`packages/backend/CLAUDE.md`](packages/backend/CLAUDE.md), [`SPEC.md`](packages/backend/SPEC.md) |
-| `packages/tools` | Offline data pipelines (`video-grabber`: IA ingest/encode/transcribe/usenet; `mbox_parser`: one-off Usenet mbox conversion) that populate the same Postgres/Directus + Wasabi the streamer and frontend read | [`packages/tools/video-grabber/CLAUDE.md`](packages/tools/video-grabber/CLAUDE.md) |
+| `packages/tools` | Offline data pipelines (`video-grabber`: IA ingest/encode/transcribe/usenet; `mbox_parser`: one-off Usenet mbox conversion; `flight-recon`: BTS flight-trajectory reconstruction → Directus via a Prefect k8s work pool) that populate the same Postgres/Directus + Wasabi the streamer and frontend read | [`packages/tools/video-grabber/CLAUDE.md`](packages/tools/video-grabber/CLAUDE.md), [`packages/tools/flight-recon/README.md`](packages/tools/flight-recon/README.md) |
 
 Read the nested `CLAUDE.md` before working inside a package — this file only covers what's true across all three.
 

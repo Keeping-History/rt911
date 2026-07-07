@@ -1,0 +1,6 @@
+.venv
+tests
+k8s
+__pycache__
+*.png
+*.egg-info
