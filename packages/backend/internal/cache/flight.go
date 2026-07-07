@@ -132,9 +132,14 @@ func WarmFlightCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Poo
 		return err
 	})
 	if err != nil {
+		// A partial warm must not satisfy the HLEN warm-skip guard on the next
+		// boot — flights has no listener to self-heal, so drop what was written
+		// and let the next restart retry from scratch.
+		rdb.Del(ctx, keyFlightMinutes)
 		return fmt.Errorf("load flight positions: %w", err)
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
+		rdb.Del(ctx, keyFlightMinutes)
 		return fmt.Errorf("pipeline exec: %w", err)
 	}
 	logger.Info("flight cache warm", "minutes", buckets, "positions", positions)

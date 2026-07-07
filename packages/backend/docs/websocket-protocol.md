@@ -396,7 +396,7 @@ forward window the client reveal-gates by `start_date`, and mirrors `internal/mo
 Like `pager`/`mp3`/`news`, `flights` frames are sent once per **window refill** and only when the
 window (or snapshot) contains at least one position — empty batches produce no frame. Because the
 snapshot window `[t−90s, t+1s)` and the first forward window can both contain a flight's most
-recent sample, the client must **dedup by `id`** (keeping the newest `start_date` per id) in
+recent sample, the client must **dedup by `id`** in
 addition to the reveal-gate it already applies to pager/media items.
 
 `run_id`, `et_seconds`, `clock_seconds`, and `flight_date` (pipeline provenance from
