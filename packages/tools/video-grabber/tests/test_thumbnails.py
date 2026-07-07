@@ -257,8 +257,11 @@ def test_channel_rows_returns_urls_and_slugs():
     with respx.mock:
         respx.get(f"{cfg.directus_url}/items/tv_channels").mock(
             return_value=_httpx.Response(200, json={"data": [
-                {"url": "https://files.911realtime.org/playlists/cnn/master.m3u8"},
-                {"url": "https://files.911realtime.org/playlists/weta/master.m3u8"},
+                {"title": "CNN", "url": "https://files.911realtime.org/playlists/cnn/master.m3u8"},
+                {"title": "WETA", "url": "https://files.911realtime.org/playlists/weta/master.m3u8"},
+                # slug comes from the title, not the playlist URL path
+                {"title": "CCTV4", "url": "https://files.911realtime.org/playlists/cctv3/master.m3u8"},
+                # rows missing a title are skipped
                 {"url": "https://files.911realtime.org/playlists/abc/master.m3u8"},
             ]})
         )
@@ -266,7 +269,7 @@ def test_channel_rows_returns_urls_and_slugs():
     assert rows == [
         ("cnn", "https://files.911realtime.org/playlists/cnn/master.m3u8"),
         ("weta", "https://files.911realtime.org/playlists/weta/master.m3u8"),
-        ("abc", "https://files.911realtime.org/playlists/abc/master.m3u8"),
+        ("cctv4", "https://files.911realtime.org/playlists/cctv3/master.m3u8"),
     ]
 
 

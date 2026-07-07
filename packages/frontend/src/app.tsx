@@ -49,7 +49,7 @@ createRoot(rootElement).render(
 											"ANT1",
 											"AZT",
 											"BET",
-											"CCTV3",
+											"CCTV4",
 											"IRAQ",
 											"MCM",
 											"MSNBC",

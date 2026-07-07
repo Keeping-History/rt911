@@ -24,10 +24,15 @@ _WASABI_BASE = "https://files.911realtime.org"
 
 
 def _channel_rows(cfg: Config) -> list[tuple[str, str]]:
-    """Return (slug, master_url) pairs for all approved tv_channels rows."""
+    """Return (slug, master_url) pairs for all approved tv_channels rows.
+
+    The slug is the lowercased channel *title*, not the playlist URL path:
+    the frontend requests ``thumbnails/{item.source.toLowerCase()}/…``, and
+    the two can diverge (CCTV4's stream lives under ``playlists/cctv3/``).
+    """
     resp = httpx.get(
         f"{cfg.directus_url}/items/tv_channels",
-        params={"filter[approved][_eq]": 1, "fields": "url", "limit": -1},
+        params={"filter[approved][_eq]": 1, "fields": "title,url", "limit": -1},
         headers={"Authorization": f"Bearer {cfg.directus_api_token}"},
         timeout=10,
     )
@@ -35,14 +40,10 @@ def _channel_rows(cfg: Config) -> list[tuple[str, str]]:
     rows = []
     for item in resp.json().get("data", []):
         url = item.get("url", "")
-        if not url.endswith("master.m3u8"):
+        title = item.get("title") or ""
+        if not url.endswith("master.m3u8") or not title:
             continue
-        # playlists/cnn/master.m3u8  →  parts[-2] == "cnn"
-        parts = url.rstrip("/").split("/")
-        if len(parts) < 3:
-            continue
-        slug = parts[-2]
-        rows.append((slug, url))
+        rows.append((title.lower(), url))
     return rows
 
 

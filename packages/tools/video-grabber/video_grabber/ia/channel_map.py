@@ -27,7 +27,6 @@ KNOWN_CHANNELS: dict[str, str] = {
     "cspan": "c-span",
     "univision": "univision",
     "telemundo": "telemundo",
-    "cctv3": "cctv4",
     "cctv4": "cctv4",
 }
 
