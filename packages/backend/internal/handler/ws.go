@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"classicy/streamer/internal/cache"
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 	"classicy/streamer/internal/session"
@@ -162,7 +163,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.Init(t, items)
-				sendSubscribedSnapshots(r, sess, pool, t, logger)
+				sendSubscribedSnapshots(r, sess, pool, rdb, t, logger)
 				sendSources(r, sess, pool, logger)
 
 			case "seek":
@@ -178,7 +179,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.Seek(t, items)
-				sendSubscribedSnapshots(r, sess, pool, t, logger)
+				sendSubscribedSnapshots(r, sess, pool, rdb, t, logger)
 
 			case "heartbeat":
 				t, err := parseTime(msg.Time)
@@ -244,7 +245,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 				// Deliver an immediate snapshot at the current virtual time so the
 				// client gets the active items without waiting for the next tick.
 				if t, ok := sess.VirtualTime(); ok {
-					sendChannelSnapshot(r, sess, pool, cmsg.Channel, t, logger)
+					sendChannelSnapshot(r, sess, pool, rdb, cmsg.Channel, t, logger)
 				}
 
 			case "unsubscribe":
@@ -415,6 +416,28 @@ func sendUsenetBody(r *http.Request, sess *session.Session, pool *pgxpool.Pool, 
 	sess.SendUsenetBody(id, item.Body, "")
 }
 
+// flightsSnapshotLookback covers the airborne picture at t: positions are
+// per-minute samples, so any flight airborne at t has a sample within the
+// trailing 90s (two minute buckets across the boundary).
+const flightsSnapshotLookback = 90 * time.Second
+
+// sendFlightsSnapshot delivers the airborne set at t to the session if it is
+// subscribed to the flights channel. Unlike the other snapshots this reads the
+// Redis minute buckets, not Postgres: the flight cache is the channel's only
+// read path (no Current* query, no serving index on the table), and the buckets
+// covering [t−90s, t] already hold the latest sample of every airborne flight.
+func sendFlightsSnapshot(r *http.Request, sess *session.Session, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelFlights) {
+		return
+	}
+	items, err := cache.FlightPositionsInRange(r.Context(), rdb, t.Add(-flightsSnapshotLookback), t.Add(time.Second), logger)
+	if err != nil {
+		logger.Warn("flights snapshot lookup failed", "error", err)
+		return
+	}
+	sess.SendFlights(t, items)
+}
+
 // sendSources delivers the time-independent available-source lists for client
 // filters (TV channels, RadioScanner audio stations, pager providers, newsgroups). Called once per init —
 // sources don't change with virtual time, so seek does not resend them. Failures
@@ -442,11 +465,12 @@ func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, log
 // knownChannel reports whether ch is a valid subscription channel.
 func knownChannel(ch string) bool {
 	return ch == session.ChannelPager || ch == session.ChannelMp3 ||
-		ch == session.ChannelNews || ch == session.ChannelUsenet
+		ch == session.ChannelNews || ch == session.ChannelUsenet ||
+		ch == session.ChannelFlights
 }
 
 // sendChannelSnapshot delivers the subscribe-time snapshot for a single channel.
-func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, channel string, t time.Time, logger *slog.Logger) {
+func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, rdb *goredis.Client, channel string, t time.Time, logger *slog.Logger) {
 	switch channel {
 	case session.ChannelPager:
 		sendPagerSnapshot(r, sess, pool, t, logger)
@@ -456,14 +480,17 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 		sendNewsSnapshot(r, sess, pool, t, logger)
 	case session.ChannelUsenet:
 		sendUsenetSnapshot(r, sess, pool, t, logger)
+	case session.ChannelFlights:
+		sendFlightsSnapshot(r, sess, rdb, t, logger)
 	}
 }
 
 // sendSubscribedSnapshots delivers snapshots for every channel the session is
 // subscribed to. Called from init and seek; each helper no-ops if unsubscribed.
-func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpool.Pool, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
 	sendPagerSnapshot(r, sess, pool, t, logger)
 	sendMp3Snapshot(r, sess, pool, t, logger)
 	sendNewsSnapshot(r, sess, pool, t, logger)
 	sendUsenetSnapshot(r, sess, pool, t, logger)
+	sendFlightsSnapshot(r, sess, rdb, t, logger)
 }

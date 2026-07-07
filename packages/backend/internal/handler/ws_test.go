@@ -142,7 +142,7 @@ func TestParseTimeInvalid(t *testing.T) {
 // --- knownChannel ---
 
 func TestKnownChannels(t *testing.T) {
-	for _, ch := range []string{"pager", "mp3", "news", "usenet"} {
+	for _, ch := range []string{"pager", "mp3", "news", "usenet", "flights"} {
 		if !knownChannel(ch) {
 			t.Errorf("knownChannel(%q) = false, want true", ch)
 		}
