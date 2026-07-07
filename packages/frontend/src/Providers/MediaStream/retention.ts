@@ -4,8 +4,8 @@
 // virtual clock reaches its start_date, and these predicates decide when a
 // surfaced item should be dropped again. They are applied on every clock tick
 // and to every freshly-received frame, and are the single source of truth for
-// what is "live" on the time-pruned channels (media, mp3, news, pager) — unlike
-// usenet, which is never time-pruned and is cleared explicitly on seek.
+// what is "live" on the time-pruned channels (media, mp3, news, pager, flights) —
+// unlike usenet, which is never time-pruned and is cleared explicitly on seek.
 //
 // CRITICAL: the predicate must be correct regardless of which way the clock
 // moved. Forward ticking only ever needs the trailing edge (has the item
@@ -15,7 +15,7 @@
 // dropped (it will be re-revealed from the buffer when the clock reaches its
 // start again). Both predicates therefore guard the leading edge first.
 
-import type { MediaItem, PagerItem } from "./MediaStreamContext";
+import type { MediaItem } from "./MediaStreamContext";
 
 // Instant items (start_date = end_date or calc_duration = 0) are kept for this
 // many milliseconds after their start time before being pruned.
@@ -37,11 +37,15 @@ export function keepMediaItem(item: MediaItem, now: number): boolean {
 	return endMs > now;
 }
 
-// Pager items are always instant — retained by start_date within the instant
-// window, and only once the clock has actually reached their start.
-export function keepPagerItem(item: PagerItem, now: number): boolean {
+// Instant, start_date-only items (pager messages, flight positions) share one
+// retention rule: keep for INSTANT_RETENTION_MS after their start, and only
+// once the clock has actually reached the start.
+export function keepInstantItem(
+	item: { start_date: string },
+	now: number,
+): boolean {
 	const startMs = new Date(item.start_date).getTime();
-	// Leading edge: a pager whose start is still in the future (after a rewind)
+	// Leading edge: an item whose start is still in the future (after a rewind)
 	// is not live; without this guard `now - startMs` is negative and passes.
 	if (startMs > now) return false;
 	return now - startMs < INSTANT_RETENTION_MS;

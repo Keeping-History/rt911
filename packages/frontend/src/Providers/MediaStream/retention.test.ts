@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MediaItem, PagerItem } from "./MediaStreamContext";
-import { INSTANT_RETENTION_MS, keepMediaItem, keepPagerItem } from "./retention";
+import { INSTANT_RETENTION_MS, keepInstantItem, keepMediaItem } from "./retention";
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
@@ -79,20 +79,42 @@ describe("keepMediaItem", () => {
 	});
 });
 
-describe("keepPagerItem", () => {
+describe("keepInstantItem", () => {
 	const now = 10_000_000;
 
 	it("keeps a pager within the retention window", () => {
-		expect(keepPagerItem(pager({ start_date: iso(now - 1_000) }), now)).toBe(true);
+		expect(keepInstantItem(pager({ start_date: iso(now - 1_000) }), now)).toBe(true);
 	});
 
 	it("drops a pager past the retention window", () => {
 		expect(
-			keepPagerItem(pager({ start_date: iso(now - INSTANT_RETENTION_MS - 1) }), now),
+			keepInstantItem(pager({ start_date: iso(now - INSTANT_RETENTION_MS - 1) }), now),
 		).toBe(false);
 	});
 
 	it("drops a pager whose start is in the future after a rewind", () => {
-		expect(keepPagerItem(pager({ start_date: iso(now + 1_000) }), now)).toBe(false);
+		expect(keepInstantItem(pager({ start_date: iso(now + 1_000) }), now)).toBe(false);
+	});
+});
+
+describe("keepInstantItem generalizes beyond pager", () => {
+	const now = Date.parse("2001-09-11T13:00:00.000Z");
+
+	it("keeps a flight position within the instant window", () => {
+		expect(
+			keepInstantItem({ start_date: "2001-09-11T12:55:00.000Z" }, now),
+		).toBe(true);
+	});
+
+	it("drops a flight position older than the instant window", () => {
+		expect(
+			keepInstantItem({ start_date: "2001-09-11T12:49:59.000Z" }, now),
+		).toBe(false);
+	});
+
+	it("drops a future flight position (backward seek leading edge)", () => {
+		expect(
+			keepInstantItem({ start_date: "2001-09-11T13:01:00.000Z" }, now),
+		).toBe(false);
 	});
 });

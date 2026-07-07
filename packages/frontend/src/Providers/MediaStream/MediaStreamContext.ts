@@ -95,6 +95,25 @@ export interface UsenetItem {
 }
 
 /**
+ * One per-minute reconstructed aircraft position sample, delivered on the
+ * opt-in "flights" channel. Instant items like pager (a start_date, no
+ * duration); a map consumer keeps the latest sample per `flight`. Full track
+ * geometry (flight_tracks) is NOT streamed — apps fetch it from Directus on
+ * demand.
+ */
+export interface FlightPosition {
+	id: number;
+	flight: string;
+	carrier?: string;
+	start_date: string;
+	lat: number;
+	lon: number;
+	alt_ft: number;
+	phase?: string;
+	diverted?: boolean;
+}
+
+/**
  * Time-independent sets of selectable sources for each filter, delivered once by
  * the server on the `sources` frame (see the streamer's websocket-protocol.md).
  * Unlike the source values derived from streamed items, these list every option
@@ -170,6 +189,12 @@ export interface MediaStreamContextValue {
 	setUsenetGroups: (groups: string[]) => void;
 	/** Request the page of messages older than `before` for a group (backlog pagination). */
 	requestUsenetOlder: (newsgroup: string, before: string) => void;
+	/** Flight positions received while subscribed to the flights channel. */
+	flightPositions: FlightPosition[];
+	/** Opt into flights-channel delivery. Ref-counted by appId. */
+	subscribeFlights: (appId: string) => void;
+	/** Drop a flights-channel subscription. Unsubscribes server-side when the last app leaves. */
+	unsubscribeFlights: (appId: string) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -198,4 +223,7 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	unsubscribeUsenet: () => {},
 	setUsenetGroups: () => {},
 	requestUsenetOlder: () => {},
+	flightPositions: [],
+	subscribeFlights: () => {},
+	unsubscribeFlights: () => {},
 });

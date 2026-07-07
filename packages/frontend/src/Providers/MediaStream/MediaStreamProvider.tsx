@@ -18,7 +18,7 @@ import {
 import { trackAck } from "./ackTracking";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
-import { keepMediaItem, keepPagerItem } from "./retention";
+import { keepInstantItem, keepMediaItem } from "./retention";
 import { virtualUtcMs } from "./virtualClock";
 import {
 	applyUsenetBodyFrame,
@@ -352,7 +352,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		// news items reuse the same retention rules (mostly instant headlines).
 		setNewsItems((prev) => mergeById(prev, dueNews).filter((item) => keepMediaItem(item, now)));
 		// Pager items are always instant — retain by start_date.
-		setPagerItems((prev) => mergeById(prev, duePager).filter((p) => keepPagerItem(p, now)));
+		setPagerItems((prev) => mergeById(prev, duePager).filter((p) => keepInstantItem(p, now)));
 		// Usenet messages are not time-pruned: a reader keeps browsing the group's
 		// backlog. They are cleared only on group change, unsubscribe, or seek.
 		if (dueUsenet.length > 0) setUsenetItems((prev) => mergeById(prev, dueUsenet));
@@ -488,7 +488,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				if (!incomingPager || incomingPager.length === 0) return;
 				const { due, future } = partitionByDue(incomingPager, now);
 				for (const p of future) pagerBuffer.current.set(p.id, p);
-				const fresh = due.filter((p) => keepPagerItem(p, now));
+				const fresh = due.filter((p) => keepInstantItem(p, now));
 				if (fresh.length > 0) setPagerItems((prev) => mergeById(prev, fresh));
 				return;
 			}
