@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"classicy/streamer/internal/cache"
@@ -17,7 +18,13 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	dbURL := env("DATABASE_URL", "postgres://directus:directus@localhost:5432/directus")
-	pool, err := db.Connect(dbURL)
+	pool, err := db.Connect(dbURL, db.PoolConfig{
+		MaxConns:          int32(envInt("DB_MAX_CONNS", 20)),
+		MinConns:          int32(envInt("DB_MIN_CONNS", 2)),
+		MaxConnLifetime:   envDur("DB_MAX_CONN_LIFETIME", time.Hour),
+		MaxConnIdleTime:   envDur("DB_MAX_CONN_IDLE_TIME", 30*time.Minute),
+		HealthCheckPeriod: envDur("DB_HEALTH_CHECK_PERIOD", time.Minute),
+	})
 	if err != nil {
 		logger.Error("database connection failed", "error", err)
 		os.Exit(1)
@@ -77,7 +84,10 @@ func main() {
 	// Keep Redis in sync with tv_channels changes for the process lifetime.
 	go cache.Listen(ctx, dbURL, rdb, pool, logger)
 
-	hub := session.NewHub(logger)
+	// MAX_SESSIONS caps concurrent connections per pod for load-shedding; 0 means
+	// unlimited. Set it (from a load-tested per-pod ceiling) so an overloaded pod
+	// rejects new connections with 503 instead of crashing under the weight.
+	hub := session.NewHub(logger, envInt("MAX_SESSIONS", 0))
 	go hub.Run()
 
 	addr := env("LISTEN_ADDR", ":8080")
@@ -120,6 +130,27 @@ func main() {
 func env(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+// envInt reads key as an int, falling back on an unset/empty/unparseable value.
+func envInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return fallback
+}
+
+// envDur reads key as a Go duration (e.g. "30s", "1h"), falling back on an
+// unset/empty/unparseable value.
+func envDur(key string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
 	}
 	return fallback
 }

@@ -9,7 +9,7 @@ import {
 import { DefaultFileSystem } from "./data/DefaultFileSystem";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";
-import { Controls } from "./Applications/Controls/Controls";
+import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
@@ -68,7 +68,7 @@ createRoot(rootElement).render(
 				<ClassicyDesktop>
 					<MobileBlocker />
 					<Browser />
-					<Controls />
+					<TimeMachine />
 					<Feedback />
 					<News />
 					<Newsgroups />

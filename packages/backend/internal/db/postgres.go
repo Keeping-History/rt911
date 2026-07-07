@@ -24,14 +24,51 @@ const selectFrom = `
 	FROM tv_channels mi
 	LEFT JOIN sources s ON s.id = mi.source`
 
-// Connect opens a pgx connection pool and verifies connectivity.
-func Connect(dsn string) (*pgxpool.Pool, error) {
+// PoolConfig tunes the pgx connection pool. pgx's own default MaxConns is
+// max(4, numCPU), which on a small (1-CPU) pod is just 4 — far too few for the
+// burst of init/seek queries when many clients connect at once. The caller
+// supplies sized values (see cmd/server/main.go); a zero field leaves pgx's
+// default for that setting in place.
+//
+// Sizing note: MaxConns is per-pod. Across N streamer replicas the pool ceilings
+// sum, so keep N × MaxConns comfortably under Postgres's max_connections.
+type PoolConfig struct {
+	MaxConns          int32
+	MinConns          int32
+	MaxConnLifetime   time.Duration
+	MaxConnIdleTime   time.Duration
+	HealthCheckPeriod time.Duration
+}
+
+// Connect opens a pgx connection pool with the given tuning and verifies
+// connectivity.
+func Connect(dsn string, pc PoolConfig) (*pgxpool.Pool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, dsn)
+	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("pgxpool.New: %w", err)
+		return nil, fmt.Errorf("pgxpool.ParseConfig: %w", err)
+	}
+	if pc.MaxConns > 0 {
+		cfg.MaxConns = pc.MaxConns
+	}
+	if pc.MinConns > 0 {
+		cfg.MinConns = pc.MinConns
+	}
+	if pc.MaxConnLifetime > 0 {
+		cfg.MaxConnLifetime = pc.MaxConnLifetime
+	}
+	if pc.MaxConnIdleTime > 0 {
+		cfg.MaxConnIdleTime = pc.MaxConnIdleTime
+	}
+	if pc.HealthCheckPeriod > 0 {
+		cfg.HealthCheckPeriod = pc.HealthCheckPeriod
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("pgxpool.NewWithConfig: %w", err)
 	}
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()

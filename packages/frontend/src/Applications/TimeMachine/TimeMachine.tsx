@@ -13,7 +13,10 @@ import {
 import type React from "react";
 import { type ChangeEvent, useCallback, useMemo, useState } from "react";
 import { trackPauseResume, trackVirtualTimeSet } from "../../openreplay";
-import styles from "./Controls.module.scss";
+import { BookmarksWindow } from "./BookmarksWindow";
+import { setDateTimeFromUtc } from "./setVirtualClock";
+import styles from "./TimeMachine.module.scss";
+import type { Bookmark } from "./useBookmarks";
 
 const DEFAULT_SKIP_MINUTES = 30;
 const DEFAULT_STEP_SECONDS = 300; // 5 minutes
@@ -25,14 +28,15 @@ function formatSeconds(s: number): string {
 	return sec > 0 ? `${min} min ${sec} sec` : `${min} min`;
 }
 
-export const Controls: React.FC = () => {
-	const appName = "Controls";
-	const appId = "Controls.app";
+export const TimeMachine: React.FC = () => {
+	const appName = "Time Machine";
+	const appId = "TimeMachine.app";
 	const appIcon = ClassicyIcons.system.quicktime.controlPanel as string;
 
 	const [skipMinutes, setSkipMinutes] = useState(DEFAULT_SKIP_MINUTES);
 	const [stepSeconds, setStepSeconds] = useState(DEFAULT_STEP_SECONDS);
 	const [showSettings, setShowSettings] = useState(false);
+	const [showBookmarks, setShowBookmarks] = useState(false);
 	const [settingsForm, setSettingsForm] = useState({
 		skipMinutes: DEFAULT_SKIP_MINUTES,
 		stepSeconds: DEFAULT_STEP_SECONDS,
@@ -49,12 +53,19 @@ export const Controls: React.FC = () => {
 		setShowSettings(false);
 	}, [settingsForm]);
 
+	const openBookmarks = useCallback(() => setShowBookmarks(true), []);
+
 	const appMenu = useMemo(
 		() => [
 			{
 				id: "file",
 				title: "File",
 				menuChildren: [
+					{
+						id: `${appId}_bookmarks`,
+						title: "Bookmarks\u2026",
+						onClickFunc: openBookmarks,
+					},
 					{
 						id: `${appId}_settings`,
 						title: "Settings\u2026",
@@ -64,7 +75,7 @@ export const Controls: React.FC = () => {
 				],
 			},
 		],
-		[appIcon, openSettings],
+		[appIcon, openBookmarks, openSettings],
 	);
 
 	const { dateTime, setDateTime, tzOffset, paused, pause, resume } = useClassicyDateTime({ tick: true });
@@ -118,6 +129,16 @@ export const Controls: React.FC = () => {
 		setDateTime(base);
 		trackVirtualTimeSet(base.toISOString(), "seek");
 	}, [timeForm, dateTime, tzOffset, setDateTime]);
+
+	// --- Bookmarks ---
+
+	const handleBookmarkClick = useCallback(
+		(bookmark: Bookmark) => {
+			const applied = setDateTimeFromUtc(setDateTime, bookmark.start_date);
+			trackVirtualTimeSet(applied.toISOString(), "seek");
+		},
+		[setDateTime],
+	);
 
 	return (
 		<ClassicyApp
@@ -190,6 +211,15 @@ export const Controls: React.FC = () => {
 						</div>
 					</div>
 				</ClassicyWindow>
+			)}
+			{showBookmarks && (
+				<BookmarksWindow
+					appId={appId}
+					appMenu={appMenu}
+					tzOffset={tzOffset}
+					onSelect={handleBookmarkClick}
+					onCloseFunc={() => setShowBookmarks(false)}
+				/>
 			)}
 			<ClassicyWindow
 				id={`${appId}_main`}

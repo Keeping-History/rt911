@@ -9,7 +9,7 @@ Guidance for AI coding assistants working in this Vite + React + TypeScript app.
 The Mac OS 8-style desktop shell for 911realtime.org. It is built on the [`classicy`](https://www.npmjs.com/package/classicy) npm package — an external, generically-reusable retro desktop/window-manager component library. Classicy ships its own bundled system apps (Finder, PDF Viewer, Picture Viewer, Movie Player, SimpleText, Control Panels) — **this repo never implements those**; it only supplies configuration and content for them. What this package *does* own:
 
 - `src/app.tsx` — the root: wraps everything in `ClassicyAppManagerProvider` (default file system, seeded boot state) and `MediaStreamProvider`, then renders each Application inside `ClassicyDesktop`.
-- `src/Applications/*` — one folder per product app (Browser, News, TV, RadioScanner, PagerDecoder, Newsgroups, Controls, Feedback), each a `ClassicyApp` + `ClassicyWindow(s)`.
+- `src/Applications/*` — one folder per product app (Browser, News, TV, RadioScanner, PagerDecoder, Newsgroups, TimeMachine, Feedback), each a `ClassicyApp` + `ClassicyWindow(s)`.
 - `src/Providers/MediaStream/` — the single WebSocket client to the `packages/backend` streamer.
 - `src/data/DefaultFileSystem.ts` — the virtual desktop file tree (Documents → Newspapers/Photos, System Folder) that Classicy's Finder/viewers browse.
 
@@ -17,7 +17,7 @@ The Mac OS 8-style desktop shell for 911realtime.org. It is built on the [`class
 
 ## Mental model — read before changing anything
 
-- **One virtual clock, one writer.** The canonical time lives in Classicy's own state at `state.System.Manager.DateAndTime` (`{ dateTime, timeZoneOffset }`), seeded in `app.tsx` to `2001-09-11T12:40:00.000Z` / `-4`. **`Controls.tsx` is the only app that mutates it** (step/skip buttons, the H/M/S spinner). Every other app — `TV`, `RadioScanner`, `News`, `PagerDecoder`, `MediaStreamProvider` — reads it reactively via `useClassicyDateTime({ tick: true })` (when it needs play/pause/`localDate`) or `useAppManager((s) => s.System.Manager.DateAndTime.dateTime)` (when it just needs the value). Don't add a second place that calls `setDateTime`/`shiftTime`.
+- **One virtual clock, one writer.** The canonical time lives in Classicy's own state at `state.System.Manager.DateAndTime` (`{ dateTime, timeZoneOffset }`), seeded in `app.tsx` to `2001-09-11T12:40:00.000Z` / `-4`. **`TimeMachine.tsx` is the only app that mutates it** (step/skip buttons, the H/M/S spinner, the Bookmarks jump list). Every other app — `TV`, `RadioScanner`, `News`, `PagerDecoder`, `MediaStreamProvider` — reads it reactively via `useClassicyDateTime({ tick: true })` (when it needs play/pause/`localDate`) or `useAppManager((s) => s.System.Manager.DateAndTime.dateTime)` (when it just needs the value). Don't add a second place that calls `setDateTime`/`shiftTime`.
 - **One WebSocket, ref-counted subscriptions.** `MediaStreamProvider` opens exactly one connection (`VITE_MEDIA_STREAM_URL`) in `app.tsx`, above `ClassicyDesktop`. Every app shares it through `MediaStreamContext` — either directly (`useContext(MediaStreamContext)`) or via the filtering hook `useMediaStream(filter)`. Opt-in side channels (pager/mp3/news/usenet) are tracked as a `Set<appId>` per channel so multiple apps can subscribe/unsubscribe independently without duplicating `{type:"subscribe"}` wire traffic — see the `subscribePager`/`unsubscribePager`-style pairs in `MediaStreamProvider.tsx`.
 - **Incoming data is buffered, not applied immediately.** Frames land in per-channel `Map` buffers and a per-second effect promotes items whose `start_date` has arrived (`revealBuffer.ts`) and prunes expired ones (`retention.ts`) — this is what makes playback advance in lockstep with the virtual clock instead of dumping the whole dataset at once. A clock jump past `SEEK_THRESHOLD_MS` (90s) is treated as a manual seek: buffers clear and a `{type:"seek"}` message goes out.
 - **`virtualUtcMs` strips the display timezone back off.** `useClassicyDateTime`'s `localDate` is a *display* value (shifted for the menu-bar clock); the streamer, item `start_date`s, and seek/heartbeat messages are all true UTC. `Providers/MediaStream/virtualClock.ts`'s `virtualUtcMs(localDate, tzOffsetHours)` recovers the real UTC instant. Comparing `localDate` directly against wire timestamps previously trapped short-lived items (radio clips, instant news) permanently in the reveal buffer for any non-zero offset — see `virtualClock.test.ts`.
@@ -28,7 +28,7 @@ The Mac OS 8-style desktop shell for 911realtime.org. It is built on the [`class
 ## Hard rules
 
 1. **Apps never open a second WebSocket or call the streamer directly.** Always go through `MediaStreamContext` / `useMediaStream`.
-2. **Only `Controls.tsx` mutates the clock.** A new app that needs to "jump to a time" should call into the existing `Controls` seek path conceptually, not add its own `setDateTime` call — every other app assumes the clock only moves from that one place.
+2. **Only `TimeMachine.tsx` mutates the clock.** A new app that needs to "jump to a time" should call into the existing `TimeMachine` seek path conceptually (see `setDateTimeFromUtc` in `TimeMachine/setVirtualClock.ts`), not add its own `setDateTime` call — every other app assumes the clock only moves from that one place.
 3. **Use `virtualUtcMs(localDate, tzOffset)`, not `localDate`, whenever comparing against an item's `start_date` or building a wire timestamp.** Direct `localDate` comparisons reintroduce the tz-offset reveal-buffer bug described above.
 4. **New subscription channels follow the ref-counted `Set<appId>` pattern** already used for pager/mp3/news/usenet in `MediaStreamProvider.tsx` — don't add a bare boolean "subscribed" flag that one app's unmount can rip out from under another.
 5. **`classicy` is external and pinned to `"latest"`; don't hand-edit its version.** `.husky/pre-commit` auto-bumps it on every commit — see the root `CLAUDE.md`. Use `pnpm use:local` / `pnpm use:published` to develop against an unpublished local build.
@@ -52,7 +52,7 @@ The Mac OS 8-style desktop shell for 911realtime.org. It is built on the [`class
 ## Common tasks
 
 ### Add a new desktop app
-1. Create `src/Applications/<Name>/<Name>.tsx` following the `ClassicyApp`/`ClassicyWindow` shape above — `Controls.tsx`, `Feedback/Feedback.tsx`, and `PagerDecoder/PagerDecoder.tsx` are good, small references.
+1. Create `src/Applications/<Name>/<Name>.tsx` following the `ClassicyApp`/`ClassicyWindow` shape above — `TimeMachine/TimeMachine.tsx`, `Feedback/Feedback.tsx`, and `PagerDecoder/PagerDecoder.tsx` are good, small references.
 2. Wire it into `src/app.tsx` (import + render inside `ClassicyDesktop`).
 3. Add a co-located `<Name>.test.tsx`.
 

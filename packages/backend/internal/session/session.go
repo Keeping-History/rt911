@@ -52,6 +52,11 @@ const (
 	windowUsenet = 600 * time.Second
 )
 
+// usenetTickTimeout bounds a single windowed usenet Postgres read on the tick path
+// — the tick's only DB dependency (hard rule #4 exception). A slow query is
+// abandoned rather than allowed to pile up tick after tick.
+const usenetTickTimeout = 5 * time.Second
+
 // SourceList carries the time-independent set of selectable sources for each
 // client-side filter. The sources table does not record which media type a source
 // belongs to, so each list is derived from actual usage in its table.
@@ -481,15 +486,19 @@ func (s *Session) RunTimePump() {
 			// messages carry full bodies and are too large to cache, and delivery is
 			// gated to the group(s) the client is viewing, so the query volume is low.
 			if doUsenet && len(usenetGroups) > 0 && s.pool != nil {
+				// Bound the per-tick Postgres reads so a slow query is abandoned
+				// rather than piling up across ticks.
+				qctx, cancel := context.WithTimeout(ctx, usenetTickTimeout)
 				var batch []model.UsenetItem
 				for _, g := range usenetGroups {
-					items, err := db.UsenetItemsInRange(ctx, s.pool, g, usenetLo, usenetHi)
+					items, err := db.UsenetItemsInRange(qctx, s.pool, g, usenetLo, usenetHi)
 					if err != nil {
 						s.logger.Warn("usenet range lookup failed", "group", g, "error", err)
 						continue
 					}
 					batch = append(batch, items...)
 				}
+				cancel()
 				s.SendUsenet(t, batch)
 			}
 		}

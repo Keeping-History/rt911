@@ -3,6 +3,7 @@ package session
 import (
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,16 +15,47 @@ type Hub struct {
 	reg      chan *Session
 	unreg    chan *Session
 	logger   *slog.Logger
+
+	// Load-shedding: maxSessions caps concurrently-admitted connections; 0 means
+	// unlimited. active is the live count, maintained synchronously by
+	// TryAcquire/Release — not the sessions map, which Run updates asynchronously
+	// and so lags admission under a burst (the exact moment the cap must hold).
+	maxSessions int64
+	active      atomic.Int64
 }
 
-func NewHub(logger *slog.Logger) *Hub {
+func NewHub(logger *slog.Logger, maxSessions int) *Hub {
 	return &Hub{
-		sessions: make(map[string]*Session),
-		reg:      make(chan *Session, 64),
-		unreg:    make(chan *Session, 64),
-		logger:   logger,
+		sessions:    make(map[string]*Session),
+		reg:         make(chan *Session, 64),
+		unreg:       make(chan *Session, 64),
+		logger:      logger,
+		maxSessions: int64(maxSessions),
 	}
 }
+
+// TryAcquire reserves one connection slot for load-shedding. It returns false when
+// the hub is at capacity (maxSessions > 0 and already full); the caller must then
+// reject the connection and MUST NOT call Release. On success the caller owns one
+// slot and MUST call Release exactly once when the connection ends.
+//
+// It increments first and rolls back on overflow: concurrent callers that
+// transiently overshoot the cap are each rejected, so the admitted count never
+// settles above maxSessions — no lock needed.
+func (h *Hub) TryAcquire() bool {
+	n := h.active.Add(1)
+	if h.maxSessions > 0 && n > h.maxSessions {
+		h.active.Add(-1)
+		return false
+	}
+	return true
+}
+
+// Release returns a slot reserved by a successful TryAcquire.
+func (h *Hub) Release() { h.active.Add(-1) }
+
+// Active reports the number of currently-admitted connections.
+func (h *Hub) Active() int64 { return h.active.Load() }
 
 func (h *Hub) Register(s *Session) {
 	h.reg <- s

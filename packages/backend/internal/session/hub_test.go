@@ -3,6 +3,8 @@ package session
 import (
 	"io"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -29,9 +31,88 @@ func waitSessions(t *testing.T, h *Hub, want int) {
 func newTestHub(t *testing.T) *Hub {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub := NewHub(logger)
+	hub := NewHub(logger, 0) // 0 = unlimited; admission caps are tested separately
 	go hub.Run()
 	return hub
+}
+
+func discardHub(maxSessions int) *Hub {
+	return NewHub(slog.New(slog.NewTextHandler(io.Discard, nil)), maxSessions)
+}
+
+// TestHubTryAcquireUnlimited: with maxSessions=0 the hub admits without bound and
+// still tracks the live count via Active.
+func TestHubTryAcquireUnlimited(t *testing.T) {
+	hub := discardHub(0)
+	for i := 0; i < 1000; i++ {
+		if !hub.TryAcquire() {
+			t.Fatalf("unlimited hub rejected acquire #%d", i)
+		}
+	}
+	if got := hub.Active(); got != 1000 {
+		t.Fatalf("Active() = %d, want 1000", got)
+	}
+}
+
+// TestHubTryAcquireEnforcesCap: admits exactly maxSessions, then rejects — and a
+// rejected acquire must not leak a slot (rolled back), or the pod would wedge
+// below its real capacity forever.
+func TestHubTryAcquireEnforcesCap(t *testing.T) {
+	const limit = 3
+	hub := discardHub(limit)
+	for i := 0; i < limit; i++ {
+		if !hub.TryAcquire() {
+			t.Fatalf("acquire #%d rejected below cap", i)
+		}
+	}
+	if hub.TryAcquire() {
+		t.Fatal("acquire above cap should have been rejected")
+	}
+	if got := hub.Active(); got != limit {
+		t.Fatalf("Active() = %d, want %d (rejected acquire leaked a slot)", got, limit)
+	}
+}
+
+// TestHubReleaseFreesSlot: a released slot is reusable, so a churning pod keeps
+// serving instead of latching at capacity after the first cohort disconnects.
+func TestHubReleaseFreesSlot(t *testing.T) {
+	hub := discardHub(1)
+	if !hub.TryAcquire() {
+		t.Fatal("first acquire rejected")
+	}
+	if hub.TryAcquire() {
+		t.Fatal("second acquire should be rejected at cap 1")
+	}
+	hub.Release()
+	if !hub.TryAcquire() {
+		t.Fatal("acquire after release rejected — slot not freed")
+	}
+}
+
+// TestHubTryAcquireConcurrentNeverExceedsCap: the whole point of load-shedding is
+// that a *burst* can't breach the cap. Race many concurrent acquires against a
+// small limit and assert exactly `limit` win. Run with -race.
+func TestHubTryAcquireConcurrentNeverExceedsCap(t *testing.T) {
+	const limit = 50
+	hub := discardHub(limit)
+	var admitted atomic.Int64
+	var wg sync.WaitGroup
+	for i := 0; i < 500; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if hub.TryAcquire() {
+				admitted.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := admitted.Load(); got != limit {
+		t.Fatalf("admitted %d, want exactly %d", got, limit)
+	}
+	if got := hub.Active(); got != limit {
+		t.Fatalf("Active() = %d, want %d", got, limit)
+	}
 }
 
 func TestHubRegisterAddsSession(t *testing.T) {

@@ -68,3 +68,50 @@
 	gap: calc(var(--window-padding-size) * 0.5);
 	padding-top: calc(var(--window-padding-size) * 0.5);
 }
+
+.bookmarks {
+	display: flex;
+	flex-direction: column;
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	background-color: var(--color-system-02);
+	min-height: 100%;
+}
+
+.bookmarksMessage {
+	padding: var(--window-padding-size);
+	color: var(--color-system-07);
+}
+
+.bookmarkRow {
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+	gap: calc(var(--window-padding-size) * 0.5);
+	width: 100%;
+	padding: 3px var(--window-padding-size);
+	border: none;
+	background: transparent;
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	text-align: left;
+	cursor: pointer;
+
+	&:hover {
+		background-color: var(--color-theme-highlight, var(--color-system-04));
+	}
+}
+
+.bookmarkTime {
+	flex: 0 0 auto;
+	min-width: 5.5em;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-system-07);
+}
+
+.bookmarkTitle {
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

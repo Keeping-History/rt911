@@ -3,8 +3,10 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
@@ -29,13 +31,47 @@ type wsFrame struct {
 func newTestServer(t *testing.T, rdb *goredis.Client) *url.URL {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub := session.NewHub(logger)
+	hub := session.NewHub(logger, 0)
 	go hub.Run()
 	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, logger))
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
 	u.Scheme = "ws"
 	return u
+}
+
+// TestWSHandlerShedsWhenAtCapacity proves the client-facing load-shedding
+// contract: once the per-pod cap is reached the handler rejects new connections
+// with a clean HTTP 503 during the handshake (never upgrading them), rather than
+// accepting them toward a crash that would drop every already-connected client.
+func TestWSHandlerShedsWhenAtCapacity(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	hub := session.NewHub(logger, 1) // capacity of exactly one connection
+	go hub.Run()
+	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, logger))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	u.Scheme = "ws"
+
+	// First connection is admitted and holds the only slot for the test's duration.
+	first, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		t.Fatalf("first dial should succeed: %v", err)
+	}
+	t.Cleanup(func() { first.Close() })
+
+	// Second connection must be shed with HTTP 503, not upgraded.
+	_, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if !errors.Is(err, websocket.ErrBadHandshake) {
+		t.Fatalf("second dial: want ErrBadHandshake, got %v", err)
+	}
+	if resp == nil || resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("second dial: want HTTP 503, got %v", resp)
+	}
 }
 
 func dialWS(t *testing.T, u *url.URL) *websocket.Conn {

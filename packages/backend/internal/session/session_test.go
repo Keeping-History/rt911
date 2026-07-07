@@ -15,7 +15,7 @@ import (
 func newTestSession(t *testing.T) *Session {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub := NewHub(logger)
+	hub := NewHub(logger, 0)
 	return NewSession(hub, nil, nil, logger)
 }
 

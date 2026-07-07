@@ -250,6 +250,48 @@ async function createCollections(token) {
   }
   await ensureNumericFields("tv_channels");
 
+  // alert_items — media-shaped collection (same shape as tv_channels / tm_bookmarks):
+  // a title/full_title + a start_date the desktop clock can seek to. Authored in the
+  // Directus admin UI (ships empty on a fresh install). Like tm_bookmarks it is not
+  // streamed, so — matching that precedent — its `source` field is left unlinked (no
+  // sources relation). See seed note below re: public read if the frontend fetches it.
+  if (!names.includes("alert_items")) {
+    console.log("Creating collection: alert_items");
+    await api(token, "POST", "/collections", {
+      collection: "alert_items",
+      meta: { icon: "warning", sort_field: "sort", note: "Alert timeline events" },
+      schema: {},
+      fields: mediaLikeBaseFields,
+    });
+    // Widen varchar(255) columns to text, matching the other media-shaped tables.
+    widenMediaLikeColumns("alert_items");
+  } else {
+    console.log("Collection alert_items already exists, skipping.");
+  }
+  await ensureNumericFields("alert_items");
+
+  // tm_bookmarks — Time Machine "jump to a moment" bookmarks. Same media_items
+  // shape as alert_items (a title/full_title + a start_date the desktop clock
+  // seeks to). Read directly over Directus REST by the frontend Time Machine app
+  // — not streamed — so createCollections also grants the public policy read
+  // access to it (ensurePublicBookmarkAccess). Ships empty; rows are authored in
+  // the Directus admin UI.
+  if (!names.includes("tm_bookmarks")) {
+    console.log("Creating collection: tm_bookmarks");
+    await api(token, "POST", "/collections", {
+      collection: "tm_bookmarks",
+      meta: { icon: "bookmark", sort_field: "sort", note: "Time Machine bookmarks (jump-to timeline events)" },
+      schema: {},
+      fields: mediaLikeBaseFields,
+    });
+    // Widen varchar(255) columns to text so long event descriptions fit, matching
+    // the other media-shaped tables. Done in the fresh-create branch only.
+    widenMediaLikeColumns("tm_bookmarks");
+  } else {
+    console.log("Collection tm_bookmarks already exists, skipping.");
+  }
+  await ensureNumericFields("tm_bookmarks");
+
   // pager_items — pager traffic lives in its own table (not media_items). Every
   // pager item is "instant": a start_date with no duration/end_date. provider is
   // a plain text column, not a sources FK.
@@ -342,6 +384,55 @@ async function createCollections(token) {
   } else {
     console.log("Collection usenet_items already exists, skipping.");
   }
+}
+
+// The frontend Time Machine app fetches tm_bookmarks anonymously (no token), so
+// the Directus public policy needs read access to it. Directus Community only
+// supports full (all-or-nothing) access rules — no field/filter restrictions —
+// so this grants read on all fields, which is fine for non-sensitive event
+// bookmarks. Idempotent: skips if the grant already exists.
+async function ensurePublicBookmarkAccess(token) {
+  const policies = await api(token, "GET", "/policies?fields=id,name&limit=-1");
+  const publicPolicy = policies.data.find((p) => p.name === "$t:public_label");
+  if (!publicPolicy) {
+    console.warn("Public policy not found — skipping tm_bookmarks public read grant.");
+    return;
+  }
+  const existing = await api(
+    token,
+    "GET",
+    `/permissions?filter[policy][_eq]=${publicPolicy.id}&filter[collection][_eq]=tm_bookmarks&filter[action][_eq]=read`,
+  );
+  if (existing.data.length > 0) {
+    console.log("Public read on tm_bookmarks already granted, skipping.");
+    return;
+  }
+  console.log("Granting public read on tm_bookmarks");
+  await api(token, "POST", "/permissions", {
+    policy: publicPolicy.id,
+    collection: "tm_bookmarks",
+    action: "read",
+    fields: ["*"],
+  });
+}
+
+// createStreamerIndexes indexes the per-table time lookups the streamer's init/seek
+// queries run. usenet already has its own (source, start_date) index (see
+// createCollections); the video/news/mp3/pager tables are filtered by
+// (approved, start_date) on every Current*Items call, which without an index is a
+// sequential scan — invisible at low traffic, a bottleneck under a connection burst.
+// Run unconditionally (not just in the fresh-create branch) so existing, already
+// populated tables get the index too; IF NOT EXISTS makes re-runs a no-op. These
+// tables are small and write-rarely (historical data), so a plain CREATE INDEX's
+// brief lock is fine — switch to CREATE INDEX CONCURRENTLY if that ever changes.
+function createStreamerIndexes() {
+  console.log("Ensuring streamer (approved, start_date) indexes…");
+  psql(`
+    CREATE INDEX IF NOT EXISTS idx_tv_channels_approved_start ON tv_channels (approved, start_date);
+    CREATE INDEX IF NOT EXISTS idx_news_items_approved_start  ON news_items  (approved, start_date);
+    CREATE INDEX IF NOT EXISTS idx_mp3_items_approved_start   ON mp3_items   (approved, start_date);
+    CREATE INDEX IF NOT EXISTS idx_pager_items_approved_start ON pager_items (approved, start_date);
+  `);
 }
 
 async function createRelations(token) {
@@ -830,6 +921,8 @@ console.log("Authenticated.");
 
 await createCollections(token);
 await createRelations(token);
+await ensurePublicBookmarkAccess(token);
+createStreamerIndexes();
 
 console.log("\n--- TV media items (entries_media.json) ---");
 const sourceMap = await importSources(token, mediaRecords);

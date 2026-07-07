@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
+	"golang.org/x/time/rate"
 )
 
 var upgrader = websocket.Upgrader{
@@ -68,7 +69,24 @@ type usenetBodyMsg struct {
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
 func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) http.HandlerFunc {
+	// shedLog rate-limits the at-capacity warning: shedding kicks in exactly when
+	// connections flood, so an unthrottled per-rejection log would itself become a
+	// flood. The 503 the client receives is the real, unthrottled signal.
+	shedLog := rate.Sometimes{Interval: time.Second}
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Load-shedding: reserve a slot before upgrading so an overloaded pod
+		// rejects new connections with a clean 503 instead of accepting them and
+		// crashing — a crash drops every already-connected client at once. The slot
+		// is released when the handler returns, i.e. when the connection ends.
+		if !hub.TryAcquire() {
+			shedLog.Do(func() {
+				logger.Warn("at capacity, shedding connection", "active", hub.Active(), "remote", r.RemoteAddr)
+			})
+			http.Error(w, "server at capacity", http.StatusServiceUnavailable)
+			return
+		}
+		defer hub.Release()
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			logger.Warn("websocket upgrade failed", "error", err, "remote", r.RemoteAddr)
