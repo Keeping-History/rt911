@@ -8,7 +8,7 @@ PREFECT_API_URL pointing at the in-cluster server:
         python -m flight_recon.deploy
 
 Env knobs:
-    FLIGHT_RECON_IMAGE  image ref baked into job pods (default flight-recon:0.1.1)
+    FLIGHT_RECON_IMAGE  image ref baked into job pods (default flight-recon:0.2.0)
     FLIGHT_RECON_CRON   optional cron schedule, e.g. "0 6 * * 1" — omitted = manual runs only
 """
 
@@ -16,7 +16,7 @@ import os
 
 from flight_recon.flow import reconstruct_flights
 
-IMAGE = os.environ.get("FLIGHT_RECON_IMAGE", "flight-recon:0.1.1")
+IMAGE = os.environ.get("FLIGHT_RECON_IMAGE", "flight-recon:0.2.0")
 CRON = os.environ.get("FLIGHT_RECON_CRON")
 
 if __name__ == "__main__":

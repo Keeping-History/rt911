@@ -1,6 +1,6 @@
 [project]
 name = "flight-recon"
-version = "0.1.1"
+version = "0.2.0"
 description = "Reconstruct per-flight trajectories from BTS On-Time data and load them into Directus (Prefect flow)"
 requires-python = ">=3.12"
 dependencies = [
@@ -10,6 +10,7 @@ dependencies = [
     "prefect>=3.7,<4",
     "prefect-kubernetes>=0.5",
     "httpx>=0.27",
+    "psycopg[binary]>=3.1",
 ]
 
 [project.optional-dependencies]

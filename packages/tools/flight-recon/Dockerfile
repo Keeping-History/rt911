@@ -8,7 +8,7 @@ WORKDIR /app
 # Deps first (stable layer), pinned to the in-cluster Prefect server version.
 RUN pip install \
     "pandas>=2.0" "numpy>=1.26" "matplotlib>=3.8" \
-    "prefect==3.7.4" "prefect-kubernetes>=0.5" "httpx>=0.27"
+    "prefect==3.7.4" "prefect-kubernetes>=0.5" "httpx>=0.27" "psycopg[binary]>=3.1"
 
 COPY pyproject.toml reconstruct.py ./
 COPY flight_recon ./flight_recon

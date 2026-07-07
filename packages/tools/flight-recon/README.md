@@ -34,6 +34,38 @@ avoid rapid-fire schema create/delete churn against this Directus instance —
 a burst of collection deletes wedged its in-process schema introspection
 ("hit infinite loop" on every request) until the pod was restarted.
 
+## Position loading: Postgres COPY fast path
+
+Real windows are millions of position rows, and the Directus items API tops
+out around 300 rows/s on rt911-api even with activity logging disabled
+(`meta.accountability = null`, which the schema sets — bulk audit rows are
+noise; provenance lives in `reconstruction_runs`). The default
+`positions_loader="copy"` therefore bulk-COPYs positions straight into the
+`flight_positions` table Directus manages (same pattern as the 447k-row pager
+tables), using `$RT911_DB_DSN` from the secret. It also ensures the
+replay-clock indexes `(flight_date, et_seconds)` and `(clock_seconds)`, which
+Directus can't manage. Tracks and the run ledger stay on the items API.
+Pass `--param positions_loader=items` to force the pure-API path (fine for
+sample-sized loads; hours for real ones).
+
+## Real BTS data
+
+1. Download a monthly PREZIP from TranStats (no API):
+   `https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_<YYYY>_<M>.zip`
+2. Unzip and map onto the input contract (renames
+   `Flight_Number_Reporting_Airline`, collapses `Div1..Div5` legs into
+   `DivAirport`+`WheelsOn`, handles latin-1):
+   `python -m flight_recon.prep_bts --raw <raw.csv> --out /srv/flight-recon-data/bts_2001-09.csv`
+3. Airports reference: `/srv/flight-recon-data/airports.csv` was built from
+   OpenFlights + IANA tz offsets computed at 2001-09-11 (DST-aware; 5,201
+   IATA codes, whole-hour zones).
+4. Run with `--param flights_path=/data/bts_2001-09.csv --param airports_path=/data/airports.csv`.
+
+Known source limitation: BTS only records diversion detail (`Div*Airport`/
+`Div*WheelsOn`) from 2003 onward — the 584 diverted 9/11 flights have no
+recorded landing in the data and are skipped as "no usable airborne
+interval" (visible in the run summary's skip list).
+
 ## Idempotency
 
 Re-running a window must not duplicate rows. Each run mints a fresh `run_id`

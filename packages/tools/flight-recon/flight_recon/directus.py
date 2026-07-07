@@ -37,8 +37,12 @@ _JSON_META = {"special": ["cast-json"], "interface": "input-code"}
 
 COLLECTIONS = {
     "flight_positions": {
+        # accountability None: skip per-row directus_activity writes — 5x
+        # insert throughput on bulk loads, and row-level audit of derived
+        # data is noise (provenance lives in reconstruction_runs).
         "meta": {"icon": "flight", "note": "Per-minute reconstructed aircraft positions "
-                                           "(BTS On-Time great-circle interpolation)"},
+                                           "(BTS On-Time great-circle interpolation)",
+                 "accountability": None},
         "fields": [
             {"field": "id", "type": "integer",
              "schema": {"is_primary_key": True, "has_auto_increment": True}},
@@ -57,7 +61,8 @@ COLLECTIONS = {
         ],
     },
     "flight_tracks": {
-        "meta": {"icon": "route", "note": "One GeoJSON LineString per reconstructed flight"},
+        "meta": {"icon": "route", "note": "One GeoJSON LineString per reconstructed flight",
+                 "accountability": None},
         "fields": [
             {"field": "id", "type": "integer",
              "schema": {"is_primary_key": True, "has_auto_increment": True}},
