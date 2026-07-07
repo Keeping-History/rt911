@@ -92,6 +92,7 @@ COLLECTIONS = {
             {"field": "tracks_count", "type": "integer"},
             {"field": "skipped_count", "type": "integer"},
             {"field": "skipped", "type": "json", "meta": _JSON_META},
+            {"field": "skipped_by_reason", "type": "json", "meta": _JSON_META},
             {"field": "cancelled_by_day", "type": "json", "meta": _JSON_META},
             {"field": "created_at", "type": "timestamp",
              "meta": {"special": ["date-created"], "readonly": True}},

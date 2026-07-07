@@ -120,12 +120,29 @@ def load_tracks(tracks, run_id, start, end, directus_url):
         client.close()
 
 
+SKIPPED_DETAIL_CAP = 2000
+
+
+def trim_summary(summary, run_id):
+    """Shape a reconstruct() summary for the ledger row. Full skip detail can
+    be megabytes (a 9/11-scale window skips 35k+ flights, mostly cancelled —
+    already aggregated in cancelled_by_day), which blows Directus's 1 MB
+    payload cap. Keep per-reason counts plus capped non-cancelled detail."""
+    by_reason = {}
+    for s in summary["skipped"]:
+        by_reason[s["reason"]] = by_reason.get(s["reason"], 0) + 1
+    detail = [s for s in summary["skipped"] if s["reason"] != "cancelled"]
+    return {**summary, "run_id": run_id,
+            "skipped": detail[:SKIPPED_DETAIL_CAP],
+            "skipped_by_reason": by_reason}
+
+
 @task(**NETWORK_RETRIES)
 def record_run_summary(summary, run_id, directus_url):
     log = get_run_logger()
     client = _client(directus_url)
     try:
-        client.insert_one("reconstruction_runs", {"run_id": run_id, **summary})
+        client.insert_one("reconstruction_runs", trim_summary(summary, run_id))
         log.info("reconstruction_runs: recorded run %s", run_id)
     finally:
         client.close()

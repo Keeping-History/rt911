@@ -98,3 +98,29 @@ def test_bad_inputs_raise():
         reconstruct("2001-09-12", "2001-09-09", FLIGHTS, AIRPORTS)
     with pytest.raises(ValueError, match="missing columns"):
         reconstruct("2001-09-09", "2001-09-12", AIRPORTS, AIRPORTS)
+
+
+def test_trim_summary_stays_under_directus_payload_cap():
+    # Regression: the real 9/11 window skips ~35k flights (mostly cancelled);
+    # the raw summary blew Directus's 1 MB MAX_PAYLOAD_SIZE (run cherubic-chicken).
+    import json
+
+    from flight_recon.flow import SKIPPED_DETAIL_CAP, trim_summary
+
+    skipped = [{"flight": f"XX{i}", "flight_date": "2001-09-11",
+                "reason": "cancelled"} for i in range(35000)]
+    skipped += [{"flight": f"DV{i}", "flight_date": "2001-09-11",
+                 "reason": "no usable airborne interval"} for i in range(3000)]
+    summary = {"flights_reconstructed": 4000, "positions_count": 3_470_000,
+               "tracks_count": 4000, "skipped_count": len(skipped),
+               "skipped": skipped, "cancelled_by_day": {"2001-09-11": 35000}}
+
+    row = trim_summary(summary, run_id="abc123")
+
+    assert row["run_id"] == "abc123"
+    assert row["skipped_by_reason"] == {"cancelled": 35000,
+                                        "no usable airborne interval": 3000}
+    # cancelled detail is dropped (aggregated in cancelled_by_day); rest capped
+    assert len(row["skipped"]) == SKIPPED_DETAIL_CAP
+    assert all(s["reason"] != "cancelled" for s in row["skipped"])
+    assert len(json.dumps(row)) < 900_000  # headroom under the 1 MB cap
