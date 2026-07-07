@@ -1,6 +1,6 @@
 [project]
 name = "flight-recon"
-version = "0.2.1"
+version = "0.2.2"
 description = "Reconstruct per-flight trajectories from BTS On-Time data and load them into Directus (Prefect flow)"
 requires-python = ">=3.12"
 dependencies = [
