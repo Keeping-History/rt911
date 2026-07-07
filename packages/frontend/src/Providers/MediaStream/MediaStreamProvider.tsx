@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
 	type AvailableSources,
+	type FlightPosition,
 	MediaStreamContext,
 	type MediaItem,
 	type PagerItem,
@@ -89,6 +90,12 @@ interface WsSourcesMessage {
 	sources: AvailableSources;
 }
 
+// flight positions ride their own field (like usenet), not items.
+interface WsFlightsMessage {
+	type: "flights";
+	flights: FlightPosition[];
+}
+
 type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
@@ -98,6 +105,7 @@ type WsIncomingMessage =
 	| WsUsenetMessage
 	| WsUsenetBodyMessage
 	| WsSourcesMessage
+	| WsFlightsMessage
 	| { type: string };
 
 interface MediaStreamProviderProps {
@@ -115,6 +123,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [mp3History, setMp3History] = useState<MediaItem[]>([]);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
 	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
+	const [flightPositions, setFlightPositions] = useState<FlightPosition[]>([]);
 	const [usenetBodyState, setUsenetBodyState] = useState(emptyUsenetBodyState);
 	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
 	// fetches when a window re-renders before its body arrives.
@@ -131,6 +140,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const mp3Subscribers = useRef(new Set<string>());
 	const newsSubscribers = useRef(new Set<string>());
 	const usenetSubscribers = useRef(new Set<string>());
+	const flightsSubscribers = useRef(new Set<string>());
 	// The newsgroup(s) the client is currently viewing — resent on reconnect.
 	const usenetGroups = useRef<string[]>([]);
 
@@ -142,6 +152,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const mp3Buffer = useRef(new Map<number, MediaItem>());
 	const newsBuffer = useRef(new Map<number, MediaItem>());
 	const usenetBuffer = useRef(new Map<number, UsenetItem>());
+	const flightsBuffer = useRef(new Map<number, FlightPosition>());
 
 	const addItems = useCallback((incoming: MediaItem[]) => {
 		setItems((prev) => {
@@ -295,6 +306,27 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	const subscribeFlights = useCallback(
+		(appId: string) => {
+			const wasEmpty = flightsSubscribers.current.size === 0;
+			flightsSubscribers.current.add(appId);
+			if (wasEmpty) send({ type: "subscribe", channel: "flights" });
+		},
+		[send],
+	);
+
+	const unsubscribeFlights = useCallback(
+		(appId: string) => {
+			flightsSubscribers.current.delete(appId);
+			if (flightsSubscribers.current.size === 0) {
+				send({ type: "unsubscribe", channel: "flights" });
+				setFlightPositions([]);
+				flightsBuffer.current.clear();
+			}
+		},
+		[send],
+	);
+
 	// Set the newsgroup(s) being viewed. The server resends a backlog for the new
 	// group(s), so the current items + buffer are cleared to avoid mixing groups.
 	const setUsenetGroups = useCallback(
@@ -345,6 +377,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		const dueNews = drainDue(newsBuffer.current, now);
 		const duePager = drainDue(pagerBuffer.current, now);
 		const dueUsenet = drainDue(usenetBuffer.current, now);
+		const dueFlights = drainDue(flightsBuffer.current, now);
 
 		setItems((prev) => mergeById(prev, dueMedia).filter((item) => keepMediaItem(item, now)));
 		// mp3 items are durational audio — same retention rules as media items.
@@ -356,6 +389,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		// Usenet messages are not time-pruned: a reader keeps browsing the group's
 		// backlog. They are cleared only on group change, unsubscribe, or seek.
 		if (dueUsenet.length > 0) setUsenetItems((prev) => mergeById(prev, dueUsenet));
+		// Flight positions are instant per-minute samples — pager-style retention.
+		setFlightPositions((prev) =>
+			mergeById(prev, dueFlights).filter((p) => keepInstantItem(p, now)),
+		);
 	}, [localDate, tzOffset]);
 
 	// Detect manual time changes and send seek; ignore tick-driven minute boundaries
@@ -374,6 +411,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// new instant; drop the old-timeline messages so they don't linger.
 			usenetBuffer.current.clear();
 			setUsenetItems([]);
+			flightsBuffer.current.clear();
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
 		}
 
@@ -437,6 +475,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				if (usenetGroups.current.length > 0) {
 					ws.send(JSON.stringify({ type: "usenet_filter", newsgroups: usenetGroups.current }));
 				}
+			}
+			if (flightsSubscribers.current.size > 0) {
+				ws.send(JSON.stringify({ type: "subscribe", channel: "flights" }));
 			}
 			// Body requests do not survive a reconnect; clear in-flight markers so
 			// any open message window re-requests on its next render.
@@ -540,6 +581,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "flights") {
+				const incomingFlights = (msg as WsFlightsMessage).flights;
+				if (!incomingFlights || incomingFlights.length === 0) return;
+				const { due, future } = partitionByDue(incomingFlights, now);
+				for (const p of future) flightsBuffer.current.set(p.id, p);
+				const fresh = due.filter((p) => keepInstantItem(p, now));
+				if (fresh.length > 0)
+					setFlightPositions((prev) => mergeById(prev, fresh));
+				return;
+			}
+
 			if (msg.type !== "items" && msg.type !== "init_ack" && msg.type !== "seek_ack") return;
 
 			trackAck(msg.type, (msg as WsItemsMessage).time);
@@ -609,6 +661,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeUsenet,
 			setUsenetGroups,
 			requestUsenetOlder,
+			flightPositions,
+			subscribeFlights,
+			unsubscribeFlights,
 		}),
 		[
 			items,
@@ -635,6 +690,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeUsenet,
 			setUsenetGroups,
 			requestUsenetOlder,
+			flightPositions,
+			subscribeFlights,
+			unsubscribeFlights,
 		],
 	);
 
