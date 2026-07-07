@@ -111,8 +111,8 @@ def load_tracks(tracks, run_id, start, end, directus_url):
                         "[%s, %s] before insert", deleted, start, end)
         rows = [{**feature["properties"], "geometry": feature["geometry"],
                  "run_id": run_id} for feature in tracks]
-        # geometry-heavy rows (~2.5 KB each): stay under Directus's 1 MB
-        # default MAX_PAYLOAD_SIZE per request
+        # geometry-heavy rows: insert_many's size-aware batching keeps each
+        # request under Directus's 1 MB MAX_PAYLOAD_SIZE
         inserted = client.insert_many("flight_tracks", rows, chunk=250)
         log.info("flight_tracks: inserted %d rows (run_id=%s)", inserted, run_id)
         return inserted

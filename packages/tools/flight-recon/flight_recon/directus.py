@@ -27,7 +27,8 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-INSERT_CHUNK = 2000        # ~150 B/row keeps requests well under body-size limits
+INSERT_CHUNK = 2000        # row-count bound per request
+MAX_BATCH_BYTES = 700_000  # size bound: Directus MAX_PAYLOAD_SIZE defaults to 1 MB
 DELETE_MAX_PASSES = 50     # QUERY_LIMIT_MAX may cap a bulk delete; loop until empty
 
 # json-typed fields MUST carry the cast-json special: without it Directus
@@ -180,14 +181,26 @@ class DirectusClient:
         raise RuntimeError(f"{collection}: rows still match window filter after "
                            f"{DELETE_MAX_PASSES} delete passes")
 
-    def insert_many(self, collection, rows, chunk=INSERT_CHUNK):
-        """Chunked POST /items/{collection}. Returns rows inserted."""
-        for i in range(0, len(rows), chunk):
-            batch = rows[i:i + chunk]
+    def insert_many(self, collection, rows, chunk=INSERT_CHUNK, max_bytes=MAX_BATCH_BYTES):
+        """Chunked POST /items/{collection}. Returns rows inserted.
+
+        Batches are bounded by BOTH row count and serialized size — rows with
+        big json fields (a transcontinental track's geometry is ~6-10 KB)
+        blow past Directus's 1 MB payload cap long before `chunk` rows."""
+        i = 0
+        while i < len(rows):
+            batch, size = [], 2  # brackets
+            while i < len(rows) and len(batch) < chunk:
+                row_bytes = len(json.dumps(rows[i], default=str)) + 1
+                if batch and size + row_bytes > max_bytes:
+                    break
+                batch.append(rows[i])
+                size += row_bytes
+                i += 1
             r = self._http.post(f"/items/{collection}", json=batch,
                                 params={"fields": "id"})
             _check(r)
-            log.info("%s: inserted %d/%d", collection, min(i + chunk, len(rows)), len(rows))
+            log.info("%s: inserted %d/%d", collection, i, len(rows))
         return len(rows)
 
     def insert_one(self, collection, row):
