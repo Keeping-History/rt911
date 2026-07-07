@@ -26,10 +26,11 @@ const (
 // Opt-in subscription channels. Each is a side stream a session must subscribe
 // to; nothing on a channel is delivered by default. HTML is planned.
 const (
-	ChannelPager  = "pager"
-	ChannelMp3    = "mp3"
-	ChannelNews   = "news"
-	ChannelUsenet = "usenet"
+	ChannelPager   = "pager"
+	ChannelMp3     = "mp3"
+	ChannelNews    = "news"
+	ChannelUsenet  = "usenet"
+	ChannelFlights = "flights"
 )
 
 // Look-ahead windowing. Instead of one Redis lookup + frame per virtual second,
@@ -50,6 +51,9 @@ const (
 	windowMp3    = 300 * time.Second
 	windowNews   = 600 * time.Second
 	windowUsenet = 600 * time.Second
+	// flights are dense — ~600-900 airborne rows/min — so they get media's
+	// shorter window, keeping refill frames at ~300-450 KB.
+	windowFlights = 300 * time.Second
 )
 
 // usenetTickTimeout bounds a single windowed usenet Postgres read on the tick path
@@ -69,14 +73,15 @@ type SourceList struct {
 
 // outMsg is the envelope for every server→client message.
 type outMsg struct {
-	Type    string             `json:"type"`
-	Time    string             `json:"time,omitempty"`
-	Channel string             `json:"channel,omitempty"`
-	Items   []model.MediaItem  `json:"items,omitempty"`
-	Pager   []model.PagerItem  `json:"pager,omitempty"`
-	Usenet  []model.UsenetItem `json:"usenet,omitempty"`
-	Sources *SourceList        `json:"sources,omitempty"`
-	Msg     string             `json:"message,omitempty"`
+	Type    string                 `json:"type"`
+	Time    string                 `json:"time,omitempty"`
+	Channel string                 `json:"channel,omitempty"`
+	Items   []model.MediaItem      `json:"items,omitempty"`
+	Pager   []model.PagerItem      `json:"pager,omitempty"`
+	Usenet  []model.UsenetItem     `json:"usenet,omitempty"`
+	Flights []model.FlightPosition `json:"flights,omitempty"`
+	Sources *SourceList            `json:"sources,omitempty"`
+	Msg     string                 `json:"message,omitempty"`
 	// ID/Body carry a single on-demand Usenet article body (usenet_body frame).
 	ID   int    `json:"id,omitempty"`
 	Body string `json:"body,omitempty"`
@@ -102,11 +107,12 @@ type Session struct {
 	// Per-channel look-ahead high-water marks: the exclusive upper edge of the
 	// last window sent on each channel. Channels are subscribed at different
 	// times, so each refills independently. All guarded by mu.
-	mediaHorizon  time.Time
-	pagerHorizon  time.Time
-	mp3Horizon    time.Time
-	newsHorizon   time.Time
-	usenetHorizon time.Time
+	mediaHorizon   time.Time
+	pagerHorizon   time.Time
+	mp3Horizon     time.Time
+	newsHorizon    time.Time
+	usenetHorizon  time.Time
+	flightsHorizon time.Time
 
 	// usenetGroups is the set of newsgroups the client is currently viewing. The
 	// usenet channel is delivered only for these groups — a group can hold millions
@@ -219,6 +225,8 @@ func (s *Session) horizonFor(channel string) *time.Time {
 		return &s.newsHorizon
 	case ChannelUsenet:
 		return &s.usenetHorizon
+	case ChannelFlights:
+		return &s.flightsHorizon
 	}
 	return nil
 }
@@ -303,6 +311,16 @@ func (s *Session) SendUsenetBody(id int, body, errMsg string) {
 	s.send_(outMsg{Type: "usenet_body", ID: id, Body: body, Msg: errMsg})
 }
 
+// SendFlights delivers a batch of flight positions at time t on the flights
+// channel. Positions are instant per-minute samples like pager items; no frame
+// is sent for an empty batch (a minute with nobody airborne is silence).
+func (s *Session) SendFlights(t time.Time, items []model.FlightPosition) {
+	if len(items) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "flights", Time: t.Format(time.RFC3339), Flights: items})
+}
+
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the
 // usenet channel and acks. Resetting the usenet horizon to the current virtual time
 // makes the next tick refill a fresh forward window for the new group(s); the
@@ -384,6 +402,7 @@ func (s *Session) resetHorizons(t time.Time) {
 	s.mp3Horizon = t
 	s.newsHorizon = t
 	s.usenetHorizon = t
+	s.flightsHorizon = t
 }
 
 // Pause freezes the client's virtual clock.
@@ -445,6 +464,7 @@ func (s *Session) RunTimePump() {
 			mp3Lo, mp3Hi, doMp3 := s.planChannelRefill(ChannelMp3, &s.mp3Horizon, t, windowMp3)
 			newsLo, newsHi, doNews := s.planChannelRefill(ChannelNews, &s.newsHorizon, t, windowNews)
 			usenetLo, usenetHi, doUsenet := s.planChannelRefill(ChannelUsenet, &s.usenetHorizon, t, windowUsenet)
+			flightsLo, flightsHi, doFlights := s.planChannelRefill(ChannelFlights, &s.flightsHorizon, t, windowFlights)
 			var usenetGroups []string
 			if doUsenet {
 				usenetGroups = s.usenetGroupsLocked()
@@ -480,6 +500,13 @@ func (s *Session) RunTimePump() {
 					s.logger.Warn("news range lookup failed", "error", err)
 				} else {
 					s.SendNews(t, items)
+				}
+			}
+			if doFlights {
+				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, flightsLo, flightsHi, s.logger); err != nil {
+					s.logger.Warn("flights range lookup failed", "error", err)
+				} else {
+					s.SendFlights(t, items)
 				}
 			}
 			// usenet refills per active group, reading Postgres directly (not Redis):

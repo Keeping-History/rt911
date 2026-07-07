@@ -600,3 +600,76 @@ func TestSendToClosedSessionDropsMessage(t *testing.T) {
 	s.Close()
 	s.SendError("after close") // must not panic or block
 }
+
+func TestSendFlightsEmitsFrameWithPositions(t *testing.T) {
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 12, 46, 0, 0, time.UTC)
+
+	s.SendFlights(at, []model.FlightPosition{
+		{ID: 1, Flight: "AA11", Carrier: "AA", StartDate: at, Lat: 40.7, Lon: -74.0, AltFt: 29000, Phase: "enroute"},
+	})
+
+	m := recvType(t, s)
+	if m.Type != "flights" {
+		t.Fatalf("expected flights frame, got %q", m.Type)
+	}
+	if len(m.Flights) != 1 || m.Flights[0].Flight != "AA11" || m.Flights[0].AltFt != 29000 {
+		t.Fatalf("expected one flight position, got %+v", m.Flights)
+	}
+	if len(m.Items) != 0 || len(m.Pager) != 0 {
+		t.Fatalf("flights frame must not carry items/pager payloads, got %+v", m)
+	}
+}
+
+func TestSendFlightsSuppressesEmptyBatch(t *testing.T) {
+	s := newTestSession(t)
+	s.SendFlights(time.Date(2001, 9, 11, 3, 0, 0, 0, time.UTC), nil)
+
+	select {
+	case data := <-s.send:
+		t.Fatalf("expected no frame for empty flights batch, got %d bytes", len(data))
+	default:
+	}
+}
+
+func TestFlightsHorizonResetOnSubscribeInitAndSeek(t *testing.T) {
+	s := newTestSession(t)
+	t0 := time.Date(2001, 9, 11, 12, 40, 0, 0, time.UTC)
+
+	s.Init(t0, nil)
+	if !s.flightsHorizon.Equal(t0) {
+		t.Fatalf("Init must reset flightsHorizon to t, got %v", s.flightsHorizon)
+	}
+
+	s.Subscribe(ChannelFlights)
+	if !s.Subscribed(ChannelFlights) {
+		t.Fatal("expected flights subscription after Subscribe")
+	}
+
+	t1 := t0.Add(2 * time.Hour)
+	s.Seek(t1, nil)
+	if !s.flightsHorizon.Equal(t1) {
+		t.Fatalf("Seek must reset flightsHorizon to t, got %v", s.flightsHorizon)
+	}
+}
+
+func TestFlightsRefillRequiresSubscription(t *testing.T) {
+	s := newTestSession(t)
+	t0 := time.Date(2001, 9, 11, 12, 40, 0, 0, time.UTC)
+	s.mu.Lock()
+	s.virtualTime = t0
+	s.flightsHorizon = t0
+	if _, _, due := s.planChannelRefill(ChannelFlights, &s.flightsHorizon, t0, windowFlights); due {
+		s.mu.Unlock()
+		t.Fatal("unsubscribed flights channel must never refill")
+	}
+	s.mu.Unlock()
+
+	s.Subscribe(ChannelFlights)
+	s.mu.Lock()
+	lo, hi, due := s.planChannelRefill(ChannelFlights, &s.flightsHorizon, t0, windowFlights)
+	s.mu.Unlock()
+	if !due || !lo.Equal(t0) || !hi.Equal(t0.Add(windowFlights)) {
+		t.Fatalf("expected [t, t+window) refill after subscribe, got lo=%v hi=%v due=%v", lo, hi, due)
+	}
+}
