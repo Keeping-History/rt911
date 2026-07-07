@@ -76,6 +76,15 @@ func main() {
 		go cache.ListenNews(ctx, dbURL, rdb, pool, logger)
 	}
 
+	// flights is an opt-in side channel like pager, but with no triggers and no
+	// listener: flight positions are immutable bulk data loaded via COPY (which
+	// bypasses row triggers anyway), so the boot warm is the only sync. After a
+	// flight-recon re-load: `DEL flight:minutes` + restart to rewarm. Best-effort
+	// like every side channel — a failure must not take down media streaming.
+	if err := cache.WarmFlightCache(ctx, rdb, pool, logger); err != nil {
+		logger.Warn("flight cache warm failed; flights channel disabled", "error", err)
+	}
+
 	// usenet (Newsgroups app) is intentionally NOT cached in Redis: messages carry
 	// full bodies and the corpus is far too large to warm. The channel reads
 	// Postgres directly (per-group, gated by what the client is viewing) — see

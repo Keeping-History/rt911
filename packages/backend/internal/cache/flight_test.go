@@ -139,3 +139,20 @@ func TestFlightCacheIsolatedFromPager(t *testing.T) {
 		t.Fatalf("pager lookup must not see flight buckets, got %+v", pager)
 	}
 }
+
+// A warm cache (HLEN > 0) must short-circuit before touching Postgres — proven
+// here by passing a nil pool: any DB access would panic.
+func TestWarmFlightCacheSkipsWhenAlreadyWarm(t *testing.T) {
+	rdb, done := newTestRedis(t)
+	defer done()
+	ctx := context.Background()
+
+	m := time.Date(2001, 9, 11, 12, 0, 0, 0, time.UTC)
+	if err := PutFlightBucket(ctx, rdb, m, []model.FlightPosition{{ID: 1, Flight: "F", StartDate: m}}); err != nil {
+		t.Fatalf("PutFlightBucket: %v", err)
+	}
+
+	if err := WarmFlightCache(ctx, rdb, nil, discardLogger()); err != nil {
+		t.Fatalf("WarmFlightCache should skip when warm, got %v", err)
+	}
+}

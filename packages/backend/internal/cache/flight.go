@@ -8,8 +8,10 @@ import (
 	"strconv"
 	"time"
 
+	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -103,4 +105,38 @@ func FlightPositionsInRange(ctx context.Context, rdb *goredis.Client, lo, hi tim
 		}
 	}
 	return out, nil
+}
+
+// WarmFlightCache loads all flight positions from PostgreSQL into per-minute
+// Redis buckets if not already present. One streaming scan at boot; there is no
+// incremental sync (see the keyFlightMinutes comment).
+func WarmFlightCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) error {
+	n, err := rdb.HLen(ctx, keyFlightMinutes).Result()
+	if err == nil && n > 0 {
+		logger.Info("flight cache already warm", "minutes", n)
+		return nil
+	}
+
+	logger.Info("warming flight cache from database…")
+	pipe := rdb.Pipeline()
+	buckets, positions := 0, 0
+	err = db.StreamFlightPositions(ctx, pool, func(minute time.Time, items []model.FlightPosition) error {
+		data, err := encodeFlightBucket(items)
+		if err != nil {
+			return fmt.Errorf("encode flight bucket %s: %w", minuteKey(minute), err)
+		}
+		pipe.HSet(ctx, keyFlightMinutes, minuteKey(minute), data)
+		buckets++
+		positions += len(items)
+		pipe, err = flushIfFull(ctx, rdb, pipe, buckets)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("load flight positions: %w", err)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("pipeline exec: %w", err)
+	}
+	logger.Info("flight cache warm", "minutes", buckets, "positions", positions)
+	return nil
 }

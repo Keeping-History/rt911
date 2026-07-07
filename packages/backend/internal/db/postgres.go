@@ -597,3 +597,59 @@ func queryItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) 
 	}
 	return out, rows.Err()
 }
+
+// --- flight positions (flights channel) ---
+
+// StreamFlightPositions scans every flight position ordered by utc and invokes
+// fn once per minute (all rows sharing the same utc-truncated minute). Streaming
+// with per-minute flushing keeps peak memory at one bucket (≤ ~1k rows), never
+// the full multi-million-row table. Used only by the boot-time cache warm — the
+// flights tick path reads Redis (see cache.FlightPositionsInRange), so this
+// table needs no serving index. COALESCE handles Directus NULLs in one place
+// instead of per-field pointer scans (the derefStr pattern) — every nullable
+// column here has an obvious zero value.
+func StreamFlightPositions(ctx context.Context, pool *pgxpool.Pool, fn func(minute time.Time, items []model.FlightPosition) error) error {
+	rows, err := pool.Query(ctx, `
+		SELECT id, flight, COALESCE(carrier, ''), utc,
+		       COALESCE(lat, 0), COALESCE(lon, 0), COALESCE(alt_ft, 0),
+		       COALESCE(phase, ''), COALESCE(diverted, false)
+		FROM flight_positions
+		WHERE utc IS NOT NULL
+		ORDER BY utc`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var bucket []model.FlightPosition
+	var minute time.Time
+	flush := func() error {
+		if len(bucket) == 0 {
+			return nil
+		}
+		err := fn(minute, bucket)
+		bucket = nil
+		return err
+	}
+	for rows.Next() {
+		var it model.FlightPosition
+		if err := rows.Scan(&it.ID, &it.Flight, &it.Carrier, &it.StartDate,
+			&it.Lat, &it.Lon, &it.AltFt, &it.Phase, &it.Diverted); err != nil {
+			return err
+		}
+		// utc is a bare `timestamp` column holding UTC wall times; pin the
+		// location so downstream Unix()/RFC3339 conversions are exact.
+		it.StartDate = it.StartDate.UTC()
+		if m := it.StartDate.Truncate(time.Minute); !m.Equal(minute) {
+			if err := flush(); err != nil {
+				return err
+			}
+			minute = m
+		}
+		bucket = append(bucket, it)
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+	return rows.Err()
+}
