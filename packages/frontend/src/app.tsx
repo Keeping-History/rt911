@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./app.css";
 import "classicy/dist/classicy.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import {
 	ClassicyAppManagerProvider,
 	ClassicyDesktop,
@@ -9,6 +10,7 @@ import {
 import { DefaultFileSystem } from "./data/DefaultFileSystem";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";
+import { FlightTracker } from "./Applications/FlightTracker/FlightTracker";
 import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
@@ -70,6 +72,7 @@ createRoot(rootElement).render(
 					<Browser />
 					<TimeMachine />
 					<Feedback />
+					<FlightTracker />
 					<News />
 					<Newsgroups />
 					<PagerDecoder />
