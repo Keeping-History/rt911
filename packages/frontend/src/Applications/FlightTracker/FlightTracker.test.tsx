@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -51,8 +51,10 @@ import { FlightTracker } from "./FlightTracker";
 const subscribeFlights = vi.fn();
 const unsubscribeFlights = vi.fn();
 
-function renderWithContext(overrides: Partial<MediaStreamContextValue>) {
-	const ctxValue: MediaStreamContextValue = {
+function makeCtxValue(
+	overrides: Partial<MediaStreamContextValue>,
+): MediaStreamContextValue {
+	return {
 		items: [],
 		pagerItems: [],
 		mp3Items: [],
@@ -83,8 +85,11 @@ function renderWithContext(overrides: Partial<MediaStreamContextValue>) {
 		unsubscribeFlights,
 		...overrides,
 	};
+}
+
+function renderWithContext(overrides: Partial<MediaStreamContextValue>) {
 	return render(
-		<MediaStreamContext.Provider value={ctxValue}>
+		<MediaStreamContext.Provider value={makeCtxValue(overrides)}>
 			<FlightTracker />
 		</MediaStreamContext.Provider>,
 	);
@@ -92,6 +97,7 @@ function renderWithContext(overrides: Partial<MediaStreamContextValue>) {
 
 describe("FlightTracker", () => {
 	afterEach(() => {
+		cleanup();
 		mapProps.length = 0;
 		vi.clearAllMocks();
 	});
@@ -114,5 +120,54 @@ describe("FlightTracker", () => {
 		expect(screen.getByTestId("flightmap")).toBeTruthy();
 		const last = mapProps[mapProps.length - 1];
 		expect((last.positions as unknown[]).length).toBe(1);
+	});
+
+	it("clears the selection when the selected flight leaves the airborne set (e.g. after a seek)", () => {
+		// useFlightTrack fires a real fetch once a flight is selected; stub it out
+		// so the test only exercises the selection-clearing behavior under test.
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
+		);
+
+		const aa11 = {
+			id: 1,
+			flight: "AA11",
+			start_date: "2001-09-11T13:00:00Z",
+			lat: 40,
+			lon: -74,
+			alt_ft: 30000,
+		};
+
+		const { rerender } = renderWithContext({
+			flightPositions: [aa11],
+			connected: true,
+		});
+
+		// Simulate the map reporting a click on AA11, as FlightTracker wires
+		// FlightMap's onSelectFlight to do.
+		const onSelectFlight = mapProps[mapProps.length - 1].onSelectFlight as (
+			flight: string,
+		) => void;
+		act(() => {
+			onSelectFlight("AA11");
+		});
+		expect(screen.getByText("AA11")).toBeTruthy();
+
+		// Seek: the streamed set no longer contains AA11 (it's landed/not yet
+		// airborne at the new clock position). The spec requires the stale
+		// selection to be cleared, not left pointing at a flight that's gone.
+		rerender(
+			<MediaStreamContext.Provider
+				value={makeCtxValue({ flightPositions: [], connected: true })}
+			>
+				<FlightTracker />
+			</MediaStreamContext.Provider>,
+		);
+
+		expect(screen.queryByText("AA11")).toBeNull();
+		expect(screen.getByText("Select a flight to view its track.")).toBeTruthy();
+
+		vi.unstubAllGlobals();
 	});
 });

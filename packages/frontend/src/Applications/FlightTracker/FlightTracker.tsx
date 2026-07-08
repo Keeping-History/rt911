@@ -66,8 +66,17 @@ export const FlightTracker: FC = () => {
 	);
 	const { track, loading, error } = useFlightTrack(selection);
 
-	// If the selected flight leaves the airborne set (e.g. after a seek), keep the
-	// last-known position object; clear selection when the set empties on seek.
+	// Clear the selection when the selected flight leaves the airborne set — e.g.
+	// after a seek to a time it isn't aloft (spec: seek clears selection). Keyed on
+	// `flight`, the streamed identity, not object reference.
+	useEffect(() => {
+		if (selected && !flightPositions.some((p) => p.flight === selected.flight)) {
+			setSelected(null);
+		}
+	}, [flightPositions, selected]);
+
+	// Selects the clicked flight if it's currently in the airborne set; does not
+	// clear on seek itself — the effect above handles that.
 	const onSelectFlight = (flight: string) => {
 		const hit = flightPositions.find((p) => p.flight === flight) ?? null;
 		if (hit) setSelected(hit);
