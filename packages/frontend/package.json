@@ -27,6 +27,8 @@
 		"classnames": "^2.5.1",
 		"dompurify": "^3.4.11",
 		"html2canvas-pro": "^2.2.1",
+		"maplibre-gl": "^5.24.0",
+		"pmtiles": "^4.4.1",
 		"react": "^19.2.7",
 		"react-dom": "^19.2.7",
 		"react-marquee-text": "^1.0.6",

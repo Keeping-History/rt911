@@ -15,3 +15,14 @@ class IntersectionObserverStub {
 globalThis.IntersectionObserver =
 	globalThis.IntersectionObserver ??
 	(IntersectionObserverStub as unknown as typeof IntersectionObserver);
+
+// jsdom does not implement ResizeObserver; FlightMap observes its container to
+// call map.resize(). Minimal inert stub for tests.
+class ResizeObserverStub {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+globalThis.ResizeObserver =
+	globalThis.ResizeObserver ??
+	(ResizeObserverStub as unknown as typeof ResizeObserver);
