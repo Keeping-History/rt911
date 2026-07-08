@@ -67,7 +67,7 @@ describe("FlightMap", () => {
 	it("creates a map, adds the flights source on load, and pushes positions", () => {
 		render(
 			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
-				trackGeoJSON={null} onSelectFlight={() => {}} onClearSelection={() => {}} />,
+				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}} />,
 		);
 		const map = FakeMap.last!;
 		expect(map).toBeTruthy();
@@ -80,7 +80,7 @@ describe("FlightMap", () => {
 		const onSelect = vi.fn();
 		render(
 			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
-				trackGeoJSON={null} onSelectFlight={onSelect} onClearSelection={() => {}} />,
+				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={onSelect} onClearSelection={() => {}} />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
@@ -91,10 +91,48 @@ describe("FlightMap", () => {
 	it("removes the map on unmount (frees the WebGL context)", () => {
 		const { unmount } = render(
 			<FlightMap positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null}
-				onSelectFlight={() => {}} onClearSelection={() => {}} />,
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}} />,
 		);
 		const map = FakeMap.last!;
 		unmount();
 		expect(map.removed).toBe(true);
+	});
+
+	it("adds a flight-trails layer and glides dots forward via the animation loop", () => {
+		// Control the animation frame + timestamp deterministically.
+		let rafCb: FrameRequestCallback | null = null;
+		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+			rafCb = cb;
+			return 1;
+		});
+		vi.stubGlobal("cancelAnimationFrame", () => {});
+		// Re-anchor (the [nowMs] effect) reads performance.now(); pin it to 0 so the
+		// smooth clock's wall origin is 0 and the frame timestamp is the elapsed ms.
+		vi.spyOn(performance, "now").mockReturnValue(0);
+
+		const t1 = Date.parse("2001-09-11T13:01:00.000Z");
+		const p1 = pos({ id: 1, flight: "AA1", lat: 40, lon: -74, start_date: "2001-09-11T13:00:00.000Z" });
+		const p2 = pos({ id: 2, flight: "AA1", lat: 40, lon: -73, start_date: "2001-09-11T13:01:00.000Z" });
+
+		const common = { basemapUrl: "x.pmtiles", trackGeoJSON: null, onSelectFlight: () => {}, onClearSelection: () => {} };
+		const { rerender } = render(
+			<FlightMap positions={[p1]} nowMs={Date.parse("2001-09-11T13:00:00.000Z")} playing {...common} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.sources["flight-trails"]).toBeDefined();
+
+		// Second sample → establishes velocity (+1 lon / 60s). Re-anchor now == t1, wall == 0.
+		rerender(<FlightMap positions={[p2]} nowMs={t1} playing {...common} />);
+
+		// Run one frame 30s of wall time later → smoothNow == t1 + 30_000 → head lon ≈ -72.5.
+		rafCb!(30_000);
+
+		const head = (map.sources.flights?.data as { features: { geometry: { coordinates: [number, number] } }[] })
+			.features[0].geometry.coordinates;
+		expect(head[0]).toBeGreaterThan(-73); // glided forward past the last sample
+		expect(head[0]).toBeLessThan(-72); // but within the clamp, not overshot
+		const trails = (map.sources["flight-trails"]?.data as { features: unknown[] }).features;
+		expect(trails.length).toBe(1);
 	});
 });
