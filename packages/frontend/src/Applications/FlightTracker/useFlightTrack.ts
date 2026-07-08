@@ -73,6 +73,7 @@ export function useFlightTrack(selection: TrackSelection | null): {
 		setError(null);
 		fetch(trackUrl(selection.flight, date), { signal: controller.signal })
 			.then(async (res) => {
+				if (controller.signal.aborted) return;
 				if (!res.ok) throw new Error(`HTTP ${res.status}`);
 				const json = (await res.json()) as { data: FlightTrack[] };
 				const row = json.data[0] ?? null;
