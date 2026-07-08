@@ -1,0 +1,38 @@
+{
+  "flight": "AA77",
+  "carrier": "AA",
+  "flight_date": "2001-09-11",
+  "origin": "IAD",
+  "scheduled_dest": "LAX",
+  "aircraft": "B757",
+  "registration": "N644AA",
+  "impact": {
+    "site": "The Pentagon (west facade), Arlington, VA",
+    "lat": 38.87117,
+    "lon": -77.05825,
+    "alt_ft": 0,
+    "utc": "2001-09-11T13:37:46Z"
+  },
+  "sources": [
+    "NTSB Flight Path Study - American Airlines Flight 77 (2002-02-19), ntsb.gov/about/Documents/Flight_Path_Study_AA77.pdf",
+    "9/11 Commission Report, Ch. 1",
+    "American Airlines Flight 77 impact coordinates 38deg52'16.2\"N 77deg03'29.7\"W (Pentagon west/southwest face, ground level)"
+  ],
+  "provenance_notes": [
+    "DOCUMENTED-WAYPOINT FALLBACK: The NTSB Flight Path Study for AA77 is published only as a scanned image PDF; its radar-return table is not machine-recoverable and was not transcribed return-by-return. The waypoints below are documented anchors from the 9/11 Commission Report and NTSB study narrative: takeoff Dulles 08:20 EDT, level-off 35,000 ft at 08:46 EDT, the 08:54 EDT deviation/turn near Pike County, Ohio (the westernmost point of the flight), transponder-off 08:56 EDT with the autopilot set eastbound for Washington, the 09:29 EDT start of the 330-degree descending spiral ~5 mi WSW of the Pentagon from ~7,000 ft, ~2,200 ft during the spiral by ~09:34 EDT, and impact. Intermediate per-minute positions are great-circle interpolations between these anchors, NOT surveyed radar returns.",
+    "TURN-BACK / TERMINAL-SPIRAL APPROXIMATION: The east-to-west outbound leg and west-to-east return are represented by the documented westernmost anchor near Pike County, OH (so the track is NOT straight-lined Dulles-to-Pentagon). The final clockwise 330-degree descending spiral (~09:29-09:37:46 EDT, ~5 mi WSW of the Pentagon) is approximated by the net displacement between the documented spiral-entry point and the impact point; the loop itself is not traced return-by-return because the radar table is not machine-recoverable.",
+    "Times are UTC = EDT + 4h. Takeoff 08:20 EDT = 12:20 UTC; impact 09:37:46 EDT = 13:37:46 UTC. Positions after the 08:56 EDT transponder-off were primary-radar only; altitudes reflect the documented profile (cruise FL350, ~7,000 ft at spiral entry, ~2,200 ft mid-spiral, ground at impact)."
+  ],
+  "waypoints": [
+    { "utc": "2001-09-11T12:20:00Z", "lat": 38.9445, "lon": -77.4558, "alt_ft": 0 },
+    { "utc": "2001-09-11T12:33:00Z", "lat": 38.9500, "lon": -78.8000, "alt_ft": 25000 },
+    { "utc": "2001-09-11T12:46:00Z", "lat": 39.0000, "lon": -81.0000, "alt_ft": 35000 },
+    { "utc": "2001-09-11T12:54:00Z", "lat": 39.0800, "lon": -83.0700, "alt_ft": 35000 },
+    { "utc": "2001-09-11T12:56:00Z", "lat": 38.9000, "lon": -82.9000, "alt_ft": 35000 },
+    { "utc": "2001-09-11T13:10:00Z", "lat": 38.9500, "lon": -80.3000, "alt_ft": 33000 },
+    { "utc": "2001-09-11T13:20:00Z", "lat": 38.9000, "lon": -78.4000, "alt_ft": 22000 },
+    { "utc": "2001-09-11T13:29:00Z", "lat": 38.8500, "lon": -77.1500, "alt_ft": 7000 },
+    { "utc": "2001-09-11T13:34:00Z", "lat": 38.8600, "lon": -77.1000, "alt_ft": 2200 },
+    { "utc": "2001-09-11T13:37:46Z", "lat": 38.87117, "lon": -77.05825, "alt_ft": 0 }
+  ]
+}
