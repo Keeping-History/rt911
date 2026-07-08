@@ -1,0 +1,22 @@
+.root { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.body { display: flex; flex: 1 1 auto; min-height: 0; }
+.map { flex: 1 1 auto; min-width: 0; position: relative; }
+.detail {
+	width: 200px; flex: 0 0 200px; padding: 8px;
+	border-left: 1px solid #999; overflow-y: auto; font-size: var(--body-font-size);
+}
+.detailEmpty { color: #666; }
+.detailHeader { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.detailFlight { font-weight: bold; font-size: 1.1em; }
+.detailBadge {
+	font-size: 0.75em; text-transform: uppercase; color: #fff;
+	background: #c0202a; padding: 1px 4px; border-radius: 2px;
+}
+.detailFields { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0; }
+.detailFields dt { color: #555; }
+.detailFields dd { margin: 0; }
+.detailNote { margin-top: 8px; color: #666; }
+.statusBar {
+	flex: 0 0 auto; padding: 2px 8px; border-top: 1px solid #999;
+	font-size: var(--body-font-size); display: flex; justify-content: space-between;
+}
