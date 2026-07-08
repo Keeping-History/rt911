@@ -87,8 +87,12 @@ export function useFlightTrack(selection: TrackSelection | null): {
 			})
 			.catch((err: unknown) => {
 				if (controller.signal.aborted) return;
+				// Show the panel a friendly message; keep the technical cause (a raw
+				// "HTTP 403", a network error, etc.) in the console for debugging.
+				// Users should never see the raw fetch error string.
+				console.warn("flight track fetch failed:", err);
 				setTrack(null);
-				setError(err instanceof Error ? err.message : String(err));
+				setError("Track unavailable");
 			})
 			.finally(() => {
 				if (!controller.signal.aborted) setLoading(false);

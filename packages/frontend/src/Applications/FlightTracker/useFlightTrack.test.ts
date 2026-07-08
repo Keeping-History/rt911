@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { flightDateOf, trackUrl } from "./useFlightTrack";
+import { renderHook, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { flightDateOf, trackUrl, useFlightTrack } from "./useFlightTrack";
 
 describe("flightDateOf", () => {
 	it("takes the UTC date component of an ISO start_date", () => {
@@ -16,5 +17,29 @@ describe("trackUrl", () => {
 		expect(url).toContain("filter%5Bflight_date%5D%5B_eq%5D=2001-09-11");
 		expect(url).toContain("fields=flight%2Corigin%2Cscheduled_dest%2Clanded_at%2Cdiverted%2Cgeometry");
 		expect(url).toContain("limit=1");
+	});
+});
+
+describe("useFlightTrack error handling", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
+	});
+
+	it("surfaces a friendly 'Track unavailable', not a raw HTTP status, on a non-ok response", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({ ok: false, status: 403 } as Response),
+		);
+
+		const { result } = renderHook(() =>
+			useFlightTrack({ flight: "AA77", startDate: "2001-09-11T13:00:00Z" }),
+		);
+
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		expect(result.current.track).toBeNull();
+		expect(result.current.error).toBe("Track unavailable");
+		expect(result.current.error).not.toContain("403");
 	});
 });
