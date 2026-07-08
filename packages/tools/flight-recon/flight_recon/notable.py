@@ -50,9 +50,12 @@ FLIGHT_DATE = "2001-09-11"
 NOTABLE_FLIGHTS = ("AA11", "UA175", "AA77", "UA93")
 DATA_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "data", "notable_flights")
 
-# clock_seconds anchor: continuous seconds since ET midnight of the flight_date,
-# identical to the BTS loader's single-day window anchor (ET = UTC + ET_OFFSET).
-_WINDOW_START_UTC = datetime(2001, 9, 11, -ET_OFFSET, 0, 0, tzinfo=timezone.utc)
+# clock_seconds anchor: continuous seconds since ET midnight of the loaded BTS
+# window's FIRST day — not of flight_date. Every prod run in reconstruction_runs
+# used [2001-09-09, 2001-09-12], and every prod 9/11 position row has
+# clock_seconds = et_seconds + 172800 (verified 2026-07-08); anchoring anywhere
+# else would put these four on a different replay clock than the BTS flights.
+_WINDOW_START_UTC = datetime(2001, 9, 9, -ET_OFFSET, 0, 0, tzinfo=timezone.utc)
 
 # Validation bounds (match the BTS loader's North-America envelope).
 _LON_MIN, _LON_MAX = -150.0, -65.0

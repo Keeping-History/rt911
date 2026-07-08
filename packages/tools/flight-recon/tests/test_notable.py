@@ -107,10 +107,12 @@ def test_track_is_linestring_ending_at_impact(built, flight):
 def test_positions_have_per_minute_clock_keys(built, flight):
     _, positions, _ = built[flight]
     # interior rows are whole minutes -> et_seconds multiples of 60 (clean airborne
-    # snapshot); on 2001-09-11 clock_seconds == et_seconds (single-day window).
+    # snapshot); clock_seconds anchors at the prod BTS window start (2001-09-09 ET
+    # midnight), so 9/11 rows sit exactly two days into the replay clock — matching
+    # every existing prod row (clock_seconds - et_seconds = 172800, verified).
     for p in positions[:-1]:
         assert p["et_seconds"] % 60 == 0
-        assert p["clock_seconds"] == p["et_seconds"]
+        assert p["clock_seconds"] == p["et_seconds"] + 172800
         assert p["diverted"] is False
 
 
