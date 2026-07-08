@@ -4,12 +4,14 @@ import {
 	ClassicyWindow,
 	quitMenuItemHelper,
 	useAppManager,
+	useClassicyDateTime,
 } from "classicy";
 import { type FC, useContext, useEffect, useMemo, useState } from "react";
 import {
 	MediaStreamContext,
 	type FlightPosition,
 } from "../../Providers/MediaStream/MediaStreamContext";
+import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { FlightDetailPanel } from "./FlightDetailPanel";
 import { FlightMap } from "./FlightMap";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
@@ -41,6 +43,12 @@ export const FlightTracker: FC = () => {
 
 	const { flightPositions, subscribeFlights, unsubscribeFlights, connected } =
 		useContext(MediaStreamContext);
+
+	// Read-only: this app never mutates the clock (only TimeMachine does). The
+	// animation loop needs the true-UTC instant + play state; virtualUtcMs strips
+	// the display tz back off (same conversion the MediaStreamProvider uses).
+	const { localDate, tzOffset, paused } = useClassicyDateTime({ tick: true });
+	const nowMs = virtualUtcMs(localDate, tzOffset);
 
 	// Subscribe only while the app is open (ref-counted by appId server-side).
 	useEffect(() => {
@@ -106,6 +114,8 @@ export const FlightTracker: FC = () => {
 								positions={flightPositions}
 								basemapUrl={BASEMAP_URL}
 								trackGeoJSON={trackGeoJSON}
+								nowMs={nowMs}
+								playing={!paused}
 								onSelectFlight={onSelectFlight}
 								onClearSelection={() => setSelected(null)}
 							/>

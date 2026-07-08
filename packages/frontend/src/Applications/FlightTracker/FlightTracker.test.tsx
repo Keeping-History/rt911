@@ -40,6 +40,11 @@ vi.mock("classicy", () => ({
 			},
 		}),
 	useAppManagerDispatch: () => vi.fn(),
+	useClassicyDateTime: () => ({
+		localDate: new Date("2001-09-11T13:00:00.000Z"),
+		tzOffset: 0,
+		paused: false,
+	}),
 }));
 
 import { FlightTracker } from "./FlightTracker";
@@ -169,5 +174,24 @@ describe("FlightTracker", () => {
 		expect(screen.getByText("Select a flight to view its track.")).toBeTruthy();
 
 		vi.unstubAllGlobals();
+	});
+
+	it("passes the virtual clock to the map", () => {
+		renderWithContext({
+			flightPositions: [
+				{
+					id: 1,
+					flight: "AA11",
+					start_date: "2001-09-11T13:00:00Z",
+					lat: 40,
+					lon: -74,
+					alt_ft: 30000,
+				},
+			],
+			connected: true,
+		});
+		const last = mapProps[mapProps.length - 1];
+		expect(typeof last.nowMs).toBe("number");
+		expect(last.playing).toBe(true); // paused:false → playing
 	});
 });
