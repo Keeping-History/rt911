@@ -17,4 +17,7 @@ describe("buildBasemapStyle", () => {
 		const ids = style.layers.map((l) => l.id);
 		expect(ids).toEqual(expect.arrayContaining(["land", "countries", "states"]));
 	});
+	it("omits the glyphs key entirely (undefined value crashes maplibre 5 style validation)", () => {
+		expect("glyphs" in buildBasemapStyle("https://x.example/na.pmtiles")).toBe(false);
+	});
 });

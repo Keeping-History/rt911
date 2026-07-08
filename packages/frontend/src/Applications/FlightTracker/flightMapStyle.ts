@@ -12,7 +12,6 @@ import type { StyleSpecification } from "maplibre-gl";
 export function buildBasemapStyle(basemapUrl: string): StyleSpecification {
 	return {
 		version: 8,
-		glyphs: undefined,
 		sources: {
 			basemap: { type: "vector", url: `pmtiles://${basemapUrl}` },
 		},
