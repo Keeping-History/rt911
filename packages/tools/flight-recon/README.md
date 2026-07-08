@@ -66,6 +66,39 @@ Known source limitation: BTS only records diversion detail (`Div*Airport`/
 recorded landing in the data and are skipped as "no usable airborne
 interval" (visible in the run summary's skip list).
 
+## Notable flights (curated 9/11 hijacked aircraft)
+
+The four hijacked flights of September 11, 2001 — **AA11, UA175, AA77, UA93** —
+are absent from BTS On-Time Performance (which records only completed flights;
+the lowest AA number present is `AA1002`), so they are curated separately from
+authoritative public radar data — each flight's **NTSB Flight Path Study**
+(2002-02-19), corroborated by the **9/11 Commission Report** (Ch. 1). They load
+into the same `flight_positions` / `flight_tracks` / `reconstruction_runs`
+tables, under those exact flight IDs, so the streamer `flights` channel and the
+Flight Tracker read them with zero special-casing.
+
+- **Data (the reviewable accuracy artifact):** `data/notable_flights/{aa11,
+  ua175,aa77,ua93}.json` — documented radar/anchor waypoints (lat/lon/alt/UTC)
+  plus metadata, impact site, `sources`, and `provenance_notes`. The NTSB
+  studies are published as scanned image PDFs whose radar tables are not
+  machine-recoverable, so intermediate per-minute positions are great-circle
+  interpolations between documented anchors (takeoff, transponder-off, the
+  documented turn-backs, impact), **not** surveyed radar returns — flagged in
+  each file's `provenance_notes`.
+- **Loader:** `python -m flight_recon.notable --dsn postgres://… [--dry-run]`.
+  Resamples each flight to one position per UTC minute in `[takeoff, impact]`
+  (`flight_recon/resample.py`, the unit-tested pure core), builds positions +
+  one LineString track per flight, then **scoped-deletes ONLY these four flight
+  IDs for `flight_date='2001-09-11'`** before re-inserting — it does **not**
+  reuse the BTS window-delete, which would wipe the 1,945 real flights. Emits a
+  `reconstruction_runs` provenance row citing the NTSB studies. `--dry-run`
+  builds, validates, and exercises the delete/insert inside a transaction it
+  rolls back. `--init-schema` creates the tables (scratch DBs only).
+- **PROD-LOAD REVIEW GATE:** loading synthesized 9/11 flight paths to prod is
+  gated on human review of the data files + a dry-run report against a scratch
+  DB. Run against a throwaway Postgres, not `rt911-db`. `NOTABLE_TEST_DSN=…`
+  enables the end-to-end idempotency test in `tests/test_notable.py`.
+
 ## Idempotency
 
 Re-running a window must not duplicate rows. Each run mints a fresh `run_id`

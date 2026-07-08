@@ -1,0 +1,34 @@
+{
+  "flight": "UA175",
+  "carrier": "UA",
+  "flight_date": "2001-09-11",
+  "origin": "BOS",
+  "scheduled_dest": "LAX",
+  "aircraft": "B767",
+  "registration": "N612UA",
+  "impact": {
+    "site": "South Tower, World Trade Center (WTC 2)",
+    "lat": 40.71078,
+    "lon": -74.01314,
+    "alt_ft": 940,
+    "utc": "2001-09-11T13:03:02Z"
+  },
+  "sources": [
+    "NTSB Flight Path Study - United Airlines Flight 175 (2002-02-19)",
+    "9/11 Commission Report, Ch. 1",
+    "United Airlines Flight 175 impact coordinates 40deg42'38.8\"N 74deg00'47.3\"W (WTC 2 south facade, floors 77-85)"
+  ],
+  "provenance_notes": [
+    "DOCUMENTED-WAYPOINT FALLBACK: The NTSB Flight Path Study for UA175 is published only as a scanned image PDF; its radar-return table is not machine-recoverable and was not transcribed return-by-return. The waypoints below are documented anchors (takeoff, 08:33 EDT level-off at 31,000 ft, the 08:46 EDT transponder-code change / start of deviation, the 08:58 EDT position over New Jersey at 28,500 ft, and impact) from the 9/11 Commission Report and NTSB study narrative; intermediate per-minute positions are great-circle interpolations between them, NOT surveyed radar returns.",
+    "Times are UTC = EDT + 4h. Takeoff 08:14 EDT = 12:14 UTC; impact 09:03:02 EDT = 13:03:02 UTC (impact second per the NTSB study; the 9/11 Commission cites 09:03:11, NIST 09:02:59).",
+    "The final ~5 minutes were a sustained power dive averaging over 5,000 ft/min, ending in a banking left turn back to the northeast into the South Tower; the descent altitudes reflect that profile."
+  ],
+  "waypoints": [
+    { "utc": "2001-09-11T12:14:00Z", "lat": 42.3656, "lon": -71.0096, "alt_ft": 0 },
+    { "utc": "2001-09-11T12:25:00Z", "lat": 41.9000, "lon": -72.0000, "alt_ft": 24000 },
+    { "utc": "2001-09-11T12:33:00Z", "lat": 41.6000, "lon": -72.7000, "alt_ft": 31000 },
+    { "utc": "2001-09-11T12:46:00Z", "lat": 41.0000, "lon": -74.0000, "alt_ft": 30000 },
+    { "utc": "2001-09-11T12:58:00Z", "lat": 40.5500, "lon": -74.6000, "alt_ft": 28500 },
+    { "utc": "2001-09-11T13:03:02Z", "lat": 40.71078, "lon": -74.01314, "alt_ft": 940 }
+  ]
+}

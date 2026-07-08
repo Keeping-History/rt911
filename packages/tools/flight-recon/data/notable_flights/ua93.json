@@ -1,0 +1,41 @@
+{
+  "flight": "UA93",
+  "carrier": "UA",
+  "flight_date": "2001-09-11",
+  "origin": "EWR",
+  "scheduled_dest": "SFO",
+  "aircraft": "B757",
+  "registration": "N591UA",
+  "impact": {
+    "site": "Field near Shanksville, Somerset County, PA",
+    "lat": 40.05056,
+    "lon": -78.90472,
+    "alt_ft": 0,
+    "utc": "2001-09-11T14:03:11Z"
+  },
+  "sources": [
+    "NTSB Flight Path Study - United Airlines Flight 93 (2002-02-19), NPS 508 copy: nps.gov/flni/learn/historyculture/upload/Flight_Path_Study_of_Flight_93_508.pdf",
+    "9/11 Commission Report, Ch. 1",
+    "United 93 crash coordinates 40deg03'02\"N 78deg54'17\"W (Flight 93 National Memorial impact site)"
+  ],
+  "provenance_notes": [
+    "SOURCE NOTE: UA93 is the only one of the four with a recovered Flight Data Recorder, so its altitude/time profile is well documented. The altitudes and times of the labelled points below (B level-off 35,000 ft at ~09:02; C 600-ft deviation / assumed takeover ~09:28; D climb toward 41,000 ft and turn to a 120-degree SE heading ~09:34; E max 41,000 ft then descent at 4,000 ft/min ~09:39 with transponder returns ceasing ~09:41; F brief descent interruption climbing 19,000->20,500 ft ~09:46; G 5,000 ft with rapid roll inputs ~09:59; H climb to ~10,000 ft turning right; I impact) are transcribed from the NTSB Flight Path Study narrative (NPS 508 copy, which has a readable text layer).",
+    "DOCUMENTED-WAYPOINT FALLBACK (positions): The study's radar ground-track figure (lat/lon) is an image and was not transcribed point-by-point. Longitude/latitude of the enroute and turnaround anchors below are placed from the documented narrative (departed Newark; cruised west across PA into Cleveland Center airspace; transponder switched off ~30 nm west of Akron, OH; turned back toward Washington; crashed near Shanksville). Per-minute positions are great-circle interpolations between these anchors, NOT surveyed radar returns. The turn-back near Cleveland is captured by the westernmost anchor (so the track is NOT straight-lined Newark-to-Shanksville); the final erratic maneuvering (~09:57-10:03:11, rolls and pitch inputs during the passenger revolt) is approximated by the anchors near the crash site rather than traced.",
+    "IMPACT-COORDINATE CORRECTION: the upstream design doc listed the Shanksville longitude as -78.8539; that is inconsistent with the cited DMS 78deg54'17\"W = -78.90472 (a ~4 km / ~0.05deg error, placing it east of the actual crater). This file uses the source-derived -78.90472 (Flight 93 National Memorial impact site). Flagged for reviewer confirmation.",
+    "Times are UTC = EDT + 4h. Takeoff 08:42 EDT = 12:42 UTC; impact 10:03:11 EDT = 14:03:11 UTC."
+  ],
+  "waypoints": [
+    { "utc": "2001-09-11T12:42:00Z", "lat": 40.6925, "lon": -74.1687, "alt_ft": 0 },
+    { "utc": "2001-09-11T13:02:00Z", "lat": 41.0000, "lon": -77.6000, "alt_ft": 35000 },
+    { "utc": "2001-09-11T13:28:00Z", "lat": 41.1000, "lon": -81.2000, "alt_ft": 34400 },
+    { "utc": "2001-09-11T13:34:00Z", "lat": 41.0000, "lon": -82.1500, "alt_ft": 36000 },
+    { "utc": "2001-09-11T13:39:00Z", "lat": 40.7200, "lon": -81.1000, "alt_ft": 41000 },
+    { "utc": "2001-09-11T13:41:00Z", "lat": 40.6200, "lon": -80.7000, "alt_ft": 33000 },
+    { "utc": "2001-09-11T13:44:00Z", "lat": 40.5000, "lon": -80.1000, "alt_ft": 19000 },
+    { "utc": "2001-09-11T13:46:00Z", "lat": 40.4500, "lon": -79.8500, "alt_ft": 20500 },
+    { "utc": "2001-09-11T13:52:00Z", "lat": 40.2500, "lon": -79.3500, "alt_ft": 12000 },
+    { "utc": "2001-09-11T13:59:00Z", "lat": 40.0800, "lon": -78.9800, "alt_ft": 5000 },
+    { "utc": "2001-09-11T14:01:00Z", "lat": 40.0600, "lon": -78.9300, "alt_ft": 10000 },
+    { "utc": "2001-09-11T14:03:11Z", "lat": 40.05056, "lon": -78.90472, "alt_ft": 0 }
+  ]
+}
