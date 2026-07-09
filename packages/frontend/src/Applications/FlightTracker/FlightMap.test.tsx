@@ -243,11 +243,17 @@ describe("FlightMap", () => {
 		expect(dots.layout["icon-rotation-alignment"]).toBe("map");
 		expect(dots.layout["icon-allow-overlap"]).toBe(true);
 		expect(dots.layout["icon-ignore-placement"]).toBe(true);
+		// Regular planes grow to 1.5× while zooming in, capping at ~zoom 9
+		// (≈100 mi visible); interpolate clamps beyond the last stop.
+		expect(dots.layout["icon-size"]).toEqual(
+			["interpolate", ["linear"], ["zoom"], 4, 1, 9, 1.5],
+		);
 		const notable = map.layers.find((l) => l.id === "flights-notable") as {
 			type: string; layout: Record<string, unknown>;
 		};
 		expect(notable.type).toBe("symbol");
 		expect(notable.layout["icon-image"]).toBe("plane-notable-icon");
+		expect(notable.layout["icon-size"]).toBeUndefined(); // notables stay fixed
 	});
 
 	it("creates radar layers under the track line, visible when radarSweep is on", () => {

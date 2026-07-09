@@ -152,6 +152,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 				filter: ["!=", ["get", "notable"], true],
 				layout: {
 					"icon-image": PLANE_ICON_ID,
+					// Grow to 1.5× while zooming in, capping at ~zoom 9 — where a
+					// typical viewport spans roughly 100 miles at CONUS latitudes
+					// (interpolate clamps past the last stop). Notables stay fixed.
+					"icon-size": ["interpolate", ["linear"], ["zoom"], 4, 1, 9, 1.5],
 					"icon-rotate": ["-", ["get", "heading"], 90],
 					"icon-rotation-alignment": "map",
 					"icon-allow-overlap": true,
