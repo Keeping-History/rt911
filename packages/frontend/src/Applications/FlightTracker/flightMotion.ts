@@ -6,8 +6,10 @@ import { isNotable } from "./notableFlights";
 // keeps a flight that stopped reporting (about to land / leave the set) from
 // sailing off the map. ~1.5 samples.
 export const MAX_EXTRAPOLATION_MS = 90_000;
-// Length of the comet tail, in ms of travel behind the head.
-export const TAIL_MS = 120_000;
+// How many recent real positions each flight retains for its breadcrumb trail.
+// At ~1 sample/minute this is ~10 minutes of path; older points are dropped and
+// the trail fades to transparent, so the map stays clean over long sessions.
+export const TRAIL_POINTS = 10;
 
 export interface FlightMotion {
 	prev: { lat: number; lon: number };
@@ -15,6 +17,8 @@ export interface FlightMotion {
 	prevT: number; // prev sample UTC ms
 	curT: number; // cur sample UTC ms
 	item: FlightPosition; // latest sample — supplies point properties
+	// Last TRAIL_POINTS real positions as [lon,lat], oldest → newest.
+	trail: [number, number][];
 }
 
 // Keyed by `flight` (callsign): the DB id changes each per-minute sample, the
@@ -22,8 +26,9 @@ export interface FlightMotion {
 export type MotionBuffer = Map<string, FlightMotion>;
 
 // Fold the current airborne snapshot into the buffer: seed unseen flights
-// (prev == cur → static until a 2nd sample gives a direction), shift cur→prev on
-// a newer sample, refresh item props, and prune flights that left the set.
+// (prev == cur → static until a 2nd sample gives a direction), shift cur→prev and
+// append to the breadcrumb on a newer sample, refresh item props on a same/older
+// one, and prune flights that left the set.
 export function updateMotion(
 	buffer: MotionBuffer,
 	positions: FlightPosition[],
@@ -40,6 +45,7 @@ export function updateMotion(
 				prevT: t,
 				curT: t,
 				item: p,
+				trail: [[p.lon, p.lat]],
 			});
 		} else if (t > m.curT) {
 			m.prev = m.cur;
@@ -47,8 +53,10 @@ export function updateMotion(
 			m.cur = { lat: p.lat, lon: p.lon };
 			m.curT = t;
 			m.item = p;
+			m.trail.push([p.lon, p.lat]);
+			if (m.trail.length > TRAIL_POINTS) m.trail.shift();
 		} else {
-			m.item = p; // same/older sample: keep freshest props, don't shift
+			m.item = p; // same/older sample: keep freshest props, don't shift or append
 		}
 	}
 	for (const flight of buffer.keys()) {
@@ -71,21 +79,6 @@ export function extrapolate(m: FlightMotion, now: number): { lat: number; lon: n
 	const { vlat, vlon } = velocityOf(m);
 	const dt = Math.min(Math.max(now - m.curT, 0), MAX_EXTRAPOLATION_MS);
 	return { lat: m.cur.lat + vlat * dt, lon: m.cur.lon + vlon * dt };
-}
-
-// Comet tail as [ [lon,lat] tail, [lon,lat] head ]; null when static.
-export function tailSegment(
-	m: FlightMotion,
-	now: number,
-): [[number, number], [number, number]] | null {
-	const { vlat, vlon } = velocityOf(m);
-	if (vlat === 0 && vlon === 0) return null;
-	const head = extrapolate(m, now);
-	const tail = { lat: head.lat - vlat * TAIL_MS, lon: head.lon - vlon * TAIL_MS };
-	return [
-		[tail.lon, tail.lat],
-		[head.lon, head.lat],
-	];
 }
 
 // Point FC of extrapolated heads — same shape flightsToGeoJSON emits, so the
@@ -122,17 +115,25 @@ export interface TrailFeatureCollection {
 	}>;
 }
 
+// Breadcrumb FC: each flight's real recent path (its retained trail) extended to
+// the current gliding head, so the line connects the true track to the moving
+// dot. A line-gradient (see flightMapStyle) fades it from transparent at the
+// oldest end to opaque at the head. Flights with a single sample (no direction
+// yet) emit nothing.
 export function motionTrailsToGeoJSON(
 	buffer: MotionBuffer,
 	now: number,
 ): TrailFeatureCollection {
 	const features: TrailFeatureCollection["features"] = [];
 	for (const m of buffer.values()) {
-		const seg = tailSegment(m, now);
-		if (!seg) continue;
+		if (m.trail.length < 2) continue;
+		const head = extrapolate(m, now);
 		features.push({
 			type: "Feature",
-			geometry: { type: "LineString", coordinates: seg },
+			geometry: {
+				type: "LineString",
+				coordinates: [...m.trail, [head.lon, head.lat]],
+			},
 			properties: { notable: isNotable(m.item.flight) },
 		});
 	}

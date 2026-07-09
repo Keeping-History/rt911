@@ -5,10 +5,10 @@ import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamCont
 import {
 	PIN_STROKE_COLOR,
 	TRACK_LINE_COLOR,
-	TRAIL_COLORS,
 	applyMapColors,
 	buildBasemapStyle,
 	type FlightMapColors,
+	trailGradient,
 } from "./flightMapStyle";
 import {
 	type MotionBuffer,
@@ -97,15 +97,16 @@ export const FlightMap: FC<FlightMapProps> = ({
 				data: motionPointsToGeoJSON(motionBufferRef.current, nowMsRef.current),
 			});
 			map.addSource("track", { type: "geojson", data: EMPTY_FC });
-			map.addSource("flight-trails", { type: "geojson", data: EMPTY_FC });
+			// lineMetrics enables the line-progress-based fade gradient on the trails.
+			map.addSource("flight-trails", { type: "geojson", data: EMPTY_FC, lineMetrics: true });
 			map.addLayer({
 				id: "track-line", type: "line", source: "track",
 				paint: { "line-color": TRACK_LINE_COLOR, "line-width": 2 },
 			});
-			// Comet tails, drawn under the dots.
+			// Breadcrumb trails under the dots, faded oldest→head by a line-gradient.
 			map.addLayer({
 				id: "flight-trails", type: "line", source: "flight-trails",
-				paint: { "line-color": TRAIL_COLORS[theme], "line-width": 1.2, "line-opacity": 0.35 },
+				paint: { "line-width": 1.2, "line-gradient": trailGradient(theme) },
 			});
 			map.addLayer({
 				id: "flights-dots", type: "circle", source: "flights",

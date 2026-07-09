@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
 	BASEMAP_PALETTES,
-	TRAIL_COLORS,
 	applyMapColors,
 	buildBasemapStyle,
 } from "./flightMapStyle";
@@ -70,7 +69,8 @@ describe("applyMapColors", () => {
 			BASEMAP_PALETTES.dark.background,
 		);
 		expect(map.paint.states["line-color"]).toBe(BASEMAP_PALETTES.dark.states);
-		expect(map.paint["flight-trails"]["line-color"]).toBe(TRAIL_COLORS.dark);
+		// Trails fade via a themed line-gradient (dark #9a9aa6 → rgb 154,154,166).
+		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("154,154,166");
 		expect(map.paint["flights-dots"]["circle-color"]).toBe("#00aa00");
 		expect(map.paint["flights-notable"]["circle-color"]).toBe("#123456");
 	});
@@ -85,6 +85,7 @@ describe("applyMapColors", () => {
 		expect(map.paint.background["background-color"]).toBe(
 			BASEMAP_PALETTES.light.background,
 		);
-		expect(map.paint["flight-trails"]["line-color"]).toBe(TRAIL_COLORS.light);
+		// Light trail gradient (#5a5a5a → rgb 90,90,90).
+		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("90,90,90");
 	});
 });

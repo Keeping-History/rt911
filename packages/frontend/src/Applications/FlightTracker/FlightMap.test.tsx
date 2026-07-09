@@ -196,7 +196,8 @@ describe("FlightMap", () => {
 		);
 		expect(FakeMap.last).toBe(map); // no map re-creation
 		expect(map.paint["background"]?.["background-color"]).toBe("#1c1c22");
-		expect(map.paint["flight-trails"]?.["line-color"]).toBe("#9a9aa6");
+		// Trail fade uses a themed line-gradient (dark #9a9aa6 → rgb 154,154,166).
+		expect(JSON.stringify(map.paint["flight-trails"]?.["line-gradient"])).toContain("154,154,166");
 		expect(map.paint["flights-dots"]?.["circle-color"]).toBe("#ffffff");
 		expect(map.paint["flights-notable"]?.["circle-color"]).toBe("#ff0000");
 	});

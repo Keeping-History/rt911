@@ -27,7 +27,7 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({ selected, track,
 		<ClassicyControlGroup label="Flight Details">
 			<div className={styles.detailHeader}>
 				<span className={styles.detailFlight}>{selected.flight}</span>
-				{isNotable(selected.flight) && <span className={styles.detailBadge}>notable</span>}
+				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
 			</div>
 			<dl className={styles.detailFields}>
 				{selected.carrier && (<><dt>Carrier</dt><dd>{selected.carrier}</dd></>)}

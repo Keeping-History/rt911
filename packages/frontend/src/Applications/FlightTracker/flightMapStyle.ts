@@ -1,4 +1,4 @@
-import type { StyleSpecification } from "maplibre-gl";
+import type { ExpressionSpecification, StyleSpecification } from "maplibre-gl";
 
 export type BasemapTheme = "light" | "dark";
 
@@ -39,6 +39,28 @@ export const TRAIL_COLORS: Record<BasemapTheme, string> = {
 };
 export const PIN_STROKE_COLOR = "#ffffff";
 export const TRACK_LINE_COLOR = "#b22222";
+
+function hexToRgb(hex: string): [number, number, number] {
+	const n = Number.parseInt(hex.slice(1), 16);
+	return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// A line-gradient that fades the theme's trail color from transparent at the
+// oldest end of the breadcrumb (line-progress 0) to opaque at the gliding head
+// (line-progress 1), so aging trail points drop out and the map self-cleans.
+// Requires the flight-trails source to be created with `lineMetrics: true`.
+export function trailGradient(theme: BasemapTheme): ExpressionSpecification {
+	const [r, g, b] = hexToRgb(TRAIL_COLORS[theme]);
+	return [
+		"interpolate",
+		["linear"],
+		["line-progress"],
+		0,
+		`rgba(${r},${g},${b},0)`,
+		1,
+		`rgba(${r},${g},${b},0.7)`,
+	] as ExpressionSpecification;
+}
 
 // A monochrome basemap style for the Mac OS 8 desktop: paper (or slate)
 // background, subtle land fill, thin country borders and thinner state
@@ -96,7 +118,7 @@ export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void
 	map.setPaintProperty("lakes", "fill-color", p.lakes);
 	map.setPaintProperty("countries", "line-color", p.countries);
 	map.setPaintProperty("states", "line-color", p.states);
-	map.setPaintProperty("flight-trails", "line-color", TRAIL_COLORS[theme]);
+	map.setPaintProperty("flight-trails", "line-gradient", trailGradient(theme));
 	map.setPaintProperty("flights-dots", "circle-color", colors.pinColor);
 	map.setPaintProperty("flights-notable", "circle-color", colors.notablePinColor);
 }
