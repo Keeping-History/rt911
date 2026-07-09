@@ -7,9 +7,9 @@ import { isNotable } from "./notableFlights";
 // sailing off the map. ~1.5 samples.
 export const MAX_EXTRAPOLATION_MS = 90_000;
 // How many recent real positions each flight retains for its breadcrumb trail.
-// At ~1 sample/minute this is ~10 minutes of path; older points are dropped and
+// At ~1 sample/minute this is ~20 minutes of path; older points are dropped and
 // the trail fades to transparent, so the map stays clean over long sessions.
-export const TRAIL_POINTS = 10;
+export const TRAIL_POINTS = 20;
 
 export interface FlightMotion {
 	prev: { lat: number; lon: number };

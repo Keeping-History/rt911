@@ -54,7 +54,7 @@ describe("updateMotion", () => {
 		const buf: MotionBuffer = new Map();
 		for (let min = 0; min <= TRAIL_POINTS + 3; min++) updateMotion(buf, [sampleAt(min, -74 + min)]);
 		const m = buf.get("AA1")!;
-		expect(TRAIL_POINTS).toBe(10);
+		expect(TRAIL_POINTS).toBe(20);
 		expect(m.trail).toHaveLength(TRAIL_POINTS);
 		// After 14 samples (min 0..13), the oldest 4 are dropped: oldest kept is min 4.
 		expect(m.trail[0]).toEqual([-70, 40]);
