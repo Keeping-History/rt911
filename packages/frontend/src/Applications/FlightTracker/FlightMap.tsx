@@ -16,6 +16,12 @@ import {
 	motionTrailsToGeoJSON,
 	updateMotion,
 } from "./flightMotion";
+import {
+	RADAR_FALLBACK_COLOR,
+	resolveCssColor,
+	sweepLineGeoJSON,
+	sweepTrailGeoJSON,
+} from "./flightRadar";
 
 // Register the pmtiles:// protocol once per page (adding it twice throws).
 let protocolRegistered = false;
@@ -35,6 +41,7 @@ interface FlightMapProps {
 	// CSS hex strings — FlightTracker converts from the persisted packed ints.
 	pinColor: string;
 	notablePinColor: string;
+	radarSweep: boolean;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
 }
@@ -50,7 +57,7 @@ const HIT_TOLERANCE = 6;
 
 export const FlightMap: FC<FlightMapProps> = ({
 	positions, basemapUrl, trackGeoJSON, nowMs, playing,
-	darkMap, pinColor, notablePinColor,
+	darkMap, pinColor, notablePinColor, radarSweep,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -63,6 +70,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	cbRef.current = { onSelectFlight, onClearSelection };
 	const colorsRef = useRef<FlightMapColors>({ darkMap, pinColor, notablePinColor });
 	colorsRef.current = { darkMap, pinColor, notablePinColor };
+	const radarSweepRef = useRef(radarSweep);
+	radarSweepRef.current = radarSweep;
 
 	const motionBufferRef = useRef<MotionBuffer>(new Map());
 	const nowMsRef = useRef(nowMs);
@@ -125,6 +134,31 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"circle-stroke-width": 1, "circle-stroke-color": PIN_STROKE_COLOR,
 				},
 			});
+			// Radar sweep + afterglow wedge, under the track line and all flight
+			// layers. Color = Classicy theme var, resolved from the DOM because
+			// WebGL paint can't read CSS custom properties.
+			map.addSource("radar-sweep", {
+				type: "geojson", data: sweepLineGeoJSON(nowMsRef.current),
+			});
+			map.addSource("radar-trail", {
+				type: "geojson", data: sweepTrailGeoJSON(nowMsRef.current),
+			});
+			const radarColor = resolveCssColor(
+				containerRef.current ?? document.documentElement,
+				"--color-system-04",
+				RADAR_FALLBACK_COLOR,
+			);
+			const radarVisibility = radarSweepRef.current ? "visible" : "none";
+			map.addLayer({
+				id: "radar-trail", type: "fill", source: "radar-trail",
+				layout: { visibility: radarVisibility },
+				paint: { "fill-color": radarColor, "fill-opacity": ["get", "opacity"] },
+			}, "track-line");
+			map.addLayer({
+				id: "radar-sweep", type: "line", source: "radar-sweep",
+				layout: { visibility: radarVisibility },
+				paint: { "line-color": radarColor, "line-width": 1.5, "line-opacity": 0.8 },
+			}, "track-line");
 			applyMapColors(map, colorsRef.current);
 		});
 
@@ -201,6 +235,27 @@ export const FlightMap: FC<FlightMapProps> = ({
 		applyMapColors(map, { darkMap, pinColor, notablePinColor });
 	}, [darkMap, pinColor, notablePinColor]);
 
+	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an
+	// Appearance-theme switch that happened while hidden is picked up. dirtyRef
+	// makes a paused map redraw once so the change is visible immediately.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		const vis = radarSweep ? "visible" : "none";
+		map.setLayoutProperty("radar-sweep", "visibility", vis);
+		map.setLayoutProperty("radar-trail", "visibility", vis);
+		if (radarSweep) {
+			const c = resolveCssColor(
+				containerRef.current ?? document.documentElement,
+				"--color-system-04",
+				RADAR_FALLBACK_COLOR,
+			);
+			map.setPaintProperty("radar-sweep", "line-color", c);
+			map.setPaintProperty("radar-trail", "fill-color", c);
+		}
+		dirtyRef.current = true;
+	}, [radarSweep]);
+
 	// Glide dots + draw trails at ~15 fps off a smooth virtual clock. While
 	// playing, advance wall-time deltas from the anchor (RATE 1×); while paused,
 	// hold at the anchor and idle after the last draw. All virtual/UTC ms.
@@ -226,6 +281,14 @@ export const FlightMap: FC<FlightMapProps> = ({
 			(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
 				motionTrailsToGeoJSON(buf, now),
 			);
+			if (radarSweepRef.current) {
+				(map.getSource("radar-sweep") as maplibregl.GeoJSONSource | undefined)?.setData(
+					sweepLineGeoJSON(now),
+				);
+				(map.getSource("radar-trail") as maplibregl.GeoJSONSource | undefined)?.setData(
+					sweepTrailGeoJSON(now),
+				);
+			}
 		};
 		let raf = requestAnimationFrame(loop);
 		return () => cancelAnimationFrame(raf);
