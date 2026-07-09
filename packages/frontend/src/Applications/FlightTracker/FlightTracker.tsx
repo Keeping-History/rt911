@@ -4,6 +4,8 @@ import {
 	ClassicyCheckbox,
 	ClassicyColorPicker,
 	ClassicyIcons,
+	ClassicyPopUpMenu,
+	ClassicySlider,
 	ClassicyWindow,
 	MAC_OS_8_CRAYONS,
 	quitMenuItemHelper,
@@ -11,7 +13,15 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
-import { type FC, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+	type FC,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	MediaStreamContext,
 	type FlightPosition,
@@ -27,6 +37,16 @@ import {
 	intToHex,
 	readFlightMapSettings,
 } from "./flightMapSettings";
+import { insertReplaySamples, pruneReplay, type ReplayBuffer } from "./flightReplay";
+import {
+	formatPlayhead,
+	LOOP_SPEEDS,
+	type LoopClock,
+	type LoopSpeed,
+	type LoopWindowMinutes,
+	playheadAt,
+	SPEED_LABELS,
+} from "./loopClock";
 import styles from "./FlightTracker.module.scss";
 import type { Feature } from "geojson";
 
@@ -84,6 +104,93 @@ export const FlightTracker: FC = () => {
 		);
 	}, [settings, desktopEventDispatch]);
 
+	const {
+		flightPositions,
+		subscribeFlights,
+		unsubscribeFlights,
+		connected,
+		flightsHistory,
+		requestFlightsHistory,
+		clearFlightsHistory,
+	} = useContext(MediaStreamContext);
+
+	// Read-only: this app never mutates the clock (only TimeMachine does). The
+	// animation loop needs the true-UTC instant + play state; virtualUtcMs strips
+	// the display tz back off (same conversion the MediaStreamProvider uses).
+	const { localDate, tzOffset, paused } = useClassicyDateTime({ tick: true });
+	const nowMs = virtualUtcMs(localDate, tzOffset);
+
+	// Subscribe only while the app is open (ref-counted by appId server-side).
+	useEffect(() => {
+		if (!isRunning) return;
+		subscribeFlights(appId);
+		return () => unsubscribeFlights(appId);
+	}, [isRunning, subscribeFlights, unsubscribeFlights, appId]);
+
+	const [selected, setSelected] = useState<FlightPosition | null>(null);
+
+	// Loop mode: transient session state (a radar loop is an inspection tool, not
+	// a persisted setting). The loop clock is local — the Classicy clock keeps
+	// running live and is never written from here.
+	const [loopEnabled, setLoopEnabled] = useState(false);
+	const [loopMinutes, setLoopMinutes] = useState<LoopWindowMinutes>(30);
+	const [loopClock, setLoopClock] = useState<LoopClock>({
+		anchorVirtual: 0,
+		anchorWall: 0,
+		speed: 1,
+		scrubbing: false,
+	});
+	const [playheadMs, setPlayheadMs] = useState(0);
+	// Mutated in place; identity is stable so FlightMap's ref always sees the
+	// latest samples without a re-render per insert.
+	const replayBufferRef = useRef<ReplayBuffer>(new Map());
+	// How many flightsHistory entries have been folded into the buffer (the
+	// provider's array is append-only until it resets).
+	const consumedHistoryRef = useRef(0);
+	const windowMs = loopMinutes * 60_000;
+
+	const toggleLoop = useCallback(() => {
+		if (!loopEnabled) {
+			// Start each session at the top of the loop, playing at 1×.
+			setLoopClock({
+				anchorVirtual: nowMs - loopMinutes * 60_000,
+				anchorWall: performance.now(),
+				speed: 1,
+				scrubbing: false,
+			});
+		} else {
+			replayBufferRef.current = new Map();
+			consumedHistoryRef.current = 0;
+		}
+		setLoopEnabled(!loopEnabled);
+	}, [loopEnabled, nowMs, loopMinutes]);
+
+	// Slider drag: freeze at the dragged instant. Release: resume from there.
+	const scrubTo = useCallback(
+		(offsetSec: number, scrubbing: boolean) => {
+			setLoopClock((c) => ({
+				...c,
+				anchorVirtual: nowMs - windowMs + offsetSec * 1000,
+				anchorWall: performance.now(),
+				scrubbing,
+			}));
+		},
+		[nowMs, windowMs],
+	);
+
+	// Re-anchor at the current playhead so a speed change never jumps the ghosts.
+	const setLoopSpeed = useCallback(
+		(speed: LoopSpeed) => {
+			setLoopClock((c) => ({
+				...c,
+				speed,
+				anchorVirtual: playheadMs,
+				anchorWall: performance.now(),
+			}));
+		},
+		[playheadMs],
+	);
+
 	const appMenu = useMemo(
 		() => [
 			{
@@ -113,29 +220,65 @@ export const FlightTracker: FC = () => {
 						title: `${settings.radarSweep ? "✓ " : ""}Radar Sweep`,
 						onClickFunc: toggleRadarSweep,
 					},
+					{
+						id: "flight-loop-menu",
+						title: `${loopEnabled ? "✓ " : ""}Loop Playback`,
+						onClickFunc: toggleLoop,
+					},
 				],
 			},
 		],
-		[appIcon, settings.darkMap, settings.radarSweep, openSettings, toggleDarkMap, toggleRadarSweep],
+		[appIcon, settings.darkMap, settings.radarSweep, openSettings, toggleDarkMap, toggleRadarSweep, loopEnabled, toggleLoop],
 	);
 
-	const { flightPositions, subscribeFlights, unsubscribeFlights, connected } =
-		useContext(MediaStreamContext);
-
-	// Read-only: this app never mutates the clock (only TimeMachine does). The
-	// animation loop needs the true-UTC instant + play state; virtualUtcMs strips
-	// the display tz back off (same conversion the MediaStreamProvider uses).
-	const { localDate, tzOffset, paused } = useClassicyDateTime({ tick: true });
-	const nowMs = virtualUtcMs(localDate, tzOffset);
-
-	// Subscribe only while the app is open (ref-counted by appId server-side).
+	// Loop on/off ↔ provider history request. The provider re-issues on
+	// seek/reconnect by itself; window changes re-run this effect.
 	useEffect(() => {
 		if (!isRunning) return;
-		subscribeFlights(appId);
-		return () => unsubscribeFlights(appId);
-	}, [isRunning, subscribeFlights, unsubscribeFlights, appId]);
+		if (loopEnabled) {
+			requestFlightsHistory(loopMinutes);
+		} else {
+			clearFlightsHistory();
+		}
+	}, [isRunning, loopEnabled, loopMinutes, requestFlightsHistory, clearFlightsHistory]);
 
-	const [selected, setSelected] = useState<FlightPosition | null>(null);
+	// Fold history chunks into the replay buffer. Append-only consumption; a
+	// length decrease means the provider reset (new request / seek) → start over.
+	useEffect(() => {
+		if (!loopEnabled) {
+			consumedHistoryRef.current = 0;
+			return;
+		}
+		if (flightsHistory.length < consumedHistoryRef.current) {
+			replayBufferRef.current = new Map();
+			consumedHistoryRef.current = 0;
+		}
+		insertReplaySamples(
+			replayBufferRef.current,
+			flightsHistory.slice(consumedHistoryRef.current),
+		);
+		consumedHistoryRef.current = flightsHistory.length;
+	}, [flightsHistory, loopEnabled]);
+
+	// Live positions are the sliding window's tail (insertion is idempotent);
+	// prune keeps the buffer bounded as the window slides forward.
+	useEffect(() => {
+		if (!loopEnabled) return;
+		insertReplaySamples(replayBufferRef.current, flightPositions);
+		pruneReplay(replayBufferRef.current, nowMs - windowMs);
+	}, [flightPositions, loopEnabled, nowMs, windowMs]);
+
+	// Coarse playhead for the slider + time label (the map computes its own at
+	// rAF rate from the same clock; 4 Hz is plenty for a 30-90 min slider).
+	useEffect(() => {
+		if (!loopEnabled) return;
+		const update = () => {
+			setPlayheadMs(playheadAt(loopClock, performance.now(), nowMs - windowMs, nowMs));
+		};
+		update();
+		const id = setInterval(update, 250);
+		return () => clearInterval(id);
+	}, [loopEnabled, loopClock, nowMs, windowMs]);
 
 	// Memoized: useFlightTrack's effect depends on [selection], so a fresh
 	// object literal here would re-fetch the track on every render even when
@@ -261,6 +404,10 @@ export const FlightTracker: FC = () => {
 								pinColor={intToHex(settings.pinColor)}
 								notablePinColor={intToHex(settings.notablePinColor)}
 								radarSweep={settings.radarSweep}
+								loopEnabled={loopEnabled}
+								loopWindowMs={windowMs}
+								loopClock={loopClock}
+								replayBuffer={replayBufferRef.current}
 								onSelectFlight={onSelectFlight}
 								onClearSelection={() => setSelected(null)}
 							/>
@@ -274,10 +421,56 @@ export const FlightTracker: FC = () => {
 						/>
 						</div>
 					</div>
+					{loopEnabled && (
+						<div className={styles.loopStrip}>
+							<ClassicyPopUpMenu
+								id="flight_loop_window"
+								options={[
+									{ value: "30", label: "30 min" },
+									{ value: "90", label: "90 min" },
+								]}
+								selected={String(loopMinutes)}
+								onChangeFunc={(e) =>
+									setLoopMinutes(Number(e.target.value) as LoopWindowMinutes)
+								}
+							/>
+							<ClassicyPopUpMenu
+								id="flight_loop_speed"
+								options={LOOP_SPEEDS.map((s) => ({
+									value: String(s),
+									label: SPEED_LABELS[s],
+								}))}
+								selected={String(loopClock.speed)}
+								onChangeFunc={(e) =>
+									setLoopSpeed(Number(e.target.value) as LoopSpeed)
+								}
+							/>
+							<span className={styles.loopTime}>
+								{formatPlayhead(playheadMs, tzOffset)}
+							</span>
+							<div className={styles.loopSlider}>
+								<ClassicySlider
+									id="flight_loop_scrub"
+									value={Math.round(
+										Math.min(
+											Math.max((playheadMs - (nowMs - windowMs)) / 1000, 0),
+											windowMs / 1000,
+										),
+									)}
+									min={0}
+									max={windowMs / 1000}
+									step={1}
+									ariaLabel="Loop playhead"
+									onChangeFunc={(e) => scrubTo(Number(e.target.value), true)}
+									onCommitFunc={(v: number) => scrubTo(v, false)}
+								/>
+							</div>
+						</div>
+					)}
 					<div className={styles.statusBar}>
 						<span>
 							<span style={{ color: connected ? "green" : "red" }}>&bull;</span>{" "}
-							{connected ? "Live" : "Disconnected"}
+							{connected ? (loopEnabled ? "Live (Loop)" : "Live") : "Disconnected"}
 						</span>
 						<span>{flightPositions.length} aircraft aloft</span>
 					</div>

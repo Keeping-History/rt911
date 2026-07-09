@@ -87,6 +87,50 @@ vi.mock("classicy", () => ({
 			{labelTitle}
 		</button>
 	),
+	ClassicyPopUpMenu: ({
+		id,
+		options,
+		selected,
+		onChangeFunc,
+	}: {
+		id: string;
+		options: Array<{ value: string; label: string }>;
+		selected?: string;
+		onChangeFunc?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+	}) => (
+		<select data-testid={id} value={selected} onChange={(e) => onChangeFunc?.(e)}>
+			{options.map((o) => (
+				<option key={o.value} value={o.value}>
+					{o.label}
+				</option>
+			))}
+		</select>
+	),
+	ClassicySlider: ({
+		id,
+		value,
+		min,
+		max,
+		onChangeFunc,
+		onCommitFunc,
+	}: {
+		id: string;
+		value: number;
+		min?: number;
+		max?: number;
+		onChangeFunc?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+		onCommitFunc?: (v: number) => void;
+	}) => (
+		<input
+			type="range"
+			data-testid={id}
+			value={value}
+			min={min}
+			max={max}
+			onChange={(e) => onChangeFunc?.(e)}
+			onMouseUp={(e) => onCommitFunc?.(Number((e.target as HTMLInputElement).value))}
+		/>
+	),
 	MAC_OS_8_CRAYONS: [],
 	ClassicyIcons: { controlPanels: { location: { app: "icon.png" } } },
 	quitMenuItemHelper: () => ({}),
@@ -361,5 +405,52 @@ describe("FlightTracker", () => {
 				(a as { type?: string })?.type === "ClassicyAppFlightTrackerSetMapSettings",
 		);
 		expect(settingsDispatches).toHaveLength(0);
+	});
+
+	describe("loop mode", () => {
+		it("toggles via the View menu: strip appears, status reads Live (Loop), history requested", () => {
+			const requestFlightsHistory = vi.fn();
+			renderWithContext({ connected: true, requestFlightsHistory });
+			expect(screen.queryByTestId("flight_loop_scrub")).toBeNull();
+			expect(screen.getByText("Live")).toBeTruthy();
+
+			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
+
+			expect(screen.getByTestId("flight_loop_scrub")).toBeTruthy();
+			expect(screen.getByText("Live (Loop)")).toBeTruthy();
+			expect(requestFlightsHistory).toHaveBeenCalledWith(30);
+		});
+
+		it("re-requests with 90 when the window popup changes", () => {
+			const requestFlightsHistory = vi.fn();
+			renderWithContext({ connected: true, requestFlightsHistory });
+			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
+			fireEvent.change(screen.getByTestId("flight_loop_window"), {
+				target: { value: "90" },
+			});
+			expect(requestFlightsHistory).toHaveBeenLastCalledWith(90);
+		});
+
+		it("clears history when loop mode turns off", () => {
+			const clearFlightsHistory = vi.fn();
+			renderWithContext({ connected: true, clearFlightsHistory });
+			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
+			expect(menuItem("View", (t) => t.includes("Loop Playback"))!.title).toBe(
+				"✓ Loop Playback",
+			);
+			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
+			expect(clearFlightsHistory).toHaveBeenCalled();
+			expect(screen.queryByTestId("flight_loop_scrub")).toBeNull();
+			expect(screen.getByText("Live")).toBeTruthy();
+		});
+
+		it("passes loop props through to FlightMap", () => {
+			renderWithContext({ connected: true });
+			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
+			const last = mapProps[mapProps.length - 1];
+			expect(last.loopEnabled).toBe(true);
+			expect(last.loopWindowMs).toBe(30 * 60_000);
+			expect(last.replayBuffer).toBeInstanceOf(Map);
+		});
 	});
 });

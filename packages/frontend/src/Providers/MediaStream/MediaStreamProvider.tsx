@@ -690,8 +690,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			wsRef.current = null;
 		};
-		// Intentionally runs once on mount; utcMsRef carries the live value
-	}, []);
+		// Intentionally runs once on mount; utcMsRef carries the live value.
+		// sendFlightsHistoryRequest is stable (its only dep is the stable `send`),
+		// so listing it satisfies the lint without re-running the effect.
+	}, [sendFlightsHistoryRequest]);
 
 	// Memoize the context value so consumers only re-render when specific data
 	// changes — not on every provider render (which happens every clock tick and
