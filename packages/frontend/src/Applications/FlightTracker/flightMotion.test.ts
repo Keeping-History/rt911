@@ -7,6 +7,7 @@ import {
 	extrapolate,
 	motionPointsToGeoJSON,
 	motionTrailsToGeoJSON,
+	bearingDeg,
 	updateMotion,
 	velocityOf,
 } from "./flightMotion";
@@ -142,5 +143,33 @@ describe("GeoJSON builders", () => {
 		const fc = motionTrailsToGeoJSON(buf, T1 + 30_000);
 		const coords = fc.features[0].geometry.coordinates;
 		expect(coords[coords.length - 1][0]).toBeCloseTo(-72.5, 6);
+	});
+});
+
+describe("heading", () => {
+	it("computes compass bearings (east, north, southwest)", () => {
+		expect(bearingDeg({ lat: 40, lon: -74 }, { lat: 40, lon: -73 })).toBeCloseTo(90, 5);
+		expect(bearingDeg({ lat: 40, lon: -74 }, { lat: 41, lon: -74 })).toBeCloseTo(0, 5);
+		const sw = bearingDeg({ lat: 40, lon: -74 }, { lat: 39, lon: -75 });
+		expect(sw).toBeGreaterThan(180);
+		expect(sw).toBeLessThan(270);
+	});
+
+	it("updates heading on movement and holds it while static", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [sampleAt(0, -74)]);
+		expect(buf.get("AA1")!.headingDeg).toBe(0); // never moved → north default
+		updateMotion(buf, [sampleAt(1, -73)]); // due east
+		expect(buf.get("AA1")!.headingDeg).toBeCloseTo(90, 5);
+		updateMotion(buf, [sampleAt(2, -73)]); // newer sample, same position
+		expect(buf.get("AA1")!.headingDeg).toBeCloseTo(90, 5); // held, not reset
+	});
+
+	it("carries heading into point features", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [sampleAt(0, -74)]);
+		updateMotion(buf, [sampleAt(1, -73)]);
+		const fc = motionPointsToGeoJSON(buf, T1);
+		expect(fc.features[0].properties.heading).toBeCloseTo(90, 5);
 	});
 });

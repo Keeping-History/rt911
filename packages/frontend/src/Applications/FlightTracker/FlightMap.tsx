@@ -3,13 +3,20 @@ import { Protocol } from "pmtiles";
 import { type FC, useEffect, useRef } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import {
-	PIN_STROKE_COLOR,
 	TRACK_LINE_COLOR,
 	applyMapColors,
 	buildBasemapStyle,
 	type FlightMapColors,
 	trailGradient,
 } from "./flightMapStyle";
+import planeSvg from "./plane.svg?raw";
+import {
+	PLANE_ICON_ID,
+	PLANE_ICON_PX,
+	PLANE_NOTABLE_ICON_ID,
+	PLANE_NOTABLE_ICON_PX,
+	buildPlaneImage,
+} from "./flightIcons";
 import {
 	type MotionBuffer,
 	motionPointsToGeoJSON,
@@ -31,6 +38,29 @@ function ensurePmtilesProtocol() {
 	if (protocolRegistered) return;
 	maplibregl.addProtocol("pmtiles", new Protocol().tile);
 	protocolRegistered = true;
+}
+
+// Build both plane images and (re)install them. updateImage on a color change
+// keeps the symbol layers untouched. Never throws into React — on failure the
+// map just has no plane icons (prod browsers always have canvas; jsdom tests
+// mock this module).
+async function installPlaneIcons(
+	map: maplibregl.Map,
+	pinColor: string,
+	notablePinColor: string,
+) {
+	try {
+		const [regular, notable] = await Promise.all([
+			buildPlaneImage(planeSvg, pinColor, PLANE_ICON_PX),
+			buildPlaneImage(planeSvg, notablePinColor, PLANE_NOTABLE_ICON_PX),
+		]);
+		if (map.hasImage(PLANE_ICON_ID)) map.updateImage(PLANE_ICON_ID, regular);
+		else map.addImage(PLANE_ICON_ID, regular, { pixelRatio: 2 });
+		if (map.hasImage(PLANE_NOTABLE_ICON_ID)) map.updateImage(PLANE_NOTABLE_ICON_ID, notable);
+		else map.addImage(PLANE_NOTABLE_ICON_ID, notable, { pixelRatio: 2 });
+	} catch (err) {
+		console.warn("plane icons unavailable:", err);
+	}
 }
 
 interface FlightMapProps {
@@ -71,9 +101,10 @@ const FRAME_MS = 66; // ~15 fps animation gate
 // exact-pixel hit-test misses easily; a click within this radius selects the
 // nearest dot instead of clearing the selection.
 const HIT_TOLERANCE = 6;
-// Ghost pins replay history under the live dots; the reduced opacity is the
+// Ghost pins replay history under the live planes; the reduced opacity is the
 // "this is not live" cue (ghosts-under-live rendering).
 const GHOST_OPACITY = 0.4;
+const GHOST_STROKE_COLOR = "#ffffff";
 
 export const FlightMap: FC<FlightMapProps> = ({
 	positions, basemapUrl, trackGeoJSON, nowMs, playing,
@@ -146,33 +177,47 @@ export const FlightMap: FC<FlightMapProps> = ({
 				paint: { "line-width": 1.2, "line-gradient": trailGradient(theme) },
 			});
 			map.addLayer({
-				id: "flights-dots", type: "circle", source: "flights",
-				paint: {
-					"circle-radius": 3, "circle-color": colors.pinColor,
-					"circle-stroke-width": 0.5, "circle-stroke-color": PIN_STROKE_COLOR,
+				id: "flights-dots", type: "symbol", source: "flights",
+				filter: ["!=", ["get", "notable"], true],
+				layout: {
+					"icon-image": PLANE_ICON_ID,
+					// Grow to 1.5× while zooming in, capping at ~zoom 9 — where a
+					// typical viewport spans roughly 100 miles at CONUS latitudes
+					// (interpolate clamps past the last stop). Notables stay fixed.
+					"icon-size": ["interpolate", ["linear"], ["zoom"], 4, 1, 9, 1.5],
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
 				},
 			});
 			// Always-on highlight of the notable flights (renders nothing until the
 			// notable-flights data story loads AA11/UA175/AA77/UA93).
 			map.addLayer({
-				id: "flights-notable", type: "circle", source: "flights",
+				id: "flights-notable", type: "symbol", source: "flights",
 				filter: ["==", ["get", "notable"], true],
-				paint: {
-					"circle-radius": 5, "circle-color": colors.notablePinColor,
-					"circle-stroke-width": 1, "circle-stroke-color": PIN_STROKE_COLOR,
+				layout: {
+					"icon-image": PLANE_NOTABLE_ICON_ID,
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
 				},
 			});
-			// Loop-mode ghosts render under BOTH live dot layers ("flights-dots" is
-			// the lower of the two, so inserting before it puts ghosts under both)
-			// but above the trails. Not clickable: the hit-test below only queries
-			// the live layers.
+			void installPlaneIcons(map, colors.pinColor, colors.notablePinColor);
+			// Loop-mode ghosts render under BOTH live plane layers ("flights-dots"
+			// is the lower of the two, so inserting before it puts ghosts under
+			// both) but above the trails. They stay simple circles — visually
+			// distinct from the live plane icons, and recolorable via paint (the
+			// icons bake their color in). Not clickable: the hit-test below only
+			// queries the live layers.
 			map.addSource("ghost-flights", { type: "geojson", data: EMPTY_FC });
 			map.addLayer({
 				id: "ghost-dots", type: "circle", source: "ghost-flights",
 				paint: {
 					"circle-radius": 3, "circle-color": colors.pinColor,
 					"circle-opacity": GHOST_OPACITY,
-					"circle-stroke-width": 0.5, "circle-stroke-color": PIN_STROKE_COLOR,
+					"circle-stroke-width": 0.5, "circle-stroke-color": GHOST_STROKE_COLOR,
 					"circle-stroke-opacity": GHOST_OPACITY,
 				},
 			}, "flights-dots");
@@ -182,7 +227,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				paint: {
 					"circle-radius": 5, "circle-color": colors.notablePinColor,
 					"circle-opacity": GHOST_OPACITY,
-					"circle-stroke-width": 1, "circle-stroke-color": PIN_STROKE_COLOR,
+					"circle-stroke-width": 1, "circle-stroke-color": GHOST_STROKE_COLOR,
 					"circle-stroke-opacity": GHOST_OPACITY,
 				},
 			}, "flights-dots");
@@ -285,6 +330,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
 		applyMapColors(map, { darkMap, pinColor, notablePinColor });
+		void installPlaneIcons(map, pinColor, notablePinColor);
 	}, [darkMap, pinColor, notablePinColor]);
 
 	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an

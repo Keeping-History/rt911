@@ -115,7 +115,8 @@ export function replayPointsAt(
 			type: "Feature",
 			id: f.id,
 			geometry: { type: "Point", coordinates: [lon, lat] },
-			properties: { ...f.props },
+			// heading: ghost layers are circles, not rotated plane icons.
+			properties: { ...f.props, heading: 0 },
 		});
 	}
 	return { type: "FeatureCollection", features };

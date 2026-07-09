@@ -19,11 +19,28 @@ export interface FlightMotion {
 	item: FlightPosition; // latest sample — supplies point properties
 	// Last TRAIL_POINTS real positions as [lon,lat], oldest → newest.
 	trail: [number, number][];
+	// Direction of travel in degrees clockwise from north. Updated only when a
+	// new sample actually moves the flight, so a static flight holds its last
+	// heading instead of snapping to north. 0 until first movement.
+	headingDeg: number;
 }
 
 // Keyed by `flight` (callsign): the DB id changes each per-minute sample, the
 // callsign is stable, and the airborne snapshot holds one row per flight.
 export type MotionBuffer = Map<string, FlightMotion>;
+
+// Compass bearing from → to, degrees clockwise from north. Longitude is
+// compressed by cos(midLat) so the bearing matches the on-screen direction
+// (and the trail) at mid-latitudes, not the raw degree-space vector.
+export function bearingDeg(
+	from: { lat: number; lon: number },
+	to: { lat: number; lon: number },
+): number {
+	const midLatRad = (((from.lat + to.lat) / 2) * Math.PI) / 180;
+	const deg =
+		(Math.atan2((to.lon - from.lon) * Math.cos(midLatRad), to.lat - from.lat) * 180) / Math.PI;
+	return (deg + 360) % 360;
+}
 
 // Fold the current airborne snapshot into the buffer: seed unseen flights
 // (prev == cur → static until a 2nd sample gives a direction), shift cur→prev and
@@ -46,6 +63,7 @@ export function updateMotion(
 				curT: t,
 				item: p,
 				trail: [[p.lon, p.lat]],
+				headingDeg: 0,
 			});
 		} else if (t > m.curT) {
 			m.prev = m.cur;
@@ -55,6 +73,9 @@ export function updateMotion(
 			m.item = p;
 			m.trail.push([p.lon, p.lat]);
 			if (m.trail.length > TRAIL_POINTS) m.trail.shift();
+			if (m.cur.lat !== m.prev.lat || m.cur.lon !== m.prev.lon) {
+				m.headingDeg = bearingDeg(m.prev, m.cur);
+			}
 		} else {
 			m.item = p; // same/older sample: keep freshest props, don't shift or append
 		}
@@ -100,6 +121,7 @@ export function motionPointsToGeoJSON(
 				alt_ft: m.item.alt_ft,
 				phase: m.item.phase ?? "",
 				notable: isNotable(m.item.flight),
+				heading: m.headingDeg,
 			},
 		});
 	}
