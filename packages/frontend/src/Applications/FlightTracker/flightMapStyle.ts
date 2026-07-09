@@ -121,4 +121,6 @@ export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void
 	map.setPaintProperty("flight-trails", "line-gradient", trailGradient(theme));
 	map.setPaintProperty("flights-dots", "circle-color", colors.pinColor);
 	map.setPaintProperty("flights-notable", "circle-color", colors.notablePinColor);
+	map.setPaintProperty("ghost-dots", "circle-color", colors.pinColor);
+	map.setPaintProperty("ghost-notable", "circle-color", colors.notablePinColor);
 }

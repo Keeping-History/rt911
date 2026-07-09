@@ -22,6 +22,8 @@ import {
 	sweepLineGeoJSON,
 	sweepTrailGeoJSON,
 } from "./flightRadar";
+import { type ReplayBuffer, replayPointsAt } from "./flightReplay";
+import { type LoopClock, playheadAt } from "./loopClock";
 
 // Register the pmtiles:// protocol once per page (adding it twice throws).
 let protocolRegistered = false;
@@ -42,9 +44,24 @@ interface FlightMapProps {
 	pinColor: string;
 	notablePinColor: string;
 	radarSweep: boolean;
+	// Loop mode (optional with idle defaults so non-loop call sites stay simple):
+	// while enabled, ghost pins replay replayBuffer at the loopClock's playhead,
+	// wrapped into the sliding [now − loopWindowMs, now) window.
+	loopEnabled?: boolean;
+	loopWindowMs?: number;
+	loopClock?: LoopClock;
+	replayBuffer?: ReplayBuffer;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
 }
+
+export const IDLE_LOOP_CLOCK: LoopClock = {
+	anchorVirtual: 0,
+	anchorWall: 0,
+	speed: 1,
+	scrubbing: false,
+};
+const EMPTY_REPLAY_BUFFER: ReplayBuffer = new Map();
 
 const NA_CENTER: [number, number] = [-98, 39];
 const NA_ZOOM = 3;
@@ -54,10 +71,15 @@ const FRAME_MS = 66; // ~15 fps animation gate
 // exact-pixel hit-test misses easily; a click within this radius selects the
 // nearest dot instead of clearing the selection.
 const HIT_TOLERANCE = 6;
+// Ghost pins replay history under the live dots; the reduced opacity is the
+// "this is not live" cue (ghosts-under-live rendering).
+const GHOST_OPACITY = 0.4;
 
 export const FlightMap: FC<FlightMapProps> = ({
 	positions, basemapUrl, trackGeoJSON, nowMs, playing,
 	darkMap, pinColor, notablePinColor, radarSweep,
+	loopEnabled = false, loopWindowMs = 1_800_000,
+	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -72,6 +94,12 @@ export const FlightMap: FC<FlightMapProps> = ({
 	colorsRef.current = { darkMap, pinColor, notablePinColor };
 	const radarSweepRef = useRef(radarSweep);
 	radarSweepRef.current = radarSweep;
+	const loopRef = useRef({
+		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
+	});
+	loopRef.current = {
+		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
+	};
 
 	const motionBufferRef = useRef<MotionBuffer>(new Map());
 	const nowMsRef = useRef(nowMs);
@@ -134,6 +162,30 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"circle-stroke-width": 1, "circle-stroke-color": PIN_STROKE_COLOR,
 				},
 			});
+			// Loop-mode ghosts render under BOTH live dot layers ("flights-dots" is
+			// the lower of the two, so inserting before it puts ghosts under both)
+			// but above the trails. Not clickable: the hit-test below only queries
+			// the live layers.
+			map.addSource("ghost-flights", { type: "geojson", data: EMPTY_FC });
+			map.addLayer({
+				id: "ghost-dots", type: "circle", source: "ghost-flights",
+				paint: {
+					"circle-radius": 3, "circle-color": colors.pinColor,
+					"circle-opacity": GHOST_OPACITY,
+					"circle-stroke-width": 0.5, "circle-stroke-color": PIN_STROKE_COLOR,
+					"circle-stroke-opacity": GHOST_OPACITY,
+				},
+			}, "flights-dots");
+			map.addLayer({
+				id: "ghost-notable", type: "circle", source: "ghost-flights",
+				filter: ["==", ["get", "notable"], true],
+				paint: {
+					"circle-radius": 5, "circle-color": colors.notablePinColor,
+					"circle-opacity": GHOST_OPACITY,
+					"circle-stroke-width": 1, "circle-stroke-color": PIN_STROKE_COLOR,
+					"circle-stroke-opacity": GHOST_OPACITY,
+				},
+			}, "flights-dots");
 			// Radar sweep + afterglow wedge, under the track line and all flight
 			// layers. Color = Classicy theme var, resolved from the DOM because
 			// WebGL paint can't read CSS custom properties.
@@ -256,6 +308,17 @@ export const FlightMap: FC<FlightMapProps> = ({
 		dirtyRef.current = true;
 	}, [radarSweep]);
 
+	// Entering/leaving loop mode: clear the ghost layer when leaving so stale
+	// ghosts don't linger under a paused map; dirtyRef redraws once either way.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		if (!loopEnabled) {
+			(map.getSource("ghost-flights") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
+		}
+		dirtyRef.current = true;
+	}, [loopEnabled]);
+
 	// Glide dots + draw trails at ~15 fps off a smooth virtual clock. While
 	// playing, advance wall-time deltas from the anchor (RATE 1×); while paused,
 	// hold at the anchor and idle after the last draw. All virtual/UTC ms.
@@ -266,7 +329,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const map = mapRef.current;
 			if (!map || !loadedRef.current) return;
 			if (wall - lastRender < FRAME_MS) return;
-			if (!playingRef.current && !dirtyRef.current) {
+			// Loop mode animates even while the virtual clock is paused: the live
+			// edge freezes but the loop keeps cycling through the frozen window.
+			if (!playingRef.current && !dirtyRef.current && !loopRef.current.enabled) {
 				lastRender = wall;
 				return;
 			}
@@ -287,6 +352,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 				);
 				(map.getSource("radar-trail") as maplibregl.GeoJSONSource | undefined)?.setData(
 					sweepTrailGeoJSON(now),
+				);
+			}
+			const loopState = loopRef.current;
+			if (loopState.enabled) {
+				const playhead = playheadAt(
+					loopState.clock, wall, now - loopState.windowMs, now,
+				);
+				(map.getSource("ghost-flights") as maplibregl.GeoJSONSource | undefined)?.setData(
+					replayPointsAt(loopState.buffer, playhead),
 				);
 			}
 		};
