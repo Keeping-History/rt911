@@ -24,20 +24,23 @@ import argparse
 import pandas as pd
 
 CONTRACT = ["FlightDate", "Reporting_Airline", "Flight_Number", "Origin", "Dest",
-            "WheelsOff", "WheelsOn", "Cancelled", "Diverted", "DivAirport", "Distance"]
+            "WheelsOff", "WheelsOn", "Cancelled", "Diverted", "DivAirport", "Distance",
+            "Tail_Number"]
 DIV_LEGS = 5
 
 
 def prep(raw_path, out_path):
     usecols = ["FlightDate", "Reporting_Airline", "Flight_Number_Reporting_Airline",
                "Origin", "Dest", "WheelsOff", "WheelsOn", "Cancelled", "Diverted",
-               "Distance"]
+               "Distance", "Tail_Number"]
     usecols += [f"Div{i}Airport" for i in range(1, DIV_LEGS + 1)]
     usecols += [f"Div{i}WheelsOn" for i in range(1, DIV_LEGS + 1)]
 
     df = pd.read_csv(raw_path, usecols=lambda c: c in usecols,
                      dtype={"FlightDate": str}, encoding="latin-1", low_memory=False)
     df = df.rename(columns={"Flight_Number_Reporting_Airline": "Flight_Number"})
+    if "Tail_Number" not in df.columns:
+        df["Tail_Number"] = pd.NA
 
     # Last populated diversion leg wins: that's where the flight actually
     # came down, and its WheelsOn is local time at that airport (matching
