@@ -78,6 +78,12 @@ export const FlightTracker: FC = () => {
 		);
 	}, [settings, desktopEventDispatch]);
 
+	const toggleRadarSweep = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, radarSweep: !settings.radarSweep }),
+		);
+	}, [settings, desktopEventDispatch]);
+
 	const appMenu = useMemo(
 		() => [
 			{
@@ -102,10 +108,15 @@ export const FlightTracker: FC = () => {
 						title: `${settings.darkMap ? "✓ " : ""}Dark Map`,
 						onClickFunc: toggleDarkMap,
 					},
+					{
+						id: "flight-radar-menu",
+						title: `${settings.radarSweep ? "✓ " : ""}Radar Sweep`,
+						onClickFunc: toggleRadarSweep,
+					},
 				],
 			},
 		],
-		[appIcon, settings.darkMap, openSettings, toggleDarkMap],
+		[appIcon, settings.darkMap, settings.radarSweep, openSettings, toggleDarkMap, toggleRadarSweep],
 	);
 
 	const { flightPositions, subscribeFlights, unsubscribeFlights, connected } =
@@ -188,6 +199,14 @@ export const FlightTracker: FC = () => {
 								setForm((f) => ({ ...f, darkMap: checked }))
 							}
 						/>
+						<ClassicyCheckbox
+							id="flight_settings_radar"
+							label="Radar sweep"
+							checked={form.radarSweep}
+							onClickFunc={(checked: boolean) =>
+								setForm((f) => ({ ...f, radarSweep: checked }))
+							}
+						/>
 						<ClassicyColorPicker
 							id="flight_settings_pin_color"
 							labelTitle="Flight pins"
@@ -241,6 +260,7 @@ export const FlightTracker: FC = () => {
 								darkMap={settings.darkMap}
 								pinColor={intToHex(settings.pinColor)}
 								notablePinColor={intToHex(settings.notablePinColor)}
+								radarSweep={settings.radarSweep}
 								onSelectFlight={onSelectFlight}
 								onClearSelection={() => setSelected(null)}
 							/>

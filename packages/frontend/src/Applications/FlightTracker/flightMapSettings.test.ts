@@ -20,7 +20,7 @@ function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 
 describe("classicyFlightTrackerEventHandler", () => {
 	it("persists mapSettings from a SetMapSettings action", () => {
-		const settings = { darkMap: true, pinColor: 0x112233, notablePinColor: 0x445566 };
+		const settings = { darkMap: true, pinColor: 0x112233, notablePinColor: 0x445566, radarSweep: false };
 		const out = classicyFlightTrackerEventHandler(
 			storeWithApp(),
 			flightTrackerSetMapSettings(settings),
@@ -64,6 +64,12 @@ describe("readFlightMapSettings", () => {
 			...DEFAULT_FLIGHT_MAP_SETTINGS,
 			darkMap: true,
 		});
+	});
+
+	it("defaults radarSweep to true, including for pre-radar persisted state", () => {
+		expect(readFlightMapSettings(undefined).radarSweep).toBe(true);
+		// State persisted before the radar feature existed lacks the field.
+		expect(readFlightMapSettings({ mapSettings: { darkMap: true } }).radarSweep).toBe(true);
 	});
 });
 

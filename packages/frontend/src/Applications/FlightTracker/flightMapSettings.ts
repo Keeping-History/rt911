@@ -10,12 +10,14 @@ export interface FlightMapSettings {
 	darkMap: boolean;
 	pinColor: number;
 	notablePinColor: number;
+	radarSweep: boolean;
 }
 
 export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	darkMap: false,
 	pinColor: 0x3a3a3a, // the original hardcoded dot color
 	notablePinColor: 0xc0202a, // the original notable highlight
+	radarSweep: true,
 };
 
 /** Persist the whole map-settings object in one dispatch. */

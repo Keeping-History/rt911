@@ -295,7 +295,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: true, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a },
+			mapSettings: { darkMap: true, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: true },
 		});
 	});
 
@@ -320,7 +320,30 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: true, pinColor: 0x0000ff, notablePinColor: 0x0000ff },
+			mapSettings: { darkMap: true, pinColor: 0x0000ff, notablePinColor: 0x0000ff, radarSweep: true },
+		});
+	});
+
+	it("View ▸ Radar Sweep shows ✓ by default and toggles radarSweep off in one dispatch", () => {
+		renderWithContext({});
+		const item = menuItem("View", (t) => t.includes("Radar Sweep"))!;
+		expect(item.title).toBe("✓ Radar Sweep"); // default on
+		act(() => item.onClickFunc?.());
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyAppFlightTrackerSetMapSettings",
+			mapSettings: { darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: false },
+		});
+	});
+
+	it("passes radarSweep to the map and commits the Settings checkbox on Save", () => {
+		renderWithContext({});
+		expect(mapProps[mapProps.length - 1].radarSweep).toBe(true);
+		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		fireEvent.click(screen.getByTestId("flight_settings_radar")); // on → off
+		fireEvent.click(screen.getByText("Save"));
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyAppFlightTrackerSetMapSettings",
+			mapSettings: { darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: false },
 		});
 	});
 
