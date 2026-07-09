@@ -62,7 +62,13 @@ const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 
 describe("FlightMap", () => {
 	beforeEach(() => { FakeMap.last = null; });
-	afterEach(() => vi.clearAllMocks());
+	afterEach(() => {
+		// Restore globals/spies stubbed by the animation-loop test (rAF, performance.now)
+		// so a future test appended here doesn't inherit a frozen clock / stubbed rAF.
+		vi.clearAllMocks();
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+	});
 
 	it("creates a map, adds the flights source on load, and pushes positions", () => {
 		render(
