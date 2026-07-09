@@ -227,6 +227,7 @@ export const FlightTracker: FC = () => {
 				scrollable={false}
 				resizable
 				growable
+				dimContents={false}
 			>
 				<div className={styles.root}>
 					<div className={styles.body}>
