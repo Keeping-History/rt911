@@ -30,6 +30,8 @@ from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 
+from flight_recon.fleet import normalize_tail
+
 STEP_SECONDS = 60          # trajectory sample cadence
 CRUISE_ALT_FT = 35000
 CLIMB_FRAC = 0.15          # fraction of airborne time spent climbing / descending
@@ -104,9 +106,13 @@ def et_seconds(utc_dt):
 
 
 # ---------------------------------------------------------------- reconstruction
-def reconstruct(start, end, flights_path, airports_path):
+def reconstruct(start, end, flights_path, airports_path, fleet=None):
     """
     Rebuild trajectories for every flight with FlightDate in [start, end].
+
+    fleet: optional {normalized_tail: aircraft_type} mapping (see
+    flight_recon.fleet.load_fleet); when given, each track carries
+    tail_number/aircraft_type. Unmatched tails leave aircraft_type None.
 
     Returns (positions, tracks, summary, flown):
       positions — list of dicts, one per flight per STEP_SECONDS
@@ -159,6 +165,10 @@ def reconstruct(start, end, flights_path, airports_path):
             skipped.append((fid, fdate, "no usable airborne interval"))
             continue
 
+        tail_raw = r.Tail_Number if "Tail_Number" in in_window.columns else None
+        tail = normalize_tail(tail_raw) if pd.notna(tail_raw) else None
+        aircraft_type = (fleet or {}).get(tail) if tail else None
+
         dur = (t_on - t_off).total_seconds()
         coords = []
         t = t_off
@@ -187,6 +197,8 @@ def reconstruct(start, end, flights_path, airports_path):
                            "origin": r.Origin,
                            "scheduled_dest": r.Dest, "landed_at": end_code,
                            "diverted": diverted,
+                           "tail_number": tail,
+                           "aircraft_type": aircraft_type,
                            "wheels_off_utc": t_off.strftime("%Y-%m-%dT%H:%M:%SZ"),
                            "wheels_on_utc": t_on.strftime("%Y-%m-%dT%H:%M:%SZ")},
             "geometry": {"type": "LineString", "coordinates": coords},

@@ -25,6 +25,7 @@ from pathlib import Path
 from prefect import flow, get_run_logger, task
 
 from flight_recon.directus import COLLECTIONS, DirectusClient
+from flight_recon.fleet import load_fleet
 from reconstruct import reconstruct
 
 # NB: scalar retry_delay_seconds — list-valued delays 422 on this server (see
@@ -51,13 +52,22 @@ def validate_inputs(start, end, flights_path, airports_path):
 
 
 @task
-def run_reconstruction(start, end, flights_path, airports_path):
+def run_reconstruction(start, end, flights_path, airports_path, fleet_path=None):
     log = get_run_logger()
-    positions, tracks, summary, _ = reconstruct(start, end, flights_path, airports_path)
-    log.info("reconstructed %d flights -> %d positions, %d tracks; skipped %d "
-             "(cancelled_by_day=%s)", summary["flights_reconstructed"],
-             summary["positions_count"], summary["tracks_count"],
-             summary["skipped_count"], summary["cancelled_by_day"])
+    fleet = None
+    if fleet_path and Path(fleet_path).is_file():
+        fleet = load_fleet(fleet_path)
+        log.info("fleet reference loaded: %d tails from %s", len(fleet), fleet_path)
+    else:
+        log.warning("no fleet reference at %s — aircraft_type will be null", fleet_path)
+    positions, tracks, summary, _ = reconstruct(start, end, flights_path, airports_path,
+                                                fleet=fleet)
+    typed = sum(1 for t in tracks if t["properties"]["aircraft_type"])
+    log.info("reconstructed %d flights -> %d positions, %d tracks (%d with "
+             "aircraft_type); skipped %d (cancelled_by_day=%s)",
+             summary["flights_reconstructed"], summary["positions_count"],
+             summary["tracks_count"], typed, summary["skipped_count"],
+             summary["cancelled_by_day"])
     return positions, tracks, summary
 
 
@@ -154,19 +164,26 @@ def reconstruct_flights(
     end: str = "2001-09-12",
     flights_path: str = "/app/data/sample_bts_2001-09-09_2001-09-12.csv",
     airports_path: str = "/app/data/airports.csv",
+    fleet_path: str | None = "/app/data/b43_2001.csv",
     run_id: str | None = None,
     directus_url: str | None = None,
     positions_loader: str = "copy",  # "copy" (Postgres COPY) | "items" (Directus API)
+    skip_positions: bool = False,    # tracks-only backfill: leave flight_positions alone
 ):
     log = get_run_logger()
     run_id = run_id or uuid.uuid4().hex
-    log.info("run_id=%s window=[%s, %s] positions_loader=%s",
-             run_id, start, end, positions_loader)
+    log.info("run_id=%s window=[%s, %s] positions_loader=%s skip_positions=%s",
+             run_id, start, end, positions_loader, skip_positions)
 
     validate_inputs(start, end, flights_path, airports_path)
-    positions, tracks, summary = run_reconstruction(start, end, flights_path, airports_path)
+    positions, tracks, summary = run_reconstruction(start, end, flights_path,
+                                                    airports_path, fleet_path)
     ensure_schema(directus_url)
-    n_pos = load_positions(positions, run_id, start, end, directus_url, positions_loader)
+    if skip_positions:
+        n_pos = 0
+        log.warning("skip_positions=True: flight_positions untouched (tracks-only backfill)")
+    else:
+        n_pos = load_positions(positions, run_id, start, end, directus_url, positions_loader)
     n_trk = load_tracks(tracks, run_id, start, end, directus_url)
     record_run_summary(summary, run_id, directus_url)
 
