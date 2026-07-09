@@ -1,7 +1,6 @@
 import type { FC } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightTrack } from "./useFlightTrack";
-import { isNotable } from "./notableFlights";
 import styles from "./FlightTracker.module.scss";
 import { ClassicyControlGroup, ClassicyControlLabel } from "classicy";
 
@@ -27,7 +26,7 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({ selected, track,
 		<ClassicyControlGroup label="Flight Details">
 			<div className={styles.detailHeader}>
 				<span className={styles.detailFlight}>{selected.flight}</span>
-				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
+				{track && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
 			</div>
 			<dl className={styles.detailFields}>
 				{selected.carrier && (<><dt>Carrier</dt><dd>{selected.carrier}</dd></>)}
