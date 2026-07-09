@@ -11,6 +11,8 @@ export interface FlightFeature {
 		alt_ft: number;
 		phase: string;
 		notable: boolean;
+		// Degrees clockwise from north; drives the plane icons' icon-rotate.
+		heading: number;
 	};
 }
 
@@ -35,6 +37,7 @@ export function flightsToGeoJSON(positions: FlightPosition[]): FlightFeatureColl
 				alt_ft: p.alt_ft,
 				phase: p.phase ?? "",
 				notable: isNotable(p.flight),
+				heading: 0, // static builder — no velocity context
 			},
 		})),
 	};
