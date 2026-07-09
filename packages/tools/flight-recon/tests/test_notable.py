@@ -235,3 +235,29 @@ def test_dry_run_persists_nothing(scratch_db):
     summary = notable.run(scratch_db, dry_run=True)
     assert summary["dry_run"] is True and summary["flights"] == 4
     assert _counts(scratch_db) == base    # rolled back
+
+
+# ------------------------------------------------------------------ details/metadata
+@pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
+def test_tracks_carry_aircraft_and_registration(built, flight):
+    data, _, track = built[flight]
+    assert track["tail_number"] == data["registration"]
+    assert track["aircraft_type"].startswith("Boeing "), track["aircraft_type"]
+
+
+@pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
+def test_details_souls_are_internally_consistent(built, flight):
+    _, _, track = built[flight]
+    s = track["details"]["souls"]
+    assert s["passengers"] + s["crew"] + s["hijackers"] == s["total"]
+    assert len(track["details"]["hijackers"]) == s["hijackers"]
+
+
+def test_fate_utc_is_injected_from_impact(built):
+    # AA11's documented impact instant; the JSON's details.fate has no utc key
+    _, _, aa11 = built["AA11"]
+    assert aa11["details"]["fate"]["utc"] == "2001-09-11T12:46:40Z"
+    for flight in notable.NOTABLE_FLIGHTS:
+        data, _, track = built[flight]
+        assert track["details"]["fate"]["utc"] == data["impact"]["utc"], flight
+        assert track["details"]["fate"]["text"], f"{flight}: fate.text missing"

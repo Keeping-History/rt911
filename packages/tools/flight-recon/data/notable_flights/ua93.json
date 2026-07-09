@@ -4,8 +4,14 @@
   "flight_date": "2001-09-11",
   "origin": "EWR",
   "scheduled_dest": "SFO",
-  "aircraft": "B757",
+  "aircraft": "Boeing 757-222",
   "registration": "N591UA",
+  "details": {
+    "crew": { "captain": "Jason Dahl", "first_officer": "LeRoy Homer Jr.", "attendants": 5 },
+    "souls": { "passengers": 33, "crew": 7, "hijackers": 4, "total": 44 },
+    "hijackers": ["Ziad Jarrah", "Ahmed al-Haznawi", "Ahmed al-Nami", "Saeed al-Ghamdi"],
+    "fate": { "text": "Crashed near Shanksville, Pennsylvania after passengers stormed the cockpit" }
+  },
   "impact": {
     "site": "Field near Shanksville, Somerset County, PA",
     "lat": 40.05056,
@@ -16,7 +22,8 @@
   "sources": [
     "NTSB Flight Path Study - United Airlines Flight 93 (2002-02-19), NPS 508 copy: nps.gov/flni/learn/historyculture/upload/Flight_Path_Study_of_Flight_93_508.pdf",
     "9/11 Commission Report, Ch. 1",
-    "United 93 crash coordinates 40deg03'02\"N 78deg54'17\"W (Flight 93 National Memorial impact site)"
+    "United 93 crash coordinates 40deg03'02\"N 78deg54'17\"W (Flight 93 National Memorial impact site)",
+    "9/11 Commission Report, Ch. 1 — flight crew, passenger, and hijacker complement"
   ],
   "provenance_notes": [
     "SOURCE NOTE: UA93 is the only one of the four with a recovered Flight Data Recorder, so its altitude/time profile is well documented. The altitudes and times of the labelled points below (B level-off 35,000 ft at ~09:02; C 600-ft deviation / assumed takeover ~09:28; D climb toward 41,000 ft and turn to a 120-degree SE heading ~09:34; E max 41,000 ft then descent at 4,000 ft/min ~09:39 with transponder returns ceasing ~09:41; F brief descent interruption climbing 19,000->20,500 ft ~09:46; G 5,000 ft with rapid roll inputs ~09:59; H climb to ~10,000 ft turning right; I impact) are transcribed from the NTSB Flight Path Study narrative (NPS 508 copy, which has a readable text layer).",

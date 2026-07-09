@@ -4,8 +4,14 @@
   "flight_date": "2001-09-11",
   "origin": "BOS",
   "scheduled_dest": "LAX",
-  "aircraft": "B767",
+  "aircraft": "Boeing 767-223ER",
   "registration": "N334AA",
+  "details": {
+    "crew": { "captain": "John Ogonowski", "first_officer": "Thomas McGuinness", "attendants": 9 },
+    "souls": { "passengers": 76, "crew": 11, "hijackers": 5, "total": 92 },
+    "hijackers": ["Mohamed Atta", "Abdulaziz al-Omari", "Wail al-Shehri", "Waleed al-Shehri", "Satam al-Suqami"],
+    "fate": { "text": "Crashed into the North Tower of the World Trade Center" }
+  },
   "impact": {
     "site": "North Tower, World Trade Center (WTC 1)",
     "lat": 40.71236,
@@ -16,7 +22,8 @@
   "sources": [
     "NTSB Flight Path Study - American Airlines Flight 11 (2002-02-19)",
     "9/11 Commission Report, Ch. 1 (The System Was Blinking Red / We Have Some Planes)",
-    "American Airlines Flight 11 impact coordinates 40deg42'44.5\"N 74deg00'46.9\"W (WTC 1 north facade, floors 93-99)"
+    "American Airlines Flight 11 impact coordinates 40deg42'44.5\"N 74deg00'46.9\"W (WTC 1 north facade, floors 93-99)",
+    "9/11 Commission Report, Ch. 1 — flight crew, passenger, and hijacker complement"
   ],
   "provenance_notes": [
     "DOCUMENTED-WAYPOINT FALLBACK: The NTSB Flight Path Study for AA11 is published only as a scanned image PDF whose radar-return table is not machine-recoverable and could not be transcribed return-by-return. The waypoints below are documented anchor points (takeoff, transponder-off, the 08:26:30 EDT 100-degree turn south while ~15 mi SW of Albany, the 08:37 EDT start of rapid descent, and impact) taken from the 9/11 Commission Report timeline and the NTSB study narrative; intermediate per-minute positions are great-circle interpolations between these anchors, NOT surveyed radar returns.",
