@@ -4,17 +4,12 @@
 // rasterize, and (re)install the image on the map when a color changes.
 export const PLANE_ICON_ID = "plane-icon";
 export const PLANE_NOTABLE_ICON_ID = "plane-notable-icon";
-export const PLANE_ICON_PX = 24; // display size; rasterized at 2× (pixelRatio 2)
+export const PLANE_ICON_PX = 12; // display size; rasterized at 2× (pixelRatio 2)
 export const PLANE_NOTABLE_ICON_PX = 32;
 
-// The art (a single path with no fill of its own) inherits these root attrs.
-// The white stroke behind the fill (paint-order) replaces the old circle
-// layers' white contrast stroke — 20 viewBox units ≈ 0.75px at 24px display.
+// The art (a single path with no fill of its own) inherits the root fill.
 export const colorizeSvg = (svg: string, fill: string): string =>
-	svg.replace(
-		"<svg ",
-		`<svg fill="${fill}" stroke="#ffffff" stroke-width="20" paint-order="stroke" `,
-	);
+	svg.replace("<svg ", `<svg fill="${fill}" `);
 
 export const buildPlaneImage = (
 	svg: string,
