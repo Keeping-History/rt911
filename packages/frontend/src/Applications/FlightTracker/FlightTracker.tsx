@@ -120,12 +120,14 @@ export const FlightTracker: FC = () => {
 								onClearSelection={() => setSelected(null)}
 							/>
 						</div>
+						<div style={{ width: "20%", flexShrink: 0, borderLeft: "var(--window-border-size) solid var(--color-black)", padding: "var(--window-padding-size)", backgroundColor: "var(--color-system-03)" }}>
 						<FlightDetailPanel
 							selected={selected}
 							track={track}
 							loading={loading}
 							error={error}
 						/>
+						</div>
 					</div>
 					<div className={styles.statusBar}>
 						<span>

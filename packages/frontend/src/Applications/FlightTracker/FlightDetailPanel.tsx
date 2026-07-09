@@ -3,6 +3,7 @@ import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamCont
 import type { FlightTrack } from "./useFlightTrack";
 import { isNotable } from "./notableFlights";
 import styles from "./FlightTracker.module.scss";
+import { ClassicyControlGroup, ClassicyControlLabel } from "classicy";
 
 interface FlightDetailPanelProps {
 	selected: FlightPosition | null;
@@ -13,14 +14,17 @@ interface FlightDetailPanelProps {
 
 export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({ selected, track, loading, error }) => {
 	if (!selected) {
-		return <div className={styles.detail}><p className={styles.detailEmpty}>Select a flight to view its track.</p></div>;
+		return <ClassicyControlGroup label="Flight Details">
+			<ClassicyControlLabel label="Select a flight to view its track." />
+			</ClassicyControlGroup>;
 	}
 	const route =
 		track?.origin || track?.scheduled_dest
 			? `${track?.origin ?? "?"} → ${track?.scheduled_dest ?? "?"}`
 			: null;
 	return (
-		<div className={styles.detail}>
+		<div className={styles.detailWrapper}>
+		<ClassicyControlGroup label="Flight Details">
 			<div className={styles.detailHeader}>
 				<span className={styles.detailFlight}>{selected.flight}</span>
 				{isNotable(selected.flight) && <span className={styles.detailBadge}>notable</span>}
@@ -34,6 +38,7 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({ selected, track,
 			</dl>
 			{loading && <p className={styles.detailNote}>Loading track…</p>}
 			{error && <p className={styles.detailNote}>{error}</p>}
+		</ClassicyControlGroup>
 		</div>
 	);
 };
