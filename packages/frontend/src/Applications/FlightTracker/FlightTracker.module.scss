@@ -26,7 +26,8 @@
 	font-size: var(--ui-font-size); display: flex; justify-content: space-between;
 	font-family: var(--ui-font) !important;
 	padding-right: calc(var(--window-control-size) *2);
-	background-color: var(--color-system-04);
+	background-color: var(--color-system-07);
+	color: var(--color-theme-01);
 
 }
 .settings { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
