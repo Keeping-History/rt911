@@ -14,7 +14,7 @@
 .detailHeader { display: flex; align-items: center; gap: var(--window-padding-size); margin-bottom: var(--window-padding-size); font-family: var(--body-font) !important; }
 .detailFlight { font-weight: bold; font-size: 1.1em; }
 .detailBadge {
-	font-size: 0.75em; text-transform: uppercase; color: #fff;
+	font-size: var(--ui-font-size); text-transform: uppercase; color: #fff;
 	background: #c0202a; padding: 1px 4px; border-radius: 2px;
 }
 .detailFields { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0; font-family: var(--ui-font) !important; font-size: var(--ui-font-size); }
@@ -23,7 +23,7 @@
 .detailNote { margin-top: 8px; color: #666; font-family: var(--ui-font) !important; }
 .statusBar {
 	flex: 0 0 auto; padding: 2px 8px; border-top: 1px solid #999;
-	font-size: var(--ui-font-size); display: flex; justify-content: space-between;
+	font-size: calc(var(--ui-font-size)*.75); display: flex; justify-content: space-between;
 	font-family: var(--ui-font) !important;
 	padding-right: calc(var(--window-control-size) *2);
 	background-color: var(--color-system-07);
@@ -34,9 +34,16 @@
 .settingsButtons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .loopStrip {
 	flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
-	padding: 2px 8px; border-top: 1px solid #999;
-	font-family: var(--ui-font) !important; font-size: var(--ui-font-size);
+	border-top: 1px solid #999;
+	font-family: var(--ui-font) !important;
+	font-size: var(--ui-font-size);
 	background-color: var(--color-system-03);
+	width: 100%;
+
+	:global(.classicyPopUpMenuWrapper) {
+		width: 25%;
+	}
 }
-.loopSlider { flex: 1 1 auto; min-width: 0; }
+.loopPlayPause { flex: 0 0 auto; }
+.loopSlider { flex: 1 0; padding: var(--window-padding-size); }
 .loopTime { flex: 0 0 auto; font-variant-numeric: tabular-nums; }

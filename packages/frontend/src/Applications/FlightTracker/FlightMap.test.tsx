@@ -379,7 +379,7 @@ describe("FlightMap", () => {
 			darkMap: false, pinColor: "#3a3a3a", notablePinColor: "#c0202a", radarSweep: false,
 			trailMultiplier: 1,
 			loopWindowMs: 1_800_000,
-			loopClock: { anchorVirtual: 0, anchorWall: 0, speed: 1 as const, scrubbing: false },
+			loopClock: { anchorVirtual: 0, anchorWall: 0, speed: 10 as const, scrubbing: false, paused: false },
 			replayBuffer: new Map(),
 		};
 		const { rerender } = render(<FlightMap {...common} loopEnabled={true} />);

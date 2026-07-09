@@ -345,32 +345,53 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: true, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: true, trailMultiplier: 1 },
+			mapSettings: { darkMap: true, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
 		});
 	});
 
-	it("reads persisted settings: ✓ menu prefix and int→hex conversion for the map", () => {
+	it("dark map picks the dark pin colors; light map picks the light ones", () => {
 		mockAppData.current = {
-			mapSettings: { darkMap: true, pinColor: 0x0000ff, notablePinColor: 0x00ff00 },
+			mapSettings: {
+				darkMap: true,
+				pinColorLight: 0x111111, pinColorDark: 0x0000ff,
+				notablePinColorLight: 0x222222, notablePinColorDark: 0x00ff00,
+			},
 		};
 		renderWithContext({});
 		const last = mapProps[mapProps.length - 1];
 		expect(last.darkMap).toBe(true);
+		// darkMap:true → the map gets the *dark* pair, not the light one.
 		expect(last.pinColor).toBe("#0000ff");
 		expect(last.notablePinColor).toBe("#00ff00");
 		expect(menuItem("View", (t) => t.includes("Dark Map"))!.title).toBe("✓ Dark Map");
+	});
+
+	it("light map picks the light pin colors", () => {
+		mockAppData.current = {
+			mapSettings: {
+				darkMap: false,
+				pinColorLight: 0x111111, pinColorDark: 0x0000ff,
+				notablePinColorLight: 0x222222, notablePinColorDark: 0x00ff00,
+			},
+		};
+		renderWithContext({});
+		const last = mapProps[mapProps.length - 1];
+		expect(last.pinColor).toBe("#111111");
+		expect(last.notablePinColor).toBe("#222222");
 	});
 
 	it("commits Settings edits on Save as a single dispatch", () => {
 		renderWithContext({});
 		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.click(screen.getByTestId("flight_settings_darkmap"));
-		fireEvent.click(screen.getByTestId("flight_settings_pin_color")); // mock → 0x0000ff
-		fireEvent.click(screen.getByTestId("flight_settings_notable_pin_color")); // mock → 0x0000ff
+		fireEvent.click(screen.getByTestId("flight_settings_pin_color_light")); // mock → 0x0000ff
+		fireEvent.click(screen.getByTestId("flight_settings_pin_color_dark")); // mock → 0x0000ff
+		fireEvent.click(screen.getByTestId("flight_settings_notable_pin_color_light")); // mock → 0x0000ff
+		fireEvent.click(screen.getByTestId("flight_settings_notable_pin_color_dark")); // mock → 0x0000ff
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: true, pinColor: 0x0000ff, notablePinColor: 0x0000ff, radarSweep: true, trailMultiplier: 1 },
+			mapSettings: { darkMap: true, pinColorLight: 0x0000ff, pinColorDark: 0x0000ff, notablePinColorLight: 0x0000ff, notablePinColorDark: 0x0000ff, radarSweep: true, trailMultiplier: 5 },
 		});
 	});
 
@@ -381,7 +402,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: false, trailMultiplier: 1 },
+			mapSettings: { darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
 		});
 	});
 
@@ -393,7 +414,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: false, trailMultiplier: 1 },
+			mapSettings: { darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
 		});
 	});
 
@@ -407,7 +428,8 @@ describe("FlightTracker", () => {
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
 			mapSettings: {
-				darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a,
+				darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e,
+				notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d,
 				radarSweep: true, trailMultiplier: 3.5,
 			},
 		});
@@ -426,45 +448,86 @@ describe("FlightTracker", () => {
 	});
 
 	describe("loop mode", () => {
-		it("toggles via the View menu: strip appears, status reads Live (Loop), history requested", () => {
+		it("is on by default: strip present, status reads Live (Loop), history requested", () => {
 			const requestFlightsHistory = vi.fn();
 			renderWithContext({ connected: true, requestFlightsHistory });
-			expect(screen.queryByTestId("flight_loop_scrub")).toBeNull();
-			expect(screen.getByText("Live")).toBeTruthy();
-
-			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
-
 			expect(screen.getByTestId("flight_loop_scrub")).toBeTruthy();
 			expect(screen.getByText("Live (Loop)")).toBeTruthy();
 			expect(requestFlightsHistory).toHaveBeenCalledWith(30);
-		});
-
-		it("re-requests with 90 when the window popup changes", () => {
-			const requestFlightsHistory = vi.fn();
-			renderWithContext({ connected: true, requestFlightsHistory });
-			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
-			fireEvent.change(screen.getByTestId("flight_loop_window"), {
-				target: { value: "90" },
-			});
-			expect(requestFlightsHistory).toHaveBeenLastCalledWith(90);
-		});
-
-		it("clears history when loop mode turns off", () => {
-			const clearFlightsHistory = vi.fn();
-			renderWithContext({ connected: true, clearFlightsHistory });
-			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
 			expect(menuItem("View", (t) => t.includes("Loop Playback"))!.title).toBe(
 				"✓ Loop Playback",
 			);
+		});
+
+		it("View ▸ Loop Playback persists the enabled flag flipped off", () => {
+			renderWithContext({ connected: true });
 			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
-			expect(clearFlightsHistory).toHaveBeenCalled();
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetLoopSettings",
+				loopSettings: { enabled: false, windowMinutes: 30, speed: 10 },
+			});
+		});
+
+		it("reads a persisted disabled flag: strip hidden, status Live, history cleared", () => {
+			const clearFlightsHistory = vi.fn();
+			mockAppData.current = { loopSettings: { enabled: false } };
+			renderWithContext({ connected: true, clearFlightsHistory });
 			expect(screen.queryByTestId("flight_loop_scrub")).toBeNull();
 			expect(screen.getByText("Live")).toBeTruthy();
+			expect(clearFlightsHistory).toHaveBeenCalled();
+			expect(menuItem("View", (t) => t.includes("Loop Playback"))!.title).toBe(
+				"Loop Playback",
+			);
+		});
+
+		it("the window popup persists windowMinutes", () => {
+			renderWithContext({ connected: true });
+			fireEvent.change(screen.getByTestId("flight_loop_window"), {
+				target: { value: "90" },
+			});
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetLoopSettings",
+				loopSettings: { enabled: true, windowMinutes: 90, speed: 10 },
+			});
+		});
+
+		it("reads a persisted 90-minute window: requests history and sizes the window with 90", () => {
+			const requestFlightsHistory = vi.fn();
+			mockAppData.current = { loopSettings: { windowMinutes: 90 } };
+			renderWithContext({ connected: true, requestFlightsHistory });
+			expect(requestFlightsHistory).toHaveBeenCalledWith(90);
+			expect(mapProps[mapProps.length - 1].loopWindowMs).toBe(90 * 60_000);
+		});
+
+		it("the speed popup persists the loop speed", () => {
+			renderWithContext({ connected: true });
+			fireEvent.change(screen.getByTestId("flight_loop_speed"), {
+				target: { value: "100" },
+			});
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetLoopSettings",
+				loopSettings: { enabled: true, windowMinutes: 30, speed: 100 },
+			});
+		});
+
+		it("seeds the loop clock speed from persisted settings", () => {
+			mockAppData.current = { loopSettings: { speed: 500 } };
+			renderWithContext({ connected: true });
+			const last = mapProps[mapProps.length - 1];
+			expect((last.loopClock as { speed: number }).speed).toBe(500);
+		});
+
+		it("the play/pause button freezes the loop clock and back", () => {
+			renderWithContext({ connected: true });
+			expect((mapProps.at(-1)!.loopClock as { paused: boolean }).paused).toBe(false);
+			act(() => fireEvent.click(screen.getByText("⏸")));
+			expect((mapProps.at(-1)!.loopClock as { paused: boolean }).paused).toBe(true);
+			act(() => fireEvent.click(screen.getByText("▶")));
+			expect((mapProps.at(-1)!.loopClock as { paused: boolean }).paused).toBe(false);
 		});
 
 		it("passes loop props through to FlightMap", () => {
 			renderWithContext({ connected: true });
-			act(() => menuItem("View", (t) => t.includes("Loop Playback"))!.onClickFunc?.());
 			const last = mapProps[mapProps.length - 1];
 			expect(last.loopEnabled).toBe(true);
 			expect(last.loopWindowMs).toBe(30 * 60_000);

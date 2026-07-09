@@ -3,15 +3,15 @@
 // (only TimeMachine may mutate the real clock). Same anchor pattern FlightMap
 // uses for the live glide: a virtual instant plus the wall time it was set.
 
-export const LOOP_SPEEDS = [0.25, 0.5, 1, 2, 8] as const;
+export const LOOP_SPEEDS = [10, 20, 50, 100, 500] as const;
 export type LoopSpeed = (typeof LOOP_SPEEDS)[number];
 
 export const SPEED_LABELS: Record<LoopSpeed, string> = {
-	0.25: "¼×",
-	0.5: "½×",
-	1: "1×",
-	2: "2×",
-	8: "8×",
+	10: "10×",
+	20: "20×",
+	50: "50×",
+	100: "100×",
+	500: "500×",
 };
 
 export type LoopWindowMinutes = 30 | 90;
@@ -21,6 +21,7 @@ export interface LoopClock {
 	anchorWall: number; // performance.now() at the moment of anchoring
 	speed: LoopSpeed;
 	scrubbing: boolean; // slider held: playhead frozen at anchorVirtual
+	paused: boolean; // play/pause toggle: playhead frozen at anchorVirtual
 }
 
 // Playhead at wall time `wall`, wrapped into the sliding window [startMs, endMs).
@@ -32,9 +33,10 @@ export function playheadAt(
 	startMs: number,
 	endMs: number,
 ): number {
-	const raw = clock.scrubbing
-		? clock.anchorVirtual
-		: clock.anchorVirtual + (wall - clock.anchorWall) * clock.speed;
+	const raw =
+		clock.scrubbing || clock.paused
+			? clock.anchorVirtual
+			: clock.anchorVirtual + (wall - clock.anchorWall) * clock.speed;
 	const span = endMs - startMs;
 	if (span <= 0) return startMs;
 	const offset = (((raw - startMs) % span) + span) % span;

@@ -10,32 +10,40 @@ function clock(over: Partial<LoopClock>): LoopClock {
 	return {
 		anchorVirtual: START,
 		anchorWall: 1000,
-		speed: 1,
+		speed: 10,
 		scrubbing: false,
+		paused: false,
 		...over,
 	};
 }
 
 describe("playheadAt", () => {
-	it("advances at 1x from the anchor", () => {
-		expect(playheadAt(clock({}), 1000 + 5 * MIN, START, END)).toBe(START + 5 * MIN);
+	it("advances at the clock's speed from the anchor", () => {
+		// 10× default: 1 min of wall time → 10 min of playhead.
+		expect(playheadAt(clock({}), 1000 + MIN, START, END)).toBe(START + 10 * MIN);
 	});
 
 	it("scales by speed", () => {
-		expect(playheadAt(clock({ speed: 8 }), 1000 + MIN, START, END)).toBe(
-			START + 8 * MIN,
+		expect(playheadAt(clock({ speed: 20 }), 1000 + MIN, START, END)).toBe(
+			START + 20 * MIN,
 		);
-		expect(playheadAt(clock({ speed: 0.25 }), 1000 + 4 * MIN, START, END)).toBe(
-			START + MIN,
+		expect(playheadAt(clock({ speed: 50 }), 1000 + 0.5 * MIN, START, END)).toBe(
+			START + 25 * MIN,
 		);
 	});
 
 	it("wraps back to the window start at the live edge", () => {
-		expect(playheadAt(clock({}), 1000 + 31 * MIN, START, END)).toBe(START + MIN);
+		// 10× for 4 min = 40 min, one full 30 min window past the edge → 10 min in.
+		expect(playheadAt(clock({}), 1000 + 4 * MIN, START, END)).toBe(START + 10 * MIN);
 	});
 
 	it("holds at the anchor while scrubbing", () => {
 		const c = clock({ anchorVirtual: START + 10 * MIN, scrubbing: true });
+		expect(playheadAt(c, 1000 + 60 * MIN, START, END)).toBe(START + 10 * MIN);
+	});
+
+	it("holds at the anchor while paused", () => {
+		const c = clock({ anchorVirtual: START + 10 * MIN, paused: true });
 		expect(playheadAt(c, 1000 + 60 * MIN, START, END)).toBe(START + 10 * MIN);
 	});
 

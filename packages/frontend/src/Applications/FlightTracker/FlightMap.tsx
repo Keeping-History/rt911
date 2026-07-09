@@ -92,8 +92,9 @@ interface FlightMapProps {
 const IDLE_LOOP_CLOCK: LoopClock = {
 	anchorVirtual: 0,
 	anchorWall: 0,
-	speed: 1,
+	speed: 10,
 	scrubbing: false,
+	paused: false,
 };
 const EMPTY_REPLAY_BUFFER: ReplayBuffer = new Map();
 

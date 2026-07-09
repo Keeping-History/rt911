@@ -1,10 +1,13 @@
 import type { ClassicyStore } from "classicy";
 import { describe, expect, it } from "vitest";
 import {
+	DEFAULT_FLIGHT_LOOP_SETTINGS,
 	DEFAULT_FLIGHT_MAP_SETTINGS,
 	classicyFlightTrackerEventHandler,
+	flightTrackerSetLoopSettings,
 	flightTrackerSetMapSettings,
 	intToHex,
+	readFlightLoopSettings,
 	readFlightMapSettings,
 } from "./flightMapSettings";
 
@@ -20,7 +23,7 @@ function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 
 describe("classicyFlightTrackerEventHandler", () => {
 	it("persists mapSettings from a SetMapSettings action", () => {
-		const settings = { darkMap: true, pinColor: 0x112233, notablePinColor: 0x445566, radarSweep: false, trailMultiplier: 2 };
+		const settings = { darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, radarSweep: false, trailMultiplier: 2 };
 		const out = classicyFlightTrackerEventHandler(
 			storeWithApp(),
 			flightTrackerSetMapSettings(settings),
@@ -51,6 +54,17 @@ describe("classicyFlightTrackerEventHandler", () => {
 			),
 		).toBe(ds);
 	});
+
+	it("persists loopSettings from a SetLoopSettings action without touching mapSettings", () => {
+		const loopSettings = { enabled: false, windowMinutes: 90 as const, speed: 100 as const };
+		const out = classicyFlightTrackerEventHandler(
+			storeWithApp({ mapSettings: DEFAULT_FLIGHT_MAP_SETTINGS }),
+			flightTrackerSetLoopSettings(loopSettings),
+		);
+		expect(
+			out.System.Manager.Applications.apps["FlightTracker.app"].data,
+		).toMatchObject({ mapSettings: DEFAULT_FLIGHT_MAP_SETTINGS, loopSettings });
+	});
 });
 
 describe("readFlightMapSettings", () => {
@@ -72,9 +86,39 @@ describe("readFlightMapSettings", () => {
 		expect(readFlightMapSettings({ mapSettings: { darkMap: true } }).radarSweep).toBe(true);
 	});
 
-	it("defaults trailMultiplier to 1, including for older persisted state", () => {
-		expect(readFlightMapSettings(undefined).trailMultiplier).toBe(1);
-		expect(readFlightMapSettings({ mapSettings: { darkMap: true } }).trailMultiplier).toBe(1);
+	it("defaults trailMultiplier to 5, including for older persisted state", () => {
+		expect(readFlightMapSettings(undefined).trailMultiplier).toBe(5);
+		expect(readFlightMapSettings({ mapSettings: { darkMap: true } }).trailMultiplier).toBe(5);
+	});
+
+	it("defaults to independent light/dark pin colors that read on each ground", () => {
+		const s = readFlightMapSettings(undefined);
+		// Light map keeps the original dark-gray / red; dark map gets a lighter,
+		// higher-contrast pair so pins don't vanish into the slate basemap.
+		expect(s.pinColorLight).toBe(0x3a3a3a);
+		expect(s.pinColorDark).toBe(0xe0a72e);
+		expect(s.notablePinColorLight).toBe(0xc0202a);
+		expect(s.notablePinColorDark).toBe(0xff4d4d);
+		expect(s.pinColorDark).not.toBe(s.pinColorLight);
+	});
+});
+
+describe("readFlightLoopSettings", () => {
+	it("returns defaults (loop on, 30 min, 10×) when nothing is stored", () => {
+		expect(readFlightLoopSettings(undefined)).toEqual(DEFAULT_FLIGHT_LOOP_SETTINGS);
+		expect(readFlightLoopSettings({})).toEqual(DEFAULT_FLIGHT_LOOP_SETTINGS);
+		expect(DEFAULT_FLIGHT_LOOP_SETTINGS).toEqual({
+			enabled: true,
+			windowMinutes: 30,
+			speed: 10,
+		});
+	});
+
+	it("merges partial stored loop settings over defaults (no migration needed)", () => {
+		expect(readFlightLoopSettings({ loopSettings: { enabled: false } })).toEqual({
+			...DEFAULT_FLIGHT_LOOP_SETTINGS,
+			enabled: false,
+		});
 	});
 });
 
@@ -83,7 +127,9 @@ describe("intToHex", () => {
 		expect(intToHex(0x0000ff)).toBe("#0000ff");
 	});
 	it("formats the default pin colors", () => {
-		expect(intToHex(0x3a3a3a)).toBe("#3a3a3a");
-		expect(intToHex(0xc0202a)).toBe("#c0202a");
+		expect(intToHex(0x3a3a3a)).toBe("#3a3a3a"); // pin light
+		expect(intToHex(0xe0a72e)).toBe("#e0a72e"); // pin dark
+		expect(intToHex(0xc0202a)).toBe("#c0202a"); // notable light
+		expect(intToHex(0xff4d4d)).toBe("#ff4d4d"); // notable dark
 	});
 });

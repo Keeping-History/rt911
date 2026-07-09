@@ -34,8 +34,10 @@ import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
 	type FlightMapSettings,
+	flightTrackerSetLoopSettings,
 	flightTrackerSetMapSettings,
 	intToHex,
+	readFlightLoopSettings,
 	readFlightMapSettings,
 } from "./flightMapSettings";
 import { insertReplaySamples, pruneReplay, type ReplayBuffer } from "./flightReplay";
@@ -72,6 +74,7 @@ export const FlightTracker: FC = () => {
 				| undefined,
 	);
 	const settings = useMemo(() => readFlightMapSettings(appData), [appData]);
+	const loopSettings = useMemo(() => readFlightLoopSettings(appData), [appData]);
 
 	const [showSettings, setShowSettings] = useState(false);
 	// Settings form: local working copy, committed on Save (TV pattern).
@@ -130,17 +133,22 @@ export const FlightTracker: FC = () => {
 
 	const [selected, setSelected] = useState<FlightPosition | null>(null);
 
-	// Loop mode: transient session state (a radar loop is an inspection tool, not
-	// a persisted setting). The loop clock is local — the Classicy clock keeps
-	// running live and is never written from here.
-	const [loopEnabled, setLoopEnabled] = useState(false);
-	const [loopMinutes, setLoopMinutes] = useState<LoopWindowMinutes>(30);
-	const [loopClock, setLoopClock] = useState<LoopClock>({
-		anchorVirtual: 0,
-		anchorWall: 0,
-		speed: 1,
+	// Loop mode: the enable flag, window, and speed are persisted preferences
+	// (readFlightLoopSettings), so they survive a refresh. Only the ephemeral
+	// playback state below (clock anchors, scrubbing, paused) stays local — the
+	// Classicy clock keeps running live and is never written from here.
+	const loopEnabled = loopSettings.enabled;
+	const loopMinutes = loopSettings.windowMinutes;
+	// Anchored at the top of the loop on mount (same as toggleLoop), so a
+	// default-on / restored session starts at the window head, not a wrapped
+	// offset. Speed is seeded from the persisted preference.
+	const [loopClock, setLoopClock] = useState<LoopClock>(() => ({
+		anchorVirtual: nowMs - loopSettings.windowMinutes * 60_000,
+		anchorWall: performance.now(),
+		speed: loopSettings.speed,
 		scrubbing: false,
-	});
+		paused: false,
+	}));
 	const [playheadMs, setPlayheadMs] = useState(0);
 	// Mutated in place; identity is stable so FlightMap's ref always sees the
 	// latest samples without a re-render per insert.
@@ -152,19 +160,22 @@ export const FlightTracker: FC = () => {
 
 	const toggleLoop = useCallback(() => {
 		if (!loopEnabled) {
-			// Start each session at the top of the loop, playing at 1×.
+			// Start each session at the top of the loop, at the saved speed.
 			setLoopClock({
 				anchorVirtual: nowMs - loopMinutes * 60_000,
 				anchorWall: performance.now(),
-				speed: 1,
+				speed: loopSettings.speed,
 				scrubbing: false,
+				paused: false,
 			});
 		} else {
 			replayBufferRef.current = new Map();
 			consumedHistoryRef.current = 0;
 		}
-		setLoopEnabled(!loopEnabled);
-	}, [loopEnabled, nowMs, loopMinutes]);
+		desktopEventDispatch(
+			flightTrackerSetLoopSettings({ ...loopSettings, enabled: !loopEnabled }),
+		);
+	}, [loopEnabled, nowMs, loopMinutes, loopSettings, desktopEventDispatch]);
 
 	// Slider drag: freeze at the dragged instant. Release: resume from there.
 	const scrubTo = useCallback(
@@ -179,7 +190,8 @@ export const FlightTracker: FC = () => {
 		[nowMs, windowMs],
 	);
 
-	// Re-anchor at the current playhead so a speed change never jumps the ghosts.
+	// Re-anchor at the current playhead so a speed change never jumps the ghosts,
+	// and persist the new speed as a preference.
 	const setLoopSpeed = useCallback(
 		(speed: LoopSpeed) => {
 			setLoopClock((c) => ({
@@ -188,9 +200,21 @@ export const FlightTracker: FC = () => {
 				anchorVirtual: playheadMs,
 				anchorWall: performance.now(),
 			}));
+			desktopEventDispatch(flightTrackerSetLoopSettings({ ...loopSettings, speed }));
 		},
-		[playheadMs],
+		[playheadMs, loopSettings, desktopEventDispatch],
 	);
+
+	// Play/pause. Re-anchor at the current playhead so resume picks up exactly
+	// where it froze (same trick as a speed change).
+	const togglePause = useCallback(() => {
+		setLoopClock((c) => ({
+			...c,
+			paused: !c.paused,
+			anchorVirtual: playheadMs,
+			anchorWall: performance.now(),
+		}));
+	}, [playheadMs]);
 
 	const appMenu = useMemo(
 		() => [
@@ -352,21 +376,39 @@ export const FlightTracker: FC = () => {
 							}
 						/>
 						<ClassicyColorPicker
-							id="flight_settings_pin_color"
-							labelTitle="Flight pins"
-							value={form.pinColor}
+							id="flight_settings_pin_color_light"
+							labelTitle="Flight pins (light map)"
+							value={form.pinColorLight}
 							crayons={MAC_OS_8_CRAYONS}
 							onChangeFunc={(color: number) =>
-								setForm((f) => ({ ...f, pinColor: color }))
+								setForm((f) => ({ ...f, pinColorLight: color }))
 							}
 						/>
 						<ClassicyColorPicker
-							id="flight_settings_notable_pin_color"
-							labelTitle="Notable flight pins"
-							value={form.notablePinColor}
+							id="flight_settings_pin_color_dark"
+							labelTitle="Flight pins (dark map)"
+							value={form.pinColorDark}
 							crayons={MAC_OS_8_CRAYONS}
 							onChangeFunc={(color: number) =>
-								setForm((f) => ({ ...f, notablePinColor: color }))
+								setForm((f) => ({ ...f, pinColorDark: color }))
+							}
+						/>
+						<ClassicyColorPicker
+							id="flight_settings_notable_pin_color_light"
+							labelTitle="Notable flight pins (light map)"
+							value={form.notablePinColorLight}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, notablePinColorLight: color }))
+							}
+						/>
+						<ClassicyColorPicker
+							id="flight_settings_notable_pin_color_dark"
+							labelTitle="Notable flight pins (dark map)"
+							value={form.notablePinColorDark}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, notablePinColorDark: color }))
 							}
 						/>
 						<ClassicySlider
@@ -416,8 +458,14 @@ export const FlightTracker: FC = () => {
 								nowMs={nowMs}
 								playing={!paused}
 								darkMap={settings.darkMap}
-								pinColor={intToHex(settings.pinColor)}
-								notablePinColor={intToHex(settings.notablePinColor)}
+								pinColor={intToHex(
+									settings.darkMap ? settings.pinColorDark : settings.pinColorLight,
+								)}
+								notablePinColor={intToHex(
+									settings.darkMap
+										? settings.notablePinColorDark
+										: settings.notablePinColorLight,
+								)}
 								radarSweep={settings.radarSweep}
 								trailMultiplier={settings.trailMultiplier}
 								loopEnabled={loopEnabled}
@@ -439,19 +487,39 @@ export const FlightTracker: FC = () => {
 					</div>
 					{loopEnabled && (
 						<div className={styles.loopStrip}>
+							<ClassicyButton
+								onClickFunc={togglePause}
+								aria-label={loopClock.paused ? "Play loop" : "Pause loop"}
+							>
+								{loopClock.paused ? "▶" : "⏸"}
+							</ClassicyButton>
 							<ClassicyPopUpMenu
 								id="flight_loop_window"
+								label="Time"
+								labelPosition="left"
+								labelSize="small"
+								size="small"
 								options={[
 									{ value: "30", label: "30 min" },
 									{ value: "90", label: "90 min" },
 								]}
 								selected={String(loopMinutes)}
 								onChangeFunc={(e) =>
-									setLoopMinutes(Number(e.target.value) as LoopWindowMinutes)
+									desktopEventDispatch(
+										flightTrackerSetLoopSettings({
+											...loopSettings,
+											windowMinutes: Number(e.target.value) as LoopWindowMinutes,
+										}),
+									)
 								}
 							/>
 							<ClassicyPopUpMenu
 								id="flight_loop_speed"
+								label="Speed"
+								labelPosition="left"
+								labelSize="small"
+								size="small"
+
 								options={LOOP_SPEEDS.map((s) => ({
 									value: String(s),
 									label: SPEED_LABELS[s],
@@ -461,9 +529,6 @@ export const FlightTracker: FC = () => {
 									setLoopSpeed(Number(e.target.value) as LoopSpeed)
 								}
 							/>
-							<span className={styles.loopTime}>
-								{formatPlayhead(playheadMs, tzOffset)}
-							</span>
 							<div className={styles.loopSlider}>
 								<ClassicySlider
 									id="flight_loop_scrub"
@@ -473,6 +538,7 @@ export const FlightTracker: FC = () => {
 											windowMs / 1000,
 										),
 									)}
+									valueLabel={formatPlayhead(playheadMs, tzOffset)}
 									min={0}
 									max={windowMs / 1000}
 									step={1}
