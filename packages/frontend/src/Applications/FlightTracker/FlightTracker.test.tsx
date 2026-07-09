@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -15,15 +15,23 @@ vi.mock("./FlightMap", () => ({
 	},
 }));
 
+const dispatchMock = vi.hoisted(() => vi.fn());
+const windowProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+const mockAppData = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+
 // classicy primitives → plain elements; useAppManager returns a state the
-// isRunning selector reads as "open".
+// isRunning selector reads as "open". ClassicyWindow records its props so
+// tests can drive appMenu items; mockAppData.current feeds persisted app data.
 vi.mock("classicy", () => ({
 	ClassicyApp: ({ children }: { children: React.ReactNode }) => (
 		<div>{children}</div>
 	),
-	ClassicyWindow: ({ children }: { children: React.ReactNode }) => (
-		<div>{children}</div>
-	),
+	ClassicyWindow: (
+		props: Record<string, unknown> & { children?: React.ReactNode },
+	) => {
+		windowProps.push(props);
+		return <div>{props.children}</div>;
+	},
 	ClassicyControlGroup: ({
 		label,
 		children,
@@ -37,14 +45,64 @@ vi.mock("classicy", () => ({
 		</div>
 	),
 	ClassicyControlLabel: ({ label }: { label?: string }) => <span>{label}</span>,
+	ClassicyButton: ({
+		children,
+		onClickFunc,
+	}: {
+		children?: React.ReactNode;
+		onClickFunc?: () => void;
+	}) => <button onClick={onClickFunc}>{children}</button>,
+	ClassicyCheckbox: ({
+		id,
+		label,
+		checked,
+		onClickFunc,
+	}: {
+		id: string;
+		label?: string;
+		checked?: boolean;
+		onClickFunc?: (checked: boolean) => void;
+	}) => (
+		<label>
+			<input
+				type="checkbox"
+				data-testid={id}
+				checked={!!checked}
+				onChange={(e) => onClickFunc?.(e.target.checked)}
+			/>
+			{label}
+		</label>
+	),
+	// The mock picker "picks" blue (0x0000ff) on click.
+	ClassicyColorPicker: ({
+		id,
+		labelTitle,
+		onChangeFunc,
+	}: {
+		id: string;
+		labelTitle?: string;
+		onChangeFunc?: (color: number) => void;
+	}) => (
+		<button data-testid={id} onClick={() => onChangeFunc?.(0x0000ff)}>
+			{labelTitle}
+		</button>
+	),
+	MAC_OS_8_CRAYONS: [],
 	ClassicyIcons: { controlPanels: { location: { app: "icon.png" } } },
 	quitMenuItemHelper: () => ({}),
+	registerAppEventHandler: () => {},
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({
 			System: {
 				Manager: {
 					Applications: {
-						apps: { "FlightTracker.app": { open: true, windows: [] } },
+						apps: {
+							"FlightTracker.app": {
+								open: true,
+								windows: [],
+								data: mockAppData.current,
+							},
+						},
 					},
 					Appearance: {
 						activeTheme: { measurements: { window: { paddingSize: 0 } } },
@@ -52,7 +110,7 @@ vi.mock("classicy", () => ({
 				},
 			},
 		}),
-	useAppManagerDispatch: () => vi.fn(),
+	useAppManagerDispatch: () => dispatchMock,
 	useClassicyDateTime: () => ({
 		localDate: new Date("2001-09-11T13:00:00.000Z"),
 		tzOffset: 0,
@@ -113,10 +171,32 @@ function renderWithContext(overrides: Partial<MediaStreamContextValue>) {
 	);
 }
 
+type MenuItem = { id?: string; title?: string; onClickFunc?: () => void };
+
+// FlightTracker passes appMenu to its ClassicyWindows; the window mock records
+// props, so tests find and "click" menu items from the latest recorded menus.
+function menuItem(
+	menuTitle: string,
+	pred: (title: string) => boolean,
+): MenuItem | undefined {
+	for (let i = windowProps.length - 1; i >= 0; i--) {
+		const menus = windowProps[i].appMenu as
+			| Array<{ title?: string; menuChildren?: MenuItem[] }>
+			| undefined;
+		const item = menus
+			?.find((m) => m.title === menuTitle)
+			?.menuChildren?.find((i2) => pred(i2.title ?? ""));
+		if (item) return item;
+	}
+	return undefined;
+}
+
 describe("FlightTracker", () => {
 	afterEach(() => {
 		cleanup();
 		mapProps.length = 0;
+		windowProps.length = 0;
+		mockAppData.current = {};
 		vi.clearAllMocks();
 	});
 
@@ -206,5 +286,53 @@ describe("FlightTracker", () => {
 		const last = mapProps[mapProps.length - 1];
 		expect(typeof last.nowMs).toBe("number");
 		expect(last.playing).toBe(true); // paused:false → playing
+	});
+
+	it("View ▸ Dark Map toggles darkMap in one dispatch, preserving pin colors", () => {
+		renderWithContext({});
+		const item = menuItem("View", (t) => t.includes("Dark Map"))!;
+		expect(item.title).toBe("Dark Map"); // off by default → no ✓ prefix
+		act(() => item.onClickFunc?.());
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyAppFlightTrackerSetMapSettings",
+			mapSettings: { darkMap: true, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a },
+		});
+	});
+
+	it("reads persisted settings: ✓ menu prefix and int→hex conversion for the map", () => {
+		mockAppData.current = {
+			mapSettings: { darkMap: true, pinColor: 0x0000ff, notablePinColor: 0x00ff00 },
+		};
+		renderWithContext({});
+		const last = mapProps[mapProps.length - 1];
+		expect(last.darkMap).toBe(true);
+		expect(last.pinColor).toBe("#0000ff");
+		expect(last.notablePinColor).toBe("#00ff00");
+		expect(menuItem("View", (t) => t.includes("Dark Map"))!.title).toBe("✓ Dark Map");
+	});
+
+	it("commits Settings edits on Save as a single dispatch", () => {
+		renderWithContext({});
+		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		fireEvent.click(screen.getByTestId("flight_settings_darkmap"));
+		fireEvent.click(screen.getByTestId("flight_settings_pin_color")); // mock → 0x0000ff
+		fireEvent.click(screen.getByTestId("flight_settings_notable_pin_color")); // mock → 0x0000ff
+		fireEvent.click(screen.getByText("Save"));
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyAppFlightTrackerSetMapSettings",
+			mapSettings: { darkMap: true, pinColor: 0x0000ff, notablePinColor: 0x0000ff },
+		});
+	});
+
+	it("discards Settings edits on Cancel", () => {
+		renderWithContext({});
+		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		fireEvent.click(screen.getByTestId("flight_settings_darkmap"));
+		fireEvent.click(screen.getByText("Cancel"));
+		const settingsDispatches = dispatchMock.mock.calls.filter(
+			([a]) =>
+				(a as { type?: string })?.type === "ClassicyAppFlightTrackerSetMapSettings",
+		);
+		expect(settingsDispatches).toHaveLength(0);
 	});
 });

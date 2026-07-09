@@ -25,3 +25,5 @@
 	background-color: var(--color-system-02);
 
 }
+.settings { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
+.settingsButtons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }

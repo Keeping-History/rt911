@@ -1,12 +1,17 @@
 import {
 	ClassicyApp,
+	ClassicyButton,
+	ClassicyCheckbox,
+	ClassicyColorPicker,
 	ClassicyIcons,
 	ClassicyWindow,
+	MAC_OS_8_CRAYONS,
 	quitMenuItemHelper,
 	useAppManager,
+	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
-import { type FC, useContext, useEffect, useMemo, useState } from "react";
+import { type FC, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
 	MediaStreamContext,
 	type FlightPosition,
@@ -15,6 +20,13 @@ import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { FlightDetailPanel } from "./FlightDetailPanel";
 import { FlightMap } from "./FlightMap";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
+// Importing this module also registers the ClassicyAppFlightTracker reducer.
+import {
+	type FlightMapSettings,
+	flightTrackerSetMapSettings,
+	intToHex,
+	readFlightMapSettings,
+} from "./flightMapSettings";
 import styles from "./FlightTracker.module.scss";
 import type { Feature } from "geojson";
 
@@ -26,19 +38,74 @@ export const FlightTracker: FC = () => {
 	const appId = "FlightTracker.app";
 	const appName = "Flight Tracker";
 	const appIcon = ClassicyIcons.controlPanels.location.app as string;
+
+	const isRunning = useAppManager(
+		(s) => appId in (s.System.Manager.Applications.apps ?? {}),
+	);
+
+	const desktopEventDispatch = useAppManagerDispatch();
+	const appData = useAppManager(
+		(s) =>
+			s.System.Manager.Applications.apps[appId]?.data as
+				| Record<string, unknown>
+				| undefined,
+	);
+	const settings = useMemo(() => readFlightMapSettings(appData), [appData]);
+
+	const [showSettings, setShowSettings] = useState(false);
+	// Settings form: local working copy, committed on Save (TV pattern).
+	const [form, setForm] = useState<FlightMapSettings>(settings);
+
+	// Re-sync the working copy from persisted state, reveal, and focus.
+	const openSettings = useCallback(() => {
+		setForm(settings);
+		setShowSettings(true);
+		desktopEventDispatch({
+			type: "ClassicyWindowFocus",
+			app: { id: appId },
+			window: { id: "flight-settings" },
+		});
+	}, [settings, desktopEventDispatch]);
+
+	const saveSettings = useCallback(() => {
+		desktopEventDispatch(flightTrackerSetMapSettings(form));
+		setShowSettings(false);
+	}, [form, desktopEventDispatch]);
+
+	const toggleDarkMap = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, darkMap: !settings.darkMap }),
+		);
+	}, [settings, desktopEventDispatch]);
+
 	const appMenu = useMemo(
 		() => [
 			{
 				id: "file",
 				title: "File",
-				menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
+				menuChildren: [
+					{
+						id: "flight-settings-menu",
+						title: "Settings…",
+						onClickFunc: openSettings,
+					},
+					quitMenuItemHelper(appId, appName, appIcon),
+				],
+			},
+			{
+				id: "view",
+				title: "View",
+				menuChildren: [
+					{
+						// ClassicyMenuItem has no checked prop — the ✓ lives in the title.
+						id: "flight-darkmap-menu",
+						title: `${settings.darkMap ? "✓ " : ""}Dark Map`,
+						onClickFunc: toggleDarkMap,
+					},
+				],
 			},
 		],
-		[appIcon],
-	);
-
-	const isRunning = useAppManager(
-		(s) => appId in (s.System.Manager.Applications.apps ?? {}),
+		[appIcon, settings.darkMap, openSettings, toggleDarkMap],
 	);
 
 	const { flightPositions, subscribeFlights, unsubscribeFlights, connected } =
@@ -96,6 +163,60 @@ export const FlightTracker: FC = () => {
 
 	return (
 		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="flight-map">
+			{showSettings && (
+				<ClassicyWindow
+					id="flight-settings"
+					title="Settings"
+					appId={appId}
+					closable={true}
+					resizable={false}
+					zoomable={false}
+					scrollable={true}
+					collapsable={false}
+					initialSize={[360, 0]}
+					initialPosition={[150, 120]}
+					modal={true}
+					appMenu={appMenu}
+					onCloseFunc={() => setShowSettings(false)}
+				>
+					<div className={styles.settings}>
+						<ClassicyCheckbox
+							id="flight_settings_darkmap"
+							label="Dark map"
+							checked={form.darkMap}
+							onClickFunc={(checked: boolean) =>
+								setForm((f) => ({ ...f, darkMap: checked }))
+							}
+						/>
+						<ClassicyColorPicker
+							id="flight_settings_pin_color"
+							labelTitle="Flight pins"
+							value={form.pinColor}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, pinColor: color }))
+							}
+						/>
+						<ClassicyColorPicker
+							id="flight_settings_notable_pin_color"
+							labelTitle="Notable flight pins"
+							value={form.notablePinColor}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, notablePinColor: color }))
+							}
+						/>
+						<div className={styles.settingsButtons}>
+							<ClassicyButton onClickFunc={() => setShowSettings(false)}>
+								Cancel
+							</ClassicyButton>
+							<ClassicyButton isDefault={true} onClickFunc={saveSettings}>
+								Save
+							</ClassicyButton>
+						</div>
+					</div>
+				</ClassicyWindow>
+			)}
 			<ClassicyWindow
 				id="flight-map"
 				title="Flight Tracker"
@@ -116,6 +237,9 @@ export const FlightTracker: FC = () => {
 								trackGeoJSON={trackGeoJSON}
 								nowMs={nowMs}
 								playing={!paused}
+								darkMap={settings.darkMap}
+								pinColor={intToHex(settings.pinColor)}
+								notablePinColor={intToHex(settings.notablePinColor)}
 								onSelectFlight={onSelectFlight}
 								onClearSelection={() => setSelected(null)}
 							/>
