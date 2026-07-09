@@ -195,6 +195,17 @@ export interface MediaStreamContextValue {
 	subscribeFlights: (appId: string) => void;
 	/** Drop a flights-channel subscription. Unsubscribes server-side when the last app leaves. */
 	unsubscribeFlights: (appId: string) => void;
+	/** Accumulated flights_history chunks for the active loop-mode request. */
+	flightsHistory: FlightPosition[];
+	/** True once the active history request's done frame has arrived. */
+	flightsHistoryDone: boolean;
+	/**
+	 * Request the trailing `minutes` of flight positions for loop playback.
+	 * Replaces any prior request; the provider re-issues it on seek/reconnect.
+	 */
+	requestFlightsHistory: (minutes: 30 | 90) => void;
+	/** Drop history state and stop re-issuing on seek/reconnect (loop mode off). */
+	clearFlightsHistory: () => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -226,4 +237,8 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	flightPositions: [],
 	subscribeFlights: () => {},
 	unsubscribeFlights: () => {},
+	flightsHistory: [],
+	flightsHistoryDone: false,
+	requestFlightsHistory: () => {},
+	clearFlightsHistory: () => {},
 });

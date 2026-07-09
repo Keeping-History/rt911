@@ -67,6 +67,15 @@ type usenetBodyMsg struct {
 	ID   int    `json:"id"`
 }
 
+// flightsHistoryMsg requests the trailing N minutes of flight positions for the
+// Flight Tracker's loop mode. id is echoed on every reply chunk so the client
+// can discard chunks of a superseded request.
+type flightsHistoryMsg struct {
+	Type    string `json:"type"`
+	Minutes int    `json:"minutes"`
+	ID      int    `json:"id"`
+}
+
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
 func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) http.HandlerFunc {
@@ -260,6 +269,25 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 				}
 				sess.Unsubscribe(cmsg.Channel)
 
+			case "flights_history":
+				var fmsg flightsHistoryMsg
+				if err := json.Unmarshal(raw, &fmsg); err != nil {
+					sess.SendError("malformed flights_history message")
+					continue
+				}
+				if fmsg.Minutes != 30 && fmsg.Minutes != 90 {
+					sess.SendError("invalid flights_history minutes")
+					continue
+				}
+				// Loop mode is a flights-channel feature; without the subscription
+				// there is nothing to loop, so the request is silently dropped.
+				if !sess.Subscribed(session.ChannelFlights) {
+					continue
+				}
+				if t, ok := sess.VirtualTime(); ok {
+					sendFlightsHistory(r, sess, rdb, fmsg.ID, t, fmsg.Minutes, logger)
+				}
+
 			case "pause":
 				sess.Pause()
 
@@ -436,6 +464,34 @@ func sendFlightsSnapshot(r *http.Request, sess *session.Session, rdb *goredis.Cl
 		return
 	}
 	sess.SendFlights(t, items)
+}
+
+// flightsHistoryChunk bounds one flights_history reply frame at ~10 minute
+// buckets (~6-9k positions, a few hundred KB of msgpack). A single 90-minute
+// frame would be several MB — enough to stall the write pump and the client
+// decoder, so the window is streamed in pieces.
+const flightsHistoryChunk = 10 * time.Minute
+
+// sendFlightsHistory streams the [t−minutes, t] window to the client in chunked
+// flights_history frames, ending with an (always-sent) done frame. A chunk that
+// fails to read is skipped: the client still gets the rest of the window and
+// the done marker — a hole in the loop beats no loop.
+func sendFlightsHistory(r *http.Request, sess *session.Session, rdb *goredis.Client, reqID int, t time.Time, minutes int, logger *slog.Logger) {
+	lo := t.Add(-time.Duration(minutes) * time.Minute)
+	hi := t.Add(time.Second) // include the current instant, like the snapshot
+	for chunkLo := lo; chunkLo.Before(hi); chunkLo = chunkLo.Add(flightsHistoryChunk) {
+		chunkHi := chunkLo.Add(flightsHistoryChunk)
+		if chunkHi.After(hi) {
+			chunkHi = hi
+		}
+		items, err := cache.FlightPositionsInRange(r.Context(), rdb, chunkLo, chunkHi, logger)
+		if err != nil {
+			logger.Warn("flights history lookup failed", "error", err)
+			continue
+		}
+		sess.SendFlightsHistory(reqID, chunkLo, items, false)
+	}
+	sess.SendFlightsHistory(reqID, t, nil, true)
 }
 
 // sendSources delivers the time-independent available-source lists for client

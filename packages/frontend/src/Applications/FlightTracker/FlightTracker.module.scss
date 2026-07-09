@@ -32,3 +32,11 @@
 }
 .settings { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
 .settingsButtons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.loopStrip {
+	flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+	padding: 2px 8px; border-top: 1px solid #999;
+	font-family: var(--ui-font) !important; font-size: var(--ui-font-size);
+	background-color: var(--color-system-03);
+}
+.loopSlider { flex: 1 1 auto; min-width: 0; }
+.loopTime { flex: 0 0 auto; font-variant-numeric: tabular-nums; }

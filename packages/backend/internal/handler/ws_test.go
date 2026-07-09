@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/model"
 	"classicy/streamer/internal/session"
 
 	"github.com/alicebob/miniredis/v2"
@@ -22,10 +25,13 @@ import (
 
 // wsFrame is a subset of session.outMsg used only for decoding test responses.
 type wsFrame struct {
-	Type    string `json:"type"`
-	Channel string `json:"channel,omitempty"`
-	Msg     string `json:"message,omitempty"`
-	Time    string `json:"time,omitempty"`
+	Type    string                 `json:"type"`
+	Channel string                 `json:"channel,omitempty"`
+	Msg     string                 `json:"message,omitempty"`
+	Time    string                 `json:"time,omitempty"`
+	ID      int                    `json:"id,omitempty"`
+	Done    bool                   `json:"done,omitempty"`
+	Flights []model.FlightPosition `json:"flights,omitempty"`
 }
 
 func newTestServer(t *testing.T, rdb *goredis.Client) *url.URL {
@@ -272,5 +278,80 @@ func TestWSHandlerAllChannelsSubscribeIndependently(t *testing.T) {
 		if f.Type != "unsubscribe_ack" || f.Channel != ch {
 			t.Fatalf("channel %q: expected unsubscribe_ack, got %+v", ch, f)
 		}
+	}
+}
+
+func TestWSHandlerFlightsHistoryChunksAndDone(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	// Seed 30 one-position minute buckets ending at the virtual clock instant.
+	now := time.Date(2001, 9, 11, 13, 0, 0, 0, time.UTC)
+	for i := 0; i < 30; i++ {
+		m := now.Add(-time.Duration(i) * time.Minute)
+		items := []model.FlightPosition{{
+			ID: i + 1, Flight: "AA11", StartDate: m, Lat: 42.0, Lon: -71.0, AltFt: 30000,
+		}}
+		if err := cache.PutFlightBucket(context.Background(), rdb, m, items); err != nil {
+			t.Fatalf("seed bucket: %v", err)
+		}
+	}
+
+	conn := dialWS(t, newTestServer(t, rdb))
+
+	sendJSON(t, conn, map[string]string{"type": "subscribe", "channel": "flights"})
+	if f := readFrame(t, conn); f.Type != "subscribe_ack" {
+		t.Fatalf("expected subscribe_ack, got %+v", f)
+	}
+	// A heartbeat with a large drift initialises the virtual clock without
+	// needing a Postgres-backed init.
+	sendJSON(t, conn, map[string]string{"type": "heartbeat", "time": now.Format(time.RFC3339)})
+	if f := readFrame(t, conn); f.Type != "heartbeat_ack" {
+		t.Fatalf("expected heartbeat_ack, got %+v", f)
+	}
+
+	sendJSON(t, conn, map[string]any{"type": "flights_history", "minutes": 30, "id": 3})
+
+	var chunks, total int
+	for {
+		f := readFrame(t, conn)
+		if f.Type != "flights_history" {
+			t.Fatalf("expected flights_history frame, got %+v", f)
+		}
+		if f.ID != 3 {
+			t.Fatalf("expected echoed id 3, got %d", f.ID)
+		}
+		if f.Done {
+			break
+		}
+		chunks++
+		total += len(f.Flights)
+	}
+	// 30 minutes at 10-minute chunks (+ the current-instant second) → 3-4 chunk
+	// frames depending on boundary alignment; every seeded position arrives once.
+	if chunks < 3 || chunks > 4 {
+		t.Fatalf("expected 3-4 chunk frames, got %d", chunks)
+	}
+	if total != 30 {
+		t.Fatalf("expected all 30 seeded positions, got %d", total)
+	}
+}
+
+func TestWSHandlerFlightsHistoryInvalidMinutes(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+	sendJSON(t, conn, map[string]any{"type": "flights_history", "minutes": 45, "id": 1})
+	if f := readFrame(t, conn); f.Type != "error" {
+		t.Fatalf("expected error frame for minutes=45, got %+v", f)
+	}
+}
+
+func TestWSHandlerFlightsHistoryIgnoredWhenUnsubscribed(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+	sendJSON(t, conn, map[string]any{"type": "flights_history", "minutes": 30, "id": 1})
+	// A follow-up round-trip proves the request produced no frames at all.
+	sendJSON(t, conn, map[string]string{"type": "pause"})
+	if f := readFrame(t, conn); f.Type != "pause_ack" {
+		t.Fatalf("expected pause_ack (history silently ignored), got %+v", f)
 	}
 }

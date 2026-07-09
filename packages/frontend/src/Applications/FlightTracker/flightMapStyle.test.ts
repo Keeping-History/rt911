@@ -90,3 +90,20 @@ describe("applyMapColors", () => {
 		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("90,90,90");
 	});
 });
+
+describe("applyMapColors ghost layers", () => {
+	it("recolors the ghost layers with the pin colors", () => {
+		const calls: Array<[string, string, unknown]> = [];
+		const map = {
+			setPaintProperty: (l: string, n: string, v: unknown) =>
+				calls.push([l, n, v]),
+		};
+		applyMapColors(map, {
+			darkMap: false,
+			pinColor: "#112233",
+			notablePinColor: "#445566",
+		});
+		expect(calls).toContainEqual(["ghost-dots", "circle-color", "#112233"]);
+		expect(calls).toContainEqual(["ghost-notable", "circle-color", "#445566"]);
+	});
+});

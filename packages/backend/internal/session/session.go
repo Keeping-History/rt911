@@ -85,6 +85,9 @@ type outMsg struct {
 	// ID/Body carry a single on-demand Usenet article body (usenet_body frame).
 	ID   int    `json:"id,omitempty"`
 	Body string `json:"body,omitempty"`
+	// Done marks the final chunk of a flights_history reply (the ID field above
+	// doubles as the echoed request id on those frames).
+	Done bool `json:"done,omitempty"`
 }
 
 // Session holds all state for a single connected client.
@@ -319,6 +322,17 @@ func (s *Session) SendFlights(t time.Time, items []model.FlightPosition) {
 		return
 	}
 	s.send_(outMsg{Type: "flights", Time: t.Format(time.RFC3339), Flights: items})
+}
+
+// SendFlightsHistory delivers one chunk of a flights_history reply, echoing the
+// client's request id so chunks of a superseded request can be discarded. Unlike
+// SendFlights, the done frame IS sent with an empty batch — it is the completion
+// marker the client waits for.
+func (s *Session) SendFlightsHistory(reqID int, t time.Time, items []model.FlightPosition, done bool) {
+	if len(items) == 0 && !done {
+		return
+	}
+	s.send_(outMsg{Type: "flights_history", ID: reqID, Time: t.Format(time.RFC3339), Flights: items, Done: done})
 }
 
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the

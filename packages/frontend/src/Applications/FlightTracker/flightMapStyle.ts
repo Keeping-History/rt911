@@ -118,6 +118,9 @@ export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void
 	map.setPaintProperty("countries", "line-color", p.countries);
 	map.setPaintProperty("states", "line-color", p.states);
 	map.setPaintProperty("flight-trails", "line-gradient", trailGradient(theme));
-	// Pin colors are NOT set here: the plane layers are symbol layers whose
+	// Live pin colors are NOT set here: the plane layers are symbol layers whose
 	// icons bake the color in (see flightIcons + FlightMap's installPlaneIcons).
+	// The loop-mode ghost layers stay plain circles, so they DO recolor here.
+	map.setPaintProperty("ghost-dots", "circle-color", colors.pinColor);
+	map.setPaintProperty("ghost-notable", "circle-color", colors.notablePinColor);
 }

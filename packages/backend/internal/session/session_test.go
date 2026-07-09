@@ -673,3 +673,49 @@ func TestFlightsRefillRequiresSubscription(t *testing.T) {
 		t.Fatalf("expected [t, t+window) refill after subscribe, got lo=%v hi=%v due=%v", lo, hi, due)
 	}
 }
+
+func TestSendFlightsHistoryEmitsChunkWithIDAndTime(t *testing.T) {
+	s := newTestSession(t)
+	ts := time.Date(2001, 9, 11, 12, 30, 0, 0, time.UTC)
+	items := []model.FlightPosition{
+		{ID: 1, Flight: "AA11", StartDate: ts, Lat: 42.36, Lon: -71.0, AltFt: 1000},
+	}
+
+	s.SendFlightsHistory(7, ts, items, false)
+
+	m := recvType(t, s)
+	if m.Type != "flights_history" {
+		t.Fatalf("expected flights_history frame, got %q", m.Type)
+	}
+	if m.ID != 7 {
+		t.Fatalf("expected echoed request id 7, got %d", m.ID)
+	}
+	if m.Done {
+		t.Fatal("chunk frame must not carry done")
+	}
+	if len(m.Flights) != 1 || m.Flights[0].Flight != "AA11" {
+		t.Fatalf("expected the AA11 position, got %+v", m.Flights)
+	}
+}
+
+func TestSendFlightsHistoryEmptyChunkIsSuppressed(t *testing.T) {
+	s := newTestSession(t)
+	s.SendFlightsHistory(7, time.Now().UTC(), nil, false)
+	select {
+	case <-s.send:
+		t.Fatal("empty non-done chunk must not emit a frame")
+	default:
+	}
+}
+
+func TestSendFlightsHistoryDoneFrameSentEvenWhenEmpty(t *testing.T) {
+	s := newTestSession(t)
+	s.SendFlightsHistory(7, time.Now().UTC(), nil, true)
+	m := recvType(t, s)
+	if m.Type != "flights_history" || !m.Done || m.ID != 7 {
+		t.Fatalf("expected empty done frame with id 7, got %+v", m)
+	}
+	if len(m.Flights) != 0 {
+		t.Fatalf("done marker should carry no flights, got %d", len(m.Flights))
+	}
+}

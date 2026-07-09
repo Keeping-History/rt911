@@ -355,4 +355,43 @@ describe("FlightMap", () => {
 		rafCb!(2_000);
 		expect((map.sources["flight-trails"]!.data as { features: unknown[] }).features).toHaveLength(0);
 	});
+
+	it("adds ghost source and layers under the live dots on load", () => {
+		render(
+			<FlightMap positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false}
+				trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.sources["ghost-flights"]).toBeDefined();
+		const ghostDots = map.layers.find((l) => l.id === "ghost-dots");
+		const ghostNotable = map.layers.find((l) => l.id === "ghost-notable");
+		expect(ghostDots?.beforeId).toBe("flights-dots");
+		expect(ghostNotable?.beforeId).toBe("flights-dots");
+	});
+
+	it("clears the ghost source when loop mode turns off", () => {
+		const common = {
+			positions: [], basemapUrl: "x.pmtiles", trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, pinColor: "#3a3a3a", notablePinColor: "#c0202a", radarSweep: false,
+			trailMultiplier: 1,
+			loopWindowMs: 1_800_000,
+			loopClock: { anchorVirtual: 0, anchorWall: 0, speed: 1 as const, scrubbing: false },
+			replayBuffer: new Map(),
+		};
+		const { rerender } = render(<FlightMap {...common} loopEnabled={true} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		// Seed the ghost source with a non-empty FC to prove the disable clears it.
+		map.getSource("ghost-flights")?.setData({
+			type: "FeatureCollection",
+			features: [{ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: {} }],
+		});
+		rerender(<FlightMap {...common} loopEnabled={false} />);
+		const data = map.sources["ghost-flights"].data as { features: unknown[] };
+		expect(data.features).toEqual([]);
+	});
 });

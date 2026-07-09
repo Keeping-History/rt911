@@ -96,6 +96,15 @@ interface WsFlightsMessage {
 	flights: FlightPosition[];
 }
 
+// Chunked reply to a flights_history request. id echoes the request generation;
+// the done frame (possibly empty) marks the window complete.
+interface WsFlightsHistoryMessage {
+	type: "flights_history";
+	id?: number;
+	flights?: FlightPosition[];
+	done?: boolean;
+}
+
 type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
@@ -106,6 +115,7 @@ type WsIncomingMessage =
 	| WsUsenetBodyMessage
 	| WsSourcesMessage
 	| WsFlightsMessage
+	| WsFlightsHistoryMessage
 	| { type: string };
 
 interface MediaStreamProviderProps {
@@ -124,6 +134,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
 	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
 	const [flightPositions, setFlightPositions] = useState<FlightPosition[]>([]);
+	const [flightsHistory, setFlightsHistory] = useState<FlightPosition[]>([]);
+	const [flightsHistoryDone, setFlightsHistoryDone] = useState(false);
 	const [usenetBodyState, setUsenetBodyState] = useState(emptyUsenetBodyState);
 	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
 	// fetches when a window re-renders before its body arrives.
@@ -141,6 +153,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const newsSubscribers = useRef(new Set<string>());
 	const usenetSubscribers = useRef(new Set<string>());
 	const flightsSubscribers = useRef(new Set<string>());
+	// Active loop-history request: window wanted (null = loop off) and a
+	// generation id echoed by the server so a superseded request's chunks are
+	// discarded — frames from request N can still arrive after request N+1 goes out.
+	const flightsHistoryMinutes = useRef<30 | 90 | null>(null);
+	const flightsHistoryGen = useRef(0);
 	// The newsgroup(s) the client is currently viewing — resent on reconnect.
 	const usenetGroups = useRef<string[]>([]);
 
@@ -322,10 +339,41 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				send({ type: "unsubscribe", channel: "flights" });
 				setFlightPositions([]);
 				flightsBuffer.current.clear();
+				// Loop history is a flights-channel feature; drop it with the channel.
+				flightsHistoryMinutes.current = null;
+				flightsHistoryGen.current += 1;
+				setFlightsHistory([]);
+				setFlightsHistoryDone(false);
 			}
 		},
 		[send],
 	);
+
+	// (Re-)issue the active history request: bump the generation, reset the
+	// accumulated window, ask again. No-op while loop mode is off.
+	const sendFlightsHistoryRequest = useCallback(() => {
+		const minutes = flightsHistoryMinutes.current;
+		if (minutes === null) return;
+		flightsHistoryGen.current += 1;
+		setFlightsHistory([]);
+		setFlightsHistoryDone(false);
+		send({ type: "flights_history", minutes, id: flightsHistoryGen.current });
+	}, [send]);
+
+	const requestFlightsHistory = useCallback(
+		(minutes: 30 | 90) => {
+			flightsHistoryMinutes.current = minutes;
+			sendFlightsHistoryRequest();
+		},
+		[sendFlightsHistoryRequest],
+	);
+
+	const clearFlightsHistory = useCallback(() => {
+		flightsHistoryMinutes.current = null;
+		flightsHistoryGen.current += 1; // orphan any in-flight chunks
+		setFlightsHistory([]);
+		setFlightsHistoryDone(false);
+	}, []);
 
 	// Set the newsgroup(s) being viewed. The server resends a backlog for the new
 	// group(s), so the current items + buffer are cleared to avoid mixing groups.
@@ -413,10 +461,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			setUsenetItems([]);
 			flightsBuffer.current.clear();
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
+			// The old timeline's loop history is meaningless at the new instant.
+			sendFlightsHistoryRequest();
 		}
 
 		prevDateTimeRef.current = dateTime;
-	}, [dateTime, send]);
+	}, [dateTime, send, sendFlightsHistoryRequest]);
 
 	// Once the socket is OPEN, re-request the window for the current instant.
 	// The active video channels are long-running stitched HLS streams (one row in
@@ -478,6 +528,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			if (flightsSubscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "flights" }));
+				// Loop mode survives a reconnect: re-seed its window at the fresh clock.
+				sendFlightsHistoryRequest();
 			}
 			// Body requests do not survive a reconnect; clear in-flight markers so
 			// any open message window re-requests on its next render.
@@ -581,6 +633,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "flights_history") {
+				const hist = msg as WsFlightsHistoryMessage;
+				if (hist.id !== flightsHistoryGen.current) return; // superseded request
+				const incoming = hist.flights ?? [];
+				if (incoming.length > 0)
+					setFlightsHistory((prev) => [...prev, ...incoming]);
+				if (hist.done) setFlightsHistoryDone(true);
+				return;
+			}
+
 			if (msg.type === "flights") {
 				const incomingFlights = (msg as WsFlightsMessage).flights;
 				if (!incomingFlights || incomingFlights.length === 0) return;
@@ -628,8 +690,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			wsRef.current = null;
 		};
-		// Intentionally runs once on mount; utcMsRef carries the live value
-	}, []);
+		// Intentionally runs once on mount; utcMsRef carries the live value.
+		// sendFlightsHistoryRequest is stable (its only dep is the stable `send`),
+		// so listing it satisfies the lint without re-running the effect.
+	}, [sendFlightsHistoryRequest]);
 
 	// Memoize the context value so consumers only re-render when specific data
 	// changes — not on every provider render (which happens every clock tick and
@@ -664,6 +728,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			flightPositions,
 			subscribeFlights,
 			unsubscribeFlights,
+			flightsHistory,
+			flightsHistoryDone,
+			requestFlightsHistory,
+			clearFlightsHistory,
 		}),
 		[
 			items,
@@ -693,6 +761,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			flightPositions,
 			subscribeFlights,
 			unsubscribeFlights,
+			flightsHistory,
+			flightsHistoryDone,
+			requestFlightsHistory,
+			clearFlightsHistory,
 		],
 	);
 
