@@ -19,6 +19,8 @@ import {
 } from "./flightIcons";
 import {
 	type MotionBuffer,
+	TRAIL_MULTIPLIER_MAX,
+	TRAIL_POINTS,
 	motionPointsToGeoJSON,
 	motionTrailsToGeoJSON,
 	updateMotion,
@@ -72,6 +74,8 @@ interface FlightMapProps {
 	pinColor: string;
 	notablePinColor: string;
 	radarSweep: boolean;
+	// Comet-tail length as a multiple of TRAIL_POINTS; 0 turns tails off.
+	trailMultiplier: number;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
 }
@@ -87,7 +91,7 @@ const HIT_TOLERANCE = 6;
 
 export const FlightMap: FC<FlightMapProps> = ({
 	positions, basemapUrl, trackGeoJSON, nowMs, playing,
-	darkMap, pinColor, notablePinColor, radarSweep,
+	darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -102,6 +106,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	colorsRef.current = { darkMap, pinColor, notablePinColor };
 	const radarSweepRef = useRef(radarSweep);
 	radarSweepRef.current = radarSweep;
+	const trailMultiplierRef = useRef(trailMultiplier);
+	trailMultiplierRef.current = trailMultiplier;
 
 	const motionBufferRef = useRef<MotionBuffer>(new Map());
 	const nowMsRef = useRef(nowMs);
@@ -299,6 +305,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 		dirtyRef.current = true;
 	}, [radarSweep]);
 
+	// New trail length applies next frame; wake a paused map for one redraw.
+	useEffect(() => {
+		dirtyRef.current = true;
+	}, [trailMultiplier]);
+
 	// Glide dots + draw trails at ~15 fps off a smooth virtual clock. While
 	// playing, advance wall-time deltas from the anchor (RATE 1×); while paused,
 	// hold at the anchor and idle after the last draw. All virtual/UTC ms.
@@ -321,8 +332,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 			(map.getSource("flights") as maplibregl.GeoJSONSource | undefined)?.setData(
 				motionPointsToGeoJSON(buf, now),
 			);
+			// Clamp: hand-edited persisted state must not build million-point trails.
+			const clamped = Math.min(Math.max(trailMultiplierRef.current, 0), TRAIL_MULTIPLIER_MAX);
 			(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
-				motionTrailsToGeoJSON(buf, now),
+				motionTrailsToGeoJSON(buf, now, Math.round(TRAIL_POINTS * clamped)),
 			);
 			if (radarSweepRef.current) {
 				(map.getSource("radar-sweep") as maplibregl.GeoJSONSource | undefined)?.setData(

@@ -87,6 +87,22 @@ vi.mock("classicy", () => ({
 			{labelTitle}
 		</button>
 	),
+	ClassicySlider: ({
+		id,
+		value,
+		onChangeFunc,
+	}: {
+		id: string;
+		value?: number;
+		onChangeFunc?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+	}) => (
+		<input
+			type="range"
+			data-testid={id}
+			value={value}
+			onChange={(e) => onChangeFunc?.(e)}
+		/>
+	),
 	MAC_OS_8_CRAYONS: [],
 	ClassicyIcons: { controlPanels: { location: { app: "icon.png" } } },
 	quitMenuItemHelper: () => ({}),
@@ -295,7 +311,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: true, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: true },
+			mapSettings: { darkMap: true, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: true, trailMultiplier: 1 },
 		});
 	});
 
@@ -320,7 +336,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: true, pinColor: 0x0000ff, notablePinColor: 0x0000ff, radarSweep: true },
+			mapSettings: { darkMap: true, pinColor: 0x0000ff, notablePinColor: 0x0000ff, radarSweep: true, trailMultiplier: 1 },
 		});
 	});
 
@@ -331,7 +347,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: false },
+			mapSettings: { darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: false, trailMultiplier: 1 },
 		});
 	});
 
@@ -343,7 +359,23 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: false },
+			mapSettings: { darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a, radarSweep: false, trailMultiplier: 1 },
+		});
+	});
+
+	it("commits the trail-length slider on Save", () => {
+		renderWithContext({});
+		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		fireEvent.change(screen.getByTestId("flight_settings_trail_multiplier"), {
+			target: { value: "3.5" },
+		});
+		fireEvent.click(screen.getByText("Save"));
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyAppFlightTrackerSetMapSettings",
+			mapSettings: {
+				darkMap: false, pinColor: 0x3a3a3a, notablePinColor: 0xc0202a,
+				radarSweep: true, trailMultiplier: 3.5,
+			},
 		});
 	});
 
