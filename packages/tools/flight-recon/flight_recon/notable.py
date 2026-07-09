@@ -92,7 +92,10 @@ CREATE TABLE IF NOT EXISTS flight_tracks (
     diverted       boolean,
     wheels_off_utc timestamptz,
     wheels_on_utc  timestamptz,
+    tail_number    varchar,
+    aircraft_type  varchar,
     geometry       json,
+    details        json,
     run_id         varchar NOT NULL
 );
 CREATE TABLE IF NOT EXISTS reconstruction_runs (
