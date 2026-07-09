@@ -46,6 +46,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
 | `usenet_body` | `id`              | Request the full body of one message by id (bodies are no longer in list frames). |
+| `flights_history` | `minutes`, `id` | Request the trailing `minutes` (30 or 90) of flight positions for loop playback. Requires an active `flights` subscription. `id` is echoed on every reply chunk. |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
 
@@ -70,6 +71,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `flights`         | `time`, `flights[]`           | Flights snapshot (airborne picture covering `[t−90s, t]`) on subscribe/init/seek, plus a forward **window** (default 300 s) per refill while subscribed. |
+| `flights_history` | `id`, `time`, `flights[]`, `done` | Chunked reply to a `flights_history` request (~10 minute-buckets per frame). The final frame carries `done: true` (and may be empty). `id` echoes the request. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`, `sources.usenet`). Not resent on `seek`. |
@@ -401,6 +403,30 @@ addition to the reveal-gate it already applies to pager/media items.
 
 `run_id`, `et_seconds`, `clock_seconds`, and `flight_date` (pipeline provenance from
 `packages/tools/flight-recon`) are deliberately not on the wire — the client never needs them.
+
+### `flights_history` (loop-mode history)
+
+Request:
+
+```json
+{ "type": "flights_history", "minutes": 30, "id": 4 }
+```
+
+`minutes` must be 30 or 90 (anything else yields an `error` frame). The request is
+silently ignored without an active `flights` subscription or before the virtual clock
+is initialised. The server reads the minute buckets covering `[clock − minutes, clock]`
+from the flight cache and streams them as `flights_history` frames of ~10 buckets each —
+one 90-minute window is ~150k positions, far too large for a single frame. Every frame
+echoes the request `id`; a client that issues a new request (window change, seek,
+reconnect) bumps its `id` and discards stale chunks. The final frame carries
+`done: true` and no positions:
+
+```json
+{ "type": "flights_history", "id": 4, "time": "2001-09-11T13:00:00Z", "done": true }
+```
+
+Elements of `flights[]` are the same `FlightPosition` shape as `flights` frames
+(see the field table above).
 
 #### `flight_tracks` is not on the wire
 
