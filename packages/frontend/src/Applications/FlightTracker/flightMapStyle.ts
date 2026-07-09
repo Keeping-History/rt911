@@ -32,12 +32,11 @@ export const BASEMAP_PALETTES: Record<BasemapTheme, BasemapPalette> = {
 };
 
 // Non-basemap colors that follow the theme (trails) or deliberately don't
-// (pin strokes and the selected-track line read fine on both palettes).
+// (the selected-track line reads fine on both palettes).
 export const TRAIL_COLORS: Record<BasemapTheme, string> = {
 	light: "#5a5a5a",
 	dark: "#9a9aa6",
 };
-export const PIN_STROKE_COLOR = "#ffffff";
 export const TRACK_LINE_COLOR = "#b22222";
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -119,6 +118,6 @@ export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void
 	map.setPaintProperty("countries", "line-color", p.countries);
 	map.setPaintProperty("states", "line-color", p.states);
 	map.setPaintProperty("flight-trails", "line-gradient", trailGradient(theme));
-	map.setPaintProperty("flights-dots", "circle-color", colors.pinColor);
-	map.setPaintProperty("flights-notable", "circle-color", colors.notablePinColor);
+	// Pin colors are NOT set here: the plane layers are symbol layers whose
+	// icons bake the color in (see flightIcons + FlightMap's installPlaneIcons).
 }

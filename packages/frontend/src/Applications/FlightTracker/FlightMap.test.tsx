@@ -48,6 +48,11 @@ const FakeMap = vi.hoisted(() => {
 		setLayoutProperty(layerId: string, name: string, value: unknown) {
 			(this.layout[layerId] ??= {})[name] = value;
 		}
+		images: Record<string, unknown> = {};
+		updatedImages: Record<string, unknown> = {};
+		hasImage(id: string) { return id in this.images; }
+		addImage(id: string, img: unknown) { this.images[id] = img; }
+		updateImage(id: string, img: unknown) { this.updatedImages[id] = img; this.images[id] = img; }
 		getSource(id: string) {
 			const s = this.sources[id];
 			return s ? { setData: (d: unknown) => { s.data = d; } } : undefined;
@@ -65,6 +70,15 @@ vi.mock("maplibre-gl", () => ({
 	addProtocol: vi.fn(),
 }));
 vi.mock("pmtiles", () => ({ Protocol: class { tile = vi.fn(); } }));
+// Real constants, fake rasterizer — jsdom has no canvas. The fake records the
+// fill so tests can assert which color went into which image.
+vi.mock("./flightIcons", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./flightIcons")>();
+	return {
+		...actual,
+		buildPlaneImage: vi.fn(async (_svg: string, fill: string) => ({ fill }) as unknown as ImageData),
+	};
+});
 
 import { FlightMap } from "./FlightMap";
 
@@ -181,7 +195,7 @@ describe("FlightMap", () => {
 		expect(trails.length).toBe(1);
 	});
 
-	it("applies pin colors + theme on load and live via setPaintProperty (no re-mount)", () => {
+	it("installs plane icons from pin colors and re-themes/recolors live (no re-mount)", async () => {
 		const common = {
 			positions: [], basemapUrl: "x.pmtiles", trackGeoJSON: null, nowMs: 0,
 			playing: false, onSelectFlight: () => {}, onClearSelection: () => {}, radarSweep: false,
@@ -191,12 +205,13 @@ describe("FlightMap", () => {
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
-		// The load handler applies the current colors over the just-added layers.
-		expect(map.paint["flights-dots"]?.["circle-color"]).toBe("#00aa00");
-		expect(map.paint["flights-notable"]?.["circle-color"]).toBe("#123456");
+		// Basemap still themed via paint; pin colors now flow through the icons.
 		expect(map.paint["background"]?.["background-color"]).toBe("#efe9dd");
+		await vi.waitFor(() => {
+			expect((map.images["plane-icon"] as { fill: string }).fill).toBe("#00aa00");
+			expect((map.images["plane-notable-icon"] as { fill: string }).fill).toBe("#123456");
+		});
 
-		// Theme flip + recolor: live paint updates on the SAME map instance.
 		rerender(
 			<FlightMap {...common} darkMap={true} pinColor="#ffffff" notablePinColor="#ff0000" />,
 		);
@@ -204,8 +219,35 @@ describe("FlightMap", () => {
 		expect(map.paint["background"]?.["background-color"]).toBe("#1c1c22");
 		// Trail fade uses a themed line-gradient (dark #9a9aa6 → rgb 154,154,166).
 		expect(JSON.stringify(map.paint["flight-trails"]?.["line-gradient"])).toContain("154,154,166");
-		expect(map.paint["flights-dots"]?.["circle-color"]).toBe("#ffffff");
-		expect(map.paint["flights-notable"]?.["circle-color"]).toBe("#ff0000");
+		await vi.waitFor(() => {
+			expect((map.updatedImages["plane-icon"] as { fill: string }).fill).toBe("#ffffff");
+			expect((map.updatedImages["plane-notable-icon"] as { fill: string }).fill).toBe("#ff0000");
+		});
+	});
+
+	it("renders planes as heading-rotated symbol layers (regular excludes notables)", () => {
+		render(
+			<FlightMap positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		const dots = map.layers.find((l) => l.id === "flights-dots") as {
+			type: string; filter: unknown; layout: Record<string, unknown>;
+		};
+		expect(dots.type).toBe("symbol");
+		expect(dots.filter).toEqual(["!=", ["get", "notable"], true]);
+		expect(dots.layout["icon-image"]).toBe("plane-icon");
+		expect(dots.layout["icon-rotate"]).toEqual(["-", ["get", "heading"], 90]);
+		expect(dots.layout["icon-rotation-alignment"]).toBe("map");
+		expect(dots.layout["icon-allow-overlap"]).toBe(true);
+		expect(dots.layout["icon-ignore-placement"]).toBe(true);
+		const notable = map.layers.find((l) => l.id === "flights-notable") as {
+			type: string; layout: Record<string, unknown>;
+		};
+		expect(notable.type).toBe("symbol");
+		expect(notable.layout["icon-image"]).toBe("plane-notable-icon");
 	});
 
 	it("creates radar layers under the track line, visible when radarSweep is on", () => {

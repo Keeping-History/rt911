@@ -58,7 +58,7 @@ describe("applyMapColors", () => {
 		};
 	}
 
-	it("applies the dark palette, themed trail color, and pin colors", () => {
+	it("applies the dark palette and themed trail gradient, leaving pin layers alone", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
 			darkMap: true,
@@ -71,8 +71,9 @@ describe("applyMapColors", () => {
 		expect(map.paint.states["line-color"]).toBe(BASEMAP_PALETTES.dark.states);
 		// Trails fade via a themed line-gradient (dark #9a9aa6 → rgb 154,154,166).
 		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("154,154,166");
-		expect(map.paint["flights-dots"]["circle-color"]).toBe("#00aa00");
-		expect(map.paint["flights-notable"]["circle-color"]).toBe("#123456");
+		// Pin colors flow through icon rebuilds now, not paint.
+		expect(map.paint["flights-dots"]).toBeUndefined();
+		expect(map.paint["flights-notable"]).toBeUndefined();
 	});
 
 	it("applies the light palette when darkMap is off", () => {

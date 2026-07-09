@@ -3,13 +3,20 @@ import { Protocol } from "pmtiles";
 import { type FC, useEffect, useRef } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import {
-	PIN_STROKE_COLOR,
 	TRACK_LINE_COLOR,
 	applyMapColors,
 	buildBasemapStyle,
 	type FlightMapColors,
 	trailGradient,
 } from "./flightMapStyle";
+import planeSvg from "./plane.svg?raw";
+import {
+	PLANE_ICON_ID,
+	PLANE_ICON_PX,
+	PLANE_NOTABLE_ICON_ID,
+	PLANE_NOTABLE_ICON_PX,
+	buildPlaneImage,
+} from "./flightIcons";
 import {
 	type MotionBuffer,
 	motionPointsToGeoJSON,
@@ -29,6 +36,29 @@ function ensurePmtilesProtocol() {
 	if (protocolRegistered) return;
 	maplibregl.addProtocol("pmtiles", new Protocol().tile);
 	protocolRegistered = true;
+}
+
+// Build both plane images and (re)install them. updateImage on a color change
+// keeps the symbol layers untouched. Never throws into React — on failure the
+// map just has no plane icons (prod browsers always have canvas; jsdom tests
+// mock this module).
+async function installPlaneIcons(
+	map: maplibregl.Map,
+	pinColor: string,
+	notablePinColor: string,
+) {
+	try {
+		const [regular, notable] = await Promise.all([
+			buildPlaneImage(planeSvg, pinColor, PLANE_ICON_PX),
+			buildPlaneImage(planeSvg, notablePinColor, PLANE_NOTABLE_ICON_PX),
+		]);
+		if (map.hasImage(PLANE_ICON_ID)) map.updateImage(PLANE_ICON_ID, regular);
+		else map.addImage(PLANE_ICON_ID, regular, { pixelRatio: 2 });
+		if (map.hasImage(PLANE_NOTABLE_ICON_ID)) map.updateImage(PLANE_NOTABLE_ICON_ID, notable);
+		else map.addImage(PLANE_NOTABLE_ICON_ID, notable, { pixelRatio: 2 });
+	} catch (err) {
+		console.warn("plane icons unavailable:", err);
+	}
 }
 
 interface FlightMapProps {
@@ -118,22 +148,30 @@ export const FlightMap: FC<FlightMapProps> = ({
 				paint: { "line-width": 1.2, "line-gradient": trailGradient(theme) },
 			});
 			map.addLayer({
-				id: "flights-dots", type: "circle", source: "flights",
-				paint: {
-					"circle-radius": 3, "circle-color": colors.pinColor,
-					"circle-stroke-width": 0.5, "circle-stroke-color": PIN_STROKE_COLOR,
+				id: "flights-dots", type: "symbol", source: "flights",
+				filter: ["!=", ["get", "notable"], true],
+				layout: {
+					"icon-image": PLANE_ICON_ID,
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
 				},
 			});
 			// Always-on highlight of the notable flights (renders nothing until the
 			// notable-flights data story loads AA11/UA175/AA77/UA93).
 			map.addLayer({
-				id: "flights-notable", type: "circle", source: "flights",
+				id: "flights-notable", type: "symbol", source: "flights",
 				filter: ["==", ["get", "notable"], true],
-				paint: {
-					"circle-radius": 5, "circle-color": colors.notablePinColor,
-					"circle-stroke-width": 1, "circle-stroke-color": PIN_STROKE_COLOR,
+				layout: {
+					"icon-image": PLANE_NOTABLE_ICON_ID,
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
 				},
 			});
+			void installPlaneIcons(map, colors.pinColor, colors.notablePinColor);
 			// Radar sweep + afterglow wedge, under the track line and all flight
 			// layers. Color = Classicy theme var, resolved from the DOM because
 			// WebGL paint can't read CSS custom properties.
@@ -233,6 +271,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
 		applyMapColors(map, { darkMap, pinColor, notablePinColor });
+		void installPlaneIcons(map, pinColor, notablePinColor);
 	}, [darkMap, pinColor, notablePinColor]);
 
 	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an
