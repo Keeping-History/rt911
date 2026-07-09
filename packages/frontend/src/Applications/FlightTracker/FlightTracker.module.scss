@@ -23,7 +23,8 @@
 .detailNote { margin-top: 8px; color: #666; font-family: var(--ui-font) !important; }
 .statusBar {
 	flex: 0 0 auto; padding: 2px 8px; border-top: 1px solid #999;
-	font-size: var(--ui-font-size); display: flex; justify-content: space-between;
+	font-size: calc(var(--ui-font-size)/1.25);
+	display: flex; justify-content: space-between;
 	font-family: var(--ui-font) !important;
 	padding-right: calc(var(--window-control-size) *2);
 	background-color: var(--color-system-07);
