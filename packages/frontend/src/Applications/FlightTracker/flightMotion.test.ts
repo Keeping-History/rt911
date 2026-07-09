@@ -3,6 +3,7 @@ import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamCont
 import {
 	MAX_EXTRAPOLATION_MS,
 	type MotionBuffer,
+	TRAIL_MULTIPLIER_MAX,
 	TRAIL_POINTS,
 	extrapolate,
 	motionPointsToGeoJSON,
@@ -50,15 +51,17 @@ describe("updateMotion", () => {
 		]);
 	});
 
-	it("caps the trail at TRAIL_POINTS, dropping the oldest", () => {
+	it("retains up to TRAIL_POINTS * TRAIL_MULTIPLIER_MAX, dropping the oldest", () => {
 		const buf: MotionBuffer = new Map();
-		for (let min = 0; min <= TRAIL_POINTS + 3; min++) updateMotion(buf, [sampleAt(min, -74 + min)]);
+		const cap = TRAIL_POINTS * TRAIL_MULTIPLIER_MAX;
+		for (let min = 0; min <= cap + 3; min++) updateMotion(buf, [sampleAt(min, -74 + min)]);
 		const m = buf.get("AA1")!;
 		expect(TRAIL_POINTS).toBe(20);
-		expect(m.trail).toHaveLength(TRAIL_POINTS);
-		// After 14 samples (min 0..13), the oldest 4 are dropped: oldest kept is min 4.
+		expect(TRAIL_MULTIPLIER_MAX).toBe(10);
+		expect(m.trail).toHaveLength(cap);
+		// cap+4 samples → oldest 4 dropped: oldest kept is min 4.
 		expect(m.trail[0]).toEqual([-70, 40]);
-		expect(m.trail[m.trail.length - 1]).toEqual([-74 + (TRAIL_POINTS + 3), 40]);
+		expect(m.trail[m.trail.length - 1]).toEqual([-74 + (cap + 3), 40]);
 	});
 
 	it("does not append to the trail on a same/older sample", () => {
@@ -171,5 +174,31 @@ describe("heading", () => {
 		updateMotion(buf, [sampleAt(1, -73)]);
 		const fc = motionPointsToGeoJSON(buf, T1);
 		expect(fc.features[0].properties.heading).toBeCloseTo(90, 5);
+	});
+});
+
+describe("trail display length (multiplier support)", () => {
+	// 6 real samples → 6 trail points for AA1.
+	function bufWith6(): MotionBuffer {
+		const buf: MotionBuffer = new Map();
+		for (let min = 0; min < 6; min++) updateMotion(buf, [sampleAt(min, -74 + min)]);
+		return buf;
+	}
+
+	it("slices each trail to displayPoints (+ gliding head)", () => {
+		const fc = motionTrailsToGeoJSON(bufWith6(), T0 + 5 * 60_000, 3);
+		const coords = fc.features[0].geometry.coordinates;
+		expect(coords).toHaveLength(4); // 3 newest real points + head
+		expect(coords[0]).toEqual([-74 + 3, 40]); // older points sliced away
+	});
+
+	it("defaults to TRAIL_POINTS when displayPoints is omitted (today's behavior)", () => {
+		const fc = motionTrailsToGeoJSON(bufWith6(), T0 + 5 * 60_000);
+		expect(fc.features[0].geometry.coordinates).toHaveLength(7); // all 6 + head
+	});
+
+	it("emits nothing at displayPoints 0 or 1 (tails off)", () => {
+		expect(motionTrailsToGeoJSON(bufWith6(), T0 + 5 * 60_000, 0).features).toHaveLength(0);
+		expect(motionTrailsToGeoJSON(bufWith6(), T0 + 5 * 60_000, 1).features).toHaveLength(0);
 	});
 });
