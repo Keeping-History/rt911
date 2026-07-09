@@ -24,6 +24,19 @@ vi.mock("classicy", () => ({
 	ClassicyWindow: ({ children }: { children: React.ReactNode }) => (
 		<div>{children}</div>
 	),
+	ClassicyControlGroup: ({
+		label,
+		children,
+	}: {
+		label?: string;
+		children?: React.ReactNode;
+	}) => (
+		<div>
+			<span>{label}</span>
+			{children}
+		</div>
+	),
+	ClassicyControlLabel: ({ label }: { label?: string }) => <span>{label}</span>,
 	ClassicyIcons: { controlPanels: { location: { app: "icon.png" } } },
 	quitMenuItemHelper: () => ({}),
 	useAppManager: (sel: (s: unknown) => unknown) =>
