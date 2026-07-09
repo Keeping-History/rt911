@@ -54,3 +54,43 @@ def test_missing_tail_column_still_reconstructs(tmp_path, airports_csv):
     assert tracks[0]["properties"]["aircraft_type"] is None
     # positions untouched by this feature
     assert "tail_number" not in positions[0]
+
+
+def _flights_csv_carrier(tmp_path, tail_cell):
+    p = tmp_path / "flights2.csv"
+    p.write_text(f"{FLIGHT_COLS},Tail_Number\n"
+                 f"2001-09-10,AA,11,BOS,LAX,0800,1100,0,0,,2611,{tail_cell}\n")
+    return p
+
+
+def test_decode_map_resolves_mangled_tail(tmp_path, airports_csv):
+    flights = _flights_csv_carrier(tmp_path, "N334A1")  # mangled: final zoned A->1
+    fleet = {"N334AA": "Boeing 767-223"}
+    decode = {("AA", "N334A1"): "N334AA"}
+    _, tracks, _, _ = reconstruct("2001-09-10", "2001-09-10", flights, airports_csv,
+                                  fleet=fleet, tail_decode=decode)
+    props = tracks[0]["properties"]
+    assert props["tail_number"] == "N334AA"
+    assert props["aircraft_type"] == "Boeing 767-223"
+
+
+def test_decode_map_unmapped_mangled_tail_stays_null(tmp_path, airports_csv):
+    # '@' padding marks a mangled value; without a mapping it must NOT be
+    # stored as a pseudo-tail like "N368"
+    flights = _flights_csv_carrier(tmp_path, "N368@@")
+    _, tracks, _, _ = reconstruct("2001-09-10", "2001-09-10", flights, airports_csv,
+                                  fleet={}, tail_decode={})
+    props = tracks[0]["properties"]
+    assert props["tail_number"] is None
+    assert props["aircraft_type"] is None
+
+
+def test_decode_map_clean_tail_passes_through(tmp_path, airports_csv):
+    # CO-style clean numeric tails aren't in the decode map but are valid
+    flights = _flights_csv_carrier(tmp_path, "N14079")
+    fleet = {"N14079": "Boeing 737-824"}
+    _, tracks, _, _ = reconstruct("2001-09-10", "2001-09-10", flights, airports_csv,
+                                  fleet=fleet, tail_decode={})
+    props = tracks[0]["properties"]
+    assert props["tail_number"] == "N14079"
+    assert props["aircraft_type"] == "Boeing 737-824"

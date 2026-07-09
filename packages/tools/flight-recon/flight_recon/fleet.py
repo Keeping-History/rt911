@@ -19,6 +19,13 @@ _TAIL_JUNK = re.compile(r"[^A-Z0-9]")
 # upstream) which would otherwise normalize to a plausible-looking tail.
 _NOT_A_TAIL = {"", "UNKNOW", "UNKNOWN", "NONE", "NAN"}
 
+# US registration grammar: N + 1-5 digits, or N + 1-4 digits + 1 letter, or
+# N + 1-3 digits + 2 letters; no leading zero. Used to gate passthrough of
+# raw values when a decode map is active — a value like "N334A1" is
+# format-invalid (digit after letter) and must not be stored as a tail.
+VALID_TAIL = re.compile(
+    r"^N[1-9]\d{0,4}$|^N[1-9]\d{0,3}[A-Z]$|^N[1-9]\d{0,2}[A-Z]{2}$")
+
 
 def normalize_tail(raw):
     """Return the canonical N-number for a BTS/B-43 tail cell, or None."""
@@ -30,6 +37,22 @@ def normalize_tail(raw):
     if not t.startswith("N"):
         t = "N" + t
     return t
+
+
+def load_tail_decode(path):
+    """Load a decode-map CSV (CARRIER,RAW_TAIL,TAIL_NUMBER) into
+    {(carrier, raw): tail}. Produced by analysis/decode_2001_tails.py — maps
+    the September 2001 BTS file's mangled tail values (botched EBCDIC
+    conversion, see that script's docstring) to real registrations."""
+    out = {}
+    with open(path, newline="", encoding="latin-1") as fh:
+        for row in csv.DictReader(fh):
+            carrier = (row.get("CARRIER") or "").strip()
+            raw = (row.get("RAW_TAIL") or "").strip()
+            tail = (row.get("TAIL_NUMBER") or "").strip()
+            if carrier and raw and tail:
+                out[(carrier, raw)] = tail
+    return out
 
 
 def load_fleet(path):
