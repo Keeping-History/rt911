@@ -55,7 +55,7 @@ interface FlightMapProps {
 	onClearSelection: () => void;
 }
 
-export const IDLE_LOOP_CLOCK: LoopClock = {
+const IDLE_LOOP_CLOCK: LoopClock = {
 	anchorVirtual: 0,
 	anchorWall: 0,
 	speed: 1,
