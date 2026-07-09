@@ -34,6 +34,11 @@ class Config:
     # Per-message cutoff passed to mbox_parser --before. Keep messages on or before
     # this date (exclusive of later), so the replay never reveals "future" posts.
     usenet_before: str = field(default_factory=lambda: os.getenv("USENET_BEFORE", "2001-09-21"))
+    # A usenet_jobs row untouched (no heartbeat / transition) this long while in an
+    # in-flight stage (downloading/downloaded/processing) is treated as orphaned by
+    # a dead process-usenet-item run and re-queued at the head of dispatch-usenet.
+    # Must exceed the heartbeat interval (60s) by a comfortable margin.
+    usenet_orphan_stale_minutes: int = field(default_factory=lambda: _int("USENET_ORPHAN_STALE_MINUTES", 10))
 
     # --- Channel thumbnail generation ---
     # Real-world UTC timestamp when the virtual clock was set to the channel window's

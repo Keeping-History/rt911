@@ -1,4 +1,6 @@
 """Unit tests for usenet flow DB helpers. Imports prefect (CI-only, like test_flows.py)."""
+import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from video_grabber.usenet import flows
@@ -48,3 +50,52 @@ def test_get_usenet_job_shapes_namespace():
 def test_sync_db_url_rewrites_asyncpg():
     assert flows._sync_db_url("postgresql+asyncpg://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
     assert flows._sync_db_url("postgresql+psycopg2://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
+
+
+def test_reclaim_orphaned_requeues_stale_inflight_jobs():
+    db = FakeDB()
+    flows.reclaim_orphaned_usenet_jobs(db, stale_minutes=10, max_retries=3, logger=None)
+    sql, params = db.calls[0]
+    # Only in-flight stages, and only when the heartbeat has gone stale.
+    assert "stage IN ('downloading', 'downloaded', 'processing')" in sql
+    assert "last_transition_at < now() - (:mins * interval '1 minute')" in sql
+    # Retry if budget remains, else park in 'failed'; always spend a retry so a
+    # perpetually-orphaning job eventually stops.
+    assert "CAST('discovered' AS usenet_stage)" in sql
+    assert "CAST('failed' AS usenet_stage)" in sql
+    assert "retry_count = retry_count + 1" in sql
+    assert params == {"max": 3, "mins": 10}
+    assert db.commits == 1
+
+
+def test_job_heartbeat_refreshes_last_transition(monkeypatch):
+    """The heartbeat thread bumps last_transition_at for its job while running."""
+    calls = []
+
+    class _Ctx:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def execute(self, stmt, params=None):
+            calls.append((str(stmt), params))
+
+    class _Engine:
+        def begin(self):
+            return _Ctx()
+
+        def dispose(self):
+            pass
+
+    monkeypatch.setattr(flows.sa, "create_engine", lambda url: _Engine())
+    monkeypatch.setattr(flows, "Config", lambda: SimpleNamespace(database_url="postgresql+psycopg2://u:p@h/db"))
+
+    with flows._JobHeartbeat("job-1", interval=0.01, logger=None):
+        time.sleep(0.05)
+
+    assert calls, "heartbeat issued no update"
+    sql, params = calls[0]
+    assert "last_transition_at = now()" in sql
+    assert "stage IN" in sql and params == {"id": "job-1"}

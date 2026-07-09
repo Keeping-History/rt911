@@ -12,6 +12,7 @@ drag in the video pipeline's boto/ffmpeg dependencies.
 """
 import os
 import shutil
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -72,6 +73,97 @@ def transition_usenet_job(db, job_id: str, to_stage: str, *, error: str = None, 
     db.commit()
 
 
+# Stages a job passes through while a process-usenet-item run is working it. If
+# that run's pod is killed (OOM / eviction / SIGKILL), the flow's except/finally
+# never runs, so the job is stranded here — invisible to the dispatcher, which
+# only claims 'discovered'/'failed'. reclaim_orphaned_usenet_jobs rescues these.
+_INFLIGHT_STAGES = ("downloading", "downloaded", "processing")
+
+# Seconds between a live process-usenet-item's last_transition_at refreshes.
+_HEARTBEAT_INTERVAL = 60
+
+
+def reclaim_orphaned_usenet_jobs(db, *, stale_minutes: int, max_retries: int, logger=None) -> int:
+    """Re-queue jobs stranded mid-flight by a killed process-usenet-item run.
+
+    A live run heartbeats its job's ``last_transition_at`` every minute (see
+    ``_JobHeartbeat``), so a job in an in-flight stage untouched for
+    ``stale_minutes`` has no live worker → recover it: back to 'discovered' to
+    retry, or to 'failed' once retries are exhausted (kept for diagnosis),
+    bumping ``retry_count`` either way so a job that keeps orphaning eventually
+    stops. Runs at the head of every dispatch-usenet — the periodic driver — so
+    no separate supervisor process is needed. Returns the number reclaimed.
+    """
+    res = db.execute(
+        sa.text(
+            """
+            UPDATE usenet_jobs
+               SET stage = CASE WHEN retry_count < :max
+                                THEN CAST('discovered' AS usenet_stage)
+                                ELSE CAST('failed' AS usenet_stage) END,
+                   retry_count = retry_count + 1,
+                   error_message = 'recovered: worker died/stalled mid-' || stage,
+                   last_transition_at = now()
+             WHERE stage IN ('downloading', 'downloaded', 'processing')
+               AND last_transition_at < now() - (:mins * interval '1 minute')
+            """
+        ),
+        {"max": max_retries, "mins": stale_minutes},
+    )
+    db.commit()
+    n = res.rowcount
+    if n and logger:
+        logger.warning("dispatch-usenet: reclaimed %d orphaned job(s) stale > %d min", n, stale_minutes)
+    return n
+
+
+class _JobHeartbeat:
+    """Refresh a job's ``last_transition_at`` every minute while it is in-flight.
+
+    Lets ``reclaim_orphaned_usenet_jobs`` distinguish a live-but-slow run (a big
+    mbox download or a long threading build) from one whose pod was killed. The
+    heartbeat runs its own short-lived engine on a daemon thread and is
+    best-effort: any error is logged, never raised, so it can't fail the job.
+    Once the job leaves the in-flight stages the UPDATE simply matches nothing.
+    """
+
+    def __init__(self, job_id: str, *, interval: int = _HEARTBEAT_INTERVAL, logger=None):
+        self._job_id = job_id
+        self._interval = interval
+        self._logger = logger
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def __enter__(self) -> "_JobHeartbeat":
+        self._thread.start()
+        return self
+
+    def _run(self) -> None:
+        engine = sa.create_engine(_sync_db_url(Config().database_url))
+        try:
+            while not self._stop.wait(self._interval):
+                try:
+                    with engine.begin() as db:
+                        db.execute(
+                            sa.text(
+                                "UPDATE usenet_jobs SET last_transition_at = now() "
+                                "WHERE id = :id AND stage IN "
+                                "('downloading', 'downloaded', 'processing')"
+                            ),
+                            {"id": self._job_id},
+                        )
+                except Exception as exc:  # noqa: BLE001 — heartbeat must not kill the job
+                    if self._logger:
+                        self._logger.warning("usenet heartbeat error: %s", exc)
+        finally:
+            engine.dispose()
+
+    def __exit__(self, *exc) -> bool:
+        self._stop.set()
+        self._thread.join(timeout=5)
+        return False
+
+
 @flow(name="scan-usenet")
 def scan_usenet_flow(collections: list[str] | None = None) -> None:
     logger = get_run_logger()
@@ -98,21 +190,24 @@ def process_usenet_item_flow(job_id: str) -> None:
     job = get_usenet_job(job_id)
     scratch = _SCRATCH / "usenet" / job.ia_identifier
     try:
-        transition_usenet_job(db, job_id, "downloading")
-        mbox_path = download_mbox(job, scratch / "dl", logger=logger)
-        transition_usenet_job(db, job_id, "downloaded")
+        # Heartbeat last_transition_at while in-flight so a killed pod's job is
+        # reclaimable but a slow-but-live one is never falsely reclaimed.
+        with _JobHeartbeat(job_id, logger=logger):
+            transition_usenet_job(db, job_id, "downloading")
+            mbox_path = download_mbox(job, scratch / "dl", logger=logger)
+            transition_usenet_job(db, job_id, "downloaded")
 
-        transition_usenet_job(db, job_id, "processing")
-        fallback_group = job.ia_identifier.removeprefix("usenet-")
-        groups = process_archive(mbox_path, cfg.usenet_before, scratch / "work", fallback_group, logger=logger)
+            transition_usenet_job(db, job_id, "processing")
+            fallback_group = job.ia_identifier.removeprefix("usenet-")
+            groups = process_archive(mbox_path, cfg.usenet_before, scratch / "work", fallback_group, logger=logger)
 
-        total = 0
-        for newsgroup, records in groups.items():
-            _, n = write_group(newsgroup, records, cfg)
-            total += n
-        transition_usenet_job(db, job_id, "processed", message_count=total)
-        logger.info("process-usenet-item: %s ingested %d messages in %d groups",
-                    job.ia_identifier, total, len(groups))
+            total = 0
+            for newsgroup, records in groups.items():
+                _, n = write_group(newsgroup, records, cfg)
+                total += n
+            transition_usenet_job(db, job_id, "processed", message_count=total)
+            logger.info("process-usenet-item: %s ingested %d messages in %d groups",
+                        job.ia_identifier, total, len(groups))
     except Exception as exc:  # noqa: BLE001 — record failure, then re-raise for retry
         transition_usenet_job(db, job_id, "failed", error=str(exc)[:2000])
         raise
@@ -132,6 +227,15 @@ def dispatch_usenet_flow(max_runs: int = 100, max_retries: int = 3) -> None:
     """
     logger = get_run_logger()
     db = get_db()
+    # Supervisor sweep: rescue jobs orphaned in-flight by a killed process run
+    # before claiming fresh work, so a crash self-heals within one dispatch cycle
+    # instead of stranding the job (and leaking its DB connection) indefinitely.
+    reclaim_orphaned_usenet_jobs(
+        db,
+        stale_minutes=Config().usenet_orphan_stale_minutes,
+        max_retries=max_retries,
+        logger=logger,
+    )
     processed = 0
     while processed < max_runs:
         row = db.execute(
