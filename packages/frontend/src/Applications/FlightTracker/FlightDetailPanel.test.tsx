@@ -18,7 +18,7 @@ describe("FlightDetailPanel", () => {
 	it("shows flight fields and route from the track", () => {
 		render(
 			<FlightDetailPanel selected={sel} loading={false} error={null}
-				track={{ flight: "AA11", origin: "BOS", scheduled_dest: "LAX", landed_at: null, diverted: false, geometry: null }} />,
+				track={{ flight: "AA11", origin: "BOS", scheduled_dest: "LAX", landed_at: null, diverted: false, geometry: null, tail_number: null, aircraft_type: null, details: null }} />,
 		);
 		expect(screen.getByText("AA11")).toBeTruthy();
 		expect(screen.getByText(/29,?000/)).toBeTruthy();

@@ -7,6 +7,15 @@ const DIRECTUS_URL =
 	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
 	"https://api-beta.911realtime.org";
 
+// Rich curated metadata, present only on the four notable flights (AA11,
+// UA175, AA77, UA93). Every key is optional — the panel renders what exists.
+export interface FlightDetails {
+	crew?: { captain?: string; first_officer?: string; attendants?: number };
+	souls?: { passengers?: number; crew?: number; hijackers?: number; total?: number };
+	hijackers?: string[];
+	fate?: { text?: string; utc?: string };
+}
+
 export interface FlightTrack {
 	flight: string;
 	origin: string | null;
@@ -14,6 +23,9 @@ export interface FlightTrack {
 	landed_at: string | null;
 	diverted: boolean;
 	geometry: { type: "LineString"; coordinates: [number, number][] } | null;
+	tail_number: string | null;
+	aircraft_type: string | null;
+	details: FlightDetails | null;
 }
 
 export interface TrackSelection {
@@ -31,7 +43,7 @@ export function trackUrl(flight: string, flightDate: string): string {
 	const params = new URLSearchParams({
 		"filter[flight][_eq]": flight,
 		"filter[flight_date][_eq]": flightDate,
-		fields: "flight,origin,scheduled_dest,landed_at,diverted,geometry",
+		fields: "flight,origin,scheduled_dest,landed_at,diverted,geometry,tail_number,aircraft_type,details",
 		limit: "1",
 	});
 	return `${DIRECTUS_URL}/items/flight_tracks?${params.toString()}`;
