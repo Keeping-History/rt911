@@ -159,6 +159,10 @@ function makeCtxValue(
 		flightPositions: [],
 		subscribeFlights,
 		unsubscribeFlights,
+		flightsHistory: [],
+		flightsHistoryDone: false,
+		requestFlightsHistory: vi.fn(),
+		clearFlightsHistory: vi.fn(),
 		...overrides,
 	};
 }
