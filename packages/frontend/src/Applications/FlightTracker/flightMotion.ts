@@ -7,9 +7,14 @@ import { isNotable } from "./notableFlights";
 // sailing off the map. ~1.5 samples.
 export const MAX_EXTRAPOLATION_MS = 90_000;
 // How many recent real positions each flight retains for its breadcrumb trail.
-// At ~1 sample/minute this is ~10 minutes of path; older points are dropped and
+// At ~1 sample/minute this is ~20 minutes of path; older points are dropped and
 // the trail fades to transparent, so the map stays clean over long sessions.
-export const TRAIL_POINTS = 10;
+export const TRAIL_POINTS = 20;
+// Upper bound of the user's trail-length multiplier (Settings slider). The
+// buffer always RETAINS this many × TRAIL_POINTS so sliding the multiplier up
+// lengthens tails instantly from history; the display length is applied when
+// building the GeoJSON (motionTrailsToGeoJSON's displayPoints).
+export const TRAIL_MULTIPLIER_MAX = 10;
 
 export interface FlightMotion {
 	prev: { lat: number; lon: number };
@@ -72,7 +77,7 @@ export function updateMotion(
 			m.curT = t;
 			m.item = p;
 			m.trail.push([p.lon, p.lat]);
-			if (m.trail.length > TRAIL_POINTS) m.trail.shift();
+			while (m.trail.length > TRAIL_POINTS * TRAIL_MULTIPLIER_MAX) m.trail.shift();
 			if (m.cur.lat !== m.prev.lat || m.cur.lon !== m.prev.lon) {
 				m.headingDeg = bearingDeg(m.prev, m.cur);
 			}
@@ -145,8 +150,10 @@ export interface TrailFeatureCollection {
 export function motionTrailsToGeoJSON(
 	buffer: MotionBuffer,
 	now: number,
+	displayPoints: number = TRAIL_POINTS,
 ): TrailFeatureCollection {
 	const features: TrailFeatureCollection["features"] = [];
+	if (displayPoints <= 1) return { type: "FeatureCollection", features }; // tails off
 	for (const m of buffer.values()) {
 		if (m.trail.length < 2) continue;
 		const head = extrapolate(m, now);
@@ -154,7 +161,7 @@ export function motionTrailsToGeoJSON(
 			type: "Feature",
 			geometry: {
 				type: "LineString",
-				coordinates: [...m.trail, [head.lon, head.lat]],
+				coordinates: [...m.trail.slice(-displayPoints), [head.lon, head.lat]],
 			},
 			properties: { notable: isNotable(m.item.flight) },
 		});

@@ -14,6 +14,7 @@ import {
 	useClassicyDateTime,
 } from "classicy";
 import {
+	type ChangeEvent,
 	type FC,
 	useCallback,
 	useContext,
@@ -368,6 +369,20 @@ export const FlightTracker: FC = () => {
 								setForm((f) => ({ ...f, notablePinColor: color }))
 							}
 						/>
+						<ClassicySlider
+							id="flight_settings_trail_multiplier"
+							labelTitle="Trail length"
+							ariaLabel="Flight trail length multiplier"
+							value={form.trailMultiplier}
+							min={0}
+							max={10}
+							step={0.5}
+							labelSize="small"
+							valueLabel={form.trailMultiplier === 0 ? "Off" : `${form.trailMultiplier}×`}
+							onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+								setForm((f) => ({ ...f, trailMultiplier: parseFloat(e.target.value) }))
+							}
+						/>
 						<div className={styles.settingsButtons}>
 							<ClassicyButton onClickFunc={() => setShowSettings(false)}>
 								Cancel
@@ -404,6 +419,7 @@ export const FlightTracker: FC = () => {
 								pinColor={intToHex(settings.pinColor)}
 								notablePinColor={intToHex(settings.notablePinColor)}
 								radarSweep={settings.radarSweep}
+								trailMultiplier={settings.trailMultiplier}
 								loopEnabled={loopEnabled}
 								loopWindowMs={windowMs}
 								loopClock={loopClock}

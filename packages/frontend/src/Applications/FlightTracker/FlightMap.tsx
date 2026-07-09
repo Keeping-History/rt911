@@ -19,6 +19,8 @@ import {
 } from "./flightIcons";
 import {
 	type MotionBuffer,
+	TRAIL_MULTIPLIER_MAX,
+	TRAIL_POINTS,
 	motionPointsToGeoJSON,
 	motionTrailsToGeoJSON,
 	updateMotion,
@@ -74,6 +76,8 @@ interface FlightMapProps {
 	pinColor: string;
 	notablePinColor: string;
 	radarSweep: boolean;
+	// Comet-tail length as a multiple of TRAIL_POINTS; 0 turns tails off.
+	trailMultiplier: number;
 	// Loop mode (optional with idle defaults so non-loop call sites stay simple):
 	// while enabled, ghost pins replay replayBuffer at the loopClock's playhead,
 	// wrapped into the sliding [now − loopWindowMs, now) window.
@@ -108,7 +112,7 @@ const GHOST_STROKE_COLOR = "#ffffff";
 
 export const FlightMap: FC<FlightMapProps> = ({
 	positions, basemapUrl, trackGeoJSON, nowMs, playing,
-	darkMap, pinColor, notablePinColor, radarSweep,
+	darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	onSelectFlight, onClearSelection,
@@ -125,6 +129,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	colorsRef.current = { darkMap, pinColor, notablePinColor };
 	const radarSweepRef = useRef(radarSweep);
 	radarSweepRef.current = radarSweep;
+	const trailMultiplierRef = useRef(trailMultiplier);
+	trailMultiplierRef.current = trailMultiplier;
 	const loopRef = useRef({
 		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
 	});
@@ -354,6 +360,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 		dirtyRef.current = true;
 	}, [radarSweep]);
 
+	// New trail length applies next frame; wake a paused map for one redraw.
+	useEffect(() => {
+		dirtyRef.current = true;
+	}, [trailMultiplier]);
+
 	// Entering/leaving loop mode: clear the ghost layer when leaving so stale
 	// ghosts don't linger under a paused map; dirtyRef redraws once either way.
 	useEffect(() => {
@@ -389,8 +400,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 			(map.getSource("flights") as maplibregl.GeoJSONSource | undefined)?.setData(
 				motionPointsToGeoJSON(buf, now),
 			);
+			// Clamp: hand-edited persisted state must not build million-point trails.
+			const clamped = Math.min(Math.max(trailMultiplierRef.current, 0), TRAIL_MULTIPLIER_MAX);
 			(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
-				motionTrailsToGeoJSON(buf, now),
+				motionTrailsToGeoJSON(buf, now, Math.round(TRAIL_POINTS * clamped)),
 			);
 			if (radarSweepRef.current) {
 				(map.getSource("radar-sweep") as maplibregl.GeoJSONSource | undefined)?.setData(

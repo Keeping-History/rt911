@@ -101,7 +101,7 @@ describe("FlightMap", () => {
 		render(
 			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
 				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
-				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} />,
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
 		);
 		const map = FakeMap.last!;
 		expect(map).toBeTruthy();
@@ -115,7 +115,7 @@ describe("FlightMap", () => {
 		render(
 			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
 				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={onSelect} onClearSelection={() => {}}
-				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} />,
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
@@ -134,7 +134,7 @@ describe("FlightMap", () => {
 		render(
 			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
 				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={onClear}
-				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} />,
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
@@ -147,7 +147,7 @@ describe("FlightMap", () => {
 		const { unmount } = render(
 			<FlightMap positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null}
 				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
-				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} />,
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
 		);
 		const map = FakeMap.last!;
 		unmount();
@@ -172,7 +172,7 @@ describe("FlightMap", () => {
 
 		const common = {
 			basemapUrl: "x.pmtiles", trackGeoJSON: null, onSelectFlight: () => {}, onClearSelection: () => {},
-			darkMap: false, pinColor: "#3a3a3a", notablePinColor: "#c0202a", radarSweep: false,
+			darkMap: false, pinColor: "#3a3a3a", notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
 		};
 		const { rerender } = render(
 			<FlightMap positions={[p1]} nowMs={Date.parse("2001-09-11T13:00:00.000Z")} playing {...common} />,
@@ -198,7 +198,7 @@ describe("FlightMap", () => {
 	it("installs plane icons from pin colors and re-themes/recolors live (no re-mount)", async () => {
 		const common = {
 			positions: [], basemapUrl: "x.pmtiles", trackGeoJSON: null, nowMs: 0,
-			playing: false, onSelectFlight: () => {}, onClearSelection: () => {}, radarSweep: false,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {}, radarSweep: false, trailMultiplier: 1,
 		};
 		const { rerender } = render(
 			<FlightMap {...common} darkMap={false} pinColor="#00aa00" notablePinColor="#123456" />,
@@ -229,7 +229,7 @@ describe("FlightMap", () => {
 		render(
 			<FlightMap positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null}
 				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
-				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} />,
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
@@ -260,7 +260,7 @@ describe("FlightMap", () => {
 		render(
 			<FlightMap positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null}
 				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
-				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={true} />,
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={true} trailMultiplier={1} />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
@@ -285,13 +285,13 @@ describe("FlightMap", () => {
 			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
 			darkMap: false, pinColor: "#3a3a3a", notablePinColor: "#c0202a",
 		};
-		const { rerender } = render(<FlightMap {...common} radarSweep={true} />);
+		const { rerender } = render(<FlightMap {...common} radarSweep={true} trailMultiplier={1} />);
 		const map = FakeMap.last!;
 		map.fire("load");
-		rerender(<FlightMap {...common} radarSweep={false} />);
+		rerender(<FlightMap {...common} radarSweep={false} trailMultiplier={1} />);
 		expect(map.layout["radar-sweep"]?.visibility).toBe("none");
 		expect(map.layout["radar-trail"]?.visibility).toBe("none");
-		rerender(<FlightMap {...common} radarSweep={true} />);
+		rerender(<FlightMap {...common} radarSweep={true} trailMultiplier={1} />);
 		expect(map.layout["radar-sweep"]?.visibility).toBe("visible");
 		expect(map.paint["radar-sweep"]?.["line-color"]).toBe("#808080"); // re-resolved on re-enable
 	});
@@ -308,7 +308,7 @@ describe("FlightMap", () => {
 		render(
 			<FlightMap positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null}
 				nowMs={0} playing onSelectFlight={() => {}} onClearSelection={() => {}}
-				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={true} />,
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={true} trailMultiplier={1} />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
@@ -326,11 +326,42 @@ describe("FlightMap", () => {
 		expect(tip[1]).toBeCloseTo(39.83, 2);
 	});
 
+	it("turns trails off next frame when trailMultiplier drops to 0", () => {
+		let rafCb: FrameRequestCallback | null = null;
+		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+			rafCb = cb;
+			return 1;
+		});
+		vi.stubGlobal("cancelAnimationFrame", () => {});
+		vi.spyOn(performance, "now").mockReturnValue(0);
+
+		const t1 = Date.parse("2001-09-11T13:01:00.000Z");
+		const p1 = pos({ id: 1, flight: "AA1", lon: -74, start_date: "2001-09-11T13:00:00.000Z" });
+		const p2 = pos({ id: 2, flight: "AA1", lon: -73, start_date: "2001-09-11T13:01:00.000Z" });
+		const common = {
+			basemapUrl: "x.pmtiles", trackGeoJSON: null, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, pinColor: "#3a3a3a", notablePinColor: "#c0202a", radarSweep: false,
+		};
+		const { rerender } = render(
+			<FlightMap positions={[p1]} nowMs={Date.parse("2001-09-11T13:00:00.000Z")} playing trailMultiplier={1} {...common} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		rerender(<FlightMap positions={[p2]} nowMs={t1} playing trailMultiplier={1} {...common} />);
+		rafCb!(1_000);
+		expect((map.sources["flight-trails"]!.data as { features: unknown[] }).features).toHaveLength(1);
+
+		rerender(<FlightMap positions={[p2]} nowMs={t1} playing trailMultiplier={0} {...common} />);
+		rafCb!(2_000);
+		expect((map.sources["flight-trails"]!.data as { features: unknown[] }).features).toHaveLength(0);
+	});
+
 	it("adds ghost source and layers under the live dots on load", () => {
 		render(
 			<FlightMap positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null}
 				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
-				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} />,
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false}
+				trailMultiplier={1} />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
@@ -346,6 +377,7 @@ describe("FlightMap", () => {
 			positions: [], basemapUrl: "x.pmtiles", trackGeoJSON: null, nowMs: 0,
 			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
 			darkMap: false, pinColor: "#3a3a3a", notablePinColor: "#c0202a", radarSweep: false,
+			trailMultiplier: 1,
 			loopWindowMs: 1_800_000,
 			loopClock: { anchorVirtual: 0, anchorWall: 0, speed: 1 as const, scrubbing: false },
 			replayBuffer: new Map(),

@@ -11,6 +11,8 @@ export interface FlightMapSettings {
 	pinColor: number;
 	notablePinColor: number;
 	radarSweep: boolean;
+	// Comet-tail length as a multiple of the base TRAIL_POINTS; 0 = tails off.
+	trailMultiplier: number;
 }
 
 export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
@@ -18,6 +20,7 @@ export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	pinColor: 0x3a3a3a, // the original hardcoded dot color
 	notablePinColor: 0xc0202a, // the original notable highlight
 	radarSweep: true,
+	trailMultiplier: 1,
 };
 
 /** Persist the whole map-settings object in one dispatch. */
