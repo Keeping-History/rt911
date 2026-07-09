@@ -30,7 +30,8 @@ const FakeMap = vi.hoisted(() => {
 				(this.handlers[ev] ??= []).push(a as Handler);
 			}
 		}
-		fire(ev: string) { for (const h of this.handlers[ev] ?? []) h(); }
+		queryResult: unknown[] = [];
+		fire(ev: string, payload?: unknown) { for (const h of this.handlers[ev] ?? []) h(payload); }
 		fireLayer(ev: string, layer: string, payload: unknown) {
 			for (const h of this.layerHandlers[ev]?.[layer] ?? []) h(payload);
 		}
@@ -40,7 +41,8 @@ const FakeMap = vi.hoisted(() => {
 			const s = this.sources[id];
 			return s ? { setData: (d: unknown) => { s.data = d; } } : undefined;
 		}
-		queryRenderedFeatures() { return [] as unknown[]; }
+		queryRenderedFeatures() { return this.queryResult; }
+		project(c: [number, number]) { return { x: c[0], y: c[1] }; }
 		resize() {}
 		remove() { this.removed = true; }
 	}
@@ -82,7 +84,7 @@ describe("FlightMap", () => {
 		expect(data.features).toHaveLength(1);
 	});
 
-	it("calls onSelectFlight when a plane is clicked", () => {
+	it("selects the nearest dot within the click tolerance box (forgiving near-miss)", () => {
 		const onSelect = vi.fn();
 		render(
 			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
@@ -90,8 +92,27 @@ describe("FlightMap", () => {
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
-		map.fireLayer("click", "flights-dots", { features: [{ properties: { flight: "AA11" } }] });
+		// A near-miss click still finds dots in the tolerance box; the closer one wins.
+		// project() maps [lon,lat] → {x:lon, y:lat}, so the click at (12,20) is nearest [12,20].
+		map.queryResult = [
+			{ geometry: { type: "Point", coordinates: [50, 50] }, properties: { flight: "FAR" } },
+			{ geometry: { type: "Point", coordinates: [12, 20] }, properties: { flight: "AA11" } },
+		];
+		map.fire("click", { point: { x: 12, y: 20 } });
 		expect(onSelect).toHaveBeenCalledWith("AA11");
+	});
+
+	it("clears the selection when no dot is within the tolerance box", () => {
+		const onClear = vi.fn();
+		render(
+			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
+				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={onClear} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		map.queryResult = []; // nothing near the click
+		map.fire("click", { point: { x: 200, y: 200 } });
+		expect(onClear).toHaveBeenCalled();
 	});
 
 	it("removes the map on unmount (frees the WebGL context)", () => {

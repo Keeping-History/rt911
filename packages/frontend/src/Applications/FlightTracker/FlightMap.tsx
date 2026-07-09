@@ -32,6 +32,10 @@ const NA_CENTER: [number, number] = [-98, 39];
 const NA_ZOOM = 3;
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 const FRAME_MS = 66; // ~15 fps animation gate
+// Click hit-test slop (px). Dots are a small (3px) and gliding target, so an
+// exact-pixel hit-test misses easily; a click within this radius selects the
+// nearest dot instead of clearing the selection.
+const HIT_TOLERANCE = 6;
 
 export const FlightMap: FC<FlightMapProps> = ({
 	positions, basemapUrl, trackGeoJSON, nowMs, playing, onSelectFlight, onClearSelection,
@@ -105,17 +109,34 @@ export const FlightMap: FC<FlightMapProps> = ({
 			});
 		});
 
-		const selectFromClick = (e: maplibregl.MapLayerMouseEvent) => {
-			const f = e.features?.[0];
-			if (f?.properties) cbRef.current.onSelectFlight(String(f.properties.flight));
-		};
-		map.on("click", "flights-dots", selectFromClick);
-		map.on("click", "flights-notable", selectFromClick);
+		// Forgiving hit-test: query a small box around the click and select the
+		// NEAREST dot within it; clear the selection only when nothing is nearby.
+		// (An exact-pixel layer click missed too often on the tiny gliding dots.)
 		map.on("click", (e) => {
-			const hits = map.queryRenderedFeatures(e.point, {
-				layers: ["flights-dots", "flights-notable"],
-			});
-			if (hits.length === 0) cbRef.current.onClearSelection();
+			const { x, y } = e.point;
+			const near = map.queryRenderedFeatures(
+				[
+					[x - HIT_TOLERANCE, y - HIT_TOLERANCE],
+					[x + HIT_TOLERANCE, y + HIT_TOLERANCE],
+				],
+				{ layers: ["flights-dots", "flights-notable"] },
+			);
+			if (near.length === 0) {
+				cbRef.current.onClearSelection();
+				return;
+			}
+			let best = near[0];
+			let bestDist = Number.POSITIVE_INFINITY;
+			for (const f of near) {
+				if (f.geometry.type !== "Point") continue;
+				const pp = map.project(f.geometry.coordinates as [number, number]);
+				const d = (pp.x - x) ** 2 + (pp.y - y) ** 2;
+				if (d < bestDist) {
+					bestDist = d;
+					best = f;
+				}
+			}
+			if (best.properties) cbRef.current.onSelectFlight(String(best.properties.flight));
 		});
 
 		const ro = new ResizeObserver(() => map.resize());
