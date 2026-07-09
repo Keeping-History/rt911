@@ -2,7 +2,14 @@ import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import { type FC, useEffect, useRef } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
-import { buildBasemapStyle } from "./flightMapStyle";
+import {
+	PIN_STROKE_COLOR,
+	TRACK_LINE_COLOR,
+	TRAIL_COLORS,
+	applyMapColors,
+	buildBasemapStyle,
+	type FlightMapColors,
+} from "./flightMapStyle";
 import {
 	type MotionBuffer,
 	motionPointsToGeoJSON,
@@ -24,6 +31,10 @@ interface FlightMapProps {
 	trackGeoJSON: GeoJSON.Feature | null;
 	nowMs: number;
 	playing: boolean;
+	darkMap: boolean;
+	// CSS hex strings — FlightTracker converts from the persisted packed ints.
+	pinColor: string;
+	notablePinColor: string;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
 }
@@ -38,7 +49,9 @@ const FRAME_MS = 66; // ~15 fps animation gate
 const HIT_TOLERANCE = 6;
 
 export const FlightMap: FC<FlightMapProps> = ({
-	positions, basemapUrl, trackGeoJSON, nowMs, playing, onSelectFlight, onClearSelection,
+	positions, basemapUrl, trackGeoJSON, nowMs, playing,
+	darkMap, pinColor, notablePinColor,
+	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const mapRef = useRef<maplibregl.Map | null>(null);
@@ -48,6 +61,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	positionsRef.current = positions;
 	const cbRef = useRef({ onSelectFlight, onClearSelection });
 	cbRef.current = { onSelectFlight, onClearSelection };
+	const colorsRef = useRef<FlightMapColors>({ darkMap, pinColor, notablePinColor });
+	colorsRef.current = { darkMap, pinColor, notablePinColor };
 
 	const motionBufferRef = useRef<MotionBuffer>(new Map());
 	const nowMsRef = useRef(nowMs);
@@ -65,7 +80,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		ensurePmtilesProtocol();
 		const map = new maplibregl.Map({
 			container: containerRef.current,
-			style: buildBasemapStyle(basemapUrl),
+			style: buildBasemapStyle(basemapUrl, colorsRef.current.darkMap ? "dark" : "light"),
 			center: NA_CENTER,
 			zoom: NA_ZOOM,
 			attributionControl: false,
@@ -74,6 +89,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 
 		map.on("load", () => {
 			loadedRef.current = true;
+			const colors = colorsRef.current;
+			const theme = colors.darkMap ? "dark" : "light";
 			updateMotion(motionBufferRef.current, positionsRef.current);
 			map.addSource("flights", {
 				type: "geojson",
@@ -83,18 +100,18 @@ export const FlightMap: FC<FlightMapProps> = ({
 			map.addSource("flight-trails", { type: "geojson", data: EMPTY_FC });
 			map.addLayer({
 				id: "track-line", type: "line", source: "track",
-				paint: { "line-color": "#b22222", "line-width": 2 },
+				paint: { "line-color": TRACK_LINE_COLOR, "line-width": 2 },
 			});
 			// Comet tails, drawn under the dots.
 			map.addLayer({
 				id: "flight-trails", type: "line", source: "flight-trails",
-				paint: { "line-color": "#5a5a5a", "line-width": 1.2, "line-opacity": 0.35 },
+				paint: { "line-color": TRAIL_COLORS[theme], "line-width": 1.2, "line-opacity": 0.35 },
 			});
 			map.addLayer({
 				id: "flights-dots", type: "circle", source: "flights",
 				paint: {
-					"circle-radius": 3, "circle-color": "#3a3a3a",
-					"circle-stroke-width": 0.5, "circle-stroke-color": "#ffffff",
+					"circle-radius": 3, "circle-color": colors.pinColor,
+					"circle-stroke-width": 0.5, "circle-stroke-color": PIN_STROKE_COLOR,
 				},
 			});
 			// Always-on highlight of the notable flights (renders nothing until the
@@ -103,10 +120,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 				id: "flights-notable", type: "circle", source: "flights",
 				filter: ["==", ["get", "notable"], true],
 				paint: {
-					"circle-radius": 5, "circle-color": "#c0202a",
-					"circle-stroke-width": 1, "circle-stroke-color": "#ffffff",
+					"circle-radius": 5, "circle-color": colors.notablePinColor,
+					"circle-stroke-width": 1, "circle-stroke-color": PIN_STROKE_COLOR,
 				},
 			});
+			applyMapColors(map, colorsRef.current);
 		});
 
 		// Forgiving hit-test: query a small box around the click and select the
@@ -172,6 +190,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 		const src = map.getSource("track") as maplibregl.GeoJSONSource | undefined;
 		src?.setData(trackGeoJSON ? { type: "FeatureCollection", features: [trackGeoJSON] } : EMPTY_FC);
 	}, [trackGeoJSON]);
+
+	// Re-theme / recolor live. setPaintProperty only — setStyle() would tear
+	// down the flights/trails/track sources and layers. Before "load" fires,
+	// the load handler's applyMapColors call picks up the latest values.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		applyMapColors(map, { darkMap, pinColor, notablePinColor });
+	}, [darkMap, pinColor, notablePinColor]);
 
 	// Glide dots + draw trails at ~15 fps off a smooth virtual clock. While
 	// playing, advance wall-time deltas from the anchor (RATE 1×); while paused,

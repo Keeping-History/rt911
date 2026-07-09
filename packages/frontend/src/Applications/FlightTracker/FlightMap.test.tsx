@@ -16,6 +16,8 @@ const FakeMap = vi.hoisted(() => {
 		handlers: Record<string, Handler[]> = {};
 		layerHandlers: Record<string, Record<string, Handler[]>> = {};
 		sources: Record<string, { data: unknown }> = {};
+		layers: Record<string, unknown>[] = [];
+		paint: Record<string, Record<string, unknown>> = {};
 		style: unknown;
 		removed = false;
 		constructor(opts: { style: unknown }) {
@@ -36,7 +38,10 @@ const FakeMap = vi.hoisted(() => {
 			for (const h of this.layerHandlers[ev]?.[layer] ?? []) h(payload);
 		}
 		addSource(id: string, def: { data: unknown }) { this.sources[id] = { data: def.data }; }
-		addLayer() {}
+		addLayer(def: Record<string, unknown>) { this.layers.push(def); }
+		setPaintProperty(layerId: string, name: string, value: unknown) {
+			(this.paint[layerId] ??= {})[name] = value;
+		}
 		getSource(id: string) {
 			const s = this.sources[id];
 			return s ? { setData: (d: unknown) => { s.data = d; } } : undefined;
@@ -75,7 +80,8 @@ describe("FlightMap", () => {
 	it("creates a map, adds the flights source on load, and pushes positions", () => {
 		render(
 			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
-				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}} />,
+				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" />,
 		);
 		const map = FakeMap.last!;
 		expect(map).toBeTruthy();
@@ -88,7 +94,8 @@ describe("FlightMap", () => {
 		const onSelect = vi.fn();
 		render(
 			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
-				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={onSelect} onClearSelection={() => {}} />,
+				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={onSelect} onClearSelection={() => {}}
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
@@ -106,7 +113,8 @@ describe("FlightMap", () => {
 		const onClear = vi.fn();
 		render(
 			<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrl="x.pmtiles"
-				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={onClear} />,
+				trackGeoJSON={null} nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={onClear}
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
@@ -118,7 +126,8 @@ describe("FlightMap", () => {
 	it("removes the map on unmount (frees the WebGL context)", () => {
 		const { unmount } = render(
 			<FlightMap positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null}
-				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}} />,
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" />,
 		);
 		const map = FakeMap.last!;
 		unmount();
@@ -141,7 +150,10 @@ describe("FlightMap", () => {
 		const p1 = pos({ id: 1, flight: "AA1", lat: 40, lon: -74, start_date: "2001-09-11T13:00:00.000Z" });
 		const p2 = pos({ id: 2, flight: "AA1", lat: 40, lon: -73, start_date: "2001-09-11T13:01:00.000Z" });
 
-		const common = { basemapUrl: "x.pmtiles", trackGeoJSON: null, onSelectFlight: () => {}, onClearSelection: () => {} };
+		const common = {
+			basemapUrl: "x.pmtiles", trackGeoJSON: null, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, pinColor: "#3a3a3a", notablePinColor: "#c0202a",
+		};
 		const { rerender } = render(
 			<FlightMap positions={[p1]} nowMs={Date.parse("2001-09-11T13:00:00.000Z")} playing {...common} />,
 		);
@@ -161,5 +173,31 @@ describe("FlightMap", () => {
 		expect(head[0]).toBeLessThan(-72); // but within the clamp, not overshot
 		const trails = (map.sources["flight-trails"]?.data as { features: unknown[] }).features;
 		expect(trails.length).toBe(1);
+	});
+
+	it("applies pin colors + theme on load and live via setPaintProperty (no re-mount)", () => {
+		const common = {
+			positions: [], basemapUrl: "x.pmtiles", trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+		};
+		const { rerender } = render(
+			<FlightMap {...common} darkMap={false} pinColor="#00aa00" notablePinColor="#123456" />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		// The load handler applies the current colors over the just-added layers.
+		expect(map.paint["flights-dots"]?.["circle-color"]).toBe("#00aa00");
+		expect(map.paint["flights-notable"]?.["circle-color"]).toBe("#123456");
+		expect(map.paint["background"]?.["background-color"]).toBe("#efe9dd");
+
+		// Theme flip + recolor: live paint updates on the SAME map instance.
+		rerender(
+			<FlightMap {...common} darkMap={true} pinColor="#ffffff" notablePinColor="#ff0000" />,
+		);
+		expect(FakeMap.last).toBe(map); // no map re-creation
+		expect(map.paint["background"]?.["background-color"]).toBe("#1c1c22");
+		expect(map.paint["flight-trails"]?.["line-color"]).toBe("#9a9aa6");
+		expect(map.paint["flights-dots"]?.["circle-color"]).toBe("#ffffff");
+		expect(map.paint["flights-notable"]?.["circle-color"]).toBe("#ff0000");
 	});
 });
