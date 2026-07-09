@@ -13,9 +13,13 @@ interface FlightDetailPanelProps {
 
 export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({ selected, track, loading, error }) => {
 	if (!selected) {
-		return <ClassicyControlGroup label="Flight Details">
-			<ClassicyControlLabel label="Select a flight to view its track." />
-			</ClassicyControlGroup>;
+		return (
+			<div className={styles.detailWrapper}>
+				<ClassicyControlGroup label="Flight Details">
+					<ClassicyControlLabel label="Select a flight to view its track." />
+				</ClassicyControlGroup>
+			</div>
+		);
 	}
 	const route =
 		track?.origin || track?.scheduled_dest
