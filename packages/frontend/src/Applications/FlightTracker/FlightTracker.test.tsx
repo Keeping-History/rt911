@@ -134,7 +134,11 @@ vi.mock("classicy", () => ({
 		/>
 	),
 	MAC_OS_8_CRAYONS: [],
-	ClassicyIcons: { controlPanels: { location: { app: "icon.png" } } },
+	ClassicyIcons: {
+		controlPanels: { location: { app: "icon.png" } },
+		applications: {},
+	},
+	registerClassicyIcons: <T,>(icons: T) => icons,
 	quitMenuItemHelper: () => ({}),
 	registerAppEventHandler: () => {},
 	useAppManager: (sel: (s: unknown) => unknown) =>
@@ -268,6 +272,14 @@ describe("FlightTracker", () => {
 		expect(screen.getByTestId("flightmap")).toBeTruthy();
 		const last = mapProps[mapProps.length - 1];
 		expect((last.positions as unknown[]).length).toBe(1);
+	});
+
+	it("registers app.png as the app icon and passes it to every window", () => {
+		render(<FlightTracker />);
+		expect(windowProps.length).toBeGreaterThan(0);
+		for (const w of windowProps) {
+			expect(String(w.icon)).toMatch(/app\.png/);
+		}
 	});
 
 	it("clears the selection when the selected flight leaves the airborne set (e.g. after a seek)", () => {
