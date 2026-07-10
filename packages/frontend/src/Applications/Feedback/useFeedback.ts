@@ -2,6 +2,11 @@ import html2canvas from "html2canvas-pro";
 import { useCallback, useState } from "react";
 import { getSessionURL } from "../../openreplay";
 
+// Also the `id` of <ClassicyApp> in Feedback.tsx. Classicy gives every window
+// a DOM id of `${appId}_${windowId}`, which is how captureScreenshot excludes
+// this app's own windows from the shot.
+export const FEEDBACK_APP_ID = "Feedback.app";
+
 export interface FeedbackFields {
 	name:        string;
 	email:       string;
@@ -27,6 +32,9 @@ export function useFeedback(): {
 		const canvas = await html2canvas(root, {
 			useCORS:        true,
 			ignoreElements: (el) => {
+				// html2canvas re-renders the DOM rather than grabbing the real
+				// screen, so skipping this app's windows is what "hides" them.
+				if (el.id.startsWith(`${FEEDBACK_APP_ID}_`)) return true;
 				if (el.tagName !== "IFRAME") return false;
 				try {
 					return new URL((el as HTMLIFrameElement).src).origin !== window.location.origin;
