@@ -9,10 +9,12 @@ import {
 	ClassicyWindow,
 	MAC_OS_8_CRAYONS,
 	quitMenuItemHelper,
+	registerClassicyIcons,
 	useAppManager,
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import appIconPng from "./app.png";
 import {
 	type ChangeEvent,
 	type FC,
@@ -58,10 +60,21 @@ const BASEMAP_URL =
 	(import.meta.env.VITE_FLIGHT_BASEMAP_URL as string | undefined) ??
 	"https://files.911realtime.org/maps/na-basemap.pmtiles";
 
+// This app's own icon, registered into the shared registry at
+// ClassicyIcons.applications.flightTracker.app. registerClassicyIcons assigns
+// shallowly, so the existing applications namespace is spread in to keep
+// classicy's bundled app icons intact.
+const ICONS = registerClassicyIcons({
+	applications: {
+		...ClassicyIcons.applications,
+		flightTracker: { app: appIconPng },
+	},
+});
+
 export const FlightTracker: FC = () => {
 	const appId = "FlightTracker.app";
 	const appName = "Flight Tracker";
-	const appIcon = ClassicyIcons.controlPanels.location.app as string;
+	const appIcon = ICONS.applications.flightTracker.app;
 
 	const isRunning = useAppManager(
 		(s) => appId in (s.System.Manager.Applications.apps ?? {}),
@@ -361,6 +374,7 @@ export const FlightTracker: FC = () => {
 				<ClassicyWindow
 					id="flight-settings"
 					title="Settings"
+					icon={appIcon}
 					appId={appId}
 					closable={true}
 					resizable={false}
@@ -454,6 +468,7 @@ export const FlightTracker: FC = () => {
 			<ClassicyWindow
 				id="flight-map"
 				title="Flight Tracker"
+				icon={appIcon}
 				appId={appId}
 				initialSize={["80%", "80%"]}
 				initialPosition={["center", "center"]}
