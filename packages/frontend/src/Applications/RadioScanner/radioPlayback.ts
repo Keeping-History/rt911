@@ -27,3 +27,18 @@ export function sanitizeItemIds(value: unknown): number[] {
 		? value.filter((v): v is number => typeof v === "number" && Number.isFinite(v))
 		: [];
 }
+
+/**
+ * The muted ids that should actually reach the audio elements. With no solo
+ * active, manual mutes apply as-is. While an item is soloed, every OTHER
+ * playing item is muted and manual mutes are ignored — un-soloing therefore
+ * restores the manual state untouched.
+ */
+export function effectiveMutedIds(
+	mutedItems: number[],
+	soloItemId: number | null,
+	playingIds: number[],
+): number[] {
+	if (soloItemId === null) return mutedItems;
+	return playingIds.filter((id) => id !== soloItemId);
+}

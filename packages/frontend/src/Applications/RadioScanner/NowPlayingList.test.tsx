@@ -7,9 +7,13 @@ afterEach(cleanup);
 
 // react-fast-marquee measures via ResizeObserver, which jsdom doesn't
 // implement. The marquee is purely presentational here, so render children
-// directly.
+// directly — recording the play prop so tests can assert pause-on-solo.
 vi.mock("./marquee", () => ({
-	default: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+	default: ({ children, play }: { children?: React.ReactNode; play?: boolean }) => (
+		<div data-testid="marquee" data-play={String(play ?? true)}>
+			{children}
+		</div>
+	),
 }));
 
 import type React from "react";
@@ -28,39 +32,78 @@ const segs = [
 	item({ id: 2, full_title: "", title: "ATC Ground" }),
 ];
 
+const noop = () => {};
+
+function renderList(over: Partial<React.ComponentProps<typeof NowPlayingList>> = {}) {
+	return render(
+		<NowPlayingList
+			segments={segs}
+			mutedItems={[]}
+			onToggleMute={noop}
+			soloItemId={null}
+			onToggleSolo={noop}
+			{...over}
+		/>,
+	);
+}
+
 describe("NowPlayingList", () => {
 	it("renders one row per segment showing full_title (title fallback)", () => {
-		const { getByText, getAllByRole } = render(
-			<NowPlayingList segments={segs} mutedItems={[]} onToggleMute={() => {}} />,
-		);
+		const { getByText, getAllByRole } = renderList();
 		expect(getByText("ATC Tower")).not.toBeNull();
 		expect(getByText("ATC Ground")).not.toBeNull(); // full_title empty → title
 		expect(getAllByRole("listitem")).toHaveLength(2);
 	});
 
-	it("calls onToggleMute with the file id when a row's button is clicked", () => {
+	it("calls onToggleMute with the file id when a row's icon button is clicked", () => {
 		const onToggle = vi.fn();
-		const { getAllByRole } = render(
-			<NowPlayingList segments={segs} mutedItems={[]} onToggleMute={onToggle} />,
-		);
-		fireEvent.mouseUp(getAllByRole("button")[0]);
+		const onSolo = vi.fn();
+		const { getAllByAltText } = renderList({ onToggleMute: onToggle, onToggleSolo: onSolo });
+		fireEvent.mouseUp(getAllByAltText("Mute")[0]);
 		expect(onToggle).toHaveBeenCalledWith(1);
+		expect(onSolo).not.toHaveBeenCalled(); // icon click never solos
 	});
 
 	it("shows the muted icon (alt 'Unmute') for files in mutedItems", () => {
-		const { getAllByRole } = render(
-			<NowPlayingList segments={segs} mutedItems={[2]} onToggleMute={() => {}} />,
-		);
+		const { getAllByRole } = renderList({ mutedItems: [2] });
 		const imgs = getAllByRole("img");
 		expect(imgs[0].getAttribute("alt")).toBe("Mute"); // id 1 unmuted → action Mute
 		expect(imgs[1].getAttribute("alt")).toBe("Unmute"); // id 2 muted → action Unmute
 	});
 
 	it("renders a placeholder and no rows when segments is empty", () => {
-		const { getByText, queryAllByRole } = render(
-			<NowPlayingList segments={[]} mutedItems={[]} onToggleMute={() => {}} />,
-		);
+		const { getByText, queryAllByRole } = renderList({ segments: [] });
 		expect(getByText("—")).not.toBeNull();
 		expect(queryAllByRole("listitem")).toHaveLength(0);
+	});
+
+	it("clicking a title solos that item; clicking it again un-solos", () => {
+		const onSolo = vi.fn();
+		const { getByText, unmount } = renderList({ onToggleSolo: onSolo });
+		fireEvent.click(getByText("ATC Tower"));
+		expect(onSolo).toHaveBeenCalledWith(1);
+		unmount();
+		// parent flips soloItemId; a second click reports the same id (toggle)
+		onSolo.mockClear();
+		const { getByText: getByText2 } = renderList({ soloItemId: 1, onToggleSolo: onSolo });
+		fireEvent.click(getByText2("ATC Tower"));
+		expect(onSolo).toHaveBeenCalledWith(1);
+	});
+
+	it("while soloed, other rows read as muted and the soloed row as audible", () => {
+		// manual mutes are ignored for display while solo is active — what you
+		// see is what you hear
+		const { getAllByRole } = renderList({ soloItemId: 2, mutedItems: [2] });
+		const imgs = getAllByRole("img");
+		expect(imgs[0].getAttribute("alt")).toBe("Unmute"); // id 1 silenced by solo
+		expect(imgs[1].getAttribute("alt")).toBe("Mute"); // id 2 audible (soloed)
+	});
+
+	it("pauses the marquee while a solo is active", () => {
+		const { getByTestId, unmount } = renderList({ soloItemId: 1 });
+		expect(getByTestId("marquee").getAttribute("data-play")).toBe("false");
+		unmount();
+		const { getByTestId: get2 } = renderList({ soloItemId: null });
+		expect(get2("marquee").getAttribute("data-play")).toBe("true");
 	});
 });
