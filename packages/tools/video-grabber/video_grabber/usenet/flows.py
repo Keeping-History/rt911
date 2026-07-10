@@ -48,17 +48,22 @@ def get_db():
 
 def get_usenet_job(job_id: str):
     """Load a usenet_jobs row as a SimpleNamespace of its columns."""
-    db = get_db()
-    row = db.execute(
-        sa.text("SELECT * FROM usenet_jobs WHERE id = :id"), {"id": job_id}
-    ).mappings().fetchone()
+    with get_db() as db:
+        row = db.execute(
+            sa.text("SELECT * FROM usenet_jobs WHERE id = :id"), {"id": job_id}
+        ).mappings().fetchone()
     if row is None:
         raise ValueError(f"usenet_jobs row not found: {job_id}")
     return SimpleNamespace(**dict(row))
 
 
-def transition_usenet_job(db, job_id: str, to_stage: str, *, error: str = None, message_count: int = None) -> None:
-    """Set a usenet_jobs row's stage (+ optional error / message_count). Commits."""
+def transition_usenet_job(job_id: str, to_stage: str, *, error: str = None, message_count: int = None) -> None:
+    """Set a usenet_jobs row's stage (+ optional error / message_count). Commits.
+
+    Opens its own fresh, short-lived connection: rt911-db sets
+    idle_session_timeout=10min on the video_grabber database, and the stages
+    between transitions (mbox download, threading) can outlive it — a
+    connection held across them is dead by the next transition."""
     sets = ["stage = CAST(:stage AS usenet_stage)", "last_transition_at = now()"]
     params = {"stage": to_stage, "job_id": job_id}
     if error is not None:
@@ -69,8 +74,9 @@ def transition_usenet_job(db, job_id: str, to_stage: str, *, error: str = None, 
     if message_count is not None:
         sets.append("message_count = :mc")
         params["mc"] = message_count
-    db.execute(sa.text(f"UPDATE usenet_jobs SET {', '.join(sets)} WHERE id = :job_id"), params)
-    db.commit()
+    with get_db() as db:
+        db.execute(sa.text(f"UPDATE usenet_jobs SET {', '.join(sets)} WHERE id = :job_id"), params)
+        db.commit()
 
 
 # Stages a job passes through while a process-usenet-item run is working it. If
@@ -171,8 +177,8 @@ def scan_usenet_flow(collections: list[str] | None = None) -> None:
     collections = collections or cfg.usenet_collection_list()
     sleep_sec = 1.0 / cfg.ia_rate_per_sec if cfg.ia_rate_per_sec > 0 else 0.0
     session = IASearch()
-    db = get_db()
-    total = scan_collections(session, collections, db, sleep_sec=sleep_sec, logger=logger)
+    with get_db() as db:
+        total = scan_collections(session, collections, db, sleep_sec=sleep_sec, logger=logger)
     logger.info("scan-usenet: complete, %d items enumerated", total)
 
 
@@ -186,18 +192,17 @@ def process_usenet_item_flow(job_id: str) -> None:
     """
     logger = get_run_logger()
     cfg = Config()
-    db = get_db()
     job = get_usenet_job(job_id)
     scratch = _SCRATCH / "usenet" / job.ia_identifier
     try:
         # Heartbeat last_transition_at while in-flight so a killed pod's job is
         # reclaimable but a slow-but-live one is never falsely reclaimed.
         with _JobHeartbeat(job_id, logger=logger):
-            transition_usenet_job(db, job_id, "downloading")
+            transition_usenet_job(job_id, "downloading")
             mbox_path = download_mbox(job, scratch / "dl", logger=logger)
-            transition_usenet_job(db, job_id, "downloaded")
+            transition_usenet_job(job_id, "downloaded")
 
-            transition_usenet_job(db, job_id, "processing")
+            transition_usenet_job(job_id, "processing")
             fallback_group = job.ia_identifier.removeprefix("usenet-")
             groups = process_archive(mbox_path, cfg.usenet_before, scratch / "work", fallback_group, logger=logger)
 
@@ -205,11 +210,11 @@ def process_usenet_item_flow(job_id: str) -> None:
             for newsgroup, records in groups.items():
                 _, n = write_group(newsgroup, records, cfg)
                 total += n
-            transition_usenet_job(db, job_id, "processed", message_count=total)
+            transition_usenet_job(job_id, "processed", message_count=total)
             logger.info("process-usenet-item: %s ingested %d messages in %d groups",
                         job.ia_identifier, total, len(groups))
     except Exception as exc:  # noqa: BLE001 — record failure, then re-raise for retry
-        transition_usenet_job(db, job_id, "failed", error=str(exc)[:2000])
+        transition_usenet_job(job_id, "failed", error=str(exc)[:2000])
         raise
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
@@ -226,40 +231,44 @@ def dispatch_usenet_flow(max_runs: int = 100, max_retries: int = 3) -> None:
     job spends one retry, bounding the loop at max_retries.
     """
     logger = get_run_logger()
-    db = get_db()
     # Supervisor sweep: rescue jobs orphaned in-flight by a killed process run
     # before claiming fresh work, so a crash self-heals within one dispatch cycle
     # instead of stranding the job (and leaking its DB connection) indefinitely.
-    reclaim_orphaned_usenet_jobs(
-        db,
-        stale_minutes=Config().usenet_orphan_stale_minutes,
-        max_retries=max_retries,
-        logger=logger,
-    )
+    with get_db() as db:
+        reclaim_orphaned_usenet_jobs(
+            db,
+            stale_minutes=Config().usenet_orphan_stale_minutes,
+            max_retries=max_retries,
+            logger=logger,
+        )
     processed = 0
     while processed < max_runs:
-        row = db.execute(
-            sa.text(
-                """
-                UPDATE usenet_jobs SET
-                    stage = 'downloading',
-                    retry_count = retry_count
-                        + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
-                    last_transition_at = now()
-                WHERE id = (
-                    SELECT id FROM usenet_jobs
-                    WHERE stage = 'discovered'
-                       OR (stage = 'failed' AND retry_count < :max_retries)
-                    ORDER BY (stage = 'failed'), created_at
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1
-                )
-                RETURNING id
-                """
-            ),
-            {"max_retries": max_retries},
-        ).first()
-        db.commit()
+        # Fresh connection per claim: the blocking run_deployment below outlives
+        # rt911-db's idle_session_timeout (10 min), so a connection held across
+        # it is dead by the next iteration.
+        with get_db() as db:
+            row = db.execute(
+                sa.text(
+                    """
+                    UPDATE usenet_jobs SET
+                        stage = 'downloading',
+                        retry_count = retry_count
+                            + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
+                        last_transition_at = now()
+                    WHERE id = (
+                        SELECT id FROM usenet_jobs
+                        WHERE stage = 'discovered'
+                           OR (stage = 'failed' AND retry_count < :max_retries)
+                        ORDER BY (stage = 'failed'), created_at
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    )
+                    RETURNING id
+                    """
+                ),
+                {"max_retries": max_retries},
+            ).first()
+            db.commit()
         if row is None:
             logger.info("dispatch-usenet: queue empty after %d runs", processed)
             return

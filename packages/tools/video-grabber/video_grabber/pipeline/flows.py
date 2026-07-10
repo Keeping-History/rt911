@@ -72,32 +72,32 @@ def get_job(job_id: str):
     ``pending_review`` stage. It gates Directus ``approved`` (0 = awaiting
     human sign-off, 1 = auto-approved).
     """
-    db = get_db()
-    row = db.execute(
-        sa.text(
-            """
-            SELECT
-                j.*,
-                c.slug             AS channel_slug,
-                c.display_name     AS channel_display_name,
-                c.timezone         AS channel_timezone,
-                p.title            AS program_title,
-                p.description      AS program_description,
-                p.air_date         AS program_air_date,
-                p.duration_seconds AS program_duration_seconds,
-                EXISTS (
-                    SELECT 1 FROM pipeline_transitions t
-                    WHERE t.job_id = j.id
-                      AND t.to_stage = 'pending_review'
-                ) AS passed_through_review
-            FROM video_jobs j
-            LEFT JOIN channels c ON c.id = j.channel_id
-            LEFT JOIN programs p ON p.id = j.program_id
-            WHERE j.id = :id
-            """
-        ),
-        {"id": job_id},
-    ).mappings().fetchone()
+    with get_db() as db:
+        row = db.execute(
+            sa.text(
+                """
+                SELECT
+                    j.*,
+                    c.slug             AS channel_slug,
+                    c.display_name     AS channel_display_name,
+                    c.timezone         AS channel_timezone,
+                    p.title            AS program_title,
+                    p.description      AS program_description,
+                    p.air_date         AS program_air_date,
+                    p.duration_seconds AS program_duration_seconds,
+                    EXISTS (
+                        SELECT 1 FROM pipeline_transitions t
+                        WHERE t.job_id = j.id
+                          AND t.to_stage = 'pending_review'
+                    ) AS passed_through_review
+                FROM video_jobs j
+                LEFT JOIN channels c ON c.id = j.channel_id
+                LEFT JOIN programs p ON p.id = j.program_id
+                WHERE j.id = :id
+                """
+            ),
+            {"id": job_id},
+        ).mappings().fetchone()
 
     if row is None:
         raise ValueError(f"video_jobs row not found: {job_id}")
@@ -117,45 +117,51 @@ def get_job(job_id: str):
     return SimpleNamespace(channel=channel, program=program, **m)
 
 
-def transition_job(db, job_id: str, to_stage: str, *, from_stage: str = None, error: str = None) -> None:
-    """Atomic stage transition: UPDATE video_jobs + INSERT pipeline_transitions audit row."""
+def transition_job(job_id: str, to_stage: str, *, from_stage: str = None, error: str = None) -> None:
+    """Atomic stage transition: UPDATE video_jobs + INSERT pipeline_transitions audit row.
+
+    Opens its own fresh, short-lived connection: rt911-db sets
+    idle_session_timeout=10min on the video_grabber database, and the stages
+    between transitions (a multi-GB IA download, an encode) routinely outlive
+    it — a connection held across them is dead by the next transition."""
     params = {
         "stage": to_stage,
         "job_id": job_id,
         "worker_id": os.getenv("HOSTNAME", "unknown"),
     }
-    if error:
-        db.execute(
-            sa.text(
-                "UPDATE video_jobs SET stage = CAST(:stage AS pipeline_stage), "
-                "error_message = :error, last_transition_at = now() "
-                "WHERE id = :job_id"
-            ),
-            {**params, "error": error},
-        )
-    else:
-        db.execute(
-            sa.text(
-                "UPDATE video_jobs SET stage = CAST(:stage AS pipeline_stage), "
-                "last_transition_at = now() WHERE id = :job_id"
-            ),
-            params,
-        )
+    with get_db() as db:
+        if error:
+            db.execute(
+                sa.text(
+                    "UPDATE video_jobs SET stage = CAST(:stage AS pipeline_stage), "
+                    "error_message = :error, last_transition_at = now() "
+                    "WHERE id = :job_id"
+                ),
+                {**params, "error": error},
+            )
+        else:
+            db.execute(
+                sa.text(
+                    "UPDATE video_jobs SET stage = CAST(:stage AS pipeline_stage), "
+                    "last_transition_at = now() WHERE id = :job_id"
+                ),
+                params,
+            )
 
-    db.execute(
-        sa.text(
-            "INSERT INTO pipeline_transitions (job_id, from_stage, to_stage, worker_id) "
-            "VALUES (:job_id, CAST(:from_stage AS pipeline_stage), "
-            "CAST(:to_stage AS pipeline_stage), :worker_id)"
-        ),
-        {
-            "job_id": job_id,
-            "from_stage": from_stage,
-            "to_stage": to_stage,
-            "worker_id": os.getenv("HOSTNAME", "unknown"),
-        },
-    )
-    db.commit()
+        db.execute(
+            sa.text(
+                "INSERT INTO pipeline_transitions (job_id, from_stage, to_stage, worker_id) "
+                "VALUES (:job_id, CAST(:from_stage AS pipeline_stage), "
+                "CAST(:to_stage AS pipeline_stage), :worker_id)"
+            ),
+            {
+                "job_id": job_id,
+                "from_stage": from_stage,
+                "to_stage": to_stage,
+                "worker_id": os.getenv("HOSTNAME", "unknown"),
+            },
+        )
+        db.commit()
 
 
 @flow(name="scan-collections")
@@ -164,14 +170,14 @@ def scan_collections_flow(collections: list[str] = ["sept_11_tv_archive", "911"]
     cfg = Config()
     sleep_sec = 1.0 / cfg.ia_rate_per_sec if cfg.ia_rate_per_sec > 0 else 0.0
     session = IASearch()
-    db = get_db()
-    for coll in collections:
-        crawl_collection(
-            session, coll, db,
-            visited=set(),
-            sleep_sec=sleep_sec,
-            logger=logger,
-        )
+    with get_db() as db:
+        for coll in collections:
+            crawl_collection(
+                session, coll, db,
+                visited=set(),
+                sleep_sec=sleep_sec,
+                logger=logger,
+            )
     logger.info("Scan complete")
 
 
@@ -193,44 +199,46 @@ def process_item_flow(job_id: str):
     Per-retry lists are a task-only feature.
     """
     logger = get_run_logger()
-    db = get_db()
     job = get_job(job_id)
     cfg = Config()
     scratch = _SCRATCH / job.ia_identifier
 
     try:
-        transition_job(db, job_id, "downloading", from_stage=str(job.stage))
+        transition_job(job_id, "downloading", from_stage=str(job.stage))
         local_path = download_item(job, scratch, cfg, logger=logger)
 
-        transition_job(db, job_id, "downloaded", from_stage="downloading")
+        transition_job(job_id, "downloaded", from_stage="downloading")
 
         # Bare video_jobs rows carry no channel/program. Derive and link them
         # from the IA metadata + downloaded media before any stage that needs
         # job.channel.* or job.program.* (upload prefix, Directus media_item).
-        job = resolve_job(job, db, media_path=local_path)
+        # Fresh connection: the download above can outlive idle_session_timeout.
+        with get_db() as db:
+            job = resolve_job(job, db, media_path=local_path)
 
         encode_dir = scratch / "encoded"
 
-        transition_job(db, job_id, "encoding", from_stage="downloaded")
+        transition_job(job_id, "encoding", from_stage="downloaded")
         encode_to_hls(local_path, encode_dir, logger=logger)
 
-        transition_job(db, job_id, "encoded", from_stage="encoding")
+        transition_job(job_id, "encoded", from_stage="encoding")
 
-        transition_job(db, job_id, "uploading", from_stage="encoded")
+        transition_job(job_id, "uploading", from_stage="encoded")
         wasabi_key = upload_hls_package(job, encode_dir, cfg)
 
-        db.execute(
-            sa.text("UPDATE video_jobs SET wasabi_key = :key WHERE id = :id"),
-            {"key": wasabi_key, "id": job_id},
-        )
-        db.commit()
+        with get_db() as db:
+            db.execute(
+                sa.text("UPDATE video_jobs SET wasabi_key = :key WHERE id = :id"),
+                {"key": wasabi_key, "id": job_id},
+            )
+            db.commit()
 
         write_media_item(job, wasabi_key, cfg)
-        transition_job(db, job_id, "complete", from_stage="uploading")
+        transition_job(job_id, "complete", from_stage="uploading")
         logger.info(f"Completed: {job.ia_identifier}")
 
     except Exception as exc:
-        transition_job(db, job_id, "failed", from_stage=None, error=str(exc))
+        transition_job(job_id, "failed", from_stage=None, error=str(exc))
         raise
     finally:
         # Reclaim the per-job scratch (downloaded source + encoded HLS). Without
@@ -262,19 +270,21 @@ def build_channel_flow(channel_id: str, window_start: str, window_end: str):
     ISO-8601 UTC strings, e.g. "2001-09-09T00:00:00+00:00".
     """
     logger = get_run_logger()
-    db = get_db()
     cfg = Config()
     ws = datetime.fromisoformat(window_start)
     we = datetime.fromisoformat(window_end)
-    channel = _load_channel(db, channel_id)
-
-    n_slots = build_schedule(channel_id, ws, we, db)
+    with get_db() as db:
+        channel = _load_channel(db, channel_id)
+        n_slots = build_schedule(channel_id, ws, we, db)
     logger.info("build-channel %s: %d slots scheduled", channel.slug, n_slots)
 
     # Shared sequenced blue gap pool (channel-independent); uploaded once.
+    # Generating + uploading it (first build only) can outlive
+    # idle_session_timeout, so assemble on a fresh connection afterwards.
     _ensure_gap_pool(cfg)
 
-    playlists, epg_channel = assemble_range(channel, ws, we, db, cfg=cfg)
+    with get_db() as db:
+        playlists, epg_channel = assemble_range(channel, ws, we, db, cfg=cfg)
 
     # HLS playlists under playlists/<slug>/ (the EPG JSON guide lives in epg/).
     base = f"playlists/{channel.slug}"
@@ -348,7 +358,6 @@ def dispatch_discovered_flow(max_runs: int = 100, max_retries: int = 3) -> None:
     a bug can stop, fix, and rerun.
     """
     logger = get_run_logger()
-    db = get_db()
     processed = 0
     while processed < max_runs:
         # Atomically claim the next job. A single UPDATE whose target is chosen
@@ -361,28 +370,33 @@ def dispatch_discovered_flow(max_runs: int = 100, max_retries: int = 3) -> None:
         # one retry (retry_count++ via the CASE on the OLD stage), which bounds
         # the retry loop. SKIP LOCKED means each concurrent dispatcher gets a
         # distinct row instead of blocking on the same one.
-        row = db.execute(
-            sa.text(
-                """
-                UPDATE video_jobs SET
-                    stage = 'downloading',
-                    retry_count = retry_count
-                        + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
-                    last_transition_at = now()
-                WHERE id = (
-                    SELECT id FROM video_jobs
-                    WHERE stage = 'discovered'
-                       OR (stage = 'failed' AND retry_count < :max_retries)
-                    ORDER BY (stage = 'failed'), created_at
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1
-                )
-                RETURNING id
-                """
-            ),
-            {"max_retries": max_retries},
-        ).first()
-        db.commit()
+        #
+        # Fresh connection per claim: the blocking run_deployment below outlives
+        # rt911-db's idle_session_timeout (10 min), so a connection held across
+        # it is dead by the next iteration.
+        with get_db() as db:
+            row = db.execute(
+                sa.text(
+                    """
+                    UPDATE video_jobs SET
+                        stage = 'downloading',
+                        retry_count = retry_count
+                            + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
+                        last_transition_at = now()
+                    WHERE id = (
+                        SELECT id FROM video_jobs
+                        WHERE stage = 'discovered'
+                           OR (stage = 'failed' AND retry_count < :max_retries)
+                        ORDER BY (stage = 'failed'), created_at
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    )
+                    RETURNING id
+                    """
+                ),
+                {"max_retries": max_retries},
+            ).first()
+            db.commit()
         if row is None:
             logger.info("dispatch-discovered: queue empty after %d runs", processed)
             return
@@ -412,51 +426,51 @@ def requeue_pending_review_flow(max_jobs: int = 20000, dry_run: bool = False) ->
     changing anything. Returns ``{"promoted": n, "evaluated": m}``.
     """
     logger = get_run_logger()
-    db = get_db()
-    rows = db.execute(
-        sa.text(
-            "SELECT id, ia_identifier, ia_metadata FROM video_jobs "
-            "WHERE stage = 'pending_review' ORDER BY created_at LIMIT :n"
-        ),
-        {"n": max_jobs},
-    ).mappings().all()
-
-    to_promote: list[str] = []
-    for r in rows:
-        meta = r["ia_metadata"] or {}
-        if isinstance(meta, str):
-            try:
-                meta = json.loads(meta)
-            except json.JSONDecodeError:
-                meta = {}
-        # The stored blob carries "identifier", but fall back to the column so
-        # the identifier-prefix rule still fires on older/sparse metadata.
-        meta.setdefault("identifier", r["ia_identifier"])
-        if normalize_slug(meta):
-            to_promote.append(str(r["id"]))
-
-    logger.info(
-        "requeue-pending-review: %d of %d evaluated jobs now resolve to a channel%s",
-        len(to_promote), len(rows), " (dry run — no changes made)" if dry_run else "",
-    )
-    if to_promote and not dry_run:
-        worker = os.getenv("HOSTNAME", "unknown")
-        db.execute(
+    with get_db() as db:
+        rows = db.execute(
             sa.text(
-                "UPDATE video_jobs SET stage = 'discovered', last_transition_at = now() "
-                "WHERE id = ANY(CAST(:ids AS uuid[]))"
+                "SELECT id, ia_identifier, ia_metadata FROM video_jobs "
+                "WHERE stage = 'pending_review' ORDER BY created_at LIMIT :n"
             ),
-            {"ids": to_promote},
+            {"n": max_jobs},
+        ).mappings().all()
+
+        to_promote: list[str] = []
+        for r in rows:
+            meta = r["ia_metadata"] or {}
+            if isinstance(meta, str):
+                try:
+                    meta = json.loads(meta)
+                except json.JSONDecodeError:
+                    meta = {}
+            # The stored blob carries "identifier", but fall back to the column so
+            # the identifier-prefix rule still fires on older/sparse metadata.
+            meta.setdefault("identifier", r["ia_identifier"])
+            if normalize_slug(meta):
+                to_promote.append(str(r["id"]))
+
+        logger.info(
+            "requeue-pending-review: %d of %d evaluated jobs now resolve to a channel%s",
+            len(to_promote), len(rows), " (dry run — no changes made)" if dry_run else "",
         )
-        # Audit trail, mirroring transition_job but in one bulk insert.
-        db.execute(
-            sa.text(
-                "INSERT INTO pipeline_transitions (job_id, from_stage, to_stage, worker_id) "
-                "SELECT unnest(CAST(:ids AS uuid[])), "
-                "CAST('pending_review' AS pipeline_stage), "
-                "CAST('discovered' AS pipeline_stage), :worker"
-            ),
-            {"ids": to_promote, "worker": worker},
-        )
-        db.commit()
+        if to_promote and not dry_run:
+            worker = os.getenv("HOSTNAME", "unknown")
+            db.execute(
+                sa.text(
+                    "UPDATE video_jobs SET stage = 'discovered', last_transition_at = now() "
+                    "WHERE id = ANY(CAST(:ids AS uuid[]))"
+                ),
+                {"ids": to_promote},
+            )
+            # Audit trail, mirroring transition_job but in one bulk insert.
+            db.execute(
+                sa.text(
+                    "INSERT INTO pipeline_transitions (job_id, from_stage, to_stage, worker_id) "
+                    "SELECT unnest(CAST(:ids AS uuid[])), "
+                    "CAST('pending_review' AS pipeline_stage), "
+                    "CAST('discovered' AS pipeline_stage), :worker"
+                ),
+                {"ids": to_promote, "worker": worker},
+            )
+            db.commit()
     return {"promoted": len(to_promote), "evaluated": len(rows)}
