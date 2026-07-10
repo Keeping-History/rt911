@@ -92,6 +92,42 @@ describe("useFeedback", () => {
 
 			document.body.removeChild(root);
 		});
+
+		it("ignoreElements skips the Feedback app's own windows so they don't appear in the shot", async () => {
+			const mockCanvas = {
+				toBlob: (cb: (b: Blob | null) => void) =>
+					cb(new Blob(["png"], { type: "image/png" })),
+			} as unknown as HTMLCanvasElement;
+			mockHtml2canvas.mockResolvedValue(mockCanvas);
+
+			const root = document.createElement("div");
+			root.id = "root";
+			document.body.appendChild(root);
+
+			const { result } = renderHook(() => useFeedback());
+			await act(async () => {
+				await result.current.captureScreenshot();
+			});
+
+			const { ignoreElements } = mockHtml2canvas.mock.calls[0][1] as {
+				ignoreElements: (el: Element) => boolean;
+			};
+
+			// Classicy renders each window with DOM id `${appId}_${windowId}`.
+			const mainWindow = document.createElement("div");
+			mainWindow.id = "Feedback.app_feedback_main";
+			expect(ignoreElements(mainWindow)).toBe(true);
+
+			const aboutWindow = document.createElement("div");
+			aboutWindow.id = "Feedback.app_about";
+			expect(ignoreElements(aboutWindow)).toBe(true);
+
+			const otherAppWindow = document.createElement("div");
+			otherAppWindow.id = "RadioScanner.app_radioscanner_main";
+			expect(ignoreElements(otherAppWindow)).toBe(false);
+
+			document.body.removeChild(root);
+		});
 	});
 
 	describe("submit", () => {

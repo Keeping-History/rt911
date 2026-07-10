@@ -10,10 +10,10 @@ import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { FeedbackForm } from "./FeedbackForm";
 import { FeedbackSuccess } from "./FeedbackSuccess";
-import { useFeedback } from "./useFeedback";
+import { FEEDBACK_APP_ID, useFeedback } from "./useFeedback";
 import type { FeedbackFields } from "./useFeedback";
 
-const appId   = "Feedback.app";
+const appId   = FEEDBACK_APP_ID;
 const appName = "Feedback";
 
 // This app's own icon, registered into the shared registry at
