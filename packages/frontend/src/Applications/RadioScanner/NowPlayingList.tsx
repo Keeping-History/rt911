@@ -27,28 +27,28 @@ export const NowPlayingList: React.FC<NowPlayingListProps> = ({
 		return <p className={styles.rsNowPlayingEmpty}>—</p>;
 	}
 	return (
-		<ul className={styles.rsNowPlaying}>
-			{segments.map((item) => {
-				const isMuted = mutedItems.includes(item.id);
-				return (
-					<li key={item.id} className={styles.rsNowPlayingRow}>
-						<button
-							type="button"
-							className={styles.rsNowPlayingBtn}
-							onMouseUp={() => onToggleMute(item.id)}
-							aria-pressed={isMuted}
-						>
-							<img src={isMuted ? soundMute : soundOn} alt={isMuted ? "Unmute" : "Mute"} />
-						</button>
-						{/* Per-title marquee; react-fast-marquee re-measures via
-						    ResizeObserver so it keeps scrolling when the clock swaps
-						    segments (react-marquee-text froze on content change). */}
-						<Marquee direction="right" speed={40} pauseOnHover>
-							<span className={styles.rsNowPlayingTitle}>{item.full_title || item.title}</span>
-						</Marquee>
-					</li>
-				);
-			})}
-		</ul>
+		<Marquee direction="left" speed={40} pauseOnHover>
+			<ul className={styles.rsNowPlaying}>
+				{segments.map((item) => {
+					const isMuted = mutedItems.includes(item.id);
+					return (
+						<li key={item.id} className={styles.rsNowPlayingRow}>
+							<button
+								type="button"
+								className={styles.rsNowPlayingBtn}
+								onMouseUp={() => onToggleMute(item.id)}
+								aria-pressed={isMuted}
+							>
+								<img src={isMuted ? soundMute : soundOn} alt={isMuted ? "Unmute" : "Mute"} />
+							</button>
+							{/* Per-title marquee; react-fast-marquee re-measures via
+								ResizeObserver so it keeps scrolling when the clock swaps
+								segments (react-marquee-text froze on content change). */}
+								<span className={styles.rsNowPlayingTitle}>{item.full_title || item.title}</span>
+						</li>
+					);
+				})}
+			</ul>
+		</Marquee>
 	);
 };
