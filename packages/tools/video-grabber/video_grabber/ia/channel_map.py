@@ -28,6 +28,9 @@ KNOWN_CHANNELS: dict[str, str] = {
     "univision": "univision",
     "telemundo": "telemundo",
     "cctv4": "cctv4",
+    # The IA archive's identifier prefix stayed CCTV3_ after the slug was
+    # renamed to cctv4 (the stream is CCTV-4; see migration 004).
+    "cctv3": "cctv4",
 }
 
 # Local affiliate call-sign pattern: W/K followed by 3 uppercase letters

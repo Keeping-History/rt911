@@ -62,7 +62,14 @@ def get_transcribe_job(job_id: str):
         return SimpleNamespace(**dict(row))
 
 
-def transition_transcribe_job(db, job_id, to_stage, *, error=None, srt_key=None) -> None:
+def transition_transcribe_job(job_id, to_stage, *, error=None, srt_key=None) -> None:
+    """Move a transcribe_jobs row to *to_stage* on a fresh, short-lived connection.
+
+    Opening a connection per transition (rather than holding one across the
+    flow) is load-bearing: rt911-db sets idle_session_timeout=10min on the
+    video_grabber database, and whisper keeps transcribe-item busy for 15-20
+    minutes — any connection opened before transcription is dead by the time
+    the flow records 'done'/'failed'."""
     sets = ["stage = CAST(:stage AS transcribe_stage)", "last_transition_at = now()"]
     params = {"stage": to_stage, "job_id": job_id}
     if error is not None:
@@ -73,8 +80,9 @@ def transition_transcribe_job(db, job_id, to_stage, *, error=None, srt_key=None)
     if srt_key is not None:
         sets.append("srt_key = :srt_key")
         params["srt_key"] = srt_key
-    db.execute(sa.text(f"UPDATE transcribe_jobs SET {', '.join(sets)} WHERE id = :job_id"), params)
-    db.commit()
+    with get_db() as db:
+        db.execute(sa.text(f"UPDATE transcribe_jobs SET {', '.join(sets)} WHERE id = :job_id"), params)
+        db.commit()
 
 
 # ---- pure merge helper (unit-tested) --------------------------------------
@@ -154,11 +162,10 @@ def transcribe_item_flow(job_id: str) -> None:
     its mp3_items row. TV's Directus write happens in build-channel-subtitles."""
     logger = get_run_logger()
     cfg = Config()
-    db = get_db()
     job = get_transcribe_job(job_id)
     scratch = _SCRATCH / "transcribe" / str(job.id)
     try:
-        transition_transcribe_job(db, job_id, "transcribing")
+        transition_transcribe_job(job_id, "transcribing")
         wav = extract_audio(job.source_url, scratch / "audio.wav")
         out_base = scratch / "out"
         srt_path = transcribe_wav(wav, out_base, cfg)
@@ -190,14 +197,13 @@ def transcribe_item_flow(job_id: str) -> None:
                     job.source_key,
                 )
 
-        transition_transcribe_job(db, job_id, "done", srt_key=srt_key)
+        transition_transcribe_job(job_id, "done", srt_key=srt_key)
         logger.info("transcribe-item: %s %s → %s", job.kind, job.source_key, srt_key)
     except Exception as exc:  # noqa: BLE001 — record failure then re-raise for retry
-        transition_transcribe_job(db, job_id, "failed", error=str(exc)[:2000])
+        transition_transcribe_job(job_id, "failed", error=str(exc)[:2000])
         raise
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
-        db.close()
 
 
 @flow(name="build-channel-subtitles")
