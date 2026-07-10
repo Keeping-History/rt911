@@ -94,9 +94,13 @@ export function pruneReplay(buffer: ReplayBuffer, oldestMs: number): void {
 export function replayPointsAt(
 	buffer: ReplayBuffer,
 	tMs: number,
+	// Draw-time filter (issue #188): ghosts of hidden flights are skipped, the
+	// buffer itself stays complete so clearing the filter restores them instantly.
+	visible: Set<string> | null = null,
 ): FlightFeatureCollection {
 	const features: FlightFeatureCollection["features"] = [];
-	for (const f of buffer.values()) {
+	for (const [flight, f] of buffer) {
+		if (visible && !visible.has(flight)) continue;
 		const s = f.samples;
 		if (s.length === 0 || tMs < s[0].t || tMs > s[s.length - 1].t) continue;
 		const i = lowerBound(s, tMs);
