@@ -7,6 +7,7 @@ import { type Bookmark, useBookmarks } from "./useBookmarks";
 interface BookmarksWindowProps {
 	appId:      string;
 	appMenu:    React.ComponentProps<typeof ClassicyWindow>["appMenu"];
+	icon:       string;
 	tzOffset:   number;
 	onSelect:   (bookmark: Bookmark) => void;
 	onCloseFunc: () => void;
@@ -15,6 +16,7 @@ interface BookmarksWindowProps {
 export const BookmarksWindow: React.FC<BookmarksWindowProps> = ({
 	appId,
 	appMenu,
+	icon,
 	tzOffset,
 	onSelect,
 	onCloseFunc,
@@ -25,6 +27,7 @@ export const BookmarksWindow: React.FC<BookmarksWindowProps> = ({
 		<ClassicyWindow
 			id={`${appId}_bookmarks`}
 			title="Bookmarks"
+			icon={icon}
 			appId={appId}
 			closable={true}
 			resizable={true}

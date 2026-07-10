@@ -3,7 +3,9 @@ import {
 	ClassicyIcons,
 	ClassicyWindow,
 	quitMenuItemHelper,
+	registerClassicyIcons,
 } from "classicy";
+import appIconPng from "./app.png";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { FeedbackForm } from "./FeedbackForm";
@@ -13,7 +15,18 @@ import type { FeedbackFields } from "./useFeedback";
 
 const appId   = "Feedback.app";
 const appName = "Feedback";
-const appIcon = ClassicyIcons.system.bomb as string;
+
+// This app's own icon, registered into the shared registry at
+// ClassicyIcons.applications.feedback.app. registerClassicyIcons assigns
+// shallowly, so the existing applications namespace is spread in to keep
+// classicy's bundled app icons (and other apps' registrations) intact.
+const ICONS = registerClassicyIcons({
+	applications: {
+		...ClassicyIcons.applications,
+		feedback: { app: appIconPng },
+	},
+});
+const appIcon = ICONS.applications.feedback.app;
 
 export const Feedback: React.FC = () => {
 	const [view,     setView]     = useState<"form" | "success">("form");
