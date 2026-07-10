@@ -125,21 +125,41 @@
 .rsOfflineText {
   padding-right: 6em;
 }
+.rsNowPlayingWrapper {
+  position: relative;
+  display: flex;
+  background: rgba(255,255,255,.5);
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--window-control-size);
+  width: 100%;
+  overflow: hidden;
+}
 
 .rsNowPlaying {
 	list-style: none;
 	margin: 0;
+  gap: var(--window-control-size);
 	padding: 0;
 	display: flex;
 	flex-direction: row;
 	gap: 2px;
 	position: relative;
 	z-index: 1;
-  background: rgba(255,255,255,.5);
   padding: var(--window-padding-size);
   gap: var(--window-control-size);
-  width: 100%;
-  overflow: hidden;
+  // Natural width, never shrink-to-fit: the rows would otherwise ellipsize
+  // to fit and useHorizontalOverflow could never detect that the list is
+  // too wide to display without scrolling.
+  width: max-content;
+  max-width: none;
+}
+
+// Applied only while the list overflows and scrolls: keeps a gap between the
+// marquee's loop repeats (same trick as .rsOfflineText).
+.rsNowPlayingScrolling {
+  padding-right: 6em;
 }
 
 .rsNowPlayingRow {

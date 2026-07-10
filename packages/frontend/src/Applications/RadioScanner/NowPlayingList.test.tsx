@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // rt911 has no global test setup, so testing-library does not auto-clean the
 // DOM between tests; do it explicitly to keep document-level queries isolated.
@@ -15,6 +15,20 @@ vi.mock("./marquee", () => ({
 		</div>
 	),
 }));
+
+// jsdom has no layout, so drive the fits/overflows decision from the tests
+// instead of from real measurement (the hook has its own unit tests).
+const overflow = vi.hoisted(() => ({ value: false }));
+vi.mock("./useHorizontalOverflow", () => ({
+	useHorizontalOverflow: () => ({
+		containerRef: () => {},
+		contentRef: () => {},
+		overflowing: overflow.value,
+	}),
+}));
+beforeEach(() => {
+	overflow.value = true; // most tests exercise the scrolling (marquee) mode
+});
 
 import type React from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
@@ -105,5 +119,19 @@ describe("NowPlayingList", () => {
 		unmount();
 		const { getByTestId: get2 } = renderList({ soloItemId: null });
 		expect(get2("marquee").getAttribute("data-play")).toBe("true");
+	});
+
+	it("renders a plain list (no marquee) while the content fits the container", () => {
+		overflow.value = false;
+		const { queryByTestId, getAllByRole } = renderList();
+		expect(queryByTestId("marquee")).toBeNull();
+		expect(getAllByRole("listitem")).toHaveLength(2); // rows still render
+	});
+
+	it("wraps the list in the marquee only once the content overflows", () => {
+		overflow.value = true;
+		const { getByTestId, getAllByRole } = renderList();
+		expect(getByTestId("marquee")).not.toBeNull();
+		expect(getAllByRole("listitem")).toHaveLength(2);
 	});
 });
