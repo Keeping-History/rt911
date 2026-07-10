@@ -16,7 +16,7 @@ describe("trackUrl", () => {
 		expect(url).toContain("filter%5Bflight%5D%5B_eq%5D=AA11");
 		expect(url).toContain("filter%5Bflight_date%5D%5B_eq%5D=2001-09-11");
 		expect(url).toContain(
-			"fields=flight%2Corigin%2Cscheduled_dest%2Clanded_at%2Cdiverted%2Cgeometry%2Ctail_number%2Caircraft_type%2Cdetails",
+			"fields=flight%2Corigin%2Cscheduled_dest%2Clanded_at%2Cdiverted%2Cgeometry%2Ctail_number%2Caircraft_type%2Cdetails%2Cwheels_off_utc%2Cwheels_on_utc",
 		);
 		expect(url).toContain("limit=1");
 	});

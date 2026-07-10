@@ -15,6 +15,7 @@ const baseTrack: FlightTrack = {
 	flight: "AA11", origin: "BOS", scheduled_dest: "LAX", landed_at: null,
 	diverted: false, geometry: null,
 	tail_number: null, aircraft_type: null, details: null,
+	wheels_off_utc: null, wheels_on_utc: null,
 };
 
 const notableTrack: FlightTrack = {
@@ -73,5 +74,34 @@ describe("FlightDetailPanel", () => {
 	it("shows the fate line once the virtual clock passes impact", () => {
 		render(<FlightDetailPanel selected={sel} loading={false} error={null} track={notableTrack} nowMs={POST_IMPACT} />);
 		expect(screen.getByText(/North Tower/)).toBeTruthy();
+	});
+	it("shows heading in degrees when known, omits when null", () => {
+		const { rerender } = render(
+			<FlightDetailPanel selected={sel} loading={false} error={null} track={baseTrack} nowMs={PRE_IMPACT} headingDeg={271.6} />,
+		);
+		expect(screen.getByText("272°")).toBeTruthy();
+		rerender(
+			<FlightDetailPanel selected={sel} loading={false} error={null} track={baseTrack} nowMs={PRE_IMPACT} headingDeg={null} />,
+		);
+		expect(screen.queryByText("Heading")).toBeNull();
+	});
+	it("shows wheels-up in display time (tz-shifted)", () => {
+		// 11:59Z at UTC-4 -> 7:59 AM
+		render(
+			<FlightDetailPanel selected={sel} loading={false} error={null} nowMs={PRE_IMPACT} tzOffset={-4}
+				track={{ ...baseTrack, wheels_off_utc: "2001-09-11T11:59:00Z" }} />,
+		);
+		expect(screen.getByText("7:59 AM")).toBeTruthy();
+	});
+	it("marks wheels-down (est.) until the replay clock passes it, then plain", () => {
+		const track = { ...baseTrack, wheels_on_utc: "2001-09-11T12:45:00Z" }; // 8:45 AM at -4
+		const { rerender } = render(
+			<FlightDetailPanel selected={sel} loading={false} error={null} nowMs={PRE_IMPACT} tzOffset={-4} track={track} />,
+		);
+		expect(screen.getByText("8:45 AM (est.)")).toBeTruthy();
+		rerender(
+			<FlightDetailPanel selected={sel} loading={false} error={null} nowMs={POST_IMPACT} tzOffset={-4} track={track} />,
+		);
+		expect(screen.getByText("8:45 AM")).toBeTruthy();
 	});
 });

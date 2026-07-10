@@ -168,3 +168,31 @@ export function motionTrailsToGeoJSON(
 	}
 	return { type: "FeatureCollection", features };
 }
+
+// Heading at a point on a fetched track: bearing of the geometry leg whose
+// vertex is nearest the given position. Used by the detail panel, which has
+// the track LineString but not the map's live motion buffer. Nearest-vertex
+// distance uses the same cos(midLat) longitude compression as bearingDeg so
+// self-crossing paths resolve to the on-screen-closest leg.
+export function headingFromTrack(
+	coords: [number, number][] | null | undefined,
+	lat: number,
+	lon: number,
+): number | null {
+	if (!coords || coords.length < 2) return null;
+	const cosLat = Math.cos((lat * Math.PI) / 180);
+	let best = 0;
+	let bestD = Infinity;
+	for (let i = 0; i < coords.length; i++) {
+		const dLat = coords[i][1] - lat;
+		const dLon = (coords[i][0] - lon) * cosLat;
+		const d = dLat * dLat + dLon * dLon;
+		if (d < bestD) {
+			bestD = d;
+			best = i;
+		}
+	}
+	const from = best > 0 ? coords[best - 1] : coords[0];
+	const to = best > 0 ? coords[best] : coords[1];
+	return bearingDeg({ lat: from[1], lon: from[0] }, { lat: to[1], lon: to[0] });
+}
