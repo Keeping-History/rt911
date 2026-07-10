@@ -4,8 +4,14 @@
   "flight_date": "2001-09-11",
   "origin": "BOS",
   "scheduled_dest": "LAX",
-  "aircraft": "B767",
+  "aircraft": "Boeing 767-222",
   "registration": "N612UA",
+  "details": {
+    "crew": { "captain": "Victor Saracini", "first_officer": "Michael Horrocks", "attendants": 7 },
+    "souls": { "passengers": 51, "crew": 9, "hijackers": 5, "total": 65 },
+    "hijackers": ["Marwan al-Shehhi", "Fayez Banihammad", "Mohand al-Shehri", "Hamza al-Ghamdi", "Ahmed al-Ghamdi"],
+    "fate": { "text": "Crashed into the South Tower of the World Trade Center" }
+  },
   "impact": {
     "site": "South Tower, World Trade Center (WTC 2)",
     "lat": 40.71078,
@@ -16,7 +22,8 @@
   "sources": [
     "NTSB Flight Path Study - United Airlines Flight 175 (2002-02-19)",
     "9/11 Commission Report, Ch. 1",
-    "United Airlines Flight 175 impact coordinates 40deg42'38.8\"N 74deg00'47.3\"W (WTC 2 south facade, floors 77-85)"
+    "United Airlines Flight 175 impact coordinates 40deg42'38.8\"N 74deg00'47.3\"W (WTC 2 south facade, floors 77-85)",
+    "9/11 Commission Report, Ch. 1 — flight crew, passenger, and hijacker complement"
   ],
   "provenance_notes": [
     "DOCUMENTED-WAYPOINT FALLBACK: The NTSB Flight Path Study for UA175 is published only as a scanned image PDF; its radar-return table is not machine-recoverable and was not transcribed return-by-return. The waypoints below are documented anchors (takeoff, 08:33 EDT level-off at 31,000 ft, the 08:46 EDT transponder-code change / start of deviation, the 08:58 EDT position over New Jersey at 28,500 ft, and impact) from the 9/11 Commission Report and NTSB study narrative; intermediate per-minute positions are great-circle interpolations between them, NOT surveyed radar returns.",

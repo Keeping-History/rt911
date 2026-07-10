@@ -482,6 +482,7 @@ export const FlightTracker: FC = () => {
 							track={track}
 							loading={loading}
 							error={error}
+							nowMs={nowMs}
 						/>
 						</div>
 					</div>

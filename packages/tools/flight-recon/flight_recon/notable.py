@@ -92,7 +92,10 @@ CREATE TABLE IF NOT EXISTS flight_tracks (
     diverted       boolean,
     wheels_off_utc timestamptz,
     wheels_on_utc  timestamptz,
+    tail_number    varchar,
+    aircraft_type  varchar,
     geometry       json,
+    details        json,
     run_id         varchar NOT NULL
 );
 CREATE TABLE IF NOT EXISTS reconstruction_runs (
@@ -112,7 +115,8 @@ CREATE TABLE IF NOT EXISTS reconstruction_runs (
 """
 
 TRACK_COLUMNS = ["flight", "flight_date", "origin", "scheduled_dest", "landed_at",
-                 "diverted", "wheels_off_utc", "wheels_on_utc", "geometry", "run_id"]
+                 "diverted", "wheels_off_utc", "wheels_on_utc", "tail_number",
+                 "aircraft_type", "geometry", "details", "run_id"]
 
 
 # ----------------------------------------------------------------- pure build
@@ -163,11 +167,20 @@ def build_flight(data):
     if abs(last[0] - imp["lon"]) > _IMPACT_TOL_DEG or abs(last[1] - imp["lat"]) > _IMPACT_TOL_DEG:
         raise ValueError(f"{flight}: track end {last} != impact ({imp['lon']},{imp['lat']})")
 
+    # details is curated in the JSON minus fate.utc, which is injected from the
+    # already-reviewed impact.utc so the impact instant lives in exactly one place.
+    details = data.get("details")
+    if details and "fate" in details:
+        details = {**details, "fate": {**details["fate"], "utc": imp["utc"]}}
+
     track = {
         "flight": flight, "flight_date": FLIGHT_DATE, "origin": data["origin"],
         "scheduled_dest": data["scheduled_dest"], "landed_at": None,
         "diverted": False, "wheels_off_utc": positions[0]["utc"],
         "wheels_on_utc": None,
+        "tail_number": data.get("registration"),
+        "aircraft_type": data.get("aircraft"),
+        "details": details,
         "geometry": {"type": "LineString", "coordinates": coords},
     }
     return positions, track
@@ -225,7 +238,10 @@ def insert_tracks(cur, tracks, run_id):
     for t in tracks:
         cur.execute(sql, (t["flight"], t["flight_date"], t["origin"], t["scheduled_dest"],
                           t["landed_at"], t["diverted"], t["wheels_off_utc"],
-                          t["wheels_on_utc"], Json(t["geometry"]), run_id))
+                          t["wheels_on_utc"], t["tail_number"], t["aircraft_type"],
+                          Json(t["geometry"]),
+                          Json(t["details"]) if t["details"] is not None else None,
+                          run_id))
     return len(tracks)
 
 

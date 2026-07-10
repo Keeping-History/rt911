@@ -4,8 +4,14 @@
   "flight_date": "2001-09-11",
   "origin": "IAD",
   "scheduled_dest": "LAX",
-  "aircraft": "B757",
+  "aircraft": "Boeing 757-223",
   "registration": "N644AA",
+  "details": {
+    "crew": { "captain": "Charles Burlingame", "first_officer": "David Charlebois", "attendants": 4 },
+    "souls": { "passengers": 53, "crew": 6, "hijackers": 5, "total": 64 },
+    "hijackers": ["Hani Hanjour", "Khalid al-Mihdhar", "Majed Moqed", "Nawaf al-Hazmi", "Salem al-Hazmi"],
+    "fate": { "text": "Crashed into the Pentagon" }
+  },
   "impact": {
     "site": "The Pentagon (west facade), Arlington, VA",
     "lat": 38.87117,
@@ -16,7 +22,8 @@
   "sources": [
     "NTSB Flight Path Study - American Airlines Flight 77 (2002-02-19), ntsb.gov/about/Documents/Flight_Path_Study_AA77.pdf",
     "9/11 Commission Report, Ch. 1",
-    "American Airlines Flight 77 impact coordinates 38deg52'16.2\"N 77deg03'29.7\"W (Pentagon west/southwest face, ground level)"
+    "American Airlines Flight 77 impact coordinates 38deg52'16.2\"N 77deg03'29.7\"W (Pentagon west/southwest face, ground level)",
+    "9/11 Commission Report, Ch. 1 — flight crew, passenger, and hijacker complement"
   ],
   "provenance_notes": [
     "DOCUMENTED-WAYPOINT FALLBACK: The NTSB Flight Path Study for AA77 is published only as a scanned image PDF; its radar-return table is not machine-recoverable and was not transcribed return-by-return. The waypoints below are documented anchors from the 9/11 Commission Report and NTSB study narrative: takeoff Dulles 08:20 EDT, level-off 35,000 ft at 08:46 EDT, the 08:54 EDT deviation/turn near Pike County, Ohio (the westernmost point of the flight), transponder-off 08:56 EDT with the autopilot set eastbound for Washington, the 09:29 EDT start of the 330-degree descending spiral ~5 mi WSW of the Pentagon from ~7,000 ft, ~2,200 ft during the spiral by ~09:34 EDT, and impact. Intermediate per-minute positions are great-circle interpolations between these anchors, NOT surveyed radar returns.",

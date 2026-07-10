@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
+import type { FlightTrack } from "./useFlightTrack";
 import { FlightDetailPanel } from "./FlightDetailPanel";
 
 afterEach(cleanup);
@@ -10,23 +11,67 @@ const sel: FlightPosition = {
 	lat: 42, lon: -73, alt_ft: 29000, phase: "cruise",
 };
 
+const baseTrack: FlightTrack = {
+	flight: "AA11", origin: "BOS", scheduled_dest: "LAX", landed_at: null,
+	diverted: false, geometry: null,
+	tail_number: null, aircraft_type: null, details: null,
+};
+
+const notableTrack: FlightTrack = {
+	...baseTrack,
+	tail_number: "N334AA",
+	aircraft_type: "Boeing 767-223ER",
+	details: {
+		crew: { captain: "John Ogonowski", first_officer: "Thomas McGuinness", attendants: 9 },
+		souls: { passengers: 76, crew: 11, hijackers: 5, total: 92 },
+		hijackers: ["Mohamed Atta", "Abdulaziz al-Omari"],
+		fate: { text: "Crashed into the North Tower of the World Trade Center", utc: "2001-09-11T12:46:40Z" },
+	},
+};
+
+const PRE_IMPACT = Date.parse("2001-09-11T12:30:00Z");
+const POST_IMPACT = Date.parse("2001-09-11T12:50:00Z");
+
 describe("FlightDetailPanel", () => {
 	it("prompts when nothing is selected", () => {
-		render(<FlightDetailPanel selected={null} track={null} loading={false} error={null} />);
+		render(<FlightDetailPanel selected={null} track={null} loading={false} error={null} nowMs={PRE_IMPACT} />);
 		expect(screen.getByText(/select a flight/i)).toBeTruthy();
 	});
 	it("shows flight fields and route from the track", () => {
-		render(
-			<FlightDetailPanel selected={sel} loading={false} error={null}
-				track={{ flight: "AA11", origin: "BOS", scheduled_dest: "LAX", landed_at: null, diverted: false, geometry: null }} />,
-		);
+		render(<FlightDetailPanel selected={sel} loading={false} error={null} track={baseTrack} nowMs={PRE_IMPACT} />);
 		expect(screen.getByText("AA11")).toBeTruthy();
 		expect(screen.getByText(/29,?000/)).toBeTruthy();
 		expect(screen.getByText(/BOS/)).toBeTruthy();
 		expect(screen.getByText(/LAX/)).toBeTruthy();
 	});
 	it("shows a track-unavailable note on error", () => {
-		render(<FlightDetailPanel selected={sel} track={null} loading={false} error="Track unavailable" />);
+		render(<FlightDetailPanel selected={sel} track={null} loading={false} error="Track unavailable" nowMs={PRE_IMPACT} />);
 		expect(screen.getByText(/track unavailable/i)).toBeTruthy();
+	});
+	it("shows aircraft type and tail when present", () => {
+		render(<FlightDetailPanel selected={sel} loading={false} error={null}
+			track={{ ...baseTrack, tail_number: "N334AA", aircraft_type: "Boeing 767-223ER" }} nowMs={PRE_IMPACT} />);
+		expect(screen.getByText("Boeing 767-223ER")).toBeTruthy();
+		expect(screen.getByText("N334AA")).toBeTruthy();
+	});
+	it("omits aircraft rows entirely when null — no placeholder dashes", () => {
+		render(<FlightDetailPanel selected={sel} loading={false} error={null} track={baseTrack} nowMs={PRE_IMPACT} />);
+		expect(screen.queryByText("Aircraft")).toBeNull();
+		expect(screen.queryByText("Tail")).toBeNull();
+	});
+	it("renders crew, souls, and hijackers for a notable flight", () => {
+		render(<FlightDetailPanel selected={sel} loading={false} error={null} track={notableTrack} nowMs={PRE_IMPACT} />);
+		expect(screen.getByText("John Ogonowski")).toBeTruthy();
+		expect(screen.getByText("Thomas McGuinness")).toBeTruthy();
+		expect(screen.getByText(/76 passengers · 11 crew · 5 hijackers · 92 aboard/)).toBeTruthy();
+		expect(screen.getByText(/Mohamed Atta, Abdulaziz al-Omari/)).toBeTruthy();
+	});
+	it("hides the fate line before the virtual clock reaches impact", () => {
+		render(<FlightDetailPanel selected={sel} loading={false} error={null} track={notableTrack} nowMs={PRE_IMPACT} />);
+		expect(screen.queryByText(/North Tower/)).toBeNull();
+	});
+	it("shows the fate line once the virtual clock passes impact", () => {
+		render(<FlightDetailPanel selected={sel} loading={false} error={null} track={notableTrack} nowMs={POST_IMPACT} />);
+		expect(screen.getByText(/North Tower/)).toBeTruthy();
 	});
 });

@@ -30,6 +30,8 @@ from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 
+from flight_recon.fleet import VALID_TAIL, normalize_tail
+
 STEP_SECONDS = 60          # trajectory sample cadence
 CRUISE_ALT_FT = 35000
 CLIMB_FRAC = 0.15          # fraction of airborne time spent climbing / descending
@@ -104,9 +106,20 @@ def et_seconds(utc_dt):
 
 
 # ---------------------------------------------------------------- reconstruction
-def reconstruct(start, end, flights_path, airports_path):
+def reconstruct(start, end, flights_path, airports_path, fleet=None, tail_decode=None):
     """
     Rebuild trajectories for every flight with FlightDate in [start, end].
+
+    fleet: optional {normalized_tail: aircraft_type} mapping (see
+    flight_recon.fleet.load_fleet); when given, each track carries
+    tail_number/aircraft_type. Unmatched tails leave aircraft_type None.
+
+    tail_decode: optional {(carrier, raw_tail): tail} map for windows whose
+    BTS file has mangled tail values (September 2001 — see
+    analysis/decode_2001_tails.py). When given, a raw value resolves via the
+    map first; unmapped values pass through only if they are grammatically
+    valid N-numbers (VALID_TAIL), otherwise the tail stays None — a mangled
+    value must never be stored as a pseudo-registration.
 
     Returns (positions, tracks, summary, flown):
       positions — list of dicts, one per flight per STEP_SECONDS
@@ -159,6 +172,22 @@ def reconstruct(start, end, flights_path, airports_path):
             skipped.append((fid, fdate, "no usable airborne interval"))
             continue
 
+        tail_raw = r.Tail_Number if "Tail_Number" in in_window.columns else None
+        tail_raw = tail_raw.strip() if isinstance(tail_raw, str) else None
+        if tail_decode is not None:
+            tail = tail_decode.get((r.Reporting_Airline, tail_raw)) if tail_raw else None
+            if tail is None and tail_raw:
+                # passthrough gate on the RAW value: normalizing first would
+                # launder a mangled "N368@@" into a plausible-looking "N368"
+                cand = tail_raw.upper()
+                if not cand.startswith("N"):
+                    cand = "N" + cand
+                if VALID_TAIL.match(cand):
+                    tail = cand
+        else:
+            tail = normalize_tail(tail_raw) if tail_raw and pd.notna(tail_raw) else None
+        aircraft_type = (fleet or {}).get(tail) if tail else None
+
         dur = (t_on - t_off).total_seconds()
         coords = []
         t = t_off
@@ -187,6 +216,8 @@ def reconstruct(start, end, flights_path, airports_path):
                            "origin": r.Origin,
                            "scheduled_dest": r.Dest, "landed_at": end_code,
                            "diverted": diverted,
+                           "tail_number": tail,
+                           "aircraft_type": aircraft_type,
                            "wheels_off_utc": t_off.strftime("%Y-%m-%dT%H:%M:%SZ"),
                            "wheels_on_utc": t_on.strftime("%Y-%m-%dT%H:%M:%SZ")},
             "geometry": {"type": "LineString", "coordinates": coords},
