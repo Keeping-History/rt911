@@ -33,6 +33,7 @@ def test_sync_db_url_passes_through_explicit_psycopg2():
 def _mock_db_returning(mapping):
     """Build a MagicMock db whose execute(...).mappings().fetchone() yields `mapping`."""
     db = MagicMock()
+    db.__enter__.return_value = db  # sqlalchemy Connection context manager returns self
     db.execute.return_value.mappings.return_value.fetchone.return_value = mapping
     return db
 
@@ -82,27 +83,155 @@ def test_get_job_raises_when_row_missing():
             get_job("nope")
 
 
-# --- transition_job ---
-
-def test_transition_job_updates_stage_and_logs():
-    from video_grabber.pipeline.flows import transition_job
-
-    db = MagicMock()
-    transition_job(db, "job-id-001", "metadata_extracted", from_stage="discovered")
-
-    db.execute.assert_called()
-    calls_sql = " ".join(str(c) for c in db.execute.call_args_list)
-    assert "video_jobs" in calls_sql or db.execute.called
+# --- transition_job / per-transition DB connections -------------------------
+#
+# rt911-db sets idle_session_timeout=10min on the video_grabber database (leak
+# protection), but download/encode can hold process-item for far longer, and
+# dispatch blocks on run_deployment for the whole job. Any connection opened
+# before a long stage is dead afterwards — so every DB touch must open its own
+# fresh connection (same fix as transcribe-item, PR #189).
 
 
-def test_transition_job_inserts_audit_row():
-    from video_grabber.pipeline.flows import transition_job
+class FakeConn:
+    """Stands in for a sqlalchemy Connection; `dead` mimics the server having
+    closed the socket (idle_session_timeout). Optional shared `results` deque
+    feeds execute(...).first() for dispatcher claim queries."""
 
-    db = MagicMock()
-    transition_job(db, "job-id-001", "downloading", from_stage="metadata_extracted")
+    def __init__(self, registry, results=None):
+        self.dead = False
+        self.executed = []
+        self.commits = 0
+        self.closed = False
+        self._results = results
+        registry.append(self)
 
-    # Two execute calls: UPDATE video_jobs + INSERT pipeline_transitions
-    assert db.execute.call_count >= 2
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.closed = True
+        return False
+
+    def _check(self):
+        if self.dead:
+            raise RuntimeError("server closed the connection unexpectedly")
+
+    def execute(self, stmt, params=None):
+        self._check()
+        self.executed.append((str(stmt), params or {}))
+        res = MagicMock()
+        if self._results is not None:
+            # Lazy pop: only a caller that actually calls .first() (the claim
+            # query) consumes a row; other queries must not eat the queue.
+            res.first = lambda: self._results.popleft() if self._results else None
+        return res
+
+    def commit(self):
+        self._check()
+        self.commits += 1
+
+
+def _stages(conns):
+    return [p["stage"] for c in conns for (_, p) in c.executed if "stage" in p]
+
+
+def _kill_all(conns):
+    """Simulate idle_session_timeout firing during a long stage."""
+    for c in conns:
+        c.dead = True
+
+
+def test_transition_job_opens_and_closes_its_own_connection():
+    from video_grabber.pipeline import flows
+
+    conns = []
+    with patch.object(flows, "get_db", lambda: FakeConn(conns)):
+        flows.transition_job("job-id-001", "downloading", from_stage="discovered")
+
+    assert len(conns) == 1
+    sqls = " ".join(s for s, _ in conns[0].executed)
+    assert "UPDATE video_jobs" in sqls
+    assert "INSERT INTO pipeline_transitions" in sqls
+    assert conns[0].commits == 1
+    assert conns[0].closed
+
+
+def test_get_job_closes_its_connection():
+    from video_grabber.pipeline.flows import get_job
+
+    db = _mock_db_returning(None)
+    with patch("video_grabber.pipeline.flows.get_db", return_value=db):
+        with pytest.raises(ValueError, match="not found"):
+            get_job("nope")
+    assert db.__exit__.called
+
+
+def test_process_item_flow_completes_after_connections_die_during_long_stages():
+    from video_grabber.pipeline import flows
+
+    job = MagicMock(id="job-001", ia_identifier="cnn-sep11-0800", stage="discovered")
+    conns = []
+
+    def slow_stage(*a, **k):
+        _kill_all(conns)
+        return MagicMock()
+
+    with patch.object(flows, "get_db", lambda: FakeConn(conns)), \
+         patch("video_grabber.pipeline.flows.get_job", return_value=job), \
+         patch("video_grabber.pipeline.flows.download_item", side_effect=slow_stage), \
+         patch("video_grabber.pipeline.flows.resolve_job", return_value=job), \
+         patch("video_grabber.pipeline.flows.encode_to_hls", side_effect=slow_stage), \
+         patch("video_grabber.pipeline.flows.upload_hls_package", return_value="some/key"), \
+         patch("video_grabber.pipeline.flows.write_media_item"), \
+         patch("video_grabber.pipeline.flows.shutil.rmtree"), \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        flows.process_item_flow.fn("job-001")
+
+    stages = _stages(conns)
+    assert stages[0] == "downloading"
+    assert stages[-1] == "complete"
+
+
+def test_process_item_flow_marks_failed_on_fresh_connection():
+    from video_grabber.pipeline import flows
+
+    job = MagicMock(id="job-001", ia_identifier="cnn-sep11-0800", stage="discovered")
+    conns = []
+
+    def dying_download(*a, **k):
+        _kill_all(conns)
+        raise Exception("download fail")
+
+    with patch.object(flows, "get_db", lambda: FakeConn(conns)), \
+         patch("video_grabber.pipeline.flows.get_job", return_value=job), \
+         patch("video_grabber.pipeline.flows.download_item", side_effect=dying_download), \
+         patch("video_grabber.pipeline.flows.shutil.rmtree"), \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        with pytest.raises(Exception, match="download fail"):
+            flows.process_item_flow.fn("job-001")
+
+    assert _stages(conns)[-1] == "failed"
+
+
+def test_dispatch_discovered_claims_each_job_on_a_fresh_connection():
+    from collections import deque
+    from types import SimpleNamespace
+    from video_grabber.pipeline import flows
+
+    rows = deque([SimpleNamespace(id="job-1"), None])
+    conns = []
+
+    def blocking_run(*a, **k):
+        _kill_all(conns)  # the dispatched job outlives idle_session_timeout
+
+    with patch.object(flows, "get_db", lambda: FakeConn(conns, results=rows)), \
+         patch("video_grabber.pipeline.flows.run_deployment", side_effect=blocking_run) as mock_run, \
+         patch("video_grabber.pipeline.flows.get_run_logger", return_value=MagicMock()):
+        flows.dispatch_discovered_flow.fn(max_runs=5)
+
+    assert mock_run.call_count == 1
+    claims = [s for c in conns for s, _ in c.executed if "UPDATE video_jobs" in s]
+    assert len(claims) == 2  # both claim attempts survived, second returned empty
 
 
 # --- scan_collections_flow ---
@@ -162,7 +291,7 @@ def test_process_item_flow_transitions_to_complete_on_success():
 
         process_item_flow.fn("job-001")
 
-    stages = [c[0][2] for c in mock_trans.call_args_list]
+    stages = [c[0][1] for c in mock_trans.call_args_list]  # transition_job(job_id, to_stage, ...)
     assert "complete" in stages
 
 
@@ -182,7 +311,7 @@ def test_process_item_flow_transitions_to_failed_on_download_error():
         with pytest.raises(Exception, match="download fail"):
             process_item_flow.fn("job-001")
 
-    stages = [c[0][2] for c in mock_trans.call_args_list]
+    stages = [c[0][1] for c in mock_trans.call_args_list]  # transition_job(job_id, to_stage, ...)
     assert "failed" in stages
 
 
@@ -241,7 +370,7 @@ def test_process_item_flow_transitions_through_all_stages():
 
         process_item_flow.fn("job-001")
 
-    stages = [c[0][2] for c in mock_trans.call_args_list]
+    stages = [c[0][1] for c in mock_trans.call_args_list]  # transition_job(job_id, to_stage, ...)
     assert "downloading" in stages
     assert "downloaded" in stages
     assert "encoding" in stages
@@ -264,6 +393,7 @@ def test_requeue_pending_review_promotes_only_resolvable_jobs():
          "ia_metadata": {"identifier": "20010911_0900_x", "title": ""}},
     ]
     db = MagicMock()
+    db.__enter__.return_value = db
     db.execute.return_value.mappings.return_value.all.return_value = rows
 
     with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
@@ -282,6 +412,7 @@ def test_requeue_pending_review_dry_run_makes_no_changes():
     rows = [{"id": "j1", "ia_identifier": "NHK_20010914_010000_x",
              "ia_metadata": {"identifier": "NHK_20010914_010000_x"}}]
     db = MagicMock()
+    db.__enter__.return_value = db
     db.execute.return_value.mappings.return_value.all.return_value = rows
 
     with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
@@ -299,6 +430,7 @@ def test_dispatch_discovered_flow_no_discovered_jobs_is_noop():
     from video_grabber.pipeline.flows import dispatch_discovered_flow
 
     db = MagicMock()
+    db.__enter__.return_value = db
     db.execute.return_value.first.return_value = None
 
     with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
@@ -315,6 +447,7 @@ def test_dispatch_discovered_flow_dispatches_one_per_iteration():
     # Two discovered rows, then empty — flow should dispatch twice then exit.
     rows = [MagicMock(id="job-a"), MagicMock(id="job-b"), None]
     db = MagicMock()
+    db.__enter__.return_value = db
     db.execute.return_value.first.side_effect = rows
 
     with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
@@ -332,6 +465,7 @@ def test_dispatch_discovered_flow_respects_max_runs_cap():
 
     # Endless supply of rows — flow must still stop at max_runs.
     db = MagicMock()
+    db.__enter__.return_value = db
     db.execute.return_value.first.return_value = MagicMock(id="job-x")
 
     with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
@@ -349,6 +483,7 @@ def test_dispatch_claims_atomically_and_bumps_failed_retry():
     # dispatches it; the claim bumps retry_count for failed jobs via a CASE.
     claimed = MagicMock(id="job-f")
     db = MagicMock()
+    db.__enter__.return_value = db
     db.execute.return_value.first.side_effect = [claimed, None]
 
     with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
@@ -371,6 +506,7 @@ def test_dispatch_skips_failed_jobs_over_retry_budget():
     # The SELECT itself filters out failed jobs at/over the retry cap, so an
     # exhausted job is simply never returned — modeled here as an empty queue.
     db = MagicMock()
+    db.__enter__.return_value = db
     db.execute.return_value.first.return_value = None
 
     with patch("video_grabber.pipeline.flows.get_db", return_value=db), \
