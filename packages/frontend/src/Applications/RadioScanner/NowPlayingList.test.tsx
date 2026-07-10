@@ -8,7 +8,7 @@ afterEach(cleanup);
 // react-fast-marquee measures via ResizeObserver, which jsdom doesn't
 // implement. The marquee is purely presentational here, so render children
 // directly.
-vi.mock("react-fast-marquee", () => ({
+vi.mock("./marquee", () => ({
 	default: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 

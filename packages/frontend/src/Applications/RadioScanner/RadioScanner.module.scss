@@ -139,6 +139,7 @@
   padding: var(--window-padding-size);
   gap: var(--window-control-size);
   width: 100%;
+  overflow: hidden;
 }
 
 .rsNowPlayingRow {

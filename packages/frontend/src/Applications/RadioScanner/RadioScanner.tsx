@@ -32,7 +32,7 @@ import {
     previousSegments,
     upcomingSegments,
 } from "./stationGrouping";
-import Marquee from "react-fast-marquee";
+import Marquee from "./marquee";
 
 type RadioScannerProps = Record<string, never>;
 
@@ -402,7 +402,9 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                             {station.label}
                                         </p>
                                         {!isOnline && (
-                                                <p
+                                                // div, not p: the marquee renders block divs inside,
+                                                // and <div> inside <p> is invalid HTML (React 19 errors)
+                                                <div
                                                     className={
                                                         styles.rsStationOffline
                                                     }
@@ -410,7 +412,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                                 <Marquee direction="right" speed={20}>
                                                         <span className={styles.rsOfflineText}>OFFLINE</span>
                                                 </Marquee>
-                                                </p>
+                                                </div>
                                         )}
                                     </ClassicyButton>
                                 );
