@@ -8,6 +8,10 @@ interface NowPlayingListProps {
 	segments: MediaItem[];
 	mutedItems: number[];
 	onToggleMute: (id: number) => void;
+	// Solo: clicking a title mutes every other playing item and pauses the
+	// marquee; clicking it again restores the manual mute state. null = off.
+	soloItemId: number | null;
+	onToggleSolo: (id: number) => void;
 }
 
 const soundOn = ClassicyIcons.controlPanels.soundManager.soundOn as string;
@@ -16,21 +20,32 @@ const soundMute = ClassicyIcons.controlPanels.soundManager.soundMute as string;
 /**
  * Lists the files currently playing for one station (its in-window segments),
  * each with a mute/unmute toggle. Purely presentational — the caller owns the
- * segment computation and the muted-id state.
+ * segment computation, the muted-id state, and the solo state.
  */
 export const NowPlayingList: React.FC<NowPlayingListProps> = ({
 	segments,
 	mutedItems,
 	onToggleMute,
+	soloItemId,
+	onToggleSolo,
 }) => {
 	if (segments.length === 0) {
 		return <p className={styles.rsNowPlayingEmpty}>—</p>;
 	}
+	const soloActive = soloItemId !== null;
 	return (
-		<Marquee direction="left" speed={40} pauseOnHover>
+		// react-fast-marquee re-measures via ResizeObserver so it keeps
+		// scrolling when the clock swaps segments; it pauses while a solo is
+		// active so the soloed row stays put.
+		<Marquee direction="left" speed={40} pauseOnHover play={!soloActive}>
 			<ul className={styles.rsNowPlaying}>
 				{segments.map((item) => {
-					const isMuted = mutedItems.includes(item.id);
+					// While soloed, display mirrors what's audible: only the soloed
+					// item plays, regardless of manual mutes (which stay untouched).
+					const isMuted = soloActive
+						? item.id !== soloItemId
+						: mutedItems.includes(item.id);
+					const isSoloed = soloItemId === item.id;
 					return (
 						<li key={item.id} className={styles.rsNowPlayingRow}>
 							<button
@@ -41,10 +56,15 @@ export const NowPlayingList: React.FC<NowPlayingListProps> = ({
 							>
 								<img src={isMuted ? soundMute : soundOn} alt={isMuted ? "Unmute" : "Mute"} />
 							</button>
-							{/* Per-title marquee; react-fast-marquee re-measures via
-								ResizeObserver so it keeps scrolling when the clock swaps
-								segments (react-marquee-text froze on content change). */}
+							<button
+								type="button"
+								className={`${styles.rsNowPlayingTitleBtn}${isSoloed ? ` ${styles.rsNowPlayingSolo}` : ""}`}
+								onClick={() => onToggleSolo(item.id)}
+								aria-pressed={isSoloed}
+								title={isSoloed ? "Unsolo (unmute the rest)" : "Solo (mute the rest)"}
+							>
 								<span className={styles.rsNowPlayingTitle}>{item.full_title || item.title}</span>
+							</button>
 						</li>
 					);
 				})}

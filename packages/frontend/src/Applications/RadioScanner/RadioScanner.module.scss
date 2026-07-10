@@ -162,6 +162,22 @@
 	}
 }
 
+// Title is a click target (solo toggle) — strip button chrome so it reads
+// like the plain label it replaced.
+.rsNowPlayingTitleBtn {
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	padding: 0;
+	text-align: left;
+	min-width: 0;
+}
+
+.rsNowPlayingSolo .rsNowPlayingTitle {
+	font-weight: bold;
+	text-decoration: underline;
+}
+
 .rsNowPlayingTitle {
 	font-family: var(--ui-font) ;
 	font-size: calc(var(--ui-font-size) * 1.25);

@@ -50,3 +50,23 @@ describe("sanitizeItemIds", () => {
 		expect(sanitizeItemIds("nope")).toEqual([]);
 	});
 });
+
+describe("effectiveMutedIds", () => {
+	const playing = [10, 11, 12];
+
+	it("returns manual mutes untouched when no solo is active", async () => {
+		const { effectiveMutedIds } = await import("./radioPlayback");
+		expect(effectiveMutedIds([11], null, playing)).toEqual([11]);
+	});
+
+	it("mutes every playing item except the soloed one, ignoring manual mutes", async () => {
+		const { effectiveMutedIds } = await import("./radioPlayback");
+		// 11 was manually muted but is the solo target -> audible
+		expect(effectiveMutedIds([11], 11, playing)).toEqual([10, 12]);
+	});
+
+	it("solo of an id not in the playing set mutes everything playing", async () => {
+		const { effectiveMutedIds } = await import("./radioPlayback");
+		expect(effectiveMutedIds([], 99, playing)).toEqual([10, 11, 12]);
+	});
+});

@@ -24,7 +24,11 @@ import { NowPlayingList } from "./NowPlayingList";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
 import { trackAppToggle } from "../../openreplay";
-import { sanitizeActiveStation, sanitizeItemIds } from "./radioPlayback";
+import {
+    effectiveMutedIds,
+    sanitizeActiveStation,
+    sanitizeItemIds,
+} from "./radioPlayback";
 import { StationPlayer } from "./StationPlayer";
 import {
     activeSegments,
@@ -93,6 +97,10 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         (appState?.showWaveform as boolean) ?? true,
     );
     const [focusedItem, setFocusedItem] = useState<MediaItem | null>(null);
+    // Solo (ephemeral, not persisted): while set, every other playing item is
+    // muted via effectiveMutedIds and the now-playing marquee pauses. Manual
+    // mutedItems stay untouched, so un-soloing restores them exactly.
+    const [soloItemId, setSoloItemId] = useState<number | null>(null);
 
     // Accumulate all mp3Items ever received so previousSegments can access them
     // even after they expire from the live stream.
@@ -165,6 +173,16 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         );
     };
 
+    const toggleSoloItem = useCallback((id: number) => {
+        setSoloItemId((prev) => (prev === id ? null : id));
+    }, []);
+
+    // Solo is scoped to the station it was started on.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: reset-on-change effect
+    useEffect(() => {
+        setSoloItemId(null);
+    }, [activeStation]);
+
     const appMenu = [
         {
             id: "file",
@@ -185,6 +203,39 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
     ];
 
     const activeStationObj = stations.find((s) => s.key === activeStation);
+
+    // The active station's in-window segments — shared by the now-playing
+    // list, the solo lifecycle, and the effective-mute derivation. Memoized so
+    // the no-solo playerMutedItems keeps mutedItems' identity and the volume
+    // effect in StationPlayer doesn't re-fire on unrelated renders.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: nowMs is the clock dep
+    const playingSegments = useMemo(
+        () => (activeStationObj ? activeSegments(activeStationObj, nowMs) : []),
+        [activeStationObj, nowMs],
+    );
+
+    // A soloed clip that finishes (or expires on seek) releases the solo, so
+    // the rest of the mix comes back rather than staying silent.
+    useEffect(() => {
+        if (
+            soloItemId !== null &&
+            !playingSegments.some((i) => i.id === soloItemId)
+        ) {
+            setSoloItemId(null);
+        }
+    }, [playingSegments, soloItemId]);
+
+    // What the audio elements actually honor: manual mutes, or — while a solo
+    // is active — everything in the mix except the soloed item.
+    const playerMutedItems = useMemo(
+        () =>
+            effectiveMutedIds(
+                mutedItems,
+                soloItemId,
+                playingSegments.map((i) => i.id),
+            ),
+        [mutedItems, soloItemId, playingSegments],
+    );
 
     const showSchedule =
         activeStation !== "" && !CONTINUOUS_STATIONS.has(activeStation);
@@ -262,12 +313,11 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                             {activeStationObj.label}
                                         </p>
                                         <NowPlayingList
-                                            segments={activeSegments(
-                                                activeStationObj,
-                                                nowMs,
-                                            )}
+                                            segments={playingSegments}
                                             mutedItems={mutedItems}
                                             onToggleMute={toggleItemMute}
+                                            soloItemId={soloItemId}
+                                            onToggleSolo={toggleSoloItem}
                                         />
                                         <div style={{ display: "flex", flexDirection: "row", width: "100%", minHeight: "30%", maxHeight: "60%", gap: "var(--window-control-size)" }}>
                                                 <div
@@ -363,7 +413,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                         nowMs={nowMs}
                                         getNowMs={getNowMs}
                                         stationMuted={false}
-                                        mutedItems={mutedItems}
+                                        mutedItems={playerMutedItems}
                                         clockPaused={clockPaused}
                                         showWaveform={showWaveform}
                                         captionsOn={captionsOn}
