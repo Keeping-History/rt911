@@ -8,8 +8,10 @@ import {
 	ClassicySpinner,
 	ClassicyWindow,
 	quitMenuItemHelper,
+	registerClassicyIcons,
 	useClassicyDateTime,
 } from "classicy";
+import appIconPng from "./app.png";
 import type React from "react";
 import { type ChangeEvent, useCallback, useMemo, useState } from "react";
 import { trackPauseResume, trackVirtualTimeSet } from "../../openreplay";
@@ -21,6 +23,17 @@ import type { Bookmark } from "./useBookmarks";
 const DEFAULT_SKIP_MINUTES = 30;
 const DEFAULT_STEP_SECONDS = 300; // 5 minutes
 
+// This app's own icon, registered into the shared registry at
+// ClassicyIcons.applications.timeMachine.app. registerClassicyIcons assigns
+// shallowly, so the existing applications namespace is spread in to keep
+// classicy's bundled app icons (and other apps' registrations) intact.
+const ICONS = registerClassicyIcons({
+	applications: {
+		...ClassicyIcons.applications,
+		timeMachine: { app: appIconPng },
+	},
+});
+
 function formatSeconds(s: number): string {
 	if (s < 60) return `${s} sec`;
 	const min = Math.floor(s / 60);
@@ -31,7 +44,7 @@ function formatSeconds(s: number): string {
 export const TimeMachine: React.FC = () => {
 	const appName = "Time Machine";
 	const appId = "TimeMachine.app";
-	const appIcon = ClassicyIcons.system.quicktime.controlPanel as string;
+	const appIcon = ICONS.applications.timeMachine.app;
 
 	const [skipMinutes, setSkipMinutes] = useState(DEFAULT_SKIP_MINUTES);
 	const [stepSeconds, setStepSeconds] = useState(DEFAULT_STEP_SECONDS);
@@ -152,6 +165,7 @@ export const TimeMachine: React.FC = () => {
 				<ClassicyWindow
 					id={`${appId}_settings`}
 					title="Settings"
+					icon={appIcon}
 					appId={appId}
 					closable={true}
 					resizable={false}
@@ -216,6 +230,7 @@ export const TimeMachine: React.FC = () => {
 				<BookmarksWindow
 					appId={appId}
 					appMenu={appMenu}
+					icon={appIcon}
 					tzOffset={tzOffset}
 					onSelect={handleBookmarkClick}
 					onCloseFunc={() => setShowBookmarks(false)}
@@ -224,6 +239,7 @@ export const TimeMachine: React.FC = () => {
 			<ClassicyWindow
 				id={`${appId}_main`}
 				title={appName}
+				icon={appIcon}
 				appId={appId}
 				closable={true}
 				resizable={false}
