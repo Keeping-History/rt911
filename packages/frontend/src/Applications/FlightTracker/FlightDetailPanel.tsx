@@ -13,9 +13,26 @@ interface FlightDetailPanelProps {
 	// Virtual-clock UTC ms (already stripped of the display tz by the caller
 	// via virtualUtcMs) — gates the fate line so the replay isn't spoiled.
 	nowMs: number;
+	// Bearing of the track leg at the flight's live position (headingFromTrack);
+	// null until a track with >=2 vertices is loaded.
+	headingDeg?: number | null;
+	// Display-timezone offset in hours (the menu-bar clock's tz) for rendering
+	// wheels times as local times.
+	tzOffset?: number;
 }
 
-export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({ selected, track, loading, error, nowMs }) => {
+// "8:14 AM"-style display time for a UTC instant in the app's display tz.
+function formatDisplayTime(iso: string, tzOffset: number): string {
+	const d = new Date(Date.parse(iso) + tzOffset * 3_600_000);
+	const h24 = d.getUTCHours();
+	const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+	const mm = String(d.getUTCMinutes()).padStart(2, "0");
+	return `${h12}:${mm} ${h24 < 12 ? "AM" : "PM"}`;
+}
+
+export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
+	selected, track, loading, error, nowMs, headingDeg = null, tzOffset = -4,
+}) => {
 	if (!selected) {
 		return (
 			<div className={styles.detailWrapper}>
@@ -57,7 +74,19 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({ selected, track,
 				{selected.carrier && (<><dt>Carrier</dt><dd>{selected.carrier}</dd></>)}
 				<dt>Altitude</dt><dd>{selected.alt_ft.toLocaleString()} ft</dd>
 				{selected.phase && (<><dt>Phase</dt><dd>{selected.phase}</dd></>)}
+				{headingDeg != null && (<><dt>Heading</dt><dd>{`${Math.round(headingDeg) % 360}°`}</dd></>)}
 				{route && (<><dt>Route</dt><dd>{route}</dd></>)}
+				{track?.wheels_off_utc && (
+					<><dt>Wheels Up</dt><dd>{formatDisplayTime(track.wheels_off_utc, tzOffset)}</dd></>
+				)}
+				{track?.wheels_on_utc && (
+					// In-world an unlanded flight's arrival is an estimate; the
+					// suffix drops once the replay clock passes the actual time.
+					<><dt>Wheels Down</dt><dd>
+						{formatDisplayTime(track.wheels_on_utc, tzOffset) +
+							(nowMs < Date.parse(track.wheels_on_utc) ? " (est.)" : "")}
+					</dd></>
+				)}
 				{track?.diverted && (<><dt>Status</dt><dd>Diverted</dd></>)}
 				{track?.aircraft_type && (<><dt>Aircraft</dt><dd>{track.aircraft_type}</dd></>)}
 				{track?.tail_number && (<><dt>Tail</dt><dd>{track.tail_number}</dd></>)}

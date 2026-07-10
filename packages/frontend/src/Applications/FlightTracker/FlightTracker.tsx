@@ -41,6 +41,7 @@ import {
 	readFlightMapSettings,
 } from "./flightMapSettings";
 import { insertReplaySamples, pruneReplay, type ReplayBuffer } from "./flightReplay";
+import { headingFromTrack } from "./flightMotion";
 import {
 	formatPlayhead,
 	LOOP_SPEEDS,
@@ -320,6 +321,20 @@ export const FlightTracker: FC = () => {
 	);
 	const { track, loading, error } = useFlightTrack(selection);
 
+	// Live fix for the selected flight (`selected` is a click-time snapshot; the
+	// streamed set updates each minute-bucket). Heading is the bearing of the
+	// track leg nearest that fix — no motion-buffer plumbing needed.
+	const livePos = selected
+		? (flightPositions.find((p) => p.flight === selected.flight) ?? selected)
+		: null;
+	const headingDeg = useMemo(
+		() =>
+			livePos && track?.geometry
+				? headingFromTrack(track.geometry.coordinates, livePos.lat, livePos.lon)
+				: null,
+		[livePos, track],
+	);
+
 	// Clear the selection when the selected flight leaves the airborne set — e.g.
 	// after a seek to a time it isn't aloft (spec: seek clears selection). Keyed on
 	// `flight`, the streamed identity, not object reference.
@@ -483,6 +498,8 @@ export const FlightTracker: FC = () => {
 							loading={loading}
 							error={error}
 							nowMs={nowMs}
+							headingDeg={headingDeg}
+							tzOffset={tzOffset}
 						/>
 						</div>
 					</div>

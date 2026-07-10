@@ -202,3 +202,24 @@ describe("trail display length (multiplier support)", () => {
 		expect(motionTrailsToGeoJSON(bufWith6(), T0 + 5 * 60_000, 1).features).toHaveLength(0);
 	});
 });
+
+describe("headingFromTrack", () => {
+	// square-ish path: east then north
+	const coords: [number, number][] = [
+		[-80, 40],
+		[-79, 40], // due east leg
+		[-79, 41], // due north leg
+	];
+	it("returns the bearing of the leg nearest the given position", async () => {
+		const { headingFromTrack } = await import("./flightMotion");
+		// near the midpoint of the east leg -> ~90°
+		expect(headingFromTrack(coords, 40.001, -79.5)!).toBeCloseTo(90, 0);
+		// near the north leg's end -> ~0°
+		expect(headingFromTrack(coords, 40.9, -79.001)!).toBeCloseTo(0, 0);
+	});
+	it("returns null without at least two vertices", async () => {
+		const { headingFromTrack } = await import("./flightMotion");
+		expect(headingFromTrack([[-80, 40]], 40, -80)).toBeNull();
+		expect(headingFromTrack(null, 40, -80)).toBeNull();
+	});
+});

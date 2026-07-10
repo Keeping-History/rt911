@@ -26,6 +26,8 @@ export interface FlightTrack {
 	tail_number: string | null;
 	aircraft_type: string | null;
 	details: FlightDetails | null;
+	wheels_off_utc: string | null;
+	wheels_on_utc: string | null;
 }
 
 export interface TrackSelection {
@@ -43,7 +45,7 @@ export function trackUrl(flight: string, flightDate: string): string {
 	const params = new URLSearchParams({
 		"filter[flight][_eq]": flight,
 		"filter[flight_date][_eq]": flightDate,
-		fields: "flight,origin,scheduled_dest,landed_at,diverted,geometry,tail_number,aircraft_type,details",
+		fields: "flight,origin,scheduled_dest,landed_at,diverted,geometry,tail_number,aircraft_type,details,wheels_off_utc,wheels_on_utc",
 		limit: "1",
 	});
 	return `${DIRECTUS_URL}/items/flight_tracks?${params.toString()}`;
