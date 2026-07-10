@@ -2,8 +2,7 @@ import { ClassicyIcons } from "classicy";
 import type React from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./RadioScanner.module.scss";
-import MarqueeText from "react-marquee-text"
-import "react-marquee-text/dist/styles.css"
+import Marquee from "react-fast-marquee";
 
 interface NowPlayingListProps {
 	segments: MediaItem[];
@@ -28,25 +27,28 @@ export const NowPlayingList: React.FC<NowPlayingListProps> = ({
 		return <p className={styles.rsNowPlayingEmpty}>—</p>;
 	}
 	return (
-		<ul className={styles.rsNowPlaying}>
-			{segments.map((item) => {
-				const isMuted = mutedItems.includes(item.id);
-				return (
-					<li key={item.id} className={styles.rsNowPlayingRow}>
-						<button
-							type="button"
-							className={styles.rsNowPlayingBtn}
-							onMouseUp={() => onToggleMute(item.id)}
-							aria-pressed={isMuted}
-						>
-							<img src={isMuted ? soundMute : soundOn} alt={isMuted ? "Unmute" : "Mute"} />
-						</button>
-						<MarqueeText direction="right" duration={10}>
-							<span className={styles.rsNowPlayingTitle}>{item.full_title || item.title}</span>
-						</MarqueeText>
-					</li>
-				);
-			})}
-		</ul>
+		// react-fast-marquee re-measures via ResizeObserver, so the ticker keeps
+		// scrolling when the virtual clock promotes/expires segments (the old
+		// react-marquee-text measured once on mount and froze on content change).
+		<Marquee direction="right" speed={40} pauseOnHover>
+			<ul className={styles.rsNowPlaying}>
+				{segments.map((item) => {
+					const isMuted = mutedItems.includes(item.id);
+					return (
+						<li key={item.id} className={styles.rsNowPlayingRow}>
+							<button
+								type="button"
+								className={styles.rsNowPlayingBtn}
+								onMouseUp={() => onToggleMute(item.id)}
+								aria-pressed={isMuted}
+							>
+								<img src={isMuted ? soundMute : soundOn} alt={isMuted ? "Unmute" : "Mute"} />
+							</button>
+								<span className={styles.rsNowPlayingTitle}>{item.full_title || item.title}</span>
+						</li>
+					);
+				})}
+			</ul>
+		</Marquee>
 	);
 };

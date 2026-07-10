@@ -5,10 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // DOM between tests; do it explicitly to keep document-level queries isolated.
 afterEach(cleanup);
 
-// react-marquee-text measures element widths to size its clone track; jsdom
-// reports zero widths, which crashes its mount effect. The marquee is purely
-// presentational here, so render children directly.
-vi.mock("react-marquee-text", () => ({
+// react-fast-marquee measures via ResizeObserver, which jsdom doesn't
+// implement. The marquee is purely presentational here, so render children
+// directly.
+vi.mock("react-fast-marquee", () => ({
 	default: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
