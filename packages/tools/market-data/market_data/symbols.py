@@ -80,7 +80,7 @@ SYMBOLS: list[Symbol] = [
     Symbol("ALK", "Alaska Air Group", ("airline",), "yahoo:ALK"),
     # ---- Insurers ----------------------------------------------------------
     Symbol("AIG", "American International Group", ("insurer",), "yahoo:AIG"),
-    Symbol("MMC", "Marsh & McLennan", ("insurer",), "yahoo:MMC"),
+    Symbol("MMC", "Marsh & McLennan", ("insurer",), "override"),  # Yahoo returns no data
     Symbol("MET", "MetLife", ("insurer",), "yahoo:MET"),
     # ---- Brokers -----------------------------------------------------------
     Symbol("MER", "Merrill Lynch", ("broker",), "override"),
