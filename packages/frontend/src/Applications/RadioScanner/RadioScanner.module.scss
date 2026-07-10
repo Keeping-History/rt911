@@ -120,6 +120,11 @@
   letter-spacing: 0.05em;
   width: 100%;
 }
+// Gap between the marquee's loop repeats (react-fast-marquee spaces repeats
+// by child margin; replaces react-marquee-text's textSpacing prop).
+.rsOfflineText {
+  padding-right: 6em;
+}
 
 .rsNowPlaying {
 	list-style: none;
@@ -133,6 +138,7 @@
   background: rgba(255,255,255,.5);
   padding: var(--window-padding-size);
   gap: var(--window-control-size);
+  width: 100%;
 }
 
 .rsNowPlayingRow {

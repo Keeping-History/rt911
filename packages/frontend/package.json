@@ -31,7 +31,7 @@
 		"pmtiles": "^4.4.1",
 		"react": "^19.2.7",
 		"react-dom": "^19.2.7",
-		"react-marquee-text": "^1.0.6",
+		"react-fast-marquee": "^1.6.5",
 		"react-player": "^3.4.0",
 		"sass-embedded": "^1.100.0"
 	},
