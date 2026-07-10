@@ -18,6 +18,9 @@ vi.mock("./FlightMap", () => ({
 const dispatchMock = vi.hoisted(() => vi.fn());
 const windowProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 const mockAppData = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+// Mutable virtual clock (true UTC; tzOffset 0 so localDate === UTC instant).
+// Defaults to 13:00 UTC on 9/11 — before the 13:26 FAA ground stop.
+const mockClock = vi.hoisted(() => ({ current: "2001-09-11T13:00:00.000Z" }));
 
 // classicy primitives → plain elements; useAppManager returns a state the
 // isRunning selector reads as "open". ClassicyWindow records its props so
@@ -162,7 +165,7 @@ vi.mock("classicy", () => ({
 		}),
 	useAppManagerDispatch: () => dispatchMock,
 	useClassicyDateTime: () => ({
-		localDate: new Date("2001-09-11T13:00:00.000Z"),
+		localDate: new Date(mockClock.current),
 		tzOffset: 0,
 		paused: false,
 	}),
@@ -251,6 +254,7 @@ describe("FlightTracker", () => {
 		mapProps.length = 0;
 		windowProps.length = 0;
 		mockAppData.current = {};
+		mockClock.current = "2001-09-11T13:00:00.000Z";
 		vi.clearAllMocks();
 	});
 
@@ -544,6 +548,45 @@ describe("FlightTracker", () => {
 			expect(last.loopEnabled).toBe(true);
 			expect(last.loopWindowMs).toBe(30 * 60_000);
 			expect(last.replayBuffer).toBeInstanceOf(Map);
+		});
+	});
+
+	describe("ground stop alert", () => {
+		it("shows no alert before the order (13:00 UTC default clock)", () => {
+			renderWithContext({ connected: true });
+			expect(screen.queryByRole("alert")).toBeNull();
+		});
+
+		it("turns the status bar red with a centered alert while the stop is in effect", () => {
+			mockClock.current = "2001-09-11T14:00:00.000Z";
+			renderWithContext({ connected: true });
+			const alert = screen.getByRole("alert");
+			expect(alert.textContent).toBe("FAA GROUND STOP IN EFFECT");
+			// The whole status bar (the nearest div — cells are spans) goes red
+			// per issue #186, not just the alert text.
+			expect(alert.closest("div")?.className).toContain("statusBarRed");
+		});
+
+		it("stays red overnight on September 12", () => {
+			mockClock.current = "2001-09-12T06:00:00.000Z";
+			renderWithContext({ connected: true });
+			expect(screen.getByRole("alert").textContent).toBe(
+				"FAA GROUND STOP IN EFFECT",
+			);
+		});
+
+		it("shows a non-red lifted notice after airspace reopens on September 13", () => {
+			mockClock.current = "2001-09-13T15:30:00.000Z";
+			renderWithContext({ connected: true });
+			const alert = screen.getByRole("alert");
+			expect(alert.textContent).toBe("FAA ground stop lifted — airspace reopened");
+			expect(alert.closest("div")?.className).not.toContain("statusBarRed");
+		});
+
+		it("drops the lifted notice an hour after reopening", () => {
+			mockClock.current = "2001-09-13T16:00:00.000Z";
+			renderWithContext({ connected: true });
+			expect(screen.queryByRole("alert")).toBeNull();
 		});
 	});
 });

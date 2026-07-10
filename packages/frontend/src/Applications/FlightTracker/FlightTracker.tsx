@@ -42,6 +42,7 @@ import {
 	readFlightLoopSettings,
 	readFlightMapSettings,
 } from "./flightMapSettings";
+import { groundStopStatus } from "./groundStop";
 import { insertReplaySamples, pruneReplay, type ReplayBuffer } from "./flightReplay";
 import { headingFromTrack } from "./flightMotion";
 import {
@@ -137,6 +138,10 @@ export const FlightTracker: FC = () => {
 	// the display tz back off (same conversion the MediaStreamProvider uses).
 	const { localDate, tzOffset, paused } = useClassicyDateTime({ tick: true });
 	const nowMs = virtualUtcMs(localDate, tzOffset);
+
+	// FAA ground stop replay state (issue #186): the whole status bar turns red
+	// while the order is in effect, then shows a one-hour "lifted" notice.
+	const groundStop = groundStopStatus(nowMs);
 
 	// Subscribe only while the app is open (ref-counted by appId server-side).
 	useEffect(() => {
@@ -582,12 +587,42 @@ export const FlightTracker: FC = () => {
 							</div>
 						</div>
 					)}
-					<div className={styles.statusBar}>
-						<span>
-							<span style={{ color: connected ? "green" : "red" }}>&bull;</span>{" "}
+					<div
+						className={`${styles.statusBar}${
+							groundStop === "active" ? ` ${styles.statusBarRed}` : ""
+						}`}
+					>
+						<span className={styles.statusBarCell}>
+							{/* On the red bar the usual green/red dot would vanish; use
+							    white-on-red equivalents instead. */}
+							<span
+								style={{
+									color:
+										groundStop === "active"
+											? connected
+												? "#7fff7f"
+												: "#fff"
+											: connected
+												? "green"
+												: "red",
+								}}
+							>
+								&bull;
+							</span>{" "}
 							{connected ? (loopEnabled ? "Live (Loop)" : "Live") : "Disconnected"}
 						</span>
-						<span>{flightPositions.length} aircraft aloft</span>
+						<span className={`${styles.statusBarCell} ${styles.statusBarCenter}`}>
+							{groundStop !== "none" && (
+								<span role="alert">
+									{groundStop === "active"
+										? "FAA GROUND STOP IN EFFECT"
+										: "FAA ground stop lifted — airspace reopened"}
+								</span>
+							)}
+						</span>
+						<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
+							{flightPositions.length} aircraft aloft
+						</span>
 					</div>
 				</div>
 			</ClassicyWindow>

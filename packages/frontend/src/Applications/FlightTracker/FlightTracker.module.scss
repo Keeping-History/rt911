@@ -31,6 +31,12 @@
 	height: var(--window-control-size);
 
 }
+// Equal-width thirds keep the ground-stop alert truly centered regardless of
+// how wide the connection/aircraft-count cells are.
+.statusBarCell { flex: 1 1 0; white-space: nowrap; }
+.statusBarCenter { text-align: center; font-weight: bold; }
+.statusBarRight { text-align: right; }
+.statusBarRed { background-color: #c0202a; color: #fff; }
 .settings { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
 .settingsButtons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .loopStrip {
