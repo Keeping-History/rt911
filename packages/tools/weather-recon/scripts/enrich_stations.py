@@ -1,0 +1,184 @@
+"""
+Dev-run: add wfo + nws_zone columns to data/stations.csv.
+
+    python scripts/enrich_stations.py          # uses caches under data/enrich-cache/
+
+Per US station: WFO from api.weather.gov points (cached JSON; reliable), then
+the 2001 zone resolved against that WFO's archived ZFP segments (cached AFOS
+text) via weather_recon.zone_resolve. CA/MX stations get empty wfo/nws_zone.
+Unresolved stations are listed at exit (curate ZONE_OVERRIDES; exit 1 until
+every US station resolves).
+"""
+
+import csv
+import json
+import sys
+import time
+from pathlib import Path
+
+import httpx
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from weather_recon.afos import split_products, split_segments  # noqa: E402
+from weather_recon.fetch_afos import afos_pil  # noqa: E402
+from weather_recon.stations import load_stations  # noqa: E402
+from weather_recon.zone_resolve import resolve_zone  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+CSV = ROOT / "data" / "stations.csv"
+CACHE = ROOT / "data" / "enrich-cache"
+FIELDS = ["station_id", "name", "lat", "lon", "elevation_m", "country", "tz",
+          "isd_id", "wfo", "nws_zone"]
+UA = {"User-Agent": "rt911-weather-recon (me@robbiebyrd.com)"}
+AFOS = "https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py"
+
+# Hand-curated results for stations the automated resolution can't place.
+# Populate ONLY from reading the archived product text. ICAO -> (wfo, zone).
+#
+# KJFK/KLGA (Queens) and KEWR (Newark/Essex Co, NJ): OKX's Sept-2001 ZFP
+# always bundles the 5 NYC boroughs + adjacent NJ counties into combined
+# segments (e.g. "NJZ005-006-011-NYZ072>077-" / "BRONX-ESSEX-HUDSON-KINGS
+# (BROOKLYN)-NASSAU-NEW YORK (MANHATTAN)-QUEENS-RICHMOND (STATEN ISLAND)-
+# UNION-"), so the name-list order (alphabetical) never lines up positionally
+# with the UGC zone-code order (numeric per state prefix) -- taking
+# segment.zones[0] would silently pick the wrong county/state. The actual
+# NYZ/NJZ <-> county mapping was verified against the IEM AFOS archive
+# BEYOND the cached 2001-09-08..13 window (retrieve.py pil=ZFPOKX,
+# sdate=2001-01-01 edate=2001-12-31; same office, same UGC scheme all year,
+# so the zone id is stable even though the citation date differs):
+# "NYZ075-076-210853-" / "KINGS (BROOKLYN)-QUEENS-" (Oct 20 2001)
+# -> NYZ076 = Queens (JFK, LaGuardia); a single-zone "NJZ005-...-" / "ESSEX-"
+# segment -> NJZ005 = Essex Co NJ (Newark/EWR).
+ZONE_OVERRIDES: dict[str, tuple[str, str]] = {
+    "KJFK": ("OKX", "NYZ076"),
+    "KLGA": ("OKX", "NYZ076"),
+    "KEWR": ("OKX", "NJZ005"),
+    # The remaining stations below have station *names* that don't literally
+    # share a token with their WFO's area-name headers (e.g. "PAGE FIELD
+    # AIRPORT" vs. "LEE"), so the automated name-match scores 0 even though
+    # the WFO's archive has real content. Each zone id was confirmed from a
+    # single- or 2-zone ZFP segment: some straight from the committed-window
+    # cache under data/enrich-cache/, others verified against the IEM AFOS
+    # archive beyond the cached window (noted per entry; UGC scheme is
+    # stable all year, so the zone id holds for the Sept window too).
+    # In-cache: "CAZ007-122300-" / "ALAMEDA AND CONTRA COSTA COUNTIES-"
+    # (data/enrich-cache/zfp_MTR.txt, line ~605).
+    "KOAK": ("MTR", "CAZ007"),
+    # In-cache: "CAZ008-122300-" / "SANTA CLARA COUNTY-"
+    # (data/enrich-cache/zfp_MTR.txt, line ~640).
+    "KSJC": ("MTR", "CAZ008"),
+    # Verified beyond the cached window (retrieve.py pil=ZFPTFX, full 2001):
+    # "MTZ012-302300-" / "CASCADE-" (Dec 30 2001 issuance).
+    "KGTF": ("TFX", "MTZ012"),
+    # Verified beyond the cached window (retrieve.py pil=ZFPTFX, full 2001):
+    # "MTZ014-281100-" / "SOUTHERN LEWIS AND CLARK-" (Dec 27 2001).
+    "KHLN": ("TFX", "MTZ014"),
+    # Verified beyond the cached window (retrieve.py pil=ZFPPIH, full 2001):
+    # "IDZ020-311130-" / "UPPER SNAKE RIVER PLAIN-", temp table lists IDAHO
+    # FALLS/REXBURG under this zone (Dec 30 2001).
+    "KIDA": ("PIH", "IDZ020"),
+    # Verified beyond the cached window (retrieve.py pil=ZFPPIH, full 2001):
+    # "IDZ021-311130-" / "LOWER SNAKE RIVER PLAIN-", temp table lists
+    # POCATELLO-ARPT/POCATELLO under this zone (Dec 30 2001).
+    "KPIH": ("PIH", "IDZ021"),
+    # In-cache: "FLZ062-065-120900-" / "CHARLOTTE-LEE-"
+    # (data/enrich-cache/zfp_TBW.txt, line ~286) -- FLZ062=Charlotte,
+    # FLZ065=Lee (Fort Myers/Page Field).
+    "KFMY": ("TBW", "FLZ065"),
+    # Verified beyond the cached window (retrieve.py pil=ZFPHNX, full 2001):
+    # "CAZ092-080000-" / "SOUTHEASTERN SAN JOAQUIN VALLEY-" (Dec 7 2001).
+    # Corroborated in-cache: the Sept-window 4-zone SE San Joaquin segment's
+    # temp table lists BAKERSFIELD (data/enrich-cache/zfp_HNX.txt).
+    "KBFL": ("HNX", "CAZ092"),
+    # KHSV (Huntsville AL): IEM's AFOS archive has zero ZFP-family products
+    # for HUN under any known 2001 pil (checked ZFPHUN, ZFPHSV, and the full
+    # `cccc=KHUN` product list for 2001 -- only FWCHSV/FWCMSL fire-weather
+    # condition statements exist, no zone forecast). Accepted gap per the
+    # brief's rule: not a major city, WFO archive genuinely empty.
+    "KHSV": ("HUN", ""),
+}
+
+# AFOS PIL overrides (wfo/cwa -> 2001-era ZFP suffix) live in
+# weather_recon.fetch_afos.AFOS_PIL_OVERRIDES; imported above as afos_pil().
+
+
+def points_lookup(client, station):
+    f = CACHE / f"points_{station['station_id']}.json"
+    if f.is_file():
+        return json.loads(f.read_text())
+    try:
+        r = client.get(f"https://api.weather.gov/points/{station['lat']},{station['lon']}",
+                       headers=UA, timeout=30, follow_redirects=True)
+        r.raise_for_status()
+        p = r.json()["properties"]
+        data = {"cwa": p.get("cwa") or "", "zone": (p.get("forecastZone") or "").rsplit("/", 1)[-1]}
+    except (httpx.HTTPStatusError, httpx.RequestError, KeyError, ValueError):
+        data = {"cwa": "", "zone": ""}
+    CACHE.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(data))
+    time.sleep(0.5)   # api.weather.gov politeness
+    return data
+
+
+def afos_segments(client, wfo):
+    f = CACHE / f"zfp_{wfo}.txt"
+    if f.is_file():
+        text = f.read_text()
+    else:
+        r = client.get(AFOS, params={"pil": afos_pil(wfo), "sdate": "2001-09-08",
+                                     "edate": "2001-09-13", "fmt": "text",
+                                     "limit": "9999"}, timeout=120)
+        r.raise_for_status()
+        text = r.text
+        CACHE.mkdir(parents=True, exist_ok=True)
+        f.write_text(text)
+    segs = []
+    for prod in split_products(text):
+        segs.extend(split_segments(prod))
+    return segs
+
+
+def main():
+    rows = load_stations(CSV)
+    unresolved = []
+    with httpx.Client() as client:
+        for st in rows:
+            if st["country"] != "US":
+                st["wfo"], st["nws_zone"] = "", ""
+                continue
+            if st["station_id"] in ZONE_OVERRIDES:
+                st["wfo"], st["nws_zone"] = ZONE_OVERRIDES[st["station_id"]]
+                continue
+            pt = points_lookup(client, st)
+            st["wfo"] = pt["cwa"]
+            if not pt["cwa"]:
+                unresolved.append((st["station_id"], pt["cwa"], st["name"]))
+                st["nws_zone"] = ""
+                continue
+            segs = afos_segments(client, pt["cwa"])
+            zone, method = resolve_zone(st["name"], pt["zone"], segs)
+            if zone is None:
+                unresolved.append((st["station_id"], pt["cwa"], st["name"]))
+                st["nws_zone"] = ""
+            else:
+                st["nws_zone"] = zone
+                print(f"{st['station_id']}: {pt['cwa']}/{zone} ({method})")
+    with CSV.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDS)
+        w.writeheader()
+        for st in rows:
+            if st["elevation_m"] is None:
+                st = {**st, "elevation_m": ""}
+            w.writerow({k: st[k] for k in FIELDS})
+    if unresolved:
+        print(f"\nUNRESOLVED ({len(unresolved)}):", file=sys.stderr)
+        for icao, wfo, name in unresolved:
+            print(f"  {icao} wfo={wfo} name={name!r} -> read data/enrich-cache/"
+                  f"zfp_{wfo}.txt and add to ZONE_OVERRIDES", file=sys.stderr)
+        return 1
+    print(f"wrote {len(rows)} stations with wfo/nws_zone to {CSV}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
