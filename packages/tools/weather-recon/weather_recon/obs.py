@@ -116,3 +116,41 @@ def raw_metar_from_rem(s):
     if not s or not s.startswith("MET") or not s[3:6].isdigit():
         return None
     return s[6:].rstrip(";").strip()
+
+
+KEEP_REPORT_TYPES = {"FM-15", "FM-16"}   # METAR + SPECI
+
+
+def observation_from_row(row, station_id):
+    """One NCEI CSV row -> weather_observations dict (run_id added by flow)."""
+    wind_dir, wind_kt = parse_wnd(row.get("WND"))
+    return {
+        "station_id": station_id,
+        "observed_at": row["DATE"],
+        "temp_c": parse_tenths(row.get("TMP")),
+        "dewpoint_c": parse_tenths(row.get("DEW")),
+        "wind_dir_deg": wind_dir,
+        "wind_speed_kt": wind_kt,
+        "gust_kt": parse_gust(row.get("OC1")),
+        "pressure_hpa": parse_tenths(row.get("SLP")),
+        "sky_condition": sky_from_gf1(row.get("GF1")),
+        "present_weather": weather_from_mw1(row.get("MW1")),
+        "visibility_km": parse_vis_km(row.get("VIS")),
+        "raw_metar": raw_metar_from_rem(row.get("REM")),
+    }
+
+
+def shape_station_rows(rows, station_id):
+    """Filter to METAR/SPECI, shape, dedupe per timestamp (FM-15 wins), sort."""
+    by_time = {}
+    for row in rows:
+        rtype = (row.get("REPORT_TYPE") or "").strip()
+        if rtype not in KEEP_REPORT_TYPES:
+            continue
+        key = row["DATE"]
+        if key in by_time and by_time[key][0] == "FM-15":
+            continue
+        if key not in by_time or rtype == "FM-15":
+            by_time[key] = (rtype, observation_from_row(row, station_id))
+    return [obs for _, obs in sorted(
+        (k, v[1]) for k, v in by_time.items())]
