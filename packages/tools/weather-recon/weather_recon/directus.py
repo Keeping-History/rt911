@@ -6,7 +6,7 @@ Ported from flight_recon.directus (same server, same gotchas):
   collections, but keep _JSON_META for the Phase 2 fields that will).
 - insert_many is bounded by row count AND serialized bytes (1 MB payload cap).
 
-Idempotency: weather_stations is a ~175-row reference table keyed by ICAO —
+Idempotency: weather_stations is a ~190-row reference table keyed by ICAO —
 re-loads do delete_all + insert. Phase 2 flows will add windowed deletes for
 observations/forecasts when they land.
 """
@@ -174,6 +174,8 @@ class DirectusClient:
         Batches are bounded by BOTH row count and serialized size — rows with
         big json fields (a transcontinental track's geometry is ~6-10 KB)
         blow past Directus's 1 MB payload cap long before `chunk` rows."""
+        pk = next(f["field"] for f in COLLECTIONS[collection]["fields"]
+                  if f.get("schema", {}).get("is_primary_key"))
         i = 0
         while i < len(rows):
             batch, size = [], 2  # brackets
@@ -185,7 +187,7 @@ class DirectusClient:
                 size += row_bytes
                 i += 1
             r = self._http.post(f"/items/{collection}", json=batch,
-                                params={"fields": "id"})
+                                params={"fields": pk})
             _check(r)
             log.info("%s: inserted %d/%d", collection, i, len(rows))
         return len(rows)

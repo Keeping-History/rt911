@@ -20,8 +20,12 @@ NETWORK_RETRIES = dict(retries=4, retry_delay_seconds=15, retry_jitter_factor=0.
 
 
 def _client(directus_url):
-    url = directus_url or os.environ["DIRECTUS_URL"]
-    token = os.environ["DIRECTUS_API_TOKEN"]
+    url = directus_url or os.environ.get("DIRECTUS_URL")
+    if not url:
+        raise RuntimeError("DIRECTUS_URL is not set (env or parameter)")
+    token = os.environ.get("DIRECTUS_API_TOKEN")
+    if not token:
+        raise RuntimeError("DIRECTUS_API_TOKEN is not set in the environment")
     return DirectusClient(url, token)
 
 

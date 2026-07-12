@@ -22,7 +22,7 @@ OUT = ROOT / "data" / "stations.csv"
 FIELDS = ["station_id", "name", "lat", "lon", "elevation_m", "country", "tz", "isd_id"]
 
 # Curated station list: major-city METAR sites across the US, Canada and
-# Mexico with 2001 coverage. 188 sites; every US state, 17 CA / 18 MX.
+# Mexico with 2001 coverage. 188 sites; every US state except Delaware, 17 CA / 18 MX.
 CURATED_ICAOS = {
     # US — Northeast
     "KBOS", "KPWM", "KBGR", "KBTV", "KMHT", "KPVD", "KBDL", "KALB", "KSYR",
