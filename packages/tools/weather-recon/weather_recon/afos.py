@@ -11,7 +11,9 @@ header (UTC) — never from the local-time line (anachronism rule).
 
 import re
 
-WMO_RE = re.compile(r"^([A-Z]{4}\d{2}) (K[A-Z0-9]{3}) (\d{2})(\d{2})(\d{2})", re.M)
+# station id after the WMO block: K = CONUS, P = Alaska/Hawaii/Pacific (e.g.
+# PAFC Anchorage, PHFO Honolulu) -- both appear in this project's station set.
+WMO_RE = re.compile(r"^([A-Z]{4}\d{2}) ([KP][A-Z0-9]{3}) (\d{2})(\d{2})(\d{2})", re.M)
 # a UGC chunk line: SSZ or SSC groups separated by '-', optionally ending in
 # the DDHHMM expiry; always ends with '-'
 UGC_LINE_RE = re.compile(r"^[A-Z]{2}[CZ]\d{3}[A-Z0-9>\-]*-$")
