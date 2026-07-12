@@ -43,6 +43,8 @@ COLLECTIONS = {
             {"field": "country", "type": "string", "schema": {"is_nullable": False}},
             {"field": "tz", "type": "string", "schema": {"is_nullable": False}},
             {"field": "isd_id", "type": "string", "schema": {"is_nullable": False}},
+            {"field": "wfo", "type": "string"},
+            {"field": "nws_zone", "type": "string"},
         ],
     },
     "weather_observations": {

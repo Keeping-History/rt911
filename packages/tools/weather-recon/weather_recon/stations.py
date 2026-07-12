@@ -3,6 +3,7 @@
 import csv
 
 COLUMNS = ["station_id", "name", "lat", "lon", "elevation_m", "country", "tz", "isd_id"]
+OPTIONAL_COLUMNS = ["wfo", "nws_zone"]
 COUNTRIES = {"US", "CA", "MX"}
 
 
@@ -10,8 +11,10 @@ def load_stations(path):
     """Parse stations.csv into typed dicts; raise ValueError on any bad row."""
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        if reader.fieldnames != COLUMNS:
-            raise ValueError(f"{path}: expected columns {COLUMNS}, got {reader.fieldnames}")
+        # Accept both 8-column (legacy) and 10-column (with wfo/nws_zone) headers
+        fieldnames = reader.fieldnames or []
+        if fieldnames != COLUMNS and fieldnames != COLUMNS + OPTIONAL_COLUMNS:
+            raise ValueError(f"{path}: expected columns {COLUMNS} or {COLUMNS + OPTIONAL_COLUMNS}, got {fieldnames}")
         rows, seen = [], set()
         for i, raw in enumerate(reader, start=2):
             where = f"{path}:{i} ({raw.get('station_id')!r})"
@@ -36,7 +39,9 @@ def load_stations(path):
                          "lat": lat, "lon": lon,
                          "elevation_m": float(elev) if elev else None,
                          "country": raw["country"], "tz": raw["tz"].strip(),
-                         "isd_id": raw["isd_id"].strip()})
+                         "isd_id": raw["isd_id"].strip(),
+                         "wfo": (raw.get("wfo") or "").strip(),
+                         "nws_zone": (raw.get("nws_zone") or "").strip()})
     if not rows:
         raise ValueError(f"{path}: no station rows")
     return rows

@@ -16,7 +16,8 @@ def test_loads_and_types_a_valid_row(tmp_path):
     rows = load_stations(_write(tmp_path, GOOD))
     assert rows == [{"station_id": "KORD", "name": "CHICAGO OHARE", "lat": 41.995,
                      "lon": -87.934, "elevation_m": 200.6, "country": "US",
-                     "tz": "America/Chicago", "isd_id": "725300-94846"}]
+                     "tz": "America/Chicago", "isd_id": "725300-94846",
+                     "wfo": "", "nws_zone": ""}]
 
 
 def test_empty_elevation_is_none(tmp_path):
@@ -50,3 +51,30 @@ def test_committed_csv_is_valid():
     rows = load_stations(Path(__file__).resolve().parents[1] / "data" / "stations.csv")
     assert len(rows) >= 150
     assert {r["country"] for r in rows} == {"US", "CA", "MX"}
+
+
+HEADER10 = ("station_id,name,lat,lon,elevation_m,country,tz,isd_id,wfo,nws_zone\n")
+GOOD10 = ('KORD,CHICAGO OHARE,41.995,-87.934,200.6,US,America/Chicago,'
+          '725300-94846,LOT,ILZ013\n')
+
+
+def test_loads_ten_column_row(tmp_path):
+    p = tmp_path / "stations.csv"
+    p.write_text(HEADER10 + GOOD10, encoding="utf-8")
+    rows = load_stations(p)
+    assert rows[0]["wfo"] == "LOT" and rows[0]["nws_zone"] == "ILZ013"
+
+
+def test_ten_column_allows_empty_wfo_zone_for_ca_mx(tmp_path):
+    p = tmp_path / "stations.csv"
+    p.write_text(HEADER10 + 'CYYZ,TORONTO,43.68,-79.63,,CA,America/Toronto,'
+                            '712650-99999,,\n', encoding="utf-8")
+    rows = load_stations(p)
+    assert rows[0]["wfo"] == "" and rows[0]["nws_zone"] == ""
+
+
+def test_eight_column_header_still_accepted(tmp_path):
+    p = tmp_path / "stations.csv"
+    p.write_text(HEADER + GOOD, encoding="utf-8")
+    rows = load_stations(p)
+    assert rows[0]["wfo"] == "" and rows[0]["nws_zone"] == ""
