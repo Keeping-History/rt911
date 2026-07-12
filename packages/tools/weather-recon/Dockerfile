@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 
 # Deps first (stable layer), pinned to the in-cluster Prefect server version.
-RUN pip install "prefect==3.7.4" "prefect-kubernetes>=0.5" "httpx>=0.27"
+RUN pip install "prefect==3.7.4" "prefect-kubernetes>=0.5" "httpx>=0.27" "boto3>=1.34"
 
 COPY pyproject.toml ./
 COPY weather_recon ./weather_recon
