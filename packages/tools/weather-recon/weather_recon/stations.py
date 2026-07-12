@@ -14,7 +14,8 @@ def load_stations(path):
         # Accept both 8-column (legacy) and 10-column (with wfo/nws_zone) headers
         fieldnames = reader.fieldnames or []
         if fieldnames != COLUMNS and fieldnames != COLUMNS + OPTIONAL_COLUMNS:
-            raise ValueError(f"{path}: expected columns {COLUMNS} or {COLUMNS + OPTIONAL_COLUMNS}, got {fieldnames}")
+            raise ValueError(f"{path}: expected columns {COLUMNS} (optionally + {OPTIONAL_COLUMNS}),\n"
+                             f"got {fieldnames}")
         rows, seen = [], set()
         for i, raw in enumerate(reader, start=2):
             where = f"{path}:{i} ({raw.get('station_id')!r})"
