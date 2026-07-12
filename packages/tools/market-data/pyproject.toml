@@ -1,0 +1,27 @@
+[project]
+name = "market-data"
+version = "0.1.0"
+description = "Generate the static market-data.json (Sept 2001 quotes + market calendar) consumed by the MarketWatch frontend app"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.4"]
+
+[project.scripts]
+market-data = "market_data.generate:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["market_data"]
+
+[tool.setuptools.package-data]
+market_data = ["overrides.json"]
+
+[tool.ruff]
+line-length = 100

@@ -1,0 +1,204 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--color-theme-07);
+  overflow: hidden;
+}
+
+.loading {
+  font-family: var(--ui-font);
+  font-size: var(--ui-font-size);
+  color: var(--color-theme-01);
+  padding: calc(var(--window-padding-size) * 2);
+  margin: 0;
+}
+
+// ---- Status banner ---------------------------------------------------------
+
+.banner {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--window-padding-size) * 2);
+  padding: var(--window-padding-size) calc(var(--window-padding-size) * 2);
+  border-bottom: 1px solid var(--color-theme-03);
+  font-family: var(--ui-font);
+}
+
+.bannerState {
+  font-size: var(--ui-font-size);
+  font-weight: bold;
+  letter-spacing: 0.15em;
+}
+
+.bannerReason {
+  font-size: calc(var(--ui-font-size) * 0.85);
+  opacity: 0.85;
+}
+
+.banner_open {
+  background: #d8efd8;
+  color: #0a5c0a;
+}
+
+.banner_halted {
+  background: #a01010;
+  color: #ffffff;
+}
+
+.banner_closed {
+  background: var(--color-theme-06);
+  color: var(--color-theme-01);
+}
+
+// ---- Index tiles -----------------------------------------------------------
+
+.tiles {
+  display: flex;
+  flex-direction: row;
+  gap: var(--window-padding-size);
+  padding: var(--window-padding-size);
+  border-bottom: 1px solid var(--color-theme-03);
+}
+
+.tile {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--window-padding-size);
+  background: var(--color-theme-06);
+  border: 1px solid var(--color-theme-03);
+  font-family: var(--ui-font);
+}
+
+.tileName {
+  font-size: calc(var(--ui-font-size) * 0.8);
+  color: var(--color-theme-02);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.tileValue {
+  font-size: calc(var(--ui-font-size) * 1.6);
+  font-weight: bold;
+  color: var(--color-theme-01);
+}
+
+.tileChange {
+  font-size: calc(var(--ui-font-size) * 0.9);
+}
+
+// ---- Quote board -----------------------------------------------------------
+
+.board {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--window-padding-size) var(--window-padding-size);
+  font-family: var(--ui-font);
+}
+
+.group {
+  margin-top: var(--window-padding-size);
+}
+
+.groupHeader {
+  font-size: calc(var(--ui-font-size) * 0.85);
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-theme-02);
+  border-bottom: 1px solid var(--color-theme-03);
+  padding-bottom: 2px;
+  margin-bottom: 2px;
+  position: sticky;
+  top: 0;
+  background: var(--color-theme-07);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 4.5em 1fr 6em 6em 6em;
+  gap: var(--window-padding-size);
+  font-size: var(--ui-font-size);
+  color: var(--color-theme-01);
+  padding: 1px 0;
+
+  &:nth-child(odd) {
+    background: var(--color-theme-06);
+  }
+}
+
+.rowSymbol {
+  font-weight: bold;
+}
+
+.rowName {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-theme-02);
+}
+
+.rowNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+// ---- Directions -------------------------------------------------------------
+
+.up {
+  color: #0a7c0a;
+}
+
+.down {
+  color: #c00000;
+}
+
+.flat {
+  color: var(--color-theme-02);
+}
+
+// ---- Ticker tape -------------------------------------------------------------
+
+.tape {
+  border-top: 2px solid var(--color-theme-03);
+  background: #000000;
+  padding: 3px 0;
+  overflow: hidden;
+
+  // marquee items are inline; keep them from wrapping inside the crawl
+  :global(.rfm-marquee),
+  :global(.rfm-initial-child-container) {
+    white-space: nowrap;
+  }
+
+  .up {
+    color: #33ff66;
+  }
+
+  .down {
+    color: #ff5544;
+  }
+
+  .flat {
+    color: #cccccc;
+  }
+}
+
+.tapeItem {
+  font-family: var(--ui-font);
+  font-size: var(--ui-font-size);
+  margin-right: 2.5em;
+  white-space: nowrap;
+}
+
+.tapeSymbol {
+  font-weight: bold;
+  color: #ffffff;
+}

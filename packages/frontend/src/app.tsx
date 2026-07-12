@@ -11,6 +11,7 @@ import { DefaultFileSystem } from "./data/DefaultFileSystem";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";
 import { FlightTracker } from "./Applications/FlightTracker/FlightTracker";
+import { MarketWatch } from "./Applications/MarketWatch/MarketWatch";
 import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
@@ -73,6 +74,7 @@ createRoot(rootElement).render(
 					<TimeMachine />
 					<Feedback />
 					<FlightTracker />
+					<MarketWatch />
 					<News />
 					<Newsgroups />
 					<PagerDecoder />
