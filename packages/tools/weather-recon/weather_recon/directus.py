@@ -151,7 +151,9 @@ class DirectusClient:
 
     def delete_all(self, collection):
         """Delete every row (reference-table reload). Returns rows deleted."""
-        flt = {"station_id": {"_nnull": True}}
+        pk = next(f["field"] for f in COLLECTIONS[collection]["fields"]
+                  if f.get("schema", {}).get("is_primary_key"))
+        flt = {pk: {"_nnull": True}}
         total = self.count(collection, flt)
         if total == 0:
             return 0

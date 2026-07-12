@@ -35,6 +35,15 @@ def test_stations_pk_is_the_icao_string():
     assert pk["field"] == "station_id" and pk["type"] == "string"
 
 
+def test_delete_all_pk_filter_derivable_for_every_collection():
+    # delete_all filters on the collection PK; every collection must yield one
+    from weather_recon.directus import COLLECTIONS
+    for name, spec in COLLECTIONS.items():
+        pk = next(f["field"] for f in spec["fields"]
+                  if f.get("schema", {}).get("is_primary_key"))
+        assert pk
+
+
 def test_observation_and_forecast_time_fields_are_timestamps():
     obs = {f["field"]: f for f in COLLECTIONS["weather_observations"]["fields"]}
     fc = {f["field"]: f for f in COLLECTIONS["weather_forecasts"]["fields"]}
