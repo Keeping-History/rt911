@@ -1,7 +1,0 @@
-pyproject.toml
-weather_recon/__init__.py
-weather_recon.egg-info/PKG-INFO
-weather_recon.egg-info/SOURCES.txt
-weather_recon.egg-info/dependency_links.txt
-weather_recon.egg-info/requires.txt
-weather_recon.egg-info/top_level.txt
