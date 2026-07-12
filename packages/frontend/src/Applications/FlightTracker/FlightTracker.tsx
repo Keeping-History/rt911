@@ -32,16 +32,26 @@ import {
 import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { FlightDetailPanel } from "./FlightDetailPanel";
 import { FlightMap } from "./FlightMap";
-import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
+import { flightDateOf, type TrackSelection, useFlightTrack } from "./useFlightTrack";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
 	type FlightMapSettings,
+	flightTrackerSetFilterSettings,
 	flightTrackerSetLoopSettings,
 	flightTrackerSetMapSettings,
 	intToHex,
+	readFlightFilterSettings,
 	readFlightLoopSettings,
 	readFlightMapSettings,
 } from "./flightMapSettings";
+import {
+	EMPTY_FLIGHT_FILTER,
+	type FlightFilter,
+	popUpOptions,
+	routeKey,
+	visibleFlightSet,
+} from "./flightFilter";
+import { useRouteIndex } from "./useRouteIndex";
 import { groundStopStatus } from "./groundStop";
 import { insertReplaySamples, pruneReplay, type ReplayBuffer } from "./flightReplay";
 import { headingFromTrack } from "./flightMotion";
@@ -90,6 +100,7 @@ export const FlightTracker: FC = () => {
 	);
 	const settings = useMemo(() => readFlightMapSettings(appData), [appData]);
 	const loopSettings = useMemo(() => readFlightLoopSettings(appData), [appData]);
+	const filterSettings = useMemo(() => readFlightFilterSettings(appData), [appData]);
 
 	const [showSettings, setShowSettings] = useState(false);
 	// Settings form: local working copy, committed on Save (TV pattern).
@@ -110,6 +121,31 @@ export const FlightTracker: FC = () => {
 		desktopEventDispatch(flightTrackerSetMapSettings(form));
 		setShowSettings(false);
 	}, [form, desktopEventDispatch]);
+
+	const [showFilter, setShowFilter] = useState(false);
+	// Filter Flights window (issue #188): non-modal, live-apply — each change
+	// dispatches immediately (no working-copy form; contrast saveSettings).
+	const openFilter = useCallback(() => {
+		setShowFilter(true);
+		desktopEventDispatch({
+			type: "ClassicyWindowFocus",
+			app: { id: appId },
+			window: { id: "flight-filter" },
+		});
+	}, [desktopEventDispatch]);
+
+	const setFilter = useCallback(
+		(patch: Partial<FlightFilter>) =>
+			desktopEventDispatch(
+				flightTrackerSetFilterSettings({ ...filterSettings, ...patch }),
+			),
+		[filterSettings, desktopEventDispatch],
+	);
+
+	const clearFilter = useCallback(
+		() => desktopEventDispatch(flightTrackerSetFilterSettings(EMPTY_FLIGHT_FILTER)),
+		[desktopEventDispatch],
+	);
 
 	const toggleDarkMap = useCallback(() => {
 		desktopEventDispatch(
@@ -132,6 +168,56 @@ export const FlightTracker: FC = () => {
 		requestFlightsHistory,
 		clearFlightsHistory,
 	} = useContext(MediaStreamContext);
+
+	// Bulk route metadata (tail/origin/dest) for the airborne set — the streamed
+	// position only carries flight # and carrier (see flightFilter.ts).
+	const routeIndex = useRouteIndex(flightPositions);
+	// null = filter inactive. Feeds the map's ghost skip-set, the positions
+	// filter below, and the status bar's "filtered" cue.
+	const visibleFlights = useMemo(
+		() => visibleFlightSet(flightPositions, routeIndex, filterSettings),
+		[flightPositions, routeIndex, filterSettings],
+	);
+	// Upstream filter for live pins/trails: updateMotion prunes flights that
+	// leave the positions set, so hidden flights disappear (and reappear on
+	// clear) with no map-side special casing.
+	const filteredPositions = useMemo(
+		() =>
+			visibleFlights
+				? flightPositions.filter((p) => visibleFlights.has(p.flight))
+				: flightPositions,
+		[flightPositions, visibleFlights],
+	);
+
+	// Option lists rebuild from whatever is airborne right now (accepted churn);
+	// popUpOptions synthesizes the current selection in when it's absent.
+	const airborneRows = useMemo(
+		() =>
+			flightPositions.map((p) =>
+				routeIndex.get(routeKey(p.flight, flightDateOf(p.start_date))),
+			),
+		[flightPositions, routeIndex],
+	);
+	const flightOptions = useMemo(
+		() => popUpOptions(flightPositions.map((p) => p.flight), filterSettings.flight),
+		[flightPositions, filterSettings.flight],
+	);
+	const tailOptions = useMemo(
+		() => popUpOptions(airborneRows.map((r) => r?.tail_number), filterSettings.tail),
+		[airborneRows, filterSettings.tail],
+	);
+	const carrierOptions = useMemo(
+		() => popUpOptions(flightPositions.map((p) => p.carrier), filterSettings.carrier),
+		[flightPositions, filterSettings.carrier],
+	);
+	const originOptions = useMemo(
+		() => popUpOptions(airborneRows.map((r) => r?.origin), filterSettings.origin),
+		[airborneRows, filterSettings.origin],
+	);
+	const destOptions = useMemo(
+		() => popUpOptions(airborneRows.map((r) => r?.scheduled_dest), filterSettings.dest),
+		[airborneRows, filterSettings.dest],
+	);
 
 	// Read-only: this app never mutates the clock (only TimeMachine does). The
 	// animation loop needs the true-UTC instant + play state; virtualUtcMs strips
@@ -246,6 +332,11 @@ export const FlightTracker: FC = () => {
 						title: "Settings…",
 						onClickFunc: openSettings,
 					},
+					{
+						id: "flight-filter-menu",
+						title: "Filter Flights…",
+						onClickFunc: openFilter,
+					},
 					quitMenuItemHelper(appId, appName, appIcon),
 				],
 			},
@@ -272,7 +363,7 @@ export const FlightTracker: FC = () => {
 				],
 			},
 		],
-		[appIcon, settings.darkMap, settings.radarSweep, openSettings, toggleDarkMap, toggleRadarSweep, loopEnabled, toggleLoop],
+		[appIcon, settings.darkMap, settings.radarSweep, openSettings, openFilter, toggleDarkMap, toggleRadarSweep, loopEnabled, toggleLoop],
 	);
 
 	// Loop on/off ↔ provider history request. The provider re-issues on
@@ -353,14 +444,13 @@ export const FlightTracker: FC = () => {
 		[livePos, track],
 	);
 
-	// Clear the selection when the selected flight leaves the airborne set — e.g.
-	// after a seek to a time it isn't aloft (spec: seek clears selection). Keyed on
-	// `flight`, the streamed identity, not object reference.
+	// Clear the selection when the selected flight leaves the *visible* set —
+	// gone from the airborne set (e.g. after a seek) or hidden by the filter.
 	useEffect(() => {
-		if (selected && !flightPositions.some((p) => p.flight === selected.flight)) {
+		if (selected && !filteredPositions.some((p) => p.flight === selected.flight)) {
 			setSelected(null);
 		}
-	}, [flightPositions, selected]);
+	}, [filteredPositions, selected]);
 
 	// Selects the clicked flight if it's currently in the airborne set; does not
 	// clear on seek itself — the effect above handles that.
@@ -470,6 +560,79 @@ export const FlightTracker: FC = () => {
 					</div>
 				</ClassicyWindow>
 			)}
+			{showFilter && (
+				<ClassicyWindow
+					id="flight-filter"
+					title="Filter Flights"
+					icon={appIcon}
+					appId={appId}
+					closable={true}
+					resizable={false}
+					zoomable={false}
+					scrollable={true}
+					collapsable={false}
+					initialSize={[300, 0]}
+					initialPosition={[180, 140]}
+					appMenu={appMenu}
+					onCloseFunc={() => setShowFilter(false)}
+				>
+					<div className={styles.settings}>
+						<ClassicyPopUpMenu
+							id="flight_filter_flight"
+							label="Flight #"
+							labelPosition="left"
+							labelSize="small"
+							size="small"
+							options={flightOptions}
+							selected={filterSettings.flight}
+							onChangeFunc={(e) => setFilter({ flight: e.target.value })}
+						/>
+						<ClassicyPopUpMenu
+							id="flight_filter_tail"
+							label="Tail #"
+							labelPosition="left"
+							labelSize="small"
+							size="small"
+							options={tailOptions}
+							selected={filterSettings.tail}
+							onChangeFunc={(e) => setFilter({ tail: e.target.value })}
+						/>
+						<ClassicyPopUpMenu
+							id="flight_filter_carrier"
+							label="Carrier"
+							labelPosition="left"
+							labelSize="small"
+							size="small"
+							options={carrierOptions}
+							selected={filterSettings.carrier}
+							onChangeFunc={(e) => setFilter({ carrier: e.target.value })}
+						/>
+						<ClassicyPopUpMenu
+							id="flight_filter_origin"
+							label="Departure"
+							labelPosition="left"
+							labelSize="small"
+							size="small"
+							options={originOptions}
+							selected={filterSettings.origin}
+							onChangeFunc={(e) => setFilter({ origin: e.target.value })}
+						/>
+						<ClassicyPopUpMenu
+							id="flight_filter_dest"
+							label="Destination"
+							labelPosition="left"
+							labelSize="small"
+							size="small"
+							options={destOptions}
+							selected={filterSettings.dest}
+							onChangeFunc={(e) => setFilter({ dest: e.target.value })}
+						/>
+						<div className={styles.settingsButtons}>
+							<ClassicyButton onClickFunc={clearFilter}>Clear</ClassicyButton>
+						</div>
+					</div>
+				</ClassicyWindow>
+			)}
 			<ClassicyWindow
 				id="flight-map"
 				title="Flight Tracker"
@@ -487,7 +650,8 @@ export const FlightTracker: FC = () => {
 					<div className={styles.body}>
 						<div className={styles.map}>
 							<FlightMap
-								positions={flightPositions}
+								positions={filteredPositions}
+								visibleFlights={visibleFlights}
 								basemapUrl={BASEMAP_URL}
 								trackGeoJSON={trackGeoJSON}
 								nowMs={nowMs}
@@ -512,6 +676,11 @@ export const FlightTracker: FC = () => {
 							/>
 						</div>
 						<div style={{ width: "20%", flexShrink: 0, borderLeft: "var(--window-border-size) solid var(--color-black)", padding: "var(--window-padding-size)", backgroundColor: "var(--color-system-03)" }}>
+						<div className={styles.filterButtonRow}>
+							<ClassicyButton onClickFunc={openFilter}>
+								{visibleFlights ? "Filter (on)…" : "Filter…"}
+							</ClassicyButton>
+						</div>
 						<FlightDetailPanel
 							selected={selected}
 							track={track}
@@ -621,7 +790,9 @@ export const FlightTracker: FC = () => {
 							)}
 						</span>
 						<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
-							{flightPositions.length} aircraft aloft
+							{visibleFlights
+								? `${filteredPositions.length} of ${flightPositions.length} aircraft aloft · filtered`
+								: `${flightPositions.length} aircraft aloft`}
 						</span>
 					</div>
 				</div>
