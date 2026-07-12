@@ -78,7 +78,9 @@ COLLECTIONS = {
             {"field": "id", "type": "integer",
              "schema": {"is_primary_key": True, "has_auto_increment": True}},
             {"field": "wfo", "type": "string"},
-            {"field": "zone", "type": "string"},
+            # comma-joined EXPANDED zone ids for a segment can exceed varchar(255)
+            # (observed max 307 chars, e.g. wide GAZ/ segments) -- must be unbounded.
+            {"field": "zone", "type": "text"},
             {"field": "product_type", "type": "string"},
             {"field": "issued_at", "type": "timestamp", "schema": {"is_nullable": False}},
             {"field": "raw_text", "type": "text", "schema": {"is_nullable": False}},
