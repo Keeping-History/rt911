@@ -65,6 +65,7 @@ def test_build_index_shape():
                       "2001-09-09", "2001-09-12")
     assert idx == {
         "product": "n0r", "interval_seconds": 300,
+        "timezone": "UTC",
         "start": "2001-09-09", "end": "2001-09-12",
         "bounds": [[-126.0, 50.0], [-66.0, 50.0], [-66.0, 24.0], [-126.0, 24.0]],
         "key_prefix": "weather/radar/", "key_pattern": "n0r_{stamp}.png",

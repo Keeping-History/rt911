@@ -64,6 +64,7 @@ def corners(wld, width, height):
 def build_index(frames_present, missing, bounds, start, end):
     return {
         "product": "n0r", "interval_seconds": 300,
+        "timezone": "UTC",   # frame stamps are UTC YYYYMMDDHHMM
         "start": start, "end": end,
         "bounds": bounds,
         "key_prefix": KEY_PREFIX, "key_pattern": "n0r_{stamp}.png",
