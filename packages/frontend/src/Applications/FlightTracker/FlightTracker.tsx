@@ -32,7 +32,7 @@ import {
 import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { FlightDetailPanel } from "./FlightDetailPanel";
 import { FlightMap } from "./FlightMap";
-import { flightDateOf, type TrackSelection, useFlightTrack } from "./useFlightTrack";
+import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
 	type FlightMapSettings,
@@ -48,7 +48,7 @@ import {
 	EMPTY_FLIGHT_FILTER,
 	type FlightFilter,
 	popUpOptions,
-	routeKey,
+	routeRowFor,
 	visibleFlightSet,
 } from "./flightFilter";
 import { useRouteIndex } from "./useRouteIndex";
@@ -192,10 +192,7 @@ export const FlightTracker: FC = () => {
 	// Option lists rebuild from whatever is airborne right now (accepted churn);
 	// popUpOptions synthesizes the current selection in when it's absent.
 	const airborneRows = useMemo(
-		() =>
-			flightPositions.map((p) =>
-				routeIndex.get(routeKey(p.flight, flightDateOf(p.start_date))),
-			),
+		() => flightPositions.map((p) => routeRowFor(routeIndex, p)),
 		[flightPositions, routeIndex],
 	);
 	const flightOptions = useMemo(

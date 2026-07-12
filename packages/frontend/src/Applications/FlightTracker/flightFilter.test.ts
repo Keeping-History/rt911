@@ -8,7 +8,9 @@ import {
 	isFilterActive,
 	matchesFilter,
 	popUpOptions,
+	prevUtcDay,
 	routeKey,
+	routeRowFor,
 	visibleFlightSet,
 } from "./flightFilter";
 
@@ -37,6 +39,44 @@ const filter = (over: Partial<FlightFilter>): FlightFilter => ({
 describe("routeKey", () => {
 	it("joins flight and date with a pipe", () => {
 		expect(routeKey("AA11", "2001-09-11")).toBe("AA11|2001-09-11");
+	});
+});
+
+describe("prevUtcDay", () => {
+	it("steps back one UTC day", () => {
+		expect(prevUtcDay("2001-09-13")).toBe("2001-09-12");
+	});
+
+	it("crosses a month boundary", () => {
+		expect(prevUtcDay("2001-10-01")).toBe("2001-09-30");
+	});
+});
+
+describe("routeRowFor", () => {
+	it("finds the row by the sample's own UTC date when present (primary date wins)", () => {
+		const primary = row({ tail_number: "N334AA", origin: "IAD", scheduled_dest: "LAX" });
+		const fallback = row({ tail_number: "N999ZZ", origin: "BOS", scheduled_dest: "ORD" });
+		const index: RouteIndex = new Map([
+			["AA99|2001-09-13", primary],
+			["AA99|2001-09-12", fallback],
+		]);
+		const p = pos({ flight: "AA99", start_date: "2001-09-13T00:30:00Z" });
+		expect(routeRowFor(index, p)).toBe(primary);
+	});
+
+	it("falls back to the previous UTC day for an evening-departure flight whose flight_date is local", () => {
+		// Departed ~8:30 PM ET on 9/12 (flight_date = 2001-09-12, BTS local
+		// date), but the sample is dated after UTC midnight.
+		const row1 = row({ tail_number: "N999ZZ", origin: "BOS", scheduled_dest: "ORD" });
+		const index: RouteIndex = new Map([["AA99|2001-09-12", row1]]);
+		const p = pos({ flight: "AA99", start_date: "2001-09-13T00:30:00Z" });
+		expect(routeRowFor(index, p)).toBe(row1);
+	});
+
+	it("returns undefined when neither date has a row", () => {
+		const index: RouteIndex = new Map();
+		const p = pos({ flight: "AA99", start_date: "2001-09-13T00:30:00Z" });
+		expect(routeRowFor(index, p)).toBeUndefined();
 	});
 });
 
@@ -120,6 +160,18 @@ describe("visibleFlightSet", () => {
 
 	it("returns an empty set when nothing matches", () => {
 		expect(visibleFlightSet(positions, index, filter({ origin: "JFK" }))).toEqual(new Set());
+	});
+
+	it("joins an evening-departure flight across the local/UTC flight_date boundary", () => {
+		// AA99's flight_date (BTS local departure date) is 2001-09-12, but it
+		// departed late enough that its samples are dated 2001-09-13 UTC.
+		const eveningIndex: RouteIndex = new Map([
+			["AA99|2001-09-12", row({ tail_number: "N999ZZ", origin: "BOS", scheduled_dest: "ORD" })],
+		]);
+		const eveningPositions = [pos({ flight: "AA99", start_date: "2001-09-13T00:30:00Z" })];
+		expect(
+			visibleFlightSet(eveningPositions, eveningIndex, filter({ origin: "BOS" })),
+		).toEqual(new Set(["AA99"]));
 	});
 });
 

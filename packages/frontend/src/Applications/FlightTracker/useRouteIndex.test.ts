@@ -24,11 +24,19 @@ const apiRow = (flight: string, flight_date: string): ApiRow => ({
 	flight, flight_date, tail_number: `N-${flight}`, origin: "BOS", scheduled_dest: "LAX",
 });
 
-function mockFetchPages(...pages: ApiRow[][]) {
-	let call = 0;
-	return vi.fn().mockImplementation(() => {
-		const data = pages[Math.min(call++, pages.length - 1)];
-		return Promise.resolve({ ok: true, json: async () => ({ data }) });
+// Dispatches on the `flight_date` embedded in the URL rather than call order,
+// since a single sample date now triggers fetches for both it and the
+// previous UTC day (see flightFilter.prevUtcDay) — call order alone can't
+// pin a response to a specific date.
+function dateFromUrl(url: string): string {
+	return /flight_date%5D%5B_eq%5D=([0-9-]+)/.exec(String(url))![1];
+}
+
+function mockFetchByDate(byDate: Record<string, () => ApiRow[]>) {
+	return vi.fn().mockImplementation((url: string) => {
+		const date = dateFromUrl(url);
+		const rows = byDate[date]?.() ?? [];
+		return Promise.resolve({ ok: true, json: async () => ({ data: rows }) });
 	});
 }
 
@@ -53,8 +61,14 @@ describe("useRouteIndex", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("fetches each distinct flight date once and exposes rows keyed flight|date", async () => {
-		const fetchMock = mockFetchPages([apiRow("AA11", "2001-09-11")]);
+	it("fetches a sample date and its previous UTC day, and exposes rows keyed flight|date", async () => {
+		// A single sample date now fetches TWO dates: the sample's own UTC date
+		// and the day before it, since flight_date can land on either (see
+		// flightFilter.prevUtcDay).
+		const fetchMock = mockFetchByDate({
+			"2001-09-11": () => [apiRow("AA11", "2001-09-11")],
+			"2001-09-10": () => [],
+		});
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { result, rerender } = renderHook(
@@ -67,19 +81,32 @@ describe("useRouteIndex", () => {
 				tail_number: "N-AA11", origin: "BOS", scheduled_dest: "LAX",
 			}),
 		);
-		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 
-		// Same date again → served from the module cache, no second fetch.
+		// Same dates again → served from the module cache, no further fetches.
 		rerender({ positions: [pos("UA175", "2001-09-11T14:00:00Z")] });
 		await waitFor(() => expect(result.current.size).toBe(1));
-		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
 	it("paginates until a short page", async () => {
+		// Pin pagination to the 2001-09-11 sample date's URL: a full page then a
+		// short page. The previous-day date (2001-09-10) that useRouteIndex now
+		// also loads returns an empty single page.
 		const fullPage = Array.from({ length: ROUTE_INDEX_PAGE_LIMIT }, (_, i) =>
 			apiRow(`FL${i}`, "2001-09-11"),
 		);
-		const fetchMock = mockFetchPages(fullPage, [apiRow("LAST1", "2001-09-11")]);
+		const shortPage = [apiRow("LAST1", "2001-09-11")];
+		let page11Calls = 0;
+		const fetchMock = vi.fn().mockImplementation((url: string) => {
+			const date = dateFromUrl(url);
+			if (date === "2001-09-11") {
+				page11Calls += 1;
+				const data = page11Calls === 1 ? fullPage : shortPage;
+				return Promise.resolve({ ok: true, json: async () => ({ data }) });
+			}
+			return Promise.resolve({ ok: true, json: async () => ({ data: [] }) });
+		});
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { result } = renderHook(() =>
@@ -87,14 +114,20 @@ describe("useRouteIndex", () => {
 		);
 
 		await waitFor(() => expect(result.current.size).toBe(ROUTE_INDEX_PAGE_LIMIT + 1));
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(String(fetchMock.mock.calls[0][0])).toContain("page=1");
-		expect(String(fetchMock.mock.calls[1][0])).toContain("page=2");
+		const page11Urls = fetchMock.mock.calls
+			.map((c) => String(c[0]))
+			.filter((u) => dateFromUrl(u) === "2001-09-11");
+		expect(page11Urls).toHaveLength(2);
+		expect(page11Urls[0]).toContain("page=1");
+		expect(page11Urls[1]).toContain("page=2");
 	});
 
-	it("fetches once per distinct date when positions span midnight", async () => {
+	it("fetches once per distinct date when positions span midnight, including each sample's previous UTC day", async () => {
+		// Sample dates present: 09-11 and 09-12. Each also pulls in its previous
+		// UTC day (09-10 and 09-11 respectively), so the distinct date set
+		// fetched is {09-10, 09-11, 09-12} — three fetches, not two.
 		const fetchMock = vi.fn().mockImplementation((url: string) => {
-			const date = /flight_date%5D%5B_eq%5D=([0-9-]+)/.exec(String(url))![1];
+			const date = dateFromUrl(url);
 			return Promise.resolve({
 				ok: true,
 				json: async () => ({ data: [apiRow(`F-${date}`, date)] }),
@@ -109,8 +142,11 @@ describe("useRouteIndex", () => {
 			]),
 		);
 
-		await waitFor(() => expect(result.current.size).toBe(2));
-		expect(fetchMock).toHaveBeenCalledTimes(2);
+		await waitFor(() => expect(result.current.size).toBe(3));
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		const datesFetched = fetchMock.mock.calls.map((c) => dateFromUrl(String(c[0]))).sort();
+		expect(datesFetched).toEqual(["2001-09-10", "2001-09-11", "2001-09-12"]);
+		expect(result.current.get("F-2001-09-10|2001-09-10")).toBeTruthy();
 		expect(result.current.get("F-2001-09-11|2001-09-11")).toBeTruthy();
 		expect(result.current.get("F-2001-09-12|2001-09-12")).toBeTruthy();
 	});

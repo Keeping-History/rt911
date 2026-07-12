@@ -36,6 +36,33 @@ export function routeKey(flight: string, flightDate: string): string {
 	return `${flight}|${flightDate}`;
 }
 
+// flight_tracks.flight_date is the BTS *local* departure date, but a
+// FlightPosition's start_date (and flightDateOf, which takes its UTC date
+// component) is a UTC instant. An evening flight departing e.g. 8:30 PM ET on
+// 9/12 has flight_date = "2001-09-12" while every one of its samples is dated
+// "2001-09-13" UTC (00:30Z onward) — so joining strictly on
+// routeKey(flight, flightDateOf(start_date)) misses it. Across every US
+// timezone in this dataset, flight_date is always either the sample's UTC
+// date or the day before it, so a lookup falls back one UTC day before
+// giving up.
+export function prevUtcDay(flightDate: string): string {
+	return new Date(Date.parse(`${flightDate}T00:00:00Z`) - 86_400_000)
+		.toISOString()
+		.slice(0, 10);
+}
+
+// Joins a streamed position to its route-index row across that local/UTC
+// flight_date boundary: try the sample's own UTC date first (the common
+// case), then fall back to the previous UTC day (the evening-departure case
+// described above).
+export function routeRowFor(
+	index: RouteIndex,
+	p: FlightPosition,
+): RouteIndexRow | undefined {
+	const d = flightDateOf(p.start_date);
+	return index.get(routeKey(p.flight, d)) ?? index.get(routeKey(p.flight, prevUtcDay(d)));
+}
+
 export function isFilterActive(f: FlightFilter): boolean {
 	return !!(f.flight || f.tail || f.carrier || f.origin || f.dest);
 }
@@ -64,7 +91,7 @@ export function visibleFlightSet(
 	if (!isFilterActive(f)) return null;
 	const visible = new Set<string>();
 	for (const p of positions) {
-		const row = index.get(routeKey(p.flight, flightDateOf(p.start_date)));
+		const row = routeRowFor(index, p);
 		if (matchesFilter(p, row, f)) visible.add(p.flight);
 	}
 	return visible;

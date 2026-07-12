@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
-import { routeKey, type RouteIndex, type RouteIndexRow } from "./flightFilter";
+import { prevUtcDay, routeKey, type RouteIndex, type RouteIndexRow } from "./flightFilter";
 import { flightDateOf } from "./useFlightTrack";
 
 // Same anonymous-read Directus base as useFlightTrack; the route index is the
@@ -11,8 +11,10 @@ const DIRECTUS_URL =
 	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
 	"https://api-beta.911realtime.org";
 
-// 2001-09-11 has ~1,949 rows (checked 2026-07-10), so one page is the norm;
-// pagination is a guard, not the expectation.
+// 2001-09-11 has ~1,949 rows (checked 2026-07-10), so one page per date is
+// the norm; pagination is a guard, not the expectation. Note that each
+// sample date fetches two dates' worth of rows (see datesKey below), so the
+// number of fetches is up to 2x the number of distinct sample dates.
 export const ROUTE_INDEX_PAGE_LIMIT = 3000;
 
 interface RouteIndexApiRow extends RouteIndexRow {
@@ -83,9 +85,18 @@ async function loadDate(date: string): Promise<void> {
  */
 export function useRouteIndex(positions: FlightPosition[]): RouteIndex {
 	// Stable key of distinct dates so effects/memos don't churn per position tick.
+	// Each sample's own UTC date AND the day before it are both loaded: an
+	// evening-departure flight's flight_date (BTS local date) lands on the
+	// previous UTC day from its samples' start_date (see flightFilter.prevUtcDay
+	// for the full local-vs-UTC explanation), so routeRowFor's fallback lookup
+	// needs that earlier date's index already fetched.
 	const datesKey = useMemo(() => {
 		const dates = new Set<string>();
-		for (const p of positions) dates.add(flightDateOf(p.start_date));
+		for (const p of positions) {
+			const d = flightDateOf(p.start_date);
+			dates.add(d);
+			dates.add(prevUtcDay(d));
+		}
 		return [...dates].sort().join(",");
 	}, [positions]);
 
