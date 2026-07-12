@@ -1,0 +1,23 @@
+[project]
+name = "weather-recon"
+version = "0.1.0"
+description = "Load Sept 2001 weather stations/observations/forecasts into Directus (Prefect flows)"
+requires-python = ">=3.12"
+dependencies = [
+    "prefect>=3.7,<4",
+    "prefect-kubernetes>=0.5",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.4", "timezonefinder>=6"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["weather_recon"]
+
+[tool.ruff]
+line-length = 100
