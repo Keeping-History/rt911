@@ -2,7 +2,6 @@
 Dev-run: add wfo + nws_zone columns to data/stations.csv.
 
     python scripts/enrich_stations.py          # uses caches under data/enrich-cache/
-    python scripts/enrich_stations.py --refresh
 
 Per US station: WFO from api.weather.gov points (cached JSON; reliable), then
 the 2001 zone resolved against that WFO's archived ZFP segments (cached AFOS
@@ -42,10 +41,11 @@ AFOS = "https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py"
 # UNION-"), so the name-list order (alphabetical) never lines up positionally
 # with the UGC zone-code order (numeric per state prefix) -- taking
 # segment.zones[0] would silently pick the wrong county/state. The actual
-# NYZ/NJZ <-> county mapping was confirmed from real *single- or double-zone*
-# ZFPOKX segments elsewhere in the archived 2001 stream (same office, same
-# UGC scheme all year, so the id is stable even though the specific day
-# differs): "NYZ075-076-210853-" / "KINGS (BROOKLYN)-QUEENS-" (Oct 20 2001)
+# NYZ/NJZ <-> county mapping was verified against the IEM AFOS archive
+# BEYOND the cached 2001-09-08..13 window (retrieve.py pil=ZFPOKX,
+# sdate=2001-01-01 edate=2001-12-31; same office, same UGC scheme all year,
+# so the zone id is stable even though the citation date differs):
+# "NYZ075-076-210853-" / "KINGS (BROOKLYN)-QUEENS-" (Oct 20 2001)
 # -> NYZ076 = Queens (JFK, LaGuardia); a single-zone "NJZ005-...-" / "ESSEX-"
 # segment -> NJZ005 = Essex Co NJ (Newark/EWR).
 ZONE_OVERRIDES: dict[str, tuple[str, str]] = {
@@ -56,29 +56,38 @@ ZONE_OVERRIDES: dict[str, tuple[str, str]] = {
     # share a token with their WFO's area-name headers (e.g. "PAGE FIELD
     # AIRPORT" vs. "LEE"), so the automated name-match scores 0 even though
     # the WFO's archive has real content. Each zone id was confirmed from a
-    # single- or 2-zone ZFP segment for the same office elsewhere in the
-    # archived 2001 stream (stable UGC scheme all year):
-    # "CAZ007-131100-" / "ALAMEDA AND CONTRA COSTA COUNTIES-" (ZFPMTR, in
-    # the Sept window, line ~605 of the cache).
+    # single- or 2-zone ZFP segment: some straight from the committed-window
+    # cache under data/enrich-cache/, others verified against the IEM AFOS
+    # archive beyond the cached window (noted per entry; UGC scheme is
+    # stable all year, so the zone id holds for the Sept window too).
+    # In-cache: "CAZ007-122300-" / "ALAMEDA AND CONTRA COSTA COUNTIES-"
+    # (data/enrich-cache/zfp_MTR.txt, line ~605).
     "KOAK": ("MTR", "CAZ007"),
-    # "CAZ008-122300-" / "SANTA CLARA COUNTY-" (ZFPMTR, Sept window).
+    # In-cache: "CAZ008-122300-" / "SANTA CLARA COUNTY-"
+    # (data/enrich-cache/zfp_MTR.txt, line ~640).
     "KSJC": ("MTR", "CAZ008"),
-    # "MTZ012-302300-" / "CASCADE-" (ZFPTFX, Dec 30 2001 issuance).
+    # Verified beyond the cached window (retrieve.py pil=ZFPTFX, full 2001):
+    # "MTZ012-302300-" / "CASCADE-" (Dec 30 2001 issuance).
     "KGTF": ("TFX", "MTZ012"),
-    # "MTZ014-281100-" / "SOUTHERN LEWIS AND CLARK-" (ZFPTFX, Dec 27 2001).
+    # Verified beyond the cached window (retrieve.py pil=ZFPTFX, full 2001):
+    # "MTZ014-281100-" / "SOUTHERN LEWIS AND CLARK-" (Dec 27 2001).
     "KHLN": ("TFX", "MTZ014"),
+    # Verified beyond the cached window (retrieve.py pil=ZFPPIH, full 2001):
     # "IDZ020-311130-" / "UPPER SNAKE RIVER PLAIN-", temp table lists IDAHO
-    # FALLS/REXBURG under this zone (ZFPPIH, Dec 30 2001).
+    # FALLS/REXBURG under this zone (Dec 30 2001).
     "KIDA": ("PIH", "IDZ020"),
+    # Verified beyond the cached window (retrieve.py pil=ZFPPIH, full 2001):
     # "IDZ021-311130-" / "LOWER SNAKE RIVER PLAIN-", temp table lists
-    # POCATELLO-ARPT/POCATELLO under this zone (ZFPPIH, Dec 30 2001).
+    # POCATELLO-ARPT/POCATELLO under this zone (Dec 30 2001).
     "KPIH": ("PIH", "IDZ021"),
-    # "FLZ062-065-...-" / "CHARLOTTE-LEE-" (ZFPTBW, repeated throughout
-    # 2001) -- FLZ062=Charlotte, FLZ065=Lee (Fort Myers/Page Field).
+    # In-cache: "FLZ062-065-120900-" / "CHARLOTTE-LEE-"
+    # (data/enrich-cache/zfp_TBW.txt, line ~286) -- FLZ062=Charlotte,
+    # FLZ065=Lee (Fort Myers/Page Field).
     "KFMY": ("TBW", "FLZ065"),
-    # "CAZ092-080000-" / "SOUTHEASTERN SAN JOAQUIN VALLEY-" (ZFPHNX, Dec 7
-    # 2001); the Sept-window segment's temp table lists BAKERSFIELD as the
-    # southernmost city under the matching 4-zone SE San Joaquin group.
+    # Verified beyond the cached window (retrieve.py pil=ZFPHNX, full 2001):
+    # "CAZ092-080000-" / "SOUTHEASTERN SAN JOAQUIN VALLEY-" (Dec 7 2001).
+    # Corroborated in-cache: the Sept-window 4-zone SE San Joaquin segment's
+    # temp table lists BAKERSFIELD (data/enrich-cache/zfp_HNX.txt).
     "KBFL": ("HNX", "CAZ092"),
     # KHSV (Huntsville AL): IEM's AFOS archive has zero ZFP-family products
     # for HUN under any known 2001 pil (checked ZFPHUN, ZFPHSV, and the full
