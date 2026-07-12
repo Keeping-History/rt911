@@ -113,3 +113,23 @@ describe("pruneReplay", () => {
 		expect(buf.has("UA930")).toBe(false);
 	});
 });
+
+describe("replayPointsAt visibility", () => {
+	it("skips flights not in the visible set; null or omitted keeps all", () => {
+		const buf: ReplayBuffer = new Map();
+		insertReplaySamples(buf, [
+			pos({ flight: "AA11", id: 1, start_date: "2001-09-11T13:00:00Z" }),
+			pos({ flight: "UA175", id: 2, start_date: "2001-09-11T13:00:00Z" }),
+		]);
+		const t = Date.parse("2001-09-11T13:00:00Z");
+
+		expect(replayPointsAt(buf, t).features).toHaveLength(2);
+		expect(replayPointsAt(buf, t, null).features).toHaveLength(2);
+
+		const only = replayPointsAt(buf, t, new Set(["AA11"]));
+		expect(only.features).toHaveLength(1);
+		expect(only.features[0].properties.flight).toBe("AA11");
+
+		expect(replayPointsAt(buf, t, new Set()).features).toHaveLength(0);
+	});
+});

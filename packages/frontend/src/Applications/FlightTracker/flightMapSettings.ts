@@ -1,6 +1,7 @@
 import type { ActionMessage, ClassicyStore } from "classicy";
 import { registerAppEventHandler } from "classicy";
 import type { LoopSpeed, LoopWindowMinutes } from "./loopClock";
+import { EMPTY_FLIGHT_FILTER, type FlightFilter } from "./flightFilter";
 
 export const FLIGHT_TRACKER_APP_ID = "FlightTracker.app";
 const appId = FLIGHT_TRACKER_APP_ID;
@@ -81,6 +82,26 @@ export const readFlightLoopSettings = (
 	return { ...DEFAULT_FLIGHT_LOOP_SETTINGS, ...stored };
 };
 
+// The Filter Flights window's criteria (issue #188). Persisted like map/loop
+// settings so a filter survives refresh; the status bar's "filtered" cue and
+// the button's "(on)" label keep a persisted filter from being mysterious.
+/** Persist the whole filter object in one dispatch. */
+export const flightTrackerSetFilterSettings = (
+	filterSettings: FlightFilter,
+): ActionMessage => ({
+	type: "ClassicyAppFlightTrackerSetFilterSettings",
+	filterSettings,
+});
+
+/** Per-field fallback to "any", so absent/partial stored state needs no migration. */
+export const readFlightFilterSettings = (
+	data: Record<string, unknown> | undefined,
+): FlightFilter => {
+	const stored =
+		(data?.filterSettings as Partial<FlightFilter> | undefined) ?? {};
+	return { ...EMPTY_FLIGHT_FILTER, ...stored };
+};
+
 /** Packed int → CSS hex; the single place the two color formats meet. */
 export const intToHex = (color: number): string =>
 	`#${color.toString(16).padStart(6, "0")}`;
@@ -99,6 +120,9 @@ export const classicyFlightTrackerEventHandler = (
 			return ds;
 		case "ClassicyAppFlightTrackerSetLoopSettings":
 			apps[appId].data = { ...appData, loopSettings: action.loopSettings };
+			return ds;
+		case "ClassicyAppFlightTrackerSetFilterSettings":
+			apps[appId].data = { ...appData, filterSettings: action.filterSettings };
 			return ds;
 		default:
 			return ds;

@@ -6,10 +6,13 @@ import {
 	classicyFlightTrackerEventHandler,
 	flightTrackerSetLoopSettings,
 	flightTrackerSetMapSettings,
+	flightTrackerSetFilterSettings,
 	intToHex,
 	readFlightLoopSettings,
 	readFlightMapSettings,
+	readFlightFilterSettings,
 } from "./flightMapSettings";
+import { EMPTY_FLIGHT_FILTER } from "./flightFilter";
 
 function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 	return {
@@ -131,5 +134,26 @@ describe("intToHex", () => {
 		expect(intToHex(0xe0a72e)).toBe("#e0a72e"); // pin dark
 		expect(intToHex(0xc0202a)).toBe("#c0202a"); // notable light
 		expect(intToHex(0xff4d4d)).toBe("#ff4d4d"); // notable dark
+	});
+});
+
+describe("filter settings", () => {
+	it("persists filterSettings from a SetFilterSettings action without touching other data", () => {
+		const filterSettings = { flight: "", tail: "", carrier: "AA", origin: "BOS", dest: "" };
+		const out = classicyFlightTrackerEventHandler(
+			storeWithApp({ mapSettings: { darkMap: true } }),
+			flightTrackerSetFilterSettings(filterSettings),
+		);
+		expect(
+			out.System.Manager.Applications.apps["FlightTracker.app"].data,
+		).toMatchObject({ mapSettings: { darkMap: true }, filterSettings });
+	});
+
+	it("readFlightFilterSettings falls back per-field to the empty filter", () => {
+		expect(readFlightFilterSettings(undefined)).toEqual(EMPTY_FLIGHT_FILTER);
+		expect(readFlightFilterSettings({})).toEqual(EMPTY_FLIGHT_FILTER);
+		expect(readFlightFilterSettings({ filterSettings: { carrier: "UA" } })).toEqual({
+			flight: "", tail: "", carrier: "UA", origin: "", dest: "",
+		});
 	});
 });

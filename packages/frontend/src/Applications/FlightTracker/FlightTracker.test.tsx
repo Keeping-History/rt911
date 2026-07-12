@@ -18,6 +18,9 @@ vi.mock("./FlightMap", () => ({
 const dispatchMock = vi.hoisted(() => vi.fn());
 const windowProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 const mockAppData = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+const mockRouteIndex = vi.hoisted(
+	() => ({ current: new Map<string, unknown>() }),
+);
 // Mutable virtual clock (true UTC; tzOffset 0 so localDate === UTC instant).
 // Defaults to 13:00 UTC on 9/11 — before the 13:26 FAA ground stop.
 const mockClock = vi.hoisted(() => ({ current: "2001-09-11T13:00:00.000Z" }));
@@ -171,6 +174,12 @@ vi.mock("classicy", () => ({
 	}),
 }));
 
+// The route index has its own fetch/cache tests (useRouteIndex.test.ts);
+// here it's a controllable map so component tests never touch fetch.
+vi.mock("./useRouteIndex", () => ({
+	useRouteIndex: () => mockRouteIndex.current,
+}));
+
 import { FlightTracker } from "./FlightTracker";
 
 // Real MediaStreamContext.Provider (as MediaStreamProvider.flights.test.tsx
@@ -255,6 +264,7 @@ describe("FlightTracker", () => {
 		windowProps.length = 0;
 		mockAppData.current = {};
 		mockClock.current = "2001-09-11T13:00:00.000Z";
+		mockRouteIndex.current = new Map();
 		vi.clearAllMocks();
 	});
 
@@ -587,6 +597,135 @@ describe("FlightTracker", () => {
 			mockClock.current = "2001-09-13T16:00:00.000Z";
 			renderWithContext({ connected: true });
 			expect(screen.queryByRole("alert")).toBeNull();
+		});
+	});
+
+	describe("flight filter (issue #188)", () => {
+		const aa11 = {
+			id: 1, flight: "AA11", carrier: "AA",
+			start_date: "2001-09-11T13:00:00Z", lat: 40, lon: -74, alt_ft: 30000,
+		};
+		const ua175 = {
+			id: 2, flight: "UA175", carrier: "UA",
+			start_date: "2001-09-11T13:00:00Z", lat: 41, lon: -73, alt_ft: 31000,
+		};
+
+		it("the sidebar Filter button opens the filter window with five dropdowns and Clear", () => {
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			fireEvent.click(screen.getByText("Filter…"));
+			expect(windowProps.some((w) => w.id === "flight-filter")).toBe(true);
+			for (const id of [
+				"flight_filter_flight", "flight_filter_tail", "flight_filter_carrier",
+				"flight_filter_origin", "flight_filter_dest",
+			]) {
+				expect(screen.getByTestId(id)).toBeTruthy();
+			}
+			expect(screen.getByText("Clear")).toBeTruthy();
+		});
+
+		it("File ▸ Filter Flights… opens the filter window", () => {
+			renderWithContext({ connected: true });
+			act(() => menuItem("File", (t) => t.startsWith("Filter Flights"))!.onClickFunc?.());
+			expect(screen.getByTestId("flight_filter_carrier")).toBeTruthy();
+		});
+
+		it("changing a dropdown dispatches the merged filter immediately (live apply)", () => {
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			fireEvent.click(screen.getByText("Filter…"));
+			fireEvent.change(screen.getByTestId("flight_filter_carrier"), {
+				target: { value: "AA" },
+			});
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetFilterSettings",
+				filterSettings: { flight: "", tail: "", carrier: "AA", origin: "", dest: "" },
+			});
+		});
+
+		it("a persisted carrier filter hides non-matching flights and shows the filtered count", () => {
+			mockAppData.current = { filterSettings: { carrier: "AA" } };
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			const last = mapProps[mapProps.length - 1];
+			expect((last.positions as { flight: string }[]).map((p) => p.flight)).toEqual(["AA11"]);
+			expect(last.visibleFlights).toEqual(new Set(["AA11"]));
+			expect(screen.getByText("1 of 2 aircraft aloft · filtered")).toBeTruthy();
+			expect(screen.getByText("Filter (on)…")).toBeTruthy();
+		});
+
+		it("origin filtering joins positions to the route index; missing rows are hidden", () => {
+			mockRouteIndex.current = new Map([
+				["AA11|2001-09-11", { tail_number: "N334AA", origin: "BOS", scheduled_dest: "LAX" }],
+				// UA175 has no row → fails the origin criterion.
+			]);
+			mockAppData.current = { filterSettings: { origin: "BOS" } };
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			const last = mapProps[mapProps.length - 1];
+			expect((last.positions as { flight: string }[]).map((p) => p.flight)).toEqual(["AA11"]);
+			expect(screen.getByText("1 of 2 aircraft aloft · filtered")).toBeTruthy();
+		});
+
+		it("an index-backed filter with an empty index hides everything (graceful degradation)", () => {
+			mockAppData.current = { filterSettings: { origin: "BOS" } };
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			expect((mapProps[mapProps.length - 1].positions as unknown[]).length).toBe(0);
+			expect(screen.getByText("0 of 2 aircraft aloft · filtered")).toBeTruthy();
+		});
+
+		it("no filter → no visibleFlights set, unfiltered count, plain button label", () => {
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			expect(mapProps[mapProps.length - 1].visibleFlights).toBeNull();
+			expect(screen.getByText("2 aircraft aloft")).toBeTruthy();
+			expect(screen.getByText("Filter…")).toBeTruthy();
+		});
+
+		it("Clear resets the filter in one dispatch", () => {
+			mockAppData.current = { filterSettings: { carrier: "AA", origin: "BOS" } };
+			renderWithContext({ flightPositions: [aa11], connected: true });
+			fireEvent.click(screen.getByText("Filter (on)…"));
+			fireEvent.click(screen.getByText("Clear"));
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetFilterSettings",
+				filterSettings: { flight: "", tail: "", carrier: "", origin: "", dest: "" },
+			});
+		});
+
+		it("deselects the selected flight when the filter hides it", () => {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
+			);
+			const { rerender } = renderWithContext({
+				flightPositions: [aa11, ua175], connected: true,
+			});
+			const onSelectFlight = mapProps[mapProps.length - 1].onSelectFlight as (
+				flight: string,
+			) => void;
+			act(() => onSelectFlight("AA11"));
+			expect(screen.getByText("AA11")).toBeTruthy();
+
+			// A UA-only filter arrives (e.g. set in the filter window): AA11 is
+			// now hidden, so the stale selection must clear.
+			mockAppData.current = { filterSettings: { carrier: "UA" } };
+			rerender(
+				<MediaStreamContext.Provider
+					value={makeCtxValue({ flightPositions: [aa11, ua175], connected: true })}
+				>
+					<FlightTracker />
+				</MediaStreamContext.Provider>,
+			);
+			expect(screen.queryByText("AA11")).toBeNull();
+			expect(screen.getByText("Select a flight to view its track.")).toBeTruthy();
+			vi.unstubAllGlobals();
+		});
+
+		it("keeps a stale selected value as a synthesized dropdown option", () => {
+			// Persisted carrier UA, but only AA flights are airborne — the UA
+			// option must still exist so the select shows the real filter state.
+			mockAppData.current = { filterSettings: { carrier: "UA" } };
+			renderWithContext({ flightPositions: [aa11], connected: true });
+			fireEvent.click(screen.getByText("Filter (on)…"));
+			const select = screen.getByTestId("flight_filter_carrier") as HTMLSelectElement;
+			expect([...select.options].map((o) => o.value)).toContain("UA");
+			expect(select.value).toBe("UA");
 		});
 	});
 });

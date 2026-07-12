@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
+import { insertReplaySamples, type ReplayBuffer } from "./flightReplay";
 
 // ---- maplibre-gl mock (jsdom has no WebGL) --------------------------------
 // Vitest 4 hoists vi.mock factories above all module-scope declarations, so a
@@ -393,5 +394,50 @@ describe("FlightMap", () => {
 		rerender(<FlightMap {...common} loopEnabled={false} />);
 		const data = map.sources["ghost-flights"].data as { features: unknown[] };
 		expect(data.features).toEqual([]);
+	});
+
+	it("skips ghost points for flights outside visibleFlights", () => {
+		let rafCb: FrameRequestCallback | null = null;
+		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+			rafCb = cb;
+			return 1;
+		});
+		vi.stubGlobal("cancelAnimationFrame", () => {});
+		vi.spyOn(performance, "now").mockReturnValue(0);
+
+		const t0 = Date.parse("2001-09-11T13:00:00.000Z");
+		const buffer: ReplayBuffer = new Map();
+		// One sample each at the loop-clock anchor instant, so the paused
+		// playhead lands exactly on both flights' sampled lifetimes.
+		insertReplaySamples(buffer, [
+			pos({ id: 1, flight: "AA11", start_date: "2001-09-11T12:50:00.000Z" }),
+			pos({ id: 2, flight: "UA175", start_date: "2001-09-11T12:50:00.000Z" }),
+		]);
+
+		render(
+			<FlightMap
+				positions={[]} basemapUrl="x.pmtiles" trackGeoJSON={null} nowMs={t0} playing
+				onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1}
+				loopEnabled loopWindowMs={1_800_000}
+				loopClock={{
+					anchorVirtual: t0 - 600_000, anchorWall: 0, speed: 10,
+					scrubbing: false, paused: true,
+				}}
+				replayBuffer={buffer}
+				visibleFlights={new Set(["AA11"])}
+			/>,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		rafCb!(100);
+
+		const ghosts = (
+			map.sources["ghost-flights"]?.data as {
+				features: { properties: { flight: string } }[];
+			}
+		).features;
+		expect(ghosts.map((g) => g.properties.flight)).toEqual(["AA11"]);
 	});
 });

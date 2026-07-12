@@ -85,6 +85,10 @@ interface FlightMapProps {
 	loopWindowMs?: number;
 	loopClock?: LoopClock;
 	replayBuffer?: ReplayBuffer;
+	// Filter Flights (issue #188): ghosts of flights outside this set are
+	// skipped at draw time; null/omitted shows all. Live pins are filtered
+	// upstream by FlightTracker via the positions array itself.
+	visibleFlights?: Set<string> | null;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
 }
@@ -116,6 +120,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
+	visibleFlights = null,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -134,9 +139,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 	trailMultiplierRef.current = trailMultiplier;
 	const loopRef = useRef({
 		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
+		visible: visibleFlights,
 	});
 	loopRef.current = {
 		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
+		visible: visibleFlights,
 	};
 
 	const motionBufferRef = useRef<MotionBuffer>(new Map());
@@ -420,7 +427,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 					loopState.clock, wall, now - loopState.windowMs, now,
 				);
 				(map.getSource("ghost-flights") as maplibregl.GeoJSONSource | undefined)?.setData(
-					replayPointsAt(loopState.buffer, playhead),
+					replayPointsAt(loopState.buffer, playhead, loopState.visible),
 				);
 			}
 		};
