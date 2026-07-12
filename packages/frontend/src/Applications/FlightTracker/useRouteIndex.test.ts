@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import {
@@ -47,6 +47,7 @@ describe("routeIndexUrl", () => {
 
 describe("useRouteIndex", () => {
 	afterEach(() => {
+		cleanup();
 		resetRouteIndexCache();
 		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
