@@ -20,6 +20,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from weather_recon.afos import split_products, split_segments  # noqa: E402
+from weather_recon.fetch_afos import afos_pil  # noqa: E402
 from weather_recon.stations import load_stations  # noqa: E402
 from weather_recon.zone_resolve import resolve_zone  # noqa: E402
 
@@ -97,30 +98,8 @@ ZONE_OVERRIDES: dict[str, tuple[str, str]] = {
     "KHSV": ("HUN", ""),
 }
 
-# api.weather.gov's `cwa` is the MODERN WFO identifier. A handful of offices
-# archived their 2001 ZFP under a different 3-letter product id (pre-rename /
-# pre-consolidation) -- confirmed per-office via IEM's AFOS product list API
-# (`/api/1/nws/afos/list.json?cccc=K<cwa>&date=2001-09-11`), not guessed.
-# wfo (cwa, stored in the CSV) -> AFOS PIL suffix used for ZFP in 2001.
-PIL_OVERRIDES: dict[str, str] = {
-    "FFC": "ATL",  # Atlanta GA (Peachtree City office, product still ATL)
-    "FWD": "FTW",  # Dallas/Fort Worth TX
-    "MFL": "MIA",  # Miami FL
-    "KEY": "EYW",  # Key West FL
-    "LIX": "NEW",  # New Orleans/Slidell LA
-    "LUB": "LBB",  # Lubbock TX
-    "LZK": "LIT",  # Little Rock AR
-    "MEG": "MEM",  # Memphis TN
-    "OHX": "BNA",  # Nashville TN
-    "OUN": "OKC",  # Norman/Oklahoma City OK
-    "TAE": "TLH",  # Tallahassee FL
-    "TSA": "TUL",  # Tulsa OK
-    "BMX": "BHM",  # Birmingham AL
-    "EAX": "MCI",  # Kansas City/Pleasant Hill MO
-    "EPZ": "ELP",  # El Paso TX
-    "EWX": "SAT",  # Austin/San Antonio TX
-    "HFO": "HI",   # Hawaii (single statewide ZFPHI, not per-office)
-}
+# AFOS PIL overrides (wfo/cwa -> 2001-era ZFP suffix) live in
+# weather_recon.fetch_afos.AFOS_PIL_OVERRIDES; imported above as afos_pil().
 
 
 def points_lookup(client, station):
@@ -146,8 +125,7 @@ def afos_segments(client, wfo):
     if f.is_file():
         text = f.read_text()
     else:
-        pil = PIL_OVERRIDES.get(wfo, wfo)
-        r = client.get(AFOS, params={"pil": f"ZFP{pil}", "sdate": "2001-09-08",
+        r = client.get(AFOS, params={"pil": afos_pil(wfo), "sdate": "2001-09-08",
                                      "edate": "2001-09-13", "fmt": "text",
                                      "limit": "9999"}, timeout=120)
         r.raise_for_status()
