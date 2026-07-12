@@ -17,6 +17,11 @@ WMO_RE = re.compile(r"^([A-Z]{4}\d{2}) ([KP][A-Z0-9]{3}) (\d{2})(\d{2})(\d{2})",
 # a UGC chunk line: SSZ or SSC groups separated by '-', optionally ending in
 # the DDHHMM expiry; always ends with '-'
 UGC_LINE_RE = re.compile(r"^[A-Z]{2}[CZ]\d{3}[A-Z0-9>\-]*-$")
+# a UGC continuation line: a segment's UGC can wrap onto multiple lines, and a
+# wrapped line may start mid-token with a bare zone number (inheriting the
+# previous line's SSZ/SSC prefix) rather than a fresh SSZnnn token. Only valid
+# once at least one UGC_LINE_RE line has already matched for this segment.
+UGC_CONTINUATION_RE = re.compile(r"^\d{3}[A-Z0-9>\-]*-$")
 # a single UGC token: SSZnnn / SSZnnn>mmm (prefixed) or bare nnn / nnn>mmm
 # (inherits the previous prefix). Exactly 3 digits, so this never matches the
 # 6-digit DDHHMM expiry stamp that trails a UGC line — that token is simply
@@ -75,6 +80,9 @@ def split_segments(product):
             continue
         ugc_parts, start = [], i
         while i < len(lines) and UGC_LINE_RE.match(lines[i].strip()):
+            ugc_parts.append(lines[i].strip())
+            i += 1
+        while i < len(lines) and UGC_CONTINUATION_RE.match(lines[i].strip()):
             ugc_parts.append(lines[i].strip())
             i += 1
         # area names run until the local issuance line (ends in a 4-digit year)

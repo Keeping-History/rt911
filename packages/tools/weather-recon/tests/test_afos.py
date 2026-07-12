@@ -71,3 +71,22 @@ def test_split_segments_multiline_ugc():
             "245 PM EDT TUE SEP 11 2001\n\n.TONIGHT...CLEAR.\n\n$$\n")
     segs = split_segments(prod)
     assert segs[0]["zones"] == ["MAZ002", "MAZ003", "MAZ004", "CTZ002", "RIZ001"]
+
+
+def test_split_segments_digit_starting_ugc_continuation():
+    # Real ZFPILN form, 2001-09-11: the UGC wraps onto a second line that
+    # starts with a bare zone number (no SSZ prefix) rather than a fresh
+    # SSZnnn token -- it inherits the OHZ prefix from the first line.
+    prod = ("FPUS51 KILN 111845\nZFPILN\n\n"
+            "OHZ026-034-035-042>046-055>056-\n"
+            "051>053-060>062-070>072-077>080-102030-\n"
+            "AREA ONE-AREA TWO-\n"
+            "245 PM EDT TUE SEP 11 2001\n\n.TONIGHT...CLEAR.\n\n$$\n")
+    segs = split_segments(prod)
+    zones = segs[0]["zones"]
+    for z in ("OHZ026", "OHZ034", "OHZ035", "OHZ042", "OHZ043", "OHZ044",
+              "OHZ045", "OHZ046", "OHZ055", "OHZ056", "OHZ051", "OHZ052",
+              "OHZ053", "OHZ060", "OHZ061", "OHZ062", "OHZ070", "OHZ071",
+              "OHZ072", "OHZ077", "OHZ078", "OHZ079", "OHZ080"):
+        assert z in zones
+    assert "051" not in segs[0]["area_names"]
