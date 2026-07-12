@@ -75,7 +75,8 @@ def load_forecasts_into_directus(rows, run_id, directus_url):
 @flow(name="load-weather-forecasts", log_prints=True)
 def load_weather_forecasts(
     sdate: str = "2001-09-08",
-    edate: str = "2001-09-13",     # retrieve.py edate behaves end-exclusive-ish; window covers 09-08..09-12 issuances
+    # retrieve.py edate is end-exclusive-ish; window covers 09-08..09-12 issuances
+    edate: str = "2001-09-13",
     stations_path: str = "/app/data/stations.csv",
     cache_dir: str | None = "/tmp/afos-cache",
     directus_url: str | None = None,
