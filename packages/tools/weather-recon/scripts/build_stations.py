@@ -22,7 +22,7 @@ OUT = ROOT / "data" / "stations.csv"
 FIELDS = ["station_id", "name", "lat", "lon", "elevation_m", "country", "tz", "isd_id"]
 
 # Curated station list: major-city METAR sites across the US, Canada and
-# Mexico with 2001 coverage. ~175 sites; every US state, ~13 CA / ~15 MX.
+# Mexico with 2001 coverage. 188 sites; every US state, 17 CA / 18 MX.
 CURATED_ICAOS = {
     # US — Northeast
     "KBOS", "KPWM", "KBGR", "KBTV", "KMHT", "KPVD", "KBDL", "KALB", "KSYR",
@@ -31,6 +31,7 @@ CURATED_ICAOS = {
     # US — Southeast
     "KRIC", "KORF", "KRDU", "KGSO", "KCLT", "KCAE", "KCHS", "KSAV", "KATL",
     "KTLH", "KJAX", "KMCO", "KTPA", "KMIA", "KPBI", "KEYW",
+    "KFMY",  # KRSW substitute: Fort Myers Page Field (KRSW has no 2001-09 rows)
     "KBHM", "KMGM", "KMOB", "KHSV", "KBNA", "KMEM", "KTYS", "KCHA", "KSDF",
     "KLEX", "KCRW", "KJAN",
     # US — Midwest
