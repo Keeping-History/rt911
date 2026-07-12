@@ -61,3 +61,12 @@ def test_compute_almanac_records_normals_and_cutoff():
     d10 = alm["09-10"]
     assert d10["record_high_c"] == 28.9 and d10["record_high_year"] == 1980
     assert d10["record_low_c"] is None and d10["record_precip_mm"] is None
+
+
+def test_compute_almanac_zero_precip_tie_goes_to_latest_year():
+    csv_text = ('"STATION","DATE","PRCP","TMAX","TMIN"\n'
+                '"USW00094846","1975-09-11","    0","  250","  120"\n'
+                '"USW00094846","1988-09-11","    0","  260","  130"\n')
+    alm = compute_almanac(parse_daily_rows(csv_text), ["09-11"])
+    d = alm["09-11"]
+    assert d["record_precip_mm"] == 0.0 and d["record_precip_year"] == 1988

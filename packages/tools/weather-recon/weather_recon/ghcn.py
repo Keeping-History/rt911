@@ -94,10 +94,9 @@ def compute_almanac(rows, month_days, cutoff="2001-09-08",
                 entry["record_precip_mm"] is None
                 or r["prcp_mm"] >= entry["record_precip_mm"]
             ):
-                if r["prcp_mm"] > 0 or entry["record_precip_mm"] is None:
-                    entry["record_precip_mm"], entry["record_precip_year"] = (
-                        r["prcp_mm"], year
-                    )
+                entry["record_precip_mm"], entry["record_precip_year"] = (
+                    r["prcp_mm"], year
+                )
         if highs:
             entry["normal_high_c"] = round(sum(highs) / len(highs), 1)
         if lows:
