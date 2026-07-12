@@ -18,7 +18,7 @@ WW_CODES = {
     "10": "mist", "11": "fog patches", "12": "fog patches",
     "13": "lightning", "17": "thunder", "18": "squalls", "19": "funnel cloud",
     "40": "fog", "41": "fog patches", "42": "fog", "43": "fog",
-    "44": "fog", "45": "fog", "46": "fog", "48": "freezing fog",
+    "44": "fog", "45": "fog", "46": "fog", "47": "fog", "48": "freezing fog",
     "49": "freezing fog",
     "50": "light drizzle", "51": "light drizzle", "52": "drizzle",
     "53": "drizzle", "54": "heavy drizzle", "55": "heavy drizzle",

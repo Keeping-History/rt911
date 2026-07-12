@@ -70,7 +70,7 @@ def test_weather_from_mw1():
 
 
 def test_weather_from_mw1_unknown_and_missing():
-    assert weather_from_mw1("47,1") is None    # not in condensed map
+    assert weather_from_mw1("39,1") is None    # not in condensed map (blowing snow band)
     assert weather_from_mw1("") is None
     assert weather_from_mw1(None) is None
 
