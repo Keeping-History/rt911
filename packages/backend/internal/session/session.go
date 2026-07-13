@@ -31,6 +31,7 @@ const (
 	ChannelNews    = "news"
 	ChannelUsenet  = "usenet"
 	ChannelFlights = "flights"
+	ChannelWeather = "weather"
 )
 
 // Look-ahead windowing. Instead of one Redis lookup + frame per virtual second,
@@ -54,12 +55,15 @@ const (
 	// flights are dense — ~600-900 airborne rows/min — so they get media's
 	// shorter window, keeping refill frames at ~300-450 KB.
 	windowFlights = 300 * time.Second
+	// weather is sparse (hourly obs per station, occasional forecast products),
+	// so it gets usenet/news scale rather than flights' shorter window.
+	windowWeather = 600 * time.Second
 )
 
-// usenetTickTimeout bounds a single windowed usenet Postgres read on the tick path
-// — the tick's only DB dependency (hard rule #4 exception). A slow query is
-// abandoned rather than allowed to pile up tick after tick.
-const usenetTickTimeout = 5 * time.Second
+// pgTickTimeout bounds a single windowed Postgres read on the tick path — the
+// usenet and weather channels' DB dependency (hard rule #4 exception). A slow
+// query is abandoned rather than allowed to pile up tick after tick.
+const pgTickTimeout = 5 * time.Second
 
 // SourceList carries the time-independent set of selectable sources for each
 // client-side filter. The sources table does not record which media type a source
@@ -80,8 +84,12 @@ type outMsg struct {
 	Pager   []model.PagerItem      `json:"pager,omitempty"`
 	Usenet  []model.UsenetItem     `json:"usenet,omitempty"`
 	Flights []model.FlightPosition `json:"flights,omitempty"`
-	Sources *SourceList            `json:"sources,omitempty"`
-	Msg     string                 `json:"message,omitempty"`
+	// Weather/WeatherForecasts carry the weather channel's tick batch
+	// (SendWeather) and the on-demand weather_forecast reply (SendWeatherForecast).
+	Weather          []model.WeatherObservation `json:"weather,omitempty"`
+	WeatherForecasts []model.WeatherForecast    `json:"weather_forecasts,omitempty"`
+	Sources          *SourceList                `json:"sources,omitempty"`
+	Msg              string                     `json:"message,omitempty"`
 	// ID/Body carry a single on-demand Usenet article body (usenet_body frame).
 	ID   int    `json:"id,omitempty"`
 	Body string `json:"body,omitempty"`
@@ -95,9 +103,11 @@ type Session struct {
 	id  string
 	hub *Hub
 	rdb *goredis.Client
-	// pool backs the usenet channel only: usenet messages are too large to cache in
-	// Redis, so its windowed delivery reads Postgres directly (see UsenetItemsInRange).
-	// Every other channel uses Redis via the tick path (hard rule #4).
+	// pool backs the usenet and weather channels: usenet messages are too large to
+	// cache in Redis, and weather data is sparse enough that a Redis cache isn't
+	// worth building, so both read Postgres directly on the tick (see
+	// UsenetItemsInRange / WeatherObsInRange / WeatherForecastsInRange). Every
+	// other channel uses Redis via the tick path (hard rule #4).
 	pool   *pgxpool.Pool
 	logger *slog.Logger
 
@@ -116,6 +126,7 @@ type Session struct {
 	newsHorizon    time.Time
 	usenetHorizon  time.Time
 	flightsHorizon time.Time
+	weatherHorizon time.Time
 
 	// usenetGroups is the set of newsgroups the client is currently viewing. The
 	// usenet channel is delivered only for these groups — a group can hold millions
@@ -230,6 +241,8 @@ func (s *Session) horizonFor(channel string) *time.Time {
 		return &s.usenetHorizon
 	case ChannelFlights:
 		return &s.flightsHorizon
+	case ChannelWeather:
+		return &s.weatherHorizon
 	}
 	return nil
 }
@@ -335,6 +348,30 @@ func (s *Session) SendFlightsHistory(reqID int, t time.Time, items []model.Fligh
 	s.send_(outMsg{Type: "flights_history", ID: reqID, Time: t.Format(time.RFC3339), Flights: items, Done: done})
 }
 
+// SendWeather delivers a batch of weather observations and forecasts at time t
+// on the weather channel. Sparse data (hourly obs, occasional forecast
+// products) rides one frame carrying both lists, following the usenet Postgres
+// exception. No frame is sent when both batches are empty.
+func (s *Session) SendWeather(t time.Time, obs []model.WeatherObservation, forecasts []model.WeatherForecast) {
+	if len(obs) == 0 && len(forecasts) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "weather", Time: t.Format(time.RFC3339), Weather: obs, WeatherForecasts: forecasts})
+}
+
+// SendWeatherForecast delivers a single on-demand forecast lookup for a zone,
+// echoing the client's request id. Unlike SendWeather, this always sends —
+// even when fc is nil, the client must see an explicit "no forecast for this
+// zone" reply (WeatherForecasts empty) rather than silence being ambiguous
+// with "still loading."
+func (s *Session) SendWeatherForecast(reqID int, t time.Time, fc *model.WeatherForecast) {
+	var forecasts []model.WeatherForecast
+	if fc != nil {
+		forecasts = []model.WeatherForecast{*fc}
+	}
+	s.send_(outMsg{Type: "weather_forecast", ID: reqID, Time: t.Format(time.RFC3339), WeatherForecasts: forecasts})
+}
+
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the
 // usenet channel and acks. Resetting the usenet horizon to the current virtual time
 // makes the next tick refill a fresh forward window for the new group(s); the
@@ -417,6 +454,7 @@ func (s *Session) resetHorizons(t time.Time) {
 	s.newsHorizon = t
 	s.usenetHorizon = t
 	s.flightsHorizon = t
+	s.weatherHorizon = t
 }
 
 // Pause freezes the client's virtual clock.
@@ -479,6 +517,7 @@ func (s *Session) RunTimePump() {
 			newsLo, newsHi, doNews := s.planChannelRefill(ChannelNews, &s.newsHorizon, t, windowNews)
 			usenetLo, usenetHi, doUsenet := s.planChannelRefill(ChannelUsenet, &s.usenetHorizon, t, windowUsenet)
 			flightsLo, flightsHi, doFlights := s.planChannelRefill(ChannelFlights, &s.flightsHorizon, t, windowFlights)
+			weatherLo, weatherHi, doWeather := s.planChannelRefill(ChannelWeather, &s.weatherHorizon, t, windowWeather)
 			var usenetGroups []string
 			if doUsenet {
 				usenetGroups = s.usenetGroupsLocked()
@@ -529,7 +568,7 @@ func (s *Session) RunTimePump() {
 			if doUsenet && len(usenetGroups) > 0 && s.pool != nil {
 				// Bound the per-tick Postgres reads so a slow query is abandoned
 				// rather than piling up across ticks.
-				qctx, cancel := context.WithTimeout(ctx, usenetTickTimeout)
+				qctx, cancel := context.WithTimeout(ctx, pgTickTimeout)
 				var batch []model.UsenetItem
 				for _, g := range usenetGroups {
 					items, err := db.UsenetItemsInRange(qctx, s.pool, g, usenetLo, usenetHi)
@@ -541,6 +580,22 @@ func (s *Session) RunTimePump() {
 				}
 				cancel()
 				s.SendUsenet(t, batch)
+			}
+			// weather refills read Postgres directly (not Redis), the same exception
+			// as usenet: observations/forecasts are sparse enough that per-tick query
+			// volume is low, so there is no Redis cache/listener/warm to build.
+			if doWeather && s.pool != nil {
+				qctx, cancel := context.WithTimeout(ctx, pgTickTimeout)
+				obs, obsErr := db.WeatherObsInRange(qctx, s.pool, weatherLo, weatherHi)
+				if obsErr != nil {
+					s.logger.Warn("weather obs range lookup failed", "error", obsErr)
+				}
+				forecasts, fcErr := db.WeatherForecastsInRange(qctx, s.pool, weatherLo, weatherHi)
+				if fcErr != nil {
+					s.logger.Warn("weather forecast range lookup failed", "error", fcErr)
+				}
+				cancel()
+				s.SendWeather(t, obs, forecasts)
 			}
 		}
 	}
