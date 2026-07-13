@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { StationPlayer } from "./StationPlayer";
@@ -95,5 +95,52 @@ describe("StationPlayer", () => {
 		const { container } = render(<StationPlayer {...base} stationMuted={true} />);
 		const audios = Array.from(container.querySelectorAll("audio")) as HTMLAudioElement[];
 		expect(audios.every((a) => a.volume === 0)).toBe(true);
+	});
+
+	// Safari ignores el.volume once the visualizer's createMediaElementSource
+	// captures an element (and always on iOS), so muting must also drive
+	// el.muted — but only after the element's autoplay unlock, since pre-play
+	// elements stay muted so play() is permitted.
+
+	/** Fire canplay and flush the play().then microtask (the autoplay unlock). */
+	async function unlock(audio: HTMLAudioElement) {
+		fireEvent(audio, new Event("canplay"));
+		await act(async () => {});
+	}
+
+	it("mutes a playing element via el.muted, not just volume", async () => {
+		const { container, rerender } = render(<StationPlayer {...base} />);
+		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		await unlock(audio);
+		expect(audio.muted).toBe(false);
+		rerender(<StationPlayer {...base} mutedItems={[1]} />);
+		expect(audio.muted).toBe(true);
+		expect(audio.volume).toBe(0);
+	});
+
+	it("unmuting a playing element restores el.muted = false", async () => {
+		const { container, rerender } = render(<StationPlayer {...base} mutedItems={[1]} />);
+		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		await unlock(audio);
+		expect(audio.muted).toBe(true); // canplay while muted keeps it silent
+		rerender(<StationPlayer {...base} mutedItems={[]} />);
+		expect(audio.muted).toBe(false);
+		expect(audio.volume).toBe(1);
+	});
+
+	it("never unmutes an element still waiting for its autoplay unlock", () => {
+		const { rerender, container } = render(<StationPlayer {...base} mutedItems={[2]} />);
+		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		expect(audio.muted).toBe(true); // pre-play autoplay mute
+		rerender(<StationPlayer {...base} mutedItems={[]} />);
+		expect(audio.muted).toBe(true); // mute-state change must not unlock it
+	});
+
+	it("onCanPlay honors the current mute list instead of unconditionally unmuting", async () => {
+		const { container } = render(<StationPlayer {...base} mutedItems={[1]} />);
+		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		await unlock(audio);
+		expect(audio.muted).toBe(true);
+		expect(audio.volume).toBe(0);
 	});
 });

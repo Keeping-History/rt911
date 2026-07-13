@@ -51,6 +51,24 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	const getNowMsRef = useRef(getNowMs);
 	getNowMsRef.current = getNowMs;
 
+	// Elements whose play() has resolved at least once. Until then an element
+	// must stay el.muted = true (that's what lets the browser permit autoplay),
+	// so the mute effect below may only unmute unlocked elements.
+	const unlockedRef = useRef<Set<number>>(new Set());
+
+	// Called after a successful play(): the element is past the autoplay gate,
+	// so muting can be driven through el.muted from here on. el.volume alone is
+	// not enough — Safari ignores it once the visualizer's
+	// createMediaElementSource captures the element (every clip is captured
+	// while it's the newest), and iOS ignores it always.
+	const unlockAndApplyMuteState = (id: number, el: HTMLAudioElement) => {
+		unlockedRef.current.add(id);
+		const silenced =
+			stationMutedRef.current || mutedItemsRef.current.includes(id);
+		el.muted = silenced;
+		el.volume = silenced ? 0 : 1;
+	};
+
 	// Health check: keep each mounted element playing and within 30s of expected.
 	useEffect(() => {
 		const id = setInterval(() => {
@@ -59,7 +77,14 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 			for (const [segId, el] of audioRefs.current) {
 				const item = station.items.find((i) => i.id === segId);
 				if (!item) continue;
-				if (el.paused || el.ended) el.play().catch(() => {});
+				if (el.paused || el.ended) {
+					// A late unlock (initial autoplay was blocked; a user gesture has
+					// since granted audio) must also clear the autoplay mute, or the
+					// element resumes playing but stays silent forever.
+					el.play()
+						.then(() => unlockAndApplyMuteState(segId, el))
+						.catch(() => {});
+				}
 				const expected = calcSeekSeconds(item, now);
 				if (Math.abs(el.currentTime - expected) > 30) el.currentTime = expected;
 			}
@@ -67,20 +92,28 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 		return () => clearInterval(id);
 	}, [station]);
 
-	// Apply mute volume immediately: a file is silenced if its station is muted
-	// or the file itself is muted.
+	// Apply mute state immediately: a file is silenced if its station is muted
+	// or the file itself is muted. Muting is always safe, but unmuting via
+	// el.muted is only allowed once the element's autoplay unlock happened.
 	useEffect(() => {
 		for (const [id, el] of audioRefs.current) {
-			el.volume = stationMuted || mutedItems.includes(id) ? 0 : 1;
+			const silenced = stationMuted || mutedItems.includes(id);
+			el.volume = silenced ? 0 : 1;
+			if (silenced) el.muted = true;
+			else if (unlockedRef.current.has(id)) el.muted = false;
 		}
 	}, [stationMuted, mutedItems]);
 
 	// Pause/resume all mounted elements when the clock pauses/resumes.
 	useEffect(() => {
-		for (const [, el] of audioRefs.current) {
+		for (const [id, el] of audioRefs.current) {
 			if (clockPaused) el.pause();
-			else el.play().catch(() => {});
+			else
+				el.play()
+					.then(() => unlockAndApplyMuteState(id, el))
+					.catch(() => {});
 		}
+		// biome-ignore lint/correctness/useExhaustiveDependencies: unlockAndApplyMuteState reads refs only
 	}, [clockPaused]);
 
 	// Reseek on a clock scrub (a large jump), not on natural per-second advance.
@@ -114,6 +147,9 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 					// <audio> element from the DOM does not stop browser playback.
 					audioRefs.current.get(id)?.pause();
 					audioRefs.current.delete(id);
+					// A remount of the same id gets a fresh element that must redo
+					// the autoplay dance from its muted starting state.
+					unlockedRef.current.delete(id);
 				}
 			};
 			refCallbacks.current.set(id, cb);
@@ -145,13 +181,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 						const el = e.currentTarget;
 						if (clockPausedRef.current) return;
 						el.play()
-							.then(() => {
-								el.muted = false;
-								el.volume =
-									stationMutedRef.current || mutedItemsRef.current.includes(item.id)
-										? 0
-										: 1;
-							})
+							.then(() => unlockAndApplyMuteState(item.id, el))
 							.catch(() => {});
 					}}
 				>
