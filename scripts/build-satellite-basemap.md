@@ -51,7 +51,7 @@ SRC=land_lights_16384.tif / OUT=na-satellite-night:
 
 Expected sizes: ~15–40 MB each.
 
-## Host (GATED — prod Wasabi) 
+## Host (GATED — prod Wasabi) — DONE 2026-07-13 
 
 1. Upload both to the file-proxy's Wasabi bucket under `maps/`, alongside
    `na-basemap.pmtiles`. Use the video-grabber Wasabi creds with boto3
