@@ -54,14 +54,14 @@ describe("buildBasemapStyle — superset structure", () => {
 	it("contains the vector source and both raster sources", () => {
 		const basemap = style.sources.basemap as { type: string; url: string };
 		const day = style.sources["satellite-day"] as {
-			type: string; url: string; maxzoom: number; bounds: number[];
+			type: string; url: string; bounds: number[];
 		};
 		const night = style.sources["satellite-night"] as { type: string; url: string };
 		expect(basemap.type).toBe("vector");
 		expect(basemap.url).toBe("pmtiles://https://x.example/na.pmtiles");
 		expect(day.type).toBe("raster");
 		expect(day.url).toBe("pmtiles://https://x.example/day.pmtiles");
-		expect(day.maxzoom).toBe(7);
+		expect("maxzoom" in day).toBe(false);
 		expect(day.bounds).toEqual([-150, 18, -65, 65]);
 		expect(night.type).toBe("raster");
 	});

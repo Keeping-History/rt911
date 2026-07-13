@@ -9,9 +9,12 @@ domain (NASA Visible Earth).
 ## Contract with the app
 
 `packages/frontend/src/lib/basemap/basemapStyles.ts` consumes each archive as
-a `raster` source: 256px tiles, **maxzoom 7**, bounds `-150,18,-65,65` (the
-same NA bbox as the vector basemap). MapLibre overzooms past z7 and never
-requests outside the bbox, so the archives stay small and 404s are never hit.
+a `raster` source: 256px tiles, min/max zoom come from the archive's own
+TileJSON (native max is 6 for these sources; MapLibre overzooms past it
+automatically), bounds `-150,18,-65,65` (the same NA bbox as the vector
+basemap). The app sets NO inline maxzoom — it defers to the PMTiles protocol's
+native max. Never requests outside the bbox, so the archives stay small and 404s
+are never hit.
 
 ## Sources
 
@@ -41,9 +44,9 @@ SRC=land_lights_16384.tif / OUT=na-satellite-night:
 4. Convert:
    pmtiles convert $OUT.mbtiles $OUT.pmtiles
 5. Sanity checks before uploading:
-   - `pmtiles show $OUT.pmtiles` reports maxzoom ≤ 7 (if the native zoom came
-     out at 8, re-run gdal_translate with `-outsize 50% 50%` on the 3857 tif —
-     the app never requests past z7 either way) and bounds ≈ the NA bbox.
+   - `pmtiles show $OUT.pmtiles` reports expected native maxzoom is 6 and minzoom
+     2 for these sources. Below map zoom 2 the imagery hides and the style's
+     background + borders show, which is the accepted fallback. Bounds should ≈ the NA bbox.
    - Open in https://pmtiles.io — North America renders, oceans/edges look sane.
 
 Expected sizes: ~15–40 MB each.
