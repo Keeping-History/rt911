@@ -95,8 +95,8 @@ export const FlightTracker: FC = () => {
 	const appData = useAppManager(
 		(s) =>
 			s.System.Manager.Applications.apps[appId]?.data as
-				| Record<string, unknown>
-				| undefined,
+			| Record<string, unknown>
+			| undefined,
 	);
 	const settings = useMemo(() => readFlightMapSettings(appData), [appData]);
 	const loopSettings = useMemo(() => readFlightLoopSettings(appData), [appData]);
@@ -672,21 +672,21 @@ export const FlightTracker: FC = () => {
 								onClearSelection={() => setSelected(null)}
 							/>
 						</div>
-						<div style={{ width: "20%", flexShrink: 0, borderLeft: "var(--window-border-size) solid var(--color-black)", padding: "var(--window-padding-size)", backgroundColor: "var(--color-system-03)" }}>
-						<div className={styles.filterButtonRow}>
-							<ClassicyButton onClickFunc={openFilter}>
-								{visibleFlights ? "Filter (on)…" : "Filter…"}
-							</ClassicyButton>
-						</div>
-						<FlightDetailPanel
-							selected={selected}
-							track={track}
-							loading={loading}
-							error={error}
-							nowMs={nowMs}
-							headingDeg={headingDeg}
-							tzOffset={tzOffset}
-						/>
+						<div className={styles.filterPanel}>
+							<div className={styles.filterButtonRow}>
+								<ClassicyButton onClickFunc={openFilter}>
+									{visibleFlights ? "Filter (on)…" : "Filter…"}
+								</ClassicyButton>
+							</div>
+							<FlightDetailPanel
+								selected={selected}
+								track={track}
+								loading={loading}
+								error={error}
+								nowMs={nowMs}
+								headingDeg={headingDeg}
+								tzOffset={tzOffset}
+							/>
 						</div>
 					</div>
 					{loopEnabled && (
@@ -754,9 +754,8 @@ export const FlightTracker: FC = () => {
 						</div>
 					)}
 					<div
-						className={`${styles.statusBar}${
-							groundStop === "active" ? ` ${styles.statusBarRed}` : ""
-						}`}
+						className={`${styles.statusBar}${groundStop === "active" ? ` ${styles.statusBarRed}` : ""
+							}`}
 					>
 						<span className={styles.statusBarCell}>
 							{/* On the red bar the usual green/red dot would vanish; use
