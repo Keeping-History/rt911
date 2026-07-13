@@ -28,7 +28,6 @@
 
 .bannerState {
   font-size: var(--ui-font-size);
-  font-weight: bold;
   letter-spacing: 0.15em;
 }
 
@@ -86,7 +85,6 @@
 
 .tileValue {
   font-size: calc(var(--ui-font-size) * 1.6);
-  font-weight: bold;
   color: var(--color-theme-01);
 }
 
@@ -109,7 +107,6 @@
 
 .groupHeader {
   font-size: calc(var(--ui-font-size) * 0.85);
-  font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--color-theme-02);
@@ -135,7 +132,6 @@
 }
 
 .rowSymbol {
-  font-weight: bold;
 }
 
 .rowName {
@@ -199,6 +195,5 @@
 }
 
 .tapeSymbol {
-  font-weight: bold;
   color: #ffffff;
 }
