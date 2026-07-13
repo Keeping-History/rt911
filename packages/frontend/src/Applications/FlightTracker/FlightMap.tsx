@@ -23,6 +23,7 @@ import {
 	TRAIL_POINTS,
 	motionPointsToGeoJSON,
 	motionTrailsToGeoJSON,
+	seedMotionFromHistory,
 	updateMotion,
 } from "./flightMotion";
 import {
@@ -67,6 +68,9 @@ async function installPlaneIcons(
 
 interface FlightMapProps {
 	positions: FlightPosition[];
+	// Short history lookback from the provider (flightsSeed): earlier samples
+	// that give freshly-seeded single-sample flights a heading immediately.
+	seedPositions?: FlightPosition[];
 	basemapUrl: string;
 	trackGeoJSON: GeoJSON.Feature | null;
 	nowMs: number;
@@ -116,7 +120,7 @@ const GHOST_OPACITY = 0.4;
 const GHOST_STROKE_COLOR = "#ffffff";
 
 export const FlightMap: FC<FlightMapProps> = ({
-	positions, basemapUrl, trackGeoJSON, nowMs, playing,
+	positions, seedPositions, basemapUrl, trackGeoJSON, nowMs, playing,
 	darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
@@ -129,6 +133,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	// Latest props read inside map event handlers registered once at create time.
 	const positionsRef = useRef(positions);
 	positionsRef.current = positions;
+	const seedRef = useRef(seedPositions);
+	seedRef.current = seedPositions;
 	const cbRef = useRef({ onSelectFlight, onClearSelection });
 	cbRef.current = { onSelectFlight, onClearSelection };
 	const colorsRef = useRef<FlightMapColors>({ darkMap, pinColor, notablePinColor });
@@ -174,6 +180,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const colors = colorsRef.current;
 			const theme = colors.darkMap ? "dark" : "light";
 			updateMotion(motionBufferRef.current, positionsRef.current);
+			if (seedRef.current?.length)
+				seedMotionFromHistory(motionBufferRef.current, seedRef.current);
 			map.addSource("flights", {
 				type: "geojson",
 				data: motionPointsToGeoJSON(motionBufferRef.current, nowMsRef.current),
@@ -314,11 +322,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 		};
 	}, [basemapUrl]);
 
-	// Fold each new airborne snapshot into the motion buffer.
+	// Fold each new airborne snapshot into the motion buffer, then re-apply the
+	// heading seed: chunks can land before OR after the snapshot that creates
+	// the buffer entries they refine, and seeding is idempotent either way.
 	useEffect(() => {
 		updateMotion(motionBufferRef.current, positions);
+		if (seedPositions?.length)
+			seedMotionFromHistory(motionBufferRef.current, seedPositions);
 		dirtyRef.current = true;
-	}, [positions]);
+	}, [positions, seedPositions]);
 
 	// Re-anchor the smooth clock on each coarse provider tick / play-state change.
 	useEffect(() => {

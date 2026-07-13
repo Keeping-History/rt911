@@ -46,6 +46,16 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 // Jumps larger than this are treated as manual seeks rather than clock ticks
 const SEEK_THRESHOLD_MS = 90_000;
 
+// Heading-seed lookback: how many trailing minutes of flight positions to fetch
+// (via a small flights_history request) whenever the flights channel (re)starts
+// at an instant — subscribe, seek, reconnect. Flights are sampled per minute, so
+// 3 minutes guarantees at least one sample OLDER than the snapshot's for every
+// airborne flight, which is what the Flight Tracker needs to derive a heading
+// for its planes immediately instead of pointing them north for the first
+// minute. Kept deliberately small: a 30-minute loop-style window would be
+// ~20k rows on every open/seek for data the seeding path throws away.
+const FLIGHTS_SEED_LOOKBACK_MINUTES = 3;
+
 interface WsItemsMessage {
 	type: "items" | "init_ack" | "seek_ack";
 	time?: string;
@@ -161,6 +171,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [flightPositions, setFlightPositions] = useState<FlightPosition[]>([]);
 	const [flightsHistory, setFlightsHistory] = useState<FlightPosition[]>([]);
 	const [flightsHistoryDone, setFlightsHistoryDone] = useState(false);
+	// Short heading-seed lookback (see FLIGHTS_SEED_LOOKBACK_MINUTES): the
+	// previous minute-buckets around the subscribe/seek instant, used by the
+	// Flight Tracker to give single-sample flights a heading immediately.
+	const [flightsSeed, setFlightsSeed] = useState<FlightPosition[]>([]);
 	// Latest observation per station (see weatherMerge.ts). Not a plain list —
 	// stations report at most hourly, so the UI wants "current reading per
 	// station", not an accumulating array.
@@ -190,11 +204,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const usenetSubscribers = useRef(new Set<string>());
 	const flightsSubscribers = useRef(new Set<string>());
 	const weatherSubscribers = useRef(new Set<string>());
-	// Active loop-history request: window wanted (null = loop off) and a
-	// generation id echoed by the server so a superseded request's chunks are
-	// discarded — frames from request N can still arrive after request N+1 goes out.
+	// Active loop-history request: window wanted (null = loop off). Loop-history
+	// and heading-seed requests share the flights_history wire type, so they draw
+	// ids from ONE counter (flightsReqGen) and each remembers its own active id
+	// (0 = none) — the id echo then routes each reply chunk to the right consumer
+	// and discards chunks of superseded requests (frames from request N can still
+	// arrive after request N+1 goes out).
 	const flightsHistoryMinutes = useRef<30 | 90 | null>(null);
-	const flightsHistoryGen = useRef(0);
+	const flightsReqGen = useRef(0);
+	const flightsLoopReqId = useRef(0);
+	const flightsSeedReqId = useRef(0);
 	// The single active forecast request (null = none pending) and a generation
 	// id echoed by the server, mirroring flightsHistoryGen: a reply whose id
 	// doesn't match the current generation is from a superseded request and is
@@ -377,13 +396,31 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	// (Re-)issue the heading-seed lookback for the current instant: fresh id,
+	// reset the accumulated rows, ask again. No-op while nothing is subscribed —
+	// the seed exists only to serve the flights channel's motion rendering.
+	const sendFlightsSeedRequest = useCallback(() => {
+		if (flightsSubscribers.current.size === 0) return;
+		flightsReqGen.current += 1;
+		flightsSeedReqId.current = flightsReqGen.current;
+		setFlightsSeed([]);
+		send({
+			type: "flights_history",
+			minutes: FLIGHTS_SEED_LOOKBACK_MINUTES,
+			id: flightsSeedReqId.current,
+		});
+	}, [send]);
+
 	const subscribeFlights = useCallback(
 		(appId: string) => {
 			const wasEmpty = flightsSubscribers.current.size === 0;
 			flightsSubscribers.current.add(appId);
-			if (wasEmpty) send({ type: "subscribe", channel: "flights" });
+			if (wasEmpty) {
+				send({ type: "subscribe", channel: "flights" });
+				sendFlightsSeedRequest();
+			}
 		},
-		[send],
+		[send, sendFlightsSeedRequest],
 	);
 
 	const unsubscribeFlights = useCallback(
@@ -393,25 +430,29 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				send({ type: "unsubscribe", channel: "flights" });
 				setFlightPositions([]);
 				flightsBuffer.current.clear();
-				// Loop history is a flights-channel feature; drop it with the channel.
+				// Loop history and the heading seed are flights-channel features;
+				// drop them with the channel (id 0 orphans any in-flight chunks).
 				flightsHistoryMinutes.current = null;
-				flightsHistoryGen.current += 1;
+				flightsLoopReqId.current = 0;
 				setFlightsHistory([]);
 				setFlightsHistoryDone(false);
+				flightsSeedReqId.current = 0;
+				setFlightsSeed([]);
 			}
 		},
 		[send],
 	);
 
-	// (Re-)issue the active history request: bump the generation, reset the
-	// accumulated window, ask again. No-op while loop mode is off.
+	// (Re-)issue the active history request: fresh id, reset the accumulated
+	// window, ask again. No-op while loop mode is off.
 	const sendFlightsHistoryRequest = useCallback(() => {
 		const minutes = flightsHistoryMinutes.current;
 		if (minutes === null) return;
-		flightsHistoryGen.current += 1;
+		flightsReqGen.current += 1;
+		flightsLoopReqId.current = flightsReqGen.current;
 		setFlightsHistory([]);
 		setFlightsHistoryDone(false);
-		send({ type: "flights_history", minutes, id: flightsHistoryGen.current });
+		send({ type: "flights_history", minutes, id: flightsLoopReqId.current });
 	}, [send]);
 
 	const requestFlightsHistory = useCallback(
@@ -424,7 +465,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 
 	const clearFlightsHistory = useCallback(() => {
 		flightsHistoryMinutes.current = null;
-		flightsHistoryGen.current += 1; // orphan any in-flight chunks
+		flightsLoopReqId.current = 0; // orphan any in-flight chunks
 		setFlightsHistory([]);
 		setFlightsHistoryDone(false);
 	}, []);
@@ -583,13 +624,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
 			// The old timeline's loop history is meaningless at the new instant.
 			sendFlightsHistoryRequest();
+			// The motion buffer rebuilds from single samples after a seek, so the
+			// north-pointing first minute would recur — re-seed at the new instant.
+			sendFlightsSeedRequest();
 			// Re-ask for the last-requested zone's forecast at the new clock
 			// (no-op when none is pending) — mirrors the reconnect path.
 			sendWeatherForecastRequest();
 		}
 
 		prevDateTimeRef.current = dateTime;
-	}, [dateTime, send, sendFlightsHistoryRequest, sendWeatherForecastRequest]);
+	}, [dateTime, send, sendFlightsHistoryRequest, sendFlightsSeedRequest, sendWeatherForecastRequest]);
 
 	// Once the socket is OPEN, re-request the window for the current instant.
 	// The active video channels are long-running stitched HLS streams (one row in
@@ -653,6 +697,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				ws.send(JSON.stringify({ type: "subscribe", channel: "flights" }));
 				// Loop mode survives a reconnect: re-seed its window at the fresh clock.
 				sendFlightsHistoryRequest();
+				// The subscribe-time heading seed was lost with the old connection.
+				sendFlightsSeedRequest();
 			}
 			if (weatherSubscribers.current.size > 0) {
 				weatherSnapshotPending.current = true;
@@ -765,7 +811,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 
 			if (msg.type === "flights_history") {
 				const hist = msg as WsFlightsHistoryMessage;
-				if (hist.id !== flightsHistoryGen.current) return; // superseded request
+				// Loop-history and heading-seed replies share this wire type; the
+				// echoed request id says which consumer (if either) each chunk is
+				// for. An active id is never 0 (the counter starts at 1), so the
+				// 0-means-inactive sentinel can't match a real frame.
+				if (hist.id !== 0 && hist.id === flightsSeedReqId.current) {
+					const incoming = hist.flights ?? [];
+					if (incoming.length > 0)
+						setFlightsSeed((prev) => [...prev, ...incoming]);
+					return;
+				}
+				if (hist.id === 0 || hist.id !== flightsLoopReqId.current) return; // superseded
 				const incoming = hist.flights ?? [];
 				if (incoming.length > 0)
 					setFlightsHistory((prev) => [...prev, ...incoming]);
@@ -858,10 +914,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			wsRef.current = null;
 		};
 		// Intentionally runs once on mount; utcMsRef carries the live value.
-		// sendFlightsHistoryRequest/sendWeatherForecastRequest are stable (their
-		// only dep is the stable `send`), so listing them satisfies the lint
-		// without re-running the effect.
-	}, [sendFlightsHistoryRequest, sendWeatherForecastRequest]);
+		// sendFlightsHistoryRequest/sendFlightsSeedRequest/sendWeatherForecastRequest
+		// are stable (their only dep is the stable `send`), so listing them
+		// satisfies the lint without re-running the effect.
+	}, [sendFlightsHistoryRequest, sendFlightsSeedRequest, sendWeatherForecastRequest]);
 
 	// Memoize the context value so consumers only re-render when specific data
 	// changes — not on every provider render (which happens every clock tick and
@@ -898,6 +954,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeFlights,
 			flightsHistory,
 			flightsHistoryDone,
+			flightsSeed,
 			requestFlightsHistory,
 			clearFlightsHistory,
 			weatherObservations,
@@ -936,6 +993,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeFlights,
 			flightsHistory,
 			flightsHistoryDone,
+			flightsSeed,
 			requestFlightsHistory,
 			clearFlightsHistory,
 			weatherObservations,

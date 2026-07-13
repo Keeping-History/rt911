@@ -165,6 +165,7 @@ export const FlightTracker: FC = () => {
 		unsubscribeFlights,
 		connected,
 		flightsHistory,
+		flightsSeed,
 		requestFlightsHistory,
 		clearFlightsHistory,
 	} = useContext(MediaStreamContext);
@@ -648,6 +649,7 @@ export const FlightTracker: FC = () => {
 						<div className={styles.map}>
 							<FlightMap
 								positions={filteredPositions}
+								seedPositions={flightsSeed}
 								visibleFlights={visibleFlights}
 								basemapUrl={BASEMAP_URL}
 								trackGeoJSON={trackGeoJSON}

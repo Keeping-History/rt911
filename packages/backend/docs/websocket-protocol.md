@@ -46,7 +46,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
 | `usenet_body` | `id`              | Request the full body of one message by id (bodies are no longer in list frames). |
-| `flights_history` | `minutes`, `id` | Request the trailing `minutes` (30 or 90) of flight positions for loop playback. Requires an active `flights` subscription. `id` is echoed on every reply chunk. |
+| `flights_history` | `minutes`, `id` | Request the trailing `minutes` (1-90; loop mode uses 30/90, the heading seed ~3) of flight positions. Requires an active `flights` subscription. `id` is echoed on every reply chunk. |
 | `weather_forecast` | `zone`, `id` | Request the forecast product covering NWS UGC `zone` (e.g. `"NYZ076"`) at the client's virtual time. Requires an active `weather` subscription. `id` is echoed on the reply. |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
@@ -424,7 +424,7 @@ addition to the reveal-gate it already applies to pager/media items.
 `run_id`, `et_seconds`, `clock_seconds`, and `flight_date` (pipeline provenance from
 `packages/tools/flight-recon`) are deliberately not on the wire — the client never needs them.
 
-### `flights_history` (loop-mode history)
+### `flights_history` (loop-mode history / heading seed)
 
 Request:
 
@@ -432,9 +432,14 @@ Request:
 { "type": "flights_history", "minutes": 30, "id": 4 }
 ```
 
-`minutes` must be 30 or 90 (anything else yields an `error` frame). The request is
-silently ignored without an active `flights` subscription or before the virtual clock
-is initialised. The server reads the minute buckets covering `[clock − minutes, clock]`
+`minutes` must be between 1 and 90 inclusive (anything else yields an `error` frame).
+The Flight Tracker's loop mode requests 30 or 90; its heading seed — issued
+automatically on subscribe/seek/reconnect so single-sample flights get a previous
+minute-bucket to derive a heading from, instead of rendering due north for their
+first minute — requests a few minutes (currently 3). The two request kinds share
+this message type and are told apart client-side purely by the echoed `id`. The
+request is silently ignored without an active `flights` subscription or before the
+virtual clock is initialised. The server reads the minute buckets covering `[clock − minutes, clock]`
 from the flight cache and streams them as `flights_history` frames of ~10 buckets each —
 one 90-minute window is ~150k positions, far too large for a single frame. Every frame
 echoes the request `id`; a client that issues a new request (window change, seek,

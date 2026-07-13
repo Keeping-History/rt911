@@ -347,11 +347,63 @@ func TestWSHandlerFlightsHistoryChunksAndDone(t *testing.T) {
 	}
 }
 
+// A short lookback (the frontend's heading-seed request is 3 minutes) is served
+// in one chunk: any window inside the 1-90 minute bound is valid, not just the
+// loop-mode 30/90 presets.
+func TestWSHandlerFlightsHistoryShortSeedLookback(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	now := time.Date(2001, 9, 11, 13, 0, 0, 0, time.UTC)
+	for i := 0; i < 3; i++ {
+		m := now.Add(-time.Duration(i) * time.Minute)
+		items := []model.FlightPosition{{
+			ID: i + 1, Flight: "AA11", StartDate: m, Lat: 42.0, Lon: -71.0, AltFt: 30000,
+		}}
+		if err := cache.PutFlightBucket(context.Background(), rdb, m, items); err != nil {
+			t.Fatalf("seed bucket: %v", err)
+		}
+	}
+
+	conn := dialWS(t, newTestServer(t, rdb))
+	sendJSON(t, conn, map[string]string{"type": "subscribe", "channel": "flights"})
+	if f := readFrame(t, conn); f.Type != "subscribe_ack" {
+		t.Fatalf("expected subscribe_ack, got %+v", f)
+	}
+	sendJSON(t, conn, map[string]string{"type": "heartbeat", "time": now.Format(time.RFC3339)})
+	if f := readFrame(t, conn); f.Type != "heartbeat_ack" {
+		t.Fatalf("expected heartbeat_ack, got %+v", f)
+	}
+
+	sendJSON(t, conn, map[string]any{"type": "flights_history", "minutes": 3, "id": 7})
+
+	var total int
+	for {
+		f := readFrame(t, conn)
+		if f.Type != "flights_history" {
+			t.Fatalf("expected flights_history frame, got %+v", f)
+		}
+		if f.ID != 7 {
+			t.Fatalf("expected echoed id 7, got %d", f.ID)
+		}
+		if f.Done {
+			break
+		}
+		total += len(f.Flights)
+	}
+	if total != 3 {
+		t.Fatalf("expected all 3 seeded positions, got %d", total)
+	}
+}
+
 func TestWSHandlerFlightsHistoryInvalidMinutes(t *testing.T) {
 	conn := dialWS(t, newTestServer(t, nil))
-	sendJSON(t, conn, map[string]any{"type": "flights_history", "minutes": 45, "id": 1})
-	if f := readFrame(t, conn); f.Type != "error" {
-		t.Fatalf("expected error frame for minutes=45, got %+v", f)
+	for _, minutes := range []int{0, -5, 91} {
+		sendJSON(t, conn, map[string]any{"type": "flights_history", "minutes": minutes, "id": 1})
+		if f := readFrame(t, conn); f.Type != "error" {
+			t.Fatalf("expected error frame for minutes=%d, got %+v", minutes, f)
+		}
 	}
 }
 

@@ -91,6 +91,31 @@ export function updateMotion(
 	return buffer;
 }
 
+// Backfill prev samples from a short flights_history lookback so flights seeded
+// from a single live sample (first open, post-seek) get a real heading and glide
+// velocity immediately instead of pointing north until their second minute-bucket.
+// Monotonic and idempotent across chunked replies: a sample only ever moves a
+// flight's prev FORWARD in time (and never to/past cur), so replaying chunks in
+// any order converges on the newest older sample, and live-derived state from a
+// second snapshot is never regressed by a late-arriving chunk.
+export function seedMotionFromHistory(
+	buffer: MotionBuffer,
+	history: FlightPosition[],
+): void {
+	for (const p of history) {
+		const m = buffer.get(p.flight);
+		if (!m) continue; // history only refines flights the live snapshot knows
+		const t = Date.parse(p.start_date);
+		if (t >= m.curT) continue; // not older than the live sample
+		if (m.prevT !== m.curT && t <= m.prevT) continue; // already have a newer prev
+		m.prev = { lat: p.lat, lon: p.lon };
+		m.prevT = t;
+		if (m.cur.lat !== m.prev.lat || m.cur.lon !== m.prev.lon) {
+			m.headingDeg = bearingDeg(m.prev, m.cur);
+		}
+	}
+}
+
 export function velocityOf(m: FlightMotion): { vlat: number; vlon: number } {
 	const dt = m.curT - m.prevT;
 	if (dt <= 0) return { vlat: 0, vlon: 0 };

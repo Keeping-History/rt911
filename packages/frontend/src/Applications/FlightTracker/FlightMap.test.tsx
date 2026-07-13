@@ -396,6 +396,54 @@ describe("FlightMap", () => {
 		expect(data.features).toEqual([]);
 	});
 
+	it("derives an immediate heading for single-sample flights from seedPositions", () => {
+		// Live snapshot has ONE sample per flight (the first-open case); the seed
+		// lookback supplies the previous minute so the plane doesn't point north.
+		const live = pos({ id: 2, flight: "AA1", lat: 40, lon: -73, start_date: "2001-09-11T13:00:00Z" });
+		const seed = pos({ id: 1, flight: "AA1", lat: 40, lon: -74, start_date: "2001-09-11T12:59:00Z" });
+		render(
+			<FlightMap positions={[live]} seedPositions={[seed]} basemapUrl="x.pmtiles"
+				trackGeoJSON={null} nowMs={Date.parse("2001-09-11T13:00:00Z")} playing={false}
+				onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		const data = map.sources.flights?.data as {
+			features: { properties: { heading: number } }[];
+		};
+		expect(data.features[0].properties.heading).toBeCloseTo(90, 5); // due east, not north
+	});
+
+	it("applies seedPositions that arrive after the live snapshot", () => {
+		// Chunked replies mean the seed can land a render after the snapshot; the
+		// seed effect marks the map dirty so the next animation frame redraws.
+		let rafCb: FrameRequestCallback | null = null;
+		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+			rafCb = cb;
+			return 1;
+		});
+		vi.stubGlobal("cancelAnimationFrame", () => {});
+		vi.spyOn(performance, "now").mockReturnValue(0);
+
+		const live = pos({ id: 2, flight: "AA1", lat: 40, lon: -73, start_date: "2001-09-11T13:00:00Z" });
+		const seed = pos({ id: 1, flight: "AA1", lat: 40, lon: -74, start_date: "2001-09-11T12:59:00Z" });
+		const common = {
+			basemapUrl: "x.pmtiles", trackGeoJSON: null, nowMs: Date.parse("2001-09-11T13:00:00Z"),
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, pinColor: "#3a3a3a", notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender } = render(<FlightMap positions={[live]} seedPositions={[]} {...common} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		rerender(<FlightMap positions={[live]} seedPositions={[seed]} {...common} />);
+		rafCb!(100); // one paused-but-dirty frame
+		const data = map.sources.flights?.data as {
+			features: { properties: { heading: number } }[];
+		};
+		expect(data.features[0].properties.heading).toBeCloseTo(90, 5);
+	});
+
 	it("skips ghost points for flights outside visibleFlights", () => {
 		let rafCb: FrameRequestCallback | null = null;
 		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {

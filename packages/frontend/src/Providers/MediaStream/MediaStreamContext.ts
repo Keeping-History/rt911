@@ -239,6 +239,14 @@ export interface MediaStreamContextValue {
 	/** True once the active history request's done frame has arrived. */
 	flightsHistoryDone: boolean;
 	/**
+	 * Short history lookback around the current instant, auto-fetched whenever
+	 * the flights channel (re)starts — subscribe, seek, reconnect. Gives the
+	 * Flight Tracker a previous sample per airborne flight so headings render
+	 * immediately (a fresh snapshot alone has one sample per flight, which
+	 * would leave every plane pointing north for its first minute).
+	 */
+	flightsSeed: FlightPosition[];
+	/**
 	 * Request the trailing `minutes` of flight positions for loop playback.
 	 * Replaces any prior request; the provider re-issues it on seek/reconnect.
 	 */
@@ -297,6 +305,7 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	unsubscribeFlights: () => {},
 	flightsHistory: [],
 	flightsHistoryDone: false,
+	flightsSeed: [],
 	requestFlightsHistory: () => {},
 	clearFlightsHistory: () => {},
 	weatherObservations: {},

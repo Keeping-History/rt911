@@ -151,6 +151,7 @@ function makeCtxValue(
 		unsubscribeFlights: () => {},
 		flightsHistory: [],
 		flightsHistoryDone: false,
+		flightsSeed: [],
 		requestFlightsHistory: () => {},
 		clearFlightsHistory: () => {},
 		weatherObservations: {},

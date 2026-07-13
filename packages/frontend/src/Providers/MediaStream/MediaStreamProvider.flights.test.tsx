@@ -157,6 +157,11 @@ const histPos = (id: number, iso: string): object => ({
 	alt_ft: 30000,
 });
 
+// Heading-seed requests ride the same flights_history wire type with a short
+// fixed lookback; loop requests are 30/90. The minutes value is what tells the
+// two kinds of request apart on the wire.
+const SEED_MINUTES = 3;
+
 // The id of the most recent flights_history request the provider actually sent.
 // Generation numbers can't be hardcoded: child effects run before the provider's
 // socket-creation effect, so the mount-time request never reaches the wire and
@@ -164,9 +169,19 @@ const histPos = (id: number, iso: string): object => ({
 function lastHistoryReq(ws: FakeWebSocket): { minutes: number; id: number } {
 	const req = ws.sent
 		.map((s) => JSON.parse(s) as { type: string; minutes: number; id: number })
-		.filter((m) => m.type === "flights_history")
+		.filter((m) => m.type === "flights_history" && m.minutes !== SEED_MINUTES)
 		.at(-1);
 	if (!req) throw new Error("no flights_history request sent");
+	return req;
+}
+
+// The most recent heading-seed request (flights_history with the seed lookback).
+function lastSeedReq(ws: FakeWebSocket): { minutes: number; id: number } {
+	const req = ws.sent
+		.map((s) => JSON.parse(s) as { type: string; minutes: number; id: number })
+		.filter((m) => m.type === "flights_history" && m.minutes === SEED_MINUTES)
+		.at(-1);
+	if (!req) throw new Error("no seed flights_history request sent");
 	return req;
 }
 
@@ -273,7 +288,7 @@ describe("MediaStreamProvider flights_history", () => {
 		expect(screen.getByTestId("history-count").textContent).toBe("1");
 	});
 
-	it("re-issues the active history request on reconnect with a fresh id", () => {
+	it("re-issues the active loop-history request on reconnect with a fresh id", () => {
 		render(
 			<MediaStreamProvider>
 				<HistoryConsumer minutes={30} />
@@ -281,15 +296,138 @@ describe("MediaStreamProvider flights_history", () => {
 		);
 		const ws = FakeWebSocket.instances[0];
 		act(() => ws.onopen?.());
-		const before = ws.sent.filter(
-			(s) => JSON.parse(s).type === "flights_history",
-		).length;
+		const isLoopReq = (m: { type: string; minutes?: number }) =>
+			m.type === "flights_history" && m.minutes !== SEED_MINUTES;
+		const before = ws.sent.filter((s) => isLoopReq(JSON.parse(s))).length;
 		expect(before).toBeGreaterThan(0);
 		act(() => ws.onopen?.()); // reconnect: onopen re-runs subscribe + history
-		const reqs = ws.sent
-			.map((s) => JSON.parse(s))
-			.filter((m) => m.type === "flights_history");
+		const reqs = ws.sent.map((s) => JSON.parse(s)).filter(isLoopReq);
 		expect(reqs.length).toBe(before + 1);
 		expect(reqs.at(-1)!.id).toBeGreaterThan(reqs[before - 1].id);
+	});
+});
+
+// Consumer exposing both the heading-seed rows and the loop-history rows, so
+// routing between the two reply streams (same wire type, different request ids)
+// can be asserted from the outside.
+function SeedConsumer({ loopMinutes }: { loopMinutes?: 30 | 90 }) {
+	const {
+		flightsSeed,
+		flightsHistory,
+		requestFlightsHistory,
+		subscribeFlights,
+	} = useContext(MediaStreamContext);
+	useEffect(() => {
+		subscribeFlights("test.app");
+	}, [subscribeFlights]);
+	useEffect(() => {
+		if (loopMinutes) requestFlightsHistory(loopMinutes);
+	}, [requestFlightsHistory, loopMinutes]);
+	return (
+		<div>
+			<span data-testid="seed-count">{flightsSeed.length}</span>
+			<span data-testid="history-count">{flightsHistory.length}</span>
+		</div>
+	);
+}
+
+describe("MediaStreamProvider flights heading seed", () => {
+	beforeEach(() => {
+		FakeWebSocket.instances = [];
+		vi.stubGlobal("WebSocket", FakeWebSocket);
+	});
+	afterEach(() => {
+		cleanup();
+		vi.unstubAllGlobals();
+	});
+
+	it("requests a short history lookback when the flights channel is subscribed", () => {
+		render(
+			<MediaStreamProvider>
+				<SeedConsumer />
+			</MediaStreamProvider>,
+		);
+		const ws = FakeWebSocket.instances[0];
+		act(() => ws.onopen?.());
+		const req = lastSeedReq(ws); // throws if no seed request went out
+		expect(req.minutes).toBe(SEED_MINUTES);
+	});
+
+	it("accumulates seed chunks into flightsSeed and drops mismatched ids", () => {
+		render(
+			<MediaStreamProvider>
+				<SeedConsumer />
+			</MediaStreamProvider>,
+		);
+		const ws = FakeWebSocket.instances[0];
+		act(() => ws.onopen?.());
+		const req = lastSeedReq(ws);
+
+		act(() => {
+			ws.onmessage?.(
+				frame({
+					type: "flights_history",
+					id: req.id,
+					flights: [histPos(1, "2001-09-11T12:58:00Z")],
+				}),
+			);
+			ws.onmessage?.(
+				frame({
+					type: "flights_history",
+					id: req.id,
+					flights: [histPos(2, "2001-09-11T12:59:00Z")],
+					done: true,
+				}),
+			);
+		});
+		expect(screen.getByTestId("seed-count").textContent).toBe("2");
+
+		act(() => {
+			ws.onmessage?.(
+				frame({
+					type: "flights_history",
+					id: req.id + 1000, // no such request
+					flights: [histPos(3, "2001-09-11T12:57:00Z")],
+				}),
+			);
+		});
+		expect(screen.getByTestId("seed-count").textContent).toBe("2");
+	});
+
+	it("routes seed and loop replies independently by request id", () => {
+		render(
+			<MediaStreamProvider>
+				<SeedConsumer loopMinutes={30} />
+			</MediaStreamProvider>,
+		);
+		const ws = FakeWebSocket.instances[0];
+		act(() => ws.onopen?.());
+		const seedReq = lastSeedReq(ws);
+		const loopReq = lastHistoryReq(ws);
+		expect(seedReq.id).not.toBe(loopReq.id); // ids must be disjoint
+
+		act(() => {
+			ws.onmessage?.(
+				frame({
+					type: "flights_history",
+					id: loopReq.id,
+					flights: [histPos(1, "2001-09-11T12:31:00Z")],
+				}),
+			);
+		});
+		expect(screen.getByTestId("history-count").textContent).toBe("1");
+		expect(screen.getByTestId("seed-count").textContent).toBe("0");
+
+		act(() => {
+			ws.onmessage?.(
+				frame({
+					type: "flights_history",
+					id: seedReq.id,
+					flights: [histPos(2, "2001-09-11T12:58:00Z")],
+				}),
+			);
+		});
+		expect(screen.getByTestId("seed-count").textContent).toBe("1");
+		expect(screen.getByTestId("history-count").textContent).toBe("1");
 	});
 });

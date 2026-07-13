@@ -72,14 +72,24 @@ type usenetBodyMsg struct {
 	ID   int    `json:"id"`
 }
 
-// flightsHistoryMsg requests the trailing N minutes of flight positions for the
-// Flight Tracker's loop mode. id is echoed on every reply chunk so the client
-// can discard chunks of a superseded request.
+// flightsHistoryMsg requests the trailing N minutes of flight positions — the
+// Flight Tracker's loop mode uses 30/90, its heading seed a few minutes. id is
+// echoed on every reply chunk so the client can discard chunks of a superseded
+// request (and route seed vs loop replies, which share this message type).
 type flightsHistoryMsg struct {
 	Type    string `json:"type"`
 	Minutes int    `json:"minutes"`
 	ID      int    `json:"id"`
 }
+
+// Bounds for flightsHistoryMsg.Minutes: a range rather than a preset list so
+// the frontend can tune its lookbacks without a lockstep backend deploy. The
+// cap matches the largest loop window; at ~600-900 rows/min it bounds a single
+// request to roughly the same worst case the loop mode already implies.
+const (
+	flightsHistoryMinMinutes = 1
+	flightsHistoryMaxMinutes = 90
+)
 
 // weatherForecastMsg requests the current forecast product for a single NWS
 // zone (UGC code, e.g. "NYZ072") at the client's virtual time. id is echoed
@@ -289,12 +299,13 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					sess.SendError("malformed flights_history message")
 					continue
 				}
-				if fmsg.Minutes != 30 && fmsg.Minutes != 90 {
+				if fmsg.Minutes < flightsHistoryMinMinutes || fmsg.Minutes > flightsHistoryMaxMinutes {
 					sess.SendError("invalid flights_history minutes")
 					continue
 				}
-				// Loop mode is a flights-channel feature; without the subscription
-				// there is nothing to loop, so the request is silently dropped.
+				// History (loop or heading seed) is a flights-channel feature; without
+				// the subscription there is nothing to serve, so the request is
+				// silently dropped.
 				if !sess.Subscribed(session.ChannelFlights) {
 					continue
 				}

@@ -9,6 +9,7 @@ import {
 	motionPointsToGeoJSON,
 	motionTrailsToGeoJSON,
 	bearingDeg,
+	seedMotionFromHistory,
 	updateMotion,
 	velocityOf,
 } from "./flightMotion";
@@ -200,6 +201,76 @@ describe("trail display length (multiplier support)", () => {
 	it("emits nothing at displayPoints 0 or 1 (tails off)", () => {
 		expect(motionTrailsToGeoJSON(bufWith6(), T0 + 5 * 60_000, 0).features).toHaveLength(0);
 		expect(motionTrailsToGeoJSON(bufWith6(), T0 + 5 * 60_000, 1).features).toHaveLength(0);
+	});
+});
+
+describe("seedMotionFromHistory", () => {
+	// A short lookback of per-minute history samples, fetched at subscribe/seek
+	// time, gives freshly-seeded (single-sample) flights a real prev sample so
+	// they render with a heading instead of pointing north for the first minute.
+
+	it("gives a directionless flight its heading and glide velocity from an older sample", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [sampleAt(1, -73)]); // live snapshot: single sample at T0+1min
+		seedMotionFromHistory(buf, [sampleAt(0, -74)]); // one minute earlier, one lon west
+		const m = buf.get("AA1")!;
+		expect(m.headingDeg).toBeCloseTo(90, 5); // travelled due east
+		expect(m.prevT).toBe(T0);
+		// prev is now a real earlier sample → extrapolation glides instead of holding
+		const head = extrapolate(m, T1 + 30_000);
+		expect(head.lon).toBeCloseTo(-72.5, 6);
+	});
+
+	it("ignores history samples at or after the flight's current sample", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [sampleAt(1, -73)]);
+		seedMotionFromHistory(buf, [sampleAt(1, -75), sampleAt(2, -70)]);
+		const m = buf.get("AA1")!;
+		expect(m.headingDeg).toBe(0); // nothing usable → still directionless
+		expect(m.prevT).toBe(m.curT);
+	});
+
+	it("does not regress a heading derived from newer live movement", () => {
+		// live samples: (min 1, lon -73) → (min 2, lat 41) = travelling due north
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [sampleAt(1, -73)]);
+		updateMotion(buf, [pos({ id: 999, flight: "AA1", lat: 41, lon: -73, start_date: new Date(T0 + 2 * 60_000).toISOString() })]);
+		expect(buf.get("AA1")!.headingDeg).toBeCloseTo(0, 5);
+		// a late seed chunk older than the flight's prev must not overwrite it
+		seedMotionFromHistory(buf, [sampleAt(0, -74)]);
+		expect(buf.get("AA1")!.headingDeg).toBeCloseTo(0, 5);
+		expect(buf.get("AA1")!.prevT).toBe(T1);
+	});
+
+	it("prefers the newest older sample across chunked replies", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [sampleAt(2, -72)]);
+		// first chunk: sample from min 0, southwest of cur → heading ≈ northeast
+		seedMotionFromHistory(buf, [pos({ id: 50, flight: "AA1", lat: 39, lon: -73, start_date: new Date(T0).toISOString() })]);
+		const ne = buf.get("AA1")!.headingDeg;
+		expect(ne).toBeGreaterThan(0);
+		expect(ne).toBeLessThan(90);
+		// a later chunk carries a NEWER (still older-than-cur) sample: due west of cur → east
+		seedMotionFromHistory(buf, [sampleAt(1, -73)]);
+		const m = buf.get("AA1")!;
+		expect(m.prevT).toBe(T1);
+		expect(m.headingDeg).toBeCloseTo(90, 5);
+	});
+
+	it("ignores history for flights not in the buffer", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [sampleAt(1, -73)]);
+		seedMotionFromHistory(buf, [sampleAt(0, -74, "UA2")]);
+		expect(buf.has("UA2")).toBe(false);
+	});
+
+	it("adopts a same-position older sample without inventing a heading", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [sampleAt(1, -73)]);
+		seedMotionFromHistory(buf, [sampleAt(0, -73)]); // held position for a minute
+		const m = buf.get("AA1")!;
+		expect(m.headingDeg).toBe(0); // no movement → no direction to claim
+		expect(velocityOf(m)).toEqual({ vlat: 0, vlon: 0 }); // holds, doesn't glide
 	});
 });
 

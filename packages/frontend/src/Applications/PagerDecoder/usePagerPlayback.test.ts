@@ -74,6 +74,7 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					unsubscribeFlights: vi.fn(),
 					flightsHistory: [],
 					flightsHistoryDone: false,
+					flightsSeed: [],
 					requestFlightsHistory: vi.fn(),
 					clearFlightsHistory: vi.fn(),
 					weatherObservations: {},

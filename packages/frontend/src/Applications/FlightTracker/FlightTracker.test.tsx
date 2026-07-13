@@ -223,6 +223,7 @@ function makeCtxValue(
 		unsubscribeFlights,
 		flightsHistory: [],
 		flightsHistoryDone: false,
+		flightsSeed: [],
 		requestFlightsHistory: vi.fn(),
 		clearFlightsHistory: vi.fn(),
 		weatherObservations: {},
