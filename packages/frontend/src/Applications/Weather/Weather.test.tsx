@@ -488,12 +488,17 @@ describe("Weather", () => {
 			expect(findMenuItem("View", (t) => t.includes("Loop Playback"))!.title).toBe(
 				"✓ Loop Playback",
 			);
-			// The map replays: its utcMs is the playhead (anchored at the window
-			// head), not the live clock. Generous tolerance — a few ms of wall time
-			// between mount and the playhead effect is amplified 1800×.
+			// The map replays: its utcMs is the playhead, not the live clock. The
+			// playhead anchors at the window head (live − 3h) and advances at 1800×
+			// wall speed, so mount→effect jitter is amplified 1800×; a tight ±120s
+			// tolerance (66ms wall budget) flaked under parallel-suite load. Assert
+			// "in the window, near the head, definitely not live" as a range: the
+			// upper bound allows ~2s of wall jitter, while a live-clock utcMs would
+			// exceed it by two hours.
 			const live = Date.parse(mockClock.current);
 			const mapUtc = mapProps.at(-1)!.utcMs as number;
-			expect(Math.abs(mapUtc - (live - 3 * HOUR))).toBeLessThan(120_000);
+			expect(mapUtc).toBeGreaterThanOrEqual(live - 3 * HOUR);
+			expect(mapUtc).toBeLessThan(live - 2 * HOUR);
 		});
 
 		it("map follows the live clock when the loop is off", async () => {
