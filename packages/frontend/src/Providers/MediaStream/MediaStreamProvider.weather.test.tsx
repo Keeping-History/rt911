@@ -409,4 +409,120 @@ describe("MediaStreamProvider weather channel", () => {
 			"NEW YORK CITY ZONE FORECAST PRODUCT",
 		);
 	});
+
+	it("seek clears forecast state and re-requests the last zone with a fresh id", () => {
+		const view = render(
+			<MediaStreamProvider>
+				<ForecastConsumer zone="NYZ076" />
+			</MediaStreamProvider>,
+		);
+		const ws = FakeWebSocket.instances[0];
+		act(() => ws.onopen?.());
+		const preSeekReq = lastWeatherForecastReq(ws);
+
+		// Land a product for the pre-seek clock.
+		act(() => {
+			ws.onmessage?.(
+				frame({
+					type: "weather_forecast",
+					id: preSeekReq.id,
+					time: NOW_ISO,
+					weather_forecasts: [
+						{
+							id: 512,
+							wfo: "OKX",
+							zone: "NYZ072,NYZ073,NYZ076",
+							product_type: "ZFP",
+							start_date: "2001-09-11T08:35:00Z",
+							raw_text: "SEPT 11 PRODUCT",
+						},
+					],
+				}),
+			);
+		});
+		expect(screen.getByTestId("forecast").textContent).toBe("SEPT 11 PRODUCT");
+
+		// Manual seek two days back — the 9/11 product is now an anachronism.
+		mockDateTime = "2001-09-09T13:00:00.000Z";
+		view.rerender(
+			<MediaStreamProvider>
+				<ForecastConsumer zone="NYZ076" />
+			</MediaStreamProvider>,
+		);
+
+		// State cleared back to pending, and a fresh request went out for the
+		// same zone with a bumped id.
+		expect(screen.getByTestId("forecast").textContent).toBe("pending");
+		const postSeekReq = lastWeatherForecastReq(ws);
+		expect(postSeekReq.zone).toBe("NYZ076");
+		expect(postSeekReq.id).toBeGreaterThan(preSeekReq.id);
+
+		// (b) A late reply still carrying the pre-seek id must be dropped.
+		act(() => {
+			ws.onmessage?.(
+				frame({
+					type: "weather_forecast",
+					id: preSeekReq.id,
+					time: NOW_ISO,
+					weather_forecasts: [
+						{
+							id: 513,
+							wfo: "OKX",
+							zone: "NYZ072,NYZ073,NYZ076",
+							product_type: "ZFP",
+							start_date: "2001-09-11T09:00:00Z",
+							raw_text: "LATE PRE-SEEK PRODUCT",
+						},
+					],
+				}),
+			);
+		});
+		expect(screen.getByTestId("forecast").textContent).toBe("pending");
+
+		// The post-seek reply (matching the new id) repopulates the zone.
+		act(() => {
+			ws.onmessage?.(
+				frame({
+					type: "weather_forecast",
+					id: postSeekReq.id,
+					time: "2001-09-09T13:00:00Z",
+					weather_forecasts: [
+						{
+							id: 200,
+							wfo: "OKX",
+							zone: "NYZ072,NYZ073,NYZ076",
+							product_type: "ZFP",
+							start_date: "2001-09-09T08:35:00Z",
+							raw_text: "SEPT 9 PRODUCT",
+						},
+					],
+				}),
+			);
+		});
+		expect(screen.getByTestId("forecast").textContent).toBe("SEPT 9 PRODUCT");
+	});
+
+	it("seek without a prior forecast request sends no weather_forecast message", () => {
+		const view = render(
+			<MediaStreamProvider>
+				<WeatherConsumer />
+			</MediaStreamProvider>,
+		);
+		const ws = FakeWebSocket.instances[0];
+		act(() => ws.onopen?.());
+
+		mockDateTime = "2001-09-09T13:00:00.000Z";
+		view.rerender(
+			<MediaStreamProvider>
+				<WeatherConsumer />
+			</MediaStreamProvider>,
+		);
+
+		expect(
+			ws.sent.some((m) => JSON.parse(m).type === "seek"),
+		).toBe(true);
+		expect(
+			ws.sent.some((m) => JSON.parse(m).type === "weather_forecast"),
+		).toBe(false);
+	});
 });

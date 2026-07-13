@@ -572,13 +572,24 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// the ordinary keep-newest merge) is what performs the replacement.
 			weatherBuffer.current.clear();
 			weatherSnapshotPending.current = true;
+			// Forecast products, unlike per-station observations, have no
+			// post-seek push that would replace them (they're request/reply
+			// only) — a kept entry would show the old timeline's product at the
+			// new clock, an anachronism. Clear them all; the re-fired request
+			// below repopulates the active zone (the product for the new
+			// instant, or an explicit null), and its generation bump orphans
+			// any in-flight pre-seek reply via the id-echo guard.
+			setWeatherForecastByZone({});
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
 			// The old timeline's loop history is meaningless at the new instant.
 			sendFlightsHistoryRequest();
+			// Re-ask for the last-requested zone's forecast at the new clock
+			// (no-op when none is pending) — mirrors the reconnect path.
+			sendWeatherForecastRequest();
 		}
 
 		prevDateTimeRef.current = dateTime;
-	}, [dateTime, send, sendFlightsHistoryRequest]);
+	}, [dateTime, send, sendFlightsHistoryRequest, sendWeatherForecastRequest]);
 
 	// Once the socket is OPEN, re-request the window for the current instant.
 	// The active video channels are long-running stitched HLS streams (one row in
