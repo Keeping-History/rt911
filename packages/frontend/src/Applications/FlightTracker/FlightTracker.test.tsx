@@ -446,6 +446,18 @@ describe("FlightTracker", () => {
 		expect(menuItem("View", (t) => t.includes("Dark Map"))!.title).toBe("✓ Dark Map");
 	});
 
+	it("radar style picks the dark pin colors even with darkMap off", () => {
+		mockAppData.current = {
+			mapSettings: { mapStyle: "radar", darkMap: false },
+		};
+		renderWithContext({});
+		const last = mapProps[mapProps.length - 1];
+		// radar is always dark-toned regardless of the darkMap flag.
+		expect(last.mapStyle).toBe("radar");
+		expect(last.pinColor).toBe("#e0a72e");
+		expect(last.notablePinColor).toBe("#ff4d4d");
+	});
+
 	it("light map picks the light pin colors", () => {
 		mockAppData.current = {
 			mapSettings: {

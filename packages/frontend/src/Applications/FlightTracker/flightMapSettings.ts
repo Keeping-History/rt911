@@ -14,7 +14,8 @@ const appId = FLIGHT_TRACKER_APP_ID;
 // stay ints everywhere except the FlightMap prop boundary (see intToHex).
 // Pin colors are stored per basemap theme: a single color can't stay legible on
 // both the paper-light and slate-dark grounds, so light/dark are independent and
-// FlightTracker picks the pair matching the active darkMap flag.
+// FlightTracker picks the pair matching the style's effective tone (see
+// `effectiveTone` in lib/basemap) — radar is always dark-toned regardless of the flag.
 export interface FlightMapSettings {
 	// Basemap display mode; orthogonal to darkMap (see lib/basemap).
 	mapStyle: BasemapStyleId;
