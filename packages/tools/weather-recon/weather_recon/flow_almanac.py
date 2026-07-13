@@ -1,9 +1,10 @@
 """
 Prefect flow: GHCN-Daily -> per-station almanac JSON on Wasabi.
 
-GHCN id resolution (flow-internal by design — see the phase plan): derive
-USW000+WBAN, else nearest ghcnd-stations.txt entry within 20 km, else
-GHCN_OVERRIDES, else recorded gap. A derived/matched id that returns zero
+GHCN id resolution (flow-internal by design — see the phase plan):
+GHCN_OVERRIDES first (hand-verified ids preempt automation, as in 2c's
+ZONE_OVERRIDES), else derived USW000+WBAN, else nearest ghcnd-stations.txt
+entry within 20 km, else recorded gap. A derived/matched id that returns zero
 daily rows demotes to the next strategy rather than publishing an empty
 almanac. All math cuts off at 2001-09-08 (anachronism rule).
 """
