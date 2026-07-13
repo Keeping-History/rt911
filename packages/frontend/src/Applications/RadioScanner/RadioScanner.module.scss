@@ -82,6 +82,7 @@
   gap: var(--window-control-size);
   background-color: var(--color-system-03);
   padding: calc(var(--window-padding-size) * 2);
+  width: 20%;
 
   // Stations are ClassicyButtons. The pressed/active and selected look comes
   // from the button's own `depressed` state; here we only size each one for
