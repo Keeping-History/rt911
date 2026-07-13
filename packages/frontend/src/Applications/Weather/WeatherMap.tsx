@@ -6,11 +6,11 @@ import type { WeatherObservation } from "../../Providers/MediaStream/MediaStream
 import { cToF } from "./weatherUnits";
 import { type RadarIndex, frameUrlFor } from "./weatherRadar";
 
-// Register the pmtiles:// protocol once per page. maplibregl.addProtocol
-// throws on a duplicate registration — FlightTracker's FlightMap registers
-// the same protocol independently (both apps mount on the desktop at once),
-// so the try/catch below is defensive against whichever of the two mounts
-// second, not just this module's own re-renders.
+// Register the pmtiles:// protocol once per page. maplibre's addProtocol
+// does NOT throw on duplicates (it silently overwrites the handler — verified
+// against maplibre-gl 5.x source; FlightMap.tsx's "throws" comment is wrong).
+// The module guard + try/catch here exist only to avoid pointlessly replacing
+// FlightTracker's already-working registration when both apps are mounted.
 let protocolRegistered = false;
 function ensurePmtilesProtocol() {
 	if (protocolRegistered) return;
