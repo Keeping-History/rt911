@@ -66,10 +66,7 @@ import {
 } from "./loopClock";
 import styles from "./FlightTracker.module.scss";
 import type { Feature } from "geojson";
-
-const BASEMAP_URL =
-	(import.meta.env.VITE_FLIGHT_BASEMAP_URL as string | undefined) ??
-	"https://files.911realtime.org/maps/na-basemap.pmtiles";
+import { BASEMAP_URLS } from "./flightMapStyle";
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.flightTracker.app. registerClassicyIcons assigns
@@ -651,10 +648,11 @@ export const FlightTracker: FC = () => {
 								positions={filteredPositions}
 								seedPositions={flightsSeed}
 								visibleFlights={visibleFlights}
-								basemapUrl={BASEMAP_URL}
+								basemapUrls={BASEMAP_URLS}
 								trackGeoJSON={trackGeoJSON}
 								nowMs={nowMs}
 								playing={!paused}
+								mapStyle="classic"
 								darkMap={settings.darkMap}
 								pinColor={intToHex(
 									settings.darkMap ? settings.pinColorDark : settings.pinColorLight,
