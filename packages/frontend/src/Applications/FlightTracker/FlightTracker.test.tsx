@@ -225,6 +225,11 @@ function makeCtxValue(
 		flightsHistoryDone: false,
 		requestFlightsHistory: vi.fn(),
 		clearFlightsHistory: vi.fn(),
+		weatherObservations: {},
+		weatherForecastByZone: {},
+		subscribeWeather: vi.fn(),
+		unsubscribeWeather: vi.fn(),
+		requestWeatherForecast: vi.fn(),
 		...overrides,
 	};
 }
