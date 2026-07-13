@@ -8,13 +8,15 @@ GHCND_STATIONS = (
     "CA006158733  43.6772  -79.6306  173.4    TORONTO LESTER B. PEARSON INT\n"
 )
 
-# Three stations near Chicago O'Hare at increasing distance (0, 6.72, 12.62 km),
-# plus one far away (Toronto, ~702 km) that must be excluded by max_km.
+# Three stations near Chicago O'Hare at 0, 6.72 and 12.62 km, deliberately
+# listed OUT of distance order so the ordering assertions discriminate a
+# true sorted k-nearest from naive file-order collection; plus one far
+# station (Toronto, ~702 km) that must be excluded by max_km.
 NEARBY_STATIONS = (
-    "USW00094846  41.9950  -87.9336  201.8 IL CHICAGO OHARE INTL AP        \n"
-    "USC00111577  42.0500  -87.9000  190.0 IL EVANSTON                    \n"
     "USW00014819  41.9000  -87.8500  185.9 IL CHICAGO MIDWAY AP 3SW        \n"
+    "USW00094846  41.9950  -87.9336  201.8 IL CHICAGO OHARE INTL AP        \n"
     "CA006158733  43.6772  -79.6306  173.4    TORONTO LESTER B. PEARSON INT\n"
+    "USC00111577  42.0500  -87.9000  190.0 IL EVANSTON                    \n"
 )
 
 DAILY_CSV = ('"STATION","DATE","PRCP","TMAX","TMIN"\n'
