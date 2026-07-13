@@ -1,6 +1,7 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
+import { setAudioSilenced } from "./audioCapture";
 import {
 	activeSegments,
 	calcSeekSeconds,
@@ -67,6 +68,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 			stationMutedRef.current || mutedItemsRef.current.includes(id);
 		el.muted = silenced;
 		el.volume = silenced ? 0 : 1;
+		setAudioSilenced(el, silenced);
 	};
 
 	// Health check: keep each mounted element playing and within 30s of expected.
@@ -95,12 +97,15 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	// Apply mute state immediately: a file is silenced if its station is muted
 	// or the file itself is muted. Muting is always safe, but unmuting via
 	// el.muted is only allowed once the element's autoplay unlock happened.
+	// Safari ignores volume AND muted on visualizer-captured elements, so the
+	// state is mirrored into the capture module's in-graph gain too.
 	useEffect(() => {
 		for (const [id, el] of audioRefs.current) {
 			const silenced = stationMuted || mutedItems.includes(id);
 			el.volume = silenced ? 0 : 1;
 			if (silenced) el.muted = true;
 			else if (unlockedRef.current.has(id)) el.muted = false;
+			setAudioSilenced(el, silenced);
 		}
 	}, [stationMuted, mutedItems]);
 

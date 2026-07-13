@@ -1,18 +1,11 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { captureAudioElement } from "./audioCapture";
 import { keepAudioContextAlive } from "./audioContextKeepAlive";
 
 interface WaveformVisualizerProps {
 	audioEl: HTMLAudioElement | null;
 }
-
-// One AudioContext + MediaElementSourceNode per audio element.
-// createMediaElementSource() may only be called once per element; this
-// WeakMap lets the entry be GC'd when the audio element is collected.
-const audioContextMap = new WeakMap<
-	HTMLAudioElement,
-	{ ctx: AudioContext; source: MediaElementAudioSourceNode }
->();
 
 const VIZ_MODES = [
 	{ label: "Bars" },
@@ -147,31 +140,23 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 		const container = containerRef.current;
 		if (!container || !audioEl) return;
 
-		// Get or create the shared AudioContext and source node for this element.
-		let entry = audioContextMap.get(audioEl);
-		if (!entry) {
-			try {
-				const ctx = new AudioContext();
-				const source = ctx.createMediaElementSource(audioEl);
-				// Direct path to speakers ensures audio keeps playing even when
-				// the visualizer is stopped or recreated between renders.
-				source.connect(ctx.destination);
-				entry = { ctx, source };
-				audioContextMap.set(audioEl, entry);
-			} catch {
-				return;
-			}
-		}
+		// Get or create the shared capture (source → gain → destination) for
+		// this element — audioCapture.ts owns it so StationPlayer can silence
+		// captured elements in-graph. The gain path to the speakers persists
+		// when the visualizer is stopped or recreated between renders.
+		const entry = captureAudioElement(audioEl);
+		if (!entry) return;
 		entry.ctx.resume().catch(() => {});
 		const stopKeepAlive = keepAudioContextAlive(entry.ctx);
 
-		// Capture source for cleanup closure; entry may theoretically change.
-		const { source } = entry;
+		// Tap post-gain so the waveform reflects what is actually audible —
+		// a muted or un-soloed clip draws flat instead of dancing silently.
+		const { gain } = entry;
 
 		const analyser = entry.ctx.createAnalyser();
 		analyser.fftSize = 2048;
 		analyser.smoothingTimeConstant = 0.8;
-		source.connect(analyser);
+		gain.connect(analyser);
 
 		const canvas = document.createElement("canvas");
 		canvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;";
@@ -213,7 +198,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 			// Remove canvas before stopping so StrictMode's double-invoke doesn't
 			// leave a stale canvas when the effect re-runs.
 			canvas.remove();
-			source.disconnect(analyser);
+			gain.disconnect(analyser);
 			stopKeepAlive();
 		};
 	}, [audioEl]);

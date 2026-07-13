@@ -1,8 +1,17 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
+import { setAudioSilenced } from "./audioCapture";
 import { StationPlayer } from "./StationPlayer";
 import type { Station } from "./stationGrouping";
+
+// Safari ignores el.volume AND el.muted on elements captured by the
+// visualizer's createMediaElementSource, so muting must also drive the
+// capture module's in-graph GainNode — assert those calls here.
+vi.mock("./audioCapture", () => ({
+	captureAudioElement: vi.fn(() => null),
+	setAudioSilenced: vi.fn(),
+}));
 
 // rt911 has no global test setup, so testing-library does not auto-clean the
 // DOM between tests; do it explicitly to keep renders isolated.
@@ -142,5 +151,15 @@ describe("StationPlayer", () => {
 		await unlock(audio);
 		expect(audio.muted).toBe(true);
 		expect(audio.volume).toBe(0);
+	});
+
+	it("mutes and unmutes through the in-graph gain as well (Safari)", () => {
+		const { container, rerender } = render(<StationPlayer {...base} />);
+		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		vi.mocked(setAudioSilenced).mockClear();
+		rerender(<StationPlayer {...base} mutedItems={[1]} />);
+		expect(vi.mocked(setAudioSilenced)).toHaveBeenCalledWith(audio, true);
+		rerender(<StationPlayer {...base} mutedItems={[]} />);
+		expect(vi.mocked(setAudioSilenced)).toHaveBeenCalledWith(audio, false);
 	});
 });
