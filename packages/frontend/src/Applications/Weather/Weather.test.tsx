@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -21,6 +21,8 @@ const windowProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 // Mutable virtual clock (true UTC dateTime string, as useClassicyDateTime
 // returns it — TV.tsx:222 precedent). Defaults to 9/11 8:40 AM ET boot time.
 const mockClock = vi.hoisted(() => ({ current: "2001-09-11T12:40:00.000Z" }));
+const dispatchMock = vi.hoisted(() => vi.fn());
+const mockAppData = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 
 vi.mock("classicy", () => ({
 	ClassicyApp: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -42,10 +44,84 @@ vi.mock("classicy", () => ({
 			{children}
 		</div>
 	),
+	ClassicyButton: ({
+		children,
+		onClickFunc,
+		...rest
+	}: {
+		children?: React.ReactNode;
+		onClickFunc?: () => void;
+	} & Record<string, unknown>) => (
+		<button onClick={onClickFunc} {...rest}>
+			{children}
+		</button>
+	),
+	ClassicyPopUpMenu: ({
+		id,
+		options,
+		selected,
+		onChangeFunc,
+	}: {
+		id: string;
+		options: Array<{ value: string; label: string }>;
+		selected?: string;
+		onChangeFunc?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+	}) => (
+		<select data-testid={id} value={selected} onChange={(e) => onChangeFunc?.(e)}>
+			{options.map((o) => (
+				<option key={o.value} value={o.value}>
+					{o.label}
+				</option>
+			))}
+		</select>
+	),
+	ClassicySlider: ({
+		id,
+		value,
+		min,
+		max,
+		onChangeFunc,
+		onCommitFunc,
+	}: {
+		id: string;
+		value?: number;
+		min?: number;
+		max?: number;
+		onChangeFunc?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+		onCommitFunc?: (v: number) => void;
+	}) => (
+		<input
+			type="range"
+			data-testid={id}
+			value={value}
+			min={min}
+			max={max}
+			onChange={(e) => onChangeFunc?.(e)}
+			onMouseUp={(e) => onCommitFunc?.(Number((e.target as HTMLInputElement).value))}
+		/>
+	),
+	registerAppEventHandler: () => {},
+	useAppManager: (sel: (s: unknown) => unknown) =>
+		sel({
+			System: {
+				Manager: {
+					Applications: {
+						apps: {
+							"Weather.app": { open: true, windows: [], data: mockAppData.current },
+						},
+					},
+				},
+			},
+		}),
+	useAppManagerDispatch: () => dispatchMock,
 	ClassicyIcons: { applications: {} },
 	registerClassicyIcons: <T,>(icons: T) => icons,
 	quitMenuItemHelper: () => ({}),
-	useClassicyDateTime: () => ({ dateTime: mockClock.current, paused: false }),
+	useClassicyDateTime: () => ({
+		dateTime: mockClock.current,
+		tzOffset: 0,
+		paused: false,
+	}),
 }));
 
 import { Weather } from "./Weather";
@@ -170,12 +246,31 @@ function renderWithContext(overrides: Partial<MediaStreamContextValue> = {}) {
 	);
 }
 
+type MenuItem = { title?: string; onClickFunc?: () => void };
+function findMenuItem(
+	menuTitle: string,
+	pred: (title: string) => boolean,
+): MenuItem | undefined {
+	for (let i = windowProps.length - 1; i >= 0; i--) {
+		const menus = windowProps[i].appMenu as
+			| Array<{ title?: string; menuChildren?: MenuItem[] }>
+			| undefined;
+		const item = menus
+			?.find((m) => m.title === menuTitle)
+			?.menuChildren?.find((i2) => pred(i2.title ?? ""));
+		if (item) return item;
+	}
+	return undefined;
+}
+
 describe("Weather", () => {
 	afterEach(() => {
 		cleanup();
 		mapProps.length = 0;
 		windowProps.length = 0;
 		mockClock.current = "2001-09-11T12:40:00.000Z";
+		mockAppData.current = {};
+		dispatchMock.mockClear();
 		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
 	});
@@ -356,5 +451,83 @@ describe("Weather", () => {
 		for (const w of windowProps) {
 			expect(String(w.icon)).toMatch(/app\.png/);
 		}
+	});
+
+	describe("Weather loop mode", () => {
+		const HOUR = 3_600_000;
+
+		it("is off by default: no strip, unchecked menu item", () => {
+			stubFetch();
+			renderWithContext();
+			expect(screen.queryByTestId("weather_loop_scrub")).toBeNull();
+			const item = findMenuItem("View", (t) => t.includes("Loop Playback"));
+			expect(item).toBeTruthy();
+			expect(item!.title).toBe("Loop Playback"); // no ✓ prefix
+		});
+
+		it("View → Loop Playback dispatches enabled loop settings", () => {
+			stubFetch();
+			renderWithContext();
+			const item = findMenuItem("View", (t) => t.includes("Loop Playback"))!;
+			act(() => item.onClickFunc?.());
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppWeatherSetLoopSettings",
+				loopSettings: { enabled: true, windowHours: 3, speed: 1800 },
+			});
+		});
+
+		it("renders the strip and replays the map from the window head when persisted on", async () => {
+			stubFetch();
+			mockAppData.current = { loopSettings: { enabled: true } };
+			renderWithContext();
+			expect(screen.getByRole("button", { name: "Pause loop" })).toBeTruthy();
+			expect((screen.getByTestId("weather_loop_window") as HTMLSelectElement).value).toBe("3");
+			expect((screen.getByTestId("weather_loop_speed") as HTMLSelectElement).value).toBe("1800");
+			expect(screen.getByTestId("weather_loop_scrub")).toBeTruthy();
+			// Menu item is now checked.
+			expect(findMenuItem("View", (t) => t.includes("Loop Playback"))!.title).toBe(
+				"✓ Loop Playback",
+			);
+			// The map replays: its utcMs is the playhead (anchored at the window
+			// head), not the live clock. Generous tolerance — a few ms of wall time
+			// between mount and the playhead effect is amplified 1800×.
+			const live = Date.parse(mockClock.current);
+			const mapUtc = mapProps.at(-1)!.utcMs as number;
+			expect(Math.abs(mapUtc - (live - 3 * HOUR))).toBeLessThan(120_000);
+		});
+
+		it("map follows the live clock when the loop is off", async () => {
+			stubFetch();
+			renderWithContext();
+			expect(mapProps.at(-1)!.utcMs).toBe(Date.parse(mockClock.current));
+		});
+
+		it("pause button flips to play", () => {
+			stubFetch();
+			mockAppData.current = { loopSettings: { enabled: true } };
+			renderWithContext();
+			fireEvent.click(screen.getByRole("button", { name: "Pause loop" }));
+			expect(screen.getByRole("button", { name: "Play loop" })).toBeTruthy();
+		});
+
+		it("window and speed popups persist the choice", () => {
+			stubFetch();
+			mockAppData.current = { loopSettings: { enabled: true } };
+			renderWithContext();
+			fireEvent.change(screen.getByTestId("weather_loop_window"), {
+				target: { value: "12" },
+			});
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppWeatherSetLoopSettings",
+				loopSettings: { enabled: true, windowHours: 12, speed: 1800 },
+			});
+			fireEvent.change(screen.getByTestId("weather_loop_speed"), {
+				target: { value: "3600" },
+			});
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppWeatherSetLoopSettings",
+				loopSettings: { enabled: true, windowHours: 3, speed: 3600 },
+			});
+		});
 	});
 });
