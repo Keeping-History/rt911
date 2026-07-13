@@ -41,12 +41,13 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `seek`        | `time`            | Move the virtual clock to a new instant.      |
 | `heartbeat`   | `time`            | Report client's current virtual time.         |
 | `filter`      | `formats[]`       | Whitelist media formats.                      |
-| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`). |
+| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`weather`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
 | `usenet_body` | `id`              | Request the full body of one message by id (bodies are no longer in list frames). |
 | `flights_history` | `minutes`, `id` | Request the trailing `minutes` (30 or 90) of flight positions for loop playback. Requires an active `flights` subscription. `id` is echoed on every reply chunk. |
+| `weather_forecast` | `zone`, `id` | Request the forecast product covering NWS UGC `zone` (e.g. `"NYZ076"`) at the client's virtual time. Requires an active `weather` subscription. `id` is echoed on the reply. |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
 
@@ -72,6 +73,8 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `flights`         | `time`, `flights[]`           | Flights snapshot (airborne picture covering `[t−90s, t]`) on subscribe/init/seek, plus a forward **window** (default 300 s) per refill while subscribed. |
 | `flights_history` | `id`, `time`, `flights[]`, `done` | Chunked reply to a `flights_history` request (~10 minute-buckets per frame). The final frame carries `done: true` (and may be empty). `id` echoes the request. |
+| `weather`         | `time`, `weather[]`, `weather_forecasts[]` | Weather snapshot (latest observation per station ≤ `t`, no age limit) on subscribe/init/seek, plus a forward **window** (default 600 s) per refill while subscribed — windowed observations plus any forecast products newly issued in the window. One frame carries both lists; suppressed when both are empty. |
+| `weather_forecast` | `id`, `time`, `weather_forecasts[]` | Reply to `weather_forecast`: the forecast product covering the requested zone at the clock, or an explicit empty `weather_forecasts` when none exists. `id` echoes the request. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`, `sources.usenet`). Not resent on `seek`. |
@@ -230,8 +233,8 @@ in bulk on the wire, the **client reveal-gate** holds each page until its `start
 still render paced by the virtual clock rather than all at once. This pacing invariant is enforced
 client-side; consumer apps never receive a not-yet-due page.
 
-Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"` and `"flights"`; any other value yields
-`{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
+Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"` and `"weather"`; any other
+value yields `{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
 Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
 
 The `mp3` channel (Radio app) behaves the same but carries `MediaItem`s on `mp3`-typed frames
@@ -257,6 +260,23 @@ reveals it immediately since every row's `start_date ≤ t`. Forward refills use
 as media. See [`flights` field reference](#server-initiated--snapshot-flights) below for the shape
 of `FlightPosition`, and [`flight_tracks` is not streamed](#flight_tracks-is-not-on-the-wire) for how
 per-flight route geometry is fetched instead.
+
+The `weather` channel carries `WeatherObservation`s and `WeatherForecast`s on `weather`-typed frames
+(its own `weather`/`weather_forecasts` fields, not a reuse of `items`). Observations are sparse —
+one per station per hour, versus a media item every few seconds — so unlike pager/flights the
+subscribe/init/seek **snapshot has no age limit**: it is the single most recent observation at or
+before `t` for **every** station (a point-in-time `DISTINCT ON`), so a station that has been silent
+for hours still shows its last reading, timestamped with its own `start_date` rather than `t`.
+Forecast products are **not** part of the snapshot — they're delivered on demand only, via
+`weather_forecast` below. Forward refills use a 600 s window (usenet/news scale, reflecting how
+sparse the data is) and carry both the observations newly in-window and any forecast products newly
+*issued* in that window, in a single frame; the frame is suppressed when both lists are empty. Like
+`usenet`, the `weather` channel reads Postgres directly on the tick rather than Redis — observations
+and forecasts are sparse enough that a Redis cache isn't worth building, so `Session` uses its
+`*pgxpool.Pool` the same way (`packages/backend/CLAUDE.md` hard rule #4's usenet exception; weather
+is a second exception under it). See [`weather` field reference](#server-initiated--snapshot-weather)
+below for the frame shape, and [radar and almanac are not on the wire](#radar-and-almanac-are-not-on-the-wire)
+for how the rest of the Weather app's data (map imagery, per-station normals) is fetched instead.
 
 ### `usenet_filter` and the `usenet` channel
 
@@ -434,6 +454,137 @@ Per-flight route geometry (`flight_tracks.geometry`, a GeoJSON LineString) is **
 `flights` channel. It's static per-flight metadata, not a time-windowed stream, so apps that need a
 flight's full track (e.g. drawing a route on a map) fetch it on demand from Directus REST —
 `GET /items/flight_tracks?filter[flight][_eq]=AA11` — rather than having the streamer replay it.
+
+### Server-initiated / snapshot `weather`
+
+```json
+{
+  "type": "weather",
+  "time": "2001-09-11T08:51:00Z",
+  "weather": [
+    {
+      "id": 88213,
+      "station_id": "KLGA",
+      "start_date": "2001-09-11T08:51:00Z",
+      "temp_c": 22.8,
+      "dewpoint_c": 15.6,
+      "wind_dir_deg": 250,
+      "wind_speed_kt": 8,
+      "pressure_hpa": 1015.2,
+      "sky_condition": "CLR",
+      "visibility_km": 16.1,
+      "raw_metar": "KLGA 110851Z 25008KT 10SM CLR 23/16 A2998"
+    }
+  ],
+  "weather_forecasts": [
+    {
+      "id": 512,
+      "wfo": "OKX",
+      "zone": "NYZ072,NYZ073,NYZ076",
+      "product_type": "ZFP",
+      "start_date": "2001-09-11T08:35:00Z",
+      "raw_text": "NEW YORK CITY ZONE FORECAST PRODUCT..."
+    }
+  ]
+}
+```
+
+`WeatherObservation` fields (mirrors `internal/model/weather.go`; field names are its `json` tags):
+
+| Field           | Type      | Notes                                                                 |
+| --------------- | --------- | ---------------------------------------------------------------------- |
+| `id`            | int       | Row id (`weather_observations.id`).                                    |
+| `station_id`    | string    | Station identifier (`weather_stations.station_id`), e.g. `"KLGA"`.     |
+| `start_date`    | timestamp | `observed_at`, UTC.                                                    |
+| `temp_c`        | float?    | **Absent when the station didn't report it** — not COALESCEd to 0.     |
+| `dewpoint_c`    | float?    | Absent when not reported.                                              |
+| `wind_dir_deg`  | int?      | Absent when not reported.                                              |
+| `wind_speed_kt` | float?    | Absent when not reported. A real `0` kt is sent as `0`, distinguishable from absence. |
+| `gust_kt`       | float?    | Absent when not reported.                                              |
+| `pressure_hpa`  | float?    | Absent when not reported.                                              |
+| `sky_condition` | string?   | Absent when empty.                                                     |
+| `present_weather` | string? | Absent when empty.                                                     |
+| `visibility_km` | float?    | Absent when not reported.                                              |
+| `raw_metar`     | string?   | Absent when empty; the raw encoded METAR/SPECI line.                   |
+
+`WeatherObservation`'s nullable numeric fields scan as Go pointers (`*float64`/`*int`) rather than
+being COALESCEd to `0` in SQL, and the wire encoding (msgpack `omitempty` via the `json` struct tag)
+drops the field entirely when the pointer is `nil` — so "not reported" and "reported as zero" stay
+distinguishable on the wire, not just in Postgres.
+
+`WeatherForecast` fields (mirrors `internal/model/weather.go`):
+
+| Field          | Type      | Notes                                                              |
+| -------------- | --------- | -------------------------------------------------------------------- |
+| `id`           | int       | Row id (`weather_forecasts.id`).                                     |
+| `wfo`          | string    | Issuing NWS Weather Forecast Office, e.g. `"OKX"`.                    |
+| `zone`         | string    | Comma-joined 6-char UGC zone ids the product covers, e.g. `"NYZ072,NYZ073,NYZ076"`. |
+| `product_type` | string    | e.g. `"ZFP"`, `"AFD"`.                                                |
+| `start_date`   | timestamp | `issued_at`, UTC.                                                    |
+| `raw_text`     | string    | The full archived forecast text.                                     |
+
+Like `pager`/`flights`, `weather` frames are sent once per **window refill** (or snapshot) and only
+when at least one of `weather[]`/`weather_forecasts[]` is non-empty — an empty batch on both produces
+no frame. Because the subscribe/init/seek snapshot and the first forward window can both cover a
+station's most recent observation, the client should **dedup by `id`**, same as `flights`.
+
+### `weather_forecast`
+
+Request:
+
+```json
+{ "type": "weather_forecast", "zone": "NYZ076", "id": 7 }
+```
+
+`zone` must match `^[A-Z]{2}Z\d{3}$` (an NWS UGC zone code, validated server-side before it ever
+reaches a SQL `LIKE` clause). If the zone fails that pattern, **or** the session has no active
+`weather` subscription, the request is **silently dropped** — no reply, no `error` frame — mirroring
+`flights_history`'s silent-drop gating for an unsubscribed request; neither condition is something
+the user needs surfaced as an error.
+
+A valid, subscribed request always gets a reply on `weather_forecast`, echoing `id`:
+
+```json
+{
+  "type": "weather_forecast",
+  "id": 7,
+  "time": "2001-09-11T08:51:00Z",
+  "weather_forecasts": [ { "id": 512, "wfo": "OKX", "zone": "NYZ072,NYZ073,NYZ076", "product_type": "ZFP", "start_date": "2001-09-11T08:35:00Z", "raw_text": "..." } ]
+}
+```
+
+When no forecast product covers the zone at or before the client's virtual time, the reply is still
+sent, with `weather_forecasts` empty/omitted:
+
+```json
+{ "type": "weather_forecast", "id": 7, "time": "2001-09-11T08:51:00Z" }
+```
+
+This is an **explicit** "no forecast for this zone yet" answer, not silence — unlike the
+unsubscribed/invalid-zone case above, a request that clears both gates always resolves the client's
+`id`, so "no product" and "still waiting" are never ambiguous.
+
+The zone lookup is a **containment** match, not an exact-string match: a forecast product's `zone`
+column holds a comma-joined list of every UGC zone it covers (e.g. `"NYZ072,NYZ073,NYZ076"`), and the
+server matches the requested zone as a substring of that list (`zone LIKE '%'||$1||'%'`), picking the
+most recently issued match at or before the clock. Each UGC zone id is a fixed 6 characters, so a
+prefix/suffix collision across adjacent zone ids in the joined list is not possible. The Weather app
+determines *which* zone to request by reading its selected station's `nws_zone` column from the
+`weather_stations` Directus collection — that mapping is static reference data, not part of this
+wire protocol.
+
+#### Radar and almanac are not on the wire
+
+NEXRAD radar composite imagery and per-station almanac (normals/records) are **not** part of the
+`weather` channel, or any WebSocket frame — like `flight_tracks`, they're static per-instant or
+per-station assets, not a time-windowed stream of database rows. `packages/tools/weather-recon`
+mirrors radar composites into Wasabi under `weather/radar/`, alongside an `index.json` manifest
+(mosaic bounds, the frame list, and any gaps) that the client uses to compute the frame URL for a
+given virtual-clock 5-minute bucket, served through `files.911realtime.org/weather/...` — the same
+static-asset path every other media type in this repo uses (see the top-level CLAUDE.md's "Media
+assets live outside this repo"). Almanac data follows the same pattern (one static JSON per station).
+See `plans/weather-app-design.md` for the full pipeline/frontend design and
+`packages/tools/weather-recon/README.md` for the shipped/pending pipeline phases.
 
 ### `pause`
 

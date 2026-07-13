@@ -719,3 +719,99 @@ func TestSendFlightsHistoryDoneFrameSentEvenWhenEmpty(t *testing.T) {
 		t.Fatalf("done marker should carry no flights, got %d", len(m.Flights))
 	}
 }
+
+func TestSendWeatherEmitsFrame(t *testing.T) {
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	tempC := 21.1
+
+	s.SendWeather(at,
+		[]model.WeatherObservation{{ID: 1, StationID: "KJFK", StartDate: at, TempC: &tempC}},
+		[]model.WeatherForecast{{ID: 2, Wfo: "OKX", Zone: "NYZ072", StartDate: at, RawText: "Sunny."}},
+	)
+
+	m := recvType(t, s)
+	if m.Type != "weather" {
+		t.Fatalf("expected weather frame, got %q", m.Type)
+	}
+	if len(m.Weather) != 1 || m.Weather[0].StationID != "KJFK" || m.Weather[0].TempC == nil || *m.Weather[0].TempC != 21.1 {
+		t.Fatalf("expected one weather observation, got %+v", m.Weather)
+	}
+	if len(m.WeatherForecasts) != 1 || m.WeatherForecasts[0].Zone != "NYZ072" || m.WeatherForecasts[0].RawText != "Sunny." {
+		t.Fatalf("expected one weather forecast, got %+v", m.WeatherForecasts)
+	}
+	if len(m.Items) != 0 || len(m.Flights) != 0 {
+		t.Fatalf("weather frame must not carry other payloads, got %+v", m)
+	}
+}
+
+func TestSendWeatherSuppressesEmptyBatch(t *testing.T) {
+	s := newTestSession(t)
+	s.SendWeather(time.Date(2001, 9, 11, 3, 0, 0, 0, time.UTC), nil, nil)
+
+	select {
+	case data := <-s.send:
+		t.Fatalf("expected no frame for empty weather batch, got %d bytes", len(data))
+	default:
+	}
+}
+
+func TestWeatherHorizonResetOnSubscribeInitAndSeek(t *testing.T) {
+	s := newTestSession(t)
+	t0 := time.Date(2001, 9, 11, 12, 40, 0, 0, time.UTC)
+
+	s.Init(t0, nil)
+	if !s.weatherHorizon.Equal(t0) {
+		t.Fatalf("Init must reset weatherHorizon to t, got %v", s.weatherHorizon)
+	}
+
+	s.Subscribe(ChannelWeather)
+	if !s.Subscribed(ChannelWeather) {
+		t.Fatal("expected weather subscription after Subscribe")
+	}
+
+	t1 := t0.Add(2 * time.Hour)
+	s.Seek(t1, nil)
+	if !s.weatherHorizon.Equal(t1) {
+		t.Fatalf("Seek must reset weatherHorizon to t, got %v", s.weatherHorizon)
+	}
+}
+
+func TestWeatherRefillRequiresSubscription(t *testing.T) {
+	s := newTestSession(t)
+	t0 := time.Date(2001, 9, 11, 12, 40, 0, 0, time.UTC)
+	s.mu.Lock()
+	s.virtualTime = t0
+	s.weatherHorizon = t0
+	if _, _, due := s.planChannelRefill(ChannelWeather, &s.weatherHorizon, t0, windowWeather); due {
+		s.mu.Unlock()
+		t.Fatal("unsubscribed weather channel must never refill")
+	}
+	s.mu.Unlock()
+
+	s.Subscribe(ChannelWeather)
+	s.mu.Lock()
+	lo, hi, due := s.planChannelRefill(ChannelWeather, &s.weatherHorizon, t0, windowWeather)
+	s.mu.Unlock()
+	if !due || !lo.Equal(t0) || !hi.Equal(t0.Add(windowWeather)) {
+		t.Fatalf("expected [t, t+window) refill after subscribe, got lo=%v hi=%v due=%v", lo, hi, due)
+	}
+}
+
+func TestSendWeatherForecastNilStillSends(t *testing.T) {
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+
+	s.SendWeatherForecast(42, at, nil)
+
+	m := recvType(t, s)
+	if m.Type != "weather_forecast" {
+		t.Fatalf("expected weather_forecast frame, got %q", m.Type)
+	}
+	if m.ID != 42 {
+		t.Fatalf("expected echoed request id 42, got %d", m.ID)
+	}
+	if len(m.WeatherForecasts) != 0 {
+		t.Fatalf("nil forecast must send an empty list, got %+v", m.WeatherForecasts)
+	}
+}
