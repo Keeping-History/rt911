@@ -26,7 +26,7 @@ function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 
 describe("classicyFlightTrackerEventHandler", () => {
 	it("persists mapSettings from a SetMapSettings action", () => {
-		const settings = { darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, radarSweep: false, trailMultiplier: 2 };
+		const settings = { mapStyle: "radar" as const, darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, radarSweep: false, trailMultiplier: 2 };
 		const out = classicyFlightTrackerEventHandler(
 			storeWithApp(),
 			flightTrackerSetMapSettings(settings),
@@ -103,6 +103,19 @@ describe("readFlightMapSettings", () => {
 		expect(s.notablePinColorLight).toBe(0xc0202a);
 		expect(s.notablePinColorDark).toBe(0xff4d4d);
 		expect(s.pinColorDark).not.toBe(s.pinColorLight);
+	});
+
+	it("defaults mapStyle to classic and preserves a stored valid style", () => {
+		expect(readFlightMapSettings(undefined).mapStyle).toBe("classic");
+		expect(
+			readFlightMapSettings({ mapSettings: { mapStyle: "satellite" } }).mapStyle,
+		).toBe("satellite");
+	});
+
+	it("normalizes an unrecognized persisted mapStyle to classic", () => {
+		expect(
+			readFlightMapSettings({ mapSettings: { mapStyle: "sepia" } }).mapStyle,
+		).toBe("classic");
 	});
 });
 

@@ -5,6 +5,7 @@ import {
 	ClassicyColorPicker,
 	ClassicyIcons,
 	ClassicyPopUpMenu,
+	ClassicyRadioInput,
 	ClassicySlider,
 	ClassicyWindow,
 	MAC_OS_8_CRAYONS,
@@ -66,7 +67,12 @@ import {
 } from "./loopClock";
 import styles from "./FlightTracker.module.scss";
 import type { Feature } from "geojson";
-import { BASEMAP_URLS } from "./flightMapStyle";
+import {
+	BASEMAP_URLS,
+	type BasemapStyleId,
+	effectiveTone,
+	normalizeBasemapStyle,
+} from "./flightMapStyle";
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.flightTracker.app. registerClassicyIcons assigns
@@ -149,6 +155,15 @@ export const FlightTracker: FC = () => {
 			flightTrackerSetMapSettings({ ...settings, darkMap: !settings.darkMap }),
 		);
 	}, [settings, desktopEventDispatch]);
+
+	const setMapStyle = useCallback(
+		(mapStyle: BasemapStyleId) => {
+			desktopEventDispatch(
+				flightTrackerSetMapSettings({ ...settings, mapStyle }),
+			);
+		},
+		[settings, desktopEventDispatch],
+	);
 
 	const toggleRadarSweep = useCallback(() => {
 		desktopEventDispatch(
@@ -340,6 +355,21 @@ export const FlightTracker: FC = () => {
 				title: "View",
 				menuChildren: [
 					{
+						id: "flight-style-classic-menu",
+						title: `${settings.mapStyle === "classic" ? "✓ " : ""}Classic Map`,
+						onClickFunc: () => setMapStyle("classic"),
+					},
+					{
+						id: "flight-style-radar-menu",
+						title: `${settings.mapStyle === "radar" ? "✓ " : ""}Radar Scope`,
+						onClickFunc: () => setMapStyle("radar"),
+					},
+					{
+						id: "flight-style-satellite-menu",
+						title: `${settings.mapStyle === "satellite" ? "✓ " : ""}Satellite`,
+						onClickFunc: () => setMapStyle("satellite"),
+					},
+					{
 						// ClassicyMenuItem has no checked prop — the ✓ lives in the title.
 						id: "flight-darkmap-menu",
 						title: `${settings.darkMap ? "✓ " : ""}Dark Map`,
@@ -358,7 +388,7 @@ export const FlightTracker: FC = () => {
 				],
 			},
 		],
-		[appIcon, settings.darkMap, settings.radarSweep, openSettings, openFilter, toggleDarkMap, toggleRadarSweep, loopEnabled, toggleLoop],
+		[appIcon, settings.mapStyle, settings.darkMap, settings.radarSweep, openSettings, openFilter, setMapStyle, toggleDarkMap, toggleRadarSweep, loopEnabled, toggleLoop],
 	);
 
 	// Loop on/off ↔ provider history request. The provider re-issues on
@@ -458,6 +488,10 @@ export const FlightTracker: FC = () => {
 		? { type: "Feature", geometry: track.geometry, properties: {} }
 		: null;
 
+	// A radar-scope style is inherently dark regardless of the Dark Map toggle
+	// (see effectiveTone) — pin-color buckets follow this, not settings.darkMap.
+	const tone = effectiveTone(settings.mapStyle, settings.darkMap);
+
 	return (
 		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="flight-map">
 			{showSettings && (
@@ -478,6 +512,18 @@ export const FlightTracker: FC = () => {
 					onCloseFunc={() => setShowSettings(false)}
 				>
 					<div className={styles.settings}>
+						<ClassicyRadioInput
+							name="flight_settings_map_style"
+							label="Map style"
+							inputs={[
+								{ id: "classic", label: "Classic", checked: form.mapStyle === "classic" },
+								{ id: "radar", label: "Radar Scope", checked: form.mapStyle === "radar" },
+								{ id: "satellite", label: "Satellite", checked: form.mapStyle === "satellite" },
+							]}
+							onClickFunc={(id: string) =>
+								setForm((f) => ({ ...f, mapStyle: normalizeBasemapStyle(id) }))
+							}
+						/>
 						<ClassicyCheckbox
 							id="flight_settings_darkmap"
 							label="Dark map"
@@ -652,13 +698,13 @@ export const FlightTracker: FC = () => {
 								trackGeoJSON={trackGeoJSON}
 								nowMs={nowMs}
 								playing={!paused}
-								mapStyle="classic"
+								mapStyle={settings.mapStyle}
 								darkMap={settings.darkMap}
 								pinColor={intToHex(
-									settings.darkMap ? settings.pinColorDark : settings.pinColorLight,
+									tone === "dark" ? settings.pinColorDark : settings.pinColorLight,
 								)}
 								notablePinColor={intToHex(
-									settings.darkMap
+									tone === "dark"
 										? settings.notablePinColorDark
 										: settings.notablePinColorLight,
 								)}
