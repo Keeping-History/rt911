@@ -315,6 +315,24 @@ describe("Weather", () => {
 		expect(screen.getByText("59°F")).toBeTruthy();
 	});
 
+	it("treats zero readings as real values, not absent ones (the 0-is-falsy trap)", async () => {
+		stubFetch();
+		const obs: WeatherObservation = {
+			id: 1,
+			station_id: "KJFK",
+			start_date: "2001-09-11T12:51:00Z",
+			temp_c: 0, // freezing, not missing → 32°F
+			wind_dir_deg: 0, // due north, not missing
+			wind_speed_kt: 0, // calm, not missing → "N 0 mph"
+		};
+		renderWithContext({ weatherObservations: { KJFK: obs } });
+		await waitFor(() => expect(screen.getByText(/32°F/)).toBeTruthy());
+		expect(screen.getByText("N 0 mph")).toBeTruthy();
+		// Only the genuinely absent fields (sky line, visibility, pressure,
+		// dewpoint) render the dash — temp and wind must not be among them.
+		expect(screen.getAllByText("—").length).toBe(4);
+	});
+
 	it("shows the almanac block within the 09-09..09-12 window", async () => {
 		stubFetch();
 		mockClock.current = "2001-09-11T12:40:00.000Z";

@@ -99,9 +99,10 @@ export const Weather: FC = () => {
 	// MM-DD component of the virtual UTC date — the almanac window key.
 	const currentMMDD = dateTime.slice(5, 10);
 
-	// Ref-counted by appId server-side; subscribe for the app's whole mounted
-	// lifetime (this app has no "closed but mounted" state to gate on, unlike
-	// FlightTracker's isRunning check).
+	// Ref-counted by appId server-side. Subscribe on mount, mirror
+	// RadioScanner: all desktop apps are statically mounted at boot, and the
+	// isRunning gate other apps use is map-membership that also flips true at
+	// boot — there is no real closed-state gate in this architecture.
 	useEffect(() => {
 		subscribeWeather(appId);
 		return () => unsubscribeWeather(appId);
