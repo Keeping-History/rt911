@@ -1,0 +1,49 @@
+.root { display: flex; width: 100%; height: 100%; }
+.map { flex: 1 1 auto; min-width: 0; position: relative; }
+.panel {
+	width: 240px; flex: 0 0 240px;
+	border-left: var(--window-border-size) solid var(--color-black);
+	padding: var(--window-padding-size);
+	background-color: var(--color-system-03);
+	overflow-y: auto;
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	box-sizing: border-box;
+}
+.panelEmpty { color: #666; }
+
+.stationHeader { margin-bottom: var(--window-padding-size); }
+.stationName { font-weight: bold; font-size: 1.1em; display: block; }
+.stationAsOf { color: #555; font-size: calc(var(--ui-font-size) * 0.9); }
+
+.section { margin-bottom: calc(var(--window-padding-size) * 2); }
+.sectionTitle {
+	font-weight: bold; text-transform: uppercase;
+	font-size: calc(var(--ui-font-size) * 0.85);
+	color: #555; margin-bottom: 4px;
+}
+
+.tempBig { font-size: 1.8em; font-weight: bold; display: block; }
+.skyLine { color: #333; margin-bottom: 4px; }
+
+.fields { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0; }
+.fields dt { color: #555; }
+.fields dd { margin: 0; }
+
+.note { color: #666; font-style: italic; }
+
+.forecastText {
+	font-family: 'Courier New', Courier, monospace;
+	font-size: 11px;
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 180px;
+	overflow-y: auto;
+	background: var(--color-theme-07);
+	color: var(--color-theme-02);
+	padding: 6px;
+	margin: 0;
+	box-sizing: border-box;
+}
+
+.almanacDay { display: flex; flex-direction: column; gap: 2px; }

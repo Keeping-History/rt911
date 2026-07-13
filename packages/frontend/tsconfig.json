@@ -6,6 +6,7 @@
 		"module": "ESNext",
 		"types": ["vite/client", "geojson"],
 		"skipLibCheck": true,
+		"resolveJsonModule": true,
 		/* Bundler mode */
 		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": true,

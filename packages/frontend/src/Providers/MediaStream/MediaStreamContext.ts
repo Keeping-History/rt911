@@ -114,6 +114,45 @@ export interface FlightPosition {
 }
 
 /**
+ * A single station observation (METAR), delivered on the opt-in "weather"
+ * channel. Unlike pager/flights, the channel exposes only the latest reading
+ * per station (weatherObservations keyed by station_id) rather than a list —
+ * observations are sparse (about one per station per hour) and a station that
+ * has gone quiet still shows its last reading. Nullable numeric fields are
+ * absent (not zero) when the station didn't report them.
+ */
+export interface WeatherObservation {
+	id: number;
+	station_id: string;
+	start_date: string;
+	temp_c?: number;
+	dewpoint_c?: number;
+	wind_dir_deg?: number;
+	wind_speed_kt?: number;
+	gust_kt?: number;
+	pressure_hpa?: number;
+	sky_condition?: string;
+	present_weather?: string;
+	visibility_km?: number;
+	raw_metar?: string;
+}
+
+/**
+ * An archived NWS forecast product (zone forecast, area forecast discussion,
+ * etc.), fetched on demand via requestWeatherForecast rather than streamed —
+ * the weather channel's snapshot/window frames never include these directly
+ * in weatherForecastByZone; only an explicit request/reply round-trip does.
+ */
+export interface WeatherForecast {
+	id: number;
+	wfo: string;
+	zone: string;
+	product_type: string;
+	start_date: string;
+	raw_text: string;
+}
+
+/**
  * Time-independent sets of selectable sources for each filter, delivered once by
  * the server on the `sources` frame (see the streamer's websocket-protocol.md).
  * Unlike the source values derived from streamed items, these list every option
@@ -206,6 +245,25 @@ export interface MediaStreamContextValue {
 	requestFlightsHistory: (minutes: 30 | 90) => void;
 	/** Drop history state and stop re-issuing on seek/reconnect (loop mode off). */
 	clearFlightsHistory: () => void;
+	/** Latest observation per station, keyed by station_id, from the weather channel. */
+	weatherObservations: Record<string, WeatherObservation>;
+	/**
+	 * Forecast products fetched via requestWeatherForecast, keyed by zone.
+	 * `null` is an explicit, confirmed "no product covers this zone yet" answer
+	 * from the server — distinct from a key simply being absent (never requested
+	 * / still awaiting reply).
+	 */
+	weatherForecastByZone: Record<string, WeatherForecast | null>;
+	/** Opt into weather-channel delivery. Ref-counted by appId. */
+	subscribeWeather: (appId: string) => void;
+	/** Drop a weather-channel subscription. Unsubscribes server-side when the last app leaves. */
+	unsubscribeWeather: (appId: string) => void;
+	/**
+	 * Request the forecast product covering `zone` at the client's virtual
+	 * time. Replaces any prior pending request; stale replies (superseded by a
+	 * newer request) are dropped via an internally-managed id echo.
+	 */
+	requestWeatherForecast: (zone: string) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -241,4 +299,9 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	flightsHistoryDone: false,
 	requestFlightsHistory: () => {},
 	clearFlightsHistory: () => {},
+	weatherObservations: {},
+	weatherForecastByZone: {},
+	subscribeWeather: () => {},
+	unsubscribeWeather: () => {},
+	requestWeatherForecast: () => {},
 });

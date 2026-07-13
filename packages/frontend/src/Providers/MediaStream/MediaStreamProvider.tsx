@@ -15,12 +15,15 @@ import {
 	type MediaItem,
 	type PagerItem,
 	type UsenetItem,
+	type WeatherForecast,
+	type WeatherObservation,
 } from "./MediaStreamContext";
 import { trackAck } from "./ackTracking";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
 import { keepInstantItem, keepMediaItem } from "./retention";
 import { virtualUtcMs } from "./virtualClock";
+import { mergeLatestPerStation } from "./weatherMerge";
 import {
 	applyUsenetBodyFrame,
 	emptyUsenetBodyState,
@@ -105,6 +108,26 @@ interface WsFlightsHistoryMessage {
 	done?: boolean;
 }
 
+// Weather observations ride their own `weather` field (like flights). The
+// same-typed frame also carries `weather_forecasts` for products newly issued
+// in-window, but Task 0 only exposes forecasts via the explicit request/reply
+// round-trip (weatherForecastByZone) — the pushed list is not surfaced here.
+interface WsWeatherMessage {
+	type: "weather";
+	time?: string;
+	weather?: WeatherObservation[];
+	weather_forecasts?: WeatherForecast[];
+}
+
+// Reply to a weather_forecast request. id echoes the request generation; an
+// empty/omitted weather_forecasts is an explicit "no product for this zone"
+// answer, distinct from a request that's still in flight.
+interface WsWeatherForecastMessage {
+	type: "weather_forecast";
+	id?: number;
+	weather_forecasts?: WeatherForecast[];
+}
+
 type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
@@ -116,6 +139,8 @@ type WsIncomingMessage =
 	| WsSourcesMessage
 	| WsFlightsMessage
 	| WsFlightsHistoryMessage
+	| WsWeatherMessage
+	| WsWeatherForecastMessage
 	| { type: string };
 
 interface MediaStreamProviderProps {
@@ -136,6 +161,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [flightPositions, setFlightPositions] = useState<FlightPosition[]>([]);
 	const [flightsHistory, setFlightsHistory] = useState<FlightPosition[]>([]);
 	const [flightsHistoryDone, setFlightsHistoryDone] = useState(false);
+	// Latest observation per station (see weatherMerge.ts). Not a plain list —
+	// stations report at most hourly, so the UI wants "current reading per
+	// station", not an accumulating array.
+	const [weatherObservations, setWeatherObservations] = useState<
+		Record<string, WeatherObservation>
+	>({});
+	// Forecast products fetched on demand, keyed by zone. null is a confirmed
+	// "no product" answer, distinct from a key that was never requested.
+	const [weatherForecastByZone, setWeatherForecastByZone] = useState<
+		Record<string, WeatherForecast | null>
+	>({});
 	const [usenetBodyState, setUsenetBodyState] = useState(emptyUsenetBodyState);
 	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
 	// fetches when a window re-renders before its body arrives.
@@ -153,11 +189,28 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const newsSubscribers = useRef(new Set<string>());
 	const usenetSubscribers = useRef(new Set<string>());
 	const flightsSubscribers = useRef(new Set<string>());
+	const weatherSubscribers = useRef(new Set<string>());
 	// Active loop-history request: window wanted (null = loop off) and a
 	// generation id echoed by the server so a superseded request's chunks are
 	// discarded — frames from request N can still arrive after request N+1 goes out.
 	const flightsHistoryMinutes = useRef<30 | 90 | null>(null);
 	const flightsHistoryGen = useRef(0);
+	// The single active forecast request (null = none pending) and a generation
+	// id echoed by the server, mirroring flightsHistoryGen: a reply whose id
+	// doesn't match the current generation is from a superseded request and is
+	// dropped. Starts at 0 so the very first request sent carries id 1.
+	const weatherForecastZone = useRef<string | null>(null);
+	const weatherForecastGen = useRef(0);
+	// Marks the NEXT non-empty weather frame as the subscribe/init/seek
+	// snapshot (a full one-row-per-station picture at the current instant),
+	// which must overwrite a station's entry outright — including with an
+	// OLDER reading than what's held after a backward seek — rather than
+	// going through mergeLatestPerStation's keep-newest rule (which exists to
+	// protect ordinary forward-window refills from a late/reordered frame
+	// regressing a station, not to reject a legitimate resync). Set whenever a
+	// fresh snapshot is expected (subscribe, seek, reconnect-resubscribe) and
+	// cleared once a due batch has been applied.
+	const weatherSnapshotPending = useRef(true);
 	// The newsgroup(s) the client is currently viewing — resent on reconnect.
 	const usenetGroups = useRef<string[]>([]);
 
@@ -170,6 +223,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const newsBuffer = useRef(new Map<number, MediaItem>());
 	const usenetBuffer = useRef(new Map<number, UsenetItem>());
 	const flightsBuffer = useRef(new Map<number, FlightPosition>());
+	const weatherBuffer = useRef(new Map<number, WeatherObservation>());
 
 	const addItems = useCallback((incoming: MediaItem[]) => {
 		setItems((prev) => {
@@ -375,6 +429,52 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		setFlightsHistoryDone(false);
 	}, []);
 
+	const subscribeWeather = useCallback(
+		(appId: string) => {
+			const wasEmpty = weatherSubscribers.current.size === 0;
+			weatherSubscribers.current.add(appId);
+			if (wasEmpty) {
+				weatherSnapshotPending.current = true;
+				send({ type: "subscribe", channel: "weather" });
+			}
+		},
+		[send],
+	);
+
+	const unsubscribeWeather = useCallback(
+		(appId: string) => {
+			weatherSubscribers.current.delete(appId);
+			if (weatherSubscribers.current.size === 0) {
+				send({ type: "unsubscribe", channel: "weather" });
+				setWeatherObservations({});
+				weatherBuffer.current.clear();
+				// A forecast request is meaningless without an active subscription;
+				// drop it and orphan any reply still in flight.
+				weatherForecastZone.current = null;
+				weatherForecastGen.current += 1;
+				setWeatherForecastByZone({});
+			}
+		},
+		[send],
+	);
+
+	// (Re-)issue the active forecast request: bump the generation, ask again.
+	// No-op while no zone is pending. Mirrors sendFlightsHistoryRequest.
+	const sendWeatherForecastRequest = useCallback(() => {
+		const zone = weatherForecastZone.current;
+		if (zone === null) return;
+		weatherForecastGen.current += 1;
+		send({ type: "weather_forecast", zone, id: weatherForecastGen.current });
+	}, [send]);
+
+	const requestWeatherForecast = useCallback(
+		(zone: string) => {
+			weatherForecastZone.current = zone;
+			sendWeatherForecastRequest();
+		},
+		[sendWeatherForecastRequest],
+	);
+
 	// Set the newsgroup(s) being viewed. The server resends a backlog for the new
 	// group(s), so the current items + buffer are cleared to avoid mixing groups.
 	const setUsenetGroups = useCallback(
@@ -426,6 +526,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		const duePager = drainDue(pagerBuffer.current, now);
 		const dueUsenet = drainDue(usenetBuffer.current, now);
 		const dueFlights = drainDue(flightsBuffer.current, now);
+		const dueWeather = drainDue(weatherBuffer.current, now);
 
 		setItems((prev) => mergeById(prev, dueMedia).filter((item) => keepMediaItem(item, now)));
 		// mp3 items are durational audio — same retention rules as media items.
@@ -441,6 +542,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		setFlightPositions((prev) =>
 			mergeById(prev, dueFlights).filter((p) => keepInstantItem(p, now)),
 		);
+		// Weather observations are latest-per-station, not time-pruned — a
+		// station's last reading stays visible however old it gets.
+		if (dueWeather.length > 0)
+			setWeatherObservations((prev) => mergeLatestPerStation(prev, dueWeather));
 	}, [localDate, tzOffset]);
 
 	// Detect manual time changes and send seek; ignore tick-driven minute boundaries
@@ -460,13 +565,31 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			usenetBuffer.current.clear();
 			setUsenetItems([]);
 			flightsBuffer.current.clear();
+			// Per-station weather state is intentionally NOT cleared here — the
+			// post-seek "weather" snapshot frame (covering every station at the
+			// new instant) replaces each station's entry as it arrives, so the
+			// UI doesn't flash empty on seek. Mark it pending so that frame (not
+			// the ordinary keep-newest merge) is what performs the replacement.
+			weatherBuffer.current.clear();
+			weatherSnapshotPending.current = true;
+			// Forecast products, unlike per-station observations, have no
+			// post-seek push that would replace them (they're request/reply
+			// only) — a kept entry would show the old timeline's product at the
+			// new clock, an anachronism. Clear them all; the re-fired request
+			// below repopulates the active zone (the product for the new
+			// instant, or an explicit null), and its generation bump orphans
+			// any in-flight pre-seek reply via the id-echo guard.
+			setWeatherForecastByZone({});
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
 			// The old timeline's loop history is meaningless at the new instant.
 			sendFlightsHistoryRequest();
+			// Re-ask for the last-requested zone's forecast at the new clock
+			// (no-op when none is pending) — mirrors the reconnect path.
+			sendWeatherForecastRequest();
 		}
 
 		prevDateTimeRef.current = dateTime;
-	}, [dateTime, send, sendFlightsHistoryRequest]);
+	}, [dateTime, send, sendFlightsHistoryRequest, sendWeatherForecastRequest]);
 
 	// Once the socket is OPEN, re-request the window for the current instant.
 	// The active video channels are long-running stitched HLS streams (one row in
@@ -530,6 +653,13 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				ws.send(JSON.stringify({ type: "subscribe", channel: "flights" }));
 				// Loop mode survives a reconnect: re-seed its window at the fresh clock.
 				sendFlightsHistoryRequest();
+			}
+			if (weatherSubscribers.current.size > 0) {
+				weatherSnapshotPending.current = true;
+				ws.send(JSON.stringify({ type: "subscribe", channel: "weather" }));
+				// A pending forecast request survives a reconnect: re-fire it so the
+				// answer isn't silently lost to the dropped connection.
+				sendWeatherForecastRequest();
 			}
 			// Body requests do not survive a reconnect; clear in-flight markers so
 			// any open message window re-requests on its next render.
@@ -654,6 +784,43 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "weather") {
+				const incomingWeather = (msg as WsWeatherMessage).weather;
+				if (!incomingWeather || incomingWeather.length === 0) return;
+				const { due, future } = partitionByDue(incomingWeather, now);
+				for (const obs of future) weatherBuffer.current.set(obs.id, obs);
+				if (due.length > 0) {
+					if (weatherSnapshotPending.current) {
+						// The subscribe/init/seek snapshot: one row per station at the
+						// current instant. Overwrite outright rather than merging —
+						// see weatherSnapshotPending's declaration for why.
+						weatherSnapshotPending.current = false;
+						setWeatherObservations((prev) => {
+							const next = { ...prev };
+							for (const reading of due) next[reading.station_id] = reading;
+							return next;
+						});
+					} else {
+						setWeatherObservations((prev) => mergeLatestPerStation(prev, due));
+					}
+				}
+				return;
+			}
+
+			if (msg.type === "weather_forecast") {
+				const reply = msg as WsWeatherForecastMessage;
+				if (reply.id !== weatherForecastGen.current) return; // superseded request
+				const zone = weatherForecastZone.current;
+				if (zone === null) return;
+				const forecasts = reply.weather_forecasts ?? [];
+				setWeatherForecastByZone((prev) => ({
+					...prev,
+					// Explicit-empty reply → confirmed "no product", not "still pending".
+					[zone]: forecasts.length > 0 ? forecasts[0] : null,
+				}));
+				return;
+			}
+
 			if (msg.type !== "items" && msg.type !== "init_ack" && msg.type !== "seek_ack") return;
 
 			trackAck(msg.type, (msg as WsItemsMessage).time);
@@ -691,9 +858,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			wsRef.current = null;
 		};
 		// Intentionally runs once on mount; utcMsRef carries the live value.
-		// sendFlightsHistoryRequest is stable (its only dep is the stable `send`),
-		// so listing it satisfies the lint without re-running the effect.
-	}, [sendFlightsHistoryRequest]);
+		// sendFlightsHistoryRequest/sendWeatherForecastRequest are stable (their
+		// only dep is the stable `send`), so listing them satisfies the lint
+		// without re-running the effect.
+	}, [sendFlightsHistoryRequest, sendWeatherForecastRequest]);
 
 	// Memoize the context value so consumers only re-render when specific data
 	// changes — not on every provider render (which happens every clock tick and
@@ -732,6 +900,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			flightsHistoryDone,
 			requestFlightsHistory,
 			clearFlightsHistory,
+			weatherObservations,
+			weatherForecastByZone,
+			subscribeWeather,
+			unsubscribeWeather,
+			requestWeatherForecast,
 		}),
 		[
 			items,
@@ -765,6 +938,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			flightsHistoryDone,
 			requestFlightsHistory,
 			clearFlightsHistory,
+			weatherObservations,
+			weatherForecastByZone,
+			subscribeWeather,
+			unsubscribeWeather,
+			requestWeatherForecast,
 		],
 	);
 
