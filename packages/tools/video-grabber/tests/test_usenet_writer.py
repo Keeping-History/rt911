@@ -117,6 +117,33 @@ def test_write_group_replaces_and_bulk_inserts():
     assert count_patch == {"message_count": 20}                 # precomputed count stored on source
 
 
+@respx.mock
+def test_write_group_uses_generous_timeout():
+    # Directus delete-by-query / bulk inserts on a multi-million-row usenet_items
+    # table run for minutes; httpx's default 5 s read timeout failed every large
+    # group (ReadTimeout at delete_group_messages). Every writer request must
+    # carry the module's explicit timeout.
+    cfg = make_cfg()
+    seen = []
+
+    def cap(request):
+        seen.append(request.extensions["timeout"])
+        return httpx.Response(200, json={"data": [{"id": 5}]})
+
+    respx.get("http://directus:8055/items/sources").mock(side_effect=cap)
+    respx.delete("http://directus:8055/items/usenet_items").mock(side_effect=cap)
+    respx.post("http://directus:8055/items/usenet_items").mock(side_effect=cap)
+    respx.patch("http://directus:8055/items/sources/5").mock(side_effect=cap)
+
+    writer.write_group(
+        "ntl.talk",
+        [{"message_id": "<1@x>", "start_date": "2001-09-11T00:00:00+00:00", "body": "hi"}],
+        cfg,
+    )
+    assert len(seen) == 4                       # source get, delete, insert, count patch
+    assert all(t["read"] >= 600 for t in seen)  # far beyond httpx's 5 s default
+
+
 def test_message_payload_caps_body():
     p = writer.message_payload({"body": "x" * 300_000, "start_date": "2001-01-01T00:00:00+00:00"}, 1)
     assert len(p["body"]) == writer._BODY_LIMIT

@@ -26,6 +26,12 @@ _USENET_SOURCE_TYPE = "usenet"
 _MAX_BATCH_BYTES = 900_000
 _BODY_LIMIT = 200_000
 
+# Directus delete-by-query and bulk inserts on the multi-million-row usenet_items
+# table run for minutes server-side; httpx's 5 s default read timeout failed every
+# large group at delete_group_messages. Connect stays short so a down Directus
+# still errors promptly.
+_TIMEOUT = httpx.Timeout(connect=30.0, read=600.0, write=120.0, pool=30.0)
+
 
 def _headers(cfg: Config) -> dict:
     return {
@@ -116,6 +122,7 @@ def upsert_source(newsgroup: str, cfg: Config, *, client=httpx) -> int | None:
         f"{cfg.directus_url}/items/sources",
         params={"filter[slug][_eq]": newsgroup, "fields": "id"},
         headers=headers,
+        timeout=_TIMEOUT,
     )
     resp.raise_for_status()
     data = resp.json().get("data", [])
@@ -126,6 +133,7 @@ def upsert_source(newsgroup: str, cfg: Config, *, client=httpx) -> int | None:
         f"{cfg.directus_url}/items/sources",
         content=json.dumps({"name": newsgroup, "slug": newsgroup, "type": _USENET_SOURCE_TYPE}),
         headers=headers,
+        timeout=_TIMEOUT,
     )
     resp.raise_for_status()
     return resp.json().get("data", {}).get("id")
@@ -139,6 +147,7 @@ def delete_group_messages(source_id: int, cfg: Config, *, client=httpx) -> None:
         f"{cfg.directus_url}/items/usenet_items",
         content=json.dumps({"query": {"filter": {"source": {"_eq": source_id}}}}),
         headers=headers,
+        timeout=_TIMEOUT,
     )
     # 204 No Content when rows matched; 200/no-op when none. Treat 404 as empty.
     if resp.status_code not in (200, 204, 404):
@@ -157,6 +166,7 @@ def write_group(newsgroup: str, records: list[dict], cfg: Config, *, client=http
             f"{cfg.directus_url}/items/usenet_items",
             content=json.dumps(batch),
             headers=headers,
+            timeout=_TIMEOUT,
         )
         _raise(resp, "usenet_items insert")
 
@@ -167,6 +177,7 @@ def write_group(newsgroup: str, records: list[dict], cfg: Config, *, client=http
             f"{cfg.directus_url}/items/sources/{source_id}",
             content=json.dumps({"message_count": len(payloads)}),
             headers=headers,
+            timeout=_TIMEOUT,
         )
         _raise(resp, "source count update")
     return source_id, len(payloads)
