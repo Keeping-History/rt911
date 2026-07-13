@@ -4,9 +4,9 @@ Prefect flow: GHCN-Daily -> per-station almanac JSON on Wasabi.
 GHCN id resolution (flow-internal by design — see the phase plan):
 GHCN_OVERRIDES first (hand-verified ids preempt automation, as in 2c's
 ZONE_OVERRIDES), else derived USW000+WBAN, else nearest ghcnd-stations.txt
-entry within 20 km, else recorded gap. A derived/matched id that returns zero
-daily rows demotes to the next strategy rather than publishing an empty
-almanac. All math cuts off at 2001-09-08 (anachronism rule).
+entries (k=5) within 20 km, else recorded gap. A derived/matched id that
+returns zero daily rows demotes to the next strategy rather than publishing
+an empty almanac. All math cuts off at 2001-09-08 (anachronism rule).
 """
 
 import json
@@ -17,8 +17,9 @@ import httpx
 from prefect import flow, get_run_logger, task
 
 from weather_recon.flow import NETWORK_RETRIES
-from weather_recon.ghcn import (compute_almanac, derive_ghcn_id, nearest_ghcn,
-                                parse_daily_rows, parse_ghcnd_stations)
+from weather_recon.ghcn import (compute_almanac, derive_ghcn_id,
+                                nearest_ghcn_candidates, parse_daily_rows,
+                                parse_ghcnd_stations)
 from weather_recon.stations import load_stations
 from weather_recon.wasabi import make_client, upload_bytes
 
@@ -78,9 +79,9 @@ def build_and_publish(stations_path, cache_dir, cutoff, run_id):
             derived = derive_ghcn_id(st["isd_id"])
             if derived:
                 candidates.append(derived)
-            near = nearest_ghcn(st["lat"], st["lon"], ghcnd)
-            if near and near not in candidates:
-                candidates.append(near)
+            for near in nearest_ghcn_candidates(st["lat"], st["lon"], ghcnd):
+                if near not in candidates:
+                    candidates.append(near)
             almanac, used = None, None
             for gid in candidates:
                 rows = parse_daily_rows(_fetch_daily(client, gid, cutoff, cache))

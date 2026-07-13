@@ -1,9 +1,19 @@
 from weather_recon.ghcn import (compute_almanac, derive_ghcn_id, nearest_ghcn,
-                                parse_daily_rows, parse_ghcnd_stations)
+                                nearest_ghcn_candidates, parse_daily_rows,
+                                parse_ghcnd_stations)
 
 GHCND_STATIONS = (
     "USW00094846  41.9950  -87.9336  201.8 IL CHICAGO OHARE INTL AP        \n"
     "USW00014819  41.7861  -87.7522  185.9 IL CHICAGO MIDWAY AP 3SW        \n"
+    "CA006158733  43.6772  -79.6306  173.4    TORONTO LESTER B. PEARSON INT\n"
+)
+
+# Three stations near Chicago O'Hare at increasing distance (0, 6.72, 12.62 km),
+# plus one far away (Toronto, ~702 km) that must be excluded by max_km.
+NEARBY_STATIONS = (
+    "USW00094846  41.9950  -87.9336  201.8 IL CHICAGO OHARE INTL AP        \n"
+    "USC00111577  42.0500  -87.9000  190.0 IL EVANSTON                    \n"
+    "USW00014819  41.9000  -87.8500  185.9 IL CHICAGO MIDWAY AP 3SW        \n"
     "CA006158733  43.6772  -79.6306  173.4    TORONTO LESTER B. PEARSON INT\n"
 )
 
@@ -37,6 +47,20 @@ def test_nearest_ghcn_within_radius():
 def test_nearest_ghcn_none_when_too_far():
     st = parse_ghcnd_stations(GHCND_STATIONS)
     assert nearest_ghcn(19.43, -99.07, st) is None   # Mexico City vs this tiny list
+
+
+def test_nearest_ghcn_candidates_orders_by_distance_and_excludes_far():
+    st = parse_ghcnd_stations(NEARBY_STATIONS)
+    ids = nearest_ghcn_candidates(41.9950, -87.9336, st)
+    # nearest-first: self (0 km), then Evanston (6.72 km), then Midway (12.62 km);
+    # Toronto (~702 km) excluded by the 20 km default max_km.
+    assert ids == ["USW00094846", "USC00111577", "USW00014819"]
+
+
+def test_nearest_ghcn_candidates_respects_limit():
+    st = parse_ghcnd_stations(NEARBY_STATIONS)
+    ids = nearest_ghcn_candidates(41.9950, -87.9336, st, limit=2)
+    assert ids == ["USW00094846", "USC00111577"]
 
 
 def test_parse_daily_rows_units_and_missing():

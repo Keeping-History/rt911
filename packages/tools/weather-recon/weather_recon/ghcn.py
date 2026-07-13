@@ -40,14 +40,20 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
 
 
-def nearest_ghcn(lat, lon, stations, max_km=20.0):
-    """Haversine-nearest station id within max_km, or None if none qualify."""
-    best, best_km = None, max_km
+def nearest_ghcn_candidates(lat, lon, stations, max_km=20.0, limit=5):
+    """Ids of up to `limit` nearest stations within max_km, nearest first."""
+    within = []
     for st in stations:
         km = _haversine_km(lat, lon, st["lat"], st["lon"])
-        if km <= best_km:
-            best, best_km = st["id"], km
-    return best
+        if km <= max_km:
+            within.append((km, st["id"]))
+    within.sort(key=lambda pair: pair[0])
+    return [sid for _, sid in within[:limit]]
+
+
+def nearest_ghcn(lat, lon, stations, max_km=20.0):
+    """Haversine-nearest station id within max_km, or None if none qualify."""
+    return (nearest_ghcn_candidates(lat, lon, stations, max_km=max_km, limit=1) or [None])[0]
 
 
 def _tenths(v):
