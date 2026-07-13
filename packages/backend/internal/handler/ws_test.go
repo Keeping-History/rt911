@@ -148,7 +148,7 @@ func TestParseTimeInvalid(t *testing.T) {
 // --- knownChannel ---
 
 func TestKnownChannels(t *testing.T) {
-	for _, ch := range []string{"pager", "mp3", "news", "usenet", "flights"} {
+	for _, ch := range []string{"pager", "mp3", "news", "usenet", "flights", "weather"} {
 		if !knownChannel(ch) {
 			t.Errorf("knownChannel(%q) = false, want true", ch)
 		}
@@ -263,16 +263,25 @@ func TestWSHandlerHeartbeatInvalidTime(t *testing.T) {
 	}
 }
 
+// TestWSHandlerAllChannelsSubscribeIndependently proves every known channel
+// can subscribe/unsubscribe on its own. It uses a nil pool and rdb (like the
+// other handler tests above) and never sends init/heartbeat/seek, so the
+// session's virtual time stays zero — sendChannelSnapshot is gated behind
+// sess.VirtualTime()'s ok flag and is therefore never invoked here, meaning
+// even the Postgres- and Redis-backed channels (weather, flights) are safe to
+// exercise without a real pool/rdb. Snapshot DB paths are covered separately
+// (or, per repo convention, left untested where they require Postgres).
 func TestWSHandlerAllChannelsSubscribeIndependently(t *testing.T) {
 	conn := dialWS(t, newTestServer(t, nil))
-	for _, ch := range []string{"pager", "mp3", "news", "usenet"} {
+	channels := []string{"pager", "mp3", "news", "usenet", "flights", "weather"}
+	for _, ch := range channels {
 		sendJSON(t, conn, map[string]string{"type": "subscribe", "channel": ch})
 		f := readFrame(t, conn)
 		if f.Type != "subscribe_ack" || f.Channel != ch {
 			t.Fatalf("channel %q: expected subscribe_ack, got %+v", ch, f)
 		}
 	}
-	for _, ch := range []string{"pager", "mp3", "news", "usenet"} {
+	for _, ch := range channels {
 		sendJSON(t, conn, map[string]string{"type": "unsubscribe", "channel": ch})
 		f := readFrame(t, conn)
 		if f.Type != "unsubscribe_ack" || f.Channel != ch {
@@ -353,5 +362,42 @@ func TestWSHandlerFlightsHistoryIgnoredWhenUnsubscribed(t *testing.T) {
 	sendJSON(t, conn, map[string]string{"type": "pause"})
 	if f := readFrame(t, conn); f.Type != "pause_ack" {
 		t.Fatalf("expected pause_ack (history silently ignored), got %+v", f)
+	}
+}
+
+// --- weather_forecast gating ---
+//
+// Both paths below return before touching the pool (invalid zone shape and
+// missing subscription), so a nil pool is safe — same technique as
+// TestWSHandlerFlightsHistoryIgnoredWhenUnsubscribed. The DB-backed success
+// path (valid zone + subscribed) needs Postgres and stays untested here by
+// repo convention (see sendUsenetSnapshot's siblings, none of which are
+// exercised end-to-end in this file either).
+
+func TestWSHandlerWeatherForecastIgnoredWhenUnsubscribed(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+	sendJSON(t, conn, map[string]any{"type": "weather_forecast", "zone": "NYZ072", "id": 1})
+	// A follow-up round-trip proves the request produced no frames at all.
+	sendJSON(t, conn, map[string]string{"type": "pause"})
+	if f := readFrame(t, conn); f.Type != "pause_ack" {
+		t.Fatalf("expected pause_ack (forecast request silently ignored), got %+v", f)
+	}
+}
+
+func TestWSHandlerWeatherForecastIgnoredWhenZoneInvalid(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+	sendJSON(t, conn, map[string]string{"type": "subscribe", "channel": "weather"})
+	if f := readFrame(t, conn); f.Type != "subscribe_ack" {
+		t.Fatalf("expected subscribe_ack, got %+v", f)
+	}
+
+	for _, zone := range []string{"", "nyz072", "NYZ72", "NYZ0721", "NY072", "NYZ07A", "NYZ072;DROP"} {
+		sendJSON(t, conn, map[string]any{"type": "weather_forecast", "zone": zone, "id": 2})
+		// A follow-up round-trip proves the request produced no frames at all —
+		// it never reached the pool (which is nil here and would panic).
+		sendJSON(t, conn, map[string]string{"type": "pause"})
+		if f := readFrame(t, conn); f.Type != "pause_ack" {
+			t.Fatalf("zone %q: expected pause_ack (forecast request silently ignored), got %+v", zone, f)
+		}
 	}
 }

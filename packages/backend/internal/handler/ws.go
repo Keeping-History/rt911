@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"time"
 
 	"classicy/streamer/internal/cache"
@@ -17,6 +18,10 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"golang.org/x/time/rate"
 )
+
+// weatherZoneRe validates a client-supplied NWS UGC zone code (e.g. "NYZ072")
+// before it feeds a SQL LIKE in db.CurrentWeatherForecast.
+var weatherZoneRe = regexp.MustCompile(`^[A-Z]{2}Z\d{3}$`)
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -39,7 +44,7 @@ type filterMsg struct {
 }
 
 // channelMsg carries the channel name for subscribe/unsubscribe. Valid channels
-// are "pager", "mp3", "news" and "usenet".
+// are "pager", "mp3", "news", "usenet", "flights" and "weather".
 type channelMsg struct {
 	Type    string `json:"type"`
 	Channel string `json:"channel"`
@@ -74,6 +79,15 @@ type flightsHistoryMsg struct {
 	Type    string `json:"type"`
 	Minutes int    `json:"minutes"`
 	ID      int    `json:"id"`
+}
+
+// weatherForecastMsg requests the current forecast product for a single NWS
+// zone (UGC code, e.g. "NYZ072") at the client's virtual time. id is echoed
+// on the reply so the client can match it to the request.
+type weatherForecastMsg struct {
+	Type string `json:"type"`
+	Zone string `json:"zone"`
+	ID   int    `json:"id"`
 }
 
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
@@ -288,6 +302,24 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					sendFlightsHistory(r, sess, rdb, fmsg.ID, t, fmsg.Minutes, logger)
 				}
 
+			case "weather_forecast":
+				var wmsg weatherForecastMsg
+				if err := json.Unmarshal(raw, &wmsg); err != nil {
+					sess.SendError("malformed weather_forecast message")
+					continue
+				}
+				// The forecast lookup is a weather-channel feature, and the zone feeds
+				// a SQL LIKE, so both gates return before touching the pool. Neither
+				// case sends an error frame — an unsubscribed client or a stale/mistyped
+				// zone selection isn't something the user needs to see as an error,
+				// mirroring flights_history's silent-drop gating for the unsubscribed case.
+				if !sess.Subscribed(session.ChannelWeather) || !weatherZoneRe.MatchString(wmsg.Zone) {
+					continue
+				}
+				if t, ok := sess.VirtualTime(); ok {
+					sendWeatherForecast(r, sess, pool, wmsg.ID, wmsg.Zone, t, logger)
+				}
+
 			case "pause":
 				sess.Pause()
 
@@ -494,6 +526,40 @@ func sendFlightsHistory(r *http.Request, sess *session.Session, rdb *goredis.Cli
 	sess.SendFlightsHistory(reqID, t, nil, true)
 }
 
+// sendWeatherSnapshot delivers the latest observation at or before t for every
+// station to the session if it is subscribed to the weather channel. Called
+// from init, seek, and subscribe. Unlike the tick path's windowed reads, this
+// is a point-in-time DISTINCT ON lookup with no lookback bound baked in — a
+// station silent for hours still shows its last observation, labeled by its
+// own timestamp; forecasts are not part of the snapshot (on-demand only, via
+// weather_forecast).
+func sendWeatherSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelWeather) {
+		return
+	}
+	obs, err := db.CurrentWeatherObs(r.Context(), pool, t)
+	if err != nil {
+		logger.Warn("current weather obs query failed", "error", err)
+		return
+	}
+	sess.SendWeather(t, obs, nil)
+}
+
+// sendWeatherForecast looks up the forecast product covering zone at t and
+// replies on the weather_forecast frame, echoing reqID. Unlike
+// sendWeatherSnapshot, this always sends — CurrentWeatherForecast returning
+// (nil, nil) (no product covers the zone) or a query error still gets a
+// reply (empty forecast field) so the client's request doesn't hang.
+func sendWeatherForecast(r *http.Request, sess *session.Session, pool *pgxpool.Pool, reqID int, zone string, t time.Time, logger *slog.Logger) {
+	fc, err := db.CurrentWeatherForecast(r.Context(), pool, zone, t)
+	if err != nil {
+		logger.Warn("current weather forecast query failed", "zone", zone, "error", err)
+		sess.SendWeatherForecast(reqID, t, nil)
+		return
+	}
+	sess.SendWeatherForecast(reqID, t, fc)
+}
+
 // sendSources delivers the time-independent available-source lists for client
 // filters (TV channels, RadioScanner audio stations, pager providers, newsgroups). Called once per init —
 // sources don't change with virtual time, so seek does not resend them. Failures
@@ -522,7 +588,7 @@ func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, log
 func knownChannel(ch string) bool {
 	return ch == session.ChannelPager || ch == session.ChannelMp3 ||
 		ch == session.ChannelNews || ch == session.ChannelUsenet ||
-		ch == session.ChannelFlights
+		ch == session.ChannelFlights || ch == session.ChannelWeather
 }
 
 // sendChannelSnapshot delivers the subscribe-time snapshot for a single channel.
@@ -538,6 +604,8 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 		sendUsenetSnapshot(r, sess, pool, t, logger)
 	case session.ChannelFlights:
 		sendFlightsSnapshot(r, sess, rdb, t, logger)
+	case session.ChannelWeather:
+		sendWeatherSnapshot(r, sess, pool, t, logger)
 	}
 }
 
@@ -549,4 +617,5 @@ func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpo
 	sendNewsSnapshot(r, sess, pool, t, logger)
 	sendUsenetSnapshot(r, sess, pool, t, logger)
 	sendFlightsSnapshot(r, sess, rdb, t, logger)
+	sendWeatherSnapshot(r, sess, pool, t, logger)
 }
