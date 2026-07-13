@@ -536,4 +536,55 @@ describe("Weather", () => {
 			});
 		});
 	});
+
+	describe("Weather map style menu", () => {
+		it("defaults to Classic Map checked, other styles and Dark Map unchecked", () => {
+			stubFetch();
+			renderWithContext();
+			expect(findMenuItem("View", (t) => t.includes("Classic Map"))!.title).toBe(
+				"✓ Classic Map",
+			);
+			expect(findMenuItem("View", (t) => t.includes("Radar Scope"))!.title).toBe(
+				"Radar Scope",
+			);
+			expect(findMenuItem("View", (t) => t.includes("Satellite"))!.title).toBe("Satellite");
+			expect(findMenuItem("View", (t) => t.includes("Dark Map"))!.title).toBe("Dark Map");
+		});
+
+		it("View → Satellite dispatches map settings, preserving darkMap", () => {
+			stubFetch();
+			mockAppData.current = { mapSettings: { mapStyle: "classic", darkMap: true } };
+			renderWithContext();
+			const item = findMenuItem("View", (t) => t.includes("Satellite"))!;
+			act(() => item.onClickFunc?.());
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppWeatherSetMapSettings",
+				mapSettings: { mapStyle: "satellite", darkMap: true },
+			});
+		});
+
+		it("the active style carries the ✓ prefix once persisted", () => {
+			stubFetch();
+			mockAppData.current = { mapSettings: { mapStyle: "satellite", darkMap: false } };
+			renderWithContext();
+			expect(findMenuItem("View", (t) => t.includes("Satellite"))!.title).toBe(
+				"✓ Satellite",
+			);
+			expect(findMenuItem("View", (t) => t.includes("Classic Map"))!.title).toBe(
+				"Classic Map",
+			);
+		});
+
+		it("View → Dark Map toggles darkMap, preserving mapStyle", () => {
+			stubFetch();
+			mockAppData.current = { mapSettings: { mapStyle: "radar", darkMap: false } };
+			renderWithContext();
+			const item = findMenuItem("View", (t) => t.includes("Dark Map"))!;
+			act(() => item.onClickFunc?.());
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppWeatherSetMapSettings",
+				mapSettings: { mapStyle: "radar", darkMap: true },
+			});
+		});
+	});
 });

@@ -1,5 +1,9 @@
 import type { ActionMessage, ClassicyStore } from "classicy";
 import { registerAppEventHandler } from "classicy";
+import {
+	type BasemapStyleId,
+	normalizeBasemapStyle,
+} from "../../lib/basemap/basemapStyles";
 
 export const WEATHER_APP_ID = "Weather.app";
 const appId = WEATHER_APP_ID;
@@ -50,6 +54,37 @@ export const readWeatherLoopSettings = (
 	return { ...DEFAULT_WEATHER_LOOP_SETTINGS, ...stored };
 };
 
+// Map appearance (shared basemap styles; see lib/basemap). Kept separate from
+// loopSettings so the View menu's style items and the loop strip persist
+// independently — neither write clobbers the other.
+export interface WeatherMapSettings {
+	mapStyle: BasemapStyleId;
+	darkMap: boolean;
+}
+
+export const DEFAULT_WEATHER_MAP_SETTINGS: WeatherMapSettings = {
+	mapStyle: "classic",
+	darkMap: false,
+};
+
+/** Persist the whole map-settings object in one dispatch. */
+export const weatherSetMapSettings = (
+	mapSettings: WeatherMapSettings,
+): ActionMessage => ({
+	type: "ClassicyAppWeatherSetMapSettings",
+	mapSettings,
+});
+
+/** Per-field fallback to defaults; unknown stored styles normalize to classic. */
+export const readWeatherMapSettings = (
+	data: Record<string, unknown> | undefined,
+): WeatherMapSettings => {
+	const stored =
+		(data?.mapSettings as Partial<WeatherMapSettings> | undefined) ?? {};
+	const merged = { ...DEFAULT_WEATHER_MAP_SETTINGS, ...stored };
+	return { ...merged, mapStyle: normalizeBasemapStyle(merged.mapStyle) };
+};
+
 export const classicyWeatherEventHandler = (
 	ds: ClassicyStore,
 	action: ActionMessage,
@@ -61,6 +96,9 @@ export const classicyWeatherEventHandler = (
 	switch (action.type) {
 		case "ClassicyAppWeatherSetLoopSettings":
 			apps[appId].data = { ...appData, loopSettings: action.loopSettings };
+			return ds;
+		case "ClassicyAppWeatherSetMapSettings":
+			apps[appId].data = { ...appData, mapSettings: action.mapSettings };
 			return ds;
 		default:
 			return ds;

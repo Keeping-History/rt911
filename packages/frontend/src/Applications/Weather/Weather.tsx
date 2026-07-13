@@ -15,6 +15,7 @@ import {
 import { type FC, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import appIconPng from "./app.png";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
+import { BASEMAP_URLS, type BasemapStyleId } from "../../lib/basemap/basemapStyles";
 import { useAlmanac } from "./useAlmanac";
 import type { RadarIndex } from "./weatherRadar";
 import { cToF, degToCompass, hpaToInHg, kmToMiles, ktToMph } from "./weatherUnits";
@@ -25,18 +26,14 @@ import { formatPlayhead, type LoopClock, playheadAt } from "../../lib/loopClock"
 // Importing this module also registers the ClassicyAppWeather reducer.
 import {
 	readWeatherLoopSettings,
+	readWeatherMapSettings,
 	WEATHER_LOOP_SPEEDS,
 	WEATHER_SPEED_LABELS,
 	weatherSetLoopSettings,
+	weatherSetMapSettings,
 	type WeatherLoopSpeed,
 	type WeatherLoopWindowHours,
-} from "./weatherLoopSettings";
-
-// Same basemap FlightTracker uses (VITE_FLIGHT_BASEMAP_URL) — no new env var
-// for a second map, per the design brief.
-const BASEMAP_URL =
-	(import.meta.env.VITE_FLIGHT_BASEMAP_URL as string | undefined) ??
-	"https://files.911realtime.org/maps/na-basemap.pmtiles";
+} from "./weatherSettings";
 
 // Static Wasabi manifest, fetched once on mount (not on the websocket wire).
 const RADAR_INDEX_URL = "https://files.911realtime.org/weather/radar/index.json";
@@ -128,6 +125,23 @@ export const Weather: FC = () => {
 	const loopSettings = useMemo(() => readWeatherLoopSettings(appData), [appData]);
 	const loopEnabled = loopSettings.enabled;
 	const windowMs = loopSettings.windowHours * 3_600_000;
+
+	// Map appearance (View menu's style items + Dark Map toggle); independent
+	// of loopSettings above — see weatherSettings.ts.
+	const mapSettings = useMemo(() => readWeatherMapSettings(appData), [appData]);
+
+	const setMapStyle = useCallback(
+		(mapStyle: BasemapStyleId) =>
+			desktopEventDispatch(weatherSetMapSettings({ ...mapSettings, mapStyle })),
+		[mapSettings, desktopEventDispatch],
+	);
+	const toggleDarkMap = useCallback(
+		() =>
+			desktopEventDispatch(
+				weatherSetMapSettings({ ...mapSettings, darkMap: !mapSettings.darkMap }),
+			),
+		[mapSettings, desktopEventDispatch],
+	);
 
 	// Anchored at the top of the loop on mount (same as toggleLoop), so a
 	// restored session starts at the window head, not a wrapped offset.
@@ -262,6 +276,26 @@ export const Weather: FC = () => {
 			title: "View",
 			menuChildren: [
 				{
+					id: "weather-style-classic-menu",
+					title: `${mapSettings.mapStyle === "classic" ? "✓ " : ""}Classic Map`,
+					onClickFunc: () => setMapStyle("classic"),
+				},
+				{
+					id: "weather-style-radar-menu",
+					title: `${mapSettings.mapStyle === "radar" ? "✓ " : ""}Radar Scope`,
+					onClickFunc: () => setMapStyle("radar"),
+				},
+				{
+					id: "weather-style-satellite-menu",
+					title: `${mapSettings.mapStyle === "satellite" ? "✓ " : ""}Satellite`,
+					onClickFunc: () => setMapStyle("satellite"),
+				},
+				{
+					id: "weather-darkmap-menu",
+					title: `${mapSettings.darkMap ? "✓ " : ""}Dark Map`,
+					onClickFunc: toggleDarkMap,
+				},
+				{
 					// ClassicyMenuItem has no checked prop — the ✓ lives in the title.
 					id: "weather-loop-menu",
 					title: `${loopEnabled ? "✓ " : ""}Loop Playback`,
@@ -306,8 +340,9 @@ export const Weather: FC = () => {
 								onSelectStation={setSelectedStationId}
 								radarIndex={radarIndex}
 								utcMs={loopEnabled ? playheadMs : utcMs}
-								theme="light"
-								basemapUrl={BASEMAP_URL}
+								mapStyle={mapSettings.mapStyle}
+								darkMap={mapSettings.darkMap}
+								basemapUrls={BASEMAP_URLS}
 							/>
 						</div>
 						<div className={styles.panel}>

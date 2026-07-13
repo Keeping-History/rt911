@@ -2,6 +2,10 @@ import type { ActionMessage, ClassicyStore } from "classicy";
 import { registerAppEventHandler } from "classicy";
 import type { LoopSpeed, LoopWindowMinutes } from "./loopClock";
 import { EMPTY_FLIGHT_FILTER, type FlightFilter } from "./flightFilter";
+import {
+	type BasemapStyleId,
+	normalizeBasemapStyle,
+} from "../../lib/basemap/basemapStyles";
 
 export const FLIGHT_TRACKER_APP_ID = "FlightTracker.app";
 const appId = FLIGHT_TRACKER_APP_ID;
@@ -10,8 +14,11 @@ const appId = FLIGHT_TRACKER_APP_ID;
 // stay ints everywhere except the FlightMap prop boundary (see intToHex).
 // Pin colors are stored per basemap theme: a single color can't stay legible on
 // both the paper-light and slate-dark grounds, so light/dark are independent and
-// FlightTracker picks the pair matching the active darkMap flag.
+// FlightTracker picks the pair matching the style's effective tone (see
+// `effectiveTone` in lib/basemap) — radar is always dark-toned regardless of the flag.
 export interface FlightMapSettings {
+	// Basemap display mode; orthogonal to darkMap (see lib/basemap).
+	mapStyle: BasemapStyleId;
 	darkMap: boolean;
 	pinColorLight: number;
 	pinColorDark: number;
@@ -23,6 +30,7 @@ export interface FlightMapSettings {
 }
 
 export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
+	mapStyle: "classic",
 	darkMap: false,
 	pinColorLight: 0x3a3a3a, // the original dark-gray dot, legible on paper
 	pinColorDark: 0xe0a72e, // amber radar-scope accent, legible on slate
@@ -46,7 +54,8 @@ export const readFlightMapSettings = (
 ): FlightMapSettings => {
 	const stored =
 		(data?.mapSettings as Partial<FlightMapSettings> | undefined) ?? {};
-	return { ...DEFAULT_FLIGHT_MAP_SETTINGS, ...stored };
+	const merged = { ...DEFAULT_FLIGHT_MAP_SETTINGS, ...stored };
+	return { ...merged, mapStyle: normalizeBasemapStyle(merged.mapStyle) };
 };
 
 // Loop playback preferences. Kept separate from mapSettings so the Settings

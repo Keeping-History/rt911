@@ -1,109 +1,75 @@
 import { describe, expect, it } from "vitest";
-import {
-	BASEMAP_PALETTES,
-	applyMapColors,
-	buildBasemapStyle,
-} from "./flightMapStyle";
+import { basemapPalette } from "../../lib/basemap/basemapStyles";
+import { applyMapColors, trailColor, trailGradient } from "./flightMapStyle";
 
-describe("buildBasemapStyle", () => {
-	const style = buildBasemapStyle("https://x.example/na.pmtiles");
-
-	it("references the pmtiles url as a vector source", () => {
-		const src = style.sources.basemap as { type: string; url: string };
-		expect(src.type).toBe("vector");
-		expect(src.url).toBe("pmtiles://https://x.example/na.pmtiles");
+describe("trailColor", () => {
+	it("keeps the original grays for classic light/dark", () => {
+		expect(trailColor("classic", false)).toBe("#5a5a5a");
+		expect(trailColor("classic", true)).toBe("#9a9aa6");
 	});
-	it("always includes a background layer so a failed basemap still renders", () => {
-		const bg = style.layers.find((l) => l.id === "background");
-		expect(bg?.type).toBe("background");
+	it("uses phosphor green for radar regardless of darkMap", () => {
+		expect(trailColor("radar", false)).toBe("#39d353");
+		expect(trailColor("radar", true)).toBe("#39d353");
 	});
-	it("draws land, country, and state layers from the basemap source", () => {
-		const ids = style.layers.map((l) => l.id);
-		expect(ids).toEqual(expect.arrayContaining(["land", "countries", "states"]));
-	});
-	it("omits the glyphs key entirely (undefined value crashes maplibre 5 style validation)", () => {
-		expect("glyphs" in buildBasemapStyle("https://x.example/na.pmtiles")).toBe(false);
+	it("uses near-white over day imagery and pale gray over night", () => {
+		expect(trailColor("satellite", false)).toBe("#f2f2f2");
+		expect(trailColor("satellite", true)).toBe("#cfd8e3");
 	});
 });
 
-describe("buildBasemapStyle — themes", () => {
-	it("defaults to the light (paper) palette", () => {
-		const bg = buildBasemapStyle("https://x.example/na.pmtiles").layers.find(
-			(l) => l.id === "background",
-		) as { paint: { "background-color": string } };
-		expect(bg.paint["background-color"]).toBe(BASEMAP_PALETTES.light.background);
-	});
-
-	it("uses the dark palette when asked", () => {
-		const style = buildBasemapStyle("https://x.example/na.pmtiles", "dark");
-		const bg = style.layers.find((l) => l.id === "background") as {
-			paint: { "background-color": string };
-		};
-		const land = style.layers.find((l) => l.id === "land") as {
-			paint: { "fill-color": string };
-		};
-		expect(bg.paint["background-color"]).toBe(BASEMAP_PALETTES.dark.background);
-		expect(land.paint["fill-color"]).toBe(BASEMAP_PALETTES.dark.land);
+describe("trailGradient", () => {
+	it("fades transparent→opaque in the style's trail color", () => {
+		// classic dark trail #9a9aa6 → rgb 154,154,166
+		const g = JSON.stringify(trailGradient("classic", true));
+		expect(g).toContain("rgba(154,154,166,0)");
+		expect(g).toContain("rgba(154,154,166,0.7)");
 	});
 });
 
 describe("applyMapColors", () => {
 	function recordingMap() {
 		const paint: Record<string, Record<string, unknown>> = {};
+		const layout: Record<string, Record<string, unknown>> = {};
 		return {
 			paint,
+			layout,
 			setPaintProperty(layerId: string, name: string, value: unknown) {
 				(paint[layerId] ??= {})[name] = value;
+			},
+			setLayoutProperty(layerId: string, name: string, value: unknown) {
+				(layout[layerId] ??= {})[name] = value;
 			},
 		};
 	}
 
-	it("applies the dark palette and themed trail gradient, leaving pin layers alone", () => {
+	it("applies palette, ground visibility, trail gradient, and ghost colors", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
-			darkMap: true,
-			pinColor: "#00aa00",
-			notablePinColor: "#123456",
+			mapStyle: "satellite", darkMap: true,
+			pinColor: "#00aa00", notablePinColor: "#123456",
 		});
 		expect(map.paint.background["background-color"]).toBe(
-			BASEMAP_PALETTES.dark.background,
+			basemapPalette("satellite", true).background,
 		);
-		expect(map.paint.states["line-color"]).toBe(BASEMAP_PALETTES.dark.states);
-		// Trails fade via a themed line-gradient (dark #9a9aa6 → rgb 154,154,166).
-		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("154,154,166");
-		// Pin colors flow through icon rebuilds now, not paint.
+		expect(map.layout["satellite-night"].visibility).toBe("visible");
+		expect(map.layout.land.visibility).toBe("none");
+		// satellite-night trail #cfd8e3 → rgb 207,216,227
+		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("207,216,227");
+		expect(map.paint["ghost-dots"]["circle-color"]).toBe("#00aa00");
+		expect(map.paint["ghost-notable"]["circle-color"]).toBe("#123456");
+		// Pin colors flow through icon rebuilds, not paint.
 		expect(map.paint["flights-dots"]).toBeUndefined();
 		expect(map.paint["flights-notable"]).toBeUndefined();
 	});
 
-	it("applies the light palette when darkMap is off", () => {
+	it("classic light matches the original paper behavior", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
-			darkMap: false,
-			pinColor: "#3a3a3a",
-			notablePinColor: "#c0202a",
+			mapStyle: "classic", darkMap: false,
+			pinColor: "#3a3a3a", notablePinColor: "#c0202a",
 		});
-		expect(map.paint.background["background-color"]).toBe(
-			BASEMAP_PALETTES.light.background,
-		);
-		// Light trail gradient (#5a5a5a → rgb 90,90,90).
+		expect(map.paint.background["background-color"]).toBe("#efe9dd");
+		expect(map.layout.land.visibility).toBe("visible");
 		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("90,90,90");
-	});
-});
-
-describe("applyMapColors ghost layers", () => {
-	it("recolors the ghost layers with the pin colors", () => {
-		const calls: Array<[string, string, unknown]> = [];
-		const map = {
-			setPaintProperty: (l: string, n: string, v: unknown) =>
-				calls.push([l, n, v]),
-		};
-		applyMapColors(map, {
-			darkMap: false,
-			pinColor: "#112233",
-			notablePinColor: "#445566",
-		});
-		expect(calls).toContainEqual(["ghost-dots", "circle-color", "#112233"]);
-		expect(calls).toContainEqual(["ghost-notable", "circle-color", "#445566"]);
 	});
 });

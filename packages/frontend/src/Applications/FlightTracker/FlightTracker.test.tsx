@@ -139,6 +139,37 @@ vi.mock("classicy", () => ({
 			onMouseUp={(e) => onCommitFunc?.(Number((e.target as HTMLInputElement).value))}
 		/>
 	),
+	// Mirrors the real component's DOM shape (input id = option id, a <label
+	// htmlFor> pointing at it) so getByLabelText resolves the same way it
+	// would against the real ClassicyRadioInput.
+	ClassicyRadioInput: ({
+		name,
+		label,
+		inputs,
+		onClickFunc,
+	}: {
+		name: string;
+		label?: string;
+		inputs: Array<{ id: string; label?: string; checked?: boolean }>;
+		onClickFunc?: (id: string) => void;
+	}) => (
+		<div>
+			<span>{label}</span>
+			{inputs.map((inp) => (
+				<div key={inp.id}>
+					<input
+						id={inp.id}
+						type="radio"
+						name={name}
+						value={inp.id}
+						defaultChecked={inp.checked}
+						onChange={() => onClickFunc?.(inp.id)}
+					/>
+					<label htmlFor={inp.id}>{inp.label}</label>
+				</div>
+			))}
+		</div>
+	),
 	MAC_OS_8_CRAYONS: [],
 	ClassicyIcons: {
 		controlPanels: { location: { app: "icon.png" } },
@@ -370,6 +401,23 @@ describe("FlightTracker", () => {
 		expect(last.playing).toBe(true); // paused:false → playing
 	});
 
+	it("View menu style items check the active style and dispatch a single mapStyle change", () => {
+		renderWithContext({});
+		expect(menuItem("View", (t) => t.includes("Classic Map"))!.title).toBe(
+			"✓ Classic Map",
+		); // default → checked
+		expect(menuItem("View", (t) => t.includes("Radar Scope"))!.title).toBe(
+			"Radar Scope",
+		);
+		const satellite = menuItem("View", (t) => t.includes("Satellite"))!;
+		expect(satellite.title).toBe("Satellite");
+		act(() => satellite.onClickFunc?.());
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyAppFlightTrackerSetMapSettings",
+			mapSettings: { mapStyle: "satellite", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+		});
+	});
+
 	it("View ▸ Dark Map toggles darkMap in one dispatch, preserving pin colors", () => {
 		renderWithContext({});
 		const item = menuItem("View", (t) => t.includes("Dark Map"))!;
@@ -377,7 +425,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: true, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
 		});
 	});
 
@@ -396,6 +444,18 @@ describe("FlightTracker", () => {
 		expect(last.pinColor).toBe("#0000ff");
 		expect(last.notablePinColor).toBe("#00ff00");
 		expect(menuItem("View", (t) => t.includes("Dark Map"))!.title).toBe("✓ Dark Map");
+	});
+
+	it("radar style picks the dark pin colors even with darkMap off", () => {
+		mockAppData.current = {
+			mapSettings: { mapStyle: "radar", darkMap: false },
+		};
+		renderWithContext({});
+		const last = mapProps[mapProps.length - 1];
+		// radar is always dark-toned regardless of the darkMap flag.
+		expect(last.mapStyle).toBe("radar");
+		expect(last.pinColor).toBe("#e0a72e");
+		expect(last.notablePinColor).toBe("#ff4d4d");
 	});
 
 	it("light map picks the light pin colors", () => {
@@ -423,7 +483,18 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: true, pinColorLight: 0x0000ff, pinColorDark: 0x0000ff, notablePinColorLight: 0x0000ff, notablePinColorDark: 0x0000ff, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x0000ff, pinColorDark: 0x0000ff, notablePinColorLight: 0x0000ff, notablePinColorDark: 0x0000ff, radarSweep: true, trailMultiplier: 5 },
+		});
+	});
+
+	it("Settings window map-style radio round-trips through Save", () => {
+		renderWithContext({});
+		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		fireEvent.click(screen.getByLabelText("Radar Scope"));
+		fireEvent.click(screen.getByText("Save"));
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyAppFlightTrackerSetMapSettings",
+			mapSettings: { mapStyle: "radar", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
 		});
 	});
 
@@ -434,7 +505,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
 		});
 	});
 
@@ -446,7 +517,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
 		});
 	});
 
@@ -460,7 +531,7 @@ describe("FlightTracker", () => {
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
 			mapSettings: {
-				darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e,
+				mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e,
 				notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d,
 				radarSweep: true, trailMultiplier: 3.5,
 			},

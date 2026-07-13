@@ -3,6 +3,8 @@ import { Protocol } from "pmtiles";
 import { type FC, useEffect, useRef } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import {
+	type BasemapStyleId,
+	type BasemapUrls,
 	TRACK_LINE_COLOR,
 	applyMapColors,
 	buildBasemapStyle,
@@ -71,10 +73,11 @@ interface FlightMapProps {
 	// Short history lookback from the provider (flightsSeed): earlier samples
 	// that give freshly-seeded single-sample flights a heading immediately.
 	seedPositions?: FlightPosition[];
-	basemapUrl: string;
+	basemapUrls: BasemapUrls;
 	trackGeoJSON: GeoJSON.Feature | null;
 	nowMs: number;
 	playing: boolean;
+	mapStyle: BasemapStyleId;
 	darkMap: boolean;
 	// CSS hex strings — FlightTracker converts from the persisted packed ints.
 	pinColor: string;
@@ -120,8 +123,8 @@ const GHOST_OPACITY = 0.4;
 const GHOST_STROKE_COLOR = "#ffffff";
 
 export const FlightMap: FC<FlightMapProps> = ({
-	positions, seedPositions, basemapUrl, trackGeoJSON, nowMs, playing,
-	darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
+	positions, seedPositions, basemapUrls, trackGeoJSON, nowMs, playing,
+	mapStyle, darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null,
@@ -137,8 +140,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	seedRef.current = seedPositions;
 	const cbRef = useRef({ onSelectFlight, onClearSelection });
 	cbRef.current = { onSelectFlight, onClearSelection };
-	const colorsRef = useRef<FlightMapColors>({ darkMap, pinColor, notablePinColor });
-	colorsRef.current = { darkMap, pinColor, notablePinColor };
+	const colorsRef = useRef<FlightMapColors>({ mapStyle, darkMap, pinColor, notablePinColor });
+	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor };
 	const radarSweepRef = useRef(radarSweep);
 	radarSweepRef.current = radarSweep;
 	const trailMultiplierRef = useRef(trailMultiplier);
@@ -162,13 +165,13 @@ export const FlightMap: FC<FlightMapProps> = ({
 	// Whether a frame is owed while paused (buffer/clock changed since last draw).
 	const dirtyRef = useRef(true);
 
-	// Create the map once (basemapUrl is effectively stable from env).
+	// Create the map once (basemapUrls is effectively stable from env).
 	useEffect(() => {
 		if (!containerRef.current) return;
 		ensurePmtilesProtocol();
 		const map = new maplibregl.Map({
 			container: containerRef.current,
-			style: buildBasemapStyle(basemapUrl, colorsRef.current.darkMap ? "dark" : "light"),
+			style: buildBasemapStyle(basemapUrls, colorsRef.current.mapStyle, colorsRef.current.darkMap),
 			center: NA_CENTER,
 			zoom: NA_ZOOM,
 			attributionControl: false,
@@ -178,7 +181,6 @@ export const FlightMap: FC<FlightMapProps> = ({
 		map.on("load", () => {
 			loadedRef.current = true;
 			const colors = colorsRef.current;
-			const theme = colors.darkMap ? "dark" : "light";
 			updateMotion(motionBufferRef.current, positionsRef.current);
 			if (seedRef.current?.length)
 				seedMotionFromHistory(motionBufferRef.current, seedRef.current);
@@ -196,7 +198,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// Breadcrumb trails under the dots, faded oldest→head by a line-gradient.
 			map.addLayer({
 				id: "flight-trails", type: "line", source: "flight-trails",
-				paint: { "line-width": 1.2, "line-gradient": trailGradient(theme) },
+				paint: { "line-width": 1.2, "line-gradient": trailGradient(colors.mapStyle, colors.darkMap) },
 			});
 			map.addLayer({
 				id: "flights-dots", type: "symbol", source: "flights",
@@ -320,7 +322,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			mapRef.current = null;
 			loadedRef.current = false;
 		};
-	}, [basemapUrl]);
+	}, [basemapUrls]);
 
 	// Fold each new airborne snapshot into the motion buffer, then re-apply the
 	// heading seed: chunks can land before OR after the snapshot that creates
@@ -355,9 +357,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		applyMapColors(map, { darkMap, pinColor, notablePinColor });
+		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor });
 		void installPlaneIcons(map, pinColor, notablePinColor);
-	}, [darkMap, pinColor, notablePinColor]);
+	}, [mapStyle, darkMap, pinColor, notablePinColor]);
 
 	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an
 	// Appearance-theme switch that happened while hidden is picked up. dirtyRef
