@@ -727,9 +727,12 @@ const weatherForecastSelectFrom = `
 // WeatherForecastsInRange returns forecasts whose issued_at falls in the
 // half-open interval [lo, hi), ordered by issued_at.
 func WeatherForecastsInRange(ctx context.Context, pool *pgxpool.Pool, lo, hi time.Time) ([]model.WeatherForecast, error) {
+	// zone IS NOT NULL: Zone scans as a plain string; the loader never writes
+	// NULL zones, but the column is nullable — one bad row would otherwise
+	// fail the scan and black out the whole tick window.
 	return queryWeatherForecasts(ctx, pool,
 		weatherForecastSelectFrom+`
-		 WHERE issued_at >= $1 AND issued_at < $2
+		 WHERE zone IS NOT NULL AND issued_at >= $1 AND issued_at < $2
 		 ORDER BY issued_at`, lo, hi)
 }
 
