@@ -653,3 +653,125 @@ func StreamFlightPositions(ctx context.Context, pool *pgxpool.Pool, fn func(minu
 	}
 	return rows.Err()
 }
+
+// --- weather (weather channel) ---
+
+// weatherObsSelectFrom is the shared SELECT clause for weather_observations
+// rows (packages/tools/weather-recon). Numeric fields are nullable in the
+// NCEI source data — a station can report temp without gust, or vice versa —
+// so they scan straight into the model's *float64/*int fields rather than
+// COALESCEing to 0 (see model.WeatherObservation).
+const weatherObsSelectFrom = `
+	SELECT id, station_id, observed_at, temp_c, dewpoint_c,
+	       wind_dir_deg, wind_speed_kt, gust_kt, pressure_hpa,
+	       sky_condition, present_weather, visibility_km, raw_metar
+	FROM weather_observations`
+
+// WeatherObsInRange returns observations whose observed_at falls in the
+// half-open interval [lo, hi), ordered by observed_at — the forward window a
+// tick fetches for the weather channel.
+func WeatherObsInRange(ctx context.Context, pool *pgxpool.Pool, lo, hi time.Time) ([]model.WeatherObservation, error) {
+	return queryWeatherObs(ctx, pool,
+		weatherObsSelectFrom+`
+		 WHERE observed_at >= $1 AND observed_at < $2
+		 ORDER BY observed_at`, lo, hi)
+}
+
+// CurrentWeatherObs returns the most recent observation at or before t for
+// every station — the per-station snapshot a client sees on init/seek.
+func CurrentWeatherObs(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model.WeatherObservation, error) {
+	return queryWeatherObs(ctx, pool,
+		`SELECT DISTINCT ON (station_id) id, station_id, observed_at, temp_c, dewpoint_c,
+		        wind_dir_deg, wind_speed_kt, gust_kt, pressure_hpa,
+		        sky_condition, present_weather, visibility_km, raw_metar
+		 FROM weather_observations
+		 WHERE observed_at <= $1
+		 ORDER BY station_id, observed_at DESC`, t)
+}
+
+func queryWeatherObs(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.WeatherObservation, error) {
+	rows, err := pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.WeatherObservation
+	for rows.Next() {
+		var it model.WeatherObservation
+		// sky_condition/present_weather/raw_metar are nullable text — the derefStr
+		// pattern; the numeric fields are already *float64/*int on the model, so
+		// they scan directly (see item.go's CalcDuration/Sort for precedent).
+		var skyCondition, presentWeather, rawMetar *string
+		if err := rows.Scan(
+			&it.ID, &it.StationID, &it.StartDate, &it.TempC, &it.DewpointC,
+			&it.WindDirDeg, &it.WindSpeedKt, &it.GustKt, &it.PressureHpa,
+			&skyCondition, &presentWeather, &it.VisibilityKm, &rawMetar,
+		); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		derefStr(&it.SkyCondition, skyCondition)
+		derefStr(&it.PresentWeather, presentWeather)
+		derefStr(&it.RawMetar, rawMetar)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// weatherForecastSelectFrom is the shared SELECT clause for weather_forecasts
+// rows (archived NWS ZFP/AFD zone forecast text products).
+const weatherForecastSelectFrom = `
+	SELECT id, wfo, zone, product_type, issued_at, raw_text
+	FROM weather_forecasts`
+
+// WeatherForecastsInRange returns forecasts whose issued_at falls in the
+// half-open interval [lo, hi), ordered by issued_at.
+func WeatherForecastsInRange(ctx context.Context, pool *pgxpool.Pool, lo, hi time.Time) ([]model.WeatherForecast, error) {
+	return queryWeatherForecasts(ctx, pool,
+		weatherForecastSelectFrom+`
+		 WHERE issued_at >= $1 AND issued_at < $2
+		 ORDER BY issued_at`, lo, hi)
+}
+
+// CurrentWeatherForecast returns the most recently issued forecast at or
+// before t whose comma-joined zone list contains zone, or (nil, nil) if none
+// exists. zone is matched with a substring LIKE since a single product can
+// cover many UGC zones.
+func CurrentWeatherForecast(ctx context.Context, pool *pgxpool.Pool, zone string, t time.Time) (*model.WeatherForecast, error) {
+	items, err := queryWeatherForecasts(ctx, pool,
+		weatherForecastSelectFrom+`
+		 WHERE zone LIKE '%'||$1||'%' AND issued_at <= $2
+		 ORDER BY issued_at DESC
+		 LIMIT 1`, zone, t)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
+func queryWeatherForecasts(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.WeatherForecast, error) {
+	rows, err := pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.WeatherForecast
+	for rows.Next() {
+		var it model.WeatherForecast
+		var wfo, productType, rawText *string
+		if err := rows.Scan(
+			&it.ID, &wfo, &it.Zone, &productType, &it.StartDate, &rawText,
+		); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		derefStr(&it.Wfo, wfo)
+		derefStr(&it.ProductType, productType)
+		derefStr(&it.RawText, rawText)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
