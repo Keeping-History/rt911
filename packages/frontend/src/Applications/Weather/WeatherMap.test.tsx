@@ -100,9 +100,16 @@ function buildRadarIndex(overrides: Partial<RadarIndex> = {}): RadarIndex {
 	};
 }
 
+const TEST_URLS = {
+	vector: "x.pmtiles",
+	satelliteDay: "day.pmtiles",
+	satelliteNight: "night.pmtiles",
+};
+
 const commonProps = {
-	basemapUrl: "x.pmtiles",
-	theme: "light" as const,
+	basemapUrls: TEST_URLS,
+	mapStyle: "classic" as const,
+	darkMap: false,
 	onSelectStation: () => {},
 };
 
@@ -262,16 +269,32 @@ describe("WeatherMap", () => {
 	it("re-applies basemap theme colors live without re-creating the map", () => {
 		const { rerender } = render(
 			<WeatherMap {...commonProps} stations={[]} observations={{}} selectedStation={null}
-				radarIndex={null} utcMs={0} theme="light" />,
+				radarIndex={null} utcMs={0} mapStyle="classic" darkMap={false} />,
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
 		expect(map.paint["background"]?.["background-color"]).toBe("#efe9dd");
 		rerender(
 			<WeatherMap {...commonProps} stations={[]} observations={{}} selectedStation={null}
-				radarIndex={null} utcMs={0} theme="dark" />,
+				radarIndex={null} utcMs={0} mapStyle="classic" darkMap={true} />,
 		);
 		expect(FakeMap.last).toBe(map); // no map re-creation
 		expect(map.paint["background"]?.["background-color"]).toBe("#1c1c22");
+	});
+
+	it("re-styling to satellite flips ground visibility on the live map", () => {
+		const { rerender } = render(
+			<WeatherMap {...commonProps} stations={[]} observations={{}} selectedStation={null}
+				radarIndex={null} utcMs={0} mapStyle="classic" darkMap={false} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		rerender(
+			<WeatherMap {...commonProps} stations={[]} observations={{}} selectedStation={null}
+				radarIndex={null} utcMs={0} mapStyle="satellite" darkMap={false} />,
+		);
+		expect(FakeMap.last).toBe(map); // no map re-creation
+		expect(map.layout["satellite-day"]?.visibility).toBe("visible");
+		expect(map.layout.land?.visibility).toBe("none");
 	});
 });

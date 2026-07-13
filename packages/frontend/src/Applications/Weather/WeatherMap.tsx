@@ -1,8 +1,14 @@
-import type { ExpressionSpecification, StyleSpecification } from "maplibre-gl";
+import type { ExpressionSpecification } from "maplibre-gl";
 import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import { type FC, useEffect, useRef } from "react";
 import type { WeatherObservation } from "../../Providers/MediaStream/MediaStreamContext";
+import {
+	applyBasemapStyle,
+	type BasemapStyleId,
+	type BasemapUrls,
+	buildBasemapStyle,
+} from "../../lib/basemap/basemapStyles";
 import { cToF } from "./weatherUnits";
 import { type RadarIndex, frameUrlFor } from "./weatherRadar";
 
@@ -43,8 +49,6 @@ export interface WeatherStation {
 	nws_zone: string | null;
 }
 
-export type WeatherMapTheme = "light" | "dark";
-
 interface WeatherMapProps {
 	stations: WeatherStation[];
 	observations: Record<string, WeatherObservation>;
@@ -52,65 +56,9 @@ interface WeatherMapProps {
 	onSelectStation: (stationId: string) => void;
 	radarIndex: RadarIndex | null;
 	utcMs: number;
-	theme: WeatherMapTheme;
-	basemapUrl: string;
-}
-
-// Same monochrome basemap treatment as FlightTracker's map (paper/slate,
-// no labels) — kept as an independent copy rather than a cross-app import so
-// the Weather app has no compile-time dependency on FlightTracker.
-interface BasemapPalette {
-	background: string;
-	land: string;
-	lakes: string;
-	countries: string;
-	states: string;
-}
-const BASEMAP_PALETTES: Record<WeatherMapTheme, BasemapPalette> = {
-	light: {
-		background: "#efe9dd",
-		land: "#e3ddcf",
-		lakes: "#d7d3c6",
-		countries: "#8a8574",
-		states: "#b3ad9c",
-	},
-	dark: {
-		background: "#1c1c22",
-		land: "#26262e",
-		lakes: "#16161c",
-		countries: "#6f6f7e",
-		states: "#44444f",
-	},
-};
-
-function buildBasemapStyle(basemapUrl: string, theme: WeatherMapTheme): StyleSpecification {
-	const p = BASEMAP_PALETTES[theme];
-	return {
-		version: 8,
-		sources: {
-			basemap: { type: "vector", url: `pmtiles://${basemapUrl}` },
-		},
-		layers: [
-			{ id: "background", type: "background", paint: { "background-color": p.background } },
-			{ id: "land", type: "fill", source: "basemap", "source-layer": "land",
-				paint: { "fill-color": p.land } },
-			{ id: "lakes", type: "fill", source: "basemap", "source-layer": "lakes",
-				paint: { "fill-color": p.lakes } },
-			{ id: "countries", type: "line", source: "basemap", "source-layer": "countries",
-				paint: { "line-color": p.countries, "line-width": 0.8 } },
-			{ id: "states", type: "line", source: "basemap", "source-layer": "states",
-				paint: { "line-color": p.states, "line-width": 0.4 } },
-		],
-	};
-}
-
-function applyBasemapColors(map: maplibregl.Map, theme: WeatherMapTheme) {
-	const p = BASEMAP_PALETTES[theme];
-	map.setPaintProperty("background", "background-color", p.background);
-	map.setPaintProperty("land", "fill-color", p.land);
-	map.setPaintProperty("lakes", "fill-color", p.lakes);
-	map.setPaintProperty("countries", "line-color", p.countries);
-	map.setPaintProperty("states", "line-color", p.states);
+	mapStyle: BasemapStyleId;
+	darkMap: boolean;
+	basemapUrls: BasemapUrls;
 }
 
 const NA_CENTER: [number, number] = [-98, 39];
@@ -189,7 +137,7 @@ function syncRadarFrame(
 }
 
 export const WeatherMap: FC<WeatherMapProps> = ({
-	stations, observations, selectedStation, onSelectStation, radarIndex, utcMs, theme, basemapUrl,
+	stations, observations, selectedStation, onSelectStation, radarIndex, utcMs, mapStyle, darkMap, basemapUrls,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const mapRef = useRef<maplibregl.Map | null>(null);
@@ -206,19 +154,19 @@ export const WeatherMap: FC<WeatherMapProps> = ({
 	radarIndexRef.current = radarIndex;
 	const utcMsRef = useRef(utcMs);
 	utcMsRef.current = utcMs;
-	const themeRef = useRef(theme);
-	themeRef.current = theme;
+	const styleRef = useRef({ mapStyle, darkMap });
+	styleRef.current = { mapStyle, darkMap };
 	const cbRef = useRef({ onSelectStation });
 	cbRef.current = { onSelectStation };
 	const lastRadarUrlRef = useRef<string | null>(null);
 
-	// Create the map once (basemapUrl is effectively stable from env).
+	// Create the map once (basemapUrls is effectively stable from env).
 	useEffect(() => {
 		if (!containerRef.current) return;
 		ensurePmtilesProtocol();
 		const map = new maplibregl.Map({
 			container: containerRef.current,
-			style: buildBasemapStyle(basemapUrl, themeRef.current),
+			style: buildBasemapStyle(basemapUrls, styleRef.current.mapStyle, styleRef.current.darkMap),
 			center: NA_CENTER,
 			zoom: NA_ZOOM,
 			attributionControl: false,
@@ -260,7 +208,7 @@ export const WeatherMap: FC<WeatherMapProps> = ({
 				if (f?.properties) cbRef.current.onSelectStation(String(f.properties.station_id));
 			});
 
-			applyBasemapColors(map, themeRef.current);
+			applyBasemapStyle(map, styleRef.current.mapStyle, styleRef.current.darkMap);
 		});
 
 		const ro = new ResizeObserver(() => map.resize());
@@ -272,7 +220,7 @@ export const WeatherMap: FC<WeatherMapProps> = ({
 			mapRef.current = null;
 			loadedRef.current = false;
 		};
-	}, [basemapUrl]);
+	}, [basemapUrls]);
 
 	// Rebuild pins when the station list or the latest observations change.
 	useEffect(() => {
@@ -297,13 +245,13 @@ export const WeatherMap: FC<WeatherMapProps> = ({
 		syncRadarFrame(map, radarIndex, utcMs, lastRadarUrlRef);
 	}, [utcMs, radarIndex]);
 
-	// Re-theme live. setPaintProperty only — setStyle() would tear down the
-	// stations/radar sources and layers.
+	// Re-style live. setPaintProperty/setLayoutProperty only — setStyle() would
+	// tear down the stations/radar sources and layers.
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		applyBasemapColors(map, theme);
-	}, [theme]);
+		applyBasemapStyle(map, mapStyle, darkMap);
+	}, [mapStyle, darkMap]);
 
 	return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 };
