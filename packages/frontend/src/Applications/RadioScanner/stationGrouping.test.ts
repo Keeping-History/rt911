@@ -3,6 +3,7 @@ import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	activeSegments,
 	calcSeekSeconds,
+	countdownLabel,
 	groupStations,
 	mergeWithSources,
 	previousSegments,
@@ -112,6 +113,33 @@ describe("calcSeekSeconds", () => {
 		const it1 = item({ start_date: "2001-09-11T12:40:00Z", jump: 2 });
 		expect(calcSeekSeconds(it1, new Date("2001-09-11T12:40:30Z").getTime())).toBe(32);
 		expect(calcSeekSeconds(it1, new Date("2001-09-11T12:39:00Z").getTime())).toBe(0); // floored
+	});
+});
+
+describe("countdownLabel", () => {
+	const t = (s: string) => new Date(s).getTime();
+
+	it("formats minutes:seconds until the item's start", () => {
+		const it1 = item({ start_date: "2001-09-11T12:31:32Z" });
+		expect(countdownLabel(it1, t("2001-09-11T12:30:00Z"))).toBe("01:32");
+	});
+
+	it("pads both fields and counts total minutes past an hour", () => {
+		const it1 = item({ start_date: "2001-09-11T13:45:07Z" });
+		expect(countdownLabel(it1, t("2001-09-11T12:30:00Z"))).toBe("75:07");
+		const it2 = item({ start_date: "2001-09-11T12:30:05Z" });
+		expect(countdownLabel(it2, t("2001-09-11T12:30:00Z"))).toBe("00:05");
+	});
+
+	it("rounds up mid-second so it reaches 00:00 exactly at start", () => {
+		const it1 = item({ start_date: "2001-09-11T12:31:00Z" });
+		expect(countdownLabel(it1, t("2001-09-11T12:30:59.400Z"))).toBe("00:01");
+		expect(countdownLabel(it1, t("2001-09-11T12:31:00Z"))).toBe("00:00");
+	});
+
+	it("clamps to 00:00 once the start has passed", () => {
+		const it1 = item({ start_date: "2001-09-11T12:30:00Z" });
+		expect(countdownLabel(it1, t("2001-09-11T12:31:00Z"))).toBe("00:00");
 	});
 });
 

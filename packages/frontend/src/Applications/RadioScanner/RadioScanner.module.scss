@@ -261,6 +261,12 @@
   }
 }
 
+.rsCountdown {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  margin: 0 calc(var(--window-padding-size) * 2) 0 var(--window-padding-size);
+}
+
 .rsScheduleBtn {
   background: transparent;
   border: none;

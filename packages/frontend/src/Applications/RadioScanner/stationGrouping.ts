@@ -33,6 +33,22 @@ export function calcSeekSeconds(item: MediaItem, clockMs: number): number {
 	return Math.max(0, raw);
 }
 
+/**
+ * MM:SS remaining until `item` starts, for the Coming Up countdown. Rounds up
+ * to whole seconds (so it hits 00:00 exactly at the start instant, never a
+ * second early) and clamps at 00:00 once the start has passed. Minutes keep
+ * counting past 59 (e.g. "75:07") rather than rolling into hours.
+ */
+export function countdownLabel(item: MediaItem, nowMs: number): string {
+	const totalSeconds = Math.max(
+		0,
+		Math.ceil((toMs(item.start_date) - nowMs) / 1000),
+	);
+	const minutes = Math.floor(totalSeconds / 60);
+	const seconds = totalSeconds % 60;
+	return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 /** Group items into stations keyed by source (title fallback), first-seen order. */
 export function groupStations(items: MediaItem[]): Station[] {
 	const order: string[] = [];

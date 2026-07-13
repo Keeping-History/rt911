@@ -32,6 +32,7 @@ import {
 import { StationPlayer } from "./StationPlayer";
 import {
     activeSegments,
+    countdownLabel,
     mergeWithSources,
     previousSegments,
     upcomingSegments,
@@ -349,6 +350,16 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                                                     }
                                                                 >
 																	<img src={ ClassicyIcons.controlPanels.soundManager.sound33} alt={item.title} />
+                                                                    <span
+                                                                        className={
+                                                                            styles.rsCountdown
+                                                                        }
+                                                                    >
+                                                                        {countdownLabel(
+                                                                            item,
+                                                                            nowMs,
+                                                                        )}
+                                                                    </span>
                                                                     {item.full_title ||
                                                                         item.title}
                                                                 </li>
