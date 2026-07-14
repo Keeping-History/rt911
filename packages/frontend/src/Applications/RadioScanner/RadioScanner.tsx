@@ -316,6 +316,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                             soloItemId={soloItemId}
                                             onToggleSolo={toggleSoloItem}
                                         />
+                                        {showSchedule && (
                                         <div style={{ display: "flex", flexDirection: "row", width: "100%", minHeight: "30%", maxHeight: "60%", gap: "var(--window-control-size)" }}>
                                                 <div
                                                     className={
@@ -413,7 +414,8 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                                     </ul>
                                                 </div>
                                             )}
-                                        </div>{" "}
+                                        </div>
+                                        )}
                                     </div>
                                     <StationPlayer
                                         station={activeStationObj}
