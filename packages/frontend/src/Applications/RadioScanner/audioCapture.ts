@@ -12,6 +12,8 @@
 // with its el.volume/el.muted muting. The WeakMaps let entries be collected
 // with their audio elements.
 
+import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
+
 export interface CapturedAudio {
 	ctx: AudioContext;
 	source: MediaElementAudioSourceNode;
@@ -31,14 +33,19 @@ const desiredSilenced = new WeakMap<HTMLAudioElement, boolean>();
 // plays in silence.
 const awaitingGesture = new Set<CapturedAudio["ctx"]>();
 
+function releaseContext(ctx: CapturedAudio["ctx"]): void {
+	awaitingGesture.delete(ctx);
+	clearAudioBlocked(ctx);
+}
+
 function resumeAwaitingContexts(): void {
 	for (const ctx of awaitingGesture) {
 		if (ctx.state !== "suspended") {
-			awaitingGesture.delete(ctx);
+			releaseContext(ctx);
 			continue;
 		}
 		ctx.resume()
-			.then(() => awaitingGesture.delete(ctx))
+			.then(() => releaseContext(ctx))
 			.catch(() => {});
 	}
 }
@@ -64,7 +71,21 @@ export function captureAudioElement(el: HTMLAudioElement): CapturedAudio | null 
 		}
 		entry.gain.gain.value = desiredSilenced.get(el) ? 0 : 1;
 		captured.set(el, entry);
-		if (entry.ctx.state === "suspended") awaitingGesture.add(entry.ctx);
+		// Track the suspended state via statechange, not just a creation-time
+		// snapshot: Safari can report a fresh context as running and only settle
+		// on suspended later (and a tab-hide suspension should also re-arm the
+		// gesture listeners).
+		const ctx = entry.ctx;
+		const syncBlocked = () => {
+			if (ctx.state === "suspended") {
+				awaitingGesture.add(ctx);
+				markAudioBlocked(ctx);
+			} else {
+				releaseContext(ctx);
+			}
+		};
+		ctx.addEventListener?.("statechange", syncBlocked);
+		syncBlocked();
 	}
 	return entry;
 }

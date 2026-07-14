@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { isAudioBlocked } from "./audioBlocked";
 import { captureAudioElement, setAudioSilenced } from "./audioCapture";
 
 class FakeGain {
@@ -94,6 +95,41 @@ describe("resume on first user gesture", () => {
 		await Promise.resolve(); // flush resume().then(...) removal
 		document.dispatchEvent(new Event("click"));
 		expect(entry?.ctx.resume).toHaveBeenCalledTimes(1);
+	});
+
+	it("reports blocked audio while a context awaits a gesture, clear after", async () => {
+		vi.stubGlobal("AudioContext", SuspendedAudioContext);
+		expect(isAudioBlocked()).toBe(false);
+		const entry = captureAudioElement(el());
+		expect(isAudioBlocked()).toBe(true);
+		if (entry) (entry.ctx as unknown as { state: string }).state = "running";
+		document.dispatchEvent(new Event("click"));
+		await Promise.resolve();
+		expect(isAudioBlocked()).toBe(false);
+	});
+
+	it("tracks a context that only reports suspended AFTER creation (statechange)", () => {
+		class StatefulAudioContext extends FakeAudioContext {
+			state = "running";
+			listeners: Array<() => void> = [];
+			addEventListener(_t: string, l: () => void) {
+				this.listeners.push(l);
+			}
+			removeEventListener() {}
+			fireStateChange() {
+				for (const l of this.listeners) l();
+			}
+		}
+		vi.stubGlobal("AudioContext", StatefulAudioContext);
+		const entry = captureAudioElement(el());
+		const ctx = entry?.ctx as unknown as InstanceType<typeof StatefulAudioContext>;
+		expect(isAudioBlocked()).toBe(false);
+		ctx.state = "suspended";
+		ctx.fireStateChange();
+		expect(isAudioBlocked()).toBe(true);
+		ctx.state = "running";
+		ctx.fireStateChange();
+		expect(isAudioBlocked()).toBe(false);
 	});
 });
 

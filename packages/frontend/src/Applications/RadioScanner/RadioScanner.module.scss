@@ -326,3 +326,42 @@
   align-items: center;
   z-index: 9;
 }
+
+/* Scrim shown while the browser's autoplay policy is holding audio back —
+   any click anywhere doubles as the unlock gesture, so the overlay needs no
+   handler of its own. Sits above the display panels (z-index 9). */
+.rsUnlockOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+.rsUnlockOverlayBox {
+  background: var(--color-theme-07);
+  border: 2px solid var(--color-theme-01);
+  box-shadow: 2px 2px 0 var(--color-theme-01);
+  padding: calc(var(--window-padding-size) * 4);
+  margin: calc(var(--window-padding-size) * 4);
+  text-align: center;
+}
+
+.rsUnlockOverlayTitle {
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 1.2);
+  color: var(--color-theme-01);
+  margin: 0 0 var(--window-padding-size) 0;
+}
+
+.rsUnlockOverlayHint {
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.85);
+  color: var(--color-theme-02);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0;
+}
