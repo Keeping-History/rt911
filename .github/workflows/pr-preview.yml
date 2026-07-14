@@ -1,0 +1,65 @@
+name: Deploy PR preview
+
+# Builds the frontend SPA for each pull request and publishes it to GitHub
+# Pages via rossjrw/pr-preview-action (gh-pages branch, pr-preview/pr-<n>/).
+# The action leaves a sticky PR comment with the preview URL and removes the
+# preview when the PR closes.
+#
+# The preview is compiled against the PRODUCTION backends (same FE_* values as
+# build.yml bakes into the deployed image), so a preview is a real client of
+# stream-beta / api-beta / files.911realtime.org. Two deliberate differences
+# from the prod image build:
+#   - OpenReplay vars are left unset so preview sessions don't pollute prod
+#     session recordings (the tracker is disabled when the key is absent).
+#   - `--base=./` makes asset URLs relative, because Pages serves the bundle
+#     from a subpath (/rt911/pr-preview/pr-<n>/), not the domain root.
+#
+# Known Pages limitations (fine for previews, listed so nobody debugs them):
+#   - No COOP/COEP response headers, so the Infinite Mac emulator's
+#     SharedArrayBuffer path is degraded (nginx.conf sets these in prod).
+#   - Directus/streamer CORS must allow https://keeping-history.github.io —
+#     configured in the Keeping-History/infra repo (rt911 configmap CORS_ORIGIN
+#     and the streamer-cors Traefik middleware).
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency: preview-${{ github.event.number }}
+
+permissions:
+  contents: write # push the built preview to the gh-pages branch
+  pull-requests: write # sticky preview-URL comment
+
+env:
+  # Public backend URLs compiled into the preview bundle — keep in sync with
+  # the FE_* block in build.yml (the prod image build).
+  VITE_PROXY_PROTOCOL: "https:"
+  VITE_PROXY_HOST: "timemachine.911realtime.org"
+  VITE_PROXY_PORT: "443"
+  VITE_MEDIA_STREAM_URL: "wss://stream-beta.911realtime.org/stream"
+  VITE_FEEDBACK_URL: "https://stream-beta.911realtime.org"
+  VITE_DIRECTUS_URL: "https://api-beta.911realtime.org"
+
+jobs:
+  deploy-preview:
+    # Fork PRs get a read-only GITHUB_TOKEN (and the action doesn't support
+    # them); dependabot runs also get a read-only token. Neither can deploy.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v4
+        if: github.event.action != 'closed'
+
+      - name: Install and build
+        if: github.event.action != 'closed' # closed = remove-only, no build needed
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @rt911/frontend exec vite build --base=./
+
+      - name: Deploy preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: packages/frontend/dist
