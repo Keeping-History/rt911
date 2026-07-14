@@ -32,6 +32,7 @@ describe("FocusedItemPlayer", () => {
 				vizMode="Wave"
 				onCycleVizMode={() => {}}
 				waveColors={null}
+				maxVolume={1}
 			/>,
 		);
 		expect(queryByText("Wave")).toBeNull();
@@ -43,8 +44,37 @@ describe("FocusedItemPlayer", () => {
 				vizMode="Wave"
 				onCycleVizMode={() => {}}
 				waveColors={null}
+				maxVolume={1}
 			/>,
 		);
 		expect(queryByText("Wave")).not.toBeNull();
+	});
+
+	it("applies maxVolume to the audio element and tracks changes", () => {
+		const { container, rerender } = render(
+			<FocusedItemPlayer
+				item={item({})}
+				onDismiss={() => {}}
+				showWaveform={false}
+				vizMode="Wave"
+				onCycleVizMode={() => {}}
+				waveColors={null}
+				maxVolume={0.4}
+			/>,
+		);
+		const el = container.querySelector("audio") as HTMLAudioElement;
+		expect(el.volume).toBe(0.4);
+		rerender(
+			<FocusedItemPlayer
+				item={item({})}
+				onDismiss={() => {}}
+				showWaveform={false}
+				vizMode="Wave"
+				onCycleVizMode={() => {}}
+				waveColors={null}
+				maxVolume={0.9}
+			/>,
+		);
+		expect(el.volume).toBe(0.9);
 	});
 });

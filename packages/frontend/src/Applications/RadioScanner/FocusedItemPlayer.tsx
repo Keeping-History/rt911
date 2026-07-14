@@ -5,6 +5,7 @@ import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import type { VizMode } from "./radioScannerSettings";
 import styles from "./RadioScanner.module.scss";
 import { WaveformVisualizer } from "./WaveformVisualizer";
+import { setAudioLevel } from "./audioCapture";
 
 interface FocusedItemPlayerProps {
 	item: MediaItem;
@@ -13,6 +14,7 @@ interface FocusedItemPlayerProps {
 	vizMode: VizMode;
 	onCycleVizMode: () => void;
 	waveColors: { bright: string; dim: string } | null;
+	maxVolume: number;
 }
 
 export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
@@ -22,6 +24,7 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 	vizMode,
 	onCycleVizMode,
 	waveColors,
+	maxVolume,
 }) => {
 	const audioRef = useRef<HTMLAudioElement>(null);
 	const [playing, setPlaying] = useState(false);
@@ -36,6 +39,16 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 			.then(() => setPlaying(true))
 			.catch(() => {});
 	}, []);
+
+	// Volume ceiling. This element is captured by the waveform whenever it is
+	// shown, and Safari ignores el.volume on captured elements — mirror the
+	// level into the in-graph gain as well.
+	useEffect(() => {
+		const el = audioRef.current;
+		if (!el) return;
+		el.volume = maxVolume;
+		setAudioLevel(el, maxVolume);
+	}, [maxVolume]);
 
 	const togglePlay = () => {
 		const el = audioRef.current;
