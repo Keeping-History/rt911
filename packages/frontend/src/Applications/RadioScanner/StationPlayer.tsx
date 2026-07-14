@@ -132,9 +132,11 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 		};
 		document.addEventListener("click", retryBlockedPlayback, true);
 		document.addEventListener("keydown", retryBlockedPlayback, true);
+		document.addEventListener("pointerdown", retryBlockedPlayback, true);
 		return () => {
 			document.removeEventListener("click", retryBlockedPlayback, true);
 			document.removeEventListener("keydown", retryBlockedPlayback, true);
+			document.removeEventListener("pointerdown", retryBlockedPlayback, true);
 		};
 	}, [tryPlay]);
 

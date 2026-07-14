@@ -53,6 +53,9 @@ function resumeAwaitingContexts(): void {
 if (typeof document !== "undefined") {
 	document.addEventListener("click", resumeAwaitingContexts, true);
 	document.addEventListener("keydown", resumeAwaitingContexts, true);
+	// The mobile click wheel preventDefault()s pointerdown, which suppresses
+	// the synthetic click — listen for the pointer event itself as well.
+	document.addEventListener("pointerdown", resumeAwaitingContexts, true);
 }
 
 /** Get or create the permanent capture chain (source → gain → destination). */
