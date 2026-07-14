@@ -1,29 +1,34 @@
-import { StrictMode } from "react";
+import { Component, lazy, StrictMode, Suspense, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "./app.css";
 import "classicy/dist/classicy.css";
-import "maplibre-gl/dist/maplibre-gl.css";
-import {
-	ClassicyAppManagerProvider,
-	ClassicyDesktop,
-} from "classicy";
+import { ClassicyAppManagerProvider } from "classicy";
 import { DefaultFileSystem } from "./data/DefaultFileSystem";
-import { Browser } from "./Applications/Browser/Browser";
-import { Feedback } from "./Applications/Feedback/Feedback";
-import { FlightTracker } from "./Applications/FlightTracker/FlightTracker";
-import { MarketWatch } from "./Applications/MarketWatch/MarketWatch";
-import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
-import { News } from "./Applications/News/News";
-import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
-import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
-import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
-import { TV } from "./Applications/TV/TV";
-import { Weather } from "./Applications/Weather/Weather";
-import { MobileBlocker } from "./MobileBlocker";
+import { isMobileDevice } from "./Mobile/detectMobile";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
 import { initTracker } from "./openreplay";
 
 initTracker();
+
+const Desktop = lazy(() => import("./Desktop"));
+const IpodShell = lazy(() => import("./Mobile/IpodShell"));
+
+// If the mobile chunk fails to load (bad network, stale deploy), fall back to
+// the desktop branch — never a blank page.
+class MobileFallbackBoundary extends Component<
+	{ children: ReactNode },
+	{ failed: boolean }
+> {
+	state = { failed: false };
+	static getDerivedStateFromError() {
+		return { failed: true };
+	}
+	render() {
+		return this.state.failed ? <Desktop /> : this.props.children;
+	}
+}
+
+const mobile = isMobileDevice();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Root element not found");
@@ -69,20 +74,15 @@ createRoot(rootElement).render(
 			}}
 		>
 			<MediaStreamProvider>
-				<ClassicyDesktop>
-					<MobileBlocker />
-					<Browser />
-					<TimeMachine />
-					<Feedback />
-					<FlightTracker />
-					<MarketWatch />
-					<News />
-					<Newsgroups />
-					<PagerDecoder />
-					<RadioScanner />
-					<TV />
-					<Weather />
-				</ClassicyDesktop>
+				<Suspense fallback={null}>
+					{mobile ? (
+						<MobileFallbackBoundary>
+							<IpodShell />
+						</MobileFallbackBoundary>
+					) : (
+						<Desktop />
+					)}
+				</Suspense>
 			</MediaStreamProvider>
 		</ClassicyAppManagerProvider>
 	</StrictMode>,
