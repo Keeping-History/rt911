@@ -60,6 +60,11 @@
 	flex-direction: column;
 	overflow: hidden;
 	border-radius: calc(var(--u) * 6);
+	/* #screen (the DoodleDev layout wrapper one level up) carries the
+	   decorative ".item" class, which sets pointer-events: none for static
+	   device artwork. That inherits down into the live app content unless
+	   reset here — without it, touch taps on menu rows silently no-op. */
+	pointer-events: auto;
 }
 
 /* ── Status bar ── */
