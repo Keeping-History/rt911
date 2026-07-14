@@ -162,4 +162,43 @@ describe("StationPlayer", () => {
 		rerender(<StationPlayer {...base} mutedItems={[]} />);
 		expect(vi.mocked(setAudioSilenced)).toHaveBeenCalledWith(audio, false);
 	});
+
+	// Safari refuses gesture-less play() on page load, so a restored session
+	// autoplays into a blocked state; clicking the already-selected station
+	// changes no React state, so without a gesture listener nothing retries
+	// until the 15s health check.
+	describe("gesture retry (Safari autoplay unlock)", () => {
+		it("retries paused elements on a user click anywhere", () => {
+			render(<StationPlayer {...base} />);
+			playSpy.mockClear();
+			document.dispatchEvent(new Event("click"));
+			expect(playSpy).toHaveBeenCalled();
+		});
+
+		it("does not retry while the clock is paused", () => {
+			render(<StationPlayer {...base} clockPaused={true} />);
+			playSpy.mockClear();
+			document.dispatchEvent(new Event("click"));
+			expect(playSpy).not.toHaveBeenCalled();
+		});
+
+		it("leaves already-playing elements alone", () => {
+			const pausedSpy = vi
+				.spyOn(window.HTMLMediaElement.prototype, "paused", "get")
+				.mockReturnValue(false);
+			render(<StationPlayer {...base} />);
+			playSpy.mockClear();
+			document.dispatchEvent(new Event("click"));
+			expect(playSpy).not.toHaveBeenCalled();
+			pausedSpy.mockRestore();
+		});
+
+		it("stops listening after unmount", () => {
+			const { unmount } = render(<StationPlayer {...base} />);
+			unmount();
+			playSpy.mockClear();
+			document.dispatchEvent(new Event("click"));
+			expect(playSpy).not.toHaveBeenCalled();
+		});
+	});
 });

@@ -23,6 +23,31 @@ const captured = new WeakMap<HTMLAudioElement, CapturedAudio>();
 // native (never yet primary) must come up silent if it later gets captured.
 const desiredSilenced = new WeakMap<HTMLAudioElement, boolean>();
 
+// A context created before the page's first user gesture (e.g. a restored
+// session autoplaying on load) starts out suspended in Safari, and resume()
+// is refused unless called during a real user activation. Remember those
+// contexts and retry from document-level gesture listeners — a captured
+// element is audible only through its context, so until this succeeds it
+// plays in silence.
+const awaitingGesture = new Set<CapturedAudio["ctx"]>();
+
+function resumeAwaitingContexts(): void {
+	for (const ctx of awaitingGesture) {
+		if (ctx.state !== "suspended") {
+			awaitingGesture.delete(ctx);
+			continue;
+		}
+		ctx.resume()
+			.then(() => awaitingGesture.delete(ctx))
+			.catch(() => {});
+	}
+}
+
+if (typeof document !== "undefined") {
+	document.addEventListener("click", resumeAwaitingContexts, true);
+	document.addEventListener("keydown", resumeAwaitingContexts, true);
+}
+
 /** Get or create the permanent capture chain (source → gain → destination). */
 export function captureAudioElement(el: HTMLAudioElement): CapturedAudio | null {
 	let entry = captured.get(el);
@@ -39,6 +64,7 @@ export function captureAudioElement(el: HTMLAudioElement): CapturedAudio | null 
 		}
 		entry.gain.gain.value = desiredSilenced.get(el) ? 0 : 1;
 		captured.set(el, entry);
+		if (entry.ctx.state === "suspended") awaitingGesture.add(entry.ctx);
 	}
 	return entry;
 }

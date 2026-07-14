@@ -94,6 +94,31 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 		return () => clearInterval(id);
 	}, [station]);
 
+	// A user gesture is the first moment blocked playback can start: Safari
+	// refuses gesture-less play() on page load, so a restored session autoplays
+	// into a blocked state — and clicking the already-selected station changes
+	// no React state, so without this nothing would retry until the health
+	// check above. Any click or keypress retries immediately.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: unlockAndApplyMuteState reads refs only
+	useEffect(() => {
+		const retryBlockedPlayback = () => {
+			if (clockPausedRef.current) return;
+			for (const [segId, el] of audioRefs.current) {
+				if (el.paused || el.ended) {
+					el.play()
+						.then(() => unlockAndApplyMuteState(segId, el))
+						.catch(() => {});
+				}
+			}
+		};
+		document.addEventListener("click", retryBlockedPlayback, true);
+		document.addEventListener("keydown", retryBlockedPlayback, true);
+		return () => {
+			document.removeEventListener("click", retryBlockedPlayback, true);
+			document.removeEventListener("keydown", retryBlockedPlayback, true);
+		};
+	}, []);
+
 	// Apply mute state immediately: a file is silenced if its station is muted
 	// or the file itself is muted. Muting is always safe, but unmuting via
 	// el.muted is only allowed once the element's autoplay unlock happened.

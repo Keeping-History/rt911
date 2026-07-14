@@ -55,6 +55,48 @@ describe("captureAudioElement", () => {
 	});
 });
 
+describe("resume on first user gesture", () => {
+	class SuspendedAudioContext extends FakeAudioContext {
+		state = "suspended";
+	}
+
+	it("resumes a context the browser created suspended once the user clicks", () => {
+		vi.stubGlobal("AudioContext", SuspendedAudioContext);
+		const entry = captureAudioElement(el());
+		expect(entry?.ctx.resume).not.toHaveBeenCalled();
+		document.dispatchEvent(new Event("click"));
+		expect(entry?.ctx.resume).toHaveBeenCalled();
+	});
+
+	it("resumes a suspended context on a keydown gesture too", () => {
+		vi.stubGlobal("AudioContext", SuspendedAudioContext);
+		const entry = captureAudioElement(el());
+		document.dispatchEvent(new Event("keydown"));
+		expect(entry?.ctx.resume).toHaveBeenCalled();
+	});
+
+	it("leaves a running context alone on a gesture", () => {
+		vi.stubGlobal(
+			"AudioContext",
+			class extends FakeAudioContext {
+				state = "running";
+			},
+		);
+		const entry = captureAudioElement(el());
+		document.dispatchEvent(new Event("click"));
+		expect(entry?.ctx.resume).not.toHaveBeenCalled();
+	});
+
+	it("stops retrying a context once a resume has succeeded", async () => {
+		vi.stubGlobal("AudioContext", SuspendedAudioContext);
+		const entry = captureAudioElement(el());
+		document.dispatchEvent(new Event("click"));
+		await Promise.resolve(); // flush resume().then(...) removal
+		document.dispatchEvent(new Event("click"));
+		expect(entry?.ctx.resume).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("setAudioSilenced", () => {
 	it("drives the gain of an already-captured element", () => {
 		vi.stubGlobal("AudioContext", FakeAudioContext);
