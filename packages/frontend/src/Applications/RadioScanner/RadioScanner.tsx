@@ -370,6 +370,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                     collapsable={false}
                     initialSize={[320, 0]}
                     initialPosition={[250, 150]}
+                    modal={true}
                     appMenu={appMenu}
                     onCloseFunc={() => setShowSettings(false)}
                 >
