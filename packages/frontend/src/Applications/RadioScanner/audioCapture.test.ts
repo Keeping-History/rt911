@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isAudioBlocked } from "./audioBlocked";
-import { captureAudioElement, setAudioSilenced } from "./audioCapture";
+import { captureAudioElement, setAudioLevel } from "./audioCapture";
 
 class FakeGain {
 	gain = { value: 1 };
@@ -141,26 +141,26 @@ describe("resume on first user gesture", () => {
 	});
 });
 
-describe("setAudioSilenced", () => {
-	it("drives the gain of an already-captured element", () => {
+describe("setAudioLevel", () => {
+	it("drives the gain of an already-captured element to the exact level", () => {
 		vi.stubGlobal("AudioContext", FakeAudioContext);
 		const a = el();
 		const entry = captureAudioElement(a);
-		setAudioSilenced(a, true);
+		setAudioLevel(a, 0.5);
+		expect(entry?.gain.gain.value).toBe(0.5);
+		setAudioLevel(a, 0);
 		expect(entry?.gain.gain.value).toBe(0);
-		setAudioSilenced(a, false);
-		expect(entry?.gain.gain.value).toBe(1);
 	});
 
-	it("is remembered by a later capture (silenced before primary)", () => {
+	it("is remembered by a later capture (level set before primary)", () => {
 		vi.stubGlobal("AudioContext", FakeAudioContext);
 		const a = el();
-		setAudioSilenced(a, true);
+		setAudioLevel(a, 0.25);
 		const entry = captureAudioElement(a);
-		expect(entry?.gain.gain.value).toBe(0);
+		expect(entry?.gain.gain.value).toBe(0.25);
 	});
 
 	it("is safe on an element that never gets captured", () => {
-		expect(() => setAudioSilenced(el(), true)).not.toThrow();
+		expect(() => setAudioLevel(el(), 0.5)).not.toThrow();
 	});
 });

@@ -8,8 +8,8 @@
 // speakers, which every browser honors by specification.
 //
 // This module owns the capture. WaveformVisualizer asks for an element's
-// entry to attach its analyser; StationPlayer drives the gain in lockstep
-// with its el.volume/el.muted muting. The WeakMaps let entries be collected
+// entry to attach its analyser; StationPlayer drives the gain level in lockstep
+// with its el.volume/el.muted handling. The WeakMaps let entries be collected
 // with their audio elements.
 
 import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
@@ -21,9 +21,10 @@ export interface CapturedAudio {
 }
 
 const captured = new WeakMap<HTMLAudioElement, CapturedAudio>();
-// Desired mute state, remembered even before capture: a clip muted while
-// native (never yet primary) must come up silent if it later gets captured.
-const desiredSilenced = new WeakMap<HTMLAudioElement, boolean>();
+// Desired volume level (0..1), remembered even before capture: a clip whose
+// level was set while native (never yet primary) must come up at that level
+// if it later gets captured. 0 = silenced.
+const desiredVolume = new WeakMap<HTMLAudioElement, number>();
 
 // A context created before the page's first user gesture (e.g. a restored
 // session autoplaying on load) starts out suspended in Safari, and resume()
@@ -72,7 +73,7 @@ export function captureAudioElement(el: HTMLAudioElement): CapturedAudio | null 
 		} catch {
 			return null;
 		}
-		entry.gain.gain.value = desiredSilenced.get(el) ? 0 : 1;
+		entry.gain.gain.value = desiredVolume.get(el) ?? 1;
 		captured.set(el, entry);
 		// Track the suspended state via statechange, not just a creation-time
 		// snapshot: Safari can report a fresh context as running and only settle
@@ -94,12 +95,18 @@ export function captureAudioElement(el: HTMLAudioElement): CapturedAudio | null 
 }
 
 /**
- * Record whether `el` should be silent and, if it is (or later becomes)
- * captured, enforce it in-graph. Gain does not affect autoplay permission,
- * so unlike el.muted this needs no autoplay-unlock gating.
+ * Record the volume `el` should play at (0..1; 0 = silenced) and, if it is
+ * (or later becomes) captured, enforce it in-graph. Gain does not affect
+ * autoplay permission, so unlike el.muted this needs no autoplay-unlock
+ * gating.
  */
-export function setAudioSilenced(el: HTMLAudioElement, silenced: boolean): void {
-	desiredSilenced.set(el, silenced);
+export function setAudioLevel(el: HTMLAudioElement, volume: number): void {
+	desiredVolume.set(el, volume);
 	const entry = captured.get(el);
-	if (entry) entry.gain.gain.value = silenced ? 0 : 1;
+	if (entry) entry.gain.gain.value = volume;
+}
+
+/** Back-compat shim — removed once StationPlayer migrates (next commit). */
+export function setAudioSilenced(el: HTMLAudioElement, silenced: boolean): void {
+	setAudioLevel(el, silenced ? 0 : 1);
 }
