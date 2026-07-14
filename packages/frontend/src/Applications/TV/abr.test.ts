@@ -96,6 +96,14 @@ describe("bumpToLevel", () => {
 		expect(api.nextLevel).toBe(-1); // no forced switch, no flush
 		expect(handlers.hlsLevelSwitched).toBeUndefined();
 	});
+
+	it("only refreshes the estimate when nothing has played yet (fresh remount)", () => {
+		const { api, handlers } = fakeApi({ currentLevel: -1 });
+		bumpToLevel(api, 2);
+		expect(api.bandwidthEstimate).toBe(OPTIMISTIC_BANDWIDTH_ESTIMATE);
+		expect(api.nextLevel).toBe(-1); // no forced switch — startLevel already covers this
+		expect(handlers.hlsLevelSwitched).toBeUndefined();
+	});
 });
 
 describe("maybeProbeUp", () => {

@@ -62,10 +62,19 @@ export function bufferedAheadSeconds(el: BufferedMedia): number {
  *  now, not after ~30s of buffer drains). Setting `nextLevel` puts hls.js in
  *  MANUAL mode, so auto is restored on the next level switch — the bump is a
  *  nudge, not a pin: if bandwidth can't sustain the level, ABR degrades as
- *  usual afterward. */
+ *  usual afterward.
+ *
+ *  A channel switch remounts the player embed, and `onReady` can fire before
+ *  hls.js has started anything — `currentLevel` still at its unset -1, with
+ *  nothing buffered to flush. Forcing `nextLevel` at that point strands
+ *  hls.js in manual mode with no fragment in flight, so `hlsLevelSwitched`
+ *  never fires and auto is never restored: the player wedges. Skip the force
+ *  whenever playback hasn't started yet — the per-player `startLevel`
+ *  config already loads a fresh mount at the ceiling, so there's nothing to
+ *  bump. */
 export function bumpToLevel(api: HlsAbrApi, level: number): void {
 	api.bandwidthEstimate = OPTIMISTIC_BANDWIDTH_ESTIMATE;
-	if (api.currentLevel === level) return; // already there — nothing to flush
+	if (api.currentLevel === level || api.currentLevel < 0) return; // already there, or nothing played yet — nothing to flush
 	api.nextLevel = level;
 	api.once("hlsLevelSwitched", () => {
 		api.nextLevel = -1;
