@@ -9,6 +9,7 @@ carries ONE bounds for every frame.
 """
 
 import struct
+import zlib
 from datetime import date, datetime, timedelta
 
 IEM_BASE = "https://mesonet.agron.iastate.edu/archive/data"
@@ -45,6 +46,32 @@ def png_dimensions(data):
     if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValueError("not a PNG")
     return struct.unpack(">II", data[16:24])
+
+
+def add_index0_transparency(data):
+    """Insert a tRNS chunk making palette index 0 fully transparent.
+
+    IEM's n0r composites are palette PNGs whose index 0 (black) means "no
+    echo"; without a tRNS chunk MapLibre renders that background as an opaque
+    box over the whole CONUS. Inserting tRNS right after PLTE keeps the image
+    data untouched. Idempotent: bytes that already carry a tRNS chunk are
+    returned unchanged. ValueError on non-PNG or non-palette input.
+    """
+    if len(data) < 8 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a PNG")
+    pos, plte_end = 8, None
+    while pos + 8 <= len(data):
+        length, ctype = struct.unpack(">I4s", data[pos:pos + 8])
+        if ctype == b"tRNS":
+            return data
+        if ctype == b"PLTE":
+            plte_end = pos + 8 + length + 4
+        pos += 8 + length + 4
+    if plte_end is None:
+        raise ValueError("no PLTE chunk (not a palette PNG)")
+    trns = (struct.pack(">I", 1) + b"tRNS" + b"\x00"
+            + struct.pack(">I", zlib.crc32(b"tRNS\x00")))
+    return data[:plte_end] + trns + data[plte_end:]
 
 
 def parse_wld(text):

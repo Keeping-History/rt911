@@ -19,9 +19,9 @@ import httpx
 from prefect import flow, get_run_logger, task
 
 from weather_recon.flow import NETWORK_RETRIES
-from weather_recon.radar import (build_index, corners, frame_times, iem_frame_url,
-                                 iem_wld_url, parse_wld, png_dimensions,
-                                 wasabi_frame_key)
+from weather_recon.radar import (add_index0_transparency, build_index, corners,
+                                 frame_times, iem_frame_url, iem_wld_url,
+                                 parse_wld, png_dimensions, wasabi_frame_key)
 from weather_recon.wasabi import existing_keys, make_client, upload_bytes
 
 FETCH_TIMEOUT = 60.0
@@ -68,6 +68,10 @@ def mirror_frames(start, end, cache_dir, skip_existing):
             if data is None:
                 missing.append(stamp)
                 continue
+            # IEM frames ship index-0 black as "no echo" with no transparency;
+            # patch in tRNS here (post-cache, pre-upload) so the disk cache
+            # stays a verbatim IEM mirror but Wasabi only ever sees keyed frames.
+            data = add_index0_transparency(data)
             dims = png_dimensions(data)
             frame_bounds = corners(wld, *dims)
             if bounds is None:

@@ -392,8 +392,7 @@ export const Weather: FC = () => {
 										</dl>
 									</ClassicyControlGroup>
 
-									<div className={styles.section}>
-										<div className={styles.sectionTitle}>Forecast</div>
+									<ClassicyControlGroup label="Forecast">
 										{!station.nws_zone ? (
 											<p className={styles.note}>
 												No archived forecast for this station.
@@ -405,11 +404,10 @@ export const Weather: FC = () => {
 										) : (
 											<pre className={styles.forecastText}>{forecastEntry.raw_text}</pre>
 										)}
-									</div>
+									</ClassicyControlGroup>
 
 									{showAlmanac && (
-										<div className={styles.section}>
-											<div className={styles.sectionTitle}>Almanac</div>
+									<ClassicyControlGroup label="Almanac">
 											{almanacDay ? (
 												<div className={styles.almanacDay}>
 													<span>
@@ -438,7 +436,7 @@ export const Weather: FC = () => {
 											) : (
 												<p className={styles.note}>No almanac data.</p>
 											)}
-										</div>
+										</ClassicyControlGroup>
 									)}
 								</>
 							)}
