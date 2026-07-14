@@ -168,6 +168,7 @@ export default function IpodShell() {
 							vizMode={DEFAULT_RADIO_SCANNER_SETTINGS.vizMode}
 							onCycleVizMode={noopCycleVizMode}
 							waveColors={null}
+							maxVolume={DEFAULT_RADIO_SCANNER_SETTINGS.maxVolume / 100}
 						/>
 					)}
 				</ScreenNavContext.Provider>

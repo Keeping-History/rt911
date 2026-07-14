@@ -128,6 +128,28 @@ vi.mock("classicy", () => ({
 		labelTitle?: string;
 		value?: number;
 	}) => <div data-color-value={value}>{labelTitle}</div>,
+	ClassicySlider: ({
+		id,
+		value,
+		min,
+		max,
+		onChangeFunc,
+	}: {
+		id?: string;
+		value?: number;
+		min?: number;
+		max?: number;
+		onChangeFunc?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+	}) => (
+		<input
+			type="range"
+			data-testid={id}
+			value={value}
+			min={min}
+			max={max}
+			onChange={onChangeFunc}
+		/>
+	),
 	MAC_OS_8_CRAYONS: [],
 	ClassicyButton: ({
 		children,
@@ -299,6 +321,7 @@ describe("RadioScanner waveform settings", () => {
 		expect(stationPlayerProps.current).toMatchObject({
 			vizMode: "Wave",
 			waveColors: null,
+			maxVolume: 1,
 		});
 	});
 
@@ -310,12 +333,14 @@ describe("RadioScanner waveform settings", () => {
 				useThemeColors: false,
 				colorBright: 0xff0000,
 				colorDim: 0x330000,
+				maxVolume: 40,
 			},
 		};
 		renderScannerWithData();
 		expect(stationPlayerProps.current).toMatchObject({
 			vizMode: "Bars",
 			waveColors: { bright: "#ff0000", dim: "#330000" },
+			maxVolume: 0.4,
 		});
 	});
 
@@ -369,5 +394,18 @@ describe("RadioScanner Settings window", () => {
 		fireEvent.click(screen.getByLabelText("Use theme colors"));
 		expect(screen.getByText("Bright")).toBeTruthy();
 		expect(screen.getByText("Dim")).toBeTruthy();
+	});
+
+	it("saves a changed max volume from the slider", () => {
+		renderScanner("ATC");
+		fireEvent.click(screen.getAllByText("Settings…")[0]);
+		fireEvent.change(screen.getByTestId("radioscanner_settings_max_volume"), {
+			target: { value: "40" },
+		});
+		fireEvent.click(screen.getByText("Save"));
+		expect(mockDispatch).toHaveBeenCalledWith({
+			type: "ClassicyAppRadioScannerSetSettings",
+			settings: expect.objectContaining({ maxVolume: 40 }),
+		});
 	});
 });

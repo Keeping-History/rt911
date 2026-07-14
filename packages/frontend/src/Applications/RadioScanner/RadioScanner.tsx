@@ -6,6 +6,7 @@ import {
     ClassicyControlGroup,
     ClassicyIcons,
     ClassicyRadioInput,
+    ClassicySlider,
     ClassicyWindow,
     intToHex,
     MAC_OS_8_CRAYONS,
@@ -16,6 +17,7 @@ import {
 } from "classicy";
 import type React from "react";
 import {
+    type ChangeEvent,
     useCallback,
     useContext,
     useEffect,
@@ -104,6 +106,9 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                     },
         [settings],
     );
+
+    // Settings store percent (slider-native); players take a 0..1 fraction.
+    const maxVolume = settings.maxVolume / 100;
 
     // Settings window draft (TimeMachine pattern): seeded from the persisted
     // settings on open, dispatched only on Save.
@@ -431,6 +436,24 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                 </>
                             )}
                         </ClassicyControlGroup>
+                        <ClassicyControlGroup label="Volume">
+                            <ClassicySlider
+                                id="radioscanner_settings_max_volume"
+                                labelTitle="Max volume:"
+                                labelPosition="left"
+                                value={settingsForm.maxVolume}
+                                min={0}
+                                max={100}
+                                step={1}
+                                valueLabel={`${settingsForm.maxVolume}%`}
+                                onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+                                    setSettingsForm((f) => ({
+                                        ...f,
+                                        maxVolume: parseInt(e.target.value, 10),
+                                    }))
+                                }
+                            />
+                        </ClassicyControlGroup>
                         <div className={styles.rsSettingsButtons}>
                             <ClassicyButton onClickFunc={() => setShowSettings(false)}>
                                 Cancel
@@ -483,6 +506,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                 vizMode={settings.vizMode}
                                 onCycleVizMode={onCycleVizMode}
                                 waveColors={waveColors}
+                                maxVolume={maxVolume}
                             />
                         ) : (
                             activeStationObj && (
@@ -621,6 +645,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                         vizMode={settings.vizMode}
                                         onCycleVizMode={onCycleVizMode}
                                         waveColors={waveColors}
+                                        maxVolume={maxVolume}
                                     />
                                 </>
                             )
