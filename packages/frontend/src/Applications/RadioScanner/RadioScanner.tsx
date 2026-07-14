@@ -37,7 +37,7 @@ import {
     previousSegments,
     upcomingSegments,
 } from "./stationGrouping";
-import Marquee from "./marquee";
+import { StationButtonContent } from "./StationButtonContent";
 
 type RadioScannerProps = Record<string, never>;
 
@@ -459,22 +459,10 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                             setFocusedItem(null);
                                         }}
                                     >
-                                        <p className={styles.rsStationSource}>
-                                            {station.label}
-                                        </p>
-                                        {!isOnline && (
-                                                // div, not p: the marquee renders block divs inside,
-                                                // and <div> inside <p> is invalid HTML (React 19 errors)
-                                                <div
-                                                    className={
-                                                        styles.rsStationOffline
-                                                    }
-                                                >
-                                                <Marquee direction="right" speed={20}>
-                                                        <span className={styles.rsOfflineText}>OFFLINE</span>
-                                                </Marquee>
-                                                </div>
-                                        )}
+                                        <StationButtonContent
+                                            label={station.label}
+                                            offline={!isOnline}
+                                        />
                                     </ClassicyButton>
                                 );
                             })}

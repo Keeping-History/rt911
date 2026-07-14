@@ -86,17 +86,57 @@
 
   // Stations are ClassicyButtons. The pressed/active and selected look comes
   // from the button's own `depressed` state; here we only size each one for
-  // the horizontal strip and stack its label/player vertically.
+  // the horizontal strip — the label/marquee layout lives on the
+  // .rsStationBtnContent wrapper inside (StationButtonContent), which needs
+  // its own element so useVerticalStackOverflow can observe it (ClassicyButton
+  // doesn't forward a ref to its <button>).
   :global(.classicyButton) {
     flex-shrink: 0;
     height: 90%;
     min-width: 8em;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: flex-start;
-    gap: calc(var(--window-padding-size) / 2);
     text-align: left;
+  }
+}
+
+.rsStationBtnContent {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: calc(var(--window-padding-size) / 2);
+
+  // Children keep their natural line heights: if they could shrink, a
+  // too-short button would crush the label to 0px instead of overflowing,
+  // and useVerticalStackOverflow would measure the crushed heights and never
+  // trigger the row layout.
+  > * {
+    flex-shrink: 0;
+  }
+}
+
+// Applied when the button is too short to stack the label above the OFFLINE
+// marquee (useVerticalStackOverflow): the marquee moves to the label's right.
+.rsStationBtnContentRow {
+  flex-direction: row;
+  align-items: center;
+
+  // In the row layout shrinking is horizontal, where the label may ellipsize.
+  .rsStationSource {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .rsStationOffline {
+    width: auto;
+    // A fixed 6em basis (instead of the stacked layout's width: 100%) keeps
+    // the marquee usable next to a long label without letting its animated
+    // content inflate the button's intrinsic width.
+    flex: 1 0 6em;
+    min-width: 0;
   }
 }
 
