@@ -414,7 +414,7 @@ describe("FlightTracker", () => {
 		act(() => satellite.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "satellite", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "satellite", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
 		});
 	});
 
@@ -425,7 +425,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
 		});
 	});
 
@@ -454,7 +454,7 @@ describe("FlightTracker", () => {
 		const last = mapProps[mapProps.length - 1];
 		// radar is always dark-toned regardless of the darkMap flag.
 		expect(last.mapStyle).toBe("radar");
-		expect(last.pinColor).toBe("#e0a72e");
+		expect(last.pinColor).toBe("#ffd700");
 		expect(last.notablePinColor).toBe("#ff4d4d");
 	});
 
@@ -494,7 +494,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "radar", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "radar", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
 		});
 	});
 
@@ -505,7 +505,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
 		});
 	});
 
@@ -517,7 +517,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
 		});
 	});
 
@@ -531,7 +531,7 @@ describe("FlightTracker", () => {
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
 			mapSettings: {
-				mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xe0a72e,
+				mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700,
 				notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d,
 				radarSweep: true, trailMultiplier: 3.5,
 			},

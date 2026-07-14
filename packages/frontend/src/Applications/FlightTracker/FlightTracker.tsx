@@ -3,6 +3,8 @@ import {
 	ClassicyButton,
 	ClassicyCheckbox,
 	ClassicyColorPicker,
+	ClassicyControlGroup,
+	ClassicyControlLabel,
 	ClassicyIcons,
 	ClassicyPopUpMenu,
 	ClassicyRadioInput,
@@ -618,56 +620,94 @@ export const FlightTracker: FC = () => {
 					onCloseFunc={() => setShowFilter(false)}
 				>
 					<div className={styles.settings}>
-						<ClassicyPopUpMenu
-							id="flight_filter_flight"
-							label="Flight #"
-							labelPosition="left"
-							labelSize="small"
-							size="small"
-							options={flightOptions}
-							selected={filterSettings.flight}
-							onChangeFunc={(e) => setFilter({ flight: e.target.value })}
-						/>
-						<ClassicyPopUpMenu
-							id="flight_filter_tail"
-							label="Tail #"
-							labelPosition="left"
-							labelSize="small"
-							size="small"
-							options={tailOptions}
-							selected={filterSettings.tail}
-							onChangeFunc={(e) => setFilter({ tail: e.target.value })}
-						/>
-						<ClassicyPopUpMenu
-							id="flight_filter_carrier"
-							label="Carrier"
-							labelPosition="left"
-							labelSize="small"
-							size="small"
-							options={carrierOptions}
-							selected={filterSettings.carrier}
-							onChangeFunc={(e) => setFilter({ carrier: e.target.value })}
-						/>
-						<ClassicyPopUpMenu
-							id="flight_filter_origin"
-							label="Departure"
-							labelPosition="left"
-							labelSize="small"
-							size="small"
-							options={originOptions}
-							selected={filterSettings.origin}
-							onChangeFunc={(e) => setFilter({ origin: e.target.value })}
-						/>
-						<ClassicyPopUpMenu
-							id="flight_filter_dest"
-							label="Destination"
-							labelPosition="left"
-							labelSize="small"
-							size="small"
-							options={destOptions}
-							selected={filterSettings.dest}
-							onChangeFunc={(e) => setFilter({ dest: e.target.value })}
-						/>
+						<ClassicyControlGroup label="Filter by">
+						<table style={{ width: "100%" }}>
+							<tr>
+								<td>
+									<ClassicyControlLabel
+										label="Flight #"
+										labelSize="small"
+									></ClassicyControlLabel>
+								</td>
+								<td>
+									<ClassicyPopUpMenu
+										id="flight_filter_flight"
+										size="small"
+										options={flightOptions}
+										selected={filterSettings.flight}
+										onChangeFunc={(e) => setFilter({ flight: e.target.value })}
+									/>
+								</td>
+								</tr>
+								<tr>
+								<td>
+									<ClassicyControlLabel
+								label="Tail #"
+								labelSize="small"
+									></ClassicyControlLabel>
+								</td>
+								<td>
+							<ClassicyPopUpMenu
+								id="flight_filter_tail"
+								size="small"
+								options={tailOptions}
+								selected={filterSettings.tail}
+								onChangeFunc={(e) => setFilter({ tail: e.target.value })}
+							/>
+								</td>
+							</tr>
+								<tr>
+								<td>
+									<ClassicyControlLabel
+								label="Carrier"
+								labelSize="small"
+									></ClassicyControlLabel>
+								</td>
+								<td>
+							<ClassicyPopUpMenu
+								id="flight_filter_carrier"
+								size="small"
+								options={carrierOptions}
+								selected={filterSettings.carrier}
+								onChangeFunc={(e) => setFilter({ carrier: e.target.value })}
+							/>
+								</td>
+							</tr>
+								<tr>
+								<td>
+									<ClassicyControlLabel
+								label="Departure"
+								labelSize="small"
+									></ClassicyControlLabel>
+								</td>
+								<td>
+							<ClassicyPopUpMenu
+								id="flight_filter_origin"
+								size="small"
+								options={originOptions}
+								selected={filterSettings.origin}
+								onChangeFunc={(e) => setFilter({ origin: e.target.value })}
+							/>
+								</td>
+							</tr>
+								<tr>
+								<td>
+									<ClassicyControlLabel
+								label="Destination"
+								labelSize="small"
+									></ClassicyControlLabel>
+								</td>
+								<td>
+							<ClassicyPopUpMenu
+								id="flight_filter_dest"
+								options={destOptions}
+								selected={filterSettings.dest}
+								onChangeFunc={(e) => setFilter({ dest: e.target.value })}
+							/>
+								</td>
+							</tr>
+						</table>
+						</ClassicyControlGroup>
 						<div className={styles.settingsButtons}>
 							<ClassicyButton onClickFunc={clearFilter}>Clear</ClassicyButton>
 						</div>

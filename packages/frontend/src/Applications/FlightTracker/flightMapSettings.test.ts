@@ -99,7 +99,7 @@ describe("readFlightMapSettings", () => {
 		// Light map keeps the original dark-gray / red; dark map gets a lighter,
 		// higher-contrast pair so pins don't vanish into the slate basemap.
 		expect(s.pinColorLight).toBe(0x3a3a3a);
-		expect(s.pinColorDark).toBe(0xe0a72e);
+		expect(s.pinColorDark).toBe(0xffd700);
 		expect(s.notablePinColorLight).toBe(0xc0202a);
 		expect(s.notablePinColorDark).toBe(0xff4d4d);
 		expect(s.pinColorDark).not.toBe(s.pinColorLight);
@@ -144,7 +144,7 @@ describe("intToHex", () => {
 	});
 	it("formats the default pin colors", () => {
 		expect(intToHex(0x3a3a3a)).toBe("#3a3a3a"); // pin light
-		expect(intToHex(0xe0a72e)).toBe("#e0a72e"); // pin dark
+		expect(intToHex(0xffd700)).toBe("#ffd700"); // pin dark
 		expect(intToHex(0xc0202a)).toBe("#c0202a"); // notable light
 		expect(intToHex(0xff4d4d)).toBe("#ff4d4d"); // notable dark
 	});
