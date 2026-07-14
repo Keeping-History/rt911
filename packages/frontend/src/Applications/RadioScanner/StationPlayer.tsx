@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
 import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
 import { setAudioSilenced } from "./audioCapture";
+import type { VizMode } from "./radioScannerSettings";
 import {
 	activeSegments,
 	calcSeekSeconds,
@@ -20,6 +21,9 @@ interface StationPlayerProps {
 	clockPaused: boolean;
 	showWaveform: boolean;
 	captionsOn?: boolean;
+	vizMode: VizMode;
+	onCycleVizMode: () => void;
+	waveColors: { bright: string; dim: string } | null;
 }
 
 /**
@@ -37,6 +41,9 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	clockPaused,
 	showWaveform,
 	captionsOn,
+	vizMode,
+	onCycleVizMode,
+	waveColors,
 }) => {
 	const segments = activeSegments(station, nowMs);
 	const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
@@ -256,6 +263,9 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 				<WaveformVisualizer
 					key={`wf-${station.key}-${primary.id}-${readyVersions.get(primary.id) ?? 0}`}
 					audioEl={audioRefs.current.get(primary.id) ?? null}
+					mode={vizMode}
+					onCycleMode={onCycleVizMode}
+					colors={waveColors}
 				/>
 			)}
 		</>

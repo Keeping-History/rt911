@@ -2,6 +2,7 @@ import { ClassicyButton } from "classicy";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
+import type { VizMode } from "./radioScannerSettings";
 import styles from "./RadioScanner.module.scss";
 import { WaveformVisualizer } from "./WaveformVisualizer";
 
@@ -9,12 +10,18 @@ interface FocusedItemPlayerProps {
 	item: MediaItem;
 	onDismiss: () => void;
 	showWaveform: boolean;
+	vizMode: VizMode;
+	onCycleVizMode: () => void;
+	waveColors: { bright: string; dim: string } | null;
 }
 
 export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 	item,
 	onDismiss,
 	showWaveform,
+	vizMode,
+	onCycleVizMode,
+	waveColors,
 }) => {
 	const audioRef = useRef<HTMLAudioElement>(null);
 	const [playing, setPlaying] = useState(false);
@@ -61,6 +68,9 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 				<WaveformVisualizer
 					key={`wf-${item.id}-${readyVersion}`}
 					audioEl={audioRef.current}
+					mode={vizMode}
+					onCycleMode={onCycleVizMode}
+					colors={waveColors}
 				/>
 			)}
 			<div className={styles.rsFocusedControls}>

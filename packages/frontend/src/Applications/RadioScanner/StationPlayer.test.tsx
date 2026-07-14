@@ -54,6 +54,9 @@ const base = {
 	mutedItems: [] as number[],
 	clockPaused: false,
 	showWaveform: false,
+	vizMode: "Wave" as const,
+	onCycleVizMode: () => {},
+	waveColors: null,
 };
 
 describe("StationPlayer", () => {

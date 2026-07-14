@@ -1,18 +1,18 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { captureAudioElement } from "./audioCapture";
 import { keepAudioContextAlive } from "./audioContextKeepAlive";
+import type { VizMode } from "./radioScannerSettings";
 
 interface WaveformVisualizerProps {
 	audioEl: HTMLAudioElement | null;
+	/** Current display mode — owned and persisted by RadioScanner. */
+	mode: VizMode;
+	/** Advance to the next mode; the parent persists the change. */
+	onCycleMode: () => void;
+	/** Custom colors; null/undefined = follow the Classicy theme variables. */
+	colors?: { bright: string; dim: string } | null;
 }
-
-const VIZ_MODES = [
-	{ label: "Bars" },
-	{ label: "Spectrum" },
-	{ label: "Radial" },
-	{ label: "Wave" },
-] as const;
 
 // Fallbacks when the Classicy theme variables aren't set (e.g. in tests).
 const FALLBACK_BRIGHT = "rgba(0,210,90,0.9)";
@@ -134,13 +134,21 @@ function drawWave(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: nu
  * positioned ancestor. A small toggle button cycles through four visualization
  * modes.
  */
-export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl }) => {
+export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
+	audioEl,
+	mode,
+	onCycleMode,
+	colors,
+}) => {
 	const containerRef = useRef<HTMLDivElement>(null);
-	const [modeIndex, setModeIndex] = useState(3);
-	const modeIndexRef = useRef(modeIndex);
-	modeIndexRef.current = modeIndex;
+	// Read per frame via refs so the rAF loop tracks prop changes without
+	// tearing down the capture/canvas effect.
+	const modeRef = useRef(mode);
+	modeRef.current = mode;
+	const colorsRef = useRef(colors ?? null);
+	colorsRef.current = colors ?? null;
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: modeIndex intentionally excluded — read each frame via ref
+	// biome-ignore lint/correctness/useExhaustiveDependencies: mode/colors intentionally excluded — read each frame via refs
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container || !audioEl) return;
@@ -193,15 +201,19 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 			const w = canvas.width;
 			const h = canvas.height;
 			if (w === 0 || h === 0) return;
-			const colors: WaveColors = {
-				bright: computed.getPropertyValue("--color-theme-03").trim() || FALLBACK_BRIGHT,
-				dim: computed.getPropertyValue("--color-theme-05").trim() || FALLBACK_DIM,
+			const c: WaveColors = colorsRef.current ?? {
+				bright:
+					computed.getPropertyValue("--color-theme-03").trim() ||
+					FALLBACK_BRIGHT,
+				dim:
+					computed.getPropertyValue("--color-theme-05").trim() ||
+					FALLBACK_DIM,
 			};
-			const mode = VIZ_MODES[modeIndexRef.current].label;
-			if (mode === "Bars") drawBars(ctx2d, analyser, w, h, colors);
-			else if (mode === "Spectrum") drawSpectrum(ctx2d, analyser, w, h, colors);
-			else if (mode === "Radial") drawRadial(ctx2d, analyser, w, h, colors);
-			else drawWave(ctx2d, analyser, w, h, colors);
+			const m = modeRef.current;
+			if (m === "Bars") drawBars(ctx2d, analyser, w, h, c);
+			else if (m === "Spectrum") drawSpectrum(ctx2d, analyser, w, h, c);
+			else if (m === "Radial") drawRadial(ctx2d, analyser, w, h, c);
+			else drawWave(ctx2d, analyser, w, h, c);
 		};
 		draw();
 
@@ -227,7 +239,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 		>
 			<button
 				type="button"
-				onMouseUp={() => setModeIndex((i) => (i + 1) % VIZ_MODES.length)}
+				onMouseUp={onCycleMode}
 				style={{
 					position: "absolute",
 					bottom: "var(--window-padding-size, 6px)",
@@ -244,7 +256,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({ audioEl 
 					zIndex: 999,
 				}}
 			>
-				{VIZ_MODES[modeIndex].label}
+				{mode}
 			</button>
 		</div>
 	);
