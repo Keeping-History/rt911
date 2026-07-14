@@ -1,9 +1,13 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 
 const captured = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }));
+// Seeded TV.app data handed to useAppManager; tests may override, reset in afterEach.
+const mockAppData = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+// Optional items override for the useMediaStream mock (null → default [FAKE_ITEM]).
+const mockItems = vi.hoisted(() => ({ value: null as unknown[] | null }));
 
 const FAKE_ITEM = {
 	id: 7,
@@ -14,17 +18,29 @@ const FAKE_ITEM = {
 	subtitles: "https://files.example.org/wabc/subs.srt",
 } as unknown as MediaItem;
 
+const FAKE_ITEM_2 = {
+	id: 8,
+	url: "https://files.example.org/wnbc/index.m3u8",
+	source: "WNBC",
+	start_date: "2001-09-11T12:00:00",
+	jump: 0,
+	subtitles: "https://files.example.org/wnbc/subs.srt",
+} as unknown as MediaItem;
+
 vi.mock("classicy", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("classicy")>();
-	const FAKE_STATE = {
+	// Built per call so a test's mockAppData override is visible to the selector.
+	const fakeState = () => ({
 		System: {
 			Manager: {
 				Applications: {
-					apps: { "TV.app": { data: {}, open: true, windows: [] } },
+					apps: {
+						"TV.app": { data: mockAppData.value, open: true, windows: [] },
+					},
 				},
 			},
 		},
-	};
+	});
 	return {
 		...actual,
 		ClassicyApp: ({ children }: { children?: React.ReactNode }) => (
@@ -49,7 +65,7 @@ vi.mock("classicy", async (importOriginal) => {
 			captured.props.push(props);
 			return <div data-testid="qt-embed" />;
 		},
-		useAppManager: (selector: (s: unknown) => unknown) => selector(FAKE_STATE),
+		useAppManager: (selector: (s: unknown) => unknown) => selector(fakeState()),
 		useAppManagerDispatch: () => () => {},
 		useClassicyDateTime: () => ({
 			dateTime: "2001-09-11T12:40:00.000Z",
@@ -60,8 +76,8 @@ vi.mock("classicy", async (importOriginal) => {
 
 vi.mock("../../Providers/MediaStream/useMediaStream", () => ({
 	useMediaStream: () => ({
-		items: [FAKE_ITEM],
-		sources: { video: ["WABC"], audio: [], pager: [], usenet: [] },
+		items: mockItems.value ?? [FAKE_ITEM],
+		sources: { video: ["WABC", "WNBC"], audio: [], pager: [], usenet: [] },
 	}),
 }));
 
@@ -73,7 +89,11 @@ vi.mock("../../openreplay", () => ({
 import { TV } from "./TV";
 import { DEFAULT_CAPTION_STYLE } from "./TVContext";
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	mockAppData.value = {};
+	mockItems.value = null;
+});
 
 type FakeApi = {
 	autoLevelCapping: number;
@@ -161,6 +181,34 @@ describe("TV — props handed to QuickTimeVideoEmbed", () => {
 		});
 
 		expect(api.autoLevelCapping).toBe(2); // ceiling: single view = full
+		expect(api.bandwidthEstimate).toBe(5_000_000); // optimistic reset
+		expect(api.nextLevel).toBe(2); // forced switch (flushes low-res buffer)
+		handlers.hlsLevelSwitched[0]();
+		expect(api.nextLevel).toBe(-1); // auto restored — a nudge, not a pin
+	});
+
+	it("bumps an already-mounted grid player whose tier rises to HIGHEST when the grid shrinks to one", () => {
+		captured.props.length = 0;
+		mockAppData.value = { multiSelectMode: true, selectedPlayers: [7, 8] };
+		mockItems.value = [FAKE_ITEM, FAKE_ITEM_2];
+		render(<TV />);
+
+		// Two grid players mounted; register a fake hls element for item 7.
+		const p7 = captured.props.find((p) => p.name === "WABC");
+		if (!p7) throw new Error("WABC grid player not mounted");
+		const { el, api, handlers } = fakeHlsElement();
+		(p7.onMediaElement as (el: unknown) => void)(el);
+
+		// Two-player grid → item 7 sits at ONE_DOWN; no bump has fired yet.
+		expect(api.bandwidthEstimate).toBe(500_000);
+		expect(api.nextLevel).toBe(-1);
+
+		// Remove item 8 via its grid ✕ button (selectedPlayers order [7, 8] →
+		// second ✕). The grid shrinks to one WITHOUT remounting item 7, so the
+		// bump must come from the re-cap effect's rise detection, not onReady.
+		fireEvent.mouseUp(screen.getAllByText("✕")[1]);
+
+		expect(api.autoLevelCapping).toBe(2); // ceiling: grid of one = full
 		expect(api.bandwidthEstimate).toBe(5_000_000); // optimistic reset
 		expect(api.nextLevel).toBe(2); // forced switch (flushes low-res buffer)
 		handlers.hlsLevelSwitched[0]();
