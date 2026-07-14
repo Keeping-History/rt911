@@ -55,3 +55,19 @@ export function bufferedAheadSeconds(el: BufferedMedia): number {
 	}
 	return 0;
 }
+
+/** One-time aggressive bump used when a channel gains single-view focus:
+ *  optimistically reset the bandwidth estimate (future auto decisions), then
+ *  force `nextLevel` (flushes buffered low-res so the improvement is visible
+ *  now, not after ~30s of buffer drains). Setting `nextLevel` puts hls.js in
+ *  MANUAL mode, so auto is restored on the next level switch — the bump is a
+ *  nudge, not a pin: if bandwidth can't sustain the level, ABR degrades as
+ *  usual afterward. */
+export function bumpToLevel(api: HlsAbrApi, level: number): void {
+	api.bandwidthEstimate = OPTIMISTIC_BANDWIDTH_ESTIMATE;
+	if (api.currentLevel === level) return; // already there — nothing to flush
+	api.nextLevel = level;
+	api.once("hlsLevelSwitched", () => {
+		api.nextLevel = -1;
+	});
+}

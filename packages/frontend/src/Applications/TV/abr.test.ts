@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+	bumpToLevel,
 	bufferedAheadSeconds,
 	OPTIMISTIC_BANDWIDTH_ESTIMATE,
 	TV_ABR_CONFIG,
 	WATCHDOG_MIN_BUFFER_S,
 } from "./abr";
-import type { BufferedMedia } from "./abr";
+import type { BufferedMedia, HlsAbrApi } from "./abr";
 
 /** Build a minimal media element stand-in with the given buffered ranges. */
 export function fakeMedia(
@@ -53,5 +54,45 @@ describe("bufferedAheadSeconds", () => {
 		expect(
 			bufferedAheadSeconds(fakeMedia([[0, 10], [100, 160]], 150)),
 		).toBe(10);
+	});
+});
+
+/** Fake hls.js api that records once-handlers so tests can fire events. */
+export function fakeApi(over: Partial<HlsAbrApi> = {}) {
+	const handlers: Record<string, (() => void)[]> = {};
+	const api: HlsAbrApi = {
+		autoLevelCapping: -1,
+		autoLevelEnabled: true,
+		bandwidthEstimate: 500_000,
+		currentLevel: 0,
+		loadLevel: 0,
+		nextLevel: -1,
+		nextLoadLevel: 0,
+		once: (event, cb) => {
+			(handlers[event] ??= []).push(cb);
+		},
+		...over,
+	};
+	return { api, handlers };
+}
+
+describe("bumpToLevel", () => {
+	it("resets the estimate, forces the level, then restores auto on switch", () => {
+		const { api, handlers } = fakeApi();
+		bumpToLevel(api, 2);
+		expect(api.bandwidthEstimate).toBe(OPTIMISTIC_BANDWIDTH_ESTIMATE);
+		expect(api.nextLevel).toBe(2);
+		// hls.js fires hlsLevelSwitched once the forced switch lands.
+		expect(handlers.hlsLevelSwitched).toHaveLength(1);
+		handlers.hlsLevelSwitched[0]();
+		expect(api.nextLevel).toBe(-1); // back to auto — never frozen at full
+	});
+
+	it("only refreshes the estimate when already playing the target level", () => {
+		const { api, handlers } = fakeApi({ currentLevel: 2 });
+		bumpToLevel(api, 2);
+		expect(api.bandwidthEstimate).toBe(OPTIMISTIC_BANDWIDTH_ESTIMATE);
+		expect(api.nextLevel).toBe(-1); // no forced switch, no flush
+		expect(handlers.hlsLevelSwitched).toBeUndefined();
 	});
 });
