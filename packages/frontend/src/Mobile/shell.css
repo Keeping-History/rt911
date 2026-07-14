@@ -1,0 +1,209 @@
+/* packages/frontend/src/Mobile/shell.css
+   Adapted from robbiebyrd/ipod_ui css/{global,ipod,screen,menu}.css
+   (MIT — see VENDORED.md). Page background and dev chrome dropped; scoped
+   under .ipodRoot; button ids renamed (#menu-btn etc.). The --u unit is
+   1/371 of the device width — every upstream measurement is in these units. */
+
+.ipodRoot {
+	position: fixed;
+	inset: 0;
+	overflow: hidden;
+	background: #111;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	touch-action: manipulation;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.ipodRoot .ipodDevice {
+	position: relative;
+	--base-width: min(calc(100vw - 24px), calc((100dvh - 24px) * 0.5955));
+	width: var(--base-width);
+	height: calc(var(--base-width) / 0.5955);
+	--u: calc(var(--base-width) / 371);
+}
+
+/* ── DoodleDev shell primitives ── */
+.ipodRoot .item {
+	position: absolute;
+	margin: 0;
+	padding: 0;
+	pointer-events: none;
+}
+.ipodRoot .item.interactive {
+	pointer-events: auto;
+	cursor: pointer;
+	transition: transform 0.05s ease-in-out, filter 0.05s ease-in-out;
+}
+.ipodRoot .item .shape {
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+.ipodRoot #base { z-index: 2; }
+.ipodRoot #base svg { width: 100%; height: 100%; }
+
+/* ── Screen ── */
+.ipodRoot #ipod-screen-content {
+	position: absolute;
+	top: calc(var(--u) * 1.5);
+	left: calc(var(--u) * 1.5);
+	width: calc(100% - var(--u) * 3);
+	height: calc(100% - var(--u) * 2.5);
+	background: #fff;
+	color: #000;
+	font-family: "Myriad Pro", "Gill Sans", "Helvetica Neue", Arial, sans-serif;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border-radius: calc(var(--u) * 6);
+}
+
+/* ── Status bar ── */
+.ipodRoot .ipodHeader {
+	height: calc(var(--u) * 20);
+	background: linear-gradient(to bottom, #ffffff 0%, #f2f2f2 45%, #e6e6e6 50%, #d9d9d9 100%);
+	border-bottom: calc(var(--u) * 1) solid #999;
+	display: flex;
+	align-items: center;
+	padding: 0 calc(var(--u) * 8);
+	justify-content: space-between;
+	box-shadow: inset 0 calc(var(--u) * 1) 0 #fff;
+	flex-shrink: 0;
+	font-weight: bold;
+	font-size: calc(var(--u) * 14);
+}
+.ipodRoot .ipodHeaderTitle {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.ipodRoot .ipodHeaderClock {
+	font-weight: 600;
+	font-size: calc(var(--u) * 12);
+	display: flex;
+	align-items: center;
+	gap: calc(var(--u) * 4);
+}
+.ipodRoot .ipodHeaderPlay {
+	width: calc(var(--u) * 9);
+	height: calc(var(--u) * 11);
+	background: linear-gradient(to bottom, #60d2fc 0%, #005ea6 100%);
+	clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.ipodRoot .ipodHeaderPause {
+	width: calc(var(--u) * 9);
+	height: calc(var(--u) * 11);
+	background: linear-gradient(to bottom, #9aa4ad 0%, #4c565f 100%);
+	clip-path: polygon(0 0, 35% 0, 35% 100%, 0 100%, 65% 0, 100% 0, 100% 100%, 65% 100%);
+}
+
+/* ── Screen body + slide-in ── */
+.ipodRoot .ipodScreenBody {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	animation: ipod-slide-in 0.2s ease-out;
+	background: #fff;
+}
+@keyframes ipod-slide-in {
+	from { transform: translateX(8%); opacity: 0.6; }
+	to { transform: translateX(0); opacity: 1; }
+}
+
+/* ── Menu list ── */
+.ipodRoot .ipodMenu {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+.ipodRoot .ipodMenuItem {
+	width: 100%;
+	padding: calc(var(--u) * 4) calc(var(--u) * 12);
+	font-size: calc(var(--u) * 15);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: calc(var(--u) * 8);
+	font-weight: 600;
+	border-bottom: calc(var(--u) * 1) solid #eee;
+}
+.ipodRoot .ipodMenuItem .label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex-grow: 1;
+}
+.ipodRoot .ipodMenuItem .value {
+	font-size: calc(var(--u) * 13);
+	color: #888;
+	font-weight: 500;
+	white-space: nowrap;
+}
+.ipodRoot .ipodMenuItem .arrow {
+	font-size: calc(var(--u) * 15);
+	color: #888;
+}
+.ipodRoot .ipodMenuItem.selected {
+	background: linear-gradient(to bottom, #4a8df3 0%, #2f7cf1 45%, #186bf0 50%, #155dd5 100%);
+	color: #fff;
+	border-bottom-color: transparent;
+}
+.ipodRoot .ipodMenuItem.selected .value,
+.ipodRoot .ipodMenuItem.selected .arrow { color: #fff; }
+.ipodRoot .ipodMenuItem.disabled { color: #bbb; }
+
+/* ── Text screens (Now Playing, Scrub, About, states) ── */
+.ipodRoot .ipodTextScreen {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: calc(var(--u) * 10) calc(var(--u) * 12);
+	font-size: calc(var(--u) * 13);
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--u) * 6);
+}
+.ipodRoot .ipodBigTime {
+	font-size: calc(var(--u) * 26);
+	font-weight: 700;
+	text-align: center;
+}
+.ipodRoot .ipodDim { color: #888; }
+.ipodRoot .ipodCenter { text-align: center; }
+.ipodRoot .ipodMarquee {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-weight: 700;
+	font-size: calc(var(--u) * 15);
+}
+
+/* ── Click wheel ── */
+.ipodRoot #control-wheel {
+	clip-path: circle(50%);
+	touch-action: none;
+}
+.ipodRoot #control-wheel.rock-next #wheel .stroke-path { stroke: url(#wheel-rock-next); }
+.ipodRoot #control-wheel.rock-prev #wheel .stroke-path { stroke: url(#wheel-rock-prev); }
+.ipodRoot #control-wheel.rock-menu #wheel .stroke-path { stroke: url(#wheel-rock-menu); }
+.ipodRoot #control-wheel.rock-play-pause #wheel .stroke-path { stroke: url(#wheel-rock-play); }
+.ipodRoot #mid-button.pressed { transform: scale(0.98) !important; filter: brightness(0.9); }
+.ipodRoot #mid-button.pressed .stroke-path { stroke: url(#mid-rock-play); }
+
+/* Expanded hit areas for the small button glyphs */
+.ipodRoot #menu-btn, .ipodRoot #next-btn, .ipodRoot #prev-btn, .ipodRoot #play-pause-btn { overflow: visible; }
+.ipodRoot #menu-btn::after, .ipodRoot #next-btn::after,
+.ipodRoot #prev-btn::after, .ipodRoot #play-pause-btn::after {
+	content: "";
+	position: absolute;
+	inset: -30px;
+}
