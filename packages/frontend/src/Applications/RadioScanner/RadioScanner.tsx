@@ -3,6 +3,7 @@ import {
     ClassicyButton,
     ClassicyIcons,
     ClassicyWindow,
+    intToHex,
     quitMenuItemHelper,
     useAppManager,
     useAppManagerDispatch,
@@ -31,6 +32,12 @@ import {
     sanitizeActiveStation,
     sanitizeItemIds,
 } from "./radioPlayback";
+import {
+	nextVizMode,
+	radioScannerSetSettings,
+	type RadioScannerSettings,
+	readRadioScannerSettings,
+} from "./radioScannerSettings";
 import { StationPlayer } from "./StationPlayer";
 import {
     activeSegments,
@@ -60,6 +67,35 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                 | Record<string, unknown>
                 | undefined,
     );
+
+	// Waveform preferences — persisted under data.settings, distinct from the
+	// SetState fields below. The overlay toggle and the Settings window both
+	// write through saveSettings.
+	const settings = useMemo(
+		() => readRadioScannerSettings(appState),
+		[appState],
+	);
+
+	const saveSettings = useCallback(
+		(next: RadioScannerSettings) =>
+			desktopEventDispatch(radioScannerSetSettings(next)),
+		[desktopEventDispatch],
+	);
+
+	const onCycleVizMode = useCallback(() => {
+		saveSettings({ ...settings, vizMode: nextVizMode(settings.vizMode) });
+	}, [saveSettings, settings]);
+
+	const waveColors = useMemo(
+		() =>
+			settings.useThemeColors
+				? null
+				: {
+						bright: intToHex(settings.colorBright),
+						dim: intToHex(settings.colorDim),
+					},
+		[settings],
+	);
 
     const isOpen = useAppManager(
         (state) => state.System.Manager.Applications.apps[appId]?.open ?? false,
@@ -326,6 +362,9 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                 item={focusedItem}
                                 onDismiss={() => setFocusedItem(null)}
                                 showWaveform={showWaveform}
+								vizMode={settings.vizMode}
+								onCycleVizMode={onCycleVizMode}
+								waveColors={waveColors}
                             />
                         ) : (
                             activeStationObj && (
@@ -461,6 +500,9 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                         clockPaused={clockPaused}
                                         showWaveform={showWaveform}
                                         captionsOn={captionsOn}
+										vizMode={settings.vizMode}
+										onCycleVizMode={onCycleVizMode}
+										waveColors={waveColors}
                                     />
                                 </>
                             )

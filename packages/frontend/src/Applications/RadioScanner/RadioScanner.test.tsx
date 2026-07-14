@@ -10,8 +10,14 @@ import {
 
 // Stub the playback-heavy children — this suite only asserts the schedule
 // (Coming Up / Previous) chrome around them.
+const stationPlayerProps = vi.hoisted(
+	() => ({ current: null as Record<string, unknown> | null }),
+);
 vi.mock("./StationPlayer", () => ({
-	StationPlayer: () => <div data-testid="station-player" />,
+	StationPlayer: (props: Record<string, unknown>) => {
+		stationPlayerProps.current = props;
+		return <div data-testid="station-player" />;
+	},
 }));
 vi.mock("./NowPlayingList", () => ({
 	NowPlayingList: () => <div data-testid="now-playing" />,
@@ -26,6 +32,7 @@ vi.mock("../../openreplay", () => ({
 const mockAppData = vi.hoisted(
 	() => ({ current: {} as Record<string, unknown> }),
 );
+const mockDispatch = vi.hoisted(() => vi.fn());
 
 vi.mock("classicy", () => ({
 	ClassicyApp: ({ children }: { children: React.ReactNode }) => (
@@ -51,6 +58,7 @@ vi.mock("classicy", () => ({
 	},
 	quitMenuItemHelper: () => ({}),
 	registerAppEventHandler: () => {},
+	intToHex: (c: number) => `#${c.toString(16).padStart(6, "0")}`,
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({
 			System: {
@@ -66,7 +74,7 @@ vi.mock("classicy", () => ({
 				},
 			},
 		}),
-	useAppManagerDispatch: () => () => {},
+	useAppManagerDispatch: () => mockDispatch,
 	useClassicyDateTime: () => ({
 		dateTime: "2001-09-11T12:40:00.000Z",
 		paused: true,
@@ -104,6 +112,10 @@ function item(
 
 function renderScanner(activeStation: string): void {
 	mockAppData.current = { activeStation };
+	renderScannerWithData();
+}
+
+function renderScannerWithData(): void {
 	const ctx: Partial<MediaStreamContextValue> = {
 		mp3Items: [
 			item(1, "WINS", "2001-09-11T12:30:00.000Z"),
@@ -184,5 +196,49 @@ describe("RadioScanner audio-unlock overlay", () => {
 		markAudioBlocked("test-gate");
 		renderScanner("WINS");
 		expect(screen.getByText(/click anywhere to start audio/i)).toBeTruthy();
+	});
+});
+
+describe("RadioScanner waveform settings", () => {
+	afterEach(() => {
+		mockDispatch.mockClear();
+		stationPlayerProps.current = null;
+		cleanup();
+	});
+
+	it("passes default settings (Wave, theme colors) to StationPlayer", () => {
+		renderScanner("ATC");
+		expect(stationPlayerProps.current).toMatchObject({
+			vizMode: "Wave",
+			waveColors: null,
+		});
+	});
+
+	it("passes stored custom mode and colors to StationPlayer", () => {
+		mockAppData.current = {
+			activeStation: "ATC",
+			settings: {
+				vizMode: "Bars",
+				useThemeColors: false,
+				colorBright: 0xff0000,
+				colorDim: 0x330000,
+			},
+		};
+		renderScannerWithData();
+		expect(stationPlayerProps.current).toMatchObject({
+			vizMode: "Bars",
+			waveColors: { bright: "#ff0000", dim: "#330000" },
+		});
+	});
+
+	it("cycling the viz mode dispatches a persisted settings update", () => {
+		renderScanner("ATC");
+		const cycle = stationPlayerProps.current
+			?.onCycleVizMode as () => void;
+		act(() => cycle());
+		expect(mockDispatch).toHaveBeenCalledWith({
+			type: "ClassicyAppRadioScannerSetSettings",
+			settings: expect.objectContaining({ vizMode: "Bars" }), // Wave → Bars
+		});
 	});
 });
