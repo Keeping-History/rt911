@@ -35,6 +35,7 @@ import {
 } from "./WheelContext";
 import { AboutScreen } from "./screens/AboutScreen";
 import { MainMenu } from "./screens/MainMenu";
+import { RadioScreen } from "./screens/RadioScreen";
 
 const APP_ID = "IpodShell.mobile";
 
@@ -91,13 +92,9 @@ export default function IpodShell() {
 		onPlayPause: () => (paused ? resume() : pause()),
 	});
 
-	// Consumed by Task 10's RadioScreen (onTune prop); no screen calls it yet
-	// since RadioScreen doesn't exist until that task lands. The `void` keeps
-	// it a live reference (not a dead declaration) for eslint/tsc until then.
 	const tuneStation = useCallback((key: string) => {
 		setActiveStationKey(key);
 	}, []);
-	void tuneStation;
 
 	const clockLabel = formatUtcAsLocalTime(
 		new Date(nowMs).toISOString(),
@@ -129,8 +126,16 @@ export default function IpodShell() {
 									<MainMenu hasActiveStation={activeStation !== null} />
 								)}
 								{screen === "about" && <AboutScreen />}
-								{/* radio / nowPlaying / timeTravel / bookmarks / scrub
-								    screens are added in Tasks 10–12 */}
+								{screen === "radio" && (
+									<RadioScreen
+										stations={stations}
+										nowMs={nowMs}
+										activeStationKey={activeStationKey}
+										onTune={tuneStation}
+									/>
+								)}
+								{/* nowPlaying / timeTravel / bookmarks / scrub
+								    screens are added in Tasks 11–12 */}
 							</div>
 						)}
 					</IpodChrome>

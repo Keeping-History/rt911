@@ -95,6 +95,14 @@ describe("resume on first user gesture", () => {
 		document.dispatchEvent(new Event("click"));
 		expect(entry?.ctx.resume).toHaveBeenCalledTimes(1);
 	});
+
+	it("resumes a suspended context on pointerdown (the mobile wheel suppresses click)", () => {
+		vi.stubGlobal("AudioContext", SuspendedAudioContext);
+		const entry = captureAudioElement(el());
+		expect(entry?.ctx.resume).not.toHaveBeenCalled();
+		document.dispatchEvent(new Event("pointerdown"));
+		expect(entry?.ctx.resume).toHaveBeenCalled();
+	});
 });
 
 describe("setAudioSilenced", () => {
