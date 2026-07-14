@@ -38,7 +38,7 @@ export function NowPlayingScreen({
 			<div className="ipodMarquee ipodCenter">{station.label}</div>
 			{primary ? (
 				<>
-					<p className="ipodCenter">{primary.title}</p>
+					<p className="ipodCenter">{primary.full_title || primary.title}</p>
 					<p className="ipodDim ipodCenter">
 						started {startTimeLabel(primary, tzOffset)}
 					</p>

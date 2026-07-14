@@ -7,8 +7,12 @@ import IpodShell from "./IpodShell";
 
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
+	// localDate is the DISPLAY value classicy's ticking clock returns (UTC
+	// shifted by tzOffset -4) — useFineClock strips the offset back off via
+	// virtualUtcMs to recover the true UTC instant (12:40 UTC here).
 	useClassicyDateTime: () => ({
 		dateTime: "2001-09-11T12:40:00.000Z",
+		localDate: new Date("2001-09-11T08:40:00.000Z"),
 		paused: false,
 		tzOffset: -4,
 		setDateTime: vi.fn(),

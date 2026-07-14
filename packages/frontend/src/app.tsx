@@ -23,6 +23,9 @@ class MobileFallbackBoundary extends Component<
 	static getDerivedStateFromError() {
 		return { failed: true };
 	}
+	componentDidCatch(error: unknown) {
+		console.error("iPod shell failed; falling back to desktop", error);
+	}
 	render() {
 		return this.state.failed ? <Desktop /> : this.props.children;
 	}

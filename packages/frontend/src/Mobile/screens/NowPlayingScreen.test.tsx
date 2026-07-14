@@ -13,7 +13,7 @@ const station: Station = {
 		{
 			id: 1,
 			title: "1010 WINS coverage",
-			full_title: "1010 WINS coverage",
+			full_title: "1010 WINS full coverage",
 			source: "WINS",
 			start_date: "2001-09-11T12:30:00",
 			end_date: "2001-09-11T13:30:00",
@@ -34,7 +34,7 @@ describe("NowPlayingScreen", () => {
 			<NowPlayingScreen station={station} nowMs={NOW} tzOffset={-4} clockPaused={false} />,
 		);
 		expect(screen.getByText("WINS")).toBeTruthy();
-		expect(screen.getByText("1010 WINS coverage")).toBeTruthy();
+		expect(screen.getByText("1010 WINS full coverage")).toBeTruthy();
 		expect(screen.getByText("8:40:00 AM")).toBeTruthy(); // 12:40 UTC at -4
 	});
 

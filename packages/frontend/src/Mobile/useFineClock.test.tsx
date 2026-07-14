@@ -1,14 +1,14 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Partial-mock classicy: replace ONLY useClassicyDateTime. Never replace the
 // whole module — new classicy imports elsewhere would explode.
 // vi.hoisted is required: imports (and vi.mock) hoist above plain consts, so
 // a bare `const clockState` would hit a TDZ error inside the mock factory.
 const clockState = vi.hoisted(() => ({
-	dateTime: "2001-09-11T12:40:00.000Z",
+	localDate: new Date("2001-09-11T08:40:00.000Z"),
 	paused: false,
-	tzOffset: -4,
+	tzOffset: -4 as number | string,
 }));
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
@@ -18,37 +18,70 @@ vi.mock("classicy", async (importOriginal) => ({
 import { useFineClock } from "./useFineClock";
 
 afterEach(cleanup);
-beforeEach(() => {
-	vi.useFakeTimers();
-	clockState.paused = false;
-});
 
 function Probe() {
 	const { nowMs, clockPaused, tzOffset } = useFineClock();
-	return <div data-testid="probe" data-now={nowMs} data-paused={clockPaused} data-tz={tzOffset} />;
+	return (
+		<div
+			data-testid="probe"
+			data-now={nowMs}
+			data-paused={clockPaused}
+			data-tz={tzOffset}
+		/>
+	);
 }
 
 describe("useFineClock", () => {
-	it("starts at the classicy dateTime and advances with real time", () => {
-		render(<Probe />);
-		const base = Date.parse("2001-09-11T12:40:00.000Z");
-		expect(Number(screen.getByTestId("probe").dataset.now)).toBeGreaterThanOrEqual(base);
-		act(() => vi.advanceTimersByTime(3000));
-		const now = Number(screen.getByTestId("probe").dataset.now);
-		expect(now - base).toBeGreaterThanOrEqual(3000);
-		expect(now - base).toBeLessThan(5000);
+	afterEach(() => {
+		clockState.localDate = new Date("2001-09-11T08:40:00.000Z");
+		clockState.paused = false;
+		clockState.tzOffset = -4;
 	});
 
-	it("freezes while the clock is paused", () => {
-		clockState.paused = true;
+	it("strips the display tz offset off the ticking localDate (virtualUtcMs)", () => {
+		// localDate is a DISPLAY value already shifted by tzOffset -4; the true
+		// UTC instant is 4 hours ahead of it.
 		render(<Probe />);
+		const expected = Date.parse("2001-09-11T12:40:00.000Z");
+		expect(Number(screen.getByTestId("probe").dataset.now)).toBe(expected);
+	});
+
+	it("derives nowMs fresh as the mocked localDate advances", () => {
+		const { rerender } = render(<Probe />);
 		const before = Number(screen.getByTestId("probe").dataset.now);
-		act(() => vi.advanceTimersByTime(3000));
-		expect(Number(screen.getByTestId("probe").dataset.now)).toBe(before);
+
+		clockState.localDate = new Date("2001-09-11T08:41:30.000Z");
+		rerender(<Probe />);
+
+		const after = Number(screen.getByTestId("probe").dataset.now);
+		expect(after).toBe(before + 90_000);
 	});
 
-	it("exposes the display timezone offset", () => {
+	it("passes clockPaused through and coerces tzOffset to a number", () => {
+		clockState.paused = true;
+		clockState.tzOffset = "-4";
 		render(<Probe />);
-		expect(screen.getByTestId("probe").dataset.tz).toBe("-4");
+		const probe = screen.getByTestId("probe");
+		expect(probe.dataset.paused).toBe("true");
+		expect(probe.dataset.tz).toBe("-4");
+	});
+
+	it("getNowMs() reflects the current value and stays referentially stable", () => {
+		let firstGetNowMs: (() => number) | undefined;
+		let secondGetNowMs: (() => number) | undefined;
+
+		function IdentityProbe() {
+			const { getNowMs } = useFineClock();
+			if (!firstGetNowMs) firstGetNowMs = getNowMs;
+			else secondGetNowMs = getNowMs;
+			return null;
+		}
+
+		const { rerender } = render(<IdentityProbe />);
+		clockState.localDate = new Date("2001-09-11T08:42:00.000Z");
+		rerender(<IdentityProbe />);
+
+		expect(secondGetNowMs).toBe(firstGetNowMs);
+		expect(firstGetNowMs?.()).toBe(Date.parse("2001-09-11T12:42:00.000Z"));
 	});
 });
