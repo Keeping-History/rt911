@@ -2,7 +2,7 @@ import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
 import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
-import { setAudioSilenced } from "./audioCapture";
+import { setAudioLevel } from "./audioCapture";
 import type { VizMode } from "./radioScannerSettings";
 import {
 	activeSegments,
@@ -24,6 +24,7 @@ interface StationPlayerProps {
 	vizMode: VizMode;
 	onCycleVizMode: () => void;
 	waveColors: { bright: string; dim: string } | null;
+	maxVolume: number;
 }
 
 /**
@@ -44,6 +45,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	vizMode,
 	onCycleVizMode,
 	waveColors,
+	maxVolume,
 }) => {
 	const segments = activeSegments(station, nowMs);
 	const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
@@ -55,6 +57,8 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	stationMutedRef.current = stationMuted;
 	const mutedItemsRef = useRef(mutedItems);
 	mutedItemsRef.current = mutedItems;
+	const maxVolumeRef = useRef(maxVolume);
+	maxVolumeRef.current = maxVolume;
 	const clockPausedRef = useRef(clockPaused);
 	clockPausedRef.current = clockPaused;
 	const getNowMsRef = useRef(getNowMs);
@@ -75,9 +79,10 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 			unlockedRef.current.add(id);
 			const silenced =
 				stationMutedRef.current || mutedItemsRef.current.includes(id);
+			const level = silenced ? 0 : maxVolumeRef.current;
 			el.muted = silenced;
-			el.volume = silenced ? 0 : 1;
-			setAudioSilenced(el, silenced);
+			el.volume = level;
+			setAudioLevel(el, level);
 		},
 		[],
 	);
@@ -147,20 +152,22 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 		};
 	}, [tryPlay]);
 
-	// Apply mute state immediately: a file is silenced if its station is muted
-	// or the file itself is muted. Muting is always safe, but unmuting via
+	// Apply mute state and the volume ceiling immediately: a file is silenced
+	// if its station is muted or the file itself is muted; otherwise it plays
+	// at the user's max-volume setting. Muting is always safe, but unmuting via
 	// el.muted is only allowed once the element's autoplay unlock happened.
 	// Safari ignores volume AND muted on visualizer-captured elements, so the
-	// state is mirrored into the capture module's in-graph gain too.
+	// level is mirrored into the capture module's in-graph gain too.
 	useEffect(() => {
 		for (const [id, el] of audioRefs.current) {
 			const silenced = stationMuted || mutedItems.includes(id);
-			el.volume = silenced ? 0 : 1;
+			const level = silenced ? 0 : maxVolume;
+			el.volume = level;
 			if (silenced) el.muted = true;
 			else if (unlockedRef.current.has(id)) el.muted = false;
-			setAudioSilenced(el, silenced);
+			setAudioLevel(el, level);
 		}
-	}, [stationMuted, mutedItems]);
+	}, [stationMuted, mutedItems, maxVolume]);
 
 	// Pause/resume all mounted elements when the clock pauses/resumes.
 	useEffect(() => {

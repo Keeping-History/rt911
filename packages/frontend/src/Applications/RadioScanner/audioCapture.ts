@@ -106,7 +106,3 @@ export function setAudioLevel(el: HTMLAudioElement, volume: number): void {
 	if (entry) entry.gain.gain.value = volume;
 }
 
-/** Back-compat shim — removed once StationPlayer migrates (next commit). */
-export function setAudioSilenced(el: HTMLAudioElement, silenced: boolean): void {
-	setAudioLevel(el, silenced ? 0 : 1);
-}

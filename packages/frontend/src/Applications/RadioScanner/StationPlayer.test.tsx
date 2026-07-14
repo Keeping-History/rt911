@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { isAudioBlocked } from "./audioBlocked";
-import { setAudioSilenced } from "./audioCapture";
+import { setAudioLevel } from "./audioCapture";
 import { StationPlayer } from "./StationPlayer";
 import type { Station } from "./stationGrouping";
 
@@ -11,7 +11,7 @@ import type { Station } from "./stationGrouping";
 // capture module's in-graph GainNode — assert those calls here.
 vi.mock("./audioCapture", () => ({
 	captureAudioElement: vi.fn(() => null),
-	setAudioSilenced: vi.fn(),
+	setAudioLevel: vi.fn(),
 }));
 
 // rt911 has no global test setup, so testing-library does not auto-clean the
@@ -57,6 +57,7 @@ const base = {
 	vizMode: "Wave" as const,
 	onCycleVizMode: () => {},
 	waveColors: null,
+	maxVolume: 1,
 };
 
 describe("StationPlayer", () => {
@@ -160,11 +161,11 @@ describe("StationPlayer", () => {
 	it("mutes and unmutes through the in-graph gain as well (Safari)", () => {
 		const { container, rerender } = render(<StationPlayer {...base} />);
 		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
-		vi.mocked(setAudioSilenced).mockClear();
+		vi.mocked(setAudioLevel).mockClear();
 		rerender(<StationPlayer {...base} mutedItems={[1]} />);
-		expect(vi.mocked(setAudioSilenced)).toHaveBeenCalledWith(audio, true);
+		expect(vi.mocked(setAudioLevel)).toHaveBeenCalledWith(audio, 0);
 		rerender(<StationPlayer {...base} mutedItems={[]} />);
-		expect(vi.mocked(setAudioSilenced)).toHaveBeenCalledWith(audio, false);
+		expect(vi.mocked(setAudioLevel)).toHaveBeenCalledWith(audio, 1);
 	});
 
 	// Safari refuses gesture-less play() on page load, so a restored session
@@ -256,6 +257,33 @@ describe("StationPlayer", () => {
 			fireEvent(audio, new Event("pause"));
 			expect(isAudioBlocked()).toBe(false);
 			endedSpy.mockRestore();
+		});
+	});
+
+	describe("max volume", () => {
+		it("plays unmuted elements at maxVolume instead of 1", () => {
+			const { container } = render(<StationPlayer {...base} maxVolume={0.5} />);
+			for (const el of container.querySelectorAll("audio")) {
+				expect((el as HTMLAudioElement).volume).toBe(0.5);
+			}
+		});
+
+		it("keeps muted items at 0 regardless of maxVolume", () => {
+			const { container } = render(
+				<StationPlayer {...base} mutedItems={[1]} maxVolume={0.5} />,
+			);
+			const el = container.querySelector("audio") as HTMLAudioElement;
+			expect(el.volume).toBe(0);
+		});
+
+		it("re-applies a changed maxVolume to already-playing elements", () => {
+			const { container, rerender } = render(
+				<StationPlayer {...base} maxVolume={1} />,
+			);
+			const el = container.querySelector("audio") as HTMLAudioElement;
+			expect(el.volume).toBe(1);
+			rerender(<StationPlayer {...base} maxVolume={0.2} />);
+			expect(el.volume).toBe(0.2);
 		});
 	});
 });
