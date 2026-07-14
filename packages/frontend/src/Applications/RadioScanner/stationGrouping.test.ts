@@ -8,6 +8,7 @@ import {
 	mergeWithSources,
 	previousSegments,
 	primarySegment,
+	sortStations,
 	type Station,
 	upcomingSegments,
 } from "./stationGrouping";
@@ -247,5 +248,46 @@ describe("mergeWithSources", () => {
 
 	it("returns empty list when both audioSources and items are empty", () => {
 		expect(mergeWithSources([], [])).toEqual([]);
+	});
+});
+
+describe("sortStations", () => {
+	const nowMs = new Date("2001-09-11T12:45:00Z").getTime();
+	const active = item({ start_date: "2001-09-11T12:40:00Z", end_date: "2001-09-11T12:50:00Z" });
+	const station = (key: string, items: MediaItem[] = []): Station => ({ key, label: key, items });
+
+	it("pins WINS then WCBS to the front even when offline", () => {
+		const stations = [
+			station("ATC", [active]),
+			station("WCBS"),
+			station("Rutgers"),
+			station("WINS"),
+		];
+		expect(sortStations(stations, nowMs).map((s) => s.key)).toEqual([
+			"WINS",
+			"WCBS",
+			"ATC",
+			"Rutgers",
+		]);
+	});
+
+	it("orders the remaining stations online-first, keeping relative order", () => {
+		const stations = [
+			station("Rutgers"),
+			station("NY ATC", [active]),
+			station("Newark ATC", [active]),
+			station("Scanner"),
+		];
+		expect(sortStations(stations, nowMs).map((s) => s.key)).toEqual([
+			"NY ATC",
+			"Newark ATC",
+			"Rutgers",
+			"Scanner",
+		]);
+	});
+
+	it("omits pinned stations that are absent from the list", () => {
+		const stations = [station("WCBS"), station("ATC", [active])];
+		expect(sortStations(stations, nowMs).map((s) => s.key)).toEqual(["WCBS", "ATC"]);
 	});
 });

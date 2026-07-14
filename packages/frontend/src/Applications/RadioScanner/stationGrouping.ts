@@ -111,6 +111,24 @@ export function previousSegments(
 		.sort((a, b) => toMs(b.start_date) - toMs(a.start_date));
 }
 
+/** Stations pinned to the front of the strip regardless of online state. */
+export const PINNED_STATIONS = ["WINS", "WCBS"];
+
+/**
+ * Display order for the station strip: pinned stations first (in
+ * PINNED_STATIONS order), then the remaining online stations, then offline
+ * ones — each group keeping its incoming relative order.
+ */
+export function sortStations(stations: Station[], nowMs: number): Station[] {
+	const pinned = PINNED_STATIONS.flatMap((key) =>
+		stations.filter((s) => s.key === key),
+	);
+	const rest = stations.filter((s) => !PINNED_STATIONS.includes(s.key));
+	const online = rest.filter((s) => activeSegments(s, nowMs).length > 0);
+	const offline = rest.filter((s) => activeSegments(s, nowMs).length === 0);
+	return [...pinned, ...online, ...offline];
+}
+
 /**
  * Build the full station list from the time-independent audio source catalogue,
  * overlaying active items. Sources with no active items have an empty items array

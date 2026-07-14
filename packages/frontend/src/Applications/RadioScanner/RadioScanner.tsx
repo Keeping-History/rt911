@@ -35,6 +35,7 @@ import {
     countdownLabel,
     mergeWithSources,
     previousSegments,
+    sortStations,
     upcomingSegments,
 } from "./stationGrouping";
 import { StationButtonContent } from "./StationButtonContent";
@@ -265,16 +266,11 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
               )
             : [];
 
-    // Online stations first, offline stations last.
-    const sortedStations = useMemo(() => {
-        const online = stations.filter(
-            (s) => activeSegments(s, nowMs).length > 0,
-        );
-        const offline = stations.filter(
-            (s) => activeSegments(s, nowMs).length === 0,
-        );
-        return [...online, ...offline];
-    }, [stations, nowMs]);
+    // Pinned stations first, then online stations, then offline ones.
+    const sortedStations = useMemo(
+        () => sortStations(stations, nowMs),
+        [stations, nowMs],
+    );
 
     return (
         <ClassicyApp

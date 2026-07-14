@@ -763,7 +763,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 							return (
 								<>
 									<img
-										src="/loading.webp"
+										src={`${import.meta.env.BASE_URL}loading.webp`}
 										className={`${styles.tvLoadingOverlay}${mainPlayerBuffering ? ` ${styles.tvLoadingOverlayVisible}` : ""}`}
 										alt=""
 									/>
