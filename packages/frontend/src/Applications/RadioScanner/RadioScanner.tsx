@@ -1,9 +1,14 @@
 import {
     ClassicyApp,
     ClassicyButton,
+    ClassicyCheckbox,
+    ClassicyColorPicker,
+    ClassicyControlGroup,
     ClassicyIcons,
+    ClassicyRadioInput,
     ClassicyWindow,
     intToHex,
+    MAC_OS_8_CRAYONS,
     quitMenuItemHelper,
     useAppManager,
     useAppManagerDispatch,
@@ -33,10 +38,13 @@ import {
     sanitizeItemIds,
 } from "./radioPlayback";
 import {
-	nextVizMode,
-	radioScannerSetSettings,
-	type RadioScannerSettings,
-	readRadioScannerSettings,
+    DEFAULT_RADIO_SCANNER_SETTINGS,
+    isVizMode,
+    nextVizMode,
+    radioScannerSetSettings,
+    type RadioScannerSettings,
+    readRadioScannerSettings,
+    VIZ_MODES,
 } from "./radioScannerSettings";
 import { StationPlayer } from "./StationPlayer";
 import {
@@ -68,34 +76,49 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                 | undefined,
     );
 
-	// Waveform preferences — persisted under data.settings, distinct from the
-	// SetState fields below. The overlay toggle and the Settings window both
-	// write through saveSettings.
-	const settings = useMemo(
-		() => readRadioScannerSettings(appState),
-		[appState],
-	);
+    // Waveform preferences — persisted under data.settings, distinct from the
+    // SetState fields below. The overlay toggle and the Settings window both
+    // write through saveSettings.
+    const settings = useMemo(
+        () => readRadioScannerSettings(appState),
+        [appState],
+    );
 
-	const saveSettings = useCallback(
-		(next: RadioScannerSettings) =>
-			desktopEventDispatch(radioScannerSetSettings(next)),
-		[desktopEventDispatch],
-	);
+    const saveSettings = useCallback(
+        (next: RadioScannerSettings) =>
+            desktopEventDispatch(radioScannerSetSettings(next)),
+        [desktopEventDispatch],
+    );
 
-	const onCycleVizMode = useCallback(() => {
-		saveSettings({ ...settings, vizMode: nextVizMode(settings.vizMode) });
-	}, [saveSettings, settings]);
+    const onCycleVizMode = useCallback(() => {
+        saveSettings({ ...settings, vizMode: nextVizMode(settings.vizMode) });
+    }, [saveSettings, settings]);
 
-	const waveColors = useMemo(
-		() =>
-			settings.useThemeColors
-				? null
-				: {
-						bright: intToHex(settings.colorBright),
-						dim: intToHex(settings.colorDim),
-					},
-		[settings],
-	);
+    const waveColors = useMemo(
+        () =>
+            settings.useThemeColors
+                ? null
+                : {
+                        bright: intToHex(settings.colorBright),
+                        dim: intToHex(settings.colorDim),
+                    },
+        [settings],
+    );
+
+    // Settings window draft (TimeMachine pattern): seeded from the persisted
+    // settings on open, dispatched only on Save.
+    const [showSettings, setShowSettings] = useState(false);
+    const [settingsForm, setSettingsForm] = useState<RadioScannerSettings>(
+        DEFAULT_RADIO_SCANNER_SETTINGS,
+    );
+    const openSettings = useCallback(() => {
+        setSettingsForm(settings);
+        setShowSettings(true);
+    }, [settings]);
+    const saveSettingsForm = useCallback(() => {
+        saveSettings(settingsForm);
+        setShowSettings(false);
+    }, [saveSettings, settingsForm]);
 
     const isOpen = useAppManager(
         (state) => state.System.Manager.Applications.apps[appId]?.open ?? false,
@@ -228,7 +251,14 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         {
             id: "file",
             title: "File",
-            menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
+            menuChildren: [
+                {
+                    id: "settings",
+                    title: "Settings…",
+                    onClickFunc: openSettings,
+                },
+                quitMenuItemHelper(appId, appName, appIcon),
+            ],
         },
         {
             id: "view",
@@ -327,6 +357,93 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
             icon={appIcon}
             defaultWindow={`${appId}_main`}
         >
+            {showSettings && (
+                <ClassicyWindow
+                    id={`${appId}_settings`}
+                    title="Settings"
+                    icon={appIcon}
+                    appId={appId}
+                    closable={true}
+                    resizable={false}
+                    zoomable={false}
+                    scrollable={false}
+                    collapsable={false}
+                    initialSize={[320, 0]}
+                    initialPosition={[250, 150]}
+                    appMenu={appMenu}
+                    onCloseFunc={() => setShowSettings(false)}
+                >
+                    <div className={styles.rsSettings}>
+                        <ClassicyControlGroup label="Waveform Style">
+                            <ClassicyRadioInput
+                                name="radioscanner_settings_viz_mode"
+                                inputs={VIZ_MODES.map((m) => ({
+                                    id: m,
+                                    label: m,
+                                    checked: settingsForm.vizMode === m,
+                                }))}
+                                onClickFunc={(id: string) =>
+                                    setSettingsForm((f) =>
+                                        isVizMode(id) ? { ...f, vizMode: id } : f,
+                                    )
+                                }
+                            />
+                        </ClassicyControlGroup>
+                        <ClassicyControlGroup label="Waveform Colors">
+                            <ClassicyCheckbox
+                                id="radioscanner_settings_use_theme"
+                                label="Use theme colors"
+                                checked={settingsForm.useThemeColors}
+                                onClickFunc={(checked: boolean) =>
+                                    setSettingsForm((f) => ({
+                                        ...f,
+                                        useThemeColors: checked,
+                                    }))
+                                }
+                            />
+                            {!settingsForm.useThemeColors && (
+                                <>
+                                    <ClassicyColorPicker
+                                        id="radioscanner_settings_color_bright"
+                                        labelTitle="Bright"
+                                        value={settingsForm.colorBright}
+                                        crayons={MAC_OS_8_CRAYONS}
+                                        onChangeFunc={(color: number) =>
+                                            setSettingsForm((f) => ({
+                                                ...f,
+                                                colorBright: color,
+                                            }))
+                                        }
+                                    />
+                                    <ClassicyColorPicker
+                                        id="radioscanner_settings_color_dim"
+                                        labelTitle="Dim"
+                                        value={settingsForm.colorDim}
+                                        crayons={MAC_OS_8_CRAYONS}
+                                        onChangeFunc={(color: number) =>
+                                            setSettingsForm((f) => ({
+                                                ...f,
+                                                colorDim: color,
+                                            }))
+                                        }
+                                    />
+                                </>
+                            )}
+                        </ClassicyControlGroup>
+                        <div className={styles.rsSettingsButtons}>
+                            <ClassicyButton onClickFunc={() => setShowSettings(false)}>
+                                Cancel
+                            </ClassicyButton>
+                            <ClassicyButton
+                                isDefault={true}
+                                onClickFunc={saveSettingsForm}
+                            >
+                                Save
+                            </ClassicyButton>
+                        </div>
+                    </div>
+                </ClassicyWindow>
+            )}
             <ClassicyWindow
                 id={`${appId}_main`}
                 title={appName}
@@ -362,9 +479,9 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                 item={focusedItem}
                                 onDismiss={() => setFocusedItem(null)}
                                 showWaveform={showWaveform}
-								vizMode={settings.vizMode}
-								onCycleVizMode={onCycleVizMode}
-								waveColors={waveColors}
+                                vizMode={settings.vizMode}
+                                onCycleVizMode={onCycleVizMode}
+                                waveColors={waveColors}
                             />
                         ) : (
                             activeStationObj && (
@@ -500,9 +617,9 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                         clockPaused={clockPaused}
                                         showWaveform={showWaveform}
                                         captionsOn={captionsOn}
-										vizMode={settings.vizMode}
-										onCycleVizMode={onCycleVizMode}
-										waveColors={waveColors}
+                                        vizMode={settings.vizMode}
+                                        onCycleVizMode={onCycleVizMode}
+                                        waveColors={waveColors}
                                     />
                                 </>
                             )

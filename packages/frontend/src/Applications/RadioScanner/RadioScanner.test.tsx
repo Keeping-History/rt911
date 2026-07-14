@@ -1,4 +1,10 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+} from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
@@ -38,9 +44,91 @@ vi.mock("classicy", () => ({
 	ClassicyApp: ({ children }: { children: React.ReactNode }) => (
 		<div>{children}</div>
 	),
-	ClassicyWindow: ({ children }: { children?: React.ReactNode }) => (
-		<div>{children}</div>
+	ClassicyWindow: ({
+		children,
+		appMenu,
+		title,
+	}: {
+		children?: React.ReactNode;
+		title?: string;
+		appMenu?: {
+			menuChildren?: {
+				id?: string;
+				title?: string;
+				onClickFunc?: () => void;
+			}[];
+		}[];
+	}) => (
+		<div data-window-title={title}>
+			{appMenu
+				?.flatMap((m) => m.menuChildren ?? [])
+				.map((mi, i) =>
+					mi.title ? (
+						<button
+							type="button"
+							key={mi.id ?? i}
+							onClick={mi.onClickFunc}
+						>
+							{mi.title}
+						</button>
+					) : null,
+				)}
+			{children}
+		</div>
 	),
+	ClassicyControlGroup: ({
+		label,
+		children,
+	}: {
+		label?: string;
+		children?: React.ReactNode;
+	}) => (
+		<fieldset>
+			<legend>{label}</legend>
+			{children}
+		</fieldset>
+	),
+	ClassicyRadioInput: ({
+		inputs,
+		onClickFunc,
+	}: {
+		inputs: { id: string; label: string; checked: boolean }[];
+		onClickFunc: (id: string) => void;
+	}) => (
+		<div>
+			{inputs.map((i) => (
+				<button type="button" key={i.id} onClick={() => onClickFunc(i.id)}>
+					{i.label}
+				</button>
+			))}
+		</div>
+	),
+	ClassicyCheckbox: ({
+		label,
+		checked,
+		onClickFunc,
+	}: {
+		label?: string;
+		checked?: boolean;
+		onClickFunc?: (checked: boolean) => void;
+	}) => (
+		<label>
+			<input
+				type="checkbox"
+				checked={checked ?? false}
+				onChange={() => onClickFunc?.(!checked)}
+			/>
+			{label}
+		</label>
+	),
+	ClassicyColorPicker: ({
+		labelTitle,
+		value,
+	}: {
+		labelTitle?: string;
+		value?: number;
+	}) => <div data-color-value={value}>{labelTitle}</div>,
+	MAC_OS_8_CRAYONS: [],
 	ClassicyButton: ({
 		children,
 		onClickFunc,
@@ -240,5 +328,46 @@ describe("RadioScanner waveform settings", () => {
 			type: "ClassicyAppRadioScannerSetSettings",
 			settings: expect.objectContaining({ vizMode: "Bars" }), // Wave → Bars
 		});
+	});
+});
+
+describe("RadioScanner Settings window", () => {
+	afterEach(() => {
+		mockDispatch.mockClear();
+		cleanup();
+	});
+
+	it("opens from the menu, saves a new mode, and closes", () => {
+		renderScanner("ATC");
+		expect(screen.queryByText("Save")).toBeNull();
+		fireEvent.click(screen.getAllByText("Settings…")[0]);
+		fireEvent.click(screen.getByText("Bars"));
+		fireEvent.click(screen.getByText("Save"));
+		expect(mockDispatch).toHaveBeenCalledWith({
+			type: "ClassicyAppRadioScannerSetSettings",
+			settings: expect.objectContaining({ vizMode: "Bars" }),
+		});
+		expect(screen.queryByText("Save")).toBeNull();
+	});
+
+	it("Cancel discards the draft without dispatching settings", () => {
+		renderScanner("ATC");
+		fireEvent.click(screen.getAllByText("Settings…")[0]);
+		fireEvent.click(screen.getByText("Bars"));
+		fireEvent.click(screen.getByText("Cancel"));
+		expect(
+			mockDispatch.mock.calls.filter(
+				([a]) => a.type === "ClassicyAppRadioScannerSetSettings",
+			),
+		).toHaveLength(0);
+	});
+
+	it("shows the color pickers only when theme colors are off", () => {
+		renderScanner("ATC");
+		fireEvent.click(screen.getAllByText("Settings…")[0]);
+		expect(screen.queryByText("Bright")).toBeNull();
+		fireEvent.click(screen.getByLabelText("Use theme colors"));
+		expect(screen.getByText("Bright")).toBeTruthy();
+		expect(screen.getByText("Dim")).toBeTruthy();
 	});
 });
