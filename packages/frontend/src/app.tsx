@@ -4,13 +4,20 @@ import "./app.css";
 import "classicy/dist/classicy.css";
 import { ClassicyAppManagerProvider } from "classicy";
 import { DefaultFileSystem } from "./data/DefaultFileSystem";
+// Desktop is imported EAGERLY on purpose: mounting ClassicyDesktop lazily
+// (a tick after ClassicyAppManagerProvider) corrupts classicy's manager
+// state — early dispatches hit a reducer that iterates state the desktop
+// hasn't seeded yet, and every dispatch after that throws (windows can no
+// longer open). Verified empirically 2026-07-14: `lazy(() =>
+// import("./Desktop"))` alone reproduces it; a static import is clean.
+// Re-splitting the desktop chunk for mobile is blocked on a classicy fix.
+import Desktop from "./Desktop";
 import { isMobileDevice } from "./Mobile/detectMobile";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
 import { initTracker } from "./openreplay";
 
 initTracker();
 
-const Desktop = lazy(() => import("./Desktop"));
 const IpodShell = lazy(() => import("./Mobile/IpodShell"));
 
 // If the mobile chunk fails to load (bad network, stale deploy), fall back to
@@ -25,6 +32,13 @@ class MobileFallbackBoundary extends Component<
 	}
 	componentDidCatch(error: unknown) {
 		console.error("iPod shell failed; falling back to desktop", error);
+		// Lazy-chunk loads can fail transiently (a network blip on a phone;
+		// vite's dep re-optimization reload in dev). Retry with one full page
+		// reload before falling back to the desktop for good.
+		if (!sessionStorage.getItem("ipodShellRetried")) {
+			sessionStorage.setItem("ipodShellRetried", "1");
+			window.location.reload();
+		}
 	}
 	render() {
 		return this.state.failed ? <Desktop /> : this.props.children;
