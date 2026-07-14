@@ -69,6 +69,7 @@ vi.mock("classicy", () => ({
 	useClassicyDateTime: () => ({
 		dateTime: "2001-09-11T12:40:00.000Z",
 		paused: true,
+		tzOffset: -4,
 	}),
 }));
 
@@ -76,7 +77,12 @@ import { RadioScanner } from "./RadioScanner";
 
 const NOW = "2001-09-11T12:40:00.000Z";
 
-function item(id: number, source: string, start: string): MediaItem {
+function item(
+	id: number,
+	source: string,
+	start: string,
+	over: Partial<MediaItem> = {},
+): MediaItem {
 	return {
 		id,
 		title: `${source} clip ${id}`,
@@ -91,6 +97,7 @@ function item(id: number, source: string, start: string): MediaItem {
 		volume: 1,
 		jump: 0,
 		trim: 0,
+		...over,
 	};
 }
 
@@ -102,7 +109,11 @@ function renderScanner(activeStation: string): void {
 			item(2, "WCBS", "2001-09-11T12:30:00.000Z"),
 			item(3, "ATC", "2001-09-11T12:30:00.000Z"),
 		],
-		mp3History: [],
+		// One already-ended ATC clip (12:00–12:10 UTC, now is 12:40) for the
+		// Previous list.
+		mp3History: [
+			item(21, "ATC", "2001-09-11T12:00:00.000Z", { calc_duration: 600 }),
+		],
 		sources: {
 			video: [],
 			audio: ["WINS", "WCBS", "ATC"],
@@ -143,5 +154,12 @@ describe("RadioScanner schedule visibility", () => {
 	it("hides Coming Up on WCBS (continuous broadcast)", () => {
 		renderScanner("WCBS");
 		expect(screen.queryByText("Coming Up")).toBeNull();
+	});
+
+	it("labels each Previous item with its start time in the display timezone", () => {
+		renderScanner("ATC");
+		expect(screen.getByText("Previous")).toBeTruthy();
+		// 12:00 UTC shifted by the -4 display offset.
+		expect(screen.getByText("9/11, 8:00 AM")).toBeTruthy();
 	});
 });

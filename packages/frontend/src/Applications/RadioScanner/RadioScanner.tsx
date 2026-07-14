@@ -36,6 +36,7 @@ import {
     mergeWithSources,
     previousSegments,
     sortStations,
+    startTimeLabel,
     upcomingSegments,
 } from "./stationGrouping";
 import { StationButtonContent } from "./StationButtonContent";
@@ -86,7 +87,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         return () => unsubscribeMp3(appId);
     }, [subscribeMp3, unsubscribeMp3, appId]);
 
-    const { dateTime, paused: clockPaused } = useClassicyDateTime();
+    const { dateTime, paused: clockPaused, tzOffset } = useClassicyDateTime();
 
     const [captionsOn, setCaptionsOn] = useState<boolean>(false);
     const [activeStation, setActiveStation] = useState<string>(
@@ -394,6 +395,16 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                                                     }
                                                                 >
 																	<img src={ ClassicyIcons.controlPanels.soundManager.sound33} alt={item.title} />
+                                                                    <span
+                                                                        className={
+                                                                            styles.rsCountdown
+                                                                        }
+                                                                    >
+                                                                        {startTimeLabel(
+                                                                            item,
+                                                                            tzOffset,
+                                                                        )}
+                                                                    </span>
                                                                     <button
                                                                         type="button"
                                                                         className={

@@ -9,6 +9,7 @@ import {
 	previousSegments,
 	primarySegment,
 	sortStations,
+	startTimeLabel,
 	type Station,
 	upcomingSegments,
 } from "./stationGrouping";
@@ -141,6 +142,24 @@ describe("countdownLabel", () => {
 	it("clamps to 00:00 once the start has passed", () => {
 		const it1 = item({ start_date: "2001-09-11T12:30:00Z" });
 		expect(countdownLabel(it1, t("2001-09-11T12:31:00Z"))).toBe("00:00");
+	});
+});
+
+describe("startTimeLabel", () => {
+	it("formats the start instant in the display timezone", () => {
+		const it1 = item({ start_date: "2001-09-11T12:52:00.000Z" });
+		expect(startTimeLabel(it1, -4)).toBe("9/11, 8:52 AM");
+	});
+
+	it("treats a tz-less Directus datetime as UTC", () => {
+		const it1 = item({ start_date: "2001-09-11 12:52:00" });
+		expect(startTimeLabel(it1, -4)).toBe("9/11, 8:52 AM");
+	});
+
+	it("crosses the date line when the shift lands on another day", () => {
+		const it1 = item({ start_date: "2001-09-12T01:30:00.000Z" });
+		expect(startTimeLabel(it1, -4)).toBe("9/11, 9:30 PM");
+		expect(startTimeLabel(it1, 0)).toBe("9/12, 1:30 AM");
 	});
 });
 
