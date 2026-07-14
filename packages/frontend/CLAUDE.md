@@ -12,7 +12,7 @@ The Mac OS 8-style desktop shell for 911realtime.org. It is built on the [`class
 - `src/Applications/*` — one folder per product app (Browser, News, TV, RadioScanner, PagerDecoder, Newsgroups, TimeMachine, Feedback), each a `ClassicyApp` + `ClassicyWindow(s)`.
 - `src/Providers/MediaStream/` — the single WebSocket client to the `packages/backend` streamer.
 - `src/data/DefaultFileSystem.ts` — the virtual desktop file tree (Documents → Newspapers/Photos, System Folder) that Classicy's Finder/viewers browse.
-- `src/Mobile/*` — the iPod-style mobile shell (phones/tablets get it instead of the desktop; chosen once at boot in `app.tsx` via `pointer: coarse`). Vendored `ipod_ui` chrome — see `src/Mobile/VENDORED.md`.
+- `src/Mobile/*` — the iPod-style mobile shell (phones/tablets get it instead of the desktop; chosen once at boot in `app.tsx` via `pointer: coarse` or the `?ipod` URL override (testing escape hatch)). Vendored `ipod_ui` chrome — see `src/Mobile/VENDORED.md`.
 
 ---
 
