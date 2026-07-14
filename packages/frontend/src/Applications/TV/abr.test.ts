@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	bumpToLevel,
 	bufferedAheadSeconds,
+	maybeProbeUp,
 	OPTIMISTIC_BANDWIDTH_ESTIMATE,
 	TV_ABR_CONFIG,
 	WATCHDOG_MIN_BUFFER_S,
@@ -94,5 +95,42 @@ describe("bumpToLevel", () => {
 		expect(api.bandwidthEstimate).toBe(OPTIMISTIC_BANDWIDTH_ESTIMATE);
 		expect(api.nextLevel).toBe(-1); // no forced switch, no flush
 		expect(handlers.hlsLevelSwitched).toBeUndefined();
+	});
+});
+
+describe("maybeProbeUp", () => {
+	const healthy = () => fakeMedia([[0, 100]], 50); // 50s buffered ahead
+
+	it("probes one level up via nextLoadLevel when below the ceiling with a healthy buffer", () => {
+		const { api } = fakeApi({ loadLevel: 0 });
+		expect(maybeProbeUp(healthy(), api, 2)).toBe(true);
+		expect(api.nextLoadLevel).toBe(1); // exactly one fragment, no flush
+	});
+
+	it("does nothing without an hls api (Safari native HLS)", () => {
+		expect(maybeProbeUp(healthy(), undefined, 2)).toBe(false);
+	});
+
+	it("does nothing in manual mode (a bump is in flight)", () => {
+		const { api } = fakeApi({ autoLevelEnabled: false, nextLoadLevel: 0 });
+		expect(maybeProbeUp(healthy(), api, 2)).toBe(false);
+		expect(api.nextLoadLevel).toBe(0);
+	});
+
+	it("never probes at or past the ceiling", () => {
+		const { api } = fakeApi({ loadLevel: 1, nextLoadLevel: 1 });
+		expect(maybeProbeUp(healthy(), api, 1)).toBe(false); // grid pinned at mid
+		expect(api.nextLoadLevel).toBe(1);
+	});
+
+	it("skips paused or ended players", () => {
+		const { api } = fakeApi();
+		expect(maybeProbeUp(fakeMedia([[0, 100]], 50, { paused: true }), api, 2)).toBe(false);
+		expect(maybeProbeUp(fakeMedia([[0, 100]], 50, { ended: true }), api, 2)).toBe(false);
+	});
+
+	it("skips when the buffer is thinner than WATCHDOG_MIN_BUFFER_S", () => {
+		const { api } = fakeApi();
+		expect(maybeProbeUp(fakeMedia([[0, 55]], 50), api, 2)).toBe(false); // 5s < 10s
 	});
 });

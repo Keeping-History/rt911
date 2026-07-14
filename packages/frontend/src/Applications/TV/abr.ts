@@ -71,3 +71,25 @@ export function bumpToLevel(api: HlsAbrApi, level: number): void {
 		api.nextLevel = -1;
 	});
 }
+
+/** Recurring watchdog probe: when a player is parked below its tier ceiling
+ *  despite a healthy buffer, force exactly ONE fragment at the next level up
+ *  (`nextLoadLevel` — no flush, auto mode preserved). The fragment's real
+ *  throughput sample feeds the EWMA, so if bandwidth is genuinely good ABR
+ *  keeps the higher level on its own; if not, it falls back and the watchdog
+ *  retries on the next health-check tick. This is what un-sticks a player
+ *  parked at thumb on a stale low estimate. Uses `loadLevel` (not
+ *  `currentLevel`) so a probe never drags an already-climbing loader back
+ *  down. Returns true when a probe was issued. */
+export function maybeProbeUp(
+	el: BufferedMedia,
+	api: HlsAbrApi | undefined,
+	ceiling: number,
+): boolean {
+	if (!api || !api.autoLevelEnabled) return false;
+	if (api.loadLevel >= ceiling) return false;
+	if (el.paused || el.ended) return false;
+	if (bufferedAheadSeconds(el) < WATCHDOG_MIN_BUFFER_S) return false;
+	api.nextLoadLevel = api.loadLevel + 1;
+	return true;
+}
