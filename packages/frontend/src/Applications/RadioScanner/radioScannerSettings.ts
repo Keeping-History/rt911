@@ -18,6 +18,8 @@ export interface RadioScannerSettings {
 	colorBright: number;
 	/** Custom dim (gradient end) color, packed 0xRRGGBB. */
 	colorDim: number;
+	/** Volume ceiling for all audio the app plays, percent 0..100. */
+	maxVolume: number;
 }
 
 export const DEFAULT_RADIO_SCANNER_SETTINGS: RadioScannerSettings = {
@@ -25,6 +27,7 @@ export const DEFAULT_RADIO_SCANNER_SETTINGS: RadioScannerSettings = {
 	useThemeColors: true,
 	colorBright: 0x00d25a, // the pre-theme hardcoded bright green
 	colorDim: 0x00b446, // the pre-theme hardcoded dim green
+	maxVolume: 100, // no attenuation
 };
 
 /** Persist the whole settings object in one dispatch. */
@@ -37,8 +40,8 @@ export const radioScannerSetSettings = (
 
 // Stored state comes from localStorage, so a hand-edited or stale value
 // could be anything; invalid fields fall back individually.
-const isColorInt = (v: unknown): v is number =>
-	typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 0xffffff;
+const isIntIn = (v: unknown, min: number, max: number): v is number =>
+	typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
 
 /** Per-field fallback to defaults, so absent/partial/invalid stored state needs no migration. */
 export const readRadioScannerSettings = (
@@ -54,12 +57,15 @@ export const readRadioScannerSettings = (
 			typeof stored.useThemeColors === "boolean"
 				? stored.useThemeColors
 				: DEFAULT_RADIO_SCANNER_SETTINGS.useThemeColors,
-		colorBright: isColorInt(stored.colorBright)
+		colorBright: isIntIn(stored.colorBright, 0, 0xffffff)
 			? stored.colorBright
 			: DEFAULT_RADIO_SCANNER_SETTINGS.colorBright,
-		colorDim: isColorInt(stored.colorDim)
+		colorDim: isIntIn(stored.colorDim, 0, 0xffffff)
 			? stored.colorDim
 			: DEFAULT_RADIO_SCANNER_SETTINGS.colorDim,
+		maxVolume: isIntIn(stored.maxVolume, 0, 100)
+			? stored.maxVolume
+			: DEFAULT_RADIO_SCANNER_SETTINGS.maxVolume,
 	};
 };
 

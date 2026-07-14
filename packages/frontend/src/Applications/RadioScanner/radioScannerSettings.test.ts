@@ -25,6 +25,7 @@ describe("readRadioScannerSettings", () => {
 			useThemeColors: false,
 			colorBright: 0xff0000,
 			colorDim: 0x330000,
+			maxVolume: 40,
 		};
 		expect(readRadioScannerSettings({ settings: stored })).toEqual(stored);
 	});
@@ -36,6 +37,7 @@ describe("readRadioScannerSettings", () => {
 				useThemeColors: "yes",      // not a boolean
 				colorBright: 0x1000000,     // > 0xffffff
 				colorDim: 0x112233,         // valid — must survive
+				maxVolume: 101,             // > 100
 			},
 		});
 		expect(out).toEqual({
@@ -50,6 +52,19 @@ describe("readRadioScannerSettings", () => {
 		});
 		expect(out.colorBright).toBe(DEFAULT_RADIO_SCANNER_SETTINGS.colorBright);
 		expect(out.colorDim).toBe(DEFAULT_RADIO_SCANNER_SETTINGS.colorDim);
+	});
+
+	it("rejects out-of-range and non-integer maxVolume", () => {
+		for (const bad of [-1, 101, 1.5, "50", null]) {
+			const out = readRadioScannerSettings({ settings: { maxVolume: bad } });
+			expect(out.maxVolume).toBe(DEFAULT_RADIO_SCANNER_SETTINGS.maxVolume);
+		}
+		expect(
+			readRadioScannerSettings({ settings: { maxVolume: 0 } }).maxVolume,
+		).toBe(0);
+		expect(
+			readRadioScannerSettings({ settings: { maxVolume: 100 } }).maxVolume,
+		).toBe(100);
 	});
 });
 
