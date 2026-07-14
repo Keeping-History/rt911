@@ -71,10 +71,21 @@ export function captureAudioElement(el: HTMLAudioElement): CapturedAudio | null 
 		}
 		entry.gain.gain.value = desiredSilenced.get(el) ? 0 : 1;
 		captured.set(el, entry);
-		if (entry.ctx.state === "suspended") {
-			awaitingGesture.add(entry.ctx);
-			markAudioBlocked(entry.ctx);
-		}
+		// Track the suspended state via statechange, not just a creation-time
+		// snapshot: Safari can report a fresh context as running and only settle
+		// on suspended later (and a tab-hide suspension should also re-arm the
+		// gesture listeners).
+		const ctx = entry.ctx;
+		const syncBlocked = () => {
+			if (ctx.state === "suspended") {
+				awaitingGesture.add(ctx);
+				markAudioBlocked(ctx);
+			} else {
+				releaseContext(ctx);
+			}
+		};
+		ctx.addEventListener?.("statechange", syncBlocked);
+		syncBlocked();
 	}
 	return entry;
 }

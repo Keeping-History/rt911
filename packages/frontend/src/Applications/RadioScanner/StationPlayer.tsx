@@ -229,6 +229,18 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 						if (clockPausedRef.current) return;
 						tryPlay(item.id, el);
 					}}
+					onPause={(e) => {
+						const el = e.currentTarget;
+						// A pause we didn't initiate is the autoplay policy speaking —
+						// Safari lets muted play() RESOLVE, then punishes the gesture-less
+						// unmute with a silent pause (no rejection anywhere). Our own
+						// pauses are excluded: clock pause (guarded), natural end
+						// (el.ended), unmount teardown (element already out of audioRefs
+						// when the queued event fires).
+						if (clockPausedRef.current || el.ended) return;
+						if (!audioRefs.current.has(item.id)) return;
+						markAudioBlocked(`play-${item.id}`);
+					}}
 				>
 					{captionsOn && vttUrl(item.subtitles) && (
 						<track

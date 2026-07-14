@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
+import { isAudioBlocked } from "./audioBlocked";
 import { setAudioSilenced } from "./audioCapture";
 import { StationPlayer } from "./StationPlayer";
 import type { Station } from "./stationGrouping";
@@ -199,6 +200,59 @@ describe("StationPlayer", () => {
 			playSpy.mockClear();
 			document.dispatchEvent(new Event("click"));
 			expect(playSpy).not.toHaveBeenCalled();
+		});
+	});
+
+	// Safari's blocked states are not all rejection-shaped: muted play() can
+	// RESOLVE (muted autoplay is allowed) and the gesture-less unmute is then
+	// punished with a silent pause event. The audioBlocked signal must catch
+	// both shapes so the click-to-start overlay actually appears.
+	describe("blocked-audio signal", () => {
+		it("attempts play() at mount, before canplay (surfaces iOS-style refusals)", () => {
+			playSpy.mockClear();
+			render(<StationPlayer {...base} />);
+			expect(playSpy).toHaveBeenCalledTimes(2); // both in-window segments
+		});
+
+		it("marks blocked when play() rejects with NotAllowedError, clears on unmount", async () => {
+			playSpy.mockRejectedValue(
+				new DOMException("autoplay blocked", "NotAllowedError"),
+			);
+			const { unmount } = render(<StationPlayer {...base} />);
+			await act(async () => {});
+			expect(isAudioBlocked()).toBe(true);
+			unmount();
+			expect(isAudioBlocked()).toBe(false);
+			playSpy.mockResolvedValue(undefined);
+		});
+
+		it("marks blocked on a pause it did not initiate (Safari unmute-pause)", () => {
+			const { container, unmount } = render(<StationPlayer {...base} />);
+			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			expect(isAudioBlocked()).toBe(false);
+			fireEvent(audio, new Event("pause"));
+			expect(isAudioBlocked()).toBe(true);
+			unmount();
+			expect(isAudioBlocked()).toBe(false);
+		});
+
+		it("ignores the pause caused by the clock pausing", () => {
+			const { container, rerender } = render(<StationPlayer {...base} />);
+			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			rerender(<StationPlayer {...base} clockPaused={true} />);
+			fireEvent(audio, new Event("pause"));
+			expect(isAudioBlocked()).toBe(false);
+		});
+
+		it("ignores the pause of a naturally ended element", () => {
+			const endedSpy = vi
+				.spyOn(window.HTMLMediaElement.prototype, "ended", "get")
+				.mockReturnValue(true);
+			const { container } = render(<StationPlayer {...base} />);
+			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			fireEvent(audio, new Event("pause"));
+			expect(isAudioBlocked()).toBe(false);
+			endedSpy.mockRestore();
 		});
 	});
 });
