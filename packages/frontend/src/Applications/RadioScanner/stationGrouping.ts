@@ -49,6 +49,24 @@ export function countdownLabel(item: MediaItem, nowMs: number): string {
 	return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+/**
+ * Short "M/D, h:mm AM" label for an item's start instant, rendered in the
+ * desktop's display timezone: shift the UTC epoch by tzOffsetHours and format
+ * as UTC — the same trick as lib/loopClock.ts's formatPlayhead, so the label
+ * matches the menu-bar clock for every visitor regardless of browser locale.
+ */
+export function startTimeLabel(item: MediaItem, tzOffsetHours: number): string {
+	return new Date(
+		toMs(item.start_date) + tzOffsetHours * 3_600_000,
+	).toLocaleString("en-US", {
+		timeZone: "UTC",
+		month: "numeric",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
 /** Group items into stations keyed by source (title fallback), first-seen order. */
 export function groupStations(items: MediaItem[]): Station[] {
 	const order: string[] = [];
