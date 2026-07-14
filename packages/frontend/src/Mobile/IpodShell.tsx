@@ -35,6 +35,7 @@ import {
 } from "./WheelContext";
 import { AboutScreen } from "./screens/AboutScreen";
 import { MainMenu } from "./screens/MainMenu";
+import { NowPlayingScreen } from "./screens/NowPlayingScreen";
 import { RadioScreen } from "./screens/RadioScreen";
 
 const APP_ID = "IpodShell.mobile";
@@ -134,8 +135,16 @@ export default function IpodShell() {
 										onTune={tuneStation}
 									/>
 								)}
-								{/* nowPlaying / timeTravel / bookmarks / scrub
-								    screens are added in Tasks 11–12 */}
+								{screen === "nowPlaying" && (
+									<NowPlayingScreen
+										station={activeStation}
+										nowMs={nowMs}
+										tzOffset={tzOffset}
+										clockPaused={clockPaused}
+									/>
+								)}
+								{/* timeTravel / bookmarks / scrub
+								    screens are added in Tasks 12–13 */}
 							</div>
 						)}
 					</IpodChrome>
