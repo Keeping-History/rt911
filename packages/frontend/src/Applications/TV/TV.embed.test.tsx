@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
@@ -75,6 +75,44 @@ import { DEFAULT_CAPTION_STYLE } from "./TVContext";
 
 afterEach(cleanup);
 
+type FakeApi = {
+	autoLevelCapping: number;
+	autoLevelEnabled: boolean;
+	bandwidthEstimate: number;
+	currentLevel: number;
+	loadLevel: number;
+	nextLevel: number;
+	nextLoadLevel: number;
+	once: (event: string, cb: () => void) => void;
+};
+
+/** Plain-object stand-in for the <hls-video> element QuickTimeVideoEmbed
+ *  registers via onMediaElement — jsdom's HTMLMediaElement lacks play(). */
+function fakeHlsElement() {
+	const handlers: Record<string, (() => void)[]> = {};
+	const api: FakeApi = {
+		autoLevelCapping: -1,
+		autoLevelEnabled: true,
+		bandwidthEstimate: 500_000,
+		currentLevel: 0,
+		loadLevel: 0,
+		nextLevel: -1,
+		nextLoadLevel: 0,
+		once: (event, cb) => {
+			(handlers[event] ??= []).push(cb);
+		},
+	};
+	const el = {
+		api,
+		paused: false,
+		ended: false,
+		currentTime: 2400,
+		buffered: { length: 1, start: () => 0, end: () => 4000 },
+		play: () => Promise.resolve(),
+	} as unknown as HTMLVideoElement;
+	return { el, api, handlers };
+}
+
 describe("TV — props handed to QuickTimeVideoEmbed", () => {
 	it("drives the embed as a fully controlled, chrome-less, caption-styled player", () => {
 		render(<TV />);
@@ -109,5 +147,23 @@ describe("TV — props handed to QuickTimeVideoEmbed", () => {
 		// The pre-existing per-item fields must survive the spread.
 		expect(hls.startLevel).toBe(2); // single view starts at full
 		expect(typeof hls.startPosition).toBe("number");
+	});
+
+	it("aggressively bumps the focused single view to full on ready, then restores auto", () => {
+		captured.props.length = 0;
+		render(<TV />);
+		const p = captured.props[captured.props.length - 1];
+		const { el, api, handlers } = fakeHlsElement();
+
+		(p.onMediaElement as (el: unknown) => void)(el);
+		act(() => {
+			(p.onReady as () => void)();
+		});
+
+		expect(api.autoLevelCapping).toBe(2); // ceiling: single view = full
+		expect(api.bandwidthEstimate).toBe(5_000_000); // optimistic reset
+		expect(api.nextLevel).toBe(2); // forced switch (flushes low-res buffer)
+		handlers.hlsLevelSwitched[0]();
+		expect(api.nextLevel).toBe(-1); // auto restored — a nudge, not a pin
 	});
 });
