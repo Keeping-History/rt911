@@ -1,6 +1,7 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	MediaStreamContext,
@@ -161,5 +162,27 @@ describe("RadioScanner schedule visibility", () => {
 		expect(screen.getByText("Previous")).toBeTruthy();
 		// 12:00 UTC shifted by the -4 display offset.
 		expect(screen.getByText("9/11, 8:00 AM")).toBeTruthy();
+	});
+});
+
+describe("RadioScanner audio-unlock overlay", () => {
+	afterEach(() => {
+		clearAudioBlocked("test-gate");
+		cleanup();
+	});
+
+	it("appears while audio is gesture-blocked and leaves once unblocked", () => {
+		renderScanner("ATC");
+		expect(screen.queryByText(/click anywhere to start audio/i)).toBeNull();
+		act(() => markAudioBlocked("test-gate"));
+		expect(screen.getByText(/click anywhere to start audio/i)).toBeTruthy();
+		act(() => clearAudioBlocked("test-gate"));
+		expect(screen.queryByText(/click anywhere to start audio/i)).toBeNull();
+	});
+
+	it("is already visible on mount when audio was blocked before render", () => {
+		markAudioBlocked("test-gate");
+		renderScanner("WINS");
+		expect(screen.getByText(/click anywhere to start audio/i)).toBeTruthy();
 	});
 });

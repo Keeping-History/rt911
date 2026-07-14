@@ -1,6 +1,7 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
+import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
 import { setAudioSilenced } from "./audioCapture";
 import {
 	activeSegments,
@@ -62,14 +63,37 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	// not enough — Safari ignores it once the visualizer's
 	// createMediaElementSource captures the element (every clip is captured
 	// while it's the newest), and iOS ignores it always.
-	const unlockAndApplyMuteState = (id: number, el: HTMLAudioElement) => {
-		unlockedRef.current.add(id);
-		const silenced =
-			stationMutedRef.current || mutedItemsRef.current.includes(id);
-		el.muted = silenced;
-		el.volume = silenced ? 0 : 1;
-		setAudioSilenced(el, silenced);
-	};
+	const unlockAndApplyMuteState = useCallback(
+		(id: number, el: HTMLAudioElement) => {
+			unlockedRef.current.add(id);
+			const silenced =
+				stationMutedRef.current || mutedItemsRef.current.includes(id);
+			el.muted = silenced;
+			el.volume = silenced ? 0 : 1;
+			setAudioSilenced(el, silenced);
+		},
+		[],
+	);
+
+	// Every play() goes through here so the shared audioBlocked signal tracks
+	// which elements the autoplay policy is holding back: a NotAllowedError
+	// means a user gesture will fix it (the overlay tells the user to click);
+	// any success clears the element's token.
+	const tryPlay = useCallback(
+		(id: number, el: HTMLAudioElement) => {
+			el.play()
+				.then(() => {
+					clearAudioBlocked(`play-${id}`);
+					unlockAndApplyMuteState(id, el);
+				})
+				.catch((err: unknown) => {
+					if ((err as DOMException | null)?.name === "NotAllowedError") {
+						markAudioBlocked(`play-${id}`);
+					}
+				});
+		},
+		[unlockAndApplyMuteState],
+	);
 
 	// Health check: keep each mounted element playing and within 30s of expected.
 	useEffect(() => {
@@ -83,31 +107,26 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 					// A late unlock (initial autoplay was blocked; a user gesture has
 					// since granted audio) must also clear the autoplay mute, or the
 					// element resumes playing but stays silent forever.
-					el.play()
-						.then(() => unlockAndApplyMuteState(segId, el))
-						.catch(() => {});
+					tryPlay(segId, el);
 				}
 				const expected = calcSeekSeconds(item, now);
 				if (Math.abs(el.currentTime - expected) > 30) el.currentTime = expected;
 			}
 		}, 15_000);
 		return () => clearInterval(id);
-	}, [station]);
+	}, [station, tryPlay]);
 
 	// A user gesture is the first moment blocked playback can start: Safari
 	// refuses gesture-less play() on page load, so a restored session autoplays
 	// into a blocked state — and clicking the already-selected station changes
 	// no React state, so without this nothing would retry until the health
 	// check above. Any click or keypress retries immediately.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: unlockAndApplyMuteState reads refs only
 	useEffect(() => {
 		const retryBlockedPlayback = () => {
 			if (clockPausedRef.current) return;
 			for (const [segId, el] of audioRefs.current) {
 				if (el.paused || el.ended) {
-					el.play()
-						.then(() => unlockAndApplyMuteState(segId, el))
-						.catch(() => {});
+					tryPlay(segId, el);
 				}
 			}
 		};
@@ -119,7 +138,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 			document.removeEventListener("keydown", retryBlockedPlayback, true);
 			document.removeEventListener("pointerdown", retryBlockedPlayback, true);
 		};
-	}, []);
+	}, [tryPlay]);
 
 	// Apply mute state immediately: a file is silenced if its station is muted
 	// or the file itself is muted. Muting is always safe, but unmuting via
@@ -140,13 +159,9 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	useEffect(() => {
 		for (const [id, el] of audioRefs.current) {
 			if (clockPaused) el.pause();
-			else
-				el.play()
-					.then(() => unlockAndApplyMuteState(id, el))
-					.catch(() => {});
+			else tryPlay(id, el);
 		}
-		// biome-ignore lint/correctness/useExhaustiveDependencies: unlockAndApplyMuteState reads refs only
-	}, [clockPaused]);
+	}, [clockPaused, tryPlay]);
 
 	// Reseek on a clock scrub (a large jump), not on natural per-second advance.
 	const prevNowRef = useRef(nowMs);
@@ -182,6 +197,8 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 					// A remount of the same id gets a fresh element that must redo
 					// the autoplay dance from its muted starting state.
 					unlockedRef.current.delete(id);
+					// A gone element no longer needs a gesture.
+					clearAudioBlocked(`play-${id}`);
 				}
 			};
 			refCallbacks.current.set(id, cb);
@@ -212,9 +229,19 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 					onCanPlay={(e) => {
 						const el = e.currentTarget;
 						if (clockPausedRef.current) return;
-						el.play()
-							.then(() => unlockAndApplyMuteState(item.id, el))
-							.catch(() => {});
+						tryPlay(item.id, el);
+					}}
+					onPause={(e) => {
+						const el = e.currentTarget;
+						// A pause we didn't initiate is the autoplay policy speaking —
+						// Safari lets muted play() RESOLVE, then punishes the gesture-less
+						// unmute with a silent pause (no rejection anywhere). Our own
+						// pauses are excluded: clock pause (guarded), natural end
+						// (el.ended), unmount teardown (element already out of audioRefs
+						// when the queued event fires).
+						if (clockPausedRef.current || el.ended) return;
+						if (!audioRefs.current.has(item.id)) return;
+						markAudioBlocked(`play-${item.id}`);
 					}}
 				>
 					{captionsOn && vttUrl(item.subtitles) && (

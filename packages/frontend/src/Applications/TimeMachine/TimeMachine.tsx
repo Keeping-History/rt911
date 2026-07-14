@@ -9,6 +9,8 @@ import {
 	ClassicyWindow,
 	quitMenuItemHelper,
 	registerClassicyIcons,
+	useAppManager,
+	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
 import appIconPng from "./app.png";
@@ -18,10 +20,13 @@ import { trackPauseResume, trackVirtualTimeSet } from "../../openreplay";
 import { BookmarksWindow } from "./BookmarksWindow";
 import { setDateTimeFromUtc } from "./setVirtualClock";
 import styles from "./TimeMachine.module.scss";
+import {
+	DEFAULT_TIME_MACHINE_SETTINGS,
+	readTimeMachineSettings,
+	TIME_MACHINE_APP_ID,
+	timeMachineSetSettings,
+} from "./timeMachineSettings";
 import type { Bookmark } from "./useBookmarks";
-
-const DEFAULT_SKIP_MINUTES = 30;
-const DEFAULT_STEP_SECONDS = 300; // 5 minutes
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.timeMachine.app. registerClassicyIcons assigns
@@ -41,19 +46,29 @@ function formatSeconds(s: number): string {
 	return sec > 0 ? `${min} min ${sec} sec` : `${min} min`;
 }
 
-export const TimeMachine: React.FC = () => {
-	const appName = "Time Machine";
-	const appId = "TimeMachine.app";
-	const appIcon = ICONS.applications.timeMachine.app;
+const appName = "Time Machine";
+const appId = TIME_MACHINE_APP_ID;
+const appIcon = ICONS.applications.timeMachine.app;
 
-	const [skipMinutes, setSkipMinutes] = useState(DEFAULT_SKIP_MINUTES);
-	const [stepSeconds, setStepSeconds] = useState(DEFAULT_STEP_SECONDS);
+export const TimeMachine: React.FC = () => {
+
+	// Skip/step durations persist in Classicy app data (the Settings window
+	// writes them); the settings draft below stays local until Save.
+	const desktopEventDispatch = useAppManagerDispatch();
+	const appData = useAppManager(
+		(s) =>
+			s.System.Manager.Applications.apps[appId]?.data as
+				| Record<string, unknown>
+				| undefined,
+	);
+	const { skipMinutes, stepSeconds } = useMemo(
+		() => readTimeMachineSettings(appData),
+		[appData],
+	);
+
 	const [showSettings, setShowSettings] = useState(false);
 	const [showBookmarks, setShowBookmarks] = useState(false);
-	const [settingsForm, setSettingsForm] = useState({
-		skipMinutes: DEFAULT_SKIP_MINUTES,
-		stepSeconds: DEFAULT_STEP_SECONDS,
-	});
+	const [settingsForm, setSettingsForm] = useState(DEFAULT_TIME_MACHINE_SETTINGS);
 
 	const openSettings = useCallback(() => {
 		setSettingsForm({ skipMinutes, stepSeconds });
@@ -61,10 +76,9 @@ export const TimeMachine: React.FC = () => {
 	}, [skipMinutes, stepSeconds]);
 
 	const saveSettings = useCallback(() => {
-		setSkipMinutes(settingsForm.skipMinutes);
-		setStepSeconds(settingsForm.stepSeconds);
+		desktopEventDispatch(timeMachineSetSettings(settingsForm));
 		setShowSettings(false);
-	}, [settingsForm]);
+	}, [settingsForm, desktopEventDispatch]);
 
 	const openBookmarks = useCallback(() => setShowBookmarks(true), []);
 
@@ -88,7 +102,7 @@ export const TimeMachine: React.FC = () => {
 				],
 			},
 		],
-		[appIcon, openBookmarks, openSettings],
+		[openBookmarks, openSettings],
 	);
 
 	const { dateTime, setDateTime, tzOffset, paused, pause, resume } = useClassicyDateTime({ tick: true });
