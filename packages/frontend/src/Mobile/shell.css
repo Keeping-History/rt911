@@ -186,7 +186,6 @@
 .ipodRoot .ipodCenter { text-align: center; }
 .ipodRoot .ipodMarquee {
 	white-space: nowrap;
-	overflow: hidden;
 	text-overflow: ellipsis;
 	font-weight: 700;
 	font-size: calc(var(--u) * 15);
