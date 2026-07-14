@@ -25,10 +25,26 @@ afterAll(() => {
 describe("FocusedItemPlayer", () => {
 	it("renders no waveform control when showWaveform is false, and one when true", () => {
 		const { queryByText, rerender } = render(
-			<FocusedItemPlayer item={item({})} onDismiss={() => {}} showWaveform={false} />,
+			<FocusedItemPlayer
+				item={item({})}
+				onDismiss={() => {}}
+				showWaveform={false}
+				vizMode="Wave"
+				onCycleVizMode={() => {}}
+				waveColors={null}
+			/>,
 		);
 		expect(queryByText("Wave")).toBeNull();
-		rerender(<FocusedItemPlayer item={item({})} onDismiss={() => {}} showWaveform={true} />);
+		rerender(
+			<FocusedItemPlayer
+				item={item({})}
+				onDismiss={() => {}}
+				showWaveform={true}
+				vizMode="Wave"
+				onCycleVizMode={() => {}}
+				waveColors={null}
+			/>,
+		);
 		expect(queryByText("Wave")).not.toBeNull();
 	});
 });

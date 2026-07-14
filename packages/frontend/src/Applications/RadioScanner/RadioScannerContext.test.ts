@@ -53,3 +53,51 @@ describe("classicyRadioScannerEventHandler", () => {
 		expect(classicyRadioScannerEventHandler(empty, { type: "ClassicyAppRadioScannerSetState" })).toBe(empty);
 	});
 });
+
+describe("classicyRadioScannerEventHandler settings", () => {
+	const settings = {
+		vizMode: "Bars",
+		useThemeColors: false,
+		colorBright: 0xff0000,
+		colorDim: 0x330000,
+	};
+
+	it("persists settings under data.settings", () => {
+		const ds = storeWithApp();
+		const out = classicyRadioScannerEventHandler(ds, {
+			type: "ClassicyAppRadioScannerSetSettings",
+			settings,
+		});
+		expect(
+			out.System.Manager.Applications.apps["RadioScanner.app"].data,
+		).toMatchObject({ settings });
+	});
+
+	it("SetState preserves previously stored settings", () => {
+		const ds = storeWithApp({ settings });
+		const out = classicyRadioScannerEventHandler(ds, {
+			type: "ClassicyAppRadioScannerSetState",
+			activeStation: "ATC",
+			mutedItems: [],
+			showWaveform: true,
+		});
+		const data =
+			out.System.Manager.Applications.apps["RadioScanner.app"].data;
+		expect(data).toMatchObject({ activeStation: "ATC", settings });
+	});
+
+	it("SetSettings preserves SetState fields", () => {
+		const ds = storeWithApp({ activeStation: "WINS", mutedItems: [7] });
+		const out = classicyRadioScannerEventHandler(ds, {
+			type: "ClassicyAppRadioScannerSetSettings",
+			settings,
+		});
+		const data =
+			out.System.Manager.Applications.apps["RadioScanner.app"].data;
+		expect(data).toMatchObject({
+			activeStation: "WINS",
+			mutedItems: [7],
+			settings,
+		});
+	});
+});

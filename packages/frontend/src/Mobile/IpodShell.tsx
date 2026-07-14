@@ -14,6 +14,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { DEFAULT_RADIO_SCANNER_SETTINGS } from "../Applications/RadioScanner/radioScannerSettings";
 import { StationPlayer } from "../Applications/RadioScanner/StationPlayer";
 import { mergeWithSources } from "../Applications/RadioScanner/stationGrouping";
 import { formatUtcAsLocalTime } from "../Applications/TimeMachine/setVirtualClock";
@@ -42,6 +43,10 @@ import { ScrubScreen } from "./screens/ScrubScreen";
 import { TimeTravelScreen } from "./screens/TimeTravelScreen";
 
 const APP_ID = "IpodShell.mobile";
+
+// The mobile shell never shows the waveform (showWaveform is always false),
+// so StationPlayer's viz props are inert here — defaults and a stable no-op.
+const noopCycleVizMode = () => {};
 
 export default function IpodShell() {
 	const [stackState, dispatchStack] = useReducer(screenStackReducer, initialScreenStack);
@@ -160,6 +165,9 @@ export default function IpodShell() {
 							mutedItems={[]}
 							clockPaused={clockPaused}
 							showWaveform={false}
+							vizMode={DEFAULT_RADIO_SCANNER_SETTINGS.vizMode}
+							onCycleVizMode={noopCycleVizMode}
+							waveColors={null}
 						/>
 					)}
 				</ScreenNavContext.Provider>

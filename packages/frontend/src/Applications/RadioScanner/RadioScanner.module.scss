@@ -363,3 +363,21 @@
   letter-spacing: 0.1em;
   margin: 0;
 }
+
+.rsSettings {
+	display: flex;
+	flex-direction: column;
+	padding: var(--window-padding-size);
+	gap: var(--window-padding-size);
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	background-color: var(--color-system-02);
+}
+
+.rsSettingsButtons {
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+	gap: calc(var(--window-padding-size) * 0.5);
+	padding-top: calc(var(--window-padding-size) * 0.5);
+}

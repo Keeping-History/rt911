@@ -1,4 +1,10 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+} from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
@@ -10,8 +16,14 @@ import {
 
 // Stub the playback-heavy children — this suite only asserts the schedule
 // (Coming Up / Previous) chrome around them.
+const stationPlayerProps = vi.hoisted(
+	() => ({ current: null as Record<string, unknown> | null }),
+);
 vi.mock("./StationPlayer", () => ({
-	StationPlayer: () => <div data-testid="station-player" />,
+	StationPlayer: (props: Record<string, unknown>) => {
+		stationPlayerProps.current = props;
+		return <div data-testid="station-player" />;
+	},
 }));
 vi.mock("./NowPlayingList", () => ({
 	NowPlayingList: () => <div data-testid="now-playing" />,
@@ -26,14 +38,97 @@ vi.mock("../../openreplay", () => ({
 const mockAppData = vi.hoisted(
 	() => ({ current: {} as Record<string, unknown> }),
 );
+const mockDispatch = vi.hoisted(() => vi.fn());
 
 vi.mock("classicy", () => ({
 	ClassicyApp: ({ children }: { children: React.ReactNode }) => (
 		<div>{children}</div>
 	),
-	ClassicyWindow: ({ children }: { children?: React.ReactNode }) => (
-		<div>{children}</div>
+	ClassicyWindow: ({
+		children,
+		appMenu,
+		title,
+	}: {
+		children?: React.ReactNode;
+		title?: string;
+		appMenu?: {
+			menuChildren?: {
+				id?: string;
+				title?: string;
+				onClickFunc?: () => void;
+			}[];
+		}[];
+	}) => (
+		<div data-window-title={title}>
+			{appMenu
+				?.flatMap((m) => m.menuChildren ?? [])
+				.map((mi, i) =>
+					mi.title ? (
+						<button
+							type="button"
+							key={mi.id ?? i}
+							onClick={mi.onClickFunc}
+						>
+							{mi.title}
+						</button>
+					) : null,
+				)}
+			{children}
+		</div>
 	),
+	ClassicyControlGroup: ({
+		label,
+		children,
+	}: {
+		label?: string;
+		children?: React.ReactNode;
+	}) => (
+		<fieldset>
+			<legend>{label}</legend>
+			{children}
+		</fieldset>
+	),
+	ClassicyRadioInput: ({
+		inputs,
+		onClickFunc,
+	}: {
+		inputs: { id: string; label: string; checked: boolean }[];
+		onClickFunc: (id: string) => void;
+	}) => (
+		<div>
+			{inputs.map((i) => (
+				<button type="button" key={i.id} onClick={() => onClickFunc(i.id)}>
+					{i.label}
+				</button>
+			))}
+		</div>
+	),
+	ClassicyCheckbox: ({
+		label,
+		checked,
+		onClickFunc,
+	}: {
+		label?: string;
+		checked?: boolean;
+		onClickFunc?: (checked: boolean) => void;
+	}) => (
+		<label>
+			<input
+				type="checkbox"
+				checked={checked ?? false}
+				onChange={() => onClickFunc?.(!checked)}
+			/>
+			{label}
+		</label>
+	),
+	ClassicyColorPicker: ({
+		labelTitle,
+		value,
+	}: {
+		labelTitle?: string;
+		value?: number;
+	}) => <div data-color-value={value}>{labelTitle}</div>,
+	MAC_OS_8_CRAYONS: [],
 	ClassicyButton: ({
 		children,
 		onClickFunc,
@@ -51,6 +146,7 @@ vi.mock("classicy", () => ({
 	},
 	quitMenuItemHelper: () => ({}),
 	registerAppEventHandler: () => {},
+	intToHex: (c: number) => `#${c.toString(16).padStart(6, "0")}`,
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({
 			System: {
@@ -66,7 +162,7 @@ vi.mock("classicy", () => ({
 				},
 			},
 		}),
-	useAppManagerDispatch: () => () => {},
+	useAppManagerDispatch: () => mockDispatch,
 	useClassicyDateTime: () => ({
 		dateTime: "2001-09-11T12:40:00.000Z",
 		paused: true,
@@ -104,6 +200,10 @@ function item(
 
 function renderScanner(activeStation: string): void {
 	mockAppData.current = { activeStation };
+	renderScannerWithData();
+}
+
+function renderScannerWithData(): void {
 	const ctx: Partial<MediaStreamContextValue> = {
 		mp3Items: [
 			item(1, "WINS", "2001-09-11T12:30:00.000Z"),
@@ -184,5 +284,90 @@ describe("RadioScanner audio-unlock overlay", () => {
 		markAudioBlocked("test-gate");
 		renderScanner("WINS");
 		expect(screen.getByText(/click anywhere to start audio/i)).toBeTruthy();
+	});
+});
+
+describe("RadioScanner waveform settings", () => {
+	afterEach(() => {
+		mockDispatch.mockClear();
+		stationPlayerProps.current = null;
+		cleanup();
+	});
+
+	it("passes default settings (Wave, theme colors) to StationPlayer", () => {
+		renderScanner("ATC");
+		expect(stationPlayerProps.current).toMatchObject({
+			vizMode: "Wave",
+			waveColors: null,
+		});
+	});
+
+	it("passes stored custom mode and colors to StationPlayer", () => {
+		mockAppData.current = {
+			activeStation: "ATC",
+			settings: {
+				vizMode: "Bars",
+				useThemeColors: false,
+				colorBright: 0xff0000,
+				colorDim: 0x330000,
+			},
+		};
+		renderScannerWithData();
+		expect(stationPlayerProps.current).toMatchObject({
+			vizMode: "Bars",
+			waveColors: { bright: "#ff0000", dim: "#330000" },
+		});
+	});
+
+	it("cycling the viz mode dispatches a persisted settings update", () => {
+		renderScanner("ATC");
+		const cycle = stationPlayerProps.current
+			?.onCycleVizMode as () => void;
+		act(() => cycle());
+		expect(mockDispatch).toHaveBeenCalledWith({
+			type: "ClassicyAppRadioScannerSetSettings",
+			settings: expect.objectContaining({ vizMode: "Bars" }), // Wave → Bars
+		});
+	});
+});
+
+describe("RadioScanner Settings window", () => {
+	afterEach(() => {
+		mockDispatch.mockClear();
+		cleanup();
+	});
+
+	it("opens from the menu, saves a new mode, and closes", () => {
+		renderScanner("ATC");
+		expect(screen.queryByText("Save")).toBeNull();
+		fireEvent.click(screen.getAllByText("Settings…")[0]);
+		fireEvent.click(screen.getByText("Bars"));
+		fireEvent.click(screen.getByText("Save"));
+		expect(mockDispatch).toHaveBeenCalledWith({
+			type: "ClassicyAppRadioScannerSetSettings",
+			settings: expect.objectContaining({ vizMode: "Bars" }),
+		});
+		expect(screen.queryByText("Save")).toBeNull();
+	});
+
+	it("Cancel discards the draft without dispatching settings", () => {
+		renderScanner("ATC");
+		fireEvent.click(screen.getAllByText("Settings…")[0]);
+		fireEvent.click(screen.getByText("Bars"));
+		fireEvent.click(screen.getByText("Cancel"));
+		expect(
+			mockDispatch.mock.calls.filter(
+				([a]) => a.type === "ClassicyAppRadioScannerSetSettings",
+			),
+		).toHaveLength(0);
+	});
+
+	it("shows the color pickers only when theme colors are off", () => {
+		renderScanner("ATC");
+		fireEvent.click(screen.getAllByText("Settings…")[0]);
+		expect(screen.queryByText("Bright")).toBeNull();
+		fireEvent.click(screen.getByLabelText("Use theme colors"));
+		expect(screen.getByText("Bright")).toBeTruthy();
+		expect(screen.getByText("Dim")).toBeTruthy();
 	});
 });
