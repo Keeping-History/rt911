@@ -56,8 +56,16 @@ describe("IpodShell", () => {
 		expect(screen.getByText("8:40 AM")).toBeTruthy(); // 12:40 UTC at -4
 	});
 
-	it("shows Connecting… when the stream is down", () => {
+	it("shows the menu even while the stream is down (only Radio needs it)", () => {
 		renderShell(false);
+		expect(screen.getByText("Radio")).toBeTruthy();
+		expect(screen.getByText("About")).toBeTruthy();
+		expect(screen.queryByText("Connecting…")).toBeNull();
+	});
+
+	it("shows Connecting… on the Radio screen while the stream is down", () => {
+		renderShell(false);
+		fireEvent.click(screen.getByText("Radio"));
 		expect(screen.getByText("Connecting…")).toBeTruthy();
 	});
 

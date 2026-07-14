@@ -10,8 +10,9 @@ test.describe("mobile iPod shell", () => {
 
 	test("navigates the menu by touch and back via MENU", async ({ page }) => {
 		await page.goto("/");
-		// Menu list may sit behind the Connecting… state briefly; About works
-		// without stream data once the menu is up.
+		// The menu is stream-independent (only the Radio screen needs the
+		// WebSocket), so this navigation works even where the streamer is
+		// unreachable — e.g. CI runners with no .env.
 		await page.getByText("About", { exact: true }).tap();
 		await expect(page.getByText(/adapted from mitchivin/)).toBeVisible();
 		await page.locator("#menu-btn").tap();

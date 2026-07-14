@@ -119,40 +119,37 @@ export default function IpodShell() {
 								{clockLabel}
 							</span>
 						</div>
-						{!connected ? (
-							<div className="ipodTextScreen ipodCenter">
-								<div className="ipodBigTime">…</div>
-								<p>Connecting…</p>
-							</div>
-						) : (
-							<div className="ipodScreenBody" key={screen}>
-								{screen === "menu" && (
-									<MainMenu hasActiveStation={activeStation !== null} />
-								)}
-								{screen === "about" && <AboutScreen />}
-								{screen === "radio" && (
-									<RadioScreen
-										stations={stations}
-										nowMs={nowMs}
-										activeStationKey={activeStationKey}
-										onTune={tuneStation}
-									/>
-								)}
-								{screen === "nowPlaying" && (
-									<NowPlayingScreen
-										station={activeStation}
-										nowMs={nowMs}
-										tzOffset={tzOffset}
-										clockPaused={clockPaused}
-									/>
-								)}
-								{screen === "timeTravel" && <TimeTravelScreen />}
-								{screen === "bookmarks" && <BookmarksScreen tzOffset={tzOffset} />}
-								{screen === "scrub" && (
-									<ScrubScreen getNowMs={getNowMs} tzOffset={tzOffset} />
-								)}
-							</div>
-						)}
+						{/* The menu, About, and Time Travel all work without the stream —
+						    only data screens gate on the connection (RadioScreen shows
+						    its own Connecting… state). */}
+						<div className="ipodScreenBody" key={screen}>
+							{screen === "menu" && (
+								<MainMenu hasActiveStation={activeStation !== null} />
+							)}
+							{screen === "about" && <AboutScreen />}
+							{screen === "radio" && (
+								<RadioScreen
+									stations={stations}
+									nowMs={nowMs}
+									activeStationKey={activeStationKey}
+									onTune={tuneStation}
+									connected={connected}
+								/>
+							)}
+							{screen === "nowPlaying" && (
+								<NowPlayingScreen
+									station={activeStation}
+									nowMs={nowMs}
+									tzOffset={tzOffset}
+									clockPaused={clockPaused}
+								/>
+							)}
+							{screen === "timeTravel" && <TimeTravelScreen />}
+							{screen === "bookmarks" && <BookmarksScreen tzOffset={tzOffset} />}
+							{screen === "scrub" && (
+								<ScrubScreen getNowMs={getNowMs} tzOffset={tzOffset} />
+							)}
+						</div>
 					</IpodChrome>
 					{activeStation && (
 						<StationPlayer

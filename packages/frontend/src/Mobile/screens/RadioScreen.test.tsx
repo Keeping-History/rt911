@@ -30,6 +30,7 @@ describe("RadioScreen", () => {
 				nowMs={NOW}
 				activeStationKey=""
 				onTune={vi.fn()}
+				connected
 			/>,
 		);
 		const labels = screen.getAllByRole("listitem").map((li) => li.textContent);
@@ -48,6 +49,7 @@ describe("RadioScreen", () => {
 					nowMs={NOW}
 					activeStationKey=""
 					onTune={onTune}
+					connected
 				/>
 			</ScreenNavContext.Provider>,
 		);
@@ -65,6 +67,7 @@ describe("RadioScreen", () => {
 			nowMs: NOW,
 			activeStationKey: "",
 			onTune: vi.fn(), // clicking selects AND activates; irrelevant here
+			connected: true,
 		};
 		const { rerender } = render(
 			<RadioScreen {...props} stations={[onAir("KYW"), onAir("WBZ")]} />,
@@ -77,5 +80,19 @@ describe("RadioScreen", () => {
 			.getAllByRole("listitem")
 			.find((li) => li.className.includes("selected"));
 		expect(selected?.textContent).toContain("WBZ");
+	});
+
+	it("shows Connecting… instead of the list while the stream is down", () => {
+		render(
+			<RadioScreen
+				stations={[]}
+				nowMs={NOW}
+				activeStationKey=""
+				onTune={vi.fn()}
+				connected={false}
+			/>,
+		);
+		expect(screen.getByText("Connecting…")).toBeTruthy();
+		expect(screen.queryAllByRole("listitem")).toHaveLength(0);
 	});
 });

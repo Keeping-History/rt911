@@ -17,6 +17,8 @@ interface RadioScreenProps {
 	nowMs: number;
 	activeStationKey: string;
 	onTune: (key: string) => void;
+	/** WebSocket state — the station list is stream-fed, so show Connecting… until up. */
+	connected: boolean;
 }
 
 export function RadioScreen({
@@ -24,6 +26,7 @@ export function RadioScreen({
 	nowMs,
 	activeStationKey,
 	onTune,
+	connected,
 }: RadioScreenProps) {
 	const { push } = useContext(ScreenNavContext);
 	const sorted = useMemo(() => sortStations(stations, nowMs), [stations, nowMs]);
@@ -65,6 +68,18 @@ export function RadioScreen({
 			select(Math.max(0, Math.min(sorted.length - 1, selectedIndex + steps))),
 		onSelect: () => activate(selectedIndex),
 	});
+
+	// The station catalogue arrives over the stream; until the socket is up
+	// there is nothing tunable. Only this screen gates on the connection —
+	// the rest of the shell works stream-free.
+	if (!connected) {
+		return (
+			<div className="ipodTextScreen ipodCenter">
+				<div className="ipodBigTime">…</div>
+				<p>Connecting…</p>
+			</div>
+		);
+	}
 
 	return (
 		<IpodList
