@@ -34,9 +34,12 @@ import {
 	type ScreenWheelHandlers,
 } from "./WheelContext";
 import { AboutScreen } from "./screens/AboutScreen";
+import { BookmarksScreen } from "./screens/BookmarksScreen";
 import { MainMenu } from "./screens/MainMenu";
 import { NowPlayingScreen } from "./screens/NowPlayingScreen";
 import { RadioScreen } from "./screens/RadioScreen";
+import { ScrubScreen } from "./screens/ScrubScreen";
+import { TimeTravelScreen } from "./screens/TimeTravelScreen";
 
 const APP_ID = "IpodShell.mobile";
 
@@ -143,8 +146,11 @@ export default function IpodShell() {
 										clockPaused={clockPaused}
 									/>
 								)}
-								{/* timeTravel / bookmarks / scrub
-								    screens are added in Tasks 12–13 */}
+								{screen === "timeTravel" && <TimeTravelScreen />}
+								{screen === "bookmarks" && <BookmarksScreen tzOffset={tzOffset} />}
+								{screen === "scrub" && (
+									<ScrubScreen getNowMs={getNowMs} tzOffset={tzOffset} />
+								)}
 							</div>
 						)}
 					</IpodChrome>

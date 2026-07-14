@@ -12,6 +12,7 @@ The Mac OS 8-style desktop shell for 911realtime.org. It is built on the [`class
 - `src/Applications/*` — one folder per product app (Browser, News, TV, RadioScanner, PagerDecoder, Newsgroups, TimeMachine, Feedback), each a `ClassicyApp` + `ClassicyWindow(s)`.
 - `src/Providers/MediaStream/` — the single WebSocket client to the `packages/backend` streamer.
 - `src/data/DefaultFileSystem.ts` — the virtual desktop file tree (Documents → Newspapers/Photos, System Folder) that Classicy's Finder/viewers browse.
+- `src/Mobile/*` — the iPod-style mobile shell (phones/tablets get it instead of the desktop; chosen once at boot in `app.tsx` via `pointer: coarse`). Vendored `ipod_ui` chrome — see `src/Mobile/VENDORED.md`.
 
 ---
 
@@ -28,7 +29,7 @@ The Mac OS 8-style desktop shell for 911realtime.org. It is built on the [`class
 ## Hard rules
 
 1. **Apps never open a second WebSocket or call the streamer directly.** Always go through `MediaStreamContext` / `useMediaStream`.
-2. **Only `TimeMachine.tsx` mutates the clock.** A new app that needs to "jump to a time" should call into the existing `TimeMachine` seek path conceptually (see `setDateTimeFromUtc` in `TimeMachine/setVirtualClock.ts`), not add its own `setDateTime` call — every other app assumes the clock only moves from that one place.
+2. **Only `TimeMachine.tsx` (desktop) and the `src/Mobile/screens/` Time Travel screens (mobile — the two are never mounted together) mutate the clock.** A new app that needs to "jump to a time" should call into the existing `TimeMachine` seek path conceptually (see `setDateTimeFromUtc` in `TimeMachine/setVirtualClock.ts`), not add its own `setDateTime` call — every other app assumes the clock only moves from that one place.
 3. **Use `virtualUtcMs(localDate, tzOffset)`, not `localDate`, whenever comparing against an item's `start_date` or building a wire timestamp.** Direct `localDate` comparisons reintroduce the tz-offset reveal-buffer bug described above.
 4. **New subscription channels follow the ref-counted `Set<appId>` pattern** already used for pager/mp3/news/usenet in `MediaStreamProvider.tsx` — don't add a bare boolean "subscribed" flag that one app's unmount can rip out from under another.
 5. **`classicy` is external and pinned to `"latest"`; don't hand-edit its version.** `.husky/pre-commit` auto-bumps it on every commit — see the root `CLAUDE.md`. Use `pnpm use:local` / `pnpm use:published` to develop against an unpublished local build.
