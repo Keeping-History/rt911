@@ -16,6 +16,7 @@ import {
     useMemo,
     useRef,
     useState,
+    useSyncExternalStore,
 } from "react";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
@@ -24,6 +25,7 @@ import { NowPlayingList } from "./NowPlayingList";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
 import { trackAppToggle } from "../../openreplay";
+import { isAudioBlocked, subscribeAudioBlocked } from "./audioBlocked";
 import {
     effectiveMutedIds,
     sanitizeActiveStation,
@@ -243,6 +245,15 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
     const showSchedule =
         activeStation !== "" && !CONTINUOUS_STATIONS.has(activeStation);
 
+    // True while the browser's autoplay policy is holding audio back (Safari
+    // refuses gesture-less sound on page load). The document-level unlock
+    // listeners in audioCapture.ts / StationPlayer.tsx make any click the fix,
+    // so the overlay below only has to ask for one.
+    const audioBlocked = useSyncExternalStore(
+        subscribeAudioBlocked,
+        isAudioBlocked,
+    );
+
     const upcomingList =
         showSchedule && activeStationObj
             ? upcomingSegments(activeStationObj, upcomingItems, nowMs)
@@ -296,6 +307,19 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                 appMenu={appMenu}
             >
                 <div className={styles.rsContainer}>
+                    {audioBlocked && (
+                        <div className={styles.rsUnlockOverlay}>
+                            <div className={styles.rsUnlockOverlayBox}>
+                                <p className={styles.rsUnlockOverlayTitle}>
+                                    Click anywhere to start audio
+                                </p>
+                                <p className={styles.rsUnlockOverlayHint}>
+                                    Your browser paused sound until you
+                                    interact with the page
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     <div className={styles.rsMainArea}>
                         {focusedItem ? (
                             <FocusedItemPlayer
