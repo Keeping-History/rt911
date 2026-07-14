@@ -37,6 +37,8 @@ import {
 	tvSetVolumeLimit,
 } from "./TVContext";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
+import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
+import type { HlsAbrApi } from "./abr";
 import { resolveVirtualNowMs } from "./clockDrift";
 import { resolveGridVolume } from "./volume";
 import { TVEPGPanel } from "./TVEPGPanel";
@@ -224,6 +226,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Underlying video elements per item — QuickTimeVideoEmbed's onMediaElement
 	// hands back the native <video> element, so we set currentTime directly for seeking.
 	const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
+	// The <hls-video> element classicy renders exposes the hls.js instance as
+	// `.api` (absent on Safari's native-HLS path).
+	type HlsVideoEl = HTMLVideoElement & { api?: HlsAbrApi };
 	const prevDateTimeRef = useRef(dateTime);
 	// Stable ref to the latest UTC dateTime string for use in config callbacks.
 	const dateTimeRef = useRef(dateTime);
@@ -270,6 +275,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			);
 			config = {
 				hls: {
+					...TV_ABR_CONFIG,
 					startLevel: level,
 					startPosition: calcSeekSeconds(item, nowMs),
 				},
@@ -337,6 +343,17 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 				const expected = calcSeekSeconds(item, nowMs);
 				if (Math.abs(el.currentTime - expected) > 30) {
 					el.currentTime = expected;
+				}
+
+				// Quality watchdog: a player parked below its tier ceiling despite a
+				// healthy buffer is usually stuck on a stale low bandwidth estimate —
+				// probe one fragment upward so ABR gets an honest sample (maybeProbeUp).
+				if (!clockPausedRef.current && !tvPausedRef.current) {
+					maybeProbeUp(
+						el,
+						(el as HlsVideoEl).api,
+						levelForItemRef.current(item),
+					);
 				}
 			}
 		}, 15_000);
@@ -528,10 +545,17 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// Setting it just steers future fragment selection, so up/down moves smoothly
 	// at segment boundaries. Idempotent guard avoids redundant ABR re-evaluations.
 	const capHlsLevel = useCallback((id: number, level: number) => {
-		const el = videoRefs.current.get(id) as
-			| (HTMLVideoElement & { api?: { autoLevelCapping: number } })
-			| undefined;
+		const el = videoRefs.current.get(id) as HlsVideoEl | undefined;
 		if (el?.api && el.api.autoLevelCapping !== level) el.api.autoLevelCapping = level;
+	}, []);
+
+	// One-time aggressive bump when a channel gains single-view focus: reset
+	// the bandwidth estimate optimistically and force an immediate switch to
+	// the tier ceiling (flushing buffered low-res), then let ABR resume — see
+	// bumpToLevel. Complements capHlsLevel, which only sets the ceiling.
+	const bumpHlsLevel = useCallback((id: number, level: number) => {
+		const el = videoRefs.current.get(id) as HlsVideoEl | undefined;
+		if (el?.api) bumpToLevel(el.api, level);
 	}, []);
 
 	// The quality ceiling for a player: the single focused video (the active channel,
@@ -549,12 +573,35 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		[multiSelectMode, selectedPlayers, activePlayer],
 	);
 
+	// Stable ref to levelForItem so the health-check interval (empty deps) sees
+	// the current tiering without re-registering the timer.
+	const levelForItemRef = useRef(levelForItem);
+	levelForItemRef.current = levelForItem;
+
 	// Re-cap every loaded player whenever the tiering inputs change (active channel,
 	// selection set, grid mode); ABR then glides toward the new ceiling. onReady
-	// covers the initial cap for players that load after this runs.
+	// covers the initial cap for players that load after this runs. A player whose
+	// tier RISES to HIGHEST without remounting (grid shrinking to one) additionally
+	// gets the aggressive bump — remounting players get theirs from onReady.
+	const prevLevelsRef = useRef<Map<number, number>>(new Map());
 	useEffect(() => {
-		for (const item of items) capHlsLevel(item.id, levelForItem(item));
-	}, [items, levelForItem, capHlsLevel]);
+		const prev = prevLevelsRef.current;
+		const next = new Map<number, number>();
+		for (const item of items) {
+			const level = levelForItem(item);
+			next.set(item.id, level);
+			capHlsLevel(item.id, level);
+			const before = prev.get(item.id);
+			if (
+				level === QUALITY_HIGHEST &&
+				before !== undefined &&
+				before < QUALITY_HIGHEST
+			) {
+				bumpHlsLevel(item.id, level);
+			}
+		}
+		prevLevelsRef.current = next;
+	}, [items, levelForItem, capHlsLevel, bumpHlsLevel]);
 
 	// Re-sync the working copy from persisted state, reveal the window, and focus
 	// it so the modal is keyboard-ready the instant it opens (mirrors Browser).
@@ -783,7 +830,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										onReady={() => {
 											setMainPlayerBuffering(false);
 											seekToCurrentTime(item);
-											capHlsLevel(item.id, levelForItem(item));
+											const level = levelForItem(item);
+											capHlsLevel(item.id, level);
+											if (level === QUALITY_HIGHEST) bumpHlsLevel(item.id, level);
 										}}
 										onWaiting={() => setMainPlayerBuffering(true)}
 										onPlaying={() => setMainPlayerBuffering(false)}
@@ -871,7 +920,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 												}}
 												onReady={() => {
 													seekToCurrentTime(item);
-													capHlsLevel(id, levelForItem(item));
+													const level = levelForItem(item);
+													capHlsLevel(id, level);
+													if (level === QUALITY_HIGHEST) bumpHlsLevel(id, level);
 												}}
 												playing={!clockPaused && !tvPaused}
 												muted={isGridMuted}
