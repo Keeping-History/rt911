@@ -94,6 +94,7 @@ afterEach(() => {
 	mockAppData.value = {};
 	mockItems.value = null;
 });
+afterEach(() => vi.useRealTimers());
 
 type FakeApi = {
 	autoLevelCapping: number;
@@ -213,5 +214,23 @@ describe("TV — props handed to QuickTimeVideoEmbed", () => {
 		expect(api.nextLevel).toBe(2); // forced switch (flushes low-res buffer)
 		handlers.hlsLevelSwitched[0]();
 		expect(api.nextLevel).toBe(-1); // auto restored — a nudge, not a pin
+	});
+
+	it("probes one level up from the 15s health check when parked below the ceiling", () => {
+		vi.useFakeTimers();
+		captured.props.length = 0;
+		render(<TV />);
+		const p = captured.props[captured.props.length - 1];
+		const { el, api } = fakeHlsElement();
+		(p.onMediaElement as (el: unknown) => void)(el);
+		// Deliberately no onReady: the player sits parked at loadLevel 0 with a
+		// healthy buffer (fakeHlsElement buffers to t=4000) — the stuck case.
+
+		act(() => {
+			vi.advanceTimersByTime(15_000);
+		});
+
+		expect(api.nextLoadLevel).toBe(1); // one-fragment probe toward the ceiling
+		expect(api.nextLevel).toBe(-1); // still fully in auto mode — no flush
 	});
 });

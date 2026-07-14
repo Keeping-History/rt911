@@ -37,7 +37,7 @@ import {
 	tvSetVolumeLimit,
 } from "./TVContext";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
-import { bumpToLevel, TV_ABR_CONFIG } from "./abr";
+import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
 import type { HlsAbrApi } from "./abr";
 import { resolveVirtualNowMs } from "./clockDrift";
 import { resolveGridVolume } from "./volume";
@@ -344,6 +344,17 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 				if (Math.abs(el.currentTime - expected) > 30) {
 					el.currentTime = expected;
 				}
+
+				// Quality watchdog: a player parked below its tier ceiling despite a
+				// healthy buffer is usually stuck on a stale low bandwidth estimate —
+				// probe one fragment upward so ABR gets an honest sample (maybeProbeUp).
+				if (!clockPausedRef.current && !tvPausedRef.current) {
+					maybeProbeUp(
+						el,
+						(el as HlsVideoEl).api,
+						levelForItemRef.current(item),
+					);
+				}
 			}
 		}, 15_000);
 
@@ -561,6 +572,11 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		},
 		[multiSelectMode, selectedPlayers, activePlayer],
 	);
+
+	// Stable ref to levelForItem so the health-check interval (empty deps) sees
+	// the current tiering without re-registering the timer.
+	const levelForItemRef = useRef(levelForItem);
+	levelForItemRef.current = levelForItem;
 
 	// Re-cap every loaded player whenever the tiering inputs change (active channel,
 	// selection set, grid mode); ABR then glides toward the new ceiling. onReady
