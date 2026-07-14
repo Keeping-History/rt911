@@ -37,6 +37,7 @@ import {
 	tvSetVolumeLimit,
 } from "./TVContext";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
+import { TV_ABR_CONFIG } from "./abr";
 import { resolveVirtualNowMs } from "./clockDrift";
 import { resolveGridVolume } from "./volume";
 import { TVEPGPanel } from "./TVEPGPanel";
@@ -270,6 +271,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			);
 			config = {
 				hls: {
+					...TV_ABR_CONFIG,
 					startLevel: level,
 					startPosition: calcSeekSeconds(item, nowMs),
 				},

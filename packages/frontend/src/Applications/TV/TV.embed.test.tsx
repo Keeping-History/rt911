@@ -93,4 +93,21 @@ describe("TV — props handed to QuickTimeVideoEmbed", () => {
 		expect(typeof p.onMediaElement).toBe("function");
 		expect(typeof p.onReady).toBe("function");
 	});
+
+	it("hands every hls player the upward-biased ABR config", () => {
+		captured.props.length = 0;
+		render(<TV />);
+		const p = captured.props[captured.props.length - 1];
+		const hls = (p.options as { hls: Record<string, unknown> }).hls;
+
+		expect(hls).toMatchObject({
+			abrEwmaDefaultEstimate: 5_000_000,
+			abrBandWidthUpFactor: 0.9,
+			abrEwmaFastVoD: 2,
+			abrEwmaSlowVoD: 5,
+		});
+		// The pre-existing per-item fields must survive the spread.
+		expect(hls.startLevel).toBe(2); // single view starts at full
+		expect(typeof hls.startPosition).toBe("number");
+	});
 });
