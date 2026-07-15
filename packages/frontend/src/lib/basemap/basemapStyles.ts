@@ -1,4 +1,4 @@
-import type { StyleSpecification } from "maplibre-gl";
+import type { ExpressionSpecification, StyleSpecification } from "maplibre-gl";
 
 // User-facing basemap styles, orthogonal to the Dark Map toggle: classic is
 // the original paper/slate vector look, radar a CRT phosphor scope, satellite
@@ -107,13 +107,21 @@ export interface SkySpec {
 	"horizon-color": string;
 	"sky-horizon-blend": number;
 	"horizon-fog-blend": number;
+	// Globe-mode atmosphere halo, fading out as you zoom in (the halo is a
+	// planet-scale effect; at street scale it would wash the horizon out).
+	"atmosphere-blend": ExpressionSpecification;
 }
+
+const ATMOSPHERE_BLEND: ExpressionSpecification = [
+	"interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0,
+];
 
 const SKY_LIGHT: SkySpec = {
 	"sky-color": "#94E3FE",
 	"horizon-color": "#00C7FC",
 	"sky-horizon-blend": 0.5,
 	"horizon-fog-blend": 0.5,
+	"atmosphere-blend": ATMOSPHERE_BLEND,
 };
 const SKY_DARK: SkySpec = { ...SKY_LIGHT, "sky-color": "#0a0a14", "horizon-color": "#1a1a2e" };
 const SKY_RADAR: SkySpec = { ...SKY_LIGHT, "sky-color": "#010b04", "horizon-color": "#0f3d1f" };

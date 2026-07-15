@@ -4,6 +4,7 @@ import { type FC, type Ref, useEffect, useImperativeHandle, useRef, useState } f
 import { MapCompass } from "./MapCompass";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
+import { basemapPalette } from "../../lib/basemap/basemapStyles";
 import {
 	type BasemapStyleId,
 	type BasemapUrls,
@@ -745,7 +746,17 @@ export const FlightMap: FC<FlightMapProps> = ({
 	}, []);
 
 	return (
-		<div style={{ position: "relative", width: "100%", height: "100%" }}>
+		<div
+			style={{
+				position: "relative",
+				width: "100%",
+				height: "100%",
+				// In globe projection the canvas is transparent around the planet;
+				// match that "space" to the style's ground tone instead of the
+				// window's white body.
+				background: basemapPalette(mapStyle, darkMap).background,
+			}}
+		>
 			<div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 			<MapCompass
 				bearing={bearing}

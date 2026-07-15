@@ -191,12 +191,16 @@ describe("applyBasemapStyle", () => {
 
 describe("sky (issue #221)", () => {
 	it("light styles get the approved daytime colors at 50% blends", () => {
-		expect(skyFor("classic", false)).toEqual({
+		expect(skyFor("classic", false)).toMatchObject({
 			"sky-color": "#94E3FE",
 			"horizon-color": "#00C7FC",
 			"sky-horizon-blend": 0.5,
 			"horizon-fog-blend": 0.5,
 		});
+		// Globe atmosphere halo fades out as you zoom in.
+		expect(skyFor("classic", false)["atmosphere-blend"]).toEqual([
+			"interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0,
+		]);
 		expect(skyFor("satellite", false)["sky-color"]).toBe("#94E3FE");
 	});
 
