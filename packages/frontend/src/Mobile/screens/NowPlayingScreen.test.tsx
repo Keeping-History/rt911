@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Station } from "../../Applications/RadioScanner/stationGrouping";
+import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { NowPlayingScreen } from "./NowPlayingScreen";
 
 afterEach(cleanup);
@@ -28,10 +29,25 @@ const station: Station = {
 	],
 };
 
+const tvChannel: MediaItem = {
+	id: 42,
+	title: "WABC",
+	full_title: "WABC 7 New York",
+	source: "WABC",
+	start_date: "2001-09-11T12:30:00",
+	url: "https://example.test/wabc.m3u8",
+	format: "m3u8",
+	approved: 1,
+	mute: 0,
+	volume: 1,
+	jump: 0,
+	trim: 0,
+};
+
 describe("NowPlayingScreen", () => {
 	it("shows station, clip title, and the virtual clock", () => {
 		render(
-			<NowPlayingScreen station={station} nowMs={NOW} tzOffset={-4} clockPaused={false} />,
+			<NowPlayingScreen station={station} tvChannel={null} nowMs={NOW} tzOffset={-4} clockPaused={false} />,
 		);
 		expect(screen.getByText("WINS")).toBeTruthy();
 		expect(screen.getByText("1010 WINS full coverage")).toBeTruthy();
@@ -42,6 +58,7 @@ describe("NowPlayingScreen", () => {
 		render(
 			<NowPlayingScreen
 				station={{ key: "KYW", label: "KYW", items: [] }}
+				tvChannel={null}
 				nowMs={NOW}
 				tzOffset={-4}
 				clockPaused={false}
@@ -51,7 +68,34 @@ describe("NowPlayingScreen", () => {
 	});
 
 	it("prompts to pick a station when none is tuned", () => {
-		render(<NowPlayingScreen station={null} nowMs={NOW} tzOffset={-4} clockPaused={false} />);
+		render(<NowPlayingScreen station={null} tvChannel={null} nowMs={NOW} tzOffset={-4} clockPaused={false} />);
 		expect(screen.getByText(/choose a station/i)).toBeTruthy();
+	});
+
+	it("shows the channel and clock when a TV channel is tuned", () => {
+		render(
+			<NowPlayingScreen
+				station={null}
+				tvChannel={tvChannel}
+				nowMs={NOW}
+				tzOffset={-4}
+				clockPaused={false}
+			/>,
+		);
+		expect(screen.getByText("WABC")).toBeTruthy();
+		expect(screen.getByText("8:40:00 AM")).toBeTruthy();
+	});
+
+	it("notes when the clock is paused while watching TV", () => {
+		render(
+			<NowPlayingScreen
+				station={null}
+				tvChannel={tvChannel}
+				nowMs={NOW}
+				tzOffset={-4}
+				clockPaused
+			/>,
+		);
+		expect(screen.getByText("paused")).toBeTruthy();
 	});
 });

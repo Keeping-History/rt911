@@ -144,6 +144,7 @@ export default function IpodShell() {
 							{screen === "nowPlaying" && (
 								<NowPlayingScreen
 									station={activeStation}
+									tvChannel={null}
 									nowMs={nowMs}
 									tzOffset={tzOffset}
 									clockPaused={clockPaused}
