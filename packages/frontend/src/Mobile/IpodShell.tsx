@@ -1,13 +1,12 @@
 // packages/frontend/src/Mobile/IpodShell.tsx
 // The mobile branch: iPod chrome + screen stack. The shell owns the wheel
 // (MENU pops, play/pause toggles the virtual clock — StationPlayer already
-// pauses audio when the clock pauses), the active station, and the mp3
-// subscription; screens own their list state and register scroll/select
-// meaning via useScreenWheel.
+// pauses audio when the clock pauses), the active now-playing source (radio
+// station or TV channel), and the mp3 subscription; screens own their list
+// state and register scroll/select meaning via useScreenWheel.
 import { useClassicyDateTime } from "classicy";
 import {
 	useCallback,
-	useContext,
 	useEffect,
 	useMemo,
 	useReducer,
@@ -18,7 +17,8 @@ import { DEFAULT_RADIO_SCANNER_SETTINGS } from "../Applications/RadioScanner/rad
 import { StationPlayer } from "../Applications/RadioScanner/StationPlayer";
 import { mergeWithSources } from "../Applications/RadioScanner/stationGrouping";
 import { formatUtcAsLocalTime } from "../Applications/TimeMachine/setVirtualClock";
-import { MediaStreamContext } from "../Providers/MediaStream/MediaStreamContext";
+import type { MediaStreamFilter } from "../Providers/MediaStream/MediaStreamContext";
+import { useMediaStream } from "../Providers/MediaStream/useMediaStream";
 import { IpodChrome } from "./IpodChrome";
 import {
 	currentScreen,
@@ -27,6 +27,7 @@ import {
 	screenStackReducer,
 	type ScreenId,
 } from "./screenStack";
+import { TvPlayer } from "./TvPlayer";
 import { useClickWheel } from "./useClickWheel";
 import { useFineClock } from "./useFineClock";
 import {
@@ -41,8 +42,19 @@ import { NowPlayingScreen } from "./screens/NowPlayingScreen";
 import { RadioScreen } from "./screens/RadioScreen";
 import { ScrubScreen } from "./screens/ScrubScreen";
 import { TimeTravelScreen } from "./screens/TimeTravelScreen";
+import { TVScreen } from "./screens/TVScreen";
 
 const APP_ID = "IpodShell.mobile";
+
+// Same filter as the desktop TV app: every approved HLS channel. Hoisted so
+// its reference is stable — useMediaStream memoizes the filtered list on it.
+const TV_CHANNELS_FILTER: MediaStreamFilter = { format: ["m3u8"], approved: true };
+
+/** The single "now playing" source — tuning either kind evicts the other,
+ *  which is the whole one-at-a-time rule (design decision 2026-07-15). */
+export type NowPlayingSource =
+	| { kind: "radio"; key: string }
+	| { kind: "tv"; id: number };
 
 // The mobile shell never shows the waveform (showWaveform is always false),
 // so StationPlayer's viz props are inert here — defaults and a stable no-op.
@@ -53,8 +65,14 @@ export default function IpodShell() {
 	const screen = currentScreen(stackState);
 	const { nowMs, getNowMs, clockPaused, tzOffset } = useFineClock();
 	const { paused, pause, resume } = useClassicyDateTime();
-	const { connected, mp3Items, sources, subscribeMp3, unsubscribeMp3 } =
-		useContext(MediaStreamContext);
+	const {
+		connected,
+		mp3Items,
+		sources,
+		subscribeMp3,
+		unsubscribeMp3,
+		items: tvChannels,
+	} = useMediaStream(TV_CHANNELS_FILTER);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-only subscription
 	useEffect(() => {
@@ -62,13 +80,19 @@ export default function IpodShell() {
 		return () => unsubscribeMp3(APP_ID);
 	}, [subscribeMp3, unsubscribeMp3]);
 
-	const [activeStationKey, setActiveStationKey] = useState<string>("");
+	const [nowPlaying, setNowPlaying] = useState<NowPlayingSource | null>(null);
 	const stations = useMemo(
 		() => mergeWithSources(sources.audio, mp3Items),
 		[sources.audio, mp3Items],
 	);
 	const activeStation =
-		stations.find((s) => s.key === activeStationKey) ?? null;
+		nowPlaying?.kind === "radio"
+			? (stations.find((s) => s.key === nowPlaying.key) ?? null)
+			: null;
+	const activeTvItem =
+		nowPlaying?.kind === "tv"
+			? (tvChannels.find((i) => i.id === nowPlaying.id) ?? null)
+			: null;
 
 	// The active screen's wheel meaning; shell-level MENU / play-pause always work.
 	const screenHandlersRef = useRef<ScreenWheelHandlers>({});
@@ -92,6 +116,14 @@ export default function IpodShell() {
 		[],
 	);
 
+	const tuneStation = useCallback((key: string) => {
+		setNowPlaying({ kind: "radio", key });
+	}, []);
+
+	const tuneTvChannel = useCallback((id: number) => {
+		setNowPlaying({ kind: "tv", id });
+	}, []);
+
 	const wheel = useClickWheel({
 		onScroll: (steps) => screenHandlersRef.current.onScroll?.(steps),
 		onSelect: () => screenHandlersRef.current.onSelect?.(),
@@ -100,10 +132,6 @@ export default function IpodShell() {
 		onMenu: () => dispatchStack({ type: "pop" }),
 		onPlayPause: () => (paused ? resume() : pause()),
 	});
-
-	const tuneStation = useCallback((key: string) => {
-		setActiveStationKey(key);
-	}, []);
 
 	const clockLabel = formatUtcAsLocalTime(
 		new Date(nowMs).toISOString(),
@@ -118,7 +146,7 @@ export default function IpodShell() {
 						<div className="ipodHeader">
 							<span className="ipodHeaderTitle">{SCREEN_TITLES[screen]}</span>
 							<span className="ipodHeaderClock">
-								{activeStation && (
+								{nowPlaying && (
 									<span className={paused ? "ipodHeaderPause" : "ipodHeaderPlay"} />
 								)}
 								{clockLabel}
@@ -127,24 +155,44 @@ export default function IpodShell() {
 						{/* The menu, About, and Time Travel all work without the stream —
 						    only data screens gate on the connection (RadioScreen shows
 						    its own Connecting… state). */}
+						{activeTvItem && (
+							<TvPlayer
+								key={activeTvItem.id}
+								item={activeTvItem}
+								visible={screen === "nowPlaying"}
+								nowMs={nowMs}
+								getNowMs={getNowMs}
+								clockPaused={clockPaused}
+							/>
+						)}
 						<div className="ipodScreenBody" key={screen}>
 							{screen === "menu" && (
-								<MainMenu hasNowPlaying={activeStation !== null} />
+								<MainMenu hasNowPlaying={nowPlaying !== null} />
 							)}
 							{screen === "about" && <AboutScreen />}
 							{screen === "radio" && (
 								<RadioScreen
 									stations={stations}
 									nowMs={nowMs}
-									activeStationKey={activeStationKey}
+									activeStationKey={
+										nowPlaying?.kind === "radio" ? nowPlaying.key : ""
+									}
 									onTune={tuneStation}
+									connected={connected}
+								/>
+							)}
+							{screen === "tv" && (
+								<TVScreen
+									channels={tvChannels}
+									activeTvId={nowPlaying?.kind === "tv" ? nowPlaying.id : null}
+									onTune={tuneTvChannel}
 									connected={connected}
 								/>
 							)}
 							{screen === "nowPlaying" && (
 								<NowPlayingScreen
 									station={activeStation}
-									tvChannel={null}
+									tvChannel={activeTvItem}
 									nowMs={nowMs}
 									tzOffset={tzOffset}
 									clockPaused={clockPaused}

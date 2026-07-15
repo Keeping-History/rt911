@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useContext } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { MediaStreamContextValue } from "../Providers/MediaStream/MediaStreamContext";
 import { MediaStreamContext } from "../Providers/MediaStream/MediaStreamContext";
 import IpodShell from "./IpodShell";
 
@@ -19,6 +20,12 @@ vi.mock("classicy", async (importOriginal) => ({
 		pause: vi.fn(),
 		resume: vi.fn(),
 	}),
+	// jsdom can't run hls.js; the shell tests only care about mount/unmount.
+	QuickTimeVideoEmbed: () => <div data-testid="qt-embed" />,
+}));
+
+vi.mock("../Applications/RadioScanner/StationPlayer", () => ({
+	StationPlayer: () => <div data-testid="station-player" />,
 }));
 
 afterEach(cleanup);
@@ -26,29 +33,57 @@ window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 // The context's default value (not exported) already provides no-op
 // subscribe functions and empty data with connected: false. Reading it via
-// useContext outside any provider and re-providing with connected flipped
-// gives a full, valid context value without restating all ~40 fields.
-function WithConnected({ children }: { children: React.ReactNode }) {
+// useContext outside any provider and re-providing with overrides gives a
+// full, valid context value without restating all ~40 fields.
+function WithStream({
+	value,
+	children,
+}: {
+	value: Partial<MediaStreamContextValue>;
+	children: React.ReactNode;
+}) {
 	const base = useContext(MediaStreamContext);
 	return (
-		<MediaStreamContext.Provider value={{ ...base, connected: true }}>
+		<MediaStreamContext.Provider value={{ ...base, ...value }}>
 			{children}
 		</MediaStreamContext.Provider>
 	);
 }
 
-const renderShell = (connected: boolean) =>
-	connected
-		? render(
-				<WithConnected>
-					<IpodShell />
-				</WithConnected>,
-			)
-		: render(<IpodShell />); // default context value has connected: false
+const renderShell = (value: Partial<MediaStreamContextValue>) =>
+	render(
+		<WithStream value={value}>
+			<IpodShell />
+		</WithStream>,
+	);
+
+const TV_ITEM = {
+	id: 42, title: "WABC", full_title: "WABC", source: "WABC",
+	start_date: "2001-09-11T12:30:00", url: "https://example.test/wabc.m3u8",
+	format: "m3u8", approved: 1, mute: 0, volume: 1, jump: 0, trim: 0,
+};
+const RADIO_ITEM = {
+	id: 7, title: "WINS", full_title: "WINS", source: "WINS",
+	start_date: "2001-09-11T12:30:00", end_date: "2001-09-11T13:30:00",
+	url: "https://example.test/wins.mp3", format: "mp3",
+	approved: 1, mute: 0, volume: 1, jump: 0, trim: 0,
+};
+const STREAM_UP = {
+	connected: true,
+	items: [TV_ITEM],
+	mp3Items: [RADIO_ITEM],
+};
+
+function pressMenu(container: HTMLElement) {
+	const wheelEl = container.querySelector("#control-wheel") as HTMLElement;
+	const menuBtn = container.querySelector("#menu-btn") as HTMLElement;
+	fireEvent.pointerDown(menuBtn, { pointerId: 1, clientX: 0, clientY: 0 });
+	fireEvent.pointerUp(wheelEl, { pointerId: 1, clientX: 0, clientY: 0 });
+}
 
 describe("IpodShell", () => {
 	it("shows the main menu with the virtual-clock status bar when connected", () => {
-		renderShell(true);
+		renderShell({ connected: true });
 		expect(screen.getByText("iPod")).toBeTruthy(); // status-bar title
 		expect(screen.getByText("Radio")).toBeTruthy();
 		expect(screen.getByText("TV")).toBeTruthy();
@@ -58,26 +93,72 @@ describe("IpodShell", () => {
 	});
 
 	it("shows the menu even while the stream is down (only Radio needs it)", () => {
-		renderShell(false);
+		renderShell({});
 		expect(screen.getByText("Radio")).toBeTruthy();
 		expect(screen.getByText("About")).toBeTruthy();
 		expect(screen.queryByText("Connecting…")).toBeNull();
 	});
 
 	it("shows Connecting… on the Radio screen while the stream is down", () => {
-		renderShell(false);
+		renderShell({});
 		fireEvent.click(screen.getByText("Radio"));
 		expect(screen.getByText("Connecting…")).toBeTruthy();
 	});
 
 	it("navigates to About on tap and back via MENU", () => {
-		const { container } = renderShell(true);
+		const { container } = renderShell({ connected: true });
 		fireEvent.click(screen.getByText("About"));
 		expect(screen.getByText(/adapted from mitchivin/)).toBeTruthy();
-		const wheelEl = container.querySelector("#control-wheel") as HTMLElement;
-		const menuBtn = container.querySelector("#menu-btn") as HTMLElement;
-		fireEvent.pointerDown(menuBtn, { pointerId: 1, clientX: 0, clientY: 0 });
-		fireEvent.pointerUp(wheelEl, { pointerId: 1, clientX: 0, clientY: 0 });
+		pressMenu(container);
 		expect(screen.getByText("Radio")).toBeTruthy(); // back on the menu
+	});
+});
+
+describe("IpodShell TV", () => {
+	it("navigates Menu → TV and lists channels", () => {
+		renderShell(STREAM_UP);
+		fireEvent.click(screen.getByText("TV"));
+		expect(screen.getByText("WABC")).toBeTruthy();
+	});
+
+	it("tuning a channel mounts the player and opens Now Playing", () => {
+		renderShell(STREAM_UP);
+		fireEvent.click(screen.getByText("TV"));
+		fireEvent.click(screen.getByText("WABC"));
+		expect(screen.getByTestId("qt-embed")).toBeTruthy();
+		expect(screen.getByText("Now Playing")).toBeTruthy(); // header title
+		expect(document.querySelector(".ipodTvPlayerHidden")).toBeNull();
+	});
+
+	it("keeps the TV player mounted — audio alive — after backing out with MENU", () => {
+		const { container } = renderShell(STREAM_UP);
+		fireEvent.click(screen.getByText("TV"));
+		fireEvent.click(screen.getByText("WABC"));
+		pressMenu(container); // Now Playing → TV list
+		expect(screen.getByTestId("qt-embed")).toBeTruthy(); // still mounted…
+		expect(document.querySelector(".ipodTvPlayerHidden")).toBeTruthy(); // …just hidden
+	});
+
+	it("tuning TV silences the radio and vice versa", () => {
+		const { container } = renderShell(STREAM_UP);
+		// Tune radio first.
+		fireEvent.click(screen.getByText("Radio"));
+		fireEvent.click(screen.getByText("WINS"));
+		expect(screen.getByTestId("station-player")).toBeTruthy();
+		expect(screen.queryByTestId("qt-embed")).toBeNull();
+		// Back out to the menu (Now Playing → Radio → menu) and tune TV.
+		pressMenu(container);
+		pressMenu(container);
+		fireEvent.click(screen.getByText("TV"));
+		fireEvent.click(screen.getByText("WABC"));
+		expect(screen.getByTestId("qt-embed")).toBeTruthy();
+		expect(screen.queryByTestId("station-player")).toBeNull();
+		// And back to radio again — TV player unmounts.
+		pressMenu(container);
+		pressMenu(container);
+		fireEvent.click(screen.getByText("Radio"));
+		fireEvent.click(screen.getByText("WINS"));
+		expect(screen.getByTestId("station-player")).toBeTruthy();
+		expect(screen.queryByTestId("qt-embed")).toBeNull();
 	});
 });
