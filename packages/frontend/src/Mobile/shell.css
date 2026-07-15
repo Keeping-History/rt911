@@ -190,6 +190,24 @@
 	font-size: calc(var(--u) * 15);
 }
 
+/* ── TV player (shell-level; hidden ≠ unmounted so audio survives MENU) ── */
+.ipodRoot .ipodTvPlayer {
+	flex-shrink: 0;
+	width: 100%;
+	aspect-ratio: 4 / 3;
+	background: #000;
+}
+.ipodRoot .ipodTvPlayer hls-video,
+.ipodRoot .ipodTvPlayer video {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	display: block;
+}
+.ipodRoot .ipodTvPlayerHidden {
+	display: none;
+}
+
 /* ── Click wheel ── */
 .ipodRoot #control-wheel {
 	clip-path: circle(50%);
