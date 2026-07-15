@@ -34,7 +34,8 @@ import {
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { FlightDetailPanel } from "./FlightDetailPanel";
-import { FlightMap } from "./FlightMap";
+import { FlightMap, type FlightMapHandle } from "./FlightMap";
+import { MapControls, type SelectMode } from "./MapControls";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
@@ -170,6 +171,26 @@ export const FlightTracker: FC = () => {
 	const toggleRadarSweep = useCallback(() => {
 		desktopEventDispatch(
 			flightTrackerSetMapSettings({ ...settings, radarSweep: !settings.radarSweep }),
+		);
+	}, [settings, desktopEventDispatch]);
+
+	// MapControls toolbar (issue #217): persisted toggles dispatch like the
+	// View-menu items above; one-shot camera moves go through the map handle.
+	const mapApi = useRef<FlightMapHandle>(null);
+	const [selectMode, setSelectMode] = useState<SelectMode>("off");
+	const toggleGlobe = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, globe: !settings.globe }),
+		);
+	}, [settings, desktopEventDispatch]);
+	const toggleThreeD = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, threeD: !settings.threeD }),
+		);
+	}, [settings, desktopEventDispatch]);
+	const toggleCluster = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, cluster: !settings.cluster }),
 		);
 	}, [settings, desktopEventDispatch]);
 
@@ -731,9 +752,23 @@ export const FlightTracker: FC = () => {
 				dimContents={false}
 			>
 				<div className={styles.root}>
+					<MapControls
+						globe={settings.globe}
+						threeD={settings.threeD}
+						cluster={settings.cluster}
+						selectMode={selectMode}
+						onZoomIn={() => mapApi.current?.zoomIn()}
+						onZoomOut={() => mapApi.current?.zoomOut()}
+						onToggleGlobe={toggleGlobe}
+						onToggleThreeD={toggleThreeD}
+						onToggleCluster={toggleCluster}
+						onSetSelectMode={setSelectMode}
+						onPinpoint={(center, zoom) => mapApi.current?.flyTo(center, zoom)}
+					/>
 					<div className={styles.body}>
 						<div className={styles.map}>
 							<FlightMap
+								ref={mapApi}
 								positions={filteredPositions}
 								seedPositions={flightsSeed}
 								visibleFlights={visibleFlights}

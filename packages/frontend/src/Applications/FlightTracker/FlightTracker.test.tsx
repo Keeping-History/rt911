@@ -414,7 +414,7 @@ describe("FlightTracker", () => {
 		act(() => satellite.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "satellite", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "satellite", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -425,7 +425,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -483,7 +483,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x0000ff, pinColorDark: 0x0000ff, notablePinColorLight: 0x0000ff, notablePinColorDark: 0x0000ff, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x0000ff, pinColorDark: 0x0000ff, notablePinColorLight: 0x0000ff, notablePinColorDark: 0x0000ff, radarSweep: true, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -494,7 +494,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "radar", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "radar", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -505,7 +505,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -517,7 +517,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -533,7 +533,7 @@ describe("FlightTracker", () => {
 			mapSettings: {
 				mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700,
 				notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d,
-				radarSweep: true, trailMultiplier: 3.5,
+				radarSweep: true, trailMultiplier: 3.5, globe: false, cluster: false, threeD: false,
 			},
 		});
 	});
