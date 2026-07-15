@@ -177,6 +177,36 @@ Hosting for this project is generously provided by **[Hivelocity](https://www.hi
 
 ---
 
+## 3D Aircraft Models
+
+The Flight Tracker's 3D mode renders each flight with a model matching its
+airframe. All models are used under free licenses, with thanks to their
+authors (processing pipeline and full provenance: [`scripts/aircraft-models/`](scripts/aircraft-models/)):
+
+| Aircraft | Author | License | Source |
+|---|---|---|---|
+| Airbus A320 (generic fallback) | PHILdesign | CC-BY 4.0 | [Thingiverse](https://www.thingiverse.com/thing:2203732) |
+| Boeing 737-800 | Jonah Ashton | CC-BY 4.0 | [Thingiverse](https://www.thingiverse.com/thing:2426394) |
+| Boeing 757-200 | Liam Gathercole, Skyop, Isais Prestes; reworked by Juuso Tapaninen | GPL-2.0+ | [FlightGear FGAddon](https://sourceforge.net/p/flightgear/fgaddon/HEAD/tree/trunk/Aircraft/757-200/) |
+| Boeing 767-300ER | RTicknor | CC-BY-SA 3.0 | [Thingiverse](https://www.thingiverse.com/thing:947061) |
+| Boeing 777-300ER | Jevan Yu | CC-BY 4.0 | [Thingiverse](https://www.thingiverse.com/thing:1703733) |
+| Boeing 727 | Bogdan Deac (yuppy) | GPL-2.0 | [Thingiverse](https://www.thingiverse.com/thing:3452615) |
+| Boeing 717 (DC-9/MD-80 family) | A. C. (Adcoff72) | CC-BY 3.0 | [Thingiverse](https://www.thingiverse.com/thing:3319522) |
+| McDonnell Douglas DC-10 | Reean24, after "DC10" by manilov.ap | CC-BY 4.0 | [Thingiverse](https://www.thingiverse.com/thing:5278513) |
+| Airbus A319 / A321 | P6619 | CC-BY-SA 3.0 | [Thingiverse](https://www.thingiverse.com/thing:173006) |
+| Bombardier CRJ-200 | Fredepo | CC-BY 3.0 | [Thingiverse](https://www.thingiverse.com/thing:1308356) |
+| Embraer ERJ-145XR | RTicknor | CC-BY 3.0 | [Thingiverse](https://www.thingiverse.com/thing:1727564) |
+| Fairchild-Dornier 328JET (ATR-42 stand-in) | A. C. (Adcoff72) | CC-BY 3.0 | [Thingiverse](https://www.thingiverse.com/thing:3319511) |
+| Gulfstream G550 (business jets) | Giddi | CC-BY 3.0 | [Thingiverse](https://www.thingiverse.com/thing:3315582) |
+| Douglas DC-3 | pumpkinhead3d | CC-BY 3.0 | [Thingiverse](https://www.thingiverse.com/thing:2733162) |
+
+Models were decimated and re-oriented for use as map markers; the Boeing
+727 and 757 are format conversions (OBJ/AC3D → STL) and remain under the
+GPL. Per-model license metadata is also served alongside the assets at
+`maps/aircraft/models.json`.
+
+---
+
 ## Special Thanks
 
 - Chris Wooster
