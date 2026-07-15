@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import { insertReplaySamples, type ReplayBuffer } from "./flightReplay";
@@ -22,8 +22,10 @@ const FakeMap = vi.hoisted(() => {
 		layout: Record<string, Record<string, unknown>> = {};
 		style: unknown;
 		removed = false;
-		constructor(opts: { style: unknown }) {
+		ctorOpts: Record<string, unknown>;
+		constructor(opts: { style: unknown } & Record<string, unknown>) {
 			this.style = opts.style;
+			this.ctorOpts = opts;
 			FakeMap.last = this;
 		}
 		on(ev: string, a?: unknown, b?: unknown) {
@@ -56,10 +58,49 @@ const FakeMap = vi.hoisted(() => {
 		updateImage(id: string, img: unknown) { this.updatedImages[id] = img; this.images[id] = img; }
 		getSource(id: string) {
 			const s = this.sources[id];
-			return s ? { setData: (d: unknown) => { s.data = d; } } : undefined;
+			return s
+				? {
+					setData: (d: unknown) => { s.data = d; },
+					// Clustered-source API: tests always expand to zoom 8.
+					getClusterExpansionZoom: async () => 8,
+				}
+				: undefined;
 		}
 		queryRenderedFeatures() { return this.queryResult; }
 		project(c: [number, number]) { return { x: c[0], y: c[1] }; }
+		zoom = 3;
+		bearing = 0;
+		getBearing() { return this.bearing; }
+		getCenter() { return { lng: -98, lat: 39 }; }
+		pitch = 0;
+		getPitch() { return this.pitch; }
+		maxPitchCalls: number[] = [];
+		setMaxPitch(v: number) {
+			this.maxPitchCalls.push(v);
+			// Real maplibre clamps the live pitch immediately and fires "pitch".
+			if (this.pitch > v) {
+				this.pitch = v;
+				this.fire("pitch");
+			}
+		}
+		dragPanDisabled = false;
+		dragPan = {
+			disable: () => { this.dragPanDisabled = true; },
+			enable: () => { this.dragPanDisabled = false; },
+		};
+		canvasStyle: Record<string, string> = {};
+		getCanvas() { return { style: this.canvasStyle } as unknown as HTMLCanvasElement; }
+		easeToCalls: Record<string, unknown>[] = [];
+		flyToCalls: Record<string, unknown>[] = [];
+		projections: Record<string, unknown>[] = [];
+		setProjection(p: Record<string, unknown>) { this.projections.push(p); }
+		skies: unknown[] = [];
+		setSky(sky: unknown) { this.skies.push(sky); }
+		jumpToCalls: Record<string, unknown>[] = [];
+		jumpTo(o: Record<string, unknown>) { this.jumpToCalls.push(o); }
+		getZoom() { return this.zoom; }
+		easeTo(o: Record<string, unknown>) { this.easeToCalls.push(o); }
+		flyTo(o: Record<string, unknown>) { this.flyToCalls.push(o); }
 		resize() {}
 		remove() { this.removed = true; }
 	}
@@ -81,7 +122,9 @@ vi.mock("./flightIcons", async (importOriginal) => {
 	};
 });
 
-import { FlightMap } from "./FlightMap";
+import { createRef } from "react";
+import { FlightMap, type FlightMapHandle, nonNotableFeatures } from "./FlightMap";
+import { motionPointsToGeoJSON, updateMotion, type MotionBuffer } from "./flightMotion";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -97,6 +140,9 @@ const TEST_URLS = {
 describe("FlightMap", () => {
 	beforeEach(() => { FakeMap.last = null; });
 	afterEach(() => {
+		// No RTL auto-cleanup in this repo — unmount so screen queries in later
+		// tests don't match elements from earlier renders.
+		cleanup();
 		// Restore globals/spies stubbed by the animation-loop test (rAF, performance.now)
 		// so a future test appended here doesn't inherit a frozen clock / stubbed rAF.
 		vi.clearAllMocks();
@@ -493,6 +539,250 @@ describe("FlightMap", () => {
 			}
 		).features;
 		expect(ghosts.map((g) => g.properties.flight)).toEqual(["AA11"]);
+	});
+
+	it("applies globe projection at load and re-applies on toggle", () => {
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender } = render(<FlightMap {...common} globe={false} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.projections.at(-1)).toEqual({ type: "mercator" });
+		rerender(<FlightMap {...common} globe={true} />);
+		expect(map.projections.at(-1)).toEqual({ type: "globe" });
+		rerender(<FlightMap {...common} globe={false} />);
+		expect(map.projections.at(-1)).toEqual({ type: "mercator" });
+	});
+
+	it("3D toggle gates pitch: lifts maxPitch + eases in, clamps flat on exit", () => {
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender, unmount } = render(<FlightMap {...common} threeD={false} />);
+		const map = FakeMap.last!;
+		// Constructed flat-locked: right-drag can never change the z axis in 2D.
+		expect((map.ctorOpts as { maxPitch?: number }).maxPitch).toBe(0);
+		map.fire("load");
+		expect(map.jumpToCalls).toHaveLength(0); // flat start: no pitch seed
+		rerender(<FlightMap {...common} threeD={true} />);
+		expect(map.maxPitchCalls.at(-1)).toBe(60);
+		expect(map.easeToCalls.at(-1)).toMatchObject({ pitch: 60 });
+		map.pitch = 60;
+		rerender(<FlightMap {...common} threeD={false} />);
+		// Exiting 3D clamps maxPitch to 0, which snaps the camera flat.
+		expect(map.maxPitchCalls.at(-1)).toBe(0);
+		expect(map.pitch).toBe(0);
+		unmount();
+
+		// A session restored with 3D on constructs unlocked and pitches at load.
+		render(<FlightMap {...common} threeD={true} />);
+		const map2 = FakeMap.last!;
+		expect((map2.ctorOpts as { maxPitch?: number }).maxPitch).toBe(60);
+		map2.fire("load");
+		expect(map2.jumpToCalls.at(-1)).toMatchObject({ pitch: 60 });
+	});
+
+	it("nonNotableFeatures drops the notable flights (they never cluster)", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [
+			pos({ id: 1, flight: "AA11" }),
+			pos({ id: 2, flight: "DL404" }),
+		]);
+		const out = nonNotableFeatures(motionPointsToGeoJSON(buf, 0));
+		expect(out.features.map((f) => f.properties.flight)).toEqual(["DL404"]);
+	});
+
+	it("cluster toggle swaps the plane/trail layers for the cluster layers", () => {
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender } = render(<FlightMap {...common} cluster={false} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.sources["flights-clustered"]).toBeDefined();
+		for (const id of ["cluster-circles", "cluster-counts", "cluster-planes"]) {
+			const layer = map.layers.find((l) => l.id === id) as { layout: { visibility: string } };
+			expect(layer.layout.visibility).toBe("none");
+		}
+		rerender(<FlightMap {...common} cluster={true} />);
+		expect(map.layout["flights-dots"]?.visibility).toBe("none");
+		expect(map.layout["flight-trails"]?.visibility).toBe("none");
+		expect(map.layout["cluster-circles"]?.visibility).toBe("visible");
+		expect(map.layout["cluster-counts"]?.visibility).toBe("visible");
+		expect(map.layout["cluster-planes"]?.visibility).toBe("visible");
+		rerender(<FlightMap {...common} cluster={false} />);
+		expect(map.layout["flights-dots"]?.visibility).toBe("visible");
+		expect(map.layout["cluster-circles"]?.visibility).toBe("none");
+	});
+
+	it("clicking a cluster eases to its expansion zoom instead of selecting", async () => {
+		const onSelect = vi.fn();
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={onSelect} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} cluster={true} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		map.queryResult = [
+			{
+				geometry: { type: "Point", coordinates: [-80, 40] },
+				properties: { cluster: true, cluster_id: 7, point_count: 12 },
+			},
+		];
+		map.fire("click", { point: { x: 10, y: 10 } });
+		await vi.waitFor(() => {
+			expect(map.easeToCalls.at(-1)).toMatchObject({ center: [-80, 40], zoom: 8 });
+		});
+		expect(onSelect).not.toHaveBeenCalled();
+	});
+
+	it("drag-selects flights in the box, deduped, and disables panning while armed", () => {
+		const onAreaSelect = vi.fn();
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1, onAreaSelect,
+		};
+		const { rerender } = render(<FlightMap {...common} selectMode="off" />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.dragPanDisabled).toBe(false);
+		rerender(<FlightMap {...common} selectMode="rect" />);
+		expect(map.dragPanDisabled).toBe(true);
+
+		// project() maps [lon,lat]→{x:lon,y:lat}: both dots land inside the box.
+		map.queryResult = [
+			{ geometry: { type: "Point", coordinates: [50, 40] }, properties: { flight: "DL404" } },
+			{ geometry: { type: "Point", coordinates: [80, 60] }, properties: { flight: "UA93" } },
+			{ geometry: { type: "Point", coordinates: [50, 40] }, properties: { flight: "DL404" } },
+		];
+		map.fire("mousedown", { point: { x: 10, y: 10 } });
+		map.fire("mousemove", { point: { x: 120, y: 90 } });
+		map.fire("mouseup", { point: { x: 120, y: 90 } });
+		expect(onAreaSelect).toHaveBeenCalledWith(["DL404", "UA93"]);
+
+		// Disarming re-enables panning.
+		rerender(<FlightMap {...common} selectMode="off" />);
+		expect(map.dragPanDisabled).toBe(false);
+	});
+
+	it("circle mode drops features outside the radius even when inside the query box", () => {
+		const onAreaSelect = vi.fn();
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} selectMode="circle" onAreaSelect={onAreaSelect} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		// Center (0,0), radius 50. (18,24) is inside (dist 30); (49,49) is in the
+		// bounding box but outside the circle (dist ~69).
+		map.queryResult = [
+			{ geometry: { type: "Point", coordinates: [18, 24] }, properties: { flight: "IN" } },
+			{ geometry: { type: "Point", coordinates: [49, 49] }, properties: { flight: "OUT" } },
+		];
+		map.fire("mousedown", { point: { x: 0, y: 0 } });
+		map.fire("mouseup", { point: { x: 30, y: 40 } });
+		expect(onAreaSelect).toHaveBeenCalledWith(["IN"]);
+	});
+
+	it("pitching swaps flat icons for 3D plane slabs floating at altitude", () => {
+		let rafCb: FrameRequestCallback | null = null;
+		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+			rafCb = cb;
+			return 1;
+		});
+		vi.stubGlobal("cancelAnimationFrame", () => {});
+		vi.spyOn(performance, "now").mockReturnValue(0);
+
+		render(
+			<FlightMap positions={[pos({ id: 5, flight: "DL404", alt_ft: 31_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		const planes = map.layers.find((l) => l.id === "planes-3d") as {
+			type: string; layout: { visibility: string }; paint: Record<string, unknown>;
+		};
+		expect(planes.type).toBe("fill-extrusion");
+		expect(planes.layout.visibility).toBe("none"); // flat start
+		expect(planes.paint["fill-extrusion-base"]).toEqual(["get", "base"]);
+
+		map.pitch = 60;
+		map.fire("pitch");
+		// The aircraft itself moves into 3D space: flat icons hide, slabs show.
+		expect(map.layout["planes-3d"]?.visibility).toBe("visible");
+		expect(map.layout["flights-dots"]?.visibility).toBe("none");
+		expect(map.layout["flights-notable"]?.visibility).toBe("none");
+		rafCb!(100); // pitch marked the frame dirty → slabs feed
+		const data = map.sources["planes-3d"]?.data as {
+			features: { properties: { flight: string; base: number; height: number } }[];
+		};
+		expect(data.features).toHaveLength(1);
+		const p = data.features[0].properties;
+		// Slab AT altitude: base is the exaggerated altitude, top a thin marker
+		// thickness above it (12% of the zoom-scaled marker size — NOT a
+		// ground-to-sky bar, whose base would be 0).
+		expect(p.base).toBeCloseTo(31_000 * 0.3048 * 10, 0);
+		// plane3DTargetPx(3) clamps to the 16px floor at the stub's zoom 3.
+		const sizeKm = 16 * ((40_075 * Math.cos((39 * Math.PI) / 180)) / (256 * 2 ** 3));
+		expect(p.height - p.base).toBeCloseTo(sizeKm * 0.12 * 1000, 0);
+
+		map.pitch = 0;
+		map.fire("pitch");
+		expect(map.layout["planes-3d"]?.visibility).toBe("none");
+		expect(map.layout["flights-dots"]?.visibility).toBe("visible");
+	});
+
+	it("compass tracks map rotation and resets bearing on click", () => {
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		map.bearing = 30;
+		act(() => map.fire("rotate"));
+		expect(screen.getByTestId("compass-needle").style.transform).toBe("rotate(-30deg)");
+		fireEvent.click(screen.getByRole("button", { name: "Reset bearing to north" }));
+		expect(map.easeToCalls.at(-1)).toMatchObject({ bearing: 0 });
+	});
+
+	it("exposes an imperative camera handle (zoom, flyTo, resetNorth)", () => {
+		const ref = createRef<FlightMapHandle>();
+		render(
+			<FlightMap ref={ref} positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		ref.current!.zoomIn();
+		expect(map.easeToCalls.at(-1)).toMatchObject({ zoom: 4 });
+		ref.current!.zoomOut();
+		expect(map.easeToCalls.at(-1)).toMatchObject({ zoom: 2 });
+		ref.current!.flyTo([-74, 40.7], 13.5);
+		expect(map.flyToCalls.at(-1)).toMatchObject({ center: [-74, 40.7], zoom: 13.5 });
+		ref.current!.resetNorth();
+		expect(map.easeToCalls.at(-1)).toMatchObject({ bearing: 0 });
 	});
 
 	it("switching mapStyle to satellite flips ground visibility without recreating the map", () => {

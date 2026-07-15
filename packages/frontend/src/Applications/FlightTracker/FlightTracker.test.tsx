@@ -414,7 +414,7 @@ describe("FlightTracker", () => {
 		act(() => satellite.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "satellite", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "satellite", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -425,7 +425,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -483,7 +483,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x0000ff, pinColorDark: 0x0000ff, notablePinColorLight: 0x0000ff, notablePinColorDark: 0x0000ff, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: true, pinColorLight: 0x0000ff, pinColorDark: 0x0000ff, notablePinColorLight: 0x0000ff, notablePinColorDark: 0x0000ff, radarSweep: true, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -494,7 +494,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "radar", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "radar", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: true, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -505,7 +505,7 @@ describe("FlightTracker", () => {
 		act(() => item.onClickFunc?.());
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -517,7 +517,7 @@ describe("FlightTracker", () => {
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",
-			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5 },
+			mapSettings: { mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700, notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d, radarSweep: false, trailMultiplier: 5, globe: false, cluster: false, threeD: false },
 		});
 	});
 
@@ -533,7 +533,7 @@ describe("FlightTracker", () => {
 			mapSettings: {
 				mapStyle: "classic", darkMap: false, pinColorLight: 0x3a3a3a, pinColorDark: 0xffd700,
 				notablePinColorLight: 0xc0202a, notablePinColorDark: 0xff4d4d,
-				radarSweep: true, trailMultiplier: 3.5,
+				radarSweep: true, trailMultiplier: 3.5, globe: false, cluster: false, threeD: false,
 			},
 		});
 	});
@@ -714,7 +714,7 @@ describe("FlightTracker", () => {
 			});
 			expect(dispatchMock).toHaveBeenCalledWith({
 				type: "ClassicyAppFlightTrackerSetFilterSettings",
-				filterSettings: { flight: "", tail: "", carrier: "AA", origin: "", dest: "" },
+				filterSettings: { flight: "", tail: "", carrier: "AA", origin: "", dest: "", flights: [] },
 			});
 		});
 
@@ -754,6 +754,51 @@ describe("FlightTracker", () => {
 			expect(screen.getByText("Filter…")).toBeTruthy();
 		});
 
+		it("area select fills the detail dropdown; Save as Filter persists the list (issue #225)", () => {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async () => ({ ok: true, json: async () => ({ data: [] }) })),
+			);
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			const onAreaSelect = mapProps[mapProps.length - 1].onAreaSelect as (f: string[]) => void;
+			act(() => onAreaSelect(["AA11", "UA175"]));
+			// The selection dropdown lists both, active first.
+			const dd = screen.getByTestId("flight_detail_selection") as HTMLSelectElement;
+			expect(dd.value).toBe("AA11");
+			// Switching the dropdown switches the detail selection (header span).
+			fireEvent.change(dd, { target: { value: "UA175" } });
+			expect(
+				screen.getAllByText("UA175").some((el) => el.tagName === "SPAN"),
+			).toBe(true);
+			// Save as Filter persists the explicit flight list.
+			fireEvent.click(screen.getByText("Save as Filter"));
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetFilterSettings",
+				filterSettings: {
+					flight: "", tail: "", carrier: "", origin: "", dest: "",
+					flights: ["AA11", "UA175"],
+				},
+			});
+			// The tool disarms after a selection.
+			expect(mapProps[mapProps.length - 1].selectMode).toBe("off");
+		});
+
+		it("a persisted flight-list filter hides everything else", () => {
+			mockAppData.current = { filterSettings: { flights: ["UA175"] } };
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			const last = mapProps[mapProps.length - 1];
+			expect((last.positions as { flight: string }[]).map((p) => p.flight)).toEqual(["UA175"]);
+			expect(screen.getByText("1 of 2 aircraft aloft · filtered")).toBeTruthy();
+			// The Filter window shows the removable saved-selection row.
+			fireEvent.click(screen.getByText("Filter (on)…"));
+			expect(screen.getByText("Selected flights (1)")).toBeTruthy();
+			fireEvent.click(screen.getByText("Remove"));
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetFilterSettings",
+				filterSettings: { flight: "", tail: "", carrier: "", origin: "", dest: "", flights: [] },
+			});
+		});
+
 		it("Clear resets the filter in one dispatch", () => {
 			mockAppData.current = { filterSettings: { carrier: "AA", origin: "BOS" } };
 			renderWithContext({ flightPositions: [aa11], connected: true });
@@ -761,7 +806,7 @@ describe("FlightTracker", () => {
 			fireEvent.click(screen.getByText("Clear"));
 			expect(dispatchMock).toHaveBeenCalledWith({
 				type: "ClassicyAppFlightTrackerSetFilterSettings",
-				filterSettings: { flight: "", tail: "", carrier: "", origin: "", dest: "" },
+				filterSettings: { flight: "", tail: "", carrier: "", origin: "", dest: "", flights: [] },
 			});
 		});
 

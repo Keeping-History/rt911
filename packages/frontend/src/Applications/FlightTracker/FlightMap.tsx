@@ -1,7 +1,10 @@
 import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
-import { type FC, useEffect, useRef } from "react";
+import { type FC, type Ref, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { MapCompass } from "./MapCompass";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
+import type { FlightFeatureCollection } from "./flightGeoJSON";
+import { basemapPalette } from "../../lib/basemap/basemapStyles";
 import {
 	type BasemapStyleId,
 	type BasemapUrls,
@@ -34,6 +37,15 @@ import {
 	sweepLineGeoJSON,
 	sweepTrailGeoJSON,
 } from "./flightRadar";
+import { kmPerPixel, motionPlanes3DToGeoJSON, plane3DTargetPx } from "./flightAltitude";
+import {
+	type DragPixels,
+	type SelectMode,
+	dragBounds,
+	insideSelection,
+	overlayStyle,
+} from "./selectTool";
+import styles from "./FlightTracker.module.scss";
 import { type ReplayBuffer, replayPointsAt } from "./flightReplay";
 import { type LoopClock, playheadAt } from "./loopClock";
 
@@ -68,13 +80,30 @@ async function installPlaneIcons(
 	}
 }
 
+/**
+ * Transient camera commands for MapControls (zoom/pinpoints/compass). The
+ * persisted toggles (globe/cluster/3D) stay declarative props; only one-shot
+ * camera moves go through this imperative seam — no consumer ever touches the
+ * raw MapLibre instance.
+ */
+export interface FlightMapHandle {
+	zoomIn(): void;
+	zoomOut(): void;
+	flyTo(center: [number, number], zoom: number): void;
+	resetNorth(): void;
+}
+
 interface FlightMapProps {
+	ref?: Ref<FlightMapHandle>;
 	positions: FlightPosition[];
 	// Short history lookback from the provider (flightsSeed): earlier samples
 	// that give freshly-seeded single-sample flights a heading immediately.
 	seedPositions?: FlightPosition[];
 	basemapUrls: BasemapUrls;
 	trackGeoJSON: GeoJSON.Feature | null;
+	// Curtain wall under the selected flight's path (issue #224): pre-built
+	// extrusion quads from its altitude profile; renders only while pitched.
+	curtainGeoJSON?: GeoJSON.FeatureCollection | null;
 	nowMs: number;
 	playing: boolean;
 	mapStyle: BasemapStyleId;
@@ -96,8 +125,52 @@ interface FlightMapProps {
 	// skipped at draw time; null/omitted shows all. Live pins are filtered
 	// upstream by FlightTracker via the positions array itself.
 	visibleFlights?: Set<string> | null;
+	// MapControls toggles (issues #218/#222/#223); persisted in FlightMapSettings.
+	globe?: boolean;
+	threeD?: boolean;
+	cluster?: boolean;
+	// Area-select tool (issue #225): while armed, drags trace a rectangle or
+	// circle instead of panning; the release reports the flights inside.
+	selectMode?: SelectMode;
+	onAreaSelect?: (flights: string[]) => void;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
+}
+
+/** Non-notable features only — notables never cluster (issue #222). */
+export function nonNotableFeatures(fc: FlightFeatureCollection): FlightFeatureCollection {
+	return {
+		type: "FeatureCollection",
+		features: fc.features.filter((f) => f.properties.notable !== true),
+	};
+}
+
+// Representative lng/lat for a hit-test feature: the point itself, or a 3D
+// plane slab's first ring vertex (close enough at marker scale for
+// nearest-hit ranking and circle-radius refinement).
+function featureAnchor(f: { geometry: GeoJSON.Geometry }): [number, number] | null {
+	if (f.geometry.type === "Point") return f.geometry.coordinates as [number, number];
+	if (f.geometry.type === "Polygon") return f.geometry.coordinates[0][0] as [number, number];
+	return null;
+}
+
+/**
+ * Single resolver for the pitch × cluster layer matrix (two flags, one
+ * writer — split writers previously stomped each other's visibility).
+ * Pitched: everything renders as 3D plane slabs (flat icons AND flat cluster
+ * blobs hide); flat: cluster decides between icons and blobs.
+ */
+export function planeLayerVisibility(cluster: boolean, pitched: boolean): Record<string, boolean> {
+	return {
+		"flights-dots": !cluster && !pitched,
+		"flights-notable": !pitched,
+		"flight-trails": !cluster,
+		"cluster-circles": cluster && !pitched,
+		"cluster-counts": cluster && !pitched,
+		"cluster-planes": cluster && !pitched,
+		"planes-3d": pitched,
+		"track-curtain": pitched,
+	};
 }
 
 const IDLE_LOOP_CLOCK: LoopClock = {
@@ -111,6 +184,8 @@ const EMPTY_REPLAY_BUFFER: ReplayBuffer = new Map();
 
 const NA_CENTER: [number, number] = [-98, 39];
 const NA_ZOOM = 3;
+// Camera pitch the 3D toggle eases to (issue #223); MapLibre's default maxPitch.
+export const THREE_D_PITCH = 60;
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 const FRAME_MS = 66; // ~15 fps animation gate
 // Click hit-test slop (px). Dots are a small (3px) and gliding target, so an
@@ -123,11 +198,14 @@ const GHOST_OPACITY = 0.4;
 const GHOST_STROKE_COLOR = "#ffffff";
 
 export const FlightMap: FC<FlightMapProps> = ({
-	positions, seedPositions, basemapUrls, trackGeoJSON, nowMs, playing,
+	ref: handleRef,
+	positions, seedPositions, basemapUrls, trackGeoJSON, curtainGeoJSON = null, nowMs, playing,
 	mapStyle, darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null,
+	globe = false, threeD = false, cluster = false,
+	selectMode = "off", onAreaSelect,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -138,14 +216,26 @@ export const FlightMap: FC<FlightMapProps> = ({
 	positionsRef.current = positions;
 	const seedRef = useRef(seedPositions);
 	seedRef.current = seedPositions;
-	const cbRef = useRef({ onSelectFlight, onClearSelection });
-	cbRef.current = { onSelectFlight, onClearSelection };
+	const cbRef = useRef({ onSelectFlight, onClearSelection, onAreaSelect });
+	cbRef.current = { onSelectFlight, onClearSelection, onAreaSelect };
+	const selectModeRef = useRef<SelectMode>(selectMode);
+	selectModeRef.current = selectMode;
+	// In-flight drag state (mutated at event rate); the overlay div re-renders
+	// through React state so the visual tracks the pointer.
+	const dragRef = useRef<DragPixels | null>(null);
+	const [overlay, setOverlay] = useState<{ mode: "rect" | "circle"; d: DragPixels } | null>(null);
 	const colorsRef = useRef<FlightMapColors>({ mapStyle, darkMap, pinColor, notablePinColor });
 	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor };
 	const radarSweepRef = useRef(radarSweep);
 	radarSweepRef.current = radarSweep;
 	const trailMultiplierRef = useRef(trailMultiplier);
 	trailMultiplierRef.current = trailMultiplier;
+	const globeRef = useRef(globe);
+	globeRef.current = globe;
+	const threeDRef = useRef(threeD);
+	threeDRef.current = threeD;
+	const clusterRef = useRef(cluster);
+	clusterRef.current = cluster;
 	const loopRef = useRef({
 		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
 		visible: visibleFlights,
@@ -154,6 +244,19 @@ export const FlightMap: FC<FlightMapProps> = ({
 		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
 		visible: visibleFlights,
 	};
+
+	useImperativeHandle(handleRef, () => ({
+		zoomIn: () => {
+			const map = mapRef.current;
+			map?.easeTo({ zoom: map.getZoom() + 1, duration: 250 });
+		},
+		zoomOut: () => {
+			const map = mapRef.current;
+			map?.easeTo({ zoom: map.getZoom() - 1, duration: 250 });
+		},
+		flyTo: (center, zoom) => mapRef.current?.flyTo({ center, zoom, essential: true }),
+		resetNorth: () => mapRef.current?.easeTo({ bearing: 0, duration: 400 }),
+	}), []);
 
 	const motionBufferRef = useRef<MotionBuffer>(new Map());
 	const nowMsRef = useRef(nowMs);
@@ -164,6 +267,12 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const anchorRef = useRef({ virtual: nowMs, wall: 0 });
 	// Whether a frame is owed while paused (buffer/clock changed since last draw).
 	const dirtyRef = useRef(true);
+	// Map bearing, mirrored into React state for the compass overlay.
+	const [bearing, setBearing] = useState(0);
+	// Whether the camera is meaningfully pitched (3D button OR manual
+	// right-click). Altitude geometry renders only while pitched — flat
+	// top-down maps keep the classic 2D look with zero extra draw cost.
+	const pitchedRef = useRef(false);
 
 	// Create the map once (basemapUrls is effectively stable from env).
 	useEffect(() => {
@@ -175,12 +284,20 @@ export const FlightMap: FC<FlightMapProps> = ({
 			center: NA_CENTER,
 			zoom: NA_ZOOM,
 			attributionControl: false,
+			// Pitch is exclusively the 3D toggle's domain: with 3D off the map is
+			// hard-locked flat (right-drag still rotates bearing, never the z
+			// axis). The threeD effect lifts this to THREE_D_PITCH.
+			maxPitch: threeDRef.current ? THREE_D_PITCH : 0,
 		});
 		mapRef.current = map;
 
 		map.on("load", () => {
 			loadedRef.current = true;
 			const colors = colorsRef.current;
+			// Projection/pitch are style-coupled, so a persisted globe/3D setting
+			// is seeded here rather than in the props effects (which skip pre-load).
+			map.setProjection({ type: globeRef.current ? "globe" : "mercator" });
+			if (threeDRef.current) map.jumpTo({ pitch: THREE_D_PITCH });
 			updateMotion(motionBufferRef.current, positionsRef.current);
 			if (seedRef.current?.length)
 				seedMotionFromHistory(motionBufferRef.current, seedRef.current);
@@ -229,6 +346,86 @@ export const FlightMap: FC<FlightMapProps> = ({
 				},
 			});
 			void installPlaneIcons(map, colors.pinColor, colors.notablePinColor);
+			// Cluster mode (issue #222): a second, pre-clustered source — MapLibre
+			// fixes the cluster option at addSource time, so toggling is a
+			// visibility swap between the plane/trail layers and these three.
+			// Notables are excluded from the feed (nonNotableFeatures) and keep
+			// rendering individually from the raw source above.
+			const clusterVis = clusterRef.current ? ("visible" as const) : ("none" as const);
+			map.addSource("flights-clustered", {
+				type: "geojson", data: EMPTY_FC,
+				cluster: true, clusterRadius: 40, clusterMaxZoom: 10,
+			});
+			map.addLayer({
+				id: "cluster-circles", type: "circle", source: "flights-clustered",
+				filter: ["has", "point_count"],
+				layout: { visibility: clusterVis },
+				paint: {
+					"circle-color": colors.pinColor, "circle-opacity": 0.8,
+					"circle-stroke-width": 1.5, "circle-stroke-color": "#ffffff",
+					"circle-radius": ["step", ["get", "point_count"], 10, 25, 14, 100, 18, 400, 24],
+				},
+			});
+			map.addLayer({
+				id: "cluster-counts", type: "symbol", source: "flights-clustered",
+				filter: ["has", "point_count"],
+				layout: {
+					visibility: clusterVis,
+					"text-field": "{point_count_abbreviated}",
+					"text-font": ["Noto Sans Regular"],
+					"text-size": 11,
+					"text-allow-overlap": true,
+				},
+				paint: { "text-color": "#ffffff" },
+			});
+			map.addLayer({
+				id: "cluster-planes", type: "symbol", source: "flights-clustered",
+				filter: ["!", ["has", "point_count"]],
+				layout: {
+					visibility: clusterVis,
+					"icon-image": PLANE_ICON_ID,
+					"icon-size": ["interpolate", ["linear"], ["zoom"], 4, 1, 9, 1.5],
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
+				},
+			});
+			if (clusterRef.current) {
+				map.setLayoutProperty("flights-dots", "visibility", "none");
+				map.setLayoutProperty("flight-trails", "visibility", "none");
+			}
+			// 3D planes (issue #224): while pitched, each aircraft is a heading-
+			// rotated plane-silhouette slab floating AT its altitude (base →
+			// height are both up there); the flat icons hide. Replaces the
+			// original ground-to-altitude drop columns, which read as bars
+			// growing out of grounded planes.
+			map.addSource("planes-3d", { type: "geojson", data: EMPTY_FC });
+			map.addLayer({
+				id: "planes-3d", type: "fill-extrusion", source: "planes-3d",
+				layout: { visibility: pitchedRef.current ? "visible" : "none" },
+				paint: {
+					"fill-extrusion-color": [
+						"case", ["==", ["get", "notable"], true],
+						colors.notablePinColor, colors.pinColor,
+					],
+					"fill-extrusion-base": ["get", "base"],
+					"fill-extrusion-height": ["get", "height"],
+					"fill-extrusion-opacity": 0.9,
+				},
+			});
+			// Selected-flight curtain wall — same pitch gating as the columns;
+			// data arrives via the curtainGeoJSON prop effect below.
+			map.addSource("track-curtain", { type: "geojson", data: EMPTY_FC });
+			map.addLayer({
+				id: "track-curtain", type: "fill-extrusion", source: "track-curtain",
+				layout: { visibility: pitchedRef.current ? "visible" : "none" },
+				paint: {
+					"fill-extrusion-color": TRACK_LINE_COLOR,
+					"fill-extrusion-height": ["get", "height"],
+					"fill-extrusion-opacity": 0.5,
+				},
+			});
 			// Loop-mode ghosts render under BOTH live plane layers ("flights-dots"
 			// is the lower of the two, so inserting before it puts ghosts under
 			// both) but above the trails. They stay simple circles — visually
@@ -286,15 +483,74 @@ export const FlightMap: FC<FlightMapProps> = ({
 		// Forgiving hit-test: query a small box around the click and select the
 		// NEAREST dot within it; clear the selection only when nothing is nearby.
 		// (An exact-pixel layer click missed too often on the tiny gliding dots.)
+		// Area-select drag (issue #225). MapLibre still emits mouse events with
+		// dragPan disabled; the release queries the box and refines per-shape.
+		map.on("mousedown", (e) => {
+			if (selectModeRef.current === "off") return;
+			dragRef.current = {
+				startX: e.point.x, startY: e.point.y, curX: e.point.x, curY: e.point.y,
+			};
+		});
+		map.on("mousemove", (e) => {
+			const d = dragRef.current;
+			const mode = selectModeRef.current;
+			if (!d || mode === "off") return;
+			d.curX = e.point.x;
+			d.curY = e.point.y;
+			setOverlay({ mode, d: { ...d } });
+		});
+		map.on("mouseup", (e) => {
+			const d = dragRef.current;
+			const mode = selectModeRef.current;
+			dragRef.current = null;
+			setOverlay(null);
+			if (!d || mode === "off") return;
+			d.curX = e.point.x;
+			d.curY = e.point.y;
+			const b = dragBounds(mode, d);
+			const feats = map.queryRenderedFeatures(
+				[[b.minX, b.minY], [b.maxX, b.maxY]],
+				{ layers: ["flights-dots", "flights-notable", "cluster-planes", "planes-3d"] },
+			);
+			const flights: string[] = [];
+			for (const f of feats) {
+				const anchor = featureAnchor(f);
+				if (!anchor) continue;
+				const pp = map.project(anchor);
+				if (!insideSelection(mode, d, pp.x, pp.y)) continue;
+				const flight = String(f.properties?.flight ?? "");
+				if (flight && !flights.includes(flight)) flights.push(flight);
+			}
+			cbRef.current.onAreaSelect?.(flights);
+		});
+
 		map.on("click", (e) => {
+			// While a select tool is armed, the drag handlers own the pointer.
+			if (selectModeRef.current !== "off") return;
 			const { x, y } = e.point;
 			const near = map.queryRenderedFeatures(
 				[
 					[x - HIT_TOLERANCE, y - HIT_TOLERANCE],
 					[x + HIT_TOLERANCE, y + HIT_TOLERANCE],
 				],
-				{ layers: ["flights-dots", "flights-notable"] },
+				{
+					layers: [
+						"flights-dots", "flights-notable", "cluster-planes",
+						"cluster-circles", "planes-3d",
+					],
+				},
 			);
+			// A cluster blob expands instead of selecting.
+			const clusterHit = near.find((f) => f.properties?.cluster === true);
+			if (clusterHit && clusterHit.geometry.type === "Point") {
+				const src = map.getSource("flights-clustered") as maplibregl.GeoJSONSource | undefined;
+				const center = clusterHit.geometry.coordinates as [number, number];
+				void src
+					?.getClusterExpansionZoom(Number(clusterHit.properties?.cluster_id))
+					.then((zoom) => map.easeTo({ center, zoom }))
+					.catch(() => {});
+				return;
+			}
 			if (near.length === 0) {
 				cbRef.current.onClearSelection();
 				return;
@@ -302,8 +558,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			let best = near[0];
 			let bestDist = Number.POSITIVE_INFINITY;
 			for (const f of near) {
-				if (f.geometry.type !== "Point") continue;
-				const pp = map.project(f.geometry.coordinates as [number, number]);
+				const anchor = featureAnchor(f);
+				if (!anchor) continue;
+				const pp = map.project(anchor);
 				const d = (pp.x - x) ** 2 + (pp.y - y) ** 2;
 				if (d < bestDist) {
 					bestDist = d;
@@ -311,6 +568,28 @@ export const FlightMap: FC<FlightMapProps> = ({
 				}
 			}
 			if (best.properties) cbRef.current.onSelectFlight(String(best.properties.flight));
+		});
+
+		map.on("rotate", () => setBearing(map.getBearing()));
+		// Altitude layers key off the ACTUAL pitch so both the 3D toggle and a
+		// manual right-click pitch reveal them.
+		map.on("pitch", () => {
+			const on = map.getPitch() > 5;
+			if (on === pitchedRef.current) return;
+			pitchedRef.current = on;
+			if (loadedRef.current) {
+				for (const [id, visible] of Object.entries(
+					planeLayerVisibility(clusterRef.current, on),
+				)) {
+					map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+				}
+			}
+			dirtyRef.current = true;
+		});
+		// Plane-slab size tracks the zoom (constant on-screen size); wake a
+		// paused map so a zoom while paused re-sizes the 3D planes.
+		map.on("zoom", () => {
+			if (pitchedRef.current) dirtyRef.current = true;
 		});
 
 		const ro = new ResizeObserver(() => map.resize());
@@ -351,6 +630,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 		src?.setData(trackGeoJSON ? { type: "FeatureCollection", features: [trackGeoJSON] } : EMPTY_FC);
 	}, [trackGeoJSON]);
 
+	// Push the selected flight's altitude curtain (or clear it).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		(map.getSource("track-curtain") as maplibregl.GeoJSONSource | undefined)?.setData(
+			curtainGeoJSON ?? EMPTY_FC,
+		);
+	}, [curtainGeoJSON]);
+
 	// Re-theme / recolor live. setPaintProperty only — setStyle() would tear
 	// down the flights/trails/track sources and layers. Before "load" fires,
 	// the load handler's applyMapColors call picks up the latest values.
@@ -360,6 +648,58 @@ export const FlightMap: FC<FlightMapProps> = ({
 		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor });
 		void installPlaneIcons(map, pinColor, notablePinColor);
 	}, [mapStyle, darkMap, pinColor, notablePinColor]);
+
+	// Arm/disarm the select tool: panning off, crosshair cursor, stale drag
+	// cleared. Runs pre-load safely (dragPan exists from construction).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map) return;
+		if (selectMode !== "off") {
+			map.dragPan.disable();
+			map.getCanvas().style.cursor = "crosshair";
+		} else {
+			map.dragPan.enable();
+			map.getCanvas().style.cursor = "";
+			dragRef.current = null;
+			setOverlay(null);
+		}
+	}, [selectMode]);
+
+	// Cluster toggle: resolve the full pitch × cluster visibility matrix; the
+	// rAF loop feeds whichever sources are active.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		for (const [id, visible] of Object.entries(
+			planeLayerVisibility(cluster, pitchedRef.current),
+		)) {
+			map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+		}
+		dirtyRef.current = true;
+	}, [cluster]);
+
+	// Mercator ↔ globe. Projection survives style-paint changes, so this only
+	// needs to run on the toggle itself (plus the load-time seed above).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		map.setProjection({ type: globe ? "globe" : "mercator" });
+		dirtyRef.current = true;
+	}, [globe]);
+
+	// 3D mode gates pitch entirely: ON lifts maxPitch and eases to the preset
+	// (right-drag can then pitch freely); OFF clamps maxPitch back to 0, which
+	// snaps the camera flat and makes right-drag bearing-only.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		if (threeD) {
+			map.setMaxPitch(THREE_D_PITCH);
+			map.easeTo({ pitch: THREE_D_PITCH, duration: 600 });
+		} else {
+			map.setMaxPitch(0);
+		}
+	}, [threeD]);
 
 	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an
 	// Appearance-theme switch that happened while hidden is picked up. dirtyRef
@@ -419,9 +759,20 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const a = anchorRef.current;
 			const now = playingRef.current ? a.virtual + (wall - a.wall) : a.virtual;
 			const buf = motionBufferRef.current;
-			(map.getSource("flights") as maplibregl.GeoJSONSource | undefined)?.setData(
-				motionPointsToGeoJSON(buf, now),
-			);
+			const pointsFc = motionPointsToGeoJSON(buf, now);
+			(map.getSource("flights") as maplibregl.GeoJSONSource | undefined)?.setData(pointsFc);
+			if (clusterRef.current) {
+				(map.getSource("flights-clustered") as maplibregl.GeoJSONSource | undefined)?.setData(
+					nonNotableFeatures(pointsFc),
+				);
+			}
+			if (pitchedRef.current) {
+				const zoom = map.getZoom();
+				const sizeKm = plane3DTargetPx(zoom) * kmPerPixel(zoom, map.getCenter().lat);
+				(map.getSource("planes-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
+					motionPlanes3DToGeoJSON(buf, now, sizeKm),
+				);
+			}
 			// Clamp: hand-edited persisted state must not build million-point trails.
 			const clamped = Math.min(Math.max(trailMultiplierRef.current, 0), TRAIL_MULTIPLIER_MAX);
 			(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
@@ -449,5 +800,26 @@ export const FlightMap: FC<FlightMapProps> = ({
 		return () => cancelAnimationFrame(raf);
 	}, []);
 
-	return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
+	return (
+		<div
+			style={{
+				position: "relative",
+				width: "100%",
+				height: "100%",
+				// In globe projection the canvas is transparent around the planet;
+				// match that "space" to the style's ground tone instead of the
+				// window's white body.
+				background: basemapPalette(mapStyle, darkMap).background,
+			}}
+		>
+			<div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+			<MapCompass
+				bearing={bearing}
+				onReset={() => mapRef.current?.easeTo({ bearing: 0, duration: 400 })}
+			/>
+			{overlay && (
+				<div className={styles.selectOverlay} style={overlayStyle(overlay.mode, overlay.d)} />
+			)}
+		</div>
+	);
 };

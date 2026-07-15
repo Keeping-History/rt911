@@ -26,7 +26,7 @@ function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 
 describe("classicyFlightTrackerEventHandler", () => {
 	it("persists mapSettings from a SetMapSettings action", () => {
-		const settings = { mapStyle: "radar" as const, darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, radarSweep: false, trailMultiplier: 2 };
+		const settings = { mapStyle: "radar" as const, darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, radarSweep: false, trailMultiplier: 2, globe: true, cluster: false, threeD: true };
 		const out = classicyFlightTrackerEventHandler(
 			storeWithApp(),
 			flightTrackerSetMapSettings(settings),
@@ -117,6 +117,18 @@ describe("readFlightMapSettings", () => {
 			readFlightMapSettings({ mapSettings: { mapStyle: "sepia" } }).mapStyle,
 		).toBe("classic");
 	});
+
+	it("defaults globe/cluster/threeD to false and reads stored values", () => {
+		expect(readFlightMapSettings(undefined)).toMatchObject({
+			globe: false,
+			cluster: false,
+			threeD: false,
+		});
+		// State persisted before these toolbar toggles existed lacks the fields.
+		expect(
+			readFlightMapSettings({ mapSettings: { globe: true, threeD: true } }),
+		).toMatchObject({ globe: true, cluster: false, threeD: true });
+	});
 });
 
 describe("readFlightLoopSettings", () => {
@@ -152,7 +164,7 @@ describe("intToHex", () => {
 
 describe("filter settings", () => {
 	it("persists filterSettings from a SetFilterSettings action without touching other data", () => {
-		const filterSettings = { flight: "", tail: "", carrier: "AA", origin: "BOS", dest: "" };
+		const filterSettings = { flight: "", tail: "", carrier: "AA", origin: "BOS", dest: "", flights: [] };
 		const out = classicyFlightTrackerEventHandler(
 			storeWithApp({ mapSettings: { darkMap: true } }),
 			flightTrackerSetFilterSettings(filterSettings),
@@ -166,7 +178,8 @@ describe("filter settings", () => {
 		expect(readFlightFilterSettings(undefined)).toEqual(EMPTY_FLIGHT_FILTER);
 		expect(readFlightFilterSettings({})).toEqual(EMPTY_FLIGHT_FILTER);
 		expect(readFlightFilterSettings({ filterSettings: { carrier: "UA" } })).toEqual({
-			flight: "", tail: "", carrier: "UA", origin: "", dest: "",
+			// flights back-fills to [] for pre-#225 persisted state.
+			flight: "", tail: "", carrier: "UA", origin: "", dest: "", flights: [],
 		});
 	});
 });

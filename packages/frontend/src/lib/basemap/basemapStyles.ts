@@ -1,4 +1,4 @@
-import type { StyleSpecification } from "maplibre-gl";
+import type { ExpressionSpecification, StyleSpecification } from "maplibre-gl";
 
 // User-facing basemap styles, orthogonal to the Dark Map toggle: classic is
 // the original paper/slate vector look, radar a CRT phosphor scope, satellite
@@ -18,7 +18,9 @@ export interface BasemapUrls {
 export const BASEMAP_URLS: BasemapUrls = {
 	vector:
 		(import.meta.env.VITE_FLIGHT_BASEMAP_URL as string | undefined) ??
-		"https://files.911realtime.org/maps/na-basemap.pmtiles",
+		// World coverage (issue #220) so globe mode/panning never hit a tile
+		// cliff; na-basemap.pmtiles stays hosted as the rollback.
+		"https://files.911realtime.org/maps/world-basemap.pmtiles",
 	satelliteDay:
 		(import.meta.env.VITE_SATELLITE_DAY_BASEMAP_URL as string | undefined) ??
 		"https://files.911realtime.org/maps/na-satellite-day.pmtiles",
@@ -96,6 +98,41 @@ export function basemapPalette(mapStyle: BasemapStyleId, darkMap: boolean): Base
 	return tone === "dark" ? CLASSIC_DARK : CLASSIC_LIGHT;
 }
 
+// Style-level sky (issue #221): visible when the camera pitches or the globe
+// projection is active. The approved daytime pair applies on light-toned
+// styles; dark-toned styles (radar scope, dark map, night satellite) get
+// matching dark variants so the horizon doesn't glow daylight-blue over them.
+export interface SkySpec {
+	"sky-color": string;
+	"horizon-color": string;
+	"sky-horizon-blend": number;
+	"horizon-fog-blend": number;
+	// Globe-mode atmosphere halo, fading out as you zoom in (the halo is a
+	// planet-scale effect; at street scale it would wash the horizon out).
+	"atmosphere-blend": ExpressionSpecification;
+}
+
+const ATMOSPHERE_BLEND: ExpressionSpecification = [
+	"interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0,
+];
+
+const SKY_LIGHT: SkySpec = {
+	"sky-color": "#94E3FE",
+	"horizon-color": "#00C7FC",
+	"sky-horizon-blend": 0.5,
+	"horizon-fog-blend": 0.5,
+	"atmosphere-blend": ATMOSPHERE_BLEND,
+};
+const SKY_DARK: SkySpec = { ...SKY_LIGHT, "sky-color": "#0a0a14", "horizon-color": "#1a1a2e" };
+const SKY_RADAR: SkySpec = { ...SKY_LIGHT, "sky-color": "#010b04", "horizon-color": "#0f3d1f" };
+const SKY_SAT_NIGHT: SkySpec = { ...SKY_LIGHT, "sky-color": "#01030a", "horizon-color": "#0a1a33" };
+
+export function skyFor(mapStyle: BasemapStyleId, darkMap: boolean): SkySpec {
+	if (mapStyle === "radar") return SKY_RADAR;
+	if (effectiveTone(mapStyle, darkMap) === "light") return SKY_LIGHT;
+	return mapStyle === "satellite" ? SKY_SAT_NIGHT : SKY_DARK;
+}
+
 export interface GroundVisibility {
 	vector: boolean;
 	satelliteDay: boolean;
@@ -132,6 +169,10 @@ export function buildBasemapStyle(
 	const g = groundVisibility(mapStyle, darkMap);
 	return {
 		version: 8,
+		sky: skyFor(mapStyle, darkMap),
+		// Glyph PBFs for symbol text (cluster counts). Missing font files are
+		// non-fatal: labels just don't draw, everything else renders.
+		glyphs: "https://files.911realtime.org/maps/fonts/{fontstack}/{range}.pbf",
 		sources: {
 			basemap: { type: "vector", url: `pmtiles://${urls.vector}` },
 			"satellite-day": {
@@ -171,6 +212,7 @@ export function buildBasemapStyle(
 export interface StylableMap {
 	setPaintProperty(layerId: string, name: string, value: unknown): unknown;
 	setLayoutProperty(layerId: string, name: string, value: unknown): unknown;
+	setSky(sky: SkySpec): unknown;
 }
 
 /** Live style switch: paint + visibility only. Mirrors buildBasemapStyle exactly. */
@@ -190,4 +232,5 @@ export function applyBasemapStyle(
 	map.setLayoutProperty("lakes", "visibility", g.vector ? "visible" : "none");
 	map.setLayoutProperty("satellite-day", "visibility", g.satelliteDay ? "visible" : "none");
 	map.setLayoutProperty("satellite-night", "visibility", g.satelliteNight ? "visible" : "none");
+	map.setSky(skyFor(mapStyle, darkMap));
 }

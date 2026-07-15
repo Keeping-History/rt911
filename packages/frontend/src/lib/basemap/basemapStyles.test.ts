@@ -8,6 +8,7 @@ import {
 	effectiveTone,
 	groundVisibility,
 	normalizeBasemapStyle,
+	skyFor,
 } from "./basemapStyles";
 
 const URLS = {
@@ -42,7 +43,7 @@ describe("normalizeBasemapStyle", () => {
 
 describe("BASEMAP_URLS", () => {
 	it("defaults to the files.911realtime.org maps/ prefix", () => {
-		expect(BASEMAP_URLS.vector).toContain("/maps/na-basemap.pmtiles");
+		expect(BASEMAP_URLS.vector).toContain("/maps/world-basemap.pmtiles");
 		expect(BASEMAP_URLS.satelliteDay).toContain("/maps/na-satellite-day.pmtiles");
 		expect(BASEMAP_URLS.satelliteNight).toContain("/maps/na-satellite-night.pmtiles");
 	});
@@ -77,8 +78,13 @@ describe("buildBasemapStyle — superset structure", () => {
 		expect(style.layers.find((l) => l.id === "background")?.type).toBe("background");
 	});
 
-	it("omits the glyphs key entirely (undefined value crashes maplibre 5 style validation)", () => {
-		expect("glyphs" in style).toBe(false);
+	it("sets a defined glyphs URL (an undefined value crashes maplibre 5 style validation)", () => {
+		// Cluster-count labels need glyph PBFs (issue #222). Must never be
+		// undefined — that's the maplibre-5 validation crash the old
+		// omit-the-key rule guarded against.
+		expect(style.glyphs).toBe(
+			"https://files.911realtime.org/maps/fonts/{fontstack}/{range}.pbf",
+		);
 	});
 });
 
@@ -131,14 +137,19 @@ describe("applyBasemapStyle", () => {
 	function recordingMap() {
 		const paint: Record<string, Record<string, unknown>> = {};
 		const layout: Record<string, Record<string, unknown>> = {};
+		const skies: unknown[] = [];
 		return {
 			paint,
 			layout,
+			skies,
 			setPaintProperty(layerId: string, name: string, value: unknown) {
 				(paint[layerId] ??= {})[name] = value;
 			},
 			setLayoutProperty(layerId: string, name: string, value: unknown) {
 				(layout[layerId] ??= {})[name] = value;
+			},
+			setSky(sky: unknown) {
+				skies.push(sky);
 			},
 		};
 	}
@@ -169,5 +180,42 @@ describe("applyBasemapStyle", () => {
 		applyBasemapStyle(map, "radar", false);
 		expect(map.paint.background["background-color"]).toBe("#041004");
 		expect(map.layout.land.visibility).toBe("visible");
+	});
+
+	it("re-applies the style's sky on a live switch", () => {
+		const map = recordingMap();
+		applyBasemapStyle(map, "radar", false);
+		expect(map.skies.at(-1)).toEqual(skyFor("radar", false));
+	});
+});
+
+describe("sky (issue #221)", () => {
+	it("light styles get the approved daytime colors at 50% blends", () => {
+		expect(skyFor("classic", false)).toMatchObject({
+			"sky-color": "#94E3FE",
+			"horizon-color": "#00C7FC",
+			"sky-horizon-blend": 0.5,
+			"horizon-fog-blend": 0.5,
+		});
+		// Globe atmosphere halo fades out as you zoom in.
+		expect(skyFor("classic", false)["atmosphere-blend"]).toEqual([
+			"interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0,
+		]);
+		expect(skyFor("satellite", false)["sky-color"]).toBe("#94E3FE");
+	});
+
+	it("dark-toned styles get dark variants (a daytime sky over a radar scope would look broken)", () => {
+		expect(skyFor("radar", false)["sky-color"]).toBe("#010b04"); // radar ignores darkMap
+		expect(skyFor("radar", true)).toEqual(skyFor("radar", false));
+		expect(skyFor("classic", true)["sky-color"]).toBe("#0a0a14");
+		expect(skyFor("satellite", true)["sky-color"]).toBe("#01030a");
+		for (const style of ALL_STYLES) {
+			expect(skyFor(style, true)["sky-horizon-blend"]).toBe(0.5);
+		}
+	});
+
+	it("buildBasemapStyle embeds the style-level sky", () => {
+		expect(buildBasemapStyle(URLS, "classic", false).sky).toEqual(skyFor("classic", false));
+		expect(buildBasemapStyle(URLS, "satellite", true).sky).toEqual(skyFor("satellite", true));
 	});
 });

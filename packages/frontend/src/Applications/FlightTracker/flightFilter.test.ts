@@ -89,6 +89,22 @@ describe("isFilterActive", () => {
 		expect(isFilterActive(filter({ origin: "BOS" }))).toBe(true);
 		expect(isFilterActive(filter({ dest: "LAX" }))).toBe(true);
 	});
+
+	it("a saved flight list activates the filter; an empty list does not", () => {
+		expect(isFilterActive(filter({ flights: ["DL404"] }))).toBe(true);
+		expect(isFilterActive(filter({ flights: [] }))).toBe(false);
+	});
+});
+
+describe("saved flight-list criterion (issue #225)", () => {
+	it("gates membership by the explicit list, ANDed with the dropdown criteria", () => {
+		const f = filter({ flights: ["DL404", "UA93"] });
+		expect(matchesFilter(pos({ flight: "DL404" }), undefined, f)).toBe(true);
+		expect(matchesFilter(pos({ flight: "AA1" }), undefined, f)).toBe(false);
+		// ANDs with carrier: listed flight with the wrong carrier is hidden.
+		const and = filter({ flights: ["DL404"], carrier: "UA" });
+		expect(matchesFilter(pos({ flight: "DL404", carrier: "DL" }), undefined, and)).toBe(false);
+	});
 });
 
 describe("matchesFilter", () => {

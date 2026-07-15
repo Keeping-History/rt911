@@ -27,6 +27,11 @@ export interface FlightMapSettings {
 	radarSweep: boolean;
 	// Comet-tail length as a multiple of the base TRAIL_POINTS; 0 = tails off.
 	trailMultiplier: number;
+	// MapControls toolbar toggles (issues #218/#222/#223). Camera/projection
+	// preferences, so they persist like the appearance settings above.
+	globe: boolean;
+	cluster: boolean;
+	threeD: boolean;
 }
 
 export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
@@ -38,6 +43,9 @@ export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	notablePinColorDark: 0xff4d4d, // brightened red so it reads on slate
 	radarSweep: true,
 	trailMultiplier: 5,
+	globe: false,
+	cluster: false,
+	threeD: false,
 };
 
 /** Persist the whole map-settings object in one dispatch. */

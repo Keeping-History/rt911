@@ -34,8 +34,12 @@ import {
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { FlightDetailPanel } from "./FlightDetailPanel";
-import { FlightMap } from "./FlightMap";
+import { FlightMap, type FlightMapHandle } from "./FlightMap";
+import { MapControls, type SelectMode } from "./MapControls";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
+import { useAltitudeProfile } from "./useAltitudeProfile";
+import { curtainToGeoJSON } from "./flightAltitude";
+import { legEstimates } from "./flightEta";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
 	type FlightMapSettings,
@@ -173,6 +177,26 @@ export const FlightTracker: FC = () => {
 		);
 	}, [settings, desktopEventDispatch]);
 
+	// MapControls toolbar (issue #217): persisted toggles dispatch like the
+	// View-menu items above; one-shot camera moves go through the map handle.
+	const mapApi = useRef<FlightMapHandle>(null);
+	const [selectMode, setSelectMode] = useState<SelectMode>("off");
+	const toggleGlobe = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, globe: !settings.globe }),
+		);
+	}, [settings, desktopEventDispatch]);
+	const toggleThreeD = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, threeD: !settings.threeD }),
+		);
+	}, [settings, desktopEventDispatch]);
+	const toggleCluster = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, cluster: !settings.cluster }),
+		);
+	}, [settings, desktopEventDispatch]);
+
 	const {
 		flightPositions,
 		subscribeFlights,
@@ -248,7 +272,39 @@ export const FlightTracker: FC = () => {
 		return () => unsubscribeFlights(appId);
 	}, [isRunning, subscribeFlights, unsubscribeFlights, appId]);
 
-	const [selected, setSelected] = useState<FlightPosition | null>(null);
+	// Selection is a LIST (issue #225): a plain click yields one entry; an
+	// area-select drag yields many, toggled via the detail pane's dropdown.
+	const [multiSelected, setMultiSelected] = useState<FlightPosition[]>([]);
+	const [activeFlightIdx, setActiveFlightIdx] = useState(0);
+	const selected = multiSelected[Math.min(activeFlightIdx, multiSelected.length - 1)] ?? null;
+
+	const onAreaSelect = useCallback(
+		(flights: string[]) => {
+			const hits = flights
+				.map((fl) => flightPositions.find((p) => p.flight === fl))
+				.filter((p): p is FlightPosition => !!p);
+			if (hits.length) {
+				setMultiSelected(hits);
+				setActiveFlightIdx(0);
+			}
+			setSelectMode("off"); // tool disarms after each selection
+		},
+		[flightPositions],
+	);
+
+	// Esc cancels an armed select tool.
+	useEffect(() => {
+		if (selectMode === "off") return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setSelectMode("off");
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [selectMode]);
+
+	const saveSelectionAsFilter = useCallback(() => {
+		setFilter({ flights: multiSelected.map((p) => p.flight) });
+	}, [multiSelected, setFilter]);
 
 	// Loop mode: the enable flag, window, and speed are persisted preferences
 	// (readFlightLoopSettings), so they survive a refresh. Only the ephemeral
@@ -456,6 +512,9 @@ export const FlightTracker: FC = () => {
 		[selected],
 	);
 	const { track, loading, error } = useFlightTrack(selection);
+	// Altitude profile → 3D curtain wall for the selected flight (issue #224).
+	const { profile } = useAltitudeProfile(selection);
+	const curtainGeoJSON = useMemo(() => curtainToGeoJSON(profile), [profile]);
 
 	// Live fix for the selected flight (`selected` is a click-time snapshot; the
 	// streamed set updates each minute-bucket). Heading is the bearing of the
@@ -463,6 +522,47 @@ export const FlightTracker: FC = () => {
 	const livePos = selected
 		? (flightPositions.find((p) => p.flight === selected.flight) ?? selected)
 		: null;
+	// Previous minute-bucket sample of the selected flight, for deriving
+	// groundspeed (issue #227) — the stream carries no speed field.
+	const prevSampleRef = useRef<{
+		flight: string;
+		prev: FlightPosition | null;
+		cur: FlightPosition;
+	} | null>(null);
+	useEffect(() => {
+		if (!selected) {
+			prevSampleRef.current = null;
+			return;
+		}
+		const live = flightPositions.find((p) => p.flight === selected.flight);
+		if (!live) return;
+		const held = prevSampleRef.current;
+		if (!held || held.flight !== live.flight) {
+			prevSampleRef.current = { flight: live.flight, prev: null, cur: live };
+		} else if (live.start_date !== held.cur.start_date) {
+			prevSampleRef.current = { flight: live.flight, prev: held.cur, cur: live };
+		}
+	}, [flightPositions, selected]);
+	// Leg estimates for the detail pane (issue #227): distance/time from origin
+	// and estimated to destination, speed derived from the tracked prev sample.
+	const estimates = useMemo(
+		() =>
+			livePos && track
+				? legEstimates({
+						live: livePos,
+						prev:
+							prevSampleRef.current?.flight === livePos.flight
+								? prevSampleRef.current.prev
+								: null,
+						origin: track.origin,
+						dest: track.scheduled_dest,
+						wheelsOffUtc: track.wheels_off_utc,
+						wheelsOnUtc: track.wheels_on_utc,
+						nowMs,
+					})
+				: null,
+		[livePos, track, nowMs],
+	);
 	const headingDeg = useMemo(
 		() =>
 			livePos && track?.geometry
@@ -471,19 +571,29 @@ export const FlightTracker: FC = () => {
 		[livePos, track],
 	);
 
-	// Clear the selection when the selected flight leaves the *visible* set —
-	// gone from the airborne set (e.g. after a seek) or hidden by the filter.
+	// Prune selection entries whose flights leave the *visible* set — gone from
+	// the airborne set (e.g. after a seek) or hidden by the filter. Keeps the
+	// rest of a multi-selection intact instead of clearing everything.
 	useEffect(() => {
-		if (selected && !filteredPositions.some((p) => p.flight === selected.flight)) {
-			setSelected(null);
-		}
-	}, [filteredPositions, selected]);
+		setMultiSelected((cur) => {
+			const kept = cur.filter((s) =>
+				filteredPositions.some((p) => p.flight === s.flight),
+			);
+			return kept.length === cur.length ? cur : kept;
+		});
+	}, [filteredPositions]);
+	useEffect(() => {
+		setActiveFlightIdx((i) => Math.max(0, Math.min(i, multiSelected.length - 1)));
+	}, [multiSelected]);
 
 	// Selects the clicked flight if it's currently in the airborne set; does not
 	// clear on seek itself — the effect above handles that.
 	const onSelectFlight = (flight: string) => {
 		const hit = flightPositions.find((p) => p.flight === flight) ?? null;
-		if (hit) setSelected(hit);
+		if (hit) {
+			setMultiSelected([hit]);
+			setActiveFlightIdx(0);
+		}
 	};
 
 	const trackGeoJSON: Feature | null = track?.geometry
@@ -709,6 +819,24 @@ export const FlightTracker: FC = () => {
 										/>
 									</td>
 								</tr>
+								{filterSettings.flights.length > 0 && (
+									<tr>
+										<td>
+											<ClassicyControlLabel
+												label={`Selected flights (${filterSettings.flights.length})`}
+												labelSize="small"
+											></ClassicyControlLabel>
+										</td>
+										<td>
+											<ClassicyButton
+												buttonSize="small"
+												onClickFunc={() => setFilter({ flights: [] })}
+											>
+												Remove
+											</ClassicyButton>
+										</td>
+									</tr>
+								)}
 							</table>
 						</ClassicyControlGroup>
 						<div className={styles.settingsButtons}>
@@ -731,14 +859,29 @@ export const FlightTracker: FC = () => {
 				dimContents={false}
 			>
 				<div className={styles.root}>
+					<MapControls
+						globe={settings.globe}
+						threeD={settings.threeD}
+						cluster={settings.cluster}
+						selectMode={selectMode}
+						onZoomIn={() => mapApi.current?.zoomIn()}
+						onZoomOut={() => mapApi.current?.zoomOut()}
+						onToggleGlobe={toggleGlobe}
+						onToggleThreeD={toggleThreeD}
+						onToggleCluster={toggleCluster}
+						onSetSelectMode={setSelectMode}
+						onPinpoint={(center, zoom) => mapApi.current?.flyTo(center, zoom)}
+					/>
 					<div className={styles.body}>
 						<div className={styles.map}>
 							<FlightMap
+								ref={mapApi}
 								positions={filteredPositions}
 								seedPositions={flightsSeed}
 								visibleFlights={visibleFlights}
 								basemapUrls={BASEMAP_URLS}
 								trackGeoJSON={trackGeoJSON}
+								curtainGeoJSON={curtainGeoJSON}
 								nowMs={nowMs}
 								playing={!paused}
 								mapStyle={settings.mapStyle}
@@ -753,12 +896,17 @@ export const FlightTracker: FC = () => {
 								)}
 								radarSweep={settings.radarSweep}
 								trailMultiplier={settings.trailMultiplier}
+								globe={settings.globe}
+								threeD={settings.threeD}
+								cluster={settings.cluster}
 								loopEnabled={loopEnabled}
 								loopWindowMs={windowMs}
 								loopClock={loopClock}
 								replayBuffer={replayBufferRef.current}
 								onSelectFlight={onSelectFlight}
-								onClearSelection={() => setSelected(null)}
+								selectMode={selectMode}
+								onAreaSelect={onAreaSelect}
+								onClearSelection={() => setMultiSelected([])}
 							/>
 						</div>
 						<div className={styles.filterPanel}>
@@ -775,6 +923,14 @@ export const FlightTracker: FC = () => {
 								nowMs={nowMs}
 								headingDeg={headingDeg}
 								tzOffset={tzOffset}
+								livePos={livePos}
+								estimates={estimates}
+								selectionOptions={multiSelected}
+								onPickFlight={(flight) => {
+									const i = multiSelected.findIndex((p) => p.flight === flight);
+									if (i >= 0) setActiveFlightIdx(i);
+								}}
+								onSaveAsFilter={saveSelectionAsFilter}
 							/>
 						</div>
 					</div>
