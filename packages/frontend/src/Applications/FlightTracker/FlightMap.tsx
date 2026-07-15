@@ -25,10 +25,12 @@ import {
 	buildPlaneImage,
 } from "./flightIcons";
 import {
+	type LandingClock,
 	type MotionBuffer,
 	TRAIL_MULTIPLIER_MAX,
 	TRAIL_POINTS,
 	extrapolate,
+	motionNow,
 	motionPointsToGeoJSON,
 	motionTrailsToGeoJSON,
 	seedMotionFromHistory,
@@ -150,6 +152,10 @@ interface FlightMapProps {
 	// skipped at draw time; null/omitted shows all. Live pins are filtered
 	// upstream by FlightTracker via the positions array itself.
 	visibleFlights?: Set<string> | null;
+	// flight → wheels-down/crash UTC ms (flightLanding.landingClockOf): every
+	// dead-reckoning builder clamps to it, freezing landed flights at their
+	// track end instead of gliding past the runway.
+	landingClock?: LandingClock;
 	// MapControls toggles (issues #218/#222/#223); persisted in FlightMapSettings.
 	globe?: boolean;
 	threeD?: boolean;
@@ -287,7 +293,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	mapStyle, darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
-	visibleFlights = null,
+	visibleFlights = null, landingClock,
 	globe = false, threeD = false, cluster = false,
 	selectMode = "off", onAreaSelect, onPitchedChange, aircraftFamilyOf,
 	onSelectFlight, onClearSelection,
@@ -349,6 +355,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 	}), []);
 
 	const motionBufferRef = useRef<MotionBuffer>(new Map());
+	// Landing/crash instants, read at frame rate by every motion builder.
+	const landingRef = useRef<LandingClock | undefined>(landingClock);
+	landingRef.current = landingClock;
 	// Smooth virtual "now" as the rAF loop computes it — used by the pitched
 	// hit tests so clicked positions match the gliding render exactly.
 	const smoothNow = () => {
@@ -362,9 +371,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 		const now = smoothNow();
 		const out: { flight: string; x: number; y: number }[] = [];
 		for (const m of motionBufferRef.current.values()) {
-			const altFt = altitudeFtAt(m, now);
+			// Same landing clamp as the render, so clicks land on frozen planes.
+			const effNow = motionNow(m, now, landingRef.current);
+			const altFt = altitudeFtAt(m, effNow);
 			if (altFt <= 0) continue;
-			const head = extrapolate(m, now);
+			const head = extrapolate(m, effNow);
 			const p = projectAtAltitude(map, head.lon, head.lat, exaggeratedHeightM(altFt));
 			out.push({ flight: m.item.flight, x: p.x, y: p.y });
 		}
@@ -444,7 +455,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				seedMotionFromHistory(motionBufferRef.current, seedRef.current);
 			map.addSource("flights", {
 				type: "geojson",
-				data: motionPointsToGeoJSON(motionBufferRef.current, nowMsRef.current),
+				data: motionPointsToGeoJSON(motionBufferRef.current, nowMsRef.current, landingRef.current),
 			});
 			map.addSource("track", { type: "geojson", data: EMPTY_FC });
 			// lineMetrics enables the line-progress-based fade gradient on the trails.
@@ -1001,7 +1012,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const a = anchorRef.current;
 			const now = playingRef.current ? a.virtual + (wall - a.wall) : a.virtual;
 			const buf = motionBufferRef.current;
-			const pointsFc = motionPointsToGeoJSON(buf, now);
+			const landing = landingRef.current;
+			const pointsFc = motionPointsToGeoJSON(buf, now, landing);
 			(map.getSource("flights") as maplibregl.GeoJSONSource | undefined)?.setData(pointsFc);
 			if (clusterRef.current) {
 				(map.getSource("flights-clustered") as maplibregl.GeoJSONSource | undefined)?.setData(
@@ -1018,7 +1030,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 					// Globe fallback: level extrusion slabs (the custom layer's
 					// mercator math doesn't hold on the sphere).
 					(map.getSource("planes-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
-						motionPlanes3DToGeoJSON(buf, now, sizeKm),
+						motionPlanes3DToGeoJSON(buf, now, sizeKm, landing),
 					);
 				} else if (planes3DRef.current) {
 					// Per-airframe batches (issue #250 follow-up): each family
@@ -1026,8 +1038,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 					// until their STL arrives, and every family seen kicks off
 					// its (cached, immutable) asset fetch.
 					const layer = planes3DRef.current;
-					const batches = buildPlaneInstanceBatches(buf, now, sizeKm, (m) =>
-						cbRef.current.aircraftFamilyOf?.(m.item.flight, m.item.start_date) ?? "default",
+					const batches = buildPlaneInstanceBatches(
+						buf, now, sizeKm,
+						(m) => cbRef.current.aircraftFamilyOf?.(m.item.flight, m.item.start_date) ?? "default",
+						landing,
 					);
 					for (const b of batches) {
 						if (b.meshKey !== "default" && !requestedMeshesRef.current.has(b.meshKey)) {
@@ -1051,11 +1065,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 				const ribbonWidthKm =
 					plane3DTargetPx(zoomT) * kmPerPixel(zoomT, map.getCenter().lat) * 0.08;
 				(map.getSource("trails-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
-					motionTrails3DToGeoJSON(buf, now, trailPoints, ribbonWidthKm),
+					motionTrails3DToGeoJSON(buf, now, trailPoints, ribbonWidthKm, landing),
 				);
 			} else {
 				(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
-					motionTrailsToGeoJSON(buf, now, trailPoints),
+					motionTrailsToGeoJSON(buf, now, trailPoints, landing),
 				);
 			}
 			if (radarSweepRef.current) {

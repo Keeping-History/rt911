@@ -1,11 +1,15 @@
 .root { display: flex; flex-direction: column; width: 100%; height: 100%; }
 .mapControls {
-	flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+	// wrap: the row outgrew narrow windows once the Style/Dark group landed
+	flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
 	padding: 2px var(--window-padding-size);
 	border-bottom: 1px solid #999;
 	background-color: var(--color-system-03);
 	font-family: var(--ui-font) !important;
 	font-size: var(--ui-font-size);
+	// classicy's wrapper is width:100% — inline toolbar menus must size to
+	// content, or each one eats a whole wrapped row.
+	:global(.classicyPopUpMenuWrapper) { width: auto; flex: 0 0 auto; }
 }
 .mapControlsDivider { width: 1px; align-self: stretch; background: #999; margin: 0 4px; }
 // Compass rose overlay (issue #219): a Classicy-bordered dial in the map's

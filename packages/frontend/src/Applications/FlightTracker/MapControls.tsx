@@ -2,10 +2,21 @@ import { type FC, useState } from "react";
 import { ClassicyButton, ClassicyPopUpMenu } from "classicy";
 import { PINPOINTS, pinpointById } from "./mapPinpoints";
 import styles from "./FlightTracker.module.scss";
+import {
+	type BasemapStyleId,
+	normalizeBasemapStyle,
+} from "../../lib/basemap/basemapStyles";
 
 import type { SelectMode } from "./selectTool";
 
 export type { SelectMode };
+
+// Same ids/labels as the Settings dialog and View menu — three UIs, one setting.
+const MAP_STYLE_OPTIONS: { value: BasemapStyleId; label: string }[] = [
+	{ value: "classic", label: "Classic" },
+	{ value: "radar", label: "Radar Scope" },
+	{ value: "satellite", label: "Satellite" },
+];
 
 /**
  * The toolbar strip between the window chrome and the map (issue #217).
@@ -17,6 +28,8 @@ export interface MapControlsProps {
 	threeD: boolean;
 	cluster: boolean;
 	selectMode: SelectMode;
+	mapStyle: BasemapStyleId;
+	darkMap: boolean;
 	onZoomIn(): void;
 	onZoomOut(): void;
 	onToggleGlobe(): void;
@@ -24,6 +37,8 @@ export interface MapControlsProps {
 	onToggleCluster(): void;
 	onSetSelectMode(mode: SelectMode): void;
 	onPinpoint(center: [number, number], zoom: number): void;
+	onSetMapStyle(style: BasemapStyleId): void;
+	onToggleDarkMap(): void;
 }
 
 export const MapControls: FC<MapControlsProps> = (p) => {
@@ -98,6 +113,29 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 				setPinpointNonce((n) => n + 1);
 			}}
 		/>
+		<span className={styles.mapControlsDivider} />
+		<ClassicyPopUpMenu
+			id="flight_map_style"
+			label="Style"
+			labelPosition="left"
+			labelSize="small"
+			size="small"
+			selected={p.mapStyle}
+			options={MAP_STYLE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+			onChangeFunc={(e) => p.onSetMapStyle(normalizeBasemapStyle(e.target.value))}
+		/>
+		<ClassicyButton
+			buttonSize="small"
+			aria-label="Dark map"
+			// A radar scope is inherently dark (effectiveTone ignores the flag),
+			// so the toggle goes dead and unpressed there — but the stored darkMap
+			// preference is kept, ready for the next non-radar style.
+			disabled={p.mapStyle === "radar"}
+			depressed={p.mapStyle !== "radar" && p.darkMap}
+			onClickFunc={p.onToggleDarkMap}
+		>
+			Dark
+		</ClassicyButton>
 	</div>
 	);
 };

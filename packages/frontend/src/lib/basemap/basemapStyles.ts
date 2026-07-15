@@ -128,7 +128,6 @@ const SKY_RADAR: SkySpec = { ...SKY_LIGHT, "sky-color": "#010b04", "horizon-colo
 const SKY_SAT_NIGHT: SkySpec = { ...SKY_LIGHT, "sky-color": "#01030a", "horizon-color": "#0a1a33" };
 
 export function skyFor(mapStyle: BasemapStyleId, darkMap: boolean): SkySpec {
-	console.log(`Current mapStyle is ${mapStyle}, effectiveTone is ${effectiveTone(mapStyle, darkMap)}, and darkMap is ${darkMap}`);
 	if (mapStyle === "radar") return SKY_RADAR;
 	if (effectiveTone(mapStyle, darkMap) === "light") return SKY_LIGHT;
 	return mapStyle === "satellite" ? SKY_SAT_NIGHT : SKY_DARK;
