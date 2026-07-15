@@ -73,9 +73,9 @@ describe("plane3DTargetPx", () => {
 });
 
 describe("motionPlanes3DToGeoJSON", () => {
-	it("level cruise takes the fast path: one whole-silhouette slab AT altitude", () => {
+	it("cruise renders one whole-silhouette slab AT altitude", () => {
 		const fc = motionPlanes3DToGeoJSON(bufferWith([{ flight: "DL404", alt_ft: 33_000 }]), 0, 4);
-		expect(fc.features).toHaveLength(1); // no climb history → no banding
+		expect(fc.features).toHaveLength(1);
 		const f = fc.features[0];
 		const base = 33_000 * FT_TO_M * ALT_EXAGGERATION;
 		expect(f.properties!.flight).toBe("DL404");
@@ -89,24 +89,17 @@ describe("motionPlanes3DToGeoJSON", () => {
 		expect(exaggeratedHeightM(33_000)).toBeCloseTo(100_584, 0);
 	});
 
-	it("climbing planes tilt as interlocking strips: nose highest, no vertical gaps", () => {
+	it("climbing planes stay ONE whole silhouette — never sliced strips (issue #250)", () => {
 		const buf: MotionBuffer = new Map();
 		// Two minutes of eastbound climb: 10k → 14k ft over ~9 km of track.
 		updateMotion(buf, [pos({ id: 1, flight: "UA1", lon: -74.1, alt_ft: 10_000, start_date: "2001-09-11T13:00:00Z" })]);
 		updateMotion(buf, [pos({ id: 2, flight: "UA1", lon: -74.0, alt_ft: 14_000, start_date: "2001-09-11T13:01:00Z" })]);
 		const fc = motionPlanes3DToGeoJSON(buf, Date.parse("2001-09-11T13:01:00Z"), 4);
-		expect(fc.features.length).toBeGreaterThanOrEqual(5); // narrow strips, nose→tail
-		const bases = fc.features.map((f) => f.properties!.base as number);
-		for (let i = 1; i < bases.length; i++) {
-			expect(bases[i - 1]).toBeGreaterThan(bases[i]); // strictly nose-down ordering
-		}
-		// The shear guarantee: every strip's slab overlaps its neighbor's —
-		// the plane must read as one connected body, never severed slices.
-		for (let i = 1; i < fc.features.length; i++) {
-			const upper = fc.features[i - 1].properties!;
-			const lower = fc.features[i].properties!;
-			expect(upper.base as number).toBeLessThan(lower.height as number);
-		}
+		// Strip-banded "pitch" rendered climbs as sliced staircases; fill-
+		// extrusion tops are flat, so the model stays level and whole (true
+		// angling needs a custom WebGL layer — tracked separately).
+		expect(fc.features).toHaveLength(1);
+		expect(fc.features[0].properties!.base).toBeCloseTo(exaggeratedHeightM(14_000), 0);
 	});
 
 	it("marks notables and skips grounded flights", () => {
@@ -118,7 +111,7 @@ describe("motionPlanes3DToGeoJSON", () => {
 			0,
 			4,
 		);
-		expect(fc.features).toHaveLength(1); // level notable, fast path; N1 grounded
+		expect(fc.features).toHaveLength(1); // one slab per airborne plane; N1 grounded
 		expect(fc.features[0].properties!.notable).toBe(true);
 	});
 
@@ -135,10 +128,7 @@ describe("motionPlanes3DToGeoJSON", () => {
 		expect(far.features).toHaveLength(0);
 		// And the rendered base at t1+30s uses the glided altitude.
 		const fc = motionPlanes3DToGeoJSON(buf, t1 + 30_000, 4);
-		const bases = fc.features.map((f) => f.properties!.base as number);
-		const mid = exaggeratedHeightM(5_000);
-		expect(Math.min(...bases)).toBeLessThan(mid);
-		expect(Math.max(...bases)).toBeGreaterThan(mid * 0.9);
+		expect(fc.features[0].properties!.base).toBeCloseTo(exaggeratedHeightM(5_000), 5);
 	});
 });
 

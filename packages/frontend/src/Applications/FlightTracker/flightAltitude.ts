@@ -94,65 +94,6 @@ export function planeRing(
 	return transformRing(PLANE_SHAPE, lon, lat, headingDeg, sizeKm);
 }
 
-// Sutherland-Hodgman clip of a closed ring against a horizontal band of the
-// unit grid (minY ≤ y ≤ maxY). Good enough for the silhouette's strips; runs
-// once at module load.
-function clipRingToBand(
-	ring: [number, number][],
-	minY: number,
-	maxY: number,
-): [number, number][] {
-	const clipHalfPlane = (
-		pts: [number, number][],
-		inside: (p: [number, number]) => boolean,
-		intersectY: number,
-	): [number, number][] => {
-		const out: [number, number][] = [];
-		for (let i = 0; i < pts.length; i++) {
-			const cur = pts[i];
-			const prev = pts[(i + pts.length - 1) % pts.length];
-			const curIn = inside(cur);
-			const prevIn = inside(prev);
-			if (curIn !== prevIn) {
-				const k = (intersectY - prev[1]) / (cur[1] - prev[1]);
-				out.push([prev[0] + (cur[0] - prev[0]) * k, intersectY]);
-			}
-			if (curIn) out.push(cur);
-		}
-		return out;
-	};
-	// Drop the closing duplicate, clip both half-planes, re-close.
-	let pts = ring.slice(0, -1);
-	pts = clipHalfPlane(pts, (p) => p[1] >= minY, minY);
-	pts = clipHalfPlane(pts, (p) => p[1] <= maxY, maxY);
-	if (pts.length < 3) return [];
-	return [...pts, pts[0]];
-}
-
-// Forward strips of the silhouette for the stepped-pitch effect: each band
-// extrudes at its own altitude along the climb gradient, so ascending and
-// descending aircraft visibly tilt nose-up/-down. (A fill-extrusion top is
-// always horizontal — a continuously tilted model would need a custom WebGL
-// layer.) Strips are narrow and MAX_PITCH_SLOPE_M_PER_KM is chosen so each
-// step stays smaller than the slab thickness: adjacent strips always overlap
-// vertically and the plane reads as one connected tilted body, never sheared
-// slices. Nose strip first (tests rely on the ordering).
-const PLANE_BAND_COUNT = 7;
-const PLANE_BANDS: { ring: [number, number][]; centerF: number }[] = Array.from(
-	{ length: PLANE_BAND_COUNT },
-	(_, i) => {
-		const maxY = 0.9 - (1.8 / PLANE_BAND_COUNT) * i;
-		const minY = maxY - 1.8 / PLANE_BAND_COUNT;
-		return { ring: clipRingToBand(PLANE_SHAPE, minY, maxY), centerF: (minY + maxY) / 2 };
-	},
-).filter((b) => b.ring.length > 0);
-
-// Overlap guarantee: step between adjacent strip centers is
-// slope × (1.8/N) × sizeKm/2 meters, slab thickness is
-// PLANE_3D_THICKNESS × sizeKm × 1000 meters — clamping the slope keeps
-// step ≤ ~0.75 × thickness for every size, i.e. strips always interlock.
-const MAX_PITCH_SLOPE_M_PER_KM = 700;
-
 /**
  * Dead-reckoned altitude at `now`, mirroring how extrapolate() glides the
  * position: vertical rate from the last two samples, clamped to the same
@@ -166,25 +107,6 @@ export function altitudeFtAt(m: FlightMotion, now: number): number {
 	const rate = (cur - prevAlt) / (m.curT - m.prevT); // ft per ms
 	const dt = Math.min(Math.max(now - m.curT, 0), MAX_EXTRAPOLATION_MS);
 	return cur + rate * dt;
-}
-
-/**
- * Exaggerated climb gradient (m of exaggerated altitude per km of ground
- * track) from the flight's last two trail samples; 0 while level/unknown.
- */
-export function climbSlopeMPerKm(m: {
-	trail: [number, number, number][];
-}): number {
-	if (m.trail.length < 2) return 0;
-	const [alon, alat, aalt] = m.trail[m.trail.length - 2];
-	const [blon, blat, balt] = m.trail[m.trail.length - 1];
-	const dKm = Math.hypot(
-		(blat - alat) * KM_PER_DEG_LAT,
-		(blon - alon) * KM_PER_DEG_LON_EQUATOR * Math.cos((blat * Math.PI) / 180),
-	);
-	if (dKm === 0) return 0;
-	const slope = (exaggeratedHeightM(balt) - exaggeratedHeightM(aalt)) / dKm;
-	return Math.min(Math.max(slope, -MAX_PITCH_SLOPE_M_PER_KM), MAX_PITCH_SLOPE_M_PER_KM);
 }
 
 /**
@@ -234,39 +156,25 @@ export function motionPlanes3DToGeoJSON(
 		if (altFt <= 0) continue;
 		const head = extrapolate(m, now);
 		const centerAltM = exaggeratedHeightM(altFt);
-		// Stepped pitch: forward strips offset along the climb gradient (nose
-		// rises when ascending, drops when descending). Level flights — the
-		// bulk of traffic — take the single-slab fast path.
-		const slope = climbSlopeMPerKm(m);
-		const props = {
-			flight: m.item.flight,
-			notable: isNotable(m.item.flight),
-		};
-		if (slope === 0) {
-			features.push({
-				type: "Feature",
-				geometry: {
-					type: "Polygon",
-					coordinates: [planeRing(head.lon, head.lat, m.headingDeg, sizeKm)],
-				},
-				properties: { ...props, base: centerAltM, height: centerAltM + thicknessM },
-			});
-			continue;
-		}
-		for (const band of PLANE_BANDS) {
-			const base = Math.max(
-				centerAltM + slope * band.centerF * (sizeKm / 2),
-				0,
-			);
-			features.push({
-				type: "Feature",
-				geometry: {
-					type: "Polygon",
-					coordinates: [transformRing(band.ring, head.lon, head.lat, m.headingDeg, sizeKm)],
-				},
-				properties: { ...props, base, height: base + thicknessM },
-			});
-		}
+		// One whole silhouette slab per plane, LEVEL on purpose. Fill-extrusion
+		// tops are always horizontal, so representing pitch by offsetting
+		// forward strips renders climbing planes as sliced staircases at close
+		// zoom no matter how fine the strips (issue #250) — a genuinely angled
+		// model needs a custom WebGL layer. Vertical motion still reads through
+		// the glided altitude, the trail ribbon and the track curtain.
+		features.push({
+			type: "Feature",
+			geometry: {
+				type: "Polygon",
+				coordinates: [planeRing(head.lon, head.lat, m.headingDeg, sizeKm)],
+			},
+			properties: {
+				flight: m.item.flight,
+				notable: isNotable(m.item.flight),
+				base: centerAltM,
+				height: centerAltM + thicknessM,
+			},
+		});
 	}
 	return { type: "FeatureCollection", features };
 }
