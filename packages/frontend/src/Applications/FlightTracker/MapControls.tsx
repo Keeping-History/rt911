@@ -3,9 +3,9 @@ import { ClassicyButton, ClassicyPopUpMenu } from "classicy";
 import { PINPOINTS, pinpointById } from "./mapPinpoints";
 import styles from "./FlightTracker.module.scss";
 
-// Canonical home moves to selectTool.ts with the area-select feature; MapControls
-// only needs the mode for its two tool toggles.
-export type SelectMode = "off" | "rect" | "circle";
+import type { SelectMode } from "./selectTool";
+
+export type { SelectMode };
 
 /**
  * The toolbar strip between the window chrome and the map (issue #217).
