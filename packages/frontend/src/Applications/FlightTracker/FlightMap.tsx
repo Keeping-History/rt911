@@ -47,6 +47,8 @@ import {
 	motionTrails3DToGeoJSON,
 	plane3DTargetPx,
 } from "./flightAltitude";
+import { buildPlaneInstances } from "./plane3dMesh";
+import { Planes3DLayer } from "./planes3DLayer";
 import {
 	type DragPixels,
 	type SelectMode,
@@ -203,12 +205,19 @@ function projectAtAltitude(
 }
 
 /**
- * Single resolver for the pitch × cluster layer matrix (two flags, one
+ * Single resolver for the pitch × cluster × projection layer matrix (one
  * writer — split writers previously stomped each other's visibility).
- * Pitched: everything renders as 3D plane slabs (flat icons AND flat cluster
- * blobs hide); flat: cluster decides between icons and blobs.
+ * Pitched: aircraft render in true 3D (flat icons AND flat cluster blobs
+ * hide); flat: cluster decides between icons and blobs. The "planes-3d"
+ * fill-extrusion is the GLOBE-projection fallback only — under mercator the
+ * pitched aircraft come from the Planes3DLayer custom layer (issue #250),
+ * whose draw gate is synced wherever this matrix is applied.
  */
-export function planeLayerVisibility(cluster: boolean, pitched: boolean): Record<string, boolean> {
+export function planeLayerVisibility(
+	cluster: boolean,
+	pitched: boolean,
+	globe: boolean,
+): Record<string, boolean> {
 	return {
 		"flights-dots": !cluster && !pitched,
 		"flights-notable": !pitched,
@@ -218,7 +227,7 @@ export function planeLayerVisibility(cluster: boolean, pitched: boolean): Record
 		"cluster-planes": cluster && !pitched,
 		"ghost-dots": !pitched,
 		"ghost-notable": !pitched,
-		"planes-3d": pitched,
+		"planes-3d": pitched && globe,
 		"trails-3d": pitched && !cluster,
 		"ghost-3d": pitched,
 		"track-curtain": pitched,
@@ -350,6 +359,18 @@ export const FlightMap: FC<FlightMapProps> = ({
 	// right-click). Altitude geometry renders only while pitched — flat
 	// top-down maps keep the classic 2D look with zero extra draw cost.
 	const pitchedRef = useRef(false);
+	// The true-3D aircraft custom layer (issue #250); one instance per map.
+	const planes3DRef = useRef<Planes3DLayer | null>(null);
+	// Apply the layer-visibility matrix AND the custom layer's draw gate from
+	// one place, so the three flags can never drift apart across call sites.
+	const syncPlaneVisibility = (map: maplibregl.Map) => {
+		for (const [id, visible] of Object.entries(
+			planeLayerVisibility(clusterRef.current, pitchedRef.current, globeRef.current),
+		)) {
+			map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+		}
+		planes3DRef.current?.setVisible(pitchedRef.current && !globeRef.current);
+	};
 
 	// Create the map once (basemapUrls is effectively stable from env).
 	useEffect(() => {
@@ -592,12 +613,14 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// writes while loadedRef is false — flipped only here, at the very
 			// end), so a 3D-restored session must not depend on that event: this
 			// is what hides the 2D pins after a refresh with 3D persisted on.
+			// True-3D aircraft (issue #250): custom layer on top of the stack;
+			// its colors follow the pin pair like every other plane layer.
+			const planes3D = new Planes3DLayer();
+			planes3D.setColors(colors.pinColor, colors.notablePinColor);
+			planes3DRef.current = planes3D;
+			map.addLayer(planes3D);
 			pitchedRef.current = map.getPitch() > 5;
-			for (const [id, visible] of Object.entries(
-				planeLayerVisibility(clusterRef.current, pitchedRef.current),
-			)) {
-				map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
-			}
+			syncPlaneVisibility(map);
 			loadedRef.current = true;
 			dirtyRef.current = true;
 		});
@@ -723,13 +746,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const on = map.getPitch() > 5;
 			if (on === pitchedRef.current) return;
 			pitchedRef.current = on;
-			if (loadedRef.current) {
-				for (const [id, visible] of Object.entries(
-					planeLayerVisibility(clusterRef.current, on),
-				)) {
-					map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
-				}
-			}
+			if (loadedRef.current) syncPlaneVisibility(map);
 			dirtyRef.current = true;
 			cbRef.current.onPitchedChange?.(on);
 		});
@@ -744,7 +761,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 
 		return () => {
 			ro.disconnect();
-			map.remove();
+			map.remove(); // also fires Planes3DLayer.onRemove (GL teardown)
+			planes3DRef.current = null;
 			mapRef.current = null;
 			loadedRef.current = false;
 		};
@@ -794,6 +812,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		if (!map || !loadedRef.current) return;
 		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor });
 		void installPlaneIcons(map, pinColor, notablePinColor);
+		planes3DRef.current?.setColors(pinColor, notablePinColor);
 	}, [mapStyle, darkMap, pinColor, notablePinColor]);
 
 	// Arm/disarm the select tool: panning off, crosshair cursor, stale drag
@@ -817,20 +836,19 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		for (const [id, visible] of Object.entries(
-			planeLayerVisibility(cluster, pitchedRef.current),
-		)) {
-			map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
-		}
+		syncPlaneVisibility(map);
 		dirtyRef.current = true;
 	}, [cluster]);
 
 	// Mercator ↔ globe. Projection survives style-paint changes, so this only
-	// needs to run on the toggle itself (plus the load-time seed above).
+	// needs to run on the toggle itself (plus the load-time seed above). The
+	// pitched-aircraft render path swaps with it (custom layer ↔ extrusion
+	// fallback), so the visibility matrix re-resolves too.
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
 		map.setProjection({ type: globe ? "globe" : "mercator" });
+		syncPlaneVisibility(map);
 		dirtyRef.current = true;
 	}, [globe]);
 
@@ -922,9 +940,17 @@ export const FlightMap: FC<FlightMapProps> = ({
 			if (pitchedRef.current) {
 				const zoom = map.getZoom();
 				const sizeKm = plane3DTargetPx(zoom) * kmPerPixel(zoom, map.getCenter().lat);
-				(map.getSource("planes-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
-					motionPlanes3DToGeoJSON(buf, now, sizeKm),
-				);
+				if (globeRef.current) {
+					// Globe fallback: level extrusion slabs (the custom layer's
+					// mercator math doesn't hold on the sphere).
+					(map.getSource("planes-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
+						motionPlanes3DToGeoJSON(buf, now, sizeKm),
+					);
+				} else if (planes3DRef.current) {
+					const inst = buildPlaneInstances(buf, now, sizeKm);
+					planes3DRef.current.updateInstances(inst.data, inst.count);
+					map.triggerRepaint();
+				}
 			}
 			// Clamp: hand-edited persisted state must not build million-point trails.
 			const clamped = Math.min(Math.max(trailMultiplierRef.current, 0), TRAIL_MULTIPLIER_MAX);

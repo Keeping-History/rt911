@@ -43,8 +43,12 @@ const FakeMap = vi.hoisted(() => {
 		}
 		addSource(id: string, def: { data: unknown }) { this.sources[id] = { data: def.data }; }
 		addLayer(def: Record<string, unknown>, beforeId?: string) {
-			this.layers.push({ ...def, beforeId });
+			// __raw keeps the original object: custom layer INSTANCES lose their
+			// prototype methods under spread, and tests poke their live state.
+			this.layers.push({ ...def, beforeId, __raw: def });
 		}
+		repaints = 0;
+		triggerRepaint() { this.repaints++; }
 		setPaintProperty(layerId: string, name: string, value: unknown) {
 			(this.paint[layerId] ??= {})[name] = value;
 		}
@@ -613,10 +617,12 @@ describe("FlightMap", () => {
 		expect(map2.jumpToCalls.at(-1)).toMatchObject({ pitch: 60 });
 		// Regression (refresh with 3D persisted): the pitch seed fires BEFORE the
 		// layers exist, so the end-of-load visibility sync must hide the 2D pins
-		// and show the 3D planes — the event alone can't.
+		// and arm the 3D aircraft — the event alone can't.
 		expect(map2.layout["flights-dots"]?.visibility).toBe("none");
 		expect(map2.layout["flights-notable"]?.visibility).toBe("none");
-		expect(map2.layout["planes-3d"]?.visibility).toBe("visible");
+		const model2 = map2.layers.find((l) => l.id === "planes-3d-model")!
+			.__raw as import("./planes3DLayer").Planes3DLayer;
+		expect(model2.visible).toBe(true);
 		expect(map2.layout["track-curtain"]?.visibility).toBe("visible");
 	});
 
@@ -731,7 +737,7 @@ describe("FlightMap", () => {
 		expect(onAreaSelect).toHaveBeenCalledWith(["IN"]);
 	});
 
-	it("pitching swaps flat icons for 3D plane slabs floating at altitude", () => {
+	it("pitching swaps flat icons for the true-3D aircraft layer (mercator)", () => {
 		let rafCb: FrameRequestCallback | null = null;
 		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
 			rafCb = cb;
@@ -749,38 +755,60 @@ describe("FlightMap", () => {
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
-		const planes = map.layers.find((l) => l.id === "planes-3d") as {
-			type: string; layout: { visibility: string }; paint: Record<string, unknown>;
-		};
-		expect(planes.type).toBe("fill-extrusion");
-		expect(planes.layout.visibility).toBe("none"); // flat start
-		expect(planes.paint["fill-extrusion-base"]).toEqual(["get", "base"]);
+		const model = map.layers.find((l) => l.id === "planes-3d-model")!
+			.__raw as import("./planes3DLayer").Planes3DLayer;
+		expect(model.type).toBe("custom");
+		expect(model.visible).toBe(false); // flat start
+		// The extrusion twin exists purely as the globe fallback.
+		const slabs = map.layers.find((l) => l.id === "planes-3d") as { type: string };
+		expect(slabs.type).toBe("fill-extrusion");
 
 		map.pitch = 60;
 		map.fire("pitch");
-		// The aircraft itself moves into 3D space: flat icons hide, slabs show.
-		expect(map.layout["planes-3d"]?.visibility).toBe("visible");
+		// The aircraft move into true 3D: flat icons hide, the custom layer arms,
+		// the extrusion fallback stays off under mercator.
+		expect(model.visible).toBe(true);
 		expect(map.layout["flights-dots"]?.visibility).toBe("none");
 		expect(map.layout["flights-notable"]?.visibility).toBe("none");
-		rafCb!(100); // pitch marked the frame dirty → slabs feed
-		const data = map.sources["planes-3d"]?.data as {
-			features: { properties: { flight: string; base: number; height: number } }[];
-		};
-		expect(data.features).toHaveLength(1); // level flight → single-slab fast path
-		const p = data.features[0].properties;
-		// Slab AT altitude: base is the exaggerated altitude, top a thin marker
-		// thickness above it (12% of the zoom-scaled marker size — NOT a
-		// ground-to-sky bar, whose base would be 0).
-		expect(p.base).toBeCloseTo(31_000 * 0.3048 * 10, 0);
-		// plane3DTargetPx(3) clamps to the hand-tuned 2px floor (issue #245) at
-		// the stub's zoom 3.
-		const sizeKm = 2 * ((40_075 * Math.cos((39 * Math.PI) / 180)) / (256 * 2 ** 3));
-		expect(p.height - p.base).toBeCloseTo(sizeKm * 0.12 * 1000, 0);
+		expect(map.layout["planes-3d"]?.visibility).toBe("none");
+		rafCb!(100); // pitch marked the frame dirty → instances feed
+		expect(model.instanceCount).toBe(1);
+		expect(map.repaints).toBeGreaterThan(0);
 
 		map.pitch = 0;
 		map.fire("pitch");
-		expect(map.layout["planes-3d"]?.visibility).toBe("none");
+		expect(model.visible).toBe(false);
 		expect(map.layout["flights-dots"]?.visibility).toBe("visible");
+	});
+
+	it("globe projection falls back to the extrusion slabs while pitched", () => {
+		let rafCb: FrameRequestCallback | null = null;
+		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+			rafCb = cb;
+			return 1;
+		});
+		vi.stubGlobal("cancelAnimationFrame", () => {});
+		vi.spyOn(performance, "now").mockReturnValue(0);
+
+		render(
+			<FlightMap positions={[pos({ id: 5, flight: "DL404", alt_ft: 31_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} threeD={true} globe={true} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		const model = map.layers.find((l) => l.id === "planes-3d-model")!
+			.__raw as import("./planes3DLayer").Planes3DLayer;
+		// Custom-layer mercator math doesn't hold on the sphere: extrusions
+		// render instead.
+		expect(model.visible).toBe(false);
+		expect(map.layout["planes-3d"]?.visibility).toBe("visible");
+		rafCb!(100);
+		const data = map.sources["planes-3d"]?.data as { features: unknown[] };
+		expect(data.features).toHaveLength(1);
+		expect(model.instanceCount).toBe(0);
 	});
 
 	it("reports pitch-threshold crossings so the 3D toggle can follow the camera", () => {

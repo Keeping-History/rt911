@@ -47,7 +47,7 @@ export function kmPerPixel(zoom: number, lat: number): number {
 // [lateral, forward] = [(y−320)/320, (x−320)/320], which turns the nose to
 // (0, 0.9) pointing north. The icon's semicircular nose is approximated with
 // three arc points. KEEP IN SYNC with plane.svg if the icon ever changes.
-const PLANE_SHAPE: [number, number][] = [
+export const PLANE_SHAPE: [number, number][] = [
 	[-0.175, 0.725], [-0.124, 0.849], [0, 0.9], [0.124, 0.849], [0.175, 0.725], // nose cone
 	[0.175, 0.327], [0.75, -0.2], [0.75, -0.45], [0.175, -0.258], // right wing
 	[0.175, -0.57], [0.4, -0.75], [0.4, -0.9], [0, -0.8], // right tail
