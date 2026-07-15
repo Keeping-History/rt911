@@ -69,6 +69,8 @@ const FakeMap = vi.hoisted(() => {
 		zoom = 3;
 		bearing = 0;
 		getBearing() { return this.bearing; }
+		pitch = 0;
+		getPitch() { return this.pitch; }
 		easeToCalls: Record<string, unknown>[] = [];
 		flyToCalls: Record<string, unknown>[] = [];
 		projections: Record<string, unknown>[] = [];
@@ -618,6 +620,45 @@ describe("FlightMap", () => {
 			expect(map.easeToCalls.at(-1)).toMatchObject({ center: [-80, 40], zoom: 8 });
 		});
 		expect(onSelect).not.toHaveBeenCalled();
+	});
+
+	it("pitching the camera reveals and feeds the altitude columns", () => {
+		let rafCb: FrameRequestCallback | null = null;
+		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+			rafCb = cb;
+			return 1;
+		});
+		vi.stubGlobal("cancelAnimationFrame", () => {});
+		vi.spyOn(performance, "now").mockReturnValue(0);
+
+		render(
+			<FlightMap positions={[pos({ id: 5, flight: "DL404", alt_ft: 31_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		const columns = map.layers.find((l) => l.id === "altitude-columns") as {
+			type: string; layout: { visibility: string };
+		};
+		expect(columns.type).toBe("fill-extrusion");
+		expect(columns.layout.visibility).toBe("none"); // flat start
+
+		map.pitch = 60;
+		map.fire("pitch");
+		expect(map.layout["altitude-columns"]?.visibility).toBe("visible");
+		rafCb!(100); // pitch marked the frame dirty → columns feed
+		const data = map.sources["altitude-columns"]?.data as {
+			features: { properties: { flight: string; height: number } }[];
+		};
+		expect(data.features).toHaveLength(1);
+		expect(data.features[0].properties.height).toBeCloseTo(31_000 * 0.3048 * 10, 0);
+
+		map.pitch = 0;
+		map.fire("pitch");
+		expect(map.layout["altitude-columns"]?.visibility).toBe("none");
 	});
 
 	it("compass tracks map rotation and resets bearing on click", () => {

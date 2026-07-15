@@ -36,6 +36,7 @@ import {
 	sweepLineGeoJSON,
 	sweepTrailGeoJSON,
 } from "./flightRadar";
+import { motionColumnsToGeoJSON } from "./flightAltitude";
 import { type ReplayBuffer, replayPointsAt } from "./flightReplay";
 import { type LoopClock, playheadAt } from "./loopClock";
 
@@ -217,6 +218,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const dirtyRef = useRef(true);
 	// Map bearing, mirrored into React state for the compass overlay.
 	const [bearing, setBearing] = useState(0);
+	// Whether the camera is meaningfully pitched (3D button OR manual
+	// right-click). Altitude geometry renders only while pitched — flat
+	// top-down maps keep the classic 2D look with zero extra draw cost.
+	const pitchedRef = useRef(false);
 
 	// Create the map once (basemapUrls is effectively stable from env).
 	useEffect(() => {
@@ -335,6 +340,22 @@ export const FlightMap: FC<FlightMapProps> = ({
 				map.setLayoutProperty("flights-dots", "visibility", "none");
 				map.setLayoutProperty("flight-trails", "visibility", "none");
 			}
+			// Altitude drop-columns (issue #224): a translucent extruded diamond
+			// per plane, visible only while the camera is pitched. Height carries
+			// the exaggerated metric altitude (see flightAltitude.ts).
+			map.addSource("altitude-columns", { type: "geojson", data: EMPTY_FC });
+			map.addLayer({
+				id: "altitude-columns", type: "fill-extrusion", source: "altitude-columns",
+				layout: { visibility: pitchedRef.current ? "visible" : "none" },
+				paint: {
+					"fill-extrusion-color": [
+						"case", ["==", ["get", "notable"], true],
+						colors.notablePinColor, colors.pinColor,
+					],
+					"fill-extrusion-height": ["get", "height"],
+					"fill-extrusion-opacity": 0.35,
+				},
+			});
 			// Loop-mode ghosts render under BOTH live plane layers ("flights-dots"
 			// is the lower of the two, so inserting before it puts ghosts under
 			// both) but above the trails. They stay simple circles — visually
@@ -431,6 +452,17 @@ export const FlightMap: FC<FlightMapProps> = ({
 		});
 
 		map.on("rotate", () => setBearing(map.getBearing()));
+		// Altitude layers key off the ACTUAL pitch so both the 3D toggle and a
+		// manual right-click pitch reveal them.
+		map.on("pitch", () => {
+			const on = map.getPitch() > 5;
+			if (on === pitchedRef.current) return;
+			pitchedRef.current = on;
+			if (loadedRef.current) {
+				map.setLayoutProperty("altitude-columns", "visibility", on ? "visible" : "none");
+			}
+			dirtyRef.current = true;
+		});
 
 		const ro = new ResizeObserver(() => map.resize());
 		ro.observe(containerRef.current);
@@ -575,6 +607,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 			if (clusterRef.current) {
 				(map.getSource("flights-clustered") as maplibregl.GeoJSONSource | undefined)?.setData(
 					nonNotableFeatures(pointsFc),
+				);
+			}
+			if (pitchedRef.current) {
+				(map.getSource("altitude-columns") as maplibregl.GeoJSONSource | undefined)?.setData(
+					motionColumnsToGeoJSON(buf, now),
 				);
 			}
 			// Clamp: hand-edited persisted state must not build million-point trails.
