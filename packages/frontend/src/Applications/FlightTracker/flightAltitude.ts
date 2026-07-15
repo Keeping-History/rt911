@@ -110,9 +110,9 @@ export function altitudeFtAt(m: FlightMotion, now: number): number {
 }
 
 /**
- * Lat-compensated octagon ring around lon/lat — the footprint for 3D ghost
- * "spheres" (an extruded disc; true spheres need a custom WebGL layer, and at
- * dot scale the puck reads the same).
+ * Lat-compensated octagon ring around lon/lat — the footprint for the 3D
+ * replay trails' GLOBE fallback (an extruded disc). Under mercator the replay trails are
+ * true spheres from the custom layer (plane3dMesh.buildSphereMesh).
  */
 export function discRing(
 	lon: number,

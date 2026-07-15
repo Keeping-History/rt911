@@ -9,6 +9,7 @@ import {
 	type BasemapStyleId,
 	type BasemapUrls,
 	TRACK_LINE_COLOR,
+	TRACK_SHADOW_COLOR,
 	applyMapColors,
 	buildBasemapStyle,
 	type FlightMapColors,
@@ -40,6 +41,7 @@ import {
 	sweepTrailGeoJSON,
 } from "./flightRadar";
 import {
+	type AltitudeSample,
 	altitudeFtAt,
 	exaggeratedHeightM,
 	kmPerPixel,
@@ -47,7 +49,9 @@ import {
 	motionTrails3DToGeoJSON,
 	plane3DTargetPx,
 } from "./flightAltitude";
-import { buildPlaneInstances } from "./plane3dMesh";
+import { buildTrackTube } from "./trackTube";
+import { TrackTube3DLayer } from "./trackTubeLayer";
+import { buildPlaneInstances, buildSphereMesh } from "./plane3dMesh";
 import { Planes3DLayer } from "./planes3DLayer";
 import {
 	type DragPixels,
@@ -57,7 +61,12 @@ import {
 	overlayStyle,
 } from "./selectTool";
 import styles from "./FlightTracker.module.scss";
-import { type ReplayBuffer, replayGhosts3DAt, replayPointsAt } from "./flightReplay";
+import {
+	type ReplayBuffer,
+	buildReplayTrailInstances,
+	replayTrails3DAt,
+	replayPointsAt,
+} from "./flightReplay";
 import { type LoopClock, playheadAt } from "./loopClock";
 
 // Register the pmtiles:// protocol once per page (adding it twice throws).
@@ -113,8 +122,12 @@ interface FlightMapProps {
 	basemapUrls: BasemapUrls;
 	trackGeoJSON: GeoJSON.Feature | null;
 	// Curtain wall under the selected flight's path (issue #224): pre-built
-	// extrusion quads from its altitude profile; renders only while pitched.
+	// extrusion quads from its altitude profile; the GLOBE fallback while
+	// pitched — under mercator the smooth track tube renders instead.
 	curtainGeoJSON?: GeoJSON.FeatureCollection | null;
+	// Raw altitude profile of the selected flight: the smooth 3D track tube
+	// splines it in all three axes (curtains staircase; see trackTube.ts).
+	trackProfile?: AltitudeSample[] | null;
 	nowMs: number;
 	playing: boolean;
 	mapStyle: BasemapStyleId;
@@ -126,13 +139,13 @@ interface FlightMapProps {
 	// Comet-tail length as a multiple of TRAIL_POINTS; 0 turns tails off.
 	trailMultiplier: number;
 	// Loop mode (optional with idle defaults so non-loop call sites stay simple):
-	// while enabled, ghost pins replay replayBuffer at the loopClock's playhead,
+	// while enabled, replay-trail pins replay replayBuffer at the loopClock's playhead,
 	// wrapped into the sliding [now − loopWindowMs, now) window.
 	loopEnabled?: boolean;
 	loopWindowMs?: number;
 	loopClock?: LoopClock;
 	replayBuffer?: ReplayBuffer;
-	// Filter Flights (issue #188): ghosts of flights outside this set are
+	// Filter Flights (issue #188): replay trails of flights outside this set are
 	// skipped at draw time; null/omitted shows all. Live pins are filtered
 	// upstream by FlightTracker via the positions array itself.
 	visibleFlights?: Set<string> | null;
@@ -208,10 +221,11 @@ function projectAtAltitude(
  * Single resolver for the pitch × cluster × projection layer matrix (one
  * writer — split writers previously stomped each other's visibility).
  * Pitched: aircraft render in true 3D (flat icons AND flat cluster blobs
- * hide); flat: cluster decides between icons and blobs. The "planes-3d"
- * fill-extrusion is the GLOBE-projection fallback only — under mercator the
- * pitched aircraft come from the Planes3DLayer custom layer (issue #250),
- * whose draw gate is synced wherever this matrix is applied.
+ * hide); flat: cluster decides between icons and blobs. The "planes-3d" and
+ * "replay-trails-3d" fill-extrusions are the GLOBE-projection fallback only — under
+ * mercator the pitched aircraft and loop replay trails come from Planes3DLayer
+ * custom layers (issues #250/#242), whose draw gates are synced wherever
+ * this matrix is applied.
  */
 export function planeLayerVisibility(
 	cluster: boolean,
@@ -225,12 +239,12 @@ export function planeLayerVisibility(
 		"cluster-circles": cluster && !pitched,
 		"cluster-counts": cluster && !pitched,
 		"cluster-planes": cluster && !pitched,
-		"ghost-dots": !pitched,
-		"ghost-notable": !pitched,
+		"replay-trail-dots": !pitched,
+		"replay-trail-notable": !pitched,
 		"planes-3d": pitched && globe,
 		"trails-3d": pitched && !cluster,
-		"ghost-3d": pitched,
-		"track-curtain": pitched,
+		"replay-trails-3d": pitched && globe,
+		"track-curtain": pitched && globe,
 	};
 }
 
@@ -257,14 +271,15 @@ const FRAME_MS = 66; // ~15 fps animation gate
 // exact-pixel hit-test misses easily; a click within this radius selects the
 // nearest dot instead of clearing the selection.
 const HIT_TOLERANCE = 6;
-// Ghost pins replay history under the live planes; the reduced opacity is the
-// "this is not live" cue (ghosts-under-live rendering).
-const GHOST_OPACITY = 0.4;
-const GHOST_STROKE_COLOR = "#ffffff";
+// Replay-trail pins replay history under the live planes; the reduced opacity is the
+// "this is not live" cue (replay-trails-under-live rendering).
+const REPLAY_TRAIL_OPACITY = 0.4;
+const REPLAY_TRAIL_STROKE_COLOR = "#ffffff";
 
 export const FlightMap: FC<FlightMapProps> = ({
 	ref: handleRef,
-	positions, seedPositions, basemapUrls, trackGeoJSON, curtainGeoJSON = null, nowMs, playing,
+	positions, seedPositions, basemapUrls, trackGeoJSON, curtainGeoJSON = null,
+	trackProfile = null, nowMs, playing,
 	mapStyle, darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
@@ -361,7 +376,13 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const pitchedRef = useRef(false);
 	// The true-3D aircraft custom layer (issue #250); one instance per map.
 	const planes3DRef = useRef<Planes3DLayer | null>(null);
-	// Apply the layer-visibility matrix AND the custom layer's draw gate from
+	// Its replay-trail-sphere sibling (issue #242): same class, sphere mesh, translucent.
+	const replayTrail3DRef = useRef<Planes3DLayer | null>(null);
+	// The selected flight's smooth 3D track tube (mercator; curtain = globe fallback).
+	const trackTubeRef = useRef<TrackTube3DLayer | null>(null);
+	const trackProfileRef = useRef<AltitudeSample[] | null>(trackProfile);
+	trackProfileRef.current = trackProfile;
+	// Apply the layer-visibility matrix AND the custom layers' draw gates from
 	// one place, so the three flags can never drift apart across call sites.
 	const syncPlaneVisibility = (map: maplibregl.Map) => {
 		for (const [id, visible] of Object.entries(
@@ -369,7 +390,17 @@ export const FlightMap: FC<FlightMapProps> = ({
 		)) {
 			map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
 		}
-		planes3DRef.current?.setVisible(pitchedRef.current && !globeRef.current);
+		const custom3D = pitchedRef.current && !globeRef.current;
+		planes3DRef.current?.setVisible(custom3D);
+		replayTrail3DRef.current?.setVisible(custom3D);
+		trackTubeRef.current?.setVisible(custom3D);
+		// Pitched: the elevated geometry carries the track color, so the ground
+		// line darkens into its shadow; flat: it IS the track, full color.
+		map.setPaintProperty(
+			"track-line",
+			"line-color",
+			pitchedRef.current ? TRACK_SHADOW_COLOR : TRACK_LINE_COLOR,
+		);
 	};
 
 	// Create the map once (basemapUrls is effectively stable from env).
@@ -510,8 +541,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"fill-extrusion-opacity": 0.9,
 				},
 			});
-			// Floating trail ribbons + ghost pucks: the 3D counterparts of the
-			// flat breadcrumb lines and loop-mode ghost circles (lines and
+			// Floating trail ribbons + replay-trail pucks: the 3D counterparts of the
+			// flat breadcrumb lines and loop-mode replay-trail circles (lines and
 			// circles are ground-clamped in MapLibre). Fed by the rAF loop only
 			// while pitched.
 			map.addSource("trails-3d", { type: "geojson", data: EMPTY_FC });
@@ -525,9 +556,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"fill-extrusion-opacity": 0.45,
 				},
 			});
-			map.addSource("ghost-3d", { type: "geojson", data: EMPTY_FC });
+			map.addSource("replay-trails-3d", { type: "geojson", data: EMPTY_FC });
 			map.addLayer({
-				id: "ghost-3d", type: "fill-extrusion", source: "ghost-3d",
+				id: "replay-trails-3d", type: "fill-extrusion", source: "replay-trails-3d",
 				layout: { visibility: "none" },
 				paint: {
 					"fill-extrusion-color": [
@@ -536,7 +567,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 					],
 					"fill-extrusion-base": ["get", "base"],
 					"fill-extrusion-height": ["get", "height"],
-					"fill-extrusion-opacity": GHOST_OPACITY,
+					"fill-extrusion-opacity": REPLAY_TRAIL_OPACITY,
 				},
 			});
 			// Selected-flight curtain wall — same pitch gating as the columns;
@@ -555,30 +586,30 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"fill-extrusion-vertical-gradient": true,
 				},
 			});
-			// Loop-mode ghosts render under BOTH live plane layers ("flights-dots"
-			// is the lower of the two, so inserting before it puts ghosts under
+			// Loop-mode replay trails render under BOTH live plane layers ("flights-dots"
+			// is the lower of the two, so inserting before it puts replay trails under
 			// both) but above the trails. They stay simple circles — visually
 			// distinct from the live plane icons, and recolorable via paint (the
 			// icons bake their color in). Not clickable: the hit-test below only
 			// queries the live layers.
-			map.addSource("ghost-flights", { type: "geojson", data: EMPTY_FC });
+			map.addSource("replay-trails", { type: "geojson", data: EMPTY_FC });
 			map.addLayer({
-				id: "ghost-dots", type: "circle", source: "ghost-flights",
+				id: "replay-trail-dots", type: "circle", source: "replay-trails",
 				paint: {
 					"circle-radius": 3, "circle-color": colors.pinColor,
-					"circle-opacity": GHOST_OPACITY,
-					"circle-stroke-width": 0.5, "circle-stroke-color": GHOST_STROKE_COLOR,
-					"circle-stroke-opacity": GHOST_OPACITY,
+					"circle-opacity": REPLAY_TRAIL_OPACITY,
+					"circle-stroke-width": 0.5, "circle-stroke-color": REPLAY_TRAIL_STROKE_COLOR,
+					"circle-stroke-opacity": REPLAY_TRAIL_OPACITY,
 				},
 			}, "flights-dots");
 			map.addLayer({
-				id: "ghost-notable", type: "circle", source: "ghost-flights",
+				id: "replay-trail-notable", type: "circle", source: "replay-trails",
 				filter: ["==", ["get", "notable"], true],
 				paint: {
 					"circle-radius": 5, "circle-color": colors.notablePinColor,
-					"circle-opacity": GHOST_OPACITY,
-					"circle-stroke-width": 1, "circle-stroke-color": GHOST_STROKE_COLOR,
-					"circle-stroke-opacity": GHOST_OPACITY,
+					"circle-opacity": REPLAY_TRAIL_OPACITY,
+					"circle-stroke-width": 1, "circle-stroke-color": REPLAY_TRAIL_STROKE_COLOR,
+					"circle-stroke-opacity": REPLAY_TRAIL_OPACITY,
 				},
 			}, "flights-dots");
 			// Radar sweep + afterglow wedge, under the track line and all flight
@@ -619,6 +650,24 @@ export const FlightMap: FC<FlightMapProps> = ({
 			planes3D.setColors(colors.pinColor, colors.notablePinColor);
 			planes3DRef.current = planes3D;
 			map.addLayer(planes3D);
+			// Loop-mode replay-trail spheres (issue #242): same instanced-mesh layer with
+			// a sphere mesh at the 2D replay trails' opacity. Added after the aircraft —
+			// translucent geometry must draw after the opaque planes it blends over.
+			const replayTrail3D = new Planes3DLayer({
+				id: "replay-trails-3d-model",
+				buildMesh: () => buildSphereMesh(),
+				opacity: REPLAY_TRAIL_OPACITY,
+			});
+			replayTrail3D.setColors(colors.pinColor, colors.notablePinColor);
+			replayTrail3DRef.current = replayTrail3D;
+			map.addLayer(replayTrail3D);
+			// Smooth 3D track tube: splined selected-flight path with per-vertex
+			// elevation (the curtain staircases; it stays as the globe fallback).
+			const trackTube = new TrackTube3DLayer();
+			trackTube.setColor(TRACK_LINE_COLOR);
+			trackTube.setGeometry(buildTrackTube(trackProfileRef.current));
+			trackTubeRef.current = trackTube;
+			map.addLayer(trackTube);
 			pitchedRef.current = map.getPitch() > 5;
 			syncPlaneVisibility(map);
 			loadedRef.current = true;
@@ -761,8 +810,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 
 		return () => {
 			ro.disconnect();
-			map.remove(); // also fires Planes3DLayer.onRemove (GL teardown)
+			map.remove(); // also fires the custom layers' onRemove (GL teardown)
 			planes3DRef.current = null;
+			replayTrail3DRef.current = null;
+			trackTubeRef.current = null;
 			mapRef.current = null;
 			loadedRef.current = false;
 		};
@@ -804,6 +855,14 @@ export const FlightMap: FC<FlightMapProps> = ({
 		);
 	}, [curtainGeoJSON]);
 
+	// Rebuild the smooth track tube when the selection's profile changes; an
+	// empty/null profile clears it. Radius comes per-frame from the rAF loop.
+	useEffect(() => {
+		if (!mapRef.current || !loadedRef.current) return;
+		trackTubeRef.current?.setGeometry(buildTrackTube(trackProfile));
+		dirtyRef.current = true;
+	}, [trackProfile]);
+
 	// Re-theme / recolor live. setPaintProperty only — setStyle() would tear
 	// down the flights/trails/track sources and layers. Before "load" fires,
 	// the load handler's applyMapColors call picks up the latest values.
@@ -813,6 +872,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor });
 		void installPlaneIcons(map, pinColor, notablePinColor);
 		planes3DRef.current?.setColors(pinColor, notablePinColor);
+		replayTrail3DRef.current?.setColors(pinColor, notablePinColor);
 	}, [mapStyle, darkMap, pinColor, notablePinColor]);
 
 	// Arm/disarm the select tool: panning off, crosshair cursor, stale drag
@@ -897,14 +957,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 		dirtyRef.current = true;
 	}, [trailMultiplier]);
 
-	// Entering/leaving loop mode: clear the ghost layer when leaving so stale
-	// ghosts don't linger under a paused map; dirtyRef redraws once either way.
+	// Entering/leaving loop mode: clear the replay-trail layer when leaving so stale
+	// replay trails don't linger under a paused map; dirtyRef redraws once either way.
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
 		if (!loopEnabled) {
-			(map.getSource("ghost-flights") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
-			(map.getSource("ghost-3d") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
+			(map.getSource("replay-trails") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
+			(map.getSource("replay-trails-3d") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
+			replayTrail3DRef.current?.updateInstances(new Float32Array(0), 0);
 		}
 		dirtyRef.current = true;
 	}, [loopEnabled]);
@@ -940,6 +1001,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			if (pitchedRef.current) {
 				const zoom = map.getZoom();
 				const sizeKm = plane3DTargetPx(zoom) * kmPerPixel(zoom, map.getCenter().lat);
+				// Track-tube thickness tracks the marker scale (half the trail
+				// ribbons' 0.08 width factor); radius is a uniform, so this is free.
+				trackTubeRef.current?.setRadius(sizeKm * 1000 * 0.04);
 				if (globeRef.current) {
 					// Globe fallback: level extrusion slabs (the custom layer's
 					// mercator math doesn't hold on the sphere).
@@ -984,13 +1048,23 @@ export const FlightMap: FC<FlightMapProps> = ({
 				);
 				if (pitchedRef.current) {
 					const zoomG = map.getZoom();
-					const ghostRadiusKm =
+					const replayTrailRadiusKm =
 						plane3DTargetPx(zoomG) * kmPerPixel(zoomG, map.getCenter().lat) * 0.12;
-					(map.getSource("ghost-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
-						replayGhosts3DAt(loopState.buffer, playhead, loopState.visible, ghostRadiusKm),
-					);
+					if (globeRef.current) {
+						// Globe fallback: extruded pucks (custom-layer math is
+						// mercator-only, same swap as the aircraft).
+						(map.getSource("replay-trails-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
+							replayTrails3DAt(loopState.buffer, playhead, loopState.visible, replayTrailRadiusKm),
+						);
+					} else if (replayTrail3DRef.current) {
+						const inst = buildReplayTrailInstances(
+							loopState.buffer, playhead, loopState.visible, replayTrailRadiusKm,
+						);
+						replayTrail3DRef.current.updateInstances(inst.data, inst.count);
+						map.triggerRepaint();
+					}
 				} else {
-					(map.getSource("ghost-flights") as maplibregl.GeoJSONSource | undefined)?.setData(
+					(map.getSource("replay-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
 						replayPointsAt(loopState.buffer, playhead, loopState.visible),
 					);
 				}

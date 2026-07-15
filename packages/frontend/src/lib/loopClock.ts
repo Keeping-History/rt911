@@ -1,4 +1,4 @@
-// Loop-mode playback clock, shared by FlightTracker (ghost replay) and
+// Loop-mode playback clock, shared by FlightTracker (replay-trail replay) and
 // Weather (radar loop). Deliberately NOT the Classicy virtual clock: the
 // desktop clock keeps running live while a loop replays the trailing window
 // (only TimeMachine may mutate the real clock). Anchor pattern: a virtual

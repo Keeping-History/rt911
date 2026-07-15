@@ -226,7 +226,7 @@ export const FlightTracker: FC = () => {
 	// Bulk route metadata (tail/origin/dest) for the airborne set — the streamed
 	// position only carries flight # and carrier (see flightFilter.ts).
 	const routeIndex = useRouteIndex(flightPositions);
-	// null = filter inactive. Feeds the map's ghost skip-set, the positions
+	// null = filter inactive. Feeds the map's replay-trail skip-set, the positions
 	// filter below, and the status bar's "filtered" cue.
 	const visibleFlights = useMemo(
 		() => visibleFlightSet(flightPositions, routeIndex, filterSettings),
@@ -378,7 +378,7 @@ export const FlightTracker: FC = () => {
 		[nowMs, windowMs],
 	);
 
-	// Re-anchor at the current playhead so a speed change never jumps the ghosts,
+	// Re-anchor at the current playhead so a speed change never jumps the replay trails,
 	// and persist the new speed as a preference.
 	const setLoopSpeed = useCallback(
 		(speed: LoopSpeed) => {
@@ -897,6 +897,7 @@ export const FlightTracker: FC = () => {
 								basemapUrls={BASEMAP_URLS}
 								trackGeoJSON={trackGeoJSON}
 								curtainGeoJSON={curtainGeoJSON}
+								trackProfile={profile}
 								nowMs={nowMs}
 								playing={!paused}
 								mapStyle={settings.mapStyle}

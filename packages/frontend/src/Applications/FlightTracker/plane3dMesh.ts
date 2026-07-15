@@ -145,6 +145,58 @@ export function buildPlaneMesh(): PlaneMesh {
 	};
 }
 
+// --- replay-trail sphere mesh --------------------------------------------------------
+
+/**
+ * Flat-shaded unit sphere (UV sphere, coarse on purpose — it's a map dot).
+ * True spheres for the loop replay trails (issue #242): the extrusion pucks were the
+ * best fill-extrusion could do; the custom layer renders the real thing.
+ */
+export function buildSphereMesh(stacks = 8, slices = 12): PlaneMesh {
+	const pos: number[] = [];
+	const nrm: number[] = [];
+	const vert = (i: number, j: number): [number, number, number] => {
+		const theta = (i / stacks) * Math.PI; // 0 (north pole) → π (south pole)
+		const phi = (j / slices) * 2 * Math.PI;
+		return [
+			Math.sin(theta) * Math.cos(phi),
+			Math.sin(theta) * Math.sin(phi),
+			Math.cos(theta),
+		];
+	};
+	const pushTri = (
+		a: [number, number, number],
+		b: [number, number, number],
+		c: [number, number, number],
+	) => {
+		// Flat face normal, pointing outward (centroid direction on a sphere).
+		const nx = (a[0] + b[0] + c[0]) / 3;
+		const ny = (a[1] + b[1] + c[1]) / 3;
+		const nz = (a[2] + b[2] + c[2]) / 3;
+		const len = Math.hypot(nx, ny, nz) || 1;
+		for (const v of [a, b, c]) {
+			pos.push(v[0], v[1], v[2]);
+			nrm.push(nx / len, ny / len, nz / len);
+		}
+	};
+	for (let i = 0; i < stacks; i++) {
+		for (let j = 0; j < slices; j++) {
+			const a = vert(i, j);
+			const b = vert(i + 1, j);
+			const c = vert(i + 1, j + 1);
+			const d = vert(i, j + 1);
+			// Pole rows collapse one quad edge to a point → single triangles.
+			if (i > 0) pushTri(a, b, d);
+			if (i < stacks - 1) pushTri(b, c, d);
+		}
+	}
+	return {
+		positions: new Float32Array(pos),
+		normals: new Float32Array(nrm),
+		vertexCount: pos.length / 3,
+	};
+}
+
 // --- per-frame instances ------------------------------------------------------
 
 // Two vec4 attributes per instance:

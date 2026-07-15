@@ -1,11 +1,13 @@
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MaplibreMap } from "maplibre-gl";
-import { buildPlaneMesh } from "./plane3dMesh";
+import { type PlaneMesh, buildPlaneMesh } from "./plane3dMesh";
 
-// True-3D aircraft rendering (issue #250). A MapLibre custom style layer that
-// draws every airborne flight as an instanced, flat-shaded prism of the
-// icon-derived silhouette — rotated by heading AND pitch, which fill-extrusion
-// fundamentally cannot do (its tops are always horizontal; strip-banding
-// rendered climbs as sliced staircases).
+// True-3D instanced-mesh rendering (issues #250, #242). A MapLibre custom
+// style layer that draws one flat-shaded mesh per instance — by default the
+// icon-derived aircraft prism, rotated by heading AND pitch, which
+// fill-extrusion fundamentally cannot do (its tops are always horizontal;
+// strip-banding rendered climbs as sliced staircases). The same class also
+// backs the loop-mode replay-trail layer with a sphere mesh (the extruded-disc pucks
+// read as cylinders once the zoom-scaled radius passes a few pixels).
 //
 // Projection support comes from MapLibre's injected shader prelude:
 // projectTileFor3D(mercXY01, elevation) handles mercator and globe alike;
@@ -50,12 +52,15 @@ void main() {
 }
 `;
 
+// Premultiplied alpha — what maplibre's blend state expects from custom
+// layers. Opaque layers (u_opacity 1) are unchanged by it.
 const FRAGMENT_SOURCE = `#version 300 es
 precision mediump float;
+uniform float u_opacity;
 in vec3 v_color;
 out vec4 fragColor;
 void main() {
-	fragColor = vec4(v_color, 1.0);
+	fragColor = vec4(v_color * u_opacity, u_opacity);
 }
 `;
 
@@ -82,10 +87,24 @@ const PROJECTION_UNIFORMS = [
 	"u_projection_transition",
 ] as const;
 
+export interface Planes3DLayerConfig {
+	id?: string;
+	buildMesh?: () => PlaneMesh;
+	opacity?: number;
+}
+
 export class Planes3DLayer implements CustomLayerInterface {
-	id = "planes-3d-model";
+	readonly id: string;
 	type = "custom" as const;
 	renderingMode = "3d" as const;
+	readonly opacity: number;
+	private buildMesh: () => PlaneMesh;
+
+	constructor(config: Planes3DLayerConfig = {}) {
+		this.id = config.id ?? "planes-3d-model";
+		this.buildMesh = config.buildMesh ?? buildPlaneMesh;
+		this.opacity = config.opacity ?? 1;
+	}
 
 	/** Draw gate — custom layers have no layout visibility. */
 	visible = false;
@@ -126,7 +145,7 @@ export class Planes3DLayer implements CustomLayerInterface {
 		this.map = map;
 		// MapLibre 5 always creates a WebGL2 context; instancing is core there.
 		this.gl = gl as WebGL2RenderingContext;
-		const mesh = buildPlaneMesh();
+		const mesh = this.buildMesh();
 		this.meshVertexCount = mesh.vertexCount;
 		this.meshBuffer = this.gl.createBuffer();
 		this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.meshBuffer);
@@ -192,7 +211,7 @@ ${VERTEX_BODY}`;
 			return null;
 		}
 		const uniforms: ProgramInfo["uniforms"] = {};
-		for (const name of [...PROJECTION_UNIFORMS, "u_color", "u_color_notable"]) {
+		for (const name of [...PROJECTION_UNIFORMS, "u_color", "u_color_notable", "u_opacity"]) {
 			uniforms[name] = gl.getUniformLocation(program, name);
 		}
 		const info = { program, uniforms };
@@ -227,6 +246,7 @@ ${VERTEX_BODY}`;
 			gl.uniform1f(u.u_projection_transition, pd.projectionTransition);
 		if (u.u_color) gl.uniform3f(u.u_color, ...this.color);
 		if (u.u_color_notable) gl.uniform3f(u.u_color_notable, ...this.colorNotable);
+		if (u.u_opacity) gl.uniform1f(u.u_opacity, this.opacity);
 
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.meshBuffer);
 		gl.enableVertexAttribArray(A_POS);
@@ -248,6 +268,10 @@ ${VERTEX_BODY}`;
 		gl.vertexAttribDivisor(I_DATA1, 1);
 
 		// Both faces matter on a pitched prism; depth state comes from maplibre.
+		// Blending must be premultiplied-alpha to match the fragment output —
+		// translucent layers (replay trails) depend on it, opaque ones are unaffected.
+		gl.enable(gl.BLEND);
+		gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		gl.disable(gl.CULL_FACE);
 		gl.drawArraysInstanced(gl.TRIANGLES, 0, this.meshVertexCount, this.instanceCount);
 

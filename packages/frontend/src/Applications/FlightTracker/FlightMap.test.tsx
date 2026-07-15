@@ -146,8 +146,14 @@ vi.mock("./flightIcons", async (importOriginal) => {
 });
 
 import { createRef } from "react";
-import { FlightMap, type FlightMapHandle, nonNotableFeatures } from "./FlightMap";
+import {
+	FlightMap,
+	type FlightMapHandle,
+	nonNotableFeatures,
+	planeLayerVisibility,
+} from "./FlightMap";
 import { motionPointsToGeoJSON, updateMotion, type MotionBuffer } from "./flightMotion";
+import { TRACK_LINE_COLOR, TRACK_SHADOW_COLOR } from "./flightMapStyle";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -432,7 +438,7 @@ describe("FlightMap", () => {
 		expect((map.sources["flight-trails"]!.data as { features: unknown[] }).features).toHaveLength(0);
 	});
 
-	it("adds ghost source and layers under the live dots on load", () => {
+	it("adds replay-trail source and layers under the live dots on load", () => {
 		render(
 			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
 				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
@@ -441,14 +447,14 @@ describe("FlightMap", () => {
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
-		expect(map.sources["ghost-flights"]).toBeDefined();
-		const ghostDots = map.layers.find((l) => l.id === "ghost-dots");
-		const ghostNotable = map.layers.find((l) => l.id === "ghost-notable");
-		expect(ghostDots?.beforeId).toBe("flights-dots");
-		expect(ghostNotable?.beforeId).toBe("flights-dots");
+		expect(map.sources["replay-trails"]).toBeDefined();
+		const replayTrailDots = map.layers.find((l) => l.id === "replay-trail-dots");
+		const replayTrailNotable = map.layers.find((l) => l.id === "replay-trail-notable");
+		expect(replayTrailDots?.beforeId).toBe("flights-dots");
+		expect(replayTrailNotable?.beforeId).toBe("flights-dots");
 	});
 
-	it("clears the ghost source when loop mode turns off", () => {
+	it("clears the replay-trail source when loop mode turns off", () => {
 		const common = {
 			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
 			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
@@ -461,13 +467,13 @@ describe("FlightMap", () => {
 		const { rerender } = render(<FlightMap {...common} loopEnabled={true} />);
 		const map = FakeMap.last!;
 		map.fire("load");
-		// Seed the ghost source with a non-empty FC to prove the disable clears it.
-		map.getSource("ghost-flights")?.setData({
+		// Seed the replay-trail source with a non-empty FC to prove the disable clears it.
+		map.getSource("replay-trails")?.setData({
 			type: "FeatureCollection",
 			features: [{ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: {} }],
 		});
 		rerender(<FlightMap {...common} loopEnabled={false} />);
-		const data = map.sources["ghost-flights"].data as { features: unknown[] };
+		const data = map.sources["replay-trails"].data as { features: unknown[] };
 		expect(data.features).toEqual([]);
 	});
 
@@ -519,7 +525,7 @@ describe("FlightMap", () => {
 		expect(data.features[0].properties.heading).toBeCloseTo(90, 5);
 	});
 
-	it("skips ghost points for flights outside visibleFlights", () => {
+	it("skips replay-trail points for flights outside visibleFlights", () => {
 		let rafCb: FrameRequestCallback | null = null;
 		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
 			rafCb = cb;
@@ -556,12 +562,12 @@ describe("FlightMap", () => {
 		map.fire("load");
 		rafCb!(100);
 
-		const ghosts = (
-			map.sources["ghost-flights"]?.data as {
+		const replayTrails = (
+			map.sources["replay-trails"]?.data as {
 				features: { properties: { flight: string } }[];
 			}
 		).features;
-		expect(ghosts.map((g) => g.properties.flight)).toEqual(["AA11"]);
+		expect(replayTrails.map((g) => g.properties.flight)).toEqual(["AA11"]);
 	});
 
 	it("applies globe projection at load and re-applies on toggle", () => {
@@ -623,7 +629,12 @@ describe("FlightMap", () => {
 		const model2 = map2.layers.find((l) => l.id === "planes-3d-model")!
 			.__raw as import("./planes3DLayer").Planes3DLayer;
 		expect(model2.visible).toBe(true);
-		expect(map2.layout["track-curtain"]?.visibility).toBe("visible");
+		// The staircase curtain is the globe fallback; under mercator the
+		// smooth track tube renders instead.
+		expect(map2.layout["track-curtain"]?.visibility).toBe("none");
+		const tube2 = map2.layers.find((l) => l.id === "track-tube-3d")!
+			.__raw as import("./trackTubeLayer").TrackTube3DLayer;
+		expect(tube2.visible).toBe(true);
 	});
 
 	it("nonNotableFeatures drops the notable flights (they never cluster)", () => {
@@ -781,6 +792,28 @@ describe("FlightMap", () => {
 		expect(map.layout["flights-dots"]?.visibility).toBe("visible");
 	});
 
+	it("darkens the ground track line into a shadow while pitched", () => {
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+
+		map.pitch = 60;
+		map.fire("pitch");
+		// The elevated tube carries the track color; the ground line drops to
+		// 50% brightness so it reads as the tube's shadow.
+		expect(map.paint["track-line"]?.["line-color"]).toBe(TRACK_SHADOW_COLOR);
+
+		map.pitch = 0;
+		map.fire("pitch");
+		// Flat again: the ground line IS the track — full color returns.
+		expect(map.paint["track-line"]?.["line-color"]).toBe(TRACK_LINE_COLOR);
+	});
+
 	it("globe projection falls back to the extrusion slabs while pitched", () => {
 		let rafCb: FrameRequestCallback | null = null;
 		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
@@ -809,6 +842,92 @@ describe("FlightMap", () => {
 		const data = map.sources["planes-3d"]?.data as { features: unknown[] };
 		expect(data.features).toHaveLength(1);
 		expect(model.instanceCount).toBe(0);
+	});
+
+	it("loop replay trails render as true spheres while pitched under mercator", () => {
+		let rafCb: FrameRequestCallback | null = null;
+		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+			rafCb = cb;
+			return 1;
+		});
+		vi.stubGlobal("cancelAnimationFrame", () => {});
+		vi.spyOn(performance, "now").mockReturnValue(0);
+
+		const t0 = Date.parse("2001-09-11T13:00:00.000Z");
+		const buffer: ReplayBuffer = new Map();
+		insertReplaySamples(buffer, [
+			pos({ id: 1, flight: "AA11", start_date: "2001-09-11T12:50:00.000Z" }),
+		]);
+		render(
+			<FlightMap
+				positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={t0} playing
+				onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1}
+				loopEnabled loopWindowMs={1_800_000}
+				loopClock={{
+					anchorVirtual: t0 - 600_000, anchorWall: 0, speed: 10,
+					scrubbing: false, paused: true,
+				}}
+				replayBuffer={buffer}
+			/>,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		const replayTrailModel = map.layers.find((l) => l.id === "replay-trails-3d-model")!
+			.__raw as import("./planes3DLayer").Planes3DLayer;
+		expect(replayTrailModel.type).toBe("custom");
+		expect(replayTrailModel.opacity).toBeCloseTo(0.4, 5);
+		expect(replayTrailModel.visible).toBe(false); // flat start
+
+		map.pitch = 60;
+		map.fire("pitch");
+		// True spheres arm; the extrusion pucks stay off under mercator.
+		expect(replayTrailModel.visible).toBe(true);
+		expect(map.layout["replay-trails-3d"]?.visibility).toBe("none");
+		rafCb!(100);
+		expect(replayTrailModel.instanceCount).toBe(1);
+
+		map.pitch = 0;
+		map.fire("pitch");
+		expect(replayTrailModel.visible).toBe(false);
+	});
+
+	it("the staircase track curtain is the globe-projection fallback only", () => {
+		expect(planeLayerVisibility(false, true, true)["track-curtain"]).toBe(true);
+		expect(planeLayerVisibility(false, true, false)["track-curtain"]).toBe(false);
+		expect(planeLayerVisibility(false, false, false)["track-curtain"]).toBe(false);
+	});
+
+	it("feeds the smooth track tube from the altitude profile", () => {
+		const profile = [
+			{ lon: -74, lat: 40, alt_ft: 1_000, utc: "2001-09-11T12:00:00Z" },
+			{ lon: -73.5, lat: 40.5, alt_ft: 12_000, utc: "2001-09-11T12:01:00Z" },
+			{ lon: -73, lat: 41, alt_ft: 24_000, utc: "2001-09-11T12:02:00Z" },
+		];
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender } = render(<FlightMap {...common} trackProfile={null} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		const tube = map.layers.find((l) => l.id === "track-tube-3d")!
+			.__raw as import("./trackTubeLayer").TrackTube3DLayer;
+		expect(tube.vertexCount).toBe(0);
+		rerender(<FlightMap {...common} trackProfile={profile} />);
+		expect(tube.vertexCount).toBeGreaterThan(0);
+		rerender(<FlightMap {...common} trackProfile={null} />); // deselect clears
+		expect(tube.vertexCount).toBe(0);
+	});
+
+	it("replay-trails-3d extrusion pucks are the globe-projection fallback only", () => {
+		expect(planeLayerVisibility(false, true, true)["replay-trails-3d"]).toBe(true);
+		expect(planeLayerVisibility(false, true, false)["replay-trails-3d"]).toBe(false);
+		expect(planeLayerVisibility(false, false, false)["replay-trails-3d"]).toBe(false);
+		expect(planeLayerVisibility(false, false, true)["replay-trails-3d"]).toBe(false);
 	});
 
 	it("reports pitch-threshold crossings so the 3D toggle can follow the camera", () => {

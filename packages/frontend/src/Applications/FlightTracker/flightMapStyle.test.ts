@@ -43,7 +43,7 @@ describe("applyMapColors", () => {
 		};
 	}
 
-	it("applies palette, ground visibility, trail gradient, and ghost colors", () => {
+	it("applies palette, ground visibility, trail gradient, and replay-trail colors", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
 			mapStyle: "satellite", darkMap: true,
@@ -56,8 +56,8 @@ describe("applyMapColors", () => {
 		expect(map.layout.land.visibility).toBe("none");
 		// satellite-night trail #cfd8e3 → rgb 207,216,227
 		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("207,216,227");
-		expect(map.paint["ghost-dots"]["circle-color"]).toBe("#00aa00");
-		expect(map.paint["ghost-notable"]["circle-color"]).toBe("#123456");
+		expect(map.paint["replay-trail-dots"]["circle-color"]).toBe("#00aa00");
+		expect(map.paint["replay-trail-notable"]["circle-color"]).toBe("#123456");
 		// Pin colors flow through icon rebuilds, not paint.
 		expect(map.paint["flights-dots"]).toBeUndefined();
 		expect(map.paint["flights-notable"]).toBeUndefined();

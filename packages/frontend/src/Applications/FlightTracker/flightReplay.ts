@@ -2,6 +2,12 @@ import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamCont
 import type { FlightFeatureCollection } from "./flightGeoJSON";
 import { discRing, exaggeratedHeightM } from "./flightAltitude";
 import { isNotable } from "./notableFlights";
+import {
+	PLANE_INSTANCE_STRIDE,
+	type PlaneInstances,
+	lngLatToMercator,
+	mercatorPerMeter,
+} from "./plane3dMesh";
 
 // Time-indexed replay buffer for loop mode. Unlike MotionBuffer (stateful,
 // strictly forward-in-time), this holds every sample in the window sorted by
@@ -11,13 +17,13 @@ export interface ReplaySample {
 	t: number; // UTC ms
 	lat: number;
 	lon: number;
-	alt_ft: number; // per-sample so 3D ghosts float at the replayed altitude
+	alt_ft: number; // per-sample so 3D replay trails float at the replayed altitude
 }
 
 export interface ReplayFlight {
 	samples: ReplaySample[]; // sorted by t, unique t
-	// Ghost-point properties, refreshed from the latest-inserted sample; the
-	// ghost layers only style by `notable`, the rest satisfies the shared FC shape.
+	// Replay-trail-point properties, refreshed from the latest-inserted sample; the
+	// replay-trail layers only style by `notable`, the rest satisfies the shared FC shape.
 	props: {
 		flight: string;
 		carrier: string;
@@ -90,13 +96,13 @@ export function pruneReplay(buffer: ReplayBuffer, oldestMs: number): void {
 	}
 }
 
-// Ghost points at playhead tMs: each flight whose sampled lifetime contains tMs
+// Replay-trail points at playhead tMs: each flight whose sampled lifetime contains tMs
 // contributes one linearly-interpolated point. No dead-reckoning beyond the
 // first/last sample — aircraft appear and disappear mid-loop, matching reality.
 export function replayPointsAt(
 	buffer: ReplayBuffer,
 	tMs: number,
-	// Draw-time filter (issue #188): ghosts of hidden flights are skipped, the
+	// Draw-time filter (issue #188): replay trails of hidden flights are skipped, the
 	// buffer itself stays complete so clearing the filter restores them instantly.
 	visible: Set<string> | null = null,
 ): FlightFeatureCollection {
@@ -109,7 +115,7 @@ export function replayPointsAt(
 			type: "Feature",
 			id: f.id,
 			geometry: { type: "Point", coordinates: [at.lon, at.lat] },
-			// heading: ghost layers are circles, not rotated plane icons.
+			// heading: replay-trail layers are circles, not rotated plane icons.
 			properties: { ...f.props, heading: 0 },
 		});
 	}
@@ -139,12 +145,45 @@ function replaySampleAt(
 }
 
 /**
- * 3D ghosts: while the camera is pitched, each replayed flight renders as a
- * small extruded disc ("sphere" at dot scale — true spheres would need a
- * custom WebGL layer) floating at its interpolated altitude. radiusKm comes
- * from the same zoom-scaled sizing as the 3D planes.
+ * 3D replay-trail spheres (mercator): each replayed flight packed at its interpolated
+ * fix into the shared custom-layer instance layout (PLANE_INSTANCE_STRIDE).
+ * Spheres are rotation-invariant so heading/pitch stay 0; halfSize carries the
+ * sphere radius in meters. radiusKm comes from the same zoom-scaled sizing as
+ * the 3D planes.
  */
-export function replayGhosts3DAt(
+export function buildReplayTrailInstances(
+	buffer: ReplayBuffer,
+	tMs: number,
+	visible: Set<string> | null,
+	radiusKm: number,
+): PlaneInstances {
+	const data = new Float32Array(buffer.size * PLANE_INSTANCE_STRIDE);
+	const flights: string[] = [];
+	let count = 0;
+	for (const [flight, f] of buffer) {
+		if (visible && !visible.has(flight)) continue;
+		const at = replaySampleAt(f, tMs);
+		if (!at || at.alt_ft <= 0) continue;
+		const [mx, my] = lngLatToMercator(at.lon, at.lat);
+		const o = count * PLANE_INSTANCE_STRIDE;
+		data[o] = mx;
+		data[o + 1] = my;
+		data[o + 2] = exaggeratedHeightM(at.alt_ft);
+		data[o + 3] = mercatorPerMeter(at.lat);
+		data[o + 6] = radiusKm * 1000;
+		data[o + 7] = f.props.notable ? 1 : 0;
+		flights.push(flight);
+		count++;
+	}
+	return { data: data.subarray(0, count * PLANE_INSTANCE_STRIDE), count, flights };
+}
+
+/**
+ * Globe-projection fallback for the 3D replay trails: the camera math the custom
+ * layer relies on doesn't hold on the sphere, so replay trails render as extruded
+ * discs there ("sphere" at dot scale) floating at the replayed altitude.
+ */
+export function replayTrails3DAt(
 	buffer: ReplayBuffer,
 	tMs: number,
 	visible: Set<string> | null,

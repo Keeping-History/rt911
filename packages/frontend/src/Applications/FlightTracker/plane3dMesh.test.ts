@@ -7,6 +7,7 @@ import {
 	PLANE_MESH_HALF_THICKNESS,
 	buildPlaneInstances,
 	buildPlaneMesh,
+	buildSphereMesh,
 	lngLatToMercator,
 	mercatorPerMeter,
 	pitchRadOf,
@@ -82,6 +83,46 @@ describe("buildPlaneMesh", () => {
 		for (let i = 0; i < mesh.normals.length; i += 3) {
 			const len = Math.hypot(mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]);
 			expect(len).toBeCloseTo(1, 5);
+		}
+	});
+});
+
+describe("buildSphereMesh", () => {
+	const mesh = buildSphereMesh();
+
+	it("is whole flat-shaded triangles with every vertex on the unit sphere", () => {
+		expect(mesh.vertexCount).toBeGreaterThan(0);
+		expect(mesh.vertexCount % 3).toBe(0);
+		expect(mesh.positions).toHaveLength(mesh.vertexCount * 3);
+		expect(mesh.normals).toHaveLength(mesh.vertexCount * 3);
+		for (let i = 0; i < mesh.positions.length; i += 3) {
+			const r = Math.hypot(
+				mesh.positions[i],
+				mesh.positions[i + 1],
+				mesh.positions[i + 2],
+			);
+			expect(r).toBeCloseTo(1, 5);
+		}
+	});
+
+	it("spans pole to pole so it reads as a ball, not a band", () => {
+		let minZ = Infinity;
+		let maxZ = -Infinity;
+		for (let i = 2; i < mesh.positions.length; i += 3) {
+			minZ = Math.min(minZ, mesh.positions[i]);
+			maxZ = Math.max(maxZ, mesh.positions[i]);
+		}
+		expect(minZ).toBeCloseTo(-1, 5);
+		expect(maxZ).toBeCloseTo(1, 5);
+	});
+
+	it("normals are unit length and point outward", () => {
+		for (let i = 0; i < mesh.normals.length; i += 3) {
+			const [nx, ny, nz] = [mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]];
+			expect(Math.hypot(nx, ny, nz)).toBeCloseTo(1, 5);
+			const dot =
+				nx * mesh.positions[i] + ny * mesh.positions[i + 1] + nz * mesh.positions[i + 2];
+			expect(dot).toBeGreaterThan(0);
 		}
 	});
 });

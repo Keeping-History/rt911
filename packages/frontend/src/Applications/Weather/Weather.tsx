@@ -211,7 +211,7 @@ export const Weather: FC = () => {
 
 	// Playhead for the slider, the time label, and the radar frame lookup.
 	// 4 Hz is plenty: the only consumer that matters buckets to 5-min frames
-	// (no rAF glide layer needed, unlike FlightTracker's ghost pins).
+	// (no rAF glide layer needed, unlike FlightTracker's replay-trail pins).
 	useEffect(() => {
 		if (!loopEnabled) return;
 		const update = () => {
