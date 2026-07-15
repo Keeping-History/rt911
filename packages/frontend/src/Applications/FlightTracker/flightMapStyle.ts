@@ -88,8 +88,8 @@ export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void
 	// Cluster blobs follow the pin color too (the clustered plane icons share
 	// the baked-in plane-icon image, so they recolor via installPlaneIcons).
 	map.setPaintProperty("cluster-circles", "circle-color", colors.pinColor);
-	// Altitude drop-columns tint per notability from the same pin pair.
-	map.setPaintProperty("altitude-columns", "fill-extrusion-color", [
+	// 3D plane slabs tint per notability from the same pin pair.
+	map.setPaintProperty("planes-3d", "fill-extrusion-color", [
 		"case", ["==", ["get", "notable"], true],
 		colors.notablePinColor, colors.pinColor,
 	]);

@@ -22,8 +22,10 @@ const FakeMap = vi.hoisted(() => {
 		layout: Record<string, Record<string, unknown>> = {};
 		style: unknown;
 		removed = false;
-		constructor(opts: { style: unknown }) {
+		ctorOpts: Record<string, unknown>;
+		constructor(opts: { style: unknown } & Record<string, unknown>) {
 			this.style = opts.style;
+			this.ctorOpts = opts;
 			FakeMap.last = this;
 		}
 		on(ev: string, a?: unknown, b?: unknown) {
@@ -69,8 +71,18 @@ const FakeMap = vi.hoisted(() => {
 		zoom = 3;
 		bearing = 0;
 		getBearing() { return this.bearing; }
+		getCenter() { return { lng: -98, lat: 39 }; }
 		pitch = 0;
 		getPitch() { return this.pitch; }
+		maxPitchCalls: number[] = [];
+		setMaxPitch(v: number) {
+			this.maxPitchCalls.push(v);
+			// Real maplibre clamps the live pitch immediately and fires "pitch".
+			if (this.pitch > v) {
+				this.pitch = v;
+				this.fire("pitch");
+			}
+		}
 		dragPanDisabled = false;
 		dragPan = {
 			disable: () => { this.dragPanDisabled = true; },
@@ -546,7 +558,7 @@ describe("FlightMap", () => {
 		expect(map.projections.at(-1)).toEqual({ type: "mercator" });
 	});
 
-	it("eases pitch when 3D mode toggles, and seeds a persisted 3D pitch at load", () => {
+	it("3D toggle gates pitch: lifts maxPitch + eases in, clamps flat on exit", () => {
 		const common = {
 			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
 			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
@@ -555,17 +567,24 @@ describe("FlightMap", () => {
 		};
 		const { rerender, unmount } = render(<FlightMap {...common} threeD={false} />);
 		const map = FakeMap.last!;
+		// Constructed flat-locked: right-drag can never change the z axis in 2D.
+		expect((map.ctorOpts as { maxPitch?: number }).maxPitch).toBe(0);
 		map.fire("load");
 		expect(map.jumpToCalls).toHaveLength(0); // flat start: no pitch seed
 		rerender(<FlightMap {...common} threeD={true} />);
+		expect(map.maxPitchCalls.at(-1)).toBe(60);
 		expect(map.easeToCalls.at(-1)).toMatchObject({ pitch: 60 });
+		map.pitch = 60;
 		rerender(<FlightMap {...common} threeD={false} />);
-		expect(map.easeToCalls.at(-1)).toMatchObject({ pitch: 0 });
+		// Exiting 3D clamps maxPitch to 0, which snaps the camera flat.
+		expect(map.maxPitchCalls.at(-1)).toBe(0);
+		expect(map.pitch).toBe(0);
 		unmount();
 
-		// A session restored with 3D on pitches immediately at load.
+		// A session restored with 3D on constructs unlocked and pitches at load.
 		render(<FlightMap {...common} threeD={true} />);
 		const map2 = FakeMap.last!;
+		expect((map2.ctorOpts as { maxPitch?: number }).maxPitch).toBe(60);
 		map2.fire("load");
 		expect(map2.jumpToCalls.at(-1)).toMatchObject({ pitch: 60 });
 	});
@@ -681,7 +700,7 @@ describe("FlightMap", () => {
 		expect(onAreaSelect).toHaveBeenCalledWith(["IN"]);
 	});
 
-	it("pitching the camera reveals and feeds the altitude columns", () => {
+	it("pitching swaps flat icons for 3D plane slabs floating at altitude", () => {
 		let rafCb: FrameRequestCallback | null = null;
 		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
 			rafCb = cb;
@@ -699,25 +718,37 @@ describe("FlightMap", () => {
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
-		const columns = map.layers.find((l) => l.id === "altitude-columns") as {
-			type: string; layout: { visibility: string };
+		const planes = map.layers.find((l) => l.id === "planes-3d") as {
+			type: string; layout: { visibility: string }; paint: Record<string, unknown>;
 		};
-		expect(columns.type).toBe("fill-extrusion");
-		expect(columns.layout.visibility).toBe("none"); // flat start
+		expect(planes.type).toBe("fill-extrusion");
+		expect(planes.layout.visibility).toBe("none"); // flat start
+		expect(planes.paint["fill-extrusion-base"]).toEqual(["get", "base"]);
 
 		map.pitch = 60;
 		map.fire("pitch");
-		expect(map.layout["altitude-columns"]?.visibility).toBe("visible");
-		rafCb!(100); // pitch marked the frame dirty → columns feed
-		const data = map.sources["altitude-columns"]?.data as {
-			features: { properties: { flight: string; height: number } }[];
+		// The aircraft itself moves into 3D space: flat icons hide, slabs show.
+		expect(map.layout["planes-3d"]?.visibility).toBe("visible");
+		expect(map.layout["flights-dots"]?.visibility).toBe("none");
+		expect(map.layout["flights-notable"]?.visibility).toBe("none");
+		rafCb!(100); // pitch marked the frame dirty → slabs feed
+		const data = map.sources["planes-3d"]?.data as {
+			features: { properties: { flight: string; base: number; height: number } }[];
 		};
 		expect(data.features).toHaveLength(1);
-		expect(data.features[0].properties.height).toBeCloseTo(31_000 * 0.3048 * 10, 0);
+		const p = data.features[0].properties;
+		// Slab AT altitude: base is the exaggerated altitude, top a thin marker
+		// thickness above it (12% of the zoom-scaled marker size — NOT a
+		// ground-to-sky bar, whose base would be 0).
+		expect(p.base).toBeCloseTo(31_000 * 0.3048 * 10, 0);
+		// plane3DTargetPx(3) clamps to the 16px floor at the stub's zoom 3.
+		const sizeKm = 16 * ((40_075 * Math.cos((39 * Math.PI) / 180)) / (256 * 2 ** 3));
+		expect(p.height - p.base).toBeCloseTo(sizeKm * 0.12 * 1000, 0);
 
 		map.pitch = 0;
 		map.fire("pitch");
-		expect(map.layout["altitude-columns"]?.visibility).toBe("none");
+		expect(map.layout["planes-3d"]?.visibility).toBe("none");
+		expect(map.layout["flights-dots"]?.visibility).toBe("visible");
 	});
 
 	it("compass tracks map rotation and resets bearing on click", () => {

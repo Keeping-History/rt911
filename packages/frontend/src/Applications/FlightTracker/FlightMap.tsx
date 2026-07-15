@@ -37,7 +37,7 @@ import {
 	sweepLineGeoJSON,
 	sweepTrailGeoJSON,
 } from "./flightRadar";
-import { motionColumnsToGeoJSON } from "./flightAltitude";
+import { kmPerPixel, motionPlanes3DToGeoJSON, plane3DTargetPx } from "./flightAltitude";
 import {
 	type DragPixels,
 	type SelectMode,
@@ -142,6 +142,34 @@ export function nonNotableFeatures(fc: FlightFeatureCollection): FlightFeatureCo
 	return {
 		type: "FeatureCollection",
 		features: fc.features.filter((f) => f.properties.notable !== true),
+	};
+}
+
+// Representative lng/lat for a hit-test feature: the point itself, or a 3D
+// plane slab's first ring vertex (close enough at marker scale for
+// nearest-hit ranking and circle-radius refinement).
+function featureAnchor(f: { geometry: GeoJSON.Geometry }): [number, number] | null {
+	if (f.geometry.type === "Point") return f.geometry.coordinates as [number, number];
+	if (f.geometry.type === "Polygon") return f.geometry.coordinates[0][0] as [number, number];
+	return null;
+}
+
+/**
+ * Single resolver for the pitch × cluster layer matrix (two flags, one
+ * writer — split writers previously stomped each other's visibility).
+ * Pitched: everything renders as 3D plane slabs (flat icons AND flat cluster
+ * blobs hide); flat: cluster decides between icons and blobs.
+ */
+export function planeLayerVisibility(cluster: boolean, pitched: boolean): Record<string, boolean> {
+	return {
+		"flights-dots": !cluster && !pitched,
+		"flights-notable": !pitched,
+		"flight-trails": !cluster,
+		"cluster-circles": cluster && !pitched,
+		"cluster-counts": cluster && !pitched,
+		"cluster-planes": cluster && !pitched,
+		"planes-3d": pitched,
+		"track-curtain": pitched,
 	};
 }
 
@@ -256,6 +284,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 			center: NA_CENTER,
 			zoom: NA_ZOOM,
 			attributionControl: false,
+			// Pitch is exclusively the 3D toggle's domain: with 3D off the map is
+			// hard-locked flat (right-drag still rotates bearing, never the z
+			// axis). The threeD effect lifts this to THREE_D_PITCH.
+			maxPitch: threeDRef.current ? THREE_D_PITCH : 0,
 		});
 		mapRef.current = map;
 
@@ -363,20 +395,23 @@ export const FlightMap: FC<FlightMapProps> = ({
 				map.setLayoutProperty("flights-dots", "visibility", "none");
 				map.setLayoutProperty("flight-trails", "visibility", "none");
 			}
-			// Altitude drop-columns (issue #224): a translucent extruded diamond
-			// per plane, visible only while the camera is pitched. Height carries
-			// the exaggerated metric altitude (see flightAltitude.ts).
-			map.addSource("altitude-columns", { type: "geojson", data: EMPTY_FC });
+			// 3D planes (issue #224): while pitched, each aircraft is a heading-
+			// rotated plane-silhouette slab floating AT its altitude (base →
+			// height are both up there); the flat icons hide. Replaces the
+			// original ground-to-altitude drop columns, which read as bars
+			// growing out of grounded planes.
+			map.addSource("planes-3d", { type: "geojson", data: EMPTY_FC });
 			map.addLayer({
-				id: "altitude-columns", type: "fill-extrusion", source: "altitude-columns",
+				id: "planes-3d", type: "fill-extrusion", source: "planes-3d",
 				layout: { visibility: pitchedRef.current ? "visible" : "none" },
 				paint: {
 					"fill-extrusion-color": [
 						"case", ["==", ["get", "notable"], true],
 						colors.notablePinColor, colors.pinColor,
 					],
+					"fill-extrusion-base": ["get", "base"],
 					"fill-extrusion-height": ["get", "height"],
-					"fill-extrusion-opacity": 0.35,
+					"fill-extrusion-opacity": 0.9,
 				},
 			});
 			// Selected-flight curtain wall — same pitch gating as the columns;
@@ -475,12 +510,13 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const b = dragBounds(mode, d);
 			const feats = map.queryRenderedFeatures(
 				[[b.minX, b.minY], [b.maxX, b.maxY]],
-				{ layers: ["flights-dots", "flights-notable", "cluster-planes"] },
+				{ layers: ["flights-dots", "flights-notable", "cluster-planes", "planes-3d"] },
 			);
 			const flights: string[] = [];
 			for (const f of feats) {
-				if (f.geometry.type !== "Point") continue;
-				const pp = map.project(f.geometry.coordinates as [number, number]);
+				const anchor = featureAnchor(f);
+				if (!anchor) continue;
+				const pp = map.project(anchor);
 				if (!insideSelection(mode, d, pp.x, pp.y)) continue;
 				const flight = String(f.properties?.flight ?? "");
 				if (flight && !flights.includes(flight)) flights.push(flight);
@@ -497,7 +533,12 @@ export const FlightMap: FC<FlightMapProps> = ({
 					[x - HIT_TOLERANCE, y - HIT_TOLERANCE],
 					[x + HIT_TOLERANCE, y + HIT_TOLERANCE],
 				],
-				{ layers: ["flights-dots", "flights-notable", "cluster-planes", "cluster-circles"] },
+				{
+					layers: [
+						"flights-dots", "flights-notable", "cluster-planes",
+						"cluster-circles", "planes-3d",
+					],
+				},
 			);
 			// A cluster blob expands instead of selecting.
 			const clusterHit = near.find((f) => f.properties?.cluster === true);
@@ -517,8 +558,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			let best = near[0];
 			let bestDist = Number.POSITIVE_INFINITY;
 			for (const f of near) {
-				if (f.geometry.type !== "Point") continue;
-				const pp = map.project(f.geometry.coordinates as [number, number]);
+				const anchor = featureAnchor(f);
+				if (!anchor) continue;
+				const pp = map.project(anchor);
 				const d = (pp.x - x) ** 2 + (pp.y - y) ** 2;
 				if (d < bestDist) {
 					bestDist = d;
@@ -536,11 +578,18 @@ export const FlightMap: FC<FlightMapProps> = ({
 			if (on === pitchedRef.current) return;
 			pitchedRef.current = on;
 			if (loadedRef.current) {
-				const vis = on ? "visible" : "none";
-				map.setLayoutProperty("altitude-columns", "visibility", vis);
-				map.setLayoutProperty("track-curtain", "visibility", vis);
+				for (const [id, visible] of Object.entries(
+					planeLayerVisibility(clusterRef.current, on),
+				)) {
+					map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+				}
 			}
 			dirtyRef.current = true;
+		});
+		// Plane-slab size tracks the zoom (constant on-screen size); wake a
+		// paused map so a zoom while paused re-sizes the 3D planes.
+		map.on("zoom", () => {
+			if (pitchedRef.current) dirtyRef.current = true;
 		});
 
 		const ro = new ResizeObserver(() => map.resize());
@@ -616,18 +665,16 @@ export const FlightMap: FC<FlightMapProps> = ({
 		}
 	}, [selectMode]);
 
-	// Cluster toggle: swap visibility between the live plane/trail layers and
-	// the three cluster layers; the rAF loop feeds whichever side is active.
+	// Cluster toggle: resolve the full pitch × cluster visibility matrix; the
+	// rAF loop feeds whichever sources are active.
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		const liveVis = cluster ? "none" : "visible";
-		const clusterVis = cluster ? "visible" : "none";
-		map.setLayoutProperty("flights-dots", "visibility", liveVis);
-		map.setLayoutProperty("flight-trails", "visibility", liveVis);
-		map.setLayoutProperty("cluster-circles", "visibility", clusterVis);
-		map.setLayoutProperty("cluster-counts", "visibility", clusterVis);
-		map.setLayoutProperty("cluster-planes", "visibility", clusterVis);
+		for (const [id, visible] of Object.entries(
+			planeLayerVisibility(cluster, pitchedRef.current),
+		)) {
+			map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+		}
 		dirtyRef.current = true;
 	}, [cluster]);
 
@@ -640,12 +687,18 @@ export const FlightMap: FC<FlightMapProps> = ({
 		dirtyRef.current = true;
 	}, [globe]);
 
-	// 3D mode is just a camera preset: ease the pitch and let the altitude
-	// layers key off the *actual* pitch (so right-click pitching works too).
+	// 3D mode gates pitch entirely: ON lifts maxPitch and eases to the preset
+	// (right-drag can then pitch freely); OFF clamps maxPitch back to 0, which
+	// snaps the camera flat and makes right-drag bearing-only.
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		map.easeTo({ pitch: threeD ? THREE_D_PITCH : 0, duration: 600 });
+		if (threeD) {
+			map.setMaxPitch(THREE_D_PITCH);
+			map.easeTo({ pitch: THREE_D_PITCH, duration: 600 });
+		} else {
+			map.setMaxPitch(0);
+		}
 	}, [threeD]);
 
 	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an
@@ -714,8 +767,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 				);
 			}
 			if (pitchedRef.current) {
-				(map.getSource("altitude-columns") as maplibregl.GeoJSONSource | undefined)?.setData(
-					motionColumnsToGeoJSON(buf, now),
+				const zoom = map.getZoom();
+				const sizeKm = plane3DTargetPx(zoom) * kmPerPixel(zoom, map.getCenter().lat);
+				(map.getSource("planes-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
+					motionPlanes3DToGeoJSON(buf, now, sizeKm),
 				);
 			}
 			// Clamp: hand-edited persisted state must not build million-point trails.

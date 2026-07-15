@@ -52,7 +52,7 @@ describe("MapControls", () => {
 		expect(placeholder.disabled).toBe(true);
 		expect(dd.value).toBe(placeholder.value);
 		fireEvent.change(dd, { target: { value: "pentagon" } });
-		expect(p.onPinpoint).toHaveBeenCalledWith([-77.0563, 38.8719], 13.5);
+		expect(p.onPinpoint).toHaveBeenCalledWith([-77.0563, 38.8719], 10.5);
 		// Remounted onto the placeholder — the picked value never sticks.
 		expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe(placeholder.value);
 	});
