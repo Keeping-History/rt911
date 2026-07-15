@@ -22,8 +22,10 @@ export interface FlightMotion {
 	prevT: number; // prev sample UTC ms
 	curT: number; // cur sample UTC ms
 	item: FlightPosition; // latest sample — supplies point properties
-	// Last TRAIL_POINTS real positions as [lon,lat], oldest → newest.
-	trail: [number, number][];
+	// Last TRAIL_POINTS real positions as [lon, lat, alt_ft], oldest → newest.
+	// The third element rides along for the 3D trail ribbons; GeoJSON allows
+	// 3-element positions, and flat line layers simply ignore it.
+	trail: [number, number, number][];
 	// Direction of travel in degrees clockwise from north. Updated only when a
 	// new sample actually moves the flight, so a static flight holds its last
 	// heading instead of snapping to north. 0 until first movement.
@@ -67,7 +69,7 @@ export function updateMotion(
 				prevT: t,
 				curT: t,
 				item: p,
-				trail: [[p.lon, p.lat]],
+				trail: [[p.lon, p.lat, p.alt_ft]],
 				headingDeg: 0,
 			});
 		} else if (t > m.curT) {
@@ -76,7 +78,7 @@ export function updateMotion(
 			m.cur = { lat: p.lat, lon: p.lon };
 			m.curT = t;
 			m.item = p;
-			m.trail.push([p.lon, p.lat]);
+			m.trail.push([p.lon, p.lat, p.alt_ft]);
 			while (m.trail.length > TRAIL_POINTS * TRAIL_MULTIPLIER_MAX) m.trail.shift();
 			if (m.cur.lat !== m.prev.lat || m.cur.lon !== m.prev.lon) {
 				m.headingDeg = bearingDeg(m.prev, m.cur);
@@ -162,7 +164,7 @@ export interface TrailFeatureCollection {
 	type: "FeatureCollection";
 	features: Array<{
 		type: "Feature";
-		geometry: { type: "LineString"; coordinates: [number, number][] };
+		geometry: { type: "LineString"; coordinates: ([number, number] | [number, number, number])[] };
 		properties: { notable: boolean };
 	}>;
 }
@@ -186,7 +188,7 @@ export function motionTrailsToGeoJSON(
 			type: "Feature",
 			geometry: {
 				type: "LineString",
-				coordinates: [...m.trail.slice(-displayPoints), [head.lon, head.lat]],
+				coordinates: [...m.trail.slice(-displayPoints), [head.lon, head.lat, m.item.alt_ft]],
 			},
 			properties: { notable: isNotable(m.item.flight) },
 		});

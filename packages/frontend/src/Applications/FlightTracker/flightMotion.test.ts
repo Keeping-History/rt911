@@ -34,10 +34,10 @@ describe("updateMotion", () => {
 		expect(m.prev).toEqual(m.cur);
 		expect(m.curT).toBe(T0);
 		expect(m.item.id).toBe(10);
-		expect(m.trail).toEqual([[-74, 40]]);
+		expect(m.trail).toEqual([[-74, 40, 30000]]);
 	});
 
-	it("shifts cur→prev on a newer sample and appends [lon,lat] to the trail", () => {
+	it("shifts cur→prev on a newer sample and appends [lon,lat,alt] to the trail", () => {
 		const buf: MotionBuffer = new Map();
 		updateMotion(buf, [sampleAt(0, -74)]);
 		updateMotion(buf, [sampleAt(1, -73)]);
@@ -47,8 +47,8 @@ describe("updateMotion", () => {
 		expect(m.prevT).toBe(T0);
 		expect(m.curT).toBe(T1);
 		expect(m.trail).toEqual([
-			[-74, 40],
-			[-73, 40],
+			[-74, 40, 30000],
+			[-73, 40, 30000],
 		]);
 	});
 
@@ -61,8 +61,8 @@ describe("updateMotion", () => {
 		expect(TRAIL_MULTIPLIER_MAX).toBe(10);
 		expect(m.trail).toHaveLength(cap);
 		// cap+4 samples → oldest 4 dropped: oldest kept is min 4.
-		expect(m.trail[0]).toEqual([-70, 40]);
-		expect(m.trail[m.trail.length - 1]).toEqual([-74 + (cap + 3), 40]);
+		expect(m.trail[0]).toEqual([-70, 40, 30000]);
+		expect(m.trail[m.trail.length - 1]).toEqual([-74 + (cap + 3), 40, 30000]);
 	});
 
 	it("does not append to the trail on a same/older sample", () => {
@@ -134,8 +134,8 @@ describe("GeoJSON builders", () => {
 		expect(fc.features).toHaveLength(1); // AA1 has 3 trail points; NEW is single-sample → skipped
 		const coords = fc.features[0].geometry.coordinates;
 		expect(coords.length).toBeGreaterThanOrEqual(4); // 3 trail points + head
-		expect(coords[0]).toEqual([-74, 40]); // oldest first (fades transparent)
-		expect(coords[coords.length - 1]).toEqual([-72, 40]); // head last (opaque)
+		expect(coords[0]).toEqual([-74, 40, 30000]); // oldest first (fades transparent)
+		expect(coords[coords.length - 1]).toEqual([-72, 40, 30000]); // head last (opaque)
 		expect(fc.features[0].geometry.type).toBe("LineString");
 	});
 
@@ -190,7 +190,7 @@ describe("trail display length (multiplier support)", () => {
 		const fc = motionTrailsToGeoJSON(bufWith6(), T0 + 5 * 60_000, 3);
 		const coords = fc.features[0].geometry.coordinates;
 		expect(coords).toHaveLength(4); // 3 newest real points + head
-		expect(coords[0]).toEqual([-74 + 3, 40]); // older points sliced away
+		expect(coords[0]).toEqual([-74 + 3, 40, 30000]); // older points sliced away
 	});
 
 	it("defaults to TRAIL_POINTS when displayPoints is omitted (today's behavior)", () => {

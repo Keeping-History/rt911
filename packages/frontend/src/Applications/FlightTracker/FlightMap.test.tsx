@@ -75,10 +75,22 @@ const FakeMap = vi.hoisted(() => {
 		pitch = 0;
 		getPitch() { return this.pitch; }
 		maxPitchCalls: number[] = [];
+		minPitchCalls: number[] = [];
+		// Interleaved order log — MapLibre throws if min ever exceeds max.
+		pitchLimitLog: string[] = [];
 		setMaxPitch(v: number) {
 			this.maxPitchCalls.push(v);
+			this.pitchLimitLog.push(`max:${v}`);
 			// Real maplibre clamps the live pitch immediately and fires "pitch".
 			if (this.pitch > v) {
+				this.pitch = v;
+				this.fire("pitch");
+			}
+		}
+		setMinPitch(v: number) {
+			this.minPitchCalls.push(v);
+			this.pitchLimitLog.push(`min:${v}`);
+			if (this.pitch < v) {
 				this.pitch = v;
 				this.fire("pitch");
 			}
@@ -580,11 +592,15 @@ describe("FlightMap", () => {
 		expect(map.jumpToCalls).toHaveLength(0); // flat start: no pitch seed
 		rerender(<FlightMap {...common} threeD={true} />);
 		expect(map.maxPitchCalls.at(-1)).toBe(60);
+		// 3D also floors the pitch: right-drag can tilt but never flatten back
+		// into 2D (max must lift before min — maplibre rejects min > max).
+		expect(map.minPitchCalls.at(-1)).toBe(10);
+		expect(map.pitchLimitLog).toEqual(["max:60", "min:10"]);
 		expect(map.easeToCalls.at(-1)).toMatchObject({ pitch: 60 });
 		map.pitch = 60;
 		rerender(<FlightMap {...common} threeD={false} />);
-		// Exiting 3D clamps maxPitch to 0, which snaps the camera flat.
-		expect(map.maxPitchCalls.at(-1)).toBe(0);
+		// Exiting 3D collapses the band to 0 (min drops first), snapping flat.
+		expect(map.pitchLimitLog.slice(2)).toEqual(["min:0", "max:0"]);
 		expect(map.pitch).toBe(0);
 		unmount();
 
@@ -592,6 +608,7 @@ describe("FlightMap", () => {
 		render(<FlightMap {...common} threeD={true} />);
 		const map2 = FakeMap.last!;
 		expect((map2.ctorOpts as { maxPitch?: number }).maxPitch).toBe(60);
+		expect((map2.ctorOpts as { minPitch?: number }).minPitch).toBe(10);
 		map2.fire("load");
 		expect(map2.jumpToCalls.at(-1)).toMatchObject({ pitch: 60 });
 		// Regression (refresh with 3D persisted): the pitch seed fires BEFORE the
@@ -749,7 +766,7 @@ describe("FlightMap", () => {
 		const data = map.sources["planes-3d"]?.data as {
 			features: { properties: { flight: string; base: number; height: number } }[];
 		};
-		expect(data.features).toHaveLength(1);
+		expect(data.features).toHaveLength(3); // one flight × nose/wing/tail bands
 		const p = data.features[0].properties;
 		// Slab AT altitude: base is the exaggerated altitude, top a thin marker
 		// thickness above it (12% of the zoom-scaled marker size — NOT a

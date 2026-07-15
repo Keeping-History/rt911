@@ -12,6 +12,7 @@ import {
 	applyMapColors,
 	buildBasemapStyle,
 	type FlightMapColors,
+	trailColor,
 	trailGradient,
 } from "./flightMapStyle";
 import planeSvg from "./plane.svg?raw";
@@ -37,7 +38,12 @@ import {
 	sweepLineGeoJSON,
 	sweepTrailGeoJSON,
 } from "./flightRadar";
-import { kmPerPixel, motionPlanes3DToGeoJSON, plane3DTargetPx } from "./flightAltitude";
+import {
+	kmPerPixel,
+	motionPlanes3DToGeoJSON,
+	motionTrails3DToGeoJSON,
+	plane3DTargetPx,
+} from "./flightAltitude";
 import {
 	type DragPixels,
 	type SelectMode,
@@ -46,7 +52,7 @@ import {
 	overlayStyle,
 } from "./selectTool";
 import styles from "./FlightTracker.module.scss";
-import { type ReplayBuffer, replayPointsAt } from "./flightReplay";
+import { type ReplayBuffer, replayGhosts3DAt, replayPointsAt } from "./flightReplay";
 import { type LoopClock, playheadAt } from "./loopClock";
 
 // Register the pmtiles:// protocol once per page (adding it twice throws).
@@ -167,11 +173,15 @@ export function planeLayerVisibility(cluster: boolean, pitched: boolean): Record
 	return {
 		"flights-dots": !cluster && !pitched,
 		"flights-notable": !pitched,
-		"flight-trails": !cluster,
+		"flight-trails": !cluster && !pitched,
 		"cluster-circles": cluster && !pitched,
 		"cluster-counts": cluster && !pitched,
 		"cluster-planes": cluster && !pitched,
+		"ghost-dots": !pitched,
+		"ghost-notable": !pitched,
 		"planes-3d": pitched,
+		"trails-3d": pitched && !cluster,
+		"ghost-3d": pitched,
 		"track-curtain": pitched,
 	};
 }
@@ -189,6 +199,10 @@ const NA_CENTER: [number, number] = [-98, 39];
 const NA_ZOOM = 3;
 // Camera pitch the 3D toggle eases to (issue #223); MapLibre's default maxPitch.
 export const THREE_D_PITCH = 60;
+// Pitch floor while 3D is ON: right-drag can tilt freely between these, but
+// never flatten back into 2D — leaving 3D is the toggle's job. Comfortably
+// above the 5° pitched threshold so the 3D layers can't flicker off mid-drag.
+export const THREE_D_MIN_PITCH = 10;
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 const FRAME_MS = 66; // ~15 fps animation gate
 // Click hit-test slop (px). Dots are a small (3px) and gliding target, so an
@@ -289,7 +303,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 			attributionControl: false,
 			// Pitch is exclusively the 3D toggle's domain: with 3D off the map is
 			// hard-locked flat (right-drag still rotates bearing, never the z
-			// axis). The threeD effect lifts this to THREE_D_PITCH.
+			// axis); with 3D on it's confined to [THREE_D_MIN_PITCH, THREE_D_PITCH]
+			// so dragging can't flatten back into 2D either. The threeD effect
+			// moves both bounds on toggle.
+			minPitch: threeDRef.current ? THREE_D_MIN_PITCH : 0,
 			maxPitch: threeDRef.current ? THREE_D_PITCH : 0,
 		});
 		mapRef.current = map;
@@ -412,6 +429,35 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"fill-extrusion-opacity": 0.9,
 				},
 			});
+			// Floating trail ribbons + ghost pucks: the 3D counterparts of the
+			// flat breadcrumb lines and loop-mode ghost circles (lines and
+			// circles are ground-clamped in MapLibre). Fed by the rAF loop only
+			// while pitched.
+			map.addSource("trails-3d", { type: "geojson", data: EMPTY_FC });
+			map.addLayer({
+				id: "trails-3d", type: "fill-extrusion", source: "trails-3d",
+				layout: { visibility: "none" },
+				paint: {
+					"fill-extrusion-color": trailColor(colors.mapStyle, colors.darkMap),
+					"fill-extrusion-base": ["get", "base"],
+					"fill-extrusion-height": ["get", "height"],
+					"fill-extrusion-opacity": 0.45,
+				},
+			});
+			map.addSource("ghost-3d", { type: "geojson", data: EMPTY_FC });
+			map.addLayer({
+				id: "ghost-3d", type: "fill-extrusion", source: "ghost-3d",
+				layout: { visibility: "none" },
+				paint: {
+					"fill-extrusion-color": [
+						"case", ["==", ["get", "notable"], true],
+						colors.notablePinColor, colors.pinColor,
+					],
+					"fill-extrusion-base": ["get", "base"],
+					"fill-extrusion-height": ["get", "height"],
+					"fill-extrusion-opacity": GHOST_OPACITY,
+				},
+			});
 			// Selected-flight curtain wall — same pitch gating as the columns;
 			// data arrives via the curtainGeoJSON prop effect below.
 			map.addSource("track-curtain", { type: "geojson", data: EMPTY_FC });
@@ -421,7 +467,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 				paint: {
 					"fill-extrusion-color": TRACK_LINE_COLOR,
 					"fill-extrusion-height": ["get", "height"],
-					"fill-extrusion-opacity": 0.5,
+					// Opaque on purpose: below 1.0 MapLibre draws every sub-quad's
+					// internal side walls, and the subdivided ramp moirés into
+					// pickets. Opaque abutting boxes read as one continuous wall.
+					"fill-extrusion-opacity": 1,
+					"fill-extrusion-vertical-gradient": true,
 				},
 			});
 			// Loop-mode ghosts render under BOTH live plane layers ("flights-dots"
@@ -700,16 +750,21 @@ export const FlightMap: FC<FlightMapProps> = ({
 		dirtyRef.current = true;
 	}, [globe]);
 
-	// 3D mode gates pitch entirely: ON lifts maxPitch and eases to the preset
-	// (right-drag can then pitch freely); OFF clamps maxPitch back to 0, which
-	// snaps the camera flat and makes right-drag bearing-only.
+	// 3D mode gates pitch entirely: ON confines the camera to
+	// [THREE_D_MIN_PITCH, THREE_D_PITCH] (right-drag tilts within the band but
+	// can't flatten back to 2D) and eases to the preset; OFF collapses the band
+	// to exactly 0, which snaps the camera flat and makes right-drag
+	// bearing-only. Order matters both ways: MapLibre rejects min > max, so
+	// max lifts before min on enable and min drops before max on disable.
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
 		if (threeD) {
 			map.setMaxPitch(THREE_D_PITCH);
+			map.setMinPitch(THREE_D_MIN_PITCH);
 			map.easeTo({ pitch: THREE_D_PITCH, duration: 600 });
 		} else {
+			map.setMinPitch(0);
 			map.setMaxPitch(0);
 		}
 	}, [threeD]);
@@ -747,6 +802,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		if (!map || !loadedRef.current) return;
 		if (!loopEnabled) {
 			(map.getSource("ghost-flights") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
+			(map.getSource("ghost-3d") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
 		}
 		dirtyRef.current = true;
 	}, [loopEnabled]);
@@ -788,9 +844,21 @@ export const FlightMap: FC<FlightMapProps> = ({
 			}
 			// Clamp: hand-edited persisted state must not build million-point trails.
 			const clamped = Math.min(Math.max(trailMultiplierRef.current, 0), TRAIL_MULTIPLIER_MAX);
-			(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
-				motionTrailsToGeoJSON(buf, now, Math.round(TRAIL_POINTS * clamped)),
-			);
+			const trailPoints = Math.round(TRAIL_POINTS * clamped);
+			if (pitchedRef.current) {
+				// Floating ribbons replace the ground lines while pitched; width
+				// tracks the plane-marker scale.
+				const zoomT = map.getZoom();
+				const ribbonWidthKm =
+					plane3DTargetPx(zoomT) * kmPerPixel(zoomT, map.getCenter().lat) * 0.08;
+				(map.getSource("trails-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
+					motionTrails3DToGeoJSON(buf, now, trailPoints, ribbonWidthKm),
+				);
+			} else {
+				(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
+					motionTrailsToGeoJSON(buf, now, trailPoints),
+				);
+			}
 			if (radarSweepRef.current) {
 				(map.getSource("radar-sweep") as maplibregl.GeoJSONSource | undefined)?.setData(
 					sweepLineGeoJSON(now),
@@ -804,9 +872,18 @@ export const FlightMap: FC<FlightMapProps> = ({
 				const playhead = playheadAt(
 					loopState.clock, wall, now - loopState.windowMs, now,
 				);
-				(map.getSource("ghost-flights") as maplibregl.GeoJSONSource | undefined)?.setData(
-					replayPointsAt(loopState.buffer, playhead, loopState.visible),
-				);
+				if (pitchedRef.current) {
+					const zoomG = map.getZoom();
+					const ghostRadiusKm =
+						plane3DTargetPx(zoomG) * kmPerPixel(zoomG, map.getCenter().lat) * 0.12;
+					(map.getSource("ghost-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
+						replayGhosts3DAt(loopState.buffer, playhead, loopState.visible, ghostRadiusKm),
+					);
+				} else {
+					(map.getSource("ghost-flights") as maplibregl.GeoJSONSource | undefined)?.setData(
+						replayPointsAt(loopState.buffer, playhead, loopState.visible),
+					);
+				}
 			}
 		};
 		let raf = requestAnimationFrame(loop);
