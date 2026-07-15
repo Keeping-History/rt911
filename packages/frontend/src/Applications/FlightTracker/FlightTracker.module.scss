@@ -44,6 +44,14 @@
 }
 .compassNorth { top: 3px; border-bottom: 12px solid #c0202a; }
 .compassSouth { bottom: 3px; border-top: 12px solid #f5f5f5; }
+// Live drag rectangle/circle for the area-select tool (issue #225).
+.selectOverlay {
+	position: absolute;
+	pointer-events: none;
+	border: 1px dashed #333;
+	background: rgba(120, 150, 255, 0.15);
+	z-index: 2;
+}
 .compassLabel {
 	position: relative;
 	font-family: var(--ui-font) !important;

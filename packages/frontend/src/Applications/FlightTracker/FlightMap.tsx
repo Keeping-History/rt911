@@ -37,6 +37,14 @@ import {
 	sweepTrailGeoJSON,
 } from "./flightRadar";
 import { motionColumnsToGeoJSON } from "./flightAltitude";
+import {
+	type DragPixels,
+	type SelectMode,
+	dragBounds,
+	insideSelection,
+	overlayStyle,
+} from "./selectTool";
+import styles from "./FlightTracker.module.scss";
 import { type ReplayBuffer, replayPointsAt } from "./flightReplay";
 import { type LoopClock, playheadAt } from "./loopClock";
 
@@ -120,6 +128,10 @@ interface FlightMapProps {
 	globe?: boolean;
 	threeD?: boolean;
 	cluster?: boolean;
+	// Area-select tool (issue #225): while armed, drags trace a rectangle or
+	// circle instead of panning; the release reports the flights inside.
+	selectMode?: SelectMode;
+	onAreaSelect?: (flights: string[]) => void;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
 }
@@ -164,6 +176,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null,
 	globe = false, threeD = false, cluster = false,
+	selectMode = "off", onAreaSelect,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -174,8 +187,14 @@ export const FlightMap: FC<FlightMapProps> = ({
 	positionsRef.current = positions;
 	const seedRef = useRef(seedPositions);
 	seedRef.current = seedPositions;
-	const cbRef = useRef({ onSelectFlight, onClearSelection });
-	cbRef.current = { onSelectFlight, onClearSelection };
+	const cbRef = useRef({ onSelectFlight, onClearSelection, onAreaSelect });
+	cbRef.current = { onSelectFlight, onClearSelection, onAreaSelect };
+	const selectModeRef = useRef<SelectMode>(selectMode);
+	selectModeRef.current = selectMode;
+	// In-flight drag state (mutated at event rate); the overlay div re-renders
+	// through React state so the visual tracks the pointer.
+	const dragRef = useRef<DragPixels | null>(null);
+	const [overlay, setOverlay] = useState<{ mode: "rect" | "circle"; d: DragPixels } | null>(null);
 	const colorsRef = useRef<FlightMapColors>({ mapStyle, darkMap, pinColor, notablePinColor });
 	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor };
 	const radarSweepRef = useRef(radarSweep);
@@ -428,7 +447,49 @@ export const FlightMap: FC<FlightMapProps> = ({
 		// Forgiving hit-test: query a small box around the click and select the
 		// NEAREST dot within it; clear the selection only when nothing is nearby.
 		// (An exact-pixel layer click missed too often on the tiny gliding dots.)
+		// Area-select drag (issue #225). MapLibre still emits mouse events with
+		// dragPan disabled; the release queries the box and refines per-shape.
+		map.on("mousedown", (e) => {
+			if (selectModeRef.current === "off") return;
+			dragRef.current = {
+				startX: e.point.x, startY: e.point.y, curX: e.point.x, curY: e.point.y,
+			};
+		});
+		map.on("mousemove", (e) => {
+			const d = dragRef.current;
+			const mode = selectModeRef.current;
+			if (!d || mode === "off") return;
+			d.curX = e.point.x;
+			d.curY = e.point.y;
+			setOverlay({ mode, d: { ...d } });
+		});
+		map.on("mouseup", (e) => {
+			const d = dragRef.current;
+			const mode = selectModeRef.current;
+			dragRef.current = null;
+			setOverlay(null);
+			if (!d || mode === "off") return;
+			d.curX = e.point.x;
+			d.curY = e.point.y;
+			const b = dragBounds(mode, d);
+			const feats = map.queryRenderedFeatures(
+				[[b.minX, b.minY], [b.maxX, b.maxY]],
+				{ layers: ["flights-dots", "flights-notable", "cluster-planes"] },
+			);
+			const flights: string[] = [];
+			for (const f of feats) {
+				if (f.geometry.type !== "Point") continue;
+				const pp = map.project(f.geometry.coordinates as [number, number]);
+				if (!insideSelection(mode, d, pp.x, pp.y)) continue;
+				const flight = String(f.properties?.flight ?? "");
+				if (flight && !flights.includes(flight)) flights.push(flight);
+			}
+			cbRef.current.onAreaSelect?.(flights);
+		});
+
 		map.on("click", (e) => {
+			// While a select tool is armed, the drag handlers own the pointer.
+			if (selectModeRef.current !== "off") return;
 			const { x, y } = e.point;
 			const near = map.queryRenderedFeatures(
 				[
@@ -537,6 +598,22 @@ export const FlightMap: FC<FlightMapProps> = ({
 		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor });
 		void installPlaneIcons(map, pinColor, notablePinColor);
 	}, [mapStyle, darkMap, pinColor, notablePinColor]);
+
+	// Arm/disarm the select tool: panning off, crosshair cursor, stale drag
+	// cleared. Runs pre-load safely (dragPan exists from construction).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map) return;
+		if (selectMode !== "off") {
+			map.dragPan.disable();
+			map.getCanvas().style.cursor = "crosshair";
+		} else {
+			map.dragPan.enable();
+			map.getCanvas().style.cursor = "";
+			dragRef.current = null;
+			setOverlay(null);
+		}
+	}, [selectMode]);
 
 	// Cluster toggle: swap visibility between the live plane/trail layers and
 	// the three cluster layers; the rAF loop feeds whichever side is active.
@@ -674,6 +751,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 				bearing={bearing}
 				onReset={() => mapRef.current?.easeTo({ bearing: 0, duration: 400 })}
 			/>
+			{overlay && (
+				<div className={styles.selectOverlay} style={overlayStyle(overlay.mode, overlay.d)} />
+			)}
 		</div>
 	);
 };

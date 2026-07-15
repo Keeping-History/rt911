@@ -71,6 +71,13 @@ const FakeMap = vi.hoisted(() => {
 		getBearing() { return this.bearing; }
 		pitch = 0;
 		getPitch() { return this.pitch; }
+		dragPanDisabled = false;
+		dragPan = {
+			disable: () => { this.dragPanDisabled = true; },
+			enable: () => { this.dragPanDisabled = false; },
+		};
+		canvasStyle: Record<string, string> = {};
+		getCanvas() { return { style: this.canvasStyle } as unknown as HTMLCanvasElement; }
 		easeToCalls: Record<string, unknown>[] = [];
 		flyToCalls: Record<string, unknown>[] = [];
 		projections: Record<string, unknown>[] = [];
@@ -620,6 +627,58 @@ describe("FlightMap", () => {
 			expect(map.easeToCalls.at(-1)).toMatchObject({ center: [-80, 40], zoom: 8 });
 		});
 		expect(onSelect).not.toHaveBeenCalled();
+	});
+
+	it("drag-selects flights in the box, deduped, and disables panning while armed", () => {
+		const onAreaSelect = vi.fn();
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1, onAreaSelect,
+		};
+		const { rerender } = render(<FlightMap {...common} selectMode="off" />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.dragPanDisabled).toBe(false);
+		rerender(<FlightMap {...common} selectMode="rect" />);
+		expect(map.dragPanDisabled).toBe(true);
+
+		// project() maps [lon,lat]→{x:lon,y:lat}: both dots land inside the box.
+		map.queryResult = [
+			{ geometry: { type: "Point", coordinates: [50, 40] }, properties: { flight: "DL404" } },
+			{ geometry: { type: "Point", coordinates: [80, 60] }, properties: { flight: "UA93" } },
+			{ geometry: { type: "Point", coordinates: [50, 40] }, properties: { flight: "DL404" } },
+		];
+		map.fire("mousedown", { point: { x: 10, y: 10 } });
+		map.fire("mousemove", { point: { x: 120, y: 90 } });
+		map.fire("mouseup", { point: { x: 120, y: 90 } });
+		expect(onAreaSelect).toHaveBeenCalledWith(["DL404", "UA93"]);
+
+		// Disarming re-enables panning.
+		rerender(<FlightMap {...common} selectMode="off" />);
+		expect(map.dragPanDisabled).toBe(false);
+	});
+
+	it("circle mode drops features outside the radius even when inside the query box", () => {
+		const onAreaSelect = vi.fn();
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} selectMode="circle" onAreaSelect={onAreaSelect} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		// Center (0,0), radius 50. (18,24) is inside (dist 30); (49,49) is in the
+		// bounding box but outside the circle (dist ~69).
+		map.queryResult = [
+			{ geometry: { type: "Point", coordinates: [18, 24] }, properties: { flight: "IN" } },
+			{ geometry: { type: "Point", coordinates: [49, 49] }, properties: { flight: "OUT" } },
+		];
+		map.fire("mousedown", { point: { x: 0, y: 0 } });
+		map.fire("mouseup", { point: { x: 30, y: 40 } });
+		expect(onAreaSelect).toHaveBeenCalledWith(["IN"]);
 	});
 
 	it("pitching the camera reveals and feeds the altitude columns", () => {
