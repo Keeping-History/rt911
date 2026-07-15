@@ -10,6 +10,9 @@ export interface FlightFilter {
 	carrier: string;
 	origin: string;
 	dest: string;
+	// Explicit flight list saved from an area selection (issue #225); [] =
+	// inactive. ANDs with the dropdown criteria like every other field.
+	flights: string[];
 }
 
 export const EMPTY_FLIGHT_FILTER: FlightFilter = {
@@ -18,6 +21,7 @@ export const EMPTY_FLIGHT_FILTER: FlightFilter = {
 	carrier: "",
 	origin: "",
 	dest: "",
+	flights: [],
 };
 
 // Per-flight static route metadata from Directus flight_tracks (no geometry).
@@ -64,7 +68,7 @@ export function routeRowFor(
 }
 
 export function isFilterActive(f: FlightFilter): boolean {
-	return !!(f.flight || f.tail || f.carrier || f.origin || f.dest);
+	return !!(f.flight || f.tail || f.carrier || f.origin || f.dest || f.flights.length);
 }
 
 // A flight missing the metadata a criterion needs fails that criterion — e.g.
@@ -74,6 +78,7 @@ export function matchesFilter(
 	row: RouteIndexRow | undefined,
 	f: FlightFilter,
 ): boolean {
+	if (f.flights.length && !f.flights.includes(p.flight)) return false;
 	if (f.flight && p.flight !== f.flight) return false;
 	if (f.carrier && p.carrier !== f.carrier) return false;
 	if (f.tail && row?.tail_number !== f.tail) return false;

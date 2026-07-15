@@ -271,7 +271,39 @@ export const FlightTracker: FC = () => {
 		return () => unsubscribeFlights(appId);
 	}, [isRunning, subscribeFlights, unsubscribeFlights, appId]);
 
-	const [selected, setSelected] = useState<FlightPosition | null>(null);
+	// Selection is a LIST (issue #225): a plain click yields one entry; an
+	// area-select drag yields many, toggled via the detail pane's dropdown.
+	const [multiSelected, setMultiSelected] = useState<FlightPosition[]>([]);
+	const [activeFlightIdx, setActiveFlightIdx] = useState(0);
+	const selected = multiSelected[Math.min(activeFlightIdx, multiSelected.length - 1)] ?? null;
+
+	const onAreaSelect = useCallback(
+		(flights: string[]) => {
+			const hits = flights
+				.map((fl) => flightPositions.find((p) => p.flight === fl))
+				.filter((p): p is FlightPosition => !!p);
+			if (hits.length) {
+				setMultiSelected(hits);
+				setActiveFlightIdx(0);
+			}
+			setSelectMode("off"); // tool disarms after each selection
+		},
+		[flightPositions],
+	);
+
+	// Esc cancels an armed select tool.
+	useEffect(() => {
+		if (selectMode === "off") return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setSelectMode("off");
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [selectMode]);
+
+	const saveSelectionAsFilter = useCallback(() => {
+		setFilter({ flights: multiSelected.map((p) => p.flight) });
+	}, [multiSelected, setFilter]);
 
 	// Loop mode: the enable flag, window, and speed are persisted preferences
 	// (readFlightLoopSettings), so they survive a refresh. Only the ephemeral
@@ -497,19 +529,29 @@ export const FlightTracker: FC = () => {
 		[livePos, track],
 	);
 
-	// Clear the selection when the selected flight leaves the *visible* set —
-	// gone from the airborne set (e.g. after a seek) or hidden by the filter.
+	// Prune selection entries whose flights leave the *visible* set — gone from
+	// the airborne set (e.g. after a seek) or hidden by the filter. Keeps the
+	// rest of a multi-selection intact instead of clearing everything.
 	useEffect(() => {
-		if (selected && !filteredPositions.some((p) => p.flight === selected.flight)) {
-			setSelected(null);
-		}
-	}, [filteredPositions, selected]);
+		setMultiSelected((cur) => {
+			const kept = cur.filter((s) =>
+				filteredPositions.some((p) => p.flight === s.flight),
+			);
+			return kept.length === cur.length ? cur : kept;
+		});
+	}, [filteredPositions]);
+	useEffect(() => {
+		setActiveFlightIdx((i) => Math.max(0, Math.min(i, multiSelected.length - 1)));
+	}, [multiSelected]);
 
 	// Selects the clicked flight if it's currently in the airborne set; does not
 	// clear on seek itself — the effect above handles that.
 	const onSelectFlight = (flight: string) => {
 		const hit = flightPositions.find((p) => p.flight === flight) ?? null;
-		if (hit) setSelected(hit);
+		if (hit) {
+			setMultiSelected([hit]);
+			setActiveFlightIdx(0);
+		}
 	};
 
 	const trackGeoJSON: Feature | null = track?.geometry
@@ -735,6 +777,24 @@ export const FlightTracker: FC = () => {
 										/>
 									</td>
 								</tr>
+								{filterSettings.flights.length > 0 && (
+									<tr>
+										<td>
+											<ClassicyControlLabel
+												label={`Selected flights (${filterSettings.flights.length})`}
+												labelSize="small"
+											></ClassicyControlLabel>
+										</td>
+										<td>
+											<ClassicyButton
+												buttonSize="small"
+												onClickFunc={() => setFilter({ flights: [] })}
+											>
+												Remove
+											</ClassicyButton>
+										</td>
+									</tr>
+								)}
 							</table>
 						</ClassicyControlGroup>
 						<div className={styles.settingsButtons}>
@@ -802,7 +862,9 @@ export const FlightTracker: FC = () => {
 								loopClock={loopClock}
 								replayBuffer={replayBufferRef.current}
 								onSelectFlight={onSelectFlight}
-								onClearSelection={() => setSelected(null)}
+								selectMode={selectMode}
+								onAreaSelect={onAreaSelect}
+								onClearSelection={() => setMultiSelected([])}
 							/>
 						</div>
 						<div className={styles.filterPanel}>
@@ -819,6 +881,12 @@ export const FlightTracker: FC = () => {
 								nowMs={nowMs}
 								headingDeg={headingDeg}
 								tzOffset={tzOffset}
+								selectionOptions={multiSelected}
+								onPickFlight={(flight) => {
+									const i = multiSelected.findIndex((p) => p.flight === flight);
+									if (i >= 0) setActiveFlightIdx(i);
+								}}
+								onSaveAsFilter={saveSelectionAsFilter}
 							/>
 						</div>
 					</div>

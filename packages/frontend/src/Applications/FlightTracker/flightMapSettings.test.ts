@@ -164,7 +164,7 @@ describe("intToHex", () => {
 
 describe("filter settings", () => {
 	it("persists filterSettings from a SetFilterSettings action without touching other data", () => {
-		const filterSettings = { flight: "", tail: "", carrier: "AA", origin: "BOS", dest: "" };
+		const filterSettings = { flight: "", tail: "", carrier: "AA", origin: "BOS", dest: "", flights: [] };
 		const out = classicyFlightTrackerEventHandler(
 			storeWithApp({ mapSettings: { darkMap: true } }),
 			flightTrackerSetFilterSettings(filterSettings),
@@ -178,7 +178,8 @@ describe("filter settings", () => {
 		expect(readFlightFilterSettings(undefined)).toEqual(EMPTY_FLIGHT_FILTER);
 		expect(readFlightFilterSettings({})).toEqual(EMPTY_FLIGHT_FILTER);
 		expect(readFlightFilterSettings({ filterSettings: { carrier: "UA" } })).toEqual({
-			flight: "", tail: "", carrier: "UA", origin: "", dest: "",
+			// flights back-fills to [] for pre-#225 persisted state.
+			flight: "", tail: "", carrier: "UA", origin: "", dest: "", flights: [],
 		});
 	});
 });

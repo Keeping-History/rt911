@@ -2,7 +2,12 @@ import type { FC } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightTrack } from "./useFlightTrack";
 import styles from "./FlightTracker.module.scss";
-import { ClassicyControlGroup, ClassicyControlLabel } from "classicy";
+import {
+	ClassicyButton,
+	ClassicyControlGroup,
+	ClassicyControlLabel,
+	ClassicyPopUpMenu,
+} from "classicy";
 import { isNotable } from "./notableFlights";
 
 interface FlightDetailPanelProps {
@@ -19,6 +24,11 @@ interface FlightDetailPanelProps {
 	// Display-timezone offset in hours (the menu-bar clock's tz) for rendering
 	// wheels times as local times.
 	tzOffset?: number;
+	// Area-selection support (issue #225): with >1 entries a dropdown toggles
+	// between the selected flights and Save as Filter persists the set.
+	selectionOptions?: FlightPosition[];
+	onPickFlight?: (flight: string) => void;
+	onSaveAsFilter?: () => void;
 }
 
 // "8:14 AM"-style display time for a UTC instant in the app's display tz.
@@ -32,6 +42,7 @@ function formatDisplayTime(iso: string, tzOffset: number): string {
 
 export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 	selected, track, loading, error, nowMs, headingDeg = null, tzOffset = -4,
+	selectionOptions = [], onPickFlight, onSaveAsFilter,
 }) => {
 	if (!selected) {
 		return (
@@ -70,6 +81,20 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				<span className={styles.detailFlight}>{selected.flight}</span>
 				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
 			</div>
+			{selectionOptions.length > 1 && (
+				<div className={styles.detailSelection}>
+					<ClassicyPopUpMenu
+						id="flight_detail_selection"
+						size="small"
+						options={selectionOptions.map((p) => ({ value: p.flight, label: p.flight }))}
+						selected={selected.flight}
+						onChangeFunc={(e) => onPickFlight?.(e.target.value)}
+					/>
+					<ClassicyButton buttonSize="small" onClickFunc={onSaveAsFilter}>
+						Save as Filter
+					</ClassicyButton>
+				</div>
+			)}
 			<dl className={styles.detailFields}>
 				{selected.carrier && (<><dt>Carrier</dt><dd>{selected.carrier}</dd></>)}
 				<dt>Altitude</dt><dd>{selected.alt_ft.toLocaleString()} ft</dd>

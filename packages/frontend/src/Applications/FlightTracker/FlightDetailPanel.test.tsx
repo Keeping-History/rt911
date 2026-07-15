@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightTrack } from "./useFlightTrack";
 import { FlightDetailPanel } from "./FlightDetailPanel";
@@ -103,5 +103,34 @@ describe("FlightDetailPanel", () => {
 			<FlightDetailPanel selected={sel} loading={false} error={null} nowMs={POST_IMPACT} tzOffset={-4} track={track} />,
 		);
 		expect(screen.getByText("8:45 AM")).toBeTruthy();
+	});
+
+	describe("multi-selection (issue #225)", () => {
+		const other: FlightPosition = { ...sel, id: 2, flight: "DL404" };
+
+		it("hides the selection row for a single-flight selection", () => {
+			render(
+				<FlightDetailPanel selected={sel} track={null} loading={false} error={null}
+					nowMs={PRE_IMPACT} selectionOptions={[sel]} />,
+			);
+			expect(screen.queryByRole("combobox")).toBeNull();
+			expect(screen.queryByText("Save as Filter")).toBeNull();
+		});
+
+		it("offers a dropdown across the selected flights and a save button", () => {
+			const onPickFlight = vi.fn();
+			const onSaveAsFilter = vi.fn();
+			render(
+				<FlightDetailPanel selected={sel} track={null} loading={false} error={null}
+					nowMs={PRE_IMPACT} selectionOptions={[sel, other]}
+					onPickFlight={onPickFlight} onSaveAsFilter={onSaveAsFilter} />,
+			);
+			const dd = screen.getByRole("combobox") as HTMLSelectElement;
+			expect(dd.value).toBe("AA11");
+			fireEvent.change(dd, { target: { value: "DL404" } });
+			expect(onPickFlight).toHaveBeenCalledWith("DL404");
+			fireEvent.click(screen.getByText("Save as Filter"));
+			expect(onSaveAsFilter).toHaveBeenCalledOnce();
+		});
 	});
 });

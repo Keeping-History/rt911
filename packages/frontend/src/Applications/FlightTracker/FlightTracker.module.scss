@@ -44,6 +44,12 @@
 }
 .compassNorth { top: 3px; border-bottom: 12px solid #c0202a; }
 .compassSouth { bottom: 3px; border-top: 12px solid #f5f5f5; }
+// Multi-selection row in the detail pane (issue #225).
+.detailSelection {
+	display: flex; align-items: center; gap: 4px;
+	margin-bottom: var(--window-padding-size);
+	:global(.classicyPopUpMenuWrapper) { flex: 1 1 auto; min-width: 0; }
+}
 // Live drag rectangle/circle for the area-select tool (issue #225).
 .selectOverlay {
 	position: absolute;
