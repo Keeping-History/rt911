@@ -196,6 +196,21 @@ export const FlightTracker: FC = () => {
 			flightTrackerSetMapSettings({ ...settings, cluster: !settings.cluster }),
 		);
 	}, [settings, desktopEventDispatch]);
+	// The 3D button mirrors the CAMERA, not just its own clicks: with 3D on,
+	// a right-drag can flatten the z-axis manually — when the map crosses back
+	// to flat, un-press (and un-persist) the toggle to match. The pitched=true
+	// direction only ever originates from the toggle itself (maxPitch is 0
+	// otherwise), so no dispatch is needed there.
+	const onPitchedChange = useCallback(
+		(pitched: boolean) => {
+			if (!pitched && settings.threeD) {
+				desktopEventDispatch(
+					flightTrackerSetMapSettings({ ...settings, threeD: false }),
+				);
+			}
+		},
+		[settings, desktopEventDispatch],
+	);
 
 	const {
 		flightPositions,
@@ -906,6 +921,7 @@ export const FlightTracker: FC = () => {
 								onSelectFlight={onSelectFlight}
 								selectMode={selectMode}
 								onAreaSelect={onAreaSelect}
+								onPitchedChange={onPitchedChange}
 								onClearSelection={() => setMultiSelected([])}
 							/>
 						</div>

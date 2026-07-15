@@ -133,6 +133,9 @@ interface FlightMapProps {
 	// circle instead of panning; the release reports the flights inside.
 	selectMode?: SelectMode;
 	onAreaSelect?: (flights: string[]) => void;
+	// Fires when the camera crosses the pitched threshold in either direction —
+	// FlightTracker keeps the 3D toggle in sync with manual z-axis drags.
+	onPitchedChange?: (pitched: boolean) => void;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
 }
@@ -205,7 +208,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null,
 	globe = false, threeD = false, cluster = false,
-	selectMode = "off", onAreaSelect,
+	selectMode = "off", onAreaSelect, onPitchedChange,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -216,8 +219,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	positionsRef.current = positions;
 	const seedRef = useRef(seedPositions);
 	seedRef.current = seedPositions;
-	const cbRef = useRef({ onSelectFlight, onClearSelection, onAreaSelect });
-	cbRef.current = { onSelectFlight, onClearSelection, onAreaSelect };
+	const cbRef = useRef({ onSelectFlight, onClearSelection, onAreaSelect, onPitchedChange });
+	cbRef.current = { onSelectFlight, onClearSelection, onAreaSelect, onPitchedChange };
 	const selectModeRef = useRef<SelectMode>(selectMode);
 	selectModeRef.current = selectMode;
 	// In-flight drag state (mutated at event rate); the overlay div re-renders
@@ -594,6 +597,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				}
 			}
 			dirtyRef.current = true;
+			cbRef.current.onPitchedChange?.(on);
 		});
 		// Plane-slab size tracks the zoom (constant on-screen size); wake a
 		// paused map so a zoom while paused re-sizes the 3D planes.

@@ -765,6 +765,26 @@ describe("FlightMap", () => {
 		expect(map.layout["flights-dots"]?.visibility).toBe("visible");
 	});
 
+	it("reports pitch-threshold crossings so the 3D toggle can follow the camera", () => {
+		const onPitchedChange = vi.fn();
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} threeD={true} onPitchedChange={onPitchedChange} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load"); // jumpTo seed fires "pitch" at 60 → pitched
+		expect(onPitchedChange).toHaveBeenLastCalledWith(true);
+		// User right-drags the camera flat: one crossing, one callback.
+		map.pitch = 3;
+		map.fire("pitch");
+		expect(onPitchedChange).toHaveBeenLastCalledWith(false);
+		map.pitch = 2;
+		map.fire("pitch"); // still flat — no duplicate call
+		expect(onPitchedChange).toHaveBeenCalledTimes(2);
+	});
+
 	it("compass tracks map rotation and resets bearing on click", () => {
 		render(
 			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
