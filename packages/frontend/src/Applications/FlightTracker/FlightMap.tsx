@@ -92,6 +92,9 @@ interface FlightMapProps {
 	seedPositions?: FlightPosition[];
 	basemapUrls: BasemapUrls;
 	trackGeoJSON: GeoJSON.Feature | null;
+	// Curtain wall under the selected flight's path (issue #224): pre-built
+	// extrusion quads from its altitude profile; renders only while pitched.
+	curtainGeoJSON?: GeoJSON.FeatureCollection | null;
 	nowMs: number;
 	playing: boolean;
 	mapStyle: BasemapStyleId;
@@ -155,7 +158,7 @@ const GHOST_STROKE_COLOR = "#ffffff";
 
 export const FlightMap: FC<FlightMapProps> = ({
 	ref: handleRef,
-	positions, seedPositions, basemapUrls, trackGeoJSON, nowMs, playing,
+	positions, seedPositions, basemapUrls, trackGeoJSON, curtainGeoJSON = null, nowMs, playing,
 	mapStyle, darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
@@ -356,6 +359,18 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"fill-extrusion-opacity": 0.35,
 				},
 			});
+			// Selected-flight curtain wall — same pitch gating as the columns;
+			// data arrives via the curtainGeoJSON prop effect below.
+			map.addSource("track-curtain", { type: "geojson", data: EMPTY_FC });
+			map.addLayer({
+				id: "track-curtain", type: "fill-extrusion", source: "track-curtain",
+				layout: { visibility: pitchedRef.current ? "visible" : "none" },
+				paint: {
+					"fill-extrusion-color": TRACK_LINE_COLOR,
+					"fill-extrusion-height": ["get", "height"],
+					"fill-extrusion-opacity": 0.5,
+				},
+			});
 			// Loop-mode ghosts render under BOTH live plane layers ("flights-dots"
 			// is the lower of the two, so inserting before it puts ghosts under
 			// both) but above the trails. They stay simple circles — visually
@@ -459,7 +474,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			if (on === pitchedRef.current) return;
 			pitchedRef.current = on;
 			if (loadedRef.current) {
-				map.setLayoutProperty("altitude-columns", "visibility", on ? "visible" : "none");
+				const vis = on ? "visible" : "none";
+				map.setLayoutProperty("altitude-columns", "visibility", vis);
+				map.setLayoutProperty("track-curtain", "visibility", vis);
 			}
 			dirtyRef.current = true;
 		});
@@ -501,6 +518,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 		const src = map.getSource("track") as maplibregl.GeoJSONSource | undefined;
 		src?.setData(trackGeoJSON ? { type: "FeatureCollection", features: [trackGeoJSON] } : EMPTY_FC);
 	}, [trackGeoJSON]);
+
+	// Push the selected flight's altitude curtain (or clear it).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		(map.getSource("track-curtain") as maplibregl.GeoJSONSource | undefined)?.setData(
+			curtainGeoJSON ?? EMPTY_FC,
+		);
+	}, [curtainGeoJSON]);
 
 	// Re-theme / recolor live. setPaintProperty only — setStyle() would tear
 	// down the flights/trails/track sources and layers. Before "load" fires,

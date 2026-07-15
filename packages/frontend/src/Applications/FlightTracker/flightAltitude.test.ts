@@ -58,7 +58,7 @@ describe("motionColumnsToGeoJSON", () => {
 
 describe("curtainToGeoJSON", () => {
 	const sample = (lon: number, lat: number, alt_ft: number) => ({
-		lon, lat, alt_ft, start_date: "2001-09-11T13:00:00Z",
+		lon, lat, alt_ft, utc: "2001-09-11T13:00:00Z",
 	});
 
 	it("builds one closed quad per consecutive pair at the pair's max height", () => {

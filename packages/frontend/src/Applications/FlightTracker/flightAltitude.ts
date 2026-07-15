@@ -76,7 +76,7 @@ export interface AltitudeSample {
 	lat: number;
 	lon: number;
 	alt_ft: number;
-	start_date: string;
+	utc: string;
 }
 
 /**
