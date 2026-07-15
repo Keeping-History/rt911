@@ -9,6 +9,7 @@
 		"lint": "pnpm --filter @rt911/frontend lint",
 		"setup": "node packages/backend/seed.mjs",
 		"db:gen-epg": "node packages/backend/gen-epg.mjs",
+		"bump:classicy": "pnpm update classicy --latest --recursive --silent && git add pnpm-lock.yaml && git commit -m 'Bump classicy' && git push -u origin HEAD",
 		"prepare": "husky"
 	},
 	"pnpm": {
