@@ -8,6 +8,50 @@
 	font-size: var(--ui-font-size);
 }
 .mapControlsDivider { width: 1px; align-self: stretch; background: #999; margin: 0 4px; }
+// Compass rose overlay (issue #219): a Classicy-bordered dial in the map's
+// top-right corner; the needle span counter-rotates with the map bearing.
+.compass {
+	position: absolute;
+	top: var(--window-padding-size);
+	right: var(--window-padding-size);
+	z-index: 2;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border-radius: 50%;
+	border: var(--window-border-size, 1px) solid var(--color-black, #000);
+	background: var(--color-system-03, #ddd);
+	box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.35);
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.compassNeedle {
+	position: absolute;
+	inset: 0;
+	display: block;
+}
+.compassNorth,
+.compassSouth {
+	position: absolute;
+	left: 50%;
+	width: 0;
+	height: 0;
+	border-left: 4px solid transparent;
+	border-right: 4px solid transparent;
+	transform: translateX(-50%);
+}
+.compassNorth { top: 3px; border-bottom: 12px solid #c0202a; }
+.compassSouth { bottom: 3px; border-top: 12px solid #f5f5f5; }
+.compassLabel {
+	position: relative;
+	font-family: var(--ui-font) !important;
+	font-size: 9px;
+	font-weight: bold;
+	color: var(--color-black, #000);
+	pointer-events: none;
+}
 .body { display: flex; flex: 1 1 auto; min-height: 0; }
 .map { flex: 1 1 auto; min-width: 0; position: relative; }
 .detailWrapper {

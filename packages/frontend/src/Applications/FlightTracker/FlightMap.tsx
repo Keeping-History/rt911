@@ -1,6 +1,7 @@
 import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
-import { type FC, type Ref, useEffect, useImperativeHandle, useRef } from "react";
+import { type FC, type Ref, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { MapCompass } from "./MapCompass";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	type BasemapStyleId,
@@ -202,6 +203,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const anchorRef = useRef({ virtual: nowMs, wall: 0 });
 	// Whether a frame is owed while paused (buffer/clock changed since last draw).
 	const dirtyRef = useRef(true);
+	// Map bearing, mirrored into React state for the compass overlay.
+	const [bearing, setBearing] = useState(0);
 
 	// Create the map once (basemapUrls is effectively stable from env).
 	useEffect(() => {
@@ -354,6 +357,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 			}
 			if (best.properties) cbRef.current.onSelectFlight(String(best.properties.flight));
 		});
+
+		map.on("rotate", () => setBearing(map.getBearing()));
 
 		const ro = new ResizeObserver(() => map.resize());
 		ro.observe(containerRef.current);
@@ -508,5 +513,13 @@ export const FlightMap: FC<FlightMapProps> = ({
 		return () => cancelAnimationFrame(raf);
 	}, []);
 
-	return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
+	return (
+		<div style={{ position: "relative", width: "100%", height: "100%" }}>
+			<div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+			<MapCompass
+				bearing={bearing}
+				onReset={() => mapRef.current?.easeTo({ bearing: 0, duration: 400 })}
+			/>
+		</div>
+	);
 };

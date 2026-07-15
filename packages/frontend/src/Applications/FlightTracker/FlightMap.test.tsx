@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import { insertReplaySamples, type ReplayBuffer } from "./flightReplay";
@@ -61,6 +61,8 @@ const FakeMap = vi.hoisted(() => {
 		queryRenderedFeatures() { return this.queryResult; }
 		project(c: [number, number]) { return { x: c[0], y: c[1] }; }
 		zoom = 3;
+		bearing = 0;
+		getBearing() { return this.bearing; }
 		easeToCalls: Record<string, unknown>[] = [];
 		flyToCalls: Record<string, unknown>[] = [];
 		projections: Record<string, unknown>[] = [];
@@ -110,6 +112,9 @@ const TEST_URLS = {
 describe("FlightMap", () => {
 	beforeEach(() => { FakeMap.last = null; });
 	afterEach(() => {
+		// No RTL auto-cleanup in this repo — unmount so screen queries in later
+		// tests don't match elements from earlier renders.
+		cleanup();
 		// Restore globals/spies stubbed by the animation-loop test (rAF, performance.now)
 		// so a future test appended here doesn't inherit a frozen clock / stubbed rAF.
 		vi.clearAllMocks();
@@ -547,6 +552,21 @@ describe("FlightMap", () => {
 		const map2 = FakeMap.last!;
 		map2.fire("load");
 		expect(map2.jumpToCalls.at(-1)).toMatchObject({ pitch: 60 });
+	});
+
+	it("compass tracks map rotation and resets bearing on click", () => {
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		map.bearing = 30;
+		act(() => map.fire("rotate"));
+		expect(screen.getByTestId("compass-needle").style.transform).toBe("rotate(-30deg)");
+		fireEvent.click(screen.getByRole("button", { name: "Reset bearing to north" }));
+		expect(map.easeToCalls.at(-1)).toMatchObject({ bearing: 0 });
 	});
 
 	it("exposes an imperative camera handle (zoom, flyTo, resetNorth)", () => {
