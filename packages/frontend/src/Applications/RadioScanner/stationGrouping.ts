@@ -114,6 +114,25 @@ export function upcomingSegments(
 		.slice(0, count);
 }
 
+export type StationStatus = "on-air" | "upcoming" | "offline";
+
+/**
+ * Indicator state for a station-strip button: on-air while any segment is
+ * in-window (which wins even when more items are queued), otherwise upcoming
+ * when a future item is waiting for the station, otherwise offline.
+ */
+export function stationStatus(
+	station: Station,
+	upcoming: MediaItem[],
+	nowMs: number,
+): StationStatus {
+	if (activeSegments(station, nowMs).length > 0) return "on-air";
+	const hasUpcoming = upcoming.some(
+		(item) => stationKey(item) === station.key && toMs(item.start_date) > nowMs,
+	);
+	return hasUpcoming ? "upcoming" : "offline";
+}
+
 /** Every ended item for `station` from the history list, most recent first. */
 export function previousSegments(
 	station: Station,

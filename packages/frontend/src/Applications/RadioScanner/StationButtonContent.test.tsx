@@ -9,25 +9,37 @@ import { StationButtonContent } from "./StationButtonContent";
 
 describe("StationButtonContent", () => {
 	it("renders the station label", () => {
-		const { getByText } = render(<StationButtonContent label="NY ATC" offline={false} />);
+		const { getByText } = render(<StationButtonContent label="NY ATC" status="on-air" />);
 		expect(getByText("NY ATC")).not.toBeNull();
 	});
 
-	it("shows the lit indicator while the station is online", () => {
+	it("shows the lit indicator while the station is on air", () => {
 		const { getByAltText, queryByAltText } = render(
-			<StationButtonContent label="NY ATC" offline={false} />,
+			<StationButtonContent label="NY ATC" status="on-air" />,
 		);
 		const light = getByAltText("On air") as HTMLImageElement;
 		expect(light.src).toContain("light-on");
+		expect(queryByAltText("Offline")).toBeNull();
+		expect(queryByAltText("Upcoming")).toBeNull();
+	});
+
+	it("shows the upcoming indicator while the station only has queued items", () => {
+		const { getByAltText, queryByAltText } = render(
+			<StationButtonContent label="NY ATC" status="upcoming" />,
+		);
+		const light = getByAltText("Upcoming") as HTMLImageElement;
+		expect(light.src).toContain("light-upcoming");
+		expect(queryByAltText("On air")).toBeNull();
 		expect(queryByAltText("Offline")).toBeNull();
 	});
 
 	it("shows the unlit indicator while the station is offline", () => {
 		const { getByAltText, queryByAltText } = render(
-			<StationButtonContent label="NY ATC" offline={true} />,
+			<StationButtonContent label="NY ATC" status="offline" />,
 		);
 		const light = getByAltText("Offline") as HTMLImageElement;
 		expect(light.src).toContain("light-off");
 		expect(queryByAltText("On air")).toBeNull();
+		expect(queryByAltText("Upcoming")).toBeNull();
 	});
 });

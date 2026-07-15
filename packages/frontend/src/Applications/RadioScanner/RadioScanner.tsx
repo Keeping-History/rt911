@@ -56,6 +56,7 @@ import {
     previousSegments,
     sortStations,
     startTimeLabel,
+    stationStatus,
     upcomingSegments,
 } from "./stationGrouping";
 import { StationButtonContent } from "./StationButtonContent";
@@ -74,8 +75,8 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
     const appState = useAppManager(
         (state) =>
             state.System.Manager.Applications.apps[appId]?.data as
-                | Record<string, unknown>
-                | undefined,
+            | Record<string, unknown>
+            | undefined,
     );
 
     // Waveform preferences — persisted under data.settings, distinct from the
@@ -101,9 +102,9 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
             settings.useThemeColors
                 ? null
                 : {
-                        bright: intToHex(settings.colorBright),
-                        dim: intToHex(settings.colorDim),
-                    },
+                    bright: intToHex(settings.colorBright),
+                    dim: intToHex(settings.colorDim),
+                },
         [settings],
     );
 
@@ -337,16 +338,16 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
     const previousList =
         showSchedule && activeStationObj
             ? previousSegments(
-                  activeStationObj,
-                  Array.from(
-                      new Map(
-                          [...mp3History, ...seenItemsRef.current.values()].map(
-                              (i) => [i.id, i],
-                          ),
-                      ).values(),
-                  ),
-                  nowMs,
-              )
+                activeStationObj,
+                Array.from(
+                    new Map(
+                        [...mp3History, ...seenItemsRef.current.values()].map(
+                            (i) => [i.id, i],
+                        ),
+                    ).values(),
+                ),
+                nowMs,
+            )
             : [];
 
     // Pinned stations first, then online stations, then offline ones.
@@ -524,7 +525,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                             onToggleSolo={toggleSoloItem}
                                         />
                                         {showSchedule && (
-                                        <div style={{ display: "flex", flexDirection: "row", width: "100%", minHeight: "30%", maxHeight: "60%", gap: "var(--window-control-size)" }}>
+                                            <div style={{ display: "flex", flexDirection: "row", width: "100%", minHeight: "30%", maxHeight: "60%", gap: "var(--window-control-size)" }}>
                                                 <div
                                                     className={
                                                         styles.rsScheduleSection
@@ -537,101 +538,100 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                                     >
                                                         Coming Up
                                                     </p>
-                                            {upcomingList.length > 0 && (
-                                                    <ul
-                                                        className={
-                                                            styles.rsScheduleList
-                                                        }
-                                                    >
-                                                        {upcomingList.map(
-                                                            (item) => (
-                                                                <li
-                                                                    key={
-                                                                        item.id
-                                                                    }
-                                                                    className={
-                                                                        styles.rsScheduleItem
-                                                                    }
-                                                                >
-																	<img src={ ClassicyIcons.controlPanels.soundManager.sound33} alt={item.title} />
-                                                                    <span
+                                                        <ul
+                                                            className={
+                                                                styles.rsScheduleList
+                                                            }
+                                                        >
+                                                        {upcomingList.length > 0 ?
+                                                            upcomingList.map(
+                                                                (item) => (
+                                                                    <li
+                                                                        key={
+                                                                            item.id
+                                                                        }
                                                                         className={
-                                                                            styles.rsCountdown
+                                                                            styles.rsScheduleItem
                                                                         }
                                                                     >
-                                                                        {countdownLabel(
-                                                                            item,
-                                                                            nowMs,
-                                                                        )}
-                                                                    </span>
-                                                                    {item.full_title ||
-                                                                        item.title}
-                                                                </li>
-                                                            ),
-                                                        )}
-                                                    </ul>
-                                            )}
-											</div>
-                                            {previousList.length > 0 && (
-                                                <div
-                                                    className={
-                                                        styles.rsScheduleSection
-                                                    }
-                                                >
-                                                    <p
-                                                        className={
-                                                            styles.rsScheduleLabel
-                                                        }
-                                                    >
-                                                        Previous
-                                                    </p>
-                                                    <ul
-                                                        className={
-                                                            styles.rsScheduleList
-                                                        }
-                                                    >
-                                                        {previousList.map(
-                                                            (item) => (
-                                                                <li
-                                                                    key={
-                                                                        item.id
-                                                                    }
-                                                                    className={
-                                                                        styles.rsScheduleItem
-                                                                    }
-                                                                >
-																	<img src={ ClassicyIcons.controlPanels.soundManager.sound33} alt={item.title} />
-                                                                    <span
-                                                                        className={
-                                                                            styles.rsCountdown
-                                                                        }
-                                                                    >
-                                                                        {startTimeLabel(
-                                                                            item,
-                                                                            tzOffset,
-                                                                        )}
-                                                                    </span>
-                                                                    <button
-                                                                        type="button"
-                                                                        className={
-                                                                            styles.rsScheduleBtn
-                                                                        }
-                                                                        onMouseUp={() =>
-                                                                            setFocusedItem(
+                                                                        <img src={ClassicyIcons.controlPanels.soundManager.sound33} alt={item.title} />
+                                                                        <span
+                                                                            className={
+                                                                                styles.rsCountdown
+                                                                            }
+                                                                        >
+                                                                            {countdownLabel(
                                                                                 item,
-                                                                            )
-                                                                        }
-                                                                    >
+                                                                                nowMs,
+                                                                            )}
+                                                                        </span>
                                                                         {item.full_title ||
                                                                             item.title}
-                                                                    </button>
-                                                                </li>
-                                                            ),
-                                                        )}
-                                                    </ul>
+                                                                    </li>
+                                                                ),
+                                                            ) : <li className={styles.rsScheduleItem}>No upcoming items</li>}
+                                                        </ul>
                                                 </div>
-                                            )}
-                                        </div>
+                                                {previousList.length > 0 && (
+                                                    <div
+                                                        className={
+                                                            styles.rsScheduleSection
+                                                        }
+                                                    >
+                                                        <p
+                                                            className={
+                                                                styles.rsScheduleLabel
+                                                            }
+                                                        >
+                                                            Previous
+                                                        </p>
+                                                        <ul
+                                                            className={
+                                                                styles.rsScheduleList
+                                                            }
+                                                        >
+                                                            {previousList.map(
+                                                                (item) => (
+                                                                    <li
+                                                                        key={
+                                                                            item.id
+                                                                        }
+                                                                        className={
+                                                                            styles.rsScheduleItem
+                                                                        }
+                                                                    >
+                                                                        <img src={ClassicyIcons.controlPanels.soundManager.sound33} alt={item.title} />
+                                                                        <span
+                                                                            className={
+                                                                                styles.rsCountdown
+                                                                            }
+                                                                        >
+                                                                            {startTimeLabel(
+                                                                                item,
+                                                                                tzOffset,
+                                                                            )}
+                                                                        </span>
+                                                                        <button
+                                                                            type="button"
+                                                                            className={
+                                                                                styles.rsScheduleBtn
+                                                                            }
+                                                                            onMouseUp={() =>
+                                                                                setFocusedItem(
+                                                                                    item,
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            {item.full_title ||
+                                                                                item.title}
+                                                                        </button>
+                                                                    </li>
+                                                                ),
+                                                            )}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                     <StationPlayer
@@ -667,8 +667,6 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                         <div className={styles.rsStationStrip}>
                             {sortedStations.map((station) => {
                                 const isActive = station.key === activeStation;
-                                const isOnline =
-                                    activeSegments(station, nowMs).length > 0;
                                 return (
                                     <ClassicyButton
                                         key={station.key}
@@ -680,7 +678,11 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                     >
                                         <StationButtonContent
                                             label={station.label}
-                                            offline={!isOnline}
+                                            status={stationStatus(
+                                                station,
+                                                upcomingItems,
+                                                nowMs,
+                                            )}
                                         />
                                     </ClassicyButton>
                                 );

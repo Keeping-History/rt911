@@ -11,6 +11,7 @@ import {
 	sortStations,
 	startTimeLabel,
 	type Station,
+	stationStatus,
 	upcomingSegments,
 } from "./stationGrouping";
 
@@ -196,6 +197,40 @@ describe("upcomingSegments", () => {
 
 	it("returns empty for empty upcoming list", () => {
 		expect(upcomingSegments(station("ATC"), [], new Date("2001-09-11T12:00:00Z").getTime())).toEqual([]);
+	});
+});
+
+describe("stationStatus", () => {
+	const t = (s: string) => new Date(s).getTime();
+	const station = (key: string, items: MediaItem[] = []): Station => ({ key, label: key, items });
+	const now = t("2001-09-11T12:45:00Z");
+
+	it("is on-air while the station has an in-window segment", () => {
+		const s = station("ATC", [
+			item({ id: 1, source: "ATC", start_date: "2001-09-11T12:40:00Z", end_date: "2001-09-11T12:50:00Z" }),
+		]);
+		expect(stationStatus(s, [], now)).toBe("on-air");
+	});
+
+	it("is upcoming when nothing is playing but a future item is queued for the station", () => {
+		const upcoming = [item({ id: 1, source: "ATC", start_date: "2001-09-11T13:00:00Z" })];
+		expect(stationStatus(station("ATC"), upcoming, now)).toBe("upcoming");
+	});
+
+	it("prefers on-air over upcoming when both apply", () => {
+		const s = station("ATC", [
+			item({ id: 1, source: "ATC", start_date: "2001-09-11T12:40:00Z", end_date: "2001-09-11T12:50:00Z" }),
+		]);
+		const upcoming = [item({ id: 2, source: "ATC", start_date: "2001-09-11T13:00:00Z" })];
+		expect(stationStatus(s, upcoming, now)).toBe("on-air");
+	});
+
+	it("is offline when the only queued items belong to other stations or the past", () => {
+		const upcoming = [
+			item({ id: 1, source: "Rutgers", start_date: "2001-09-11T13:00:00Z" }),
+			item({ id: 2, source: "ATC", start_date: "2001-09-11T12:40:00Z" }),
+		];
+		expect(stationStatus(station("ATC"), upcoming, now)).toBe("offline");
 	});
 });
 

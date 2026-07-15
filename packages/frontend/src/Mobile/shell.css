@@ -103,7 +103,7 @@
 	width: calc(var(--u) * 9);
 	height: calc(var(--u) * 11);
 	background: linear-gradient(to bottom, #9aa4ad 0%, #4c565f 100%);
-	clip-path: polygon(0 0, 35% 0, 35% 100%, 0 100%, 65% 0, 100% 0, 100% 100%, 65% 100%);
+	clip-path: polygon(15% 15%, 15% 85%, 40% 85%, 40% 15%, 60% 15%, 85% 15%, 85% 85%, 60% 85%, 60% 15%);
 }
 
 /* ── Screen body + slide-in ── */
@@ -195,7 +195,7 @@
 	/* A fixed share of the screen column (not aspect-ratio): a full-width 4:3
 	   box eats the whole body and pushes the Now Playing caption strip out of
 	   view. min-height:0 lets flex actually shrink below the content size. */
-	flex: 0 0 62%;
+	flex: 0 0 90%;
 	min-height: 0;
 	width: 100%;
 	background: #000;
