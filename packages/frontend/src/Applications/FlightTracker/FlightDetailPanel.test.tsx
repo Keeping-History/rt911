@@ -105,6 +105,47 @@ describe("FlightDetailPanel", () => {
 		expect(screen.getByText("8:45 AM")).toBeTruthy();
 	});
 
+	describe("position and leg-estimate rows (issue #227)", () => {
+		it("shows the live position with hemisphere letters", () => {
+			render(
+				<FlightDetailPanel selected={sel} track={baseTrack} loading={false} error={null}
+					nowMs={PRE_IMPACT} livePos={{ ...sel, lat: 40.7128, lon: -74.006 }} />,
+			);
+			expect(screen.getByText("Position")).toBeTruthy();
+			expect(screen.getByText("40.71° N, 74.01° W")).toBeTruthy();
+		});
+
+		it("renders from-origin and to-dest rows from the estimates", () => {
+			render(
+				<FlightDetailPanel selected={sel} track={baseTrack} loading={false} error={null}
+					nowMs={PRE_IMPACT} livePos={sel}
+					estimates={{
+						fromOrigin: { distanceNm: 152.4, elapsedMs: 31 * 60_000 },
+						toDest: { distanceNm: 2010.2, etaMs: 4.5 * 3_600_000 },
+					}} />,
+			);
+			expect(screen.getByText("From BOS")).toBeTruthy();
+			expect(screen.getByText("152 nm · 31 m")).toBeTruthy();
+			expect(screen.getByText("To LAX")).toBeTruthy();
+			expect(screen.getByText("2010 nm · 4 h 30 m (est.)")).toBeTruthy();
+		});
+
+		it("shows distance without an ETA when speed is unknown; hides rows for null estimates", () => {
+			const { rerender } = render(
+				<FlightDetailPanel selected={sel} track={baseTrack} loading={false} error={null}
+					nowMs={PRE_IMPACT}
+					estimates={{ fromOrigin: null, toDest: { distanceNm: 500, etaMs: null } }} />,
+			);
+			expect(screen.queryByText("From BOS")).toBeNull();
+			expect(screen.getByText("500 nm")).toBeTruthy();
+			rerender(
+				<FlightDetailPanel selected={sel} track={baseTrack} loading={false} error={null}
+					nowMs={PRE_IMPACT} estimates={{ fromOrigin: null, toDest: null }} />,
+			);
+			expect(screen.queryByText("To LAX")).toBeNull();
+		});
+	});
+
 	describe("multi-selection (issue #225)", () => {
 		const other: FlightPosition = { ...sel, id: 2, flight: "DL404" };
 

@@ -2,7 +2,7 @@
 // airports.json is GENERATED — see scripts/build-airports.md; do not hand-edit.
 import airportData from "./airports.json";
 
-const AIRPORTS = airportData as Record<string, [number, number]>;
+const AIRPORTS = airportData as unknown as Record<string, [number, number]>;
 
 /** Coordinates for an IATA code, or null when unknown/absent. */
 export function airportCoords(iata: string | null | undefined): [number, number] | null {

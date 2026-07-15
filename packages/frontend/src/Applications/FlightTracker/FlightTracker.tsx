@@ -39,6 +39,7 @@ import { MapControls, type SelectMode } from "./MapControls";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 import { useAltitudeProfile } from "./useAltitudeProfile";
 import { curtainToGeoJSON } from "./flightAltitude";
+import { legEstimates } from "./flightEta";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
 	type FlightMapSettings,
@@ -521,6 +522,47 @@ export const FlightTracker: FC = () => {
 	const livePos = selected
 		? (flightPositions.find((p) => p.flight === selected.flight) ?? selected)
 		: null;
+	// Previous minute-bucket sample of the selected flight, for deriving
+	// groundspeed (issue #227) — the stream carries no speed field.
+	const prevSampleRef = useRef<{
+		flight: string;
+		prev: FlightPosition | null;
+		cur: FlightPosition;
+	} | null>(null);
+	useEffect(() => {
+		if (!selected) {
+			prevSampleRef.current = null;
+			return;
+		}
+		const live = flightPositions.find((p) => p.flight === selected.flight);
+		if (!live) return;
+		const held = prevSampleRef.current;
+		if (!held || held.flight !== live.flight) {
+			prevSampleRef.current = { flight: live.flight, prev: null, cur: live };
+		} else if (live.start_date !== held.cur.start_date) {
+			prevSampleRef.current = { flight: live.flight, prev: held.cur, cur: live };
+		}
+	}, [flightPositions, selected]);
+	// Leg estimates for the detail pane (issue #227): distance/time from origin
+	// and estimated to destination, speed derived from the tracked prev sample.
+	const estimates = useMemo(
+		() =>
+			livePos && track
+				? legEstimates({
+						live: livePos,
+						prev:
+							prevSampleRef.current?.flight === livePos.flight
+								? prevSampleRef.current.prev
+								: null,
+						origin: track.origin,
+						dest: track.scheduled_dest,
+						wheelsOffUtc: track.wheels_off_utc,
+						wheelsOnUtc: track.wheels_on_utc,
+						nowMs,
+					})
+				: null,
+		[livePos, track, nowMs],
+	);
 	const headingDeg = useMemo(
 		() =>
 			livePos && track?.geometry
@@ -881,6 +923,8 @@ export const FlightTracker: FC = () => {
 								nowMs={nowMs}
 								headingDeg={headingDeg}
 								tzOffset={tzOffset}
+								livePos={livePos}
+								estimates={estimates}
 								selectionOptions={multiSelected}
 								onPickFlight={(flight) => {
 									const i = multiSelected.findIndex((p) => p.flight === flight);

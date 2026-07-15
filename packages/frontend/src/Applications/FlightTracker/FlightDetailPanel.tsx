@@ -9,6 +9,7 @@ import {
 	ClassicyPopUpMenu,
 } from "classicy";
 import { isNotable } from "./notableFlights";
+import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
 
 interface FlightDetailPanelProps {
 	selected: FlightPosition | null;
@@ -24,6 +25,11 @@ interface FlightDetailPanelProps {
 	// Display-timezone offset in hours (the menu-bar clock's tz) for rendering
 	// wheels times as local times.
 	tzOffset?: number;
+	// Live fix + leg estimates (issue #227). livePos is the current streamed
+	// sample (selected is a click-time snapshot); estimates gate their own
+	// rows (null = row hidden).
+	livePos?: FlightPosition | null;
+	estimates?: LegEstimates | null;
 	// Area-selection support (issue #225): with >1 entries a dropdown toggles
 	// between the selected flights and Save as Filter persists the set.
 	selectionOptions?: FlightPosition[];
@@ -42,6 +48,7 @@ function formatDisplayTime(iso: string, tzOffset: number): string {
 
 export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 	selected, track, loading, error, nowMs, headingDeg = null, tzOffset = -4,
+	livePos = null, estimates = null,
 	selectionOptions = [], onPickFlight, onSaveAsFilter,
 }) => {
 	if (!selected) {
@@ -100,6 +107,21 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				<dt>Altitude</dt><dd>{selected.alt_ft.toLocaleString()} ft</dd>
 				{selected.phase && (<><dt>Phase</dt><dd>{selected.phase}</dd></>)}
 				{headingDeg != null && (<><dt>Heading</dt><dd>{`${Math.round(headingDeg) % 360}°`}</dd></>)}
+				{livePos && (<><dt>Position</dt><dd>{formatCoords(livePos.lat, livePos.lon)}</dd></>)}
+				{estimates?.fromOrigin && (
+					<><dt>{`From ${track?.origin ?? "origin"}`}</dt><dd>
+						{`${Math.round(estimates.fromOrigin.distanceNm)} nm · ${formatDurationMs(estimates.fromOrigin.elapsedMs)}`}
+					</dd></>
+				)}
+				{estimates?.toDest && (
+					<><dt>{`To ${track?.scheduled_dest ?? "dest."}`}</dt><dd>
+						{`${Math.round(estimates.toDest.distanceNm)} nm${
+							estimates.toDest.etaMs != null
+								? ` · ${formatDurationMs(estimates.toDest.etaMs)} (est.)`
+								: ""
+						}`}
+					</dd></>
+				)}
 				{route && (<><dt>Route</dt><dd>{route}</dd></>)}
 				{track?.wheels_off_utc && (
 					<><dt>Wheels Up</dt><dd>{formatDisplayTime(track.wheels_off_utc, tzOffset)}</dd></>
