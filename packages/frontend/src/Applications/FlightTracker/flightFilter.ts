@@ -31,6 +31,12 @@ export interface RouteIndexRow {
 	tail_number: string | null;
 	origin: string | null;
 	scheduled_dest: string | null;
+	// Drives the per-airframe 3D model lookup (aircraftModels.ts); absent on
+	// rows fetched before this field shipped, which reads as "generic".
+	aircraft_type?: string | null;
+	// Wheels-down UTC instant — the landing clamp for flightLanding.ts. Null
+	// for the four crashed notables and any BTS row without arrival data.
+	wheels_on_utc?: string | null;
 }
 
 /** Keyed by routeKey(flight, flight_date). */

@@ -40,6 +40,7 @@ import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 import { useAltitudeProfile } from "./useAltitudeProfile";
 import { curtainToGeoJSON } from "./flightAltitude";
 import { legEstimates } from "./flightEta";
+import { familyForAircraftType } from "./aircraftModels";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
 	type FlightMapSettings,
@@ -58,6 +59,8 @@ import {
 	routeRowFor,
 	visibleFlightSet,
 } from "./flightFilter";
+import { dropLandedPositions, landingClockOf } from "./flightLanding";
+import { useNotableCrashSites } from "./useNotableCrashSites";
 import { useRouteIndex } from "./useRouteIndex";
 import { groundStopStatus } from "./groundStop";
 import { insertReplaySamples, pruneReplay, type ReplayBuffer } from "./flightReplay";
@@ -196,6 +199,21 @@ export const FlightTracker: FC = () => {
 			flightTrackerSetMapSettings({ ...settings, cluster: !settings.cluster }),
 		);
 	}, [settings, desktopEventDispatch]);
+	// The 3D button mirrors the CAMERA, not just its own clicks: with 3D on,
+	// a right-drag can flatten the z-axis manually — when the map crosses back
+	// to flat, un-press (and un-persist) the toggle to match. The pitched=true
+	// direction only ever originates from the toggle itself (maxPitch is 0
+	// otherwise), so no dispatch is needed there.
+	const onPitchedChange = useCallback(
+		(pitched: boolean) => {
+			if (!pitched && settings.threeD) {
+				desktopEventDispatch(
+					flightTrackerSetMapSettings({ ...settings, threeD: false }),
+				);
+			}
+		},
+		[settings, desktopEventDispatch],
+	);
 
 	const {
 		flightPositions,
@@ -208,24 +226,61 @@ export const FlightTracker: FC = () => {
 		clearFlightsHistory,
 	} = useContext(MediaStreamContext);
 
+	// Read-only: this app never mutates the clock (only TimeMachine does). The
+	// animation loop needs the true-UTC instant + play state; virtualUtcMs strips
+	// the display tz back off (same conversion the MediaStreamProvider uses).
+	const { localDate, tzOffset, paused } = useClassicyDateTime({ tick: true });
+	const nowMs = virtualUtcMs(localDate, tzOffset);
+
+	// The four notables persist after their crash instants: whenever the clock
+	// is past a crash, that flight's final samples are re-injected into the
+	// positions pipeline, so AA11/UA175/AA77/UA93 hold frozen at the crash site
+	// no matter how the stream's retention or a seek has moved things around.
+	// (Duplicates of still-streamed samples are harmless: updateMotion ignores
+	// same-timestamp re-feeds.)
+	const { samples: crashSamples, crashMs } = useNotableCrashSites();
+	const allPositions = useMemo(() => {
+		const crashed = crashSamples.filter(
+			(s) => (crashMs.get(s.flight) ?? Infinity) <= nowMs,
+		);
+		return crashed.length ? [...flightPositions, ...crashed] : flightPositions;
+	}, [flightPositions, crashSamples, crashMs, nowMs]);
+
 	// Bulk route metadata (tail/origin/dest) for the airborne set — the streamed
 	// position only carries flight # and carrier (see flightFilter.ts).
-	const routeIndex = useRouteIndex(flightPositions);
-	// null = filter inactive. Feeds the map's ghost skip-set, the positions
+	const routeIndex = useRouteIndex(allPositions);
+	// Airframe family per flight (3D model choice) via the route index's
+	// aircraft_type — same flight|date join (and prevUtcDay fallback) as the
+	// filter criteria. Unknown flights render the generic model.
+	const aircraftFamilyOf = useCallback(
+		(flight: string, startDate: string) =>
+			familyForAircraftType(
+				routeRowFor(routeIndex, { flight, start_date: startDate } as FlightPosition)
+					?.aircraft_type,
+			),
+		[routeIndex],
+	);
+	// null = filter inactive. Feeds the map's replay-trail skip-set, the positions
 	// filter below, and the status bar's "filtered" cue.
 	const visibleFlights = useMemo(
-		() => visibleFlightSet(flightPositions, routeIndex, filterSettings),
-		[flightPositions, routeIndex, filterSettings],
+		() => visibleFlightSet(allPositions, routeIndex, filterSettings),
+		[allPositions, routeIndex, filterSettings],
 	);
 	// Upstream filter for live pins/trails: updateMotion prunes flights that
 	// leave the positions set, so hidden flights disappear (and reappear on
-	// clear) with no map-side special casing.
-	const filteredPositions = useMemo(
-		() =>
-			visibleFlights
-				? flightPositions.filter((p) => visibleFlights.has(p.flight))
-				: flightPositions,
-		[flightPositions, visibleFlights],
+	// clear) with no map-side special casing. Landed non-notables drop here
+	// too, LANDED_LINGER_MS after wheels-down (flightLanding.ts).
+	const filteredPositions = useMemo(() => {
+		const visible = visibleFlights
+			? allPositions.filter((p) => visibleFlights.has(p.flight))
+			: allPositions;
+		return dropLandedPositions(visible, routeIndex, nowMs);
+	}, [allPositions, visibleFlights, routeIndex, nowMs]);
+	// Wheels-down/crash instants for the airborne set: the map's dead-reckoning
+	// clamp (a landed flight freezes at its track end instead of overshooting).
+	const landingClock = useMemo(
+		() => landingClockOf(allPositions, routeIndex, crashMs),
+		[allPositions, routeIndex, crashMs],
 	);
 
 	// Option lists rebuild from whatever is airborne right now (accepted churn);
@@ -254,12 +309,6 @@ export const FlightTracker: FC = () => {
 		() => popUpOptions(airborneRows.map((r) => r?.scheduled_dest), filterSettings.dest),
 		[airborneRows, filterSettings.dest],
 	);
-
-	// Read-only: this app never mutates the clock (only TimeMachine does). The
-	// animation loop needs the true-UTC instant + play state; virtualUtcMs strips
-	// the display tz back off (same conversion the MediaStreamProvider uses).
-	const { localDate, tzOffset, paused } = useClassicyDateTime({ tick: true });
-	const nowMs = virtualUtcMs(localDate, tzOffset);
 
 	// FAA ground stop replay state (issue #186): the whole status bar turns red
 	// while the order is in effect, then shows a one-hour "lifted" notice.
@@ -363,7 +412,7 @@ export const FlightTracker: FC = () => {
 		[nowMs, windowMs],
 	);
 
-	// Re-anchor at the current playhead so a speed change never jumps the ghosts,
+	// Re-anchor at the current playhead so a speed change never jumps the replay trails,
 	// and persist the new speed as a preference.
 	const setLoopSpeed = useCallback(
 		(speed: LoopSpeed) => {
@@ -870,18 +919,24 @@ export const FlightTracker: FC = () => {
 						onToggleThreeD={toggleThreeD}
 						onToggleCluster={toggleCluster}
 						onSetSelectMode={setSelectMode}
+						mapStyle={settings.mapStyle}
+						darkMap={settings.darkMap}
 						onPinpoint={(center, zoom) => mapApi.current?.flyTo(center, zoom)}
+						onSetMapStyle={setMapStyle}
+						onToggleDarkMap={toggleDarkMap}
 					/>
 					<div className={styles.body}>
 						<div className={styles.map}>
 							<FlightMap
 								ref={mapApi}
 								positions={filteredPositions}
+							landingClock={landingClock}
 								seedPositions={flightsSeed}
 								visibleFlights={visibleFlights}
 								basemapUrls={BASEMAP_URLS}
 								trackGeoJSON={trackGeoJSON}
 								curtainGeoJSON={curtainGeoJSON}
+								trackProfile={profile}
 								nowMs={nowMs}
 								playing={!paused}
 								mapStyle={settings.mapStyle}
@@ -906,6 +961,8 @@ export const FlightTracker: FC = () => {
 								onSelectFlight={onSelectFlight}
 								selectMode={selectMode}
 								onAreaSelect={onAreaSelect}
+								onPitchedChange={onPitchedChange}
+								aircraftFamilyOf={aircraftFamilyOf}
 								onClearSelection={() => setMultiSelected([])}
 							/>
 						</div>

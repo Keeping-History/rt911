@@ -29,6 +29,11 @@ const TRAIL_COLORS: Record<BasemapStyleId, Record<"light" | "dark", string>> = {
 	satellite: { light: "#f2f2f2", dark: "#cfd8e3" },
 };
 export const TRACK_LINE_COLOR = "#b22222";
+// While pitched, the elevated track tube carries TRACK_LINE_COLOR and the
+// ground line drops to 50% brightness (each RGB channel halved) so it reads
+// as the tube's shadow. Flat views keep the full color — there the ground
+// line IS the track.
+export const TRACK_SHADOW_COLOR = "#591111";
 
 export function trailColor(mapStyle: BasemapStyleId, darkMap: boolean): string {
 	return TRAIL_COLORS[mapStyle][effectiveTone(mapStyle, darkMap)];
@@ -82,15 +87,23 @@ export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void
 	);
 	// Live pin colors are NOT set here: the plane layers are symbol layers whose
 	// icons bake the color in (see flightIcons + FlightMap's installPlaneIcons).
-	// The loop-mode ghost layers stay plain circles, so they DO recolor here.
-	map.setPaintProperty("ghost-dots", "circle-color", colors.pinColor);
-	map.setPaintProperty("ghost-notable", "circle-color", colors.notablePinColor);
+	// The loop-mode replay-trail layers stay plain circles, so they DO recolor here.
+	map.setPaintProperty("replay-trail-dots", "circle-color", colors.pinColor);
+	map.setPaintProperty("replay-trail-notable", "circle-color", colors.notablePinColor);
 	// Cluster blobs follow the pin color too (the clustered plane icons share
 	// the baked-in plane-icon image, so they recolor via installPlaneIcons).
 	map.setPaintProperty("cluster-circles", "circle-color", colors.pinColor);
-	// 3D plane slabs tint per notability from the same pin pair.
-	map.setPaintProperty("planes-3d", "fill-extrusion-color", [
+	// 3D plane slabs and replay-trail pucks tint per notability from the same pin
+	// pair; the floating trail ribbons follow the flat trails' themed color.
+	const notableCase = [
 		"case", ["==", ["get", "notable"], true],
 		colors.notablePinColor, colors.pinColor,
-	]);
+	];
+	map.setPaintProperty("planes-3d", "fill-extrusion-color", notableCase);
+	map.setPaintProperty("replay-trails-3d", "fill-extrusion-color", notableCase);
+	map.setPaintProperty(
+		"trails-3d",
+		"fill-extrusion-color",
+		trailColor(colors.mapStyle, colors.darkMap),
+	);
 }

@@ -41,7 +41,7 @@ describe("audioBlocked store", () => {
 	it("ignores clearing a token that was never marked", () => {
 		const cb = vi.fn();
 		const unsubscribe = subscribeAudioBlocked(cb);
-		clearAudioBlocked("ghost");
+		clearAudioBlocked("unknown");
 		expect(cb).not.toHaveBeenCalled();
 		expect(isAudioBlocked()).toBe(false);
 		unsubscribe();

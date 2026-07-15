@@ -113,14 +113,14 @@ export interface SkySpec {
 }
 
 const ATMOSPHERE_BLEND: ExpressionSpecification = [
-	"interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0,
+	"interpolate", ["exponential", 2], ["zoom"], 0, 1, 3, .5, 8, 0,
 ];
 
 const SKY_LIGHT: SkySpec = {
 	"sky-color": "#94E3FE",
 	"horizon-color": "#00C7FC",
-	"sky-horizon-blend": 0.5,
-	"horizon-fog-blend": 0.5,
+	"sky-horizon-blend": 1,
+	"horizon-fog-blend": 1,
 	"atmosphere-blend": ATMOSPHERE_BLEND,
 };
 const SKY_DARK: SkySpec = { ...SKY_LIGHT, "sky-color": "#0a0a14", "horizon-color": "#1a1a2e" };

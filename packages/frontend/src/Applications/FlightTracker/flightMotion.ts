@@ -22,8 +22,10 @@ export interface FlightMotion {
 	prevT: number; // prev sample UTC ms
 	curT: number; // cur sample UTC ms
 	item: FlightPosition; // latest sample — supplies point properties
-	// Last TRAIL_POINTS real positions as [lon,lat], oldest → newest.
-	trail: [number, number][];
+	// Last TRAIL_POINTS real positions as [lon, lat, alt_ft], oldest → newest.
+	// The third element rides along for the 3D trail ribbons; GeoJSON allows
+	// 3-element positions, and flat line layers simply ignore it.
+	trail: [number, number, number][];
 	// Direction of travel in degrees clockwise from north. Updated only when a
 	// new sample actually moves the flight, so a static flight holds its last
 	// heading instead of snapping to north. 0 until first movement.
@@ -67,7 +69,7 @@ export function updateMotion(
 				prevT: t,
 				curT: t,
 				item: p,
-				trail: [[p.lon, p.lat]],
+				trail: [[p.lon, p.lat, p.alt_ft]],
 				headingDeg: 0,
 			});
 		} else if (t > m.curT) {
@@ -76,7 +78,7 @@ export function updateMotion(
 			m.cur = { lat: p.lat, lon: p.lon };
 			m.curT = t;
 			m.item = p;
-			m.trail.push([p.lon, p.lat]);
+			m.trail.push([p.lon, p.lat, p.alt_ft]);
 			while (m.trail.length > TRAIL_POINTS * TRAIL_MULTIPLIER_MAX) m.trail.shift();
 			if (m.cur.lat !== m.prev.lat || m.cur.lon !== m.prev.lon) {
 				m.headingDeg = bearingDeg(m.prev, m.cur);
@@ -132,15 +134,29 @@ export function extrapolate(m: FlightMotion, now: number): { lat: number; lon: n
 	return { lat: m.cur.lat + vlat * dt, lon: m.cur.lon + vlon * dt };
 }
 
+/** flight → wheels-down/crash UTC ms (flightLanding.landingClockOf). */
+export type LandingClock = Map<string, number>;
+
+/**
+ * A flight's motion clock: the shared `now`, clamped to its landing/crash
+ * instant. Every builder that dead-reckons uses this, so a landed flight
+ * freezes exactly where its track ends instead of sailing past the runway.
+ */
+export function motionNow(m: FlightMotion, now: number, landing?: LandingClock): number {
+	const landedMs = landing?.get(m.item.flight);
+	return landedMs !== undefined && landedMs < now ? landedMs : now;
+}
+
 // Point FC of extrapolated heads — same shape flightsToGeoJSON emits, so the
 // existing flights-dots / flights-notable layers consume it unchanged.
 export function motionPointsToGeoJSON(
 	buffer: MotionBuffer,
 	now: number,
+	landing?: LandingClock,
 ): FlightFeatureCollection {
 	const features: FlightFeatureCollection["features"] = [];
 	for (const m of buffer.values()) {
-		const head = extrapolate(m, now);
+		const head = extrapolate(m, motionNow(m, now, landing));
 		features.push({
 			type: "Feature",
 			id: m.item.id,
@@ -162,7 +178,7 @@ export interface TrailFeatureCollection {
 	type: "FeatureCollection";
 	features: Array<{
 		type: "Feature";
-		geometry: { type: "LineString"; coordinates: [number, number][] };
+		geometry: { type: "LineString"; coordinates: ([number, number] | [number, number, number])[] };
 		properties: { notable: boolean };
 	}>;
 }
@@ -176,17 +192,18 @@ export function motionTrailsToGeoJSON(
 	buffer: MotionBuffer,
 	now: number,
 	displayPoints: number = TRAIL_POINTS,
+	landing?: LandingClock,
 ): TrailFeatureCollection {
 	const features: TrailFeatureCollection["features"] = [];
 	if (displayPoints <= 1) return { type: "FeatureCollection", features }; // tails off
 	for (const m of buffer.values()) {
 		if (m.trail.length < 2) continue;
-		const head = extrapolate(m, now);
+		const head = extrapolate(m, motionNow(m, now, landing));
 		features.push({
 			type: "Feature",
 			geometry: {
 				type: "LineString",
-				coordinates: [...m.trail.slice(-displayPoints), [head.lon, head.lat]],
+				coordinates: [...m.trail.slice(-displayPoints), [head.lon, head.lat, m.item.alt_ft]],
 			},
 			properties: { notable: isNotable(m.item.flight) },
 		});

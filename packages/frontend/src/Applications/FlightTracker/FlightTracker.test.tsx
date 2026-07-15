@@ -754,6 +754,22 @@ describe("FlightTracker", () => {
 			expect(screen.getByText("Filter…")).toBeTruthy();
 		});
 
+		it("a manual camera flatten un-persists the 3D toggle (issue #223)", () => {
+			mockAppData.current = { mapSettings: { threeD: true } };
+			renderWithContext({ connected: true });
+			const onPitchedChange = mapProps[mapProps.length - 1].onPitchedChange as (p: boolean) => void;
+			// Right-dragging the z-axis flat while 3D is on syncs the toggle off…
+			act(() => onPitchedChange(false));
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetMapSettings",
+				mapSettings: expect.objectContaining({ threeD: false }),
+			});
+			// …but re-pitching (only reachable via the toggle itself) dispatches nothing.
+			dispatchMock.mockClear();
+			act(() => onPitchedChange(true));
+			expect(dispatchMock).not.toHaveBeenCalled();
+		});
+
 		it("area select fills the detail dropdown; Save as Filter persists the list (issue #225)", () => {
 			vi.stubGlobal(
 				"fetch",

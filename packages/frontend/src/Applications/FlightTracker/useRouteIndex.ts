@@ -27,7 +27,7 @@ export function routeIndexUrl(flightDate: string, page: number): string {
 		"filter[flight_date][_eq]": flightDate,
 		// flight_tracks has no readable carrier column; carrier filtering uses
 		// the streamed position instead (see flightFilter.matchesFilter).
-		fields: "flight,flight_date,tail_number,origin,scheduled_dest",
+		fields: "flight,flight_date,tail_number,origin,scheduled_dest,aircraft_type,wheels_on_utc",
 		limit: String(ROUTE_INDEX_PAGE_LIMIT),
 		page: String(page),
 	});
@@ -62,6 +62,8 @@ async function loadDate(date: string): Promise<void> {
 					tail_number: r.tail_number ?? null,
 					origin: r.origin ?? null,
 					scheduled_dest: r.scheduled_dest ?? null,
+					aircraft_type: r.aircraft_type ?? null,
+					wheels_on_utc: r.wheels_on_utc ?? null,
 				});
 			}
 			if (json.data.length < ROUTE_INDEX_PAGE_LIMIT) break;
@@ -105,7 +107,15 @@ export function useRouteIndex(positions: FlightPosition[]): RouteIndex {
 	useEffect(() => {
 		const listener = () => setVersion((v) => v + 1);
 		listeners.add(listener);
-		if (datesKey) for (const date of datesKey.split(",")) void loadDate(date);
+		// Dates load in SERIES: concurrent same-path requests to api-beta can
+		// come back with their response bodies mixed by the proxy layer (see
+		// useNotableCrashSites.loadCrashSites) — a poisoned date would cache
+		// another date's rows permanently.
+		if (datesKey) {
+			void (async () => {
+				for (const date of datesKey.split(",")) await loadDate(date);
+			})();
+		}
 		return () => {
 			listeners.delete(listener);
 		};

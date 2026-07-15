@@ -6,6 +6,7 @@ import {
 	TRAIL_MULTIPLIER_MAX,
 	TRAIL_POINTS,
 	extrapolate,
+	motionNow,
 	motionPointsToGeoJSON,
 	motionTrailsToGeoJSON,
 	bearingDeg,
@@ -34,10 +35,10 @@ describe("updateMotion", () => {
 		expect(m.prev).toEqual(m.cur);
 		expect(m.curT).toBe(T0);
 		expect(m.item.id).toBe(10);
-		expect(m.trail).toEqual([[-74, 40]]);
+		expect(m.trail).toEqual([[-74, 40, 30000]]);
 	});
 
-	it("shifts cur→prev on a newer sample and appends [lon,lat] to the trail", () => {
+	it("shifts cur→prev on a newer sample and appends [lon,lat,alt] to the trail", () => {
 		const buf: MotionBuffer = new Map();
 		updateMotion(buf, [sampleAt(0, -74)]);
 		updateMotion(buf, [sampleAt(1, -73)]);
@@ -47,8 +48,8 @@ describe("updateMotion", () => {
 		expect(m.prevT).toBe(T0);
 		expect(m.curT).toBe(T1);
 		expect(m.trail).toEqual([
-			[-74, 40],
-			[-73, 40],
+			[-74, 40, 30000],
+			[-73, 40, 30000],
 		]);
 	});
 
@@ -61,8 +62,8 @@ describe("updateMotion", () => {
 		expect(TRAIL_MULTIPLIER_MAX).toBe(10);
 		expect(m.trail).toHaveLength(cap);
 		// cap+4 samples → oldest 4 dropped: oldest kept is min 4.
-		expect(m.trail[0]).toEqual([-70, 40]);
-		expect(m.trail[m.trail.length - 1]).toEqual([-74 + (cap + 3), 40]);
+		expect(m.trail[0]).toEqual([-70, 40, 30000]);
+		expect(m.trail[m.trail.length - 1]).toEqual([-74 + (cap + 3), 40, 30000]);
 	});
 
 	it("does not append to the trail on a same/older sample", () => {
@@ -134,8 +135,8 @@ describe("GeoJSON builders", () => {
 		expect(fc.features).toHaveLength(1); // AA1 has 3 trail points; NEW is single-sample → skipped
 		const coords = fc.features[0].geometry.coordinates;
 		expect(coords.length).toBeGreaterThanOrEqual(4); // 3 trail points + head
-		expect(coords[0]).toEqual([-74, 40]); // oldest first (fades transparent)
-		expect(coords[coords.length - 1]).toEqual([-72, 40]); // head last (opaque)
+		expect(coords[0]).toEqual([-74, 40, 30000]); // oldest first (fades transparent)
+		expect(coords[coords.length - 1]).toEqual([-72, 40, 30000]); // head last (opaque)
 		expect(fc.features[0].geometry.type).toBe("LineString");
 	});
 
@@ -190,7 +191,7 @@ describe("trail display length (multiplier support)", () => {
 		const fc = motionTrailsToGeoJSON(bufWith6(), T0 + 5 * 60_000, 3);
 		const coords = fc.features[0].geometry.coordinates;
 		expect(coords).toHaveLength(4); // 3 newest real points + head
-		expect(coords[0]).toEqual([-74 + 3, 40]); // older points sliced away
+		expect(coords[0]).toEqual([-74 + 3, 40, 30000]); // older points sliced away
 	});
 
 	it("defaults to TRAIL_POINTS when displayPoints is omitted (today's behavior)", () => {
@@ -292,5 +293,44 @@ describe("headingFromTrack", () => {
 		const { headingFromTrack } = await import("./flightMotion");
 		expect(headingFromTrack([[-80, 40]], 40, -80)).toBeNull();
 		expect(headingFromTrack(null, 40, -80)).toBeNull();
+	});
+});
+
+describe("landing clamp (wheels-down freeze)", () => {
+	// AA1 samples at T0 (lon -74) and T1 (lon -73): 1°lon/min eastbound.
+	function buf(): MotionBuffer {
+		const b: MotionBuffer = new Map();
+		updateMotion(b, [sampleAt(0, -74)]);
+		updateMotion(b, [sampleAt(1, -73)]);
+		return b;
+	}
+	const landedT = T1 + 30_000; // wheels down 30s after the last sample
+
+	it("motionNow clamps a flight's clock to its landing instant", () => {
+		const m = buf().get("AA1")!;
+		const landing = new Map([["AA1", landedT]]);
+		expect(motionNow(m, T1, landing)).toBe(T1); // before landing: untouched
+		expect(motionNow(m, landedT + 60_000, landing)).toBe(landedT);
+		expect(motionNow(m, landedT + 60_000, new Map())).toBe(landedT + 60_000);
+		expect(motionNow(m, landedT + 60_000)).toBe(landedT + 60_000);
+	});
+
+	it("points freeze exactly at the wheels-down position, forever", () => {
+		const landing = new Map([["AA1", landedT]]);
+		const at = (now: number) =>
+			(motionPointsToGeoJSON(buf(), now, landing).features[0].geometry as {
+				coordinates: [number, number];
+			}).coordinates[0];
+		const frozen = at(landedT);
+		expect(frozen).toBeCloseTo(-72.5, 6); // 30s past last sample at 1°/min
+		expect(at(landedT + 90_000)).toBeCloseTo(frozen, 9);
+		expect(at(landedT + 3_600_000)).toBeCloseTo(frozen, 9);
+	});
+
+	it("trail heads freeze with the dot", () => {
+		const landing = new Map([["AA1", landedT]]);
+		const fc = motionTrailsToGeoJSON(buf(), landedT + 90_000, TRAIL_POINTS, landing);
+		const coords = fc.features[0].geometry.coordinates;
+		expect(coords[coords.length - 1][0]).toBeCloseTo(-72.5, 6);
 	});
 });
