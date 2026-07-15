@@ -1,6 +1,6 @@
 import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
-import { type FC, useEffect, useRef } from "react";
+import { type FC, type Ref, useEffect, useImperativeHandle, useRef } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	type BasemapStyleId,
@@ -68,7 +68,21 @@ async function installPlaneIcons(
 	}
 }
 
+/**
+ * Transient camera commands for MapControls (zoom/pinpoints/compass). The
+ * persisted toggles (globe/cluster/3D) stay declarative props; only one-shot
+ * camera moves go through this imperative seam — no consumer ever touches the
+ * raw MapLibre instance.
+ */
+export interface FlightMapHandle {
+	zoomIn(): void;
+	zoomOut(): void;
+	flyTo(center: [number, number], zoom: number): void;
+	resetNorth(): void;
+}
+
 interface FlightMapProps {
+	ref?: Ref<FlightMapHandle>;
 	positions: FlightPosition[];
 	// Short history lookback from the provider (flightsSeed): earlier samples
 	// that give freshly-seeded single-sample flights a heading immediately.
@@ -123,6 +137,7 @@ const GHOST_OPACITY = 0.4;
 const GHOST_STROKE_COLOR = "#ffffff";
 
 export const FlightMap: FC<FlightMapProps> = ({
+	ref: handleRef,
 	positions, seedPositions, basemapUrls, trackGeoJSON, nowMs, playing,
 	mapStyle, darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
@@ -154,6 +169,19 @@ export const FlightMap: FC<FlightMapProps> = ({
 		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
 		visible: visibleFlights,
 	};
+
+	useImperativeHandle(handleRef, () => ({
+		zoomIn: () => {
+			const map = mapRef.current;
+			map?.easeTo({ zoom: map.getZoom() + 1, duration: 250 });
+		},
+		zoomOut: () => {
+			const map = mapRef.current;
+			map?.easeTo({ zoom: map.getZoom() - 1, duration: 250 });
+		},
+		flyTo: (center, zoom) => mapRef.current?.flyTo({ center, zoom, essential: true }),
+		resetNorth: () => mapRef.current?.easeTo({ bearing: 0, duration: 400 }),
+	}), []);
 
 	const motionBufferRef = useRef<MotionBuffer>(new Map());
 	const nowMsRef = useRef(nowMs);

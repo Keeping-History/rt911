@@ -60,6 +60,12 @@ const FakeMap = vi.hoisted(() => {
 		}
 		queryRenderedFeatures() { return this.queryResult; }
 		project(c: [number, number]) { return { x: c[0], y: c[1] }; }
+		zoom = 3;
+		easeToCalls: Record<string, unknown>[] = [];
+		flyToCalls: Record<string, unknown>[] = [];
+		getZoom() { return this.zoom; }
+		easeTo(o: Record<string, unknown>) { this.easeToCalls.push(o); }
+		flyTo(o: Record<string, unknown>) { this.flyToCalls.push(o); }
 		resize() {}
 		remove() { this.removed = true; }
 	}
@@ -81,7 +87,8 @@ vi.mock("./flightIcons", async (importOriginal) => {
 	};
 });
 
-import { FlightMap } from "./FlightMap";
+import { createRef } from "react";
+import { FlightMap, type FlightMapHandle } from "./FlightMap";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -493,6 +500,25 @@ describe("FlightMap", () => {
 			}
 		).features;
 		expect(ghosts.map((g) => g.properties.flight)).toEqual(["AA11"]);
+	});
+
+	it("exposes an imperative camera handle (zoom, flyTo, resetNorth)", () => {
+		const ref = createRef<FlightMapHandle>();
+		render(
+			<FlightMap ref={ref} positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a" radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		ref.current!.zoomIn();
+		expect(map.easeToCalls.at(-1)).toMatchObject({ zoom: 4 });
+		ref.current!.zoomOut();
+		expect(map.easeToCalls.at(-1)).toMatchObject({ zoom: 2 });
+		ref.current!.flyTo([-74, 40.7], 13.5);
+		expect(map.flyToCalls.at(-1)).toMatchObject({ center: [-74, 40.7], zoom: 13.5 });
+		ref.current!.resetNorth();
+		expect(map.easeToCalls.at(-1)).toMatchObject({ bearing: 0 });
 	});
 
 	it("switching mapStyle to satellite flips ground visibility without recreating the map", () => {
