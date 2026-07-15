@@ -5,23 +5,24 @@ import { ScreenNavContext, useScreenWheel } from "../WheelContext";
 import type { ScreenId } from "../screenStack";
 
 interface MainMenuProps {
-	/** Now Playing is only reachable once a station has been tuned. */
-	hasActiveStation: boolean;
+	/** Now Playing is only reachable once a radio station or TV channel is tuned. */
+	hasNowPlaying: boolean;
 }
 
-export function MainMenu({ hasActiveStation }: MainMenuProps) {
+export function MainMenu({ hasNowPlaying }: MainMenuProps) {
 	const { push } = useContext(ScreenNavContext);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 
 	const entries: Array<IpodListItem & { target: ScreenId }> = [
 		{ key: "radio", label: "Radio", arrow: true, target: "radio" },
+		{ key: "tv", label: "TV", arrow: true, target: "tv" },
 		{ key: "timeTravel", label: "Time Travel", arrow: true, target: "timeTravel" },
 		{
 			key: "nowPlaying",
 			label: "Now Playing",
 			arrow: true,
 			target: "nowPlaying",
-			disabled: !hasActiveStation,
+			disabled: !hasNowPlaying,
 		},
 		{ key: "about", label: "About", arrow: true, target: "about" },
 	];

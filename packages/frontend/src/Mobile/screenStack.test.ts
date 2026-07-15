@@ -31,4 +31,8 @@ describe("screenStackReducer", () => {
 			expect(title.length).toBeGreaterThan(0);
 		}
 	});
+
+	it("has a title for the TV screen", () => {
+		expect(SCREEN_TITLES.tv).toBe("TV");
+	});
 });

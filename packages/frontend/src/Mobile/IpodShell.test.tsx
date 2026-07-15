@@ -51,6 +51,7 @@ describe("IpodShell", () => {
 		renderShell(true);
 		expect(screen.getByText("iPod")).toBeTruthy(); // status-bar title
 		expect(screen.getByText("Radio")).toBeTruthy();
+		expect(screen.getByText("TV")).toBeTruthy();
 		expect(screen.getByText("Time Travel")).toBeTruthy();
 		expect(screen.getByText("About")).toBeTruthy();
 		expect(screen.getByText("8:40 AM")).toBeTruthy(); // 12:40 UTC at -4

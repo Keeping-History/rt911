@@ -129,7 +129,7 @@ export default function IpodShell() {
 						    its own Connecting… state). */}
 						<div className="ipodScreenBody" key={screen}>
 							{screen === "menu" && (
-								<MainMenu hasActiveStation={activeStation !== null} />
+								<MainMenu hasNowPlaying={activeStation !== null} />
 							)}
 							{screen === "about" && <AboutScreen />}
 							{screen === "radio" && (

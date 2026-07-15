@@ -5,6 +5,7 @@
 export type ScreenId =
 	| "menu"
 	| "radio"
+	| "tv"
 	| "nowPlaying"
 	| "timeTravel"
 	| "bookmarks"
@@ -39,6 +40,7 @@ export function currentScreen(state: ScreenStackState): ScreenId {
 export const SCREEN_TITLES: Record<ScreenId, string> = {
 	menu: "iPod",
 	radio: "Radio",
+	tv: "TV",
 	nowPlaying: "Now Playing",
 	timeTravel: "Time Travel",
 	bookmarks: "Bookmarks",
