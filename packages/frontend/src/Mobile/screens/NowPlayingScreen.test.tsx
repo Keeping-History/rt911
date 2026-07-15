@@ -31,7 +31,9 @@ const station: Station = {
 
 const tvChannel: MediaItem = {
 	id: 42,
-	title: "WABC",
+	// title deliberately differs from source so getByText("WABC") proves the
+	// screen shows `source`, not the `title` fallback.
+	title: "Channel 7",
 	full_title: "WABC 7 New York",
 	source: "WABC",
 	start_date: "2001-09-11T12:30:00",
