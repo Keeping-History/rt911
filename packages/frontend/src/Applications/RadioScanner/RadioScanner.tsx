@@ -445,6 +445,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                 min={0}
                                 max={100}
                                 step={1}
+                                tickInterval={10}
                                 valueLabel={`${settingsForm.maxVolume}%`}
                                 onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
                                     setSettingsForm((f) => ({

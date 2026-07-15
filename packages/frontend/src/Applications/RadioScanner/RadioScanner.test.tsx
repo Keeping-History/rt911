@@ -133,12 +133,18 @@ vi.mock("classicy", () => ({
 		value,
 		min,
 		max,
+		step,
+		tickInterval,
+		snapToTicks,
 		onChangeFunc,
 	}: {
 		id?: string;
 		value?: number;
 		min?: number;
 		max?: number;
+		step?: number;
+		tickInterval?: number | "center";
+		snapToTicks?: boolean;
 		onChangeFunc?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	}) => (
 		<input
@@ -147,6 +153,9 @@ vi.mock("classicy", () => ({
 			value={value}
 			min={min}
 			max={max}
+			step={step}
+			data-tick-interval={tickInterval}
+			data-snap-to-ticks={snapToTicks}
 			onChange={onChangeFunc}
 		/>
 	),
@@ -407,5 +416,15 @@ describe("RadioScanner Settings window", () => {
 			type: "ClassicyAppRadioScannerSetSettings",
 			settings: expect.objectContaining({ maxVolume: 40 }),
 		});
+	});
+
+	it("shows volume tick marks every 10% without snapping to them", () => {
+		renderScanner("ATC");
+		fireEvent.click(screen.getAllByText("Settings…")[0]);
+		const slider = screen.getByTestId("radioscanner_settings_max_volume");
+		expect(slider.getAttribute("data-tick-interval")).toBe("10");
+		// No snapToTicks: the thumb keeps its 1-unit step.
+		expect(slider.getAttribute("data-snap-to-ticks")).toBeNull();
+		expect(slider.getAttribute("step")).toBe("1");
 	});
 });
