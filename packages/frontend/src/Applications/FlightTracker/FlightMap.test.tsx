@@ -63,6 +63,10 @@ const FakeMap = vi.hoisted(() => {
 		zoom = 3;
 		easeToCalls: Record<string, unknown>[] = [];
 		flyToCalls: Record<string, unknown>[] = [];
+		projections: Record<string, unknown>[] = [];
+		setProjection(p: Record<string, unknown>) { this.projections.push(p); }
+		jumpToCalls: Record<string, unknown>[] = [];
+		jumpTo(o: Record<string, unknown>) { this.jumpToCalls.push(o); }
 		getZoom() { return this.zoom; }
 		easeTo(o: Record<string, unknown>) { this.easeToCalls.push(o); }
 		flyTo(o: Record<string, unknown>) { this.flyToCalls.push(o); }
@@ -500,6 +504,47 @@ describe("FlightMap", () => {
 			}
 		).features;
 		expect(ghosts.map((g) => g.properties.flight)).toEqual(["AA11"]);
+	});
+
+	it("applies globe projection at load and re-applies on toggle", () => {
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender } = render(<FlightMap {...common} globe={false} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.projections.at(-1)).toEqual({ type: "mercator" });
+		rerender(<FlightMap {...common} globe={true} />);
+		expect(map.projections.at(-1)).toEqual({ type: "globe" });
+		rerender(<FlightMap {...common} globe={false} />);
+		expect(map.projections.at(-1)).toEqual({ type: "mercator" });
+	});
+
+	it("eases pitch when 3D mode toggles, and seeds a persisted 3D pitch at load", () => {
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender, unmount } = render(<FlightMap {...common} threeD={false} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.jumpToCalls).toHaveLength(0); // flat start: no pitch seed
+		rerender(<FlightMap {...common} threeD={true} />);
+		expect(map.easeToCalls.at(-1)).toMatchObject({ pitch: 60 });
+		rerender(<FlightMap {...common} threeD={false} />);
+		expect(map.easeToCalls.at(-1)).toMatchObject({ pitch: 0 });
+		unmount();
+
+		// A session restored with 3D on pitches immediately at load.
+		render(<FlightMap {...common} threeD={true} />);
+		const map2 = FakeMap.last!;
+		map2.fire("load");
+		expect(map2.jumpToCalls.at(-1)).toMatchObject({ pitch: 60 });
 	});
 
 	it("exposes an imperative camera handle (zoom, flyTo, resetNorth)", () => {

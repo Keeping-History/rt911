@@ -110,6 +110,9 @@ interface FlightMapProps {
 	// skipped at draw time; null/omitted shows all. Live pins are filtered
 	// upstream by FlightTracker via the positions array itself.
 	visibleFlights?: Set<string> | null;
+	// MapControls toggles (issues #218/#223); persisted in FlightMapSettings.
+	globe?: boolean;
+	threeD?: boolean;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
 }
@@ -125,6 +128,8 @@ const EMPTY_REPLAY_BUFFER: ReplayBuffer = new Map();
 
 const NA_CENTER: [number, number] = [-98, 39];
 const NA_ZOOM = 3;
+// Camera pitch the 3D toggle eases to (issue #223); MapLibre's default maxPitch.
+export const THREE_D_PITCH = 60;
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 const FRAME_MS = 66; // ~15 fps animation gate
 // Click hit-test slop (px). Dots are a small (3px) and gliding target, so an
@@ -143,6 +148,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null,
+	globe = false, threeD = false,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -161,6 +167,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 	radarSweepRef.current = radarSweep;
 	const trailMultiplierRef = useRef(trailMultiplier);
 	trailMultiplierRef.current = trailMultiplier;
+	const globeRef = useRef(globe);
+	globeRef.current = globe;
+	const threeDRef = useRef(threeD);
+	threeDRef.current = threeD;
 	const loopRef = useRef({
 		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
 		visible: visibleFlights,
@@ -209,6 +219,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 		map.on("load", () => {
 			loadedRef.current = true;
 			const colors = colorsRef.current;
+			// Projection/pitch are style-coupled, so a persisted globe/3D setting
+			// is seeded here rather than in the props effects (which skip pre-load).
+			map.setProjection({ type: globeRef.current ? "globe" : "mercator" });
+			if (threeDRef.current) map.jumpTo({ pitch: THREE_D_PITCH });
 			updateMotion(motionBufferRef.current, positionsRef.current);
 			if (seedRef.current?.length)
 				seedMotionFromHistory(motionBufferRef.current, seedRef.current);
@@ -388,6 +402,23 @@ export const FlightMap: FC<FlightMapProps> = ({
 		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor });
 		void installPlaneIcons(map, pinColor, notablePinColor);
 	}, [mapStyle, darkMap, pinColor, notablePinColor]);
+
+	// Mercator ↔ globe. Projection survives style-paint changes, so this only
+	// needs to run on the toggle itself (plus the load-time seed above).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		map.setProjection({ type: globe ? "globe" : "mercator" });
+		dirtyRef.current = true;
+	}, [globe]);
+
+	// 3D mode is just a camera preset: ease the pitch and let the altitude
+	// layers key off the *actual* pitch (so right-click pitching works too).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		map.easeTo({ pitch: threeD ? THREE_D_PITCH : 0, duration: 600 });
+	}, [threeD]);
 
 	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an
 	// Appearance-theme switch that happened while hidden is picked up. dirtyRef
