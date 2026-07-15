@@ -131,7 +131,6 @@
 	-webkit-overflow-scrolling: touch;
 }
 .ipodRoot .ipodMenuItem {
-	width: 100%;
 	padding: calc(var(--u) * 4) calc(var(--u) * 12);
 	font-size: calc(var(--u) * 15);
 	display: flex;
