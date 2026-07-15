@@ -1,7 +1,13 @@
-# Flight Tracker basemap (na-basemap.pmtiles)
+# Flight Tracker basemap (world-basemap.pmtiles)
 
-A one-time North America vector basemap for the Flight Tracker app. Regenerate
-only when the coastline/border data changes.
+A one-time world vector basemap for the Flight Tracker/Weather apps.
+Regenerate only when the coastline/border data changes.
+
+> **History:** the original build was clipped to a North America bbox
+> (`na-basemap.pmtiles`). Globe mode (issue #220, 2026-07) made the coverage
+> cliff visible, so the shipped file is now the unclipped **world** build
+> below; `na-basemap.pmtiles` stays hosted as a rollback
+> (`VITE_FLIGHT_BASEMAP_URL` can point back at it).
 
 ## Contract with the app
 The style (`packages/frontend/src/Applications/FlightTracker/flightMapStyle.ts`)
@@ -13,18 +19,18 @@ still show — basemap failure is non-fatal).
 1. Download Natural Earth 1:50m GeoJSON: `ne_50m_land`, `ne_50m_admin_0_countries`,
    `ne_50m_admin_1_states_provinces_lines`, `ne_50m_lakes` — e.g. from the
    `nvkelso/natural-earth-vector` `geojson/` mirror.
-2. Build the tiles and write PMTiles in one step, one named layer per file, zoom
-   0–7, clipped to the North America bbox `-150,18,-65,65`:
+2. Build the tiles and write PMTiles in one step, one named layer per file,
+   zoom 0–7, world coverage (no clip):
    ```
-   tippecanoe -o na-basemap.pmtiles -Z0 -z7 \
-     --clip-bounding-box=-150,18,-65,65 \
+   tippecanoe -o world-basemap.pmtiles -Z0 -z7 \
      -L land:ne_50m_land.geojson \
      -L countries:ne_50m_admin_0_countries.geojson \
      -L states:ne_50m_admin_1_states_provinces_lines.geojson \
      -L lakes:ne_50m_lakes.geojson \
      --coalesce-densest-as-needed --force
    ```
-   (~2 MB.) Notes:
+   (~16 MB. For an NA-clipped build add `--clip-bounding-box=-150,18,-65,65`
+   — that's the original ~2 MB `na-basemap.pmtiles`.) Notes:
    - Use `-L name:file` (named layer per input). Do **not** use `-l name file`
      — a bare `-l` forces *every* input into a single output layer (the last
      name wins), so the archive ends up with only one layer and the map renders
@@ -47,5 +53,23 @@ still show — basemap failure is non-fatal).
    The nginx-s3-gateway already supports HTTP Range + CORS. Land on infra `main`;
    ArgoCD syncs. If a stale Cloudflare 404 lingers on the URL, it clears on its
    own (CF caches 404s only briefly) or purge it.
-3. Verify: `curl -I -H 'Range: bytes=0-16' https://files.911realtime.org/maps/na-basemap.pmtiles`
+3. Verify: `curl -I -H 'Range: bytes=0-16' https://files.911realtime.org/maps/world-basemap.pmtiles`
    returns `206 Partial Content`.
+
+## Glyph fonts (cluster-count labels) — DONE 2026-07-15
+
+Symbol text layers (the Flight Tracker cluster counts, issue #222) need glyph
+PBFs at the style's `glyphs` URL,
+`https://files.911realtime.org/maps/fonts/{fontstack}/{range}.pbf`. The
+hosted set is `Noto Sans Regular` (256 range files), copied verbatim from the
+`maplibre/demotiles` repo's `font/` directory and uploaded to the same Wasabi
+bucket under `maps/fonts/`:
+
+```sh
+git clone --depth 1 --filter=blob:none --sparse https://github.com/maplibre/demotiles.git
+cd demotiles && git sparse-checkout set font
+# upload font/"Noto Sans Regular"/*.pbf → s3://files.911realtime.org/maps/fonts/Noto Sans Regular/
+```
+
+Missing fonts are non-fatal: labels just don't draw. Verify:
+`curl -I 'https://files.911realtime.org/maps/fonts/Noto%20Sans%20Regular/0-255.pbf'` → 200.

@@ -18,7 +18,9 @@ export interface BasemapUrls {
 export const BASEMAP_URLS: BasemapUrls = {
 	vector:
 		(import.meta.env.VITE_FLIGHT_BASEMAP_URL as string | undefined) ??
-		"https://files.911realtime.org/maps/na-basemap.pmtiles",
+		// World coverage (issue #220) so globe mode/panning never hit a tile
+		// cliff; na-basemap.pmtiles stays hosted as the rollback.
+		"https://files.911realtime.org/maps/world-basemap.pmtiles",
 	satelliteDay:
 		(import.meta.env.VITE_SATELLITE_DAY_BASEMAP_URL as string | undefined) ??
 		"https://files.911realtime.org/maps/na-satellite-day.pmtiles",

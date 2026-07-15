@@ -43,7 +43,7 @@ describe("normalizeBasemapStyle", () => {
 
 describe("BASEMAP_URLS", () => {
 	it("defaults to the files.911realtime.org maps/ prefix", () => {
-		expect(BASEMAP_URLS.vector).toContain("/maps/na-basemap.pmtiles");
+		expect(BASEMAP_URLS.vector).toContain("/maps/world-basemap.pmtiles");
 		expect(BASEMAP_URLS.satelliteDay).toContain("/maps/na-satellite-day.pmtiles");
 		expect(BASEMAP_URLS.satelliteNight).toContain("/maps/na-satellite-night.pmtiles");
 	});
