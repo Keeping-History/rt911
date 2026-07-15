@@ -97,7 +97,14 @@ const FakeMap = vi.hoisted(() => {
 		skies: unknown[] = [];
 		setSky(sky: unknown) { this.skies.push(sky); }
 		jumpToCalls: Record<string, unknown>[] = [];
-		jumpTo(o: Record<string, unknown>) { this.jumpToCalls.push(o); }
+		jumpTo(o: Record<string, unknown>) {
+			this.jumpToCalls.push(o);
+			// Mimic the real map: the camera moves and "pitch" fires synchronously.
+			if (typeof o.pitch === "number") {
+				this.pitch = o.pitch;
+				this.fire("pitch");
+			}
+		}
 		getZoom() { return this.zoom; }
 		easeTo(o: Record<string, unknown>) { this.easeToCalls.push(o); }
 		flyTo(o: Record<string, unknown>) { this.flyToCalls.push(o); }
@@ -587,6 +594,13 @@ describe("FlightMap", () => {
 		expect((map2.ctorOpts as { maxPitch?: number }).maxPitch).toBe(60);
 		map2.fire("load");
 		expect(map2.jumpToCalls.at(-1)).toMatchObject({ pitch: 60 });
+		// Regression (refresh with 3D persisted): the pitch seed fires BEFORE the
+		// layers exist, so the end-of-load visibility sync must hide the 2D pins
+		// and show the 3D planes — the event alone can't.
+		expect(map2.layout["flights-dots"]?.visibility).toBe("none");
+		expect(map2.layout["flights-notable"]?.visibility).toBe("none");
+		expect(map2.layout["planes-3d"]?.visibility).toBe("visible");
+		expect(map2.layout["track-curtain"]?.visibility).toBe("visible");
 	});
 
 	it("nonNotableFeatures drops the notable flights (they never cluster)", () => {

@@ -292,7 +292,6 @@ export const FlightMap: FC<FlightMapProps> = ({
 		mapRef.current = map;
 
 		map.on("load", () => {
-			loadedRef.current = true;
 			const colors = colorsRef.current;
 			// Projection/pitch are style-coupled, so a persisted globe/3D setting
 			// is seeded here rather than in the props effects (which skip pre-load).
@@ -391,10 +390,6 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"icon-ignore-placement": true,
 				},
 			});
-			if (clusterRef.current) {
-				map.setLayoutProperty("flights-dots", "visibility", "none");
-				map.setLayoutProperty("flight-trails", "visibility", "none");
-			}
 			// 3D planes (issue #224): while pitched, each aircraft is a heading-
 			// rotated plane-silhouette slab floating AT its altitude (base →
 			// height are both up there); the flat icons hide. Replaces the
@@ -478,6 +473,20 @@ export const FlightMap: FC<FlightMapProps> = ({
 				paint: { "line-color": radarColor, "line-width": 1.5, "line-opacity": 0.8 },
 			}, "track-line");
 			applyMapColors(map, colorsRef.current);
+			// Now that every layer exists, resolve the pitch × cluster visibility
+			// matrix ONCE from the actual camera. The jumpTo pitch seed above
+			// fires "pitch" BEFORE the layers are added (its handler skips layer
+			// writes while loadedRef is false — flipped only here, at the very
+			// end), so a 3D-restored session must not depend on that event: this
+			// is what hides the 2D pins after a refresh with 3D persisted on.
+			pitchedRef.current = map.getPitch() > 5;
+			for (const [id, visible] of Object.entries(
+				planeLayerVisibility(clusterRef.current, pitchedRef.current),
+			)) {
+				map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+			}
+			loadedRef.current = true;
+			dirtyRef.current = true;
 		});
 
 		// Forgiving hit-test: query a small box around the click and select the
