@@ -39,7 +39,7 @@ import {
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
 import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
 import type { HlsAbrApi } from "./abr";
-import { resolveVirtualNowMs } from "./clockDrift";
+import { calcSeekSeconds, resolveVirtualNowMs } from "./clockDrift";
 import { resolveGridVolume } from "./volume";
 import { TVEPGPanel } from "./TVEPGPanel";
 
@@ -79,20 +79,6 @@ const FONT_VARS: [string, string][] = [
 const QUALITY_LOWEST = 0;
 const QUALITY_ONE_DOWN = 1;
 const QUALITY_HIGHEST = 2;
-
-/** Seconds into the media file that corresponds to the given wall-clock time. */
-function calcSeekSeconds(item: MediaItem, clockMs: number): number {
-	// Directus stores datetimes without a timezone suffix; force UTC so that
-	// JavaScript does not misinterpret them as local time.
-	const dateStr = /Z$|[+-]\d{2}:\d{2}$/.test(item.start_date)
-		? item.start_date
-		: item.start_date + "Z";
-	const startMs = new Date(dateStr).getTime();
-	const raw = (clockMs - startMs) / 1000 + item.jump;
-	// Do not cap by calc_duration — it may be inaccurate for archive streams.
-	// Let the player handle out-of-bounds positions natively.
-	return Math.max(0, raw);
-}
 
 type ClassicyTVProps = Record<string, never>;
 
