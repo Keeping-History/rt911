@@ -44,6 +44,19 @@ describe("MapControls", () => {
 		expect(p.onToggleCluster).toHaveBeenCalledOnce();
 	});
 
+	it("pinpoints dropdown flies to the chosen place then snaps back to Choose…", () => {
+		const p = baseProps();
+		render(<MapControls {...p} />);
+		const dd = screen.getByRole("combobox") as HTMLSelectElement;
+		const placeholder = screen.getByText("Choose…") as HTMLOptionElement;
+		expect(placeholder.disabled).toBe(true);
+		expect(dd.value).toBe(placeholder.value);
+		fireEvent.change(dd, { target: { value: "pentagon" } });
+		expect(p.onPinpoint).toHaveBeenCalledWith([-77.0563, 38.8719], 13.5);
+		// Remounted onto the placeholder — the picked value never sticks.
+		expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe(placeholder.value);
+	});
+
 	it("select tools are mutually exclusive toggles: active tool re-click turns off", () => {
 		const p = baseProps();
 		render(<MapControls {...p} selectMode="rect" />);

@@ -1,5 +1,6 @@
-import type { FC } from "react";
-import { ClassicyButton } from "classicy";
+import { type FC, useState } from "react";
+import { ClassicyButton, ClassicyPopUpMenu } from "classicy";
+import { PINPOINTS, pinpointById } from "./mapPinpoints";
 import styles from "./FlightTracker.module.scss";
 
 // Canonical home moves to selectTool.ts with the area-select feature; MapControls
@@ -25,7 +26,12 @@ export interface MapControlsProps {
 	onPinpoint(center: [number, number], zoom: number): void;
 }
 
-export const MapControls: FC<MapControlsProps> = (p) => (
+export const MapControls: FC<MapControlsProps> = (p) => {
+	// The Pinpoints menu must always display its disabled "Choose…" placeholder
+	// (issue #226). ClassicyPopUpMenu keeps the picked value in internal state,
+	// so after a fly-to the key bump remounts it back onto the placeholder.
+	const [pinpointNonce, setPinpointNonce] = useState(0);
+	return (
 	<div className={styles.mapControls}>
 		<ClassicyButton buttonSize="small" aria-label="Zoom out" onClickFunc={p.onZoomOut}>
 			−
@@ -75,5 +81,23 @@ export const MapControls: FC<MapControlsProps> = (p) => (
 		>
 			◯
 		</ClassicyButton>
+		<span className={styles.mapControlsDivider} />
+		<ClassicyPopUpMenu
+			key={pinpointNonce}
+			id="flight_map_pinpoints"
+			label="Pinpoints"
+			labelPosition="left"
+			labelSize="small"
+			size="small"
+			placeholder="Choose…"
+			options={PINPOINTS.map((pin) => ({ value: pin.id, label: pin.label }))}
+			onChangeFunc={(e) => {
+				const pin = pinpointById(e.target.value);
+				if (!pin) return;
+				p.onPinpoint(pin.center, pin.zoom);
+				setPinpointNonce((n) => n + 1);
+			}}
+		/>
 	</div>
-);
+	);
+};
