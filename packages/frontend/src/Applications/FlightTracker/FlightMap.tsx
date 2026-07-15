@@ -3,6 +3,7 @@ import { Protocol } from "pmtiles";
 import { type FC, type Ref, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { MapCompass } from "./MapCompass";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
+import type { FlightFeatureCollection } from "./flightGeoJSON";
 import {
 	type BasemapStyleId,
 	type BasemapUrls,
@@ -111,11 +112,20 @@ interface FlightMapProps {
 	// skipped at draw time; null/omitted shows all. Live pins are filtered
 	// upstream by FlightTracker via the positions array itself.
 	visibleFlights?: Set<string> | null;
-	// MapControls toggles (issues #218/#223); persisted in FlightMapSettings.
+	// MapControls toggles (issues #218/#222/#223); persisted in FlightMapSettings.
 	globe?: boolean;
 	threeD?: boolean;
+	cluster?: boolean;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
+}
+
+/** Non-notable features only — notables never cluster (issue #222). */
+export function nonNotableFeatures(fc: FlightFeatureCollection): FlightFeatureCollection {
+	return {
+		type: "FeatureCollection",
+		features: fc.features.filter((f) => f.properties.notable !== true),
+	};
 }
 
 const IDLE_LOOP_CLOCK: LoopClock = {
@@ -149,7 +159,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null,
-	globe = false, threeD = false,
+	globe = false, threeD = false, cluster = false,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -172,6 +182,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	globeRef.current = globe;
 	const threeDRef = useRef(threeD);
 	threeDRef.current = threeD;
+	const clusterRef = useRef(cluster);
+	clusterRef.current = cluster;
 	const loopRef = useRef({
 		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
 		visible: visibleFlights,
@@ -274,6 +286,55 @@ export const FlightMap: FC<FlightMapProps> = ({
 				},
 			});
 			void installPlaneIcons(map, colors.pinColor, colors.notablePinColor);
+			// Cluster mode (issue #222): a second, pre-clustered source — MapLibre
+			// fixes the cluster option at addSource time, so toggling is a
+			// visibility swap between the plane/trail layers and these three.
+			// Notables are excluded from the feed (nonNotableFeatures) and keep
+			// rendering individually from the raw source above.
+			const clusterVis = clusterRef.current ? ("visible" as const) : ("none" as const);
+			map.addSource("flights-clustered", {
+				type: "geojson", data: EMPTY_FC,
+				cluster: true, clusterRadius: 40, clusterMaxZoom: 10,
+			});
+			map.addLayer({
+				id: "cluster-circles", type: "circle", source: "flights-clustered",
+				filter: ["has", "point_count"],
+				layout: { visibility: clusterVis },
+				paint: {
+					"circle-color": colors.pinColor, "circle-opacity": 0.8,
+					"circle-stroke-width": 1.5, "circle-stroke-color": "#ffffff",
+					"circle-radius": ["step", ["get", "point_count"], 10, 25, 14, 100, 18, 400, 24],
+				},
+			});
+			map.addLayer({
+				id: "cluster-counts", type: "symbol", source: "flights-clustered",
+				filter: ["has", "point_count"],
+				layout: {
+					visibility: clusterVis,
+					"text-field": "{point_count_abbreviated}",
+					"text-font": ["Noto Sans Regular"],
+					"text-size": 11,
+					"text-allow-overlap": true,
+				},
+				paint: { "text-color": "#ffffff" },
+			});
+			map.addLayer({
+				id: "cluster-planes", type: "symbol", source: "flights-clustered",
+				filter: ["!", ["has", "point_count"]],
+				layout: {
+					visibility: clusterVis,
+					"icon-image": PLANE_ICON_ID,
+					"icon-size": ["interpolate", ["linear"], ["zoom"], 4, 1, 9, 1.5],
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
+				},
+			});
+			if (clusterRef.current) {
+				map.setLayoutProperty("flights-dots", "visibility", "none");
+				map.setLayoutProperty("flight-trails", "visibility", "none");
+			}
 			// Loop-mode ghosts render under BOTH live plane layers ("flights-dots"
 			// is the lower of the two, so inserting before it puts ghosts under
 			// both) but above the trails. They stay simple circles — visually
@@ -338,8 +399,19 @@ export const FlightMap: FC<FlightMapProps> = ({
 					[x - HIT_TOLERANCE, y - HIT_TOLERANCE],
 					[x + HIT_TOLERANCE, y + HIT_TOLERANCE],
 				],
-				{ layers: ["flights-dots", "flights-notable"] },
+				{ layers: ["flights-dots", "flights-notable", "cluster-planes", "cluster-circles"] },
 			);
+			// A cluster blob expands instead of selecting.
+			const clusterHit = near.find((f) => f.properties?.cluster === true);
+			if (clusterHit && clusterHit.geometry.type === "Point") {
+				const src = map.getSource("flights-clustered") as maplibregl.GeoJSONSource | undefined;
+				const center = clusterHit.geometry.coordinates as [number, number];
+				void src
+					?.getClusterExpansionZoom(Number(clusterHit.properties?.cluster_id))
+					.then((zoom) => map.easeTo({ center, zoom }))
+					.catch(() => {});
+				return;
+			}
 			if (near.length === 0) {
 				cbRef.current.onClearSelection();
 				return;
@@ -407,6 +479,21 @@ export const FlightMap: FC<FlightMapProps> = ({
 		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor });
 		void installPlaneIcons(map, pinColor, notablePinColor);
 	}, [mapStyle, darkMap, pinColor, notablePinColor]);
+
+	// Cluster toggle: swap visibility between the live plane/trail layers and
+	// the three cluster layers; the rAF loop feeds whichever side is active.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		const liveVis = cluster ? "none" : "visible";
+		const clusterVis = cluster ? "visible" : "none";
+		map.setLayoutProperty("flights-dots", "visibility", liveVis);
+		map.setLayoutProperty("flight-trails", "visibility", liveVis);
+		map.setLayoutProperty("cluster-circles", "visibility", clusterVis);
+		map.setLayoutProperty("cluster-counts", "visibility", clusterVis);
+		map.setLayoutProperty("cluster-planes", "visibility", clusterVis);
+		dirtyRef.current = true;
+	}, [cluster]);
 
 	// Mercator ↔ globe. Projection survives style-paint changes, so this only
 	// needs to run on the toggle itself (plus the load-time seed above).
@@ -483,9 +570,13 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const a = anchorRef.current;
 			const now = playingRef.current ? a.virtual + (wall - a.wall) : a.virtual;
 			const buf = motionBufferRef.current;
-			(map.getSource("flights") as maplibregl.GeoJSONSource | undefined)?.setData(
-				motionPointsToGeoJSON(buf, now),
-			);
+			const pointsFc = motionPointsToGeoJSON(buf, now);
+			(map.getSource("flights") as maplibregl.GeoJSONSource | undefined)?.setData(pointsFc);
+			if (clusterRef.current) {
+				(map.getSource("flights-clustered") as maplibregl.GeoJSONSource | undefined)?.setData(
+					nonNotableFeatures(pointsFc),
+				);
+			}
 			// Clamp: hand-edited persisted state must not build million-point trails.
 			const clamped = Math.min(Math.max(trailMultiplierRef.current, 0), TRAIL_MULTIPLIER_MAX);
 			(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(

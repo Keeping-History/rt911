@@ -160,6 +160,9 @@ export function buildBasemapStyle(
 	return {
 		version: 8,
 		sky: skyFor(mapStyle, darkMap),
+		// Glyph PBFs for symbol text (cluster counts). Missing font files are
+		// non-fatal: labels just don't draw, everything else renders.
+		glyphs: "https://files.911realtime.org/maps/fonts/{fontstack}/{range}.pbf",
 		sources: {
 			basemap: { type: "vector", url: `pmtiles://${urls.vector}` },
 			"satellite-day": {

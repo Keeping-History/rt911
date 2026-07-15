@@ -78,8 +78,13 @@ describe("buildBasemapStyle — superset structure", () => {
 		expect(style.layers.find((l) => l.id === "background")?.type).toBe("background");
 	});
 
-	it("omits the glyphs key entirely (undefined value crashes maplibre 5 style validation)", () => {
-		expect("glyphs" in style).toBe(false);
+	it("sets a defined glyphs URL (an undefined value crashes maplibre 5 style validation)", () => {
+		// Cluster-count labels need glyph PBFs (issue #222). Must never be
+		// undefined — that's the maplibre-5 validation crash the old
+		// omit-the-key rule guarded against.
+		expect(style.glyphs).toBe(
+			"https://files.911realtime.org/maps/fonts/{fontstack}/{range}.pbf",
+		);
 	});
 });
 

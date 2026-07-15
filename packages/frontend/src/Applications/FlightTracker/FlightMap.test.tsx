@@ -56,7 +56,13 @@ const FakeMap = vi.hoisted(() => {
 		updateImage(id: string, img: unknown) { this.updatedImages[id] = img; this.images[id] = img; }
 		getSource(id: string) {
 			const s = this.sources[id];
-			return s ? { setData: (d: unknown) => { s.data = d; } } : undefined;
+			return s
+				? {
+					setData: (d: unknown) => { s.data = d; },
+					// Clustered-source API: tests always expand to zoom 8.
+					getClusterExpansionZoom: async () => 8,
+				}
+				: undefined;
 		}
 		queryRenderedFeatures() { return this.queryResult; }
 		project(c: [number, number]) { return { x: c[0], y: c[1] }; }
@@ -96,7 +102,8 @@ vi.mock("./flightIcons", async (importOriginal) => {
 });
 
 import { createRef } from "react";
-import { FlightMap, type FlightMapHandle } from "./FlightMap";
+import { FlightMap, type FlightMapHandle, nonNotableFeatures } from "./FlightMap";
+import { motionPointsToGeoJSON, updateMotion, type MotionBuffer } from "./flightMotion";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -552,6 +559,65 @@ describe("FlightMap", () => {
 		const map2 = FakeMap.last!;
 		map2.fire("load");
 		expect(map2.jumpToCalls.at(-1)).toMatchObject({ pitch: 60 });
+	});
+
+	it("nonNotableFeatures drops the notable flights (they never cluster)", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [
+			pos({ id: 1, flight: "AA11" }),
+			pos({ id: 2, flight: "DL404" }),
+		]);
+		const out = nonNotableFeatures(motionPointsToGeoJSON(buf, 0));
+		expect(out.features.map((f) => f.properties.flight)).toEqual(["DL404"]);
+	});
+
+	it("cluster toggle swaps the plane/trail layers for the cluster layers", () => {
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender } = render(<FlightMap {...common} cluster={false} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.sources["flights-clustered"]).toBeDefined();
+		for (const id of ["cluster-circles", "cluster-counts", "cluster-planes"]) {
+			const layer = map.layers.find((l) => l.id === id) as { layout: { visibility: string } };
+			expect(layer.layout.visibility).toBe("none");
+		}
+		rerender(<FlightMap {...common} cluster={true} />);
+		expect(map.layout["flights-dots"]?.visibility).toBe("none");
+		expect(map.layout["flight-trails"]?.visibility).toBe("none");
+		expect(map.layout["cluster-circles"]?.visibility).toBe("visible");
+		expect(map.layout["cluster-counts"]?.visibility).toBe("visible");
+		expect(map.layout["cluster-planes"]?.visibility).toBe("visible");
+		rerender(<FlightMap {...common} cluster={false} />);
+		expect(map.layout["flights-dots"]?.visibility).toBe("visible");
+		expect(map.layout["cluster-circles"]?.visibility).toBe("none");
+	});
+
+	it("clicking a cluster eases to its expansion zoom instead of selecting", async () => {
+		const onSelect = vi.fn();
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={onSelect} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} cluster={true} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		map.queryResult = [
+			{
+				geometry: { type: "Point", coordinates: [-80, 40] },
+				properties: { cluster: true, cluster_id: 7, point_count: 12 },
+			},
+		];
+		map.fire("click", { point: { x: 10, y: 10 } });
+		await vi.waitFor(() => {
+			expect(map.easeToCalls.at(-1)).toMatchObject({ center: [-80, 40], zoom: 8 });
+		});
+		expect(onSelect).not.toHaveBeenCalled();
 	});
 
 	it("compass tracks map rotation and resets bearing on click", () => {

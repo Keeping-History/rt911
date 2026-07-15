@@ -85,4 +85,7 @@ export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void
 	// The loop-mode ghost layers stay plain circles, so they DO recolor here.
 	map.setPaintProperty("ghost-dots", "circle-color", colors.pinColor);
 	map.setPaintProperty("ghost-notable", "circle-color", colors.notablePinColor);
+	// Cluster blobs follow the pin color too (the clustered plane icons share
+	// the baked-in plane-icon image, so they recolor via installPlaneIcons).
+	map.setPaintProperty("cluster-circles", "circle-color", colors.pinColor);
 }

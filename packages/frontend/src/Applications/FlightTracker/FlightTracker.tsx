@@ -788,6 +788,9 @@ export const FlightTracker: FC = () => {
 								)}
 								radarSweep={settings.radarSweep}
 								trailMultiplier={settings.trailMultiplier}
+								globe={settings.globe}
+								threeD={settings.threeD}
+								cluster={settings.cluster}
 								loopEnabled={loopEnabled}
 								loopWindowMs={windowMs}
 								loopClock={loopClock}
