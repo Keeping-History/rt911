@@ -50,6 +50,8 @@ const FakeMap = vi.hoisted(() => {
 		setLayoutProperty(layerId: string, name: string, value: unknown) {
 			(this.layout[layerId] ??= {})[name] = value;
 		}
+		skies: unknown[] = [];
+		setSky(sky: unknown) { this.skies.push(sky); }
 		setFilter(layerId: string, filter: unknown) {
 			this.filters[layerId] = filter;
 		}

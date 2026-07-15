@@ -39,6 +39,7 @@ describe("applyMapColors", () => {
 			setLayoutProperty(layerId: string, name: string, value: unknown) {
 				(layout[layerId] ??= {})[name] = value;
 			},
+			setSky() {},
 		};
 	}
 

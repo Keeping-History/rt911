@@ -65,6 +65,8 @@ const FakeMap = vi.hoisted(() => {
 		flyToCalls: Record<string, unknown>[] = [];
 		projections: Record<string, unknown>[] = [];
 		setProjection(p: Record<string, unknown>) { this.projections.push(p); }
+		skies: unknown[] = [];
+		setSky(sky: unknown) { this.skies.push(sky); }
 		jumpToCalls: Record<string, unknown>[] = [];
 		jumpTo(o: Record<string, unknown>) { this.jumpToCalls.push(o); }
 		getZoom() { return this.zoom; }

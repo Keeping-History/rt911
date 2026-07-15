@@ -8,6 +8,7 @@ import {
 	effectiveTone,
 	groundVisibility,
 	normalizeBasemapStyle,
+	skyFor,
 } from "./basemapStyles";
 
 const URLS = {
@@ -131,14 +132,19 @@ describe("applyBasemapStyle", () => {
 	function recordingMap() {
 		const paint: Record<string, Record<string, unknown>> = {};
 		const layout: Record<string, Record<string, unknown>> = {};
+		const skies: unknown[] = [];
 		return {
 			paint,
 			layout,
+			skies,
 			setPaintProperty(layerId: string, name: string, value: unknown) {
 				(paint[layerId] ??= {})[name] = value;
 			},
 			setLayoutProperty(layerId: string, name: string, value: unknown) {
 				(layout[layerId] ??= {})[name] = value;
+			},
+			setSky(sky: unknown) {
+				skies.push(sky);
 			},
 		};
 	}
@@ -169,5 +175,38 @@ describe("applyBasemapStyle", () => {
 		applyBasemapStyle(map, "radar", false);
 		expect(map.paint.background["background-color"]).toBe("#041004");
 		expect(map.layout.land.visibility).toBe("visible");
+	});
+
+	it("re-applies the style's sky on a live switch", () => {
+		const map = recordingMap();
+		applyBasemapStyle(map, "radar", false);
+		expect(map.skies.at(-1)).toEqual(skyFor("radar", false));
+	});
+});
+
+describe("sky (issue #221)", () => {
+	it("light styles get the approved daytime colors at 50% blends", () => {
+		expect(skyFor("classic", false)).toEqual({
+			"sky-color": "#94E3FE",
+			"horizon-color": "#00C7FC",
+			"sky-horizon-blend": 0.5,
+			"horizon-fog-blend": 0.5,
+		});
+		expect(skyFor("satellite", false)["sky-color"]).toBe("#94E3FE");
+	});
+
+	it("dark-toned styles get dark variants (a daytime sky over a radar scope would look broken)", () => {
+		expect(skyFor("radar", false)["sky-color"]).toBe("#010b04"); // radar ignores darkMap
+		expect(skyFor("radar", true)).toEqual(skyFor("radar", false));
+		expect(skyFor("classic", true)["sky-color"]).toBe("#0a0a14");
+		expect(skyFor("satellite", true)["sky-color"]).toBe("#01030a");
+		for (const style of ALL_STYLES) {
+			expect(skyFor(style, true)["sky-horizon-blend"]).toBe(0.5);
+		}
+	});
+
+	it("buildBasemapStyle embeds the style-level sky", () => {
+		expect(buildBasemapStyle(URLS, "classic", false).sky).toEqual(skyFor("classic", false));
+		expect(buildBasemapStyle(URLS, "satellite", true).sky).toEqual(skyFor("satellite", true));
 	});
 });
