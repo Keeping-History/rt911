@@ -112,13 +112,21 @@ export class Planes3DLayer implements CustomLayerInterface {
 	private map: MaplibreMap | null = null;
 	private gl: WebGL2RenderingContext | null = null;
 	private programs = new Map<string, ProgramInfo>();
-	private meshBuffer: WebGLBuffer | null = null;
-	private normalBuffer: WebGLBuffer | null = null;
-	private instanceBuffer: WebGLBuffer | null = null;
-	private meshVertexCount = 0;
-	private instanceData: Float32Array = new Float32Array(0);
+	// Mesh registry: "default" is the constructor's buildMesh(); more meshes
+	// (per-airframe aircraft models, issue #250 follow-up) register at any
+	// time and upload lazily once the GL context exists.
+	private meshes = new Map<string, { pos: WebGLBuffer; nrm: WebGLBuffer; vertexCount: number }>();
+	private pendingMeshes = new Map<string, PlaneMesh>();
+	// Per-frame draw list: one instanced draw per batch; a batch whose mesh
+	// key isn't registered (asset still loading) falls back to "default".
+	private batches: {
+		meshKey: string;
+		data: Float32Array;
+		count: number;
+		buffer: WebGLBuffer | null;
+		dirty: boolean;
+	}[] = [];
 	instanceCount = 0;
-	private instancesDirty = false;
 	private color: [number, number, number] = [0.23, 0.23, 0.23];
 	private colorNotable: [number, number, number] = [0.75, 0.13, 0.16];
 
@@ -134,37 +142,81 @@ export class Planes3DLayer implements CustomLayerInterface {
 		this.map?.triggerRepaint();
 	}
 
-	/** New per-frame instance attributes (see plane3dMesh.buildPlaneInstances). */
+	/** Single-batch sugar (the sphere replay-trail layer's whole API). */
 	updateInstances(data: Float32Array, count: number): void {
-		this.instanceData = data;
-		this.instanceCount = count;
-		this.instancesDirty = true;
+		this.updateBatches([{ meshKey: "default", data, count }]);
+	}
+
+	/** Per-frame draw list, one entry per mesh (aircraft family). */
+	updateBatches(next: { meshKey: string; data: Float32Array; count: number }[]): void {
+		// Reuse GL buffers positionally; grow/shrink the list as needed.
+		for (let i = 0; i < next.length; i++) {
+			const existing = this.batches[i];
+			if (existing) {
+				existing.meshKey = next[i].meshKey;
+				existing.data = next[i].data;
+				existing.count = next[i].count;
+				existing.dirty = true;
+			} else {
+				this.batches.push({ ...next[i], buffer: null, dirty: true });
+			}
+		}
+		for (const dropped of this.batches.splice(next.length)) {
+			if (dropped.buffer && this.gl) this.gl.deleteBuffer(dropped.buffer);
+		}
+		this.instanceCount = next.reduce((sum, b) => sum + b.count, 0);
+	}
+
+	/** Register an additional mesh (uploads now, or at onAdd if pre-GL). */
+	registerMesh(key: string, mesh: PlaneMesh): void {
+		if (this.gl) this.uploadMesh(key, mesh);
+		else this.pendingMeshes.set(key, mesh);
+		this.map?.triggerRepaint();
+	}
+
+	hasMesh(key: string): boolean {
+		return this.meshes.has(key) || this.pendingMeshes.has(key);
+	}
+
+	private uploadMesh(key: string, mesh: PlaneMesh): void {
+		const gl = this.gl;
+		if (!gl) return;
+		const old = this.meshes.get(key);
+		if (old) {
+			gl.deleteBuffer(old.pos);
+			gl.deleteBuffer(old.nrm);
+		}
+		const pos = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, pos);
+		gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
+		const nrm = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, nrm);
+		gl.bufferData(gl.ARRAY_BUFFER, mesh.normals, gl.STATIC_DRAW);
+		if (pos && nrm) this.meshes.set(key, { pos, nrm, vertexCount: mesh.vertexCount });
 	}
 
 	onAdd(map: MaplibreMap, gl: WebGLRenderingContext | WebGL2RenderingContext): void {
 		this.map = map;
 		// MapLibre 5 always creates a WebGL2 context; instancing is core there.
 		this.gl = gl as WebGL2RenderingContext;
-		const mesh = this.buildMesh();
-		this.meshVertexCount = mesh.vertexCount;
-		this.meshBuffer = this.gl.createBuffer();
-		this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.meshBuffer);
-		this.gl.bufferData(this.gl.ARRAY_BUFFER, mesh.positions, this.gl.STATIC_DRAW);
-		this.normalBuffer = this.gl.createBuffer();
-		this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.normalBuffer);
-		this.gl.bufferData(this.gl.ARRAY_BUFFER, mesh.normals, this.gl.STATIC_DRAW);
-		this.instanceBuffer = this.gl.createBuffer();
+		this.uploadMesh("default", this.buildMesh());
+		for (const [key, mesh] of this.pendingMeshes) this.uploadMesh(key, mesh);
+		this.pendingMeshes.clear();
 	}
 
 	onRemove(): void {
 		const gl = this.gl;
 		if (gl) {
 			for (const { program } of this.programs.values()) gl.deleteProgram(program);
-			if (this.meshBuffer) gl.deleteBuffer(this.meshBuffer);
-			if (this.normalBuffer) gl.deleteBuffer(this.normalBuffer);
-			if (this.instanceBuffer) gl.deleteBuffer(this.instanceBuffer);
+			for (const { pos, nrm } of this.meshes.values()) {
+				gl.deleteBuffer(pos);
+				gl.deleteBuffer(nrm);
+			}
+			for (const b of this.batches) if (b.buffer) gl.deleteBuffer(b.buffer);
 		}
 		this.programs.clear();
+		this.meshes.clear();
+		this.batches = [];
 		this.map = null;
 		this.gl = null;
 	}
@@ -248,23 +300,11 @@ ${VERTEX_BODY}`;
 		if (u.u_color_notable) gl.uniform3f(u.u_color_notable, ...this.colorNotable);
 		if (u.u_opacity) gl.uniform1f(u.u_opacity, this.opacity);
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.meshBuffer);
 		gl.enableVertexAttribArray(A_POS);
-		gl.vertexAttribPointer(A_POS, 3, gl.FLOAT, false, 0, 0);
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
 		gl.enableVertexAttribArray(A_NORMAL);
-		gl.vertexAttribPointer(A_NORMAL, 3, gl.FLOAT, false, 0, 0);
-
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-		if (this.instancesDirty) {
-			gl.bufferData(gl.ARRAY_BUFFER, this.instanceData, gl.DYNAMIC_DRAW);
-			this.instancesDirty = false;
-		}
 		gl.enableVertexAttribArray(I_DATA0);
-		gl.vertexAttribPointer(I_DATA0, 4, gl.FLOAT, false, 32, 0);
-		gl.vertexAttribDivisor(I_DATA0, 1);
 		gl.enableVertexAttribArray(I_DATA1);
-		gl.vertexAttribPointer(I_DATA1, 4, gl.FLOAT, false, 32, 16);
+		gl.vertexAttribDivisor(I_DATA0, 1);
 		gl.vertexAttribDivisor(I_DATA1, 1);
 
 		// Both faces matter on a pitched prism; depth state comes from maplibre.
@@ -273,7 +313,25 @@ ${VERTEX_BODY}`;
 		gl.enable(gl.BLEND);
 		gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		gl.disable(gl.CULL_FACE);
-		gl.drawArraysInstanced(gl.TRIANGLES, 0, this.meshVertexCount, this.instanceCount);
+
+		for (const batch of this.batches) {
+			if (batch.count === 0) continue;
+			const mesh = this.meshes.get(batch.meshKey) ?? this.meshes.get("default");
+			if (!mesh) continue;
+			gl.bindBuffer(gl.ARRAY_BUFFER, mesh.pos);
+			gl.vertexAttribPointer(A_POS, 3, gl.FLOAT, false, 0, 0);
+			gl.bindBuffer(gl.ARRAY_BUFFER, mesh.nrm);
+			gl.vertexAttribPointer(A_NORMAL, 3, gl.FLOAT, false, 0, 0);
+			if (!batch.buffer) batch.buffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, batch.buffer);
+			if (batch.dirty) {
+				gl.bufferData(gl.ARRAY_BUFFER, batch.data, gl.DYNAMIC_DRAW);
+				batch.dirty = false;
+			}
+			gl.vertexAttribPointer(I_DATA0, 4, gl.FLOAT, false, 32, 0);
+			gl.vertexAttribPointer(I_DATA1, 4, gl.FLOAT, false, 32, 16);
+			gl.drawArraysInstanced(gl.TRIANGLES, 0, mesh.vertexCount, batch.count);
+		}
 
 		// Leave no instanced state behind — maplibre's own layers share this
 		// context and don't expect divisors on generic attribute slots.

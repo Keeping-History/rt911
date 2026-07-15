@@ -6,6 +6,7 @@ import {
 	TRAIL_MULTIPLIER_MAX,
 	TRAIL_POINTS,
 	extrapolate,
+	motionNow,
 	motionPointsToGeoJSON,
 	motionTrailsToGeoJSON,
 	bearingDeg,
@@ -292,5 +293,44 @@ describe("headingFromTrack", () => {
 		const { headingFromTrack } = await import("./flightMotion");
 		expect(headingFromTrack([[-80, 40]], 40, -80)).toBeNull();
 		expect(headingFromTrack(null, 40, -80)).toBeNull();
+	});
+});
+
+describe("landing clamp (wheels-down freeze)", () => {
+	// AA1 samples at T0 (lon -74) and T1 (lon -73): 1°lon/min eastbound.
+	function buf(): MotionBuffer {
+		const b: MotionBuffer = new Map();
+		updateMotion(b, [sampleAt(0, -74)]);
+		updateMotion(b, [sampleAt(1, -73)]);
+		return b;
+	}
+	const landedT = T1 + 30_000; // wheels down 30s after the last sample
+
+	it("motionNow clamps a flight's clock to its landing instant", () => {
+		const m = buf().get("AA1")!;
+		const landing = new Map([["AA1", landedT]]);
+		expect(motionNow(m, T1, landing)).toBe(T1); // before landing: untouched
+		expect(motionNow(m, landedT + 60_000, landing)).toBe(landedT);
+		expect(motionNow(m, landedT + 60_000, new Map())).toBe(landedT + 60_000);
+		expect(motionNow(m, landedT + 60_000)).toBe(landedT + 60_000);
+	});
+
+	it("points freeze exactly at the wheels-down position, forever", () => {
+		const landing = new Map([["AA1", landedT]]);
+		const at = (now: number) =>
+			(motionPointsToGeoJSON(buf(), now, landing).features[0].geometry as {
+				coordinates: [number, number];
+			}).coordinates[0];
+		const frozen = at(landedT);
+		expect(frozen).toBeCloseTo(-72.5, 6); // 30s past last sample at 1°/min
+		expect(at(landedT + 90_000)).toBeCloseTo(frozen, 9);
+		expect(at(landedT + 3_600_000)).toBeCloseTo(frozen, 9);
+	});
+
+	it("trail heads freeze with the dot", () => {
+		const landing = new Map([["AA1", landedT]]);
+		const fc = motionTrailsToGeoJSON(buf(), landedT + 90_000, TRAIL_POINTS, landing);
+		const coords = fc.features[0].geometry.coordinates;
+		expect(coords[coords.length - 1][0]).toBeCloseTo(-72.5, 6);
 	});
 });

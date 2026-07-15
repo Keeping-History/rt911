@@ -1,5 +1,5 @@
-import type { FlightMotion, MotionBuffer } from "./flightMotion";
-import { extrapolate } from "./flightMotion";
+import type { FlightMotion, LandingClock, MotionBuffer } from "./flightMotion";
+import { extrapolate, motionNow } from "./flightMotion";
 import { PLANE_SHAPE, altitudeFtAt, exaggeratedHeightM } from "./flightAltitude";
 import { isNotable } from "./notableFlights";
 
@@ -235,6 +235,58 @@ export interface PlaneInstances {
 }
 
 /**
+ * Per-airframe batches: like buildPlaneInstances, but grouped by the model
+ * family each flight should render as (aircraftModels.familyForAircraftType
+ * via the route index). Families whose mesh hasn't loaded yet fall back to
+ * the "default" prism inside the layer.
+ */
+export function buildPlaneInstanceBatches(
+	buffer: MotionBuffer,
+	now: number,
+	sizeKm: number,
+	familyOf: (m: FlightMotion) => string,
+	landing?: LandingClock,
+): { meshKey: string; data: Float32Array; count: number }[] {
+	const groups = new Map<string, FlightMotion[]>();
+	for (const m of buffer.values()) {
+		const key = familyOf(m);
+		let g = groups.get(key);
+		if (!g) {
+			g = [];
+			groups.set(key, g);
+		}
+		g.push(m);
+	}
+	const halfSizeM = sizeKm * 500;
+	const batches: { meshKey: string; data: Float32Array; count: number }[] = [];
+	for (const [meshKey, motions] of groups) {
+		const data = new Float32Array(motions.length * PLANE_INSTANCE_STRIDE);
+		let count = 0;
+		for (const m of motions) {
+			const effNow = motionNow(m, now, landing);
+			const altFt = altitudeFtAt(m, effNow);
+			if (altFt <= 0) continue;
+			const head = extrapolate(m, effNow);
+			const [mx, my] = lngLatToMercator(head.lon, head.lat);
+			const o = count * PLANE_INSTANCE_STRIDE;
+			data[o] = mx;
+			data[o + 1] = my;
+			data[o + 2] = exaggeratedHeightM(altFt);
+			data[o + 3] = mercatorPerMeter(head.lat);
+			data[o + 4] = (m.headingDeg * Math.PI) / 180;
+			data[o + 5] = pitchRadOf(m);
+			data[o + 6] = halfSizeM;
+			data[o + 7] = isNotable(m.item.flight) ? 1 : 0;
+			count++;
+		}
+		if (count > 0) {
+			batches.push({ meshKey, data: data.subarray(0, count * PLANE_INSTANCE_STRIDE), count });
+		}
+	}
+	return batches;
+}
+
+/**
  * Pack every airborne flight into instance attributes at its glided position,
  * glided altitude, heading and pitch. sizeKm is the zoom-scaled marker size
  * (same value the extrusion path uses).
@@ -243,15 +295,17 @@ export function buildPlaneInstances(
 	buffer: MotionBuffer,
 	now: number,
 	sizeKm: number,
+	landing?: LandingClock,
 ): PlaneInstances {
 	const data = new Float32Array(buffer.size * PLANE_INSTANCE_STRIDE);
 	const flights: string[] = [];
 	let count = 0;
 	const halfSizeM = sizeKm * 500; // local unit 1 = half the marker size
 	for (const m of buffer.values()) {
-		const altFt = altitudeFtAt(m, now);
+		const effNow = motionNow(m, now, landing);
+		const altFt = altitudeFtAt(m, effNow);
 		if (altFt <= 0) continue;
-		const head = extrapolate(m, now);
+		const head = extrapolate(m, effNow);
 		const [mx, my] = lngLatToMercator(head.lon, head.lat);
 		const o = count * PLANE_INSTANCE_STRIDE;
 		data[o] = mx;

@@ -51,7 +51,8 @@ import {
 } from "./flightAltitude";
 import { buildTrackTube } from "./trackTube";
 import { TrackTube3DLayer } from "./trackTubeLayer";
-import { buildPlaneInstances, buildSphereMesh } from "./plane3dMesh";
+import { buildPlaneInstanceBatches, buildSphereMesh } from "./plane3dMesh";
+import { type AircraftFamily, loadAircraftMesh } from "./aircraftModels";
 import { Planes3DLayer } from "./planes3DLayer";
 import {
 	type DragPixels,
@@ -160,6 +161,9 @@ interface FlightMapProps {
 	// Fires when the camera crosses the pitched threshold in either direction —
 	// FlightTracker keeps the 3D toggle in sync with manual z-axis drags.
 	onPitchedChange?: (pitched: boolean) => void;
+	// Airframe family for a flight (aircraftModels.familyForAircraftType via
+	// the route index) — picks which 3D model its instances render with.
+	aircraftFamilyOf?: (flight: string, startDate: string) => string;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
 }
@@ -285,7 +289,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null,
 	globe = false, threeD = false, cluster = false,
-	selectMode = "off", onAreaSelect, onPitchedChange,
+	selectMode = "off", onAreaSelect, onPitchedChange, aircraftFamilyOf,
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -296,8 +300,14 @@ export const FlightMap: FC<FlightMapProps> = ({
 	positionsRef.current = positions;
 	const seedRef = useRef(seedPositions);
 	seedRef.current = seedPositions;
-	const cbRef = useRef({ onSelectFlight, onClearSelection, onAreaSelect, onPitchedChange });
-	cbRef.current = { onSelectFlight, onClearSelection, onAreaSelect, onPitchedChange };
+	const cbRef = useRef({
+		onSelectFlight, onClearSelection, onAreaSelect, onPitchedChange, aircraftFamilyOf,
+	});
+	cbRef.current = {
+		onSelectFlight, onClearSelection, onAreaSelect, onPitchedChange, aircraftFamilyOf,
+	};
+	// Families whose STL fetch has been kicked off (once per session).
+	const requestedMeshesRef = useRef(new Set<string>());
 	const selectModeRef = useRef<SelectMode>(selectMode);
 	selectModeRef.current = selectMode;
 	// In-flight drag state (mutated at event rate); the overlay div re-renders
@@ -1011,8 +1021,23 @@ export const FlightMap: FC<FlightMapProps> = ({
 						motionPlanes3DToGeoJSON(buf, now, sizeKm),
 					);
 				} else if (planes3DRef.current) {
-					const inst = buildPlaneInstances(buf, now, sizeKm);
-					planes3DRef.current.updateInstances(inst.data, inst.count);
+					// Per-airframe batches (issue #250 follow-up): each family
+					// draws its own model; unloaded families render the prism
+					// until their STL arrives, and every family seen kicks off
+					// its (cached, immutable) asset fetch.
+					const layer = planes3DRef.current;
+					const batches = buildPlaneInstanceBatches(buf, now, sizeKm, (m) =>
+						cbRef.current.aircraftFamilyOf?.(m.item.flight, m.item.start_date) ?? "default",
+					);
+					for (const b of batches) {
+						if (b.meshKey !== "default" && !requestedMeshesRef.current.has(b.meshKey)) {
+							requestedMeshesRef.current.add(b.meshKey);
+							void loadAircraftMesh(b.meshKey as AircraftFamily).then((mesh) => {
+								if (mesh) layer.registerMesh(b.meshKey, mesh);
+							});
+						}
+					}
+					layer.updateBatches(batches);
 					map.triggerRepaint();
 				}
 			}

@@ -79,6 +79,7 @@ describe("useRouteIndex", () => {
 		await waitFor(() =>
 			expect(result.current.get("AA11|2001-09-11")).toEqual({
 				tail_number: "N-AA11", origin: "BOS", scheduled_dest: "LAX",
+				aircraft_type: null, wheels_on_utc: null,
 			}),
 		);
 		expect(fetchMock).toHaveBeenCalledTimes(2);

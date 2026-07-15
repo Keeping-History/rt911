@@ -1,5 +1,5 @@
-import type { FlightMotion, MotionBuffer } from "./flightMotion";
-import { MAX_EXTRAPOLATION_MS, extrapolate } from "./flightMotion";
+import type { FlightMotion, LandingClock, MotionBuffer } from "./flightMotion";
+import { MAX_EXTRAPOLATION_MS, extrapolate, motionNow } from "./flightMotion";
 import { isNotable } from "./notableFlights";
 
 // 3D altitude rendering (issue #224). MapLibre has no elevated symbol layers —
@@ -146,15 +146,17 @@ export function motionPlanes3DToGeoJSON(
 	buffer: MotionBuffer,
 	now: number,
 	sizeKm: number,
+	landing?: LandingClock,
 ): GeoJSON.FeatureCollection {
 	const features: GeoJSON.Feature[] = [];
 	const thicknessM = sizeKm * PLANE_3D_THICKNESS * 1000;
 	for (const m of buffer.values()) {
+		const effNow = motionNow(m, now, landing);
 		// Glided altitude: a plane extrapolated below ground (about to land)
 		// simply drops out, like a flight leaving the airborne set.
-		const altFt = altitudeFtAt(m, now);
+		const altFt = altitudeFtAt(m, effNow);
 		if (altFt <= 0) continue;
-		const head = extrapolate(m, now);
+		const head = extrapolate(m, effNow);
 		const centerAltM = exaggeratedHeightM(altFt);
 		// One whole silhouette slab per plane, LEVEL on purpose. Fill-extrusion
 		// tops are always horizontal, so representing pitch by offsetting
@@ -197,6 +199,7 @@ export function motionTrails3DToGeoJSON(
 	now: number,
 	displayPoints: number,
 	widthKm: number,
+	landing?: LandingClock,
 ): GeoJSON.FeatureCollection {
 	const features: GeoJSON.Feature[] = [];
 	const points = Math.min(displayPoints, TRAIL_3D_MAX_POINTS);
@@ -204,7 +207,7 @@ export function motionTrails3DToGeoJSON(
 	const thicknessM = widthKm * 500; // thin slab: half the ribbon width
 	for (const m of buffer.values()) {
 		if (m.trail.length < 2) continue;
-		const head = extrapolate(m, now);
+		const head = extrapolate(m, motionNow(m, now, landing));
 		const pts: [number, number, number][] = [
 			...m.trail.slice(-points),
 			[head.lon, head.lat, m.item.alt_ft],

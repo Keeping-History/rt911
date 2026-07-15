@@ -40,6 +40,7 @@ import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 import { useAltitudeProfile } from "./useAltitudeProfile";
 import { curtainToGeoJSON } from "./flightAltitude";
 import { legEstimates } from "./flightEta";
+import { familyForAircraftType } from "./aircraftModels";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
 	type FlightMapSettings,
@@ -226,6 +227,17 @@ export const FlightTracker: FC = () => {
 	// Bulk route metadata (tail/origin/dest) for the airborne set — the streamed
 	// position only carries flight # and carrier (see flightFilter.ts).
 	const routeIndex = useRouteIndex(flightPositions);
+	// Airframe family per flight (3D model choice) via the route index's
+	// aircraft_type — same flight|date join (and prevUtcDay fallback) as the
+	// filter criteria. Unknown flights render the generic model.
+	const aircraftFamilyOf = useCallback(
+		(flight: string, startDate: string) =>
+			familyForAircraftType(
+				routeRowFor(routeIndex, { flight, start_date: startDate } as FlightPosition)
+					?.aircraft_type,
+			),
+		[routeIndex],
+	);
 	// null = filter inactive. Feeds the map's replay-trail skip-set, the positions
 	// filter below, and the status bar's "filtered" cue.
 	const visibleFlights = useMemo(
@@ -923,6 +935,7 @@ export const FlightTracker: FC = () => {
 								selectMode={selectMode}
 								onAreaSelect={onAreaSelect}
 								onPitchedChange={onPitchedChange}
+								aircraftFamilyOf={aircraftFamilyOf}
 								onClearSelection={() => setMultiSelected([])}
 							/>
 						</div>
