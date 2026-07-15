@@ -21,11 +21,12 @@ const tipOf = (nowMs: number): [number, number] => {
 };
 
 describe("sweepAngleDeg", () => {
-	it("derives the phase from the clock: 0 at t=0, 90° at 15s, wraps each minute", () => {
+	it("derives the phase from the clock: 0 at t=0, 90° at 7.5s, wraps each 30s period", () => {
+		// RADAR_PERIOD_MS hand-tuned to 30s (faster sweep).
 		expect(sweepAngleDeg(0)).toBe(0);
-		expect(sweepAngleDeg(15_000)).toBe(90);
-		expect(sweepAngleDeg(60_000)).toBe(0);
-		expect(sweepAngleDeg(75_000)).toBe(90);
+		expect(sweepAngleDeg(7_500)).toBe(90);
+		expect(sweepAngleDeg(30_000)).toBe(0);
+		expect(sweepAngleDeg(37_500)).toBe(90);
 	});
 });
 
@@ -41,8 +42,8 @@ describe("sweepLineGeoJSON", () => {
 		expect(tip[1]).toBeGreaterThan(RADAR_CENTER[1]);
 	});
 
-	it("points due east at t=15s (same latitude, greater longitude)", () => {
-		const tip = tipOf(15_000);
+	it("points due east at a quarter period (same latitude, greater longitude)", () => {
+		const tip = tipOf(7_500);
 		expect(tip[1]).toBeCloseTo(RADAR_CENTER[1], 6);
 		expect(tip[0]).toBeGreaterThan(RADAR_CENTER[0]);
 	});
@@ -51,7 +52,7 @@ describe("sweepLineGeoJSON", () => {
 		const dist = (tip: [number, number]) =>
 			Math.hypot(mercX(tip[0]) - mercX(RADAR_CENTER[0]), mercY(tip[1]) - mercY(RADAR_CENTER[1]));
 		const d0 = dist(tipOf(0));
-		expect(dist(tipOf(15_000))).toBeCloseTo(d0, 9);
+		expect(dist(tipOf(7_500))).toBeCloseTo(d0, 9);
 		expect(dist(tipOf(37_500))).toBeCloseTo(d0, 9);
 	});
 });

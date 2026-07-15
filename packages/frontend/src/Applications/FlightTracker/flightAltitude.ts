@@ -1,5 +1,5 @@
-import type { MotionBuffer } from "./flightMotion";
-import { extrapolate } from "./flightMotion";
+import type { FlightMotion, MotionBuffer } from "./flightMotion";
+import { MAX_EXTRAPOLATION_MS, extrapolate } from "./flightMotion";
 import { isNotable } from "./notableFlights";
 
 // 3D altitude rendering (issue #224). MapLibre has no elevated symbol layers —
@@ -32,7 +32,7 @@ export function exaggeratedHeightM(altFt: number): number {
 // target itself GROWS as you zoom in (a constant-px marker reads as shrinking
 // while the map features around it grow), clamped at both ends.
 export function plane3DTargetPx(zoom: number): number {
-	return Math.min(Math.max(16 + (zoom - 3.5) * 4.5, 16), 44);
+	return Math.min(Math.max(2 + (zoom - 3.5) * 4.5, 2), 44);
 }
 
 /** Ground km covered by one CSS pixel at a web-mercator zoom and latitude. */
@@ -133,16 +133,40 @@ function clipRingToBand(
 // extrudes at its own altitude along the climb gradient, so ascending and
 // descending aircraft visibly tilt nose-up/-down. (A fill-extrusion top is
 // always horizontal — a continuously tilted model would need a custom WebGL
-// layer; three strips read as pitch at marker scale.)
-const PLANE_BANDS: { ring: [number, number][]; centerF: number }[] = [
-	{ ring: clipRingToBand(PLANE_SHAPE, 0.3, 1), centerF: 0.6 }, // nose
-	{ ring: clipRingToBand(PLANE_SHAPE, -0.3, 0.3), centerF: 0 }, // wings
-	{ ring: clipRingToBand(PLANE_SHAPE, -1, -0.3), centerF: -0.62 }, // tail
-];
+// layer.) Strips are narrow and MAX_PITCH_SLOPE_M_PER_KM is chosen so each
+// step stays smaller than the slab thickness: adjacent strips always overlap
+// vertically and the plane reads as one connected tilted body, never sheared
+// slices. Nose strip first (tests rely on the ordering).
+const PLANE_BAND_COUNT = 7;
+const PLANE_BANDS: { ring: [number, number][]; centerF: number }[] = Array.from(
+	{ length: PLANE_BAND_COUNT },
+	(_, i) => {
+		const maxY = 0.9 - (1.8 / PLANE_BAND_COUNT) * i;
+		const minY = maxY - 1.8 / PLANE_BAND_COUNT;
+		return { ring: clipRingToBand(PLANE_SHAPE, minY, maxY), centerF: (minY + maxY) / 2 };
+	},
+).filter((b) => b.ring.length > 0);
 
-// Visual pitch clamp: ±45° keeps steep climbs dramatic without the bands
-// tearing apart into disconnected steps.
-const MAX_PITCH_SLOPE_M_PER_KM = 1_000;
+// Overlap guarantee: step between adjacent strip centers is
+// slope × (1.8/N) × sizeKm/2 meters, slab thickness is
+// PLANE_3D_THICKNESS × sizeKm × 1000 meters — clamping the slope keeps
+// step ≤ ~0.75 × thickness for every size, i.e. strips always interlock.
+const MAX_PITCH_SLOPE_M_PER_KM = 700;
+
+/**
+ * Dead-reckoned altitude at `now`, mirroring how extrapolate() glides the
+ * position: vertical rate from the last two samples, clamped to the same
+ * MAX_EXTRAPOLATION_MS hold. Without this a descending plane rides level for
+ * a minute then snaps down a step — blocky against the spline-smooth curtain.
+ */
+export function altitudeFtAt(m: FlightMotion, now: number): number {
+	const cur = m.item.alt_ft;
+	if (m.trail.length < 2 || m.curT <= m.prevT) return cur;
+	const prevAlt = m.trail[m.trail.length - 2][2];
+	const rate = (cur - prevAlt) / (m.curT - m.prevT); // ft per ms
+	const dt = Math.min(Math.max(now - m.curT, 0), MAX_EXTRAPOLATION_MS);
+	return cur + rate * dt;
+}
 
 /**
  * Exaggerated climb gradient (m of exaggerated altitude per km of ground
@@ -204,18 +228,32 @@ export function motionPlanes3DToGeoJSON(
 	const features: GeoJSON.Feature[] = [];
 	const thicknessM = sizeKm * PLANE_3D_THICKNESS * 1000;
 	for (const m of buffer.values()) {
-		if (m.item.alt_ft <= 0) continue;
+		// Glided altitude: a plane extrapolated below ground (about to land)
+		// simply drops out, like a flight leaving the airborne set.
+		const altFt = altitudeFtAt(m, now);
+		if (altFt <= 0) continue;
 		const head = extrapolate(m, now);
-		const centerAltM = exaggeratedHeightM(m.item.alt_ft);
-		// Stepped pitch: each forward band offsets along the climb gradient
-		// (nose band rises when ascending, drops when descending).
+		const centerAltM = exaggeratedHeightM(altFt);
+		// Stepped pitch: forward strips offset along the climb gradient (nose
+		// rises when ascending, drops when descending). Level flights — the
+		// bulk of traffic — take the single-slab fast path.
 		const slope = climbSlopeMPerKm(m);
 		const props = {
 			flight: m.item.flight,
 			notable: isNotable(m.item.flight),
 		};
+		if (slope === 0) {
+			features.push({
+				type: "Feature",
+				geometry: {
+					type: "Polygon",
+					coordinates: [planeRing(head.lon, head.lat, m.headingDeg, sizeKm)],
+				},
+				properties: { ...props, base: centerAltM, height: centerAltM + thicknessM },
+			});
+			continue;
+		}
 		for (const band of PLANE_BANDS) {
-			if (band.ring.length === 0) continue;
 			const base = Math.max(
 				centerAltM + slope * band.centerF * (sizeKm / 2),
 				0,
@@ -266,8 +304,7 @@ export function motionTrails3DToGeoJSON(
 		for (let i = 1; i < pts.length; i++) {
 			const [alon, alat, aalt] = pts[i - 1];
 			const [blon, blat, balt] = pts[i];
-			const altFt = (aalt + balt) / 2;
-			if (altFt <= 0) continue;
+			if (Math.max(aalt, balt) <= 0) continue;
 			const dx = blon - alon;
 			const dy = blat - alat;
 			const len = Math.hypot(dx, dy);
@@ -276,7 +313,12 @@ export function motionTrails3DToGeoJSON(
 			const halfDeg = widthKm / 2 / (KM_PER_DEG_LAT * 1); // lat-units half width
 			const ox = (-dy / len) * (halfDeg / cosLat);
 			const oy = (dx / len) * halfDeg;
-			const altM = exaggeratedHeightM(altFt);
+			// Each quad spans vertically from the LOWER endpoint's altitude to
+			// the HIGHER one (± half thickness): consecutive quads meet exactly
+			// at the shared point's altitude, so a climb reads as one connected
+			// ramp instead of dissected blocks hovering at segment midpoints.
+			const loM = exaggeratedHeightM(Math.min(aalt, balt));
+			const hiM = exaggeratedHeightM(Math.max(aalt, balt));
 			features.push({
 				type: "Feature",
 				geometry: {
@@ -291,8 +333,8 @@ export function motionTrails3DToGeoJSON(
 				},
 				properties: {
 					notable: isNotable(m.item.flight),
-					base: Math.max(altM - thicknessM / 2, 0),
-					height: altM + thicknessM / 2,
+					base: Math.max(loM - thicknessM / 2, 0),
+					height: hiM + thicknessM / 2,
 				},
 			});
 		}

@@ -27,6 +27,7 @@ import {
 	type MotionBuffer,
 	TRAIL_MULTIPLIER_MAX,
 	TRAIL_POINTS,
+	extrapolate,
 	motionPointsToGeoJSON,
 	motionTrailsToGeoJSON,
 	seedMotionFromHistory,
@@ -39,6 +40,8 @@ import {
 	sweepTrailGeoJSON,
 } from "./flightRadar";
 import {
+	altitudeFtAt,
+	exaggeratedHeightM,
 	kmPerPixel,
 	motionPlanes3DToGeoJSON,
 	motionTrails3DToGeoJSON,
@@ -163,6 +166,42 @@ function featureAnchor(f: { geometry: GeoJSON.Geometry }): [number, number] | nu
 	return null;
 }
 
+// Screen position of a location AT ALTITUDE. queryRenderedFeatures on
+// fill-extrusion layers hit-tests the ground FOOTPRINT, not the visually
+// elevated pixels — so 3D hit tests must project the elevated point
+// themselves. transform.coordinatePoint(coord, elevationMeters) is internal
+// (absent from the public types, present in every 5.x mercator transform);
+// if it's ever missing (or throws, e.g. exotic projections), fall back to
+// the ground projection — no worse than the pre-fix behavior.
+function projectAtAltitude(
+	map: maplibregl.Map,
+	lon: number,
+	lat: number,
+	altM: number,
+): { x: number; y: number } {
+	const transform = (
+		map as unknown as {
+			transform?: {
+				coordinatePoint?: (
+					coord: maplibregl.MercatorCoordinate,
+					elevation: number,
+				) => { x: number; y: number };
+			};
+		}
+	).transform;
+	if (transform?.coordinatePoint) {
+		try {
+			return transform.coordinatePoint(
+				maplibregl.MercatorCoordinate.fromLngLat([lon, lat]),
+				altM,
+			);
+		} catch {
+			// fall through to ground projection
+		}
+	}
+	return map.project([lon, lat]);
+}
+
 /**
  * Single resolver for the pitch × cluster layer matrix (two flags, one
  * writer — split writers previously stomped each other's visibility).
@@ -276,6 +315,27 @@ export const FlightMap: FC<FlightMapProps> = ({
 	}), []);
 
 	const motionBufferRef = useRef<MotionBuffer>(new Map());
+	// Smooth virtual "now" as the rAF loop computes it — used by the pitched
+	// hit tests so clicked positions match the gliding render exactly.
+	const smoothNow = () => {
+		const a = anchorRef.current;
+		return playingRef.current ? a.virtual + (performance.now() - a.wall) : a.virtual;
+	};
+	// Screen positions of every airborne plane AT its rendered (glided)
+	// altitude — the pitched replacement for queryRenderedFeatures, which only
+	// tests fill-extrusion ground footprints.
+	const planeScreenPositions = (map: maplibregl.Map) => {
+		const now = smoothNow();
+		const out: { flight: string; x: number; y: number }[] = [];
+		for (const m of motionBufferRef.current.values()) {
+			const altFt = altitudeFtAt(m, now);
+			if (altFt <= 0) continue;
+			const head = extrapolate(m, now);
+			const p = projectAtAltitude(map, head.lon, head.lat, exaggeratedHeightM(altFt));
+			out.push({ flight: m.item.flight, x: p.x, y: p.y });
+		}
+		return out;
+	};
 	const nowMsRef = useRef(nowMs);
 	nowMsRef.current = nowMs;
 	const playingRef = useRef(playing);
@@ -569,19 +629,28 @@ export const FlightMap: FC<FlightMapProps> = ({
 			if (!d || mode === "off") return;
 			d.curX = e.point.x;
 			d.curY = e.point.y;
-			const b = dragBounds(mode, d);
-			const feats = map.queryRenderedFeatures(
-				[[b.minX, b.minY], [b.maxX, b.maxY]],
-				{ layers: ["flights-dots", "flights-notable", "cluster-planes", "planes-3d"] },
-			);
 			const flights: string[] = [];
-			for (const f of feats) {
-				const anchor = featureAnchor(f);
-				if (!anchor) continue;
-				const pp = map.project(anchor);
-				if (!insideSelection(mode, d, pp.x, pp.y)) continue;
-				const flight = String(f.properties?.flight ?? "");
-				if (flight && !flights.includes(flight)) flights.push(flight);
+			if (pitchedRef.current) {
+				// Pitched: test the planes' elevated screen positions directly
+				// (fill-extrusion footprints sit far from the visible aircraft).
+				for (const p of planeScreenPositions(map)) {
+					if (!insideSelection(mode, d, p.x, p.y)) continue;
+					if (!flights.includes(p.flight)) flights.push(p.flight);
+				}
+			} else {
+				const b = dragBounds(mode, d);
+				const feats = map.queryRenderedFeatures(
+					[[b.minX, b.minY], [b.maxX, b.maxY]],
+					{ layers: ["flights-dots", "flights-notable", "cluster-planes"] },
+				);
+				for (const f of feats) {
+					const anchor = featureAnchor(f);
+					if (!anchor) continue;
+					const pp = map.project(anchor);
+					if (!insideSelection(mode, d, pp.x, pp.y)) continue;
+					const flight = String(f.properties?.flight ?? "");
+					if (flight && !flights.includes(flight)) flights.push(flight);
+				}
 			}
 			cbRef.current.onAreaSelect?.(flights);
 		});
@@ -590,16 +659,31 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// While a select tool is armed, the drag handlers own the pointer.
 			if (selectModeRef.current !== "off") return;
 			const { x, y } = e.point;
+			// Pitched: hit-test against the planes' ELEVATED screen positions.
+			// queryRenderedFeatures only sees fill-extrusion ground footprints,
+			// which sit far below the visible aircraft at cruise altitudes.
+			if (pitchedRef.current) {
+				const tolerance = plane3DTargetPx(map.getZoom()) / 2 + HIT_TOLERANCE;
+				let bestFlight: string | null = null;
+				let bestDist = tolerance * tolerance;
+				for (const p of planeScreenPositions(map)) {
+					const d = (p.x - x) ** 2 + (p.y - y) ** 2;
+					if (d < bestDist) {
+						bestDist = d;
+						bestFlight = p.flight;
+					}
+				}
+				if (bestFlight) cbRef.current.onSelectFlight(bestFlight);
+				else cbRef.current.onClearSelection();
+				return;
+			}
 			const near = map.queryRenderedFeatures(
 				[
 					[x - HIT_TOLERANCE, y - HIT_TOLERANCE],
 					[x + HIT_TOLERANCE, y + HIT_TOLERANCE],
 				],
 				{
-					layers: [
-						"flights-dots", "flights-notable", "cluster-planes",
-						"cluster-circles", "planes-3d",
-					],
+					layers: ["flights-dots", "flights-notable", "cluster-planes", "cluster-circles"],
 				},
 			);
 			// A cluster blob expands instead of selecting.

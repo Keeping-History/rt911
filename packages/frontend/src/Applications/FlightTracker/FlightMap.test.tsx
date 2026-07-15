@@ -389,8 +389,8 @@ describe("FlightMap", () => {
 		}).geometry.coordinates[1];
 		expect(tipAtLoad[0]).toBeCloseTo(-98.35, 2); // t=0 → due north of center
 
-		// One frame 15 virtual seconds later → quarter turn → tip due east (~27° lon away).
-		rafCb!(15_000);
+		// One frame 7.5 virtual seconds later → quarter turn (30s period) → tip due east.
+		rafCb!(7_500);
 		const tip = (map.sources["radar-sweep"]!.data as {
 			geometry: { coordinates: [number, number][] };
 		}).geometry.coordinates[1];
@@ -766,14 +766,15 @@ describe("FlightMap", () => {
 		const data = map.sources["planes-3d"]?.data as {
 			features: { properties: { flight: string; base: number; height: number } }[];
 		};
-		expect(data.features).toHaveLength(3); // one flight × nose/wing/tail bands
+		expect(data.features).toHaveLength(1); // level flight → single-slab fast path
 		const p = data.features[0].properties;
 		// Slab AT altitude: base is the exaggerated altitude, top a thin marker
 		// thickness above it (12% of the zoom-scaled marker size — NOT a
 		// ground-to-sky bar, whose base would be 0).
 		expect(p.base).toBeCloseTo(31_000 * 0.3048 * 10, 0);
-		// plane3DTargetPx(3) clamps to the 16px floor at the stub's zoom 3.
-		const sizeKm = 16 * ((40_075 * Math.cos((39 * Math.PI) / 180)) / (256 * 2 ** 3));
+		// plane3DTargetPx(3) clamps to the hand-tuned 2px floor (issue #245) at
+		// the stub's zoom 3.
+		const sizeKm = 2 * ((40_075 * Math.cos((39 * Math.PI) / 180)) / (256 * 2 ** 3));
 		expect(p.height - p.base).toBeCloseTo(sizeKm * 0.12 * 1000, 0);
 
 		map.pitch = 0;
@@ -800,6 +801,56 @@ describe("FlightMap", () => {
 		map.pitch = 2;
 		map.fire("pitch"); // still flat — no duplicate call
 		expect(onPitchedChange).toHaveBeenCalledTimes(2);
+	});
+
+	it("pitched click hit-tests the planes' elevated positions, not layer footprints", () => {
+		const onSelect = vi.fn();
+		const onClear = vi.fn();
+		// Two airborne planes; stub project() maps lon/lat→x/y (no transform on
+		// the stub, so projectAtAltitude falls back to ground projection).
+		render(
+			<FlightMap
+				positions={[
+					pos({ id: 1, flight: "DL404", lon: 40, lat: 30 }),
+					pos({ id: 2, flight: "UA9", lon: 200, lat: 200 }),
+				]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={onSelect} onClearSelection={onClear}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} threeD={true} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load"); // seeds pitch 60 → pitched hit path active
+		// queryRenderedFeatures would return nothing here (footprints don't
+		// contain the click) — the buffer-based test must still find DL404.
+		map.queryResult = [];
+		map.fire("click", { point: { x: 41, y: 31 } });
+		expect(onSelect).toHaveBeenCalledWith("DL404");
+		// A click far from every plane clears.
+		map.fire("click", { point: { x: 500, y: 500 } });
+		expect(onClear).toHaveBeenCalled();
+	});
+
+	it("pitched area select captures planes by elevated position", () => {
+		const onAreaSelect = vi.fn();
+		const common = {
+			positions: [
+				pos({ id: 1, flight: "DL404", lon: 40, lat: 30 }),
+				pos({ id: 2, flight: "UA9", lon: 300, lat: 300 }),
+			],
+			basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0, playing: false,
+			onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+			threeD: true, onAreaSelect,
+		};
+		render(<FlightMap {...common} selectMode="rect" />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		map.queryResult = []; // footprint query must not be what selects
+		map.fire("mousedown", { point: { x: 10, y: 10 } });
+		map.fire("mouseup", { point: { x: 100, y: 100 } });
+		expect(onAreaSelect).toHaveBeenCalledWith(["DL404"]); // UA9 outside box
 	});
 
 	it("compass tracks map rotation and resets bearing on click", () => {

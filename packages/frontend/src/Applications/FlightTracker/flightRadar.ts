@@ -5,9 +5,9 @@ import type { Feature, FeatureCollection, LineString, Polygon } from "geojson";
 // accumulated state), so pausing Time Machine freezes the sweep and a seek
 // just jumps its phase.
 export const RADAR_CENTER: [number, number] = [-98.35, 39.83]; // Lebanon, KS
-export const RADAR_PERIOD_MS = 60_000;
+export const RADAR_PERIOD_MS = 30_000;
 // Radius in normalized-mercator units (≈27° of longitude): reaches both coasts.
-export const RADAR_RADIUS_MERC = 0.075;
+export const RADAR_RADIUS_MERC = 0.15;
 export const RADAR_TRAIL_DEG = 45; // afterglow wedge span behind the line
 export const RADAR_TRAIL_SLICES = 12;
 export const RADAR_TRAIL_MAX_OPACITY = 0.35;

@@ -5,6 +5,7 @@ import {
 	ALT_EXAGGERATION,
 	FT_TO_M,
 	TRAIL_3D_MAX_POINTS,
+	altitudeFtAt,
 	curtainToGeoJSON,
 	exaggeratedHeightM,
 	kmPerPixel,
@@ -63,41 +64,49 @@ describe("kmPerPixel", () => {
 
 describe("plane3DTargetPx", () => {
 	it("grows the on-screen marker as you zoom in, clamped at both ends", () => {
-		expect(plane3DTargetPx(3)).toBe(16); // floor
+		// 2px floor: hand-tuned (issue #245) so continental views stay airy —
+		// solid 3D silhouettes carry far more ink than the 2D icons.
+		expect(plane3DTargetPx(3)).toBe(2); // floor
 		expect(plane3DTargetPx(7)).toBeGreaterThan(plane3DTargetPx(5));
-		expect(plane3DTargetPx(12)).toBe(44); // ceiling
+		expect(plane3DTargetPx(13)).toBe(44); // ceiling
 	});
 });
 
 describe("motionPlanes3DToGeoJSON", () => {
-	it("emits nose/wing/tail bands per flight, all floating level at cruise", () => {
+	it("level cruise takes the fast path: one whole-silhouette slab AT altitude", () => {
 		const fc = motionPlanes3DToGeoJSON(bufferWith([{ flight: "DL404", alt_ft: 33_000 }]), 0, 4);
-		expect(fc.features).toHaveLength(3); // stepped-pitch bands
+		expect(fc.features).toHaveLength(1); // no climb history → no banding
+		const f = fc.features[0];
 		const base = 33_000 * FT_TO_M * ALT_EXAGGERATION;
-		for (const f of fc.features) {
-			expect(f.properties!.flight).toBe("DL404");
-			expect(f.properties!.notable).toBe(false);
-			// Level (no climb history): every band sits AT altitude, thin slab.
-			expect(f.properties!.base).toBeCloseTo(base, 0);
-			expect((f.properties!.height as number) - (f.properties!.base as number)).toBeLessThan(
-				base / 10,
-			);
-			const ring = (f.geometry as GeoJSON.Polygon).coordinates[0];
-			expect(ring[0]).toEqual(ring[ring.length - 1]);
-		}
+		expect(f.properties!.flight).toBe("DL404");
+		expect(f.properties!.notable).toBe(false);
+		expect(f.properties!.base).toBeCloseTo(base, 0);
+		expect((f.properties!.height as number) - (f.properties!.base as number)).toBeLessThan(
+			base / 10,
+		);
+		const ring = (f.geometry as GeoJSON.Polygon).coordinates[0];
+		expect(ring[0]).toEqual(ring[ring.length - 1]);
 		expect(exaggeratedHeightM(33_000)).toBeCloseTo(100_584, 0);
 	});
 
-	it("tilts the bands along the climb gradient: nose above tail when ascending", () => {
+	it("climbing planes tilt as interlocking strips: nose highest, no vertical gaps", () => {
 		const buf: MotionBuffer = new Map();
 		// Two minutes of eastbound climb: 10k → 14k ft over ~9 km of track.
 		updateMotion(buf, [pos({ id: 1, flight: "UA1", lon: -74.1, alt_ft: 10_000, start_date: "2001-09-11T13:00:00Z" })]);
 		updateMotion(buf, [pos({ id: 2, flight: "UA1", lon: -74.0, alt_ft: 14_000, start_date: "2001-09-11T13:01:00Z" })]);
 		const fc = motionPlanes3DToGeoJSON(buf, Date.parse("2001-09-11T13:01:00Z"), 4);
+		expect(fc.features.length).toBeGreaterThanOrEqual(5); // narrow strips, nose→tail
 		const bases = fc.features.map((f) => f.properties!.base as number);
-		expect(bases).toHaveLength(3);
-		expect(bases[0]).toBeGreaterThan(bases[1]); // nose above wings
-		expect(bases[1]).toBeGreaterThan(bases[2]); // wings above tail
+		for (let i = 1; i < bases.length; i++) {
+			expect(bases[i - 1]).toBeGreaterThan(bases[i]); // strictly nose-down ordering
+		}
+		// The shear guarantee: every strip's slab overlaps its neighbor's —
+		// the plane must read as one connected body, never severed slices.
+		for (let i = 1; i < fc.features.length; i++) {
+			const upper = fc.features[i - 1].properties!;
+			const lower = fc.features[i].properties!;
+			expect(upper.base as number).toBeLessThan(lower.height as number);
+		}
 	});
 
 	it("marks notables and skips grounded flights", () => {
@@ -109,13 +118,32 @@ describe("motionPlanes3DToGeoJSON", () => {
 			0,
 			4,
 		);
-		expect(fc.features).toHaveLength(3); // one flight × three bands
-		for (const f of fc.features) expect(f.properties!.notable).toBe(true);
+		expect(fc.features).toHaveLength(1); // level notable, fast path; N1 grounded
+		expect(fc.features[0].properties!.notable).toBe(true);
+	});
+
+	it("glides altitude between samples like position: no minute-step descents", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [pos({ id: 1, flight: "DL9", lon: -74.1, alt_ft: 20_000, start_date: "2001-09-11T13:00:00Z" })]);
+		updateMotion(buf, [pos({ id: 2, flight: "DL9", lon: -74.0, alt_ft: 10_000, start_date: "2001-09-11T13:01:00Z" })]);
+		const t1 = Date.parse("2001-09-11T13:01:00Z");
+		// 30s past the last sample at −10k ft/min → dead-reckoned to 5,000 ft.
+		expect(altitudeFtAt(buf.get("DL9")!, t1 + 30_000)).toBeCloseTo(5_000, 5);
+		// Clamped at MAX_EXTRAPOLATION_MS (90s → −15k → below ground) —
+		// the plane feature drops out rather than tunneling.
+		const far = motionPlanes3DToGeoJSON(buf, t1 + 10 * 60_000, 4);
+		expect(far.features).toHaveLength(0);
+		// And the rendered base at t1+30s uses the glided altitude.
+		const fc = motionPlanes3DToGeoJSON(buf, t1 + 30_000, 4);
+		const bases = fc.features.map((f) => f.properties!.base as number);
+		const mid = exaggeratedHeightM(5_000);
+		expect(Math.min(...bases)).toBeLessThan(mid);
+		expect(Math.max(...bases)).toBeGreaterThan(mid * 0.9);
 	});
 });
 
 describe("motionTrails3DToGeoJSON", () => {
-	it("floats one thin ribbon quad per trail segment at the pair's mid altitude", () => {
+	it("each ribbon quad spans the pair's altitude range so climbs stay connected", () => {
 		const buf: MotionBuffer = new Map();
 		updateMotion(buf, [pos({ id: 1, flight: "UA1", lon: -74.1, alt_ft: 10_000, start_date: "2001-09-11T13:00:00Z" })]);
 		updateMotion(buf, [pos({ id: 2, flight: "UA1", lon: -74.0, alt_ft: 20_000, start_date: "2001-09-11T13:01:00Z" })]);
@@ -125,9 +153,11 @@ describe("motionTrails3DToGeoJSON", () => {
 		// zero-length head segment is skipped → 1 ribbon quad.
 		expect(fc.features).toHaveLength(1);
 		const f = fc.features[0];
-		const midM = exaggeratedHeightM(15_000);
-		expect(f.properties!.base).toBeLessThan(midM);
-		expect(f.properties!.height).toBeGreaterThan(midM);
+		// Vertical extent covers BOTH endpoints (min→max ± half thickness), so
+		// consecutive quads meet at the shared point instead of hovering as
+		// dissected mid-altitude blocks.
+		expect(f.properties!.base).toBeLessThan(exaggeratedHeightM(10_000));
+		expect(f.properties!.height).toBeGreaterThan(exaggeratedHeightM(20_000));
 		const ring = (f.geometry as GeoJSON.Polygon).coordinates[0];
 		expect(ring).toHaveLength(5);
 		expect(ring[0]).toEqual(ring[4]);
