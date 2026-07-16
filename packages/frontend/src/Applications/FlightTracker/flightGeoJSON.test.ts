@@ -25,4 +25,10 @@ describe("flightsToGeoJSON", () => {
 		expect(fc.features[0].properties.carrier).toBe("");
 		expect(fc.features[0].properties.phase).toBe("");
 	});
+	it("stamps the static builder's features with the generic family", () => {
+		const fc = flightsToGeoJSON([
+			{ id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z", lat: 40, lon: -74, alt_ft: 30000 },
+		]);
+		expect(fc.features[0].properties.family).toBe("generic");
+	});
 });

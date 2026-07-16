@@ -13,6 +13,9 @@ export interface FlightFeature {
 		notable: boolean;
 		// Degrees clockwise from north; drives the plane icons' icon-rotate.
 		heading: number;
+		// Airframe family (aircraftModels.AircraftFamily) — drives the
+		// per-family 2D silhouette via the layers' data-driven icon-image.
+		family: string;
 	};
 }
 
@@ -38,6 +41,7 @@ export function flightsToGeoJSON(positions: FlightPosition[]): FlightFeatureColl
 				phase: p.phase ?? "",
 				notable: isNotable(p.flight),
 				heading: 0, // static builder — no velocity context
+				family: "generic", // static builder — no route-index context
 			},
 		})),
 	};

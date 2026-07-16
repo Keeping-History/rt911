@@ -177,6 +177,25 @@ describe("heading", () => {
 		const fc = motionPointsToGeoJSON(buf, T1);
 		expect(fc.features[0].properties.heading).toBeCloseTo(90, 5);
 	});
+
+	it("motionPointsToGeoJSON defaults family to generic without a resolver", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [pos({ flight: "AA11" })]);
+		const fc = motionPointsToGeoJSON(buf, Date.parse("2001-09-11T13:00:00Z"));
+		expect(fc.features[0].properties.family).toBe("generic");
+	});
+
+	it("motionPointsToGeoJSON stamps each feature via the familyOf resolver", () => {
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [pos({ flight: "AA11" })]);
+		const fc = motionPointsToGeoJSON(
+			buf,
+			Date.parse("2001-09-11T13:00:00Z"),
+			undefined,
+			(m) => (m.item.flight === "AA11" ? "b767" : "generic"),
+		);
+		expect(fc.features[0].properties.family).toBe("b767");
+	});
 });
 
 describe("trail display length (multiplier support)", () => {

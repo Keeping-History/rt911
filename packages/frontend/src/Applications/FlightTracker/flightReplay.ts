@@ -116,7 +116,7 @@ export function replayPointsAt(
 			id: f.id,
 			geometry: { type: "Point", coordinates: [at.lon, at.lat] },
 			// heading: replay-trail layers are circles, not rotated plane icons.
-			properties: { ...f.props, heading: 0 },
+			properties: { ...f.props, heading: 0, family: "generic" },
 		});
 	}
 	return { type: "FeatureCollection", features };
