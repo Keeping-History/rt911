@@ -1,10 +1,11 @@
 # Playlist Authentication & Ownership — Design Spec
 
-**Date:** 2026-07-16
-**Status:** Approved (brainstorm sign-off, section by section)
+**Date:** 2026-07-16 (amended same day after the license-key spike — see History)
+**Status:** Amended post-spike; awaiting user review
 **Depends on:** Teacher Playlists (shipped 2026-07-16 — `plans/2026-07-16-teacher-playlists-design.md`)
-**Scope:** Auth + accounts + playlist ownership + a secure CRUD API. The playlist **editor UI is
-explicitly out of scope** (its own future spec); this project delivers the seam it will consume.
+**Scope:** Auth + accounts + playlist ownership + a secure CRUD path. The playlist **editor UI is
+explicitly out of scope** (its own future spec); this project delivers the seam it will consume
+(`playlistApi.ts`).
 
 ## Goal
 
@@ -12,37 +13,51 @@ Teachers sign in (Google, email+password, Facebook, Apple), own their playlists,
 edit/save/publish/share them safely. Students keep consuming published playlists anonymously via
 `?playlist=<uuid>` exactly as today.
 
-## Load-bearing constraint (probed, not assumed)
+## History / spike results (probed, not assumed)
 
-The API is **Directus 12.1.1** and custom permission item rules are **license-gated** on this
-instance: creating a permission with `{"user_created": {"_eq": "$CURRENT_USER"}}` fails with
-`custom_permission_rules_enabled is a restricted resource` (verified 2026-07-16; the only
-rules-bearing permissions present are Directus system built-ins). Therefore **Directus's
-permission engine cannot enforce per-teacher ownership here** — enforcement lives in a custom
-endpoint extension (code we control, not license-gated). Related: the current public read
-permission on `/items/playlists` cannot be row-filtered, so **drafts are publicly readable by
-UUID today** — this design closes that hole.
+1. **Morning:** Directus 12.1.1 on the Core (unlicensed) tier gates custom permission item rules
+   (`custom_permission_rules_enabled RESTRICTED`) **and SSO** (local-container spike log: *"you
+   have SSO providers configured these will be unavailable under the current license tier"*).
+   The original draft of this spec therefore routed all enforcement through a custom endpoint
+   extension.
+2. **Then:** a production license key was provided and installed — `LICENSE_KEY` in the
+   `rt911-secrets` Secret (injected via the deployment's existing `envFrom`; the Secret is
+   manually managed, NOT in the infra repo — the key file itself lives at
+   `~/directus-license-key.txt`, mode 0600, deliberately outside any git checkout).
+3. **Verified un-gated on prod:** a `$CURRENT_USER` item rule now creates successfully
+   (created + deleted as a probe). SSO is enforced by the same license mechanism per the
+   [v12 release notes](https://github.com/directus/directus/releases/tag/v12.0.0); final
+   confirmation happens when the first real provider is configured (Plan step zero).
+4. **Already applied to prod** (was approved in the pre-amendment design, became possible with
+   the license): the public read permission on `playlists` (id 16) is now row-filtered
+   `status = published`. Verified: published playlist reads 200 anonymously, drafts read 403,
+   and the student loader's fail-open dialog handles the 403 correctly.
+5. **Consequence:** the endpoint extension, custom `rt911-api` image, and infra-repo change from
+   the original draft are **deleted from this design**. Enforcement is native Directus
+   permissions. Directus's endpoint-extension mechanism was also spike-verified working
+   (loads, serves, `ItemsService` usable) — kept in the back pocket for future needs (e.g.
+   server-side definition validation), required by nothing in v1.
 
 ## Decisions (from brainstorm)
 
 | Question | Decision |
 |---|---|
-| Scope | Auth + ownership + CRUD API now; editor UI later (consumes `playlistApi.ts`) |
+| Scope | Auth + ownership + CRUD path now; editor UI later (consumes `playlistApi.ts`) |
 | Providers (v1) | Google, email+password, Facebook, Apple — all four |
 | Sign-up | Open self-service, email-verified; no admin approval |
 | Sharing | Publish → student link; plus **duplicate** (any teacher copies a published playlist into their account as a draft) |
-| Architecture | **A: Directus-native identity + custom endpoint extension** for enforcement (B = own Go BFF is the documented fallback if the SSO spike fails) |
+| Architecture | Directus-native identity **and** native permission enforcement (license-unlocked) |
 | Account UI styling | The Account app is built from Classicy components (`ClassicyWindow`, `ClassicyButton`, the Feedback app's form controls) — the sign-in window must read as a native Mac OS 8 dialog |
 
 ## §1 Identity & accounts (Directus)
 
-- New role **`Teacher`** + attached policy: `app_access: false` (teachers never see the Directus
-  admin app), **no direct `items` permissions on `playlists`** — the extension is the only path.
+- New role **`Teacher`** + attached policy (see §3): `app_access: false` — teachers never see the
+  Directus admin app; their only surface is our frontend.
 - **SSO:** `AUTH_PROVIDERS=google,facebook,apple` via env (OpenID Connect for Google/Apple,
   OAuth2 for Facebook) in `rt911-config` + client secrets in `rt911-secrets`. Each provider sets
   `AUTH_<P>_DEFAULT_ROLE_ID` = Teacher so first sign-in auto-provisions the account.
 - **Email+password:** `public_registration: true` with `PUBLIC_REGISTRATION_ROLE` = Teacher and
-  **verify-email required** before first login.
+  **verify-email required** before first login (spike-verified registration works on 12.1.1).
 - **External prerequisites (ops, not code):**
   1. Google OAuth client (free)
   2. Meta developer app (free)
@@ -50,16 +65,18 @@ UUID today** — this design closes that hole.
      config, so Apple may lag launch)
   4. An SMTP path (`EMAIL_TRANSPORT`, e.g. SES/Mailgun/Postmark) for verification + password
      reset — the cluster has none today. **SSO-only works without it; email+password does not.**
-- **Step zero is a verification spike:** configure Google on a scratch basis and prove a live
-  login round-trip on beta **before any other work**. If SSO turns out license-gated like the
-  permission rules, stop and pivot to Approach B (own Go auth/BFF service) reusing this spec's
-  API contract (§3 routes) unchanged.
+- **Plan step zero:** configure the Google provider with a real client and prove one live login
+  round-trip on beta (confirms SSO un-gating end-to-end before UI work).
+- **Ops notes (from the license spike):** the deployment runs `directus/directus:latest` — pin
+  to a specific version tag (image choice lives in the infra repo) so Directus doesn't silently
+  upgrade on pod restarts; license validation is **online mode** (periodic revalidation against
+  Directus's licensing service — outbound network required, which the cluster has).
 
 ## §2 Sessions & frontend sign-in surface
 
 - **Directus session cookies** (`session` auth mode): httpOnly, secure, `SameSite=Lax`,
   `SESSION_COOKIE_DOMAIN=.911realtime.org`. Frontend (`beta.911realtime.org`) and API
-  (`api-beta.911realtime.org`) share the registrable domain, so cookies flow on
+  (`api-beta.911realtime.org`) share the registrable domain, so the cookie flows on
   `fetch(..., { credentials: "include" })`.
 - CORS: `CORS_CREDENTIALS=true`; keep the explicit origin list (credentials forbid `*`). The
   GitHub-Pages PR-preview origin is cross-site → no sessions there; the Account app shows a
@@ -80,37 +97,45 @@ UUID today** — this design closes that hole.
     "My Playlists" list.
   - No other auth UI anywhere in v1 (no menu-bar items).
 
-## §3 Enforcement extension
+## §3 Enforcement — native Directus permissions
 
-- **Directus endpoint extension** mounted at `/playlist-api`, new monorepo package
-  `packages/directus-extensions/playlist-api`. Deployment: `rt911-api` image becomes a thin
-  custom image (`FROM directus/directus:12.1.1` + `COPY` extension dist), built/pushed by this
-  repo's CI; one infra-repo change points the deployment at it.
-- Every route reads `req.accountability` (session user) and uses `ItemsService`, which stamps
-  `user_created` automatically on create.
+- **Schema:** `playlists` gains `user_created` (uuid, `user-created` special — Directus stamps
+  it automatically), `date_created`, `date_updated`. Existing rows stay ownerless
+  (admin-editable only; migration is out of scope).
+- **Public policy** (already live): read `playlists` where `status = published`.
+- **Teacher policy** (all rules use `user_created = $CURRENT_USER`):
 
-| Route | Auth | Rule |
+| Action | Rule | Field limits |
 |---|---|---|
-| `GET /playlist-api/:id` | public | Row only if `status = published`, else 404. Response keeps the `{ data: … }` shape so the student loader changes one URL. |
-| `GET /playlist-api/mine` | teacher | Caller's playlists, any status. |
-| `POST /playlist-api` | teacher | Create draft owned by caller. Server-side structural validation of `definition` (version 1, valid mode, entries array). Soft cap 100 playlists/user (abuse guard). |
-| `PATCH /playlist-api/:id` | owner | Edit `title`/`definition`/`status` (publish = `status: "published"`); 403 when `user_created` ≠ caller. Same validation as create. |
-| `DELETE /playlist-api/:id` | owner | Delete; 403 otherwise. |
-| `POST /playlist-api/:id/duplicate` | teacher | Source must be published **or** owned by caller → new draft `"Copy of <title>"` owned by caller. |
+| create | — (owner auto-stamped) | `title`, `definition`, `status` only; validation: `status` ∈ {draft, published} |
+| read | own rows, any status (public published-read also applies) | `*` |
+| update | own rows only | `title`, `definition`, `status` only; same status validation |
+| delete | own rows only | — |
 
-- **Schema:** `playlists` gains `user_created` (uuid, `user-created` special), `date_created`,
-  `date_updated`. Existing rows stay ownerless (admin-editable only).
-- **Permissions:** DELETE the current public read permission (id 16) on `playlists` — closes the
-  draft leak; the extension becomes the only public read path (published-only). Teacher policy
-  gets no direct `items` permissions.
+  Field limits are part of the same license unlock — the plan verifies them with a probe before
+  relying on them (fallback: allow `*` fields; `user_created` is still non-forgeable because the
+  `user-created` special ignores client-supplied values).
+- **Duplicate is client-side** — no server code: `playlistApi.duplicate(id)` = `GET` the source
+  (works for published rows via public read, and for the caller's own drafts via own-read) then
+  `POST` a copy (`"Copy of <title>"`, `status: draft`). Ownership of the copy stamps
+  automatically.
+- **Definition validation is client-side** (`parsePlaylist` already exists and runs pre-save in
+  the future editor). A malformed definition saved by other means breaks only its author's own
+  playlist (students get the existing fail-open dialog). Server-side deep validation is the
+  documented first use-case for an endpoint extension if it's ever needed — not in v1.
+- **Abuse guards:** none custom in v1; Directus `RATE_LIMITER` env can be enabled as independent
+  ops hardening.
 
 ## §4 Frontend integration
 
-- **`playlistApi.ts`** (beside `loadPlaylist.ts`): thin client for the six routes, always
-  `credentials: "include"`. **This module is the editor project's entire seam** — the editor
-  consumes it without knowing Directus exists.
-- **`loadPlaylist.ts`**: one-line change — fetch `/playlist-api/:id` instead of
-  `/items/playlists/:id`.
+- **`playlistApi.ts`** (beside `loadPlaylist.ts`): thin client over `/items/playlists` +
+  `/users/me`, always `credentials: "include"` — `listMine` (`filter[user_created][_eq]=$CURRENT_USER`
+  is implicit via permissions; a plain list returns exactly own+published, so `listMine` filters
+  client-side on `user_created`), `get`, `create`, `update`, `remove`, `duplicate`. **This
+  module is the editor project's entire seam.** Sequential fetches only (api-beta
+  response-mixing bug).
+- **`loadPlaylist.ts`: unchanged** — the public `/items/playlists/:id` read is now
+  published-only at the permission layer, which is exactly the semantics it already assumes.
 - `AuthProvider` + Account app as in §2.
 
 ## §5 Error handling
@@ -118,28 +143,31 @@ UUID today** — this design closes that hole.
 | Case | Behavior |
 |---|---|
 | 401 from any authed call | "You need to sign in" + Account app window focuses |
-| 403 (not owner) | Classicy error dialog |
+| 403 (not owner / draft not yours) | Classicy error dialog |
 | SSO provider failure | Redirect lands with `?reason=`; sign-in window shows it |
 | Unverified email login | Directus's "verify first" error shown verbatim |
-| Student loads unknown/draft/deleted playlist | Existing fail-open dialog ("This playlist could not be loaded.") — unchanged |
+| Student loads unknown/draft/deleted playlist | Existing fail-open dialog ("This playlist could not be loaded.") — unchanged (draft now 403s, verified live) |
 | PR-preview origin | Account app shows "sign-in unavailable on previews"; rest of app normal |
 
 ## §6 Testing
 
-- **Extension package:** its own unit suite — route handlers against a mocked `ItemsService`;
-  table-driven cases for ownership (owner/other/anonymous), published-only reads, duplicate
-  rules (published-not-owned, owned-not-published, neither), validation rejects, the 100-cap.
+- **Permission model (the enforcement tests):** a table-driven integration script run against a
+  disposable local Directus 12.1.1 container (the spike showed this takes seconds): two teacher
+  users + anonymous, asserting the full matrix — read own draft ✓ / other's draft ✗ / published ✓
+  anonymously; update/delete own ✓ / other's ✗; `user_created` not forgeable; duplicate
+  semantics. The same script doubles as the prod verification checklist after the permissions
+  are applied.
 - **Frontend:** vitest for `AuthProvider` (mocked fetch: signed-in/anonymous/preview) and
-  `playlistApi` (URL/credential/error mapping). `afterEach(cleanup)` per repo convention.
+  `playlistApi` (URL/credential/error mapping, duplicate composition). `afterEach(cleanup)` per
+  repo convention.
 - **Playwright:** one spec — mocked `/users/me` + sign-in form → Account app state flips
   signed-out → signed-in; mocked 403 → error dialog.
-- **Live (unmockable):** the SSO round-trip = the §1 spike, performed manually on beta with the
-  real Google client. Documented as an ops checklist item, not an automated test.
+- **Live (unmockable):** the Google SSO round-trip = Plan step zero, performed manually on beta
+  with the real client. Documented as an ops checklist item, not an automated test.
 
 ## Out of scope (explicit)
 
 - The playlist editor UI (next project; consumes `playlistApi.ts`).
 - Teacher-to-teacher collaboration/co-ownership (only duplicate ships).
 - Migrating existing ownerless playlists to an owner.
-- Rate limiting beyond the per-user cap (Directus `RATE_LIMITER` env can be enabled as ops
-  hardening independently).
+- Server-side definition validation (extension mechanism verified available if ever needed).
