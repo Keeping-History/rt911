@@ -165,3 +165,15 @@ kubectl patch secret rt911-secrets -n rt911 --type merge \
   -p "{\"stringData\":{\"AUTH_APPLE_CLIENT_SECRET\":\"$JWT\"}}"
 kubectl rollout restart deploy rt911-api -n rt911
 ```
+
+## Account profile editing (2026-07-16)
+
+- Demographic fields live on directus_users (all optional): city, state, country,
+  school_name, educator_role, grade_levels (json), subjects (json).
+- Email changes: ONLY via the profile-api extension (see packages/directus-extensions/
+  profile-api) — direct PATCH email 403s by design. Deploying the extension requires
+  the custom rt911-api image (CI job `api` → ghcr.io/keeping-history/rt911-api); the
+  INFRA repo image switch happens after this branch merges and CI pushes the image:
+  apps/rt911/directus.yaml image: ghcr.io/keeping-history/rt911-api:<main-sha or main>.
+  After the switch, run the live email round-trip and add its result here.
+- classicy >= 0.39.0 required (ClassicyInput type prop — password masking).
