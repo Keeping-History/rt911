@@ -7,6 +7,7 @@
 	background-color: var(--color-system-03);
 	font-family: var(--ui-font) !important;
 	font-size: var(--ui-font-size);
+	justify-content: space-between;
 	// classicy's wrapper is width:100% — inline toolbar menus must size to
 	// content, or each one eats a whole wrapped row.
 	:global(.classicyPopUpMenuWrapper) { width: auto; flex: 0 0 auto; }
