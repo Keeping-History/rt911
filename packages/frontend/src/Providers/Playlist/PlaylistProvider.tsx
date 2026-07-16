@@ -22,6 +22,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { browserNavigate } from "../../Applications/Browser/BrowserContext";
 import { flightTrackerFocusFlight } from "../../Applications/FlightTracker/flightTrackerCommands";
 import { newsFocusItem } from "../../Applications/News/NewsContext";
 import { radioTuneStation } from "../../Applications/RadioScanner/RadioScannerContext";
@@ -56,7 +57,7 @@ const FOCUS_DISPATCHERS: Record<PlaylistApp | "browser", (d: Dispatch, itemId: s
 		radio: (d, itemId) => d(radioTuneStation(itemId)),
 		news: (d, itemId) => d(newsFocusItem(Number(itemId))),
 		flights: (d, itemId) => d(flightTrackerFocusFlight(itemId)),
-		browser: () => console.warn("playlist: browser navigate not wired yet"),
+		browser: (d, url) => d(browserNavigate(url)),
 	};
 
 export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {

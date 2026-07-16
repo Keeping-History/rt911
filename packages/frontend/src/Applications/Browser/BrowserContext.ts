@@ -25,6 +25,23 @@ export interface BrowserHomePage {
 
 const MAX_HISTORY = 500;
 
+/**
+ * One-shot remote navigation command (TVContext's pattern): `seq` is monotonic
+ * so the component applies each command exactly once. Used by the playlist
+ * engine's scheduled browser entries.
+ */
+export interface BrowserRemoteCommand {
+	seq: number;
+	kind: "navigate";
+	url: string;
+}
+
+/** Navigate the (single) Browser window to a URL. */
+export const browserNavigate = (url: string): ActionMessage => ({
+	type: "ClassicyAppBrowserNavigate",
+	url,
+});
+
 export const classicyBrowserEventHandler = (
 	ds: ClassicyStore,
 	action: ActionMessage,
@@ -34,6 +51,17 @@ export const classicyBrowserEventHandler = (
 	let appData: Record<string, unknown> = ds.System.Manager.Applications.apps[appId].data ?? {};
 
 	switch (action.type) {
+		case "ClassicyAppBrowserNavigate": {
+			appData = {
+				...appData,
+				command: {
+					seq: ((appData.command as BrowserRemoteCommand | undefined)?.seq ?? 0) + 1,
+					kind: "navigate",
+					url: action.url as string,
+				} satisfies BrowserRemoteCommand,
+			};
+			break;
+		}
 		case "ClassicyAppBrowserSetHomePage": {
 			appData = { ...appData, homePage: { url: action.url, label: action.label, icon: action.icon } };
 			break;
