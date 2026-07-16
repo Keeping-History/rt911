@@ -129,10 +129,17 @@ const FakeMap = vi.hoisted(() => {
 	}
 	return FakeMap;
 });
+const FakeMercatorCoordinate = vi.hoisted(() => ({
+	fromLngLat: ([lon, lat]: [number, number]) => ({
+		x: (lon + 180) / 360,
+		y: (1 - Math.log(Math.tan(Math.PI / 4 + ((lat * Math.PI) / 180) / 2)) / Math.PI) / 2,
+	}),
+}));
 vi.mock("maplibre-gl", () => ({
-	default: { Map: FakeMap, addProtocol: vi.fn() },
+	default: { Map: FakeMap, addProtocol: vi.fn(), MercatorCoordinate: FakeMercatorCoordinate },
 	Map: FakeMap,
 	addProtocol: vi.fn(),
+	MercatorCoordinate: FakeMercatorCoordinate,
 }));
 vi.mock("pmtiles", () => ({ Protocol: class { tile = vi.fn(); } }));
 // Real constants, fake rasterizer — jsdom has no canvas. The fake records the
@@ -969,6 +976,54 @@ describe("FlightMap", () => {
 		expect(onSelect).toHaveBeenCalledWith("DL404");
 		// A click far from every plane clears.
 		map.fire("click", { point: { x: 500, y: 500 } });
+		expect(onClear).toHaveBeenCalled();
+	});
+
+	it("globe pitched clicks hit-test via projectTileCoordinates (elevated, not ground)", () => {
+		const onSelect = vi.fn();
+		const onClear = vi.fn();
+		render(
+			<FlightMap
+				positions={[pos({ id: 1, flight: "DL404", lon: -40, lat: 30, alt_ft: 30_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={onSelect} onClearSelection={onClear}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} threeD={true} globe={true} />,
+		);
+		const map = FakeMap.last!;
+		// The globe transform has no coordinatePoint; it projects tile coords
+		// with an elevation callback instead (NDC out). (60, 70) on a 100×100
+		// canvas — far from the ground fallback's (-40, 30).
+		(map as unknown as { transform: unknown }).transform = {
+			width: 100, height: 100,
+			projectTileCoordinates: () => ({ point: { x: 0.2, y: -0.4 }, isOccluded: false }),
+		};
+		map.fire("load");
+		map.queryResult = [];
+		map.fire("click", { point: { x: 61, y: 71 } });
+		expect(onSelect).toHaveBeenCalledWith("DL404");
+	});
+
+	it("globe pitched clicks skip planes occluded behind the planet", () => {
+		const onSelect = vi.fn();
+		const onClear = vi.fn();
+		render(
+			<FlightMap
+				positions={[pos({ id: 1, flight: "DL404", lon: -40, lat: 30, alt_ft: 30_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={onSelect} onClearSelection={onClear}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} threeD={true} globe={true} />,
+		);
+		const map = FakeMap.last!;
+		(map as unknown as { transform: unknown }).transform = {
+			width: 100, height: 100,
+			projectTileCoordinates: () => ({ point: { x: 0.2, y: -0.4 }, isOccluded: true }),
+		};
+		map.fire("load");
+		map.queryResult = [];
+		map.fire("click", { point: { x: 60, y: 70 } });
+		expect(onSelect).not.toHaveBeenCalled();
 		expect(onClear).toHaveBeenCalled();
 	});
 
