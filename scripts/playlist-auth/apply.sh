@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Create the Teacher role/policy, playlists ownership fields, and permissions.
+# Idempotent: skips anything that already exists (matched by name/field).
+# Usage: DIRECTUS_ADMIN_PASSWORD=... ./apply.sh [https://api-beta.911realtime.org]
+set -euo pipefail
+URL="${1:-https://api-beta.911realtime.org}"
+
+TOKEN=$(curl -sS -X POST "$URL/auth/login" -H "Content-Type: application/json" \
+  -d "{\"email\":\"admin@911realtime.org\",\"password\":\"$DIRECTUS_ADMIN_PASSWORD\"}" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['access_token'])")
+auth=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json")
+
+req() { # method path body — logs response body on non-2xx and exits
+  local out; out=$(curl -sS -g -X "$1" "$URL$2" "${auth[@]}" ${3:+-d "$3"} -w $'\n%{http_code}')
+  local code="${out##*$'\n'}" body="${out%$'\n'*}"
+  if [[ "$code" != 2* ]]; then echo "FAILED $1 $2 -> $code: $body" >&2; exit 1; fi
+  echo "$body"
+}
+
+# --- schema fields (serial; skip if present) -------------------------------
+have_field() { req GET "/fields/playlists" | python3 -c "
+import sys,json; print(any(f['field']=='$1' for f in json.load(sys.stdin)['data']))"; }
+[ "$(have_field user_created)" = True ] || req POST /fields/playlists \
+  '{"field":"user_created","type":"uuid","meta":{"special":["user-created"],"interface":"select-dropdown-m2o","readonly":true,"hidden":true},"schema":{}}' >/dev/null
+[ "$(have_field date_created)" = True ] || req POST /fields/playlists \
+  '{"field":"date_created","type":"timestamp","meta":{"special":["date-created"],"readonly":true,"hidden":true},"schema":{}}' >/dev/null
+[ "$(have_field date_updated)" = True ] || req POST /fields/playlists \
+  '{"field":"date_updated","type":"timestamp","meta":{"special":["date-updated"],"readonly":true,"hidden":true},"schema":{}}' >/dev/null
+echo "fields: ok"
+
+# --- Teacher policy + role --------------------------------------------------
+POLICY_ID=$(req GET "/policies?filter[name][_eq]=Teacher&fields=id" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')")
+if [ -z "$POLICY_ID" ]; then
+  POLICY_ID=$(req POST /policies '{"name":"Teacher","app_access":false,"admin_access":false,"enforce_tfa":false}' \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])")
+fi
+ROLE_ID=$(req GET "/roles?filter[name][_eq]=Teacher&fields=id" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')")
+if [ -z "$ROLE_ID" ]; then
+  ROLE_ID=$(req POST /roles '{"name":"Teacher","description":"Playlist authors (frontend only)"}' \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])")
+  req POST /access "{\"role\":\"$ROLE_ID\",\"policy\":\"$POLICY_ID\"}" >/dev/null
+fi
+echo "TEACHER_POLICY_ID=$POLICY_ID"
+echo "TEACHER_ROLE_ID=$ROLE_ID"
+
+# --- Teacher permissions on playlists (serial) ------------------------------
+OWN='{"user_created":{"_eq":"$CURRENT_USER"}}'
+STATUS_OK='{"status":{"_in":["draft","published"]}}'
+have_perm() { req GET "/permissions?filter[policy][_eq]=$POLICY_ID&filter[collection][_eq]=playlists&filter[action][_eq]=$1&fields=id" \
+  | python3 -c "import sys,json; print(bool(json.load(sys.stdin)['data']))"; }
+[ "$(have_perm create)" = True ] || req POST /permissions \
+  "{\"collection\":\"playlists\",\"action\":\"create\",\"policy\":\"$POLICY_ID\",\"fields\":[\"title\",\"definition\",\"status\"],\"validation\":$STATUS_OK}" >/dev/null
+[ "$(have_perm read)" = True ] || req POST /permissions \
+  "{\"collection\":\"playlists\",\"action\":\"read\",\"policy\":\"$POLICY_ID\",\"fields\":[\"*\"],\"permissions\":$OWN}" >/dev/null
+[ "$(have_perm update)" = True ] || req POST /permissions \
+  "{\"collection\":\"playlists\",\"action\":\"update\",\"policy\":\"$POLICY_ID\",\"fields\":[\"title\",\"definition\",\"status\"],\"permissions\":$OWN,\"validation\":$STATUS_OK}" >/dev/null
+[ "$(have_perm delete)" = True ] || req POST /permissions \
+  "{\"collection\":\"playlists\",\"action\":\"delete\",\"policy\":\"$POLICY_ID\",\"fields\":[\"*\"],\"permissions\":$OWN}" >/dev/null
+echo "permissions: ok"
