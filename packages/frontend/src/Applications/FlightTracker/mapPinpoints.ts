@@ -13,12 +13,12 @@ export interface Pinpoint {
 }
 
 export const PINPOINTS: Pinpoint[] = [
-	{ id: "logan", label: "Boston Logan", center: [-71.0096, 42.3656], zoom: 9.5 },
-	{ id: "newark", label: "Newark International", center: [-74.1745, 40.6895], zoom: 9.5 },
-	{ id: "dulles", label: "Washington Dulles", center: [-77.4565, 38.9531], zoom: 9.5 },
-	{ id: "fidi", label: "NYC Financial District", center: [-74.0113, 40.7075], zoom: 10.5 },
-	{ id: "pentagon", label: "The Pentagon", center: [-77.0563, 38.8719], zoom: 10.5 },
-	{ id: "shanksville", label: "Shanksville, PA", center: [-78.9039, 40.0517], zoom: 9 },
+	{ id: "logan", label: "Boston Logan", center: [-71.0096, 42.3656], zoom: 8.5 },
+	{ id: "newark", label: "Newark International", center: [-74.1745, 40.6895], zoom: 8.5 },
+	{ id: "dulles", label: "Washington Dulles", center: [-77.4565, 38.9531], zoom: 8.5 },
+	{ id: "fidi", label: "NYC Financial District", center: [-74.0113, 40.7075], zoom: 9.5 },
+	{ id: "pentagon", label: "The Pentagon", center: [-77.0563, 38.8719], zoom: 9.5 },
+	{ id: "shanksville", label: "Shanksville, PA", center: [-78.9039, 40.0517], zoom: 8 },
 ];
 
 export function pinpointById(id: string): Pinpoint | undefined {
