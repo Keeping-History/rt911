@@ -23,6 +23,7 @@ import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
 import { keepInstantItem, keepMediaItem } from "./retention";
 import { virtualUtcMs } from "./virtualClock";
+import { usePlaylist } from "../Playlist/PlaylistContext";
 import { mergeLatestPerStation } from "./weatherMerge";
 import {
 	applyUsenetBodyFrame,
@@ -161,6 +162,15 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	children,
 }) => {
 	const { localDate, dateTime, tzOffset } = useClassicyDateTime({ tick: true });
+	// Playlist availability predicate. Defaults to constant-true when no
+	// PlaylistProvider is mounted (tests) or no playlist is active; while a
+	// playlist runs, its identity changes each tick so windows open/close live.
+	// The ref mirror is for the long-lived WebSocket onmessage closure, which
+	// applies due items immediately and must not go stale (or force reconnects
+	// by joining the socket effect's dependency list).
+	const { isItemAvailable } = usePlaylist();
+	const isItemAvailableRef = useRef(isItemAvailable);
+	isItemAvailableRef.current = isItemAvailable;
 
 	const [items, setItems] = useState<MediaItem[]>([]);
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
@@ -569,25 +579,45 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		const dueFlights = drainDue(flightsBuffer.current, now);
 		const dueWeather = drainDue(weatherBuffer.current, now);
 
-		setItems((prev) => mergeById(prev, dueMedia).filter((item) => keepMediaItem(item, now)));
+		// Playlist availability windows gate items here — at the single choke
+		// point every app's catalog flows through — so out-of-window items are
+		// hidden uniformly. With no playlist active the predicate is a stable
+		// constant-true and this is byte-identical to the ungated behavior.
+		setItems((prev) =>
+			mergeById(prev, dueMedia).filter(
+				(item) => keepMediaItem(item, now) && isItemAvailable("tv", item.source ?? ""),
+			),
+		);
 		// mp3 items are durational audio — same retention rules as media items.
-		setMp3Items((prev) => mergeById(prev, dueMp3).filter((item) => keepMediaItem(item, now)));
+		setMp3Items((prev) =>
+			mergeById(prev, dueMp3).filter(
+				(item) => keepMediaItem(item, now) && isItemAvailable("radio", item.source ?? ""),
+			),
+		);
 		// news items reuse the same retention rules (mostly instant headlines).
-		setNewsItems((prev) => mergeById(prev, dueNews).filter((item) => keepMediaItem(item, now)));
+		setNewsItems((prev) =>
+			mergeById(prev, dueNews).filter(
+				(item) => keepMediaItem(item, now) && isItemAvailable("news", String(item.id)),
+			),
+		);
 		// Pager items are always instant — retain by start_date.
 		setPagerItems((prev) => mergeById(prev, duePager).filter((p) => keepInstantItem(p, now)));
 		// Usenet messages are not time-pruned: a reader keeps browsing the group's
 		// backlog. They are cleared only on group change, unsubscribe, or seek.
 		if (dueUsenet.length > 0) setUsenetItems((prev) => mergeById(prev, dueUsenet));
 		// Flight positions are instant per-minute samples — pager-style retention.
+		// pager/usenet/weather are NOT playlist-gated (restrict scope is
+		// tv/radio/news/flights; a teacher removes those apps wholesale instead).
 		setFlightPositions((prev) =>
-			mergeById(prev, dueFlights).filter((p) => keepInstantItem(p, now)),
+			mergeById(prev, dueFlights).filter(
+				(p) => keepInstantItem(p, now) && isItemAvailable("flights", p.flight),
+			),
 		);
 		// Weather observations are latest-per-station, not time-pruned — a
 		// station's last reading stays visible however old it gets.
 		if (dueWeather.length > 0)
 			setWeatherObservations((prev) => mergeLatestPerStation(prev, dueWeather));
-	}, [localDate, tzOffset]);
+	}, [localDate, tzOffset, isItemAvailable]);
 
 	// Detect manual time changes and send seek; ignore tick-driven minute boundaries
 	useEffect(() => {
@@ -767,7 +797,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				if (!incomingMp3 || incomingMp3.length === 0) return;
 				const { due, future } = partitionByDue(incomingMp3, now);
 				for (const item of future) mp3Buffer.current.set(item.id, item);
-				const fresh = due.filter((item) => keepMediaItem(item, now));
+				const fresh = due.filter(
+					(item) =>
+						keepMediaItem(item, now) &&
+						isItemAvailableRef.current("radio", item.source ?? ""),
+				);
 				if (fresh.length > 0) setMp3Items((prev) => mergeById(prev, fresh));
 				return;
 			}
@@ -785,7 +819,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				if (!incomingNews || incomingNews.length === 0) return;
 				const { due, future } = partitionByDue(incomingNews, now);
 				for (const item of future) newsBuffer.current.set(item.id, item);
-				const fresh = due.filter((item) => keepMediaItem(item, now));
+				const fresh = due.filter(
+					(item) =>
+						keepMediaItem(item, now) &&
+						isItemAvailableRef.current("news", String(item.id)),
+				);
 				if (fresh.length > 0) setNewsItems((prev) => mergeById(prev, fresh));
 				return;
 			}
@@ -834,7 +872,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				if (!incomingFlights || incomingFlights.length === 0) return;
 				const { due, future } = partitionByDue(incomingFlights, now);
 				for (const p of future) flightsBuffer.current.set(p.id, p);
-				const fresh = due.filter((p) => keepInstantItem(p, now));
+				const fresh = due.filter(
+					(p) =>
+						keepInstantItem(p, now) &&
+						isItemAvailableRef.current("flights", p.flight),
+				);
 				if (fresh.length > 0)
 					setFlightPositions((prev) => mergeById(prev, fresh));
 				return;
@@ -886,7 +928,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 
 			const { due, future } = partitionByDue(incoming, now);
 			for (const item of future) mediaBuffer.current.set(item.id, item);
-			const fresh = due.filter((item) => keepMediaItem(item, now));
+			const fresh = due.filter(
+				(item) =>
+					keepMediaItem(item, now) &&
+					isItemAvailableRef.current("tv", item.source ?? ""),
+			);
 			if (fresh.length > 0) setItems((prev) => mergeById(prev, fresh));
 		};
 
@@ -919,6 +965,21 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		// satisfies the lint without re-running the effect.
 	}, [sendFlightsHistoryRequest, sendFlightsSeedRequest, sendWeatherForecastRequest]);
 
+	// mp3History and sources arrive as whole frames (not through the per-second
+	// reveal tick), so the playlist gate is applied at read-out instead.
+	const gatedMp3History = useMemo(
+		() => mp3History.filter((i) => isItemAvailable("radio", i.source ?? "")),
+		[mp3History, isItemAvailable],
+	);
+	const gatedSources = useMemo<AvailableSources>(
+		() => ({
+			...sources,
+			video: sources.video.filter((s) => isItemAvailable("tv", s)),
+			audio: sources.audio.filter((s) => isItemAvailable("radio", s)),
+		}),
+		[sources, isItemAvailable],
+	);
+
 	// Memoize the context value so consumers only re-render when specific data
 	// changes — not on every provider render (which happens every clock tick and
 	// on every classicy state update such as window-focus changes).
@@ -927,13 +988,13 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			items,
 			pagerItems,
 			mp3Items,
-			mp3History,
+			mp3History: gatedMp3History,
 			newsItems,
 			usenetItems,
 			usenetBodies: usenetBodyState.bodies,
 			usenetBodyErrors: usenetBodyState.errors,
 			requestUsenetBody,
-			sources,
+			sources: gatedSources,
 			connected,
 			addItems,
 			subscribeFormats,
@@ -967,12 +1028,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			items,
 			pagerItems,
 			mp3Items,
-			mp3History,
+			gatedMp3History,
 			newsItems,
 			usenetItems,
 			usenetBodyState,
 			requestUsenetBody,
-			sources,
+			gatedSources,
 			connected,
 			addItems,
 			subscribeFormats,
