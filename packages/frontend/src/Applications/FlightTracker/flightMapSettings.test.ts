@@ -129,6 +129,13 @@ describe("readFlightMapSettings", () => {
 			readFlightMapSettings({ mapSettings: { globe: true, threeD: true } }),
 		).toMatchObject({ globe: true, cluster: false, threeD: true });
 	});
+
+	it("defaults terrain on and honors a stored false", () => {
+		expect(readFlightMapSettings(undefined).terrain).toBe(true);
+		expect(readFlightMapSettings({ mapSettings: { terrain: false } }).terrain).toBe(false);
+		// Pre-terrain stored state (no key at all) upgrades to the default.
+		expect(readFlightMapSettings({ mapSettings: { globe: true } }).terrain).toBe(true);
+	});
 });
 
 describe("readFlightLoopSettings", () => {
