@@ -126,3 +126,22 @@ status (`draft` included), and (b) any row — theirs or another teacher's —
 once it's `published`. Critically, it does **not** grant access to another
 teacher's `draft` rows: `"B cannot read A's draft"` still asserts (and
 passes) `403`, since neither side of the `_or` matches a non-owned draft.
+
+## Ops log — Task 2 (2026-07-16)
+
+- Google SSO configured: `/auth` lists `{"name":"google","driver":"openid"}` — no
+  license-tier warning (SSO un-gate confirmed with the production LICENSE_KEY).
+- Session/CORS/AUTH env moved into the INFRA repo configmap (`apps/rt911/configmap.yaml`,
+  infra commit 6ff7ab8) — the live ConfigMap is ArgoCD-tracked, so kubectl patches there
+  get reverted; only `rt911-secrets` (untracked, manual) holds the client id/secret.
+- Traefik CORS split (infra commit 6ff7ab8): `/auth`, `/users`, `/items/playlists` route
+  through `api-cors-credentialed` (origin echo + allow-credentials + Cache-Control
+  no-store — CF-variant-safe); all other paths keep the cache-safe `*` stamp. Verified
+  through the live edge: credentialed preflight echoes the origin with credentials=true,
+  flight_tracks preflight still returns `*`.
+- Live Google round-trip: PENDING operator browser test (see below).
+- Facebook/Apple: same env pattern once clients exist (`AUTH_PROVIDERS="google,facebook,apple"`,
+  `AUTH_FACEBOOK_DRIVER=oauth2` + authorize/access/profile URLs, `AUTH_APPLE_DRIVER=openid`
+  + a generated ES256 client-secret JWT, 6-month rotation). Email+password registration:
+  enable via `PATCH /settings` (public_registration + role + verify_email) only after
+  `EMAIL_TRANSPORT` SMTP env exists (SendGrid planned).
