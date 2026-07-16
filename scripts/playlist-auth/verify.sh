@@ -75,7 +75,17 @@ A_FILE=$(curl -sS -X POST "$URL/files" -H "Authorization: Bearer $TA" -F "file=@
 rm -f "$PNG"
 check "A uploads a file"           "ok"  "$([ -n "$A_FILE" ] && echo ok)"
 check "A sets own avatar"          200 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d "{\"avatar\":\"$A_FILE\"}")"
-check "A cannot update first_name" 403 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"first_name":"Hacked"}')"
+# profile editing: names + optional demographics writable; email locked to the
+# extension's verified flow; role/status locked, period (escalation guards).
+check "A updates own names"        200 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"first_name":"Verify","last_name":"Teacher"}')"
+check "A saves demographics"       200 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"city":"Memphis","state":"TN","grade_levels":["high_school"],"subjects":["us_history"]}')"
+DEMO_CITY=$(curl -sS -g "$URL/users/me?fields=city,provider" -H "Authorization: Bearer $TA" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',{}); print(d.get('city') or '')")
+check "A reads back demographics"  "Memphis" "$DEMO_CITY"
+check "A clears a demographic (optional)" 200 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"city":null}')"
+check "A cannot PATCH email directly" 403 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"email":"hijack@example.com"}')"
+check "A cannot change own role"   403 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"role":"00000000-0000-0000-0000-000000000000"}')"
+check "A cannot change own status" 403 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"status":"suspended"}')"
 check "A fetches avatar preset"    200 "$(code "$URL/assets/$A_FILE?key=avatar" -H "Authorization: Bearer $TA")"
 check "B cannot read A's file"     403 "$(code "$URL/files/$A_FILE" -H "Authorization: Bearer $TB")"
 check "A deletes own file"         204 "$(code -X DELETE "$URL/files/$A_FILE" -H "Authorization: Bearer $TA")"

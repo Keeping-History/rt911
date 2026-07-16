@@ -79,16 +79,7 @@ fi
 # fetchMe needs email/first_name/last_name. Least privilege: own row only,
 # four fields, no role/status exposure. Converged like the playlists read.
 SELF_ONLY='{"id":{"_eq":"$CURRENT_USER"}}'
-USERS_READ_ID=$(req GET "/permissions?filter[policy][_eq]=$POLICY_ID&filter[collection][_eq]=directus_users&filter[action][_eq]=read&fields=id" \
-  | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')")
-USERS_FIELDS='["id","email","first_name","last_name","avatar"]'
-if [ -z "$USERS_READ_ID" ]; then
-  req POST /permissions \
-    "{\"collection\":\"directus_users\",\"action\":\"read\",\"policy\":\"$POLICY_ID\",\"fields\":$USERS_FIELDS,\"permissions\":$SELF_ONLY}" >/dev/null
-else
-  req PATCH "/permissions/$USERS_READ_ID" \
-    "{\"fields\":$USERS_FIELDS,\"permissions\":$SELF_ONLY}" >/dev/null
-fi
+# (self-read permission is converged below, AFTER the demographic fields exist)
 # --- Avatar support: file upload + own-avatar update -------------------------
 # Teachers may upload files (images only — enforced globally by
 # FILES_MIME_TYPE_ALLOW_LIST), read/delete their own uploads (asset delivery
@@ -105,5 +96,41 @@ OWN_UPLOAD='{"uploaded_by":{"_eq":"$CURRENT_USER"}}'
 converge_perm directus_files create '["*"]' 'null'
 converge_perm directus_files read   '["*"]' "$OWN_UPLOAD"
 converge_perm directus_files delete '["*"]' "$OWN_UPLOAD"
-converge_perm directus_users update '["avatar"]' "$SELF_ONLY"
+
+# --- Profile editing: demographic fields + widened self-update ---------------
+# All demographic fields are OPTIONAL (nullable, no validation) and self-reported;
+# they are readable/writable ONLY on the teacher's own row, never publicly.
+# email is deliberately ABSENT from the update field list: email changes go
+# exclusively through the profile-api extension's verified round-trip.
+have_user_field() { req GET "/fields/directus_users" | python3 -c "
+import sys,json; print(any(f['field']=='$1' for f in json.load(sys.stdin)['data']))"; }
+mkfield() { # field json_body
+  [ "$(have_user_field "$1")" = True ] || req POST /fields/directus_users "$2" >/dev/null
+}
+mkfield city        '{"field":"city","type":"string","meta":{"interface":"input"},"schema":{}}'
+mkfield state       '{"field":"state","type":"string","meta":{"interface":"input"},"schema":{}}'
+mkfield country     '{"field":"country","type":"string","meta":{"interface":"input"},"schema":{}}'
+mkfield school_name '{"field":"school_name","type":"string","meta":{"interface":"input"},"schema":{}}'
+mkfield educator_role '{"field":"educator_role","type":"string","meta":{"interface":"select-dropdown","options":{"choices":[
+  {"text":"Teacher","value":"teacher"},{"text":"Librarian","value":"librarian"},
+  {"text":"Professor","value":"professor"},{"text":"Homeschool","value":"homeschool"},
+  {"text":"Museum Educator","value":"museum_educator"},{"text":"Administrator","value":"administrator"},
+  {"text":"Other","value":"other"}]}},"schema":{}}'
+mkfield grade_levels '{"field":"grade_levels","type":"json","meta":{"special":["cast-json"],"interface":"select-multiple-checkbox","options":{"choices":[
+  {"text":"Elementary","value":"elementary"},{"text":"Middle","value":"middle"},
+  {"text":"High School","value":"high_school"},{"text":"College","value":"college"},
+  {"text":"Adult","value":"adult"}]}},"schema":{}}'
+mkfield subjects '{"field":"subjects","type":"json","meta":{"special":["cast-json"],"interface":"select-multiple-checkbox","options":{"choices":[
+  {"text":"US History","value":"us_history"},{"text":"World History","value":"world_history"},
+  {"text":"Social Studies","value":"social_studies"},{"text":"Civics","value":"civics"},
+  {"text":"English","value":"english"},{"text":"Journalism","value":"journalism"},
+  {"text":"Media Studies","value":"media_studies"},{"text":"STEM","value":"stem"},
+  {"text":"Other","value":"other"}]}},"schema":{}}'
+echo "user fields: ok"
+
+DEMOGRAPHICS='"city","state","country","school_name","educator_role","grade_levels","subjects"'
+# self-read: profile fields incl. provider (UI gates the password section on it)
+# and demographics; NEVER password/role/status/auth_data.
+converge_perm directus_users read "[\"id\",\"email\",\"first_name\",\"last_name\",\"avatar\",\"provider\",$DEMOGRAPHICS]" "$SELF_ONLY"
+converge_perm directus_users update "[\"avatar\",\"first_name\",\"last_name\",\"password\",$DEMOGRAPHICS]" "$SELF_ONLY"
 echo "permissions: ok"
