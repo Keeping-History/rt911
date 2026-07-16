@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-16
 **Status:** Approved (brainstorming session with Robbie)
-**Scope:** Offline data pipeline + Wasabi uploads. Frontend change is limited to dropping the NA `bounds` hint. Independent of the terrain spec ([flight-map-3d-terrain-design.md](2026-07-16-flight-map-3d-terrain-design.md)); ships whenever ready.
+**Scope:** Offline data pipeline + Wasabi uploads. Frontend change is limited to dropping the NA `bounds` hint. Independent of the terrain spec ([flight-map-3d-terrain-design.md](flight-map-3d-terrain-design.md)); ships whenever ready.
 
 ## Goal
 

@@ -32,6 +32,8 @@ export interface FlightMapSettings {
 	globe: boolean;
 	cluster: boolean;
 	threeD: boolean;
+	// Topographic relief (hillshade + 3D ground mesh) — one switch for both.
+	terrain: boolean;
 }
 
 export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
@@ -46,6 +48,7 @@ export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	globe: false,
 	cluster: false,
 	threeD: false,
+	terrain: true,
 };
 
 /** Persist the whole map-settings object in one dispatch. */

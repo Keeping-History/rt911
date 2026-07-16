@@ -11,6 +11,7 @@ export interface BasemapUrls {
 	vector: string;
 	satelliteDay: string;
 	satelliteNight: string;
+	terrainDem: string;
 }
 
 // Module-scope so the object identity is stable — FlightMap/WeatherMap key
@@ -27,6 +28,9 @@ export const BASEMAP_URLS: BasemapUrls = {
 	satelliteNight:
 		(import.meta.env.VITE_SATELLITE_NIGHT_BASEMAP_URL as string | undefined) ??
 		"https://files.911realtime.org/maps/na-satellite-night.pmtiles",
+	terrainDem:
+		(import.meta.env.VITE_TERRAIN_DEM_URL as string | undefined) ??
+		"https://files.911realtime.org/maps/terrain-dem.pmtiles",
 };
 
 /** Persisted-state safety: anything unrecognized renders as classic. */
@@ -133,6 +137,62 @@ export function skyFor(mapStyle: BasemapStyleId, darkMap: boolean): SkySpec {
 	return mapStyle === "satellite" ? SKY_SAT_NIGHT : SKY_DARK;
 }
 
+// Hillshade relief (3D-terrain feature): per-style shading so topography reads
+// as part of each look — neutral on classic, phosphor clutter on radar, a
+// subtle deepening on satellite imagery. Values are living tuning numbers.
+export interface HillshadePalette {
+	shadow: string;
+	highlight: string;
+	accent: string;
+	exaggeration: number;
+}
+
+const HILLSHADE_CLASSIC_LIGHT: HillshadePalette = {
+	shadow: "#6b6250", highlight: "#ffffff", accent: "#8a8574", exaggeration: 0.35,
+};
+const HILLSHADE_CLASSIC_DARK: HillshadePalette = {
+	shadow: "#000000", highlight: "#565664", accent: "#44444f", exaggeration: 0.4,
+};
+// Deliberately reuses the RADAR scope palette (lakes/countries/states) so terrain reads as scope clutter.
+const HILLSHADE_RADAR: HillshadePalette = {
+	shadow: "#020c02", highlight: "#2f9e4f", accent: "#1e6434", exaggeration: 0.5,
+};
+const HILLSHADE_SAT_DAY: HillshadePalette = {
+	shadow: "#000000", highlight: "#ffffff", accent: "#000000", exaggeration: 0.15,
+};
+const HILLSHADE_SAT_NIGHT: HillshadePalette = {
+	shadow: "#000000", highlight: "#1a2338", accent: "#000000", exaggeration: 0.2,
+};
+
+export function hillshadePalette(
+	mapStyle: BasemapStyleId,
+	darkMap: boolean,
+): HillshadePalette {
+	const tone = effectiveTone(mapStyle, darkMap);
+	if (mapStyle === "radar") return HILLSHADE_RADAR;
+	if (mapStyle === "satellite")
+		return tone === "dark" ? HILLSHADE_SAT_NIGHT : HILLSHADE_SAT_DAY;
+	return tone === "dark" ? HILLSHADE_CLASSIC_DARK : HILLSHADE_CLASSIC_LIGHT;
+}
+
+export interface HillshadeVisibility {
+	classic: boolean;
+	radar: boolean;
+	satellite: boolean;
+}
+
+/** Exactly one hillshade layer visible while terrain is on; zero while off. */
+export function hillshadeVisibility(
+	mapStyle: BasemapStyleId,
+	terrainEnabled: boolean,
+): HillshadeVisibility {
+	return {
+		classic: terrainEnabled && mapStyle === "classic",
+		radar: terrainEnabled && mapStyle === "radar",
+		satellite: terrainEnabled && mapStyle === "satellite",
+	};
+}
+
 export interface GroundVisibility {
 	vector: boolean;
 	satelliteDay: boolean;
@@ -150,6 +210,16 @@ export function groundVisibility(mapStyle: BasemapStyleId, darkMap: boolean): Gr
 
 const NA_BBOX: [number, number, number, number] = [-150, 18, -65, 65];
 
+/** Source id for the raster-dem archive — shared by hillshade and setTerrain. */
+export const TERRAIN_SOURCE = "terrain";
+
+const hillshadePaint = (p: HillshadePalette) => ({
+	"hillshade-shadow-color": p.shadow,
+	"hillshade-highlight-color": p.highlight,
+	"hillshade-accent-color": p.accent,
+	"hillshade-exaggeration": p.exaggeration,
+});
+
 const vis = (visible: boolean) => ({ visibility: visible ? "visible" : "none" }) as const;
 
 // The superset style: every source and layer is always present; the active
@@ -164,9 +234,11 @@ export function buildBasemapStyle(
 	urls: BasemapUrls,
 	mapStyle: BasemapStyleId,
 	darkMap: boolean,
+	terrainEnabled = false,
 ): StyleSpecification {
 	const p = basemapPalette(mapStyle, darkMap);
 	const g = groundVisibility(mapStyle, darkMap);
+	const h = hillshadeVisibility(mapStyle, terrainEnabled);
 	return {
 		version: 8,
 		sky: skyFor(mapStyle, darkMap),
@@ -189,6 +261,16 @@ export function buildBasemapStyle(
 				bounds: NA_BBOX,
 				attribution: "NASA Visible Earth",
 			},
+			// Terrarium DEM (3D-terrain feature). Fetches nothing until a
+			// hillshade layer is visible or setTerrain names it.
+			[TERRAIN_SOURCE]: {
+				type: "raster-dem",
+				url: `pmtiles://${urls.terrainDem}`,
+				encoding: "terrarium",
+				tileSize: 512,
+				bounds: NA_BBOX,
+				attribution: "Mapterhorn",
+			},
 		},
 		layers: [
 			{ id: "background", type: "background", paint: { "background-color": p.background } },
@@ -200,6 +282,14 @@ export function buildBasemapStyle(
 				layout: vis(g.vector), paint: { "fill-color": p.land } },
 			{ id: "lakes", type: "fill", source: "basemap", "source-layer": "lakes",
 				layout: vis(g.vector), paint: { "fill-color": p.lakes } },
+			// One hillshade per style: relief shading tuned to each look. Exactly
+			// one is visible while the terrain toggle is on (hillshadeVisibility).
+			{ id: "hillshade-classic", type: "hillshade", source: TERRAIN_SOURCE,
+				layout: vis(h.classic), paint: hillshadePaint(hillshadePalette("classic", darkMap)) },
+			{ id: "hillshade-radar", type: "hillshade", source: TERRAIN_SOURCE,
+				layout: vis(h.radar), paint: hillshadePaint(hillshadePalette("radar", darkMap)) },
+			{ id: "hillshade-satellite", type: "hillshade", source: TERRAIN_SOURCE,
+				layout: vis(h.satellite), paint: hillshadePaint(hillshadePalette("satellite", darkMap)) },
 			{ id: "countries", type: "line", source: "basemap", "source-layer": "countries",
 				paint: { "line-color": p.countries, "line-width": 0.8 } },
 			{ id: "states", type: "line", source: "basemap", "source-layer": "states",
@@ -220,6 +310,7 @@ export function applyBasemapStyle(
 	map: StylableMap,
 	mapStyle: BasemapStyleId,
 	darkMap: boolean,
+	terrainEnabled = false,
 ): void {
 	const p = basemapPalette(mapStyle, darkMap);
 	const g = groundVisibility(mapStyle, darkMap);
@@ -233,4 +324,17 @@ export function applyBasemapStyle(
 	map.setLayoutProperty("satellite-day", "visibility", g.satelliteDay ? "visible" : "none");
 	map.setLayoutProperty("satellite-night", "visibility", g.satelliteNight ? "visible" : "none");
 	map.setSky(skyFor(mapStyle, darkMap));
+	const h = hillshadeVisibility(mapStyle, terrainEnabled);
+	for (const [id, styleId, visible] of [
+		["hillshade-classic", "classic", h.classic],
+		["hillshade-radar", "radar", h.radar],
+		["hillshade-satellite", "satellite", h.satellite],
+	] as const) {
+		map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+		for (const [name, value] of Object.entries(
+			hillshadePaint(hillshadePalette(styleId, darkMap)),
+		)) {
+			map.setPaintProperty(id, name, value);
+		}
+	}
 }

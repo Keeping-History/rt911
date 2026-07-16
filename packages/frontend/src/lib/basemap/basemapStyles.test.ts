@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
 	BASEMAP_URLS,
+	TERRAIN_SOURCE,
 	type BasemapStyleId,
 	applyBasemapStyle,
 	basemapPalette,
 	buildBasemapStyle,
 	effectiveTone,
 	groundVisibility,
+	hillshadePalette,
+	hillshadeVisibility,
 	normalizeBasemapStyle,
 	skyFor,
 } from "./basemapStyles";
@@ -15,6 +18,7 @@ const URLS = {
 	vector: "https://x.example/na.pmtiles",
 	satelliteDay: "https://x.example/day.pmtiles",
 	satelliteNight: "https://x.example/night.pmtiles",
+	terrainDem: "https://x.example/dem.pmtiles",
 };
 
 const ALL_STYLES: BasemapStyleId[] = ["classic", "radar", "satellite"];
@@ -46,6 +50,7 @@ describe("BASEMAP_URLS", () => {
 		expect(BASEMAP_URLS.vector).toContain("/maps/world-basemap.pmtiles");
 		expect(BASEMAP_URLS.satelliteDay).toContain("/maps/na-satellite-day.pmtiles");
 		expect(BASEMAP_URLS.satelliteNight).toContain("/maps/na-satellite-night.pmtiles");
+		expect(BASEMAP_URLS.terrainDem).toContain("/maps/terrain-dem.pmtiles");
 	});
 });
 
@@ -67,10 +72,12 @@ describe("buildBasemapStyle — superset structure", () => {
 		expect(night.type).toBe("raster");
 	});
 
-	it("orders layers background → rasters → land/lakes → countries/states", () => {
+	it("orders layers background → rasters → land/lakes → hillshades → countries/states", () => {
 		expect(style.layers.map((l) => l.id)).toEqual([
 			"background", "satellite-day", "satellite-night",
-			"land", "lakes", "countries", "states",
+			"land", "lakes",
+			"hillshade-classic", "hillshade-radar", "hillshade-satellite",
+			"countries", "states",
 		]);
 	});
 
@@ -187,6 +194,25 @@ describe("applyBasemapStyle", () => {
 		applyBasemapStyle(map, "radar", false);
 		expect(map.skies.at(-1)).toEqual(skyFor("radar", false));
 	});
+
+	it("terrain on shows only the active style's hillshade and re-tints it", () => {
+		const map = recordingMap();
+		applyBasemapStyle(map, "satellite", true, true);
+		expect(map.layout["hillshade-satellite"].visibility).toBe("visible");
+		expect(map.layout["hillshade-classic"].visibility).toBe("none");
+		expect(map.layout["hillshade-radar"].visibility).toBe("none");
+		expect(map.paint["hillshade-satellite"]["hillshade-shadow-color"]).toBe(
+			hillshadePalette("satellite", true).shadow,
+		);
+	});
+
+	it("terrain default (off) hides every hillshade layer", () => {
+		const map = recordingMap();
+		applyBasemapStyle(map, "classic", false);
+		expect(map.layout["hillshade-classic"].visibility).toBe("none");
+		expect(map.layout["hillshade-radar"].visibility).toBe("none");
+		expect(map.layout["hillshade-satellite"].visibility).toBe("none");
+	});
 });
 
 describe("sky (issue #221)", () => {
@@ -218,5 +244,87 @@ describe("sky (issue #221)", () => {
 	it("buildBasemapStyle embeds the style-level sky", () => {
 		expect(buildBasemapStyle(URLS, "classic", false).sky).toEqual(skyFor("classic", false));
 		expect(buildBasemapStyle(URLS, "satellite", true).sky).toEqual(skyFor("satellite", true));
+	});
+});
+
+describe("hillshadePalette", () => {
+	it("every style×tone provides a complete palette (colors are hand-tuned, not pinned)", () => {
+		for (const style of ALL_STYLES) {
+			for (const dark of [false, true]) {
+				const p = hillshadePalette(style, dark);
+				expect(typeof p.shadow).toBe("string");
+				expect(typeof p.highlight).toBe("string");
+				expect(typeof p.accent).toBe("string");
+				expect(p.exaggeration).toBeGreaterThan(0);
+				expect(p.exaggeration).toBeLessThanOrEqual(1);
+			}
+		}
+	});
+	it("radar ignores darkMap and its shading stays in the phosphor family", () => {
+		expect(hillshadePalette("radar", true)).toEqual(hillshadePalette("radar", false));
+	});
+	it("classic tones differ so relief reads on both paper and slate", () => {
+		expect(hillshadePalette("classic", true)).not.toEqual(hillshadePalette("classic", false));
+	});
+});
+
+describe("hillshadeVisibility", () => {
+	it("terrain off hides every hillshade layer", () => {
+		for (const style of ALL_STYLES) {
+			expect(hillshadeVisibility(style, false)).toEqual({
+				classic: false, radar: false, satellite: false,
+			});
+		}
+	});
+	it("terrain on shows exactly the active style's layer", () => {
+		expect(hillshadeVisibility("classic", true)).toEqual({
+			classic: true, radar: false, satellite: false,
+		});
+		expect(hillshadeVisibility("radar", true)).toEqual({
+			classic: false, radar: true, satellite: false,
+		});
+		expect(hillshadeVisibility("satellite", true)).toEqual({
+			classic: false, radar: false, satellite: true,
+		});
+	});
+});
+
+describe("terrain source + hillshade layers", () => {
+	it("declares a terrarium raster-dem source bounded to NA", () => {
+		const style = buildBasemapStyle(URLS, "classic", false);
+		const dem = style.sources[TERRAIN_SOURCE] as {
+			type: string; url: string; encoding: string; tileSize: number; bounds: number[];
+		};
+		expect(dem.type).toBe("raster-dem");
+		expect(dem.url).toBe("pmtiles://https://x.example/dem.pmtiles");
+		expect(dem.encoding).toBe("terrarium");
+		expect(dem.tileSize).toBe(512);
+		expect(dem.bounds).toEqual([-150, 18, -65, 65]);
+	});
+
+	it("bakes hillshade visibility from the terrain flag (default off)", () => {
+		const vis = (style: ReturnType<typeof buildBasemapStyle>, id: string) =>
+			(style.layers.find((l) => l.id === id) as { layout?: { visibility?: string } })
+				.layout?.visibility;
+		const off = buildBasemapStyle(URLS, "radar", false);
+		expect(vis(off, "hillshade-classic")).toBe("none");
+		expect(vis(off, "hillshade-radar")).toBe("none");
+		expect(vis(off, "hillshade-satellite")).toBe("none");
+		const on = buildBasemapStyle(URLS, "radar", false, true);
+		expect(vis(on, "hillshade-radar")).toBe("visible");
+		expect(vis(on, "hillshade-classic")).toBe("none");
+		expect(vis(on, "hillshade-satellite")).toBe("none");
+	});
+
+	it("each hillshade layer carries its own style's palette", () => {
+		const style = buildBasemapStyle(URLS, "classic", true, true);
+		const paint = (id: string) =>
+			(style.layers.find((l) => l.id === id) as { paint: Record<string, unknown> }).paint;
+		expect(paint("hillshade-radar")["hillshade-shadow-color"]).toBe(
+			hillshadePalette("radar", true).shadow,
+		);
+		expect(paint("hillshade-classic")["hillshade-exaggeration"]).toBe(
+			hillshadePalette("classic", true).exaggeration,
+		);
 	});
 });

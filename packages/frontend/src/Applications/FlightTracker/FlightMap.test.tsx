@@ -112,6 +112,8 @@ const FakeMap = vi.hoisted(() => {
 		setProjection(p: Record<string, unknown>) { this.projections.push(p); }
 		skies: unknown[] = [];
 		setSky(sky: unknown) { this.skies.push(sky); }
+		terrainCalls: (Record<string, unknown> | null)[] = [];
+		setTerrain(spec: Record<string, unknown> | null) { this.terrainCalls.push(spec); }
 		jumpToCalls: Record<string, unknown>[] = [];
 		jumpTo(o: Record<string, unknown>) {
 			this.jumpToCalls.push(o);
@@ -171,6 +173,7 @@ const TEST_URLS = {
 	vector: "x.pmtiles",
 	satelliteDay: "day.pmtiles",
 	satelliteNight: "night.pmtiles",
+	terrainDem: "https://x.example/dem.pmtiles",
 };
 
 describe("FlightMap", () => {
@@ -644,6 +647,41 @@ describe("FlightMap", () => {
 		const trails2 = map2.layers.find((l) => l.id === "trails-3d-model")!
 			.__raw as import("./trackTubeLayer").TrackTube3DLayer;
 		expect(trails2.visible).toBe(true);
+	});
+
+	describe("terrain toggle", () => {
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", radarSweep: false, trailMultiplier: 1,
+		};
+
+		it("seeds setTerrain at load when the persisted toggle is on", () => {
+			render(<FlightMap {...common} terrain={true} />);
+			const map = FakeMap.last!;
+			map.fire("load");
+			expect(map.terrainCalls).toEqual([{ source: "terrain", exaggeration: 1 }]);
+		});
+
+		it("does not call setTerrain at load when off", () => {
+			render(<FlightMap {...common} terrain={false} />);
+			const map = FakeMap.last!;
+			map.fire("load");
+			expect(map.terrainCalls).toEqual([]);
+		});
+
+		it("toggling flips the 3D mesh and the active hillshade layer", () => {
+			const { rerender } = render(<FlightMap {...common} terrain={false} />);
+			const map = FakeMap.last!;
+			map.fire("load");
+			rerender(<FlightMap {...common} terrain={true} />);
+			expect(map.terrainCalls.at(-1)).toEqual({ source: "terrain", exaggeration: 1 });
+			expect(map.layout["hillshade-classic"].visibility).toBe("visible");
+			rerender(<FlightMap {...common} terrain={false} />);
+			expect(map.terrainCalls.at(-1)).toBeNull();
+			expect(map.layout["hillshade-classic"].visibility).toBe("none");
+		});
 	});
 
 	it("nonNotableFeatures drops the notable flights (they never cluster)", () => {

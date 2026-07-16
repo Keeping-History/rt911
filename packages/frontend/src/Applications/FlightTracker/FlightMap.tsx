@@ -4,7 +4,7 @@ import { type FC, type Ref, useEffect, useImperativeHandle, useRef, useState } f
 import { MapCompass } from "./MapCompass";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
-import { basemapPalette } from "../../lib/basemap/basemapStyles";
+import { basemapPalette, TERRAIN_SOURCE } from "../../lib/basemap/basemapStyles";
 import {
 	type BasemapStyleId,
 	type BasemapUrls,
@@ -152,6 +152,8 @@ interface FlightMapProps {
 	// MapControls toggles (issues #218/#222/#223); persisted in FlightMapSettings.
 	globe?: boolean;
 	threeD?: boolean;
+	// Topography (hillshade + 3D ground mesh); persisted in FlightMapSettings.
+	terrain?: boolean;
 	cluster?: boolean;
 	// Area-select tool (issue #225): while armed, drags trace a rectangle or
 	// circle instead of panning; the release reports the flights inside.
@@ -310,7 +312,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null, landingClock,
-	globe = false, threeD = false, cluster = false,
+	globe = false, threeD = false, terrain = false, cluster = false,
 	selectMode = "off", onAreaSelect, onPitchedChange, aircraftFamilyOf,
 	onSelectFlight, onClearSelection,
 }) => {
@@ -336,8 +338,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 	// through React state so the visual tracks the pointer.
 	const dragRef = useRef<DragPixels | null>(null);
 	const [overlay, setOverlay] = useState<{ mode: "rect" | "circle"; d: DragPixels } | null>(null);
-	const colorsRef = useRef<FlightMapColors>({ mapStyle, darkMap, pinColor, notablePinColor });
-	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor };
+	const colorsRef = useRef<FlightMapColors>({
+		mapStyle, darkMap, pinColor, notablePinColor, terrain,
+	});
+	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor, terrain };
 	const radarSweepRef = useRef(radarSweep);
 	radarSweepRef.current = radarSweep;
 	const trailMultiplierRef = useRef(trailMultiplier);
@@ -624,6 +628,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 				paint: { "line-color": radarColor, "line-width": 1.5, "line-opacity": 0.8 },
 			}, "track-line");
 			applyMapColors(map, colorsRef.current);
+			// Projection/pitch-style load-time seed for the terrain mesh: the
+			// [terrain] effect below skips pre-load renders.
+			if (colorsRef.current.terrain)
+				map.setTerrain({ source: TERRAIN_SOURCE, exaggeration: 1 });
 			// Now that every layer exists, resolve the pitch × cluster visibility
 			// matrix ONCE from the actual camera. The jumpTo pitch seed above
 			// fires "pitch" BEFORE the layers are added (its handler skips layer
@@ -856,12 +864,12 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor });
+		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, terrain });
 		void installPlaneIcons(map, pinColor, notablePinColor);
 		planes3DRef.current?.setColors(pinColor, notablePinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor);
 		trailTubeRef.current?.setColor(trailColor(mapStyle, darkMap));
-	}, [mapStyle, darkMap, pinColor, notablePinColor]);
+	}, [mapStyle, darkMap, pinColor, notablePinColor, terrain]);
 
 	// Arm/disarm the select tool: panning off, crosshair cursor, stale drag
 	// cleared. Runs pre-load safely (dragPan exists from construction).
@@ -918,6 +926,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 			map.setMaxPitch(0);
 		}
 	}, [threeD]);
+
+	// Terrain mesh on/off. The hillshade half of the toggle rides the re-theme
+	// effect above (applyMapColors); this owns only the ground mesh.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		map.setTerrain(terrain ? { source: TERRAIN_SOURCE, exaggeration: 1 } : null);
+		dirtyRef.current = true;
+	}, [terrain]);
 
 	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an
 	// Appearance-theme switch that happened while hidden is picked up. dirtyRef

@@ -70,6 +70,8 @@ export interface FlightMapColors {
 	darkMap: boolean;
 	pinColor: string;
 	notablePinColor: string;
+	// Topography toggle: hillshade visibility rides the shared basemap switch.
+	terrain: boolean;
 }
 
 // Kept as the historical local name; identical to the shared StylableMap.
@@ -79,7 +81,7 @@ export type PaintableMap = StylableMap;
 // flight overlays. Callers use this instead of map.setStyle(), which would
 // tear down the flights/trails/track sources and layers.
 export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void {
-	applyBasemapStyle(map, colors.mapStyle, colors.darkMap);
+	applyBasemapStyle(map, colors.mapStyle, colors.darkMap, colors.terrain);
 	map.setPaintProperty(
 		"flight-trails",
 		"line-gradient",

@@ -7,6 +7,7 @@ afterEach(cleanup);
 const baseProps = (): MapControlsProps => ({
 	globe: false,
 	threeD: false,
+	terrain: false,
 	cluster: false,
 	selectMode: "off",
 	mapStyle: "classic",
@@ -16,6 +17,7 @@ const baseProps = (): MapControlsProps => ({
 	onZoomOut: vi.fn(),
 	onToggleGlobe: vi.fn(),
 	onToggleThreeD: vi.fn(),
+	onToggleTerrain: vi.fn(),
 	onToggleCluster: vi.fn(),
 	onSetSelectMode: vi.fn(),
 	onPinpoint: vi.fn(),
@@ -56,6 +58,15 @@ describe("MapControls", () => {
 		expect(p.onToggleGlobe).toHaveBeenCalledOnce();
 		expect(p.onToggleThreeD).toHaveBeenCalledOnce();
 		expect(p.onToggleCluster).toHaveBeenCalledOnce();
+	});
+
+	it("reflects and toggles the terrain state", () => {
+		const p = baseProps();
+		render(<MapControls {...p} terrain={true} />);
+		const terrain = screen.getByRole("button", { name: "Terrain" });
+		expect(terrain.getAttribute("aria-pressed")).toBe("true");
+		fireEvent.click(terrain);
+		expect(p.onToggleTerrain).toHaveBeenCalledOnce();
 	});
 
 	it("pinpoints dropdown flies to the chosen place then snaps back to Choose…", () => {
