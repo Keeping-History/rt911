@@ -145,3 +145,8 @@ passes) `403`, since neither side of the `_or` matches a non-owned draft.
   + a generated ES256 client-secret JWT, 6-month rotation). Email+password registration:
   enable via `PATCH /settings` (public_registration + role + verify_email) only after
   `EMAIL_TRANSPORT` SMTP env exists (SendGrid planned).
+- Live Google round-trip: VERIFIED 2026-07-16 (operator browser test). Auto-provisioned
+  google-provider user landed with the Teacher role. Surfaced a gap: app_access:false
+  policies don't inherit read-own-profile, so /users/me returned only `id` — fixed with a
+  least-privilege directus_users self-read permission (id/email/first_name/last_name,
+  own row only); matrix now 16/16.

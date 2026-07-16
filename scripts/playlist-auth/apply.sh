@@ -72,4 +72,21 @@ fi
   "{\"collection\":\"playlists\",\"action\":\"update\",\"policy\":\"$POLICY_ID\",\"fields\":[\"title\",\"definition\",\"status\"],\"permissions\":$OWN,\"validation\":$STATUS_OK}" >/dev/null
 [ "$(have_perm delete)" = True ] || req POST /permissions \
   "{\"collection\":\"playlists\",\"action\":\"delete\",\"policy\":\"$POLICY_ID\",\"fields\":[\"*\"],\"permissions\":$OWN}" >/dev/null
+
+# --- Teacher self-read on directus_users -------------------------------------
+# With app_access:false the policy does NOT inherit Directus's built-in
+# read-own-profile rules, so /users/me returns only `id` — the frontend's
+# fetchMe needs email/first_name/last_name. Least privilege: own row only,
+# four fields, no role/status exposure. Converged like the playlists read.
+SELF_ONLY='{"id":{"_eq":"$CURRENT_USER"}}'
+USERS_READ_ID=$(req GET "/permissions?filter[policy][_eq]=$POLICY_ID&filter[collection][_eq]=directus_users&filter[action][_eq]=read&fields=id" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')")
+USERS_FIELDS='["id","email","first_name","last_name"]'
+if [ -z "$USERS_READ_ID" ]; then
+  req POST /permissions \
+    "{\"collection\":\"directus_users\",\"action\":\"read\",\"policy\":\"$POLICY_ID\",\"fields\":$USERS_FIELDS,\"permissions\":$SELF_ONLY}" >/dev/null
+else
+  req PATCH "/permissions/$USERS_READ_ID" \
+    "{\"fields\":$USERS_FIELDS,\"permissions\":$SELF_ONLY}" >/dev/null
+fi
 echo "permissions: ok"

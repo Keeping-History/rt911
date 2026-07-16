@@ -60,5 +60,11 @@ check "A updates own row"        200 "$(code -X PATCH "$URL/items/playlists/$A_P
 check "A cannot set bogus status" 400 "$(code -X PATCH "$URL/items/playlists/$A_PL" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"status":"hacked"}')"
 check "B cannot delete A's row"  403 "$(code -X DELETE "$URL/items/playlists/$A_PL" -H "Authorization: Bearer $TB")"
 check "A deletes own row"        204 "$(code -X DELETE "$URL/items/playlists/$A_PL" -H "Authorization: Bearer $TA")"
+# users self-read: /users/me must expose the profile fields the frontend needs,
+# and a teacher must NOT be able to read another user's row.
+ME_EMAIL=$(curl -sS "$URL/users/me?fields=email" -H "Authorization: Bearer $TA" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('email') or '')")
+check "A reads own profile email" "verify-teacher-a@example.com" "$ME_EMAIL"
+check "A cannot read B's user row" 403 "$(code "$URL/users/$B_ID" -H "Authorization: Bearer $TA")"
 A_PL="" # deleted; skip in cleanup
 echo; [ "$FAILS" -eq 0 ] && echo "ALL CHECKS PASSED" || { echo "$FAILS CHECK(S) FAILED"; exit 1; }
