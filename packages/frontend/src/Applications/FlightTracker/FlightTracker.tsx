@@ -193,6 +193,11 @@ export const FlightTracker: FC = () => {
 			flightTrackerSetMapSettings({ ...settings, threeD: !settings.threeD }),
 		);
 	}, [settings, desktopEventDispatch]);
+	const toggleTerrain = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, terrain: !settings.terrain }),
+		);
+	}, [settings, desktopEventDispatch]);
 	const toggleCluster = useCallback(() => {
 		desktopEventDispatch(
 			flightTrackerSetMapSettings({ ...settings, cluster: !settings.cluster }),
@@ -909,12 +914,14 @@ export const FlightTracker: FC = () => {
 					<MapControls
 						globe={settings.globe}
 						threeD={settings.threeD}
+						terrain={settings.terrain}
 						cluster={settings.cluster}
 						selectMode={selectMode}
 						onZoomIn={() => mapApi.current?.zoomIn()}
 						onZoomOut={() => mapApi.current?.zoomOut()}
 						onToggleGlobe={toggleGlobe}
 						onToggleThreeD={toggleThreeD}
+						onToggleTerrain={toggleTerrain}
 						onToggleCluster={toggleCluster}
 						onSetSelectMode={setSelectMode}
 						mapStyle={settings.mapStyle}
@@ -952,6 +959,7 @@ export const FlightTracker: FC = () => {
 								trailMultiplier={settings.trailMultiplier}
 								globe={settings.globe}
 								threeD={settings.threeD}
+								terrain={settings.terrain}
 								cluster={settings.cluster}
 								loopEnabled={loopEnabled}
 								loopWindowMs={windowMs}

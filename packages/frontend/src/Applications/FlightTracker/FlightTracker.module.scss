@@ -12,6 +12,9 @@
 	// content, or each one eats a whole wrapped row.
 	:global(.classicyPopUpMenuWrapper) { width: auto; flex: 0 0 auto; }
 }
+.mapControlsContainer {
+	display: flex; align-items: center; gap: var(--window-padding-size); flex-wrap: wrap; flex-direction: row;
+}
 .mapControlsDivider { width: 1px; align-self: stretch; background: #999; margin: 0 4px; }
 // Compass rose overlay (issue #219): a Classicy-bordered dial in the map's
 // top-right corner; the needle span counter-rotates with the map bearing.

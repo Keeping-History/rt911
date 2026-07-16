@@ -26,6 +26,7 @@ const MAP_STYLE_OPTIONS: { value: BasemapStyleId; label: string }[] = [
 export interface MapControlsProps {
 	globe: boolean;
 	threeD: boolean;
+	terrain: boolean;
 	cluster: boolean;
 	selectMode: SelectMode;
 	mapStyle: BasemapStyleId;
@@ -35,6 +36,7 @@ export interface MapControlsProps {
 	onZoomOut(): void;
 	onToggleGlobe(): void;
 	onToggleThreeD(): void;
+	onToggleTerrain(): void;
 	onToggleCluster(): void;
 	onSetSelectMode(mode: SelectMode): void;
 	onPinpoint(center: [number, number], zoom: number): void;
@@ -50,13 +52,16 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 	const [pinpointNonce, setPinpointNonce] = useState(0);
 	return (
 	<div className={styles.mapControls}>
+		<div className={styles.mapControlsContainer}>
 		<ClassicyButton buttonSize="small" aria-label="Zoom out" onClickFunc={p.onZoomOut}>
 			−
 		</ClassicyButton>
 		<ClassicyButton buttonSize="small" aria-label="Zoom in" onClickFunc={p.onZoomIn}>
 			+
 		</ClassicyButton>
+		</div>
 		<span className={styles.mapControlsDivider} />
+		<div className={styles.mapControlsContainer}>
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Globe"
@@ -75,13 +80,23 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		</ClassicyButton>
 		<ClassicyButton
 			buttonSize="small"
+			aria-label="Terrain"
+			depressed={p.terrain}
+			onClickFunc={p.onToggleTerrain}
+		>
+			Terrain
+		</ClassicyButton>
+		<ClassicyButton
+			buttonSize="small"
 			aria-label="Cluster"
 			depressed={p.cluster}
 			onClickFunc={p.onToggleCluster}
 		>
 			Cluster
 		</ClassicyButton>
+		</div>
 		<span className={styles.mapControlsDivider} />
+		<div className={styles.mapControlsContainer}>
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Select rectangle"
@@ -98,7 +113,9 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		>
 			◯
 		</ClassicyButton>
+		</div>
 		<span className={styles.mapControlsDivider} />
+		<div className={styles.mapControlsContainer}>
 		<ClassicyPopUpMenu
 			key={pinpointNonce}
 			id="flight_map_pinpoints"
@@ -115,7 +132,9 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 				setPinpointNonce((n) => n + 1);
 			}}
 		/>
+		</div>
 		<span className={styles.mapControlsDivider} />
+		<div className={styles.mapControlsContainer}>
 		<ClassicyPopUpMenu
 			id="flight_map_style"
 			label="Style"
@@ -138,7 +157,9 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		>
 			Dark
 		</ClassicyButton>
+		</div>
 		<span className={styles.mapControlsDivider} />
+		<div className={styles.mapControlsContainer}>
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Filter flights"
@@ -147,6 +168,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		>
 			{p.filterOn ? "Filter (on)…" : "Filter…"}
 		</ClassicyButton>
+		</div>
 	</div>
 	);
 };
