@@ -1,0 +1,20 @@
+{
+	"name": "directus-extension-profile-api",
+	"version": "1.0.0",
+	"private": true,
+	"type": "commonjs",
+	"description": "Verified email-change endpoints for 911realtime teacher accounts",
+	"directus:extension": {
+		"type": "endpoint",
+		"path": "dist/index.js",
+		"source": "src/index.js",
+		"host": "^12.0.0"
+	},
+	"scripts": {
+		"build": "mkdir -p dist && cp src/index.js dist/index.js",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"vitest": "^3.0.0"
+	}
+}

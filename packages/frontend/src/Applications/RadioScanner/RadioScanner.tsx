@@ -32,6 +32,7 @@ import { FocusedItemPlayer } from "./FocusedItemPlayer";
 import { NowPlayingList } from "./NowPlayingList";
 import styles from "./RadioScanner.module.scss";
 import "./RadioScannerContext";
+import type { RadioRemoteCommand } from "./RadioScannerContext";
 import { trackAppToggle } from "../../openreplay";
 import { isAudioBlocked, subscribeAudioBlocked } from "./audioBlocked";
 import {
@@ -236,6 +237,27 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
             showWaveform,
         });
     }, [activeStation, mutedItems, showWaveform, desktopEventDispatch]);
+
+    // Apply each remote tune command (playlist engine, etc.) exactly once,
+    // tracked by its monotonic seq — TV.tsx's command pattern. If the station
+    // isn't in the list yet, the seq is left unconsumed so the effect retries
+    // when `stations` updates. Drives the same local path a station-button
+    // click uses (audio-unlock semantics included).
+    const command = appState?.command as RadioRemoteCommand | undefined;
+    const lastCommandSeqRef = useRef(0);
+    useEffect(() => {
+        if (!command || command.seq <= lastCommandSeqRef.current) return;
+        if (command.kind !== "tune") {
+            lastCommandSeqRef.current = command.seq;
+            return;
+        }
+        const lc = command.station.toLowerCase();
+        const match = stations.find((s) => s.key.toLowerCase() === lc);
+        if (!match) return; // not in the list yet — retry on next update
+        lastCommandSeqRef.current = command.seq;
+        setActiveStation(match.key);
+        setFocusedItem(null);
+    }, [command, stations]);
 
     const toggleItemMute = (id: number) => {
         setMutedItems((prev) =>
