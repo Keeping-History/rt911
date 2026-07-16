@@ -153,6 +153,7 @@ const HILLSHADE_CLASSIC_LIGHT: HillshadePalette = {
 const HILLSHADE_CLASSIC_DARK: HillshadePalette = {
 	shadow: "#000000", highlight: "#565664", accent: "#44444f", exaggeration: 0.4,
 };
+// Deliberately reuses the RADAR scope palette (lakes/countries/states) so terrain reads as scope clutter.
 const HILLSHADE_RADAR: HillshadePalette = {
 	shadow: "#020c02", highlight: "#2f9e4f", accent: "#1e6434", exaggeration: 0.5,
 };

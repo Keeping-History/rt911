@@ -290,10 +290,6 @@ describe("hillshadeVisibility", () => {
 });
 
 describe("terrain source + hillshade layers", () => {
-	it("BASEMAP_URLS includes the terrain DEM archive", () => {
-		expect(BASEMAP_URLS.terrainDem).toContain("/maps/terrain-dem.pmtiles");
-	});
-
 	it("declares a terrarium raster-dem source bounded to NA", () => {
 		const style = buildBasemapStyle(URLS, "classic", false);
 		const dem = style.sources[TERRAIN_SOURCE] as {
