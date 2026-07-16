@@ -661,7 +661,7 @@ describe("FlightMap", () => {
 			render(<FlightMap {...common} terrain={true} />);
 			const map = FakeMap.last!;
 			map.fire("load");
-			expect(map.terrainCalls).toEqual([{ source: "terrain", exaggeration: 1 }]);
+			expect(map.terrainCalls).toEqual([{ source: "terrain", exaggeration: 10 }]);
 		});
 
 		it("does not call setTerrain at load when off", () => {
@@ -676,7 +676,7 @@ describe("FlightMap", () => {
 			const map = FakeMap.last!;
 			map.fire("load");
 			rerender(<FlightMap {...common} terrain={true} />);
-			expect(map.terrainCalls.at(-1)).toEqual({ source: "terrain", exaggeration: 1 });
+			expect(map.terrainCalls.at(-1)).toEqual({ source: "terrain", exaggeration: 10 });
 			expect(map.layout["hillshade-classic"].visibility).toBe("visible");
 			rerender(<FlightMap {...common} terrain={false} />);
 			expect(map.terrainCalls.at(-1)).toBeNull();
