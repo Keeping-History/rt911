@@ -1,7 +1,7 @@
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
 import { exaggeratedHeightM } from "./flightAltitude";
-import { isNotable } from "./notableFlights";
+import { isNotable, isObserver } from "./notableFlights";
 import {
 	PLANE_INSTANCE_STRIDE,
 	type PlaneInstances,
@@ -23,13 +23,14 @@ export interface ReplaySample {
 export interface ReplayFlight {
 	samples: ReplaySample[]; // sorted by t, unique t
 	// Replay-trail-point properties, refreshed from the latest-inserted sample; the
-	// replay-trail layers only style by `notable`, the rest satisfies the shared FC shape.
+	// replay-trail layers only style by `notable`/`observer`, the rest satisfies the shared FC shape.
 	props: {
 		flight: string;
 		carrier: string;
 		alt_ft: number;
 		phase: string;
 		notable: boolean;
+		observer: boolean;
 	};
 	id: number; // stable feature id (latest sample's row id)
 }
@@ -68,6 +69,7 @@ export function insertReplaySamples(
 					alt_ft: p.alt_ft,
 					phase: p.phase ?? "",
 					notable: isNotable(p.flight),
+					observer: isObserver(p.flight),
 				},
 				id: p.id,
 			};
@@ -171,7 +173,7 @@ export function buildReplayTrailInstances(
 		data[o + 2] = exaggeratedHeightM(at.alt_ft);
 		data[o + 3] = mercatorPerMeter(at.lat);
 		data[o + 6] = radiusKm * 1000;
-		data[o + 7] = f.props.notable ? 1 : 0;
+		data[o + 7] = f.props.notable ? 1 : f.props.observer ? 2 : 0;
 		flights.push(flight);
 		count++;
 	}

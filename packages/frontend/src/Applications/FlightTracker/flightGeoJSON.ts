@@ -1,5 +1,5 @@
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
-import { isNotable } from "./notableFlights";
+import { isNotable, isObserver } from "./notableFlights";
 
 export interface FlightFeature {
 	type: "Feature";
@@ -11,6 +11,9 @@ export interface FlightFeature {
 		alt_ft: number;
 		phase: string;
 		notable: boolean;
+		// Witness aircraft (GOFER06): highlighted like a notable but in the
+		// observer color and with none of the crash semantics.
+		observer: boolean;
 		// Degrees clockwise from north; drives the plane icons' icon-rotate.
 		heading: number;
 		// Airframe family (aircraftModels.AircraftFamily) — drives the
@@ -40,6 +43,7 @@ export function flightsToGeoJSON(positions: FlightPosition[]): FlightFeatureColl
 				alt_ft: p.alt_ft,
 				phase: p.phase ?? "",
 				notable: isNotable(p.flight),
+				observer: isObserver(p.flight),
 				heading: 0, // static builder — no velocity context
 				family: "generic", // static builder — no route-index context
 			},

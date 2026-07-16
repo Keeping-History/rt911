@@ -23,6 +23,7 @@ in vec4 i_data1; // headingRad, pitchRad, halfSizeMeters, notableFlag
 
 uniform vec3 u_color;
 uniform vec3 u_color_notable;
+uniform vec3 u_color_observer;
 
 out vec3 v_color;
 
@@ -48,7 +49,9 @@ void main() {
 	gl_Position = projectTileFor3D(posMerc, elevMeters * i_data0.w);
 #endif
 	float shade = 0.55 + 0.45 * max(dot(normalize(n), LIGHT), 0.0);
-	v_color = mix(u_color, u_color_notable, i_data1.w) * shade;
+	// Category flag: 0 = regular, 1 = notable, 2 = observer.
+	vec3 base = i_data1.w < 0.5 ? u_color : (i_data1.w < 1.5 ? u_color_notable : u_color_observer);
+	v_color = base * shade;
 }
 `;
 
@@ -129,6 +132,7 @@ export class Planes3DLayer implements CustomLayerInterface {
 	instanceCount = 0;
 	private color: [number, number, number] = [0.23, 0.23, 0.23];
 	private colorNotable: [number, number, number] = [0.75, 0.13, 0.16];
+	private colorObserver: [number, number, number] = [0.06, 0.46, 0.43];
 
 	setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
@@ -136,9 +140,10 @@ export class Planes3DLayer implements CustomLayerInterface {
 		this.map?.triggerRepaint();
 	}
 
-	setColors(pinHex: string, notableHex: string): void {
+	setColors(pinHex: string, notableHex: string, observerHex?: string): void {
 		this.color = hexToRgb01(pinHex);
 		this.colorNotable = hexToRgb01(notableHex);
+		if (observerHex) this.colorObserver = hexToRgb01(observerHex);
 		this.map?.triggerRepaint();
 	}
 
@@ -263,7 +268,7 @@ ${VERTEX_BODY}`;
 			return null;
 		}
 		const uniforms: ProgramInfo["uniforms"] = {};
-		for (const name of [...PROJECTION_UNIFORMS, "u_color", "u_color_notable", "u_opacity"]) {
+		for (const name of [...PROJECTION_UNIFORMS, "u_color", "u_color_notable", "u_color_observer", "u_opacity"]) {
 			uniforms[name] = gl.getUniformLocation(program, name);
 		}
 		const info = { program, uniforms };
@@ -298,6 +303,7 @@ ${VERTEX_BODY}`;
 			gl.uniform1f(u.u_projection_transition, pd.projectionTransition);
 		if (u.u_color) gl.uniform3f(u.u_color, ...this.color);
 		if (u.u_color_notable) gl.uniform3f(u.u_color_notable, ...this.colorNotable);
+		if (u.u_color_observer) gl.uniform3f(u.u_color_observer, ...this.colorObserver);
 		if (u.u_opacity) gl.uniform1f(u.u_opacity, this.opacity);
 
 		gl.enableVertexAttribArray(A_POS);
