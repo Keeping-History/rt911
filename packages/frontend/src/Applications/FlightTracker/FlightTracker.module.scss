@@ -112,8 +112,6 @@
 .statusBarRed { background-color: #c0202a; color: #fff; }
 .settings { display: flex; flex-direction: column; background-color: var(--color-system-03); }
 .settingsButtons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-.filterButtonRow { display: flex; margin-bottom: var(--window-padding-size); }
-.filterButtonRow > button { flex: 1 1 auto; }
 .loopStrip {
 	flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
 	border-top: 1px solid #999;

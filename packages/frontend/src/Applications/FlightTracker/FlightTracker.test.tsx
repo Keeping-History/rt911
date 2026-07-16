@@ -687,7 +687,7 @@ describe("FlightTracker", () => {
 			start_date: "2001-09-11T13:00:00Z", lat: 41, lon: -73, alt_ft: 31000,
 		};
 
-		it("the sidebar Filter button opens the filter window with five dropdowns and Clear", () => {
+		it("the toolbar Filter button opens the filter window with five dropdowns and Clear", () => {
 			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
 			fireEvent.click(screen.getByText("Filter…"));
 			expect(windowProps.some((w) => w.id === "flight-filter")).toBe(true);

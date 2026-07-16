@@ -30,6 +30,7 @@ export interface MapControlsProps {
 	selectMode: SelectMode;
 	mapStyle: BasemapStyleId;
 	darkMap: boolean;
+	filterOn: boolean;
 	onZoomIn(): void;
 	onZoomOut(): void;
 	onToggleGlobe(): void;
@@ -39,6 +40,7 @@ export interface MapControlsProps {
 	onPinpoint(center: [number, number], zoom: number): void;
 	onSetMapStyle(style: BasemapStyleId): void;
 	onToggleDarkMap(): void;
+	onOpenFilter(): void;
 }
 
 export const MapControls: FC<MapControlsProps> = (p) => {
@@ -135,6 +137,15 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			onClickFunc={p.onToggleDarkMap}
 		>
 			Dark
+		</ClassicyButton>
+		<span className={styles.mapControlsDivider} />
+		<ClassicyButton
+			buttonSize="small"
+			aria-label="Filter flights"
+			depressed={p.filterOn}
+			onClickFunc={p.onOpenFilter}
+		>
+			{p.filterOn ? "Filter (on)…" : "Filter…"}
 		</ClassicyButton>
 	</div>
 	);
