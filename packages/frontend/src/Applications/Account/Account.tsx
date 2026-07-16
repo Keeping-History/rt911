@@ -9,9 +9,11 @@ import {
 } from "classicy";
 import appIconPng from "./app.png";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { avatarUrl, uploadAvatar } from "../../Providers/Auth/authApi";
+import { confirmEmailChange } from "../../Providers/Auth/profileApi";
+import { ProfileEditor } from "./ProfileEditor";
 import { SignInForm } from "./SignInForm";
 
 const MAX_AVATAR_BYTES = 50 * 1024 * 1024;
@@ -40,6 +42,36 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 	const { status, user, signInWithEmail, signInWithProvider, signOut, refresh } = useAuth();
 	const [avatarUploading, setAvatarUploading] = useState(false);
 	const [avatarError, setAvatarError] = useState<string | null>(null);
+
+	// Verified-email-change landing: capture ?confirm-email=<token> once, strip
+	// it from the URL, keep it IN MEMORY ONLY. Confirm as soon as we're signed
+	// in (which may be immediately, or after the teacher signs in below).
+	const [confirmToken, setConfirmToken] = useState<string | null>(() => {
+		const params = new URLSearchParams(window.location.search);
+		const token = params.get("confirm-email");
+		if (token) {
+			params.delete("confirm-email");
+			const rest = params.toString();
+			window.history.replaceState({}, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+		}
+		return token;
+	});
+	const [confirmResult, setConfirmResult] = useState<string | null>(null);
+	useEffect(() => {
+		if (!confirmToken || status !== "signedIn") return;
+		setConfirmToken(null);
+		confirmEmailChange(confirmToken)
+			.then((email) => {
+				setConfirmResult(`Your email is now ${email}.`);
+				return refresh();
+			})
+			.catch((err: Error) => setConfirmResult(err.message));
+	}, [confirmToken, status, refresh]);
+	const confirmBanner =
+		confirmResult ??
+		(confirmToken && status === "anonymous"
+			? "Sign in to confirm your new email address."
+			: null);
 
 	const appMenu = useMemo(
 		() => [
@@ -102,6 +134,7 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 				modal={false}
 				appMenu={appMenu}
 			>
+				{confirmBanner && <div>{confirmBanner}</div>}
 				{status === "loading" ? (
 					<div />
 				) : status === "signedIn" ? (
@@ -125,6 +158,7 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 							{user?.avatar ? "Change Avatar" : "Upload Avatar"}
 						</ClassicyButton>
 						{avatarError && <div>{avatarError}</div>}
+						<ProfileEditor />
 					</div>
 				) : (
 					<SignInForm

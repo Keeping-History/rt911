@@ -23,6 +23,13 @@ vi.mock("classicy", async (importOriginal) => ({
 }));
 
 // Mock only the auth seam beyond that.
+const mockConfirmEmailChange = vi.hoisted(() => vi.fn());
+vi.mock("../../Providers/Auth/profileApi", () => ({
+	updateProfile: vi.fn(async () => ({})),
+	requestEmailChange: vi.fn(async () => undefined),
+	confirmEmailChange: mockConfirmEmailChange,
+}));
+
 const mockAuth = vi.hoisted(() => ({
 	status:              "anonymous" as "loading" | "anonymous" | "signedIn",
 	user:                null as AuthUser | null,
@@ -255,5 +262,51 @@ describe("Account — preview origins", () => {
 		expect(
 			document.getElementById("account-password")?.getAttribute("type"),
 		).toBe("password");
+	});
+});
+
+describe("Account — email-change confirm link", () => {
+	it("confirms immediately when signed in and shows the new email", async () => {
+		window.history.pushState({}, "", "/?confirm-email=tok123");
+		mockConfirmEmailChange.mockResolvedValue("new@x.org");
+		mockAuth.status = "signedIn";
+		mockAuth.user = makeUser({ email: "old@x.org", first_name: "Ada" });
+		render(<Account />);
+		await waitFor(() =>
+			expect(mockConfirmEmailChange).toHaveBeenCalledWith("tok123"),
+		);
+		expect(await screen.findByText("Your email is now new@x.org.")).not.toBeNull();
+		expect(window.location.search).not.toContain("confirm-email");
+		expect(mockAuth.refresh).toHaveBeenCalled();
+	});
+
+	it("prompts to sign in when anonymous, then confirms after status flips", async () => {
+		window.history.pushState({}, "", "/?confirm-email=tok456");
+		mockConfirmEmailChange.mockResolvedValue("new@x.org");
+		mockAuth.status = "anonymous";
+		const { rerender } = render(<Account />);
+		expect(
+			screen.getByText("Sign in to confirm your new email address."),
+		).not.toBeNull();
+		expect(mockConfirmEmailChange).not.toHaveBeenCalled();
+		mockAuth.status = "signedIn";
+		mockAuth.user = makeUser({ email: "old@x.org" });
+		rerender(<Account />);
+		await waitFor(() =>
+			expect(mockConfirmEmailChange).toHaveBeenCalledWith("tok456"),
+		);
+	});
+
+	it("renders the confirm error verbatim on a bad token", async () => {
+		window.history.pushState({}, "", "/?confirm-email=expired");
+		mockConfirmEmailChange.mockRejectedValue(
+			new Error("This confirmation link is invalid or has expired."),
+		);
+		mockAuth.status = "signedIn";
+		mockAuth.user = makeUser({ email: "old@x.org" });
+		render(<Account />);
+		expect(
+			await screen.findByText("This confirmation link is invalid or has expired."),
+		).not.toBeNull();
 	});
 });
