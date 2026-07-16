@@ -2,13 +2,17 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log/slog"
 	"testing"
 	"time"
 
+	"classicy/streamer/internal/clock"
 	"classicy/streamer/internal/model"
 
+	"github.com/alicebob/miniredis/v2"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -813,5 +817,115 @@ func TestSendWeatherForecastNilStillSends(t *testing.T) {
 	}
 	if len(m.WeatherForecasts) != 0 {
 		t.Fatalf("nil forecast must send an empty list, got %+v", m.WeatherForecasts)
+	}
+}
+
+// forcedTestSession returns a session whose hub has an ACTIVE master clock
+// pinned at target, plus the MasterClock for further manipulation.
+func forcedTestSession(t *testing.T, target time.Time) (*Session, *clock.MasterClock) {
+	t.Helper()
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run: %v", err)
+	}
+	t.Cleanup(mr.Close)
+	rdb := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	mc := clock.New(rdb, logger)
+	if err := mc.Set(context.Background(), target); err != nil {
+		t.Fatalf("mc.Set: %v", err)
+	}
+	hub := NewHub(logger, 0)
+	hub.SetMaster(mc)
+	return NewSession(hub, nil, nil, logger), mc
+}
+
+func TestHeartbeatUnforcedHasNoMasterTime(t *testing.T) {
+	s := newTestSession(t)
+	s.Heartbeat(time.Date(2001, 9, 11, 13, 0, 0, 0, time.UTC))
+	ack := recvType(t, s)
+	if ack.Type != "heartbeat_ack" || ack.MasterTime != "" {
+		t.Fatalf("expected plain heartbeat_ack, got %+v", ack)
+	}
+}
+
+func TestHeartbeatForcedPinsToMasterAndAcksMasterTime(t *testing.T) {
+	master := time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC)
+	s, _ := forcedTestSession(t, master)
+
+	// Client reports a wildly different time; the server must ignore it.
+	s.Heartbeat(time.Date(2001, 9, 11, 8, 0, 0, 0, time.UTC))
+	ack := recvType(t, s)
+	if ack.Type != "heartbeat_ack" {
+		t.Fatalf("expected heartbeat_ack, got %+v", ack)
+	}
+	if ack.MasterTime == "" {
+		t.Fatal("expected master_time while forced")
+	}
+	ackTime, err := time.Parse(time.RFC3339, ack.MasterTime)
+	if err != nil {
+		t.Fatalf("bad master_time: %v", err)
+	}
+	if d := ackTime.Sub(master); d < 0 || d > 2*time.Second {
+		t.Fatalf("master_time %v not near master %v", ackTime, master)
+	}
+	vt, _ := s.VirtualTime()
+	if vt.Sub(master) < 0 || vt.Sub(master) > 2*time.Second {
+		t.Fatalf("virtualTime %v not pinned to master %v", vt, master)
+	}
+}
+
+func TestSendClock(t *testing.T) {
+	s := newTestSession(t)
+	target := time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC)
+
+	s.SendClock(true, target)
+	m := recvType(t, s)
+	if m.Type != "clock" || m.Active == nil || !*m.Active || m.Time != target.Format(time.RFC3339) {
+		t.Fatalf("bad active clock frame: %+v", m)
+	}
+
+	s.SendClock(false, time.Time{})
+	m = recvType(t, s)
+	if m.Type != "clock" || m.Active == nil || *m.Active || m.Time != "" {
+		t.Fatalf("bad release clock frame: %+v", m)
+	}
+}
+
+func TestPauseIgnoredWhileForced(t *testing.T) {
+	s, _ := forcedTestSession(t, time.Date(2001, 9, 11, 13, 0, 0, 0, time.UTC))
+	s.Pause()
+	if ack := recvType(t, s); ack.Type != "pause_ack" {
+		t.Fatalf("expected pause_ack, got %+v", ack)
+	}
+	s.mu.Lock()
+	paused := s.paused
+	s.mu.Unlock()
+	if paused {
+		t.Fatal("pause must not apply while the clock is forced")
+	}
+}
+
+func TestBroadcastClockReachesRegisteredSessions(t *testing.T) {
+	master := time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC)
+	s, mc := forcedTestSession(t, master)
+	hub := s.hub
+	// Register synchronously (bypass the async reg channel — Run isn't running).
+	hub.mu.Lock()
+	hub.sessions[s.id] = s
+	hub.mu.Unlock()
+
+	hub.BroadcastClock(mc.Snapshot())
+	m := recvType(t, s)
+	if m.Type != "clock" || m.Active == nil || !*m.Active {
+		t.Fatalf("expected active clock broadcast, got %+v", m)
+	}
+
+	hub.BroadcastClock(clock.State{Active: false})
+	m = recvType(t, s)
+	if m.Type != "clock" || m.Active == nil || *m.Active {
+		t.Fatalf("expected release clock broadcast, got %+v", m)
 	}
 }
