@@ -72,7 +72,10 @@ export function splineTrack(profile: TrackPoint[], steps: number): TrackPoint[] 
 export interface TrackTube {
 	/** vec4 per vertex: mercX, mercY, exaggerated elevation (m), mercator units per meter. */
 	centers: Float32Array;
-	/** vec3 per vertex: ENU unit offset from the centerline — also the shading normal. */
+	/**
+	 * vec4 per vertex: ENU unit offset from the centerline (xyz — also the
+	 * shading normal) + an opacity multiplier (w; the trail fade).
+	 */
 	offsets: Float32Array;
 	vertexCount: number;
 }
@@ -144,7 +147,7 @@ export function buildTrackTube(
 	const quads = (n - 1) * TUBE_SIDES;
 	const vertexCount = quads * 2 * 3;
 	const centers = new Float32Array(vertexCount * 4);
-	const offsets = new Float32Array(vertexCount * 3);
+	const offsets = new Float32Array(vertexCount * 4);
 	let v = 0;
 	const emit = (ring: number, side: number) => {
 		const c4 = v * 4;
@@ -152,12 +155,13 @@ export function buildTrackTube(
 		centers[c4 + 1] = cy[ring];
 		centers[c4 + 2] = ce[ring];
 		centers[c4 + 3] = cm[ring];
-		const o3 = v * 3;
+		const o4 = v * 4;
 		const d = dirs[ring];
 		const k = side * 3;
-		offsets[o3] = d[k];
-		offsets[o3 + 1] = d[k + 1];
-		offsets[o3 + 2] = d[k + 2];
+		offsets[o4] = d[k];
+		offsets[o4 + 1] = d[k + 1];
+		offsets[o4 + 2] = d[k + 2];
+		offsets[o4 + 3] = 1; // the selected track never fades
 		v++;
 	};
 	for (let i = 0; i < n - 1; i++) {
@@ -175,6 +179,27 @@ export function buildTrackTube(
 }
 
 // --- live trail ribbons --------------------------------------------------------
+
+// Opacity along the trail as a fraction of its length measured FROM the
+// plane (0 = at the aircraft, 1 = the oldest tip): solid for the newest
+// half, then stepping down to fully transparent at the tip.
+const TRAIL_FADE_STOPS: [number, number][] = [
+	[0, 1], [0.5, 1], [0.7, 0.5], [0.8, 0.25], [0.9, 0.1], [1, 0],
+];
+
+/** Piecewise-linear trail opacity at fraction-from-plane `f`, clamped. */
+export function trailFadeAt(f: number): number {
+	if (f <= 0) return 1;
+	if (f >= 1) return 0;
+	for (let i = 1; i < TRAIL_FADE_STOPS.length; i++) {
+		const [f1, a1] = TRAIL_FADE_STOPS[i];
+		if (f <= f1) {
+			const [f0, a0] = TRAIL_FADE_STOPS[i - 1];
+			return a0 + ((f - f0) / (f1 - f0)) * (a1 - a0);
+		}
+	}
+	return 0;
+}
 
 export interface TrailTubeOptions {
 	/** Breadcrumb points per flight (already multiplier-scaled; capped below). */
@@ -209,14 +234,14 @@ export interface TrailTubeOptions {
 // Scratch pools, grown geometrically and kept for the page lifetime.
 let ringScratch = new Float64Array(64 * 6); // per-ring: x, y, elev, mpm, ux, uy
 let centersScratch = new Float32Array(4096 * 4);
-let offsetsScratch = new Float32Array(4096 * 3);
+let offsetsScratch = new Float32Array(4096 * 4);
 
 function ensureVertexCapacity(verts: number): void {
 	if (centersScratch.length < verts * 4) {
 		let cap = centersScratch.length / 4;
 		while (cap < verts) cap *= 2;
 		centersScratch = new Float32Array(cap * 4);
-		offsetsScratch = new Float32Array(cap * 3);
+		offsetsScratch = new Float32Array(cap * 4);
 	}
 }
 
@@ -304,29 +329,35 @@ export function buildTrailTubes(
 		}
 
 		// Two triangles per ring pair, emitted inline into the packed scratch.
+		// Rings run oldest -> newest, so fraction-from-plane at ring i is
+		// (rings-1-i)/(rings-1); the fade goes transparent at the oldest tip.
 		for (let i = 0; i < rings - 1; i++) {
 			const lo = i * 6;
 			const hi = (i + 1) * 6;
+			const alphaLo = trailFadeAt((rings - 1 - i) / (rings - 1));
+			const alphaHi = trailFadeAt((rings - 2 - i) / (rings - 1));
 			// (i,-1) (i+1,-1) (i+1,+1) / (i,-1) (i+1,+1) (i,+1)
-			for (const [r6, side] of [
-				[lo, -1], [hi, -1], [hi, 1], [lo, -1], [hi, 1], [lo, 1],
+			for (const [r6, side, alpha] of [
+				[lo, -1, alphaLo], [hi, -1, alphaHi], [hi, 1, alphaHi],
+				[lo, -1, alphaLo], [hi, 1, alphaHi], [lo, 1, alphaLo],
 			] as const) {
 				const c4 = v * 4;
 				centersScratch[c4] = ringScratch[r6];
 				centersScratch[c4 + 1] = ringScratch[r6 + 1];
 				centersScratch[c4 + 2] = ringScratch[r6 + 2];
 				centersScratch[c4 + 3] = ringScratch[r6 + 3];
-				const o3 = v * 3;
-				offsetsScratch[o3] = side * ringScratch[r6 + 4];
-				offsetsScratch[o3 + 1] = side * ringScratch[r6 + 5];
-				offsetsScratch[o3 + 2] = 0;
+				const o4 = v * 4;
+				offsetsScratch[o4] = side * ringScratch[r6 + 4];
+				offsetsScratch[o4 + 1] = side * ringScratch[r6 + 5];
+				offsetsScratch[o4 + 2] = 0;
+				offsetsScratch[o4 + 3] = alpha;
 				v++;
 			}
 		}
 	}
 	return {
 		centers: centersScratch.subarray(0, v * 4),
-		offsets: offsetsScratch.subarray(0, v * 3),
+		offsets: offsetsScratch.subarray(0, v * 4),
 		vertexCount: v,
 	};
 }
