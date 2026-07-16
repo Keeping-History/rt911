@@ -3,7 +3,7 @@
 **Date:** 2026-07-16
 **Status:** Approved (brainstorming session with Robbie)
 **Scope:** `packages/frontend` (FlightTracker + shared basemap), one new DEM archive on Wasabi, a `scripts/` build doc.
-**Companion spec:** [satellite-imagery-global-period-design.md](2026-07-16-satellite-imagery-global-period-design.md) — independent data pipeline; neither blocks the other.
+**Companion spec:** [satellite-imagery-global-period-design.md](satellite-imagery-global-period-design.md) — independent data pipeline; neither blocks the other.
 
 ## Goal
 
