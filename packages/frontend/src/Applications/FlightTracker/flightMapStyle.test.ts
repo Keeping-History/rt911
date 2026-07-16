@@ -48,6 +48,7 @@ describe("applyMapColors", () => {
 		applyMapColors(map, {
 			mapStyle: "satellite", darkMap: true,
 			pinColor: "#00aa00", notablePinColor: "#123456",
+			terrain: false,
 		});
 		expect(map.paint.background["background-color"]).toBe(
 			basemapPalette("satellite", true).background,
@@ -68,9 +69,21 @@ describe("applyMapColors", () => {
 		applyMapColors(map, {
 			mapStyle: "classic", darkMap: false,
 			pinColor: "#3a3a3a", notablePinColor: "#c0202a",
+			terrain: false,
 		});
 		expect(map.paint.background["background-color"]).toBe("#efe9dd");
 		expect(map.layout.land.visibility).toBe("visible");
 		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("90,90,90");
+	});
+
+	it("forwards the terrain flag to the shared basemap switch", () => {
+		const map = recordingMap();
+		applyMapColors(map, {
+			mapStyle: "radar", darkMap: false,
+			pinColor: "#ffd700", notablePinColor: "#ff4d4d",
+			terrain: true,
+		});
+		expect(map.layout["hillshade-radar"].visibility).toBe("visible");
+		expect(map.layout["hillshade-classic"].visibility).toBe("none");
 	});
 });

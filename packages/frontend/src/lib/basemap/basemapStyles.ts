@@ -309,6 +309,7 @@ export function applyBasemapStyle(
 	map: StylableMap,
 	mapStyle: BasemapStyleId,
 	darkMap: boolean,
+	terrainEnabled = false,
 ): void {
 	const p = basemapPalette(mapStyle, darkMap);
 	const g = groundVisibility(mapStyle, darkMap);
@@ -322,4 +323,17 @@ export function applyBasemapStyle(
 	map.setLayoutProperty("satellite-day", "visibility", g.satelliteDay ? "visible" : "none");
 	map.setLayoutProperty("satellite-night", "visibility", g.satelliteNight ? "visible" : "none");
 	map.setSky(skyFor(mapStyle, darkMap));
+	const h = hillshadeVisibility(mapStyle, terrainEnabled);
+	for (const [id, styleId, visible] of [
+		["hillshade-classic", "classic", h.classic],
+		["hillshade-radar", "radar", h.radar],
+		["hillshade-satellite", "satellite", h.satellite],
+	] as const) {
+		map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+		for (const [name, value] of Object.entries(
+			hillshadePaint(hillshadePalette(styleId, darkMap)),
+		)) {
+			map.setPaintProperty(id, name, value);
+		}
+	}
 }

@@ -336,8 +336,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 	// through React state so the visual tracks the pointer.
 	const dragRef = useRef<DragPixels | null>(null);
 	const [overlay, setOverlay] = useState<{ mode: "rect" | "circle"; d: DragPixels } | null>(null);
-	const colorsRef = useRef<FlightMapColors>({ mapStyle, darkMap, pinColor, notablePinColor });
-	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor };
+	// terrain: false is a placeholder — Task 5 wires the real terrain prop through.
+	const colorsRef = useRef<FlightMapColors>({
+		mapStyle, darkMap, pinColor, notablePinColor, terrain: false,
+	});
+	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor, terrain: false };
 	const radarSweepRef = useRef(radarSweep);
 	radarSweepRef.current = radarSweep;
 	const trailMultiplierRef = useRef(trailMultiplier);

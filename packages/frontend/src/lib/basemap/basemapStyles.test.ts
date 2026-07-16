@@ -194,6 +194,25 @@ describe("applyBasemapStyle", () => {
 		applyBasemapStyle(map, "radar", false);
 		expect(map.skies.at(-1)).toEqual(skyFor("radar", false));
 	});
+
+	it("terrain on shows only the active style's hillshade and re-tints it", () => {
+		const map = recordingMap();
+		applyBasemapStyle(map, "satellite", true, true);
+		expect(map.layout["hillshade-satellite"].visibility).toBe("visible");
+		expect(map.layout["hillshade-classic"].visibility).toBe("none");
+		expect(map.layout["hillshade-radar"].visibility).toBe("none");
+		expect(map.paint["hillshade-satellite"]["hillshade-shadow-color"]).toBe(
+			hillshadePalette("satellite", true).shadow,
+		);
+	});
+
+	it("terrain default (off) hides every hillshade layer", () => {
+		const map = recordingMap();
+		applyBasemapStyle(map, "classic", false);
+		expect(map.layout["hillshade-classic"].visibility).toBe("none");
+		expect(map.layout["hillshade-radar"].visibility).toBe("none");
+		expect(map.layout["hillshade-satellite"].visibility).toBe("none");
+	});
 });
 
 describe("sky (issue #221)", () => {
