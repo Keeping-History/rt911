@@ -1017,6 +1017,38 @@ describe("FlightMap", () => {
 		expect(onClear).toHaveBeenCalled();
 	});
 
+	it("mercator pitched clicks compensate for the terrain camera-elevation offset", () => {
+		// MapLibre builds coordinatePoint's pixel matrix BEFORE the terrain
+		// "elevate camera over terrain" translate, but custom layers render
+		// through the view-proj matrix built AFTER it — with terrain on, the
+		// shader draws aircraft transform.elevation meters lower than
+		// coordinatePoint predicts. The hit test must project at
+		// (altitude − transform.elevation) to land on the rendered plane.
+		const onSelect = vi.fn();
+		const seenElevations: number[] = [];
+		render(
+			<FlightMap
+				positions={[pos({ id: 1, flight: "DL404", lon: -40, lat: 30, alt_ft: 30_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={onSelect} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				radarSweep={false} trailMultiplier={1} threeD={true} terrain={true} />,
+		);
+		const map = FakeMap.last!;
+		(map as unknown as { transform: unknown }).transform = {
+			elevation: 5000, // exaggerated terrain height at the camera center
+			coordinatePoint: (_c: unknown, elev: number) => {
+				seenElevations.push(elev);
+				return { x: 41, y: 31 };
+			},
+		};
+		map.fire("load");
+		map.queryResult = [];
+		map.fire("click", { point: { x: 41, y: 31 } });
+		expect(onSelect).toHaveBeenCalledWith("DL404");
+		expect(seenElevations[0]).toBeCloseTo(30_000 * 0.3048 * 10 - 5000);
+	});
+
 	it("globe pitched clicks hit-test via projectTileCoordinates (elevated, not ground)", () => {
 		const onSelect = vi.fn();
 		const onClear = vi.fn();

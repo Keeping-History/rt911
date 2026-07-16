@@ -215,6 +215,8 @@ function projectAtAltitude(
 					coord: maplibregl.MercatorCoordinate,
 					elevation: number,
 				) => { x: number; y: number };
+				// Exaggerated terrain height at the camera center; 0 without terrain.
+				elevation?: number;
 				projectTileCoordinates?: (
 					x: number,
 					y: number,
@@ -228,9 +230,15 @@ function projectAtAltitude(
 	).transform;
 	try {
 		if (transform?.coordinatePoint) {
+			// coordinatePoint's pixel matrix is built BEFORE MapLibre's terrain
+			// "elevate camera over terrain" translate, but custom layers render
+			// through the view-proj matrix built AFTER it — so with terrain on,
+			// the shader draws aircraft transform.elevation meters lower than
+			// this predicts. Subtracting it projects exactly where the plane is
+			// drawn; without terrain, elevation is 0 and this is a no-op.
 			return transform.coordinatePoint(
 				maplibregl.MercatorCoordinate.fromLngLat([lon, lat]),
-				altM,
+				altM - (transform.elevation ?? 0),
 			);
 		}
 		if (transform?.projectTileCoordinates && transform.width && transform.height) {
