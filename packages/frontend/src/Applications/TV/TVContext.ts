@@ -98,6 +98,16 @@ export const tvSetActivePlayer = (activePlayer: number): ActionMessage => ({
 	activePlayer,
 });
 
+/**
+ * Publish the active channel's `source` slug (data.currentChannel) so external
+ * controllers — the playlist engine's locked-focus reconciliation — can see
+ * where the TV is tuned without resolving numeric item ids.
+ */
+export const tvSetCurrentChannel = (source: string): ActionMessage => ({
+	type: "ClassicyAppTVSetCurrentChannel",
+	source,
+});
+
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 
 // Next command sequence number = previous + 1 (starts at 1).
@@ -183,6 +193,12 @@ export const classicyTVEventHandler = (
 			apps[appId].data = {
 				...appData,
 				activePlayer: action.activePlayer as number,
+			};
+			return ds;
+		case "ClassicyAppTVSetCurrentChannel":
+			apps[appId].data = {
+				...appData,
+				currentChannel: action.source as string,
 			};
 			return ds;
 		default:
