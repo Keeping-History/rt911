@@ -22,6 +22,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { flightTrackerFocusFlight } from "../../Applications/FlightTracker/flightTrackerCommands";
 import { newsFocusItem } from "../../Applications/News/NewsContext";
 import { radioTuneStation } from "../../Applications/RadioScanner/RadioScannerContext";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
@@ -54,7 +55,7 @@ const FOCUS_DISPATCHERS: Record<PlaylistApp | "browser", (d: Dispatch, itemId: s
 		tv: (d, itemId) => d(tvTuneChannel(itemId)),
 		radio: (d, itemId) => d(radioTuneStation(itemId)),
 		news: (d, itemId) => d(newsFocusItem(Number(itemId))),
-		flights: () => console.warn("playlist: focus for flights not wired yet"),
+		flights: (d, itemId) => d(flightTrackerFocusFlight(itemId)),
 		browser: () => console.warn("playlist: browser navigate not wired yet"),
 	};
 
