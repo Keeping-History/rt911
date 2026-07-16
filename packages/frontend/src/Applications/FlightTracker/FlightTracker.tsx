@@ -464,38 +464,43 @@ export const FlightTracker: FC = () => {
 			{
 				id: "view",
 				title: "View",
-				menuChildren: [
-					{
-						id: "flight-style-classic-menu",
-						title: `${settings.mapStyle === "classic" ? "✓ " : ""}Classic Map`,
-						onClickFunc: () => setMapStyle("classic"),
-					},
-					{
-						id: "flight-style-radar-menu",
-						title: `${settings.mapStyle === "radar" ? "✓ " : ""}Radar`,
-						onClickFunc: () => setMapStyle("radar"),
-					},
-					{
-						id: "flight-style-satellite-menu",
-						title: `${settings.mapStyle === "satellite" ? "✓ " : ""}Satellite`,
-						onClickFunc: () => setMapStyle("satellite"),
-					},
-					{
-						// ClassicyMenuItem has no checked prop — the ✓ lives in the title.
-						id: "flight-darkmap-menu",
-						title: `${settings.darkMap ? "✓ " : ""}Dark Map`,
-						onClickFunc: toggleDarkMap,
-					},
-					{
-						id: "flight-radar-menu",
-						title: `${settings.radarSweep ? "✓ " : ""}Radar Sweep`,
-						onClickFunc: toggleRadarSweep,
-					},
-					{
-						id: "flight-loop-menu",
-						title: `${loopEnabled ? "✓ " : ""}Loop Playback`,
-						onClickFunc: toggleLoop,
-					},
+				menuChildren: [{
+					id: "map_style",
+					title: "Map Style",
+					menuChildren: [
+						{
+							id: "flight-style-classic-menu",
+							title: `${settings.mapStyle === "classic" ? "✓ " : ""}Classic Map`,
+							onClickFunc: () => setMapStyle("classic"),
+						},
+						{
+							id: "flight-style-radar-menu",
+							title: `${settings.mapStyle === "radar" ? "✓ " : ""}Radar`,
+							onClickFunc: () => setMapStyle("radar"),
+						},
+						{
+							id: "flight-style-satellite-menu",
+							title: `${settings.mapStyle === "satellite" ? "✓ " : ""}Satellite`,
+							onClickFunc: () => setMapStyle("satellite"),
+						},
+					],
+				},
+				{
+					// ClassicyMenuItem has no checked prop — the ✓ lives in the title.
+					id: "flight-darkmap-menu",
+					title: `${settings.darkMap ? "✓ " : ""}Dark Map`,
+					onClickFunc: toggleDarkMap,
+				},
+				{
+					id: "flight-radar-menu",
+					title: `${settings.radarSweep ? "✓ " : ""}Radar Sweep`,
+					onClickFunc: toggleRadarSweep,
+				},
+				{
+					id: "flight-loop-menu",
+					title: `${loopEnabled ? "✓ " : ""}Loop Playback`,
+					onClickFunc: toggleLoop,
+				},
 				],
 			},
 		],
@@ -601,17 +606,17 @@ export const FlightTracker: FC = () => {
 		() =>
 			livePos && track
 				? legEstimates({
-						live: livePos,
-						prev:
-							prevSampleRef.current?.flight === livePos.flight
-								? prevSampleRef.current.prev
-								: null,
-						origin: track.origin,
-						dest: track.scheduled_dest,
-						wheelsOffUtc: track.wheels_off_utc,
-						wheelsOnUtc: track.wheels_on_utc,
-						nowMs,
-					})
+					live: livePos,
+					prev:
+						prevSampleRef.current?.flight === livePos.flight
+							? prevSampleRef.current.prev
+							: null,
+					origin: track.origin,
+					dest: track.scheduled_dest,
+					wheelsOffUtc: track.wheels_off_utc,
+					wheelsOnUtc: track.wheels_on_utc,
+					nowMs,
+				})
 				: null,
 		[livePos, track, nowMs],
 	);
@@ -688,24 +693,24 @@ export const FlightTracker: FC = () => {
 									setForm((f) => ({ ...f, mapStyle: normalizeBasemapStyle(id) }))
 								}
 							/>
-						<div style={{display: "flex", flexDirection: "row", gap: "calc(var(--window-control-size)*4)"}}>
-						<ClassicyCheckbox
-							id="flight_settings_darkmap"
-							label="Dark map"
-							checked={form.darkMap}
-							onClickFunc={(checked: boolean) =>
-								setForm((f) => ({ ...f, darkMap: checked }))
-							}
-						/>
-						<ClassicyCheckbox
-							id="flight_settings_radar"
-							label="Radar sweep"
-							checked={form.radarSweep}
-							onClickFunc={(checked: boolean) =>
-								setForm((f) => ({ ...f, radarSweep: checked }))
-							}
-						/>
-						</div>
+							<div style={{ display: "flex", flexDirection: "row", gap: "calc(var(--window-control-size)*4)" }}>
+								<ClassicyCheckbox
+									id="flight_settings_darkmap"
+									label="Dark map"
+									checked={form.darkMap}
+									onClickFunc={(checked: boolean) =>
+										setForm((f) => ({ ...f, darkMap: checked }))
+									}
+								/>
+								<ClassicyCheckbox
+									id="flight_settings_radar"
+									label="Radar sweep"
+									checked={form.radarSweep}
+									onClickFunc={(checked: boolean) =>
+										setForm((f) => ({ ...f, radarSweep: checked }))
+									}
+								/>
+							</div>
 						</ClassicyControlGroup>
 						<ClassicyColorPicker
 							id="flight_settings_pin_color_light"
@@ -937,7 +942,7 @@ export const FlightTracker: FC = () => {
 							<FlightMap
 								ref={mapApi}
 								positions={filteredPositions}
-							landingClock={landingClock}
+								landingClock={landingClock}
 								seedPositions={flightsSeed}
 								visibleFlights={visibleFlights}
 								basemapUrls={BASEMAP_URLS}
