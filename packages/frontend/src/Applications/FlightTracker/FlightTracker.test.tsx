@@ -283,13 +283,23 @@ function menuItem(
 	menuTitle: string,
 	pred: (title: string) => boolean,
 ): MenuItem | undefined {
+	// Depth-first search: menu items may live in nested submenus (e.g. the
+	// View menu's "Map Style" group), so a flat children scan is not enough.
+	const findIn = (items: MenuItem[] | undefined): MenuItem | undefined => {
+		for (const item of items ?? []) {
+			if (pred(item.title ?? "")) return item;
+			const nested = findIn(
+				(item as { menuChildren?: MenuItem[] }).menuChildren,
+			);
+			if (nested) return nested;
+		}
+		return undefined;
+	};
 	for (let i = windowProps.length - 1; i >= 0; i--) {
 		const menus = windowProps[i].appMenu as
 			| Array<{ title?: string; menuChildren?: MenuItem[] }>
 			| undefined;
-		const item = menus
-			?.find((m) => m.title === menuTitle)
-			?.menuChildren?.find((i2) => pred(i2.title ?? ""));
+		const item = findIn(menus?.find((m) => m.title === menuTitle)?.menuChildren);
 		if (item) return item;
 	}
 	return undefined;
