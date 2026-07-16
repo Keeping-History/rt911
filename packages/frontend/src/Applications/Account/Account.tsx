@@ -1,6 +1,8 @@
 import {
 	ClassicyApp,
 	ClassicyButton,
+	ClassicyFileInput,
+	type ClassicyFileInputHandle,
 	ClassicyIcons,
 	ClassicyWindow,
 	quitMenuItemHelper,
@@ -8,9 +10,12 @@ import {
 } from "classicy";
 import appIconPng from "./app.png";
 import type React from "react";
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
+import { avatarUrl, uploadAvatar } from "../../Providers/Auth/authApi";
 import { SignInForm } from "./SignInForm";
+
+const MAX_AVATAR_BYTES = 50 * 1024 * 1024;
 
 const appId   = "Account.app";
 const appName = "Account";
@@ -33,7 +38,10 @@ export interface AccountProps {
 }
 
 export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
-	const { status, user, signInWithEmail, signInWithProvider, signOut } = useAuth();
+	const { status, user, signInWithEmail, signInWithProvider, signOut, refresh } = useAuth();
+	const [avatarUploading, setAvatarUploading] = useState(false);
+	const [avatarError, setAvatarError] = useState<string | null>(null);
+	const avatarFileInputRef = useRef<ClassicyFileInputHandle>(null);
 
 	const appMenu = useMemo(
 		() => [
@@ -44,6 +52,33 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 			},
 		],
 		[],
+	);
+
+	const handleAvatarFiles = useCallback(
+		(files: File[]) => {
+			// ClassicyFileInput accumulates every selection into its internal
+			// entries list (no maxFiles cap here), so the most recent pick is
+			// always the last entry, not the first.
+			const file = files[files.length - 1];
+			if (!file) return;
+			setAvatarError(null);
+			if (file.size > MAX_AVATAR_BYTES) {
+				setAvatarError("Image must be 50 MB or smaller.");
+				return;
+			}
+			if (!file.type.startsWith("image/")) {
+				setAvatarError("Please choose an image file.");
+				return;
+			}
+			setAvatarUploading(true);
+			void uploadAvatar(file, user?.avatar ?? null)
+				.then(() => refresh())
+				.catch((err: unknown) => {
+					setAvatarError(err instanceof Error ? err.message : "Failed to upload image");
+				})
+				.finally(() => setAvatarUploading(false));
+		},
+		[user, refresh],
 	);
 
 	return (
@@ -76,6 +111,23 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 						<div>{`Signed in as ${user?.first_name ?? user?.email}`}</div>
 						<ClassicyButton onClickFunc={() => void signOut()}>Sign Out</ClassicyButton>
 						<div>My Playlists — coming soon</div>
+						{user?.avatar && (
+							<img src={avatarUrl(user.avatar)} alt="Your avatar" width={74} height={74} />
+						)}
+						<ClassicyFileInput
+							ref={avatarFileInputRef}
+							id="account-avatar-file"
+							accept="image/*"
+							disabled={avatarUploading}
+							onChangeFunc={handleAvatarFiles}
+						/>
+						<ClassicyButton
+							disabled={avatarUploading}
+							onClickFunc={() => document.getElementById("account-avatar-file")?.click()}
+						>
+							{user?.avatar ? "Change Avatar" : "Upload Avatar"}
+						</ClassicyButton>
+						{avatarError && <div>{avatarError}</div>}
 					</div>
 				) : (
 					<SignInForm

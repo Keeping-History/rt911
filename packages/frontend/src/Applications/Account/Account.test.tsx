@@ -3,6 +3,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type React from "react";
 import type { AuthUser } from "../../Providers/Auth/authApi";
 
+const mockUploadAvatar = vi.hoisted(() => vi.fn());
+vi.mock("../../Providers/Auth/authApi", async (importOriginal) => ({
+	...(await importOriginal<Record<string, unknown>>()),
+	uploadAvatar: mockUploadAvatar,
+}));
+
 // Partial classicy mock — ClassicyApp/ClassicyWindow require a real
 // ClassicyAppManagerProvider tree to render their children (they bail out
 // to an empty shell without one, same as every other app-shell test in this
@@ -31,6 +37,7 @@ vi.mock("../../Providers/Auth/AuthContext", () => ({
 }));
 
 import { Account } from "./Account";
+import { avatarUrl } from "../../Providers/Auth/authApi";
 
 // Suppress classicy's analytics no-provider warning — expected in test environment
 let warnSpy: ReturnType<typeof vi.spyOn>;
@@ -44,6 +51,7 @@ beforeEach(() => {
 	mockAuth.signInWithProvider = vi.fn();
 	mockAuth.signOut = vi.fn();
 	mockAuth.refresh = vi.fn();
+	mockUploadAvatar.mockReset();
 });
 
 afterEach(() => {
@@ -114,7 +122,7 @@ describe("Account — loading", () => {
 describe("Account — signedIn", () => {
 	it("shows the first_name identity, Sign Out button, and the coming-soon line", () => {
 		mockAuth.status = "signedIn";
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: "Lovelace" };
+		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: "Lovelace", avatar: null };
 		render(<Account />);
 		expect(screen.getByText("Signed in as Ada")).not.toBeNull();
 		expect(screen.getByText("My Playlists — coming soon")).not.toBeNull();
@@ -123,17 +131,100 @@ describe("Account — signedIn", () => {
 
 	it("falls back to email when first_name is null", () => {
 		mockAuth.status = "signedIn";
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: null, last_name: null };
+		mockAuth.user = { id: "1", email: "ada@example.com", first_name: null, last_name: null, avatar: null };
 		render(<Account />);
 		expect(screen.getByText("Signed in as ada@example.com")).not.toBeNull();
 	});
 
 	it("Sign Out calls signOut", () => {
 		mockAuth.status = "signedIn";
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null };
+		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
 		render(<Account />);
 		fireEvent.click(screen.getByRole("button", { name: "Sign Out" }));
 		expect(mockAuth.signOut).toHaveBeenCalledOnce();
+	});
+});
+
+describe("Account — avatar", () => {
+	beforeEach(() => {
+		mockAuth.status = "signedIn";
+	});
+
+	it("renders the avatar image with the preset URL when the user has one", () => {
+		mockAuth.user = {
+			id:         "1",
+			email:      "ada@example.com",
+			first_name: "Ada",
+			last_name:  null,
+			avatar:     "file-1",
+		};
+		render(<Account />);
+		const img = screen.getByAltText("Your avatar") as HTMLImageElement;
+		expect(img.src).toBe(avatarUrl("file-1"));
+		expect(img.width).toBe(74);
+		expect(img.height).toBe(74);
+		expect(screen.getByRole("button", { name: "Change Avatar" })).not.toBeNull();
+	});
+
+	it("renders no avatar image and an Upload Avatar label when the user has none", () => {
+		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		render(<Account />);
+		expect(screen.queryByAltText("Your avatar")).toBeNull();
+		expect(screen.getByRole("button", { name: "Upload Avatar" })).not.toBeNull();
+	});
+
+	it("rejects an oversized file before calling uploadAvatar", async () => {
+		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		render(<Account />);
+		const file = new File([new ArrayBuffer(1)], "big.png", { type: "image/png" });
+		Object.defineProperty(file, "size", { value: 51 * 1024 * 1024 });
+
+		const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+		fireEvent.change(input, { target: { files: [file] } });
+
+		await waitFor(() =>
+			expect(screen.getByText("Image must be 50 MB or smaller.")).not.toBeNull(),
+		);
+		expect(mockUploadAvatar).not.toHaveBeenCalled();
+	});
+
+	it("rejects a non-image file before calling uploadAvatar", async () => {
+		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		render(<Account />);
+		const file = new File([new ArrayBuffer(1)], "doc.pdf", { type: "application/pdf" });
+
+		const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+		fireEvent.change(input, { target: { files: [file] } });
+
+		await waitFor(() =>
+			expect(screen.getByText("Please choose an image file.")).not.toBeNull(),
+		);
+		expect(mockUploadAvatar).not.toHaveBeenCalled();
+	});
+
+	it("uploads a valid image and calls refresh on success", async () => {
+		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		mockUploadAvatar.mockResolvedValue("new-file");
+		render(<Account />);
+		const file = new File([new ArrayBuffer(1)], "avatar.png", { type: "image/png" });
+
+		const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+		fireEvent.change(input, { target: { files: [file] } });
+
+		await waitFor(() => expect(mockUploadAvatar).toHaveBeenCalledWith(file, null));
+		await waitFor(() => expect(mockAuth.refresh).toHaveBeenCalledOnce());
+	});
+
+	it("renders upload errors verbatim", async () => {
+		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		mockUploadAvatar.mockRejectedValue(new Error("Upload rejected by server."));
+		render(<Account />);
+		const file = new File([new ArrayBuffer(1)], "avatar.png", { type: "image/png" });
+
+		const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+		fireEvent.change(input, { target: { files: [file] } });
+
+		await waitFor(() => expect(screen.getByText("Upload rejected by server.")).not.toBeNull());
 	});
 });
 
