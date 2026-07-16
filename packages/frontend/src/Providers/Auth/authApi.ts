@@ -9,6 +9,16 @@ export interface AuthUser {
 	first_name: string | null;
 	last_name: string | null;
 	avatar: string | null;
+	/** Sign-in provider: "default" = email+password, else "google"/"apple"/… */
+	provider: string | null;
+	// Optional, self-reported demographics (spec: account-profile design).
+	city: string | null;
+	state: string | null;
+	country: string | null;
+	school_name: string | null;
+	educator_role: string | null;
+	grade_levels: string[] | null;
+	subjects: string[] | null;
 }
 
 // Exported for later tasks (AuthProvider, playlistApi) to classify failures
@@ -33,7 +43,7 @@ async function serverMessage(res: Response, fallback: string): Promise<string> {
 // 401 means "not signed in" — anonymous is the expected steady state for most
 // visitors, so it resolves to null rather than throwing.
 export async function fetchMe(fetchFn: typeof fetch = fetch): Promise<AuthUser | null> {
-	const res = await fetchFn(`${DIRECTUS_URL}/users/me?fields=id,email,first_name,last_name,avatar`, {
+	const res = await fetchFn(`${DIRECTUS_URL}/users/me?fields=id,email,first_name,last_name,avatar,provider,city,state,country,school_name,educator_role,grade_levels,subjects`, {
 		credentials: "include",
 	});
 	if (res.status === 401) return null;

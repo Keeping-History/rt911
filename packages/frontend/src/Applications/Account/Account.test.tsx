@@ -39,6 +39,15 @@ vi.mock("../../Providers/Auth/AuthContext", () => ({
 import { Account } from "./Account";
 import { avatarUrl } from "../../Providers/Auth/authApi";
 
+// Fill the non-essential AuthUser fields so fixtures stay one-line.
+const makeUser = (over: Partial<AuthUser>): AuthUser => ({
+	id: "1", email: null, first_name: null, last_name: null, avatar: null,
+	provider: "google", city: null, state: null, country: null,
+	school_name: null, educator_role: null, grade_levels: null, subjects: null,
+	...over,
+});
+
+
 // Suppress classicy's analytics no-provider warning — expected in test environment
 let warnSpy: ReturnType<typeof vi.spyOn>;
 beforeAll(() => { warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {}); });
@@ -122,7 +131,7 @@ describe("Account — loading", () => {
 describe("Account — signedIn", () => {
 	it("shows the first_name identity, Sign Out button, and the coming-soon line", () => {
 		mockAuth.status = "signedIn";
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: "Lovelace", avatar: null };
+		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: "Ada", last_name: "Lovelace", avatar: null });
 		render(<Account />);
 		expect(screen.getByText("Signed in as Ada")).not.toBeNull();
 		expect(screen.getByText("My Playlists — coming soon")).not.toBeNull();
@@ -131,14 +140,14 @@ describe("Account — signedIn", () => {
 
 	it("falls back to email when first_name is null", () => {
 		mockAuth.status = "signedIn";
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: null, last_name: null, avatar: null };
+		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: null, last_name: null, avatar: null });
 		render(<Account />);
 		expect(screen.getByText("Signed in as ada@example.com")).not.toBeNull();
 	});
 
 	it("Sign Out calls signOut", () => {
 		mockAuth.status = "signedIn";
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null });
 		render(<Account />);
 		fireEvent.click(screen.getByRole("button", { name: "Sign Out" }));
 		expect(mockAuth.signOut).toHaveBeenCalledOnce();
@@ -151,13 +160,13 @@ describe("Account — avatar", () => {
 	});
 
 	it("renders the avatar image with the preset URL when the user has one", () => {
-		mockAuth.user = {
+		mockAuth.user = makeUser({
 			id:         "1",
 			email:      "ada@example.com",
 			first_name: "Ada",
 			last_name:  null,
 			avatar:     "file-1",
-		};
+		});
 		render(<Account />);
 		const img = screen.getByAltText("Your avatar") as HTMLImageElement;
 		expect(img.src).toBe(avatarUrl("file-1"));
@@ -167,14 +176,14 @@ describe("Account — avatar", () => {
 	});
 
 	it("renders no avatar image and an Upload Avatar label when the user has none", () => {
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null });
 		render(<Account />);
 		expect(screen.queryByAltText("Your avatar")).toBeNull();
 		expect(screen.getByRole("button", { name: "Upload Avatar" })).not.toBeNull();
 	});
 
 	it("rejects an oversized file before calling uploadAvatar", async () => {
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null });
 		render(<Account />);
 		const file = new File([new ArrayBuffer(1)], "big.png", { type: "image/png" });
 		Object.defineProperty(file, "size", { value: 51 * 1024 * 1024 });
@@ -189,7 +198,7 @@ describe("Account — avatar", () => {
 	});
 
 	it("rejects a non-image file before calling uploadAvatar", async () => {
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null });
 		render(<Account />);
 		const file = new File([new ArrayBuffer(1)], "doc.pdf", { type: "application/pdf" });
 
@@ -203,7 +212,7 @@ describe("Account — avatar", () => {
 	});
 
 	it("uploads a valid image and calls refresh on success", async () => {
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null });
 		mockUploadAvatar.mockResolvedValue("new-file");
 		render(<Account />);
 		const file = new File([new ArrayBuffer(1)], "avatar.png", { type: "image/png" });
@@ -216,7 +225,7 @@ describe("Account — avatar", () => {
 	});
 
 	it("renders upload errors verbatim", async () => {
-		mockAuth.user = { id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null };
+		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: "Ada", last_name: null, avatar: null });
 		mockUploadAvatar.mockRejectedValue(new Error("Upload rejected by server."));
 		render(<Account />);
 		const file = new File([new ArrayBuffer(1)], "avatar.png", { type: "image/png" });
