@@ -171,6 +171,7 @@ const TEST_URLS = {
 	vector: "x.pmtiles",
 	satelliteDay: "day.pmtiles",
 	satelliteNight: "night.pmtiles",
+	terrainDem: "https://x.example/dem.pmtiles",
 };
 
 describe("FlightMap", () => {

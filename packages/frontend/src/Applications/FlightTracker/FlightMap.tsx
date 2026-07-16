@@ -859,7 +859,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor });
+		applyMapColors(map, {
+			mapStyle, darkMap, pinColor, notablePinColor,
+			terrain: false, // placeholder — Task 5 wires the real terrain prop
+		});
 		void installPlaneIcons(map, pinColor, notablePinColor);
 		planes3DRef.current?.setColors(pinColor, notablePinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor);

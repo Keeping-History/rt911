@@ -26,7 +26,7 @@ function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 
 describe("classicyFlightTrackerEventHandler", () => {
 	it("persists mapSettings from a SetMapSettings action", () => {
-		const settings = { mapStyle: "radar" as const, darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, radarSweep: false, trailMultiplier: 2, globe: true, cluster: false, threeD: true };
+		const settings = { mapStyle: "radar" as const, darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, radarSweep: false, trailMultiplier: 2, globe: true, cluster: false, threeD: true, terrain: true };
 		const out = classicyFlightTrackerEventHandler(
 			storeWithApp(),
 			flightTrackerSetMapSettings(settings),
