@@ -58,20 +58,18 @@ The superset-style contract is preserved: every source/layer always present, act
 
 ## Coexistence with custom 3D layers
 
-- **Airborne aircraft:** rendered altitude uses 10× exaggeration while terrain is 1×, so cruise/climb geometry clears terrain by an order of magnitude. No change.
-- **Ground-contact geometry** (landing-clamped aircraft, notable crash-site markers/persistent wreck geometry) currently sits at elevation 0 and would be buried under raised ground (Denver ≈ 1,600 m MSL). When terrain is active, offset ground-level custom-layer geometry by `map.queryTerrainElevation(lngLat)` (returns null when terrain off → offset 0). Symbol and 2D layers drape onto terrain automatically — only the custom WebGL layers need this.
-- `projectTileFor3D` already abstracts mercator/globe projection for the custom layers; terrain alters the ground mesh, not their coordinate pipeline.
+- **No geometry can ever be buried.** `alt_ft` values are MSL and all 3D geometry renders at `ALT_EXAGGERATION = 10`× while terrain renders at 1×. Ground elevation at any point is ≤ the MSL altitude of anything at or above that ground, so `10×alt_ft ≥ 1×terrain` everywhere — including landed planes at high-elevation airports and the notables' crash-site samples. No `queryTerrainElevation` offsets are needed (an earlier draft proposed them; the exaggeration asymmetry makes them dead code).
+- **2D layers** (plane icons, replay-trail circles, cluster circles, trails, track line) drape onto the terrain mesh automatically — MapLibre's render-to-texture pass handles them.
+- `projectTileFor3D` already abstracts mercator/globe projection for the custom layers; terrain alters the ground mesh and depth buffer, not their coordinate pipeline. A mountain between the camera and a tube/plane may now correctly occlude it.
 - **Risk:** custom-layer depth interaction with MapLibre's terrain render-to-texture pass is the least-documented corner. Mitigation: verify early in implementation with a pitched-over-Rockies smoke test; if depth artifacts appear, fall back to enabling the 3D mesh only while `threeD` mode is active (hillshade stays global) — a one-line policy change in the toggle effect.
 
 ## Error handling
 
 - Missing/failed DEM tiles are non-fatal, matching the existing basemap contract: hillshade simply doesn't draw; `setTerrain` with an unavailable source must not take the map down (verify; guard the call if needed).
-- `queryTerrainElevation` returning `null`/`undefined` (tile not loaded yet) → treat as 0; geometry pops up a frame later rather than crashing.
 
 ## Testing
 
 - `basemapStyles.test.ts`: hillshade palette per style×tone; superset style contains the `terrain` source + three hillshade layers; `applyBasemapStyle` recording-stub mirror covers hillshade visibility/paint and the terrain flag.
 - `flightMapSettings.test.ts`: default `terrain: true`; stored partial state merges.
-- `FlightMap.test.tsx`: maplibre mock grows `setTerrain`/`queryTerrainElevation`; assert setTerrain called with the source on toggle-on and null on toggle-off.
-- Ground-clamp unit tests wherever the elevation offset lands (pure function taking an elevation-lookup callback).
-- Browser verification (`packages/frontend:verify`): pitched Rockies in all three styles × dark variants, mercator + globe; landed plane and a crash-site marker at elevated ground sit on the surface; toggle off restores today's flat look.
+- `FlightMap.test.tsx`: maplibre mock grows `setTerrain`; assert setTerrain called with the source on toggle-on and null on toggle-off.
+- Browser verification (`packages/frontend:verify`): pitched Rockies in all three styles × dark variants, mercator + globe; toggle off restores today's flat look.
