@@ -11,10 +11,10 @@ const validRow = {
 };
 
 const okFetch = (body: unknown) =>
-	vi.fn(
-		async (_input: RequestInfo | URL, _init?: RequestInit) =>
-			new Response(JSON.stringify(body), { status: 200 }),
-	);
+	vi.fn(async (...args: Parameters<typeof fetch>) => {
+		void args; // typed like fetch so mock.calls[0][0] is inspectable
+		return new Response(JSON.stringify(body), { status: 200 });
+	});
 
 describe("playlistIdFromSearch", () => {
 	it("extracts a well-formed id", () => {

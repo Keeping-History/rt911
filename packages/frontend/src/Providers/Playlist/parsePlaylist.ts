@@ -148,7 +148,8 @@ export function parsePlaylist(raw: unknown): ParsedPlaylist {
 		.map((e): PlaylistEntry | null => {
 			if (e.kind === "media" && e.focus && disabled.has(APP_IDS[e.app])) {
 				warn(`focus on "${e.itemId}" ignored: ${APP_IDS[e.app]} is disabled`);
-				const { focus: _focus, ...rest } = e;
+				const { focus, ...rest } = e;
+				void focus;
 				return rest;
 			}
 			if (e.kind === "settings" && disabled.has(e.appId)) {
