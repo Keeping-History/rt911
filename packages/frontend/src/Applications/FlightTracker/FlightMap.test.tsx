@@ -629,12 +629,14 @@ describe("FlightMap", () => {
 		const model2 = map2.layers.find((l) => l.id === "planes-3d-model")!
 			.__raw as import("./planes3DLayer").Planes3DLayer;
 		expect(model2.visible).toBe(true);
-		// The staircase curtain is the globe fallback; under mercator the
-		// smooth track tube renders instead.
-		expect(map2.layout["track-curtain"]?.visibility).toBe("none");
+		// All pitched 3D geometry is custom-layer: the smooth track tube and
+		// the splined trail ribbons both arm with the camera.
 		const tube2 = map2.layers.find((l) => l.id === "track-tube-3d")!
 			.__raw as import("./trackTubeLayer").TrackTube3DLayer;
 		expect(tube2.visible).toBe(true);
+		const trails2 = map2.layers.find((l) => l.id === "trails-3d-model")!
+			.__raw as import("./trackTubeLayer").TrackTube3DLayer;
+		expect(trails2.visible).toBe(true);
 	});
 
 	it("nonNotableFeatures drops the notable flights (they never cluster)", () => {
@@ -770,18 +772,15 @@ describe("FlightMap", () => {
 			.__raw as import("./planes3DLayer").Planes3DLayer;
 		expect(model.type).toBe("custom");
 		expect(model.visible).toBe(false); // flat start
-		// The extrusion twin exists purely as the globe fallback.
-		const slabs = map.layers.find((l) => l.id === "planes-3d") as { type: string };
-		expect(slabs.type).toBe("fill-extrusion");
+		// No extrusion twin remains — the custom layer covers both projections.
+		expect(map.layers.find((l) => l.id === "planes-3d")).toBeUndefined();
 
 		map.pitch = 60;
 		map.fire("pitch");
-		// The aircraft move into true 3D: flat icons hide, the custom layer arms,
-		// the extrusion fallback stays off under mercator.
+		// The aircraft move into true 3D: flat icons hide, the custom layer arms.
 		expect(model.visible).toBe(true);
 		expect(map.layout["flights-dots"]?.visibility).toBe("none");
 		expect(map.layout["flights-notable"]?.visibility).toBe("none");
-		expect(map.layout["planes-3d"]?.visibility).toBe("none");
 		rafCb!(100); // pitch marked the frame dirty → instances feed
 		expect(model.instanceCount).toBe(1);
 		expect(map.repaints).toBeGreaterThan(0);
@@ -814,7 +813,17 @@ describe("FlightMap", () => {
 		expect(map.paint["track-line"]?.["line-color"]).toBe(TRACK_LINE_COLOR);
 	});
 
-	it("globe projection falls back to the extrusion slabs while pitched", () => {
+	it("the flat-layer matrix swaps 2D layers on cluster and pitch", () => {
+		expect(planeLayerVisibility(false, false)["flights-dots"]).toBe(true);
+		expect(planeLayerVisibility(true, false)["flights-dots"]).toBe(false);
+		expect(planeLayerVisibility(true, false)["cluster-circles"]).toBe(true);
+		// Pitched: every flat layer yields to the custom 3D geometry.
+		expect(planeLayerVisibility(false, true)["flights-dots"]).toBe(false);
+		expect(planeLayerVisibility(false, true)["replay-trail-dots"]).toBe(false);
+		expect(planeLayerVisibility(true, true)["cluster-circles"]).toBe(false);
+	});
+
+	it("globe projection renders through the same custom layers while pitched", () => {
 		let rafCb: FrameRequestCallback | null = null;
 		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
 			rafCb = cb;
@@ -834,14 +843,11 @@ describe("FlightMap", () => {
 		map.fire("load");
 		const model = map.layers.find((l) => l.id === "planes-3d-model")!
 			.__raw as import("./planes3DLayer").Planes3DLayer;
-		// Custom-layer mercator math doesn't hold on the sphere: extrusions
-		// render instead.
-		expect(model.visible).toBe(false);
-		expect(map.layout["planes-3d"]?.visibility).toBe("visible");
+		// projectTileFor3D's GLOBE branch handles the sphere — the custom
+		// layer arms on the globe exactly like mercator (verified live).
+		expect(model.visible).toBe(true);
 		rafCb!(100);
-		const data = map.sources["planes-3d"]?.data as { features: unknown[] };
-		expect(data.features).toHaveLength(1);
-		expect(model.instanceCount).toBe(0);
+		expect(model.instanceCount).toBe(1);
 	});
 
 	it("loop replay trails render as true spheres while pitched under mercator", () => {
@@ -882,9 +888,8 @@ describe("FlightMap", () => {
 
 		map.pitch = 60;
 		map.fire("pitch");
-		// True spheres arm; the extrusion pucks stay off under mercator.
+		// True spheres arm with the camera.
 		expect(replayTrailModel.visible).toBe(true);
-		expect(map.layout["replay-trails-3d"]?.visibility).toBe("none");
 		rafCb!(100);
 		expect(replayTrailModel.instanceCount).toBe(1);
 
@@ -893,11 +898,6 @@ describe("FlightMap", () => {
 		expect(replayTrailModel.visible).toBe(false);
 	});
 
-	it("the staircase track curtain is the globe-projection fallback only", () => {
-		expect(planeLayerVisibility(false, true, true)["track-curtain"]).toBe(true);
-		expect(planeLayerVisibility(false, true, false)["track-curtain"]).toBe(false);
-		expect(planeLayerVisibility(false, false, false)["track-curtain"]).toBe(false);
-	});
 
 	it("feeds the smooth track tube from the altitude profile", () => {
 		const profile = [
@@ -923,12 +923,6 @@ describe("FlightMap", () => {
 		expect(tube.vertexCount).toBe(0);
 	});
 
-	it("replay-trails-3d extrusion pucks are the globe-projection fallback only", () => {
-		expect(planeLayerVisibility(false, true, true)["replay-trails-3d"]).toBe(true);
-		expect(planeLayerVisibility(false, true, false)["replay-trails-3d"]).toBe(false);
-		expect(planeLayerVisibility(false, false, false)["replay-trails-3d"]).toBe(false);
-		expect(planeLayerVisibility(false, false, true)["replay-trails-3d"]).toBe(false);
-	});
 
 	it("reports pitch-threshold crossings so the 3D toggle can follow the camera", () => {
 		const onPitchedChange = vi.fn();

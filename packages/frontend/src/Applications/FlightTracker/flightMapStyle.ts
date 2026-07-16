@@ -93,17 +93,7 @@ export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void
 	// Cluster blobs follow the pin color too (the clustered plane icons share
 	// the baked-in plane-icon image, so they recolor via installPlaneIcons).
 	map.setPaintProperty("cluster-circles", "circle-color", colors.pinColor);
-	// 3D plane slabs and replay-trail pucks tint per notability from the same pin
-	// pair; the floating trail ribbons follow the flat trails' themed color.
-	const notableCase = [
-		"case", ["==", ["get", "notable"], true],
-		colors.notablePinColor, colors.pinColor,
-	];
-	map.setPaintProperty("planes-3d", "fill-extrusion-color", notableCase);
-	map.setPaintProperty("replay-trails-3d", "fill-extrusion-color", notableCase);
-	map.setPaintProperty(
-		"trails-3d",
-		"fill-extrusion-color",
-		trailColor(colors.mapStyle, colors.darkMap),
-	);
+	// The 3D geometry (aircraft models, trail ribbons, spheres, track tube)
+	// lives in custom WebGL layers whose colors FlightMap re-applies directly
+	// (setColors/setColor) — no paint properties to update here.
 }

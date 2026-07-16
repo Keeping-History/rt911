@@ -1,6 +1,6 @@
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
-import { discRing, exaggeratedHeightM } from "./flightAltitude";
+import { exaggeratedHeightM } from "./flightAltitude";
 import { isNotable } from "./notableFlights";
 import {
 	PLANE_INSTANCE_STRIDE,
@@ -178,35 +178,3 @@ export function buildReplayTrailInstances(
 	return { data: data.subarray(0, count * PLANE_INSTANCE_STRIDE), count, flights };
 }
 
-/**
- * Globe-projection fallback for the 3D replay trails: the camera math the custom
- * layer relies on doesn't hold on the sphere, so replay trails render as extruded
- * discs there ("sphere" at dot scale) floating at the replayed altitude.
- */
-export function replayTrails3DAt(
-	buffer: ReplayBuffer,
-	tMs: number,
-	visible: Set<string> | null,
-	radiusKm: number,
-): GeoJSON.FeatureCollection {
-	const features: GeoJSON.Feature[] = [];
-	const rM = radiusKm * 1000;
-	for (const [flight, f] of buffer) {
-		if (visible && !visible.has(flight)) continue;
-		const at = replaySampleAt(f, tMs);
-		if (!at || at.alt_ft <= 0) continue;
-		const altM = exaggeratedHeightM(at.alt_ft);
-		features.push({
-			type: "Feature",
-			id: f.id,
-			geometry: { type: "Polygon", coordinates: [discRing(at.lon, at.lat, radiusKm)] },
-			properties: {
-				flight: f.props.flight,
-				notable: f.props.notable,
-				base: Math.max(altM - rM, 0),
-				height: altM + rM,
-			},
-		});
-	}
-	return { type: "FeatureCollection", features };
-}

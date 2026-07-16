@@ -5,7 +5,6 @@ import {
 	insertReplaySamples,
 	pruneReplay,
 	type ReplayBuffer,
-	replayTrails3DAt,
 	replayPointsAt,
 } from "./flightReplay";
 import { exaggeratedHeightM } from "./flightAltitude";
@@ -138,36 +137,6 @@ describe("replayPointsAt visibility", () => {
 	});
 });
 
-describe("replayTrails3DAt (3D replay-trail pucks)", () => {
-	it("floats an extruded disc at the interpolated altitude", () => {
-		const buf: ReplayBuffer = new Map();
-		insertReplaySamples(buf, [
-			pos({ id: 1, alt_ft: 10_000, start_date: "2001-09-11T12:00:00Z" }),
-			pos({ id: 2, alt_ft: 20_000, lon: -73.9, start_date: "2001-09-11T12:01:00Z" }),
-		]);
-		// Halfway between the samples → altitude interpolates to 15k ft.
-		const fc = replayTrails3DAt(buf, T0 + MIN / 2, null, 0.5);
-		expect(fc.features).toHaveLength(1);
-		const f = fc.features[0];
-		const altM = exaggeratedHeightM(15_000);
-		expect(f.properties!.base).toBeCloseTo(altM - 500, 0); // radius 0.5 km
-		expect(f.properties!.height).toBeCloseTo(altM + 500, 0);
-		const ring = (f.geometry as GeoJSON.Polygon).coordinates[0];
-		expect(ring).toHaveLength(9); // closed octagon
-		expect(ring[0]).toEqual(ring[8]);
-	});
-
-	it("respects the visible set and skips grounded samples", () => {
-		const buf: ReplayBuffer = new Map();
-		insertReplaySamples(buf, [
-			pos({ id: 1, flight: "AA11", start_date: "2001-09-11T12:00:00Z" }),
-			pos({ id: 2, flight: "TAXI", alt_ft: 0, start_date: "2001-09-11T12:00:00Z" }),
-		]);
-		const fc = replayTrails3DAt(buf, T0, null, 0.5);
-		expect(fc.features.map((f) => f.properties!.flight)).toEqual(["AA11"]);
-		expect(replayTrails3DAt(buf, T0, new Set(), 0.5).features).toHaveLength(0);
-	});
-});
 
 describe("buildReplayTrailInstances (3D replay-trail spheres)", () => {
 	function twoSampleBuffer(): ReplayBuffer {
