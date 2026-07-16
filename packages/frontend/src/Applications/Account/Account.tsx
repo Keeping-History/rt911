@@ -9,7 +9,7 @@ import {
 } from "classicy";
 import appIconPng from "./app.png";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { avatarUrl, uploadAvatar } from "../../Providers/Auth/authApi";
 import { confirmEmailChange } from "../../Providers/Auth/profileApi";
@@ -57,13 +57,22 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 		return token;
 	});
 	const [confirmResult, setConfirmResult] = useState<string | null>(null);
+	// Ref guard, not just state: StrictMode double-invokes effects against the
+	// same render closure, so setConfirmToken(null) alone would still send the
+	// single-use token twice (the second attempt 400s as "already in use" and
+	// stomps the success banner). Same pattern as AuthProvider's loadStartedRef.
+	const confirmSentRef = useRef<string | null>(null);
 	useEffect(() => {
 		if (!confirmToken || status !== "signedIn") return;
+		if (confirmSentRef.current === confirmToken) return;
+		confirmSentRef.current = confirmToken;
 		setConfirmToken(null);
 		confirmEmailChange(confirmToken)
 			.then((email) => {
 				setConfirmResult(`Your email is now ${email}.`);
-				return refresh();
+				// refresh() failure must not overwrite the (real) success message —
+				// the change already applied; the profile view just re-syncs later.
+				refresh().catch(() => undefined);
 			})
 			.catch((err: Error) => setConfirmResult(err.message));
 	}, [confirmToken, status, refresh]);

@@ -79,9 +79,12 @@ check "A sets own avatar"          200 "$(code -X PATCH "$URL/users/me" -H "Auth
 # extension's verified flow; role/status locked, period (escalation guards).
 check "A updates own names"        200 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"first_name":"Verify","last_name":"Teacher"}')"
 check "A saves demographics"       200 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"city":"Memphis","state":"TN","grade_levels":["high_school"],"subjects":["us_history"]}')"
-DEMO_CITY=$(curl -sS -g "$URL/users/me?fields=city,provider" -H "Authorization: Bearer $TA" \
-  | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',{}); print(d.get('city') or '')")
-check "A reads back demographics"  "Memphis" "$DEMO_CITY"
+DEMO_READBACK=$(curl -sS -g "$URL/users/me?fields=city,grade_levels" -H "Authorization: Bearer $TA" \
+  | python3 -c "
+import sys,json; d=json.load(sys.stdin).get('data',{})
+print(f\"{d.get('city')}|{','.join(d.get('grade_levels') or [])}\")")
+# The array field proves the json/cast-json wiring, not just scalar storage.
+check "A reads back demographics"  "Memphis|high_school" "$DEMO_READBACK"
 check "A clears a demographic (optional)" 200 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"city":null}')"
 check "A cannot PATCH email directly" 403 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"email":"hijack@example.com"}')"
 check "A cannot change own role"   403 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"role":"00000000-0000-0000-0000-000000000000"}')"

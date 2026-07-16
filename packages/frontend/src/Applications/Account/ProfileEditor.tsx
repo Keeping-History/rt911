@@ -64,6 +64,10 @@ const ToggleGroup: React.FC<{
 export const ProfileEditor: React.FC = () => {
 	const { user, refresh } = useAuth();
 
+	// Section state snapshots `user` at MOUNT only (Account mounts this once
+	// per signed-in session). If a reset/cancel feature is ever added, these
+	// inits must become effects keyed on the relevant user fields.
+
 	// Names
 	const [firstName, setFirstName] = useState(user?.first_name ?? "");
 	const [lastName, setLastName] = useState(user?.last_name ?? "");
