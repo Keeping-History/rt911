@@ -80,7 +80,7 @@
 	background-color: var(--color-system-03);
 	height: 100%;
 	fieldset {
-		height: calc(100% - var(--window-control-size) - var(--window-padding-size));
+		height: calc(100% - var(--window-control-size) *2 - var(--window-padding-size));
 	}
 }
 .detail {
