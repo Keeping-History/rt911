@@ -6,6 +6,9 @@ import type { AircraftFamily } from "./aircraftModels";
 // rasterize, and (re)install the image on the map when a color changes.
 export const PLANE_ICON_ID = "plane-icon";
 export const PLANE_NOTABLE_ICON_ID = "plane-notable-icon";
+// Observer aircraft (GOFER06) share the notable treatment/size in their own
+// color — see notableFlights.isObserver.
+export const PLANE_OBSERVER_ICON_ID = "plane-observer-icon";
 export const PLANE_ICON_PX = 12; // display size; rasterized at 2× (pixelRatio 2)
 export const PLANE_NOTABLE_ICON_PX = 32;
 
@@ -62,10 +65,12 @@ export const FAMILY_ICON_PX: Record<AircraftFamily, number> = {
 
 export const familyIconId = (family: string): string => `plane-${family}`;
 export const familyNotableIconId = (family: string): string => `plane-notable-${family}`;
+export const familyObserverIconId = (family: string): string => `plane-observer-${family}`;
 
 export const familyIconPx = (family: string): number =>
 	FAMILY_ICON_PX[family as AircraftFamily] ?? PLANE_ICON_PX;
 
-// Notables keep their 32px-class slot; only the shape's relative size varies.
+// Notables (and observers, which share the slot) keep their 32px-class size;
+// only the shape's relative size varies.
 export const familyNotableIconPx = (family: string): number =>
 	Math.round((PLANE_NOTABLE_ICON_PX * familyIconPx(family)) / PLANE_ICON_PX);

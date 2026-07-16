@@ -70,8 +70,23 @@ export interface FlightMapColors {
 	darkMap: boolean;
 	pinColor: string;
 	notablePinColor: string;
+	observerPinColor: string;
 	// Topography toggle: hillshade visibility rides the shared basemap switch.
 	terrain: boolean;
+}
+
+// The replay-trail highlight layer serves notables AND observers (GOFER06);
+// circles recolor via paint, so the split is a data-driven case expression.
+export function highlightTrailColor(
+	notablePinColor: string,
+	observerPinColor: string,
+): ExpressionSpecification {
+	return [
+		"case",
+		["==", ["get", "observer"], true],
+		observerPinColor,
+		notablePinColor,
+	] as ExpressionSpecification;
 }
 
 // Kept as the historical local name; identical to the shared StylableMap.
@@ -91,7 +106,11 @@ export function applyMapColors(map: PaintableMap, colors: FlightMapColors): void
 	// icons bake the color in (see flightIcons + FlightMap's installPlaneIcons).
 	// The loop-mode replay-trail layers stay plain circles, so they DO recolor here.
 	map.setPaintProperty("replay-trail-dots", "circle-color", colors.pinColor);
-	map.setPaintProperty("replay-trail-notable", "circle-color", colors.notablePinColor);
+	map.setPaintProperty(
+		"replay-trail-notable",
+		"circle-color",
+		highlightTrailColor(colors.notablePinColor, colors.observerPinColor),
+	);
 	// Cluster blobs follow the pin color too (the clustered plane icons share
 	// the baked-in plane-icon image, so they recolor via installPlaneIcons).
 	map.setPaintProperty("cluster-circles", "circle-color", colors.pinColor);

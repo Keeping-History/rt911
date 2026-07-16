@@ -13,6 +13,7 @@ import {
 	applyMapColors,
 	buildBasemapStyle,
 	type FlightMapColors,
+	highlightTrailColor,
 	trailColor,
 	trailGradient,
 } from "./flightMapStyle";
@@ -22,11 +23,13 @@ import {
 	PLANE_ICON_PX,
 	PLANE_NOTABLE_ICON_ID,
 	PLANE_NOTABLE_ICON_PX,
+	PLANE_OBSERVER_ICON_ID,
 	buildPlaneImage,
 	familyIconId,
 	familyIconPx,
 	familyNotableIconId,
 	familyNotableIconPx,
+	familyObserverIconId,
 } from "./flightIcons";
 import {
 	type FlightMotion,
@@ -92,16 +95,20 @@ async function installPlaneIcons(
 	map: maplibregl.Map,
 	pinColor: string,
 	notablePinColor: string,
+	observerPinColor: string,
 ) {
 	try {
-		const [regular, notable] = await Promise.all([
+		const [regular, notable, observer] = await Promise.all([
 			buildPlaneImage(planeSvg, pinColor, PLANE_ICON_PX),
 			buildPlaneImage(planeSvg, notablePinColor, PLANE_NOTABLE_ICON_PX),
+			buildPlaneImage(planeSvg, observerPinColor, PLANE_NOTABLE_ICON_PX),
 		]);
 		if (map.hasImage(PLANE_ICON_ID)) map.updateImage(PLANE_ICON_ID, regular);
 		else map.addImage(PLANE_ICON_ID, regular, { pixelRatio: 2 });
 		if (map.hasImage(PLANE_NOTABLE_ICON_ID)) map.updateImage(PLANE_NOTABLE_ICON_ID, notable);
 		else map.addImage(PLANE_NOTABLE_ICON_ID, notable, { pixelRatio: 2 });
+		if (map.hasImage(PLANE_OBSERVER_ICON_ID)) map.updateImage(PLANE_OBSERVER_ICON_ID, observer);
+		else map.addImage(PLANE_OBSERVER_ICON_ID, observer, { pixelRatio: 2 });
 	} catch (err) {
 		console.warn("plane icons unavailable:", err);
 	}
@@ -115,18 +122,23 @@ async function installFamilyIcon(
 	svg: string,
 	pinColor: string,
 	notablePinColor: string,
+	observerPinColor: string,
 ) {
 	try {
-		const [regular, notable] = await Promise.all([
+		const [regular, notable, observer] = await Promise.all([
 			buildPlaneImage(svg, pinColor, familyIconPx(family)),
 			buildPlaneImage(svg, notablePinColor, familyNotableIconPx(family)),
+			buildPlaneImage(svg, observerPinColor, familyNotableIconPx(family)),
 		]);
 		const id = familyIconId(family);
 		const notableId = familyNotableIconId(family);
+		const observerId = familyObserverIconId(family);
 		if (map.hasImage(id)) map.updateImage(id, regular);
 		else map.addImage(id, regular, { pixelRatio: 2 });
 		if (map.hasImage(notableId)) map.updateImage(notableId, notable);
 		else map.addImage(notableId, notable, { pixelRatio: 2 });
+		if (map.hasImage(observerId)) map.updateImage(observerId, observer);
+		else map.addImage(observerId, observer, { pixelRatio: 2 });
 	} catch (err) {
 		console.warn(`family icon ${family} unavailable:`, err);
 	}
@@ -146,6 +158,18 @@ const FAMILY_NOTABLE_ICON_IMAGE = [
 	["image", ["concat", "plane-notable-", ["get", "family"]]],
 	["image", PLANE_NOTABLE_ICON_ID],
 ] as unknown as maplibregl.ExpressionSpecification;
+const FAMILY_OBSERVER_ICON_IMAGE = [
+	"coalesce",
+	["image", ["concat", "plane-observer-", ["get", "family"]]],
+	["image", PLANE_OBSERVER_ICON_ID],
+] as unknown as maplibregl.ExpressionSpecification;
+// The highlight layer serves both categories; the flag picks the icon set.
+const HIGHLIGHT_ICON_IMAGE = [
+	"case",
+	["==", ["get", "observer"], true],
+	FAMILY_OBSERVER_ICON_IMAGE,
+	FAMILY_NOTABLE_ICON_IMAGE,
+] as unknown as maplibregl.ExpressionSpecification;
 
 // Kick off (once per family) the silhouette fetch for every family in view;
 // on arrival, rasterize + register both color variants. "generic" never
@@ -156,7 +180,7 @@ function requestFamilyIcons(
 	requested: Set<string>,
 	loaded: Map<string, string>,
 	mapRef: { current: maplibregl.Map | null },
-	colorsRef: { current: { pinColor: string; notablePinColor: string } },
+	colorsRef: { current: { pinColor: string; notablePinColor: string; observerPinColor: string } },
 ) {
 	for (const f of fc.features) {
 		const family = f.properties.family;
@@ -169,6 +193,7 @@ function requestFamilyIcons(
 			void installFamilyIcon(
 				map, family, svg,
 				colorsRef.current.pinColor, colorsRef.current.notablePinColor,
+				colorsRef.current.observerPinColor,
 			);
 		});
 	}
@@ -205,6 +230,7 @@ interface FlightMapProps {
 	// CSS hex strings — FlightTracker converts from the persisted packed ints.
 	pinColor: string;
 	notablePinColor: string;
+	observerPinColor: string;
 	radarSweep: boolean;
 	// Comet-tail length as a multiple of TRAIL_POINTS; 0 turns tails off.
 	trailMultiplier: number;
@@ -243,11 +269,13 @@ interface FlightMapProps {
 	onClearSelection: () => void;
 }
 
-/** Non-notable features only — notables never cluster (issue #222). */
+/** Non-highlighted features only — notables and observers never cluster (issue #222). */
 export function nonNotableFeatures(fc: FlightFeatureCollection): FlightFeatureCollection {
 	return {
 		type: "FeatureCollection",
-		features: fc.features.filter((f) => f.properties.notable !== true),
+		features: fc.features.filter(
+			(f) => f.properties.notable !== true && f.properties.observer !== true,
+		),
 	};
 }
 
@@ -390,7 +418,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	ref: handleRef,
 	positions, seedPositions, basemapUrls, trackGeoJSON,
 	trackProfile = null, nowMs, playing,
-	mapStyle, darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
+	mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null, landingClock,
@@ -425,9 +453,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const dragRef = useRef<DragPixels | null>(null);
 	const [overlay, setOverlay] = useState<{ mode: "rect" | "circle"; d: DragPixels } | null>(null);
 	const colorsRef = useRef<FlightMapColors>({
-		mapStyle, darkMap, pinColor, notablePinColor, terrain,
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain,
 	});
-	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor, terrain };
+	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain };
 	const radarSweepRef = useRef(radarSweep);
 	radarSweepRef.current = radarSweep;
 	const trailMultiplierRef = useRef(trailMultiplier);
@@ -591,7 +619,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			});
 			map.addLayer({
 				id: "flights-dots", type: "symbol", source: "flights",
-				filter: ["!=", ["get", "notable"], true],
+				filter: ["all", ["!=", ["get", "notable"], true], ["!=", ["get", "observer"], true]],
 				layout: {
 					"icon-image": FAMILY_ICON_IMAGE,
 					// Grow to 1.5× while zooming in, capping at ~zoom 9 — where a
@@ -605,19 +633,22 @@ export const FlightMap: FC<FlightMapProps> = ({
 				},
 			});
 			// Always-on highlight of the notable flights (renders nothing until the
-			// notable-flights data story loads AA11/UA175/AA77/UA93).
+			// notable-flights data story loads AA11/UA175/AA77/UA93) and observer
+			// aircraft (GOFER06), which share the layer in their own color.
 			map.addLayer({
 				id: "flights-notable", type: "symbol", source: "flights",
-				filter: ["==", ["get", "notable"], true],
+				filter: ["any", ["==", ["get", "notable"], true], ["==", ["get", "observer"], true]],
 				layout: {
-					"icon-image": FAMILY_NOTABLE_ICON_IMAGE,
+					"icon-image": HIGHLIGHT_ICON_IMAGE,
 					"icon-rotate": ["-", ["get", "heading"], 90],
 					"icon-rotation-alignment": "map",
 					"icon-allow-overlap": true,
 					"icon-ignore-placement": true,
 				},
 			});
-			void installPlaneIcons(map, colors.pinColor, colors.notablePinColor);
+			void installPlaneIcons(
+				map, colors.pinColor, colors.notablePinColor, colors.observerPinColor,
+			);
 			// Cluster mode (issue #222): a second, pre-clustered source — MapLibre
 			// fixes the cluster option at addSource time, so toggling is a
 			// visibility swap between the plane/trail layers and these three.
@@ -685,9 +716,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 			}, "flights-dots");
 			map.addLayer({
 				id: "replay-trail-notable", type: "circle", source: "replay-trails",
-				filter: ["==", ["get", "notable"], true],
+				filter: ["any", ["==", ["get", "notable"], true], ["==", ["get", "observer"], true]],
 				paint: {
-					"circle-radius": 5, "circle-color": colors.notablePinColor,
+					"circle-radius": 5,
+					"circle-color": highlightTrailColor(colors.notablePinColor, colors.observerPinColor),
 					"circle-opacity": REPLAY_TRAIL_OPACITY,
 					"circle-stroke-width": 1, "circle-stroke-color": REPLAY_TRAIL_STROKE_COLOR,
 					"circle-stroke-opacity": REPLAY_TRAIL_OPACITY,
@@ -732,7 +764,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// True-3D aircraft (issue #250): custom layer on top of the stack;
 			// its colors follow the pin pair like every other plane layer.
 			const planes3D = new Planes3DLayer();
-			planes3D.setColors(colors.pinColor, colors.notablePinColor);
+			planes3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor);
 			planes3DRef.current = planes3D;
 			map.addLayer(planes3D);
 			// Loop-mode replay-trail spheres (issue #242): same instanced-mesh layer with
@@ -743,7 +775,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				buildMesh: () => buildSphereMesh(),
 				opacity: REPLAY_TRAIL_OPACITY,
 			});
-			replayTrail3D.setColors(colors.pinColor, colors.notablePinColor);
+			replayTrail3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor);
 			replayTrail3DRef.current = replayTrail3D;
 			map.addLayer(replayTrail3D);
 			// Smooth 3D track tube: splined selected-flight path with per-vertex
@@ -955,15 +987,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, terrain });
-		void installPlaneIcons(map, pinColor, notablePinColor);
+		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain });
+		void installPlaneIcons(map, pinColor, notablePinColor, observerPinColor);
 		for (const [family, svg] of loadedIconSvgsRef.current) {
-			void installFamilyIcon(map, family, svg, pinColor, notablePinColor);
+			void installFamilyIcon(map, family, svg, pinColor, notablePinColor, observerPinColor);
 		}
-		planes3DRef.current?.setColors(pinColor, notablePinColor);
-		replayTrail3DRef.current?.setColors(pinColor, notablePinColor);
+		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
+		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		trailTubeRef.current?.setColor(trailColor(mapStyle, darkMap));
-	}, [mapStyle, darkMap, pinColor, notablePinColor, terrain]);
+	}, [mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain]);
 
 	// Arm/disarm the select tool: panning off, crosshair cursor, stale drag
 	// cleared. Runs pre-load safely (dragPan exists from construction).

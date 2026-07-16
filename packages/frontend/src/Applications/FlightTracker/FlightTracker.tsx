@@ -778,6 +778,24 @@ export const FlightTracker: FC = () => {
 								setForm((f) => ({ ...f, notablePinColorDark: color }))
 							}
 						/>
+						<ClassicyColorPicker
+							id="flight_settings_observer_pin_color_light"
+							labelTitle="Observer aircraft pins (light map)"
+							value={form.observerPinColorLight}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, observerPinColorLight: color }))
+							}
+						/>
+						<ClassicyColorPicker
+							id="flight_settings_observer_pin_color_dark"
+							labelTitle="Observer aircraft pins (dark map)"
+							value={form.observerPinColorDark}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, observerPinColorDark: color }))
+							}
+						/>
 						<ClassicySlider
 							id="flight_settings_trail_multiplier"
 							labelTitle="Trail length"
@@ -989,6 +1007,11 @@ export const FlightTracker: FC = () => {
 									tone === "dark"
 										? settings.notablePinColorDark
 										: settings.notablePinColorLight,
+								)}
+								observerPinColor={intToHex(
+									tone === "dark"
+										? settings.observerPinColorDark
+										: settings.observerPinColorLight,
 								)}
 								radarSweep={settings.radarSweep}
 								trailMultiplier={settings.trailMultiplier}

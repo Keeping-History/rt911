@@ -1,7 +1,7 @@
 import type { FlightMotion, LandingClock, MotionBuffer } from "./flightMotion";
 import { extrapolate, motionNow } from "./flightMotion";
 import { PLANE_SHAPE, altitudeFtAt, exaggeratedHeightM } from "./flightAltitude";
-import { isNotable } from "./notableFlights";
+import { isNotable, isObserver } from "./notableFlights";
 
 // Geometry and per-frame instance data for the true-3D aircraft layer
 // (issue #250). Everything here is pure math — no WebGL, no maplibre — so
@@ -276,7 +276,7 @@ export function buildPlaneInstanceBatches(
 			data[o + 4] = (m.headingDeg * Math.PI) / 180;
 			data[o + 5] = pitchRadOf(m);
 			data[o + 6] = halfSizeM;
-			data[o + 7] = isNotable(m.item.flight) ? 1 : 0;
+			data[o + 7] = isNotable(m.item.flight) ? 1 : isObserver(m.item.flight) ? 2 : 0;
 			count++;
 		}
 		if (count > 0) {
@@ -315,7 +315,7 @@ export function buildPlaneInstances(
 		data[o + 4] = (m.headingDeg * Math.PI) / 180;
 		data[o + 5] = pitchRadOf(m);
 		data[o + 6] = halfSizeM;
-		data[o + 7] = isNotable(m.item.flight) ? 1 : 0;
+		data[o + 7] = isNotable(m.item.flight) ? 1 : isObserver(m.item.flight) ? 2 : 0;
 		flights.push(m.item.flight);
 		count++;
 	}

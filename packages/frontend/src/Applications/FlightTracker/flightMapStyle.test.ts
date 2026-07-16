@@ -47,7 +47,7 @@ describe("applyMapColors", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
 			mapStyle: "satellite", darkMap: true,
-			pinColor: "#00aa00", notablePinColor: "#123456",
+			pinColor: "#00aa00", notablePinColor: "#123456", observerPinColor: "#0f766e",
 			terrain: false,
 		});
 		expect(map.paint.background["background-color"]).toBe(
@@ -58,7 +58,11 @@ describe("applyMapColors", () => {
 		// satellite-night trail #cfd8e3 → rgb 207,216,227
 		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("207,216,227");
 		expect(map.paint["replay-trail-dots"]["circle-color"]).toBe("#00aa00");
-		expect(map.paint["replay-trail-notable"]["circle-color"]).toBe("#123456");
+		// Notables and observers share the replay-trail highlight layer; the
+		// color splits on the observer flag.
+		expect(map.paint["replay-trail-notable"]["circle-color"]).toEqual([
+			"case", ["==", ["get", "observer"], true], "#0f766e", "#123456",
+		]);
 		// Pin colors flow through icon rebuilds, not paint.
 		expect(map.paint["flights-dots"]).toBeUndefined();
 		expect(map.paint["flights-notable"]).toBeUndefined();
@@ -68,7 +72,7 @@ describe("applyMapColors", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
 			mapStyle: "classic", darkMap: false,
-			pinColor: "#3a3a3a", notablePinColor: "#c0202a",
+			pinColor: "#3a3a3a", notablePinColor: "#c0202a", observerPinColor: "#0f766e",
 			terrain: false,
 		});
 		expect(map.paint.background["background-color"]).toBe("#efe9dd");
@@ -80,7 +84,7 @@ describe("applyMapColors", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
 			mapStyle: "radar", darkMap: false,
-			pinColor: "#ffd700", notablePinColor: "#ff4d4d",
+			pinColor: "#ffd700", notablePinColor: "#ff4d4d", observerPinColor: "#2dd4bf",
 			terrain: true,
 		});
 		expect(map.layout["hillshade-radar"].visibility).toBe("visible");

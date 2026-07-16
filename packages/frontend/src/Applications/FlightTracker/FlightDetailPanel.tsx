@@ -8,7 +8,7 @@ import {
 	ClassicyControlLabel,
 	ClassicyPopUpMenu,
 } from "classicy";
-import { isNotable } from "./notableFlights";
+import { isNotable, isObserver } from "./notableFlights";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
 
 interface FlightDetailPanelProps {
@@ -87,6 +87,7 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 			<div className={styles.detailHeader}>
 				<span className={styles.detailFlight}>{selected.flight}</span>
 				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
+				{isObserver(selected.flight) && <span className={styles.detailBadge}>OBSERVER</span>}
 			</div>
 			{selectionOptions.length > 1 && (
 				<div className={styles.detailSelection}>

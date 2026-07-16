@@ -1,6 +1,6 @@
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
-import { isNotable } from "./notableFlights";
+import { isNotable, isObserver } from "./notableFlights";
 
 // How far ahead of its last sample a dot may be dead-reckoned before it holds —
 // keeps a flight that stopped reporting (about to land / leave the set) from
@@ -170,6 +170,7 @@ export function motionPointsToGeoJSON(
 				alt_ft: m.item.alt_ft,
 				phase: m.item.phase ?? "",
 				notable: isNotable(m.item.flight),
+				observer: isObserver(m.item.flight),
 				heading: m.headingDeg,
 				family: familyOf?.(m) ?? "generic",
 			},
@@ -183,7 +184,7 @@ export interface TrailFeatureCollection {
 	features: Array<{
 		type: "Feature";
 		geometry: { type: "LineString"; coordinates: ([number, number] | [number, number, number])[] };
-		properties: { notable: boolean };
+		properties: { notable: boolean; observer: boolean };
 	}>;
 }
 
@@ -209,7 +210,10 @@ export function motionTrailsToGeoJSON(
 				type: "LineString",
 				coordinates: [...m.trail.slice(-displayPoints), [head.lon, head.lat, m.item.alt_ft]],
 			},
-			properties: { notable: isNotable(m.item.flight) },
+			properties: {
+				notable: isNotable(m.item.flight),
+				observer: isObserver(m.item.flight),
+			},
 		});
 	}
 	return { type: "FeatureCollection", features };
