@@ -1,4 +1,4 @@
-import { useClassicyDateTime } from "classicy";
+import { useAppManager, useAppManagerDispatch, useClassicyDateTime } from "classicy";
 import {
 	type FC,
 	type ReactNode,
@@ -26,6 +26,7 @@ import { drainDue, partitionByDue } from "./revealBuffer";
 import { keepInstantItem, keepMediaItem } from "./retention";
 import { virtualUtcMs } from "./virtualClock";
 import { usePlaylist } from "../Playlist/PlaylistContext";
+import { playlistAppMeta } from "../Playlist/playlistApps";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { mergeLatestPerStation } from "./weatherMerge";
 import {
@@ -317,6 +318,34 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		clockForcedRef.current = forced;
 		setClockForced(forced);
 	}, []);
+
+	// --- Forced-clock UI enforcement ----------------------------------------
+	// Reactive watcher, not action interception — same rationale as
+	// PlaylistProvider's disabledApps sweep: watching `open` covers every
+	// entry point including desktop-icon opens that never emit ClassicyAppOpen.
+	const enforcementDispatch = useAppManagerDispatch();
+	const timeMachineOpen = useAppManager(
+		(s) => s.System.Manager.Applications.apps["TimeMachine.app"]?.open,
+	);
+
+	useEffect(() => {
+		enforcementDispatch({
+			type: clockForced ? "ClassicyManagerDateTimeLock" : "ClassicyManagerDateTimeUnlock",
+		});
+	}, [clockForced, enforcementDispatch]);
+
+	useEffect(() => {
+		if (!clockForced || !timeMachineOpen) return;
+		enforcementDispatch({
+			type: "ClassicyAppClose",
+			app: { id: "TimeMachine.app", ...playlistAppMeta("TimeMachine.app") },
+		});
+		enforcementDispatch({
+			type: "ClassicyDesktopShowErrorDialog",
+			title: "Time Machine",
+			message: "The clock is currently controlled by the broadcast operator.",
+		});
+	}, [clockForced, timeMachineOpen, enforcementDispatch]);
 
 	const send = useCallback((msg: object) => {
 		const ws = wsRef.current;

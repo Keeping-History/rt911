@@ -69,6 +69,10 @@ export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 		string,
 		{ open?: boolean; data?: Record<string, unknown> }
 	>;
+	// Cross-provider signal from MediaStreamProvider (which sits below this
+	// provider and can't be read via context): the central forced clock
+	// outranks playlist scheduling, so jump crossings are suppressed while set.
+	const dateTimeLocked = useAppManager((s) => s.System.Manager.DateAndTime.dateTimeLocked);
 
 	const [definition, setDefinition] = useState<PlaylistDefinition | null>(null);
 	const [title, setTitle] = useState<string | null>(null);
@@ -131,6 +135,9 @@ export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 		if (Math.abs(nowMs - prev) > SEEK_THRESHOLD_MS) return; // seek: re-arm only
 		for (const e of collectCrossings(definition, prev, nowMs)) {
 			if (e.kind === "jump") {
+				// Central forced clock outranks playlist scheduling; the server
+				// would clamp the seek anyway — don't fight it client-side.
+				if (dateTimeLocked) continue;
 				setDateTimeFromUtc(setDateTime, e.to);
 				// The clock moved; remaining same-tick events are in skipped territory.
 				break;
@@ -140,7 +147,7 @@ export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 			}
 			if (e.kind === "focus") applyFocus(e);
 		}
-	}, [definition, nowMs, dispatch, setDateTime, applyFocus]);
+	}, [definition, nowMs, dispatch, setDateTime, applyFocus, dateTimeLocked]);
 
 	// --- State: app gating watcher -----------------------------------------
 	// Reactive close-on-open rather than action interception: classicy's

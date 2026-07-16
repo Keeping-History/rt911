@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Partial classicy mock — full replacement breaks on transitive imports.
 const dispatched: Array<Record<string, unknown>> = [];
 let mockApps: Record<string, { open?: boolean; data?: Record<string, unknown> }> = {};
+let mockDateTimeLocked = false;
 let mockClock = {
 	dateTime: "2001-09-11T12:50:00.000Z",
 	// localDate is the DISPLAY value: UTC shifted by tzOffset (-4).
@@ -16,7 +17,14 @@ vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	useAppManagerDispatch: () => (a: Record<string, unknown>) => dispatched.push(a),
 	useAppManager: (sel: (s: unknown) => unknown) =>
-		sel({ System: { Manager: { Applications: { apps: mockApps }, DateAndTime: {} } } }),
+		sel({
+			System: {
+				Manager: {
+					Applications: { apps: mockApps },
+					DateAndTime: { dateTimeLocked: mockDateTimeLocked },
+				},
+			},
+		}),
 	useClassicyDateTime: () => mockClock,
 }));
 
@@ -34,6 +42,7 @@ describe("PlaylistProvider", () => {
 	beforeEach(() => {
 		dispatched.length = 0;
 		mockApps = {};
+		mockDateTimeLocked = false;
 		mockClock = {
 			dateTime: "2001-09-11T12:50:00.000Z",
 			localDate: new Date("2001-09-11T08:50:00.000Z"),
@@ -165,6 +174,15 @@ describe("PlaylistProvider", () => {
 				new Date("2001-09-11T13:59:00.000Z"),
 			),
 		);
+	});
+
+	it("suppresses a jump crossing while the clock is centrally forced (dateTimeLocked)", async () => {
+		mockDateTimeLocked = true;
+		const { rerender } = await mountWith([
+			{ kind: "jump", at: "2001-09-11T12:51:00", to: "2001-09-11T13:59:00" },
+		]);
+		tickTo(rerender, "2001-09-11T12:51:00.000Z");
+		expect(mockClock.setDateTime).not.toHaveBeenCalled();
 	});
 
 	it("crossing a file `at` dispatches ClassicyAppFinderOpenFile", async () => {

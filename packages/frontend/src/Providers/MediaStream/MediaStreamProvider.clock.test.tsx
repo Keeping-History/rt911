@@ -13,6 +13,10 @@ const NOW_ISO = "2001-09-11T13:00:00.000Z";
 let mockDateTime = NOW_ISO;
 const FIXED_LOCAL_DATE = new Date(NOW_ISO);
 const setDateTimeMock = vi.hoisted(() => vi.fn());
+const dispatchMock = vi.hoisted(() => vi.fn());
+const mockApps = vi.hoisted(() => ({
+	current: {} as Record<string, { open?: boolean; name?: string; icon?: string }>,
+}));
 vi.mock("classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: FIXED_LOCAL_DATE,
@@ -25,11 +29,14 @@ vi.mock("classicy", () => ({
 			System: {
 				Manager: {
 					DateAndTime: { dateTimeLocked: false },
-					Applications: { apps: {} },
+					Applications: { apps: mockApps.current },
 				},
 			},
 		}),
-	useAppManagerDispatch: () => vi.fn(),
+	useAppManagerDispatch: () => dispatchMock,
+	// playlistAppMeta (used by the Time Machine force-close effect) reads this
+	// for icon lookup; an empty registry resolves to icon: "" harmlessly.
+	ClassicyIcons: { applications: {} },
 }));
 
 class FakeWebSocket {
@@ -93,6 +100,8 @@ describe("MediaStreamProvider clock/heartbeat_ack", () => {
 		FakeWebSocket.instances = [];
 		mockDateTime = NOW_ISO;
 		setDateTimeMock.mockClear();
+		dispatchMock.mockClear();
+		mockApps.current = {};
 		vi.stubGlobal("WebSocket", FakeWebSocket);
 	});
 	afterEach(() => {
@@ -159,6 +168,46 @@ describe("MediaStreamProvider clock/heartbeat_ack", () => {
 			act(() => ws.onmessage?.(frame({ type: "clock", active: false })));
 			expect(captured.current?.clockForced).toBe(false);
 			expect(setDateTimeMock).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("forced clock enforcement", () => {
+		it("locks and unlocks the Date & Time editors with forced mode", () => {
+			renderProvider();
+			const ws = FakeWebSocket.instances[0];
+			act(() => ws.onopen?.());
+
+			act(() => ws.onmessage?.(frame({ type: "clock", active: true, time: "2001-09-11T14:00:00Z" })));
+			expect(dispatchMock).toHaveBeenCalledWith({ type: "ClassicyManagerDateTimeLock" });
+
+			act(() => ws.onmessage?.(frame({ type: "clock", active: false })));
+			expect(dispatchMock).toHaveBeenCalledWith({ type: "ClassicyManagerDateTimeUnlock" });
+		});
+
+		it("force-closes Time Machine while forced", () => {
+			mockApps.current = { "TimeMachine.app": { open: true, name: "Time Machine", icon: "tm.png" } };
+			renderProvider();
+			const ws = FakeWebSocket.instances[0];
+			act(() => ws.onopen?.());
+
+			act(() => ws.onmessage?.(frame({ type: "clock", active: true, time: "2001-09-11T14:00:00Z" })));
+
+			expect(dispatchMock).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: "ClassicyAppClose",
+					app: expect.objectContaining({ id: "TimeMachine.app" }),
+				}),
+			);
+		});
+
+		it("does not touch Time Machine when not forced", () => {
+			mockApps.current = { "TimeMachine.app": { open: true, name: "Time Machine", icon: "tm.png" } };
+			renderProvider();
+			const ws = FakeWebSocket.instances[0];
+			act(() => ws.onopen?.());
+
+			const closes = dispatchMock.mock.calls.filter((c) => c[0]?.type === "ClassicyAppClose");
+			expect(closes).toHaveLength(0);
 		});
 	});
 });
