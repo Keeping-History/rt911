@@ -11,6 +11,7 @@ export interface BasemapUrls {
 	vector: string;
 	satelliteDay: string;
 	satelliteNight: string;
+	terrainDem: string;
 }
 
 // Module-scope so the object identity is stable — FlightMap/WeatherMap key
@@ -27,6 +28,9 @@ export const BASEMAP_URLS: BasemapUrls = {
 	satelliteNight:
 		(import.meta.env.VITE_SATELLITE_NIGHT_BASEMAP_URL as string | undefined) ??
 		"https://files.911realtime.org/maps/na-satellite-night.pmtiles",
+	terrainDem:
+		(import.meta.env.VITE_TERRAIN_DEM_URL as string | undefined) ??
+		"https://files.911realtime.org/maps/terrain-dem.pmtiles",
 };
 
 /** Persisted-state safety: anything unrecognized renders as classic. */
@@ -205,6 +209,16 @@ export function groundVisibility(mapStyle: BasemapStyleId, darkMap: boolean): Gr
 
 const NA_BBOX: [number, number, number, number] = [-150, 18, -65, 65];
 
+/** Source id for the raster-dem archive — shared by hillshade and setTerrain. */
+export const TERRAIN_SOURCE = "terrain";
+
+const hillshadePaint = (p: HillshadePalette) => ({
+	"hillshade-shadow-color": p.shadow,
+	"hillshade-highlight-color": p.highlight,
+	"hillshade-accent-color": p.accent,
+	"hillshade-exaggeration": p.exaggeration,
+});
+
 const vis = (visible: boolean) => ({ visibility: visible ? "visible" : "none" }) as const;
 
 // The superset style: every source and layer is always present; the active
@@ -219,9 +233,11 @@ export function buildBasemapStyle(
 	urls: BasemapUrls,
 	mapStyle: BasemapStyleId,
 	darkMap: boolean,
+	terrainEnabled = false,
 ): StyleSpecification {
 	const p = basemapPalette(mapStyle, darkMap);
 	const g = groundVisibility(mapStyle, darkMap);
+	const h = hillshadeVisibility(mapStyle, terrainEnabled);
 	return {
 		version: 8,
 		sky: skyFor(mapStyle, darkMap),
@@ -244,6 +260,16 @@ export function buildBasemapStyle(
 				bounds: NA_BBOX,
 				attribution: "NASA Visible Earth",
 			},
+			// Terrarium DEM (3D-terrain feature). Fetches nothing until a
+			// hillshade layer is visible or setTerrain names it.
+			[TERRAIN_SOURCE]: {
+				type: "raster-dem",
+				url: `pmtiles://${urls.terrainDem}`,
+				encoding: "terrarium",
+				tileSize: 512,
+				bounds: NA_BBOX,
+				attribution: "Mapterhorn",
+			},
 		},
 		layers: [
 			{ id: "background", type: "background", paint: { "background-color": p.background } },
@@ -255,6 +281,14 @@ export function buildBasemapStyle(
 				layout: vis(g.vector), paint: { "fill-color": p.land } },
 			{ id: "lakes", type: "fill", source: "basemap", "source-layer": "lakes",
 				layout: vis(g.vector), paint: { "fill-color": p.lakes } },
+			// One hillshade per style: relief shading tuned to each look. Exactly
+			// one is visible while the terrain toggle is on (hillshadeVisibility).
+			{ id: "hillshade-classic", type: "hillshade", source: TERRAIN_SOURCE,
+				layout: vis(h.classic), paint: hillshadePaint(hillshadePalette("classic", darkMap)) },
+			{ id: "hillshade-radar", type: "hillshade", source: TERRAIN_SOURCE,
+				layout: vis(h.radar), paint: hillshadePaint(hillshadePalette("radar", darkMap)) },
+			{ id: "hillshade-satellite", type: "hillshade", source: TERRAIN_SOURCE,
+				layout: vis(h.satellite), paint: hillshadePaint(hillshadePalette("satellite", darkMap)) },
 			{ id: "countries", type: "line", source: "basemap", "source-layer": "countries",
 				paint: { "line-color": p.countries, "line-width": 0.8 } },
 			{ id: "states", type: "line", source: "basemap", "source-layer": "states",

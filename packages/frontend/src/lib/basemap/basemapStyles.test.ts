@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	BASEMAP_URLS,
+	TERRAIN_SOURCE,
 	type BasemapStyleId,
 	applyBasemapStyle,
 	basemapPalette,
@@ -17,6 +18,7 @@ const URLS = {
 	vector: "https://x.example/na.pmtiles",
 	satelliteDay: "https://x.example/day.pmtiles",
 	satelliteNight: "https://x.example/night.pmtiles",
+	terrainDem: "https://x.example/dem.pmtiles",
 };
 
 const ALL_STYLES: BasemapStyleId[] = ["classic", "radar", "satellite"];
@@ -48,6 +50,7 @@ describe("BASEMAP_URLS", () => {
 		expect(BASEMAP_URLS.vector).toContain("/maps/world-basemap.pmtiles");
 		expect(BASEMAP_URLS.satelliteDay).toContain("/maps/na-satellite-day.pmtiles");
 		expect(BASEMAP_URLS.satelliteNight).toContain("/maps/na-satellite-night.pmtiles");
+		expect(BASEMAP_URLS.terrainDem).toContain("/maps/terrain-dem.pmtiles");
 	});
 });
 
@@ -69,10 +72,12 @@ describe("buildBasemapStyle — superset structure", () => {
 		expect(night.type).toBe("raster");
 	});
 
-	it("orders layers background → rasters → land/lakes → countries/states", () => {
+	it("orders layers background → rasters → land/lakes → hillshades → countries/states", () => {
 		expect(style.layers.map((l) => l.id)).toEqual([
 			"background", "satellite-day", "satellite-night",
-			"land", "lakes", "countries", "states",
+			"land", "lakes",
+			"hillshade-classic", "hillshade-radar", "hillshade-satellite",
+			"countries", "states",
 		]);
 	});
 
@@ -262,5 +267,49 @@ describe("hillshadeVisibility", () => {
 		expect(hillshadeVisibility("satellite", true)).toEqual({
 			classic: false, radar: false, satellite: true,
 		});
+	});
+});
+
+describe("terrain source + hillshade layers", () => {
+	it("BASEMAP_URLS includes the terrain DEM archive", () => {
+		expect(BASEMAP_URLS.terrainDem).toContain("/maps/terrain-dem.pmtiles");
+	});
+
+	it("declares a terrarium raster-dem source bounded to NA", () => {
+		const style = buildBasemapStyle(URLS, "classic", false);
+		const dem = style.sources[TERRAIN_SOURCE] as {
+			type: string; url: string; encoding: string; tileSize: number; bounds: number[];
+		};
+		expect(dem.type).toBe("raster-dem");
+		expect(dem.url).toBe("pmtiles://https://x.example/dem.pmtiles");
+		expect(dem.encoding).toBe("terrarium");
+		expect(dem.tileSize).toBe(512);
+		expect(dem.bounds).toEqual([-150, 18, -65, 65]);
+	});
+
+	it("bakes hillshade visibility from the terrain flag (default off)", () => {
+		const vis = (style: ReturnType<typeof buildBasemapStyle>, id: string) =>
+			(style.layers.find((l) => l.id === id) as { layout?: { visibility?: string } })
+				.layout?.visibility;
+		const off = buildBasemapStyle(URLS, "radar", false);
+		expect(vis(off, "hillshade-classic")).toBe("none");
+		expect(vis(off, "hillshade-radar")).toBe("none");
+		expect(vis(off, "hillshade-satellite")).toBe("none");
+		const on = buildBasemapStyle(URLS, "radar", false, true);
+		expect(vis(on, "hillshade-radar")).toBe("visible");
+		expect(vis(on, "hillshade-classic")).toBe("none");
+		expect(vis(on, "hillshade-satellite")).toBe("none");
+	});
+
+	it("each hillshade layer carries its own style's palette", () => {
+		const style = buildBasemapStyle(URLS, "classic", true, true);
+		const paint = (id: string) =>
+			(style.layers.find((l) => l.id === id) as { paint: Record<string, unknown> }).paint;
+		expect(paint("hillshade-radar")["hillshade-shadow-color"]).toBe(
+			hillshadePalette("radar", true).shadow,
+		);
+		expect(paint("hillshade-classic")["hillshade-exaggeration"]).toBe(
+			hillshadePalette("classic", true).exaggeration,
+		);
 	});
 });
