@@ -638,8 +638,8 @@ export const Browser = () => {
 						<img
 							src={
 								isLoading
-									? ClassicyIcons.applications.internetExplorer.loaderAnimated
-									: ClassicyIcons.applications.internetExplorer.loader
+									? `${import.meta.env.BASE_URL}img/throbber.gif`
+									: `${import.meta.env.BASE_URL}img/throbber-static.gif`
 							}
 							className="browserLoaderIcon"
 							alt="Loader"
