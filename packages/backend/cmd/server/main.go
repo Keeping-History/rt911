@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/clock"
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/handler"
 	"classicy/streamer/internal/session"
@@ -99,6 +100,17 @@ func main() {
 	hub := session.NewHub(logger, envInt("MAX_SESSIONS", 0))
 	go hub.Run()
 
+	// Forced clock mode: operator-set master clock, persisted in Redis so a
+	// restart mid-session stays forced. OnChange broadcasts to every session;
+	// late joiners get their frame from the connect path in the WS handler.
+	masterClock := clock.New(rdb, logger)
+	masterClock.OnChange(func(st clock.State) { hub.BroadcastClock(st) })
+	if err := masterClock.Load(ctx); err != nil {
+		logger.Warn("master clock load failed; starting unforced", "error", err)
+	}
+	hub.SetMaster(masterClock)
+	go masterClock.Run(ctx)
+
 	addr := env("LISTEN_ADDR", ":8080")
 
 	mux := http.NewServeMux()
@@ -112,6 +124,7 @@ func main() {
 		env("GITHUB_TOKEN", ""),
 		logger,
 	))
+	mux.HandleFunc("/clock", handler.NewClockHandler(masterClock, env("CLOCK_CONTROL_KEY", ""), logger))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
