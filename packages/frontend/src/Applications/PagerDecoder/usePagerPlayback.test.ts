@@ -83,6 +83,7 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					unsubscribeWeather: vi.fn(),
 					requestWeatherForecast: vi.fn(),
 					sources: { video: [], audio: [], pager: [], usenet: [] },
+					clockForced: false,
 				},
 				children,
 			}),

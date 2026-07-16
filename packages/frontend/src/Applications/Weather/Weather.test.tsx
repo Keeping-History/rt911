@@ -235,6 +235,7 @@ function makeCtxValue(
 		subscribeWeather: () => {},
 		unsubscribeWeather: () => {},
 		requestWeatherForecast: () => {},
+		clockForced: false,
 		...overrides,
 	};
 }

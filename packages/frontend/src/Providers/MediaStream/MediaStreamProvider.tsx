@@ -17,6 +17,8 @@ import {
 	type UsenetItem,
 	type WeatherForecast,
 	type WeatherObservation,
+	type WsClockMessage,
+	type WsHeartbeatAckMessage,
 } from "./MediaStreamContext";
 import { trackAck } from "./ackTracking";
 import { decodeWireMessage } from "./wireCodec";
@@ -24,6 +26,7 @@ import { drainDue, partitionByDue } from "./revealBuffer";
 import { keepInstantItem, keepMediaItem } from "./retention";
 import { virtualUtcMs } from "./virtualClock";
 import { usePlaylist } from "../Playlist/PlaylistContext";
+import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { mergeLatestPerStation } from "./weatherMerge";
 import {
 	applyUsenetBodyFrame,
@@ -46,6 +49,12 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 
 // Jumps larger than this are treated as manual seeks rather than clock ticks
 const SEEK_THRESHOLD_MS = 90_000;
+
+// Forced clock mode: corrections smaller than this are ignored (the local
+// clock is close enough); larger ones snap to master via the sanctioned
+// setDateTimeFromUtc seam. Kept well under SEEK_THRESHOLD_MS so routine
+// corrections never clear buffers — only real operator jumps do.
+export const FORCED_DRIFT_THRESHOLD_MS = 2_000;
 
 // Heading-seed lookback: how many trailing minutes of flight positions to fetch
 // (via a small flights_history request) whenever the flights channel (re)starts
@@ -152,6 +161,8 @@ type WsIncomingMessage =
 	| WsFlightsHistoryMessage
 	| WsWeatherMessage
 	| WsWeatherForecastMessage
+	| WsClockMessage
+	| WsHeartbeatAckMessage
 	| { type: string };
 
 interface MediaStreamProviderProps {
@@ -161,7 +172,14 @@ interface MediaStreamProviderProps {
 export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	children,
 }) => {
-	const { localDate, dateTime, tzOffset } = useClassicyDateTime({ tick: true });
+	const { localDate, dateTime, tzOffset, setDateTime } = useClassicyDateTime({ tick: true });
+	// setDateTime is a fresh closure every render; the long-lived WebSocket
+	// onmessage handler (below) must always call the latest one, so it reads
+	// through a ref rather than closing over the destructured value directly.
+	const setDateTimeRef = useRef(setDateTime);
+	useEffect(() => {
+		setDateTimeRef.current = setDateTime;
+	}, [setDateTime]);
 	// Playlist availability predicate. Defaults to constant-true when no
 	// PlaylistProvider is mounted (tests) or no playlist is active; while a
 	// playlist runs, its identity changes each tick so windows open/close live.
@@ -274,6 +292,31 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	useEffect(() => {
 		utcMsRef.current = virtualUtcMs(localDate, tzOffset);
 	}, [localDate, tzOffset]);
+
+	// Forced clock mode: true while the server is driving the clock (Time
+	// Machine locked server-side). clockForcedRef mirrors the state for the
+	// long-lived socket closure, which needs the current value synchronously
+	// (state updates are not visible until the next render).
+	const [clockForced, setClockForced] = useState(false);
+	const clockForcedRef = useRef(false);
+
+	// Snap the local clock to `iso` via the sanctioned setDateTimeFromUtc seam,
+	// but only when it has drifted more than FORCED_DRIFT_THRESHOLD_MS from the
+	// master time — small corrections are ignored so routine heartbeats don't
+	// perpetually nudge the clock (and trip the seek-detection effect).
+	const applyForcedTime = useCallback((iso: string) => {
+		const masterMs = new Date(iso).getTime();
+		if (Number.isNaN(masterMs)) return;
+		if (Math.abs(masterMs - utcMsRef.current) > FORCED_DRIFT_THRESHOLD_MS) {
+			setDateTimeFromUtc(setDateTimeRef.current, iso);
+		}
+	}, []);
+
+	const setForced = useCallback((forced: boolean) => {
+		if (clockForcedRef.current === forced) return;
+		clockForcedRef.current = forced;
+		setClockForced(forced);
+	}, []);
 
 	const send = useCallback((msg: object) => {
 		const ws = wsRef.current;
@@ -919,6 +962,22 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "clock") {
+				const m = msg as WsClockMessage;
+				setForced(m.active);
+				if (m.active && m.time) applyForcedTime(m.time);
+				return;
+			}
+
+			if (msg.type === "heartbeat_ack") {
+				const m = msg as WsHeartbeatAckMessage;
+				// master_time presence IS the forced signal — self-heals a
+				// missed clock frame in either direction.
+				setForced(typeof m.master_time === "string");
+				if (m.master_time) applyForcedTime(m.master_time);
+				return;
+			}
+
 			if (msg.type !== "items" && msg.type !== "init_ack" && msg.type !== "seek_ack") return;
 
 			trackAck(msg.type, (msg as WsItemsMessage).time);
@@ -960,10 +1019,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			wsRef.current = null;
 		};
 		// Intentionally runs once on mount; utcMsRef carries the live value.
-		// sendFlightsHistoryRequest/sendFlightsSeedRequest/sendWeatherForecastRequest
-		// are stable (their only dep is the stable `send`), so listing them
-		// satisfies the lint without re-running the effect.
-	}, [sendFlightsHistoryRequest, sendFlightsSeedRequest, sendWeatherForecastRequest]);
+		// sendFlightsHistoryRequest/sendFlightsSeedRequest/sendWeatherForecastRequest/
+		// setForced/applyForcedTime are all stable (empty or `send`-only deps), so
+		// listing them satisfies the lint without re-running the effect.
+	}, [
+		sendFlightsHistoryRequest,
+		sendFlightsSeedRequest,
+		sendWeatherForecastRequest,
+		setForced,
+		applyForcedTime,
+	]);
 
 	// mp3History and sources arrive as whole frames (not through the per-second
 	// reveal tick), so the playlist gate is applied at read-out instead.
@@ -1023,6 +1088,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			subscribeWeather,
 			unsubscribeWeather,
 			requestWeatherForecast,
+			clockForced,
 		}),
 		[
 			items,
@@ -1062,6 +1128,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			subscribeWeather,
 			unsubscribeWeather,
 			requestWeatherForecast,
+			clockForced,
 		],
 	);
 

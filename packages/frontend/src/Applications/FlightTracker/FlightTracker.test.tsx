@@ -263,6 +263,7 @@ function makeCtxValue(
 		subscribeWeather: vi.fn(),
 		unsubscribeWeather: vi.fn(),
 		requestWeatherForecast: vi.fn(),
+		clockForced: false,
 		...overrides,
 	};
 }

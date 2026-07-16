@@ -175,6 +175,20 @@ export interface AvailableSources {
 	usenet: NewsgroupSource[];
 }
 
+/** Forced clock mode: the server owns the clock while active. */
+export interface WsClockMessage {
+	type: "clock";
+	active: boolean;
+	time?: string;
+}
+
+export interface WsHeartbeatAckMessage {
+	type: "heartbeat_ack";
+	time: string;
+	/** Present only while forced mode is active. */
+	master_time?: string;
+}
+
 export interface MediaStreamContextValue {
 	items: MediaItem[];
 	/** Pager items received while subscribed to the pager channel. */
@@ -272,6 +286,8 @@ export interface MediaStreamContextValue {
 	 * newer request) are dropped via an internally-managed id echo.
 	 */
 	requestWeatherForecast: (zone: string) => void;
+	/** True while the server is forcing the clock (Time Machine locked). */
+	clockForced: boolean;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -313,4 +329,5 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	subscribeWeather: () => {},
 	unsubscribeWeather: () => {},
 	requestWeatherForecast: () => {},
+	clockForced: false,
 });
