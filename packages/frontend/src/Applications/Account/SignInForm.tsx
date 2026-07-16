@@ -69,6 +69,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({
 			<ClassicyInput
 				id="account-password"
 				labelTitle="Password"
+				type="password"
 				prefillValue={password}
 				onChangeFunc={(e) => setPassword(e.target.value)}
 			/>

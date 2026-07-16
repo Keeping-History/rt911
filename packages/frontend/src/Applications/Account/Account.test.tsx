@@ -240,4 +240,11 @@ describe("Account — preview origins", () => {
 		render(<Account hostnameForTest="beta.911realtime.org" />);
 		expect(screen.getByRole("button", { name: "Sign in with Google" })).not.toBeNull();
 	});
+
+	it("masks the password field (classicy type passthrough)", () => {
+		render(<Account />);
+		expect(
+			document.getElementById("account-password")?.getAttribute("type"),
+		).toBe("password");
+	});
 });
