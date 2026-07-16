@@ -10,6 +10,8 @@ export interface AuthContextValue {
 	signInWithProvider: (provider: "google" | "facebook" | "apple") => void;
 	signOut: () => Promise<void>;
 	refresh: () => Promise<void>;
+	/** Self-service email+password registration (verify-email required). */
+	register: (email: string, password: string) => Promise<void>;
 }
 
 // Default = anonymous, no-op actions: safe for any consumer mounted outside
@@ -21,6 +23,7 @@ export const AuthContext = createContext<AuthContextValue>({
 	signInWithProvider: () => {},
 	signOut: async () => {},
 	refresh: async () => {},
+	register: async () => {},
 });
 
 export const useAuth = (): AuthContextValue => useContext(AuthContext);

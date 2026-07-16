@@ -151,3 +151,54 @@ export async function uploadAvatar(
 
 	return newId;
 }
+
+/** True when hostname IS the domain or a subdomain of it (boundary-safe). */
+export function isHostOf(hostname: string, domain: string): boolean {
+	return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
+// Registration verification links must land on an allow-listed URL
+// (USER_REGISTER_URL_ALLOW_LIST). Production origin by default; the frontend's
+// own origin when it's already on the product domain (future root-domain move).
+// Parameterized for tests — callers never pass arguments in production code.
+export function registrationLandingUrl(
+	hostname: string = window.location.hostname,
+	origin: string = window.location.origin,
+): string {
+	return isHostOf(hostname, "911realtime.org") ? `${origin}/` : "https://beta.911realtime.org/";
+}
+
+/**
+ * Self-service registration (Directus public_registration). Always 204 on the
+ * server for anti-enumeration; a thrown error here means a request-level
+ * failure (validation, allow-list), not "email exists".
+ */
+export async function register(
+	email: string,
+	password: string,
+	fetchFn: typeof fetch = fetch,
+): Promise<void> {
+	const res = await fetchFn(`${DIRECTUS_URL}/users/register`, {
+		method: "POST",
+		credentials: "include",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ email, password, verification_url: registrationLandingUrl() }),
+	});
+	if (!res.ok) throw new Error(await serverMessage(res, "Could not create the account."));
+}
+
+/** Complete seamless registration: exchange the emailed token server-side. */
+export async function verifyRegistration(
+	token: string,
+	fetchFn: typeof fetch = fetch,
+): Promise<void> {
+	const res = await fetchFn(
+		`${DIRECTUS_URL}/users/register/verify-email?token=${encodeURIComponent(token)}`,
+		{ credentials: "include" },
+	);
+	if (!res.ok) {
+		throw new Error(
+			await serverMessage(res, "This verification link is invalid or has expired."),
+		);
+	}
+}

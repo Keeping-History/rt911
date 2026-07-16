@@ -4,9 +4,11 @@ import type React from "react";
 import type { AuthUser } from "../../Providers/Auth/authApi";
 
 const mockUploadAvatar = vi.hoisted(() => vi.fn());
+const mockVerifyRegistration = vi.hoisted(() => vi.fn());
 vi.mock("../../Providers/Auth/authApi", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	uploadAvatar: mockUploadAvatar,
+	verifyRegistration: mockVerifyRegistration,
 }));
 
 // Partial classicy mock — ClassicyApp/ClassicyWindow require a real
@@ -37,6 +39,7 @@ const mockAuth = vi.hoisted(() => ({
 	signInWithProvider:  vi.fn(),
 	signOut:             vi.fn(),
 	refresh:             vi.fn(),
+	register:            vi.fn(),
 }));
 
 vi.mock("../../Providers/Auth/AuthContext", () => ({
@@ -67,7 +70,9 @@ beforeEach(() => {
 	mockAuth.signInWithProvider = vi.fn();
 	mockAuth.signOut = vi.fn();
 	mockAuth.refresh = vi.fn();
+	mockAuth.register = vi.fn();
 	mockUploadAvatar.mockReset();
+	mockVerifyRegistration.mockReset();
 });
 
 afterEach(() => {
@@ -307,6 +312,67 @@ describe("Account — email-change confirm link", () => {
 		render(<Account />);
 		expect(
 			await screen.findByText("This confirmation link is invalid or has expired."),
+		).not.toBeNull();
+	});
+});
+
+describe("Account — create an account", () => {
+	it("switches to the registration view and back", () => {
+		render(<Account />);
+		fireEvent.click(screen.getByRole("button", { name: "Create an Account" }));
+		expect(screen.getByRole("button", { name: "Create Account" })).not.toBeNull();
+		expect(screen.getByLabelText("Confirm Password")).not.toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Back to Sign In" }));
+		expect(screen.getByRole("button", { name: "Sign In" })).not.toBeNull();
+	});
+	it("validates locally before calling register", async () => {
+		render(<Account />);
+		fireEvent.click(screen.getByRole("button", { name: "Create an Account" }));
+		fireEvent.change(screen.getByLabelText("Email"), { target: { value: "t@x.org" } });
+		fireEvent.change(screen.getByLabelText("Password"), { target: { value: "short" } });
+		fireEvent.change(screen.getByLabelText("Confirm Password"), { target: { value: "short" } });
+		fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
+		expect(await screen.findByText("Password must be at least 8 characters.")).not.toBeNull();
+		expect(mockAuth.register).not.toHaveBeenCalled();
+		fireEvent.change(screen.getByLabelText("Password"), { target: { value: "longenough1" } });
+		fireEvent.change(screen.getByLabelText("Confirm Password"), { target: { value: "different1" } });
+		fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
+		expect(await screen.findByText("Passwords do not match.")).not.toBeNull();
+	});
+	it("registers and shows the check-your-email state", async () => {
+		mockAuth.register.mockResolvedValue(undefined);
+		render(<Account />);
+		fireEvent.click(screen.getByRole("button", { name: "Create an Account" }));
+		fireEvent.change(screen.getByLabelText("Email"), { target: { value: "t@x.org" } });
+		fireEvent.change(screen.getByLabelText("Password"), { target: { value: "longenough1" } });
+		fireEvent.change(screen.getByLabelText("Confirm Password"), { target: { value: "longenough1" } });
+		fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
+		await waitFor(() => expect(mockAuth.register).toHaveBeenCalledWith("t@x.org", "longenough1"));
+		expect(
+			await screen.findByText("Check your email to verify your account, then sign in."),
+		).not.toBeNull();
+	});
+});
+
+describe("Account — registration verification link", () => {
+	it("verifies the ?token= param and shows the verified banner", async () => {
+		window.history.pushState({}, "", "/?token=regtok1");
+		mockVerifyRegistration.mockResolvedValue(undefined);
+		render(<Account />);
+		await waitFor(() => expect(mockVerifyRegistration).toHaveBeenCalledWith("regtok1"));
+		expect(
+			await screen.findByText("Email verified — you can now sign in."),
+		).not.toBeNull();
+		expect(window.location.search).not.toContain("token");
+	});
+	it("renders the verification error verbatim", async () => {
+		window.history.pushState({}, "", "/?token=expired");
+		mockVerifyRegistration.mockRejectedValue(
+			new Error("This verification link is invalid or has expired."),
+		);
+		render(<Account />);
+		expect(
+			await screen.findByText("This verification link is invalid or has expired."),
 		).not.toBeNull();
 	});
 });
