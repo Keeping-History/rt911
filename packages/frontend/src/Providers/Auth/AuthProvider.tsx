@@ -60,7 +60,6 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
 		await apiRegister(email, password);
 	}, []);
 
-
 	const value = useMemo<AuthContextValue>(
 		() => ({ status, user, signInWithEmail, signInWithProvider, signOut, refresh, register }),
 		[status, user, signInWithEmail, signInWithProvider, signOut, refresh, register],

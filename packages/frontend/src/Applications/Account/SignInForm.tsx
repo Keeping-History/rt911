@@ -1,6 +1,7 @@
 import type React from "react";
 import { useState } from "react";
 import { ClassicyButton, ClassicyInput } from "classicy";
+import { isHostOf } from "../../Providers/Auth/authApi";
 
 type Provider = "google" | "facebook" | "apple";
 
@@ -40,11 +41,15 @@ export const SignInForm: React.FC<SignInFormProps> = ({
 	const hostname = hostnameForTest ?? window.location.hostname;
 	const reason   = new URLSearchParams(window.location.search).get("reason");
 
-	if (hostname.endsWith("github.io")) {
+	if (isHostOf(hostname, "github.io")) {
 		return <div>Sign-in is unavailable on preview builds.</div>;
 	}
 
-	const canSubmit = !submitting && email.trim() !== "" && password.trim() !== "";
+	const canSubmit =
+		!submitting &&
+		email.trim() !== "" &&
+		password.trim() !== "" &&
+		(view === "signin" || confirmPw.trim() !== "");
 
 	const handleSignIn = () => {
 		if (!canSubmit) return;

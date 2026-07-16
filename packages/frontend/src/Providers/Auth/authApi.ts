@@ -152,12 +152,20 @@ export async function uploadAvatar(
 	return newId;
 }
 
+/** True when hostname IS the domain or a subdomain of it (boundary-safe). */
+export function isHostOf(hostname: string, domain: string): boolean {
+	return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
 // Registration verification links must land on an allow-listed URL
 // (USER_REGISTER_URL_ALLOW_LIST). Production origin by default; the frontend's
 // own origin when it's already on the product domain (future root-domain move).
-function registrationLandingUrl(): string {
-	const { hostname, origin } = window.location;
-	return hostname.endsWith("911realtime.org") ? `${origin}/` : "https://beta.911realtime.org/";
+// Parameterized for tests — callers never pass arguments in production code.
+export function registrationLandingUrl(
+	hostname: string = window.location.hostname,
+	origin: string = window.location.origin,
+): string {
+	return isHostOf(hostname, "911realtime.org") ? `${origin}/` : "https://beta.911realtime.org/";
 }
 
 /**

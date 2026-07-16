@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { avatarUrl, fetchMe, loginEmail, logout, providerLoginUrl, register, uploadAvatar, verifyRegistration } from "./authApi";
+import { avatarUrl, fetchMe, isHostOf, loginEmail, logout, providerLoginUrl, register, registrationLandingUrl, uploadAvatar, verifyRegistration } from "./authApi";
 import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -218,5 +218,32 @@ describe("verifyRegistration", () => {
 			new Response(JSON.stringify({ errors: [{ message: "Invalid token." }] }), { status: 401 }),
 		);
 		await expect(verifyRegistration("bad", f)).rejects.toThrow(/invalid|expired/i);
+	});
+});
+
+describe("registrationLandingUrl", () => {
+	it("uses the current origin on the product domain (and subdomains)", () => {
+		expect(registrationLandingUrl("beta.911realtime.org", "https://beta.911realtime.org")).toBe(
+			"https://beta.911realtime.org/",
+		);
+		expect(registrationLandingUrl("911realtime.org", "https://911realtime.org")).toBe(
+			"https://911realtime.org/",
+		);
+	});
+	it("falls back to beta elsewhere, with boundary-safe matching", () => {
+		expect(registrationLandingUrl("localhost", "http://localhost:5173")).toBe(
+			"https://beta.911realtime.org/",
+		);
+		expect(registrationLandingUrl("evil911realtime.org", "https://evil911realtime.org")).toBe(
+			"https://beta.911realtime.org/",
+		);
+	});
+});
+
+describe("isHostOf", () => {
+	it("matches the domain and subdomains, never suffix-lookalikes", () => {
+		expect(isHostOf("github.io", "github.io")).toBe(true);
+		expect(isHostOf("keeping-history.github.io", "github.io")).toBe(true);
+		expect(isHostOf("notgithub.io", "github.io")).toBe(false);
 	});
 });
