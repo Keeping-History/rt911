@@ -22,6 +22,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { radioTuneStation } from "../../Applications/RadioScanner/RadioScannerContext";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { tvTuneChannel } from "../../Applications/TV/TVContext";
 import { virtualUtcMs } from "../MediaStream/virtualClock";
@@ -50,7 +51,7 @@ type Dispatch = (action: ActionMessage) => void;
 const FOCUS_DISPATCHERS: Record<PlaylistApp | "browser", (d: Dispatch, itemId: string) => void> =
 	{
 		tv: (d, itemId) => d(tvTuneChannel(itemId)),
-		radio: () => console.warn("playlist: focus for radio not wired yet"),
+		radio: (d, itemId) => d(radioTuneStation(itemId)),
 		news: () => console.warn("playlist: focus for news not wired yet"),
 		flights: () => console.warn("playlist: focus for flights not wired yet"),
 		browser: () => console.warn("playlist: browser navigate not wired yet"),
@@ -206,8 +207,8 @@ export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
 	// --- State: locked-focus reconciliation ----------------------------------
 	// Each participating app publishes its current selection into its store
-	// data (contract in the plan: TV.currentChannel, RadioScanner.
-	// activeStationSlug, News.openDocuments, FlightTracker.focusedFlight).
+	// data (contract: TV.currentChannel, RadioScanner.activeStation,
+	// News.openDocuments, FlightTracker.focusedFlight).
 	useEffect(() => {
 		if (!definition) return;
 		for (const [app, itemId] of snapshot.lockedFocus) {
@@ -217,7 +218,7 @@ export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 				app === "tv"
 					? (data.currentChannel as string | undefined)
 					: app === "radio"
-						? (data.activeStationSlug as string | undefined)
+						? (data.activeStation as string | undefined)
 						: app === "flights"
 							? (data.focusedFlight as string | undefined)
 							: undefined; // news uses openDocuments below

@@ -1,6 +1,6 @@
 import type { ClassicyStore } from "classicy";
 import { describe, expect, it } from "vitest";
-import { classicyRadioScannerEventHandler } from "./RadioScannerContext";
+import { classicyRadioScannerEventHandler, radioTuneStation } from "./RadioScannerContext";
 
 function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 	return {
@@ -99,5 +99,24 @@ describe("classicyRadioScannerEventHandler settings", () => {
 			mutedItems: [7],
 			settings,
 		});
+	});
+});
+
+describe("classicyRadioScannerEventHandler — remote tune command", () => {
+	it("writes a seq-command with the station slug", () => {
+		const ds = storeWithApp();
+		const out = classicyRadioScannerEventHandler(ds, radioTuneStation("wnyc"));
+		expect(
+			out.System.Manager.Applications.apps["RadioScanner.app"].data,
+		).toMatchObject({ command: { seq: 1, kind: "tune", station: "wnyc" } });
+	});
+
+	it("increments seq monotonically across commands", () => {
+		const ds = storeWithApp();
+		classicyRadioScannerEventHandler(ds, radioTuneStation("wnyc"));
+		const out = classicyRadioScannerEventHandler(ds, radioTuneStation("wabc"));
+		expect(
+			out.System.Manager.Applications.apps["RadioScanner.app"].data,
+		).toMatchObject({ command: { seq: 2, kind: "tune", station: "wabc" } });
 	});
 });
