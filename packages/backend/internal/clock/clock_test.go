@@ -90,18 +90,25 @@ func TestLoadRestoresPersistedState(t *testing.T) {
 func TestOnChangeFiresOnceForLocalApply(t *testing.T) {
 	mc, _, done := newTestClock(t)
 	defer done()
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	fired := make(chan State, 4)
 	mc.OnChange(func(st State) { fired <- st })
 
+	// Start Run() on the same instance to receive the pub/sub echo.
+	go mc.Run(ctx)
+	time.Sleep(50 * time.Millisecond) // let the subscription attach
+
 	if err := mc.Set(ctx, time.Date(2001, 9, 11, 13, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
+	// The Set call fires onChange directly (setLocal after apply).
 	st := <-fired
 	if !st.Active {
 		t.Fatal("expected active state in change callback")
 	}
+	// The pub/sub echo should be deduped: setLocal checks equality before firing onChange.
 	select {
 	case extra := <-fired:
 		t.Fatalf("unexpected second onChange: %+v", extra)
@@ -136,5 +143,26 @@ func TestRunAppliesPublishedState(t *testing.T) {
 	}
 	if _, ok := mc2.Now(); !ok {
 		t.Fatal("mc2 should be active after pub/sub apply")
+	}
+}
+
+func TestRunExitsOnContextCancel(t *testing.T) {
+	mc, _, done := newTestClock(t)
+	defer done()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	runDone := make(chan struct{})
+	go func() {
+		mc.Run(ctx)
+		close(runDone)
+	}()
+	time.Sleep(50 * time.Millisecond) // let the subscription attach
+
+	cancel()
+	select {
+	case <-runDone:
+		// Success: Run() exited when ctx was canceled
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not exit when context was canceled")
 	}
 }

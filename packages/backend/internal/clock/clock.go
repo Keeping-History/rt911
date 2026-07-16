@@ -143,6 +143,7 @@ func (m *MasterClock) Load(ctx context.Context) error {
 func (m *MasterClock) Run(ctx context.Context) {
 	sub := m.rdb.Subscribe(ctx, redisChannel)
 	defer sub.Close()
+	go func() { <-ctx.Done(); sub.Close() }()
 	for msg := range sub.Channel() {
 		var st State
 		if err := json.Unmarshal([]byte(msg.Payload), &st); err != nil {
