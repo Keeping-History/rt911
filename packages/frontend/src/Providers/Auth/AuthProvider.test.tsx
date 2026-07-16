@@ -111,61 +111,76 @@ describe("AuthProvider", () => {
 	});
 
 	it("signInWithEmail rethrows loginEmail's error and leaves status unchanged", async () => {
-		fetchMe.mockResolvedValue(null);
-		const { getByTestId } = render(
-			<AuthProvider>
-				<Probe />
-			</AuthProvider>,
-		);
-		await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
+		// Start SIGNED IN (not the default anonymous) so "status unchanged" is a
+		// meaningful assertion: if a bug swallowed the rejection and ran
+		// refresh() anyway, or corrupted status in a catch branch, this would
+		// visibly flip away from "signedIn" instead of trivially staying at
+		// whatever the boot default already was.
+		fetchMe.mockResolvedValue(user1);
 
-		loginEmail.mockRejectedValue(new Error("Invalid user credentials."));
-
-		// Call the context function directly so we can assert the rejection
-		// (the Probe button swallows it via `void`).
+		// Single provider instance exposes both the status probe AND the
+		// signInWithEmail trigger, so the query and the exercised instance are
+		// provably the same DOM tree (getByTestId binds to document.body, which
+		// only ever contains one instance's markup here).
 		let caught: unknown;
-		const Direct: FC = () => {
-			const { signInWithEmail } = useAuth();
+		const ProbeWithSignIn: FC = () => {
+			const { status, signInWithEmail } = useAuth();
 			return (
-				<button
-					onClick={() => {
-						signInWithEmail("t@x.org", "wrong").catch((e) => {
-							caught = e;
-						});
-					}}
-				>
-					direct sign in
-				</button>
+				<div>
+					<p data-testid="status">{status}</p>
+					<button
+						onClick={() => {
+							signInWithEmail("t@x.org", "wrong").catch((e) => {
+								caught = e;
+							});
+						}}
+					>
+						attempt sign in
+					</button>
+				</div>
 			);
 		};
-		const { getByText } = render(
+
+		const { getByTestId, getByText } = render(
 			<AuthProvider>
-				<Direct />
+				<ProbeWithSignIn />
 			</AuthProvider>,
 		);
-		fireEvent.click(getByText("direct sign in"));
+		await waitFor(() => expect(getByTestId("status").textContent).toBe("signedIn"));
+
+		loginEmail.mockRejectedValue(new Error("Invalid user credentials."));
+		fireEvent.click(getByText("attempt sign in"));
+
 		await waitFor(() => expect(caught).toBeInstanceOf(Error));
-		expect(getByTestId("status").textContent).toBe("anonymous");
+		expect(getByTestId("status").textContent).toBe("signedIn");
 	});
 
 	it("signInWithProvider navigates to the provider login URL", async () => {
 		fetchMe.mockResolvedValue(null);
 		const assignSpy = vi.fn();
+		const originalLocation = Object.getOwnPropertyDescriptor(window, "location");
 		Object.defineProperty(window, "location", {
 			value: { ...window.location, assign: assignSpy, href: "https://beta.911realtime.org/" },
 			writable: true,
+			configurable: true,
 		});
-		const { getByTestId, getByText } = render(
-			<AuthProvider>
-				<Probe />
-			</AuthProvider>,
-		);
-		await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
-		fireEvent.click(getByText("sign in google"));
-		expect(providerLoginUrl).toHaveBeenCalledWith("google", "https://beta.911realtime.org/");
-		expect(assignSpy).toHaveBeenCalledWith(
-			"https://api.example/auth/login/google?redirect=" +
-				encodeURIComponent("https://beta.911realtime.org/"),
-		);
+		try {
+			const { getByTestId, getByText } = render(
+				<AuthProvider>
+					<Probe />
+				</AuthProvider>,
+			);
+			await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
+			fireEvent.click(getByText("sign in google"));
+			expect(providerLoginUrl).toHaveBeenCalledWith("google", "https://beta.911realtime.org/");
+			expect(assignSpy).toHaveBeenCalledWith(
+				"https://api.example/auth/login/google?redirect=" +
+					encodeURIComponent("https://beta.911realtime.org/"),
+			);
+		} finally {
+			// Restore the real window.location so later tests (and test-order
+			// changes) can't be poisoned by this replacement.
+			if (originalLocation) Object.defineProperty(window, "location", originalLocation);
+		}
 	});
 });
