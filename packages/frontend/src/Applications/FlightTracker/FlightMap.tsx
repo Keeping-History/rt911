@@ -43,6 +43,7 @@ import {
 	sweepTrailGeoJSON,
 } from "./flightRadar";
 import {
+	ALT_EXAGGERATION,
 	type AltitudeSample,
 	altitudeFtAt,
 	exaggeratedHeightM,
@@ -631,7 +632,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// Projection/pitch-style load-time seed for the terrain mesh: the
 			// [terrain] effect below skips pre-load renders.
 			if (colorsRef.current.terrain)
-				map.setTerrain({ source: TERRAIN_SOURCE, exaggeration: 1 });
+				map.setTerrain({ source: TERRAIN_SOURCE, exaggeration: ALT_EXAGGERATION });
 			// Now that every layer exists, resolve the pitch × cluster visibility
 			// matrix ONCE from the actual camera. The jumpTo pitch seed above
 			// fires "pitch" BEFORE the layers are added (its handler skips layer
@@ -932,7 +933,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		map.setTerrain(terrain ? { source: TERRAIN_SOURCE, exaggeration: 1 } : null);
+		// Terrain shares the aircraft altitude exaggeration so mountains stay in
+		// proportion to the rendered flights. Safe against burial: a plane's MSL
+		// altitude is always ≥ the ground's, so scaling both by the same factor
+		// keeps every plane above the mesh.
+		map.setTerrain(terrain ? { source: TERRAIN_SOURCE, exaggeration: ALT_EXAGGERATION } : null);
 		dirtyRef.current = true;
 	}, [terrain]);
 

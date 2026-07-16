@@ -1,7 +1,7 @@
 # Flight Tracker 3D terrain + hillshade — design
 
 **Date:** 2026-07-16
-**Status:** Approved (brainstorming session with Robbie)
+**Status:** Implemented 2026-07-16 (see plans/flight-map-3d-terrain-plan.md; archive shipped at z0–10, terrain exaggeration raised to ALT_EXAGGERATION post-verification)
 **Scope:** `packages/frontend` (FlightTracker + shared basemap), one new DEM archive on Wasabi, a `scripts/` build doc.
 **Companion spec:** [satellite-imagery-global-period-design.md](satellite-imagery-global-period-design.md) — independent data pipeline; neither blocks the other.
 
@@ -16,7 +16,7 @@ Both effects apply to **all three basemap styles** (classic, radar, satellite) a
 
 ## Non-goals
 
-- No vertical-exaggeration slider (fixed 1×).
+- No vertical-exaggeration slider (fixed value; set to ALT_EXAGGERATION post-verification — see below).
 - No terrain for the Weather app map (shares `lib/basemap`; may opt in later — this design must not preclude it).
 - No contour-line rendering.
 - No change to the plane-altitude exaggeration model (`ALT_EXAGGERATION = 10` stays).
@@ -27,7 +27,7 @@ One new archive at `https://files.911realtime.org/maps/terrain-dem.pmtiles`:
 
 - **Encoding:** terrarium (`raster-dem` `"encoding": "terrarium"`).
 - **Extent:** North-America bbox `[-150, 18, -65, 65]` — matches the satellite archives.
-- **Zoom:** 0–11 over the bbox (regional relief; flight-scale viewing never needs street-level DEM).
+- **Zoom:** 0–10 over the bbox (z11 measured 36 GB vs z10's 12 GB during the build; MapLibre overzooms raster-dem past native max acceptably — see scripts/build-terrain-dem.md for the size table).
 - **Production (preferred):** `pmtiles extract` from Mapterhorn's published planet terrain archive (terrarium, 512px tiles). Mapterhorn's site rejected automated fetches during design; verify the archive URL/licensing at implementation time.
 - **Production (fallback):** assemble from AWS Open Data `elevation-tiles-prod` terrarium PNGs (no auth) → mbtiles → pmtiles.
 - **Docs:** build steps recorded in `scripts/build-terrain-dem.md`, beside `scripts/build-satellite-basemap.md`. Attribution string recorded in the source spec (Mapterhorn aggregates USGS 3DEP and other open DEMs).
@@ -51,14 +51,14 @@ The superset-style contract is preserved: every source/layer always present, act
 - New `terrain: boolean` in `FlightMapSettings` (`flightMapSettings.ts`), **default `true`**, persisted with the existing per-field-fallback merge (no migration needed).
 - Toggle button in `MapControls` beside `globe`/`cluster`/`threeD`, same interaction/visual conventions (issues #218/#222/#223 lineage).
 - Effect in `FlightMap`:
-  - **On:** active style's hillshade visible; `map.setTerrain({ source: "terrain", exaggeration: 1 })`.
+  - **On:** active style's hillshade visible; `map.setTerrain({ source: "terrain", exaggeration: ALT_EXAGGERATION })` (10× — updated 2026-07-16: 1× terrain read as disproportionately flat against the 10×-exaggerated flights, so the mesh shares the aircraft factor).
   - **Off:** all hillshade hidden; `map.setTerrain(null)`.
 - Terrain works under both mercator and globe projection (MapLibre v5); no coupling to the `globe` or `threeD` toggles.
 - The Weather map passes no terrain flag and gets today's behavior unchanged.
 
 ## Coexistence with custom 3D layers
 
-- **No geometry can ever be buried.** `alt_ft` values are MSL and all 3D geometry renders at `ALT_EXAGGERATION = 10`× while terrain renders at 1×. Ground elevation at any point is ≤ the MSL altitude of anything at or above that ground, so `10×alt_ft ≥ 1×terrain` everywhere — including landed planes at high-elevation airports and the notables' crash-site samples. No `queryTerrainElevation` offsets are needed (an earlier draft proposed them; the exaggeration asymmetry makes them dead code).
+- **No geometry can ever be buried.** `alt_ft` values are MSL and all 3D geometry renders at `ALT_EXAGGERATION = 10`× while terrain shares the same 10× factor (originally 1×; raised 2026-07-16 for proportionality). Ground elevation at any point is ≤ the MSL altitude of anything at or above that ground, so scaling both by the same factor keeps `10×alt_ft ≥ 10×terrain` everywhere — including landed planes at high-elevation airports and the notables' crash-site samples. No `queryTerrainElevation` offsets are needed (an earlier draft proposed them; the exaggeration asymmetry makes them dead code).
 - **2D layers** (plane icons, replay-trail circles, cluster circles, trails, track line) drape onto the terrain mesh automatically — MapLibre's render-to-texture pass handles them.
 - `projectTileFor3D` already abstracts mercator/globe projection for the custom layers; terrain alters the ground mesh and depth buffer, not their coordinate pipeline. A mountain between the camera and a tube/plane may now correctly occlude it.
 - **Risk:** custom-layer depth interaction with MapLibre's terrain render-to-texture pass is the least-documented corner. Mitigation: verify early in implementation with a pitched-over-Rockies smoke test; if depth artifacts appear, fall back to enabling the 3D mesh only while `threeD` mode is active (hillshade stays global) — a one-line policy change in the toggle effect.
