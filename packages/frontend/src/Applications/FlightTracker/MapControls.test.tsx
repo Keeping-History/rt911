@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { pinpointById } from "./mapPinpoints";
 import { MapControls, type MapControlsProps } from "./MapControls";
 
 afterEach(cleanup);
@@ -77,7 +78,10 @@ describe("MapControls", () => {
 		expect(placeholder.disabled).toBe(true);
 		expect(dd.value).toBe(placeholder.value);
 		fireEvent.change(dd, { target: { value: "pentagon" } });
-		expect(p.onPinpoint).toHaveBeenCalledWith([-77.0563, 38.8719], 10.5);
+		const pentagon = pinpointById("pentagon")!;
+		// Assert against the data table, not a hardcoded copy — zoom tuning is a
+		// product decision this test must follow, not police.
+		expect(p.onPinpoint).toHaveBeenCalledWith(pentagon.center, pentagon.zoom);
 		// Remounted onto the placeholder — the picked value never sticks.
 		expect(selectById("flight_map_pinpoints").value).toBe(placeholder.value);
 	});
