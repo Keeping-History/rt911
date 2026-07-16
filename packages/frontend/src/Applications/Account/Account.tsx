@@ -11,7 +11,7 @@ import appIconPng from "./app.png";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
-import { avatarUrl, uploadAvatar } from "../../Providers/Auth/authApi";
+import { avatarUrl, uploadAvatar, verifyRegistration } from "../../Providers/Auth/authApi";
 import { confirmEmailChange } from "../../Providers/Auth/profileApi";
 import { ProfileEditor } from "./ProfileEditor";
 import { SignInForm } from "./SignInForm";
@@ -39,7 +39,7 @@ export interface AccountProps {
 }
 
 export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
-	const { status, user, signInWithEmail, signInWithProvider, signOut, refresh } = useAuth();
+	const { status, user, signInWithEmail, signInWithProvider, signOut, refresh, register } = useAuth();
 	const [avatarUploading, setAvatarUploading] = useState(false);
 	const [avatarError, setAvatarError] = useState<string | null>(null);
 
@@ -56,6 +56,29 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 		}
 		return token;
 	});
+	// Seamless-registration landing: Directus appends ?token=<t> to the
+	// verification_url. Verified anonymously (the user isn't signed in yet);
+	// ref-guarded against StrictMode double-fire like the confirm-email flow.
+	const [regToken] = useState<string | null>(() => {
+		const params = new URLSearchParams(window.location.search);
+		const token = params.get("token");
+		if (token) {
+			params.delete("token");
+			const rest = params.toString();
+			window.history.replaceState({}, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+		}
+		return token;
+	});
+	const [regResult, setRegResult] = useState<string | null>(null);
+	const regSentRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!regToken || regSentRef.current === regToken) return;
+		regSentRef.current = regToken;
+		verifyRegistration(regToken)
+			.then(() => setRegResult("Email verified — you can now sign in."))
+			.catch((err: Error) => setRegResult(err.message));
+	}, [regToken]);
+
 	const [confirmResult, setConfirmResult] = useState<string | null>(null);
 	// Ref guard, not just state: StrictMode double-invokes effects against the
 	// same render closure, so setConfirmToken(null) alone would still send the
@@ -143,6 +166,7 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 				modal={false}
 				appMenu={appMenu}
 			>
+				{regResult && <div>{regResult}</div>}
 				{confirmBanner && <div>{confirmBanner}</div>}
 				{status === "loading" ? (
 					<div />
@@ -173,6 +197,7 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 					<SignInForm
 						onSignInWithEmail={signInWithEmail}
 						onSignInWithProvider={signInWithProvider}
+						onRegister={register}
 						hostnameForTest={hostnameForTest}
 					/>
 				)}

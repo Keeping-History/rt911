@@ -2,7 +2,9 @@
 // ClassicyStore; every reload re-derives status from the httpOnly session
 // cookie via fetchMe(), same non-persistence stance as PlaylistProvider.
 import { type FC, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchMe, loginEmail, logout, providerLoginUrl, type AuthUser } from "./authApi";
+import { fetchMe, loginEmail, logout, providerLoginUrl, type AuthUser,
+	register as apiRegister,
+} from "./authApi";
 import { AuthContext, type AuthContextValue, type AuthStatus } from "./AuthContext";
 
 export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
@@ -52,9 +54,16 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
 		setStatus("anonymous");
 	}, []);
 
+	// Registration does NOT sign the user in: verify-email is required first,
+	// so success just means "confirmation email sent".
+	const register = useCallback(async (email: string, password: string) => {
+		await apiRegister(email, password);
+	}, []);
+
+
 	const value = useMemo<AuthContextValue>(
-		() => ({ status, user, signInWithEmail, signInWithProvider, signOut, refresh }),
-		[status, user, signInWithEmail, signInWithProvider, signOut, refresh],
+		() => ({ status, user, signInWithEmail, signInWithProvider, signOut, refresh, register }),
+		[status, user, signInWithEmail, signInWithProvider, signOut, refresh, register],
 	);
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
