@@ -922,6 +922,8 @@ export const FlightTracker: FC = () => {
 						onPinpoint={(center, zoom) => mapApi.current?.flyTo(center, zoom)}
 						onSetMapStyle={setMapStyle}
 						onToggleDarkMap={toggleDarkMap}
+						filterOn={!!visibleFlights}
+						onOpenFilter={openFilter}
 					/>
 					<div className={styles.body}>
 						<div className={styles.map}>
@@ -964,11 +966,6 @@ export const FlightTracker: FC = () => {
 							/>
 						</div>
 						<div className={styles.filterPanel}>
-							<div className={styles.filterButtonRow}>
-								<ClassicyButton onClickFunc={openFilter}>
-									{visibleFlights ? "Filter (on)…" : "Filter…"}
-								</ClassicyButton>
-							</div>
 							<FlightDetailPanel
 								selected={selected}
 								track={track}

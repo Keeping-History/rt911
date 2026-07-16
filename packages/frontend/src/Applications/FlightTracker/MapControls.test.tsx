@@ -11,6 +11,7 @@ const baseProps = (): MapControlsProps => ({
 	selectMode: "off",
 	mapStyle: "classic",
 	darkMap: false,
+	filterOn: false,
 	onZoomIn: vi.fn(),
 	onZoomOut: vi.fn(),
 	onToggleGlobe: vi.fn(),
@@ -20,6 +21,7 @@ const baseProps = (): MapControlsProps => ({
 	onPinpoint: vi.fn(),
 	onSetMapStyle: vi.fn(),
 	onToggleDarkMap: vi.fn(),
+	onOpenFilter: vi.fn(),
 });
 
 // ClassicyPopUpMenu's label isn't wired to the select for a11y-name queries,
@@ -101,6 +103,19 @@ describe("MapControls", () => {
 		expect(dark.disabled).toBe(false);
 		fireEvent.click(dark);
 		expect(p.onToggleDarkMap).toHaveBeenCalledOnce();
+	});
+
+	it("filter button opens the filter window and reflects an active filter", () => {
+		const p = baseProps();
+		const { rerender } = render(<MapControls {...p} />);
+		const filter = screen.getByRole("button", { name: "Filter flights" });
+		expect(filter.textContent).toBe("Filter…");
+		expect(filter.getAttribute("aria-pressed")).toBeNull();
+		fireEvent.click(filter);
+		expect(p.onOpenFilter).toHaveBeenCalledOnce();
+		rerender(<MapControls {...p} filterOn={true} />);
+		expect(filter.textContent).toBe("Filter (on)…");
+		expect(filter.getAttribute("aria-pressed")).toBe("true");
 	});
 
 	it("radar scope disables the dark toggle and shows it unpressed, keeping darkMap", () => {

@@ -9,13 +9,14 @@ import type { TrackTube } from "./trackTube";
 
 const VERTEX_BODY = `
 in vec4 a_center; // mercX, mercY, elevExaggeratedMeters, mercUnitsPerMeter
-in vec3 a_offset; // ENU unit offset from the centerline (also the normal)
+in vec4 a_offset; // ENU unit offset from the centerline (xyz, also the normal) + fade (w)
 
 uniform float u_radius; // meters
 uniform vec3 u_color;
 uniform float u_shaded; // 1 = light by the offset normal (tube), 0 = flat (ribbon)
 
 out vec3 v_color;
+out float v_alpha;
 
 const vec3 LIGHT = vec3(0.30151, 0.30151, 0.90453); // pre-normalized
 
@@ -28,8 +29,9 @@ void main() {
 #else
 	gl_Position = projectTileFor3D(posMerc, elevMeters * a_center.w);
 #endif
-	float shade = mix(1.0, 0.6 + 0.4 * max(dot(a_offset, LIGHT), 0.0), u_shaded);
+	float shade = mix(1.0, 0.6 + 0.4 * max(dot(a_offset.xyz, LIGHT), 0.0), u_shaded);
 	v_color = u_color * shade;
+	v_alpha = a_offset.w;
 }
 `;
 
@@ -39,9 +41,11 @@ const FRAGMENT_SOURCE = `#version 300 es
 precision mediump float;
 uniform float u_opacity;
 in vec3 v_color;
+in float v_alpha;
 out vec4 fragColor;
 void main() {
-	fragColor = vec4(v_color * u_opacity, u_opacity);
+	float a = u_opacity * v_alpha;
+	fragColor = vec4(v_color * a, a);
 }
 `;
 
@@ -232,7 +236,7 @@ ${VERTEX_BODY}`;
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.offsetBuffer);
 		if (this.geometryDirty) gl.bufferData(gl.ARRAY_BUFFER, this.offsets, gl.DYNAMIC_DRAW);
 		gl.enableVertexAttribArray(A_OFFSET);
-		gl.vertexAttribPointer(A_OFFSET, 3, gl.FLOAT, false, 0, 0);
+		gl.vertexAttribPointer(A_OFFSET, 4, gl.FLOAT, false, 0, 0);
 		this.geometryDirty = false;
 
 		// Premultiplied-alpha blending to match the fragment output; opaque

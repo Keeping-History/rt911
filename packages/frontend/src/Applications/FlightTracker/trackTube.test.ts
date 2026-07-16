@@ -4,7 +4,7 @@ import type { AltitudeSample } from "./flightAltitude";
 import { exaggeratedHeightM } from "./flightAltitude";
 import { type MotionBuffer, updateMotion } from "./flightMotion";
 import { lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
-import { TUBE_SIDES, buildTrackTube, buildTrailTubes, splineTrack } from "./trackTube";
+import { TUBE_SIDES, buildTrackTube, buildTrailTubes, splineTrack, trailFadeAt } from "./trackTube";
 
 const sample = (lon: number, lat: number, alt_ft: number, i = 0): AltitudeSample => ({
 	lon, lat, alt_ft, utc: new Date(Date.UTC(2001, 8, 11, 13, i)).toISOString(),
@@ -75,14 +75,16 @@ describe("buildTrackTube", () => {
 		expect(tube.vertexCount).toBeGreaterThan(0);
 		expect(tube.vertexCount % 3).toBe(0); // whole triangles
 		expect(tube.centers).toHaveLength(tube.vertexCount * 4);
-		expect(tube.offsets).toHaveLength(tube.vertexCount * 3);
+		expect(tube.offsets).toHaveLength(tube.vertexCount * 4);
 		for (let v = 0; v < tube.vertexCount; v++) {
-			const [ox, oy, oz] = [
-				tube.offsets[v * 3],
-				tube.offsets[v * 3 + 1],
-				tube.offsets[v * 3 + 2],
+			const [ox, oy, oz, alpha] = [
+				tube.offsets[v * 4],
+				tube.offsets[v * 4 + 1],
+				tube.offsets[v * 4 + 2],
+				tube.offsets[v * 4 + 3],
 			];
 			expect(Math.hypot(ox, oy, oz)).toBeCloseTo(1, 5);
+			expect(alpha).toBe(1); // the selected track never fades
 			// Mercator scale rides in .w so the shader can size the radius and
 			// elevation without knowing latitude.
 			const mpm = tube.centers[v * 4 + 3];
@@ -135,14 +137,28 @@ describe("buildTrailTubes (smooth 3D trail ribbons)", () => {
 		expect(tube.vertexCount).toBeGreaterThan(0);
 		expect(tube.vertexCount % 3).toBe(0);
 		expect(tube.centers).toHaveLength(tube.vertexCount * 4);
-		expect(tube.offsets).toHaveLength(tube.vertexCount * 3);
+		expect(tube.offsets).toHaveLength(tube.vertexCount * 4);
 		for (let v = 0; v < tube.vertexCount; v++) {
-			const [ox, oy, oz] = [
-				tube.offsets[v * 3], tube.offsets[v * 3 + 1], tube.offsets[v * 3 + 2],
+			const [ox, oy, oz, alpha] = [
+				tube.offsets[v * 4], tube.offsets[v * 4 + 1],
+				tube.offsets[v * 4 + 2], tube.offsets[v * 4 + 3],
 			];
 			expect(Math.hypot(ox, oy, oz)).toBeCloseTo(1, 5);
 			expect(oz).toBe(0); // ribbon offsets are horizontal
+			expect(alpha).toBeGreaterThanOrEqual(0);
+			expect(alpha).toBeLessThanOrEqual(1);
 		}
+	});
+
+	it("fades the ribbon from opaque at the plane to transparent at the tip", () => {
+		const tube = buildTrailTubes(buf(), T0 + 2 * 60_000, {
+			displayPoints: 20, steps: 1, headOffsetM: 0,
+		});
+		// Vertices are emitted oldest ring -> newest: the FIRST vertex sits on
+		// the oldest tip (100% from the plane, alpha 0) and the LAST on the
+		// head ring (0% from the plane, alpha 1).
+		expect(tube.offsets[3]).toBeCloseTo(0, 5);
+		expect(tube.offsets[(tube.vertexCount - 1) * 4 + 3]).toBeCloseTo(1, 5);
 	});
 
 	it("head rides at the plane's GLIDED altitude and pulls back to the tail", () => {
@@ -189,5 +205,25 @@ describe("buildTrailTubes (smooth 3D trail ribbons)", () => {
 		expect(buildTrailTubes(single, T0, {
 			displayPoints: 20, steps: 1, headOffsetM: 0,
 		}).vertexCount).toBe(0);
+	});
+});
+
+describe("trailFadeAt", () => {
+	it("follows the stop table (fraction measured FROM the plane)", () => {
+		expect(trailFadeAt(0)).toBe(1);
+		expect(trailFadeAt(0.25)).toBe(1); // flat through 50%
+		expect(trailFadeAt(0.5)).toBe(1);
+		expect(trailFadeAt(0.6)).toBeCloseTo(0.75, 6); // midway 1 -> 0.5
+		expect(trailFadeAt(0.7)).toBeCloseTo(0.5, 6);
+		expect(trailFadeAt(0.75)).toBeCloseTo(0.375, 6);
+		expect(trailFadeAt(0.8)).toBeCloseTo(0.25, 6);
+		expect(trailFadeAt(0.9)).toBeCloseTo(0.1, 6);
+		expect(trailFadeAt(0.95)).toBeCloseTo(0.05, 6);
+		expect(trailFadeAt(1)).toBe(0);
+	});
+
+	it("clamps outside [0, 1]", () => {
+		expect(trailFadeAt(-0.5)).toBe(1);
+		expect(trailFadeAt(1.5)).toBe(0);
 	});
 });
