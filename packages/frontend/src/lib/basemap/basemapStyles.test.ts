@@ -7,6 +7,8 @@ import {
 	buildBasemapStyle,
 	effectiveTone,
 	groundVisibility,
+	hillshadePalette,
+	hillshadeVisibility,
 	normalizeBasemapStyle,
 	skyFor,
 } from "./basemapStyles";
@@ -218,5 +220,47 @@ describe("sky (issue #221)", () => {
 	it("buildBasemapStyle embeds the style-level sky", () => {
 		expect(buildBasemapStyle(URLS, "classic", false).sky).toEqual(skyFor("classic", false));
 		expect(buildBasemapStyle(URLS, "satellite", true).sky).toEqual(skyFor("satellite", true));
+	});
+});
+
+describe("hillshadePalette", () => {
+	it("every style×tone provides a complete palette (colors are hand-tuned, not pinned)", () => {
+		for (const style of ALL_STYLES) {
+			for (const dark of [false, true]) {
+				const p = hillshadePalette(style, dark);
+				expect(typeof p.shadow).toBe("string");
+				expect(typeof p.highlight).toBe("string");
+				expect(typeof p.accent).toBe("string");
+				expect(p.exaggeration).toBeGreaterThan(0);
+				expect(p.exaggeration).toBeLessThanOrEqual(1);
+			}
+		}
+	});
+	it("radar ignores darkMap and its shading stays in the phosphor family", () => {
+		expect(hillshadePalette("radar", true)).toEqual(hillshadePalette("radar", false));
+	});
+	it("classic tones differ so relief reads on both paper and slate", () => {
+		expect(hillshadePalette("classic", true)).not.toEqual(hillshadePalette("classic", false));
+	});
+});
+
+describe("hillshadeVisibility", () => {
+	it("terrain off hides every hillshade layer", () => {
+		for (const style of ALL_STYLES) {
+			expect(hillshadeVisibility(style, false)).toEqual({
+				classic: false, radar: false, satellite: false,
+			});
+		}
+	});
+	it("terrain on shows exactly the active style's layer", () => {
+		expect(hillshadeVisibility("classic", true)).toEqual({
+			classic: true, radar: false, satellite: false,
+		});
+		expect(hillshadeVisibility("radar", true)).toEqual({
+			classic: false, radar: true, satellite: false,
+		});
+		expect(hillshadeVisibility("satellite", true)).toEqual({
+			classic: false, radar: false, satellite: true,
+		});
 	});
 });

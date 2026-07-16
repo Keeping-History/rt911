@@ -133,6 +133,61 @@ export function skyFor(mapStyle: BasemapStyleId, darkMap: boolean): SkySpec {
 	return mapStyle === "satellite" ? SKY_SAT_NIGHT : SKY_DARK;
 }
 
+// Hillshade relief (3D-terrain feature): per-style shading so topography reads
+// as part of each look — neutral on classic, phosphor clutter on radar, a
+// subtle deepening on satellite imagery. Values are living tuning numbers.
+export interface HillshadePalette {
+	shadow: string;
+	highlight: string;
+	accent: string;
+	exaggeration: number;
+}
+
+const HILLSHADE_CLASSIC_LIGHT: HillshadePalette = {
+	shadow: "#6b6250", highlight: "#ffffff", accent: "#8a8574", exaggeration: 0.35,
+};
+const HILLSHADE_CLASSIC_DARK: HillshadePalette = {
+	shadow: "#000000", highlight: "#565664", accent: "#44444f", exaggeration: 0.4,
+};
+const HILLSHADE_RADAR: HillshadePalette = {
+	shadow: "#020c02", highlight: "#2f9e4f", accent: "#1e6434", exaggeration: 0.5,
+};
+const HILLSHADE_SAT_DAY: HillshadePalette = {
+	shadow: "#000000", highlight: "#ffffff", accent: "#000000", exaggeration: 0.15,
+};
+const HILLSHADE_SAT_NIGHT: HillshadePalette = {
+	shadow: "#000000", highlight: "#1a2338", accent: "#000000", exaggeration: 0.2,
+};
+
+export function hillshadePalette(
+	mapStyle: BasemapStyleId,
+	darkMap: boolean,
+): HillshadePalette {
+	const tone = effectiveTone(mapStyle, darkMap);
+	if (mapStyle === "radar") return HILLSHADE_RADAR;
+	if (mapStyle === "satellite")
+		return tone === "dark" ? HILLSHADE_SAT_NIGHT : HILLSHADE_SAT_DAY;
+	return tone === "dark" ? HILLSHADE_CLASSIC_DARK : HILLSHADE_CLASSIC_LIGHT;
+}
+
+export interface HillshadeVisibility {
+	classic: boolean;
+	radar: boolean;
+	satellite: boolean;
+}
+
+/** Exactly one hillshade layer visible while terrain is on; zero while off. */
+export function hillshadeVisibility(
+	mapStyle: BasemapStyleId,
+	terrainEnabled: boolean,
+): HillshadeVisibility {
+	return {
+		classic: terrainEnabled && mapStyle === "classic",
+		radar: terrainEnabled && mapStyle === "radar",
+		satellite: terrainEnabled && mapStyle === "satellite",
+	};
+}
+
 export interface GroundVisibility {
 	vector: boolean;
 	satelliteDay: boolean;
