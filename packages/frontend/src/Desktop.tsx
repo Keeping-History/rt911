@@ -7,6 +7,7 @@ import { MarketWatch } from "./Applications/MarketWatch/MarketWatch";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
+import { Readme } from "./Applications/README/README";
 import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
 import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
 import { TV } from "./Applications/TV/TV";
@@ -24,6 +25,7 @@ export default function Desktop() {
 			<News />
 			<Newsgroups />
 			<PagerDecoder />
+			<Readme />
 			<RadioScanner />
 			<TV />
 			<Weather />
