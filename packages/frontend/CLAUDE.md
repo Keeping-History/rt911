@@ -9,9 +9,10 @@ Guidance for AI coding assistants working in this Vite + React + TypeScript app.
 The Mac OS 8-style desktop shell for 911realtime.org. It is built on the [`classicy`](https://www.npmjs.com/package/classicy) npm package — an external, generically-reusable retro desktop/window-manager component library. Classicy ships its own bundled system apps (Finder, PDF Viewer, Picture Viewer, Movie Player, SimpleText, Control Panels) — **this repo never implements those**; it only supplies configuration and content for them. What this package *does* own:
 
 - `src/app.tsx` — the root: wraps everything in `ClassicyAppManagerProvider` (default file system, seeded boot state) and `MediaStreamProvider`, then renders each Application inside `ClassicyDesktop`.
-- `src/Applications/*` — one folder per product app (Browser, News, TV, RadioScanner, PagerDecoder, Newsgroups, TimeMachine, Feedback), each a `ClassicyApp` + `ClassicyWindow(s)`.
+- `src/Applications/*` — one folder per product app (Browser, News, TV, RadioScanner, PagerDecoder, Newsgroups, TimeMachine, Feedback, Account), each a `ClassicyApp` + `ClassicyWindow(s)`.
 - `src/Providers/MediaStream/` — the single WebSocket client to the `packages/backend` streamer.
 - `src/Providers/Playlist/` — the teacher-playlist engine (spec: `plans/2026-07-16-teacher-playlists-design.md`): loads `?playlist=<id>` from Directus and enforces availability windows / app disabling / focus / scheduled events. Its runtime state is deliberately non-persisted (no ClassicyStore, no localStorage, no ClassicyFileSystem).
+- `src/Providers/Auth/` — Directus session auth (AuthProvider) + the playlistApi editor seam; auth state is never persisted client-side (httpOnly cookie only).
 - `src/data/DefaultFileSystem.ts` — the virtual desktop file tree (Documents → Newspapers/Photos, System Folder) that Classicy's Finder/viewers browse.
 - `src/Mobile/*` — the iPod-style mobile shell (phones/tablets get it instead of the desktop; chosen once at boot in `app.tsx` via `pointer: coarse` or the `?ipod` URL override (testing escape hatch)). Vendored `ipod_ui` chrome — see `src/Mobile/VENDORED.md`.
 
