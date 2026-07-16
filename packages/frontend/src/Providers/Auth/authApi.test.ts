@@ -139,7 +139,7 @@ describe("uploadAvatar", () => {
 		await expect(uploadAvatar(file, "old-file", f)).resolves.toBe("new-file");
 	});
 
-	it("throws the server's message when the PATCH fails", async () => {
+	it("throws the server's message when the PATCH fails, and cleans up the orphaned upload", async () => {
 		const f = vi.fn(async (...args: Parameters<typeof fetch>) => {
 			const [url, init] = args;
 			if (String(url).endsWith("/files") && (init as RequestInit).method === "POST") {
@@ -147,6 +147,31 @@ describe("uploadAvatar", () => {
 			}
 			if (String(url).endsWith("/users/me") && (init as RequestInit).method === "PATCH") {
 				return jsonResponse({ errors: [{ message: "Avatar rejected." }] }, 500);
+			}
+			if (String(url).endsWith("/files/new-file") && (init as RequestInit).method === "DELETE") {
+				return new Response(null, { status: 204 });
+			}
+			throw new Error(`unexpected call: ${String(url)}`);
+		});
+
+		await expect(uploadAvatar(file, null, f)).rejects.toThrow("Avatar rejected.");
+
+		expect(f.mock.calls).toHaveLength(3);
+		expect(String(f.mock.calls[2][0])).toContain("/files/new-file");
+		expect((f.mock.calls[2][1] as RequestInit).method).toBe("DELETE");
+	});
+
+	it("still throws the PATCH error even when cleaning up the orphaned upload also fails", async () => {
+		const f = vi.fn(async (...args: Parameters<typeof fetch>) => {
+			const [url, init] = args;
+			if (String(url).endsWith("/files") && (init as RequestInit).method === "POST") {
+				return jsonResponse({ data: { id: "new-file" } });
+			}
+			if (String(url).endsWith("/users/me") && (init as RequestInit).method === "PATCH") {
+				return jsonResponse({ errors: [{ message: "Avatar rejected." }] }, 500);
+			}
+			if (String(url).endsWith("/files/new-file") && (init as RequestInit).method === "DELETE") {
+				throw new Error("network down");
 			}
 			throw new Error(`unexpected call: ${String(url)}`);
 		});

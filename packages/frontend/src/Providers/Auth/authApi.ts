@@ -112,7 +112,21 @@ export async function uploadAvatar(
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ avatar: newId }),
 	});
-	if (!patchRes.ok) throw new Error(await serverMessage(patchRes, "Failed to update avatar"));
+	if (!patchRes.ok) {
+		const message = await serverMessage(patchRes, "Failed to update avatar");
+		// The upload already succeeded — if linking it to the user fails, clean
+		// up the now-orphaned file before surfacing the error. Best-effort:
+		// never let a failed cleanup mask the real PATCH failure.
+		try {
+			await fetchFn(`${DIRECTUS_URL}/files/${newId}`, {
+				method: "DELETE",
+				credentials: "include",
+			});
+		} catch {
+			// ignored — orphan cleanup only, never blocks surfacing the PATCH error
+		}
+		throw new Error(message);
+	}
 
 	if (previousAvatarId) {
 		try {

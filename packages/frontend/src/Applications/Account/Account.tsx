@@ -2,7 +2,6 @@ import {
 	ClassicyApp,
 	ClassicyButton,
 	ClassicyFileInput,
-	type ClassicyFileInputHandle,
 	ClassicyIcons,
 	ClassicyWindow,
 	quitMenuItemHelper,
@@ -10,7 +9,7 @@ import {
 } from "classicy";
 import appIconPng from "./app.png";
 import type React from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { avatarUrl, uploadAvatar } from "../../Providers/Auth/authApi";
 import { SignInForm } from "./SignInForm";
@@ -41,7 +40,6 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 	const { status, user, signInWithEmail, signInWithProvider, signOut, refresh } = useAuth();
 	const [avatarUploading, setAvatarUploading] = useState(false);
 	const [avatarError, setAvatarError] = useState<string | null>(null);
-	const avatarFileInputRef = useRef<ClassicyFileInputHandle>(null);
 
 	const appMenu = useMemo(
 		() => [
@@ -115,7 +113,6 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 							<img src={avatarUrl(user.avatar)} alt="Your avatar" width={74} height={74} />
 						)}
 						<ClassicyFileInput
-							ref={avatarFileInputRef}
 							id="account-avatar-file"
 							accept="image/*"
 							disabled={avatarUploading}
