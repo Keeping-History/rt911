@@ -14,7 +14,7 @@ export type { SelectMode };
 // Same ids/labels as the Settings dialog and View menu — three UIs, one setting.
 const MAP_STYLE_OPTIONS: { value: BasemapStyleId; label: string }[] = [
 	{ value: "classic", label: "Classic" },
-	{ value: "radar", label: "Radar Scope" },
+	{ value: "radar", label: "Radar" },
 	{ value: "satellite", label: "Satellite" },
 ];
 

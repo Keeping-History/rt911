@@ -793,7 +793,7 @@ Invoke the `packages/frontend:verify` skill against the dev server and walk:
 
 1. Flight Tracker open, classic style, terrain toggle ON (default) → hillshade relief visible over the Rockies/Appalachians top-down.
 2. 3D toggle on, pinpoint near Denver/Rockies, pitch → ground mesh visibly rises; planes/tubes render above it; no z-fighting or vanishing custom layers.
-3. Style → Radar Scope: shading goes phosphor-green; Style → Satellite (± Dark): subtle relief over imagery, night variant included.
+3. Style → Radar: shading goes phosphor-green; Style → Satellite (± Dark): subtle relief over imagery, night variant included.
 4. Globe toggle on: terrain + hillshade still render; no crash (v5 globe+terrain path).
 5. Terrain toggle OFF → flat map identical to pre-feature look; Network tab shows no `terrain-dem` fetches after reload with toggle off.
 6. Reload → toggle state persists via `classicyDesktopState` localStorage.
