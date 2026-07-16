@@ -23,8 +23,13 @@ import {
 	PLANE_NOTABLE_ICON_ID,
 	PLANE_NOTABLE_ICON_PX,
 	buildPlaneImage,
+	familyIconId,
+	familyIconPx,
+	familyNotableIconId,
+	familyNotableIconPx,
 } from "./flightIcons";
 import {
+	type FlightMotion,
 	type LandingClock,
 	type MotionBuffer,
 	TRAIL_MULTIPLIER_MAX,
@@ -54,6 +59,7 @@ import { buildTrackTube, buildTrailTubes } from "./trackTube";
 import { TrackTube3DLayer } from "./trackTubeLayer";
 import { buildPlaneInstanceBatches, buildSphereMesh } from "./plane3dMesh";
 import { type AircraftFamily, loadAircraftMesh } from "./aircraftModels";
+import { loadAircraftIconSvg } from "./aircraftIcons";
 import { Planes3DLayer } from "./planes3DLayer";
 import {
 	type DragPixels,
@@ -98,6 +104,73 @@ async function installPlaneIcons(
 		else map.addImage(PLANE_NOTABLE_ICON_ID, notable, { pixelRatio: 2 });
 	} catch (err) {
 		console.warn("plane icons unavailable:", err);
+	}
+}
+
+// Per-family silhouette variant of installPlaneIcons: same colorize +
+// rasterize pipeline, at the family's relative display size.
+async function installFamilyIcon(
+	map: maplibregl.Map,
+	family: string,
+	svg: string,
+	pinColor: string,
+	notablePinColor: string,
+) {
+	try {
+		const [regular, notable] = await Promise.all([
+			buildPlaneImage(svg, pinColor, familyIconPx(family)),
+			buildPlaneImage(svg, notablePinColor, familyNotableIconPx(family)),
+		]);
+		const id = familyIconId(family);
+		const notableId = familyNotableIconId(family);
+		if (map.hasImage(id)) map.updateImage(id, regular);
+		else map.addImage(id, regular, { pixelRatio: 2 });
+		if (map.hasImage(notableId)) map.updateImage(notableId, notable);
+		else map.addImage(notableId, notable, { pixelRatio: 2 });
+	} catch (err) {
+		console.warn(`family icon ${family} unavailable:`, err);
+	}
+}
+
+// Data-driven icon choice: the family's silhouette once its image has
+// registered, the generic icon until then (["image", id] only resolves for
+// registered images, so coalesce falls through cleanly). Prefixes must
+// match flightIcons.familyIconId / familyNotableIconId.
+const FAMILY_ICON_IMAGE = [
+	"coalesce",
+	["image", ["concat", "plane-", ["get", "family"]]],
+	["image", PLANE_ICON_ID],
+] as unknown as maplibregl.ExpressionSpecification;
+const FAMILY_NOTABLE_ICON_IMAGE = [
+	"coalesce",
+	["image", ["concat", "plane-notable-", ["get", "family"]]],
+	["image", PLANE_NOTABLE_ICON_ID],
+] as unknown as maplibregl.ExpressionSpecification;
+
+// Kick off (once per family) the silhouette fetch for every family in view;
+// on arrival, rasterize + register both color variants. "generic" never
+// fetches — the fallback icon IS the generic art. Callers pass live refs so
+// late-resolving fetches see the current map/colors (or bail if unmounted).
+function requestFamilyIcons(
+	fc: FlightFeatureCollection,
+	requested: Set<string>,
+	loaded: Map<string, string>,
+	mapRef: { current: maplibregl.Map | null },
+	colorsRef: { current: { pinColor: string; notablePinColor: string } },
+) {
+	for (const f of fc.features) {
+		const family = f.properties.family;
+		if (!family || family === "generic" || requested.has(family)) continue;
+		requested.add(family);
+		void loadAircraftIconSvg(family as AircraftFamily).then((svg) => {
+			const map = mapRef.current;
+			if (!svg || !map) return;
+			loaded.set(family, svg);
+			void installFamilyIcon(
+				map, family, svg,
+				colorsRef.current.pinColor, colorsRef.current.notablePinColor,
+			);
+		});
 	}
 }
 
@@ -341,6 +414,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 	};
 	// Families whose STL fetch has been kicked off (once per session).
 	const requestedMeshesRef = useRef(new Set<string>());
+	// 2D silhouettes: families whose SVG fetch has been kicked off, and the
+	// resolved SVG text per family (kept so color changes can re-rasterize).
+	const requestedIconFamiliesRef = useRef<Set<string>>(new Set());
+	const loadedIconSvgsRef = useRef<Map<string, string>>(new Map());
 	const selectModeRef = useRef<SelectMode>(selectMode);
 	selectModeRef.current = selectMode;
 	// In-flight drag state (mutated at event rate); the overlay div re-renders
@@ -491,10 +568,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 			updateMotion(motionBufferRef.current, positionsRef.current);
 			if (seedRef.current?.length)
 				seedMotionFromHistory(motionBufferRef.current, seedRef.current);
-			map.addSource("flights", {
-				type: "geojson",
-				data: motionPointsToGeoJSON(motionBufferRef.current, nowMsRef.current, landingRef.current),
-			});
+			const initialPointsFc = motionPointsToGeoJSON(
+				motionBufferRef.current, nowMsRef.current, landingRef.current,
+				(m: FlightMotion) => cbRef.current.aircraftFamilyOf?.(m.item.flight, m.item.start_date) ?? "generic",
+			);
+			map.addSource("flights", { type: "geojson", data: initialPointsFc });
+			requestFamilyIcons(
+				initialPointsFc, requestedIconFamiliesRef.current, loadedIconSvgsRef.current,
+				mapRef, colorsRef,
+			);
 			map.addSource("track", { type: "geojson", data: EMPTY_FC });
 			// lineMetrics enables the line-progress-based fade gradient on the trails.
 			map.addSource("flight-trails", { type: "geojson", data: EMPTY_FC, lineMetrics: true });
@@ -511,7 +593,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				id: "flights-dots", type: "symbol", source: "flights",
 				filter: ["!=", ["get", "notable"], true],
 				layout: {
-					"icon-image": PLANE_ICON_ID,
+					"icon-image": FAMILY_ICON_IMAGE,
 					// Grow to 1.5× while zooming in, capping at ~zoom 9 — where a
 					// typical viewport spans roughly 100 miles at CONUS latitudes
 					// (interpolate clamps past the last stop). Notables stay fixed.
@@ -528,7 +610,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				id: "flights-notable", type: "symbol", source: "flights",
 				filter: ["==", ["get", "notable"], true],
 				layout: {
-					"icon-image": PLANE_NOTABLE_ICON_ID,
+					"icon-image": FAMILY_NOTABLE_ICON_IMAGE,
 					"icon-rotate": ["-", ["get", "heading"], 90],
 					"icon-rotation-alignment": "map",
 					"icon-allow-overlap": true,
@@ -573,7 +655,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				filter: ["!", ["has", "point_count"]],
 				layout: {
 					visibility: clusterVis,
-					"icon-image": PLANE_ICON_ID,
+					"icon-image": FAMILY_ICON_IMAGE,
 					"icon-size": ["interpolate", ["linear"], ["zoom"], 4, 1, 9, 1.5],
 					"icon-rotate": ["-", ["get", "heading"], 90],
 					"icon-rotation-alignment": "map",
@@ -875,6 +957,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 		if (!map || !loadedRef.current) return;
 		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, terrain });
 		void installPlaneIcons(map, pinColor, notablePinColor);
+		for (const [family, svg] of loadedIconSvgsRef.current) {
+			void installFamilyIcon(map, family, svg, pinColor, notablePinColor);
+		}
 		planes3DRef.current?.setColors(pinColor, notablePinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor);
 		trailTubeRef.current?.setColor(trailColor(mapStyle, darkMap));
@@ -1009,7 +1094,14 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const now = playingRef.current ? a.virtual + (wall - a.wall) : a.virtual;
 			const buf = motionBufferRef.current;
 			const landing = landingRef.current;
-			const pointsFc = motionPointsToGeoJSON(buf, now, landing);
+			const pointsFc = motionPointsToGeoJSON(
+				buf, now, landing,
+				(m: FlightMotion) => cbRef.current.aircraftFamilyOf?.(m.item.flight, m.item.start_date) ?? "generic",
+			);
+			requestFamilyIcons(
+				pointsFc, requestedIconFamiliesRef.current, loadedIconSvgsRef.current,
+				mapRef, colorsRef,
+			);
 			(map.getSource("flights") as maplibregl.GeoJSONSource | undefined)?.setData(pointsFc);
 			if (clusterRef.current) {
 				(map.getSource("flights-clustered") as maplibregl.GeoJSONSource | undefined)?.setData(
