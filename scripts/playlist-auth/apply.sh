@@ -47,13 +47,27 @@ echo "TEACHER_ROLE_ID=$ROLE_ID"
 
 # --- Teacher permissions on playlists (serial) ------------------------------
 OWN='{"user_created":{"_eq":"$CURRENT_USER"}}'
+# read: own rows (any status) OR any published row. Directus's Public policy only
+# applies to unauthenticated requests — it does not cascade to authenticated users —
+# so published-read for other teachers must be encoded directly in Teacher's own rule.
+OWN_OR_PUBLISHED='{"_or":[{"user_created":{"_eq":"$CURRENT_USER"}},{"status":{"_eq":"published"}}]}'
 STATUS_OK='{"status":{"_in":["draft","published"]}}'
 have_perm() { req GET "/permissions?filter[policy][_eq]=$POLICY_ID&filter[collection][_eq]=playlists&filter[action][_eq]=$1&fields=id" \
   | python3 -c "import sys,json; print(bool(json.load(sys.stdin)['data']))"; }
+perm_id() { req GET "/permissions?filter[policy][_eq]=$POLICY_ID&filter[collection][_eq]=playlists&filter[action][_eq]=$1&fields=id" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')"; }
 [ "$(have_perm create)" = True ] || req POST /permissions \
   "{\"collection\":\"playlists\",\"action\":\"create\",\"policy\":\"$POLICY_ID\",\"fields\":[\"title\",\"definition\",\"status\"],\"validation\":$STATUS_OK}" >/dev/null
-[ "$(have_perm read)" = True ] || req POST /permissions \
-  "{\"collection\":\"playlists\",\"action\":\"read\",\"policy\":\"$POLICY_ID\",\"fields\":[\"*\"],\"permissions\":$OWN}" >/dev/null
+# read is converged (not skip-if-present): always PATCH to the target OR rule so an
+# already-applied prod permission from before the OR rule existed gets updated too.
+READ_ID=$(perm_id read)
+if [ -z "$READ_ID" ]; then
+  req POST /permissions \
+    "{\"collection\":\"playlists\",\"action\":\"read\",\"policy\":\"$POLICY_ID\",\"fields\":[\"*\"],\"permissions\":$OWN_OR_PUBLISHED}" >/dev/null
+else
+  req PATCH "/permissions/$READ_ID" \
+    "{\"fields\":[\"*\"],\"permissions\":$OWN_OR_PUBLISHED}" >/dev/null
+fi
 [ "$(have_perm update)" = True ] || req POST /permissions \
   "{\"collection\":\"playlists\",\"action\":\"update\",\"policy\":\"$POLICY_ID\",\"fields\":[\"title\",\"definition\",\"status\"],\"permissions\":$OWN,\"validation\":$STATUS_OK}" >/dev/null
 [ "$(have_perm delete)" = True ] || req POST /permissions \

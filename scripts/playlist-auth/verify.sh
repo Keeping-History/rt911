@@ -37,13 +37,17 @@ check "teacher can create draft" "ok" "$([ -n "$A_PL" ] && echo ok)"
 OWNER=$(curl -sS "$URL/items/playlists/$A_PL?fields=user_created" -H "Authorization: Bearer $TA" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['user_created'])")
 check "user_created auto-stamped to A" "$A_ID" "$OWNER"
-# forged owner ignored on create
+# forged owner: Directus 12 rejects the whole create (403) rather than stripping the field
+FORGE_CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$URL/items/playlists" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" \
+  -d "{\"title\":\"verify pub\",\"status\":\"published\",\"definition\":$DEF,\"user_created\":\"$B_ID\"}")
+check "forged user_created rejected on create" 403 "$FORGE_CODE"
+# legitimate create (no user_created in payload) — owner auto-stamped by Directus
 A_PUB=$(curl -sS -X POST "$URL/items/playlists" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" \
-  -d "{\"title\":\"verify pub\",\"status\":\"published\",\"definition\":$DEF,\"user_created\":\"$B_ID\"}" \
+  -d "{\"title\":\"verify pub\",\"status\":\"published\",\"definition\":$DEF}" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])")
 OWNER2=$(curl -sS "$URL/items/playlists/$A_PUB?fields=user_created" -H "Authorization: Bearer $TA" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('user_created'))")
-check "client-supplied user_created ignored" "$A_ID" "$OWNER2"
+check "user_created auto-stamped on published row" "$A_ID" "$OWNER2"
 # matrix
 code() { curl -sS -o /dev/null -w "%{http_code}" "$@"; }
 check "A reads own draft"        200 "$(code "$URL/items/playlists/$A_PL"  -H "Authorization: Bearer $TA")"

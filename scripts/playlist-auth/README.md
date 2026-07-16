@@ -13,10 +13,19 @@ to run repeatedly.
     readonly/hidden), `date_created`, `date_updated` (timestamps, readonly/hidden).
   - A `Teacher` policy (`app_access: false`, `admin_access: false`) and a `Teacher`
     role linked to it via `/access`.
-  - Four permissions on `playlists` for that policy: `create` (fields limited to
-    `title`/`definition`/`status`, validated to `status in [draft, published]`),
-    `read`/`update`/`delete` (all row-filtered to `user_created == $CURRENT_USER`;
-    `update` re-validates the same status constraint).
+  - Four permissions on `playlists` for that policy:
+
+    | action | fields | row filter | notes |
+    |---|---|---|---|
+    | `create` | `title`, `definition`, `status` | — | validated to `status in [draft, published]`; any other field in the payload (e.g. `user_created`) is rejected outright by Directus (403), not silently stripped |
+    | `read` | `*` | `user_created == $CURRENT_USER` **OR** `status == published` | own rows regardless of status, plus any teacher's published rows — see "Teacher published-read" below |
+    | `update` | `title`, `definition`, `status` | `user_created == $CURRENT_USER` | re-validates the same status constraint |
+    | `delete` | `*` | `user_created == $CURRENT_USER` | |
+
+    The `read` permission is *converged* on every `apply.sh` run (fetch existing
+    id → `PATCH` to the target rule, or `POST` if missing) rather than
+    skip-if-present, so re-running `apply.sh` always brings a previously-applied
+    `read` permission up to the current OR rule.
   - Echoes `TEACHER_POLICY_ID` and `TEACHER_ROLE_ID` on success.
 
 - **`verify.sh`** — the enforcement matrix test suite *and* the prod acceptance
@@ -57,41 +66,63 @@ client-side (`curl: (3) bad range in URL position ...`) before any request reach
 the server, on this box's curl build. This is a client-side compatibility fix, not
 a change to any request body, assertion, or expected status code.
 
-## Known verify.sh finding: "client-supplied user_created ignored" does not hold as written
+## Directus 12 rejects creates containing fields outside the permission's field list (403)
 
 The `create` permission's `fields` allow-list is `["title","definition","status"]`
 (deliberately excludes `user_created`, since it's the readonly auto-stamped
 owner field). On this Directus 12.1.1 instance, when a client's create payload
 includes a field that is *not* on that allow-list — even `user_created` set to
 another user's id — Directus rejects the **entire request** with `403 FORBIDDEN`
-(`"You don't have permission to access field \"user_created\"..."`) rather than
+(`"You don't have permission to access field \"user_created\"..."`), rather than
 silently stripping the disallowed field and proceeding with the server-derived
-value. The brief's assertion `check "client-supplied user_created ignored" "$A_ID" "$OWNER2"`
-assumes the latter (silent-ignore) behavior, so it fails: the create call 403s,
-`A_PUB` is never assigned, and the subsequent `"B cannot update A's row"` check
-inherits an empty `$A_PUB`, PATCHing the *collection* endpoint
-(`/items/playlists/` with no id) instead of a real row — which Directus answers
-with `400` instead of the intended `403`.
+value.
 
-Manually reproduced against a real (non-empty) row to confirm the underlying
-security property still holds: a Teacher who does **not** own a published row
-gets `403 FORBIDDEN` on `PATCH` (`"You don't have permissions to perform
-\"update\"..."`) — the ownership enforcement itself is correct; the way this
-specific test constructs its forged-owner scenario is not.
+This fail-closed behavior is the enforcement we rely on for non-forgeable
+ownership: a Teacher can never set their own or another user's `user_created`
+by including it in a create payload — the request is rejected outright before
+any row is written. `verify.sh` encodes this directly: it asserts a create
+attempt with a forged `user_created` returns `403`
+(`forged user_created rejected on create`), then separately verifies that a
+legitimate create (payload without `user_created`) gets the correct owner
+auto-stamped by Directus (`user_created auto-stamped on published row`).
 
-Net effect: attempting to set `user_created` on create fails closed (403) rather
-than being silently dropped — arguably a *stronger* guarantee than the brief
-assumed, but not what the test asserts. Left the assertions untouched per
-instructions (do not silently redefine expected behavior); flagged for the
-task owner to decide whether to adjust the test's expectation to `403` on the
-create call, or to widen the `create` permission's `fields` list to include
-`user_created` (relying on Directus's `user-created` special-field auto-stamp
-to still override any client value once the field is permitted). Either fix
-belongs to whoever owns the test assertions, not to this apply/verify pass.
+**Frontend implication**: playlist-create calls must never include
+`user_created` (or any field outside the create permission's allow-list) in the
+payload — Directus rejects the whole request rather than ignoring the extra
+field.
 
-As a result, the current `verify.sh` run ends with `2 CHECK(S) FAILED` (of 12),
-both traceable to this single root cause; the other 10 — including the full
-ownership matrix (own-read, cross-user read/update/delete denial, anonymous
-draft-vs-published gating, invalid-status rejection) and the pre-existing
-anonymous smoke playlist (`2b2b1bc0-0e42-478f-a55a-5c89cac31c8c` → `200`) — all
-pass.
+## Teacher published-read: why the `read` permission is an OR rule, not two rows
+
+`verify.sh`'s `"B reads published"` check (Teacher B, authenticated,
+non-owner, reading Teacher A's published row) initially failed: actual `403`,
+not the expected `200`. Manually reproduced in isolation (fresh users, single
+request) to rule out a script artifact — confirmed:
+
+- anonymous GET of the published row → `200`
+- Teacher B (authenticated, non-owner) GET of the same row → `403 FORBIDDEN`
+  (`"You don't have permission to access this."`)
+
+Root cause per Directus docs (confirmed via Context7 `/directus/docs`): "The
+Public role manages permissions for unauthenticated requests" / "The public
+role applies to all unauthenticated requests" — the Public policy (permission
+id 16, `status=published` row filter) is **not** merged in as a baseline for
+authenticated users. `plans/2026-07-16-playlist-auth-design.md` §3 intends
+"own rows, any status (public published-read also applies)" for Teacher
+reads, and its client-side duplicate requires an authenticated teacher to be
+able to `GET` another teacher's published row — the spec assumed the Public
+policy would cascade to authenticated requests, but Directus 12 does not
+cascade it.
+
+Resolution: encode published-read directly in the Teacher policy's own `read`
+permission, as a single permission with an `_or` rule (not two separate
+permission rows):
+
+```json
+{"_or":[{"user_created":{"_eq":"$CURRENT_USER"}},{"status":{"_eq":"published"}}]}
+```
+
+This grants a Teacher read access to: (a) every row they own, regardless of
+status (`draft` included), and (b) any row — theirs or another teacher's —
+once it's `published`. Critically, it does **not** grant access to another
+teacher's `draft` rows: `"B cannot read A's draft"` still asserts (and
+passes) `403`, since neither side of the `_or` matches a non-owned draft.
