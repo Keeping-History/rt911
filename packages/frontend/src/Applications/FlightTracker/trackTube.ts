@@ -1,5 +1,8 @@
 import type { AltitudeSample } from "./flightAltitude";
-import { exaggeratedHeightM } from "./flightAltitude";
+import { altitudeFtAt, exaggeratedHeightM } from "./flightAltitude";
+import type { LandingClock, MotionBuffer } from "./flightMotion";
+import { extrapolate, motionNow } from "./flightMotion";
+import { TRAIL_3D_MAX_POINTS } from "./flightAltitude";
 import { lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
 
 // Smooth 3D flight track. The fill-extrusion curtain can only staircase —
@@ -37,11 +40,12 @@ function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): 
 }
 
 /**
- * Catmull-Rom-splined track through the profile: `steps` interpolated points
- * per sample pair, passing exactly through every original sample. Profiles too
- * short to spline come back as-is.
+ * Catmull-Rom-splined track through the points: `steps` interpolated points
+ * per pair, passing exactly through every original point. Inputs too short to
+ * spline come back as-is. (AltitudeSample is structurally a TrackPoint, so
+ * altitude profiles feed straight in.)
  */
-export function splineTrack(profile: AltitudeSample[], steps: number): TrackPoint[] {
+export function splineTrack(profile: TrackPoint[], steps: number): TrackPoint[] {
 	if (profile.length < 2) {
 		return profile.map(({ lon, lat, alt_ft }) => ({ lon, lat, alt_ft }));
 	}
@@ -168,4 +172,161 @@ export function buildTrackTube(
 		}
 	}
 	return { centers, offsets, vertexCount };
+}
+
+// --- live trail ribbons --------------------------------------------------------
+
+export interface TrailTubeOptions {
+	/** Breadcrumb points per flight (already multiplier-scaled; capped below). */
+	displayPoints: number;
+	/** Catmull-Rom subdivisions per segment — zoom-adaptive at the call site. */
+	steps: number;
+	/**
+	 * Meters to pull the ribbon's end back along the heading, so the trail
+	 * stops at the aircraft's TAIL instead of running under its center
+	 * (half the marker size at the call site).
+	 */
+	headOffsetM: number;
+	landing?: LandingClock;
+}
+
+/**
+ * Smooth 3D trail ribbons: every airborne flight's breadcrumb splined through
+ * lon/lat/altitude (same Catmull-Rom as the track tube) into a flat
+ * two-vertex-ring ribbon with per-vertex elevation — replacing the straight
+ * fill-extrusion slabs that cornered at every minute sample. The ribbon's
+ * head rides at the plane's GLIDED altitude (altitudeFtAt — the same value
+ * the 3D model floats at, so the trail meets the fuselage centerline) and is
+ * pulled back to the tail by headOffsetM.
+ *
+ * PERF: this runs per frame over thousands of flights, so it fills reusable
+ * module-level scratch buffers in a single pass — zero per-flight allocation
+ * (per-frame GC churn at this scale renders at seconds per frame, not
+ * frames per second). The returned arrays are views into the scratch: valid
+ * until the next call, which is exactly the lifetime the GL layer needs
+ * (upload happens in the same frame).
+ */
+// Scratch pools, grown geometrically and kept for the page lifetime.
+let ringScratch = new Float64Array(64 * 6); // per-ring: x, y, elev, mpm, ux, uy
+let centersScratch = new Float32Array(4096 * 4);
+let offsetsScratch = new Float32Array(4096 * 3);
+
+function ensureVertexCapacity(verts: number): void {
+	if (centersScratch.length < verts * 4) {
+		let cap = centersScratch.length / 4;
+		while (cap < verts) cap *= 2;
+		centersScratch = new Float32Array(cap * 4);
+		offsetsScratch = new Float32Array(cap * 3);
+	}
+}
+
+export function buildTrailTubes(
+	buffer: MotionBuffer,
+	now: number,
+	opts: TrailTubeOptions,
+): TrackTube {
+	const points = Math.min(opts.displayPoints, TRAIL_3D_MAX_POINTS);
+	if (points <= 1) return { centers: new Float32Array(0), offsets: new Float32Array(0), vertexCount: 0 };
+	const { steps, headOffsetM, landing } = opts;
+
+	// Upper bound on vertices: rings ≤ points·steps + 1 per flight, 6 verts
+	// per ring pair.
+	const maxRings = points * steps + 1;
+	ensureVertexCapacity(buffer.size * (maxRings - 1) * 6);
+	if (ringScratch.length < maxRings * 6) ringScratch = new Float64Array(maxRings * 6);
+
+	let v = 0;
+	for (const m of buffer.values()) {
+		const trailLen = Math.min(m.trail.length, points);
+		if (trailLen < 2) continue;
+		const effNow = motionNow(m, now, landing);
+		const head = extrapolate(m, effNow);
+		const headAltFt = altitudeFtAt(m, effNow);
+		// Tail alignment: retreat the endpoint along the heading (equatorial
+		// meters-per-degree for the east component, meridional for north —
+		// same constants as the rest of the geometry math).
+		const th = (m.headingDeg * Math.PI) / 180;
+		const cosLat = Math.max(Math.cos((head.lat * Math.PI) / 180), 0.01);
+		const tailLon = head.lon - (Math.sin(th) * headOffsetM) / (111_320 * cosLat);
+		const tailLat = head.lat - (Math.cos(th) * headOffsetM) / 110_574;
+
+		// Splined rings straight into the ring scratch: pts = breadcrumb tail
+		// + glided head, Catmull-Rom sampled at `steps` per segment.
+		const base = m.trail.length - trailLen;
+		const segs = trailLen; // trailLen breadcrumbs + head = trailLen segments
+		const pt = (i: number): [number, number, number] => {
+			if (i < trailLen) {
+				const p = m.trail[base + i];
+				return [p[0], p[1], p[2]];
+			}
+			return [tailLon, tailLat, headAltFt];
+		};
+		let rings = 0;
+		for (let i = 0; i < segs; i++) {
+			const [x0, y0, a0] = pt(Math.max(i - 1, 0));
+			const [x1, y1, a1] = pt(i);
+			const [x2, y2, a2] = pt(i + 1);
+			const [x3, y3, a3] = pt(Math.min(i + 2, segs));
+			for (let sIdx = 0; sIdx < steps; sIdx++) {
+				const t = sIdx / steps;
+				const lon = catmullRom(x0, x1, x2, x3, t);
+				const lat = catmullRom(y0, y1, y2, y3, t);
+				const alt = catmullRom(a0, a1, a2, a3, t);
+				const r6 = rings * 6;
+				const [mx, my] = lngLatToMercator(lon, lat);
+				ringScratch[r6] = mx;
+				ringScratch[r6 + 1] = my;
+				ringScratch[r6 + 2] = exaggeratedHeightM(Math.max(alt, 0));
+				ringScratch[r6 + 3] = mercatorPerMeter(lat);
+				rings++;
+			}
+		}
+		{
+			const r6 = rings * 6;
+			const [mx, my] = lngLatToMercator(tailLon, tailLat);
+			ringScratch[r6] = mx;
+			ringScratch[r6 + 1] = my;
+			ringScratch[r6 + 2] = exaggeratedHeightM(Math.max(headAltFt, 0));
+			ringScratch[r6 + 3] = mercatorPerMeter(tailLat);
+			rings++;
+		}
+
+		// Horizontal unit perpendicular to the local tangent per ring.
+		for (let i = 0; i < rings; i++) {
+			const a6 = Math.max(i - 1, 0) * 6;
+			const b6 = Math.min(i + 1, rings - 1) * 6;
+			const i6 = i * 6;
+			const tE = (ringScratch[b6] - ringScratch[a6]) / ringScratch[i6 + 3];
+			const tN = -(ringScratch[b6 + 1] - ringScratch[a6 + 1]) / ringScratch[i6 + 3];
+			const len = Math.hypot(tE, tN);
+			ringScratch[i6 + 4] = len > 1e-12 ? tN / len : 1;
+			ringScratch[i6 + 5] = len > 1e-12 ? -tE / len : 0;
+		}
+
+		// Two triangles per ring pair, emitted inline into the packed scratch.
+		for (let i = 0; i < rings - 1; i++) {
+			const lo = i * 6;
+			const hi = (i + 1) * 6;
+			// (i,-1) (i+1,-1) (i+1,+1) / (i,-1) (i+1,+1) (i,+1)
+			for (const [r6, side] of [
+				[lo, -1], [hi, -1], [hi, 1], [lo, -1], [hi, 1], [lo, 1],
+			] as const) {
+				const c4 = v * 4;
+				centersScratch[c4] = ringScratch[r6];
+				centersScratch[c4 + 1] = ringScratch[r6 + 1];
+				centersScratch[c4 + 2] = ringScratch[r6 + 2];
+				centersScratch[c4 + 3] = ringScratch[r6 + 3];
+				const o3 = v * 3;
+				offsetsScratch[o3] = side * ringScratch[r6 + 4];
+				offsetsScratch[o3 + 1] = side * ringScratch[r6 + 5];
+				offsetsScratch[o3 + 2] = 0;
+				v++;
+			}
+		}
+	}
+	return {
+		centers: centersScratch.subarray(0, v * 4),
+		offsets: offsetsScratch.subarray(0, v * 3),
+		vertexCount: v,
+	};
 }

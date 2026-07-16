@@ -47,11 +47,9 @@ import {
 	altitudeFtAt,
 	exaggeratedHeightM,
 	kmPerPixel,
-	motionPlanes3DToGeoJSON,
-	motionTrails3DToGeoJSON,
 	plane3DTargetPx,
 } from "./flightAltitude";
-import { buildTrackTube } from "./trackTube";
+import { buildTrackTube, buildTrailTubes } from "./trackTube";
 import { TrackTube3DLayer } from "./trackTubeLayer";
 import { buildPlaneInstanceBatches, buildSphereMesh } from "./plane3dMesh";
 import { type AircraftFamily, loadAircraftMesh } from "./aircraftModels";
@@ -67,7 +65,6 @@ import styles from "./FlightTracker.module.scss";
 import {
 	type ReplayBuffer,
 	buildReplayTrailInstances,
-	replayTrails3DAt,
 	replayPointsAt,
 } from "./flightReplay";
 import { type LoopClock, playheadAt } from "./loopClock";
@@ -124,12 +121,8 @@ interface FlightMapProps {
 	seedPositions?: FlightPosition[];
 	basemapUrls: BasemapUrls;
 	trackGeoJSON: GeoJSON.Feature | null;
-	// Curtain wall under the selected flight's path (issue #224): pre-built
-	// extrusion quads from its altitude profile; the GLOBE fallback while
-	// pitched — under mercator the smooth track tube renders instead.
-	curtainGeoJSON?: GeoJSON.FeatureCollection | null;
 	// Raw altitude profile of the selected flight: the smooth 3D track tube
-	// splines it in all three axes (curtains staircase; see trackTube.ts).
+	// splines it in all three axes (see trackTube.ts).
 	trackProfile?: AltitudeSample[] | null;
 	nowMs: number;
 	playing: boolean;
@@ -231,16 +224,13 @@ function projectAtAltitude(
  * Single resolver for the pitch × cluster × projection layer matrix (one
  * writer — split writers previously stomped each other's visibility).
  * Pitched: aircraft render in true 3D (flat icons AND flat cluster blobs
- * hide); flat: cluster decides between icons and blobs. The "planes-3d" and
- * "replay-trails-3d" fill-extrusions are the GLOBE-projection fallback only — under
- * mercator the pitched aircraft and loop replay trails come from Planes3DLayer
- * custom layers (issues #250/#242), whose draw gates are synced wherever
- * this matrix is applied.
+ * hide); flat: cluster decides between icons and blobs. All pitched 3D
+ * geometry comes from the custom WebGL layers (both projections — see
+ * syncPlaneVisibility), so this matrix only covers the flat style layers.
  */
 export function planeLayerVisibility(
 	cluster: boolean,
 	pitched: boolean,
-	globe: boolean,
 ): Record<string, boolean> {
 	return {
 		"flights-dots": !cluster && !pitched,
@@ -251,10 +241,6 @@ export function planeLayerVisibility(
 		"cluster-planes": cluster && !pitched,
 		"replay-trail-dots": !pitched,
 		"replay-trail-notable": !pitched,
-		"planes-3d": pitched && globe,
-		"trails-3d": pitched && !cluster,
-		"replay-trails-3d": pitched && globe,
-		"track-curtain": pitched && globe,
 	};
 }
 
@@ -288,7 +274,7 @@ const REPLAY_TRAIL_STROKE_COLOR = "#ffffff";
 
 export const FlightMap: FC<FlightMapProps> = ({
 	ref: handleRef,
-	positions, seedPositions, basemapUrls, trackGeoJSON, curtainGeoJSON = null,
+	positions, seedPositions, basemapUrls, trackGeoJSON,
 	trackProfile = null, nowMs, playing,
 	mapStyle, darkMap, pinColor, notablePinColor, radarSweep, trailMultiplier,
 	loopEnabled = false, loopWindowMs = 1_800_000,
@@ -399,22 +385,30 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const planes3DRef = useRef<Planes3DLayer | null>(null);
 	// Its replay-trail-sphere sibling (issue #242): same class, sphere mesh, translucent.
 	const replayTrail3DRef = useRef<Planes3DLayer | null>(null);
-	// The selected flight's smooth 3D track tube (mercator; curtain = globe fallback).
+	// The selected flight's smooth 3D track tube.
 	const trackTubeRef = useRef<TrackTube3DLayer | null>(null);
+	// Smooth live-trail ribbons (same class, translucent + flat-shaded).
+	const trailTubeRef = useRef<TrackTube3DLayer | null>(null);
+	// Alternating-frame gate for the ribbon rebuild (see the rAF loop).
+	const trailFrameRef = useRef(false);
 	const trackProfileRef = useRef<AltitudeSample[] | null>(trackProfile);
 	trackProfileRef.current = trackProfile;
 	// Apply the layer-visibility matrix AND the custom layers' draw gates from
 	// one place, so the three flags can never drift apart across call sites.
 	const syncPlaneVisibility = (map: maplibregl.Map) => {
 		for (const [id, visible] of Object.entries(
-			planeLayerVisibility(clusterRef.current, pitchedRef.current, globeRef.current),
+			planeLayerVisibility(clusterRef.current, pitchedRef.current),
 		)) {
 			map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
 		}
-		const custom3D = pitchedRef.current && !globeRef.current;
+		// The custom layers render under BOTH projections — projectTileFor3D's
+		// GLOBE branch handles the sphere (verified live 2026-07-15), so the
+		// old extrusion fallbacks are gone.
+		const custom3D = pitchedRef.current;
 		planes3DRef.current?.setVisible(custom3D);
 		replayTrail3DRef.current?.setVisible(custom3D);
 		trackTubeRef.current?.setVisible(custom3D);
+		trailTubeRef.current?.setVisible(custom3D && !clusterRef.current);
 		// Pitched: the elevated geometry carries the track color, so the ground
 		// line darkens into its shadow; flat: it IS the track, full color.
 		map.setPaintProperty(
@@ -543,70 +537,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"icon-ignore-placement": true,
 				},
 			});
-			// 3D planes (issue #224): while pitched, each aircraft is a heading-
-			// rotated plane-silhouette slab floating AT its altitude (base →
-			// height are both up there); the flat icons hide. Replaces the
-			// original ground-to-altitude drop columns, which read as bars
-			// growing out of grounded planes.
-			map.addSource("planes-3d", { type: "geojson", data: EMPTY_FC });
-			map.addLayer({
-				id: "planes-3d", type: "fill-extrusion", source: "planes-3d",
-				layout: { visibility: pitchedRef.current ? "visible" : "none" },
-				paint: {
-					"fill-extrusion-color": [
-						"case", ["==", ["get", "notable"], true],
-						colors.notablePinColor, colors.pinColor,
-					],
-					"fill-extrusion-base": ["get", "base"],
-					"fill-extrusion-height": ["get", "height"],
-					"fill-extrusion-opacity": 0.9,
-				},
-			});
-			// Floating trail ribbons + replay-trail pucks: the 3D counterparts of the
-			// flat breadcrumb lines and loop-mode replay-trail circles (lines and
-			// circles are ground-clamped in MapLibre). Fed by the rAF loop only
-			// while pitched.
-			map.addSource("trails-3d", { type: "geojson", data: EMPTY_FC });
-			map.addLayer({
-				id: "trails-3d", type: "fill-extrusion", source: "trails-3d",
-				layout: { visibility: "none" },
-				paint: {
-					"fill-extrusion-color": trailColor(colors.mapStyle, colors.darkMap),
-					"fill-extrusion-base": ["get", "base"],
-					"fill-extrusion-height": ["get", "height"],
-					"fill-extrusion-opacity": 0.45,
-				},
-			});
-			map.addSource("replay-trails-3d", { type: "geojson", data: EMPTY_FC });
-			map.addLayer({
-				id: "replay-trails-3d", type: "fill-extrusion", source: "replay-trails-3d",
-				layout: { visibility: "none" },
-				paint: {
-					"fill-extrusion-color": [
-						"case", ["==", ["get", "notable"], true],
-						colors.notablePinColor, colors.pinColor,
-					],
-					"fill-extrusion-base": ["get", "base"],
-					"fill-extrusion-height": ["get", "height"],
-					"fill-extrusion-opacity": REPLAY_TRAIL_OPACITY,
-				},
-			});
-			// Selected-flight curtain wall — same pitch gating as the columns;
-			// data arrives via the curtainGeoJSON prop effect below.
-			map.addSource("track-curtain", { type: "geojson", data: EMPTY_FC });
-			map.addLayer({
-				id: "track-curtain", type: "fill-extrusion", source: "track-curtain",
-				layout: { visibility: pitchedRef.current ? "visible" : "none" },
-				paint: {
-					"fill-extrusion-color": TRACK_LINE_COLOR,
-					"fill-extrusion-height": ["get", "height"],
-					// Opaque on purpose: below 1.0 MapLibre draws every sub-quad's
-					// internal side walls, and the subdivided ramp moirés into
-					// pickets. Opaque abutting boxes read as one continuous wall.
-					"fill-extrusion-opacity": 1,
-					"fill-extrusion-vertical-gradient": true,
-				},
-			});
+			// All 3D geometry — aircraft, trail ribbons, replay-trail spheres,
+			// the selected flight's track tube — renders through the custom
+			// WebGL layers added below; MapLibre's fill-extrusion (flat tops,
+			// no per-vertex elevation) is out of the 3D picture entirely.
 			// Loop-mode replay trails render under BOTH live plane layers ("flights-dots"
 			// is the lower of the two, so inserting before it puts replay trails under
 			// both) but above the trails. They stay simple circles — visually
@@ -689,6 +623,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 			trackTube.setGeometry(buildTrackTube(trackProfileRef.current));
 			trackTubeRef.current = trackTube;
 			map.addLayer(trackTube);
+			// Smooth live-trail ribbons: splined breadcrumbs with per-vertex
+			// elevation, replacing the chunky fill-extrusion slabs. Translucent
+			// and flat-shaded like the 2D trail lines they mirror.
+			const trailTube = new TrackTube3DLayer({
+				id: "trails-3d-model", opacity: 0.45, shaded: false,
+			});
+			trailTube.setColor(trailColor(colors.mapStyle, colors.darkMap));
+			trailTubeRef.current = trailTube;
+			map.addLayer(trailTube);
 			pitchedRef.current = map.getPitch() > 5;
 			syncPlaneVisibility(map);
 			loadedRef.current = true;
@@ -835,6 +778,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			planes3DRef.current = null;
 			replayTrail3DRef.current = null;
 			trackTubeRef.current = null;
+			trailTubeRef.current = null;
 			mapRef.current = null;
 			loadedRef.current = false;
 		};
@@ -867,15 +811,6 @@ export const FlightMap: FC<FlightMapProps> = ({
 		src?.setData(trackGeoJSON ? { type: "FeatureCollection", features: [trackGeoJSON] } : EMPTY_FC);
 	}, [trackGeoJSON]);
 
-	// Push the selected flight's altitude curtain (or clear it).
-	useEffect(() => {
-		const map = mapRef.current;
-		if (!map || !loadedRef.current) return;
-		(map.getSource("track-curtain") as maplibregl.GeoJSONSource | undefined)?.setData(
-			curtainGeoJSON ?? EMPTY_FC,
-		);
-	}, [curtainGeoJSON]);
-
 	// Rebuild the smooth track tube when the selection's profile changes; an
 	// empty/null profile clears it. Radius comes per-frame from the rAF loop.
 	useEffect(() => {
@@ -894,6 +829,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		void installPlaneIcons(map, pinColor, notablePinColor);
 		planes3DRef.current?.setColors(pinColor, notablePinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor);
+		trailTubeRef.current?.setColor(trailColor(mapStyle, darkMap));
 	}, [mapStyle, darkMap, pinColor, notablePinColor]);
 
 	// Arm/disarm the select tool: panning off, crosshair cursor, stale drag
@@ -985,7 +921,6 @@ export const FlightMap: FC<FlightMapProps> = ({
 		if (!map || !loadedRef.current) return;
 		if (!loopEnabled) {
 			(map.getSource("replay-trails") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
-			(map.getSource("replay-trails-3d") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
 			replayTrail3DRef.current?.updateInstances(new Float32Array(0), 0);
 		}
 		dirtyRef.current = true;
@@ -1026,13 +961,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				// Track-tube thickness tracks the marker scale (half the trail
 				// ribbons' 0.08 width factor); radius is a uniform, so this is free.
 				trackTubeRef.current?.setRadius(sizeKm * 1000 * 0.04);
-				if (globeRef.current) {
-					// Globe fallback: level extrusion slabs (the custom layer's
-					// mercator math doesn't hold on the sphere).
-					(map.getSource("planes-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
-						motionPlanes3DToGeoJSON(buf, now, sizeKm, landing),
-					);
-				} else if (planes3DRef.current) {
+				if (planes3DRef.current) {
 					// Per-airframe batches (issue #250 follow-up): each family
 					// draws its own model; unloaded families render the prism
 					// until their STL arrives, and every family seen kicks off
@@ -1059,14 +988,27 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const clamped = Math.min(Math.max(trailMultiplierRef.current, 0), TRAIL_MULTIPLIER_MAX);
 			const trailPoints = Math.round(TRAIL_POINTS * clamped);
 			if (pitchedRef.current) {
-				// Floating ribbons replace the ground lines while pitched; width
-				// tracks the plane-marker scale.
+				// Floating splined ribbons replace the ground lines while pitched;
+				// width tracks the plane-marker scale via the radius uniform.
+				// Ribbons rebuild every SECOND pass (~7.5 fps): they're wide soft
+				// shapes whose per-frame delta is subpixel, and their geometry is
+				// the heaviest per-frame build with thousands aloft.
+				trailFrameRef.current = !trailFrameRef.current;
 				const zoomT = map.getZoom();
-				const ribbonWidthKm =
-					plane3DTargetPx(zoomT) * kmPerPixel(zoomT, map.getCenter().lat) * 0.08;
-				(map.getSource("trails-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
-					motionTrails3DToGeoJSON(buf, now, trailPoints, ribbonWidthKm, landing),
-				);
+				const sizeKmT = plane3DTargetPx(zoomT) * kmPerPixel(zoomT, map.getCenter().lat);
+				if (trailTubeRef.current && trailFrameRef.current) {
+					trailTubeRef.current.setRadius(sizeKmT * 1000 * 0.04); // half-width
+					trailTubeRef.current.setGeometry(buildTrailTubes(buf, now, {
+						displayPoints: trailPoints,
+						// Subdivision only where corners are visible on screen.
+						steps: zoomT <= 5 ? 1 : zoomT <= 7 ? 2 : 3,
+						// Stop the ribbon at the tail: the 3D models span ±0.9 of
+						// the half-size along their length.
+						headOffsetM: sizeKmT * 450,
+						landing,
+					}));
+					map.triggerRepaint();
+				}
 			} else {
 				(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
 					motionTrailsToGeoJSON(buf, now, trailPoints, landing),
@@ -1089,13 +1031,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 					const zoomG = map.getZoom();
 					const replayTrailRadiusKm =
 						plane3DTargetPx(zoomG) * kmPerPixel(zoomG, map.getCenter().lat) * 0.12;
-					if (globeRef.current) {
-						// Globe fallback: extruded pucks (custom-layer math is
-						// mercator-only, same swap as the aircraft).
-						(map.getSource("replay-trails-3d") as maplibregl.GeoJSONSource | undefined)?.setData(
-							replayTrails3DAt(loopState.buffer, playhead, loopState.visible, replayTrailRadiusKm),
-						);
-					} else if (replayTrail3DRef.current) {
+					if (replayTrail3DRef.current) {
 						const inst = buildReplayTrailInstances(
 							loopState.buffer, playhead, loopState.visible, replayTrailRadiusKm,
 						);

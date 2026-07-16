@@ -13,6 +13,7 @@ in vec3 a_offset; // ENU unit offset from the centerline (also the normal)
 
 uniform float u_radius; // meters
 uniform vec3 u_color;
+uniform float u_shaded; // 1 = light by the offset normal (tube), 0 = flat (ribbon)
 
 out vec3 v_color;
 
@@ -27,17 +28,20 @@ void main() {
 #else
 	gl_Position = projectTileFor3D(posMerc, elevMeters * a_center.w);
 #endif
-	float shade = 0.6 + 0.4 * max(dot(a_offset, LIGHT), 0.0);
+	float shade = mix(1.0, 0.6 + 0.4 * max(dot(a_offset, LIGHT), 0.0), u_shaded);
 	v_color = u_color * shade;
 }
 `;
 
+// Premultiplied alpha — what maplibre's blend state expects from custom
+// layers. Opaque layers (u_opacity 1) are unchanged by it.
 const FRAGMENT_SOURCE = `#version 300 es
 precision mediump float;
+uniform float u_opacity;
 in vec3 v_color;
 out vec4 fragColor;
 void main() {
-	fragColor = vec4(v_color, 1.0);
+	fragColor = vec4(v_color * u_opacity, u_opacity);
 }
 `;
 
@@ -62,10 +66,25 @@ const PROJECTION_UNIFORMS = [
 	"u_projection_transition",
 ] as const;
 
+export interface TrackTube3DLayerConfig {
+	id?: string;
+	opacity?: number;
+	/** false = flat color (trail ribbons); true = lit by the offset normal (tube). */
+	shaded?: boolean;
+}
+
 export class TrackTube3DLayer implements CustomLayerInterface {
-	id = "track-tube-3d";
+	readonly id: string;
 	type = "custom" as const;
 	renderingMode = "3d" as const;
+	readonly opacity: number;
+	readonly shaded: boolean;
+
+	constructor(config: TrackTube3DLayerConfig = {}) {
+		this.id = config.id ?? "track-tube-3d";
+		this.opacity = config.opacity ?? 1;
+		this.shaded = config.shaded ?? true;
+	}
 
 	/** Draw gate — custom layers have no layout visibility. */
 	visible = false;
@@ -168,7 +187,9 @@ ${VERTEX_BODY}`;
 			return null;
 		}
 		const uniforms: ProgramInfo["uniforms"] = {};
-		for (const name of [...PROJECTION_UNIFORMS, "u_color", "u_radius"]) {
+		for (const name of [
+			...PROJECTION_UNIFORMS, "u_color", "u_radius", "u_opacity", "u_shaded",
+		]) {
 			uniforms[name] = gl.getUniformLocation(program, name);
 		}
 		const info = { program, uniforms };
@@ -201,6 +222,8 @@ ${VERTEX_BODY}`;
 			gl.uniform1f(u.u_projection_transition, pd.projectionTransition);
 		if (u.u_color) gl.uniform3f(u.u_color, ...this.color);
 		if (u.u_radius) gl.uniform1f(u.u_radius, this.radiusM);
+		if (u.u_opacity) gl.uniform1f(u.u_opacity, this.opacity);
+		if (u.u_shaded) gl.uniform1f(u.u_shaded, this.shaded ? 1 : 0);
 
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.centerBuffer);
 		if (this.geometryDirty) gl.bufferData(gl.ARRAY_BUFFER, this.centers, gl.DYNAMIC_DRAW);
@@ -212,6 +235,10 @@ ${VERTEX_BODY}`;
 		gl.vertexAttribPointer(A_OFFSET, 3, gl.FLOAT, false, 0, 0);
 		this.geometryDirty = false;
 
+		// Premultiplied-alpha blending to match the fragment output; opaque
+		// geometry (u_opacity 1) is unaffected.
+		gl.enable(gl.BLEND);
+		gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		gl.disable(gl.CULL_FACE);
 		gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
 

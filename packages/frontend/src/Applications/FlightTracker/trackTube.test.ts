@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { AltitudeSample } from "./flightAltitude";
 import { exaggeratedHeightM } from "./flightAltitude";
-import { mercatorPerMeter } from "./plane3dMesh";
-import { TUBE_SIDES, buildTrackTube, splineTrack } from "./trackTube";
+import { type MotionBuffer, updateMotion } from "./flightMotion";
+import { lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
+import { TUBE_SIDES, buildTrackTube, buildTrailTubes, splineTrack } from "./trackTube";
 
 const sample = (lon: number, lat: number, alt_ft: number, i = 0): AltitudeSample => ({
 	lon, lat, alt_ft, utc: new Date(Date.UTC(2001, 8, 11, 13, i)).toISOString(),
@@ -108,5 +110,84 @@ describe("buildTrackTube", () => {
 		const tube = buildTrackTube(profile, steps);
 		const rings = (profile.length - 1) * steps + 1;
 		expect(tube.vertexCount).toBe((rings - 1) * TUBE_SIDES * 2 * 3);
+	});
+});
+
+describe("buildTrailTubes (smooth 3D trail ribbons)", () => {
+	// AA1: three samples heading due east at 1°lon/min, climbing.
+	const T0 = Date.parse("2001-09-11T13:00:00Z");
+	function buf(): MotionBuffer {
+		const b: MotionBuffer = new Map();
+		const at = (min: number, lon: number, alt: number): FlightPosition => ({
+			id: min + 1, flight: "AA1", start_date: new Date(T0 + min * 60_000).toISOString(),
+			lat: 40, lon, alt_ft: alt,
+		});
+		updateMotion(b, [at(0, -74, 10_000)]);
+		updateMotion(b, [at(1, -73, 12_000)]);
+		updateMotion(b, [at(2, -72, 14_000)]);
+		return b;
+	}
+
+	it("builds two-vertex rings with horizontal unit offsets", () => {
+		const tube = buildTrailTubes(buf(), T0 + 2 * 60_000, {
+			displayPoints: 20, steps: 2, headOffsetM: 0,
+		});
+		expect(tube.vertexCount).toBeGreaterThan(0);
+		expect(tube.vertexCount % 3).toBe(0);
+		expect(tube.centers).toHaveLength(tube.vertexCount * 4);
+		expect(tube.offsets).toHaveLength(tube.vertexCount * 3);
+		for (let v = 0; v < tube.vertexCount; v++) {
+			const [ox, oy, oz] = [
+				tube.offsets[v * 3], tube.offsets[v * 3 + 1], tube.offsets[v * 3 + 2],
+			];
+			expect(Math.hypot(ox, oy, oz)).toBeCloseTo(1, 5);
+			expect(oz).toBe(0); // ribbon offsets are horizontal
+		}
+	});
+
+	it("head rides at the plane's GLIDED altitude and pulls back to the tail", () => {
+		// 30s past the last sample: glided position lon -71.5, glided altitude
+		// 15,000ft (2,000 ft/min climb continued) — NOT the raw sample's 14,000.
+		const now = T0 + 2 * 60_000 + 30_000;
+		const pullbackM = 2_000;
+		const tube = buildTrailTubes(buf(), now, {
+			displayPoints: 20, steps: 1, headOffsetM: pullbackM,
+		});
+		let maxElev = -Infinity;
+		let maxLonMerc = -Infinity;
+		for (let v = 0; v < tube.vertexCount; v++) {
+			maxElev = Math.max(maxElev, tube.centers[v * 4 + 2]);
+			maxLonMerc = Math.max(maxLonMerc, tube.centers[v * 4]);
+		}
+		expect(maxElev).toBeCloseTo(exaggeratedHeightM(15_000), 0);
+		// Eastbound: the ribbon's end sits WEST of the glided head by the
+		// pullback (tail alignment), never at/under the plane's center.
+		const [headMercX] = lngLatToMercator(-71.5, 40);
+		expect(maxLonMerc).toBeLessThan(headMercX);
+		const pulledBack = headMercX - pullbackM * mercatorPerMeter(40);
+		expect(maxLonMerc).toBeCloseTo(pulledBack, 7); // float32 storage
+	});
+
+	it("freezes with the landing clamp and skips single-sample flights", () => {
+		const landedT = T0 + 2 * 60_000 + 15_000;
+		const landing = new Map([["AA1", landedT]]);
+		const frozen = buildTrailTubes(buf(), landedT + 3_600_000, {
+			displayPoints: 20, steps: 1, headOffsetM: 0, landing,
+		});
+		let maxLonMerc = -Infinity;
+		for (let v = 0; v < frozen.vertexCount; v++) {
+			maxLonMerc = Math.max(maxLonMerc, frozen.centers[v * 4]);
+		}
+		const [expectedX] = lngLatToMercator(-71.75, 40); // 15s past last sample
+		expect(maxLonMerc).toBeCloseTo(expectedX, 7); // float32 storage
+
+		const single: MotionBuffer = new Map();
+		updateMotion(single, [{
+			id: 9, flight: "solo", start_date: new Date(T0).toISOString(),
+			lat: 40, lon: -74, alt_ft: 30_000,
+		}]);
+		expect(buildTrailTubes(single, T0, {
+			displayPoints: 20, steps: 1, headOffsetM: 0,
+		}).vertexCount).toBe(0);
 	});
 });

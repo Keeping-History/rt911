@@ -38,7 +38,6 @@ import { FlightMap, type FlightMapHandle } from "./FlightMap";
 import { MapControls, type SelectMode } from "./MapControls";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 import { useAltitudeProfile } from "./useAltitudeProfile";
-import { curtainToGeoJSON } from "./flightAltitude";
 import { legEstimates } from "./flightEta";
 import { familyForAircraftType } from "./aircraftModels";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
@@ -561,9 +560,8 @@ export const FlightTracker: FC = () => {
 		[selected],
 	);
 	const { track, loading, error } = useFlightTrack(selection);
-	// Altitude profile → 3D curtain wall for the selected flight (issue #224).
+	// Altitude profile → smooth 3D track tube for the selected flight.
 	const { profile } = useAltitudeProfile(selection);
-	const curtainGeoJSON = useMemo(() => curtainToGeoJSON(profile), [profile]);
 
 	// Live fix for the selected flight (`selected` is a click-time snapshot; the
 	// streamed set updates each minute-bucket). Heading is the bearing of the
@@ -935,7 +933,6 @@ export const FlightTracker: FC = () => {
 								visibleFlights={visibleFlights}
 								basemapUrls={BASEMAP_URLS}
 								trackGeoJSON={trackGeoJSON}
-								curtainGeoJSON={curtainGeoJSON}
 								trackProfile={profile}
 								nowMs={nowMs}
 								playing={!paused}
