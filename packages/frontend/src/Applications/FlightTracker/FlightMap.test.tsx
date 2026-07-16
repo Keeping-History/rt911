@@ -153,6 +153,11 @@ vi.mock("./flightIcons", async (importOriginal) => {
 		buildPlaneImage: vi.fn(async (_svg: string, fill: string) => ({ fill }) as unknown as ImageData),
 	};
 });
+// Family silhouettes resolve instantly with a recognizable per-family svg;
+// individual tests override the implementation to simulate failures.
+vi.mock("./aircraftIcons", () => ({
+	loadAircraftIconSvg: vi.fn(async (family: string) => `<svg data-family="${family}"/>`),
+}));
 
 import { createRef } from "react";
 import {
@@ -163,6 +168,8 @@ import {
 } from "./FlightMap";
 import { motionPointsToGeoJSON, updateMotion, type MotionBuffer } from "./flightMotion";
 import { TRACK_LINE_COLOR, TRACK_SHADOW_COLOR } from "./flightMapStyle";
+import { loadAircraftIconSvg } from "./aircraftIcons";
+import { buildPlaneImage } from "./flightIcons";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -330,7 +337,11 @@ describe("FlightMap", () => {
 		};
 		expect(dots.type).toBe("symbol");
 		expect(dots.filter).toEqual(["!=", ["get", "notable"], true]);
-		expect(dots.layout["icon-image"]).toBe("plane-icon");
+		expect(dots.layout["icon-image"]).toEqual([
+			"coalesce",
+			["image", ["concat", "plane-", ["get", "family"]]],
+			["image", "plane-icon"],
+		]);
 		expect(dots.layout["icon-rotate"]).toEqual(["-", ["get", "heading"], 90]);
 		expect(dots.layout["icon-rotation-alignment"]).toBe("map");
 		expect(dots.layout["icon-allow-overlap"]).toBe(true);
@@ -344,7 +355,11 @@ describe("FlightMap", () => {
 			type: string; layout: Record<string, unknown>;
 		};
 		expect(notable.type).toBe("symbol");
-		expect(notable.layout["icon-image"]).toBe("plane-notable-icon");
+		expect(notable.layout["icon-image"]).toEqual([
+			"coalesce",
+			["image", ["concat", "plane-notable-", ["get", "family"]]],
+			["image", "plane-notable-icon"],
+		]);
 		expect(notable.layout["icon-size"]).toBeUndefined(); // notables stay fixed
 	});
 
@@ -1170,5 +1185,86 @@ describe("FlightMap", () => {
 		rerender(<FlightMap {...common} mapStyle="satellite" darkMap={true} />);
 		expect(map.layout["satellite-night"].visibility).toBe("visible");
 		expect(map.layout["satellite-day"].visibility).toBe("none");
+	});
+
+	describe("per-family 2D icons", () => {
+		beforeEach(() => {
+			vi.mocked(loadAircraftIconSvg).mockImplementation(
+				async (family: string) => `<svg data-family="${family}"/>`,
+			);
+		});
+
+		const renderWithFamily = (familyOf?: (flight: string, startDate: string) => string) =>
+			render(
+				<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrls={TEST_URLS}
+					trackGeoJSON={null} nowMs={Date.parse("2001-09-11T13:00:00Z")} playing={false}
+					onSelectFlight={() => {}} onClearSelection={() => {}}
+					darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+					radarSweep={false} trailMultiplier={1} aircraftFamilyOf={familyOf} />,
+			);
+
+		it("uses a family-driven icon-image expression with a generic fallback on all three plane layers", () => {
+			renderWithFamily();
+			FakeMap.last!.fire("load");
+			const layer = (id: string) =>
+				FakeMap.last!.layers.find((l) => l.id === id) as { layout: Record<string, unknown> };
+			for (const id of ["flights-dots", "cluster-planes"]) {
+				expect(layer(id).layout["icon-image"]).toEqual([
+					"coalesce",
+					["image", ["concat", "plane-", ["get", "family"]]],
+					["image", "plane-icon"],
+				]);
+			}
+			expect(layer("flights-notable").layout["icon-image"]).toEqual([
+				"coalesce",
+				["image", ["concat", "plane-notable-", ["get", "family"]]],
+				["image", "plane-notable-icon"],
+			]);
+		});
+
+		it("stamps features with the resolved family and registers that family's images", async () => {
+			renderWithFamily(() => "b767");
+			const map = FakeMap.last!;
+			await act(async () => { map.fire("load"); });
+			const fc = map.sources["flights"].data as { features: { properties: { family: string } }[] };
+			expect(fc.features[0].properties.family).toBe("b767");
+			expect(loadAircraftIconSvg).toHaveBeenCalledWith("b767");
+			expect(map.images["plane-b767"]).toBeTruthy();
+			expect(map.images["plane-notable-b767"]).toBeTruthy();
+			// Sizes: regular at FAMILY_ICON_PX.b767=15, notable at round(32*15/12)=40.
+			expect(buildPlaneImage).toHaveBeenCalledWith('<svg data-family="b767"/>', "#3a3a3a", 15);
+			expect(buildPlaneImage).toHaveBeenCalledWith('<svg data-family="b767"/>', "#c0202a", 40);
+		});
+
+		it("never fetches an icon for the generic family", async () => {
+			renderWithFamily(); // no resolver -> family "generic"
+			await act(async () => { FakeMap.last!.fire("load"); });
+			expect(loadAircraftIconSvg).not.toHaveBeenCalled();
+		});
+
+		it("re-tints loaded family icons when the pin colors change", async () => {
+			const view = renderWithFamily(() => "b757");
+			const map = FakeMap.last!;
+			await act(async () => { map.fire("load"); });
+			expect(map.images["plane-b757"]).toBeTruthy();
+			await act(async () => {
+				view.rerender(
+					<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrls={TEST_URLS}
+						trackGeoJSON={null} nowMs={Date.parse("2001-09-11T13:00:00Z")} playing={false}
+						onSelectFlight={() => {}} onClearSelection={() => {}}
+						darkMap={false} mapStyle="classic" pinColor="#00ff00" notablePinColor="#c0202a"
+						radarSweep={false} trailMultiplier={1} aircraftFamilyOf={() => "b757"} />,
+				);
+			});
+			expect((map.updatedImages["plane-b757"] as { fill: string }).fill).toBe("#00ff00");
+		});
+
+		it("leaves the family unregistered when the icon fetch fails (fallback keeps rendering)", async () => {
+			vi.mocked(loadAircraftIconSvg).mockResolvedValueOnce(null);
+			renderWithFamily(() => "crj");
+			const map = FakeMap.last!;
+			await act(async () => { map.fire("load"); });
+			expect(map.images["plane-crj"]).toBeUndefined();
+		});
 	});
 });
