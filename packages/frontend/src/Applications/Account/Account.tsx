@@ -72,7 +72,7 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 				setConfirmResult(`Your email is now ${email}.`);
 				// refresh() failure must not overwrite the (real) success message —
 				// the change already applied; the profile view just re-syncs later.
-				refresh().catch(() => undefined);
+				void Promise.resolve(refresh()).catch(() => undefined);
 			})
 			.catch((err: Error) => setConfirmResult(err.message));
 	}, [confirmToken, status, refresh]);
