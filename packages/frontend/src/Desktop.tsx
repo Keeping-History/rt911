@@ -1,5 +1,6 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { ClassicyDesktop } from "classicy";
+import { Account } from "./Applications/Account/Account";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";
 import { FlightTracker } from "./Applications/FlightTracker/FlightTracker";
@@ -20,6 +21,7 @@ export default function Desktop() {
 			<Browser />
 			<TimeMachine />
 			<Feedback />
+			<Account />
 			<FlightTracker />
 			<MarketWatch />
 			<News />

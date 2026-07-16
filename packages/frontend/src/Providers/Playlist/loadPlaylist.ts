@@ -4,7 +4,7 @@
 import { parsePlaylist } from "./parsePlaylist";
 import type { PlaylistDefinition } from "./playlistTypes";
 
-const DIRECTUS_URL: string =
+export const DIRECTUS_URL: string =
 	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
 	"https://api-beta.911realtime.org";
 
