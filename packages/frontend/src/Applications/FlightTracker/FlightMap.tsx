@@ -184,19 +184,27 @@ function featureAnchor(f: { geometry: GeoJSON.Geometry }): [number, number] | nu
 	return null;
 }
 
-// Screen position of a location AT ALTITUDE. queryRenderedFeatures on
-// fill-extrusion layers hit-tests the ground FOOTPRINT, not the visually
-// elevated pixels — so 3D hit tests must project the elevated point
-// themselves. transform.coordinatePoint(coord, elevationMeters) is internal
-// (absent from the public types, present in every 5.x mercator transform);
-// if it's ever missing (or throws, e.g. exotic projections), fall back to
-// the ground projection — no worse than the pre-fix behavior.
+// Screen position of a location AT ALTITUDE, or null when it's hidden behind
+// the planet. queryRenderedFeatures hit-tests ground footprints, not the
+// visually elevated pixels — so 3D hit tests project the elevated point
+// themselves, via per-projection INTERNAL transform methods (absent from the
+// public types, present in every 5.x build; verified live):
+//  - mercator: transform.coordinatePoint(mercCoord, elevationMeters)
+//  - globe: transform.projectTileCoordinates(x, y, tileID, getElevation) —
+//    the CPU twin of the shaders' projectTileFor3D. A synthetic zoom-0 tile
+//    makes in-tile coords = mercator × EXTENT, and the result is NDC, so it
+//    converts through the transform's canvas size. Occluded points (far side
+//    of the sphere) return null rather than a bogus mirror position.
+// If both are missing (or throw), fall back to the ground projection — no
+// worse than the pre-fix behavior.
+const TILE_EXTENT = 8192;
+const WORLD_TILE = { wrap: 0, canonical: { x: 0, y: 0, z: 0 } };
 function projectAtAltitude(
 	map: maplibregl.Map,
 	lon: number,
 	lat: number,
 	altM: number,
-): { x: number; y: number } {
+): { x: number; y: number } | null {
 	const transform = (
 		map as unknown as {
 			transform?: {
@@ -204,18 +212,40 @@ function projectAtAltitude(
 					coord: maplibregl.MercatorCoordinate,
 					elevation: number,
 				) => { x: number; y: number };
+				projectTileCoordinates?: (
+					x: number,
+					y: number,
+					tileID: typeof WORLD_TILE,
+					getElevation: () => number,
+				) => { point: { x: number; y: number }; isOccluded?: boolean };
+				width?: number;
+				height?: number;
 			};
 		}
 	).transform;
-	if (transform?.coordinatePoint) {
-		try {
+	try {
+		if (transform?.coordinatePoint) {
 			return transform.coordinatePoint(
 				maplibregl.MercatorCoordinate.fromLngLat([lon, lat]),
 				altM,
 			);
-		} catch {
-			// fall through to ground projection
 		}
+		if (transform?.projectTileCoordinates && transform.width && transform.height) {
+			const merc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat]);
+			const p = transform.projectTileCoordinates(
+				merc.x * TILE_EXTENT,
+				merc.y * TILE_EXTENT,
+				WORLD_TILE,
+				() => altM,
+			);
+			if (p.isOccluded) return null;
+			return {
+				x: ((p.point.x + 1) / 2) * transform.width,
+				y: ((1 - p.point.y) / 2) * transform.height,
+			};
+		}
+	} catch {
+		// fall through to ground projection
 	}
 	return map.project([lon, lat]);
 }
@@ -363,6 +393,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			if (altFt <= 0) continue;
 			const head = extrapolate(m, effNow);
 			const p = projectAtAltitude(map, head.lon, head.lat, exaggeratedHeightM(altFt));
+			if (!p) continue; // behind the globe — not clickable
 			out.push({ flight: m.item.flight, x: p.x, y: p.y });
 		}
 		return out;
