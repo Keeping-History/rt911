@@ -544,8 +544,8 @@ describe("Weather", () => {
 			expect(findMenuItem("View", (t) => t.includes("Classic Map"))!.title).toBe(
 				"✓ Classic Map",
 			);
-			expect(findMenuItem("View", (t) => t.includes("Radar Scope"))!.title).toBe(
-				"Radar Scope",
+			expect(findMenuItem("View", (t) => t.includes("Radar"))!.title).toBe(
+				"Radar",
 			);
 			expect(findMenuItem("View", (t) => t.includes("Satellite"))!.title).toBe("Satellite");
 			expect(findMenuItem("View", (t) => t.includes("Dark Map"))!.title).toBe("Dark Map");

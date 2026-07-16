@@ -32,8 +32,12 @@ standing in for the ATR-42 family; FlightGear/GPL conversions covering the
    plus a `processed.html` contact sheet — eyeball it (noses must point UP
    in the left column).
 4. Review helpers: `preview.py` renders any directory of STLs to an
-   isometric contact sheet; `make_icons.py` emits top-down silhouette SVGs
-   (candidate 2D icons) into `icons/`.
+   isometric contact sheet. `python3 make_icons.py processed` emits the 2D
+   map icons — simplified single-path top-down silhouettes (nose RIGHT,
+   no fill; requires shapely) — into `processed/icons/`, plus an
+   `icons.html` contact sheet. These are uploaded to Wasabi under
+   `maps/aircraft/icons/<family>.svg` and are derivatives of the same
+   models, so `models.json`'s attribution covers them.
 5. Upload `processed/*.stl` + a regenerated `models.json` to Wasabi under
    `maps/aircraft/` (video-grabber creds, boto3
    `request_checksum_calculation="when_required"` — same Wasabi gotcha as

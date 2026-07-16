@@ -407,8 +407,8 @@ describe("FlightTracker", () => {
 		expect(menuItem("View", (t) => t.includes("Classic Map"))!.title).toBe(
 			"✓ Classic Map",
 		); // default → checked
-		expect(menuItem("View", (t) => t.includes("Radar Scope"))!.title).toBe(
-			"Radar Scope",
+		expect(menuItem("View", (t) => t.includes("Radar"))!.title).toBe(
+			"Radar",
 		);
 		const satellite = menuItem("View", (t) => t.includes("Satellite"))!;
 		expect(satellite.title).toBe("Satellite");
@@ -498,7 +498,7 @@ describe("FlightTracker", () => {
 	it("Settings window map-style radio round-trips through Save", () => {
 		renderWithContext({});
 		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
-		fireEvent.click(screen.getByLabelText("Radar Scope"));
+		fireEvent.click(screen.getByLabelText("Radar"));
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
 			type: "ClassicyAppFlightTrackerSetMapSettings",

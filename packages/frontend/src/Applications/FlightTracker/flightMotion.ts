@@ -153,6 +153,9 @@ export function motionPointsToGeoJSON(
 	buffer: MotionBuffer,
 	now: number,
 	landing?: LandingClock,
+	// Airframe family resolver (FlightMap threads aircraftFamilyOf); omitted
+	// (static/test call sites) stamps everything generic.
+	familyOf?: (m: FlightMotion) => string,
 ): FlightFeatureCollection {
 	const features: FlightFeatureCollection["features"] = [];
 	for (const m of buffer.values()) {
@@ -168,6 +171,7 @@ export function motionPointsToGeoJSON(
 				phase: m.item.phase ?? "",
 				notable: isNotable(m.item.flight),
 				heading: m.headingDeg,
+				family: familyOf?.(m) ?? "generic",
 			},
 		});
 	}

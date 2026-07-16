@@ -282,7 +282,7 @@ export const Weather: FC = () => {
 				},
 				{
 					id: "weather-style-radar-menu",
-					title: `${mapSettings.mapStyle === "radar" ? "✓ " : ""}Radar Scope`,
+					title: `${mapSettings.mapStyle === "radar" ? "✓ " : ""}Radar`,
 					onClickFunc: () => setMapStyle("radar"),
 				},
 				{

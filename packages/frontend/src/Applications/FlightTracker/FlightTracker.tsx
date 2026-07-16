@@ -476,7 +476,7 @@ export const FlightTracker: FC = () => {
 					},
 					{
 						id: "flight-style-radar-menu",
-						title: `${settings.mapStyle === "radar" ? "✓ " : ""}Radar Scope`,
+						title: `${settings.mapStyle === "radar" ? "✓ " : ""}Radar`,
 						onClickFunc: () => setMapStyle("radar"),
 					},
 					{
@@ -711,7 +711,7 @@ export const FlightTracker: FC = () => {
 								name="flight_settings_map_style"
 								inputs={[
 									{ id: "classic", label: "Classic", checked: form.mapStyle === "classic" },
-									{ id: "radar", label: "Radar Scope", checked: form.mapStyle === "radar" },
+									{ id: "radar", label: "Radar", checked: form.mapStyle === "radar" },
 									{ id: "satellite", label: "Satellite", checked: form.mapStyle === "satellite" },
 								]}
 								onClickFunc={(id: string) =>

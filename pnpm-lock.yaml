@@ -2365,8 +2365,8 @@ packages:
   immediate@3.0.6:
     resolution: {integrity: sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ==}
 
-  immer@11.1.11:
-    resolution: {integrity: sha512-qzXuyXAkPySAGYkfsAwodDPWT8Zm7/Uo5BNt4BjhMhG5WlWyZZ4wQqnWwdS8kjlQ1Cwu6gjw3A6+0gTQwlyYtw==}
+  immer@11.1.15:
+    resolution: {integrity: sha512-VrNANlmnWQnh5COXIIOQXM9oOJw7naGKlBT74ZOOR6lpVXc3gFEu9FJLDFcpCJ2j+NWr8TIwtWD//T6ZX6TKiQ==}
 
   immutable@5.1.5:
     resolution: {integrity: sha512-t7xcm2siw+hlUM68I+UEOK+z84RzmN59as9DZ7P1l0994DKUWV7UXBMQZVxaoMSRQ+PBZbHCOoBt7a2wxOMt+A==}
@@ -5857,7 +5857,7 @@ snapshots:
       classnames: 2.5.1
       he: 1.2.0
       howler: 2.2.4
-      immer: 11.1.11
+      immer: 11.1.15
       pdfjs-dist: 6.1.200
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
@@ -5866,7 +5866,7 @@ snapshots:
       screenfull: 6.0.2
       use-analytics: 1.1.0(react@19.2.7)
       zod: 4.4.3
-      zustand: 5.0.14(@types/react@19.2.17)(immer@11.1.11)(react@19.2.7)
+      zustand: 5.0.14(@types/react@19.2.17)(immer@11.1.15)(react@19.2.7)
     transitivePeerDependencies:
       - '@codemirror/language'
       - '@lezer/highlight'
@@ -6507,7 +6507,7 @@ snapshots:
 
   immediate@3.0.6: {}
 
-  immer@11.1.11: {}
+  immer@11.1.15: {}
 
   immutable@5.1.5: {}
 
@@ -8181,10 +8181,10 @@ snapshots:
 
   zod@4.4.3: {}
 
-  zustand@5.0.14(@types/react@19.2.17)(immer@11.1.11)(react@19.2.7):
+  zustand@5.0.14(@types/react@19.2.17)(immer@11.1.15)(react@19.2.7):
     optionalDependencies:
       '@types/react': 19.2.17
-      immer: 11.1.11
+      immer: 11.1.15
       react: 19.2.7
 
   zwitch@2.0.4: {}
