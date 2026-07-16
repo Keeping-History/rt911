@@ -13,6 +13,7 @@ loader. Position between waypoints is great-circle interpolated (reusing the sam
 ``gc_interp`` the BTS reconstruction uses); altitude is linearly interpolated.
 """
 
+import math
 from datetime import datetime, timedelta, timezone
 
 from reconstruct import gc_interp
@@ -111,6 +112,41 @@ def resample_track(waypoints, step_seconds=STEP_SECONDS, ndigits=5):
                         "lon": round(lon, ndigits), "alt_ft": round(alt)})
     _assign_phases(samples)
     return samples
+
+
+def decimate_polyline(coords, tolerance_deg=0.0005):
+    """Douglas-Peucker decimation of a ``[[lon, lat], ...]`` polyline.
+
+    Keeps every vertex that deviates more than ``tolerance_deg`` (degrees,
+    ~55 m at these latitudes) from the chord of its containing segment — so
+    radar-surveyed turns (AA77's descending spiral, AA11's Hudson run) survive
+    while straight cruise legs collapse to their endpoints. Endpoints are
+    always kept. Planar treatment is fine at track scale."""
+    if len(coords) <= 2:
+        return list(coords)
+    keep = [False] * len(coords)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(coords) - 1)]
+    while stack:
+        lo, hi = stack.pop()
+        ax, ay = coords[lo]
+        bx, by = coords[hi]
+        dx, dy = bx - ax, by - ay
+        norm = math.hypot(dx, dy)
+        worst, worst_d = None, tolerance_deg
+        for i in range(lo + 1, hi):
+            px, py = coords[i]
+            if norm == 0.0:
+                d = math.hypot(px - ax, py - ay)
+            else:
+                d = abs(dx * (ay - py) - dy * (ax - px)) / norm
+            if d > worst_d:
+                worst, worst_d = i, d
+        if worst is not None:
+            keep[worst] = True
+            stack.append((lo, worst))
+            stack.append((worst, hi))
+    return [c for c, k in zip(coords, keep) if k]
 
 
 def _assign_phases(samples):

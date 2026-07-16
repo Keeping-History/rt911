@@ -1,18 +1,22 @@
 """
-Load the four notable September 11, 2001 flights (AA11, UA175, AA77, UA93) into
-the same ``flight_positions`` / ``flight_tracks`` / ``reconstruction_runs`` tables
-the BTS reconstruction writes, so they appear on the streamer ``flights`` channel
-and in the Flight Tracker exactly like the 1,945 BTS-derived flights.
+Load the notable September 11, 2001 flights — the four hijacked aircraft (AA11,
+UA175, AA77, UA93) plus the C-130H observer that witnessed two of the crashes
+(GOFER06) — into the same ``flight_positions`` / ``flight_tracks`` /
+``reconstruction_runs`` tables the BTS reconstruction writes, so they appear on
+the streamer ``flights`` channel and in the Flight Tracker exactly like the
+1,945 BTS-derived flights.
 
-These four are absent from BTS On-Time Performance (which records only completed
-flights) and are curated from authoritative public radar data — each flight's
-NTSB Flight Path Study (2002-02-19), corroborated by the 9/11 Commission Report
-(Ch. 1). The reviewable accuracy artifact is ``data/notable_flights/*.json``;
-this module only resamples, validates, and loads them.
+These flights are absent from BTS On-Time Performance (which records only
+completed scheduled flights) and are curated from authoritative public radar
+data — per-sweep 84 RADES radar returns (FOIA release; extracted by
+``analysis/extract_rades_notables.py``), with NTSB Flight Path Study /
+9/11 Commission anchors bridging radar coverage gaps. The reviewable accuracy
+artifact is ``data/notable_flights/*.json``; this module only resamples,
+validates, and loads them.
 
 CRITICAL — scoped idempotency
 -----------------------------
-Re-running deletes ONLY these four flight IDs for ``flight_date='2001-09-11'``
+Re-running deletes ONLY these five flight IDs for ``flight_date='2001-09-11'``
 before re-inserting. It must NOT reuse the BTS loader's delete-by-``flight_date``
 window (``pgcopy.copy_positions`` / ``directus.delete_window``), which would wipe
 the 1,945 real flights that share that date. A sentinel BTS flight (e.g. AA1002)
@@ -41,13 +45,13 @@ import psycopg
 from psycopg.types.json import Json
 
 from flight_recon.pgcopy import COLUMNS as POSITION_COLUMNS
-from flight_recon.resample import fmt_utc, parse_utc, resample_track
+from flight_recon.resample import decimate_polyline, fmt_utc, parse_utc, resample_track
 from reconstruct import ET_OFFSET, et_seconds
 
 log = logging.getLogger(__name__)
 
 FLIGHT_DATE = "2001-09-11"
-NOTABLE_FLIGHTS = ("AA11", "UA175", "AA77", "UA93")
+NOTABLE_FLIGHTS = ("AA11", "UA175", "AA77", "UA93", "GOFER06")
 DATA_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "data", "notable_flights")
 
 # clock_seconds anchor: continuous seconds since ET midnight of the loaded BTS
@@ -162,16 +166,32 @@ def build_flight(data):
     if len(positions) != want:
         raise ValueError(f"{flight}: expected {want} per-minute rows, got {len(positions)}")
 
-    imp = data["impact"]
-    last = coords[-1]
-    if abs(last[0] - imp["lon"]) > _IMPACT_TOL_DEG or abs(last[1] - imp["lat"]) > _IMPACT_TOL_DEG:
-        raise ValueError(f"{flight}: track end {last} != impact ({imp['lon']},{imp['lat']})")
+    # A crashed flight documents `impact` and its track must end there; an
+    # observer flight (GOFER06) has no impact — its track simply ends at the
+    # last radar return as it leaves the analyzed coverage.
+    imp = data.get("impact")
+    if imp:
+        last = coords[-1]
+        if abs(last[0] - imp["lon"]) > _IMPACT_TOL_DEG or abs(last[1] - imp["lat"]) > _IMPACT_TOL_DEG:
+            raise ValueError(f"{flight}: track end {last} != impact ({imp['lon']},{imp['lat']})")
 
     # details is curated in the JSON minus fate.utc, which is injected from the
     # already-reviewed impact.utc so the impact instant lives in exactly one place.
     details = data.get("details")
-    if details and "fate" in details:
+    if details and "fate" in details and imp:
         details = {**details, "fate": {**details["fate"], "utc": imp["utc"]}}
+
+    # Track geometry at full waypoint resolution (radar returns trace the real
+    # curves — AA77's spiral is ~8 minutes, an octagon at per-minute vertices),
+    # merged with the per-minute samples (which preserve great-circle shape
+    # across sparse anchor-only stretches), then decimated.
+    by_time = {parse_utc(w["utc"]): (float(w["lon"]), float(w["lat"]))
+               for w in data["waypoints"]}
+    for s in samples:
+        by_time.setdefault(s["utc"], (s["lon"], s["lat"]))
+    dense = [[round(lon, 5), round(lat, 5)]
+             for _, (lon, lat) in sorted(by_time.items())]
+    geometry_coords = decimate_polyline(dense)
 
     track = {
         "flight": flight, "flight_date": FLIGHT_DATE, "origin": data["origin"],
@@ -181,7 +201,7 @@ def build_flight(data):
         "tail_number": data.get("registration"),
         "aircraft_type": data.get("aircraft"),
         "details": details,
-        "geometry": {"type": "LineString", "coordinates": coords},
+        "geometry": {"type": "LineString", "coordinates": geometry_coords},
     }
     return positions, track
 
@@ -246,9 +266,11 @@ def insert_tracks(cur, tracks, run_id):
 
 
 def insert_run(cur, run_id, positions_count, tracks_count):
-    """Append one provenance row citing the NTSB studies (append-only ledger)."""
-    source = ("NTSB Flight Path Studies (2002-02-19) for AA11, UA175, AA77, UA93 + "
-              "9/11 Commission Report Ch.1 — curated notable_flights load")
+    """Append one provenance row citing the radar sources (append-only ledger)."""
+    source = ("84 RADES radar returns (FOIA release, FBI analysis 13 Sep 2001) for "
+              "AA11, UA175, AA77, UA93, GOFER06 + NTSB Flight Path Studies "
+              "(2002-02-19) / 9/11 Commission Report Ch.1 gap anchors — curated "
+              "notable_flights load")
     cur.execute(
         'INSERT INTO reconstruction_runs (run_id, start, "end", source_file, '
         "flights_reconstructed, positions_count, tracks_count, skipped_count, "

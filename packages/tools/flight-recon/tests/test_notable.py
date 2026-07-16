@@ -2,9 +2,10 @@
 Tests for the notable-flights loader.
 
 Pure tests (no DB) cover the accuracy-critical core: per-minute resample cadence
-with pinned endpoints, interpolation sanity, track geometry ending at impact,
-airborne-at-T, and — crucially — that the delete is SCOPED to the four flight
-IDs and never a date window.
+with pinned endpoints, interpolation sanity, track geometry ending at impact
+(for the four crashed flights; GOFER06 has no impact), airborne-at-T, and —
+crucially — that the delete is SCOPED to the five flight IDs and never a date
+window.
 
 The end-to-end idempotency test (scoped delete leaves a sentinel BTS flight
 AA1002 and the BTS row count untouched across a re-run) needs a real Postgres.
@@ -19,9 +20,12 @@ from pathlib import Path
 import pytest
 
 from flight_recon import notable
-from flight_recon.resample import parse_utc, resample_track
+from flight_recon.resample import decimate_polyline, parse_utc, resample_track
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "notable_flights"
+
+# The four crashed flights (documented impact); GOFER06 is the observer.
+HIJACKED = ("AA11", "UA175", "AA77", "UA93")
 
 
 # ------------------------------------------------------------------ resample core
@@ -86,32 +90,74 @@ def built():
     return out
 
 
-def test_all_four_flights_present(built):
+def test_all_five_flights_present(built):
     assert set(built) == set(notable.NOTABLE_FLIGHTS)
 
 
 @pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
-def test_track_is_linestring_ending_at_impact(built, flight):
+def test_track_is_a_sane_linestring(built, flight):
     data, positions, track = built[flight]
     geom = track["geometry"]
     assert geom["type"] == "LineString"
-    assert len(geom["coordinates"]) == len(positions) >= 2
+    assert len(geom["coordinates"]) >= 2
     for lon, lat in geom["coordinates"]:
         assert -150 < lon < -65 and 18 < lat < 65      # NA bounds, [lon, lat] order
-    end_lon, end_lat = geom["coordinates"][-1]
+    # geometry spans exactly the flown track: first/last vertices match the
+    # first/last per-minute positions
+    assert geom["coordinates"][0] == pytest.approx(
+        [positions[0]["lon"], positions[0]["lat"]], abs=1e-4)
+    assert geom["coordinates"][-1] == pytest.approx(
+        [positions[-1]["lon"], positions[-1]["lat"]], abs=1e-4)
+
+
+@pytest.mark.parametrize("flight", HIJACKED)
+def test_track_ends_at_documented_impact(built, flight):
+    data, _, track = built[flight]
+    end_lon, end_lat = track["geometry"]["coordinates"][-1]
     assert abs(end_lon - data["impact"]["lon"]) <= 1e-3
     assert abs(end_lat - data["impact"]["lat"]) <= 1e-3
+
+
+@pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
+def test_track_geometry_is_radar_dense(built, flight):
+    """The RADES upgrade's point: geometry follows the surveyed returns, not
+    the per-minute resample — even after decimation it must retain more shape
+    than one vertex per minute (AA77's spiral alone is ~40 returns)."""
+    _, positions, track = built[flight]
+    assert len(track["geometry"]["coordinates"]) > len(positions)
+
+
+def test_gofer06_is_an_observer_not_a_crash(built):
+    data, positions, track = built["GOFER06"]
+    assert "impact" not in data
+    assert track["landed_at"] is None and track["wheels_on_utc"] is None
+    # fate text is curated but no impact instant is injected
+    assert track["details"]["fate"]["text"]
+    assert "utc" not in track["details"]["fate"]
+    # airborne the whole track; ends aloft as it leaves analyzed coverage
+    assert positions[-1]["alt_ft"] > 10000
+
+
+def test_decimate_polyline_collapses_straight_keeps_turns():
+    straight = [[float(x), 40.0] for x in range(-80, -70)]
+    assert decimate_polyline(straight) == [straight[0], straight[-1]]
+    # a square-wave detour must survive decimation
+    detour = [[-80.0, 40.0], [-79.0, 40.0], [-79.0, 41.0], [-78.0, 41.0], [-78.0, 40.0], [-77.0, 40.0]]
+    assert decimate_polyline(detour) == detour
 
 
 @pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
 def test_positions_have_per_minute_clock_keys(built, flight):
     _, positions, _ = built[flight]
     # interior rows are whole minutes -> et_seconds multiples of 60 (clean airborne
-    # snapshot); clock_seconds anchors at the prod BTS window start (2001-09-09 ET
-    # midnight), so 9/11 rows sit exactly two days into the replay clock — matching
-    # every existing prod row (clock_seconds - et_seconds = 172800, verified).
-    for p in positions[:-1]:
+    # snapshot); endpoints are pinned to the true takeoff/impact instants and may
+    # be off-minute (AA77's first radar return is 12:19:58Z). clock_seconds
+    # anchors at the prod BTS window start (2001-09-09 ET midnight), so 9/11 rows
+    # sit exactly two days into the replay clock — matching every existing prod
+    # row (clock_seconds - et_seconds = 172800, verified).
+    for p in positions[1:-1]:
         assert p["et_seconds"] % 60 == 0
+    for p in positions:
         assert p["clock_seconds"] == p["et_seconds"] + 172800
         assert p["diverted"] is False
 
@@ -198,13 +244,13 @@ def _counts(dsn):
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM flight_positions WHERE flight='AA1002'")
         aa1002_pos = cur.fetchone()[0]
-        cur.execute("SELECT count(*) FROM flight_positions WHERE flight NOT IN "
-                    "('AA11','UA175','AA77','UA93')")
+        cur.execute("SELECT count(*) FROM flight_positions WHERE flight != ALL(%s)",
+                    (list(notable.NOTABLE_FLIGHTS),))
         bts_pos = cur.fetchone()[0]
         cur.execute("SELECT count(*) FROM flight_tracks WHERE flight='AA1002'")
         aa1002_trk = cur.fetchone()[0]
-        cur.execute("SELECT flight, count(*) FROM flight_positions WHERE flight IN "
-                    "('AA11','UA175','AA77','UA93') GROUP BY flight")
+        cur.execute("SELECT flight, count(*) FROM flight_positions WHERE flight = ANY(%s) "
+                    "GROUP BY flight", (list(notable.NOTABLE_FLIGHTS),))
         notable_pos = dict(cur.fetchall())
     return aa1002_pos, bts_pos, aa1002_trk, notable_pos
 
@@ -215,13 +261,13 @@ def test_end_to_end_scoped_idempotency(scratch_db):
     assert base[0] == 5 and base[1] == 6 and base[2] == 1 and base[3] == {}
 
     first = notable.run(scratch_db, dry_run=False)
-    assert first["flights"] == 4
+    assert first["flights"] == 5
     after1 = _counts(scratch_db)
-    # four flights loaded; sentinel + BTS counts identical to the seed
-    assert set(after1[3]) == {"AA11", "UA175", "AA77", "UA93"}
+    # five flights loaded; sentinel + BTS counts identical to the seed
+    assert set(after1[3]) == set(notable.NOTABLE_FLIGHTS)
     assert (after1[0], after1[1], after1[2]) == (base[0], base[1], base[2])
 
-    # re-run: scoped delete removes ONLY the four, re-inserts -> no dupes, sentinel safe
+    # re-run: scoped delete removes ONLY the five, re-inserts -> no dupes, sentinel safe
     second = notable.run(scratch_db, dry_run=False)
     assert second["positions_deleted"] == first["positions"]   # deleted exactly its own
     after2 = _counts(scratch_db)
@@ -233,7 +279,7 @@ def test_end_to_end_scoped_idempotency(scratch_db):
 def test_dry_run_persists_nothing(scratch_db):
     base = _counts(scratch_db)
     summary = notable.run(scratch_db, dry_run=True)
-    assert summary["dry_run"] is True and summary["flights"] == 4
+    assert summary["dry_run"] is True and summary["flights"] == 5
     assert _counts(scratch_db) == base    # rolled back
 
 
@@ -242,10 +288,11 @@ def test_dry_run_persists_nothing(scratch_db):
 def test_tracks_carry_aircraft_and_registration(built, flight):
     data, _, track = built[flight]
     assert track["tail_number"] == data["registration"]
-    assert track["aircraft_type"].startswith("Boeing "), track["aircraft_type"]
+    maker = "Lockheed " if flight == "GOFER06" else "Boeing "
+    assert track["aircraft_type"].startswith(maker), track["aircraft_type"]
 
 
-@pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
+@pytest.mark.parametrize("flight", HIJACKED)
 def test_details_souls_are_internally_consistent(built, flight):
     _, _, track = built[flight]
     s = track["details"]["souls"]
@@ -257,7 +304,7 @@ def test_fate_utc_is_injected_from_impact(built):
     # AA11's documented impact instant; the JSON's details.fate has no utc key
     _, _, aa11 = built["AA11"]
     assert aa11["details"]["fate"]["utc"] == "2001-09-11T12:46:40Z"
-    for flight in notable.NOTABLE_FLIGHTS:
+    for flight in HIJACKED:
         data, _, track = built[flight]
         assert track["details"]["fate"]["utc"] == data["impact"]["utc"], flight
         assert track["details"]["fate"]["text"], f"{flight}: fate.text missing"
