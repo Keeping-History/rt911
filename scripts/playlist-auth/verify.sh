@@ -66,5 +66,19 @@ ME_EMAIL=$(curl -sS "$URL/users/me?fields=email" -H "Authorization: Bearer $TA" 
   | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('email') or '')")
 check "A reads own profile email" "verify-teacher-a@example.com" "$ME_EMAIL"
 check "A cannot read B's user row" 403 "$(code "$URL/users/$B_ID" -H "Authorization: Bearer $TA")"
+# avatar flow: upload own file, set own avatar (and ONLY avatar), asset fetch
+# via the locked preset; cross-user file reads must fail.
+PNG=$(mktemp --suffix=.png)
+python3 -c "import base64,sys; open('$PNG','wb').write(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='))"
+A_FILE=$(curl -sS -X POST "$URL/files" -H "Authorization: Bearer $TA" -F "file=@$PNG" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('id') or '')")
+rm -f "$PNG"
+check "A uploads a file"           "ok"  "$([ -n "$A_FILE" ] && echo ok)"
+check "A sets own avatar"          200 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d "{\"avatar\":\"$A_FILE\"}")"
+check "A cannot update first_name" 403 "$(code -X PATCH "$URL/users/me" -H "Authorization: Bearer $TA" -H "Content-Type: application/json" -d '{"first_name":"Hacked"}')"
+check "A fetches avatar preset"    200 "$(code "$URL/assets/$A_FILE?key=avatar" -H "Authorization: Bearer $TA")"
+check "B cannot read A's file"     403 "$(code "$URL/files/$A_FILE" -H "Authorization: Bearer $TB")"
+check "A deletes own file"         204 "$(code -X DELETE "$URL/files/$A_FILE" -H "Authorization: Bearer $TA")"
+A_FILE=""
 A_PL="" # deleted; skip in cleanup
 echo; [ "$FAILS" -eq 0 ] && echo "ALL CHECKS PASSED" || { echo "$FAILS CHECK(S) FAILED"; exit 1; }
