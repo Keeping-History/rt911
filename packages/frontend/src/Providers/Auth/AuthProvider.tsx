@@ -41,7 +41,9 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
 	);
 
 	const signInWithProvider = useCallback((provider: "google" | "facebook" | "apple") => {
-		window.location.assign(providerLoginUrl(provider, window.location.href));
+		// Use bare origin, not href, to avoid including query strings that
+		// Directus's AUTH_GOOGLE_REDIRECT_ALLOW_LIST would reject (exact match only).
+		window.location.assign(providerLoginUrl(provider, window.location.origin + "/"));
 	}, []);
 
 	const signOut = useCallback(async () => {

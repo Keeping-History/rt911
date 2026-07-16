@@ -155,12 +155,19 @@ describe("AuthProvider", () => {
 		expect(getByTestId("status").textContent).toBe("signedIn");
 	});
 
-	it("signInWithProvider navigates to the provider login URL", async () => {
+	it("signInWithProvider navigates to the provider login URL, stripping query strings from the redirect", async () => {
 		fetchMe.mockResolvedValue(null);
 		const assignSpy = vi.fn();
 		const originalLocation = Object.getOwnPropertyDescriptor(window, "location");
+		// Mock window.location with both origin and href; set href to include a query
+		// string to prove that signInWithProvider strips it and uses bare origin instead.
 		Object.defineProperty(window, "location", {
-			value: { ...window.location, assign: assignSpy, href: "https://beta.911realtime.org/" },
+			value: {
+				...window.location,
+				assign: assignSpy,
+				href: "https://beta.911realtime.org/?reason=denied",
+				origin: "https://beta.911realtime.org",
+			},
 			writable: true,
 			configurable: true,
 		});
@@ -172,6 +179,8 @@ describe("AuthProvider", () => {
 			);
 			await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
 			fireEvent.click(getByText("sign in google"));
+			// Verify providerLoginUrl receives the bare origin + "/", not the full href
+			// with query string—this is the key assertion that proves the fix works.
 			expect(providerLoginUrl).toHaveBeenCalledWith("google", "https://beta.911realtime.org/");
 			expect(assignSpy).toHaveBeenCalledWith(
 				"https://api.example/auth/login/google?redirect=" +
