@@ -13,6 +13,7 @@ import { DefaultFileSystem } from "./data/DefaultFileSystem";
 // Re-splitting the desktop chunk for mobile is blocked on a classicy fix.
 import Desktop from "./Desktop";
 import { isMobileDevice } from "./Mobile/detectMobile";
+import { AuthProvider } from "./Providers/Auth/AuthProvider";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
 import { PlaylistProvider } from "./Providers/Playlist/PlaylistProvider";
 import { initTracker } from "./openreplay";
@@ -92,17 +93,19 @@ createRoot(rootElement).render(
 			}}
 		>
 			<PlaylistProvider>
-				<MediaStreamProvider>
-					<Suspense fallback={null}>
-						{mobile ? (
-							<MobileFallbackBoundary>
-								<IpodShell />
-							</MobileFallbackBoundary>
-						) : (
-							<Desktop />
-						)}
-					</Suspense>
-				</MediaStreamProvider>
+				<AuthProvider>
+					<MediaStreamProvider>
+						<Suspense fallback={null}>
+							{mobile ? (
+								<MobileFallbackBoundary>
+									<IpodShell />
+								</MobileFallbackBoundary>
+							) : (
+								<Desktop />
+							)}
+						</Suspense>
+					</MediaStreamProvider>
+				</AuthProvider>
 			</PlaylistProvider>
 		</ClassicyAppManagerProvider>
 	</StrictMode>,
