@@ -24,6 +24,7 @@ import {
 	type MediaItem,
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { trackAppToggle } from "../../openreplay";
+import { newsSetOpenDocuments, type NewsRemoteCommand } from "./NewsContext";
 import styles from "./News.module.scss";
 
 export const News: React.FC = () => {
@@ -114,6 +115,37 @@ export const News: React.FC = () => {
 			desktopEventDispatch({ type: "ClassicyWindowFocus", app: { id: appId }, window: ws });
 		}
 	}, [appWindows, desktopEventDispatch]);
+
+	// Publish the open-documents set (playlist locked-focus reconciliation reads it).
+	useEffect(() => {
+		desktopEventDispatch(newsSetOpenDocuments(openDocuments));
+	}, [openDocuments, desktopEventDispatch]);
+
+	// Apply each remote focus command exactly once, tracked by its monotonic
+	// seq (TV.tsx's pattern). Consume only when the article exists in the
+	// stream AND its detail window has been rendered — otherwise leave the seq
+	// unconsumed so the effect retries as items/appWindows update.
+	const command = useAppManager(
+		(s) =>
+			s.System.Manager.Applications.apps[appId]?.data?.command as
+				| NewsRemoteCommand
+				| undefined,
+	);
+	const lastCommandSeqRef = useRef(0);
+	useEffect(() => {
+		if (!command || command.seq <= lastCommandSeqRef.current) return;
+		if (command.kind !== "focus") {
+			lastCommandSeqRef.current = command.seq;
+			return;
+		}
+		const exists = items.some((i) => i.id === command.docId);
+		const hasWindow = (appWindows ?? []).some(
+			(w: { id: string }) => w.id === `${appId}_newsitem_${command.docId}`,
+		);
+		if (!exists || !hasWindow) return; // retry on next items/windows update
+		lastCommandSeqRef.current = command.seq;
+		openDocumentDetails(command.docId);
+	}, [command, items, appWindows, openDocumentDetails]);
 
 	const paginate = useCallback((direction: "forward" | "back" | "now") => {
 		if (direction === "now") {

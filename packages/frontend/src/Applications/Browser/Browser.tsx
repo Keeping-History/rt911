@@ -28,6 +28,7 @@ import type {
 	BrowserFavorite,
 	BrowserHistoryEntry,
 	BrowserHomePage,
+	BrowserRemoteCommand,
 } from "./BrowserContext";
 import {
 	buildLinkStyle,
@@ -296,6 +297,17 @@ export const Browser = () => {
 		onRecordVisit: recordVisit,
 		visitedHistory: history,
 	});
+
+	// Apply each remote navigate command (playlist scheduled browser entries)
+	// exactly once, tracked by its monotonic seq. No retry condition needed —
+	// navigation depends on no stream data.
+	const remoteCommand = appState?.data?.command as BrowserRemoteCommand | undefined;
+	const lastCommandSeqRef = useRef(0);
+	useEffect(() => {
+		if (!remoteCommand || remoteCommand.seq <= lastCommandSeqRef.current) return;
+		lastCommandSeqRef.current = remoteCommand.seq;
+		if (remoteCommand.kind === "navigate") goTo(remoteCommand.url);
+	}, [remoteCommand, goTo]);
 
 	const windowIcon = useMemo(() => {
 		const currentDomain = normalizeDomain(addressBarValue);

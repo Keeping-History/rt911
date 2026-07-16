@@ -59,6 +59,10 @@ import {
 	visibleFlightSet,
 } from "./flightFilter";
 import { dropLandedPositions, landingClockOf } from "./flightLanding";
+import {
+	type FlightRemoteCommand,
+	flightTrackerSetFocusedFlight,
+} from "./flightTrackerCommands";
 import { useNotableCrashSites } from "./useNotableCrashSites";
 import { useRouteIndex } from "./useRouteIndex";
 import { groundStopStatus } from "./groundStop";
@@ -647,6 +651,32 @@ export const FlightTracker: FC = () => {
 			setActiveFlightIdx(0);
 		}
 	};
+
+	// Publish the selected callsign (playlist locked-focus reconciliation reads it).
+	const publishedFocused = appData?.focusedFlight as string | null | undefined;
+	useEffect(() => {
+		const current = selected?.flight ?? null;
+		if (current === (publishedFocused ?? null)) return;
+		desktopEventDispatch(flightTrackerSetFocusedFlight(current));
+	}, [selected?.flight, publishedFocused, desktopEventDispatch]);
+
+	// Apply each remote focus command exactly once, tracked by its monotonic
+	// seq (TV.tsx's pattern); retries while the callsign isn't airborne yet.
+	const command = appData?.command as FlightRemoteCommand | undefined;
+	const lastCommandSeqRef = useRef(0);
+	useEffect(() => {
+		if (!command || command.seq <= lastCommandSeqRef.current) return;
+		if (command.kind !== "focus") {
+			lastCommandSeqRef.current = command.seq;
+			return;
+		}
+		const lc = command.callsign.toLowerCase();
+		const hit = flightPositions.find((p) => p.flight.toLowerCase() === lc);
+		if (!hit) return; // not airborne yet — retry on next positions update
+		lastCommandSeqRef.current = command.seq;
+		setMultiSelected([hit]);
+		setActiveFlightIdx(0);
+	}, [command, flightPositions]);
 
 	const trackGeoJSON: Feature | null = track?.geometry
 		? { type: "Feature", geometry: track.geometry, properties: {} }

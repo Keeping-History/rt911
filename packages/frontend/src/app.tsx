@@ -14,6 +14,7 @@ import { DefaultFileSystem } from "./data/DefaultFileSystem";
 import Desktop from "./Desktop";
 import { isMobileDevice } from "./Mobile/detectMobile";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
+import { PlaylistProvider } from "./Providers/Playlist/PlaylistProvider";
 import { initTracker } from "./openreplay";
 
 initTracker();
@@ -90,17 +91,19 @@ createRoot(rootElement).render(
 				},
 			}}
 		>
-			<MediaStreamProvider>
-				<Suspense fallback={null}>
-					{mobile ? (
-						<MobileFallbackBoundary>
-							<IpodShell />
-						</MobileFallbackBoundary>
-					) : (
-						<Desktop />
-					)}
-				</Suspense>
-			</MediaStreamProvider>
+			<PlaylistProvider>
+				<MediaStreamProvider>
+					<Suspense fallback={null}>
+						{mobile ? (
+							<MobileFallbackBoundary>
+								<IpodShell />
+							</MobileFallbackBoundary>
+						) : (
+							<Desktop />
+						)}
+					</Suspense>
+				</MediaStreamProvider>
+			</PlaylistProvider>
 		</ClassicyAppManagerProvider>
 	</StrictMode>,
 );

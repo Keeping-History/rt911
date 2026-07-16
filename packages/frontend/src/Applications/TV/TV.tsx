@@ -33,6 +33,7 @@ import {
 	tvResume,
 	tvSetActivePlayer,
 	tvSetCaptionState,
+	tvSetCurrentChannel,
 	tvSetMuted,
 	tvSetVolumeLimit,
 } from "./TVContext";
@@ -174,6 +175,16 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const [activePlayer, setActivePlayer] = useState<number>(
 		(appState?.data?.activePlayer as number | undefined) ?? 0,
 	);
+	// Publish the active channel's source slug to app data (one effect covers
+	// every setActivePlayer call site) so external controllers — the playlist
+	// engine's locked-focus reconciliation — can see where the TV is tuned.
+	const publishedChannel = appState?.data?.currentChannel as string | undefined;
+	useEffect(() => {
+		const source = items.find((i) => i.id === activePlayer)?.source;
+		if (!source || source === publishedChannel) return;
+		desktopEventDispatch(tvSetCurrentChannel(source));
+	}, [activePlayer, items, publishedChannel, desktopEventDispatch]);
+
 	// True while the main player is buffering or not yet ready; shows the TV-static overlay.
 	const [mainPlayerBuffering, setMainPlayerBuffering] = useState(true);
 	// Browsers block autoplay with audio until the user interacts with the page.

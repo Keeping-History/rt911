@@ -87,3 +87,25 @@ describe("classicyTVEventHandler — guard cases", () => {
 		).toBe(empty);
 	});
 });
+
+describe("classicyTVEventHandler — current channel", () => {
+	it("persists the active channel's source slug", () => {
+		const out = classicyTVEventHandler(storeWithApp(), {
+			type: "ClassicyAppTVSetCurrentChannel",
+			source: "CNN",
+		});
+		expect(
+			out.System.Manager.Applications.apps["TV.app"].data,
+		).toMatchObject({ currentChannel: "CNN" });
+	});
+
+	it("preserves unrelated fields when writing current channel", () => {
+		const out = classicyTVEventHandler(storeWithApp({ overallMuted: true }), {
+			type: "ClassicyAppTVSetCurrentChannel",
+			source: "ABC",
+		});
+		expect(
+			out.System.Manager.Applications.apps["TV.app"].data,
+		).toMatchObject({ overallMuted: true, currentChannel: "ABC" });
+	});
+});
