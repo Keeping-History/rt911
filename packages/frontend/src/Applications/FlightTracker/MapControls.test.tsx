@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { pinpointById } from "./mapPinpoints";
 import { MapControls, type MapControlsProps } from "./MapControls";
@@ -14,6 +14,9 @@ const baseProps = (): MapControlsProps => ({
 	mapStyle: "classic",
 	darkMap: false,
 	filterOn: false,
+	cameraMode: "track",
+	cameraFollow: false,
+	canFollow: false,
 	onZoomIn: vi.fn(),
 	onZoomOut: vi.fn(),
 	onToggleGlobe: vi.fn(),
@@ -25,14 +28,24 @@ const baseProps = (): MapControlsProps => ({
 	onSetMapStyle: vi.fn(),
 	onToggleDarkMap: vi.fn(),
 	onOpenFilter: vi.fn(),
+	onSetCameraMode: vi.fn(),
+	onToggleCameraFollow: vi.fn(),
 });
 
-// ClassicyPopUpMenu's label isn't wired to the select for a11y-name queries,
-// so the two menus (pinpoints, style) are told apart by their element ids.
-const selectById = (id: string): HTMLSelectElement => {
+// classicy's ClassicyPopUpMenu renders as a <button id=…> whose label isn't
+// htmlFor-associated, plus a listbox that only mounts while open. Menus are
+// told apart by their element ids: read the shown value from the button's
+// label span; pick an option by opening the button and clicking its label.
+const popupButton = (id: string): HTMLButtonElement => {
 	const el = document.getElementById(id);
-	if (!(el instanceof HTMLSelectElement)) throw new Error(`no select #${id}`);
+	if (!(el instanceof HTMLButtonElement)) throw new Error(`no popup #${id}`);
 	return el;
+};
+const popupValue = (id: string): string =>
+	popupButton(id).querySelector(".classicyPopUpMenuValue")?.textContent ?? "";
+const pickOption = (id: string, label: string) => {
+	fireEvent.click(popupButton(id));
+	fireEvent.click(within(screen.getByRole("listbox")).getByText(label));
 };
 
 describe("MapControls", () => {
@@ -73,17 +86,15 @@ describe("MapControls", () => {
 	it("pinpoints dropdown flies to the chosen place then snaps back to Choose…", () => {
 		const p = baseProps();
 		render(<MapControls {...p} />);
-		const dd = selectById("flight_map_pinpoints");
-		const placeholder = screen.getByText("Choose…") as HTMLOptionElement;
-		expect(placeholder.disabled).toBe(true);
-		expect(dd.value).toBe(placeholder.value);
-		fireEvent.change(dd, { target: { value: "pentagon" } });
+		// The button shows the placeholder until (and after) a pick — no value sticks.
+		expect(popupValue("flight_map_pinpoints")).toBe("Choose…");
 		const pentagon = pinpointById("pentagon")!;
+		pickOption("flight_map_pinpoints", pentagon.label);
 		// Assert against the data table, not a hardcoded copy — zoom tuning is a
 		// product decision this test must follow, not police.
 		expect(p.onPinpoint).toHaveBeenCalledWith(pentagon.center, pentagon.zoom);
 		// Remounted onto the placeholder — the picked value never sticks.
-		expect(selectById("flight_map_pinpoints").value).toBe(placeholder.value);
+		expect(popupValue("flight_map_pinpoints")).toBe("Choose…");
 	});
 
 	it("select tools are mutually exclusive toggles: active tool re-click turns off", () => {
@@ -104,9 +115,8 @@ describe("MapControls", () => {
 	it("style dropdown shows the current style and fires onSetMapStyle", () => {
 		const p = baseProps();
 		render(<MapControls {...p} mapStyle="satellite" />);
-		const dd = selectById("flight_map_style");
-		expect(dd.value).toBe("satellite");
-		fireEvent.change(dd, { target: { value: "radar" } });
+		expect(popupValue("flight_map_style")).toBe("Satellite");
+		pickOption("flight_map_style", "Radar");
 		expect(p.onSetMapStyle).toHaveBeenCalledWith("radar");
 	});
 
@@ -131,6 +141,44 @@ describe("MapControls", () => {
 		rerender(<MapControls {...p} filterOn={true} />);
 		expect(filter.textContent).toBe("Filter (on)…");
 		expect(filter.getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("follow toggle is disabled until a tracked flight is selectable, then arms", () => {
+		const p = baseProps();
+		const { rerender } = render(<MapControls {...p} canFollow={false} />);
+		const follow = screen.getByRole("button", { name: "Follow flight" }) as HTMLButtonElement;
+		expect(follow.disabled).toBe(true);
+		expect(follow.textContent).toBe("Follow");
+		fireEvent.click(follow);
+		expect(p.onToggleCameraFollow).not.toHaveBeenCalled();
+		// A tracked flight is selected: the toggle arms.
+		rerender(<MapControls {...p} canFollow={true} />);
+		expect(follow.disabled).toBe(false);
+		fireEvent.click(follow);
+		expect(p.onToggleCameraFollow).toHaveBeenCalledOnce();
+	});
+
+	it("camera mode dropdown shows the current mode and fires onSetCameraMode", () => {
+		const p = baseProps();
+		render(<MapControls {...p} cameraMode="cockpit" />);
+		expect(popupValue("flight_camera_mode")).toBe("Cockpit");
+		expect(popupButton("flight_camera_mode").disabled).toBe(false); // preference stays editable
+		pickOption("flight_camera_mode", "Highlight");
+		expect(p.onSetCameraMode).toHaveBeenCalledWith("highlight");
+	});
+
+	it("locks out zoom, marquee, and pinpoints while following (depressed toggle)", () => {
+		const p = baseProps();
+		render(<MapControls {...p} canFollow={true} cameraFollow={true} />);
+		const follow = screen.getByRole("button", { name: "Follow flight" });
+		expect(follow.getAttribute("aria-pressed")).toBe("true");
+		expect(follow.textContent).toBe("Following");
+		for (const name of ["Zoom in", "Zoom out", "Select rectangle", "Select circle"]) {
+			expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+		}
+		expect(popupButton("flight_map_pinpoints").disabled).toBe(true);
+		// The follow toggle itself stays live so you can turn it off.
+		expect((follow as HTMLButtonElement).disabled).toBe(false);
 	});
 
 	it("radar scope disables the dark toggle and shows it unpressed, keeping darkMap", () => {

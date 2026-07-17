@@ -1145,6 +1145,95 @@ describe("FlightMap", () => {
 		expect(onAreaSelect).toHaveBeenCalledWith(["DL404"]); // UA9 outside box
 	});
 
+	describe("camera follow", () => {
+		const withRaf = () => {
+			let rafCb: FrameRequestCallback | null = null;
+			vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+				rafCb = cb;
+				return 1;
+			});
+			vi.stubGlobal("cancelAnimationFrame", () => {});
+			vi.spyOn(performance, "now").mockReturnValue(0);
+			return () => rafCb;
+		};
+		const common = {
+			basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0, playing: true as const,
+			onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", observerPinColor: "#0f766e", radarSweep: false, trailMultiplier: 1,
+		};
+
+		it("track mode locks the camera and jumps it top-down onto the flight", () => {
+			const getRaf = withRaf();
+			const { rerender } = render(
+				<FlightMap {...common} positions={[pos({ id: 1, flight: "AA11", lon: -74, lat: 40 })]}
+					followFlight={null} cameraMode="track" />,
+			);
+			const map = FakeMap.last!;
+			map.fire("load");
+			expect(map.dragPanDisabled).toBe(false); // free camera until follow arms
+
+			rerender(
+				<FlightMap {...common} positions={[pos({ id: 1, flight: "AA11", lon: -74, lat: 40 })]}
+					followFlight="AA11" cameraMode="track" />,
+			);
+			// Arming the lock disables user pan.
+			expect(map.dragPanDisabled).toBe(true);
+			getRaf()!(100);
+			const jt = map.jumpToCalls.at(-1)!;
+			expect(jt.center).toEqual([-74, 40]); // centered on the flight
+			expect(jt.pitch).toBe(0); // top-down
+			expect(jt.bearing).toBe(0); // north-up
+			expect(jt.zoom).toBe(map.getZoom()); // track keeps the current zoom
+
+			// Releasing re-enables pan.
+			rerender(
+				<FlightMap {...common} positions={[pos({ id: 1, flight: "AA11", lon: -74, lat: 40 })]}
+					followFlight={null} cameraMode="track" />,
+			);
+			expect(map.dragPanDisabled).toBe(false);
+		});
+
+		it("cockpit mode opens the pitch band and drives a steep heading-aligned view", () => {
+			const getRaf = withRaf();
+			// Two samples give AA11 an eastbound heading (≈90°).
+			const p1 = pos({ id: 1, flight: "AA11", lon: -74, lat: 40, start_date: "2001-09-11T13:00:00.000Z" });
+			const p2 = pos({ id: 2, flight: "AA11", lon: -73, lat: 40, start_date: "2001-09-11T13:01:00.000Z" });
+			const t1 = Date.parse("2001-09-11T13:01:00.000Z");
+			const { rerender } = render(
+				<FlightMap {...common} positions={[p1]} nowMs={Date.parse("2001-09-11T13:00:00.000Z")}
+					followFlight="AA11" cameraMode="cockpit" />,
+			);
+			const map = FakeMap.last!;
+			map.fire("load");
+			// The follow lock relaxes the pitch cap so cockpit's steep pitch survives.
+			expect(map.maxPitchCalls.at(-1)).toBe(85);
+			rerender(
+				<FlightMap {...common} positions={[p2]} nowMs={t1}
+					followFlight="AA11" cameraMode="cockpit" />,
+			);
+			getRaf()!(100);
+			const jt = map.jumpToCalls.at(-1)!;
+			expect(jt.pitch as number).toBeGreaterThan(60); // steeper than the 3D cap
+			expect(jt.bearing as number).toBeCloseTo(90, 0); // aligned with the eastbound heading
+			expect((jt.center as [number, number])[0]).toBeGreaterThan(-73); // look-point ahead (east)
+		});
+
+		it("does not report follow-driven pitch as a manual 3D change", () => {
+			const getRaf = withRaf();
+			const onPitchedChange = vi.fn();
+			render(
+				<FlightMap {...common} positions={[pos({ id: 1, flight: "AA11", lon: -74, lat: 40 })]}
+					followFlight="AA11" cameraMode="highlight" onPitchedChange={onPitchedChange} />,
+			);
+			const map = FakeMap.last!;
+			map.fire("load");
+			getRaf()!(100); // jumpTo sets a pitched camera and fires "pitch"
+			expect(map.getPitch()).toBeGreaterThan(5); // camera really did pitch
+			expect(onPitchedChange).not.toHaveBeenCalled(); // but the 3D toggle isn't touched
+		});
+	});
+
 	it("compass tracks map rotation and resets bearing on click", () => {
 		render(
 			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}

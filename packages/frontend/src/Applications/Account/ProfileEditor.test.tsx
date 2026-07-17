@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { AuthUser } from "../../Providers/Auth/authApi";
 
 const mockUpdateProfile = vi.hoisted(() => vi.fn());
@@ -76,11 +76,11 @@ describe("ProfileEditor — about you (all optional)", () => {
 	});
 	it("round-trips educator role and toggled grade levels", async () => {
 		render(<ProfileEditor />);
-		// ClassicyPopUpMenu's label isn't htmlFor-associated (classicy quirk) —
-		// target the select by id.
-		fireEvent.change(document.getElementById("profile-educator-role") as HTMLSelectElement, {
-			target: { value: "librarian" },
-		});
+		// ClassicyPopUpMenu renders as a <button id=…> + a listbox that mounts on
+		// open (classicy quirk: the label isn't htmlFor-associated) — open it by id
+		// and click the option's visible label.
+		fireEvent.click(document.getElementById("profile-educator-role") as HTMLButtonElement);
+		fireEvent.click(within(screen.getByRole("listbox")).getByText("Librarian"));
 		fireEvent.click(screen.getByRole("button", { name: "High School" }));
 		fireEvent.click(screen.getByRole("button", { name: "College" }));
 		fireEvent.click(screen.getByRole("button", { name: "College" })); // toggle back off
