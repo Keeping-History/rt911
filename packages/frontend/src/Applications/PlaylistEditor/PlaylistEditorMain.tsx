@@ -8,7 +8,7 @@ import {
 	fileSystemVolume,
 	useClassicyFileSystem,
 } from "classicy";
-import { useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
@@ -22,6 +22,7 @@ import {
 } from "./editorState";
 import { EntryForm } from "./EntryForm";
 import { PlaylistTimeline } from "./PlaylistTimeline";
+import { SaveBar } from "./SaveBar";
 
 const KIND_BRANCHES: [PlaylistEntry["kind"], string][] = [
 	["media", "Media"], ["app", "Apps"], ["settings", "Settings"],
@@ -46,12 +47,29 @@ function entrySummary(e: EditorEntry): string {
 export function PlaylistEditorMain({
 	record,
 	onBack,
+	onDirtyChange = () => {},
+	closeRequested = false,
+	onCancelClose = () => {},
+	onQuit = () => {},
 }: {
 	record: PlaylistRecord;
 	onBack: () => void;
+	/** Fired on mount and whenever dirtiness changes, so the owning window
+	 * (PlaylistEditor) can gate its close confirmation without holding its own
+	 * copy of the editor state. */
+	onDirtyChange?: (dirty: boolean) => void;
+	/** True while the owning window wants to close but the editor is dirty:
+	 * swaps the whole editor body for a three-button save/discard/cancel strip. */
+	closeRequested?: boolean;
+	onCancelClose?: () => void;
+	onQuit?: () => void;
 }) {
 	const [state, dispatch] = useReducer(editorReducer, record, initialEditorState);
 	const [dialogMode, setDialogMode] = useState<"media" | "file" | null>(null);
+
+	useEffect(() => {
+		onDirtyChange(state.dirty);
+	}, [state.dirty, onDirtyChange]);
 	const fs = useClassicyFileSystem();
 	const { sources } = useMediaStream();
 	// sources object identity changes on WS updates; the volume's closures read
@@ -97,6 +115,24 @@ export function PlaylistEditorMain({
 		setDialogMode(null);
 	};
 
+	// The owning window asked to close while the editor is dirty: replace the
+	// whole editor body with a save/discard/cancel strip instead of layering a
+	// modal over it. Reuses SaveBar so the strip's Save button gets the same
+	// invalid/warnings gate as the always-on Save above, rather than a second
+	// copy of that logic.
+	if (closeRequested) {
+		return (
+			<div className="playlistEditorMain">
+				<div className="playlistEditorCloseConfirm">
+					<p>{`Save changes to "${state.title}" before closing?`}</p>
+					<SaveBar state={state} onSaved={onQuit} warningCancelLabel="Keep Editing" />
+					<ClassicyButton onClickFunc={onQuit}>Don't Save</ClassicyButton>
+					<ClassicyButton onClickFunc={onCancelClose}>Cancel</ClassicyButton>
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="playlistEditorMain">
 			<div className="playlistEditorHeader">
@@ -125,6 +161,7 @@ export function PlaylistEditorMain({
 					<option value="draft">Draft</option>
 					<option value="published">Published</option>
 				</select>
+				<SaveBar state={state} onSaved={() => dispatch({ type: "markSaved" })} />
 			</div>
 
 			<div className="playlistEditorAddBar">

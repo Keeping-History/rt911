@@ -8,7 +8,7 @@ import {
 	registerClassicyIcons,
 	useAppManagerDispatch,
 } from "classicy";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { type PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
@@ -31,6 +31,11 @@ export function PlaylistEditor() {
 	const { status, user } = useAuth();
 	const dispatch = useAppManagerDispatch();
 	const [openRecord, setOpenRecord] = useState<PlaylistRecord | null>(null);
+	// Read inside onCloseFunc (not state) so a stale closure never gates a
+	// close decision on last render's dirtiness — PlaylistEditorMain calls
+	// onDirtyChange synchronously as it changes, keeping this current.
+	const dirtyRef = useRef(false);
+	const [closing, setClosing] = useState(false);
 
 	const appMenu = useMemo(
 		() => [
@@ -91,11 +96,32 @@ export function PlaylistEditor() {
 					initialSize={[640, 480]}
 					initialPosition={[140, 90]}
 					appMenu={appMenu}
+					onCloseFunc={() => {
+						// List view (no record open) has nothing to lose — quit directly.
+						if (openRecord === null || !dirtyRef.current) {
+							quit();
+							return;
+						}
+						setClosing(true);
+					}}
 				>
 					{openRecord === null ? (
 						<PlaylistList meId={user?.id ?? ""} onOpen={setOpenRecord} />
 					) : (
-						<PlaylistEditorMain record={openRecord} onBack={() => setOpenRecord(null)} />
+						<PlaylistEditorMain
+							record={openRecord}
+							onBack={() => {
+								setOpenRecord(null);
+								setClosing(false);
+								dirtyRef.current = false;
+							}}
+							onDirtyChange={(dirty) => {
+								dirtyRef.current = dirty;
+							}}
+							closeRequested={closing}
+							onCancelClose={() => setClosing(false)}
+							onQuit={quit}
+						/>
 					)}
 				</ClassicyWindow>
 			)}
