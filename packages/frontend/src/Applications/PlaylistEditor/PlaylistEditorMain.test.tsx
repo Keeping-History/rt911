@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const dialogProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
@@ -15,6 +15,11 @@ vi.mock("../../Providers/Auth/playlistApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../Providers/Auth/playlistApi")>()),
 	updatePlaylist: apiMocks.updatePlaylist,
 }));
+const parsePlaylistMock = vi.hoisted(() => vi.fn());
+vi.mock("../../Providers/Playlist/parsePlaylist", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../Providers/Playlist/parsePlaylist")>()),
+	parsePlaylist: parsePlaylistMock,
+}));
 // Mutable holder so tests can simulate a later WS frame swapping in a *new*
 // sources object (identity change), the way MediaStreamContext really updates.
 const mediaStreamState = vi.hoisted(() => ({
@@ -26,10 +31,16 @@ vi.mock("../../Providers/MediaStream/useMediaStream", () => ({
 
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
 
+const defaultParsePlaylistReturn = { definition: { version: 1, mode: "restrict", entries: [] }, warnings: [] };
+
 const record = {
 	id: "p1", title: "Lesson", status: "draft" as const, date_updated: null, user_created: "u1",
 	definition: { version: 1, mode: "restrict", entries: [{ kind: "media", app: "tv", itemId: "ABC" }] },
 };
+
+beforeEach(() => {
+	parsePlaylistMock.mockReturnValue(defaultParsePlaylistReturn);
+});
 
 afterEach(() => {
 	cleanup();
@@ -189,5 +200,21 @@ describe("PlaylistEditorMain dirty-close", () => {
 			"p1",
 			expect.objectContaining({ title: "Lesson X" }),
 		);
+	});
+
+	it("the strip's Save button shows an error when the definition is invalid, and does not call onQuit", async () => {
+		parsePlaylistMock.mockReturnValue({ definition: null, warnings: [] });
+		const onQuit = vi.fn();
+		const { rerender } = render(
+			<PlaylistEditorMain record={record} onBack={noop} closeRequested={false} onQuit={onQuit} />,
+		);
+		fireEvent.change(screen.getByRole("textbox", { name: /title/i }), { target: { value: "Lesson X" } });
+		rerender(<PlaylistEditorMain record={record} onBack={noop} closeRequested={true} onQuit={onQuit} />);
+
+		fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+		expect(await screen.findByText("This playlist is invalid and can't be saved.")).not.toBeNull();
+		expect(onQuit).not.toHaveBeenCalled();
+		expect(apiMocks.updatePlaylist).not.toHaveBeenCalled();
 	});
 });
