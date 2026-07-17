@@ -31,15 +31,21 @@ vi.mock("../../Providers/MediaStream/useMediaStream", () => ({
 
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
 
-const defaultParsePlaylistReturn = { definition: { version: 1, mode: "restrict", entries: [] }, warnings: [] };
-
 const record = {
 	id: "p1", title: "Lesson", status: "draft" as const, date_updated: null, user_created: "u1",
 	definition: { version: 1, mode: "restrict", entries: [{ kind: "media", app: "tv", itemId: "ABC" }] },
 };
 
-beforeEach(() => {
-	parsePlaylistMock.mockReturnValue(defaultParsePlaylistReturn);
+// Default: delegate to the real parser so every test except the invalid-save
+// case exercises actual parsing of the record it renders. Re-established here
+// (not just once at mock-factory time) because afterEach's vi.clearAllMocks()
+// wipes prior mockImplementation calls, and the invalid-save test swaps in a
+// null-returning implementation mid-test that must not leak into later tests.
+beforeEach(async () => {
+	const actual = await vi.importActual<typeof import("../../Providers/Playlist/parsePlaylist")>(
+		"../../Providers/Playlist/parsePlaylist",
+	);
+	parsePlaylistMock.mockImplementation(actual.parsePlaylist);
 });
 
 afterEach(() => {
@@ -203,7 +209,6 @@ describe("PlaylistEditorMain dirty-close", () => {
 	});
 
 	it("the strip's Save button shows an error when the definition is invalid, and does not call onQuit", async () => {
-		parsePlaylistMock.mockReturnValue({ definition: null, warnings: [] });
 		const onQuit = vi.fn();
 		const { rerender } = render(
 			<PlaylistEditorMain record={record} onBack={noop} closeRequested={false} onQuit={onQuit} />,
@@ -211,6 +216,11 @@ describe("PlaylistEditorMain dirty-close", () => {
 		fireEvent.change(screen.getByRole("textbox", { name: /title/i }), { target: { value: "Lesson X" } });
 		rerender(<PlaylistEditorMain record={record} onBack={noop} closeRequested={true} onQuit={onQuit} />);
 
+		// Only now — after mount, dirty, and the close-confirm strip are all
+		// showing — swap in the invalid-definition result, so this is the sole
+		// test exercising the invalid-save path; every other test still gets
+		// real parsing via the beforeEach delegate.
+		parsePlaylistMock.mockImplementation(() => ({ definition: null, warnings: [] }));
 		fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
 		expect(await screen.findByText("This playlist is invalid and can't be saved.")).not.toBeNull();
