@@ -145,6 +145,26 @@ preceding minutes.
 
 - `GET /health` returns `200 OK` unconditionally as long as the HTTP server is running. Used by Docker and Kubernetes liveness probes. It does **not** check Redis or Postgres reachability — those are checked once at boot and then assumed; if a downstream goes away, the streamer logs and continues serving until it cannot.
 
+### `GET|POST /clock` — forced clock mode (operator only)
+
+Guarded by the `X-Clock-Key` header (constant-time compare against
+`CLOCK_CONTROL_KEY`; unset ⇒ 404, feature off).
+
+- `GET /clock` → `{"active": false}` or `{"active": true, "time": "..."}`
+- `POST /clock {"active": true, "time": "2001-09-11T13:03:00Z"}` — enable/jump
+- `POST /clock {"active": false}` — release
+
+State persists in Redis (`clock:master`) and fans out across pods via pub/sub
+(`clock:master:changed`), so a pod restart mid-session stays forced.
+
+While active, every session is slaved to the master time: `init`/`seek` clamp
+the client-supplied time to master (the ack echoes the clamped value),
+`heartbeat` pins the session clock to master instead of trusting client drift,
+and `pause` is acked but not applied. On release, sessions keep ticking
+forward from wherever the master left them — nothing jumps back. See
+[`docs/websocket-protocol.md`](./docs/websocket-protocol.md) for the wire
+frames (`clock`, `heartbeat_ack.master_time`).
+
 ---
 
 ## 4. Non-functional requirements
