@@ -96,6 +96,10 @@ type outMsg struct {
 	// Done marks the final chunk of a flights_history reply (the ID field above
 	// doubles as the echoed request id on those frames).
 	Done bool `json:"done,omitempty"`
+	// Forced-clock mode (see internal/clock): "clock" frames carry Active
+	// (+Time while active); heartbeat_ack carries MasterTime while forced.
+	Active     *bool  `json:"active,omitempty"`
+	MasterTime string `json:"master_time,omitempty"`
 }
 
 // Session holds all state for a single connected client.
@@ -459,6 +463,13 @@ func (s *Session) resetHorizons(t time.Time) {
 
 // Pause freezes the client's virtual clock.
 func (s *Session) Pause() {
+	// The master clock never pauses; while forced, a client pause would only
+	// desync it until the next heartbeat clamp. Ack (client protocol expects
+	// it) but don't apply.
+	if _, forced := s.hub.MasterNow(); forced {
+		s.send_(outMsg{Type: "pause_ack"})
+		return
+	}
 	s.mu.Lock()
 	s.paused = true
 	s.mu.Unlock()
@@ -474,16 +485,39 @@ func (s *Session) Resume() {
 }
 
 // Heartbeat corrects drift if the client's reported time diverges too far.
+// While the master clock is forced, drift correction inverts: the server
+// wins and pins virtualTime to master rather than trusting the client.
 func (s *Session) Heartbeat(clientTime time.Time) {
+	masterTime, forced := s.hub.MasterNow()
+
 	s.mu.Lock()
-	if drift := abs(clientTime.Sub(s.virtualTime)); drift > driftThresh {
+	if forced {
+		// Forced mode inverts drift correction: the server wins. Pin the
+		// session clock to master so windowed queries track the broadcast.
+		s.virtualTime = masterTime
+	} else if drift := abs(clientTime.Sub(s.virtualTime)); drift > driftThresh {
 		s.logger.Info("correcting drift", "drift", drift)
 		s.virtualTime = clientTime
 	}
 	t := s.virtualTime
 	s.mu.Unlock()
 
-	s.send_(outMsg{Type: "heartbeat_ack", Time: t.Format(time.RFC3339)})
+	m := outMsg{Type: "heartbeat_ack", Time: t.Format(time.RFC3339)}
+	if forced {
+		m.MasterTime = masterTime.Format(time.RFC3339)
+	}
+	s.send_(m)
+}
+
+// SendClock pushes the forced-clock state to this client. While active the
+// client slaves its virtual clock to Time; on release it keeps ticking from
+// wherever the master left it.
+func (s *Session) SendClock(active bool, t time.Time) {
+	m := outMsg{Type: "clock", Active: &active}
+	if active {
+		m.Time = t.Format(time.RFC3339)
+	}
+	s.send_(m)
 }
 
 // SendError delivers an error message to the client.

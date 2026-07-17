@@ -2,7 +2,7 @@
 // The mobile counterpart of the desktop TimeMachine bookmark jump list.
 // Clock writes flow through the same setDateTimeFromUtc helper — see the
 // clock-writer rule in packages/frontend/CLAUDE.md.
-import { useClassicyDateTime } from "classicy";
+import { useAppManager, useClassicyDateTime } from "classicy";
 import { useContext, useState } from "react";
 import { useBookmarks } from "../../Applications/TimeMachine/useBookmarks";
 import {
@@ -17,8 +17,15 @@ export function BookmarksScreen({ tzOffset }: { tzOffset: number }) {
 	const { pop } = useContext(ScreenNavContext);
 	const { bookmarks, loading, error } = useBookmarks();
 	const [selectedIndex, setSelectedIndex] = useState(0);
+	// Belt-and-suspenders alongside the shell's reactive eviction: gate the
+	// write itself so a wheel-select landing in the sub-frame window between
+	// the lock committing and the shell's eviction effect can't move the clock.
+	const dateTimeLocked = useAppManager(
+		(s) => s.System.Manager.DateAndTime.dateTimeLocked,
+	);
 
 	const activate = (i: number) => {
+		if (dateTimeLocked) return;
 		const bookmark = bookmarks[i];
 		if (!bookmark) return;
 		setDateTimeFromUtc(setDateTime, bookmark.start_date);

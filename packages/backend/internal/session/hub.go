@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"classicy/streamer/internal/clock"
 )
 
 // Hub manages all active sessions and drives the global 1-second clock tick.
@@ -15,6 +17,10 @@ type Hub struct {
 	reg      chan *Session
 	unreg    chan *Session
 	logger   *slog.Logger
+
+	// master is the optional process-wide forced clock (nil when the feature
+	// is disabled). Set once at boot via SetMaster; reads are nil-safe.
+	master *clock.MasterClock
 
 	// Load-shedding: maxSessions caps concurrently-admitted connections; 0 means
 	// unlimited. active is the live count, maintained synchronously by
@@ -56,6 +62,32 @@ func (h *Hub) Release() { h.active.Add(-1) }
 
 // Active reports the number of currently-admitted connections.
 func (h *Hub) Active() int64 { return h.active.Load() }
+
+// SetMaster wires the forced master clock. Call once at boot, before Run.
+func (h *Hub) SetMaster(m *clock.MasterClock) { h.master = m }
+
+// MasterNow returns the forced master time, or false when the feature is
+// disabled or inactive.
+func (h *Hub) MasterNow() (time.Time, bool) {
+	if h.master == nil {
+		return time.Time{}, false
+	}
+	return h.master.Now()
+}
+
+// BroadcastClock pushes the forced-clock state to every connected session.
+// RLock + non-blocking send_ per session — same discipline as the tick loop.
+func (h *Hub) BroadcastClock(st clock.State) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, s := range h.sessions {
+		if st.Active {
+			s.SendClock(true, st.NowAt(time.Now().UTC()))
+		} else {
+			s.SendClock(false, time.Time{})
+		}
+	}
+}
 
 func (h *Hub) Register(s *Session) {
 	h.reg <- s

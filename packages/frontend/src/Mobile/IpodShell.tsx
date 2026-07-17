@@ -4,7 +4,7 @@
 // pauses audio when the clock pauses), the active now-playing source (radio
 // station or TV channel), and the mp3 subscription; screens own their list
 // state and register scroll/select meaning via useScreenWheel.
-import { useClassicyDateTime } from "classicy";
+import { useAppManager, useClassicyDateTime } from "classicy";
 import {
 	useCallback,
 	useEffect,
@@ -65,6 +65,11 @@ export default function IpodShell() {
 	const screen = currentScreen(stackState);
 	const { nowMs, getNowMs, clockPaused, tzOffset } = useFineClock();
 	const { paused, pause, resume } = useClassicyDateTime();
+	// While the server forces the clock, nothing on this shell may move it:
+	// Time Travel/Bookmarks/Scrub get evicted and the wheel's play/pause is inert.
+	const dateTimeLocked = useAppManager(
+		(s) => s.System.Manager.DateAndTime.dateTimeLocked,
+	);
 	const {
 		connected,
 		mp3Items,
@@ -124,13 +129,27 @@ export default function IpodShell() {
 		setNowPlaying({ kind: "tv", id });
 	}, []);
 
+	// Forced clock: kick the user off any screen that can move the clock. The
+	// stack only ever nests these three as menu → timeTravel → bookmarks|scrub,
+	// so one pop per re-render (screen is a dependency) walks all the way back.
+	useEffect(() => {
+		if (!dateTimeLocked) return;
+		if (screen === "timeTravel" || screen === "bookmarks" || screen === "scrub") {
+			dispatchStack({ type: "pop" });
+		}
+	}, [dateTimeLocked, screen]);
+
 	const wheel = useClickWheel({
 		onScroll: (steps) => screenHandlersRef.current.onScroll?.(steps),
 		onSelect: () => screenHandlersRef.current.onSelect?.(),
 		onPrev: () => screenHandlersRef.current.onPrev?.(),
 		onNext: () => screenHandlersRef.current.onNext?.(),
 		onMenu: () => dispatchStack({ type: "pop" }),
-		onPlayPause: () => (paused ? resume() : pause()),
+		onPlayPause: () => {
+			if (dateTimeLocked) return;
+			if (paused) resume();
+			else pause();
+		},
 	});
 
 	const clockLabel = formatUtcAsLocalTime(

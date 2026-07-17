@@ -59,7 +59,8 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | ----------------- | ----------------------------- | ------------------------------------------------------ |
 | `init_ack`        | `time`, `items[]`             | Reply to `init`.                                       |
 | `seek_ack`        | `time`, `items[]`             | Reply to `seek`.                                       |
-| `heartbeat_ack`   | `time`                        | Reply to `heartbeat`. `time` is server's vTime.        |
+| `heartbeat_ack`   | `time`, `master_time`         | Reply to `heartbeat`. `time` is server's vTime; `master_time` is present only while forced clock mode is active (see "Forced clock mode" below). |
+| `clock`           | `active`, `time`              | Forced-clock state push: on connect and on every activate/jump/release (see "Forced clock mode" below). |
 | `filter_ack`      | —                             | Reply to `filter`.                                     |
 | `subscribe_ack`   | `channel`                     | Reply to `subscribe`.                                  |
 | `unsubscribe_ack` | `channel`                     | Reply to `unsubscribe`.                                |
@@ -189,6 +190,35 @@ Response:
 If `|client_time - server_vTime| > 3 s`, the server adopts `client_time` as the new `virtualTime`. The reply's `time` always reflects the **server's** virtual time after the (possibly applied) correction — so the client can trust it as the authoritative value.
 
 Send a heartbeat every 5–15 seconds from the client. Less frequent and drift becomes user-visible; more frequent is wasted bandwidth.
+
+### Forced clock mode (server → client `clock`, `heartbeat_ack.master_time`)
+
+An operator can force every client onto one master clock via the streamer's
+key-guarded REST API (`POST /clock` — see SPEC.md). While active:
+
+- On connect, and on every activate/jump/release, the server pushes:
+
+```json
+{ "type": "clock", "active": true, "time": "2001-09-11T13:03:00Z" }
+```
+
+  On release the frame is `{ "type": "clock", "active": false }` and clients
+  keep ticking from wherever the master left them.
+
+- Every `heartbeat_ack` carries the authoritative time while active:
+
+```json
+{ "type": "heartbeat_ack", "time": "2001-09-11T13:03:00Z", "master_time": "2001-09-11T13:03:00Z" }
+```
+
+  Clients treat `master_time` presence as the forced-mode signal and correct
+  their clock when drift exceeds 2 s (a missed `clock` frame self-heals within
+  one heartbeat interval).
+
+- Client-supplied times on `init` and `seek` are clamped to the master time
+  (the ack echoes the clamped time); `heartbeat` pins the session clock to
+  master; `pause` is acked but not applied. Timezone display is client-local
+  and unaffected.
 
 ### `filter`
 

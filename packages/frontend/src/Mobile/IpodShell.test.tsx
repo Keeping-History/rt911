@@ -6,6 +6,12 @@ import type { MediaStreamContextValue } from "../Providers/MediaStream/MediaStre
 import { MediaStreamContext } from "../Providers/MediaStream/MediaStreamContext";
 import IpodShell from "./IpodShell";
 
+// Mutated per-test to drive forced-clock enforcement (see PlaylistProvider.test.tsx
+// for the same mutable-mock convention).
+let mockDateTimeLocked = false;
+const mockPause = vi.fn();
+const mockResume = vi.fn();
+
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	// localDate is the DISPLAY value classicy's ticking clock returns (UTC
@@ -17,9 +23,13 @@ vi.mock("classicy", async (importOriginal) => ({
 		paused: false,
 		tzOffset: -4,
 		setDateTime: vi.fn(),
-		pause: vi.fn(),
-		resume: vi.fn(),
+		pause: mockPause,
+		resume: mockResume,
 	}),
+	useAppManager: (sel: (s: unknown) => unknown) =>
+		sel({
+			System: { Manager: { DateAndTime: { dateTimeLocked: mockDateTimeLocked } } },
+		}),
 	// jsdom can't run hls.js; the shell tests only care about mount/unmount.
 	QuickTimeVideoEmbed: () => <div data-testid="qt-embed" />,
 }));
@@ -28,7 +38,12 @@ vi.mock("../Applications/RadioScanner/StationPlayer", () => ({
 	StationPlayer: () => <div data-testid="station-player" />,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	mockDateTimeLocked = false;
+	mockPause.mockClear();
+	mockResume.mockClear();
+});
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 // The context's default value (not exported) already provides no-op
@@ -78,6 +93,13 @@ function pressMenu(container: HTMLElement) {
 	const wheelEl = container.querySelector("#control-wheel") as HTMLElement;
 	const menuBtn = container.querySelector("#menu-btn") as HTMLElement;
 	fireEvent.pointerDown(menuBtn, { pointerId: 1, clientX: 0, clientY: 0 });
+	fireEvent.pointerUp(wheelEl, { pointerId: 1, clientX: 0, clientY: 0 });
+}
+
+function pressPlayPause(container: HTMLElement) {
+	const wheelEl = container.querySelector("#control-wheel") as HTMLElement;
+	const playBtn = container.querySelector("#play-pause-btn") as HTMLElement;
+	fireEvent.pointerDown(playBtn, { pointerId: 1, clientX: 0, clientY: 0 });
 	fireEvent.pointerUp(wheelEl, { pointerId: 1, clientX: 0, clientY: 0 });
 }
 
@@ -160,5 +182,52 @@ describe("IpodShell TV", () => {
 		fireEvent.click(screen.getByText("WINS"));
 		expect(screen.getByTestId("station-player")).toBeTruthy();
 		expect(screen.queryByTestId("qt-embed")).toBeNull();
+	});
+});
+
+describe("IpodShell forced clock", () => {
+	it("evicts back to the menu when the clock becomes forced while on Time Travel", () => {
+		const { rerender } = renderShell({ connected: true });
+		fireEvent.click(screen.getByText("Time Travel"));
+		expect(screen.getByText("Bookmarks")).toBeTruthy(); // on the Time Travel screen
+
+		mockDateTimeLocked = true;
+		rerender(
+			<WithStream value={{ connected: true }}>
+				<IpodShell />
+			</WithStream>,
+		);
+		expect(screen.getByText("Radio")).toBeTruthy(); // back on the main menu
+		expect(screen.queryByText("Bookmarks")).toBeNull();
+	});
+
+	it("evicts back to the menu (cascading pops) when forced while on a nested Bookmarks/Scrub screen", () => {
+		const { rerender } = renderShell({ connected: true });
+		fireEvent.click(screen.getByText("Time Travel"));
+		fireEvent.click(screen.getByText("Scrub Time"));
+		expect(screen.getByText("Scrub")).toBeTruthy(); // header title of the Scrub screen
+
+		mockDateTimeLocked = true;
+		rerender(
+			<WithStream value={{ connected: true }}>
+				<IpodShell />
+			</WithStream>,
+		);
+		expect(screen.getByText("Radio")).toBeTruthy(); // cascaded all the way back
+	});
+
+	it("makes the wheel's play/pause a no-op while the clock is forced", () => {
+		mockDateTimeLocked = true;
+		const { container } = renderShell({ connected: true });
+		pressPlayPause(container);
+		expect(mockPause).not.toHaveBeenCalled();
+		expect(mockResume).not.toHaveBeenCalled();
+	});
+
+	it("wheel play/pause still works when the clock is not forced", () => {
+		const { container } = renderShell({ connected: true });
+		pressPlayPause(container);
+		expect(mockPause).toHaveBeenCalledTimes(1); // mocked paused: false → pause()
+		expect(mockResume).not.toHaveBeenCalled();
 	});
 });

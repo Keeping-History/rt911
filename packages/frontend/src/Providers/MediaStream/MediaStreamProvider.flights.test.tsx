@@ -20,6 +20,20 @@ vi.mock("classicy", () => ({
 		dateTime: NOW_ISO,
 		tzOffset: 0,
 	}),
+	// Forced-clock enforcement effects (MediaStreamProvider) read/dispatch
+	// through these; this suite doesn't exercise that behavior, so a
+	// no-op/empty-store stub is enough to satisfy the import.
+	useAppManager: (selector: (s: unknown) => unknown) =>
+		selector({
+			System: {
+				Manager: {
+					DateAndTime: { dateTimeLocked: false },
+					Applications: { apps: {} },
+				},
+			},
+		}),
+	useAppManagerDispatch: () => vi.fn(),
+	ClassicyIcons: { applications: {} },
 }));
 
 class FakeWebSocket {

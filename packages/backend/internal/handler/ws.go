@@ -130,6 +130,11 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 		sess := session.NewSession(hub, rdb, pool, logger)
 		hub.Register(sess)
 
+		// Late joiners are locked immediately; everyone else heard the broadcast.
+		if t, ok := hub.MasterNow(); ok {
+			sess.SendClock(true, t)
+		}
+
 		// writePump — runs until the session closes or a write fails.
 		go func() {
 			ping := time.NewTicker(30 * time.Second)
@@ -168,6 +173,16 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 			return nil
 		})
 
+		// effectiveTime substitutes the master time for any client-supplied time
+		// while forced mode is active — a divergent or hand-rolled client cannot
+		// stream data from a different moment.
+		effectiveTime := func(t time.Time) time.Time {
+			if mt, ok := hub.MasterNow(); ok {
+				return mt
+			}
+			return t
+		}
+
 		for {
 			_, raw, err := conn.ReadMessage()
 			if err != nil {
@@ -189,6 +204,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					sess.SendError("invalid time: " + err.Error())
 					continue
 				}
+				t = effectiveTime(t)
 				items, err := db.CurrentItems(r.Context(), pool, t)
 				if err != nil {
 					logger.Warn("current items query failed", "error", err)
@@ -205,6 +221,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					sess.SendError("invalid time: " + err.Error())
 					continue
 				}
+				t = effectiveTime(t)
 				items, err := db.CurrentItems(r.Context(), pool, t)
 				if err != nil {
 					logger.Warn("seek items query failed", "error", err)

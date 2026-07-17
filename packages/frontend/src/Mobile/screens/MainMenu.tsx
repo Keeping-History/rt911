@@ -1,4 +1,5 @@
 // packages/frontend/src/Mobile/screens/MainMenu.tsx
+import { useAppManager } from "classicy";
 import { useContext, useState } from "react";
 import { IpodList, type IpodListItem } from "../IpodList";
 import { ScreenNavContext, useScreenWheel } from "../WheelContext";
@@ -12,11 +13,22 @@ interface MainMenuProps {
 export function MainMenu({ hasNowPlaying }: MainMenuProps) {
 	const { push } = useContext(ScreenNavContext);
 	const [selectedIndex, setSelectedIndex] = useState(0);
+	// While the server forces the clock, Time Travel (and everything reachable
+	// from it — Bookmarks, Scrub) can't be used to move the clock.
+	const dateTimeLocked = useAppManager(
+		(s) => s.System.Manager.DateAndTime.dateTimeLocked,
+	);
 
 	const entries: Array<IpodListItem & { target: ScreenId }> = [
 		{ key: "radio", label: "Radio", arrow: true, target: "radio" },
 		{ key: "tv", label: "TV", arrow: true, target: "tv" },
-		{ key: "timeTravel", label: "Time Travel", arrow: true, target: "timeTravel" },
+		{
+			key: "timeTravel",
+			label: "Time Travel",
+			arrow: true,
+			target: "timeTravel",
+			disabled: dateTimeLocked,
+		},
 		{
 			key: "nowPlaying",
 			label: "Now Playing",
