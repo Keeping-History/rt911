@@ -644,6 +644,16 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 				_system: true,
 			},
 		},
+		// The interactive user-guide tour, served from public/stacks/. Finder
+		// routes Stack-type files to HyperCard via its handlesFileTypes
+		// registration — double-clicking this opens the guide in HyperCard.
+		"Getting Started.stack": {
+			_type: ClassicyFileSystemEntryFileType.Stack,
+			_mimeType: "application/json",
+			_icon: ClassicyIcons.system.files.document,
+			_url: "/stacks/getting-started.stack.json",
+			_size: 21169,
+		},
 		Documents: {
 			_type: ClassicyFileSystemEntryFileType.Directory,
 			_icon: ClassicyIcons.system.folders.directory,
