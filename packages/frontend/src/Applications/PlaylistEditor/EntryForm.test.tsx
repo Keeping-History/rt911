@@ -46,4 +46,36 @@ describe("EntryForm", () => {
 		fireEvent.change(screen.getByRole("textbox", { name: /url/i }), { target: { value: "http://nyt.com" } });
 		expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ url: "http://nyt.com" }));
 	});
+
+	it("renders date+time pickers for a freshly added jump entry (at/to both unset)", () => {
+		const onChange = vi.fn();
+		render(
+			<EntryForm
+				value={{ uid: "e1", entry: { kind: "jump", at: "", to: "" } }}
+				onChange={onChange}
+			/>,
+		);
+		// Required fields must render pickers even though there's no value yet.
+		expect(document.getElementById("When clock reaches-date_month")).not.toBeNull();
+		expect(document.getElementById("When clock reaches-time_hour")).not.toBeNull();
+		expect(document.getElementById("Jump to-date_month")).not.toBeNull();
+		expect(document.getElementById("Jump to-time_hour")).not.toBeNull();
+	});
+
+	it("fires onChange with a UTC ISO string when the 'When clock reaches' time picker is used", () => {
+		const onChange = vi.fn();
+		render(
+			<EntryForm
+				value={{ uid: "e1", entry: { kind: "jump", at: "", to: "" } }}
+				onChange={onChange}
+			/>,
+		);
+		const minutes = document.getElementById("When clock reaches-time_minutes") as HTMLInputElement;
+		fireEvent.change(minutes, { target: { value: "45" } });
+		expect(onChange).toHaveBeenCalled();
+		const call = onChange.mock.calls.at(-1)?.[0] as { at: string };
+		expect(typeof call.at).toBe("string");
+		expect(call.at.length).toBeGreaterThan(0);
+		expect(new Date(call.at).toString()).not.toBe("Invalid Date");
+	});
 });

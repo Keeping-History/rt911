@@ -8,7 +8,7 @@ import {
 	fileSystemVolume,
 	useClassicyFileSystem,
 } from "classicy";
-import { useMemo, useReducer, useState } from "react";
+import { useMemo, useReducer, useRef, useState } from "react";
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
@@ -53,6 +53,11 @@ export function PlaylistEditorMain({
 	const [dialogMode, setDialogMode] = useState<"media" | "file" | null>(null);
 	const fs = useClassicyFileSystem();
 	const { sources } = useMediaStream();
+	// sources object identity changes on WS updates; the volume's closures read
+	// this ref (not the render's `sources`) so they always see the live lists,
+	// even though the volume itself is created only once (below).
+	const sourcesRef = useRef(sources);
+	sourcesRef.current = sources;
 
 	const localVolumes = useMemo(
 		() => [desktopVolume(fs), fileSystemVolume(fs, "Macintosh HD")],
@@ -61,11 +66,10 @@ export function PlaylistEditorMain({
 	const archiveVolume = useMemo(
 		() =>
 			createDirectusVolume({
-				tvSlugs: () => sources.video,
-				radioSlugs: () => sources.audio,
+				tvSlugs: () => sourcesRef.current.video,
+				radioSlugs: () => sourcesRef.current.audio,
 			}),
-		// sources object identity changes on WS updates; slugs are read lazily
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// volume identity must stay stable for the dialog's per-folder cache
 		[],
 	);
 

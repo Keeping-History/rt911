@@ -46,6 +46,9 @@ export type EditorAction =
 
 export function initialEditorState(record: PlaylistRecord): EditorState {
 	const parsed = parsePlaylist(record.definition);
+	if (parsed.warnings.length > 0) {
+		console.warn("playlist-editor: definition warnings on load:", parsed.warnings);
+	}
 	const entries = (parsed.definition?.entries ?? []).map((entry, i) => ({
 		uid: `e${i + 1}`,
 		entry,

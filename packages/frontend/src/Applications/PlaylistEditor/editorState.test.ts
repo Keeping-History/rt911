@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	assembleDefinition,
 	displayWallClockToUtcIso,
@@ -27,6 +27,25 @@ describe("initialEditorState", () => {
 	it("falls back to zero entries on a structurally invalid definition", () => {
 		const s = initialEditorState({ ...record, definition: { nope: true } });
 		expect(s.entries).toEqual([]);
+	});
+	it("warns to the console when parsePlaylist reports warnings, but keeps the valid entries", () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const s = initialEditorState({
+			...record,
+			definition: {
+				version: 1, mode: "restrict",
+				entries: [
+					{ kind: "media", app: "tv", itemId: "ABC" },
+					{ kind: "media", app: "bogus", itemId: "bad" }, // invalid app -> dropped with a warning
+				],
+			},
+		});
+		expect(s.entries).toHaveLength(1);
+		expect(warn).toHaveBeenCalledWith(
+			"playlist-editor: definition warnings on load:",
+			expect.arrayContaining([expect.stringMatching(/unknown app/i)]),
+		);
+		warn.mockRestore();
 	});
 });
 

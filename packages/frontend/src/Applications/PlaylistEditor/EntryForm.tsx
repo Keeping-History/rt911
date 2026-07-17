@@ -9,6 +9,8 @@ import {
 
 const TIMELINE_MIN = new Date(2001, 8, 9); // Sept 9 2001 (display wall clock)
 const TIMELINE_MAX = new Date(2001, 8, 18, 23, 59, 59);
+// Seed for pickers when there's no value yet: Sept 11 2001, 08:40 (display wall clock).
+const DEFAULT_WALL_CLOCK = new Date(2001, 8, 11, 8, 40);
 const KNOWN_APP_IDS = [
 	"TimeMachine.app", "TV.app", "RadioScanner.app", "News.app",
 	"FlightTracker.app", "Browser.app", "PDFViewer.app", "Weather.app",
@@ -23,7 +25,11 @@ function DateTimeField({
 	onChange: (iso: string | undefined) => void;
 }) {
 	const wall = value ? utcIsoToDisplayWallClock(value) : null;
+	const seed = wall ?? DEFAULT_WALL_CLOCK;
 	const setFrom = (d: Date) => onChange(displayWallClockToUtcIso(d));
+	// Required fields always render pickers (there's no way to leave them unset);
+	// optional fields hide the pickers while the "unbounded" checkbox is checked.
+	const showPickers = optional ? value !== undefined : true;
 	return (
 		<fieldset className="entryFormField">
 			<legend>{label}</legend>
@@ -33,17 +39,17 @@ function DateTimeField({
 						type="checkbox"
 						checked={value === undefined}
 						onChange={(e) =>
-							onChange(e.target.checked ? undefined : displayWallClockToUtcIso(new Date(2001, 8, 11, 8, 40)))
+							onChange(e.target.checked ? undefined : displayWallClockToUtcIso(DEFAULT_WALL_CLOCK))
 						}
 					/>
 					unbounded
 				</label>
 			)}
-			{value !== undefined && (
+			{showPickers && (
 				<>
 					<ClassicyDatePicker
 						id={`${label}-date`}
-						prefillValue={wall ?? undefined}
+						prefillValue={seed}
 						minValue={TIMELINE_MIN}
 						maxValue={TIMELINE_MAX}
 						onChangeFunc={(d) => {
@@ -54,9 +60,9 @@ function DateTimeField({
 					/>
 					<ClassicyTimePicker
 						id={`${label}-time`}
-						prefillValue={wall ?? undefined}
+						prefillValue={seed}
 						onChangeFunc={(d) => {
-							const merged = wall ? new Date(wall) : new Date(2001, 8, 11);
+							const merged = wall ? new Date(wall) : new Date(seed);
 							merged.setHours(d.getHours(), d.getMinutes(), d.getSeconds());
 							setFrom(merged);
 						}}

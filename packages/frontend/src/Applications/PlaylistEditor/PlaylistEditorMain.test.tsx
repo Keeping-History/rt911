@@ -10,8 +10,13 @@ vi.mock("classicy", async (importOriginal) => ({
 	},
 	useClassicyFileSystem: () => ({ fs: {}, separator: ":", resolve: () => undefined }),
 }));
+// Mutable holder so tests can simulate a later WS frame swapping in a *new*
+// sources object (identity change), the way MediaStreamContext really updates.
+const mediaStreamState = vi.hoisted(() => ({
+	sources: { video: ["ABC"], audio: ["KCBS"], pager: [] as string[], usenet: [] as string[] },
+}));
 vi.mock("../../Providers/MediaStream/useMediaStream", () => ({
-	useMediaStream: () => ({ sources: { video: ["ABC"], audio: ["KCBS"], pager: [], usenet: [] } }),
+	useMediaStream: () => ({ sources: mediaStreamState.sources }),
 }));
 
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
@@ -25,6 +30,7 @@ afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
 	dialogProps.current = null;
+	mediaStreamState.sources = { video: ["ABC"], audio: ["KCBS"], pager: [], usenet: [] };
 });
 
 describe("PlaylistEditorMain", () => {
@@ -62,5 +68,32 @@ describe("PlaylistEditorMain", () => {
 		expect(screen.getByRole("combobox", { name: /focus/i })).not.toBeNull();
 		fireEvent.click(screen.getByRole("button", { name: "Remove" }));
 		expect(screen.queryByText("TV · ABC")).toBeNull();
+	});
+
+	it("archive volume reads live sources instead of the mount-render snapshot", async () => {
+		render(<PlaylistEditorMain record={record} onBack={() => {}} />);
+		fireEvent.click(screen.getByRole("button", { name: "Add Media…" }));
+
+		const findArchiveVolume = () =>
+			(dialogProps.current?.volumes as { id: string; list: (p: string[]) => Promise<{ name: string }[]> }[])
+				.find((v) => v.id === "rt911-archive")!;
+
+		const initialVolume = findArchiveVolume();
+		const initialTv = await initialVolume.list(["TV Channels"]);
+		expect(initialTv.map((e) => e.name)).toEqual(["ABC"]);
+
+		// Simulate a later WS frame: MediaStreamContext hands back a *new*
+		// sources object (identity change), the way real context updates work.
+		mediaStreamState.sources = { video: ["XYZ"], audio: ["KCBS"], pager: [], usenet: [] };
+		// Force a re-render of the same mounted instance (no remount) so the
+		// component re-reads useMediaStream() and updates its live-sources ref.
+		fireEvent.change(screen.getByRole("textbox", { name: /title/i }), { target: { value: "Lesson 2" } });
+
+		// Same memoized volume instance (dialog's per-folder cache depends on
+		// stable volume identity) must now reflect the updated sources.
+		const laterVolume = findArchiveVolume();
+		expect(laterVolume).toBe(initialVolume);
+		const laterTv = await laterVolume.list(["TV Channels"]);
+		expect(laterTv.map((e) => e.name)).toEqual(["XYZ"]);
 	});
 });
