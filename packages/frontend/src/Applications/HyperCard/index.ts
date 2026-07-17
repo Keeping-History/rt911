@@ -17,11 +17,25 @@ export { tvChannelStack, TV_CHANNEL_STACK_ID } from "./extensions/tvChannelStack
 export { DirectusAudioPart } from "./extensions/DirectusAudioPart";
 export { DirectusVideo, DirectusVideoPart } from "./extensions/DirectusVideoPart";
 export { DirectusMultiviewPart } from "./extensions/DirectusMultiviewPart";
+export { DirectusNewsPart } from "./extensions/DirectusNewsPart";
+export { DirectusPagerPart } from "./extensions/DirectusPagerPart";
+export { DirectusWeatherPart } from "./extensions/DirectusWeatherPart";
+export { DirectusFlightMapPart } from "./extensions/DirectusFlightMapPart";
+export { HyperCardClockBridge } from "./extensions/HyperCardClockBridge";
+export {
+	CLOCK_RANGE_START_ISO,
+	CLOCK_RANGE_END_ISO,
+	clampClockIso,
+} from "./extensions/dateRange";
 export {
 	DIRECTUS_COLLECTIONS,
 	fetchDirectusAudioItem,
 	fetchDirectusItem,
 	fetchDirectusVideoItem,
+	fetchDirectusNewsItem,
+	fetchDirectusPagerItem,
 	type DirectusAudioItem,
 	type DirectusVideoItem,
+	type DirectusNewsItem,
+	type DirectusPagerItem,
 } from "./extensions/directusCollections";
