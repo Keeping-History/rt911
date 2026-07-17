@@ -38,6 +38,7 @@ describe("PlaylistEditorMain", () => {
 		render(<PlaylistEditorMain record={record} onBack={() => {}} />);
 		expect(screen.getByText("Media")).not.toBeNull();
 		expect(screen.getByText("TV · ABC")).not.toBeNull();
+		expect(screen.getByTestId("playlist-timeline")).not.toBeNull();
 	});
 
 	it("opens the file dialog in multi mode for Add Media…", () => {

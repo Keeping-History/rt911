@@ -1,0 +1,66 @@
+// Layout-essential rules only for the Playlist editor's read-only timeline
+// strip (C4). Visual polish (colors, fonts, chrome) lands in a later pass.
+
+.playlistTimeline {
+	position: relative;
+	width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.playlistTimelineRuler {
+	position: relative;
+	height: 16px;
+}
+
+.playlistTimelineDayTick {
+	position: absolute;
+	top: 0;
+	white-space: nowrap;
+}
+
+.playlistTimelineFlagRow {
+	position: relative;
+	width: 100%;
+}
+
+.playlistTimelineFlag {
+	position: absolute;
+	transform: translateX(-50%);
+	padding: 0;
+	border: none;
+	background: none;
+	cursor: pointer;
+}
+
+.playlistTimelineFlagExtent {
+	position: absolute;
+	height: 2px;
+}
+
+.playlistTimelineLanes {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+}
+
+.playlistTimelineLane {
+	position: relative;
+	height: 20px;
+}
+
+.playlistTimelineBar {
+	position: absolute;
+	top: 0;
+	height: 100%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-align: left;
+	cursor: pointer;
+}
+
+.playlistTimelineActualSpan {
+	position: absolute;
+	top: 0;
+	height: 100%;
+}

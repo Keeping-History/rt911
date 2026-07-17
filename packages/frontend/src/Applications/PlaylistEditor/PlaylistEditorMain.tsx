@@ -21,6 +21,7 @@ import {
 	utcIsoToDisplayWallClock,
 } from "./editorState";
 import { EntryForm } from "./EntryForm";
+import { PlaylistTimeline } from "./PlaylistTimeline";
 
 const KIND_BRANCHES: [PlaylistEntry["kind"], string][] = [
 	["media", "Media"], ["app", "Apps"], ["settings", "Settings"],
@@ -148,7 +149,11 @@ export function PlaylistEditorMain({
 				)}
 			</div>
 
-			<div data-testid="timeline-slot" />
+			<PlaylistTimeline
+				entries={state.entries}
+				selectedUid={state.selectedUid}
+				onSelect={(uid) => dispatch({ type: "select", uid })}
+			/>
 
 			<ClassicyFileOpenDialog
 				id="playlist_editor_open"
