@@ -9,6 +9,8 @@ import {
 	type PlaylistRecord,
 	type PlaylistSummary,
 } from "../../Providers/Auth/playlistApi";
+import { AuthRequiredError } from "../../Providers/Auth/authApi";
+import { useAuth } from "../../Providers/Auth/AuthContext";
 
 const EMPTY_DEFINITION = { version: 1 as const, mode: "annotate" as const, entries: [] };
 
@@ -23,14 +25,19 @@ export function PlaylistList({
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const { refresh: refreshAuth } = useAuth();
 
 	const refresh = useCallback(async () => {
 		try {
 			setRows(await listMine(meId));
 		} catch (e) {
+			if (e instanceof AuthRequiredError) {
+				void refreshAuth();
+				return;
+			}
 			setError(e instanceof Error ? e.message : "Couldn't load playlists.");
 		}
-	}, [meId]);
+	}, [meId, refreshAuth]);
 
 	useEffect(() => {
 		void refresh();
@@ -40,9 +47,13 @@ export function PlaylistList({
 
 	const run = (job: () => Promise<void>) => () => {
 		setError(null);
-		void job().catch((e) =>
-			setError(e instanceof Error ? e.message : "Something went wrong."),
-		);
+		void job().catch((e) => {
+			if (e instanceof AuthRequiredError) {
+				void refreshAuth();
+				return;
+			}
+			setError(e instanceof Error ? e.message : "Something went wrong.");
+		});
 	};
 
 	return (

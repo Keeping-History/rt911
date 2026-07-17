@@ -13,6 +13,19 @@ vi.mock("../../Providers/Auth/playlistApi", async (importOriginal) => ({
 	...api,
 }));
 
+const mockAuth = vi.hoisted(() => ({
+	status: "signedIn" as string,
+	user: { id: "u1" } as { id: string } | null,
+	signInWithEmail: vi.fn(),
+	signInWithProvider: vi.fn(),
+	signOut: vi.fn(),
+	refresh: vi.fn(),
+	register: vi.fn(),
+}));
+vi.mock("../../Providers/Auth/AuthContext", () => ({
+	useAuth: () => mockAuth,
+}));
+
 import { PlaylistList } from "./PlaylistList";
 
 const rows = [
@@ -22,6 +35,7 @@ const rows = [
 
 beforeEach(() => {
 	api.listMine.mockResolvedValue(rows);
+	mockAuth.refresh.mockResolvedValue(undefined);
 });
 afterEach(() => {
 	cleanup();
@@ -74,5 +88,13 @@ describe("PlaylistList", () => {
 		expect(screen.queryByRole("button", { name: "Copy Link" })).toBeNull();
 		fireEvent.click(screen.getByText("Lesson Two"));
 		expect(screen.getByRole("button", { name: "Copy Link" })).not.toBeNull();
+	});
+
+	it("calls auth refresh when listMine rejects with AuthRequiredError", async () => {
+		const { AuthRequiredError } = await vi.importActual<typeof import("../../Providers/Auth/authApi")>("../../Providers/Auth/authApi");
+		api.listMine.mockRejectedValue(new AuthRequiredError("auth"));
+		render(<PlaylistList meId="u1" onOpen={() => {}} />);
+		await waitFor(() => expect(mockAuth.refresh).toHaveBeenCalledTimes(1));
+		expect(document.querySelector(".playlistListError")).toBeNull();
 	});
 });
