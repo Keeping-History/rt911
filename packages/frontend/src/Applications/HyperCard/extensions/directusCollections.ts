@@ -33,6 +33,27 @@ export const DIRECTUS_COLLECTIONS = {
 			"subtitles",
 		],
 	},
+	/**
+	 * Stitched continuous TV channel streams (one HLS row per channel). The
+	 * `start_date`/`end_date` span the whole assembled broadcast window and the
+	 * stream is continuous across it, so a wall-clock instant inside that window
+	 * maps to a stream offset of `(instant − start_date)` seconds.
+	 */
+	video: {
+		collection: "tv_channels",
+		fields: [
+			"id",
+			"title",
+			"full_title",
+			"url",
+			"source",
+			"start_date",
+			"end_date",
+			"calc_duration",
+			"timezone",
+			"subtitles",
+		],
+	},
 } as const;
 
 export type DirectusCollectionKey = keyof typeof DIRECTUS_COLLECTIONS;
@@ -86,4 +107,30 @@ export function fetchDirectusAudioItem(
 ): Promise<DirectusAudioItem> {
 	const { collection, fields } = DIRECTUS_COLLECTIONS.audio;
 	return fetchDirectusItem<DirectusAudioItem>(collection, id, fields, fetchFn, signal);
+}
+
+/** One row of the `tv_channels` collection — the subset a video embed reads. */
+export interface DirectusVideoItem {
+	id: number;
+	title: string;
+	full_title?: string | null;
+	/** HLS (`.m3u8`) URL of the continuous channel stream. */
+	url: string;
+	source?: string | null;
+	/** Start of the assembled broadcast window (the offset origin for seeks). */
+	start_date?: string | null;
+	end_date?: string | null;
+	calc_duration?: number | null;
+	timezone?: string | null;
+	subtitles?: string | null;
+}
+
+/** Fetch one `tv_channels` row by id, projecting the video-embed field set. */
+export function fetchDirectusVideoItem(
+	id: string | number,
+	fetchFn: typeof fetch = fetch,
+	signal?: AbortSignal,
+): Promise<DirectusVideoItem> {
+	const { collection, fields } = DIRECTUS_COLLECTIONS.video;
+	return fetchDirectusItem<DirectusVideoItem>(collection, id, fields, fetchFn, signal);
 }

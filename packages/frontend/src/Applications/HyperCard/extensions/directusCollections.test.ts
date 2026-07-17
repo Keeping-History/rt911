@@ -4,6 +4,7 @@ import {
 	DIRECTUS_URL,
 	fetchDirectusAudioItem,
 	fetchDirectusItem,
+	fetchDirectusVideoItem,
 } from "./directusCollections";
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
@@ -64,6 +65,21 @@ describe("fetchDirectusAudioItem", () => {
 		const url = fetchFn.mock.calls[0][0] as string;
 		expect(url).toContain("/items/mp3_items/3?fields=");
 		for (const field of DIRECTUS_COLLECTIONS.audio.fields) {
+			expect(url).toContain(field);
+		}
+	});
+});
+
+describe("fetchDirectusVideoItem", () => {
+	it("targets the tv_channels collection with the video field set", async () => {
+		const fetchFn = vi.fn().mockResolvedValue(
+			jsonResponse({ data: { id: 3, title: "WNYW", url: "https://x/ch3.m3u8" } }),
+		);
+		const item = await fetchDirectusVideoItem(3, fetchFn);
+		expect(item.url).toBe("https://x/ch3.m3u8");
+		const url = fetchFn.mock.calls[0][0] as string;
+		expect(url).toContain("/items/tv_channels/3?fields=");
+		for (const field of DIRECTUS_COLLECTIONS.video.fields) {
 			expect(url).toContain(field);
 		}
 	});

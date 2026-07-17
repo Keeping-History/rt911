@@ -13,10 +13,15 @@ registerHyperCardExtensions();
 
 export { registerHyperCardExtensions } from "./extensions/registerHyperCardExtensions";
 export { mp3AudioStack, MP3_AUDIO_STACK_ID } from "./extensions/mp3AudioStack";
+export { tvChannelStack, TV_CHANNEL_STACK_ID } from "./extensions/tvChannelStack";
 export { DirectusAudioPart } from "./extensions/DirectusAudioPart";
+export { DirectusVideo, DirectusVideoPart } from "./extensions/DirectusVideoPart";
+export { DirectusMultiviewPart } from "./extensions/DirectusMultiviewPart";
 export {
 	DIRECTUS_COLLECTIONS,
 	fetchDirectusAudioItem,
 	fetchDirectusItem,
+	fetchDirectusVideoItem,
 	type DirectusAudioItem,
+	type DirectusVideoItem,
 } from "./extensions/directusCollections";
