@@ -652,7 +652,7 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 			_mimeType: "application/json",
 			_icon: ClassicyIcons.system.files.document,
 			_url: "/stacks/getting-started.stack.json",
-			_size: 21151,
+			_size: 21169,
 		},
 		Documents: {
 			_type: ClassicyFileSystemEntryFileType.Directory,

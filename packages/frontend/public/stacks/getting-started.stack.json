@@ -172,16 +172,18 @@
 					"id": "tvBody",
 					"type": "field",
 					"locked": true,
-					"rect": [12, 44, 488, 62],
+					"rect": [12, 44, 488, 66],
 					"options": { "multiline": true },
-					"content": "U.S. networks, New York and Washington locals, and international broadcasters, all tuned to the virtual clock. Click a thumbnail to fill the screen; MultiView tiles every channel; EPG opens a program guide; CC toggles captions. Below: a live channel, embedded in this card."
+					"content": "Two dozen channels tuned to the virtual clock — U.S. networks, New York and Washington locals, international broadcasters. MultiView tiles every channel; EPG opens a program guide. Below: a live channel, from 8:40 that morning."
 				},
 				{
 					"id": "tvEmbed",
 					"type": "directusVideo",
-					"rect": [96, 112, 320, 150],
+					"rect": [96, 120, 320, 140],
 					"options": {
 						"channelId": 3,
+						"start": "2001-09-11T12:40:00",
+						"autoPlay": true,
 						"controls": true,
 						"captions": true,
 						"overlay": true

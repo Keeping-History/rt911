@@ -31,15 +31,17 @@ buttons once that PR lands.)
 
 ## Making a stack appear in the app
 
-Register it in
-`packages/frontend/src/Applications/HyperCard/extensions/registerHyperCardExtensions.ts`
-so it shows up under HyperCard's **File → Open**:
+Two routes:
 
-```ts
-import userGuideStack from "../../../../docs/hypercard/user-guide.stack.json";
+1. **As a file on the virtual disk** (how Getting Started ships): put the
+   JSON in `packages/frontend/public/stacks/`, then add a
+   `ClassicyFileSystemEntryFileType.Stack` entry to
+   `src/data/DefaultFileSystem.ts` whose `_url` points at the served path.
+   Double-clicking the file routes to HyperCard, which fetches and validates
+   it (classicy ≥0.42, `handlesFileTypes` routing).
 
-registerHyperCardStack("user-guide", userGuideStack.name, userGuideStack as HCStack);
-```
-
-(Or copy the JSON into an `extensions/*.ts` module exporting an `HCStack`,
-matching how `tvChannelStack.ts` / `mp3AudioStack.ts` are shipped.)
+2. **In HyperCard's File → Open menu**: register an `HCStack` object in
+   `packages/frontend/src/Applications/HyperCard/extensions/registerHyperCardExtensions.ts`
+   via `registerHyperCardStack(id, name, stack)`, matching how
+   `tvChannelStack.ts` / `mp3AudioStack.ts` are shipped (stacks under `src/`
+   as TS modules; `public/` assets can't be imported at build time).
