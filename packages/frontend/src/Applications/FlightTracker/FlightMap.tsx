@@ -78,6 +78,11 @@ import {
 	replayPointsAt,
 } from "./flightReplay";
 import { type LoopClock, playheadAt } from "./loopClock";
+import {
+	type CameraMode,
+	cameraPose,
+	MAX_FOLLOW_PITCH,
+} from "./flightCamera";
 
 // Register the pmtiles:// protocol once per page (adding it twice throws).
 let protocolRegistered = false;
@@ -265,8 +270,41 @@ interface FlightMapProps {
 	// Airframe family for a flight (aircraftModels.familyForAircraftType via
 	// the route index) — picks which 3D model its instances render with.
 	aircraftFamilyOf?: (flight: string, startDate: string) => string;
+	// Camera follow (tracked flights): while `followFlight` is a callsign the
+	// camera locks onto that flight every frame in `cameraMode`'s framing, and
+	// user pan/zoom/rotate are disabled. null/omitted = free camera.
+	followFlight?: string | null;
+	cameraMode?: CameraMode;
 	onSelectFlight: (flight: string) => void;
 	onClearSelection: () => void;
+}
+
+// Enable/disable every user camera handler in one place (the follow lock owns
+// the camera while active). Defensive against handlers a given build/mock may
+// not expose — only dragPan is guaranteed in the test harness.
+type MapHandler = { enable?: () => void; disable?: () => void };
+function setCameraInteractive(map: maplibregl.Map, on: boolean) {
+	const m = map as unknown as Record<string, MapHandler | undefined>;
+	for (const key of [
+		"dragPan", "dragRotate", "scrollZoom", "boxZoom",
+		"doubleClickZoom", "keyboard", "touchZoomRotate", "touchPitch",
+	]) {
+		const h = m[key];
+		if (on) h?.enable?.();
+		else h?.disable?.();
+	}
+}
+
+// Restore the pitch band to the 2D/3D toggle's constraints (mirrors the threeD
+// effect's ordering — maplibre rejects min > max).
+function restorePitchConstraints(map: maplibregl.Map, threeD: boolean) {
+	if (threeD) {
+		map.setMaxPitch(THREE_D_PITCH);
+		map.setMinPitch(THREE_D_MIN_PITCH);
+	} else {
+		map.setMinPitch(0);
+		map.setMaxPitch(0);
+	}
 }
 
 /** Non-highlighted features only — notables and observers never cluster (issue #222). */
@@ -424,6 +462,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	visibleFlights = null, landingClock,
 	globe = false, threeD = false, terrain = false, cluster = false,
 	selectMode = "off", onAreaSelect, onPitchedChange, aircraftFamilyOf,
+	followFlight = null, cameraMode = "track",
 	onSelectFlight, onClearSelection,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -474,6 +513,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
 		visible: visibleFlights,
 	};
+	// Camera follow: the rAF loop reads the current target/mode; followActiveRef
+	// is the lock flag other effects check so they don't fight the driven camera.
+	const followRef = useRef({ flight: followFlight, mode: cameraMode });
+	followRef.current = { flight: followFlight, mode: cameraMode };
+	const followActiveRef = useRef(false);
 
 	useImperativeHandle(handleRef, () => ({
 		zoomIn: () => {
@@ -923,7 +967,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			pitchedRef.current = on;
 			if (loadedRef.current) syncPlaneVisibility(map);
 			dirtyRef.current = true;
-			cbRef.current.onPitchedChange?.(on);
+			// While following, pitch is camera-driven (not a manual right-drag), so
+			// it must not flip the persisted 3D toggle — only report real user tilts.
+			if (!followActiveRef.current) cbRef.current.onPitchedChange?.(on);
 		});
 		// Plane-slab size tracks the zoom (constant on-screen size); wake a
 		// paused map so a zoom while paused re-sizes the 3D planes.
@@ -1002,6 +1048,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map) return;
+		// The follow lock owns pan while active; it re-applies the select-tool
+		// state on release, so don't let a selectMode change re-enable pan here.
+		if (followActiveRef.current) return;
 		if (selectMode !== "off") {
 			map.dragPan.disable();
 			map.getCanvas().style.cursor = "crosshair";
@@ -1043,6 +1092,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
+		// The follow lock owns the pitch band while active (cockpit needs more
+		// than THREE_D_PITCH); it re-applies these constraints from threeDRef on
+		// release, so skip here to avoid clamping the driven pitch.
+		if (followActiveRef.current) return;
 		if (threeD) {
 			map.setMaxPitch(THREE_D_PITCH);
 			map.setMinPitch(THREE_D_MIN_PITCH);
@@ -1065,6 +1118,35 @@ export const FlightMap: FC<FlightMapProps> = ({
 		map.setTerrain(terrain ? { source: TERRAIN_SOURCE, exaggeration: ALT_EXAGGERATION } : null);
 		dirtyRef.current = true;
 	}, [terrain]);
+
+	// Camera follow lock (tracked flights): entering disables user camera control
+	// and opens the pitch band so the rAF loop can drive any framing; leaving
+	// re-enables control (honoring an armed select tool) and restores the 2D/3D
+	// pitch constraints. The per-frame camera drive lives in the rAF loop below.
+	useEffect(() => {
+		// dragPan / pitch APIs exist from construction (no layers needed), so this
+		// runs pre-load safely — a follow set before "load" still locks the camera.
+		const map = mapRef.current;
+		if (!map) return;
+		const active = followFlight != null;
+		if (active === followActiveRef.current) return;
+		followActiveRef.current = active;
+		if (active) {
+			setCameraInteractive(map, false);
+			map.setMinPitch(0);
+			map.setMaxPitch(MAX_FOLLOW_PITCH);
+		} else {
+			setCameraInteractive(map, true);
+			// A select tool armed during follow (shouldn't happen — it's disabled in
+			// the toolbar — but be safe) keeps pan off and the crosshair cursor.
+			if (selectModeRef.current !== "off") {
+				map.dragPan.disable();
+				map.getCanvas().style.cursor = "crosshair";
+			}
+			restorePitchConstraints(map, threeDRef.current);
+		}
+		dirtyRef.current = true;
+	}, [followFlight]);
 
 	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an
 	// Appearance-theme switch that happened while hidden is picked up. dirtyRef
@@ -1126,6 +1208,24 @@ export const FlightMap: FC<FlightMapProps> = ({
 			const now = playingRef.current ? a.virtual + (wall - a.wall) : a.virtual;
 			const buf = motionBufferRef.current;
 			const landing = landingRef.current;
+			// Camera follow: lock onto the followed flight's live (glided) position,
+			// heading-driven framing per mode. jumpTo (not easeTo) so it tracks the
+			// dot frame-for-frame instead of chasing an animation. Its pitch change
+			// flows through the "pitch" handler → 3D geometry arms for cockpit/highlight.
+			const follow = followRef.current;
+			if (follow.flight) {
+				const fm = buf.get(follow.flight);
+				if (fm) {
+					const head = extrapolate(fm, motionNow(fm, now, landing));
+					map.jumpTo(
+						cameraPose(
+							follow.mode,
+							{ lon: head.lon, lat: head.lat, headingDeg: fm.headingDeg },
+							map.getZoom(),
+						),
+					);
+				}
+			}
 			const pointsFc = motionPointsToGeoJSON(
 				buf, now, landing,
 				(m: FlightMotion) => cbRef.current.aircraftFamilyOf?.(m.item.flight, m.item.start_date) ?? "generic",

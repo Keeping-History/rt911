@@ -64,6 +64,8 @@ import {
 	flightTrackerSetFocusedFlight,
 } from "./flightTrackerCommands";
 import { useNotableCrashSites } from "./useNotableCrashSites";
+import { isNotable, isObserver } from "./notableFlights";
+import type { CameraMode } from "./flightCamera";
 import { useRouteIndex } from "./useRouteIndex";
 import { groundStopStatus } from "./groundStop";
 import { insertReplaySamples, pruneReplay, type ReplayBuffer } from "./flightReplay";
@@ -187,6 +189,21 @@ export const FlightTracker: FC = () => {
 	// View-menu items above; one-shot camera moves go through the map handle.
 	const mapApi = useRef<FlightMapHandle>(null);
 	const [selectMode, setSelectMode] = useState<SelectMode>("off");
+	// Camera follow (tracked flights): the on/off toggle is ephemeral (it needs a
+	// live selection, so it isn't persisted like the mode below); arming it clears
+	// any select tool, since the two fight over the pointer/camera.
+	const [cameraFollow, setCameraFollow] = useState(false);
+	const setCameraMode = useCallback(
+		(cameraMode: CameraMode) =>
+			desktopEventDispatch(flightTrackerSetMapSettings({ ...settings, cameraMode })),
+		[settings, desktopEventDispatch],
+	);
+	const toggleCameraFollow = useCallback(() => {
+		setCameraFollow((on) => {
+			if (!on) setSelectMode("off");
+			return !on;
+		});
+	}, []);
 	const toggleGlobe = useCallback(() => {
 		desktopEventDispatch(
 			flightTrackerSetMapSettings({ ...settings, globe: !settings.globe }),
@@ -334,6 +351,17 @@ export const FlightTracker: FC = () => {
 	const [multiSelected, setMultiSelected] = useState<FlightPosition[]>([]);
 	const [activeFlightIdx, setActiveFlightIdx] = useState(0);
 	const selected = multiSelected[Math.min(activeFlightIdx, multiSelected.length - 1)] ?? null;
+
+	// Camera follow targets the five tracked flights (the notables + observer).
+	// canFollow gates the toggle; followFlight (null unless armed AND a tracked
+	// flight is selected) is what FlightMap locks onto. Keeping cameraFollow in
+	// lockstep with canFollow means "following" never lingers with nothing to
+	// follow — so cameraFollow alone drives the toolbar's locked-out controls.
+	const canFollow = !!selected && (isNotable(selected.flight) || isObserver(selected.flight));
+	useEffect(() => {
+		if (cameraFollow && !canFollow) setCameraFollow(false);
+	}, [cameraFollow, canFollow]);
+	const followFlight = cameraFollow && canFollow ? selected!.flight : null;
 
 	const onAreaSelect = useCallback(
 		(flights: string[]) => {
@@ -984,6 +1012,11 @@ export const FlightTracker: FC = () => {
 						onToggleDarkMap={toggleDarkMap}
 						filterOn={!!visibleFlights}
 						onOpenFilter={openFilter}
+						cameraMode={settings.cameraMode}
+						cameraFollow={cameraFollow}
+						canFollow={canFollow}
+						onSetCameraMode={setCameraMode}
+						onToggleCameraFollow={toggleCameraFollow}
 					/>
 					<div className={styles.body}>
 						<div className={styles.map}>
@@ -1028,6 +1061,8 @@ export const FlightTracker: FC = () => {
 								onAreaSelect={onAreaSelect}
 								onPitchedChange={onPitchedChange}
 								aircraftFamilyOf={aircraftFamilyOf}
+								followFlight={followFlight}
+								cameraMode={settings.cameraMode}
 								onClearSelection={() => setMultiSelected([])}
 							/>
 						</div>
