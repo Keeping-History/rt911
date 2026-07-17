@@ -205,7 +205,7 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 									<ClassicyControlLabel label={`${user?.first_name ?? user?.email}`} />
 								</div>
 								<div className={styles.playlists}>
-									Manage your playlists in the Playlists app.
+									<ClassicyControlLabel label="Manage your playlists in the Playlists app." />
 								</div>
 								<ClassicyButton onClickFunc={() => void signOut()}>
 									Sign Out
