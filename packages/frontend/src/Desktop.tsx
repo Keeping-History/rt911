@@ -13,6 +13,7 @@ import { MarketWatch } from "./Applications/MarketWatch/MarketWatch";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
+import { PlaylistEditor } from "./Applications/PlaylistEditor/PlaylistEditor";
 import { Readme } from "./Applications/README/README";
 import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
 import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
@@ -28,6 +29,7 @@ export default function Desktop() {
 			<TimeMachine />
 			<Feedback />
 			<Account />
+			<PlaylistEditor />
 			<FlightTracker />
 			<MarketWatch />
 			<News />

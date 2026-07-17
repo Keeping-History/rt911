@@ -202,7 +202,9 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 								<div className={styles.identityName}>
 									{`Signed in as ${user?.first_name ?? user?.email}`}
 								</div>
-								<div className={styles.playlists}>My Playlists — coming soon</div>
+								<div className={styles.playlists}>
+									Manage your playlists in the Playlists app.
+								</div>
 								<ClassicyButton onClickFunc={() => void signOut()}>
 									Sign Out
 								</ClassicyButton>
