@@ -7,10 +7,10 @@ import type { HCStack } from "classicy";
  * navigation). Registered with the app via `registerHyperCardStack`, so it
  * shows up in HyperCard's File → Open menu.
  *
- * The `itemId`s below reference rows in the live `mp3_items` collection; the
- * part fetches each on render and degrades gracefully (a "Could not load audio"
- * note) if an id is absent. The final card shows the direct-`url` form, which
- * needs no Directus round-trip.
+ * The `itemId`s below (9, 197, 36) reference rows in the live `mp3_items`
+ * collection; the part fetches each on render and degrades gracefully (a
+ * "Could not load audio" note) if an id is absent. The final card resolves its
+ * id from a stack variable so its buttons can switch between the same clips.
  */
 
 /** The audio-part `type` string this stack embeds — must match the registered part. */
@@ -23,7 +23,7 @@ export const mp3AudioStack: HCStack = {
 	name: "Audio Clips",
 	version: "2",
 	size: [420, 300],
-	variables: { clip: "1" },
+	variables: { clip: "9" },
 	backgrounds: [
 		{
 			id: "main",
@@ -81,13 +81,13 @@ export const mp3AudioStack: HCStack = {
 					id: "clip1Title",
 					type: "label",
 					rect: [16, 16, 388, 24],
-					content: "Clip #1",
+					content: "Clip #9",
 				},
 				{
 					id: "clip1Audio",
 					type: DIRECTUS_AUDIO_PART_TYPE,
 					rect: [16, 52, 388, 96],
-					options: { itemId: 1 },
+					options: { itemId: 9 },
 				},
 				{
 					id: "clip1Prev",
@@ -124,13 +124,13 @@ export const mp3AudioStack: HCStack = {
 					id: "clip2Title",
 					type: "label",
 					rect: [16, 16, 388, 24],
-					content: "Clip #2",
+					content: "Clip #197",
 				},
 				{
 					id: "clip2Audio",
 					type: DIRECTUS_AUDIO_PART_TYPE,
 					rect: [16, 52, 388, 96],
-					options: { itemId: 2 },
+					options: { itemId: 197 },
 				},
 				{
 					id: "clip2Prev",
@@ -146,6 +146,49 @@ export const mp3AudioStack: HCStack = {
 				},
 				{
 					id: "clip2Next",
+					type: "button",
+					name: "Next →",
+					rect: [304, 160, 100, 28],
+					script: {
+						onMouseUp: [
+							{ do: "visual", effect: "wipeLeft" },
+							{ do: "go", to: "next" },
+						],
+					},
+				},
+			],
+		},
+		{
+			id: "clip-3",
+			name: "Clip Three",
+			background: "main",
+			parts: [
+				{
+					id: "clip3Title",
+					type: "label",
+					rect: [16, 16, 388, 24],
+					content: "Clip #36",
+				},
+				{
+					id: "clip3Audio",
+					type: DIRECTUS_AUDIO_PART_TYPE,
+					rect: [16, 52, 388, 96],
+					options: { itemId: 36 },
+				},
+				{
+					id: "clip3Prev",
+					type: "button",
+					name: "← Prev",
+					rect: [16, 160, 100, 28],
+					script: {
+						onMouseUp: [
+							{ do: "visual", effect: "wipeRight" },
+							{ do: "go", to: "prev" },
+						],
+					},
+				},
+				{
+					id: "clip3Next",
 					type: "button",
 					name: "Next →",
 					rect: [304, 160, 100, 28],
@@ -180,16 +223,23 @@ export const mp3AudioStack: HCStack = {
 				{
 					id: "chosenOne",
 					type: "button",
-					name: "Clip 1",
-					rect: [16, 160, 80, 28],
-					script: { onMouseUp: [{ do: "put", value: "1", var: "clip" }] },
+					name: "#9",
+					rect: [16, 160, 60, 28],
+					script: { onMouseUp: [{ do: "put", value: "9", var: "clip" }] },
 				},
 				{
 					id: "chosenTwo",
 					type: "button",
-					name: "Clip 2",
-					rect: [104, 160, 80, 28],
-					script: { onMouseUp: [{ do: "put", value: "2", var: "clip" }] },
+					name: "#197",
+					rect: [84, 160, 60, 28],
+					script: { onMouseUp: [{ do: "put", value: "197", var: "clip" }] },
+				},
+				{
+					id: "chosenThree",
+					type: "button",
+					name: "#36",
+					rect: [152, 160, 60, 28],
+					script: { onMouseUp: [{ do: "put", value: "36", var: "clip" }] },
 				},
 				{
 					id: "chosenPrev",
