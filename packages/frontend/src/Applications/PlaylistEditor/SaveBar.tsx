@@ -24,6 +24,7 @@ export function SaveBar({
 }) {
 	const [message, setMessage] = useState<string | null>(null);
 	const [pendingWarnings, setPendingWarnings] = useState<string[] | null>(null);
+	const [droppedWarnings, setDroppedWarnings] = useState<string[] | null>(null);
 
 	const write = async () => {
 		try {
@@ -47,9 +48,19 @@ export function SaveBar({
 
 	const save = () => {
 		setMessage(null);
-		const parsed = parsePlaylist(assembleDefinition(state));
+		setDroppedWarnings(null);
+		const def = assembleDefinition(state);
+		const parsed = parsePlaylist(def);
 		if (parsed.definition === null) {
 			setMessage("This playlist is invalid and can't be saved.");
+			return;
+		}
+		if (parsed.definition.entries.length < state.entries.length) {
+			// Some entries were dropped (not merely warned-about) during
+			// validation — saving the raw state would silently lose them on
+			// next open, so block outright rather than offering Save Anyway.
+			setMessage("Some entries are incomplete and would be lost — fix them before saving.");
+			setDroppedWarnings(parsed.warnings);
 			return;
 		}
 		if (parsed.warnings.length > 0) {
@@ -62,7 +73,21 @@ export function SaveBar({
 	return (
 		<div className="playlistSaveBar">
 			{message && <p className="playlistSaveMessage">{message}</p>}
-			{pendingWarnings ? (
+			{droppedWarnings ? (
+				<>
+					<ul className="playlistSaveWarnings">
+						{droppedWarnings.map((w) => <li key={w}>{w}</li>)}
+					</ul>
+					<ClassicyButton
+						onClickFunc={() => {
+							setMessage(null);
+							setDroppedWarnings(null);
+						}}
+					>
+						OK
+					</ClassicyButton>
+				</>
+			) : pendingWarnings ? (
 				<>
 					<ul className="playlistSaveWarnings">
 						{pendingWarnings.map((w) => <li key={w}>{w}</li>)}

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 const mocks = vi.hoisted(() => ({
@@ -98,7 +98,8 @@ describe("SaveBar", () => {
 	});
 
 	it("Don't Save cancels the warned save without calling the API", () => {
-		mocks.parsePlaylist.mockReturnValue({ definition: { version: 1, mode: "restrict", entries: [] }, warnings: ["some warning"] });
+		const assembled = { version: 1, mode: "restrict" as const, entries: baseState.entries.map((e) => e.entry) };
+		mocks.parsePlaylist.mockReturnValue({ definition: assembled, warnings: ["some warning"] });
 
 		render(<SaveBar state={baseState} onSaved={() => {}} />);
 		fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -111,7 +112,8 @@ describe("SaveBar", () => {
 	});
 
 	it("renders the signed-out message and keeps state on AuthRequiredError, without calling onSaved", async () => {
-		mocks.parsePlaylist.mockReturnValue({ definition: { version: 1, mode: "restrict", entries: [] }, warnings: [] });
+		const assembled = { version: 1, mode: "restrict" as const, entries: baseState.entries.map((e) => e.entry) };
+		mocks.parsePlaylist.mockReturnValue({ definition: assembled, warnings: [] });
 		mocks.updatePlaylist.mockRejectedValue(new AuthRequiredError("auth"));
 		const onSaved = vi.fn();
 
@@ -127,12 +129,71 @@ describe("SaveBar", () => {
 	});
 
 	it("shows a plain error message for other failures", async () => {
-		mocks.parsePlaylist.mockReturnValue({ definition: { version: 1, mode: "restrict", entries: [] }, warnings: [] });
+		const assembled = { version: 1, mode: "restrict" as const, entries: baseState.entries.map((e) => e.entry) };
+		mocks.parsePlaylist.mockReturnValue({ definition: assembled, warnings: [] });
 		mocks.updatePlaylist.mockRejectedValue(new Error("Failed to update playlist"));
 
 		render(<SaveBar state={baseState} onSaved={() => {}} />);
 		fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
 		expect(await screen.findByText("Failed to update playlist")).not.toBeNull();
+	});
+});
+
+describe("SaveBar — real parsePlaylist (entry-dropping vs. warning-only)", () => {
+	beforeEach(async () => {
+		const actual = await vi.importActual<typeof import("../../Providers/Playlist/parsePlaylist")>(
+			"../../Providers/Playlist/parsePlaylist",
+		);
+		mocks.parsePlaylist.mockImplementation(actual.parsePlaylist);
+	});
+
+	it("blocks the save with no Save Anyway button when an entry would be dropped (empty jump at/to)", () => {
+		const stateWithBadJump: EditorState = {
+			...baseState,
+			entries: [
+				{ uid: "e1", entry: { kind: "media", app: "tv", itemId: "ABC" } },
+				{ uid: "e2", entry: { kind: "jump", at: "", to: "" } },
+			],
+		};
+
+		render(<SaveBar state={stateWithBadJump} onSaved={() => {}} />);
+		fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+		expect(
+			screen.getByText("Some entries are incomplete and would be lost — fix them before saving."),
+		).not.toBeNull();
+		expect(screen.getByText("jump entry needs valid at and to")).not.toBeNull();
+		expect(screen.queryByRole("button", { name: /save anyway/i })).toBeNull();
+		expect(mocks.updatePlaylist).not.toHaveBeenCalled();
+	});
+
+	it("offers Save Anyway (and saves via it) for a non-dropping warning like a backward jump", async () => {
+		const stateWithBackwardJump: EditorState = {
+			...baseState,
+			entries: [
+				{ uid: "e1", entry: { kind: "media", app: "tv", itemId: "ABC" } },
+				{
+					uid: "e2",
+					entry: { kind: "jump", at: "2001-09-11T12:50:00.000Z", to: "2001-09-11T12:40:00.000Z" },
+				},
+			],
+		};
+		mocks.updatePlaylist.mockResolvedValue(savedRecord);
+		const onSaved = vi.fn();
+
+		render(<SaveBar state={stateWithBackwardJump} onSaved={onSaved} />);
+		fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+		expect(
+			await screen.findByText(
+				"backward jump at 2001-09-11T12:50:00.000Z → 2001-09-11T12:40:00.000Z loops until interrupted",
+			),
+		).not.toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Save Anyway" }));
+		await screen.findByRole("button", { name: "Save" });
+		expect(mocks.updatePlaylist).toHaveBeenCalled();
+		expect(onSaved).toHaveBeenCalledWith(savedRecord);
 	});
 });

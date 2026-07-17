@@ -174,7 +174,7 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 					<div>
 						<div>{`Signed in as ${user?.first_name ?? user?.email}`}</div>
 						<ClassicyButton onClickFunc={() => void signOut()}>Sign Out</ClassicyButton>
-						<div>My Playlists — coming soon</div>
+						<div>Manage your playlists in the Playlists app.</div>
 						{user?.avatar && (
 							<img src={avatarUrl(user.avatar)} alt="Your avatar" width={74} height={74} />
 						)}
