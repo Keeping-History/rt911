@@ -6,6 +6,9 @@ import { ScreenNavContext } from "../WheelContext";
 // vi.hoisted: imports (and vi.mock) hoist above plain consts — a bare const
 // would hit a TDZ error when the mock factory runs during classicy's import.
 const { setDateTime } = vi.hoisted(() => ({ setDateTime: vi.fn() }));
+// Mutated per-test to drive the forced-clock write guard (see
+// PlaylistProvider.test.tsx for the same mutable-mock convention).
+let mockDateTimeLocked = false;
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	useClassicyDateTime: () => ({
@@ -16,6 +19,10 @@ vi.mock("classicy", async (importOriginal) => ({
 		pause: vi.fn(),
 		resume: vi.fn(),
 	}),
+	useAppManager: (sel: (s: unknown) => unknown) =>
+		sel({
+			System: { Manager: { DateAndTime: { dateTimeLocked: mockDateTimeLocked } } },
+		}),
 }));
 vi.mock("../../Applications/TimeMachine/useBookmarks", () => ({
 	useBookmarks: () => ({
@@ -29,7 +36,11 @@ vi.mock("../../Applications/TimeMachine/useBookmarks", () => ({
 
 import { BookmarksScreen } from "./BookmarksScreen";
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	mockDateTimeLocked = false;
+	setDateTime.mockClear();
+});
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 describe("BookmarksScreen", () => {
@@ -49,5 +60,18 @@ describe("BookmarksScreen", () => {
 		fireEvent.click(screen.getByText("First impact"));
 		expect(setDateTime).toHaveBeenCalledWith(new Date("2001-09-11T12:46:40Z"));
 		expect(pop).toHaveBeenCalled();
+	});
+
+	it("does not seek or pop when the clock is forced", () => {
+		mockDateTimeLocked = true;
+		const pop = vi.fn();
+		render(
+			<ScreenNavContext.Provider value={{ push: vi.fn(), pop }}>
+				<BookmarksScreen tzOffset={-4} />
+			</ScreenNavContext.Provider>,
+		);
+		fireEvent.click(screen.getByText("First impact"));
+		expect(setDateTime).not.toHaveBeenCalled();
+		expect(pop).not.toHaveBeenCalled();
 	});
 });

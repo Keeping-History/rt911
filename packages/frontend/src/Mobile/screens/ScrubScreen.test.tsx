@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScreenNavContext, WheelContext, type ScreenWheelHandlers } from "../WheelContext";
 
 const { setDateTime } = vi.hoisted(() => ({ setDateTime: vi.fn() }));
+// Mutated per-test to drive the forced-clock write guard (see
+// PlaylistProvider.test.tsx for the same mutable-mock convention).
+let mockDateTimeLocked = false;
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	useClassicyDateTime: () => ({
@@ -15,11 +18,19 @@ vi.mock("classicy", async (importOriginal) => ({
 		pause: vi.fn(),
 		resume: vi.fn(),
 	}),
+	useAppManager: (sel: (s: unknown) => unknown) =>
+		sel({
+			System: { Manager: { DateAndTime: { dateTimeLocked: mockDateTimeLocked } } },
+		}),
 }));
 
 import { ScrubScreen } from "./ScrubScreen";
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	mockDateTimeLocked = false;
+	setDateTime.mockClear();
+});
 
 const BASE = Date.parse("2001-09-11T12:40:00.000Z");
 
@@ -56,5 +67,14 @@ describe("ScrubScreen", () => {
 		act(() => wheel().onSelect?.());
 		expect(setDateTime).toHaveBeenCalledWith(new Date(BASE + 5 * 60_000));
 		expect(pop).toHaveBeenCalled();
+	});
+
+	it("does not commit or pop when the clock is forced", () => {
+		mockDateTimeLocked = true;
+		const { wheel, pop } = renderWithWheel();
+		act(() => wheel().onScroll?.(5));
+		act(() => wheel().onSelect?.());
+		expect(setDateTime).not.toHaveBeenCalled();
+		expect(pop).not.toHaveBeenCalled();
 	});
 });
