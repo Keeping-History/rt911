@@ -8,8 +8,10 @@ import {
 	registerClassicyIcons,
 	useAppManagerDispatch,
 } from "classicy";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
+import { type PlaylistRecord } from "../../Providers/Auth/playlistApi";
+import { PlaylistList } from "./PlaylistList";
 import appIconPng from "./app.png";
 
 const appId = "PlaylistEditor.app";
@@ -25,8 +27,9 @@ const ICONS = registerClassicyIcons({
 const appIcon = ICONS.applications.playlistEditor.app;
 
 export function PlaylistEditor() {
-	const { status } = useAuth();
+	const { status, user } = useAuth();
 	const dispatch = useAppManagerDispatch();
+	const [openRecord, setOpenRecord] = useState<PlaylistRecord | null>(null);
 
 	const appMenu = useMemo(
 		() => [
@@ -88,7 +91,11 @@ export function PlaylistEditor() {
 					initialPosition={[140, 90]}
 					appMenu={appMenu}
 				>
-					<div>My Playlists</div>
+					{openRecord === null ? (
+						<PlaylistList meId={user?.id ?? ""} onOpen={setOpenRecord} />
+					) : (
+						<div>Editor: {openRecord.title}</div>
+					)}
 				</ClassicyWindow>
 			)}
 			{/* status === "loading": render no window; auth resolves within a tick of boot */}
