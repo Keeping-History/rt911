@@ -4,6 +4,8 @@ import {
 	DIRECTUS_URL,
 	fetchDirectusAudioItem,
 	fetchDirectusItem,
+	fetchDirectusNewsItem,
+	fetchDirectusPagerItem,
 	fetchDirectusVideoItem,
 } from "./directusCollections";
 
@@ -80,6 +82,36 @@ describe("fetchDirectusVideoItem", () => {
 		const url = fetchFn.mock.calls[0][0] as string;
 		expect(url).toContain("/items/tv_channels/3?fields=");
 		for (const field of DIRECTUS_COLLECTIONS.video.fields) {
+			expect(url).toContain(field);
+		}
+	});
+});
+
+describe("fetchDirectusNewsItem", () => {
+	it("targets the news_items collection with the news field set", async () => {
+		const fetchFn = vi.fn().mockResolvedValue(
+			jsonResponse({ data: { id: 9, title: "Headline", content: "<p>hi</p>" } }),
+		);
+		const item = await fetchDirectusNewsItem(9, fetchFn);
+		expect(item.content).toBe("<p>hi</p>");
+		const url = fetchFn.mock.calls[0][0] as string;
+		expect(url).toContain("/items/news_items/9?fields=");
+		for (const field of DIRECTUS_COLLECTIONS.news.fields) {
+			expect(url).toContain(field);
+		}
+	});
+});
+
+describe("fetchDirectusPagerItem", () => {
+	it("targets the pager_items collection with the pager field set", async () => {
+		const fetchFn = vi.fn().mockResolvedValue(
+			jsonResponse({ data: { id: 5, message: "CALL OPS", provider: "SkyTel" } }),
+		);
+		const item = await fetchDirectusPagerItem(5, fetchFn);
+		expect(item.message).toBe("CALL OPS");
+		const url = fetchFn.mock.calls[0][0] as string;
+		expect(url).toContain("/items/pager_items/5?fields=");
+		for (const field of DIRECTUS_COLLECTIONS.pager.fields) {
 			expect(url).toContain(field);
 		}
 	});
