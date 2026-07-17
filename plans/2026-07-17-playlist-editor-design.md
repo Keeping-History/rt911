@@ -111,9 +111,10 @@ type ClassicyFileOpenDialogProps = {
 - **Top:** `ClassicyPopUpMenu` of volumes (with volume icon). Switching volumes swaps the
   tree to that volume's root and clears the selection.
 - **Middle:** the `ClassicyTree` in a scrollable sunken well (list-box style). Folders
-  lazy-load on expand via `volume.list(path)`; while loading, a temporary child row shows
-  a `ClassicySpinner`; a failed load renders an inline "Couldn't open this folder" row
-  that retries on click.
+  lazy-load on expand via `volume.list(path)`; while loading, a temporary disabled child
+  row reads "Loading…" (*amended at plan time: `ClassicySpinner` is a numeric stepper
+  input, not a loading indicator — a dimmed row is also the period-authentic idiom*); a
+  failed load renders an inline "Couldn't open this folder" row that retries on click.
 - **Bottom left:** a "Show:" `ClassicyPopUpMenu` when `fileTypeFilters` is provided.
 - **Bottom right:** Cancel + **Open** (default button). Open is disabled until at least
   one file is selected.
@@ -142,10 +143,18 @@ data:
 
 | Top folder | Structure | Leaf `fileType` | Leaf `meta` |
 |---|---|---|---|
-| TV Channels | by network → channel | `tv-channel` | `{ app: 'tv', itemId: <source slug> }` |
-| Radio Stations | flat (small list) | `radio-station` | `{ app: 'radio', itemId: <station slug> }` |
-| News | by publication → document | `news-document` | `{ app: 'news', itemId: <doc id>, publishedAt }` |
-| Flights | Notable Flights folder + by airline → flight | `flight` | `{ app: 'flights', itemId: <callsign>, departure, arrival }` |
+| TV Channels | flat (slugs from the WS `sources` frame; no public network data exists — *amended at plan time*) | `tv-channel` | `{ app: 'tv', itemId: <source slug> }` |
+| Radio Stations | flat (WS `sources.audio` slugs) | `radio-station` | `{ app: 'radio', itemId: <station slug> }` |
+| News | by publication → document (requires a scoped public-read grant on `news_items` + `sources` — see plan task B0) | `news-document` | `{ app: 'news', itemId: <doc id>, publishedAt }` |
+| Flights | Notable Flights folder + by airline → date → flight | `flight` | `{ app: 'flights', itemId: <callsign>, departure, arrival }` |
+
+*Plan-time verification (2026-07-17):* anonymous REST probes confirmed only
+`flight_tracks`/`flight_positions`/`playlists` are publicly readable; `sources`,
+`news_items`, and `media_items` 403. TV/radio catalogs therefore come from the
+streamer's `sources` WebSocket frame (`AvailableSources.video`/`.audio` slugs), which the
+volume receives by injection; News browsing needs a field/row-scoped public read
+permission (plan task B0, a user-approved prod change). Flight timing fields verified:
+`wheels_off_utc` / `wheels_on_utc` (nullable).
 
 The `meta` payload leads with exactly the addressing the playlist engine already uses
 (`PlaylistEntry` media keys), so the editor consumes dialog selections with zero
