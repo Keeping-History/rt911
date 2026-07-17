@@ -24,6 +24,11 @@ vi.mock("../../Providers/Auth/AuthContext", () => ({
 
 import { ProfileEditor } from "./ProfileEditor";
 
+// Fields are grouped under Classicy tabs; inactive panels render `hidden`, so
+// their controls are out of the accessibility tree until the tab is selected.
+// ClassicyTabs commits the active tab on mouseUp (not click).
+const selectTab = (name: string) => fireEvent.mouseUp(screen.getByRole("tab", { name }));
+
 const makeUser = (over: Partial<AuthUser>): AuthUser => ({
 	id: "1", email: "t@x.org", first_name: null, last_name: null, avatar: null,
 	provider: "google", city: null, state: null, country: null,
@@ -67,6 +72,7 @@ describe("ProfileEditor — names", () => {
 describe("ProfileEditor — about you (all optional)", () => {
 	it("saves with everything empty (never blocks)", async () => {
 		render(<ProfileEditor />);
+		selectTab("About You");
 		fireEvent.click(screen.getByRole("button", { name: "Save Profile" }));
 		await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalled());
 		const patch = mockUpdateProfile.mock.calls[0][0];
@@ -76,6 +82,7 @@ describe("ProfileEditor — about you (all optional)", () => {
 	});
 	it("round-trips educator role and toggled grade levels", async () => {
 		render(<ProfileEditor />);
+		selectTab("About You");
 		// ClassicyPopUpMenu renders as a <button id=…> + a listbox that mounts on
 		// open (classicy quirk: the label isn't htmlFor-associated) — open it by id
 		// and click the option's visible label.
@@ -97,6 +104,7 @@ describe("ProfileEditor — about you (all optional)", () => {
 describe("ProfileEditor — email", () => {
 	it("blocks mismatched addresses locally", async () => {
 		render(<ProfileEditor />);
+		selectTab("Email");
 		fireEvent.change(screen.getByLabelText("New Email"), { target: { value: "a@b.co" } });
 		fireEvent.change(screen.getByLabelText("Confirm New Email"), { target: { value: "b@b.co" } });
 		fireEvent.click(screen.getByRole("button", { name: "Send Confirmation Link" }));
@@ -105,6 +113,7 @@ describe("ProfileEditor — email", () => {
 	});
 	it("sends the link and shows the sent state", async () => {
 		render(<ProfileEditor />);
+		selectTab("Email");
 		fireEvent.change(screen.getByLabelText("New Email"), { target: { value: "new@x.org" } });
 		fireEvent.change(screen.getByLabelText("Confirm New Email"), { target: { value: "new@x.org" } });
 		fireEvent.click(screen.getByRole("button", { name: "Send Confirmation Link" }));
@@ -122,6 +131,7 @@ describe("ProfileEditor — password", () => {
 	it("validates locally then saves for default-provider accounts", async () => {
 		mockAuth.user = makeUser({ provider: "default" });
 		render(<ProfileEditor />);
+		selectTab("Password");
 		fireEvent.change(screen.getByLabelText("New Password"), { target: { value: "short" } });
 		fireEvent.change(screen.getByLabelText("Confirm Password"), { target: { value: "short" } });
 		fireEvent.click(screen.getByRole("button", { name: "Set Password" }));
@@ -143,6 +153,7 @@ describe("ProfileEditor — password", () => {
 	it("masks both password inputs", () => {
 		mockAuth.user = makeUser({ provider: "default" });
 		render(<ProfileEditor />);
+		selectTab("Password");
 		expect(screen.getByLabelText("New Password").getAttribute("type")).toBe("password");
 		expect(screen.getByLabelText("Confirm Password").getAttribute("type")).toBe("password");
 	});
