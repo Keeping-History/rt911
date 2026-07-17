@@ -7,9 +7,9 @@ import type { HCStack } from "classicy";
  * channels — a "video wall"). Registered with the app via
  * `registerHyperCardStack`, so it appears in HyperCard's File → Open menu.
  *
- * The `channelId`s below are PLACEHOLDERS (1, 2, 3) pending the real
- * `tv_channels` row ids; the parts fetch each on render and degrade gracefully
- * (a "Could not load video" note) if an id is absent.
+ * The `channelId`s below (3, 6, 23) reference rows in the live `tv_channels`
+ * collection; the parts fetch each on render and degrade gracefully (a "Could
+ * not load video" note) if an id is absent.
  */
 
 export const DIRECTUS_VIDEO_PART_TYPE = "directusVideo";
@@ -79,14 +79,14 @@ export const tvChannelStack: HCStack = {
 					id: "singleTitle",
 					type: "label",
 					rect: [12, 14, 416, 22],
-					content: "Channel #1 — controls + captions, seconds 60–180",
+					content: "Channel #3 — controls + captions, seconds 60–180",
 				},
 				{
 					id: "singleVideo",
 					type: DIRECTUS_VIDEO_PART_TYPE,
 					rect: [12, 40, 416, 232],
 					options: {
-						channelId: 1,
+						channelId: 3,
 						start: 60,
 						end: 180,
 						controls: true,
@@ -129,14 +129,14 @@ export const tvChannelStack: HCStack = {
 					id: "loopTitle",
 					type: "label",
 					rect: [12, 14, 416, 22],
-					content: "Channel #1 — autoplay, muted, looping seconds 30–45",
+					content: "Channel #6 — autoplay, muted, looping seconds 30–45",
 				},
 				{
 					id: "loopVideo",
 					type: DIRECTUS_VIDEO_PART_TYPE,
 					rect: [12, 40, 416, 232],
 					options: {
-						channelId: 1,
+						channelId: 6,
 						start: 30,
 						end: 45,
 						autoPlay: true,
@@ -191,9 +191,9 @@ export const tvChannelStack: HCStack = {
 						audio: "solo",
 						columns: 2,
 						videos: [
-							{ channelId: 1, autoPlay: true },
-							{ channelId: 2, autoPlay: true },
 							{ channelId: 3, autoPlay: true },
+							{ channelId: 6, autoPlay: true },
+							{ channelId: 23, autoPlay: true },
 						],
 					},
 				},
