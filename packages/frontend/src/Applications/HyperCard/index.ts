@@ -19,6 +19,8 @@ export { DirectusVideo, DirectusVideoPart } from "./extensions/DirectusVideoPart
 export { DirectusMultiviewPart } from "./extensions/DirectusMultiviewPart";
 export { DirectusNewsPart } from "./extensions/DirectusNewsPart";
 export { DirectusPagerPart } from "./extensions/DirectusPagerPart";
+export { DirectusWeatherPart } from "./extensions/DirectusWeatherPart";
+export { DirectusFlightMapPart } from "./extensions/DirectusFlightMapPart";
 export { HyperCardClockBridge } from "./extensions/HyperCardClockBridge";
 export {
 	CLOCK_RANGE_START_ISO,

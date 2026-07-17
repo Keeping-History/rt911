@@ -1,7 +1,6 @@
 import {
 	ClassicyApp,
 	ClassicyButton,
-	ClassicyControlGroup,
 	ClassicyIcons,
 	ClassicyPopUpMenu,
 	ClassicySlider,
@@ -16,10 +15,10 @@ import { type FC, useCallback, useContext, useEffect, useMemo, useState } from "
 import appIconPng from "./app.png";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import { BASEMAP_URLS, type BasemapStyleId } from "../../lib/basemap/basemapStyles";
-import { useAlmanac } from "./useAlmanac";
+import { ALMANAC_DAYS, useAlmanac } from "./useAlmanac";
 import type { RadarIndex } from "./weatherRadar";
-import { cToF, degToCompass, hpaToInHg, kmToMiles, ktToMph } from "./weatherUnits";
 import { WeatherMap, type WeatherStation } from "./WeatherMap";
+import { WeatherStationPanel } from "./WeatherStationPanel";
 import stationsRaw from "./stations.json";
 import styles from "./Weather.module.scss";
 import { formatPlayhead, type LoopClock, playheadAt } from "../../lib/loopClock";
@@ -41,43 +40,6 @@ const RADAR_INDEX_URL = "https://files.911realtime.org/weather/radar/index.json"
 const STATIONS = stationsRaw as WeatherStation[];
 
 const DEFAULT_STATION_ID = "KJFK";
-
-// Almanac data exists only for these four calendar days (the weather-recon
-// almanac flow's anachronism-cutoff window) — outside this range the block
-// is hidden entirely rather than showing an empty/misleading section.
-const ALMANAC_DAYS = new Set(["09-09", "09-10", "09-11", "09-12"]);
-
-// "8:55 AM"-style local time for a UTC instant, rendered in the *station's*
-// own timezone (its `tz` field) — this is "what does the station's local
-// clock read", not the app's display-timezone menu-bar clock.
-function formatStationTime(iso: string, tz: string): string {
-	return new Intl.DateTimeFormat("en-US", {
-		timeZone: tz,
-		hour: "numeric",
-		minute: "2-digit",
-		hour12: true,
-	}).format(new Date(iso));
-}
-
-// METAR visibility reports cap at 10sm; kmToMiles itself is uncapped, so the
-// display cap is applied here, at render time, not in the unit conversion.
-function formatVisibility(km: number): string {
-	const mi = kmToMiles(km);
-	return mi >= 10 ? "10 mi" : `${mi} mi`;
-}
-
-// Absent wind speed means no reading at all ("—"); direction and gusts are
-// each optional add-ons layered onto a present speed.
-function formatWind(
-	dirDeg: number | undefined,
-	speedKt: number | undefined,
-	gustKt: number | undefined,
-): string {
-	if (speedKt === undefined) return "—";
-	const dir = dirDeg !== undefined ? `${degToCompass(dirDeg)} ` : "";
-	const gust = gustKt !== undefined ? ` (gusts ${ktToMph(gustKt)} mph)` : "";
-	return `${dir}${ktToMph(speedKt)} mph${gust}`;
-}
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.weather.app. registerClassicyIcons assigns
@@ -346,100 +308,13 @@ export const Weather: FC = () => {
 							/>
 						</div>
 						<div className={styles.panel}>
-							{!station ? (
-								<p className={styles.panelEmpty}>Select a station.</p>
-							) : (
-								<>
-									<div className={styles.stationHeader}>
-										<span className={styles.stationName}>{station.name}</span>
-										<span className={styles.stationAsOf}>
-											{obs
-												? `as of ${formatStationTime(obs.start_date, station.tz)}`
-												: "no recent observation"}
-										</span>
-									</div>
-
-									<ClassicyControlGroup label="Conditions">
-										<span className={styles.tempBig}>
-											{obs?.temp_c !== undefined ? `${cToF(obs.temp_c)}°F` : "—"}
-										</span>
-										<div className={styles.skyLine}>
-											{[obs?.sky_condition, obs?.present_weather]
-												.filter(Boolean)
-												.join(" ") || "—"}
-										</div>
-										<dl className={styles.fields}>
-											<dt>Wind</dt>
-											<dd>
-												{formatWind(obs?.wind_dir_deg, obs?.wind_speed_kt, obs?.gust_kt)}
-											</dd>
-											<dt>Visibility</dt>
-											<dd>
-												{obs?.visibility_km !== undefined
-													? formatVisibility(obs.visibility_km)
-													: "—"}
-											</dd>
-											<dt>Pressure</dt>
-											<dd>
-												{obs?.pressure_hpa !== undefined
-													? `${hpaToInHg(obs.pressure_hpa)} inHg`
-													: "—"}
-											</dd>
-											<dt>Dewpoint</dt>
-											<dd>
-												{obs?.dewpoint_c !== undefined ? `${cToF(obs.dewpoint_c)}°F` : "—"}
-											</dd>
-										</dl>
-									</ClassicyControlGroup>
-
-									<ClassicyControlGroup label="Forecast">
-										{!station.nws_zone ? (
-											<p className={styles.note}>
-												No archived forecast for this station.
-											</p>
-										) : forecastEntry === undefined ? (
-											<p className={styles.note}>retrieving…</p>
-										) : forecastEntry === null ? (
-											<p className={styles.note}>No forecast product at this hour.</p>
-										) : (
-											<pre className={styles.forecastText}>{forecastEntry.raw_text}</pre>
-										)}
-									</ClassicyControlGroup>
-
-									{showAlmanac && (
-									<ClassicyControlGroup label="Almanac">
-											{almanacDay ? (
-												<div className={styles.almanacDay}>
-													<span>
-														Normal high/low:{" "}
-														{almanacDay.normal_high_c !== null
-															? `${cToF(almanacDay.normal_high_c)}°F`
-															: "—"}
-														{" / "}
-														{almanacDay.normal_low_c !== null
-															? `${cToF(almanacDay.normal_low_c)}°F`
-															: "—"}
-													</span>
-													<span>
-														Record high:{" "}
-														{almanacDay.record_high_c !== null
-															? `${cToF(almanacDay.record_high_c)}°F (${almanacDay.record_high_year})`
-															: "—"}
-													</span>
-													<span>
-														Record low:{" "}
-														{almanacDay.record_low_c !== null
-															? `${cToF(almanacDay.record_low_c)}°F (${almanacDay.record_low_year})`
-															: "—"}
-													</span>
-												</div>
-											) : (
-												<p className={styles.note}>No almanac data.</p>
-											)}
-										</ClassicyControlGroup>
-									)}
-								</>
-							)}
+							<WeatherStationPanel
+								station={station}
+								obs={obs}
+								forecastEntry={forecastEntry}
+								almanacDay={almanacDay}
+								showAlmanac={showAlmanac}
+							/>
 						</div>
 					</div>
 					{loopEnabled && (

@@ -5,13 +5,16 @@ import {
 	registerHyperCardStack,
 } from "classicy";
 import { DirectusAudioPart } from "./DirectusAudioPart";
+import { DirectusFlightMapPart } from "./DirectusFlightMapPart";
 import { DirectusMultiviewPart } from "./DirectusMultiviewPart";
 import { DirectusNewsPart } from "./DirectusNewsPart";
 import { DirectusPagerPart } from "./DirectusPagerPart";
 import { DirectusVideoPart } from "./DirectusVideoPart";
+import { DirectusWeatherPart } from "./DirectusWeatherPart";
 import { MP3_AUDIO_STACK_ID, mp3AudioStack } from "./mp3AudioStack";
 import { NEWS_PAGER_STACK_ID, newsPagerStack } from "./newsPagerStack";
 import { TV_CHANNEL_STACK_ID, tvChannelStack } from "./tvChannelStack";
+import { WEATHER_FLIGHT_STACK_ID, weatherFlightStack } from "./weatherFlightStack";
 
 // Registration must run once, before the HyperCard app opens a stack that uses
 // a Directus part. Classicy's registries are last-write-wins Maps, so repeat
@@ -34,6 +37,8 @@ export function registerHyperCardExtensions(): void {
 	registerHyperCardPart("directusMultiview", DirectusMultiviewPart);
 	registerHyperCardPart("directusNews", DirectusNewsPart);
 	registerHyperCardPart("directusPager", DirectusPagerPart);
+	registerHyperCardPart("directusWeatherStation", DirectusWeatherPart);
+	registerHyperCardPart("directusFlightMap", DirectusFlightMapPart);
 
 	// Actions (stack commands). `setDateTime` seeks the desktop's virtual clock;
 	// the pure reducer can't touch the clock, so it queues an effect that
@@ -56,4 +61,5 @@ export function registerHyperCardExtensions(): void {
 	registerHyperCardStack(MP3_AUDIO_STACK_ID, mp3AudioStack.name, mp3AudioStack);
 	registerHyperCardStack(TV_CHANNEL_STACK_ID, tvChannelStack.name, tvChannelStack);
 	registerHyperCardStack(NEWS_PAGER_STACK_ID, newsPagerStack.name, newsPagerStack);
+	registerHyperCardStack(WEATHER_FLIGHT_STACK_ID, weatherFlightStack.name, weatherFlightStack);
 }
