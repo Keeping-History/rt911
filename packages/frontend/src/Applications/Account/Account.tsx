@@ -1,5 +1,6 @@
 import {
 	ClassicyApp,
+	ClassicyBevelButton,
 	ClassicyButton,
 	ClassicyFileInput,
 	ClassicyIcons,
@@ -13,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { avatarUrl, uploadAvatar, verifyRegistration } from "../../Providers/Auth/authApi";
 import { confirmEmailChange } from "../../Providers/Auth/profileApi";
+import styles from "./Account.module.scss";
 import { ProfileEditor } from "./ProfileEditor";
 import { SignInForm } from "./SignInForm";
 
@@ -166,31 +168,55 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 				modal={false}
 				appMenu={appMenu}
 			>
-				{regResult && <div>{regResult}</div>}
-				{confirmBanner && <div>{confirmBanner}</div>}
+				{regResult && <div className={styles.banner}>{regResult}</div>}
+				{confirmBanner && <div className={styles.banner}>{confirmBanner}</div>}
 				{status === "loading" ? (
 					<div />
 				) : status === "signedIn" ? (
-					<div>
-						<div>{`Signed in as ${user?.first_name ?? user?.email}`}</div>
-						<ClassicyButton onClickFunc={() => void signOut()}>Sign Out</ClassicyButton>
-						<div>My Playlists — coming soon</div>
-						{user?.avatar && (
-							<img src={avatarUrl(user.avatar)} alt="Your avatar" width={74} height={74} />
-						)}
-						<ClassicyFileInput
-							id="account-avatar-file"
-							accept="image/*"
-							disabled={avatarUploading}
-							onChangeFunc={handleAvatarFiles}
-						/>
-						<ClassicyButton
-							disabled={avatarUploading}
-							onClickFunc={() => document.getElementById("account-avatar-file")?.click()}
-						>
-							{user?.avatar ? "Change Avatar" : "Upload Avatar"}
-						</ClassicyButton>
-						{avatarError && <div>{avatarError}</div>}
+					<div className={styles.accountContent}>
+						<div className={styles.identity}>
+							{/* Profile image doubles as the avatar picker: a bevel
+							    button showing the current avatar (or an "Add Photo"
+							    prompt) that clicks through to the hidden file input. */}
+							<ClassicyBevelButton
+								bevelWidth="large"
+								disabled={avatarUploading}
+								aria-label={user?.avatar ? "Change Avatar" : "Upload Avatar"}
+								onClickFunc={() =>
+									document.getElementById("account-avatar-file")?.click()
+								}
+							>
+								{user?.avatar ? (
+									<img
+										className={styles.avatarImage}
+										src={avatarUrl(user.avatar)}
+										alt="Your avatar"
+										width={74}
+										height={74}
+									/>
+								) : (
+									<span className={styles.avatarPlaceholder}>Add Photo</span>
+								)}
+							</ClassicyBevelButton>
+							<div className={styles.identityInfo}>
+								<div className={styles.identityName}>
+									{`Signed in as ${user?.first_name ?? user?.email}`}
+								</div>
+								<div className={styles.playlists}>My Playlists — coming soon</div>
+								<ClassicyButton onClickFunc={() => void signOut()}>
+									Sign Out
+								</ClassicyButton>
+							</div>
+						</div>
+						<div className={styles.hiddenFileInput}>
+							<ClassicyFileInput
+								id="account-avatar-file"
+								accept="image/*"
+								disabled={avatarUploading}
+								onChangeFunc={handleAvatarFiles}
+							/>
+						</div>
+						{avatarError && <div className={styles.error}>{avatarError}</div>}
 						<ProfileEditor />
 					</div>
 				) : (
