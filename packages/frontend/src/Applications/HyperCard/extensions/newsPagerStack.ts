@@ -1,5 +1,13 @@
 import type { HCAction, HCStack } from "classicy";
 
+/**
+ * A built-in HyperCard stack demonstrating the news/pager embeds and the
+ * `setDateTime` action. The intro card's buttons seek the desktop's virtual
+ * clock to key moments (the action clamps into the 09-09…09-12 range); the
+ * news and pager cards step through real `news_items` (5–13) and `pager_items`
+ * (323–328) rows via a stack variable.
+ */
+
 // Plugin-command actions (a registered `do` name like our `setDateTime`) are
 // deliberately outside the typed HCAction union — stacks are normally untyped
 // JSON and the engine handles unknown `do`s in its default case. Authoring the
@@ -7,22 +15,18 @@ import type { HCAction, HCStack } from "classicy";
 const setDateTime = (to: string): HCAction =>
 	({ do: "setDateTime", to }) as unknown as HCAction;
 
-/**
- * A built-in HyperCard stack demonstrating the news/pager embeds and the
- * `setDateTime` action. The intro card's buttons seek the desktop's virtual
- * clock to key moments (the action clamps into the 09-09…09-12 range); the
- * later cards embed a news article and a pager message.
- *
- * The `itemId`s below are PLACEHOLDERS (1) pending real `news_items` /
- * `pager_items` ids; the parts fetch on render and degrade gracefully.
- */
-
 export const NEWS_PAGER_STACK_ID = "directus-news-pager";
+
+const NEWS_MIN = 5;
+const NEWS_MAX = 13;
+const PAGER_MIN = 323;
+const PAGER_MAX = 328;
 
 export const newsPagerStack: HCStack = {
 	name: "News & Pager",
 	version: "2",
 	size: [420, 320],
+	variables: { newsId: String(NEWS_MIN), pagerId: String(PAGER_MIN) },
 	backgrounds: [
 		{
 			id: "main",
@@ -55,7 +59,7 @@ export const newsPagerStack: HCStack = {
 					rect: [12, 48, 396, 52],
 					locked: true,
 					content:
-						"These buttons run the setDateTime action, seeking every app on the desktop to that moment. Then page through a news story and a pager message.",
+						"These buttons run the setDateTime action, seeking every app on the desktop to that moment. Then page through news stories and pager messages.",
 				},
 				{
 					id: "jump846",
@@ -74,7 +78,7 @@ export const newsPagerStack: HCStack = {
 				{
 					id: "introNext",
 					type: "button",
-					name: "Next →",
+					name: "News →",
 					rect: [304, 154, 104, 28],
 					script: {
 						onMouseUp: [
@@ -91,28 +95,52 @@ export const newsPagerStack: HCStack = {
 			background: "main",
 			parts: [
 				{
+					id: "newsTitle",
+					type: "label",
+					rect: [12, 12, 396, 20],
+					content: "News items 5–13",
+				},
+				{
 					id: "newsArticle",
 					type: "directusNews",
-					rect: [12, 12, 396, 232],
-					options: { itemId: 1 },
+					rect: [12, 36, 396, 200],
+					options: { itemId: "newsId" },
 				},
 				{
 					id: "newsPrev",
 					type: "button",
-					name: "← Prev",
-					rect: [12, 252, 104, 28],
+					name: "◀",
+					rect: [12, 244, 60, 26],
 					script: {
 						onMouseUp: [
-							{ do: "visual", effect: "wipeRight" },
-							{ do: "go", to: "prev" },
+							{
+								do: "if",
+								condition: `newsId > ${NEWS_MIN}`,
+								then: [{ do: "subtract", value: "1", var: "newsId" }],
+							},
 						],
 					},
 				},
 				{
 					id: "newsNext",
 					type: "button",
-					name: "Next →",
-					rect: [304, 252, 104, 28],
+					name: "▶",
+					rect: [80, 244, 60, 26],
+					script: {
+						onMouseUp: [
+							{
+								do: "if",
+								condition: `newsId < ${NEWS_MAX}`,
+								then: [{ do: "add", value: "1", var: "newsId" }],
+							},
+						],
+					},
+				},
+				{
+					id: "newsToPager",
+					type: "button",
+					name: "Pager →",
+					rect: [304, 244, 104, 26],
 					script: {
 						onMouseUp: [
 							{ do: "visual", effect: "wipeLeft" },
@@ -130,20 +158,50 @@ export const newsPagerStack: HCStack = {
 				{
 					id: "pagerTitle",
 					type: "label",
-					rect: [12, 14, 396, 22],
-					content: "A pager message",
+					rect: [12, 12, 396, 20],
+					content: "Pager messages 323–328",
 				},
 				{
 					id: "pagerMsg",
 					type: "directusPager",
-					rect: [12, 40, 396, 150],
-					options: { itemId: 1 },
+					rect: [12, 36, 396, 200],
+					options: { itemId: "pagerId" },
 				},
 				{
 					id: "pagerPrev",
 					type: "button",
-					name: "← Prev",
-					rect: [12, 252, 104, 28],
+					name: "◀",
+					rect: [12, 244, 60, 26],
+					script: {
+						onMouseUp: [
+							{
+								do: "if",
+								condition: `pagerId > ${PAGER_MIN}`,
+								then: [{ do: "subtract", value: "1", var: "pagerId" }],
+							},
+						],
+					},
+				},
+				{
+					id: "pagerNext",
+					type: "button",
+					name: "▶",
+					rect: [80, 244, 60, 26],
+					script: {
+						onMouseUp: [
+							{
+								do: "if",
+								condition: `pagerId < ${PAGER_MAX}`,
+								then: [{ do: "add", value: "1", var: "pagerId" }],
+							},
+						],
+					},
+				},
+				{
+					id: "pagerToNews",
+					type: "button",
+					name: "← News",
+					rect: [304, 244, 104, 26],
 					script: {
 						onMouseUp: [
 							{ do: "visual", effect: "wipeRight" },
