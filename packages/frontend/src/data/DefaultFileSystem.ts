@@ -6,6 +6,15 @@ import {
 
 const NEWSPAPER_PDF_BASE_URL = "https://files.911realtime.org/pdfs/newspapers";
 
+// HyperCard stack documents ship in public/stacks/ and are served by the
+// frontend itself (not Wasabi). Their URLs must respect Vite's configured base:
+// production serves from the domain root (base "/"), but the PR-preview build
+// (`vite build --base=./`) is served from a subpath, where an absolute "/stacks/…"
+// URL would 404. Prefixing with import.meta.env.BASE_URL keeps prod/dev/test
+// identical ("/stacks/…") while making the preview resolve relative to its subpath.
+const stackUrl = (filename: string): string =>
+	`${import.meta.env.BASE_URL}stacks/${filename}`;
+
 // Front-page PDFs uploaded to Wasabi under pdfs/newspapers/, paired with their byte size.
 const NEWSPAPER_FRONT_PAGES: [originalFilename: string, displayName: string, size: number][] = [
 	["Sept11.AK_ADN.pdf", "Anchorage Daily News.pdf", 112660],
@@ -651,8 +660,19 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 			_type: ClassicyFileSystemEntryFileType.Stack,
 			_mimeType: "application/json",
 			_icon: ClassicyIcons.system.files.document,
-			_url: "/stacks/getting-started.stack.json",
+			_url: stackUrl("getting-started.stack.json"),
 			_size: 21169,
+		},
+		// The Oregon Trail — a classic Apple II / MECC educational game rebuilt as
+		// a portable HyperCard JSON stack (outfit a wagon, then manage food, health
+		// and money across the 1848 trail to Oregon). Same Stack-type Finder routing
+		// as Getting Started: double-clicking opens it in HyperCard.
+		"The Oregon Trail.stack": {
+			_type: ClassicyFileSystemEntryFileType.Stack,
+			_mimeType: "application/json",
+			_icon: ClassicyIcons.system.files.document,
+			_url: stackUrl("oregon-trail.stack.json"),
+			_size: 130901,
 		},
 		Documents: {
 			_type: ClassicyFileSystemEntryFileType.Directory,

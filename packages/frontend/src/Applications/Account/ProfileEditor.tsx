@@ -1,7 +1,7 @@
 // Signed-in profile editor: per-section saves so a failure in one section
 // never blocks another. Demographics are ALL optional — empty saves as null.
 // Email is absent from updateProfile by design (verified round-trip only).
-import { ClassicyButton, ClassicyControlLabel, ClassicyInput, ClassicyPopUpMenu } from "classicy";
+import { ClassicyButton, ClassicyControlLabel, ClassicyInput, ClassicyPopUpMenu, ClassicyTabs } from "classicy";
 import type { ChangeEvent, ReactNode } from "react";
 import { useState } from "react";
 import type React from "react";
