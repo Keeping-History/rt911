@@ -11,6 +11,7 @@ import {
 import { useMemo, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { type PlaylistRecord } from "../../Providers/Auth/playlistApi";
+import { PlaylistEditorMain } from "./PlaylistEditorMain";
 import { PlaylistList } from "./PlaylistList";
 import appIconPng from "./app.png";
 
@@ -94,7 +95,7 @@ export function PlaylistEditor() {
 					{openRecord === null ? (
 						<PlaylistList meId={user?.id ?? ""} onOpen={setOpenRecord} />
 					) : (
-						<div>Editor: {openRecord.title}</div>
+						<PlaylistEditorMain record={openRecord} onBack={() => setOpenRecord(null)} />
 					)}
 				</ClassicyWindow>
 			)}
