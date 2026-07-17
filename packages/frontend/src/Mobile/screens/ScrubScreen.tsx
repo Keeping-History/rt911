@@ -4,7 +4,10 @@
 // clock value at mount — the display target doesn't drift while you dial.
 import { useAppManager, useClassicyDateTime } from "classicy";
 import { useContext, useRef, useState } from "react";
-import { formatUtcAsLocalTime } from "../../Applications/TimeMachine/setVirtualClock";
+import {
+	formatUtcAsLocalTime,
+	setDateTimeFromUtc,
+} from "../../Applications/TimeMachine/setVirtualClock";
 import { ScreenNavContext, useScreenWheel } from "../WheelContext";
 
 interface ScrubScreenProps {
@@ -30,7 +33,7 @@ export function ScrubScreen({ getNowMs, tzOffset }: ScrubScreenProps) {
 		onScroll: (steps) => setPendingMinutes((m) => m + steps),
 		onSelect: () => {
 			if (dateTimeLocked) return;
-			setDateTime(new Date(targetMs));
+			setDateTimeFromUtc(setDateTime, new Date(targetMs).toISOString());
 			pop();
 		},
 	});
