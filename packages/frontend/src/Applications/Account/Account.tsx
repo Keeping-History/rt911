@@ -2,6 +2,7 @@ import {
 	ClassicyApp,
 	ClassicyBevelButton,
 	ClassicyButton,
+	ClassicyControlLabel,
 	ClassicyFileInput,
 	ClassicyIcons,
 	ClassicyWindow,
@@ -200,7 +201,8 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 							</ClassicyBevelButton>
 							<div className={styles.identityInfo}>
 								<div className={styles.identityName}>
-									{`Signed in as ${user?.first_name ?? user?.email}`}
+									<ClassicyControlLabel label="Signed in as" />
+									<ClassicyControlLabel label={`${user?.first_name ?? user?.email}`} />
 								</div>
 								<div className={styles.playlists}>
 									Manage your playlists in the Playlists app.
