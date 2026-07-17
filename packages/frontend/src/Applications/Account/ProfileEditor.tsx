@@ -1,7 +1,7 @@
 // Signed-in profile editor: per-section saves so a failure in one section
 // never blocks another. Demographics are ALL optional — empty saves as null.
 // Email is absent from updateProfile by design (verified round-trip only).
-import { ClassicyButton, ClassicyInput, ClassicyPopUpMenu, ClassicyTabs } from "classicy";
+import { ClassicyButton, ClassicyControlLabel, ClassicyInput, ClassicyPopUpMenu } from "classicy";
 import type { ChangeEvent, ReactNode } from "react";
 import { useState } from "react";
 import type React from "react";
@@ -261,7 +261,7 @@ export const ProfileEditor: React.FC = () => {
 			title: "Email",
 			children: (
 				<div className={styles.tabPanel}>
-					<div className={styles.fieldNote}>{`Email: ${user?.email ?? ""}`}</div>
+					<ClassicyControlLabel label={`Email: ${user?.email ?? ""}`} />
 					<ClassicyInput
 						id="profile-new-email"
 						labelTitle="New Email"
