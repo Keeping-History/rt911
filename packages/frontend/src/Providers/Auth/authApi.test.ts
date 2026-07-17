@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { avatarUrl, fetchMe, loginEmail, logout, providerLoginUrl, uploadAvatar } from "./authApi";
+import { avatarUrl, fetchMe, isHostOf, loginEmail, logout, providerLoginUrl, register, registrationLandingUrl, uploadAvatar, verifyRegistration } from "./authApi";
 import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -182,5 +182,68 @@ describe("uploadAvatar", () => {
 	it("throws the server's message when the upload fails", async () => {
 		const f = vi.fn(async () => jsonResponse({ errors: [{ message: "File too large." }] }, 413));
 		await expect(uploadAvatar(file, null, f)).rejects.toThrow("File too large.");
+	});
+});
+
+describe("register", () => {
+	it("POSTs email/password/verification_url and resolves on 204", async () => {
+		const f = vi.fn(async (...args: Parameters<typeof fetch>) => {
+			expect(String(args[0])).toContain("/users/register");
+			const body = JSON.parse(String((args[1] as RequestInit).body));
+			expect(body.email).toBe("t@x.org");
+			expect(body.password).toBe("hunter22");
+			expect(String(body.verification_url)).toMatch(/^https:\/\//);
+			return new Response(null, { status: 204 });
+		});
+		await expect(register("t@x.org", "hunter22", f)).resolves.toBeUndefined();
+	});
+	it("throws the server message on failure", async () => {
+		const f = vi.fn(async () =>
+			new Response(JSON.stringify({ errors: [{ message: "Bad request." }] }), { status: 400 }),
+		);
+		await expect(register("t@x.org", "pw123456", f)).rejects.toThrow("Bad request.");
+	});
+});
+
+describe("verifyRegistration", () => {
+	it("GETs the verify endpoint with the token and resolves on success", async () => {
+		const f = vi.fn(async (...args: Parameters<typeof fetch>) => {
+			expect(String(args[0])).toContain("/users/register/verify-email?token=tok123");
+			return new Response(null, { status: 200 });
+		});
+		await expect(verifyRegistration("tok123", f)).resolves.toBeUndefined();
+	});
+	it("throws on an invalid/expired token", async () => {
+		const f = vi.fn(async () =>
+			new Response(JSON.stringify({ errors: [{ message: "Invalid token." }] }), { status: 401 }),
+		);
+		await expect(verifyRegistration("bad", f)).rejects.toThrow(/invalid|expired/i);
+	});
+});
+
+describe("registrationLandingUrl", () => {
+	it("uses the current origin on the product domain (and subdomains)", () => {
+		expect(registrationLandingUrl("beta.911realtime.org", "https://beta.911realtime.org")).toBe(
+			"https://beta.911realtime.org/",
+		);
+		expect(registrationLandingUrl("911realtime.org", "https://911realtime.org")).toBe(
+			"https://911realtime.org/",
+		);
+	});
+	it("falls back to beta elsewhere, with boundary-safe matching", () => {
+		expect(registrationLandingUrl("localhost", "http://localhost:5173")).toBe(
+			"https://beta.911realtime.org/",
+		);
+		expect(registrationLandingUrl("evil911realtime.org", "https://evil911realtime.org")).toBe(
+			"https://beta.911realtime.org/",
+		);
+	});
+});
+
+describe("isHostOf", () => {
+	it("matches the domain and subdomains, never suffix-lookalikes", () => {
+		expect(isHostOf("github.io", "github.io")).toBe(true);
+		expect(isHostOf("keeping-history.github.io", "github.io")).toBe(true);
+		expect(isHostOf("notgithub.io", "github.io")).toBe(false);
 	});
 });

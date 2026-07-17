@@ -1,5 +1,9 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { ClassicyDesktop } from "classicy";
+// Side effect: register the Directus-collection HyperCard extension parts and
+// stacks with classicy's HyperCard plugin registries. The HyperCard app itself
+// is bundled in classicy and auto-mounted by ClassicyDesktop.
+import "./Applications/HyperCard";
 import { Account } from "./Applications/Account/Account";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";

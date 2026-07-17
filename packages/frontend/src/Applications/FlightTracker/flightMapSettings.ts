@@ -1,6 +1,7 @@
 import type { ActionMessage, ClassicyStore } from "classicy";
 import { registerAppEventHandler } from "classicy";
 import type { LoopSpeed, LoopWindowMinutes } from "./loopClock";
+import { type CameraMode, DEFAULT_CAMERA_MODE, normalizeCameraMode } from "./flightCamera";
 import { EMPTY_FLIGHT_FILTER, type FlightFilter } from "./flightFilter";
 import {
 	type BasemapStyleId,
@@ -36,6 +37,10 @@ export interface FlightMapSettings {
 	threeD: boolean;
 	// Topographic relief (hillshade + 3D ground mesh) — one switch for both.
 	terrain: boolean;
+	// Camera-follow framing for the tracked flights (track/cockpit/highlight).
+	// Persisted as a preference; the follow on/off toggle itself is ephemeral
+	// (it needs a live selection), so it lives in FlightTracker, not here.
+	cameraMode: CameraMode;
 }
 
 export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
@@ -53,6 +58,7 @@ export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	cluster: false,
 	threeD: false,
 	terrain: true,
+	cameraMode: DEFAULT_CAMERA_MODE,
 };
 
 /** Persist the whole map-settings object in one dispatch. */
@@ -70,7 +76,11 @@ export const readFlightMapSettings = (
 	const stored =
 		(data?.mapSettings as Partial<FlightMapSettings> | undefined) ?? {};
 	const merged = { ...DEFAULT_FLIGHT_MAP_SETTINGS, ...stored };
-	return { ...merged, mapStyle: normalizeBasemapStyle(merged.mapStyle) };
+	return {
+		...merged,
+		mapStyle: normalizeBasemapStyle(merged.mapStyle),
+		cameraMode: normalizeCameraMode(merged.cameraMode),
+	};
 };
 
 // Loop playback preferences. Kept separate from mapSettings so the Settings

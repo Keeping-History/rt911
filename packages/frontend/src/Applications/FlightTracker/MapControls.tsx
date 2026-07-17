@@ -6,6 +6,12 @@ import {
 	type BasemapStyleId,
 	normalizeBasemapStyle,
 } from "../../lib/basemap/basemapStyles";
+import {
+	type CameraMode,
+	CAMERA_MODE_LABELS,
+	CAMERA_MODES,
+	normalizeCameraMode,
+} from "./flightCamera";
 
 import type { SelectMode } from "./selectTool";
 
@@ -32,6 +38,12 @@ export interface MapControlsProps {
 	mapStyle: BasemapStyleId;
 	darkMap: boolean;
 	filterOn: boolean;
+	// Camera-follow (tracked flights): `cameraMode` is the dropdown framing;
+	// `cameraFollow` is true while the camera is locked onto a flight; `canFollow`
+	// is true when a tracked flight is selected (so the toggle can arm).
+	cameraMode: CameraMode;
+	cameraFollow: boolean;
+	canFollow: boolean;
 	onZoomIn(): void;
 	onZoomOut(): void;
 	onToggleGlobe(): void;
@@ -43,6 +55,8 @@ export interface MapControlsProps {
 	onSetMapStyle(style: BasemapStyleId): void;
 	onToggleDarkMap(): void;
 	onOpenFilter(): void;
+	onSetCameraMode(mode: CameraMode): void;
+	onToggleCameraFollow(): void;
 }
 
 export const MapControls: FC<MapControlsProps> = (p) => {
@@ -53,10 +67,21 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 	return (
 	<div className={styles.mapControls}>
 		<div className={styles.mapControlsContainer}>
-		<ClassicyButton buttonSize="small" aria-label="Zoom out" onClickFunc={p.onZoomOut}>
+		{/* Zoom is the camera's domain while a follow lock is active. */}
+		<ClassicyButton
+			buttonSize="small"
+			aria-label="Zoom out"
+			disabled={p.cameraFollow}
+			onClickFunc={p.onZoomOut}
+		>
 			−
 		</ClassicyButton>
-		<ClassicyButton buttonSize="small" aria-label="Zoom in" onClickFunc={p.onZoomIn}>
+		<ClassicyButton
+			buttonSize="small"
+			aria-label="Zoom in"
+			disabled={p.cameraFollow}
+			onClickFunc={p.onZoomIn}
+		>
 			+
 		</ClassicyButton>
 		</div>
@@ -97,10 +122,12 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		</div>
 		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
+		{/* The marquee selectors move/read the map, so they lock out while following. */}
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Select rectangle"
 			depressed={p.selectMode === "rect"}
+			disabled={p.cameraFollow}
 			onClickFunc={() => p.onSetSelectMode(p.selectMode === "rect" ? "off" : "rect")}
 		>
 			▭
@@ -109,10 +136,35 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			buttonSize="small"
 			aria-label="Select circle"
 			depressed={p.selectMode === "circle"}
+			disabled={p.cameraFollow}
 			onClickFunc={() => p.onSetSelectMode(p.selectMode === "circle" ? "off" : "circle")}
 		>
 			◯
 		</ClassicyButton>
+		</div>
+		<span className={styles.mapControlsDivider} />
+		{/* Camera follow (tracked flights): a toggle that locks the camera onto
+		    the selected flight, and a dropdown picking the framing. */}
+		<div className={styles.mapControlsContainer}>
+		<ClassicyButton
+			buttonSize="small"
+			aria-label="Follow flight"
+			depressed={p.cameraFollow}
+			disabled={!p.canFollow}
+			onClickFunc={p.onToggleCameraFollow}
+		>
+			{p.cameraFollow ? "Following" : "Follow"}
+		</ClassicyButton>
+		<ClassicyPopUpMenu
+			id="flight_camera_mode"
+			label="Camera"
+			labelPosition="left"
+			labelSize="small"
+			size="small"
+			selected={p.cameraMode}
+			options={CAMERA_MODES.map((m) => ({ value: m, label: CAMERA_MODE_LABELS[m] }))}
+			onChangeFunc={(e) => p.onSetCameraMode(normalizeCameraMode(e.target.value))}
+		/>
 		</div>
 		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
@@ -123,6 +175,8 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			labelPosition="left"
 			labelSize="small"
 			size="small"
+			// A pinpoint fly-to would fight the follow lock, so it's disabled then.
+			disabled={p.cameraFollow}
 			placeholder="Choose…"
 			options={PINPOINTS.map((pin) => ({ value: pin.id, label: pin.label }))}
 			onChangeFunc={(e) => {

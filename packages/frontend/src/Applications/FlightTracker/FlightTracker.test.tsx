@@ -881,4 +881,54 @@ describe("FlightTracker", () => {
 			expect(select.value).toBe("UA");
 		});
 	});
+
+	describe("camera follow (tracked flights)", () => {
+		const aa11 = {
+			id: 1, flight: "AA11", carrier: "AA",
+			start_date: "2001-09-11T13:00:00Z", lat: 40, lon: -74, alt_ft: 30000,
+		};
+		const dl404 = {
+			id: 2, flight: "DL404", carrier: "DL",
+			start_date: "2001-09-11T13:00:00Z", lat: 41, lon: -73, alt_ft: 31000,
+		};
+		const stubFetch = () =>
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
+			);
+
+		it("arms the follow lock onto a selected tracked flight", () => {
+			stubFetch();
+			renderWithContext({ flightPositions: [aa11], connected: true });
+			expect(mapProps.at(-1)!.followFlight).toBeNull(); // idle until armed
+			act(() => (mapProps.at(-1)!.onSelectFlight as (f: string) => void)("AA11"));
+			fireEvent.click(screen.getByText("Follow"));
+			expect(mapProps.at(-1)!.followFlight).toBe("AA11");
+			expect(screen.getByText("Following")).toBeTruthy();
+			vi.unstubAllGlobals();
+		});
+
+		it("passes the persisted camera mode and dispatches a dropdown change", () => {
+			mockAppData.current = { mapSettings: { cameraMode: "highlight" } };
+			renderWithContext({ connected: true });
+			expect(mapProps.at(-1)!.cameraMode).toBe("highlight");
+			fireEvent.change(screen.getByTestId("flight_camera_mode"), {
+				target: { value: "cockpit" },
+			});
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetMapSettings",
+				mapSettings: { ...DEFAULT_FLIGHT_MAP_SETTINGS, cameraMode: "cockpit" },
+			});
+		});
+
+		it("never follows an untracked flight even if the toggle is forced", () => {
+			stubFetch();
+			renderWithContext({ flightPositions: [dl404], connected: true });
+			act(() => (mapProps.at(-1)!.onSelectFlight as (f: string) => void)("DL404"));
+			// A regular flight isn't one of the five tracked flights: arming stays inert.
+			act(() => fireEvent.click(screen.getByText("Follow")));
+			expect(mapProps.at(-1)!.followFlight).toBeNull();
+			vi.unstubAllGlobals();
+		});
+	});
 });
