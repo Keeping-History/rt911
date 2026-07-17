@@ -35,6 +35,21 @@ export function almanacUrl(stationId: string): string {
 	return `${ALMANAC_BASE}${stationId}.json`;
 }
 
+// Almanac data exists only for these four calendar days (the weather-recon
+// almanac flow's anachronism-cutoff window). Outside this range the almanac
+// block is hidden rather than showing an empty/misleading section.
+export const ALMANAC_DAYS: ReadonlySet<string> = new Set([
+	"09-09",
+	"09-10",
+	"09-11",
+	"09-12",
+]);
+
+/** True when an "MM-DD" day key falls inside the almanac window. */
+export function isAlmanacDay(mmdd: string): boolean {
+	return ALMANAC_DAYS.has(mmdd);
+}
+
 // Fetch a station's almanac file, cached by station_id (the file is
 // immutable/static). Aborts an in-flight request when the station changes
 // or the component unmounts. A miss or error surfaces as `error` with a

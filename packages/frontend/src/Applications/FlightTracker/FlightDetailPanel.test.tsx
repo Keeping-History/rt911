@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightTrack } from "./useFlightTrack";
@@ -154,7 +154,9 @@ describe("FlightDetailPanel", () => {
 				<FlightDetailPanel selected={sel} track={null} loading={false} error={null}
 					nowMs={PRE_IMPACT} selectionOptions={[sel]} />,
 			);
-			expect(screen.queryByRole("combobox")).toBeNull();
+			// classicy renders ClassicyPopUpMenu as a <button id=…>, so a single-flight
+			// selection shows no selection popup at all.
+			expect(document.getElementById("flight_detail_selection")).toBeNull();
 			expect(screen.queryByText("Save as Filter")).toBeNull();
 		});
 
@@ -166,13 +168,10 @@ describe("FlightDetailPanel", () => {
 					nowMs={PRE_IMPACT} selectionOptions={[sel, other]}
 					onPickFlight={onPickFlight} onSaveAsFilter={onSaveAsFilter} />,
 			);
-			// ClassicyPopUpMenu (>= 0.41.5) has no hidden native <select>: the
-			// trigger is a role="button" showing the selected label, and picking
-			// an option means opening the listbox then clicking the option.
-			const trigger = document.getElementById("flight_detail_selection") as HTMLButtonElement;
-			expect(trigger.textContent).toContain("AA11");
-			fireEvent.click(trigger);
-			fireEvent.click(screen.getByRole("option", { name: "DL404" }));
+			const dd = document.getElementById("flight_detail_selection") as HTMLButtonElement;
+			expect(dd.querySelector(".classicyPopUpMenuValue")?.textContent).toBe("AA11");
+			fireEvent.click(dd); // open the listbox
+			fireEvent.click(within(screen.getByRole("listbox")).getByText("DL404"));
 			expect(onPickFlight).toHaveBeenCalledWith("DL404");
 			fireEvent.click(screen.getByText("Save as Filter"));
 			expect(onSaveAsFilter).toHaveBeenCalledOnce();
