@@ -18,7 +18,12 @@ describe("Getting Started.stack", () => {
 	it("sits at the Macintosh HD root as a Stack-type file", () => {
 		expect(entry).toBeDefined();
 		expect(entry._type).toBe(ClassicyFileSystemEntryFileType.Stack);
-		expect(entry._url).toBe("/stacks/getting-started.stack.json");
+		// Base-aware URL: import.meta.env.BASE_URL is "/" in prod/dev/test, so this
+		// stays "/stacks/…"; the PR-preview build (base "./") gets a subpath-relative
+		// URL so the stack still loads when served from /rt911/pr-preview/pr-<n>/.
+		expect(entry._url).toBe(
+			`${import.meta.env.BASE_URL}stacks/getting-started.stack.json`,
+		);
 	});
 
 	it("points at a public file whose size matches the entry", () => {
