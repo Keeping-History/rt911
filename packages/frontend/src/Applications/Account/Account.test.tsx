@@ -141,12 +141,15 @@ describe("Account — loading", () => {
 });
 
 describe("Account — signedIn", () => {
-	it("shows the first_name identity, Sign Out button, and the coming-soon line", () => {
+	it("shows the first_name identity, Sign Out button, and the playlists pointer line", () => {
 		mockAuth.status = "signedIn";
 		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: "Ada", last_name: "Lovelace", avatar: null });
 		render(<Account />);
-		expect(screen.getByText("Signed in as Ada")).not.toBeNull();
-		expect(screen.getByText("My Playlists — coming soon")).not.toBeNull();
+		// The identity line renders as two ClassicyControlLabels ("Signed in
+		// as" + the name) since commit ed5a5743, not one text node.
+		expect(screen.getByText("Signed in as")).not.toBeNull();
+		expect(screen.getByText("Ada")).not.toBeNull();
+		expect(screen.getByText("Manage your playlists in the Playlists app.")).not.toBeNull();
 		expect(screen.getByRole("button", { name: "Sign Out" })).not.toBeNull();
 	});
 
@@ -154,7 +157,8 @@ describe("Account — signedIn", () => {
 		mockAuth.status = "signedIn";
 		mockAuth.user = makeUser({ id: "1", email: "ada@example.com", first_name: null, last_name: null, avatar: null });
 		render(<Account />);
-		expect(screen.getByText("Signed in as ada@example.com")).not.toBeNull();
+		expect(screen.getByText("Signed in as")).not.toBeNull();
+		expect(screen.getByText("ada@example.com")).not.toBeNull();
 	});
 
 	it("Sign Out calls signOut", () => {
