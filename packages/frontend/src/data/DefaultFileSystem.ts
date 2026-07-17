@@ -654,6 +654,17 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 			_url: "/stacks/getting-started.stack.json",
 			_size: 21169,
 		},
+		// The Oregon Trail — a classic Apple II / MECC educational game rebuilt as
+		// a portable HyperCard JSON stack (outfit a wagon, then manage food, health
+		// and money across the 1848 trail to Oregon). Same Stack-type Finder routing
+		// as Getting Started: double-clicking opens it in HyperCard.
+		"The Oregon Trail.stack": {
+			_type: ClassicyFileSystemEntryFileType.Stack,
+			_mimeType: "application/json",
+			_icon: ClassicyIcons.system.files.document,
+			_url: "/stacks/oregon-trail.stack.json",
+			_size: 130901,
+		},
 		Documents: {
 			_type: ClassicyFileSystemEntryFileType.Directory,
 			_icon: ClassicyIcons.system.folders.directory,
