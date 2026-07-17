@@ -27,11 +27,13 @@ const baseProps = (): MapControlsProps => ({
 	onOpenFilter: vi.fn(),
 });
 
-// ClassicyPopUpMenu's label isn't wired to the select for a11y-name queries,
+// ClassicyPopUpMenu's label isn't wired to the trigger for a11y-name queries,
 // so the two menus (pinpoints, style) are told apart by their element ids.
-const selectById = (id: string): HTMLSelectElement => {
+// >= 0.41.5 has no hidden native <select> — the id lives on the visible
+// role="button" trigger; opening it renders a role="listbox" of role="option"s.
+const triggerById = (id: string): HTMLButtonElement => {
 	const el = document.getElementById(id);
-	if (!(el instanceof HTMLSelectElement)) throw new Error(`no select #${id}`);
+	if (!(el instanceof HTMLButtonElement)) throw new Error(`no popup trigger #${id}`);
 	return el;
 };
 
@@ -73,17 +75,15 @@ describe("MapControls", () => {
 	it("pinpoints dropdown flies to the chosen place then snaps back to Choose…", () => {
 		const p = baseProps();
 		render(<MapControls {...p} />);
-		const dd = selectById("flight_map_pinpoints");
-		const placeholder = screen.getByText("Choose…") as HTMLOptionElement;
-		expect(placeholder.disabled).toBe(true);
-		expect(dd.value).toBe(placeholder.value);
-		fireEvent.change(dd, { target: { value: "pentagon" } });
+		expect(triggerById("flight_map_pinpoints").textContent).toContain("Choose…");
+		fireEvent.click(triggerById("flight_map_pinpoints"));
+		fireEvent.click(screen.getByRole("option", { name: "The Pentagon" }));
 		const pentagon = pinpointById("pentagon")!;
 		// Assert against the data table, not a hardcoded copy — zoom tuning is a
 		// product decision this test must follow, not police.
 		expect(p.onPinpoint).toHaveBeenCalledWith(pentagon.center, pentagon.zoom);
 		// Remounted onto the placeholder — the picked value never sticks.
-		expect(selectById("flight_map_pinpoints").value).toBe(placeholder.value);
+		expect(triggerById("flight_map_pinpoints").textContent).toContain("Choose…");
 	});
 
 	it("select tools are mutually exclusive toggles: active tool re-click turns off", () => {
@@ -104,9 +104,9 @@ describe("MapControls", () => {
 	it("style dropdown shows the current style and fires onSetMapStyle", () => {
 		const p = baseProps();
 		render(<MapControls {...p} mapStyle="satellite" />);
-		const dd = selectById("flight_map_style");
-		expect(dd.value).toBe("satellite");
-		fireEvent.change(dd, { target: { value: "radar" } });
+		expect(triggerById("flight_map_style").textContent).toContain("Satellite");
+		fireEvent.click(triggerById("flight_map_style"));
+		fireEvent.click(screen.getByRole("option", { name: "Radar" }));
 		expect(p.onSetMapStyle).toHaveBeenCalledWith("radar");
 	});
 

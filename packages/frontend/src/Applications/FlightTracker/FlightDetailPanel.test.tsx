@@ -166,9 +166,13 @@ describe("FlightDetailPanel", () => {
 					nowMs={PRE_IMPACT} selectionOptions={[sel, other]}
 					onPickFlight={onPickFlight} onSaveAsFilter={onSaveAsFilter} />,
 			);
-			const dd = screen.getByRole("combobox") as HTMLSelectElement;
-			expect(dd.value).toBe("AA11");
-			fireEvent.change(dd, { target: { value: "DL404" } });
+			// ClassicyPopUpMenu (>= 0.41.5) has no hidden native <select>: the
+			// trigger is a role="button" showing the selected label, and picking
+			// an option means opening the listbox then clicking the option.
+			const trigger = document.getElementById("flight_detail_selection") as HTMLButtonElement;
+			expect(trigger.textContent).toContain("AA11");
+			fireEvent.click(trigger);
+			fireEvent.click(screen.getByRole("option", { name: "DL404" }));
 			expect(onPickFlight).toHaveBeenCalledWith("DL404");
 			fireEvent.click(screen.getByText("Save as Filter"));
 			expect(onSaveAsFilter).toHaveBeenCalledOnce();

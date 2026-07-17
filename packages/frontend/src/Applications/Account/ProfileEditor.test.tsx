@@ -77,10 +77,11 @@ describe("ProfileEditor — about you (all optional)", () => {
 	it("round-trips educator role and toggled grade levels", async () => {
 		render(<ProfileEditor />);
 		// ClassicyPopUpMenu's label isn't htmlFor-associated (classicy quirk) —
-		// target the select by id.
-		fireEvent.change(document.getElementById("profile-educator-role") as HTMLSelectElement, {
-			target: { value: "librarian" },
-		});
+		// target the trigger by id. >= 0.41.5 has no hidden native <select>: the
+		// trigger is a role="button"; picking a value means opening the listbox
+		// then clicking the option.
+		fireEvent.click(document.getElementById("profile-educator-role") as HTMLButtonElement);
+		fireEvent.click(screen.getByRole("option", { name: "Librarian" }));
 		fireEvent.click(screen.getByRole("button", { name: "High School" }));
 		fireEvent.click(screen.getByRole("button", { name: "College" }));
 		fireEvent.click(screen.getByRole("button", { name: "College" })); // toggle back off
