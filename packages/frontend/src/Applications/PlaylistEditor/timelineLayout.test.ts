@@ -49,4 +49,26 @@ describe("layoutFlags", () => {
 	it("omits point entries with an empty at", () => {
 		expect(layoutFlags([{ uid: "j2", entry: { kind: "jump", at: "", to: "" } } as never])).toEqual([]);
 	});
+	it("plants at publishedAt (not start) when there is a bare start with no end", () => {
+		const [flag] = layoutFlags([
+			media(
+				"n3",
+				{ app: "news", itemId: "3", start: "2001-09-11T09:00:00Z" },
+				{ publishedAt: "2001-09-11T12:00:00Z" },
+			),
+		]);
+		expect(flag.atFrac).toBeCloseTo(timeToFraction("2001-09-11T12:00:00Z"));
+		expect(flag.extentEndFrac).toBeUndefined();
+	});
+	it("plants at start (with extent to end) when an explicit start+end window exists, even with publishedAt", () => {
+		const [flag] = layoutFlags([
+			media(
+				"n4",
+				{ app: "news", itemId: "4", start: "2001-09-11T09:00:00Z", end: "2001-09-11T10:00:00Z" },
+				{ publishedAt: "2001-09-11T12:00:00Z" },
+			),
+		]);
+		expect(flag.atFrac).toBeCloseTo(timeToFraction("2001-09-11T09:00:00Z"));
+		expect(flag.extentEndFrac).toBeCloseTo(timeToFraction("2001-09-11T10:00:00Z"));
+	});
 });

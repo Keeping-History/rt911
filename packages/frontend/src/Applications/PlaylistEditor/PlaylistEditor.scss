@@ -19,6 +19,15 @@
 	white-space: nowrap;
 }
 
+.playlistTimelineHourTick {
+	position: absolute;
+	top: 0;
+	width: 1px;
+	height: 4px;
+	background: currentColor;
+	opacity: 0.4;
+}
+
 .playlistTimelineFlagRow {
 	position: relative;
 	width: 100%;

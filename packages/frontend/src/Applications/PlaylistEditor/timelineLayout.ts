@@ -52,8 +52,8 @@ export function layoutFlags(entries: EditorEntry[], minGapFrac = 0.015): Timelin
 	const raw: Omit<TimelineFlag, "row">[] = [];
 	for (const e of entries) {
 		if (e.entry.kind === "media" && e.entry.app === "news") {
-			const at = e.entry.start ?? e.timelineMeta?.publishedAt ?? null;
 			const hasWindow = Boolean(e.entry.start && e.entry.end);
+			const at = hasWindow ? e.entry.start : (e.timelineMeta?.publishedAt ?? e.entry.start ?? null);
 			raw.push({
 				uid: e.uid,
 				label: e.entry.itemId,
