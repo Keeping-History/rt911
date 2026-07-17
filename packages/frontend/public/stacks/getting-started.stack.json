@@ -1,0 +1,631 @@
+{
+	"name": "911realtime.org User Guide",
+	"version": "2",
+	"size": [512, 342],
+	"backgrounds": [
+		{
+			"id": "guide",
+			"name": "Guide",
+			"parts": [
+				{
+					"id": "bgFooter",
+					"type": "label",
+					"shared": true,
+					"rect": [122, 312, 268, 20],
+					"content": "911realtime.org — User Guide",
+					"style": { "align": "center", "fontSize": "small" }
+				},
+				{
+					"id": "bgPrev",
+					"type": "button",
+					"name": "← Prev",
+					"rect": [12, 306, 100, 26],
+					"script": {
+						"onMouseUp": [
+							{ "do": "visual", "effect": "wipeRight" },
+							{ "do": "go", "to": "prev" }
+						]
+					}
+				},
+				{
+					"id": "bgNext",
+					"type": "button",
+					"name": "Next →",
+					"rect": [400, 306, 100, 26],
+					"script": {
+						"onMouseUp": [
+							{ "do": "visual", "effect": "wipeLeft" },
+							{ "do": "go", "to": "next" }
+						]
+					}
+				}
+			]
+		}
+	],
+	"cards": [
+		{
+			"id": "welcome",
+			"name": "Welcome",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "welcomeTitle",
+					"type": "label",
+					"rect": [12, 16, 488, 24],
+					"content": "Welcome to 911realtime.org",
+					"style": { "align": "center", "fontSize": "large" }
+				},
+				{
+					"id": "welcomeBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 50, 488, 130],
+					"options": { "multiline": true },
+					"content": "911realtime.org replays the media of September 11, 2001 — television, radio, pagers, news, newsgroups, flight radar, even the web itself — synchronized to one clock, inside a Mac OS 8-style desktop.\n\nThe clock starts at 8:40 AM Eastern, six minutes before the first impact. From there, every app plays forward together, exactly as the day unfolded."
+				},
+				{
+					"id": "welcomeNote",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 188, 488, 76],
+					"options": { "multiline": true },
+					"content": "A note on the subject matter: this is a documentary archive of a day on which nearly 3,000 people were killed. It is presented unedited and in real time so it can be studied and remembered as it happened. Please explore it with that in mind."
+				},
+				{
+					"id": "welcomeBegin",
+					"type": "button",
+					"name": "Begin the Tour",
+					"rect": [186, 272, 140, 28],
+					"script": {
+						"onMouseUp": [
+							{ "do": "visual", "effect": "dissolve" },
+							{ "do": "go", "to": "next" }
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "basics",
+			"name": "The Desktop & the Clock",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "basicsTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "The desktop, and the virtual clock"
+				},
+				{
+					"id": "basicsBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 250],
+					"options": { "multiline": true },
+					"content": "The desktop works like a classic Macintosh: double-click a desktop icon to open an app, drag windows by their title bars, and use each app's File menu for its settings. The menu-bar clock in the top-right corner always shows the virtual time — the time in 2001, not your local time.\n\nOne clock drives everything. Only Time Machine (or a teacher's playlist) can move it, and when it jumps, every open app seeks together: TV changes programs, the flight map redraws the sky, radio and pagers pick up from the new moment.\n\nPlayback is real time — a minute of your time is a minute of September 11. Your position persists across reloads; a first visit starts at 8:40 AM."
+				}
+			]
+		},
+		{
+			"id": "quickstart",
+			"name": "A First Session",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "quickstartTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Quick start — a first session"
+				},
+				{
+					"id": "quickstartBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 250],
+					"options": { "multiline": true },
+					"content": "You arrive at 8:40 AM; the first impact is at 8:46. Seven steps:\n\n1. Open TV — the last minutes of ordinary morning television, until coverage breaks in around 8:49, channel by channel.\n2. Open Flight Tracker — over 2,500 aircraft aloft; the hijacked flights are red.\n3. Open Pager Decoder — and just let it run.\n4. Open Radio Scanner — WINS and WCBS are New York news radio; AA11, atc and NEADS/NORAD carry the air-traffic-control recordings.\n5. Jump with Time Machine — every app follows the clock.\n6. Open the Browser — the web as it was archived that day.\n7. Open Macintosh HD → Documents → Newspapers — the next morning's front pages.\n\nThe cards that follow cover each app in turn — with a button to open the real thing."
+				}
+			]
+		},
+		{
+			"id": "times",
+			"name": "Reference Times",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "timesTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Reference times for Time Machine (Eastern)"
+				},
+				{
+					"id": "timesBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 220],
+					"options": { "multiline": true },
+					"content": "8:46 — first impact, WTC North Tower\n9:03 — second impact, South Tower\n9:26 — FAA national ground stop\n9:37 — the Pentagon\n9:59 — South Tower collapses\n10:03 — United 93, Shanksville, PA\n10:28 — North Tower collapses"
+				},
+				{
+					"id": "timesOpenTm",
+					"type": "button",
+					"name": "Open Time Machine",
+					"rect": [332, 270, 168, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "TimeMachine.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "tv",
+			"name": "TV",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "tvTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "TV — two dozen channels, one clock"
+				},
+				{
+					"id": "tvBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 62],
+					"options": { "multiline": true },
+					"content": "U.S. networks, New York and Washington locals, and international broadcasters, all tuned to the virtual clock. Click a thumbnail to fill the screen; MultiView tiles every channel; EPG opens a program guide; CC toggles captions. Below: a live channel, embedded in this card."
+				},
+				{
+					"id": "tvEmbed",
+					"type": "directusVideo",
+					"rect": [96, 112, 320, 150],
+					"options": {
+						"channelId": 3,
+						"controls": true,
+						"captions": true,
+						"overlay": true
+					}
+				},
+				{
+					"id": "tvOpen",
+					"type": "button",
+					"name": "Open TV",
+					"rect": [348, 270, 152, 28],
+					"script": { "onMouseUp": [{ "do": "openApp", "app": "TV.app" }] }
+				}
+			]
+		},
+		{
+			"id": "flight",
+			"name": "Flight Tracker",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "flightTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Flight Tracker — the whole sky"
+				},
+				{
+					"id": "flightBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "A radar view of every commercial flight over North America — 3.4 million positions reconstructed from BTS data, with the four hijacked flights drawn in red from NTSB and RADES air-defense radar. Aircraft carry silhouettes matched to their real airframe.\n\nClick any aircraft for its route, altitude, phase and aircraft details. The toolbar offers Globe and 3D views, Terrain, clustering, a Pinpoints menu of significant sites, map styles with a Dark toggle, and a Filter. The bottom bar continuously replays the trailing 30 or 90 minutes at up to 10× speed.\n\nAfter the 9:26 ground stop, leave it open — and watch the sky empty for the first time in aviation history."
+				},
+				{
+					"id": "flightOpen",
+					"type": "button",
+					"name": "Open Flight Tracker",
+					"rect": [332, 270, 168, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "FlightTracker.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "radio",
+			"name": "Radio Scanner",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "radioTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Radio Scanner — the airwaves"
+				},
+				{
+					"id": "radioBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "A scanner of period radio: New York news stations (WINS, WCBS), Rutgers college radio, and the air-traffic-control and NORAD/NEADS recordings tied to the hijacked flights, synchronized to the moment they happened.\n\nClick a station button along the bottom to tune it. The display shows what's playing now, what's coming up and what you missed, over a live waveform. Audio keeps playing if you switch browser tabs."
+				},
+				{
+					"id": "radioOpen",
+					"type": "button",
+					"name": "Open Radio Scanner",
+					"rect": [332, 270, 168, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "RadioScanner.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "pager",
+			"name": "Pager Decoder",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "pagerTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Pager Decoder — the country's pagers"
+				},
+				{
+					"id": "pagerBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "A live POCSAG/FLEX decoder streaming more than 400,000 archived pager messages across the Arch, Metrocall, Skytel and Weblink networks — market updates, \"call me when you get in,\" automated alerts — at whatever rate the moment produced.\n\nFilter by provider, recipient address or message text; Keep controls the buffer size. This window needs no interaction at all: open it, and as the morning unfolds you will see the character of the traffic change completely."
+				},
+				{
+					"id": "pagerOpen",
+					"type": "button",
+					"name": "Open Pager Decoder",
+					"rect": [332, 270, 168, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "PagerDecoder.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "news",
+			"name": "News",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "newsTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "News — the day as it was known"
+				},
+				{
+					"id": "newsBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "A reader showing the documented timeline of the day as it was known at the current virtual time — entries appear only once their moment has arrived, with sourcing and, where available, photographs.\n\nPage through with the arrow buttons, or press Now to jump to the most recent items. Per Page and Size adjust the layout."
+				},
+				{
+					"id": "newsOpen",
+					"type": "button",
+					"name": "Open News",
+					"rect": [348, 270, 152, 28],
+					"script": { "onMouseUp": [{ "do": "openApp", "app": "News.app" }] }
+				}
+			]
+		},
+		{
+			"id": "newsgroups",
+			"name": "Newsgroups",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "ngTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Newsgroups — the discussion internet of 2001"
+				},
+				{
+					"id": "ngBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "A Usenet reader over an archive of period newsgroups. Type a group-name fragment into the filter (try alt.current-events) and press Go, expand hierarchies with the disclosure triangles, and click a group to load its messages.\n\nMessage bodies load on demand — exactly like a newsreader of the era."
+				},
+				{
+					"id": "ngOpen",
+					"type": "button",
+					"name": "Open Newsgroups",
+					"rect": [332, 270, 168, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "Newsgroups.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "weather",
+			"name": "Weather",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "weatherTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Weather — severe clear"
+				},
+				{
+					"id": "weatherBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "The national weather picture, synchronized to the clock: a station map with color-coded observations and NEXRAD radar echoes, current conditions in a METAR-style report, the National Weather Service zone forecast as issued that morning, and almanac data.\n\nIt was, famously, a beautiful day in New York — severe clear, ten-mile visibility."
+				},
+				{
+					"id": "weatherOpen",
+					"type": "button",
+					"name": "Open Weather",
+					"rect": [348, 270, 152, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "Weather.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "market",
+			"name": "MarketWatch",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "marketTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "MarketWatch — the board that never opened"
+				},
+				{
+					"id": "marketBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "A trading-floor board of the U.S. markets: the Dow, S&P 500, Nasdaq and 10-year Treasury, the Dow 30 components beneath, and a ticker crawling along the bottom.\n\nThe board shows the last close from September 10 — the markets never opened on September 11, and the board reflects that as the day unfolds."
+				},
+				{
+					"id": "marketOpen",
+					"type": "button",
+					"name": "Open MarketWatch",
+					"rect": [332, 270, 168, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "MarketWatch.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "browser",
+			"name": "Browser",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "browserTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Browser — the web of September 2001"
+				},
+				{
+					"id": "browserBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "A retro web browser that fetches pages as they were archived in September 2001 from the Wayback Machine — address bar, back/forward, a favorites bar, and a status bar showing each page's exact archive timestamp.\n\nPress the CNN favorite to see CNN.com's front page from the night of September 11, or try any site you remember from 2001.\n\nOn the hosted site this works immediately; running locally requires the TimeMachine proxy (see the project README)."
+				},
+				{
+					"id": "browserOpen",
+					"type": "button",
+					"name": "Open Browser",
+					"rect": [348, 270, 152, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "Browser.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "timemachine",
+			"name": "Time Machine",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "tmTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Time Machine — the remote control"
+				},
+				{
+					"id": "tmBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "The remote control for the whole desktop. Skip backward and forward with the arrow buttons (File → Settings sets the skip size), pause and resume playback, or type an exact time and press GO.\n\nEvery app follows — TV, radio, flights, pagers, news, all of it, together."
+				},
+				{
+					"id": "tmOpen",
+					"type": "button",
+					"name": "Open Time Machine",
+					"rect": [332, 270, 168, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "TimeMachine.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "readme",
+			"name": "README",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "readmeTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "README — site news"
+				},
+				{
+					"id": "readmeBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "News and updates from the project, delivered to the desktop. New articles appear automatically as they are published — no refresh needed."
+				},
+				{
+					"id": "readmeOpen",
+					"type": "button",
+					"name": "Open README",
+					"rect": [348, 270, 152, 28],
+					"script": { "onMouseUp": [{ "do": "openApp", "app": "Readme.app" }] }
+				}
+			]
+		},
+		{
+			"id": "feedback",
+			"name": "Feedback",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "feedbackTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Feedback — tell us what you found"
+				},
+				{
+					"id": "feedbackBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "Found a bug, or have an idea? The Feedback app sends a report straight to the project — with optional attachments and a Capture Screenshot button that snapshots the desktop exactly as you see it."
+				},
+				{
+					"id": "feedbackOpen",
+					"type": "button",
+					"name": "Open Feedback",
+					"rect": [348, 270, 152, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "Feedback.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "account",
+			"name": "Account",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "accountTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Account — for educators"
+				},
+				{
+					"id": "accountBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "Sign in with Google or an email address. Accounts are used by educators: teachers can build playlists — guided, time-windowed lesson sessions that open specific apps at specific moments — and share them with a classroom via a link."
+				},
+				{
+					"id": "accountOpen",
+					"type": "button",
+					"name": "Open Account",
+					"rect": [348, 270, 152, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "Account.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "finder",
+			"name": "Files",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "finderTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Finder — the desktop is a file system"
+				},
+				{
+					"id": "finderBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 250],
+					"options": { "multiline": true },
+					"content": "Double-click Macintosh HD and browse into Documents:\n\n• Newspapers → September 11 — 49 front pages from the morning of September 12, from local U.S. dailies to international papers, readable in the built-in PDF Viewer.\n\n• Photos — a photographic archive from the International Center of Photography, viewable in Picture Viewer.\n\nThe classic system accessories — SimpleText, Movie Player, the Trash — are all present and functional."
+				}
+			]
+		},
+		{
+			"id": "phone",
+			"name": "Phones & Local",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "phoneTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "On a phone, and running locally"
+				},
+				{
+					"id": "phoneBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 250],
+					"options": { "multiline": true },
+					"content": "On a phone or tablet, the site becomes an iPod-style shell with the same synchronized TV, radio and media, built for a small touch screen. The desktop is the full experience and appears on any computer; preview the mobile shell from a computer by adding ?ipod to the URL.\n\nTo run the frontend yourself: pnpm install, then pnpm dev, and open localhost:5173. Most apps work immediately; the Browser additionally needs the TimeMachine proxy (docker compose up -d from packages/frontend). See the project README for details."
+				}
+			]
+		},
+		{
+			"id": "tips",
+			"name": "Tips",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "tipsTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Tips — how to watch"
+				},
+				{
+					"id": "tipsBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "Let it play. The site rewards patience more than clicking: open TV, Flight Tracker and Pager Decoder side by side a few minutes before 8:46, and let the day arrive.\n\nThe clock is the interface. If an app seems quiet, that moment was quiet — jump the clock, not the app.\n\nEvery window is honest. Nothing is dramatized or re-cut. If the TV anchor doesn't know yet, it's because at that minute, no one did."
+				},
+				{
+					"id": "tipsRestart",
+					"type": "button",
+					"name": "Start Over",
+					"rect": [186, 270, 140, 28],
+					"script": {
+						"onMouseUp": [
+							{ "do": "visual", "effect": "dissolve" },
+							{ "do": "go", "to": "first" }
+						]
+					}
+				}
+			]
+		}
+	]
+}
