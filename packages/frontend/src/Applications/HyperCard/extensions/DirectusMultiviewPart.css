@@ -1,0 +1,35 @@
+/* Multiview "video wall" for HyperCard cards: an even grid of channel tiles
+   filling the authored part rect. Column count is set inline (author or auto). */
+.classicyHyperCardMultiview {
+	display: grid;
+	gap: 3px;
+	width: 100%;
+	height: 100%;
+	background: #000;
+	grid-auto-rows: 1fr;
+}
+
+.classicyHyperCardMultiviewTile {
+	position: relative;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	background: #000;
+}
+
+/* The audible tile in solo mode gets a highlighted border. */
+.classicyHyperCardMultiviewTileActive {
+	outline: 2px solid #fc0;
+	outline-offset: -2px;
+	z-index: 1;
+}
+
+.classicyHyperCardMultiviewEmpty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: #ddd;
+	color: #333;
+	font-size: 11px;
+	font-style: italic;
+}
