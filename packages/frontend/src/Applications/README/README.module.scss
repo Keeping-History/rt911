@@ -38,8 +38,10 @@
 .headline {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--windows-padding-size);
 	font-weight: bold;
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
 }
 
 // Featured star, sized to match the headline text height (1em of the headline).
@@ -51,9 +53,10 @@
 
 .byline {
 	display: block;
-	font-size: 10px;
 	opacity: 0.75;
-	margin-top: 2px;
+	margin-top: calc(var(--windows-border-size) *2);
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
 }
 
 .body {
