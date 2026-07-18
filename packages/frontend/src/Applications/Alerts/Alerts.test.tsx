@@ -13,18 +13,25 @@ vi.mock("classicy", async (importOriginal) => ({
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => (
 		<div>{children}</div>
 	),
-	// Minimal ClassicyAlert stand-in: renders the label and an OK button that
-	// fires the default button's onClick, mirroring the real modal's contract
-	// without needing classicy's window chrome.
+	// Minimal ClassicyAlert stand-in: renders the label, the rich `message`
+	// node (so image/caption/HTML content are exercised), the severity as a
+	// data attribute, and an OK button that fires the default button's
+	// onClick, mirroring the real modal's contract without needing classicy's
+	// window chrome.
 	ClassicyAlert: ({
 		label,
+		alertType,
+		message,
 		buttons,
 	}: {
 		label: string;
+		alertType?: string;
+		message?: React.ReactNode;
 		buttons?: { label: string; onClick?: () => void }[];
 	}) => (
-		<div role="alertdialog">
+		<div role="alertdialog" data-alert-type={alertType}>
 			<span>{label}</span>
+			{message}
 			<button type="button" onClick={() => buttons?.[0]?.onClick?.()}>
 				{buttons?.[0]?.label ?? "OK"}
 			</button>
@@ -128,5 +135,30 @@ describe("Alerts extension", () => {
 		mockAppRunning.value = false;
 		const { subscribeAlerts } = renderWithAlerts([]);
 		expect(subscribeAlerts).not.toHaveBeenCalled();
+	});
+
+	it("renders the rich message: severity, image, caption, and HTML content", () => {
+		const item: AlertItem = {
+			...mk(1, "Evacuation Notice", "2001-09-11T12:40:00Z", "caution"),
+			image: "https://example.com/alert.jpg",
+			image_caption: "Smoke over lower Manhattan",
+			content: "<p>Evacuate <b>now</b></p>",
+		};
+		const { container } = renderWithAlerts([item]);
+
+		expect(screen.getByRole("alertdialog").getAttribute("data-alert-type")).toBe(
+			"caution",
+		);
+
+		// The image is decorative (alt=""), so it has no accessible "img" role;
+		// query the DOM directly instead.
+		const image = container.querySelector("img");
+		expect(image).not.toBeNull();
+		expect(image?.getAttribute("src")).toBe("https://example.com/alert.jpg");
+
+		expect(screen.getByText("Smoke over lower Manhattan")).not.toBeNull();
+
+		expect(screen.getByText("now").tagName).toBe("B");
+		expect(screen.getByText(/Evacuate/)).not.toBeNull();
 	});
 });
