@@ -32,6 +32,7 @@ const (
 	ChannelUsenet  = "usenet"
 	ChannelFlights = "flights"
 	ChannelWeather = "weather"
+	ChannelAlerts  = "alerts"
 )
 
 // Look-ahead windowing. Instead of one Redis lookup + frame per virtual second,
@@ -58,6 +59,8 @@ const (
 	// weather is sparse (hourly obs per station, occasional forecast products),
 	// so it gets usenet/news scale rather than flights' shorter window.
 	windowWeather = 600 * time.Second
+	// alerts are rare and instant; reuse the news window.
+	windowAlert = 600 * time.Second
 )
 
 // pgTickTimeout bounds a single windowed Postgres read on the tick path — the
@@ -88,8 +91,12 @@ type outMsg struct {
 	// (SendWeather) and the on-demand weather_forecast reply (SendWeatherForecast).
 	Weather          []model.WeatherObservation `json:"weather,omitempty"`
 	WeatherForecasts []model.WeatherForecast    `json:"weather_forecasts,omitempty"`
-	Sources          *SourceList                `json:"sources,omitempty"`
-	Msg              string                     `json:"message,omitempty"`
+	// Alerts carries the alerts channel's tick batch (SendAlerts). It rides its
+	// own field rather than Items because AlertItem carries Severity, which
+	// MediaItem lacks.
+	Alerts  []model.AlertItem `json:"alerts,omitempty"`
+	Sources *SourceList       `json:"sources,omitempty"`
+	Msg     string            `json:"message,omitempty"`
 	// ID/Body carry a single on-demand Usenet article body (usenet_body frame).
 	ID   int    `json:"id,omitempty"`
 	Body string `json:"body,omitempty"`
@@ -131,6 +138,7 @@ type Session struct {
 	usenetHorizon  time.Time
 	flightsHorizon time.Time
 	weatherHorizon time.Time
+	alertHorizon   time.Time
 
 	// usenetGroups is the set of newsgroups the client is currently viewing. The
 	// usenet channel is delivered only for these groups — a group can hold millions
@@ -247,6 +255,8 @@ func (s *Session) horizonFor(channel string) *time.Time {
 		return &s.flightsHorizon
 	case ChannelWeather:
 		return &s.weatherHorizon
+	case ChannelAlerts:
+		return &s.alertHorizon
 	}
 	return nil
 }
@@ -376,6 +386,17 @@ func (s *Session) SendWeatherForecast(reqID int, t time.Time, fc *model.WeatherF
 	s.send_(outMsg{Type: "weather_forecast", ID: reqID, Time: t.Format(time.RFC3339), WeatherForecasts: forecasts})
 }
 
+// SendAlerts delivers a batch of alerts at time t on the alerts channel. Alerts
+// reuse the AlertItem shape (MediaItem + severity) and ride their own "alerts"
+// frame field so severity survives — Items stays typed []model.MediaItem for
+// every other channel. No frame is sent for an empty batch.
+func (s *Session) SendAlerts(t time.Time, items []model.AlertItem) {
+	if len(items) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "alerts", Time: t.Format(time.RFC3339), Alerts: items})
+}
+
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the
 // usenet channel and acks. Resetting the usenet horizon to the current virtual time
 // makes the next tick refill a fresh forward window for the new group(s); the
@@ -459,6 +480,7 @@ func (s *Session) resetHorizons(t time.Time) {
 	s.usenetHorizon = t
 	s.flightsHorizon = t
 	s.weatherHorizon = t
+	s.alertHorizon = t
 }
 
 // Pause freezes the client's virtual clock.
@@ -552,6 +574,7 @@ func (s *Session) RunTimePump() {
 			usenetLo, usenetHi, doUsenet := s.planChannelRefill(ChannelUsenet, &s.usenetHorizon, t, windowUsenet)
 			flightsLo, flightsHi, doFlights := s.planChannelRefill(ChannelFlights, &s.flightsHorizon, t, windowFlights)
 			weatherLo, weatherHi, doWeather := s.planChannelRefill(ChannelWeather, &s.weatherHorizon, t, windowWeather)
+			alertLo, alertHi, doAlert := s.planChannelRefill(ChannelAlerts, &s.alertHorizon, t, windowAlert)
 			var usenetGroups []string
 			if doUsenet {
 				usenetGroups = s.usenetGroupsLocked()
@@ -587,6 +610,13 @@ func (s *Session) RunTimePump() {
 					s.logger.Warn("news range lookup failed", "error", err)
 				} else {
 					s.SendNews(t, items)
+				}
+			}
+			if doAlert {
+				if items, err := cache.AlertItemsInRange(ctx, s.rdb, alertLo, alertHi); err != nil {
+					s.logger.Warn("alert range lookup failed", "error", err)
+				} else {
+					s.SendAlerts(t, items)
 				}
 			}
 			if doFlights {

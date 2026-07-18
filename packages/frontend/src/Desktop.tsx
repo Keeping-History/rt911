@@ -6,6 +6,7 @@ import { ClassicyDesktop } from "classicy";
 import "./Applications/HyperCard";
 import { HyperCardClockBridge } from "./Applications/HyperCard/extensions/HyperCardClockBridge";
 import { Account } from "./Applications/Account/Account";
+import { Alerts } from "./Applications/Alerts/Alerts";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";
 import { FlightTracker } from "./Applications/FlightTracker/FlightTracker";
@@ -24,6 +25,7 @@ import { Weather } from "./Applications/Weather/Weather";
 export default function Desktop() {
 	return (
 		<ClassicyDesktop>
+			<Alerts />
 			<HyperCardClockBridge />
 			<Browser />
 			<TimeMachine />

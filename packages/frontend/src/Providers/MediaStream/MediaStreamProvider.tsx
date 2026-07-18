@@ -9,6 +9,7 @@ import {
 	useState,
 } from "react";
 import {
+	type AlertItem,
 	type AvailableSources,
 	type FlightPosition,
 	MediaStreamContext,
@@ -96,6 +97,14 @@ interface WsNewsMessage {
 	items: MediaItem[];
 }
 
+// alerts ride their own `alerts` field (like usenet/flights), not items. Alerts
+// are not time-pruned once due — a modal persists until the extension dismisses
+// it (Task 8) — so the tick effect merges due alerts without a retention filter.
+interface WsAlertsMessage {
+	type: "alerts";
+	alerts: AlertItem[];
+}
+
 // usenet messages ride their own field (not items) and carry per-message newsgroup.
 interface WsUsenetMessage {
 	type: "usenet";
@@ -155,6 +164,7 @@ type WsIncomingMessage =
 	| WsMp3Message
 	| WsMp3HistoryMessage
 	| WsNewsMessage
+	| WsAlertsMessage
 	| WsUsenetMessage
 	| WsUsenetBodyMessage
 	| WsSourcesMessage
@@ -196,6 +206,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
 	const [mp3History, setMp3History] = useState<MediaItem[]>([]);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
+	const [alertItems, setAlertItems] = useState<AlertItem[]>([]);
 	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
 	const [flightPositions, setFlightPositions] = useState<FlightPosition[]>([]);
 	const [flightsHistory, setFlightsHistory] = useState<FlightPosition[]>([]);
@@ -230,6 +241,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const pagerSubscribers = useRef(new Set<string>());
 	const mp3Subscribers = useRef(new Set<string>());
 	const newsSubscribers = useRef(new Set<string>());
+	const alertSubscribers = useRef(new Set<string>());
 	const usenetSubscribers = useRef(new Set<string>());
 	const flightsSubscribers = useRef(new Set<string>());
 	const weatherSubscribers = useRef(new Set<string>());
@@ -269,6 +281,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const pagerBuffer = useRef(new Map<number, PagerItem>());
 	const mp3Buffer = useRef(new Map<number, MediaItem>());
 	const newsBuffer = useRef(new Map<number, MediaItem>());
+	const alertBuffer = useRef(new Map<number, AlertItem>());
 	const usenetBuffer = useRef(new Map<number, UsenetItem>());
 	const flightsBuffer = useRef(new Map<number, FlightPosition>());
 	const weatherBuffer = useRef(new Map<number, WeatherObservation>());
@@ -451,6 +464,27 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				send({ type: "unsubscribe", channel: "news" });
 				setNewsItems([]);
 				newsBuffer.current.clear();
+			}
+		},
+		[send],
+	);
+
+	const subscribeAlerts = useCallback(
+		(appId: string) => {
+			const wasEmpty = alertSubscribers.current.size === 0;
+			alertSubscribers.current.add(appId);
+			if (wasEmpty) send({ type: "subscribe", channel: "alerts" });
+		},
+		[send],
+	);
+
+	const unsubscribeAlerts = useCallback(
+		(appId: string) => {
+			alertSubscribers.current.delete(appId);
+			if (alertSubscribers.current.size === 0) {
+				send({ type: "unsubscribe", channel: "alerts" });
+				setAlertItems([]);
+				alertBuffer.current.clear();
 			}
 		},
 		[send],
@@ -646,6 +680,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		const dueMedia = drainDue(mediaBuffer.current, now);
 		const dueMp3 = drainDue(mp3Buffer.current, now);
 		const dueNews = drainDue(newsBuffer.current, now);
+		const dueAlerts = drainDue(alertBuffer.current, now);
 		const duePager = drainDue(pagerBuffer.current, now);
 		const dueUsenet = drainDue(usenetBuffer.current, now);
 		const dueFlights = drainDue(flightsBuffer.current, now);
@@ -672,6 +707,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				(item) => keepMediaItem(item, now) && isItemAvailable("news", String(item.id)),
 			),
 		);
+		// Alerts are not time-pruned: a modal persists until the extension
+		// dismisses it (Task 8), so there is no keepMediaItem/isItemAvailable
+		// filter here — only merge newly-due alerts in.
+		if (dueAlerts.length > 0) setAlertItems((prev) => mergeById(prev, dueAlerts));
 		// Pager items are always instant — retain by start_date.
 		setPagerItems((prev) => mergeById(prev, duePager).filter((p) => keepInstantItem(p, now)));
 		// Usenet messages are not time-pruned: a reader keeps browsing the group's
@@ -703,6 +742,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerBuffer.current.clear();
 			mp3Buffer.current.clear();
 			newsBuffer.current.clear();
+			alertBuffer.current.clear();
+			setAlertItems([]);
 			// The server resends a fresh usenet backlog for the active group(s) at the
 			// new instant; drop the old-timeline messages so they don't linger.
 			usenetBuffer.current.clear();
@@ -787,6 +828,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			if (newsSubscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "news" }));
+			}
+			if (alertSubscribers.current.size > 0) {
+				ws.send(JSON.stringify({ type: "subscribe", channel: "alerts" }));
 			}
 			if (usenetSubscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "usenet" }));
@@ -897,6 +941,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 						isItemAvailableRef.current("news", String(item.id)),
 				);
 				if (fresh.length > 0) setNewsItems((prev) => mergeById(prev, fresh));
+				return;
+			}
+
+			if (msg.type === "alerts") {
+				const incomingAlerts = (msg as WsAlertsMessage).alerts;
+				if (!incomingAlerts || incomingAlerts.length === 0) return;
+				const { due, future } = partitionByDue(incomingAlerts, now);
+				for (const item of future) alertBuffer.current.set(item.id, item);
+				// Alerts are not time-pruned or playlist-gated — a modal persists
+				// until the extension dismisses it (Task 8).
+				if (due.length > 0) setAlertItems((prev) => mergeById(prev, due));
 				return;
 			}
 
@@ -1084,6 +1139,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			mp3Items,
 			mp3History: gatedMp3History,
 			newsItems,
+			alertItems,
 			usenetItems,
 			usenetBodies: usenetBodyState.bodies,
 			usenetBodyErrors: usenetBodyState.errors,
@@ -1100,6 +1156,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			getUpcomingMp3Items,
 			subscribeNews,
 			unsubscribeNews,
+			subscribeAlerts,
+			unsubscribeAlerts,
 			subscribeUsenet,
 			unsubscribeUsenet,
 			setUsenetGroups,
@@ -1125,6 +1183,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			mp3Items,
 			gatedMp3History,
 			newsItems,
+			alertItems,
 			usenetItems,
 			usenetBodyState,
 			requestUsenetBody,
@@ -1140,6 +1199,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			getUpcomingMp3Items,
 			subscribeNews,
 			unsubscribeNews,
+			subscribeAlerts,
+			unsubscribeAlerts,
 			subscribeUsenet,
 			unsubscribeUsenet,
 			setUsenetGroups,

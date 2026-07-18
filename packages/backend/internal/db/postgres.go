@@ -344,6 +344,81 @@ func CurrentNewsItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]m
 		 ORDER BY mi.start_date`, t)
 }
 
+// alertSelectFrom mirrors newsSelectFrom but reads alert_items and adds the
+// alert-only severity column (last, so queryAlertItems scans it after the shared
+// MediaItem columns).
+const alertSelectFrom = `
+	SELECT mi.id, mi.title, mi.full_title, s.slug,
+	       mi.start_date, mi.end_date, mi.calc_duration, mi.timezone,
+	       mi.url, mi.format, mi.approved, mi.mute,
+	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption, mi.subtitles,
+	       mi.content, mi.sort, mi.severity
+	FROM alert_items mi
+	LEFT JOIN sources s ON s.id = mi.source`
+
+// AllAlertItems loads every approved alert ordered by start_date (cache warming).
+func AllAlertItems(ctx context.Context, pool *pgxpool.Pool) ([]model.AlertItem, error) {
+	return queryAlertItems(ctx, pool,
+		alertSelectFrom+` WHERE mi.approved = 1 ORDER BY mi.start_date`)
+}
+
+// AlertItemByID returns the row with the given id regardless of approval state, or
+// nil if not found. The NOTIFY listener uses this to fetch the latest version of a
+// changed row; an unapproved result means "evict from cache."
+func AlertItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.AlertItem, error) {
+	items, err := queryAlertItems(ctx, pool, alertSelectFrom+` WHERE mi.id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
+// AlertItemsInRange returns approved alerts whose start_date is in [lo, hi). Kept
+// for symmetry/tests; the live tick refill reads Redis (cache.AlertItemsInRange).
+func AlertItemsInRange(ctx context.Context, pool *pgxpool.Pool, lo, hi time.Time) ([]model.AlertItem, error) {
+	return queryAlertItems(ctx, pool,
+		alertSelectFrom+` WHERE mi.approved = 1 AND mi.start_date >= $1 AND mi.start_date < $2 ORDER BY mi.start_date`, lo, hi)
+}
+
+// queryAlertItems mirrors queryItems but scans the extra severity column into
+// AlertItem. Severity is nullable (Directus default "note" may be absent on old rows).
+func queryAlertItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) ([]model.AlertItem, error) {
+	rows, err := pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.AlertItem
+	for rows.Next() {
+		var it model.AlertItem
+		var fullTitle, timezone, url, format, image, imageCaption, subtitles, content, severity *string
+		if err := rows.Scan(
+			&it.ID, &it.Title, &fullTitle, &it.Source,
+			&it.StartDate, &it.EndDate, &it.CalcDuration, &timezone,
+			&url, &format, &it.Approved, &it.Mute,
+			&it.Volume, &it.Jump, &it.Trim, &image, &imageCaption, &subtitles,
+			&content, &it.Sort, &severity,
+		); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		derefStr(&it.FullTitle, fullTitle)
+		derefStr(&it.Timezone, timezone)
+		derefStr(&it.URL, url)
+		derefStr(&it.Format, format)
+		derefStr(&it.Image, image)
+		derefStr(&it.ImageCaption, imageCaption)
+		derefStr(&it.Subtitles, subtitles)
+		derefStr(&it.Content, content)
+		it.Severity = severity
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
 // usenetSelectFrom is the shared SELECT … FROM clause for Usenet message queries.
 // The newsgroup is resolved to its sources.slug via a LEFT JOIN (source rows of
 // type="usenet"), so the client and the per-group cache key both use the

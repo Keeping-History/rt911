@@ -270,6 +270,28 @@ async function createCollections(token) {
   }
   await ensureNumericFields("alert_items");
 
+  // severity is alert-only (not in mediaLikeBaseFields): it selects the ClassicyAlert
+  // icon (note/caution/stop) when alert_items is streamed on the "alerts" channel.
+  // Idempotent add, matching the ensureNumericFields introspection idiom.
+  {
+    const alertFields = await api(token, "GET", "/fields/alert_items");
+    const haveSeverity = new Set(alertFields.data.map((f) => f.field)).has("severity");
+    if (!haveSeverity) {
+      console.log("Adding field: alert_items.severity");
+      await api(token, "POST", "/fields/alert_items", {
+        field: "severity",
+        type: "string",
+        schema: { is_nullable: true, default_value: "note" },
+        meta: {
+          interface: "select-dropdown",
+          width: "half",
+          note: "Alert icon: note | caution | stop",
+          options: { choices: ["note", "caution", "stop"].map((v) => ({ text: v, value: v })) },
+        },
+      });
+    }
+  }
+
   // tm_bookmarks — Time Machine "jump to a moment" bookmarks. Same media_items
   // shape as alert_items (a title/full_title + a start_date the desktop clock
   // seeks to). Read directly over Directus REST by the frontend Time Machine app
