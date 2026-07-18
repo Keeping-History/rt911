@@ -9,10 +9,12 @@ const ARTICLES: ReadmeArticle[] = [
 	{
 		id: 2, headline: "Newer post", author: "Robbie Byrd",
 		date_created: "2026-07-16T12:00:00", date_updated: null, body: "<p>Two</p>",
+		sort: null, featured: false,
 	},
 	{
 		id: 1, headline: "Welcome", author: null,
 		date_created: "2026-07-01T12:00:00", date_updated: null, body: "<p>One</p>",
+		sort: null, featured: false,
 	},
 ];
 
@@ -44,10 +46,36 @@ describe("ReadmeContent", () => {
 
 	it("lists headline, author and date for every article", () => {
 		render(<ReadmeContent state={stateWith({ articles: ARTICLES })} />);
-		expect(screen.getByText("Newer post")).toBeDefined();
+		// The selected article's headline appears in both the list and the body,
+		// so it matches more than once.
+		expect(screen.getAllByText("Newer post").length).toBeGreaterThan(0);
 		expect(screen.getByText("Robbie Byrd — Jul 16, 2026")).toBeDefined();
 		expect(screen.getByText("Welcome")).toBeDefined();
 		expect(screen.getByText("Jul 1, 2026")).toBeDefined(); // authorless byline
+	});
+
+	it("repeats the selected article's headline in the reading pane", () => {
+		const { container } = render(<ReadmeContent state={stateWith({ articles: ARTICLES })} />);
+		// Default selection is the newest article; its headline heads the body.
+		expect(container.querySelector("article h1")?.textContent).toBe("Newer post");
+	});
+
+	it("shows a star only next to featured articles", () => {
+		const mixed: ReadmeArticle[] = [
+			{
+				id: 5, headline: "Pinned", author: null,
+				date_created: "2026-07-20T00:00:00", date_updated: null, body: "<p>x</p>",
+				sort: null, featured: true,
+			},
+			{
+				id: 6, headline: "Plain", author: null,
+				date_created: "2026-07-19T00:00:00", date_updated: null, body: "<p>y</p>",
+				sort: null, featured: false,
+			},
+		];
+		render(<ReadmeContent state={stateWith({ articles: mixed })} />);
+		// One star: the featured row. The plain row has none.
+		expect(screen.getAllByAltText("Featured").length).toBe(1);
 	});
 
 	it("selects the newest article by default and swaps the body on click", () => {
@@ -64,6 +92,7 @@ describe("ReadmeContent", () => {
 			id: 9, headline: "XSS", author: null,
 			date_created: "2026-07-16T12:00:00", date_updated: null,
 			body: '<p>safe</p><script>window.__pwned = true</script><img src="x" onerror="window.__pwned = true">',
+			sort: null, featured: false,
 		};
 		const { container } = render(<ReadmeContent state={stateWith({ articles: [evil] })} />);
 		const article = container.querySelector("article");

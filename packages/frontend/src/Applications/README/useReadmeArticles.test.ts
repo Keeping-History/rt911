@@ -5,6 +5,7 @@ import {
 	ARTICLES_URL,
 	PROBE_URL,
 	REFRESH_INTERVAL_MS,
+	sortArticles,
 	useReadmeArticles,
 } from "./useReadmeArticles";
 
@@ -12,10 +13,12 @@ const ARTICLES: ReadmeArticle[] = [
 	{
 		id: 2, headline: "Newer post", author: "Robbie Byrd",
 		date_created: "2026-07-16T12:00:00", date_updated: null, body: "<p>Two</p>",
+		sort: null, featured: false,
 	},
 	{
 		id: 1, headline: "Welcome", author: "Robbie Byrd",
 		date_created: "2026-07-01T12:00:00", date_updated: "2026-07-02T09:00:00", body: "<p>One</p>",
+		sort: null, featured: false,
 	},
 ];
 
@@ -88,6 +91,7 @@ describe("useReadmeArticles", () => {
 			{
 				id: 3, headline: "Breaking", author: null,
 				date_created: "2026-07-17T08:00:00", date_updated: null, body: "<p>Three</p>",
+				sort: null, featured: false,
 			},
 			...ARTICLES,
 		];
@@ -176,5 +180,46 @@ describe("useReadmeArticles", () => {
 		await flush(REFRESH_INTERVAL_MS * 2);
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("sortArticles", () => {
+	const mk = (o: Partial<ReadmeArticle> & { id: number }): ReadmeArticle => ({
+		headline: `A${o.id}`, author: null, date_created: "2026-01-01T00:00:00",
+		date_updated: null, body: "", sort: null, featured: false, ...o,
+	});
+
+	it("pins featured articles above everything, even sorted or newer ones", () => {
+		const out = sortArticles([
+			mk({ id: 1, sort: 1 }),
+			mk({ id: 2, featured: true, date_created: "2020-01-01T00:00:00" }),
+		]);
+		expect(out.map((a) => a.id)).toEqual([2, 1]);
+	});
+
+	it("orders by manual sort ascending (smallest first)", () => {
+		const out = sortArticles([mk({ id: 1, sort: 3 }), mk({ id: 2, sort: 1 }), mk({ id: 3, sort: 2 })]);
+		expect(out.map((a) => a.id)).toEqual([2, 3, 1]);
+	});
+
+	it("puts unsorted (null) articles after sorted ones", () => {
+		const out = sortArticles([mk({ id: 1, sort: null }), mk({ id: 2, sort: 5 })]);
+		expect(out.map((a) => a.id)).toEqual([2, 1]);
+	});
+
+	it("breaks ties (equal sort, or both unsorted) by newest date first", () => {
+		const out = sortArticles([
+			mk({ id: 1, sort: 1, date_created: "2026-07-01T00:00:00" }),
+			mk({ id: 2, sort: 1, date_created: "2026-07-10T00:00:00" }),
+			mk({ id: 3, sort: null, date_created: "2026-06-01T00:00:00" }),
+			mk({ id: 4, sort: null, date_created: "2026-06-15T00:00:00" }),
+		]);
+		expect(out.map((a) => a.id)).toEqual([2, 1, 4, 3]);
+	});
+
+	it("does not mutate its input", () => {
+		const input = [mk({ id: 1, sort: 2 }), mk({ id: 2, sort: 1 })];
+		sortArticles(input);
+		expect(input.map((a) => a.id)).toEqual([1, 2]);
 	});
 });

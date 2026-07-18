@@ -36,9 +36,18 @@
 }
 
 .headline {
-	display: block;
+	display: flex;
+	align-items: center;
+	gap: 4px;
 	font-weight: bold;
 	font-size: 12px;
+}
+
+// Featured star, sized to match the headline text height (1em of the headline).
+.star {
+	height: 1em;
+	width: auto;
+	flex-shrink: 0;
 }
 
 .byline {
@@ -53,7 +62,22 @@
 	min-width: 0;
 	overflow-y: auto;
 	padding: 10px 14px;
-	font-size: 12px;
+}
+
+// The article headline, repeated at the top of the reading pane in the theme's
+// body/display font.
+.bodyHeadline {
+	margin: 0 0 8px;
+	font-family: var(--body-font);
+	font-size: var(--body-font-size);
+	font-weight: bold;
+	line-height: 1.15;
+}
+
+// The article copy, in the theme's UI font.
+.bodyText {
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
 
 	img {
 		max-width: 100%;
