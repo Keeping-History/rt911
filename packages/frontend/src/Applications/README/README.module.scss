@@ -40,8 +40,6 @@
 	align-items: center;
 	gap: 4px;
 	font-weight: bold;
-	font-size: var(--header-font-size);
-	font-family: var(--header-font);
 }
 
 // Featured star, sized to match the headline text height (1em of the headline).
@@ -69,8 +67,8 @@
 // body/display font.
 .bodyHeadline {
 	margin: 0 0 8px;
-	font-family: var(--body-font);
-	font-size: var(--body-font-size);
+	font-size: var(--header-font-size);
+	font-family: var(--header-font);
 	font-weight: bold;
 	line-height: 1.15;
 }
