@@ -2,6 +2,7 @@ import DOMPurify from "dompurify";
 import type React from "react";
 import { useState } from "react";
 import readmeStyles from "./README.module.scss";
+import starPng from "./star.png";
 import type { ReadmeArticle, ReadmeArticlesState } from "./useReadmeArticles";
 
 export function formatArticleDate(iso: string): string {
@@ -38,7 +39,12 @@ export const ReadmeContent: React.FC<{ state: ReadmeArticlesState }> = ({ state 
 							className={a.id === selected.id ? readmeStyles.rowSelected : readmeStyles.row}
 							onClick={() => setSelectedId(a.id)}
 						>
-							<span className={readmeStyles.headline}>{a.headline}</span>
+							<span className={readmeStyles.headline}>
+								{a.featured && (
+									<img className={readmeStyles.star} src={starPng} alt="Featured" />
+								)}
+								{a.headline}
+							</span>
 							<span className={readmeStyles.byline}>
 								{a.author ? `${a.author} — ` : ""}
 								{formatArticleDate(a.date_created)}
@@ -47,11 +53,14 @@ export const ReadmeContent: React.FC<{ state: ReadmeArticlesState }> = ({ state 
 					</li>
 				))}
 			</ul>
-			<article
-				className={readmeStyles.body}
-				// Sanitized via DOMPurify before injection — Browser.tsx precedent.
-				dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selected.body) }}
-			/>
+			<article className={readmeStyles.body}>
+				<h1 className={readmeStyles.bodyHeadline}>{selected.headline}</h1>
+				<div
+					className={readmeStyles.bodyText}
+					// Sanitized via DOMPurify before injection — Browser.tsx precedent.
+					dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selected.body) }}
+				/>
+			</article>
 		</div>
 	);
 };

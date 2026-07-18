@@ -41,6 +41,7 @@ vi.mock("./useReadmeArticles", async (importOriginal) => {
 						id: 1, headline: "Welcome", author: "Robbie Byrd",
 						date_created: "2026-07-16T12:00:00", date_updated: null,
 						body: "<p>Hello desktop</p>",
+						sort: null, featured: false,
 					},
 				],
 				loading: false,
@@ -64,7 +65,8 @@ describe("Readme", () => {
 		render(<Readme />);
 		expect(appProps[0]).toMatchObject({ id: "Readme.app", name: "README", defaultWindow: "readme_main" });
 		expect(windowProps[0]).toMatchObject({ id: "readme_main", appId: "Readme.app" });
-		expect(screen.getByText("Welcome")).toBeDefined();
+		// Headline shows in the list row and again atop the reading pane.
+		expect(screen.getAllByText("Welcome").length).toBeGreaterThan(0);
 		expect(screen.getByText("Hello desktop")).toBeDefined();
 	});
 
