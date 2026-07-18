@@ -5,6 +5,7 @@ import { ClassicyDesktop } from "classicy";
 // is bundled in classicy and auto-mounted by ClassicyDesktop.
 import "./Applications/HyperCard";
 import { HyperCardClockBridge } from "./Applications/HyperCard/extensions/HyperCardClockBridge";
+import { HyperCardStackAuthBridge } from "./Applications/HyperCard/extensions/stackProviderAuth";
 import { Account } from "./Applications/Account/Account";
 import { Alerts } from "./Applications/Alerts/Alerts";
 import { Browser } from "./Applications/Browser/Browser";
@@ -27,6 +28,7 @@ export default function Desktop() {
 		<ClassicyDesktop>
 			<Alerts />
 			<HyperCardClockBridge />
+			<HyperCardStackAuthBridge />
 			<Browser />
 			<TimeMachine />
 			<Feedback />
