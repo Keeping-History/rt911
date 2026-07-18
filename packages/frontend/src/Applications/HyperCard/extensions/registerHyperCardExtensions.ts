@@ -11,6 +11,7 @@ import { DirectusNewsPart } from "./DirectusNewsPart";
 import { DirectusPagerPart } from "./DirectusPagerPart";
 import { DirectusVideoPart } from "./DirectusVideoPart";
 import { DirectusWeatherPart } from "./DirectusWeatherPart";
+import { registerHyperCardEditorMetadata } from "./editorMetadata";
 import { MP3_AUDIO_STACK_ID, mp3AudioStack } from "./mp3AudioStack";
 import { NEWS_PAGER_STACK_ID, newsPagerStack } from "./newsPagerStack";
 import { TV_CHANNEL_STACK_ID, tvChannelStack } from "./tvChannelStack";
@@ -56,6 +57,10 @@ export function registerHyperCardExtensions(): void {
 			if (to) ctx.queueEffect("setDateTime", { to });
 		},
 	});
+
+	// Editor metadata: palette entries + typed inspector/builder forms for the
+	// parts and command registered above.
+	registerHyperCardEditorMetadata();
 
 	// Built-in stacks that demonstrate the parts (File → Open in HyperCard).
 	registerHyperCardStack(MP3_AUDIO_STACK_ID, mp3AudioStack.name, mp3AudioStack);
