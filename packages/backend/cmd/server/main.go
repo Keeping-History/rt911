@@ -77,6 +77,15 @@ func main() {
 		go cache.ListenNews(ctx, dbURL, rdb, pool, logger)
 	}
 
+	// alerts (Alerts extension) — same opt-in side-channel pattern, best-effort init.
+	if err := cache.InstallAlertTriggers(ctx, pool, logger); err != nil {
+		logger.Warn("alert trigger install failed; alerts channel disabled", "error", err)
+	} else if err := cache.WarmAlertCache(ctx, rdb, pool, logger); err != nil {
+		logger.Warn("alert cache warm failed; alerts channel disabled", "error", err)
+	} else {
+		go cache.ListenAlert(ctx, dbURL, rdb, pool, logger)
+	}
+
 	// flights is an opt-in side channel like pager, but with no triggers and no
 	// listener: flight positions are immutable bulk data loaded via COPY (which
 	// bypasses row triggers anyway), so the boot warm is the only sync. After a
