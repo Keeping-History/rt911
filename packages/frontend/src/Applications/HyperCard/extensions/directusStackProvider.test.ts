@@ -29,13 +29,21 @@ describe("directusStackSaveProvider", () => {
 		vi.mocked(createStack).mockResolvedValue({ id: 7, name: "My Stack", definition: VALID, date_updated: null, user_created: "u" });
 		await expect(
 			directusStackSaveProvider.save(VALID as never, { stackId: "getting-started" }),
-		).resolves.toEqual({ ok: true });
+		).resolves.toEqual({
+			ok: true,
+			// The created row's ref lets the host rebind to saved:directus:7 so the
+			// next save updates instead of duplicating.
+			ref: { id: "7", name: "My Stack", updatedAt: undefined },
+		});
 		expect(createStack).toHaveBeenCalledWith("My Stack", VALID);
 
-		vi.mocked(updateStack).mockResolvedValue({ id: 7, name: "My Stack", definition: VALID, date_updated: null, user_created: "u" });
+		vi.mocked(updateStack).mockResolvedValue({ id: 7, name: "My Stack", definition: VALID, date_updated: "2026-07-18T17:00:00Z", user_created: "u" });
 		await expect(
 			directusStackSaveProvider.save(VALID as never, { stackId: "saved:directus:7" }),
-		).resolves.toEqual({ ok: true });
+		).resolves.toEqual({
+			ok: true,
+			ref: { id: "7", name: "My Stack", updatedAt: "2026-07-18T17:00:00Z" },
+		});
 		expect(updateStack).toHaveBeenCalledWith(7, { name: "My Stack", definition: VALID });
 	});
 

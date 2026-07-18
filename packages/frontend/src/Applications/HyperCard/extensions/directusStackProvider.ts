@@ -25,12 +25,20 @@ export const directusStackSaveProvider: HyperCardSaveProvider = {
 	save: async (stack: HCStack, meta: { stackId: string }) => {
 		try {
 			const match = SAVED_ID.exec(meta.stackId);
-			if (match) {
-				await updateStack(Number(match[1]), { name: stack.name, definition: stack });
-			} else {
-				await createStack(stack.name, stack);
-			}
-			return { ok: true } as const;
+			// Return the saved row's ref either way: after a first-time create the
+			// host rebinds the open stack to saved:directus:<id>, so the next save
+			// updates that row instead of creating a duplicate.
+			const record = match
+				? await updateStack(Number(match[1]), { name: stack.name, definition: stack })
+				: await createStack(stack.name, stack);
+			return {
+				ok: true,
+				ref: {
+					id: String(record.id),
+					name: record.name,
+					updatedAt: record.date_updated ?? undefined,
+				},
+			} as const;
 		} catch (err) {
 			return {
 				ok: false,
