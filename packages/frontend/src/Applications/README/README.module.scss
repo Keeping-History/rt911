@@ -40,8 +40,8 @@
 	align-items: center;
 	gap: 4px;
 	font-weight: bold;
-	font-size: 12px;
-	font-family: var(--header-font)
+	font-size: var(--header-font-size);
+	font-family: var(--header-font);
 }
 
 // Featured star, sized to match the headline text height (1em of the headline).
