@@ -147,6 +147,20 @@ Required worker env vars:
 
 If either is unset, purges are skipped with a warning (never a hard failure).
 
+**Delivery:** the worker's Deployment already does `envFrom` the whole
+out-of-band `video-grabber-secrets` Secret (see `apps/video-grabber/worker.yaml`
+in the infra repo) — no infra YAML change is needed. Add the two keys directly
+to that Secret and restart the worker:
+
+```sh
+kubectl -n video-grabber patch secret video-grabber-secrets \
+  --type merge -p '{"stringData":{"CF_API_TOKEN":"<token>","CF_ZONE_ID":"<zone-id>"}}'
+kubectl -n video-grabber rollout restart deploy/video-grabber-worker
+```
+
+The token needs only `Zone → Cache Purge → Purge` permission on the
+`911realtime.org` zone (create it in the Cloudflare dashboard).
+
 ---
 
 ## Break-glass restore
