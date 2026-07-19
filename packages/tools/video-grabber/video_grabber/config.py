@@ -6,6 +6,10 @@ def _int(key: str, default: int) -> int:
     return int(os.getenv(key, str(default)))
 
 
+def _float(key: str, default: float) -> float:
+    return float(os.getenv(key, str(default)))
+
+
 @dataclass
 class Config:
     database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", ""))
@@ -47,6 +51,16 @@ class Config:
     virtual_epoch_real: str = field(
         default_factory=lambda: os.getenv("VIRTUAL_EPOCH_REAL", "2026-06-25T13:00:00+00:00")
     )
+
+    # --- Audio loudness normalization (normalize/ pipeline) ---
+    # EBU R128 targets for the dynaudnorm+loudnorm chain; tolerance is the
+    # analyze stage's "already fine, skip" band around norm_target_i.
+    norm_target_i: float = field(default_factory=lambda: _float("NORM_TARGET_I", -16.0))
+    norm_target_tp: float = field(default_factory=lambda: _float("NORM_TARGET_TP", -1.5))
+    norm_tolerance_lu: float = field(default_factory=lambda: _float("NORM_TOLERANCE_LU", 1.0))
+    # Cloudflare purge (best-effort) after in-place overwrite of audio/ objects.
+    cf_api_token: str = field(default_factory=lambda: os.getenv("CF_API_TOKEN", ""))
+    cf_zone_id: str = field(default_factory=lambda: os.getenv("CF_ZONE_ID", ""))
 
     def usenet_collection_list(self) -> list[str]:
         return [c.strip() for c in self.usenet_collections.split(",") if c.strip()]
