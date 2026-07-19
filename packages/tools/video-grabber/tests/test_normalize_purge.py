@@ -37,6 +37,17 @@ def test_purge_failure_is_swallowed(monkeypatch, caplog):
     assert "purge" in caplog.text.lower()
 
 
+@respx.mock
+def test_purge_200_non_json_body_is_swallowed(monkeypatch, caplog):
+    cfg = _cfg(monkeypatch)
+    respx.post("https://api.cloudflare.com/client/v4/zones/zone1/purge_cache").mock(
+        return_value=Response(200, text="<html>gateway</html>")
+    )
+    with caplog.at_level(logging.WARNING):
+        assert purge_urls(["https://x/a.mp3"], cfg, logging.getLogger("t")) is False
+    assert "purge" in caplog.text.lower()
+
+
 def test_purge_without_credentials_warns_and_skips(monkeypatch, caplog):
     monkeypatch.delenv("CF_API_TOKEN", raising=False)
     monkeypatch.delenv("CF_ZONE_ID", raising=False)

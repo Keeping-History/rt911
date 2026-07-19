@@ -1,3 +1,4 @@
+from collections import deque
 from types import SimpleNamespace
 
 import video_grabber.normalize.flows as flows
@@ -90,6 +91,104 @@ def test_normalize_archives_first_and_reads_from_archive(monkeypatch):
     assert up[1] == "audio/a.mp3" and up[2] == "max-age=99"
     assert transitions[-1][0] == "done"
     assert transitions[0] == ("normalizing", {})
+
+
+class _FakeConn:
+    """Stands in for a sqlalchemy Connection; `dead` mimics the server having
+    closed the socket (idle_session_timeout). Optional shared `results` deque
+    feeds execute(...).first() for the dispatcher claim query."""
+
+    def __init__(self, registry, results=None):
+        self.dead = False
+        self.executed = []
+        self.commits = 0
+        self.closed = False
+        self._results = results
+        registry.append(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.closed = True
+        return False
+
+    def execute(self, stmt, params=None):
+        if self.dead:
+            raise RuntimeError("server closed the connection unexpectedly")
+        self.executed.append((str(stmt), params or {}))
+        res = SimpleNamespace(first=lambda: None)
+        if self._results is not None:
+            res = SimpleNamespace(
+                first=lambda: self._results.popleft() if self._results else None
+            )
+        return res
+
+    def commit(self):
+        if self.dead:
+            raise RuntimeError("server closed the connection unexpectedly")
+        self.commits += 1
+
+
+def _kill_all(conns):
+    """Simulate idle_session_timeout firing during a long stage."""
+    for c in conns:
+        c.dead = True
+
+
+def test_dispatch_claims_each_job_on_a_fresh_connection_not_held_across_run_deployment(monkeypatch):
+    """_dispatch must not hold its DB connection open across the blocking
+    run_deployment call — that connection can be idle-killed
+    (idle_session_timeout=10min) while the dispatched flow runs long."""
+    rows = deque([SimpleNamespace(id="job-1"), None])
+    conns = []
+
+    def blocking_run(*a, **k):
+        _kill_all(conns)  # the dispatched job outlives idle_session_timeout
+
+    monkeypatch.setattr(flows, "get_db", lambda: _FakeConn(conns, results=rows))
+    monkeypatch.setattr(flows, "run_deployment", blocking_run)
+    logger = SimpleNamespace(info=lambda *a: None, warning=lambda *a: None)
+
+    flows._dispatch(
+        logger,
+        claim_sql="UPDATE normalize_jobs SET stage = 'analyzing' RETURNING id",
+        deployment="analyze-normalize-item/analyze-normalize-item",
+        label="dispatch-analyze-normalize",
+        max_runs=5,
+        max_retries=3,
+    )
+
+    # two claim attempts (job-1, then empty) each on their own connection,
+    # and both survived because the earlier connections were already closed
+    # by the time run_deployment killed everything.
+    assert len(conns) == 2
+    assert all(c.closed for c in conns)
+    claims = [s for c in conns for s, _ in c.executed if "UPDATE normalize_jobs" in s]
+    assert len(claims) == 2
+
+
+def test_dispatch_respects_max_runs_cap(monkeypatch):
+    rows = deque([SimpleNamespace(id="job-1"), SimpleNamespace(id="job-2"),
+                  SimpleNamespace(id="job-3")])
+    conns = []
+    run_calls = []
+
+    monkeypatch.setattr(flows, "get_db", lambda: _FakeConn(conns, results=rows))
+    monkeypatch.setattr(flows, "run_deployment",
+                        lambda **kw: run_calls.append(kw))
+    logger = SimpleNamespace(info=lambda *a: None, warning=lambda *a: None)
+
+    flows._dispatch(
+        logger,
+        claim_sql="UPDATE normalize_jobs SET stage = 'analyzing' RETURNING id",
+        deployment="analyze-normalize-item/analyze-normalize-item",
+        label="dispatch-analyze-normalize",
+        max_runs=2,
+        max_retries=3,
+    )
+
+    assert len(run_calls) == 2
 
 
 def test_scan_inserts_only_mp3_keys(monkeypatch):

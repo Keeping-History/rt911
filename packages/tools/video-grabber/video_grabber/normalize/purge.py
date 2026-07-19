@@ -28,6 +28,9 @@ def purge_urls(urls: list[str], cfg: Config, logger) -> bool:
             return True
         logger.warning("CF purge failed: HTTP %d %s", resp.status_code, resp.text[:500])
         return False
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ValueError) as exc:
+        # ValueError covers resp.json() raising json.JSONDecodeError on an
+        # HTTP-200 response with a non-JSON body (e.g. an upstream gateway
+        # error page) — purge_urls must never raise (module contract).
         logger.warning("CF purge failed: %s", exc)
         return False

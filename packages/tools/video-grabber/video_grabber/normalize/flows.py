@@ -175,19 +175,23 @@ def normalize_item_flow(job_id: str) -> None:
 
 def _dispatch(logger, *, claim_sql: str, deployment: str, label: str,
               max_runs: int, max_retries: int) -> None:
-    """Shared atomic-claim drain loop (transcribe idiom: UPDATE…SELECT…SKIP LOCKED)."""
+    """Shared atomic-claim drain loop (transcribe idiom: UPDATE…SELECT…SKIP LOCKED).
+
+    Each claim opens its own short-lived connection (idle_session_timeout=10min
+    on this DB); the connection is closed *before* the blocking run_deployment
+    call so it's never held idle across it."""
     processed = 0
-    with get_db() as db:
-        while processed < max_runs:
+    while processed < max_runs:
+        with get_db() as db:
             row = db.execute(sa.text(claim_sql), {"max_retries": max_retries}).first()
             db.commit()
-            if row is None:
-                logger.info("%s: queue empty after %d runs", label, processed)
-                return
-            job_id = str(row.id)
-            logger.info("%s: claimed + dispatching job_id=%s", label, job_id)
-            run_deployment(name=deployment, parameters={"job_id": job_id})
-            processed += 1
+        if row is None:
+            logger.info("%s: queue empty after %d runs", label, processed)
+            return
+        job_id = str(row.id)
+        logger.info("%s: claimed + dispatching job_id=%s", label, job_id)
+        run_deployment(name=deployment, parameters={"job_id": job_id})
+        processed += 1
     logger.info("%s: hit max_runs=%d cap", label, max_runs)
 
 
