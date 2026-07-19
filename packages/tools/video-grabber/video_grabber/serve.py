@@ -43,6 +43,13 @@ from video_grabber.usenet.flows import (
     process_usenet_item_flow,
     scan_usenet_flow,
 )
+from video_grabber.normalize.flows import (
+    analyze_normalize_item_flow,
+    dispatch_analyze_normalize_flow,
+    dispatch_normalize_flow,
+    normalize_item_flow,
+    scan_normalize_flow,
+)
 
 # Four concurrent download+encode pipelines. These jobs are largely
 # download-bound (pulling the ~200 MB .ogv derivative from IA) with VAAPI doing
@@ -96,6 +103,14 @@ _TRANSCRIBE_STALE_MINUTES = 5
 _TRANSCRIBE_SUPERVISE_INTERVAL = 20
 _TRANSCRIBE_MAX_RETRIES = 3
 _THUMBNAIL_LIMIT = 1  # one batch run at a time; manually triggered from Prefect UI
+# Loudness normalization: mp3 decode/encode is cheap next to the video encodes
+# sharing this pod — 2 concurrent per-item flows, serial scan. Dispatchers are
+# blocking (one item at a time each), so 2 keeps both item slots fed. NONE of
+# these get a schedule; dispatch-normalize in particular is the operator's
+# review gate — triggering it manually IS the go-ahead to rewrite audio/ bytes.
+_NORMALIZE_SCAN_LIMIT = 1
+_NORMALIZE_ITEM_LIMIT = 2
+_NORMALIZE_DISPATCH_LIMIT = 2
 
 
 def _recover_orphaned_transcribing(engine, stale_minutes: int) -> int:
@@ -233,6 +248,27 @@ def main() -> None:
         batch_thumbnails_flow.to_deployment(
             name="batch-thumbnails",
             concurrency_limit=_THUMBNAIL_LIMIT,
+        ),
+        scan_normalize_flow.to_deployment(
+            name="scan-normalize",
+            concurrency_limit=_NORMALIZE_SCAN_LIMIT,
+        ),
+        dispatch_analyze_normalize_flow.to_deployment(
+            name="dispatch-analyze-normalize",
+            concurrency_limit=_NORMALIZE_DISPATCH_LIMIT,
+        ),
+        analyze_normalize_item_flow.to_deployment(
+            name="analyze-normalize-item",
+            concurrency_limit=_NORMALIZE_ITEM_LIMIT,
+        ),
+        # MANUAL ONLY — never add an interval/schedule here (destructive pass).
+        dispatch_normalize_flow.to_deployment(
+            name="dispatch-normalize",
+            concurrency_limit=_NORMALIZE_DISPATCH_LIMIT,
+        ),
+        normalize_item_flow.to_deployment(
+            name="normalize-item",
+            concurrency_limit=_NORMALIZE_ITEM_LIMIT,
         ),
     )
 
