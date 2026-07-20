@@ -34,17 +34,18 @@ in the TV app's Classicy state.
 - The strip renders `items` sorted by `channelOrder`. Channels absent from the
   saved order (new channels, or empty first-run state) append at the end in
   their default (wire) order — first run is visually identical to today.
-- The saved order drives anything derived from the sorted `items` (the EPG
-  panel's row order follows automatically).
+- Scope note: the EPG panel fetches its own channel data (it takes only an
+  `onClose` prop), so its row order is unaffected — only the strip reorders.
 - Pure logic lives in `packages/frontend/src/Applications/TV/channelOrder.ts`
   with co-located tests:
   - `sortByChannelOrder(items, order)` — stable sort; unknown sources appended
     in input order.
   - `insertionIndexFromX(thumbnailRects, pointerX)` — index between the two
     thumbnails nearest the pointer's x-position.
-  - `applyReorder(order, sources, fromIndex, toIndex)` — produces the new
-    full `channelOrder` array; returns the input unchanged when the drop is a
-    no-op (same position).
+  - `applyReorder(sources, fromIndex, toIndex)` — takes the displayed source
+    order plus the drag's from/insertion indices and produces the new full
+    `channelOrder` array; returns the input unchanged (same reference) when
+    the drop is a no-op (same position), so callers can skip persisting.
 
 ### Drag interaction (pointer events)
 
