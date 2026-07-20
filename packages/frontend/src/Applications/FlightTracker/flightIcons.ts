@@ -16,25 +16,76 @@ export const PLANE_NOTABLE_ICON_PX = 32;
 export const colorizeSvg = (svg: string, fill: string): string =>
 	svg.replace("<svg ", `<svg fill="${fill}" `);
 
+// --- 8-bit ("radar" map style) variant -------------------------------------
+// Radar mode renders the same silhouettes as chunky pixel art. The art is
+// vector, so this is a resample, not a blow-up of an already-small bitmap:
+// rasterize the SVG down onto a coarse grid, hard-edge the alpha, then scale
+// back up with nearest-neighbour. Only the bitmap changes — the symbol layers,
+// icon ids and sizes are identical, so nothing downstream knows about it.
+
+// Sprite resolution. Proportional so a 32px notable gets more blocks than a
+// 9px regional jet, clamped to the 8-16 band: below 8 the silhouette stops
+// being recognisable, above 16 the blocks are too fine to read as pixel art.
+export const PIXEL_GRID_MIN = 8;
+export const PIXEL_GRID_MAX = 16;
+export const pixelGrid = (displayPx: number): number =>
+	Math.min(PIXEL_GRID_MAX, Math.max(PIXEL_GRID_MIN, Math.round(displayPx * 0.75)));
+
+// Downsampling antialiases, leaving soft gray edges that read as "blurry",
+// not "8-bit". Snapping alpha to 0/255 restores hard pixel edges. Deliberately
+// below the half-covered 128 midpoint: a wingtip that only partly fills its
+// cell should survive, or wide-bodies lose their wings entirely.
+export const PIXEL_ALPHA_THRESHOLD = 96;
+
+export const snapAlpha = (data: Uint8ClampedArray, threshold: number): void => {
+	// RGB is left alone: getImageData is non-premultiplied, so a partly
+	// transparent pixel already carries the full-strength pin color.
+	for (let i = 3; i < data.length; i += 4) {
+		data[i] = data[i] >= threshold ? 255 : 0;
+	}
+};
+
+const makeCanvas = (size: number): [HTMLCanvasElement, CanvasRenderingContext2D] => {
+	const canvas = document.createElement("canvas");
+	canvas.width = size;
+	canvas.height = size;
+	const ctx = canvas.getContext("2d");
+	if (!ctx) throw new Error("2d canvas unavailable");
+	return [canvas, ctx];
+};
+
 export const buildPlaneImage = (
 	svg: string,
 	fill: string,
 	displayPx: number,
+	pixelate = false,
 ): Promise<ImageData> =>
 	new Promise((resolve, reject) => {
 		const px = displayPx * 2;
 		const img = new Image();
 		img.onload = () => {
-			const canvas = document.createElement("canvas");
-			canvas.width = px;
-			canvas.height = px;
-			const ctx = canvas.getContext("2d");
-			if (!ctx) {
-				reject(new Error("2d canvas unavailable"));
-				return;
+			try {
+				const [, ctx] = makeCanvas(px);
+				if (!pixelate) {
+					ctx.drawImage(img, 0, 0, px, px);
+					resolve(ctx.getImageData(0, 0, px, px));
+					return;
+				}
+				// Rasterize onto the coarse grid on its own canvas — drawing a
+				// canvas onto an overlapping region of itself is not reliable.
+				const grid = pixelGrid(displayPx);
+				const [gridCanvas, gridCtx] = makeCanvas(grid);
+				gridCtx.drawImage(img, 0, 0, grid, grid);
+				const cells = gridCtx.getImageData(0, 0, grid, grid);
+				snapAlpha(cells.data, PIXEL_ALPHA_THRESHOLD);
+				gridCtx.putImageData(cells, 0, 0);
+				// Nearest-neighbour back up to the real icon size.
+				ctx.imageSmoothingEnabled = false;
+				ctx.drawImage(gridCanvas, 0, 0, px, px);
+				resolve(ctx.getImageData(0, 0, px, px));
+			} catch (err) {
+				reject(err);
 			}
-			ctx.drawImage(img, 0, 0, px, px);
-			resolve(ctx.getImageData(0, 0, px, px));
 		};
 		img.onerror = () => reject(new Error("plane icon SVG failed to load"));
 		img.src = `data:image/svg+xml,${encodeURIComponent(colorizeSvg(svg, fill))}`;

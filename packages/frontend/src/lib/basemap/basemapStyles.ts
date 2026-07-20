@@ -46,6 +46,13 @@ export function effectiveTone(mapStyle: BasemapStyleId, darkMap: boolean): Basem
 	return darkMap ? "dark" : "light";
 }
 
+// Radar draws its aircraft as 8-bit sprites to match the CRT scope treatment.
+// Only the rasterized icon bitmap changes (see flightIcons.buildPlaneImage);
+// icon ids, sizes and the symbol layers are identical across styles.
+export function pixelPlanes(mapStyle: BasemapStyleId): boolean {
+	return mapStyle === "radar";
+}
+
 export interface BasemapPalette {
 	background: string;
 	land: string;
