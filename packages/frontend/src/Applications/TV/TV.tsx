@@ -40,6 +40,7 @@ import {
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
 import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
 import type { HlsAbrApi } from "./abr";
+import { sortByChannelOrder } from "./channelOrder";
 import { calcSeekSeconds, resolveVirtualNowMs } from "./clockDrift";
 import { resolveGridVolume } from "./volume";
 import { TVEPGPanel } from "./TVEPGPanel";
@@ -120,6 +121,12 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		[appState?.data?.disabledChannels],
 	);
 
+	// The user's custom thumbnail-strip order (source slugs), arranged by drag.
+	const channelOrder = useMemo(
+		() => (appState?.data?.channelOrder as string[] | undefined) ?? [],
+		[appState?.data?.channelOrder],
+	);
+
 	// Distinct channel slugs available for selection, sorted for a stable Settings
 	// list. Seeded from the server's complete `sources.video` list (every channel,
 	// regardless of virtual time) and unioned with anything already seen in-stream
@@ -147,6 +154,12 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		[enabledChannels],
 	);
 	const { items } = useMediaStream(tvFilter);
+
+	// Strip display order: saved arrangement first, new channels appended.
+	const orderedItems = useMemo(
+		() => sortByChannelOrder(items, channelOrder),
+		[items, channelOrder],
+	);
 
 	// --- Remote-control state, driven by ClassicyAppTV* events (see TVContext) ---
 	// Persistent settings, read straight from app data each render.
@@ -1039,7 +1052,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 							</div>
 						</div>
 						<div className={styles.tvThumbnailStrip}>
-							{items.map((item) => {
+							{orderedItems.map((item) => {
 								// In multi-select mode no thumbnail is "active" (no absolute overlay)
 								const isActive = !multiSelectMode && item.id === activePlayer;
 								const isSelected = selectedPlayers.includes(item.id);
