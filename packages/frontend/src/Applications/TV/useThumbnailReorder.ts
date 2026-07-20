@@ -23,6 +23,19 @@ interface DragState {
 	cancelled: boolean;
 }
 
+/**
+ * The cursor-following drag visual: a box the size of the dragged tile,
+ * centered on the pointer, in the strip's content coordinates (relative to
+ * the strip's border box with its horizontal scroll added back, so it can be
+ * absolutely positioned inside the scrolling strip).
+ */
+export interface DragOutline {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
 /** Which tile's box contains `clientX`, read off the strip's DOM children. */
 function sourceAtX(target: EventTarget & HTMLButtonElement, clientX: number): string | null {
 	const strip = target.parentElement;
@@ -42,11 +55,13 @@ export function useThumbnailReorder(onReorder: (from: string, to: string) => voi
 	const suppressClickRef = useRef(false);
 	const [dragSource, setDragSource] = useState<string | null>(null);
 	const [dropTarget, setDropTarget] = useState<string | null>(null);
+	const [dragOutline, setDragOutline] = useState<DragOutline | null>(null);
 
 	const reset = useCallback(() => {
 		dragRef.current = null;
 		setDragSource(null);
 		setDropTarget(null);
+		setDragOutline(null);
 	}, []);
 
 	/**
@@ -83,6 +98,21 @@ export function useThumbnailReorder(onReorder: (from: string, to: string) => voi
 					setDragSource(drag.source);
 				}
 				setDropTarget(sourceAtX(e.currentTarget, e.clientX));
+				// Pointer capture keeps events on the pressed tile, so
+				// currentTarget is always the dragged tile itself.
+				const strip = e.currentTarget.parentElement;
+				if (strip) {
+					const stripRect = strip.getBoundingClientRect();
+					const tileRect = e.currentTarget.getBoundingClientRect();
+					const width = tileRect.right - tileRect.left;
+					const height = tileRect.bottom - tileRect.top;
+					setDragOutline({
+						x: e.clientX - stripRect.left + strip.scrollLeft - width / 2,
+						y: e.clientY - stripRect.top - height / 2,
+						width,
+						height,
+					});
+				}
 			},
 			onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => {
 				const drag = dragRef.current;
@@ -105,11 +135,12 @@ export function useThumbnailReorder(onReorder: (from: string, to: string) => voi
 					dragRef.current.cancelled = true;
 					setDragSource(null);
 					setDropTarget(null);
+					setDragOutline(null);
 				}
 			},
 		}),
 		[onReorder, reset],
 	);
 
-	return { dragSource, dropTarget, consumeSuppressedClick, handlers };
+	return { dragSource, dropTarget, dragOutline, consumeSuppressedClick, handlers };
 }

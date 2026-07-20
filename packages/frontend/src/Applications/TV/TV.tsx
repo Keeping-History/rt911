@@ -1125,6 +1125,17 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 									</button>
 								);
 							})}
+							{reorder.dragOutline && (
+								<div
+									className={styles.tvDragOutline}
+									style={{
+										left: reorder.dragOutline.x,
+										top: reorder.dragOutline.y,
+										width: reorder.dragOutline.width,
+										height: reorder.dragOutline.height,
+									}}
+								/>
+							)}
 						</div>
 					</div>
 				</div>

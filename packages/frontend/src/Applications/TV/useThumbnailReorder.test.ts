@@ -13,7 +13,11 @@ const pointerEvent = (clientX: number, clientY = 0) =>
 		currentTarget: {
 			setPointerCapture: vi.fn(),
 			releasePointerCapture: vi.fn(),
+			// The dragged tile's own box, for sizing the drag outline.
+			getBoundingClientRect: () => ({ left: 0, right: 100, top: 0, bottom: 90 }),
 			parentElement: {
+				scrollLeft: 0,
+				getBoundingClientRect: () => ({ left: 0, top: 0 }),
 				children: [
 					{
 						dataset: { source: "A" },
@@ -94,6 +98,30 @@ describe("useThumbnailReorder", () => {
 		);
 		act(() => h.onPointerUp(pointerEvent(150)));
 		expect(onReorder).not.toHaveBeenCalled();
+	});
+
+	it("tracks a cursor-following drag outline in strip coordinates", () => {
+		const { result } = renderHook(() => useThumbnailReorder(vi.fn()));
+		const h = result.current.handlers("A");
+		act(() => h.onPointerDown(pointerEvent(10, 10)));
+		expect(result.current.dragOutline).toBe(null);
+		act(() => h.onPointerMove(pointerEvent(150, 10)));
+		// Tile is 100×90; the outline centers on the cursor (150, 10).
+		expect(result.current.dragOutline).toEqual({ x: 100, y: -35, width: 100, height: 90 });
+		act(() => h.onPointerUp(pointerEvent(150, 10)));
+		expect(result.current.dragOutline).toBe(null);
+	});
+
+	it("clears the drag outline on Escape", () => {
+		const { result } = renderHook(() => useThumbnailReorder(vi.fn()));
+		const h = result.current.handlers("A");
+		act(() => h.onPointerDown(pointerEvent(10)));
+		act(() => h.onPointerMove(pointerEvent(150)));
+		expect(result.current.dragOutline).not.toBe(null);
+		act(() =>
+			h.onKeyDown({ key: "Escape" } as unknown as React.KeyboardEvent<HTMLButtonElement>),
+		);
+		expect(result.current.dragOutline).toBe(null);
 	});
 
 	it("does not reorder when released over its own tile", () => {

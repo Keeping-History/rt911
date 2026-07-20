@@ -160,6 +160,22 @@ describe("TV thumbnail reorder", () => {
 		).toBe(true);
 	});
 
+	it("shows a marching-ants outline of the dragged tile while dragging", () => {
+		mockItems.value = [FAKE_ITEM, FAKE_ITEM_2];
+		const { container } = render(<TV />);
+		stubTileBoxes();
+		const target = tile("WABC");
+		expect(container.querySelector("[class*='tvDragOutline']")).toBeNull();
+		fireEvent.pointerDown(target, { clientX: 10, clientY: 10, pointerId: 1 });
+		// Below the drag threshold: still a click, no outline.
+		fireEvent.pointerMove(target, { clientX: 12, clientY: 10, pointerId: 1 });
+		expect(container.querySelector("[class*='tvDragOutline']")).toBeNull();
+		fireEvent.pointerMove(target, { clientX: 150, clientY: 10, pointerId: 1 });
+		expect(container.querySelector("[class*='tvDragOutline']")).not.toBeNull();
+		fireEvent.pointerUp(target, { clientX: 150, clientY: 10, pointerId: 1 });
+		expect(container.querySelector("[class*='tvDragOutline']")).toBeNull();
+	});
+
 	it("renders channels in the saved order", () => {
 		mockAppData.value = { channelOrder: ["WNBC", "WABC"] };
 		mockItems.value = [FAKE_ITEM, FAKE_ITEM_2];
