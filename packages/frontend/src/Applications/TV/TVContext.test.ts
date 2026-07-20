@@ -4,6 +4,7 @@ import {
 	type CaptionStyle,
 	DEFAULT_CAPTION_STYLE,
 	classicyTVEventHandler,
+	tvSetChannelOrder,
 } from "./TVContext";
 
 function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
@@ -107,5 +108,27 @@ describe("classicyTVEventHandler — current channel", () => {
 		expect(
 			out.System.Manager.Applications.apps["TV.app"].data,
 		).toMatchObject({ overallMuted: true, currentChannel: "ABC" });
+	});
+});
+
+describe("classicyTVEventHandler — channel order", () => {
+	it("persists the channel order into app data", () => {
+		const out = classicyTVEventHandler(
+			storeWithApp(),
+			tvSetChannelOrder(["WNBC", "WABC"]),
+		);
+		expect(
+			out.System.Manager.Applications.apps["TV.app"].data,
+		).toMatchObject({ channelOrder: ["WNBC", "WABC"] });
+	});
+
+	it("preserves unrelated fields when writing channel order", () => {
+		const out = classicyTVEventHandler(
+			storeWithApp({ overallMuted: true }),
+			tvSetChannelOrder(["CNN"]),
+		);
+		expect(
+			out.System.Manager.Applications.apps["TV.app"].data,
+		).toMatchObject({ overallMuted: true, channelOrder: ["CNN"] });
 	});
 });

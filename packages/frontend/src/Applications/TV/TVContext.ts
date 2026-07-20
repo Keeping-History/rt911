@@ -98,6 +98,12 @@ export const tvSetActivePlayer = (activePlayer: number): ActionMessage => ({
 	activePlayer,
 });
 
+/** Persist the user's custom thumbnail-strip channel order (source slugs). */
+export const tvSetChannelOrder = (channelOrder: string[]): ActionMessage => ({
+	type: "ClassicyAppTVSetChannelOrder",
+	channelOrder,
+});
+
 /**
  * Publish the active channel's `source` slug (data.currentChannel) so external
  * controllers — the playlist engine's locked-focus reconciliation — can see
@@ -136,6 +142,11 @@ export const classicyTVEventHandler = (
 		// `source` slugs so any channel that appears later defaults to enabled.
 		case "ClassicyAppTVSetDisabledChannels":
 			apps[appId].data = { ...appData, disabledChannels: action.disabledChannels };
+			return ds;
+		// The thumbnail strip's user-arranged order. Sources missing from this
+		// list (channels added later) render after it in wire order.
+		case "ClassicyAppTVSetChannelOrder":
+			apps[appId].data = { ...appData, channelOrder: action.channelOrder };
 			return ds;
 		// --- Remote-control commands ---
 		case "ClassicyAppTVTuneChannel":
