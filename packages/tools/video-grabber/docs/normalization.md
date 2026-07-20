@@ -10,6 +10,14 @@ state table is `normalize_jobs` (migration `005`). For the rationale behind
 these decisions (why in-place, why archive-first, why a manual review gate),
 see [`plans/2026-07-19-audio-normalize-design.md`](../../../../plans/2026-07-19-audio-normalize-design.md).
 
+> **Deploying a schema change here needs no manual migrate-Job bump.** The
+> infra repo's `.argocd-source-video-grabber.yaml` kustomize image override
+> rewrites `ghcr.io/keeping-history/video-grabber` for *every* workload in the
+> app — the `db-migrate` Job included — so the automatic SHA bump re-creates
+> the Job on the new image and `alembic upgrade head` runs on its own. (This
+> is how `005` landed; the root CLAUDE.md's "bump the migrate Job" step is
+> belt-and-braces, not a prerequisite.)
+
 ---
 
 ## Flows and triggers
@@ -158,8 +166,17 @@ kubectl -n video-grabber patch secret video-grabber-secrets \
 kubectl -n video-grabber rollout restart deploy/video-grabber-worker
 ```
 
-The token needs only `Zone → Cache Purge → Purge` permission on the
-`911realtime.org` zone (create it in the Cloudflare dashboard).
+**The token in use is a copy of the `rt911` namespace's `cloudflare-purge`
+Secret** (the one `apps/rt911/purge-hook.yaml`'s ArgoCD PostSync hook uses to
+`purge_everything` after each frontend deploy). It already carries the
+`Zone → Cache Purge → Purge` permission, and its zone —
+`08e515063f366be3278cb3de2380469c` = `911realtime.org` — is the same zone that
+serves the `files.911realtime.org` subdomain, so no separate token is needed.
+
+> **Rotation gotcha:** Kubernetes Secrets do not cross namespaces, so this is a
+> *copy*, not a reference. If the `rt911/cloudflare-purge` token is ever
+> rotated, mirror the new value into `video-grabber/video-grabber-secrets`
+> too, or normalize purges start silently no-op'ing (warning-logged).
 
 ---
 
