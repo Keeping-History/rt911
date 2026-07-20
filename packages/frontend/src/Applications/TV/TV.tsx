@@ -654,6 +654,20 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		);
 	}, []);
 
+	// Step the tuned channel by `delta` places through the visible channel list,
+	// wrapping at both ends (+1 = ▲/next, -1 = ▼/previous). Adding items.length
+	// before the modulo keeps a negative step in range. Shared by the ▲/▼ buttons.
+	const changeChannel = useCallback(
+		(delta: number) => {
+			if (orderedItems.length === 0) return;
+			const idx = orderedItems.findIndex((i) => i.id === activePlayer);
+			const next = (idx + delta + orderedItems.length) % orderedItems.length;
+			setActivePlayer(orderedItems[next].id);
+			setHasInteracted(true);
+		},
+		[orderedItems, activePlayer],
+	);
+
 	const appMenu = [
 		{
 			id: "file",
@@ -663,6 +677,45 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					id: `${appId}_settings`,
 					title: "Settings…",
 					onClickFunc: openSettings,
+				},
+				quitMenuItemHelper(appId, appName, appIcon),
+			],
+		},
+		{
+			id: "view",
+			title: "View",
+			menuChildren: [
+				{
+					id: `${appId}_show_epg`,
+					title: "Show EPG",
+					onClickFunc: () => setShowEpg(true),
+				},
+				{
+					id: `${appId}_channel_up`,
+					title: "Channel ▲",
+					onClickFunc: () => changeChannel(1),
+				},
+				{
+					id: `${appId}_channel_down`,
+					title: "Channel ▼",
+					onClickFunc: () => changeChannel(-1),
+				},
+				quitMenuItemHelper(appId, appName, appIcon),
+			],
+		},
+		{
+			id: "controls",
+			title: "Controls",
+			menuChildren: [
+				{
+					id: `${appId}_mute_all`,
+					title: `${volumeLimit == 0 ? "✓ " : "  "} Mute${volumeLimit ==0 ? "d" : ""}`,
+					onClickFunc: () => volumeLimit == 0 ? setVolumeLimit(100) : setVolumeLimit(0),
+				},
+				{
+					id: `${appId}_pause_all`,
+					title: `${tvPaused ? "✓ " : "  "} Pause${tvPaused ? "d" : ""}`,
+					onClickFunc: () => desktopEventDispatch(tvPaused ? tvResume() : tvPause())
 				},
 				quitMenuItemHelper(appId, appName, appIcon),
 			],
@@ -1024,13 +1077,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								{!multiSelectMode && (
 									<>
 										<ClassicyButton
-											onClickFunc={() => {
-												if (items.length === 0) return;
-												const idx = items.findIndex((i) => i.id === activePlayer);
-												const next = (idx + 1) % items.length;
-												setActivePlayer(items[next].id);
-												setHasInteracted(true);
-											}}
+											onClickFunc={() => changeChannel(1)}
 											buttonSize="small"
 											margin="sm"
 											padding="sm"
@@ -1038,13 +1085,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 											▲
 										</ClassicyButton>
 										<ClassicyButton
-											onClickFunc={() => {
-												if (items.length === 0) return;
-												const idx = items.findIndex((i) => i.id === activePlayer);
-												const prev = (idx - 1 + items.length) % items.length;
-												setActivePlayer(items[prev].id);
-												setHasInteracted(true);
-											}}
+											onClickFunc={() => changeChannel(-1)}
 											buttonSize="small"
 											margin="sm"
 											padding="sm"
@@ -1143,3 +1184,4 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		</ClassicyApp>
 	);
 };
+
