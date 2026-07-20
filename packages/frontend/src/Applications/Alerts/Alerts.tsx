@@ -5,6 +5,7 @@ import {
 	type AlertItem,
 	MediaStreamContext,
 } from "../../Providers/MediaStream/MediaStreamContext";
+import { useAlertsEnabled } from "./alertsSettings";
 
 const appId = "Alerts.app";
 const appName = "Alerts";
@@ -28,18 +29,19 @@ export const Alerts: React.FC = () => {
 	const isRunning = useAppManager(
 		(s) => appId in (s.System.Manager.Applications.apps ?? {}),
 	);
+	const enabled = useAlertsEnabled();
 	const { alertItems, subscribeAlerts, unsubscribeAlerts } =
 		useContext(MediaStreamContext);
 
 	const [dismissed, setDismissed] = useState<Set<number>>(() => new Set());
 
-	// The extension is always mounted; subscribe once the app entry exists and
-	// stay subscribed for as long as it does.
+	// The extension is always mounted; subscribe while the app entry exists AND
+	// the user hasn't turned alerts off in the Alerts Manager control panel.
 	useEffect(() => {
-		if (!isRunning) return;
+		if (!isRunning || !enabled) return;
 		subscribeAlerts(appId);
 		return () => unsubscribeAlerts(appId);
-	}, [isRunning, subscribeAlerts, unsubscribeAlerts]);
+	}, [isRunning, enabled, subscribeAlerts, unsubscribeAlerts]);
 
 	// Earliest revealed-but-undismissed alert, by start_date. Rendering only
 	// this one gives the "one modal at a time" queue: OK dismisses it, the
@@ -68,7 +70,7 @@ export const Alerts: React.FC = () => {
 			extension
 			addSystemMenu={false}
 		>
-			{current && (
+			{enabled && current && (
 				<ClassicyAlert
 					key={current.id}
 					id={`${appId}_alert_${current.id}`}

@@ -1,8 +1,12 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AlertItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
+import {
+	resetAlertsSettingsForTests,
+	setAlertsEnabled,
+} from "./alertsSettings";
 
 // Seeded Alerts.app data handed to useAppManager; toggled per test to exercise
 // the subscribe-on-mount gate (mirrors News.tsx's isRunning gate).
@@ -54,6 +58,8 @@ import { Alerts } from "./Alerts";
 afterEach(() => {
 	cleanup();
 	mockAppRunning.value = true;
+	window.localStorage.clear();
+	resetAlertsSettingsForTests();
 });
 
 const mk = (
@@ -160,5 +166,37 @@ describe("Alerts extension", () => {
 
 		expect(screen.getByText("now").tagName).toBe("B");
 		expect(screen.getByText(/Evacuate/)).not.toBeNull();
+	});
+});
+
+describe("Alerts extension: enabled/disabled gating", () => {
+	it("does not subscribe or render a modal while alerts are disabled", () => {
+		setAlertsEnabled(false);
+		const { subscribeAlerts } = renderWithAlerts([
+			mk(1, "Suppressed", "2001-09-11T12:40:00Z"),
+		]);
+		expect(subscribeAlerts).not.toHaveBeenCalled();
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+	});
+
+	it("hides a visible modal and unsubscribes the moment alerts are disabled", () => {
+		const { subscribeAlerts, unsubscribeAlerts } = renderWithAlerts([
+			mk(1, "Visible", "2001-09-11T12:40:00Z"),
+		]);
+		expect(subscribeAlerts).toHaveBeenCalledWith("Alerts.app");
+		expect(screen.getByRole("alertdialog")).not.toBeNull();
+
+		act(() => setAlertsEnabled(false));
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+		expect(unsubscribeAlerts).toHaveBeenCalledWith("Alerts.app");
+	});
+
+	it("re-subscribes when alerts are re-enabled", () => {
+		const { subscribeAlerts } = renderWithAlerts([]);
+		expect(subscribeAlerts).toHaveBeenCalledTimes(1);
+
+		act(() => setAlertsEnabled(false));
+		act(() => setAlertsEnabled(true));
+		expect(subscribeAlerts).toHaveBeenCalledTimes(2);
 	});
 });

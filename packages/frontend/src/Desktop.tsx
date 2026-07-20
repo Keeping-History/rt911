@@ -8,6 +8,7 @@ import { HyperCardClockBridge } from "./Applications/HyperCard/extensions/HyperC
 import { HyperCardStackAuthBridge } from "./Applications/HyperCard/extensions/stackProviderAuth";
 import { Account } from "./Applications/Account/Account";
 import { Alerts } from "./Applications/Alerts/Alerts";
+import { AlertsManager } from "./Applications/Alerts/AlertsManager";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";
 import { FlightTracker } from "./Applications/FlightTracker/FlightTracker";
@@ -27,6 +28,7 @@ export default function Desktop() {
 	return (
 		<ClassicyDesktop>
 			<Alerts />
+			<AlertsManager />
 			<HyperCardClockBridge />
 			<HyperCardStackAuthBridge />
 			<Browser />
