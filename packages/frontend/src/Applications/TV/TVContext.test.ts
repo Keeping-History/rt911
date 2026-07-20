@@ -4,6 +4,7 @@ import {
 	type CaptionStyle,
 	DEFAULT_CAPTION_STYLE,
 	classicyTVEventHandler,
+	tvSetChannelOrder,
 } from "./TVContext";
 
 function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
@@ -107,5 +108,37 @@ describe("classicyTVEventHandler — current channel", () => {
 		expect(
 			out.System.Manager.Applications.apps["TV.app"].data,
 		).toMatchObject({ overallMuted: true, currentChannel: "ABC" });
+	});
+});
+
+describe("classicyTVEventHandler — channel order", () => {
+	it("persists the channel order", () => {
+		const out = classicyTVEventHandler(
+			storeWithApp({ volumeLimit: 0.5 }),
+			tvSetChannelOrder(["WCBS", "WABC"]),
+		);
+		expect(
+			out.System.Manager.Applications.apps["TV.app"].data,
+		).toMatchObject({ channelOrder: ["WCBS", "WABC"] });
+	});
+
+	it("preserves unrelated fields when writing channel order", () => {
+		const out = classicyTVEventHandler(
+			storeWithApp({ volumeLimit: 0.5, captionsOn: true }),
+			tvSetChannelOrder(["WABC"]),
+		);
+		expect(
+			out.System.Manager.Applications.apps["TV.app"].data,
+		).toMatchObject({ volumeLimit: 0.5, captionsOn: true, channelOrder: ["WABC"] });
+	});
+
+	it("accepts an empty order (reset to default ordering)", () => {
+		const out = classicyTVEventHandler(
+			storeWithApp({ channelOrder: ["WABC"] }),
+			tvSetChannelOrder([]),
+		);
+		expect(
+			out.System.Manager.Applications.apps["TV.app"].data,
+		).toMatchObject({ channelOrder: [] });
 	});
 });

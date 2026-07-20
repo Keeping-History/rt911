@@ -108,6 +108,17 @@ export const tvSetCurrentChannel = (source: string): ActionMessage => ({
 	source,
 });
 
+/**
+ * The user's drag-ordered channel slugs for the thumbnail strip. Stored as
+ * `item.source` values, not ids: ids belong to the currently-airing item and
+ * change on every program rollover. Classicy snapshots app data to
+ * localStorage, so this persists per-user with no storage code here.
+ */
+export const tvSetChannelOrder = (channelOrder: string[]): ActionMessage => ({
+	type: "ClassicyAppTVSetChannelOrder",
+	channelOrder,
+});
+
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 
 // Next command sequence number = previous + 1 (starts at 1).
@@ -199,6 +210,12 @@ export const classicyTVEventHandler = (
 			apps[appId].data = {
 				...appData,
 				currentChannel: action.source as string,
+			};
+			return ds;
+		case "ClassicyAppTVSetChannelOrder":
+			apps[appId].data = {
+				...appData,
+				channelOrder: action.channelOrder as string[],
 			};
 			return ds;
 		default:
