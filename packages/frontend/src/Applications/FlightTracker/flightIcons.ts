@@ -37,6 +37,18 @@ export const pixelGrid = (displayPx: number): number =>
 // cell should survive, or wide-bodies lose their wings entirely.
 export const PIXEL_ALPHA_THRESHOLD = 96;
 
+// Regular icons are scaled up in radar mode. At their normal 9-16px an 8-block
+// grid has nowhere near enough cells to hold a readable airliner — the small
+// families collapse into a blob. Scaling up buys grid cells (a 9px CRJ goes
+// from grid 8 to grid 11, a 15px 767 reaches the grid-16 cap) at the cost of a
+// busier scope. Notables/observers already sit at 32px+, comfortably at the
+// cap, so they keep their existing size and the regular < notable size
+// hierarchy survives.
+export const PIXEL_SIZE_SCALE = 1.5;
+
+export const iconDisplayPx = (basePx: number, pixelate: boolean): number =>
+	pixelate ? Math.round(basePx * PIXEL_SIZE_SCALE) : basePx;
+
 export const snapAlpha = (data: Uint8ClampedArray, threshold: number): void => {
 	// RGB is left alone: getImageData is non-premultiplied, so a partly
 	// transparent pixel already carries the full-strength pin color.

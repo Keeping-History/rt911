@@ -30,6 +30,7 @@ import {
 	familyNotableIconId,
 	familyNotableIconPx,
 	familyObserverIconId,
+	iconDisplayPx,
 } from "./flightIcons";
 import {
 	type FlightMotion,
@@ -105,7 +106,7 @@ async function installPlaneIcons(
 ) {
 	try {
 		const [regular, notable, observer] = await Promise.all([
-			buildPlaneImage(planeSvg, pinColor, PLANE_ICON_PX, pixelate),
+			buildPlaneImage(planeSvg, pinColor, iconDisplayPx(PLANE_ICON_PX, pixelate), pixelate),
 			buildPlaneImage(planeSvg, notablePinColor, PLANE_NOTABLE_ICON_PX, pixelate),
 			buildPlaneImage(planeSvg, observerPinColor, PLANE_NOTABLE_ICON_PX, pixelate),
 		]);
@@ -133,7 +134,7 @@ async function installFamilyIcon(
 ) {
 	try {
 		const [regular, notable, observer] = await Promise.all([
-			buildPlaneImage(svg, pinColor, familyIconPx(family), pixelate),
+			buildPlaneImage(svg, pinColor, iconDisplayPx(familyIconPx(family), pixelate), pixelate),
 			buildPlaneImage(svg, notablePinColor, familyNotableIconPx(family), pixelate),
 			buildPlaneImage(svg, observerPinColor, familyNotableIconPx(family), pixelate),
 		]);

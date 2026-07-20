@@ -3,7 +3,9 @@ import {
 	PLANE_ICON_PX,
 	PLANE_NOTABLE_ICON_PX,
 	PIXEL_ALPHA_THRESHOLD,
+	PIXEL_GRID_MIN,
 	colorizeSvg,
+	iconDisplayPx,
 	FAMILY_ICON_PX,
 	familyIconId,
 	familyIconPx,
@@ -90,6 +92,29 @@ describe("pixelGrid", () => {
 
 	it("gives bigger icons more blocks, not bigger blocks forever", () => {
 		expect(pixelGrid(PLANE_NOTABLE_ICON_PX)).toBeGreaterThan(pixelGrid(PLANE_ICON_PX));
+	});
+});
+
+describe("iconDisplayPx", () => {
+	it("leaves sizes untouched outside radar mode", () => {
+		for (const px of Object.values(FAMILY_ICON_PX)) {
+			expect(iconDisplayPx(px, false)).toBe(px);
+		}
+	});
+
+	it("buys the small families real grid cells in radar mode", () => {
+		// The whole point of the scale-up: at grid 8 a silhouette is a blob.
+		// Every family must clear that floor once scaled.
+		for (const px of Object.values(FAMILY_ICON_PX)) {
+			expect(pixelGrid(iconDisplayPx(px, true)), `${px}px`).toBeGreaterThan(PIXEL_GRID_MIN);
+		}
+	});
+
+	it("keeps regular icons smaller than notables, so the hierarchy survives", () => {
+		// Notables are NOT scaled — they already sit at the grid cap. A regular
+		// plane that outgrew them would break the highlight read.
+		const biggest = Math.max(...Object.values(FAMILY_ICON_PX));
+		expect(iconDisplayPx(biggest, true)).toBeLessThan(PLANE_NOTABLE_ICON_PX);
 	});
 });
 
