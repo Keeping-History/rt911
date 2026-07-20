@@ -18,6 +18,11 @@ vi.mock("./authApi", () => ({
 	providerLoginUrl: (provider: string, redirectTo: string) => providerLoginUrl(provider, redirectTo),
 }));
 
+const identifyUser = vi.fn();
+vi.mock("../../openreplay", () => ({
+	identifyUser: (user: unknown) => identifyUser(user),
+}));
+
 import { AuthProvider } from "./AuthProvider";
 import { useAuth } from "./AuthContext";
 
@@ -90,6 +95,20 @@ describe("AuthProvider", () => {
 		await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
 		expect(getByTestId("email").textContent).toBe("");
 		expect(logout).toHaveBeenCalledTimes(1);
+	});
+
+	it("identifies the user to OpenReplay on boot and clears it on sign-out", async () => {
+		fetchMe.mockResolvedValue(user1);
+		logout.mockResolvedValue(undefined);
+		const { getByTestId, getByText } = render(
+			<AuthProvider>
+				<Probe />
+			</AuthProvider>,
+		);
+		await waitFor(() => expect(identifyUser).toHaveBeenCalledWith(user1));
+		fireEvent.click(getByText("sign out"));
+		await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
+		expect(identifyUser).toHaveBeenLastCalledWith(null);
 	});
 
 	it("signInWithEmail calls loginEmail then re-fetches and flips to signedIn", async () => {

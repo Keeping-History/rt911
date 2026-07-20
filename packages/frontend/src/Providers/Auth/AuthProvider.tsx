@@ -2,6 +2,7 @@
 // ClassicyStore; every reload re-derives status from the httpOnly session
 // cookie via fetchMe(), same non-persistence stance as PlaylistProvider.
 import { type FC, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { identifyUser } from "../../openreplay";
 import { fetchMe, loginEmail, logout, providerLoginUrl, type AuthUser,
 	register as apiRegister,
 } from "./authApi";
@@ -33,6 +34,13 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
 		loadStartedRef.current = true;
 		void refresh();
 	}, [refresh]);
+
+	// Single seam for OpenReplay identification: fires for email login, the
+	// OAuth-redirect boot check, and sign-out alike, because all of them
+	// converge on this user state.
+	useEffect(() => {
+		identifyUser(user);
+	}, [user]);
 
 	const signInWithEmail = useCallback(
 		async (email: string, password: string) => {
