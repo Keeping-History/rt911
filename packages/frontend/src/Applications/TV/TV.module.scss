@@ -175,6 +175,7 @@ $strip-height: calc(5em + 8px);
 }
 
 .tvThumbnailStrip {
+  position: relative; // anchors the drag outline + insertion bar overlays
   flex: 1;
   display: flex;
   flex-direction: row;
@@ -218,7 +219,7 @@ $strip-height: calc(5em + 8px);
   }
 
   &.tvPlayerSelected {
-    outline: 4px solid var(--color-theme-03);
+    outline: 4px solid var(--color-theme-04);
     outline-offset: -2px;
   }
 }
@@ -245,6 +246,44 @@ $strip-height: calc(5em + 8px);
   object-fit: cover;
   display: block;
   pointer-events: none;
+}
+
+// Classic Mac OS 8 outline drag: a dashed "marching ants" rectangle follows
+// the cursor while the original thumbnail stays put. The four repeating
+// gradients draw one dashed edge each; animating their positions marches
+// the ants clockwise.
+.tvDragOutline {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  --ant-color: var(--color-black, #000);
+  background-image:
+    repeating-linear-gradient(90deg, var(--ant-color) 0 4px, transparent 4px 8px),
+    repeating-linear-gradient(90deg, var(--ant-color) 0 4px, transparent 4px 8px),
+    repeating-linear-gradient(0deg, var(--ant-color) 0 4px, transparent 4px 8px),
+    repeating-linear-gradient(0deg, var(--ant-color) 0 4px, transparent 4px 8px);
+  background-size: 100% 2px, 100% 2px, 2px 100%, 2px 100%;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  background-repeat: no-repeat;
+  animation: tvMarchingAnts 0.5s linear infinite;
+}
+
+// Where the dragged thumbnail will land.
+.tvDragInsertionBar {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  top: 5%;
+  height: 90%;
+  width: 3px;
+  margin-left: -1px;
+  background: var(--color-theme-04);
+}
+
+@keyframes tvMarchingAnts {
+  to {
+    background-position: 8px 0, -8px 100%, 0 -8px, 100% 8px;
+  }
 }
 
 .tvSettings {
