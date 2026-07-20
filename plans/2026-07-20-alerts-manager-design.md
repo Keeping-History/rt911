@@ -80,15 +80,20 @@ Structure copied from `ClassicyDateAndTimeManager`:
 
 - Read `const enabled = useAlertsEnabled()`.
 - Subscribe effect gates on `isRunning && enabled`; toggling off runs the
-  cleanup → `unsubscribeAlerts(appId)`, which (as the last subscriber) sends the
-  channel unsubscribe and clears the alert buffer
-  (`MediaStreamProvider.tsx:487`).
+  cleanup → `unsubscribeAlerts(appId)`, which (as the last subscriber, since
+  `Alerts.app` is the alerts channel's only subscriber) sends the channel
+  unsubscribe and clears **both** the un-revealed buffer and the revealed
+  `alertItems` list (`setAlertItems([])`, `MediaStreamProvider.tsx:484-487`).
 - Modal renders only when `enabled` — a visible alert disappears the instant
-  the user toggles off. It is *not* auto-dismissed, but re-appearing on
-  re-enable is acceptable only if it is still in `alertItems`; since dismissal
-  state is untouched, an alert visible at toggle-off that remains in the
-  provider's revealed list will re-surface on toggle-on within the same
-  session. This is intended: the user never acknowledged it.
+  the user toggles off. It is *not* auto-dismissed, but because
+  `unsubscribeAlerts` clears `alertItems` entirely, an alert visible at
+  toggle-off is dropped permanently rather than merely hidden: re-enabling
+  within the same session does **not** bring it back, since nothing remains
+  in `alertItems` to re-render and the channel is fire-on-cross with no
+  snapshot to re-deliver it. This is intended and consistent with the
+  approved "skip missed alerts" semantics — the user never acknowledged it,
+  and the product treats a missed alert the same whether alerts were off when
+  it fired or the user simply didn't see it before toggling off.
 
 ### `Desktop.tsx` (changed)
 

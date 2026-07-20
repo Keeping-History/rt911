@@ -299,8 +299,10 @@ const enabled = useAlertsEnabled();
 
 Replace the subscribe effect (lines 38-42) — disabling runs the cleanup, and
 `unsubscribeAlerts` as the last subscriber unsubscribes the WS channel and
-clears the un-revealed buffer (`MediaStreamProvider.tsx:484-487`), so alerts
-that fire while off are skipped (fire-on-cross channel, no snapshot):
+clears both the un-revealed buffer and the revealed `alertItems` list
+(`setAlertItems([])`, `MediaStreamProvider.tsx:484-487`), so alerts that fire
+while off — and any alert still visible-but-unacknowledged at the moment of
+toggle-off — are skipped/dropped (fire-on-cross channel, no snapshot):
 
 ```ts
 // The extension is always mounted; subscribe while the app entry exists AND

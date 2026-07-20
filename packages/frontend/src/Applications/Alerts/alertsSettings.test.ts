@@ -55,18 +55,27 @@ describe("alertsSettings store", () => {
 	});
 
 	it("falls back to enabled when localStorage reads throw (private-mode Safari)", () => {
-		vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-			throw new Error("denied");
-		});
+		// window.localStorage in this test environment is an own-property
+		// polyfill (see vitest.setup.ts), not a Storage.prototype instance, so
+		// the spy must target the instance itself to actually intercept calls.
+		const getItemSpy = vi
+			.spyOn(window.localStorage, "getItem")
+			.mockImplementation(() => {
+				throw new Error("denied");
+			});
 		resetAlertsSettingsForTests();
+		expect(getItemSpy).toHaveBeenCalledWith(KEY);
 		expect(getAlertsEnabled()).toBe(true);
 	});
 
 	it("keeps working in-memory when localStorage writes throw", () => {
-		vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-			throw new Error("denied");
-		});
+		const setItemSpy = vi
+			.spyOn(window.localStorage, "setItem")
+			.mockImplementation(() => {
+				throw new Error("denied");
+			});
 		setAlertsEnabled(false);
+		expect(setItemSpy).toHaveBeenCalledWith(KEY, "false");
 		expect(getAlertsEnabled()).toBe(false);
 	});
 });

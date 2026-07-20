@@ -27,9 +27,13 @@ globalThis.ResizeObserver =
 	globalThis.ResizeObserver ??
 	(ResizeObserverStub as unknown as typeof ResizeObserver);
 
-// jsdom's default url (http://localhost:3000) requires --localstorage-file
-// to provide localStorage. Tests accessing window.localStorage throw
-// SecurityError: "Cannot initialize local storage without a `--localstorage-file` path".
+// Node 25 ships a native globalThis.localStorage that throws when
+// unconfigured: SecurityError: "Cannot initialize local storage without a
+// `--localstorage-file` path". vitest's populateGlobal/getWindowKeys only
+// copies a jsdom window key onto the global when that key isn't already
+// present on the global — "Storage" is in its always-copy KEYS list, but
+// "localStorage" is not, so Node's throwing implementation shadows jsdom's
+// working one inside tests.
 // Polyfill in-memory localStorage to unblock test suites that need it.
 try {
 	if (!window.localStorage || typeof window.localStorage.getItem !== "function") {
