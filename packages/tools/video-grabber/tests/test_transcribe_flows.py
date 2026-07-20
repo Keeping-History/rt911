@@ -155,3 +155,21 @@ def test_build_channel_cues_mixed_tzinfo_naive_window_start_aware_air_date():
     assert len(cues) == 1
     assert cues[0].text == "Mixed tz cue"
     assert abs(cues[0].start - 3601.0) < 1e-6
+
+
+# ---- build-channel-subtitles must fail loudly on a channel-lookup miss ------
+#
+# The lookup matches tv_channels on the content marker {"channel_stream": slug}.
+# CCTV4's marker sat on the stale "cctv3" long after everything else moved to
+# "cctv4", so the flow took its early-return and reported COMPLETED while
+# writing nothing — a fully transcribed 345-program channel silently had no
+# subtitles. A miss is a misconfiguration, not a no-op.
+
+
+def test_build_channel_subtitles_raises_when_channel_lookup_misses():
+    from unittest.mock import MagicMock, patch
+
+    with patch.object(flows, "Config", return_value=MagicMock()), \
+         patch.object(flows, "get_tv_channel_start_date", return_value=None):
+        with pytest.raises(ValueError, match="no tv_channels row"):
+            flows.build_channel_subtitles_flow("cctv4")
