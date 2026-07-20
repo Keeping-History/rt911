@@ -1,12 +1,13 @@
 // Signed-in profile editor: per-section saves so a failure in one section
 // never blocks another. Demographics are ALL optional — empty saves as null.
 // Email is absent from updateProfile by design (verified round-trip only).
-import { ClassicyButton, ClassicyInput, ClassicyPopUpMenu } from "classicy";
-import type { ChangeEvent } from "react";
+import { ClassicyButton, ClassicyControlLabel, ClassicyInput, ClassicyPopUpMenu, ClassicyTabs } from "classicy";
+import type { ChangeEvent, ReactNode } from "react";
 import { useState } from "react";
 import type React from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { requestEmailChange, updateProfile } from "../../Providers/Auth/profileApi";
+import styles from "./Account.module.scss";
 
 const EDUCATOR_ROLES = [
 	{ value: "", label: "—" },
@@ -46,7 +47,7 @@ const ToggleGroup: React.FC<{
 	onToggle: (value: string) => void;
 	disabled: boolean;
 }> = ({ options, selected, onToggle, disabled }) => (
-	<div>
+	<div className={styles.toggleGroup}>
 		{options.map(([value, label]) => (
 			<ClassicyButton
 				key={value}
@@ -166,110 +167,129 @@ export const ProfileEditor: React.FC = () => {
 			.finally(() => setPasswordBusy(false));
 	};
 
-	return (
-		<div>
-			<div>
-				<ClassicyInput
-					id="profile-first-name"
-					labelTitle="First Name"
-					prefillValue={firstName}
-					disabled={namesBusy}
-					onChangeFunc={(e) => setFirstName(e.target.value)}
-				/>
-				<ClassicyInput
-					id="profile-last-name"
-					labelTitle="Last Name"
-					prefillValue={lastName}
-					disabled={namesBusy}
-					onChangeFunc={(e) => setLastName(e.target.value)}
-				/>
-				<ClassicyButton disabled={namesBusy} onClickFunc={saveNames}>
-					Save Names
-				</ClassicyButton>
-				{namesMsg && <div>{namesMsg}</div>}
-			</div>
+	// Grouped into Classicy tabs so each concern (name, demographics, email,
+	// password) is one uncluttered panel. Password is default-provider only,
+	// so it's appended conditionally rather than rendered-then-hidden.
+	const tabs: { title: string; children: ReactNode }[] = [
+		{
+			title: "Profile",
+			children: (
+				<div className={styles.tabPanel}>
+					<ClassicyInput
+						id="profile-first-name"
+						labelTitle="First Name"
+						prefillValue={firstName}
+						disabled={namesBusy}
+						onChangeFunc={(e) => setFirstName(e.target.value)}
+					/>
+					<ClassicyInput
+						id="profile-last-name"
+						labelTitle="Last Name"
+						prefillValue={lastName}
+						disabled={namesBusy}
+						onChangeFunc={(e) => setLastName(e.target.value)}
+					/>
+					<ClassicyButton disabled={namesBusy} onClickFunc={saveNames}>
+						Save Names
+					</ClassicyButton>
+					{namesMsg && <div>{namesMsg}</div>}
+				</div>
+			),
+		},
+		{
+			title: "About You",
+			children: (
+				<div className={styles.tabPanel}>
+					<ClassicyInput
+						id="profile-city"
+						labelTitle="City"
+						prefillValue={city}
+						disabled={aboutBusy}
+						onChangeFunc={(e) => setCity(e.target.value)}
+					/>
+					<ClassicyInput
+						id="profile-state"
+						labelTitle="State"
+						prefillValue={stateRegion}
+						disabled={aboutBusy}
+						onChangeFunc={(e) => setStateRegion(e.target.value)}
+					/>
+					<ClassicyInput
+						id="profile-country"
+						labelTitle="Country"
+						prefillValue={country}
+						disabled={aboutBusy}
+						onChangeFunc={(e) => setCountry(e.target.value)}
+					/>
+					<ClassicyInput
+						id="profile-school"
+						labelTitle="School"
+						prefillValue={school}
+						disabled={aboutBusy}
+						onChangeFunc={(e) => setSchool(e.target.value)}
+					/>
+					<ClassicyPopUpMenu
+						id="profile-educator-role"
+						label="Educator Role"
+						labelPosition="left"
+						options={EDUCATOR_ROLES}
+						selected={educatorRole}
+						onChangeFunc={(e: ChangeEvent<HTMLSelectElement>) =>
+							setEducatorRole(e.target.value)
+						}
+					/>
+					<ToggleGroup
+						options={GRADE_LEVELS}
+						selected={gradeLevels}
+						onToggle={toggle(gradeLevels, setGradeLevels)}
+						disabled={aboutBusy}
+					/>
+					<ToggleGroup
+						options={SUBJECTS}
+						selected={subjects}
+						onToggle={toggle(subjects, setSubjects)}
+						disabled={aboutBusy}
+					/>
+					<ClassicyButton disabled={aboutBusy} onClickFunc={saveAbout}>
+						Save Profile
+					</ClassicyButton>
+					{aboutMsg && <div>{aboutMsg}</div>}
+				</div>
+			),
+		},
+		{
+			title: "Email",
+			children: (
+				<div className={styles.tabPanel}>
+					<ClassicyControlLabel label={`Email: ${user?.email ?? ""}`} />
+					<ClassicyInput
+						id="profile-new-email"
+						labelTitle="New Email"
+						prefillValue={newEmail}
+						disabled={emailBusy}
+						onChangeFunc={(e) => setNewEmail(e.target.value)}
+					/>
+					<ClassicyInput
+						id="profile-confirm-email"
+						labelTitle="Confirm New Email"
+						prefillValue={confirmEmail}
+						disabled={emailBusy}
+						onChangeFunc={(e) => setConfirmEmail(e.target.value)}
+					/>
+					<ClassicyButton disabled={emailBusy} onClickFunc={sendEmailLink}>
+						Send Confirmation Link
+					</ClassicyButton>
+					{emailMsg && <div>{emailMsg}</div>}
+				</div>
+			),
+		},
+	];
 
-			<div>
-				<ClassicyInput
-					id="profile-city"
-					labelTitle="City"
-					prefillValue={city}
-					disabled={aboutBusy}
-					onChangeFunc={(e) => setCity(e.target.value)}
-				/>
-				<ClassicyInput
-					id="profile-state"
-					labelTitle="State"
-					prefillValue={stateRegion}
-					disabled={aboutBusy}
-					onChangeFunc={(e) => setStateRegion(e.target.value)}
-				/>
-				<ClassicyInput
-					id="profile-country"
-					labelTitle="Country"
-					prefillValue={country}
-					disabled={aboutBusy}
-					onChangeFunc={(e) => setCountry(e.target.value)}
-				/>
-				<ClassicyInput
-					id="profile-school"
-					labelTitle="School"
-					prefillValue={school}
-					disabled={aboutBusy}
-					onChangeFunc={(e) => setSchool(e.target.value)}
-				/>
-				<ClassicyPopUpMenu
-					id="profile-educator-role"
-					label="Educator Role"
-					labelPosition="left"
-					options={EDUCATOR_ROLES}
-					selected={educatorRole}
-					onChangeFunc={(e: ChangeEvent<HTMLSelectElement>) =>
-						setEducatorRole(e.target.value)
-					}
-				/>
-				<ToggleGroup
-					options={GRADE_LEVELS}
-					selected={gradeLevels}
-					onToggle={toggle(gradeLevels, setGradeLevels)}
-					disabled={aboutBusy}
-				/>
-				<ToggleGroup
-					options={SUBJECTS}
-					selected={subjects}
-					onToggle={toggle(subjects, setSubjects)}
-					disabled={aboutBusy}
-				/>
-				<ClassicyButton disabled={aboutBusy} onClickFunc={saveAbout}>
-					Save Profile
-				</ClassicyButton>
-				{aboutMsg && <div>{aboutMsg}</div>}
-			</div>
-
-			<div>
-				<div>{`Email: ${user?.email ?? ""}`}</div>
-				<ClassicyInput
-					id="profile-new-email"
-					labelTitle="New Email"
-					prefillValue={newEmail}
-					disabled={emailBusy}
-					onChangeFunc={(e) => setNewEmail(e.target.value)}
-				/>
-				<ClassicyInput
-					id="profile-confirm-email"
-					labelTitle="Confirm New Email"
-					prefillValue={confirmEmail}
-					disabled={emailBusy}
-					onChangeFunc={(e) => setConfirmEmail(e.target.value)}
-				/>
-				<ClassicyButton disabled={emailBusy} onClickFunc={sendEmailLink}>
-					Send Confirmation Link
-				</ClassicyButton>
-				{emailMsg && <div>{emailMsg}</div>}
-			</div>
-
-			{user?.provider === "default" && (
-				<div>
+	if (user?.provider === "default") {
+		tabs.push({
+			title: "Password",
+			children: (
+				<div className={styles.tabPanel}>
 					<ClassicyInput
 						id="profile-new-password"
 						labelTitle="New Password"
@@ -291,7 +311,9 @@ export const ProfileEditor: React.FC = () => {
 					</ClassicyButton>
 					{passwordMsg && <div>{passwordMsg}</div>}
 				</div>
-			)}
-		</div>
-	);
+			),
+		});
+	}
+
+	return <ClassicyTabs tabs={tabs} />;
 };

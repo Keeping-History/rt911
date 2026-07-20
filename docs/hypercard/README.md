@@ -29,6 +29,27 @@ plus `directusVideo`. (The `directusNews`/`directusPager` parts and the
 Time Machine rather than jumping the clock directly. Swap in `setDateTime`
 buttons once that PR lands.)
 
+## The Oregon Trail (an example game stack)
+
+Lives at `packages/frontend/public/stacks/oregon-trail.stack.json`, served at
+`/stacks/oregon-trail.stack.json` and mounted on the desktop as **Macintosh HD →
+The Oregon Trail.stack**. It re-creates the classic Apple II / MECC educational
+game entirely in the HyperCard JSON stack language — no code, no fetching, only
+the built-in part types (`label`, `field`, `button`) and declarative actions.
+
+It exercises the full breadth of the stack engine: stack-global `variables`
+(money, food, health, oxen, miles, …), the `put`/`add`/`subtract`/`multiply`
+container arithmetic, `if`/`then`/`else` branching over the expression language,
+`answer` dialogs for encounters, `beep`, `visual` transitions, and named-card
+`go` navigation. An outfitting **store** does live budget math; each trail card
+recomputes an on-screen status bar from the variables via a background
+`onOpenCard` handler; river crossings, breakdowns and mountain cold resolve
+deterministically from the party's own supplies and the departure month; and the
+journey ends on a scored **arrive** card or a **died** card. Because the engine
+is deterministic (its expression evaluator has no randomness), outcomes fall out
+of the player's choices — the game is a solvable resource-management puzzle, and
+its balance is verifiable by walking the cards.
+
 ## Making a stack appear in the app
 
 Two routes:

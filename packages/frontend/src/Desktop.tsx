@@ -4,7 +4,11 @@ import { ClassicyDesktop } from "classicy";
 // stacks with classicy's HyperCard plugin registries. The HyperCard app itself
 // is bundled in classicy and auto-mounted by ClassicyDesktop.
 import "./Applications/HyperCard";
+import { HyperCardClockBridge } from "./Applications/HyperCard/extensions/HyperCardClockBridge";
+import { HyperCardStackAuthBridge } from "./Applications/HyperCard/extensions/stackProviderAuth";
 import { Account } from "./Applications/Account/Account";
+import { Alerts } from "./Applications/Alerts/Alerts";
+import { AlertsManager } from "./Applications/Alerts/AlertsManager";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";
 import { FlightTracker } from "./Applications/FlightTracker/FlightTracker";
@@ -12,6 +16,7 @@ import { MarketWatch } from "./Applications/MarketWatch/MarketWatch";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
+import { PlaylistEditor } from "./Applications/PlaylistEditor/PlaylistEditor";
 import { Readme } from "./Applications/README/README";
 import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
 import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
@@ -22,10 +27,15 @@ import { Weather } from "./Applications/Weather/Weather";
 export default function Desktop() {
 	return (
 		<ClassicyDesktop>
+			<Alerts />
+			<AlertsManager />
+			<HyperCardClockBridge />
+			<HyperCardStackAuthBridge />
 			<Browser />
 			<TimeMachine />
 			<Feedback />
 			<Account />
+			<PlaylistEditor />
 			<FlightTracker />
 			<MarketWatch />
 			<News />

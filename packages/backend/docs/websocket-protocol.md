@@ -41,7 +41,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `seek`        | `time`            | Move the virtual clock to a new instant.      |
 | `heartbeat`   | `time`            | Report client's current virtual time.         |
 | `filter`      | `formats[]`       | Whitelist media formats.                      |
-| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`weather`). |
+| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`weather`/`alerts`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
@@ -76,6 +76,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `flights_history` | `id`, `time`, `flights[]`, `done` | Chunked reply to a `flights_history` request (~10 minute-buckets per frame). The final frame carries `done: true` (and may be empty). `id` echoes the request. |
 | `weather`         | `time`, `weather[]`, `weather_forecasts[]` | Weather snapshot (latest observation per station ≤ `t`, no age limit) on subscribe/init/seek, plus a forward **window** (default 600 s) per refill while subscribed — windowed observations plus any forecast products newly issued in the window. One frame carries both lists; suppressed when both are empty. |
 | `weather_forecast` | `id`, `time`, `weather_forecasts[]` | Reply to `weather_forecast`: the forecast product covering the requested zone at the clock, or an explicit empty `weather_forecasts` when none exists. `id` echoes the request. |
+| `alerts`          | `time`, `alerts[]`            | Forward **window** (default 600 s) of alerts per refill while subscribed. **No subscribe/init/seek snapshot** — see [`alerts` field reference](#server-initiated-alerts) below for why. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`, `sources.usenet`). Not resent on `seek`. |
@@ -263,8 +264,8 @@ in bulk on the wire, the **client reveal-gate** holds each page until its `start
 still render paced by the virtual clock rather than all at once. This pacing invariant is enforced
 client-side; consumer apps never receive a not-yet-due page.
 
-Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"` and `"weather"`; any other
-value yields `{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
+Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"`, `"weather"` and `"alerts"`;
+any other value yields `{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
 Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
 
 The `mp3` channel (Radio app) behaves the same but carries `MediaItem`s on `mp3`-typed frames
@@ -307,6 +308,16 @@ and forecasts are sparse enough that a Redis cache isn't worth building, so `Ses
 is a second exception under it). See [`weather` field reference](#server-initiated--snapshot-weather)
 below for the frame shape, and [radar and almanac are not on the wire](#radar-and-almanac-are-not-on-the-wire)
 for how the rest of the Weather app's data (map imagery, per-station normals) is fetched instead.
+
+The `alerts` channel carries `AlertItem`s — the full `MediaItem` shape plus a `severity` field — on
+`alerts`-typed frames (its own `alerts` field, not a reuse of `items`). It is unique among the
+subscription channels in having **no subscribe/init/seek snapshot**: subscribing or seeking never
+backfills anything, only the forward tick delivers alerts. This is deliberate, not an oversight —
+an alert is meant to fire exactly once, at the instant the virtual clock crosses its `start_date`
+(fire-on-cross); a snapshot would surface alerts whose moment has already passed, which is fine for
+news's headline lookback but wrong for something meant to interrupt. Forward refills use the same
+600 s window as pager/news/usenet. See [`alerts` field reference](#server-initiated-alerts) below
+for the frame shape.
 
 ### `usenet_filter` and the `usenet` channel
 
@@ -620,6 +631,43 @@ static-asset path every other media type in this repo uses (see the top-level CL
 assets live outside this repo"). Almanac data follows the same pattern (one static JSON per station).
 See `plans/weather-app-design.md` for the full pipeline/frontend design and
 `packages/tools/weather-recon/README.md` for the shipped/pending pipeline phases.
+
+### Server-initiated `alerts`
+
+```json
+{
+  "type": "alerts",
+  "time": "2001-09-11T08:46:00Z",
+  "alerts": [
+    {
+      "id": 4001,
+      "title": "Building evacuation ordered",
+      "start_date": "2001-09-11T08:46:00Z",
+      "url": "",
+      "format": "modal",
+      "approved": 1,
+      "mute": 0,
+      "volume": 1,
+      "jump": 0,
+      "trim": 0,
+      "content": "Evacuate immediately via the nearest stairwell.",
+      "severity": "stop"
+    }
+  ]
+}
+```
+
+`AlertItem` (mirrors `internal/model/item.go`) embeds the full `MediaItem` shape — see the
+[`media_items` column reference](./data-model.md#media_items) for `title`/`content`/`image`/etc. —
+plus one alert-only field:
+
+| Field      | Type    | Notes                                                                 |
+| ---------- | ------- | ---------------------------------------------------------------------- |
+| `severity` | string? | `note` \| `caution` \| `stop` — selects the client's alert icon/treatment. Omitted when empty (rows predating the column). |
+
+There is deliberately **no snapshot** frame for this channel (see [the `alerts` channel](#subscribe)
+above) — every `alerts` frame is a forward window, sent once per **window refill** and only when the
+window contains at least one alert; empty windows produce no frame, same as `pager`/`flights`.
 
 ### `pause`
 

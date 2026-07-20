@@ -616,7 +616,8 @@ func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, log
 func knownChannel(ch string) bool {
 	return ch == session.ChannelPager || ch == session.ChannelMp3 ||
 		ch == session.ChannelNews || ch == session.ChannelUsenet ||
-		ch == session.ChannelFlights || ch == session.ChannelWeather
+		ch == session.ChannelFlights || ch == session.ChannelWeather ||
+		ch == session.ChannelAlerts
 }
 
 // sendChannelSnapshot delivers the subscribe-time snapshot for a single channel.

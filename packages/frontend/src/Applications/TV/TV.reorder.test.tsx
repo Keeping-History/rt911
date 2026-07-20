@@ -1,33 +1,47 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 
-// Seeded TV.app data handed to useAppManager; tests may override, reset in afterEach.
+// Captures every dispatched action so we can assert what a gesture did (and,
+// just as importantly, what it did NOT do).
+const dispatched = vi.hoisted(() => [] as Record<string, unknown>[]);
+// Stable identity, matching the real hook (classicy returns a module-level
+// `dispatch` constant). A fresh closure per render would re-fire TV.tsx's
+// effects that list the dispatcher in their deps, polluting `dispatched`.
+const dispatch = vi.hoisted(
+	() => (a: Record<string, unknown>) => {
+		dispatched.push(a);
+	},
+);
 const mockAppData = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
-// Every action sent through useAppManagerDispatch, for asserting on persists.
-const dispatched = vi.hoisted(() => ({ actions: [] as Record<string, unknown>[] }));
+const mockItems = vi.hoisted(() => ({ value: null as unknown[] | null }));
 
-const makeItem = (id: number, source: string) =>
-	({
-		id,
-		url: `https://files.example.org/${source.toLowerCase()}/index.m3u8`,
-		source,
-		start_date: "2001-09-11T12:00:00",
-		jump: 0,
-		subtitles: "",
-	}) as unknown as MediaItem;
+const FAKE_ITEM = {
+	id: 7,
+	url: "https://files.example.org/wabc/index.m3u8",
+	source: "WABC",
+	start_date: "2001-09-11T12:00:00",
+	jump: 0,
+} as unknown as MediaItem;
 
-const ITEMS = [makeItem(1, "WABC"), makeItem(2, "WCBS"), makeItem(3, "WNBC")];
+const FAKE_ITEM_2 = {
+	id: 8,
+	url: "https://files.example.org/wnbc/index.m3u8",
+	source: "WNBC",
+	start_date: "2001-09-11T12:00:00",
+	jump: 0,
+} as unknown as MediaItem;
 
 vi.mock("classicy", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("classicy")>();
-	// Built per call so a test's mockAppData override is visible to the selector.
 	const fakeState = () => ({
 		System: {
 			Manager: {
 				Applications: {
-					apps: { "TV.app": { data: mockAppData.value, open: true, windows: [] } },
+					apps: {
+						"TV.app": { data: mockAppData.value, open: true, windows: [] },
+					},
 				},
 			},
 		},
@@ -50,17 +64,18 @@ vi.mock("classicy", async (importOriginal) => {
 		ClassicySlider: () => <input type="range" readOnly />,
 		QuickTimeVideoEmbed: () => <div data-testid="qt-embed" />,
 		useAppManager: (selector: (s: unknown) => unknown) => selector(fakeState()),
-		useAppManagerDispatch: () => (action: Record<string, unknown>) => {
-			dispatched.actions.push(action);
-		},
-		useClassicyDateTime: () => ({ dateTime: "2001-09-11T12:40:00.000Z", paused: false }),
+		useAppManagerDispatch: () => dispatch,
+		useClassicyDateTime: () => ({
+			dateTime: "2001-09-11T12:40:00.000Z",
+			paused: false,
+		}),
 	};
 });
 
 vi.mock("../../Providers/MediaStream/useMediaStream", () => ({
 	useMediaStream: () => ({
-		items: ITEMS,
-		sources: { video: ["WABC", "WCBS", "WNBC"], audio: [], pager: [], usenet: [] },
+		items: mockItems.value ?? [FAKE_ITEM],
+		sources: { video: ["WABC", "WNBC"], audio: [], pager: [], usenet: [] },
 	}),
 }));
 
@@ -74,123 +89,84 @@ import { TV } from "./TV";
 afterEach(() => {
 	cleanup();
 	mockAppData.value = {};
-	dispatched.actions = [];
+	mockItems.value = null;
+	dispatched.length = 0;
 });
 
-/** The strip's channel labels, in DOM order. */
-const stripOrder = () =>
-	screen
-		.getAllByRole("button", { name: /^(WABC|WCBS|WNBC)$/ })
-		.map((b) => b.textContent);
-
-describe("thumbnail strip ordering", () => {
-	it("renders wire order when no channelOrder is saved", () => {
-		render(<TV />);
-		expect(stripOrder()).toEqual(["WABC", "WCBS", "WNBC"]);
+/** jsdom has no layout: give each tile a box so drop-target resolution works. */
+function stubTileBoxes() {
+	document.querySelectorAll<HTMLElement>("[data-source]").forEach((tile, i) => {
+		tile.getBoundingClientRect = () =>
+			({ left: i * 100, right: (i + 1) * 100, top: 0, bottom: 90 }) as DOMRect;
 	});
-
-	it("renders the persisted channelOrder", () => {
-		mockAppData.value = { channelOrder: ["WNBC", "WABC", "WCBS"] };
-		render(<TV />);
-		expect(stripOrder()).toEqual(["WNBC", "WABC", "WCBS"]);
-	});
-
-	it("appends channels missing from the persisted order", () => {
-		mockAppData.value = { channelOrder: ["WNBC"] };
-		render(<TV />);
-		expect(stripOrder()).toEqual(["WNBC", "WABC", "WCBS"]);
-	});
-});
-
-/** Give the strip and its buttons deterministic layout in jsdom:
- *  three 100×75 thumbnails at x = 0 / 100 / 200 inside a 300px strip. */
-function mockStripLayout() {
-	const strip = document.querySelector(
-		"[class*='tvThumbnailStrip']",
-	) as HTMLElement;
-	strip.getBoundingClientRect = () =>
-		({
-			left: 0, top: 0, width: 300, height: 100, right: 300, bottom: 100,
-			x: 0, y: 0, toJSON: () => ({}),
-		}) as DOMRect;
-	const buttons = Array.from(strip.querySelectorAll("button"));
-	buttons.forEach((b, i) => {
-		b.getBoundingClientRect = () =>
-			({
-				left: i * 100, top: 0, width: 100, height: 75,
-				right: i * 100 + 100, bottom: 75, x: i * 100, y: 0, toJSON: () => ({}),
-			}) as DOMRect;
-	});
-	return buttons;
 }
 
-const reorderActions = () =>
-	dispatched.actions.filter((a) => a.type === "ClassicyAppTVSetChannelOrder");
+const tile = (source: string) =>
+	document.querySelector(`[data-source="${source}"]`) as HTMLElement;
 
-describe("thumbnail drag-to-reorder", () => {
-	it("dispatches the new channel order on drop", () => {
+describe("TV thumbnail reorder", () => {
+	it("a plain click still focuses the channel", () => {
+		mockItems.value = [FAKE_ITEM, FAKE_ITEM_2];
 		render(<TV />);
-		const [first] = mockStripLayout();
-		// Drag WABC (index 0) to the far right (past WNBC's midpoint at 250).
-		fireEvent.pointerDown(first, { clientX: 50, clientY: 30, pointerId: 1, button: 0 });
-		fireEvent.pointerMove(first, { clientX: 270, clientY: 30, pointerId: 1 });
-		fireEvent.pointerUp(first, { clientX: 270, clientY: 30, pointerId: 1 });
-		expect(dispatched.actions).toContainEqual({
-			type: "ClassicyAppTVSetChannelOrder",
-			channelOrder: ["WCBS", "WNBC", "WABC"],
-		});
+		stubTileBoxes();
+		dispatched.length = 0;
+		const target = tile("WNBC");
+		fireEvent.pointerDown(target, { clientX: 150, clientY: 10, pointerId: 1 });
+		fireEvent.pointerUp(target, { clientX: 150, clientY: 10, pointerId: 1 });
+		fireEvent.click(target);
+		expect(
+			dispatched.some(
+				(a) => a.type === "ClassicyAppTVSetActivePlayer" && a.activePlayer === 8,
+			),
+		).toBe(true);
 	});
 
-	it("shows the outline and insertion bar only while dragging", () => {
-		const { container } = render(<TV />);
-		const [first] = mockStripLayout();
-		expect(container.querySelector("[class*='tvDragOutline']")).toBeNull();
-		fireEvent.pointerDown(first, { clientX: 50, clientY: 30, pointerId: 1, button: 0 });
-		// Below the movement threshold: still nothing.
-		fireEvent.pointerMove(first, { clientX: 52, clientY: 30, pointerId: 1 });
-		expect(container.querySelector("[class*='tvDragOutline']")).toBeNull();
-		fireEvent.pointerMove(first, { clientX: 150, clientY: 30, pointerId: 1 });
-		expect(container.querySelector("[class*='tvDragOutline']")).not.toBeNull();
-		expect(container.querySelector("[class*='tvDragInsertionBar']")).not.toBeNull();
-		fireEvent.pointerUp(first, { clientX: 150, clientY: 30, pointerId: 1 });
-		expect(container.querySelector("[class*='tvDragOutline']")).toBeNull();
-	});
-
-	it("does not dispatch for a no-op drop or a sub-threshold press", () => {
+	it("a drag reorders and does not focus", () => {
+		mockItems.value = [FAKE_ITEM, FAKE_ITEM_2];
 		render(<TV />);
-		const [first] = mockStripLayout();
-		// Sub-threshold press → click semantics, no reorder dispatch.
-		fireEvent.pointerDown(first, { clientX: 50, clientY: 30, pointerId: 1, button: 0 });
-		fireEvent.pointerUp(first, { clientX: 51, clientY: 30, pointerId: 1 });
-		// Real drag dropped back into its own slot.
-		fireEvent.pointerDown(first, { clientX: 50, clientY: 30, pointerId: 2, button: 0 });
-		fireEvent.pointerMove(first, { clientX: 70, clientY: 30, pointerId: 2 });
-		fireEvent.pointerUp(first, { clientX: 40, clientY: 30, pointerId: 2 });
-		expect(reorderActions()).toEqual([]);
+		stubTileBoxes();
+		dispatched.length = 0;
+		const target = tile("WABC");
+		fireEvent.pointerDown(target, { clientX: 10, clientY: 10, pointerId: 1 });
+		fireEvent.pointerMove(target, { clientX: 150, clientY: 10, pointerId: 1 });
+		fireEvent.pointerUp(target, { clientX: 150, clientY: 10, pointerId: 1 });
+		fireEvent.click(target);
+		expect(
+			dispatched.some(
+				(a) =>
+					a.type === "ClassicyAppTVSetChannelOrder" &&
+					JSON.stringify(a.channelOrder) === JSON.stringify(["WNBC", "WABC"]),
+			),
+		).toBe(true);
+		expect(dispatched.some((a) => a.type === "ClassicyAppTVSetActivePlayer")).toBe(false);
 	});
 
-	it("cancels the drag on Escape without dispatching", () => {
-		const { container } = render(<TV />);
-		const [first] = mockStripLayout();
-		fireEvent.pointerDown(first, { clientX: 50, clientY: 30, pointerId: 1, button: 0 });
-		fireEvent.pointerMove(first, { clientX: 250, clientY: 30, pointerId: 1 });
-		expect(container.querySelector("[class*='tvDragOutline']")).not.toBeNull();
-		fireEvent.keyDown(window, { key: "Escape" });
-		expect(container.querySelector("[class*='tvDragOutline']")).toBeNull();
-		fireEvent.pointerUp(first, { clientX: 250, clientY: 30, pointerId: 1 });
-		expect(reorderActions()).toEqual([]);
-	});
-
-	it("still tunes the channel on a plain click", () => {
+	it("a plain click in multiview mode still toggles selection", () => {
+		mockAppData.value = { multiSelectMode: true };
+		mockItems.value = [FAKE_ITEM, FAKE_ITEM_2];
 		render(<TV />);
-		const buttons = mockStripLayout();
-		// Mount effects already dispatched an initial active-player persist;
-		// only the click's dispatch matters here.
-		dispatched.actions = [];
-		fireEvent.click(buttons[1]); // WCBS, id 2
-		expect(dispatched.actions).toContainEqual({
-			type: "ClassicyAppTVSetActivePlayer",
-			activePlayer: 2,
-		});
+		stubTileBoxes();
+		dispatched.length = 0;
+		const target = tile("WNBC");
+		fireEvent.pointerDown(target, { clientX: 150, clientY: 10, pointerId: 1 });
+		fireEvent.pointerUp(target, { clientX: 150, clientY: 10, pointerId: 1 });
+		fireEvent.click(target);
+		expect(
+			dispatched.some(
+				(a) =>
+					a.type === "ClassicyAppTVSetGridState" &&
+					(a.selectedPlayers as number[] | undefined)?.includes(8),
+			),
+		).toBe(true);
+	});
+
+	it("renders channels in the saved order", () => {
+		mockAppData.value = { channelOrder: ["WNBC", "WABC"] };
+		mockItems.value = [FAKE_ITEM, FAKE_ITEM_2];
+		render(<TV />);
+		const sources = Array.from(document.querySelectorAll("[data-source]")).map((el) =>
+			el.getAttribute("data-source"),
+		);
+		expect(sources).toEqual(["WNBC", "WABC"]);
 	});
 });

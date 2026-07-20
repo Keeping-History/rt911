@@ -54,6 +54,35 @@ export const DIRECTUS_COLLECTIONS = {
 			"subtitles",
 		],
 	},
+	/** History-Commons news entries (media-shaped; `content` holds HTML body). */
+	news: {
+		collection: "news_items",
+		fields: [
+			"id",
+			"title",
+			"full_title",
+			"content",
+			"start_date",
+			"image",
+			"image_caption",
+			"url",
+			"format",
+		],
+	},
+	/** Instant pager messages (bespoke shape — a message with routing metadata). */
+	pager: {
+		collection: "pager_items",
+		fields: [
+			"id",
+			"start_date",
+			"provider",
+			"recipient_id",
+			"id_type",
+			"channel",
+			"mode",
+			"message",
+		],
+	},
 } as const;
 
 export type DirectusCollectionKey = keyof typeof DIRECTUS_COLLECTIONS;
@@ -133,4 +162,50 @@ export function fetchDirectusVideoItem(
 ): Promise<DirectusVideoItem> {
 	const { collection, fields } = DIRECTUS_COLLECTIONS.video;
 	return fetchDirectusItem<DirectusVideoItem>(collection, id, fields, fetchFn, signal);
+}
+
+/** One row of the `news_items` collection — the subset a news embed reads. */
+export interface DirectusNewsItem {
+	id: number;
+	title: string;
+	full_title?: string | null;
+	/** HTML article body. */
+	content?: string | null;
+	start_date?: string | null;
+	image?: string | null;
+	image_caption?: string | null;
+	url?: string | null;
+	format?: string | null;
+}
+
+/** Fetch one `news_items` row by id, projecting the news-embed field set. */
+export function fetchDirectusNewsItem(
+	id: string | number,
+	fetchFn: typeof fetch = fetch,
+	signal?: AbortSignal,
+): Promise<DirectusNewsItem> {
+	const { collection, fields } = DIRECTUS_COLLECTIONS.news;
+	return fetchDirectusItem<DirectusNewsItem>(collection, id, fields, fetchFn, signal);
+}
+
+/** One row of the `pager_items` collection — an instant pager message. */
+export interface DirectusPagerItem {
+	id: number;
+	start_date?: string | null;
+	provider?: string | null;
+	recipient_id?: string | null;
+	id_type?: string | null;
+	channel?: string | null;
+	mode?: string | null;
+	message: string;
+}
+
+/** Fetch one `pager_items` row by id, projecting the pager-embed field set. */
+export function fetchDirectusPagerItem(
+	id: string | number,
+	fetchFn: typeof fetch = fetch,
+	signal?: AbortSignal,
+): Promise<DirectusPagerItem> {
+	const { collection, fields } = DIRECTUS_COLLECTIONS.pager;
+	return fetchDirectusItem<DirectusPagerItem>(collection, id, fields, fetchFn, signal);
 }

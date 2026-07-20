@@ -802,6 +802,52 @@ func TestWeatherRefillRequiresSubscription(t *testing.T) {
 	}
 }
 
+func TestSubscribeAlertsAck(t *testing.T) {
+	s := newTestSession(t)
+
+	if s.Subscribed(ChannelAlerts) {
+		t.Fatal("new session should not be subscribed to alerts")
+	}
+
+	s.Subscribe(ChannelAlerts)
+	if !s.Subscribed(ChannelAlerts) {
+		t.Fatal("expected alerts subscription after Subscribe")
+	}
+	if ack := recvType(t, s); ack.Type != "subscribe_ack" || ack.Channel != ChannelAlerts {
+		t.Fatalf("expected subscribe_ack for alerts, got %+v", ack)
+	}
+}
+
+func TestSendAlertsFrameType(t *testing.T) {
+	s := newTestSession(t)
+	now := time.Date(2001, 9, 11, 12, 40, 0, 0, time.UTC)
+	severity := "caution"
+
+	s.SendAlerts(now, []model.AlertItem{{MediaItem: model.MediaItem{ID: 7, Title: "Test"}, Severity: &severity}})
+
+	m := recvType(t, s)
+	if m.Type != "alerts" {
+		t.Fatalf("expected alerts frame, got %q", m.Type)
+	}
+	if len(m.Alerts) != 1 || m.Alerts[0].Title != "Test" || m.Alerts[0].Severity == nil || *m.Alerts[0].Severity != "caution" {
+		t.Fatalf("expected one alert item with severity, got %+v", m.Alerts)
+	}
+	if len(m.Items) != 0 {
+		t.Fatalf("alerts frame must not carry items payload, got %+v", m.Items)
+	}
+}
+
+func TestSendAlertsSuppressesEmptyBatch(t *testing.T) {
+	s := newTestSession(t)
+	s.SendAlerts(time.Date(2001, 9, 11, 3, 0, 0, 0, time.UTC), nil)
+
+	select {
+	case data := <-s.send:
+		t.Fatalf("expected no frame for empty alerts batch, got %d bytes", len(data))
+	default:
+	}
+}
+
 func TestSendWeatherForecastNilStillSends(t *testing.T) {
 	s := newTestSession(t)
 	at := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)

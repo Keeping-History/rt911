@@ -1,0 +1,94 @@
+// Account app — declutter pass. The window body is filled with the Platinum
+// "system-03" surface (the same fill the Appearance Manager control panel
+// uses) and the profile fields are grouped under Classicy tabs; the profile
+// image is a bevel button that opens the avatar picker.
+
+.accountContent {
+	background-color: var(--color-system-03);
+	width: 100%;
+	box-sizing: border-box;
+	padding: var(--window-padding-size);
+	min-width: 360px;
+}
+
+// Identity header: profile-image bevel button beside the name + sign-out.
+.identity {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: var(--window-padding-size);
+	margin-bottom: var(--window-padding-size);
+}
+
+.identityInfo {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: calc(var(--window-padding-size) / 2);
+}
+
+.identityName {
+	font-weight: bold;
+	display: flex;
+	flex-direction: column;
+}
+
+.playlists {
+	color: var(--color-system-06);
+}
+
+// The bevel button sizes to this image; keep it a tidy square avatar.
+.avatarImage {
+	display: block;
+	width: 74px;
+	height: 74px;
+	object-fit: cover;
+}
+
+// Shown inside the bevel button when the user has no avatar yet.
+.avatarPlaceholder {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 74px;
+	height: 74px;
+	text-align: center;
+}
+
+// The Classicy file input carries its own "Choose File…" chrome; the bevel
+// button is the trigger here, so the input (its visually-hidden native
+// element still reachable by id) is tucked away.
+.hiddenFileInput {
+	display: none;
+}
+
+.banner {
+	margin-bottom: calc(var(--window-padding-size) / 2);
+}
+
+.error {
+	color: #c00;
+	margin-bottom: calc(var(--window-padding-size) / 2);
+}
+
+// One tab panel's worth of stacked fields.
+.tabPanel {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--window-padding-size) / 2);
+	align-items: flex-start;
+	padding-top: calc(var(--window-padding-size) / 2);
+}
+
+// The toggle-button multi-selects (grade levels, subjects) wrap into rows.
+.toggleGroup {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: calc(var(--window-padding-size) / 4);
+}
+
+.fieldNote {
+	color: var(--color-system-06);
+}
+

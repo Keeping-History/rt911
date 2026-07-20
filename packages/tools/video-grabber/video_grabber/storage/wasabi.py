@@ -121,3 +121,51 @@ def upload_hls_package(job, encoded_dir: Path, cfg: Config) -> str:
     )
     upload_tree(encoded_dir, prefix, cfg)
     return f"{prefix}/master.m3u8"
+
+
+def head_object(key: str, cfg: Config, *, s3=None) -> dict | None:
+    """HEAD an object; None if it doesn't exist."""
+    s3 = s3 or _make_s3_client(cfg)
+    try:
+        return s3.head_object(Bucket=cfg.wasabi_bucket, Key=key)
+    except s3.exceptions.ClientError as exc:
+        if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
+            return None
+        raise
+
+
+def copy_object_if_absent(src_key: str, dest_key: str, cfg: Config, *, s3=None) -> bool:
+    """Server-side copy src→dest unless dest already exists (first write wins).
+
+    Used to archive audio/ originals: on a retried normalize job the audio/
+    object may already be normalized, so an existing archive must NEVER be
+    overwritten — it is the only true original. Returns True iff copied."""
+    s3 = s3 or _make_s3_client(cfg)
+    if head_object(dest_key, cfg, s3=s3) is not None:
+        return False
+    s3.copy_object(
+        Bucket=cfg.wasabi_bucket,
+        Key=dest_key,
+        CopySource={"Bucket": cfg.wasabi_bucket, "Key": src_key},
+        MetadataDirective="COPY",
+    )
+    return True
+
+
+def download_file(key: str, dest: Path, cfg: Config, *, s3=None) -> Path:
+    s3 = s3 or _make_s3_client(cfg)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    s3.download_file(cfg.wasabi_bucket, key, str(dest))
+    return dest
+
+
+def upload_mp3(path: Path, key: str, cfg: Config, *, cache_control: str, s3=None) -> None:
+    """Upload one MP3 with explicit audio/mpeg + caller-preserved Cache-Control."""
+    s3 = s3 or _make_s3_client(cfg)
+    s3.upload_file(
+        str(path),
+        cfg.wasabi_bucket,
+        key,
+        Config=_TRANSFER_CONFIG,
+        ExtraArgs={"ContentType": "audio/mpeg", "CacheControl": cache_control},
+    )

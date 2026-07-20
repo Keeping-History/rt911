@@ -28,6 +28,21 @@ result into its authored `rect`.
   Exports the reusable `DirectusVideo` body.
 - `extensions/DirectusMultiviewPart.tsx` — the `directusMultiview` part: a grid
   ("video wall") of `DirectusVideo` tiles with solo/mute/all audio modes.
+- `extensions/DirectusNewsPart.tsx` — the `directusNews` part: one article from
+  `news_items` (headline, dateline, image, HTML body).
+- `extensions/DirectusPagerPart.tsx` — the `directusPager` part: one instant
+  message from `pager_items`, styled as a pager readout.
+- `extensions/useDirectusItem.ts` — shared id-resolution + fetch/load-state hook
+  used by the news/pager parts.
+- `extensions/DirectusWeatherPart.tsx` — the `directusWeatherStation` part: one
+  station's live conditions/forecast/almanac, reusing the Weather app's
+  `WeatherStationPanel` (extracted from `Weather.tsx`).
+- `extensions/DirectusFlightMapPart.tsx` — the `directusFlightMap` part: a live
+  plane map reusing the Flight Tracker's `FlightMap` (maplibre/WebGL).
+- `extensions/HyperCardClockBridge.tsx` + `extensions/dateRange.ts` — the
+  `setDateTime` *action*: a command queues an effect, the mounted bridge applies
+  it through the sanctioned `setDateTimeFromUtc` seam, clamped to the canonical
+  date range (`dateRange.ts`).
 - `extensions/videoOptions.ts` / `extensions/videoSegment.ts` — the video option
   shape, and the pure start/end bound resolver (offset seconds, `M:SS`, or a
   date-bearing wall-clock mapped via the channel `start_date`).
@@ -99,6 +114,49 @@ the part's own `script` (e.g. `go next`), so clips can chain.
 ```
 
 Each tile takes the full `directusVideo` option set.
+
+## Authoring news / pager embeds
+
+```jsonc
+{ "id": "story", "type": "directusNews",  "rect": [12, 12, 396, 232], "options": { "itemId": 42 } }
+{ "id": "page",  "type": "directusPager", "rect": [12, 40, 396, 150], "options": { "itemId": 128 } }
+```
+
+Both take an `itemId` (a `news_items` / `pager_items` row, resolved through the
+stack expression engine). News accepts `showImage`/`showDate`; pager accepts
+`showMeta`.
+
+## Authoring weather / flight embeds
+
+```jsonc
+{ "id": "wx",  "type": "directusWeatherStation", "rect": [12, 40, 396, 210], "options": { "station": "KJFK" } }
+{ "id": "map", "type": "directusFlightMap",      "rect": [12, 44, 396, 206], "options": { "notablesOnly": true, "flight": "AA11", "mapStyle": "radar" } }
+```
+
+Both read the shared virtual clock and the streamed flight/weather channels via
+`MediaStreamContext` (ref-counted `subscribe*`), so they stay in lockstep with
+the desktop. The weather station reuses `Weather/WeatherStationPanel`; the flight
+map reuses `FlightTracker/FlightMap` and **requires WebGL + a sized card**.
+`station`/`flight` resolve through the stack expression engine (variable-driven
+selection). Flight options: `notablesOnly`, `flight` (focus a callsign),
+`mapStyle`/`darkMap`/`radarSweep`/`trailMultiplier`, pin-color overrides.
+
+## The `setDateTime` action
+
+Seeks the desktop's virtual clock — every app follows.
+
+```jsonc
+{ "do": "setDateTime", "to": "2001-09-11T12:46:00" }   // a UTC datetime literal
+{ "do": "setDateTime", "toVar": "moment" }              // read it from a variable
+```
+
+The requested instant is clamped into the canonical range (`dateRange.ts`,
+`2001-09-09`…`2001-09-12` today) and applied through the sanctioned
+`setDateTimeFromUtc` seam; a stack cannot fight the streamer's forced clock
+(`dateTimeLocked`). The action is a *command* that queues an effect; the effect
+is applied by `HyperCardClockBridge`, mounted once in `Desktop.tsx`. Because the
+`do` name isn't in classicy's typed `HCAction` union (plugin commands are
+untyped-JSON by design), a typed stack literal casts it — see `newsPagerStack.ts`.
 
 ## Adding another collection (images, PDFs, …)
 

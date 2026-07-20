@@ -53,5 +53,9 @@ test("email sign-in reaches the signed-in view", async ({ page }) => {
 	await expect(signInButton).toBeVisible();
 	await signInButton.click();
 
-	await expect(page.getByText("Signed in as Terry")).toBeVisible();
+	// The identity line renders as two ClassicyControlLabels ("Signed in as" +
+	// the name) since commit ed5a5743, not one text node — mirror the split-label
+	// assertions applied to Account.test.tsx in commit 19862e4.
+	await expect(page.getByText("Signed in as")).toBeVisible();
+	await expect(page.getByText("Terry")).toBeVisible();
 });

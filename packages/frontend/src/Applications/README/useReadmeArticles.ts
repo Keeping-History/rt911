@@ -10,6 +10,25 @@ export interface ReadmeArticle {
 	date_created: string;
 	date_updated: string | null;
 	body:         string;
+	// Manual ordering (smallest first); null = unsorted, falls to the date tail.
+	sort:         number | null;
+	// Featured articles are pinned above everything else and flagged with a star.
+	featured:     boolean;
+}
+
+// Display order: featured first (pinned), then the manual `sort` ascending
+// (unsorted articles last), then newest-first by date. Equal `sort` values fall
+// back to newest-first too. Pure + exported so it is unit-testable on its own.
+export function sortArticles(articles: ReadmeArticle[]): ReadmeArticle[] {
+	return [...articles].sort((a, b) => {
+		if (a.featured !== b.featured) return a.featured ? -1 : 1;
+		if (a.sort !== b.sort) {
+			if (a.sort == null) return 1;   // unsorted sinks below sorted
+			if (b.sort == null) return -1;
+			return a.sort - b.sort;         // smallest sort first
+		}
+		return new Date(b.date_created).getTime() - new Date(a.date_created).getTime();
+	});
 }
 
 export interface ReadmeArticlesState {
@@ -26,7 +45,7 @@ const DIRECTUS_URL =
 export const ARTICLES_URL =
 	`${DIRECTUS_URL}/items/readme_articles` +
 	"?filter[status][_eq]=published&sort=-date_created" +
-	"&fields=id,headline,author,date_created,date_updated,body&limit=-1";
+	"&fields=id,headline,author,date_created,date_updated,body,sort,featured&limit=-1";
 
 // One cheap aggregate row: (count, max date_updated) is a change signature —
 // count catches creates/deletes, max(date_updated) catches edits. Blind spot
@@ -73,7 +92,7 @@ export function useReadmeArticles(enabled: boolean): ReadmeArticlesState {
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const json = (await res.json()) as { data: ReadmeArticle[] };
 			loaded = true;
-			setState({ articles: json.data, loading: false, error: null });
+			setState({ articles: sortArticles(json.data), loading: false, error: null });
 		};
 
 		// Probe → (maybe) fetch, strictly sequential: api-beta mixes response

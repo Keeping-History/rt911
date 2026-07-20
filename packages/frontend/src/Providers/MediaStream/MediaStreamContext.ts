@@ -48,6 +48,15 @@ export interface MediaItem {
 	sort?: number;
 }
 
+/**
+ * A background alert, delivered on the opt-in "alerts" channel. Reuses the MediaItem
+ * shape (headline in title, HTML body in content, plus image/image_caption/start_date)
+ * and adds severity, which selects the ClassicyAlert icon.
+ */
+export interface AlertItem extends MediaItem {
+	severity?: "note" | "caution" | "stop";
+}
+
 /** HTML5 <track> needs WebVTT; the producer writes a .vtt next to every .srt. */
 export function vttUrl(srtUrl?: string): string | undefined {
 	if (!srtUrl) return undefined;
@@ -288,6 +297,12 @@ export interface MediaStreamContextValue {
 	requestWeatherForecast: (zone: string) => void;
 	/** True while the server is forcing the clock (Time Machine locked). */
 	clockForced: boolean;
+	/** alerts received while subscribed to the alerts channel. */
+	alertItems: AlertItem[];
+	/** Opt into alerts-channel delivery. Ref-counted by appId. */
+	subscribeAlerts: (appId: string) => void;
+	/** Drop an alerts-channel subscription. Unsubscribes server-side when the last app leaves. */
+	unsubscribeAlerts: (appId: string) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -330,4 +345,7 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	unsubscribeWeather: () => {},
 	requestWeatherForecast: () => {},
 	clockForced: false,
+	alertItems: [],
+	subscribeAlerts: () => {},
+	unsubscribeAlerts: () => {},
 });

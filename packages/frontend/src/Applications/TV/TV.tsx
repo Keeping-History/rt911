@@ -38,12 +38,12 @@ import {
 	tvSetMuted,
 	tvSetVolumeLimit,
 } from "./TVContext";
+import { moveChannel, orderChannels } from "./channelOrder";
+import { useThumbnailReorder } from "./useThumbnailReorder";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
 import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
 import type { HlsAbrApi } from "./abr";
-import { applyReorder, sortByChannelOrder } from "./channelOrder";
 import { calcSeekSeconds, resolveVirtualNowMs } from "./clockDrift";
-import { useThumbnailDrag } from "./useThumbnailDrag";
 import { resolveGridVolume } from "./volume";
 import { TVEPGPanel } from "./TVEPGPanel";
 
@@ -123,12 +123,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		[appState?.data?.disabledChannels],
 	);
 
-	// The user's custom thumbnail-strip order (source slugs), arranged by drag.
-	const channelOrder = useMemo(
-		() => (appState?.data?.channelOrder as string[] | undefined) ?? [],
-		[appState?.data?.channelOrder],
-	);
-
 	// Distinct channel slugs available for selection, sorted for a stable Settings
 	// list. Seeded from the server's complete `sources.video` list (every channel,
 	// regardless of virtual time) and unioned with anything already seen in-stream
@@ -157,23 +151,28 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	);
 	const { items } = useMediaStream(tvFilter);
 
-	// Strip display order: saved arrangement first, new channels appended.
+	// The user's drag-ordered channel slugs; empty until the first reorder.
+	// Keyed on source, not id — see channelOrder.ts.
+	const channelOrder = useMemo(
+		() => (appState?.data?.channelOrder as string[] | undefined) ?? [],
+		[appState?.data?.channelOrder],
+	);
+	// Strip order: the user's arrangement first, everything else in the order
+	// the stream (or, later, the server) supplies.
 	const orderedItems = useMemo(
-		() => sortByChannelOrder(items, channelOrder),
+		() => orderChannels(items, channelOrder),
 		[items, channelOrder],
 	);
-
-	// Classic Mac outline drag for rearranging the strip; commits the full
-	// displayed order (not a delta) so the persisted list is self-contained.
-	const stripRef = useRef<HTMLDivElement>(null);
-	const { drag, thumbHandlers, suppressNextClick } = useThumbnailDrag({
-		stripRef,
-		onCommit: (fromIndex, toIndex) => {
-			const sources = orderedItems.map((i) => i.source ?? "");
-			const next = applyReorder(sources, fromIndex, toIndex);
-			if (next !== sources) desktopEventDispatch(tvSetChannelOrder(next));
+	const handleReorder = useCallback(
+		(from: string, to: string) => {
+			const visible = orderedItems
+				.map((i) => i.source)
+				.filter((s): s is string => Boolean(s));
+			desktopEventDispatch(tvSetChannelOrder(moveChannel(channelOrder, visible, from, to)));
 		},
-	});
+		[orderedItems, channelOrder, desktopEventDispatch],
+	);
+	const reorder = useThumbnailReorder(handleReorder);
 
 	// --- Remote-control state, driven by ClassicyAppTV* events (see TVContext) ---
 	// Persistent settings, read straight from app data each render.
@@ -1065,8 +1064,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								</ClassicyButton>
 							</div>
 						</div>
-						<div className={styles.tvThumbnailStrip} ref={stripRef}>
-							{orderedItems.map((item, index) => {
+						<div className={styles.tvThumbnailStrip}>
+							{orderedItems.map((item) => {
 								// In multi-select mode no thumbnail is "active" (no absolute overlay)
 								const isActive = !multiSelectMode && item.id === activePlayer;
 								const isSelected = selectedPlayers.includes(item.id);
@@ -1074,20 +1073,22 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								return (
 									<button
 										key={item.id}
-										{...thumbHandlers(index)}
+										data-source={item.source}
 										className={[
 											styles.tvPlayer,
 											isActive || isSelected ? styles.tvPlayerSelected : "",
+											reorder.dragSource === item.source ? styles.tvPlayerDragging : "",
+											reorder.dropTarget === item.source &&
+											reorder.dragSource !== item.source
+												? styles.tvPlayerDropTarget
+												: "",
 										]
 											.filter(Boolean)
 											.join(" ")}
+										{...(item.source ? reorder.handlers(item.source) : {})}
 										onClick={() => {
-											// The click fired right after a completed drag's
-											// pointerup is not a tune request.
-											if (suppressNextClick.current) {
-												suppressNextClick.current = false;
-												return;
-											}
+											// A drag just ended — it must not focus or select.
+											if (reorder.consumeSuppressedClick()) return;
 											if (multiSelectMode) {
 												togglePlayerSelection(item.id);
 											} else {
@@ -1124,23 +1125,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 									</button>
 								);
 							})}
-							{drag?.active && (
-								<>
-									<div
-										className={styles.tvDragOutline}
-										style={{
-											left: drag.x,
-											top: drag.y,
-											width: drag.width,
-											height: drag.height,
-										}}
-									/>
-									<div
-										className={styles.tvDragInsertionBar}
-										style={{ left: drag.insertionX }}
-									/>
-								</>
-							)}
 						</div>
 					</div>
 				</div>
