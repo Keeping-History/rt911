@@ -216,8 +216,16 @@ def build_channel_subtitles_flow(channel_slug: str) -> None:
     cfg = Config()
     window_start = get_tv_channel_start_date(channel_slug, cfg)
     if window_start is None:
-        logger.warning("build-channel-subtitles: no tv_channels row for %s; skipping", channel_slug)
-        return
+        # Hard failure, not a skip. This lookup matches tv_channels on the
+        # content marker {"channel_stream": <slug>}; a stale marker (CCTV4 sat
+        # on "cctv3" long after everything else moved to "cctv4") silently
+        # produced a COMPLETED run that wrote nothing, hiding a fully
+        # transcribed channel with no subtitles. Fail loudly instead.
+        raise ValueError(
+            f"build-channel-subtitles: no tv_channels row matches "
+            f'content marker {{"channel_stream": "{channel_slug}"}} — '
+            "refusing to report success without writing subtitles"
+        )
 
     with get_db() as db:
         rows = db.execute(sa.text("""
@@ -229,7 +237,13 @@ def build_channel_subtitles_flow(channel_slug: str) -> None:
             ORDER BY p.air_date
         """), {"slug": channel_slug}).mappings().all()
         if not rows:
-            logger.info("build-channel-subtitles: %s has no done programs yet", channel_slug)
+            # Legitimate mid-rollout state (nothing transcribed yet), so not an
+            # error — but warn, so an unexpectedly empty channel is visible
+            # rather than buried at info level in a "successful" run.
+            logger.warning(
+                "build-channel-subtitles: %s has no done programs with an srt_key; "
+                "wrote nothing", channel_slug,
+            )
             return
 
     programs = [(r["air_date"], wasabi.read_text(r["srt_key"], cfg)) for r in rows]

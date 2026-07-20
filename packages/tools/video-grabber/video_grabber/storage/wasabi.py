@@ -10,9 +10,33 @@ Key behaviors:
 import boto3
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config as BotoCoreConfig
+from botocore.exceptions import (
+    ConnectionError as BotoConnectionError,
+    ReadTimeoutError,
+    ResponseStreamingError,
+)
 from pathlib import Path
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
 from video_grabber.config import Config
+
+# Wasabi resets connections under concurrent read load: the body read then dies
+# with ResponseStreamingError("IncompleteRead(0 bytes read, N more expected)"),
+# i.e. the connection breaks before any payload arrives. boto3's own retry layer
+# does NOT cover this — the failure happens after the response starts streaming,
+# past the point botocore will retry. Callers that read many objects in a loop
+# (build-channel-subtitles reads one SRT per program, ~500 for a big channel)
+# otherwise lose the whole run to a single reset.
+_TRANSIENT_S3_ERRORS = (
+    ResponseStreamingError,
+    BotoConnectionError,
+    ReadTimeoutError,
+)
 
 _CONTENT_TYPES: dict[str, tuple[str, str]] = {
     ".m3u8": ("application/vnd.apple.mpegurl", "max-age=5"),
@@ -89,8 +113,18 @@ def upload_text(content: str, key: str, cfg: Config, *, s3=None) -> None:
     )
 
 
+# Full-jitter backoff so parallel channel builds don't retry in lockstep and
+# re-create the same load spike that broke the connection. When the caller
+# doesn't supply a client, each attempt builds a fresh one, so a retry never
+# reuses the pool that just failed.
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_random_exponential(multiplier=1, max=20),
+    retry=retry_if_exception_type(_TRANSIENT_S3_ERRORS),
+    reraise=True,
+)
 def read_text(key: str, cfg: Config, *, s3=None) -> str:
-    """Read an object's body as a UTF-8 string."""
+    """Read an object's body as a UTF-8 string. Retries transient S3 resets."""
     s3 = s3 or _make_s3_client(cfg)
     obj = s3.get_object(Bucket=cfg.wasabi_bucket, Key=key)
     return obj["Body"].read().decode("utf-8")
