@@ -27,7 +27,10 @@ globalThis.ResizeObserver =
 	globalThis.ResizeObserver ??
 	(ResizeObserverStub as unknown as typeof ResizeObserver);
 
-// jsdom requires --localstorage-file; polyfill in-memory localStorage for tests.
+// jsdom's default url (http://localhost:3000) requires --localstorage-file
+// to provide localStorage. Tests accessing window.localStorage throw
+// SecurityError: "Cannot initialize local storage without a `--localstorage-file` path".
+// Polyfill in-memory localStorage to unblock test suites that need it.
 try {
 	if (!window.localStorage || typeof window.localStorage.getItem !== "function") {
 		throw new Error("localStorage not available");

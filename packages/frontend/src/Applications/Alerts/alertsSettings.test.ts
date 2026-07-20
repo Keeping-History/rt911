@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	getAlertsEnabled,
@@ -10,6 +10,7 @@ import {
 const KEY = "rt911AlertsEnabled";
 
 afterEach(() => {
+	cleanup();
 	vi.restoreAllMocks();
 	window.localStorage.clear();
 	resetAlertsSettingsForTests();
