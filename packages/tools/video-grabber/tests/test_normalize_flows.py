@@ -210,3 +210,89 @@ def test_scan_inserts_only_mp3_keys(monkeypatch):
     flows.scan_normalize_flow.fn()
     keys = [p["sk"] for p in executed if p]
     assert keys == ["audio/a.mp3", "audio/b.MP3"]
+
+
+# ---- orphan recovery -------------------------------------------------------
+#
+# A pod roll kills in-flight runs without running their except/finally, leaving
+# rows in 'analyzing'/'normalizing'. Neither dispatcher claims those stages, so
+# without recovery they are stranded forever. Observed in production: a
+# mid-run pod replacement stranded 6 rows in 'analyzing'.
+
+
+class RecoveryConn:
+    def __init__(self, rowcount=0):
+        self.rowcount = rowcount
+        self.sql = ""
+        self.params = {}
+        self.commits = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, stmt, params=None):
+        self.sql = str(stmt)
+        self.params = params or {}
+        return SimpleNamespace(rowcount=self.rowcount)
+
+    def commit(self):
+        self.commits += 1
+
+
+def test_recover_orphaned_analyzing_goes_back_to_pending(monkeypatch):
+    conn = RecoveryConn(rowcount=6)
+    monkeypatch.setattr(flows, "get_db", lambda: conn)
+    n = flows.recover_orphaned("analyzing", "pending", 30, 3)
+    assert n == 6
+    assert conn.params["from_stage"] == "analyzing"
+    assert conn.params["to_stage"] == "pending"
+    assert conn.params["mins"] == 30
+    assert conn.commits == 1
+
+
+def test_recover_orphaned_normalizing_goes_back_to_analyzed(monkeypatch):
+    # The measurement survived a normalize crash — only the rewrite must redo,
+    # and re-running it is safe because normalize-item is archive-first.
+    conn = RecoveryConn(rowcount=2)
+    monkeypatch.setattr(flows, "get_db", lambda: conn)
+    flows.recover_orphaned("normalizing", "analyzed", 30, 3)
+    assert conn.params["from_stage"] == "normalizing"
+    assert conn.params["to_stage"] == "analyzed"
+
+
+def test_recover_orphaned_only_touches_stale_rows(monkeypatch):
+    conn = RecoveryConn()
+    monkeypatch.setattr(flows, "get_db", lambda: conn)
+    flows.recover_orphaned("analyzing", "pending", 30, 3)
+    # Guard clause must be present, or a live worker's row gets reclaimed and run twice.
+    assert "last_transition_at < now()" in conn.sql
+    assert "interval '1 minute'" in conn.sql
+
+
+def test_recover_orphaned_fails_rows_past_max_retries(monkeypatch):
+    conn = RecoveryConn()
+    monkeypatch.setattr(flows, "get_db", lambda: conn)
+    flows.recover_orphaned("analyzing", "pending", 30, 3)
+    assert "retry_count < :max" in conn.sql
+    assert "'failed'" in conn.sql
+    assert conn.params["max"] == 3
+
+
+def test_get_db_uses_nullpool_engine_reused_across_calls(monkeypatch):
+    # The engine-per-call leak exhausted max_connections at width 6; one shared
+    # NullPool engine ties connection count to concurrency, not transition rate.
+    created = []
+
+    def fake_create_engine(url, **kw):
+        created.append(kw)
+        return SimpleNamespace(connect=lambda: "conn")
+
+    monkeypatch.setattr(flows, "_engine", None)
+    monkeypatch.setattr(flows.sa, "create_engine", fake_create_engine)
+    flows.get_db()
+    flows.get_db()
+    assert len(created) == 1, "engine must be created once, not per call"
+    assert created[0]["poolclass"] is flows.sa.pool.NullPool

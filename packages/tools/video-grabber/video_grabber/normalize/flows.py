@@ -34,6 +34,10 @@ _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
 _ASYNCPG_PREFIX = "postgresql+asyncpg://"
 _PSYCOPG2_PREFIX = "postgresql+psycopg2://"
 _DEFAULT_CACHE_CONTROL = "max-age=31536000"
+# A row untouched this long in an in-flight stage has no live worker. Well above
+# the slowest observed item (~3 min for an hour-long mp3 analysis, more for a
+# normalize render) because there is no heartbeat to distinguish slow from dead.
+_STALE_MINUTES = 30
 
 
 def _sync_db_url(url: str) -> str:
@@ -42,10 +46,33 @@ def _sync_db_url(url: str) -> str:
     return url
 
 
+_engine: sa.Engine | None = None
+
+
+def _get_engine() -> sa.Engine:
+    """One process-wide Engine with NullPool.
+
+    Creating an Engine per call (the idiom the other pipelines use) leaks a
+    pooled connection per call: closing the Connection returns it to that
+    throwaway Engine's pool rather than to the server, so it lingers until GC
+    or rt911-db's idle_session_timeout (10 min) reaps it. At the shipped
+    width of 2 that stays under the ceiling; running the analyze pass wider
+    exhausted max_connections=100 and started failing jobs with
+    "sorry, too many clients already".
+
+    NullPool closes each connection on release, so connection count tracks
+    concurrent work instead of transition *rate* — and there is no pooled
+    connection to go stale against idle_session_timeout either.
+    """
+    global _engine
+    if _engine is None:
+        cfg = Config()
+        _engine = sa.create_engine(_sync_db_url(cfg.database_url), poolclass=sa.pool.NullPool)
+    return _engine
+
+
 def get_db():
-    cfg = Config()
-    engine = sa.create_engine(_sync_db_url(cfg.database_url))
-    return engine.connect()
+    return _get_engine().connect()
 
 
 def get_normalize_job(job_id: str):
@@ -173,6 +200,42 @@ def normalize_item_flow(job_id: str) -> None:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+def recover_orphaned(from_stage: str, to_stage: str, stale_minutes: int,
+                     max_retries: int) -> int:
+    """Re-queue rows stranded in an in-flight stage by a dead worker.
+
+    A pod roll (ArgoCD sync, node eviction, OOM) kills in-flight runs without
+    running their except/finally, leaving rows in 'analyzing'/'normalizing'.
+    Neither dispatcher claims those stages, so without this they are stranded
+    forever — invisible to the queue and never retried. Observed in
+    production: a mid-run pod replacement stranded 6 rows in 'analyzing'.
+
+    Recovery targets are stage-specific: 'analyzing' → 'pending' (redo the
+    measurement), 'normalizing' → 'analyzed' (the measurement survived; redo
+    only the rewrite). Re-running normalize-item is safe because it is
+    archive-first and always re-reads the original from audio-original/.
+
+    ``stale_minutes`` must exceed the longest real run — there is no heartbeat
+    here, so a too-small value would reclaim a job a slow-but-alive worker is
+    still processing, running it twice.
+    """
+    with get_db() as db:
+        res = db.execute(sa.text(f"""
+            UPDATE normalize_jobs
+               SET stage = CASE WHEN retry_count < :max
+                                THEN CAST(:to_stage AS normalize_stage)
+                                ELSE CAST('failed' AS normalize_stage) END,
+                   retry_count = retry_count + 1,
+                   error_message = 'recovered: worker died/stalled mid-{from_stage}',
+                   last_transition_at = now()
+             WHERE stage = CAST(:from_stage AS normalize_stage)
+               AND last_transition_at < now() - (:mins * interval '1 minute')
+        """), {"max": max_retries, "to_stage": to_stage,
+               "from_stage": from_stage, "mins": stale_minutes})
+        db.commit()
+        return res.rowcount or 0
+
+
 def _dispatch(logger, *, claim_sql: str, deployment: str, label: str,
               max_runs: int, max_retries: int) -> None:
     """Shared atomic-claim drain loop (transcribe idiom: UPDATE…SELECT…SKIP LOCKED).
@@ -198,8 +261,12 @@ def _dispatch(logger, *, claim_sql: str, deployment: str, label: str,
 @flow(name="dispatch-analyze-normalize")
 def dispatch_analyze_normalize_flow(max_runs: int = 10000, max_retries: int = 3) -> None:
     """Drain pending analysis (+ failed-in-analysis: input_i IS NULL)."""
+    logger = get_run_logger()
+    recovered = recover_orphaned("analyzing", "pending", _STALE_MINUTES, max_retries)
+    if recovered:
+        logger.info("dispatch-analyze-normalize: recovered %d orphaned row(s)", recovered)
     _dispatch(
-        get_run_logger(),
+        logger,
         claim_sql="""
             UPDATE normalize_jobs SET
                 stage = 'analyzing',
@@ -226,8 +293,12 @@ def dispatch_analyze_normalize_flow(max_runs: int = 10000, max_retries: int = 3)
 def dispatch_normalize_flow(max_runs: int = 10000, max_retries: int = 3) -> None:
     """Drain analyzed (+ failed-in-normalize: input_i IS NOT NULL). MANUAL ONLY —
     triggering this flow is the operator's go-ahead to rewrite bytes."""
+    logger = get_run_logger()
+    recovered = recover_orphaned("normalizing", "analyzed", _STALE_MINUTES, max_retries)
+    if recovered:
+        logger.info("dispatch-normalize: recovered %d orphaned row(s)", recovered)
     _dispatch(
-        get_run_logger(),
+        logger,
         claim_sql="""
             UPDATE normalize_jobs SET
                 stage = 'normalizing',
