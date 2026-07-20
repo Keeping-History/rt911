@@ -195,6 +195,17 @@ $strip-height: calc(5em + 8px);
   background: black;
   cursor: pointer;
   aspect-ratio: 4/3;
+  // Pointer drags reorder the strip; without this, touch devices scroll the
+  // overflow-x container instead of dragging.
+  touch-action: none;
+
+  &.tvPlayerDragging {
+    opacity: 0.5;
+  }
+
+  &.tvPlayerDropTarget {
+    box-shadow: inset 2px 0 0 0 var(--color-system-07);
+  }
 
   &.tvPlayerActive {
     // Taken out of strip flow; overlays the main area above the strip

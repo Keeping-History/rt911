@@ -33,10 +33,13 @@ import {
 	tvResume,
 	tvSetActivePlayer,
 	tvSetCaptionState,
+	tvSetChannelOrder,
 	tvSetCurrentChannel,
 	tvSetMuted,
 	tvSetVolumeLimit,
 } from "./TVContext";
+import { moveChannel, orderChannels } from "./channelOrder";
+import { useThumbnailReorder } from "./useThumbnailReorder";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
 import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
 import type { HlsAbrApi } from "./abr";
@@ -147,6 +150,29 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		[enabledChannels],
 	);
 	const { items } = useMediaStream(tvFilter);
+
+	// The user's drag-ordered channel slugs; empty until the first reorder.
+	// Keyed on source, not id — see channelOrder.ts.
+	const channelOrder = useMemo(
+		() => (appState?.data?.channelOrder as string[] | undefined) ?? [],
+		[appState?.data?.channelOrder],
+	);
+	// Strip order: the user's arrangement first, everything else in the order
+	// the stream (or, later, the server) supplies.
+	const orderedItems = useMemo(
+		() => orderChannels(items, channelOrder),
+		[items, channelOrder],
+	);
+	const handleReorder = useCallback(
+		(from: string, to: string) => {
+			const visible = orderedItems
+				.map((i) => i.source)
+				.filter((s): s is string => Boolean(s));
+			desktopEventDispatch(tvSetChannelOrder(moveChannel(channelOrder, visible, from, to)));
+		},
+		[orderedItems, channelOrder, desktopEventDispatch],
+	);
+	const reorder = useThumbnailReorder(handleReorder);
 
 	// --- Remote-control state, driven by ClassicyAppTV* events (see TVContext) ---
 	// Persistent settings, read straight from app data each render.
@@ -1039,7 +1065,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 							</div>
 						</div>
 						<div className={styles.tvThumbnailStrip}>
-							{items.map((item) => {
+							{orderedItems.map((item) => {
 								// In multi-select mode no thumbnail is "active" (no absolute overlay)
 								const isActive = !multiSelectMode && item.id === activePlayer;
 								const isSelected = selectedPlayers.includes(item.id);
@@ -1047,13 +1073,22 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								return (
 									<button
 										key={item.id}
+										data-source={item.source}
 										className={[
 											styles.tvPlayer,
 											isActive || isSelected ? styles.tvPlayerSelected : "",
+											reorder.dragSource === item.source ? styles.tvPlayerDragging : "",
+											reorder.dropTarget === item.source &&
+											reorder.dragSource !== item.source
+												? styles.tvPlayerDropTarget
+												: "",
 										]
 											.filter(Boolean)
 											.join(" ")}
+										{...(item.source ? reorder.handlers(item.source) : {})}
 										onClick={() => {
+											// A drag just ended — it must not focus or select.
+											if (reorder.consumeSuppressedClick()) return;
 											if (multiSelectMode) {
 												togglePlayerSelection(item.id);
 											} else {
