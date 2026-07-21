@@ -35,7 +35,10 @@ import {
 import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { FlightDetailPanel } from "./FlightDetailPanel";
 import { FlightMap, type FlightMapHandle } from "./FlightMap";
+import { FlightLayersPanel } from "./FlightLayersPanel";
 import { MapControls, type SelectMode } from "./MapControls";
+import { useMapPois } from "./useMapPois";
+import { visiblePois, type MapPoi } from "./mapPois";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 import { useAltitudeProfile } from "./useAltitudeProfile";
 import { legEstimates } from "./flightEta";
@@ -43,13 +46,16 @@ import { familyForAircraftType } from "./aircraftModels";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
 	type FlightMapSettings,
+	type FlightPoiSettings,
 	flightTrackerSetFilterSettings,
 	flightTrackerSetLoopSettings,
 	flightTrackerSetMapSettings,
+	flightTrackerSetPoiSettings,
 	intToHex,
 	readFlightFilterSettings,
 	readFlightLoopSettings,
 	readFlightMapSettings,
+	readFlightPoiSettings,
 } from "./flightMapSettings";
 import {
 	EMPTY_FLIGHT_FILTER,
@@ -119,6 +125,15 @@ export const FlightTracker: FC = () => {
 	const loopSettings = useMemo(() => readFlightLoopSettings(appData), [appData]);
 	const filterSettings = useMemo(() => readFlightFilterSettings(appData), [appData]);
 
+	// POI markers (airports, etc.) — loaded once per page (useMapPois), filtered
+	// by the persisted layer preferences (a separate slice: flightMapSettings.ts).
+	const allPois = useMapPois();
+	const poiSettings = useMemo(() => readFlightPoiSettings(appData), [appData]);
+	const enabledPois = useMemo(
+		() => visiblePois(allPois, poiSettings.enabled, poiSettings.disabledLayers),
+		[allPois, poiSettings.enabled, poiSettings.disabledLayers],
+	);
+
 	const [showSettings, setShowSettings] = useState(false);
 	// Settings form: local working copy, committed on Save (TV pattern).
 	const [form, setForm] = useState<FlightMapSettings>(settings);
@@ -161,6 +176,23 @@ export const FlightTracker: FC = () => {
 
 	const clearFilter = useCallback(
 		() => desktopEventDispatch(flightTrackerSetFilterSettings(EMPTY_FLIGHT_FILTER)),
+		[desktopEventDispatch],
+	);
+
+	const [showLayers, setShowLayers] = useState(false);
+	// Layers window (POI layer toggles): non-modal, live-apply — mirrors
+	// Filter Flights above (each change dispatches immediately).
+	const openLayers = useCallback(() => {
+		setShowLayers(true);
+		desktopEventDispatch({
+			type: "ClassicyWindowFocus",
+			app: { id: appId },
+			window: { id: "flight-layers" },
+		});
+	}, [desktopEventDispatch]);
+
+	const setPoiSettings = useCallback(
+		(next: FlightPoiSettings) => desktopEventDispatch(flightTrackerSetPoiSettings(next)),
 		[desktopEventDispatch],
 	);
 
@@ -352,6 +384,17 @@ export const FlightTracker: FC = () => {
 	const [activeFlightIdx, setActiveFlightIdx] = useState(0);
 	const selected = multiSelected[Math.min(activeFlightIdx, multiSelected.length - 1)] ?? null;
 
+	// POI selection is a UNION with the flight selection above: at most one side
+	// is ever populated. Selecting a POI clears any flight selection; every
+	// flight-selection path (below, and the map's onClearSelection) clears the
+	// POI in turn.
+	const [selectedPoi, setSelectedPoi] = useState<MapPoi | null>(null);
+	const onSelectPoi = useCallback((poi: MapPoi) => {
+		setMultiSelected([]);
+		setActiveFlightIdx(0);
+		setSelectedPoi(poi);
+	}, []);
+
 	// Camera follow targets the five tracked flights (the notables + observer).
 	// canFollow gates the toggle; followFlight (null unless armed AND a tracked
 	// flight is selected) is what FlightMap locks onto. Keeping cameraFollow in
@@ -365,6 +408,7 @@ export const FlightTracker: FC = () => {
 
 	const onAreaSelect = useCallback(
 		(flights: string[]) => {
+			setSelectedPoi(null);
 			const hits = flights
 				.map((fl) => flightPositions.find((p) => p.flight === fl))
 				.filter((p): p is FlightPosition => !!p);
@@ -490,6 +534,11 @@ export const FlightTracker: FC = () => {
 						title: "Filter Flights…",
 						onClickFunc: openFilter,
 					},
+					{
+						id: "flight-layers-menu",
+						title: "Layers…",
+						onClickFunc: openLayers,
+					},
 					quitMenuItemHelper(appId, appName, appIcon),
 				],
 			},
@@ -536,7 +585,7 @@ export const FlightTracker: FC = () => {
 				],
 			},
 		],
-		[appIcon, settings.mapStyle, settings.darkMap, settings.radarSweep, openSettings, openFilter, setMapStyle, toggleDarkMap, toggleRadarSweep, loopEnabled, toggleLoop],
+		[appIcon, settings.mapStyle, settings.darkMap, settings.radarSweep, openSettings, openFilter, openLayers, setMapStyle, toggleDarkMap, toggleRadarSweep, loopEnabled, toggleLoop],
 	);
 
 	// Loop on/off ↔ provider history request. The provider re-issues on
@@ -678,6 +727,7 @@ export const FlightTracker: FC = () => {
 	// Selects the clicked flight if it's currently in the airborne set; does not
 	// clear on seek itself — the effect above handles that.
 	const onSelectFlight = (flight: string) => {
+		setSelectedPoi(null);
 		const hit = flightPositions.find((p) => p.flight === flight) ?? null;
 		if (hit) {
 			setMultiSelected([hit]);
@@ -978,6 +1028,25 @@ export const FlightTracker: FC = () => {
 					</div>
 				</ClassicyWindow>
 			)}
+			{showLayers && (
+				<ClassicyWindow
+					id="flight-layers"
+					title="Layers"
+					icon={appIcon}
+					appId={appId}
+					closable={true}
+					resizable={false}
+					zoomable={false}
+					scrollable={true}
+					collapsable={false}
+					initialSize={[280, 0]}
+					initialPosition={[200, 160]}
+					appMenu={appMenu}
+					onCloseFunc={() => setShowLayers(false)}
+				>
+					<FlightLayersPanel pois={allPois} settings={poiSettings} onChange={setPoiSettings} />
+				</ClassicyWindow>
+			)}
 			<ClassicyWindow
 				id="flight-map"
 				title="Flight Tracker"
@@ -1063,7 +1132,10 @@ export const FlightTracker: FC = () => {
 								aircraftFamilyOf={aircraftFamilyOf}
 								followFlight={followFlight}
 								cameraMode={settings.cameraMode}
-								onClearSelection={() => setMultiSelected([])}
+								onClearSelection={() => { setMultiSelected([]); setSelectedPoi(null); }}
+								pois={enabledPois}
+								selectedPoiId={selectedPoi?.id ?? null}
+								onSelectPoi={onSelectPoi}
 							/>
 						</div>
 						<div className={styles.filterPanel}>
@@ -1078,6 +1150,7 @@ export const FlightTracker: FC = () => {
 								livePos={livePos}
 								estimates={estimates}
 								selectionOptions={multiSelected}
+								poi={selectedPoi}
 								onPickFlight={(flight) => {
 									const i = multiSelected.findIndex((p) => p.flight === flight);
 									if (i >= 0) setActiveFlightIdx(i);
