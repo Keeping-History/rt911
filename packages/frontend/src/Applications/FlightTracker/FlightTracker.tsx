@@ -759,6 +759,7 @@ export const FlightTracker: FC = () => {
 		lastCommandSeqRef.current = command.seq;
 		setMultiSelected([hit]);
 		setActiveFlightIdx(0);
+		setSelectedPoi(null);
 	}, [command, flightPositions]);
 
 	const trackGeoJSON: Feature | null = track?.geometry

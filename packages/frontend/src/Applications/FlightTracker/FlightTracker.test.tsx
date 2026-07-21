@@ -1006,6 +1006,45 @@ describe("FlightTracker", () => {
 			vi.unstubAllGlobals();
 		});
 
+		it("applying a remote focus command clears any POI selection", () => {
+			const aa11 = {
+				id: 1, flight: "AA11", carrier: "AA",
+				start_date: "2001-09-11T13:00:00Z", lat: 40, lon: -74, alt_ft: 30000,
+			};
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
+			);
+			const { rerender } = renderWithContext({
+				flightPositions: [aa11], connected: true,
+			});
+
+			// Select the airport POI first, as a student browsing the map would.
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			// A teacher pushes a remote focus command for AA11 (playlist-driven,
+			// via classicyFlightRemoteEventHandler in flightTrackerCommands.ts).
+			mockAppData.current = {
+				command: { seq: 1, kind: "focus", callsign: "AA11" },
+			};
+			rerender(
+				<MediaStreamContext.Provider
+					value={makeCtxValue({ flightPositions: [aa11], connected: true })}
+				>
+					<FlightTracker />
+				</MediaStreamContext.Provider>,
+			);
+
+			expect(screen.queryByText("Airport Details")).toBeNull();
+			expect(screen.getByText("AA11")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
+
+			vi.unstubAllGlobals();
+		});
+
 		it("File ▸ Layers… opens the Layers window with FlightLayersPanel's controls", () => {
 			renderWithContext({});
 			const item = menuItem("File", (t) => t.startsWith("Layers"));
