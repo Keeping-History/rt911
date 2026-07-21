@@ -724,6 +724,15 @@ export const FlightTracker: FC = () => {
 		setActiveFlightIdx((i) => Math.max(0, Math.min(i, multiSelected.length - 1)));
 	}, [multiSelected]);
 
+	// Clear a selected POI once its layer is toggled off (mirrors the flight-prune
+	// effect): the pin vanishes from the map, so the detail pane must not keep
+	// showing a now-hidden airport.
+	useEffect(() => {
+		setSelectedPoi((cur) =>
+			cur && !enabledPois.some((p) => p.id === cur.id) ? null : cur,
+		);
+	}, [enabledPois]);
+
 	// Selects the clicked flight if it's currently in the airborne set; does not
 	// clear on seek itself — the effect above handles that.
 	const onSelectFlight = (flight: string) => {
