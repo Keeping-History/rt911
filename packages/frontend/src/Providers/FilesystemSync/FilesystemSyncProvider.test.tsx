@@ -75,6 +75,26 @@ describe("FilesystemSyncProvider", () => {
 			rerenderWith("signedIn", user);
 		});
 		expect(pushCurrentTree).toHaveBeenCalledTimes(1);
+		expect(dispatch).not.toHaveBeenCalled();
+	});
+
+	it("logs and does not reject when the seed push fails on login", async () => {
+		reconcileWithAdapters.mockResolvedValue(false);
+		pushCurrentTree.mockRejectedValueOnce(new Error("net"));
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+		await act(async () => {
+			rerenderWith("signedIn", user);
+		});
+
+		expect(pushCurrentTree).toHaveBeenCalledTimes(1);
+		expect(dispatch).not.toHaveBeenCalled();
+		expect(warnSpy).toHaveBeenCalledWith(
+			"FilesystemSyncProvider: login-transition sync failed",
+			expect.any(Error),
+		);
+
+		warnSpy.mockRestore();
 	});
 
 	it("registers a pre-sign-out flush that pushes the current tree", async () => {

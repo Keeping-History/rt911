@@ -30,9 +30,14 @@ export const FilesystemSyncProvider: FC<{ children: ReactNode }> = ({ children }
 
 		if (!wasSignedIn && nowSignedIn && user) {
 			void (async () => {
-				const replaced = await fs.reconcileWithAdapters();
-				if (replaced) bumpDesktop();
-				else await pushCurrentTree(JSON.parse(fs.snapshot()) as ClassicyFileSystemEntry); // seed account
+				try {
+					const replaced = await fs.reconcileWithAdapters();
+					if (replaced) bumpDesktop();
+					else await pushCurrentTree(JSON.parse(fs.snapshot()) as ClassicyFileSystemEntry); // seed account
+				} catch (err) {
+					// Network/Directus failure: leave lastPushedHash unchanged so the next snapshot retries.
+					console.warn("FilesystemSyncProvider: login-transition sync failed", err);
+				}
 			})();
 		} else if (wasSignedIn && !nowSignedIn) {
 			// Tree already flushed by the pre-sign-out hook; reset to the anonymous default.
