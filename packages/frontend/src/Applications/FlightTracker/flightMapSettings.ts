@@ -136,6 +136,38 @@ export const readFlightFilterSettings = (
 	return { ...EMPTY_FLIGHT_FILTER, ...stored };
 };
 
+// POI layer preferences (airport markers, etc.). A SEPARATE slice from
+// mapSettings/loopSettings/filterSettings so the Layers… window's live toggles
+// and the Settings dialog's Save never clobber each other's persisted state.
+// `disabledLayers` (not enabled) is stored so a newly-added Directus layer
+// defaults to visible with no migration.
+export interface FlightPoiSettings {
+	enabled: boolean;
+	disabledLayers: string[];
+}
+
+export const DEFAULT_FLIGHT_POI_SETTINGS: FlightPoiSettings = {
+	enabled: true,
+	disabledLayers: [],
+};
+
+/** Persist the whole POI-settings object in one dispatch. */
+export const flightTrackerSetPoiSettings = (
+	poiSettings: FlightPoiSettings,
+): ActionMessage => ({
+	type: "ClassicyAppFlightTrackerSetPoiSettings",
+	poiSettings,
+});
+
+/** Per-field fallback to defaults, so absent/partial stored state needs no migration. */
+export const readFlightPoiSettings = (
+	data: Record<string, unknown> | undefined,
+): FlightPoiSettings => {
+	const stored =
+		(data?.poiSettings as Partial<FlightPoiSettings> | undefined) ?? {};
+	return { ...DEFAULT_FLIGHT_POI_SETTINGS, ...stored };
+};
+
 /** Packed int → CSS hex; the single place the two color formats meet. */
 export const intToHex = (color: number): string =>
 	`#${color.toString(16).padStart(6, "0")}`;
@@ -157,6 +189,9 @@ export const classicyFlightTrackerEventHandler = (
 			return ds;
 		case "ClassicyAppFlightTrackerSetFilterSettings":
 			apps[appId].data = { ...appData, filterSettings: action.filterSettings };
+			return ds;
+		case "ClassicyAppFlightTrackerSetPoiSettings":
+			apps[appId].data = { ...appData, poiSettings: action.poiSettings };
 			return ds;
 		default:
 			return ds;
