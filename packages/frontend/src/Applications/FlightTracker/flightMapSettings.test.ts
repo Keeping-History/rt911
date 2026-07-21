@@ -219,7 +219,7 @@ describe("FlightPoiSettings", () => {
 		expect(readFlightPoiSettings(stored)).toEqual({ ...DEFAULT_FLIGHT_POI_SETTINGS, enabled: false });
 	});
 	it("builds the dispatch action", () => {
-		const action = flightTrackerSetPoiSettings({ enabled: true, disabledLayers: [] });
+		const action = flightTrackerSetPoiSettings({ enabled: true, disabledLayers: [], unclusteredLayers: [] });
 		expect(action.type).toBe("ClassicyAppFlightTrackerSetPoiSettings");
 	});
 	it("defaults unclusteredLayers to [] and round-trips it", () => {
