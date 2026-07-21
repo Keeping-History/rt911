@@ -65,14 +65,25 @@ async function ensureCollection() {
 }
 
 async function ensurePublicRead() {
-	// Directus 12: grant read on map_pois to the Public policy.
+	// Directus 12: public access is policy-based. Anonymous reads only work if a
+	// read permission is attached to the system Public policy's id (its name
+	// resolves via the translation key $t:public_label) — permission.policy: null
+	// is a stale Directus-9 (role: null) pattern and does NOT grant public access.
 	const policies = await api("GET", "/policies?filter[name][_eq]=$t:public_label&fields=id");
-	// Fall back to the well-known public policy lookup if the label filter misses.
-	const publicPolicy = await api("GET", "/permissions?filter[collection][_eq]=map_pois&filter[action][_eq]=read");
-	if (publicPolicy?.data?.length) { console.log("public read permission exists"); return; }
+	const publicPolicyId = policies?.data?.[0]?.id;
+	if (!publicPolicyId) {
+		console.error("!!! COULD NOT RESOLVE THE DIRECTUS PUBLIC POLICY ID — automated public-read grant NOT performed.");
+		console.error("!!! You must grant it manually: Directus Admin UI → Settings → Access Policies → Public →");
+		console.error("!!! Permissions → map_pois → Read. Until this is done, anonymous reads on map_pois will 403.");
+		return;
+	}
+	const existing = await api(
+		"GET",
+		`/permissions?filter[collection][_eq]=map_pois&filter[action][_eq]=read&filter[policy][_eq]=${publicPolicyId}`,
+	);
+	if (existing?.data?.length) { console.log("public read already granted"); return; }
 	console.log("granting public read on map_pois…");
-	// policy: null in a permission historically maps to Public in Directus REST.
-	await api("POST", "/permissions", { collection: "map_pois", action: "read", policy: null, fields: ["*"] });
+	await api("POST", "/permissions", { collection: "map_pois", action: "read", policy: publicPolicyId, fields: ["*"] });
 }
 
 async function upsertRows() {
@@ -95,9 +106,12 @@ try {
 	await ensureCollection();
 	await ensurePublicRead();
 	await upsertRows();
-	console.log("done. If public reads 403/400, restart rt911-api (introspection cache) and re-check.");
+	console.log("done. If public reads still 403/400: (1) restart rt911-api to clear its introspection cache and re-check, and");
+	console.log("(2) confirm the map_pois Read permission is attached to the Public policy in Settings → Access Policies → Public.");
 } catch (err) {
 	console.error(err.message);
-	console.error("If this was a schema 500, restart rt911-api and re-run (idempotent).");
+	console.error("If this was a schema 500, restart rt911-api and re-run (idempotent). If public reads still fail after that,");
+	console.error("the map_pois Read permission may not be attached to the Public policy — grant it manually in the Admin UI");
+	console.error("(Settings → Access Policies → Public → Permissions → map_pois → Read) and re-run this script to verify.");
 	process.exit(1);
 }
