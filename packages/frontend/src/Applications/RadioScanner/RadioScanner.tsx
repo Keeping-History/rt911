@@ -651,6 +651,8 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                 item={focusedItem}
                                 onDismiss={() => setFocusedItem(null)}
                                 showWaveform={showWaveform}
+                                captionsOn={captionsOn}
+                                captionStyle={settings.captionStyle}
                                 vizMode={settings.vizMode}
                                 onCycleVizMode={onCycleVizMode}
                                 waveColors={waveColors}

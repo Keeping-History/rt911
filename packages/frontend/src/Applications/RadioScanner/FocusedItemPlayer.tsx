@@ -1,8 +1,16 @@
 import { ClassicyButton } from "classicy";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
-import type { VizMode } from "./radioScannerSettings";
+import {
+	type MediaItem,
+	vttUrl,
+} from "../../Providers/MediaStream/MediaStreamContext";
+import { CaptionOverlay } from "./CaptionOverlay";
+import {
+	type CaptionStyle,
+	DEFAULT_CAPTION_STYLE,
+	type VizMode,
+} from "./radioScannerSettings";
 import styles from "./RadioScanner.module.scss";
 import { WaveformVisualizer } from "./WaveformVisualizer";
 import { setAudioLevel } from "./audioCapture";
@@ -11,6 +19,8 @@ interface FocusedItemPlayerProps {
 	item: MediaItem;
 	onDismiss: () => void;
 	showWaveform: boolean;
+	captionsOn?: boolean;
+	captionStyle?: CaptionStyle;
 	vizMode: VizMode;
 	onCycleVizMode: () => void;
 	waveColors: { bright: string; dim: string } | null;
@@ -21,6 +31,8 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 	item,
 	onDismiss,
 	showWaveform,
+	captionsOn,
+	captionStyle = DEFAULT_CAPTION_STYLE,
 	vizMode,
 	onCycleVizMode,
 	waveColors,
@@ -69,7 +81,7 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 				<p className={styles.rsFocusedLabel}>Playing</p>
 				<p className={styles.rsFocusedTitle}>{item.full_title || item.title}</p>
 			</div>
-			{/* eslint-disable-next-line jsx-a11y/media-has-caption -- historical radio playback; no caption track exists for these recordings */}
+			{/* eslint-disable-next-line jsx-a11y/media-has-caption -- captions are rendered by the CaptionOverlay sibling, not a native <track> (audio has no display surface for one) */}
 			<audio
 				ref={audioRef}
 				src={item.url}
@@ -77,6 +89,13 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 				style={{ display: "none" }}
 				onLoadedMetadata={() => setReadyVersion((v) => v + 1)}
 			/>
+			{captionsOn && (
+				<CaptionOverlay
+					audioEl={audioRef.current}
+					subtitlesUrl={vttUrl(item.subtitles)}
+					captionStyle={captionStyle}
+				/>
+			)}
 			{showWaveform && (
 				<WaveformVisualizer
 					key={`wf-${item.id}-${readyVersion}`}
