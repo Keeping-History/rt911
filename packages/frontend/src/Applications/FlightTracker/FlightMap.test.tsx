@@ -180,7 +180,7 @@ import { TRACK_LINE_COLOR, TRACK_SHADOW_COLOR } from "./flightMapStyle";
 import { loadAircraftIconSvg } from "./aircraftIcons";
 import { buildPlaneImage, iconDisplayPx, PLANE_ICON_PX } from "./flightIcons";
 import type { BasemapStyleId } from "../../lib/basemap/basemapStyles";
-import type { MapPoi } from "./mapPois";
+import type { MapPoi, PoiLayerConfig } from "./mapPois";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -1474,10 +1474,11 @@ describe("FlightMap POI layers", () => {
 		for (const id of POI_LAYER_IDS) expect(keys).not.toContain(id);
 	});
 
-	it("adds the clustered POI source and pin layers on load", () => {
+	it("adds the two shared POI sources and pin layers on load", () => {
 		render(<FlightMap {...baseProps} pois={[ATL]} />);
 		act(() => FakeMap.last!.fire("load"));
-		expect(FakeMap.last!.sources["map-pois"]).toBeTruthy();
+		expect(FakeMap.last!.sources["map-pois-clustered"]).toBeTruthy();
+		expect(FakeMap.last!.sources["map-pois-plain"]).toBeTruthy();
 		const layerIds = FakeMap.last!.layers.map((l) => l.id);
 		for (const id of POI_LAYER_IDS) expect(layerIds).toContain(id);
 	});
@@ -1497,7 +1498,7 @@ describe("FlightMap POI layers", () => {
 		act(() => FakeMap.last!.fire("load"));
 		// Mock the hit-test to return the ATL pin feature at the click point.
 		FakeMap.last!.queryResult = [{
-			layer: { id: "poi-pins" },
+			layer: { id: "poi-cluster-pins" },
 			properties: { id: 1 },
 			geometry: { type: "Point", coordinates: [-84.4, 33.6] },
 		}];
@@ -1516,5 +1517,37 @@ describe("FlightMap POI layers", () => {
 		}];
 		act(() => FakeMap.last!.fire("click", { point: { x: 10, y: 10 }, lngLat: { lng: -84.4, lat: 33.6 } }));
 		expect(onSelectPoi).not.toHaveBeenCalled();
+	});
+
+	it("feeds a clustered layer's POIs into map-pois-clustered with a per-layer cluster color", () => {
+		const poiLayers: PoiLayerConfig[] = [
+			{ layer: "Major Airports", index: 0, color: "#c0202a", clustered: true },
+		];
+		render(<FlightMap {...baseProps} pois={[ATL]} poiLayers={poiLayers} />);
+		act(() => FakeMap.last!.fire("load"));
+		const clustered = FakeMap.last!.sources["map-pois-clustered"].data as GeoJSON.FeatureCollection;
+		const plain = FakeMap.last!.sources["map-pois-plain"].data as GeoJSON.FeatureCollection;
+		expect(clustered.features).toHaveLength(1);
+		expect(clustered.features[0].properties).toMatchObject({ id: 1, layerIndex: 0 });
+		expect(plain.features).toHaveLength(0);
+		const colorExpr = FakeMap.last!.paint["poi-clusters"]?.["circle-color"];
+		expect(Array.isArray(colorExpr)).toBe(true);
+		expect((colorExpr as unknown[])[0]).toBe("match");
+	});
+
+	it("feeds an unclustered layer's Large-hub airports into map-pois-plain, excluding smaller hubs", () => {
+		const poiLayers: PoiLayerConfig[] = [
+			{ layer: "Major Airports", index: 0, color: "#c0202a", clustered: false },
+		];
+		const large: MapPoi = { ...ATL, id: 2, details: { hub_class: "Large" } };
+		const small: MapPoi = { ...ATL, id: 3, name: "Small Field", iata: "SML", details: { hub_class: "Small" } };
+		render(<FlightMap {...baseProps} pois={[large, small]} poiLayers={poiLayers} />);
+		act(() => FakeMap.last!.fire("load"));
+		const plain = FakeMap.last!.sources["map-pois-plain"].data as GeoJSON.FeatureCollection;
+		const clustered = FakeMap.last!.sources["map-pois-clustered"].data as GeoJSON.FeatureCollection;
+		const plainIds = plain.features.map((f) => f.properties?.id);
+		expect(plainIds).toContain(2);
+		expect(plainIds).not.toContain(3);
+		expect(clustered.features).toHaveLength(0);
 	});
 });
