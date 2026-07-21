@@ -71,7 +71,13 @@ const FakeMap = vi.hoisted(() => {
 				}
 				: undefined;
 		}
-		queryRenderedFeatures() { return this.queryResult; }
+		queryRenderedFeatures(_geometry?: unknown, options?: { layers?: string[] }) {
+			const layers = options?.layers;
+			if (!layers) return this.queryResult;
+			return this.queryResult.filter(
+				(f) => layers.includes((f as { layer?: { id?: string } })?.layer?.id ?? ""),
+			);
+		}
 		project(c: [number, number]) { return { x: c[0], y: c[1] }; }
 		zoom = 3;
 		bearing = 0;
@@ -236,8 +242,8 @@ describe("FlightMap", () => {
 		// A near-miss click still finds dots in the tolerance box; the closer one wins.
 		// project() maps [lon,lat] → {x:lon, y:lat}, so the click at (12,20) is nearest [12,20].
 		map.queryResult = [
-			{ geometry: { type: "Point", coordinates: [50, 50] }, properties: { flight: "FAR" } },
-			{ geometry: { type: "Point", coordinates: [12, 20] }, properties: { flight: "AA11" } },
+			{ layer: { id: "flights-dots" }, geometry: { type: "Point", coordinates: [50, 50] }, properties: { flight: "FAR" } },
+			{ layer: { id: "flights-dots" }, geometry: { type: "Point", coordinates: [12, 20] }, properties: { flight: "AA11" } },
 		];
 		map.fire("click", { point: { x: 12, y: 20 } });
 		expect(onSelect).toHaveBeenCalledWith("AA11");
@@ -773,6 +779,7 @@ describe("FlightMap", () => {
 		map.fire("load");
 		map.queryResult = [
 			{
+				layer: { id: "cluster-circles" },
 				geometry: { type: "Point", coordinates: [-80, 40] },
 				properties: { cluster: true, cluster_id: 7, point_count: 12 },
 			},
@@ -801,9 +808,9 @@ describe("FlightMap", () => {
 
 		// project() maps [lon,lat]→{x:lon,y:lat}: both dots land inside the box.
 		map.queryResult = [
-			{ geometry: { type: "Point", coordinates: [50, 40] }, properties: { flight: "DL404" } },
-			{ geometry: { type: "Point", coordinates: [80, 60] }, properties: { flight: "UA93" } },
-			{ geometry: { type: "Point", coordinates: [50, 40] }, properties: { flight: "DL404" } },
+			{ layer: { id: "flights-dots" }, geometry: { type: "Point", coordinates: [50, 40] }, properties: { flight: "DL404" } },
+			{ layer: { id: "flights-dots" }, geometry: { type: "Point", coordinates: [80, 60] }, properties: { flight: "UA93" } },
+			{ layer: { id: "flights-dots" }, geometry: { type: "Point", coordinates: [50, 40] }, properties: { flight: "DL404" } },
 		];
 		map.fire("mousedown", { point: { x: 10, y: 10 } });
 		map.fire("mousemove", { point: { x: 120, y: 90 } });
@@ -828,8 +835,8 @@ describe("FlightMap", () => {
 		// Center (0,0), radius 50. (18,24) is inside (dist 30); (49,49) is in the
 		// bounding box but outside the circle (dist ~69).
 		map.queryResult = [
-			{ geometry: { type: "Point", coordinates: [18, 24] }, properties: { flight: "IN" } },
-			{ geometry: { type: "Point", coordinates: [49, 49] }, properties: { flight: "OUT" } },
+			{ layer: { id: "flights-dots" }, geometry: { type: "Point", coordinates: [18, 24] }, properties: { flight: "IN" } },
+			{ layer: { id: "flights-dots" }, geometry: { type: "Point", coordinates: [49, 49] }, properties: { flight: "OUT" } },
 		];
 		map.fire("mousedown", { point: { x: 0, y: 0 } });
 		map.fire("mouseup", { point: { x: 30, y: 40 } });
