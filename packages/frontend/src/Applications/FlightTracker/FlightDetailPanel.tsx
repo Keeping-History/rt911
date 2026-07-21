@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import { type FC, Fragment } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightTrack } from "./useFlightTrack";
 import styles from "./FlightTracker.module.scss";
@@ -10,6 +10,7 @@ import {
 } from "classicy";
 import { isNotable, isObserver } from "./notableFlights";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
+import { type MapPoi, POI_DETAIL_FIELDS, detailTitleFor } from "./mapPois";
 
 interface FlightDetailPanelProps {
 	selected: FlightPosition | null;
@@ -35,6 +36,9 @@ interface FlightDetailPanelProps {
 	selectionOptions?: FlightPosition[];
 	onPickFlight?: (flight: string) => void;
 	onSaveAsFilter?: () => void;
+	// When set, the pane renders this POI (airport) instead of a flight, and the
+	// group header switches to the POI's detail title ("Airport Details").
+	poi?: MapPoi | null;
 }
 
 // "8:14 AM"-style display time for a UTC instant in the app's display tz.
@@ -49,8 +53,33 @@ function formatDisplayTime(iso: string, tzOffset: number): string {
 export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 	selected, track, loading, error, nowMs, headingDeg = null, tzOffset = -4,
 	livePos = null, estimates = null,
-	selectionOptions = [], onPickFlight, onSaveAsFilter,
+	selectionOptions = [], onPickFlight, onSaveAsFilter, poi = null,
 }) => {
+	if (poi) {
+		const locale = [poi.city, poi.region].filter(Boolean).join(", ");
+		const codes = [poi.iata, poi.icao].filter(Boolean).join(" / ");
+		const subline = [locale, codes].filter(Boolean).join(" · ");
+		const details = poi.details ?? {};
+		const rows = POI_DETAIL_FIELDS.filter((f) => details[f.key] != null);
+		return (
+			<div className={styles.detailWrapper}>
+				<ClassicyControlGroup label={detailTitleFor(poi)}>
+					<div className={styles.detailHeader}>
+						<span className={styles.detailFlight}>{poi.name}</span>
+					</div>
+					{subline && <p className={styles.detailNote}>{subline}</p>}
+					<dl className={styles.detailFields}>
+						{rows.map((f) => (
+							<Fragment key={f.key}>
+								<dt>{f.label}</dt>
+								<dd>{f.format(details[f.key])}</dd>
+							</Fragment>
+						))}
+					</dl>
+				</ClassicyControlGroup>
+			</div>
+		);
+	}
 	if (!selected) {
 		return (
 			<div className={styles.detailWrapper}>
