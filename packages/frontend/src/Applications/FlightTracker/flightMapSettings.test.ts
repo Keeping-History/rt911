@@ -208,11 +208,11 @@ describe("filter settings", () => {
 
 describe("FlightPoiSettings", () => {
 	it("defaults to enabled with no disabled layers", () => {
-		expect(readFlightPoiSettings(undefined)).toEqual({ enabled: true, disabledLayers: [] });
+		expect(readFlightPoiSettings(undefined)).toEqual({ enabled: true, disabledLayers: [], unclusteredLayers: [] });
 	});
 	it("round-trips stored values", () => {
 		const stored = { poiSettings: { enabled: false, disabledLayers: ["Air Bases"] } };
-		expect(readFlightPoiSettings(stored)).toEqual({ enabled: false, disabledLayers: ["Air Bases"] });
+		expect(readFlightPoiSettings(stored)).toEqual({ enabled: false, disabledLayers: ["Air Bases"], unclusteredLayers: [] });
 	});
 	it("fills missing fields from defaults", () => {
 		const stored = { poiSettings: { enabled: false } };
@@ -221,5 +221,10 @@ describe("FlightPoiSettings", () => {
 	it("builds the dispatch action", () => {
 		const action = flightTrackerSetPoiSettings({ enabled: true, disabledLayers: [] });
 		expect(action.type).toBe("ClassicyAppFlightTrackerSetPoiSettings");
+	});
+	it("defaults unclusteredLayers to [] and round-trips it", () => {
+		expect(readFlightPoiSettings(undefined).unclusteredLayers).toEqual([]);
+		const stored = { poiSettings: { enabled: true, disabledLayers: [], unclusteredLayers: ["Major Airports"] } };
+		expect(readFlightPoiSettings(stored).unclusteredLayers).toEqual(["Major Airports"]);
 	});
 });

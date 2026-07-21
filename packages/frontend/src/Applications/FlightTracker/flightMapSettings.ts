@@ -144,11 +144,15 @@ export const readFlightFilterSettings = (
 export interface FlightPoiSettings {
 	enabled: boolean;
 	disabledLayers: string[];
+	// Layers with clustering OFF (default: all layers cluster). Stored as the
+	// exception so a new Directus layer clusters with no migration.
+	unclusteredLayers: string[];
 }
 
 export const DEFAULT_FLIGHT_POI_SETTINGS: FlightPoiSettings = {
 	enabled: true,
 	disabledLayers: [],
+	unclusteredLayers: [],
 };
 
 /** Persist the whole POI-settings object in one dispatch. */
