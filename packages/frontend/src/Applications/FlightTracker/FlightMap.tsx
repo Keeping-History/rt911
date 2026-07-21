@@ -1000,6 +1000,29 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// queryRenderedFeatures only sees fill-extrusion ground footprints,
 			// which sit far below the visible aircraft at cruise altitudes.
 			if (pitchedRef.current) {
+				// POIs first (ground-level; works in flat and pitched modes). A cluster
+				// blob expands; a pin selects. Only fall through to flights when no POI
+				// pin is nearer than the nearest flight.
+				const poiHits = map.queryRenderedFeatures(
+					[[x - HIT_TOLERANCE, y - HIT_TOLERANCE], [x + HIT_TOLERANCE, y + HIT_TOLERANCE]],
+					{ layers: ["poi-pins", "poi-clusters"] },
+				);
+				const poiCluster = poiHits.find((f) => f.properties?.cluster === true);
+				if (poiCluster && poiCluster.geometry.type === "Point") {
+					const src = map.getSource("map-pois") as maplibregl.GeoJSONSource | undefined;
+					const center = poiCluster.geometry.coordinates as [number, number];
+					void src
+						?.getClusterExpansionZoom(Number(poiCluster.properties?.cluster_id))
+						.then((zoom) => map.easeTo({ center, zoom }))
+						.catch(() => {});
+					return;
+				}
+				const poiPin = poiHits.find((f) => f.properties?.cluster !== true);
+				if (poiPin) {
+					const id = Number(poiPin.properties?.id);
+					const hit = poisRef.current.find((p) => p.id === id);
+					if (hit) { cbRef.current.onSelectPoi?.(hit); return; }
+				}
 				const tolerance = plane3DTargetPx(map.getZoom()) / 2 + HIT_TOLERANCE;
 				let bestFlight: string | null = null;
 				let bestDist = tolerance * tolerance;
@@ -1013,6 +1036,29 @@ export const FlightMap: FC<FlightMapProps> = ({
 				if (bestFlight) cbRef.current.onSelectFlight(bestFlight);
 				else cbRef.current.onClearSelection();
 				return;
+			}
+			// POIs first (ground-level; works in flat and pitched modes). A cluster
+			// blob expands; a pin selects. Only fall through to flights when no POI
+			// pin is nearer than the nearest flight.
+			const poiHits = map.queryRenderedFeatures(
+				[[x - HIT_TOLERANCE, y - HIT_TOLERANCE], [x + HIT_TOLERANCE, y + HIT_TOLERANCE]],
+				{ layers: ["poi-pins", "poi-clusters"] },
+			);
+			const poiCluster = poiHits.find((f) => f.properties?.cluster === true);
+			if (poiCluster && poiCluster.geometry.type === "Point") {
+				const src = map.getSource("map-pois") as maplibregl.GeoJSONSource | undefined;
+				const center = poiCluster.geometry.coordinates as [number, number];
+				void src
+					?.getClusterExpansionZoom(Number(poiCluster.properties?.cluster_id))
+					.then((zoom) => map.easeTo({ center, zoom }))
+					.catch(() => {});
+				return;
+			}
+			const poiPin = poiHits.find((f) => f.properties?.cluster !== true);
+			if (poiPin) {
+				const id = Number(poiPin.properties?.id);
+				const hit = poisRef.current.find((p) => p.id === id);
+				if (hit) { cbRef.current.onSelectPoi?.(hit); return; }
 			}
 			const near = map.queryRenderedFeatures(
 				[
