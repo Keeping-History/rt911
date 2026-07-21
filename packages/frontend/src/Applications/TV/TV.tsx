@@ -717,7 +717,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					title: `${tvPaused ? "✓ " : "  "} Pause${tvPaused ? "d" : ""}`,
 					onClickFunc: () => desktopEventDispatch(tvPaused ? tvResume() : tvPause())
 				},
-				quitMenuItemHelper(appId, appName, appIcon),
 			],
 		},
 	];
