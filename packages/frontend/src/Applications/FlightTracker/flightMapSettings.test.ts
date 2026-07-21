@@ -3,14 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
 	DEFAULT_FLIGHT_LOOP_SETTINGS,
 	DEFAULT_FLIGHT_MAP_SETTINGS,
+	DEFAULT_FLIGHT_POI_SETTINGS,
 	classicyFlightTrackerEventHandler,
 	flightTrackerSetLoopSettings,
 	flightTrackerSetMapSettings,
 	flightTrackerSetFilterSettings,
+	flightTrackerSetPoiSettings,
 	intToHex,
 	readFlightLoopSettings,
 	readFlightMapSettings,
 	readFlightFilterSettings,
+	readFlightPoiSettings,
 } from "./flightMapSettings";
 import { EMPTY_FLIGHT_FILTER } from "./flightFilter";
 
@@ -200,5 +203,23 @@ describe("filter settings", () => {
 			// flights back-fills to [] for pre-#225 persisted state.
 			flight: "", tail: "", carrier: "UA", origin: "", dest: "", flights: [],
 		});
+	});
+});
+
+describe("FlightPoiSettings", () => {
+	it("defaults to enabled with no disabled layers", () => {
+		expect(readFlightPoiSettings(undefined)).toEqual({ enabled: true, disabledLayers: [] });
+	});
+	it("round-trips stored values", () => {
+		const stored = { poiSettings: { enabled: false, disabledLayers: ["Air Bases"] } };
+		expect(readFlightPoiSettings(stored)).toEqual({ enabled: false, disabledLayers: ["Air Bases"] });
+	});
+	it("fills missing fields from defaults", () => {
+		const stored = { poiSettings: { enabled: false } };
+		expect(readFlightPoiSettings(stored)).toEqual({ ...DEFAULT_FLIGHT_POI_SETTINGS, enabled: false });
+	});
+	it("builds the dispatch action", () => {
+		const action = flightTrackerSetPoiSettings({ enabled: true, disabledLayers: [] });
+		expect(action.type).toBe("ClassicyAppFlightTrackerSetPoiSettings");
 	});
 });
