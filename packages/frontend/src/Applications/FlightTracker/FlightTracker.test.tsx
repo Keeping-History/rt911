@@ -16,6 +16,20 @@ vi.mock("./FlightMap", () => ({
 	},
 }));
 
+// One airport POI, matching the shape useMapPois resolves to (see mapPois.ts).
+// Master-on/nothing-disabled is the default FlightPoiSettings, so this single
+// POI should reach FlightMap unfiltered on a default render.
+const AIRPORT_POI = {
+	id: 1, name: "Atlanta", layer: "Major Airports", category: "airport",
+	detailTitle: "Airport Details", lat: 33.6, lon: -84.4,
+	iata: "ATL", icao: "KATL", city: "Atlanta", region: "GA", details: null,
+};
+vi.mock("./useMapPois", () => ({
+	useMapPois: () => [AIRPORT_POI],
+	mapPoisUrl: () => "",
+	resetMapPoisCache: () => {},
+}));
+
 const dispatchMock = vi.hoisted(() => vi.fn());
 const windowProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 const mockAppData = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
@@ -932,6 +946,85 @@ describe("FlightTracker", () => {
 			act(() => fireEvent.click(screen.getByText("Follow")));
 			expect(mapProps.at(-1)!.followFlight).toBeNull();
 			vi.unstubAllGlobals();
+		});
+	});
+
+	describe("POI wiring (Task 8)", () => {
+		it("passes the enabled POIs to FlightMap by default (master on, nothing disabled)", () => {
+			renderWithContext({});
+			expect((mapProps.at(-1)!.pois as unknown[]).length).toBe(1);
+		});
+
+		it("selecting a POI shows Airport Details, clears flight selection, and reaches FlightMap as selectedPoiId", () => {
+			const aa11 = {
+				id: 1, flight: "AA11", carrier: "AA",
+				start_date: "2001-09-11T13:00:00Z", lat: 40, lon: -74, alt_ft: 30000,
+			};
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
+			);
+			renderWithContext({ flightPositions: [aa11], connected: true });
+
+			// First select a flight, so we can prove the POI selection clears it.
+			const onSelectFlight = mapProps.at(-1)!.onSelectFlight as (flight: string) => void;
+			act(() => onSelectFlight("AA11"));
+			expect(screen.getByText("AA11")).toBeTruthy();
+
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(screen.queryByText("AA11")).toBeNull();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			vi.unstubAllGlobals();
+		});
+
+		it("selecting a flight clears any POI selection", () => {
+			const aa11 = {
+				id: 1, flight: "AA11", carrier: "AA",
+				start_date: "2001-09-11T13:00:00Z", lat: 40, lon: -74, alt_ft: 30000,
+			};
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
+			);
+			renderWithContext({ flightPositions: [aa11], connected: true });
+
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			const onSelectFlight = mapProps.at(-1)!.onSelectFlight as (flight: string) => void;
+			act(() => onSelectFlight("AA11"));
+			expect(screen.getByText("AA11")).toBeTruthy();
+			expect(screen.queryByText("Airport Details")).toBeNull();
+			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
+
+			vi.unstubAllGlobals();
+		});
+
+		it("File ▸ Layers… opens the Layers window with FlightLayersPanel's controls", () => {
+			renderWithContext({});
+			const item = menuItem("File", (t) => t.startsWith("Layers"));
+			expect(item).toBeTruthy();
+			act(() => item!.onClickFunc?.());
+			expect(windowProps.some((w) => w.id === "flight-layers")).toBe(true);
+			// FlightLayersPanel renders the master toggle + each distinct layer.
+			expect(screen.getByText("Show POI layers")).toBeTruthy();
+			expect(screen.getByText("Major Airports")).toBeTruthy();
+		});
+
+		it("toggling a layer off in the Layers window dispatches the POI-settings slice (separate from mapSettings)", () => {
+			renderWithContext({});
+			act(() => menuItem("File", (t) => t.startsWith("Layers"))!.onClickFunc?.());
+			fireEvent.click(screen.getByLabelText("Major Airports"));
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetPoiSettings",
+				poiSettings: { enabled: true, disabledLayers: ["Major Airports"] },
+			});
 		});
 	});
 });
