@@ -169,7 +169,8 @@ import {
 import { motionPointsToGeoJSON, updateMotion, type MotionBuffer } from "./flightMotion";
 import { TRACK_LINE_COLOR, TRACK_SHADOW_COLOR } from "./flightMapStyle";
 import { loadAircraftIconSvg } from "./aircraftIcons";
-import { buildPlaneImage } from "./flightIcons";
+import { buildPlaneImage, iconDisplayPx, PLANE_ICON_PX } from "./flightIcons";
+import type { BasemapStyleId } from "../../lib/basemap/basemapStyles";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -1294,12 +1295,15 @@ describe("FlightMap", () => {
 			);
 		});
 
-		const renderWithFamily = (familyOf?: (flight: string, startDate: string) => string) =>
+		const renderWithFamily = (
+			familyOf?: (flight: string, startDate: string) => string,
+			mapStyle: BasemapStyleId = "classic",
+		) =>
 			render(
 				<FlightMap positions={[pos({ id: 5, flight: "AA11" })]} basemapUrls={TEST_URLS}
 					trackGeoJSON={null} nowMs={Date.parse("2001-09-11T13:00:00Z")} playing={false}
 					onSelectFlight={() => {}} onClearSelection={() => {}}
-					darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a" observerPinColor="#0f766e"
+					darkMap={false} mapStyle={mapStyle} pinColor="#3a3a3a" notablePinColor="#c0202a" observerPinColor="#0f766e"
 					radarSweep={false} trailMultiplier={1} aircraftFamilyOf={familyOf} />,
 			);
 
@@ -1342,8 +1346,24 @@ describe("FlightMap", () => {
 			expect(map.images["plane-b767"]).toBeTruthy();
 			expect(map.images["plane-notable-b767"]).toBeTruthy();
 			// Sizes: regular at FAMILY_ICON_PX.b767=15, notable at round(32*15/12)=40.
-			expect(buildPlaneImage).toHaveBeenCalledWith('<svg data-family="b767"/>', "#3a3a3a", 15);
-			expect(buildPlaneImage).toHaveBeenCalledWith('<svg data-family="b767"/>', "#c0202a", 40);
+			// Trailing flag is the 8-bit variant — off outside radar.
+			expect(buildPlaneImage).toHaveBeenCalledWith('<svg data-family="b767"/>', "#3a3a3a", 15, false);
+			expect(buildPlaneImage).toHaveBeenCalledWith('<svg data-family="b767"/>', "#c0202a", 40, false);
+		});
+
+		it("rasterizes the 8-bit variant in radar mode, for family and generic icons alike", async () => {
+			renderWithFamily(() => "b767", "radar");
+			await act(async () => { FakeMap.last!.fire("load"); });
+			// Every icon built while radar is the active style is pixellated —
+			// the generic fallback too, or planes change art mid-fetch.
+			expect(vi.mocked(buildPlaneImage).mock.calls.every((c) => c[3] === true)).toBe(true);
+			// Regular icons are scaled up for grid room: b767 15 -> 23, generic
+			// 12 -> 18. Notables keep their unscaled 40 (round(32*15/12)).
+			expect(buildPlaneImage).toHaveBeenCalledWith('<svg data-family="b767"/>', "#3a3a3a", 23, true);
+			expect(buildPlaneImage).toHaveBeenCalledWith('<svg data-family="b767"/>', "#c0202a", 40, true);
+			expect(buildPlaneImage).toHaveBeenCalledWith(
+				expect.any(String), "#3a3a3a", iconDisplayPx(PLANE_ICON_PX, true), true,
+			);
 		});
 
 		it("never fetches an icon for the generic family", async () => {

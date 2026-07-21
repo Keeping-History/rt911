@@ -4,7 +4,7 @@ import { type FC, type Ref, useEffect, useImperativeHandle, useRef, useState } f
 import { MapCompass } from "./MapCompass";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
-import { basemapPalette, TERRAIN_SOURCE } from "../../lib/basemap/basemapStyles";
+import { basemapPalette, pixelPlanes, TERRAIN_SOURCE } from "../../lib/basemap/basemapStyles";
 import {
 	type BasemapStyleId,
 	type BasemapUrls,
@@ -30,6 +30,7 @@ import {
 	familyNotableIconId,
 	familyNotableIconPx,
 	familyObserverIconId,
+	iconDisplayPx,
 } from "./flightIcons";
 import {
 	type FlightMotion,
@@ -101,12 +102,13 @@ async function installPlaneIcons(
 	pinColor: string,
 	notablePinColor: string,
 	observerPinColor: string,
+	pixelate: boolean,
 ) {
 	try {
 		const [regular, notable, observer] = await Promise.all([
-			buildPlaneImage(planeSvg, pinColor, PLANE_ICON_PX),
-			buildPlaneImage(planeSvg, notablePinColor, PLANE_NOTABLE_ICON_PX),
-			buildPlaneImage(planeSvg, observerPinColor, PLANE_NOTABLE_ICON_PX),
+			buildPlaneImage(planeSvg, pinColor, iconDisplayPx(PLANE_ICON_PX, pixelate), pixelate),
+			buildPlaneImage(planeSvg, notablePinColor, PLANE_NOTABLE_ICON_PX, pixelate),
+			buildPlaneImage(planeSvg, observerPinColor, PLANE_NOTABLE_ICON_PX, pixelate),
 		]);
 		if (map.hasImage(PLANE_ICON_ID)) map.updateImage(PLANE_ICON_ID, regular);
 		else map.addImage(PLANE_ICON_ID, regular, { pixelRatio: 2 });
@@ -128,12 +130,13 @@ async function installFamilyIcon(
 	pinColor: string,
 	notablePinColor: string,
 	observerPinColor: string,
+	pixelate: boolean,
 ) {
 	try {
 		const [regular, notable, observer] = await Promise.all([
-			buildPlaneImage(svg, pinColor, familyIconPx(family)),
-			buildPlaneImage(svg, notablePinColor, familyNotableIconPx(family)),
-			buildPlaneImage(svg, observerPinColor, familyNotableIconPx(family)),
+			buildPlaneImage(svg, pinColor, iconDisplayPx(familyIconPx(family), pixelate), pixelate),
+			buildPlaneImage(svg, notablePinColor, familyNotableIconPx(family), pixelate),
+			buildPlaneImage(svg, observerPinColor, familyNotableIconPx(family), pixelate),
 		]);
 		const id = familyIconId(family);
 		const notableId = familyNotableIconId(family);
@@ -185,7 +188,7 @@ function requestFamilyIcons(
 	requested: Set<string>,
 	loaded: Map<string, string>,
 	mapRef: { current: maplibregl.Map | null },
-	colorsRef: { current: { pinColor: string; notablePinColor: string; observerPinColor: string } },
+	colorsRef: { current: FlightMapColors },
 ) {
 	for (const f of fc.features) {
 		const family = f.properties.family;
@@ -198,7 +201,7 @@ function requestFamilyIcons(
 			void installFamilyIcon(
 				map, family, svg,
 				colorsRef.current.pinColor, colorsRef.current.notablePinColor,
-				colorsRef.current.observerPinColor,
+				colorsRef.current.observerPinColor, pixelPlanes(colorsRef.current.mapStyle),
 			);
 		});
 	}
@@ -692,6 +695,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			});
 			void installPlaneIcons(
 				map, colors.pinColor, colors.notablePinColor, colors.observerPinColor,
+				pixelPlanes(colors.mapStyle),
 			);
 			// Cluster mode (issue #222): a second, pre-clustered source — MapLibre
 			// fixes the cluster option at addSource time, so toggling is a
@@ -1034,9 +1038,14 @@ export const FlightMap: FC<FlightMapProps> = ({
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
 		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain });
-		void installPlaneIcons(map, pinColor, notablePinColor, observerPinColor);
+		// mapStyle is already a dep, so switching to/from radar re-rasterizes
+		// every registered icon into (or out of) its 8-bit variant for free.
+		const pixelate = pixelPlanes(mapStyle);
+		void installPlaneIcons(map, pinColor, notablePinColor, observerPinColor, pixelate);
 		for (const [family, svg] of loadedIconSvgsRef.current) {
-			void installFamilyIcon(map, family, svg, pinColor, notablePinColor, observerPinColor);
+			void installFamilyIcon(
+				map, family, svg, pinColor, notablePinColor, observerPinColor, pixelate,
+			);
 		}
 		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
