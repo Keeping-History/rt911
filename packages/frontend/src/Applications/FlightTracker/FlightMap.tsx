@@ -19,7 +19,7 @@ import {
 } from "./flightMapStyle";
 import planeSvg from "./plane.svg?raw";
 import pinSvg from "./pin.svg?raw";
-import type { MapPoi } from "./mapPois";
+import { type MapPoi, type PoiLayerConfig, layerIndexOf, splitPoisForRender } from "./mapPois";
 import {
 	PLANE_ICON_ID,
 	PLANE_ICON_PX,
@@ -211,19 +211,57 @@ function requestFamilyIcons(
 
 export const POI_PIN_ICON_ID = "poi-pin";
 export const POI_PIN_PX = 18; // display size; rasterized at 2×
-export const POI_LAYER_IDS = ["poi-clusters", "poi-cluster-counts", "poi-pins", "map-poi-selected"];
+export const POI_LAYER_IDS = [
+	"poi-clusters", "poi-cluster-counts", "poi-cluster-pins", "poi-plain-pins", "map-poi-selected",
+];
 const POI_SELECTED_SCALE = 1.25;
 
-/** POIs → point features carrying id/name/iata for the pin label + hit-test. */
-export function poisToGeoJSON(pois: MapPoi[]): GeoJSON.FeatureCollection {
+/** POIs → point features carrying id/name/iata/layerIndex for the pin label,
+ * hit-test, and cluster-color match. layerIndex defaults to 0 when the
+ * layer's config isn't (yet) known — e.g. the single-POI selected overlay. */
+export function poisToGeoJSON(
+	pois: MapPoi[],
+	layerIndex?: Map<string, number>,
+): GeoJSON.FeatureCollection {
 	return {
 		type: "FeatureCollection",
 		features: pois.map((p) => ({
 			type: "Feature",
 			geometry: { type: "Point", coordinates: [p.lon, p.lat] },
-			properties: { id: p.id, name: p.name, iata: p.iata ?? "", layer: p.layer },
+			properties: {
+				id: p.id, name: p.name, iata: p.iata ?? "", layer: p.layer,
+				layerIndex: layerIndex?.get(p.layer) ?? 0,
+			},
 		})),
 	};
+}
+
+// circle-color for the cluster dots: match the aggregated layerIndex → its
+// palette color; fallback covers the (empty-config) idle case.
+export function poiClusterColorExpression(
+	configs: PoiLayerConfig[],
+	fallback: string,
+): maplibregl.ExpressionSpecification | string {
+	if (configs.length === 0) return fallback;
+	const pairs = configs.flatMap((c) => [c.index, c.color]);
+	return ["match", ["get", "layerIndex"], ...pairs, fallback] as unknown as maplibregl.ExpressionSpecification;
+}
+
+// One writer for both sources + the cluster color, used by load + the effect.
+function applyPoiData(
+	map: maplibregl.Map,
+	pois: MapPoi[],
+	configs: PoiLayerConfig[],
+	fallbackColor: string,
+) {
+	const idx = layerIndexOf(configs);
+	const { clustered, plain } = splitPoisForRender(pois, configs);
+	(map.getSource("map-pois-clustered") as maplibregl.GeoJSONSource | undefined)
+		?.setData(poisToGeoJSON(clustered, idx));
+	(map.getSource("map-pois-plain") as maplibregl.GeoJSONSource | undefined)
+		?.setData(poisToGeoJSON(plain, idx));
+	if (map.getLayer("poi-clusters"))
+		map.setPaintProperty("poi-clusters", "circle-color", poiClusterColorExpression(configs, fallbackColor));
 }
 
 async function installPoiIcon(map: maplibregl.Map, color: string, pixelate: boolean) {
@@ -311,6 +349,10 @@ interface FlightMapProps {
 	onClearSelection: () => void;
 	// POI markers (airports, etc.) — enabled set computed by FlightTracker.
 	pois?: MapPoi[];
+	// Per-layer palette color + clustering flag (mapPois.poiLayerConfigs), one
+	// entry per ENABLED layer — drives which shared source a POI feeds and the
+	// cluster dot's circle-color match.
+	poiLayers?: PoiLayerConfig[];
 	selectedPoiId?: number | null;
 	onSelectPoi?: (poi: MapPoi) => void;
 }
@@ -500,7 +542,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	selectMode = "off", onAreaSelect, onPitchedChange, aircraftFamilyOf,
 	followFlight = null, cameraMode = "track",
 	onSelectFlight, onClearSelection,
-	pois = [], selectedPoiId = null, onSelectPoi,
+	pois = [], poiLayers = [], selectedPoiId = null, onSelectPoi,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const mapRef = useRef<maplibregl.Map | null>(null);
@@ -512,6 +554,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	seedRef.current = seedPositions;
 	const poisRef = useRef(pois);
 	poisRef.current = pois;
+	const poiLayersRef = useRef(poiLayers);
+	poiLayersRef.current = poiLayers;
 	const cbRef = useRef({
 		onSelectFlight, onClearSelection, onAreaSelect, onPitchedChange, aircraftFamilyOf, onSelectPoi,
 	});
@@ -834,15 +878,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 				layout: { visibility: radarVisibility },
 				paint: { "line-color": radarColor, "line-width": 1.5, "line-opacity": 0.8 },
 			}, "track-line");
-			// POI markers (ground-level; visible in EVERY pitch/cluster mode, so
-			// deliberately NOT part of planeLayerVisibility). Clustered like flights.
-			map.addSource("map-pois", {
-				type: "geojson", data: poisToGeoJSON(poisRef.current),
-				cluster: true, clusterRadius: 44, clusterMaxZoom: 9,
-				promoteId: "id",
+			// Two shared POI sources: clustered layers feed the first, unclustered
+			// layers the second. Both ground-level → excluded from planeLayerVisibility.
+			map.addSource("map-pois-clustered", {
+				type: "geojson", data: EMPTY_FC,
+				cluster: true, clusterRadius: 44, clusterMaxZoom: 9, promoteId: "id",
+				clusterProperties: { layerIndex: ["max", ["get", "layerIndex"]] },
 			});
 			map.addLayer({
-				id: "poi-clusters", type: "circle", source: "map-pois",
+				id: "poi-clusters", type: "circle", source: "map-pois-clustered",
 				filter: ["has", "point_count"],
 				paint: {
 					"circle-color": colors.pinColor, "circle-opacity": 0.75,
@@ -851,30 +895,29 @@ export const FlightMap: FC<FlightMapProps> = ({
 				},
 			});
 			map.addLayer({
-				id: "poi-cluster-counts", type: "symbol", source: "map-pois",
+				id: "poi-cluster-counts", type: "symbol", source: "map-pois-clustered",
 				filter: ["has", "point_count"],
 				layout: {
 					"text-field": "{point_count_abbreviated}",
-					"text-font": ["Noto Sans Regular"], "text-size": 11,
-					"text-allow-overlap": true,
+					"text-font": ["Noto Sans Regular"], "text-size": 11, "text-allow-overlap": true,
 				},
 				paint: { "text-color": "#ffffff" },
 			});
+			const poiPinLayout: maplibregl.SymbolLayerSpecification["layout"] = {
+				"icon-image": POI_PIN_ICON_ID, "icon-anchor": "bottom", "icon-allow-overlap": true,
+				"icon-size": ["interpolate", ["linear"], ["zoom"], 3, 0.7, 8, 1],
+				"text-field": ["get", "iata"], "text-font": ["Noto Sans Regular"], "text-size": 10,
+				"text-offset": [0, 0.4], "text-anchor": "top", "text-allow-overlap": false, "text-optional": true,
+			};
+			const poiPinPaint: maplibregl.SymbolLayerSpecification["paint"] = {
+				"text-color": colors.pinColor, "text-halo-color": "#ffffff", "text-halo-width": 1,
+			};
 			map.addLayer({
-				id: "poi-pins", type: "symbol", source: "map-pois",
-				filter: ["!", ["has", "point_count"]],
-				layout: {
-					"icon-image": POI_PIN_ICON_ID,
-					"icon-anchor": "bottom",
-					"icon-allow-overlap": true,
-					"icon-size": ["interpolate", ["linear"], ["zoom"], 3, 0.7, 8, 1],
-					"text-field": ["get", "iata"],
-					"text-font": ["Noto Sans Regular"], "text-size": 10,
-					"text-offset": [0, 0.4], "text-anchor": "top",
-					"text-allow-overlap": false, "text-optional": true,
-				},
-				paint: { "text-color": colors.pinColor, "text-halo-color": "#ffffff", "text-halo-width": 1 },
+				id: "poi-cluster-pins", type: "symbol", source: "map-pois-clustered",
+				filter: ["!", ["has", "point_count"]], layout: poiPinLayout, paint: poiPinPaint,
 			});
+			map.addSource("map-pois-plain", { type: "geojson", data: EMPTY_FC, promoteId: "id" });
+			map.addLayer({ id: "poi-plain-pins", type: "symbol", source: "map-pois-plain", layout: poiPinLayout, paint: poiPinPaint });
 			// Selected POI drawn 25% larger on its own single-feature source, ALWAYS
 			// on top — so the chosen airport pops out even from inside a cluster.
 			map.addSource("map-poi-selected", { type: "geojson", data: EMPTY_FC });
@@ -887,6 +930,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				},
 			});
 			void installPoiIcon(map, colors.pinColor, pixelPlanes(colors.mapStyle));
+			applyPoiData(map, poisRef.current, poiLayersRef.current, colors.pinColor);
 			applyMapColors(map, colorsRef.current);
 			// Projection/pitch-style load-time seed for the terrain mesh: the
 			// [terrain] effect below skips pre-load renders.
@@ -1005,11 +1049,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 				// returns here; otherwise fall through to flight hit-testing.
 				const poiHits = map.queryRenderedFeatures(
 					[[x - HIT_TOLERANCE, y - HIT_TOLERANCE], [x + HIT_TOLERANCE, y + HIT_TOLERANCE]],
-					{ layers: ["poi-pins", "poi-clusters"] },
+					{ layers: ["poi-clusters", "poi-cluster-pins", "poi-plain-pins"] },
 				);
 				const poiCluster = poiHits.find((f) => f.properties?.cluster === true);
 				if (poiCluster && poiCluster.geometry.type === "Point") {
-					const src = map.getSource("map-pois") as maplibregl.GeoJSONSource | undefined;
+					const src = map.getSource("map-pois-clustered") as maplibregl.GeoJSONSource | undefined;
 					const center = poiCluster.geometry.coordinates as [number, number];
 					void src
 						?.getClusterExpansionZoom(Number(poiCluster.properties?.cluster_id))
@@ -1042,11 +1086,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// returns here; otherwise fall through to flight hit-testing.
 			const poiHits = map.queryRenderedFeatures(
 				[[x - HIT_TOLERANCE, y - HIT_TOLERANCE], [x + HIT_TOLERANCE, y + HIT_TOLERANCE]],
-				{ layers: ["poi-pins", "poi-clusters"] },
+				{ layers: ["poi-clusters", "poi-cluster-pins", "poi-plain-pins"] },
 			);
 			const poiCluster = poiHits.find((f) => f.properties?.cluster === true);
 			if (poiCluster && poiCluster.geometry.type === "Point") {
-				const src = map.getSource("map-pois") as maplibregl.GeoJSONSource | undefined;
+				const src = map.getSource("map-pois-clustered") as maplibregl.GeoJSONSource | undefined;
 				const center = poiCluster.geometry.coordinates as [number, number];
 				void src
 					?.getClusterExpansionZoom(Number(poiCluster.properties?.cluster_id))
@@ -1160,14 +1204,14 @@ export const FlightMap: FC<FlightMapProps> = ({
 		src?.setData(trackGeoJSON ? { type: "FeatureCollection", features: [trackGeoJSON] } : EMPTY_FC);
 	}, [trackGeoJSON]);
 
-	// Re-feed the clustered POI source when the enabled set changes (layer toggles).
+	// Feed the two POI sources + recolor clusters when the enabled set, layer
+	// configs, or clustering toggles change.
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		const src = map.getSource("map-pois") as maplibregl.GeoJSONSource | undefined;
-		src?.setData(poisToGeoJSON(pois));
+		applyPoiData(map, pois, poiLayers, pinColor);
 		dirtyRef.current = true;
-	}, [pois]);
+	}, [pois, poiLayers, pinColor]);
 
 	// Feed the selected-pin overlay with just the selected POI (or clear it).
 	useEffect(() => {
@@ -1204,7 +1248,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			);
 		}
 		void installPoiIcon(map, pinColor, pixelate);
-		if (map.getLayer("poi-pins")) map.setPaintProperty("poi-pins", "text-color", pinColor);
+		for (const id of ["poi-cluster-pins", "poi-plain-pins"]) {
+			if (map.getLayer(id)) map.setPaintProperty(id, "text-color", pinColor);
+		}
 		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		// The 3D meshes get the same radar 8-bit treatment as the 2D icons, via a
