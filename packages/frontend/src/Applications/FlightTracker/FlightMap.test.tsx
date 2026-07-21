@@ -1483,4 +1483,31 @@ describe("FlightMap POI layers", () => {
 		expect(data.features).toHaveLength(1);
 		expect(data.features[0].properties?.id).toBe(1);
 	});
+
+	it("selects a POI when a pin is clicked", () => {
+		const onSelectPoi = vi.fn();
+		render(<FlightMap {...baseProps} pois={[ATL]} onSelectPoi={onSelectPoi} />);
+		act(() => FakeMap.last!.fire("load"));
+		// Mock the hit-test to return the ATL pin feature at the click point.
+		FakeMap.last!.queryResult = [{
+			layer: { id: "poi-pins" },
+			properties: { id: 1 },
+			geometry: { type: "Point", coordinates: [-84.4, 33.6] },
+		}];
+		act(() => FakeMap.last!.fire("click", { point: { x: 10, y: 10 }, lngLat: { lng: -84.4, lat: 33.6 } }));
+		expect(onSelectPoi).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
+	});
+
+	it("expands a POI cluster instead of selecting", () => {
+		const onSelectPoi = vi.fn();
+		render(<FlightMap {...baseProps} pois={[ATL]} onSelectPoi={onSelectPoi} />);
+		act(() => FakeMap.last!.fire("load"));
+		FakeMap.last!.queryResult = [{
+			layer: { id: "poi-clusters" },
+			properties: { cluster: true, cluster_id: 42, point_count: 5 },
+			geometry: { type: "Point", coordinates: [-84.4, 33.6] },
+		}];
+		act(() => FakeMap.last!.fire("click", { point: { x: 10, y: 10 }, lngLat: { lng: -84.4, lat: 33.6 } }));
+		expect(onSelectPoi).not.toHaveBeenCalled();
+	});
 });
