@@ -6,6 +6,7 @@ import { identifyUser } from "../../openreplay";
 import { fetchMe, loginEmail, logout, providerLoginUrl, type AuthUser,
 	register as apiRegister,
 } from "./authApi";
+import { runBeforeSignOutHooks } from "./beforeSignOut";
 import { AuthContext, type AuthContextValue, type AuthStatus } from "./AuthContext";
 
 export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
@@ -57,6 +58,7 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
 	}, []);
 
 	const signOut = useCallback(async () => {
+		await runBeforeSignOutHooks(); // flush pending server writes while the cookie is still valid
 		await logout(); // best-effort; authApi swallows its own failures
 		setUser(null);
 		setStatus("anonymous");

@@ -2,7 +2,9 @@ import { Component, lazy, StrictMode, Suspense, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "./app.css";
 import "classicy/dist/classicy.css";
-import { ClassicyAppManagerProvider } from "classicy";
+import { ClassicyAppManagerProvider, registerClassicyFileSystemAdapter } from "classicy";
+import { directusFilesystemAdapter } from "./Providers/FilesystemSync/directusFilesystemAdapter";
+import { FilesystemSyncProvider } from "./Providers/FilesystemSync/FilesystemSyncProvider";
 import { DefaultFileSystem } from "./data/DefaultFileSystem";
 // Desktop is imported EAGERLY on purpose: mounting ClassicyDesktop lazily
 // (a tick after ClassicyAppManagerProvider) corrupts classicy's manager
@@ -19,6 +21,10 @@ import { PlaylistProvider } from "./Providers/Playlist/PlaylistProvider";
 import { initTracker } from "./openreplay";
 
 initTracker();
+
+// Sync the signed-in user's filesystem to Directus/Wasabi. Snapshot mode with a
+// 3s debounce so rapid edits coalesce into one upload; anonymous users are a no-op.
+registerClassicyFileSystemAdapter(directusFilesystemAdapter, { snapshotDebounceMs: 3000 });
 
 const IpodShell = lazy(() => import("./Mobile/IpodShell"));
 
@@ -94,17 +100,19 @@ createRoot(rootElement).render(
 		>
 			<PlaylistProvider>
 				<AuthProvider>
-					<MediaStreamProvider>
-						<Suspense fallback={null}>
-							{mobile ? (
-								<MobileFallbackBoundary>
-									<IpodShell />
-								</MobileFallbackBoundary>
-							) : (
-								<Desktop />
-							)}
-						</Suspense>
-					</MediaStreamProvider>
+					<FilesystemSyncProvider>
+						<MediaStreamProvider>
+							<Suspense fallback={null}>
+								{mobile ? (
+									<MobileFallbackBoundary>
+										<IpodShell />
+									</MobileFallbackBoundary>
+								) : (
+									<Desktop />
+								)}
+							</Suspense>
+						</MediaStreamProvider>
+					</FilesystemSyncProvider>
 				</AuthProvider>
 			</PlaylistProvider>
 		</ClassicyAppManagerProvider>
