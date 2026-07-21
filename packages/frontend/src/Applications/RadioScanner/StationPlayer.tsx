@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
 import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
 import { setAudioLevel } from "./audioCapture";
+import { CaptionOverlay } from "./CaptionOverlay";
 import type { VizMode } from "./radioScannerSettings";
 import {
 	activeSegments,
@@ -257,17 +258,14 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 						if (!audioRefs.current.has(item.id)) return;
 						markAudioBlocked(`play-${item.id}`);
 					}}
-				>
-					{captionsOn && vttUrl(item.subtitles) && (
-						<track
-							kind="subtitles"
-							srcLang="en"
-							label="English"
-							src={vttUrl(item.subtitles)}
-						/>
-					)}
-				</audio>
+				/>
 			))}
+			{captionsOn && primary && (
+				<CaptionOverlay
+					audioEl={audioRefs.current.get(primary.id) ?? null}
+					subtitlesUrl={vttUrl(primary.subtitles)}
+				/>
+			)}
 			{showWaveform && primary && (
 				<WaveformVisualizer
 					key={`wf-${station.key}-${primary.id}-${readyVersions.get(primary.id) ?? 0}`}

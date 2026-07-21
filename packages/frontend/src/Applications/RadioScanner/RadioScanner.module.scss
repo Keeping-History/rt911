@@ -16,6 +16,33 @@
   overflow: hidden;
 }
 
+// Closed-caption band: sits over the player (above the waveform), pinned to the
+// bottom-center like a TV lower-third. Only mounted while captions are on and a
+// cue is active, so there is no empty box between cues.
+.rsCaptionBand {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--window-padding-size) * 3);
+  transform: translateX(-50%);
+  max-width: 90%;
+  z-index: 10;
+  pointer-events: none;
+  text-align: center;
+}
+
+.rsCaptionText {
+  // Per-line background boxes (like broadcast captions) when the cue wraps,
+  // instead of one rectangle spanning the widest line.
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 1.5);
+  line-height: 1.5;
+  padding: 0.1em 0.4em;
+}
+
 // Single-station display
 .rsDisplay {
   display: flex;
