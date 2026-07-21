@@ -47,6 +47,7 @@ const FakeMap = vi.hoisted(() => {
 			// prototype methods under spread, and tests poke their live state.
 			this.layers.push({ ...def, beforeId, __raw: def });
 		}
+		getLayer(id: string) { return this.layers.find((l) => l.id === id); }
 		repaints = 0;
 		triggerRepaint() { this.repaints++; }
 		setPaintProperty(layerId: string, name: string, value: unknown) {
@@ -165,12 +166,15 @@ import {
 	type FlightMapHandle,
 	nonNotableFeatures,
 	planeLayerVisibility,
+	poisToGeoJSON,
+	POI_LAYER_IDS,
 } from "./FlightMap";
 import { motionPointsToGeoJSON, updateMotion, type MotionBuffer } from "./flightMotion";
 import { TRACK_LINE_COLOR, TRACK_SHADOW_COLOR } from "./flightMapStyle";
 import { loadAircraftIconSvg } from "./aircraftIcons";
 import { buildPlaneImage, iconDisplayPx, PLANE_ICON_PX } from "./flightIcons";
 import type { BasemapStyleId } from "../../lib/basemap/basemapStyles";
+import type { MapPoi } from "./mapPois";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -182,6 +186,16 @@ const TEST_URLS = {
 	satelliteDay: "day.pmtiles",
 	satelliteNight: "night.pmtiles",
 	terrainDem: "https://x.example/dem.pmtiles",
+};
+
+// Shared minimal props: the values every existing test in this file passes by
+// hand when it doesn't care about their specifics.
+const baseProps = {
+	positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0, playing: false,
+	mapStyle: "classic" as const, darkMap: false,
+	pinColor: "#3a3a3a", notablePinColor: "#c0202a", observerPinColor: "#0f766e",
+	radarSweep: false, trailMultiplier: 0,
+	onSelectFlight: () => {}, onClearSelection: () => {},
 };
 
 describe("FlightMap", () => {
@@ -1427,5 +1441,46 @@ describe("FlightMap", () => {
 			await act(async () => { map.fire("load"); });
 			expect(map.images["plane-crj"]).toBeUndefined();
 		});
+	});
+});
+
+// --- POI rendering ---------------------------------------------------------
+const ATL: MapPoi = {
+	id: 1, name: "Atlanta", layer: "Major Airports", category: "airport",
+	detailTitle: "Airport Details", lat: 33.6, lon: -84.4,
+	iata: "ATL", icao: "KATL", city: "Atlanta", region: "GA", details: null,
+};
+
+describe("FlightMap POI layers", () => {
+	afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+	beforeEach(() => { FakeMap.last = null; });
+
+	it("poisToGeoJSON emits a point per POI with id + iata properties", () => {
+		const fc = poisToGeoJSON([ATL]);
+		expect(fc.features).toHaveLength(1);
+		expect(fc.features[0].geometry).toEqual({ type: "Point", coordinates: [-84.4, 33.6] });
+		expect(fc.features[0].properties).toMatchObject({ id: 1, iata: "ATL", name: "Atlanta" });
+	});
+
+	it("POI layers are excluded from the pitch/cluster visibility matrix", () => {
+		const keys = Object.keys(planeLayerVisibility(true, true));
+		for (const id of POI_LAYER_IDS) expect(keys).not.toContain(id);
+	});
+
+	it("adds the clustered POI source and pin layers on load", () => {
+		render(<FlightMap {...baseProps} pois={[ATL]} />);
+		act(() => FakeMap.last!.fire("load"));
+		expect(FakeMap.last!.sources["map-pois"]).toBeTruthy();
+		const layerIds = FakeMap.last!.layers.map((l) => l.id);
+		for (const id of POI_LAYER_IDS) expect(layerIds).toContain(id);
+	});
+
+	it("feeds only the selected POI to the overlay source", () => {
+		const { rerender } = render(<FlightMap {...baseProps} pois={[ATL]} selectedPoiId={null} />);
+		act(() => FakeMap.last!.fire("load"));
+		rerender(<FlightMap {...baseProps} pois={[ATL]} selectedPoiId={1} />);
+		const data = FakeMap.last!.sources["map-poi-selected"].data as GeoJSON.FeatureCollection;
+		expect(data.features).toHaveLength(1);
+		expect(data.features[0].properties?.id).toBe(1);
 	});
 });
