@@ -1000,9 +1000,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// queryRenderedFeatures only sees fill-extrusion ground footprints,
 			// which sit far below the visible aircraft at cruise altitudes.
 			if (pitchedRef.current) {
-				// POIs first (ground-level; works in flat and pitched modes). A cluster
-				// blob expands; a pin selects. Only fall through to flights when no POI
-				// pin is nearer than the nearest flight.
+				// POIs first (ground-level; works in flat and pitched modes). A POI
+				// cluster or pin within HIT_TOLERANCE takes precedence over flights and
+				// returns here; otherwise fall through to flight hit-testing.
 				const poiHits = map.queryRenderedFeatures(
 					[[x - HIT_TOLERANCE, y - HIT_TOLERANCE], [x + HIT_TOLERANCE, y + HIT_TOLERANCE]],
 					{ layers: ["poi-pins", "poi-clusters"] },
@@ -1037,9 +1037,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 				else cbRef.current.onClearSelection();
 				return;
 			}
-			// POIs first (ground-level; works in flat and pitched modes). A cluster
-			// blob expands; a pin selects. Only fall through to flights when no POI
-			// pin is nearer than the nearest flight.
+			// POIs first (ground-level; works in flat and pitched modes). A POI
+			// cluster or pin within HIT_TOLERANCE takes precedence over flights and
+			// returns here; otherwise fall through to flight hit-testing.
 			const poiHits = map.queryRenderedFeatures(
 				[[x - HIT_TOLERANCE, y - HIT_TOLERANCE], [x + HIT_TOLERANCE, y + HIT_TOLERANCE]],
 				{ layers: ["poi-pins", "poi-clusters"] },

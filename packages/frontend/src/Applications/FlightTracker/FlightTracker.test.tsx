@@ -1065,5 +1065,30 @@ describe("FlightTracker", () => {
 				poiSettings: { enabled: true, disabledLayers: ["Major Airports"] },
 			});
 		});
+
+		it("clears a selected POI once its layer is toggled off (phantom-selection fix)", () => {
+			const { rerender } = renderWithContext({});
+
+			// Select the airport POI, as a student browsing the map would.
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			// Master POI switch (or the layer itself) gets disabled in the Layers
+			// window: the pin vanishes from the map, so the stale selection must
+			// clear rather than leaving the detail pane pointed at a hidden airport.
+			mockAppData.current = { poiSettings: { enabled: false, disabledLayers: [] } };
+			act(() => {
+				rerender(
+					<MediaStreamContext.Provider value={makeCtxValue({})}>
+						<FlightTracker />
+					</MediaStreamContext.Provider>,
+				);
+			});
+
+			expect(screen.queryByText("Airport Details")).toBeNull();
+			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
+		});
 	});
 });
