@@ -4,7 +4,11 @@ import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
 import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
 import { setAudioLevel } from "./audioCapture";
 import { CaptionOverlay } from "./CaptionOverlay";
-import type { VizMode } from "./radioScannerSettings";
+import {
+	type CaptionStyle,
+	DEFAULT_CAPTION_STYLE,
+	type VizMode,
+} from "./radioScannerSettings";
 import {
 	activeSegments,
 	calcSeekSeconds,
@@ -22,6 +26,7 @@ interface StationPlayerProps {
 	clockPaused: boolean;
 	showWaveform: boolean;
 	captionsOn?: boolean;
+	captionStyle?: CaptionStyle;
 	vizMode: VizMode;
 	onCycleVizMode: () => void;
 	waveColors: { bright: string; dim: string } | null;
@@ -43,6 +48,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	clockPaused,
 	showWaveform,
 	captionsOn,
+	captionStyle = DEFAULT_CAPTION_STYLE,
 	vizMode,
 	onCycleVizMode,
 	waveColors,
@@ -264,6 +270,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 				<CaptionOverlay
 					audioEl={audioRefs.current.get(primary.id) ?? null}
 					subtitlesUrl={vttUrl(primary.subtitles)}
+					captionStyle={captionStyle}
 				/>
 			)}
 			{showWaveform && primary && (

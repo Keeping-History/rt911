@@ -2,12 +2,15 @@ import type React from "react";
 import { useQuickTimeSubtitles } from "classicy";
 import { useEffect, useState } from "react";
 import styles from "./RadioScanner.module.scss";
+import { type CaptionStyle, captionTextStyle } from "./radioScannerSettings";
 
 interface CaptionOverlayProps {
 	/** The playing <audio> whose currentTime drives cue selection, or null until ready. */
 	audioEl: HTMLAudioElement | null;
 	/** Public .vtt URL for the segment; captions are hidden when absent. */
 	subtitlesUrl?: string;
+	/** User-configured caption appearance (font, colors, opacity, size). */
+	captionStyle: CaptionStyle;
 }
 
 /**
@@ -20,6 +23,7 @@ interface CaptionOverlayProps {
 export const CaptionOverlay: React.FC<CaptionOverlayProps> = ({
 	audioEl,
 	subtitlesUrl,
+	captionStyle,
 }) => {
 	const { activeCueText } = useQuickTimeSubtitles(subtitlesUrl);
 	const [text, setText] = useState<string | null>(null);
@@ -45,7 +49,11 @@ export const CaptionOverlay: React.FC<CaptionOverlayProps> = ({
 	if (!text) return null;
 	return (
 		<div className={styles.rsCaptionBand}>
-			<span className={styles.rsCaptionText} aria-live="polite">
+			<span
+				className={styles.rsCaptionText}
+				style={captionTextStyle(captionStyle)}
+				aria-live="polite"
+			>
 				{text}
 			</span>
 		</div>

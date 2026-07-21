@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+	captionTextStyle,
+	DEFAULT_CAPTION_STYLE,
 	DEFAULT_RADIO_SCANNER_SETTINGS,
 	nextVizMode,
 	radioScannerSetSettings,
@@ -26,6 +28,7 @@ describe("readRadioScannerSettings", () => {
 			colorBright: 0xff0000,
 			colorDim: 0x330000,
 			maxVolume: 40,
+			captionStyle: DEFAULT_CAPTION_STYLE,
 		};
 		expect(readRadioScannerSettings({ settings: stored })).toEqual(stored);
 	});
@@ -65,6 +68,61 @@ describe("readRadioScannerSettings", () => {
 		expect(
 			readRadioScannerSettings({ settings: { maxVolume: 100 } }).maxVolume,
 		).toBe(100);
+	});
+
+	it("defaults the whole caption style when absent", () => {
+		expect(
+			readRadioScannerSettings({ settings: { maxVolume: 50 } }).captionStyle,
+		).toEqual(DEFAULT_CAPTION_STYLE);
+	});
+
+	it("keeps valid caption fields and falls back on invalid ones", () => {
+		const out = readRadioScannerSettings({
+			settings: {
+				captionStyle: {
+					font: "--body-font", // valid, selectable
+					color: 0xff0000, // valid
+					colorOpacity: 0.5, // valid
+					bgColor: 0x1000000, // > 0xffffff → default
+					bgOpacity: 2, // > 1 → default
+					size: 30, // < 50 → default
+				},
+			},
+		}).captionStyle;
+		expect(out).toEqual({
+			...DEFAULT_CAPTION_STYLE,
+			font: "--body-font",
+			color: 0xff0000,
+			colorOpacity: 0.5,
+		});
+	});
+
+	it("rejects a font that is not one of the offered choices", () => {
+		expect(
+			readRadioScannerSettings({
+				settings: { captionStyle: { font: "--comic-sans" } },
+			}).captionStyle.font,
+		).toBe(DEFAULT_CAPTION_STYLE.font);
+	});
+});
+
+describe("captionTextStyle", () => {
+	it("packs colors + opacity into rgba() and scales the font size", () => {
+		expect(
+			captionTextStyle({
+				font: "--header-font",
+				color: 0xff8040,
+				colorOpacity: 0.5,
+				bgColor: 0x000000,
+				bgOpacity: 0.8,
+				size: 200,
+			}),
+		).toEqual({
+			fontFamily: "var(--header-font)",
+			color: "rgba(255, 128, 64, 0.5)",
+			backgroundColor: "rgba(0, 0, 0, 0.8)",
+			fontSize: "calc(var(--ui-font-size) * 3)",
+		});
 	});
 });
 

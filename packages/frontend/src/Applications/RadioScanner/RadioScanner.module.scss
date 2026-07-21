@@ -32,15 +32,19 @@
 
 .rsCaptionText {
   // Per-line background boxes (like broadcast captions) when the cue wraps,
-  // instead of one rectangle spanning the widest line.
+  // instead of one rectangle spanning the widest line. Font, colors, and size
+  // are applied inline from the user's CaptionStyle (captionTextStyle).
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  font-family: var(--ui-font);
-  font-size: calc(var(--ui-font-size) * 1.5);
   line-height: 1.5;
   padding: 0.1em 0.4em;
+}
+
+// Font-choice buttons in the Captions settings group.
+.rsCaptionFontRow {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
 }
 
 // Single-station display

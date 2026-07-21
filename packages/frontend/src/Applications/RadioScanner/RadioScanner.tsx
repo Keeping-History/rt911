@@ -4,6 +4,7 @@ import {
     ClassicyCheckbox,
     ClassicyColorPicker,
     ClassicyControlGroup,
+    ClassicyControlLabel,
     ClassicyIcons,
     ClassicyRadioInput,
     ClassicySlider,
@@ -41,6 +42,7 @@ import {
     sanitizeItemIds,
 } from "./radioPlayback";
 import {
+    CAPTION_FONT_VARS,
     DEFAULT_RADIO_SCANNER_SETTINGS,
     isVizMode,
     nextVizMode,
@@ -478,6 +480,128 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                 }
                             />
                         </ClassicyControlGroup>
+                        <ClassicyControlGroup label="Captions">
+                            <ClassicyControlLabel label="Font" />
+                            <div className={styles.rsCaptionFontRow}>
+                                {CAPTION_FONT_VARS.map(([varName, label]) => (
+                                    <ClassicyButton
+                                        key={varName}
+                                        buttonSize="small"
+                                        margin="sm"
+                                        padding="sm"
+                                        depressed={
+                                            settingsForm.captionStyle.font ===
+                                            varName
+                                        }
+                                        onClickFunc={() =>
+                                            setSettingsForm((f) => ({
+                                                ...f,
+                                                captionStyle: {
+                                                    ...f.captionStyle,
+                                                    font: varName,
+                                                },
+                                            }))
+                                        }
+                                    >
+                                        {label}
+                                    </ClassicyButton>
+                                ))}
+                            </div>
+                            <ClassicyColorPicker
+                                id="radioscanner_settings_cc_text_color"
+                                labelTitle="Text Color"
+                                value={settingsForm.captionStyle.color}
+                                crayons={MAC_OS_8_CRAYONS}
+                                onChangeFunc={(color: number) =>
+                                    setSettingsForm((f) => ({
+                                        ...f,
+                                        captionStyle: {
+                                            ...f.captionStyle,
+                                            color,
+                                        },
+                                    }))
+                                }
+                            />
+                            <ClassicySlider
+                                id="radioscanner_settings_cc_text_opacity"
+                                labelTitle="Text Opacity"
+                                labelPosition="left"
+                                value={settingsForm.captionStyle.colorOpacity}
+                                min={0}
+                                max={1}
+                                step={0.05}
+                                valueLabel={`${Math.round(
+                                    settingsForm.captionStyle.colorOpacity * 100,
+                                )}%`}
+                                onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+                                    setSettingsForm((f) => ({
+                                        ...f,
+                                        captionStyle: {
+                                            ...f.captionStyle,
+                                            colorOpacity: parseFloat(
+                                                e.target.value,
+                                            ),
+                                        },
+                                    }))
+                                }
+                            />
+                            <ClassicyColorPicker
+                                id="radioscanner_settings_cc_bg_color"
+                                labelTitle="Background Color"
+                                value={settingsForm.captionStyle.bgColor}
+                                crayons={MAC_OS_8_CRAYONS}
+                                onChangeFunc={(color: number) =>
+                                    setSettingsForm((f) => ({
+                                        ...f,
+                                        captionStyle: {
+                                            ...f.captionStyle,
+                                            bgColor: color,
+                                        },
+                                    }))
+                                }
+                            />
+                            <ClassicySlider
+                                id="radioscanner_settings_cc_bg_opacity"
+                                labelTitle="Background Opacity"
+                                labelPosition="left"
+                                value={settingsForm.captionStyle.bgOpacity}
+                                min={0}
+                                max={1}
+                                step={0.05}
+                                valueLabel={`${Math.round(
+                                    settingsForm.captionStyle.bgOpacity * 100,
+                                )}%`}
+                                onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+                                    setSettingsForm((f) => ({
+                                        ...f,
+                                        captionStyle: {
+                                            ...f.captionStyle,
+                                            bgOpacity: parseFloat(e.target.value),
+                                        },
+                                    }))
+                                }
+                            />
+                            <ClassicySlider
+                                id="radioscanner_settings_cc_size"
+                                labelTitle="Size"
+                                labelPosition="left"
+                                value={settingsForm.captionStyle.size}
+                                min={50}
+                                max={200}
+                                step={10}
+                                tickInterval={10}
+                                valueLabel={`${settingsForm.captionStyle.size}%`}
+                                onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+                                    setSettingsForm((f) => ({
+                                        ...f,
+                                        captionStyle: {
+                                            ...f.captionStyle,
+                                            size: parseInt(e.target.value, 10),
+                                        },
+                                    }))
+                                }
+                            />
+                        </ClassicyControlGroup>
                         <div className={styles.rsSettingsButtons}>
                             <ClassicyButton onClickFunc={() => setShowSettings(false)}>
                                 Cancel
@@ -665,6 +789,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                         clockPaused={clockPaused}
                                         showWaveform={showWaveform}
                                         captionsOn={captionsOn}
+                                        captionStyle={settings.captionStyle}
                                         vizMode={settings.vizMode}
                                         onCycleVizMode={onCycleVizMode}
                                         waveColors={waveColors}

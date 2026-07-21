@@ -88,6 +88,9 @@ vi.mock("classicy", () => ({
 			{children}
 		</fieldset>
 	),
+	ClassicyControlLabel: ({ label }: { label?: string }) => (
+		<span>{label}</span>
+	),
 	ClassicyRadioInput: ({
 		inputs,
 		onClickFunc,
