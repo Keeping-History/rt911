@@ -54,7 +54,7 @@ export const directusFilesystemAdapter: ClassicyFileSystemAdapter = {
 		lastPushedHash.set(user.id, snapshot.hash);
 	},
 
-	async reconcile(_local: ClassicyFileSystemSnapshot): Promise<ClassicyFileSystemReconcileResult> {
+	async reconcile(): Promise<ClassicyFileSystemReconcileResult> {
 		const user = currentUser;
 		if (!user) return { action: "useLocal" }; // anonymous: keep local, no network
 		const fileId = await fetchFilesystemFileId();
