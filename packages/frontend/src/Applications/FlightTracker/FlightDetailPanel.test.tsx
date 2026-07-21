@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightTrack } from "./useFlightTrack";
+import type { MapPoi } from "./mapPois";
 import { FlightDetailPanel } from "./FlightDetailPanel";
 
 afterEach(cleanup);
@@ -175,6 +176,31 @@ describe("FlightDetailPanel", () => {
 			expect(onPickFlight).toHaveBeenCalledWith("DL404");
 			fireEvent.click(screen.getByText("Save as Filter"));
 			expect(onSaveAsFilter).toHaveBeenCalledOnce();
+		});
+	});
+
+	describe("FlightDetailPanel POI mode", () => {
+		const ATL: MapPoi = {
+			id: 1, name: "Hartsfield–Jackson Atlanta International Airport",
+			layer: "Major Airports", category: "airport", detailTitle: "Airport Details",
+			lat: 33.6, lon: -84.4, iata: "ATL", icao: "KATL", city: "Atlanta", region: "GA",
+			details: { hub_class: "Large", enplanements_2000: 19833823, runway_count: 4 },
+		};
+
+		it("shows the Airport Details header and the airport name", () => {
+			render(<FlightDetailPanel selected={null} track={null} loading={false} error={null} nowMs={0} poi={ATL} />);
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(screen.getByText(/Hartsfield/)).toBeTruthy();
+		});
+		it("renders present detail fields and omits absent ones", () => {
+			render(<FlightDetailPanel selected={null} track={null} loading={false} error={null} nowMs={0} poi={ATL} />);
+			expect(screen.getByText("Enplanements (2000)")).toBeTruthy();
+			expect(screen.getByText("19,833,823")).toBeTruthy();
+			expect(screen.queryByText("Operator")).toBeNull(); // not in details
+		});
+		it("falls back to Flight Details when no poi and no selection", () => {
+			render(<FlightDetailPanel selected={null} track={null} loading={false} error={null} nowMs={0} />);
+			expect(screen.getByText("Flight Details")).toBeTruthy();
 		});
 	});
 });
