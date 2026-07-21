@@ -813,6 +813,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// its colors follow the pin pair like every other plane layer.
 			const planes3D = new Planes3DLayer();
 			planes3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor);
+			planes3D.setPixelate(pixelPlanes(colors.mapStyle));
 			planes3DRef.current = planes3D;
 			map.addLayer(planes3D);
 			// Loop-mode replay-trail spheres (issue #242): same instanced-mesh layer with
@@ -824,6 +825,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				opacity: REPLAY_TRAIL_OPACITY,
 			});
 			replayTrail3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor);
+			replayTrail3D.setPixelate(pixelPlanes(colors.mapStyle));
 			replayTrail3DRef.current = replayTrail3D;
 			map.addLayer(replayTrail3D);
 			// Smooth 3D track tube: splined selected-flight path with per-vertex
@@ -1049,6 +1051,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 		}
 		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
+		// The 3D meshes get the same radar 8-bit treatment as the 2D icons, via a
+		// low-res render pass rather than a re-rasterize (see Planes3DLayer).
+		planes3DRef.current?.setPixelate(pixelate);
+		replayTrail3DRef.current?.setPixelate(pixelate);
 		trailTubeRef.current?.setColor(trailColor(mapStyle, darkMap));
 	}, [mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain]);
 

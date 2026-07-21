@@ -67,6 +67,49 @@ void main() {
 }
 `;
 
+// Radar-mode 8-bit pass: draw the meshes into a low-res offscreen buffer, then
+// upscale it over the map with a NEAREST-sampled fullscreen triangle so the
+// aircraft read as chunky pixels — the screen-space analog of the 2D icons'
+// grid quantization. The triangle is generated from gl_VertexID (no attribute
+// buffers), and v_uv maps the visible [-1,1] clip square onto [0,1] texcoords.
+const BLIT_VERTEX = `#version 300 es
+out vec2 v_uv;
+void main() {
+	vec2 pos = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+	v_uv = pos;
+	gl_Position = vec4(pos * 2.0 - 1.0, 0.0, 1.0);
+}
+`;
+const BLIT_FRAGMENT = `#version 300 es
+precision mediump float;
+uniform sampler2D u_tex;
+in vec2 v_uv;
+out vec4 fragColor;
+void main() {
+	fragColor = texture(u_tex, v_uv); // already premultiplied from the mesh pass
+}
+`;
+
+// Device pixels per pixelated block. ~4 matches the 2D radar icons' grain
+// (they quantize to ~2-4 device px/cell). One knob — bump for chunkier.
+export const PIXEL_BLOCK_PX = 4;
+
+/**
+ * Low-res offscreen target size for a given drawing buffer and block size.
+ * Rounds up so the whole canvas is covered, and clamps to 1×1 so a pre-layout
+ * (0-sized) canvas never asks GL for a zero-dimension texture.
+ */
+export function pixelBufferSize(
+	drawingBufferWidth: number,
+	drawingBufferHeight: number,
+	block: number,
+): { width: number; height: number } {
+	return {
+		width: Math.max(1, Math.ceil(drawingBufferWidth / block)),
+		height: Math.max(1, Math.ceil(drawingBufferHeight / block)),
+	};
+}
+
 const A_POS = 0;
 const A_NORMAL = 1;
 const I_DATA0 = 2;
@@ -134,9 +177,26 @@ export class Planes3DLayer implements CustomLayerInterface {
 	private colorNotable: [number, number, number] = [0.75, 0.13, 0.16];
 	private colorObserver: [number, number, number] = [0.06, 0.46, 0.43];
 
+	/** Radar-mode 8-bit toggle. Off = today's direct-to-framebuffer path. */
+	pixelate = false;
+	// Offscreen target + blit program, allocated lazily on first pixelated
+	// render and resized when the drawing buffer changes.
+	private fbo: WebGLFramebuffer | null = null;
+	private fboTex: WebGLTexture | null = null;
+	private fboDepth: WebGLRenderbuffer | null = null;
+	private fboW = 0;
+	private fboH = 0;
+	private blit: { program: WebGLProgram; uTex: WebGLUniformLocation | null } | null = null;
+
 	setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;
+		this.map?.triggerRepaint();
+	}
+
+	setPixelate(pixelate: boolean): void {
+		if (this.pixelate === pixelate) return;
+		this.pixelate = pixelate;
 		this.map?.triggerRepaint();
 	}
 
@@ -218,12 +278,84 @@ export class Planes3DLayer implements CustomLayerInterface {
 				gl.deleteBuffer(nrm);
 			}
 			for (const b of this.batches) if (b.buffer) gl.deleteBuffer(b.buffer);
+			if (this.blit) gl.deleteProgram(this.blit.program);
+			if (this.fbo) gl.deleteFramebuffer(this.fbo);
+			if (this.fboTex) gl.deleteTexture(this.fboTex);
+			if (this.fboDepth) gl.deleteRenderbuffer(this.fboDepth);
 		}
 		this.programs.clear();
 		this.meshes.clear();
 		this.batches = [];
+		this.blit = null;
+		this.fbo = this.fboTex = this.fboDepth = null;
+		this.fboW = this.fboH = 0;
 		this.map = null;
 		this.gl = null;
+	}
+
+	// Allocate (or resize) the low-res color+depth target and compile the blit
+	// program. Returns false on any GL failure so render() falls back to the
+	// direct path instead of throwing into maplibre.
+	private setupPixelTargets(gl: WebGL2RenderingContext): boolean {
+		const { width, height } = pixelBufferSize(
+			gl.drawingBufferWidth,
+			gl.drawingBufferHeight,
+			PIXEL_BLOCK_PX,
+		);
+		if (!this.blit) {
+			const compile = (type: number, src: string): WebGLShader | null => {
+				const s = gl.createShader(type);
+				if (!s) return null;
+				gl.shaderSource(s, src);
+				gl.compileShader(s);
+				if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+					console.warn("planes-3d blit compile failed:", gl.getShaderInfoLog(s));
+					gl.deleteShader(s);
+					return null;
+				}
+				return s;
+			};
+			const vs = compile(gl.VERTEX_SHADER, BLIT_VERTEX);
+			const fs = compile(gl.FRAGMENT_SHADER, BLIT_FRAGMENT);
+			const program = gl.createProgram();
+			if (!vs || !fs || !program) return false;
+			gl.attachShader(program, vs);
+			gl.attachShader(program, fs);
+			gl.linkProgram(program);
+			gl.deleteShader(vs);
+			gl.deleteShader(fs);
+			if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+				console.warn("planes-3d blit link failed:", gl.getProgramInfoLog(program));
+				gl.deleteProgram(program);
+				return false;
+			}
+			this.blit = { program, uTex: gl.getUniformLocation(program, "u_tex") };
+		}
+		if (!this.fbo) {
+			this.fbo = gl.createFramebuffer();
+			this.fboTex = gl.createTexture();
+			this.fboDepth = gl.createRenderbuffer();
+		}
+		if (!this.fbo || !this.fboTex || !this.fboDepth) return false;
+		if (width !== this.fboW || height !== this.fboH) {
+			gl.bindTexture(gl.TEXTURE_2D, this.fboTex);
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+			// NEAREST both ways is the whole point — hard blocks, no smoothing.
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+			gl.bindRenderbuffer(gl.RENDERBUFFER, this.fboDepth);
+			gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.fboTex, 0);
+			gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.fboDepth);
+			gl.bindTexture(gl.TEXTURE_2D, null);
+			gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+			this.fboW = width;
+			this.fboH = height;
+		}
+		return true;
 	}
 
 	private getProgram(args: CustomRenderMethodInput): ProgramInfo | null {
@@ -281,6 +413,64 @@ ${VERTEX_BODY}`;
 		if (!gl || !this.visible || this.instanceCount === 0) return;
 		const info = this.getProgram(args);
 		if (!info) return;
+
+		// Radar 8-bit path: draw the meshes into the low-res target, then upscale
+		// it over the map with NEAREST. Its own depth buffer preserves plane↔plane
+		// occlusion; occlusion against the basemap is intentionally dropped (a
+		// radar scope shows every contact, and radar mode uses flat hillshade, not
+		// 3D terrain geometry). Any GL setup failure falls back to the direct draw.
+		if (this.pixelate) {
+			// Capture maplibre's framebuffer + viewport BEFORE touching any GL
+			// target: setupPixelTargets binds our own fbo when it (re)allocates,
+			// so reading the binding after it would capture ours and the blit
+			// would then draw into the texture it samples — a feedback loop.
+			const prevFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+			const vp = gl.getParameter(gl.VIEWPORT) as Int32Array;
+			if (this.setupPixelTargets(gl)) {
+				gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+				gl.viewport(0, 0, this.fboW, this.fboH);
+				gl.enable(gl.DEPTH_TEST);
+				gl.depthFunc(gl.LEQUAL);
+				gl.depthMask(true);
+				gl.clearColor(0, 0, 0, 0);
+				gl.clearDepth(1);
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+				this.drawBatches(gl, info, args);
+				gl.bindFramebuffer(gl.FRAMEBUFFER, prevFbo);
+				gl.viewport(vp[0], vp[1], vp[2], vp[3]);
+				this.blitPixels(gl);
+				return;
+			}
+		}
+		this.drawBatches(gl, info, args);
+	}
+
+	// Composite the low-res target over maplibre's framebuffer with a
+	// NEAREST-sampled fullscreen triangle. Premultiplied-over blend matches the
+	// mesh fragment output; depth writes are masked off so maplibre's own depth
+	// buffer is untouched, and standard 3D depth state is restored afterward.
+	private blitPixels(gl: WebGL2RenderingContext): void {
+		const b = this.blit;
+		if (!b || !this.fboTex) return;
+		gl.useProgram(b.program);
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, this.fboTex);
+		if (b.uTex) gl.uniform1i(b.uTex, 0);
+		gl.disable(gl.DEPTH_TEST);
+		gl.depthMask(false);
+		gl.enable(gl.BLEND);
+		gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		gl.bindTexture(gl.TEXTURE_2D, null);
+		gl.enable(gl.DEPTH_TEST);
+		gl.depthMask(true);
+	}
+
+	private drawBatches(
+		gl: WebGL2RenderingContext,
+		info: ProgramInfo,
+		args: CustomRenderMethodInput,
+	): void {
 		gl.useProgram(info.program);
 
 		// MapLibre's projection uniforms (names fixed by the injected prelude);

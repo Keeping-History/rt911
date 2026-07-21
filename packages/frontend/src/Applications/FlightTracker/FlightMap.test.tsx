@@ -863,6 +863,37 @@ describe("FlightMap", () => {
 		expect(map.layout["flights-dots"]?.visibility).toBe("visible");
 	});
 
+	it("pixelates the 3D aircraft in radar mode and leaves them smooth otherwise", () => {
+		const view = (mapStyle: "classic" | "radar") =>
+			render(
+				<FlightMap positions={[pos({ id: 5, flight: "DL404", alt_ft: 31_000 })]}
+					basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+					onSelectFlight={() => {}} onClearSelection={() => {}}
+					darkMap={false} mapStyle={mapStyle} pinColor="#3a3a3a" notablePinColor="#c0202a" observerPinColor="#0f766e"
+					radarSweep={false} trailMultiplier={1} />,
+			);
+		const modelOf = (m: typeof FakeMap.last) =>
+			m!.layers.find((l) => l.id === "planes-3d-model")!
+				.__raw as import("./planes3DLayer").Planes3DLayer;
+		const replayOf = (m: typeof FakeMap.last) =>
+			m!.layers.find((l) => l.id === "replay-trails-3d-model")!
+				.__raw as import("./planes3DLayer").Planes3DLayer;
+
+		view("radar");
+		const radarMap = FakeMap.last!;
+		radarMap.fire("load");
+		// Both mesh layers (aircraft + replay spheres) enter the 8-bit path.
+		expect(modelOf(radarMap).pixelate).toBe(true);
+		expect(replayOf(radarMap).pixelate).toBe(true);
+
+		cleanup();
+		view("classic");
+		const classicMap = FakeMap.last!;
+		classicMap.fire("load");
+		expect(modelOf(classicMap).pixelate).toBe(false);
+		expect(replayOf(classicMap).pixelate).toBe(false);
+	});
+
 	it("darkens the ground track line into a shadow while pitched", () => {
 		render(
 			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
