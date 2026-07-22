@@ -618,3 +618,20 @@ git commit -m "perf(streamer): memoize per-init sendSources queries with TTL + s
 - **Placeholders:** none — every infra step has exact file, command, and expected output; the one env-name uncertainty (Task 3) is gated by an explicit Context7 confirmation step, not left vague.
 - **Type consistency:** `Sources`, `NewSourcesCache`, `newSourcesCacheWithLoader`, `Get` used consistently across Task 7 steps; loader returns match the real `db.Available*` signatures (`[]string` ×3, `[]model.NewsgroupSource`); `SendSources(video, audio, pager []string, usenet []model.NewsgroupSource)` matches `session.go:448`.
 - **Note for executor:** verify the Go module path in `packages/backend/go.mod` and fix the `model` import path in Task 7 accordingly (`github.com/rt911/backend/...` is illustrative).
+
+---
+
+## OUTCOMES (executed 2026-07-22)
+
+All tasks executed and verified live. Deviations from plan, and why:
+
+- **Tier 0** (pre-plan): truncated + indexed. directus DB 202→59 GB, disk 74%→57%, count query now Index Scan (cost 8.16).
+- **Task 1**: retention env + accountability NULL on 10 pipeline collections (media_items, mp3_items, news_items, pager_items, alert_items, usenet_items, tv_channels, sources, map_pois, reconstruction_runs). Kept audit on playlists/stacks/tm_bookmarks/readme_articles.
+- **Task 2**: dedicated `rt911-directus-cache` Redis. Verified MISS→HIT.
+- **Task 3** — **DEVIATION**: `CACHE_CONTROL_S_MAXAGE` alone did nothing — Directus hard-returns `Cache-Control: no-cache` for dynamic responses whenever `CACHE_AUTO_PURGE=true` (verified in get-cache-headers.js in the pod). Fix: set **`CACHE_AUTO_PURGE=false`** + `CACHE_TTL=10m`. Public GETs now emit `public, max-age, s-maxage=3600`; authenticated stay `no-store`. Cloudflare Cache Rule (user-set) → verified `cf-cache-status: HIT` public / `BYPASS` on /items/playlists.
+- **Task 4** — **DEVIATION**: dropped the Directus app-tier `RATE_LIMITER` (behind CF→Traefik its X-Forwarded-For resolution can collapse all clients into one bucket → self-throttle during a spike). Did Traefik-only `rateLimit` middleware keyed on `Cf-Connecting-Ip` (average 40 / burst 120). Verified 429-shedding.
+- **Task 5**: rt911-db → 4 CPU / 4 Gi + shared_buffers=1GB/effective_cache_size=3GB/work_mem=16MB/max_connections=150. Verified.
+- **Task 6** — **DEVIATION**: moved BOTH `prefect` + `video_grabber` to `db/postgresql-0` (bitnami Helm PG17, same node/disk → instance isolation, not node relief; can't bump its 1CPU/2Gi via GitOps). Streamed `pg_dump -Fc | pg_restore` inside target pod; prefect 49→11 GB (bloat reclaim, row counts verified). Cutover = host-swap in out-of-band `video-grabber-secrets` + restart prefect-server & video-grabber-worker. Verified: pipeline live on new DB, new flow_runs creating, rt911-db 0 pipeline conns. **Old DBs kept on rt911-db for rollback — drop after confidence to reclaim ~49 GB.**
+- **Task 7**: `packages/backend/internal/db/sources_cache.go` + test, wired into `ws.go`/`main.go`. Build/vet/tests green (committed on this branch; ships via CI).
+
+**Open follow-ups:** drop old rt911-db prefect/video_grabber DBs; consider bumping postgresql-0 resources; native s-maxage means admin content edits appear within CACHE_TTL (10m) not instantly.
