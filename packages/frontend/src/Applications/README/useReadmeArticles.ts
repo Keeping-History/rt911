@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 
+export interface ReadmeTag {
+	id:    number;
+	name:  string;
+	color: string | null;
+}
+
 // A README article: present-day site news authored in Directus. Unlike every
 // other app's data this is NOT time-gated — dates are real-world dates and the
 // list refreshes from Directus about once a minute while the app is open.
@@ -14,6 +20,8 @@ export interface ReadmeArticle {
 	sort:         number | null;
 	// Featured articles are pinned above everything else and flagged with a star.
 	featured:     boolean;
+	// Author-assigned tags (M2M). Drives the pill badges and the tag filter.
+	tags:         ReadmeTag[];
 }
 
 // Display order: featured first (pinned), then the manual `sort` ascending
@@ -31,6 +39,43 @@ export function sortArticles(articles: ReadmeArticle[]): ReadmeArticle[] {
 	});
 }
 
+// Directus returns M2M rows nested under the junction key; flatten to ReadmeTag[].
+interface RawTagJoin {
+	readme_tags_id?: Partial<ReadmeTag> | null;
+}
+
+export function flattenTags(raw: unknown): ReadmeTag[] {
+	if (!Array.isArray(raw)) return [];
+	return raw
+		.map((j) => (j as RawTagJoin)?.readme_tags_id)
+		.filter(
+			(t): t is Partial<ReadmeTag> =>
+				!!t && typeof t.id === "number" && typeof t.name === "string",
+		)
+		.map((t) => ({ id: t.id as number, name: t.name as string, color: t.color ?? null }));
+}
+
+// The Settings checkbox universe: every distinct tag across the feed, name-sorted.
+export function allTags(articles: ReadmeArticle[]): ReadmeTag[] {
+	const byId = new Map<number, ReadmeTag>();
+	for (const a of articles) {
+		for (const t of a.tags) if (!byId.has(t.id)) byId.set(t.id, t);
+	}
+	return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// OR filter: keep an article if it is untagged, or has ≥1 non-hidden tag.
+export function visibleArticles(
+	articles: ReadmeArticle[],
+	hiddenTagIds: number[],
+): ReadmeArticle[] {
+	if (hiddenTagIds.length === 0) return articles;
+	const hidden = new Set(hiddenTagIds);
+	return articles.filter(
+		(a) => a.tags.length === 0 || a.tags.some((t) => !hidden.has(t.id)),
+	);
+}
+
 export interface ReadmeArticlesState {
 	articles: ReadmeArticle[];
 	loading:  boolean;
@@ -45,7 +90,9 @@ const DIRECTUS_URL =
 export const ARTICLES_URL =
 	`${DIRECTUS_URL}/items/readme_articles` +
 	"?filter[status][_eq]=published&sort=-date_created" +
-	"&fields=id,headline,author,date_created,date_updated,body,sort,featured&limit=-1";
+	"&fields=id,headline,author,date_created,date_updated,body,sort,featured," +
+	"tags.readme_tags_id.id,tags.readme_tags_id.name,tags.readme_tags_id.color" +
+	"&limit=-1";
 
 // One cheap aggregate row: (count, max date_updated) is a change signature —
 // count catches creates/deletes, max(date_updated) catches edits. Blind spot
@@ -62,6 +109,13 @@ export const REFRESH_INTERVAL_MS = 60_000;
 interface ProbeRow {
 	count: number | string;
 	max:   { date_updated: string | null } | null;
+}
+
+// The raw wire article has `tags` in nested junction shape; normalize to flat.
+type RawReadmeArticle = Omit<ReadmeArticle, "tags"> & { tags?: unknown };
+
+function normalizeArticle(raw: RawReadmeArticle): ReadmeArticle {
+	return { ...raw, tags: flattenTags(raw.tags) };
 }
 
 export function useReadmeArticles(enabled: boolean): ReadmeArticlesState {
@@ -90,9 +144,13 @@ export function useReadmeArticles(enabled: boolean): ReadmeArticlesState {
 		const fetchList = async () => {
 			const res = await fetch(ARTICLES_URL, { signal: controller.signal });
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const json = (await res.json()) as { data: ReadmeArticle[] };
+			const json = (await res.json()) as { data: RawReadmeArticle[] };
 			loaded = true;
-			setState({ articles: sortArticles(json.data), loading: false, error: null });
+			setState({
+				articles: sortArticles(json.data.map(normalizeArticle)),
+				loading: false,
+				error: null,
+			});
 		};
 
 		// Probe → (maybe) fetch, strictly sequential: api-beta mixes response
