@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { FocusedItemPlayer } from "./FocusedItemPlayer";
@@ -122,5 +122,51 @@ describe("FocusedItemPlayer", () => {
 		expect(getByTestId("caption-overlay")).not.toBeNull();
 		const props = captionProps.current as { subtitlesUrl?: string } | null;
 		expect(props?.subtitlesUrl).toBe("clip.vtt");
+	});
+
+	it("tracks duration, advances on timeupdate, and seeks via the slider", () => {
+		const { container } = render(
+			<FocusedItemPlayer
+				item={item({})}
+				onDismiss={() => {}}
+				showWaveform={false}
+				vizMode="Wave"
+				onCycleVizMode={() => {}}
+				waveColors={null}
+				maxVolume={1}
+			/>,
+		);
+		const el = container.querySelector("audio") as HTMLAudioElement;
+		Object.defineProperty(el, "duration", { configurable: true, get: () => 200 });
+		const input = () => container.querySelector("input") as HTMLInputElement;
+
+		fireEvent.loadedMetadata(el);
+		expect(input().value).toBe("0");
+
+		el.currentTime = 50;
+		fireEvent.timeUpdate(el);
+		expect(input().value).toBe("0.25");
+
+		fireEvent.change(input(), { target: { value: "0.5" } });
+		expect(el.currentTime).toBe(100);
+	});
+
+	it("returns the button to Play when the clip ends", async () => {
+		const { container, findByText, getByText } = render(
+			<FocusedItemPlayer
+				item={item({})}
+				onDismiss={() => {}}
+				showWaveform={false}
+				vizMode="Wave"
+				onCycleVizMode={() => {}}
+				waveColors={null}
+				maxVolume={1}
+			/>,
+		);
+		// The mount effect calls play() (mocked to resolve) → button shows Pause.
+		await findByText("Pause");
+		const el = container.querySelector("audio") as HTMLAudioElement;
+		fireEvent.ended(el);
+		expect(getByText("Play")).not.toBeNull();
 	});
 });
