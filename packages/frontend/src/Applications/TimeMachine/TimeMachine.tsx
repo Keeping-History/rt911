@@ -135,8 +135,8 @@ export const TimeMachine: React.FC = () => {
 		[dateTime, setDateTime],
 	);
 
-	const handleScrubForward = () => shiftTime(5);
-	const handleScrubBack    = () => shiftTime(-5);
+	const handleScrubForward = () => shiftTime(5 / 60);
+	const handleScrubBack    = () => shiftTime(-5 / 60);
 	const handleSkipBack    = () => shiftTime(-skipMinutes);
 	const handleStepBack    = () => shiftTime(-(stepSeconds / 60));
 	const handleStepForward = () => shiftTime(stepSeconds / 60);
