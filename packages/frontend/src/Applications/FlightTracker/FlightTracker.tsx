@@ -38,7 +38,7 @@ import { FlightMap, type FlightMapHandle } from "./FlightMap";
 import { FlightLayersPanel } from "./FlightLayersPanel";
 import { MapControls, type SelectMode } from "./MapControls";
 import { useMapPois } from "./useMapPois";
-import { visiblePois, type MapPoi, poiLayerConfigs } from "./mapPois";
+import { visiblePois, type MapPoi, poiLayerConfigs, splitPoisForRender } from "./mapPois";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 import { useAltitudeProfile } from "./useAltitudeProfile";
 import { legEstimates } from "./flightEta";
@@ -732,10 +732,10 @@ export const FlightTracker: FC = () => {
 	// effect): the pin vanishes from the map, so the detail pane must not keep
 	// showing a now-hidden airport.
 	useEffect(() => {
-		setSelectedPoi((cur) =>
-			cur && !enabledPois.some((p) => p.id === cur.id) ? null : cur,
-		);
-	}, [enabledPois]);
+		const { clustered, plain } = splitPoisForRender(enabledPois, poiLayers);
+		const rendered = new Set([...clustered, ...plain].map((p) => p.id));
+		setSelectedPoi((cur) => (cur && !rendered.has(cur.id) ? null : cur));
+	}, [enabledPois, poiLayers]);
 
 	// Selects the clicked flight if it's currently in the airborne set; does not
 	// clear on seek itself — the effect above handles that.

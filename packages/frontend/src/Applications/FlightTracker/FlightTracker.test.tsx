@@ -1091,6 +1091,39 @@ describe("FlightTracker", () => {
 			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
 		});
 
+		it("clears a selected POI when its layer is unclustered and it isn't a Large hub (largest-only filter)", () => {
+			const { rerender } = renderWithContext({});
+
+			// Select the airport POI, as a student browsing the map would. AIRPORT_POI
+			// has details: null (not a Large hub), so it renders fine while its layer
+			// is clustered but is filtered out by unclusteredAirportFilter once that
+			// layer is switched to unclustered.
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			// Turn clustering off for "Major Airports" in the Layers window. The base
+			// map now applies the unclustered "largest hub only" filter and hides this
+			// non-Large airport — the always-on-top selected overlay must not keep
+			// rendering it, so the stale selection has to clear too. (enabledPois is
+			// unchanged here — only unclusteredLayers moved — so this only clears if
+			// the prune checks the actually-rendered set, not raw enabledPois.)
+			mockAppData.current = {
+				poiSettings: { enabled: true, disabledLayers: [], unclusteredLayers: ["Major Airports"] },
+			};
+			act(() => {
+				rerender(
+					<MediaStreamContext.Provider value={makeCtxValue({})}>
+						<FlightTracker />
+					</MediaStreamContext.Provider>,
+				);
+			});
+
+			expect(screen.queryByText("Airport Details")).toBeNull();
+			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
+		});
+
 		it("passes poiLayers to FlightMap (one config for the airports layer, clustered by default)", () => {
 			// useMapPois is already mocked to one airport POI (layer "Major Airports").
 			renderWithContext({});
