@@ -102,7 +102,7 @@ type weatherForecastMsg struct {
 
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
-func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) http.HandlerFunc {
+func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sources *db.SourcesCache, logger *slog.Logger) http.HandlerFunc {
 	// shedLog rate-limits the at-capacity warning: shedding kicks in exactly when
 	// connections flood, so an unthrottled per-rejection log would itself become a
 	// flood. The 503 the client receives is the real, unthrottled signal.
@@ -213,7 +213,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 				}
 				sess.Init(t, items)
 				sendSubscribedSnapshots(r, sess, pool, rdb, t, logger)
-				sendSources(r, sess, pool, logger)
+				sendSources(r, sess, sources)
 
 			case "seek":
 				t, err := parseTime(msg.Time)
@@ -590,26 +590,14 @@ func sendWeatherForecast(r *http.Request, sess *session.Session, pool *pgxpool.P
 
 // sendSources delivers the time-independent available-source lists for client
 // filters (TV channels, RadioScanner audio stations, pager providers, newsgroups). Called once per init —
-// sources don't change with virtual time, so seek does not resend them. Failures
-// are non-fatal: a missing list only degrades a filter UI, it must not break streaming.
-func sendSources(r *http.Request, sess *session.Session, pool *pgxpool.Pool, logger *slog.Logger) {
-	video, err := db.AvailableVideoSources(r.Context(), pool)
-	if err != nil {
-		logger.Warn("available video sources query failed", "error", err)
-	}
-	audio, err := db.AvailableAudioSources(r.Context(), pool)
-	if err != nil {
-		logger.Warn("available audio sources query failed", "error", err)
-	}
-	providers, err := db.AvailablePagerProviders(r.Context(), pool)
-	if err != nil {
-		logger.Warn("available pager providers query failed", "error", err)
-	}
-	newsgroups, err := db.AvailableNewsgroups(r.Context(), pool)
-	if err != nil {
-		logger.Warn("available newsgroups query failed", "error", err)
-	}
-	sess.SendSources(video, audio, providers, newsgroups)
+// sources don't change with virtual time, so seek does not resend them. The four
+// underlying queries are identical for every client, so they're memoized behind a
+// TTL cache (db.SourcesCache): a connection storm issues at most one refresh per
+// interval instead of four Postgres queries per connection. A failed refresh serves
+// the last good value — a missing list only degrades a filter UI, it must not break streaming.
+func sendSources(r *http.Request, sess *session.Session, sources *db.SourcesCache) {
+	s := sources.Get(r.Context())
+	sess.SendSources(s.Video, s.Audio, s.Pager, s.Usenet)
 }
 
 // knownChannel reports whether ch is a valid subscription channel.

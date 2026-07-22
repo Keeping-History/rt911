@@ -39,7 +39,7 @@ func newTestServer(t *testing.T, rdb *goredis.Client) *url.URL {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub := session.NewHub(logger, 0)
 	go hub.Run()
-	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, logger))
+	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, nil, logger))
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
 	u.Scheme = "ws"
@@ -58,7 +58,7 @@ func TestWSHandlerShedsWhenAtCapacity(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub := session.NewHub(logger, 1) // capacity of exactly one connection
 	go hub.Run()
-	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, logger))
+	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, nil, logger))
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
 	u.Scheme = "ws"
