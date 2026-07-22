@@ -25,6 +25,7 @@ import { trackAck } from "./ackTracking";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
 import { keepInstantItem, keepMediaItem } from "./retention";
+import { shouldSeek } from "./seekDetection";
 import { virtualUtcMs } from "./virtualClock";
 import { usePlaylist } from "../Playlist/PlaylistContext";
 import { playlistAppMeta } from "../Playlist/playlistApps";
@@ -48,9 +49,6 @@ const WS_URL: string =
 	"ws://localhost:8080/stream";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
-
-// Jumps larger than this are treated as manual seeks rather than clock ticks
-const SEEK_THRESHOLD_MS = 90_000;
 
 // Forced clock mode: corrections smaller than this are ignored (the local
 // clock is close enough); larger ones snap to master via the sanctioned
@@ -730,12 +728,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			setWeatherObservations((prev) => mergeLatestPerStation(prev, dueWeather));
 	}, [localDate, tzOffset, isItemAvailable]);
 
-	// Detect manual time changes and send seek; ignore tick-driven minute boundaries
+	// Detect manual time changes and send seek; ignore tick-driven minute
+	// boundaries. Forward and backward use different thresholds (see
+	// shouldSeek): a forward jump must clear a tick's worth to count, but any
+	// real backward move is a seek — the clock never rewinds on its own, and a
+	// small rewind that isn't re-fetched leaves already-revealed items dropped
+	// with nothing to re-surface them.
 	useEffect(() => {
 		const prevMs = new Date(prevDateTimeRef.current).getTime();
 		const nowMs = new Date(dateTime).getTime();
 
-		if (Math.abs(nowMs - prevMs) > SEEK_THRESHOLD_MS) {
+		if (shouldSeek(prevMs, nowMs)) {
 			// The server sends a fresh window for the new instant; drop buffered
 			// items from the old timeline so they never surface.
 			mediaBuffer.current.clear();

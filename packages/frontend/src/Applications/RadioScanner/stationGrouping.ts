@@ -101,12 +101,17 @@ export function primarySegment(segments: MediaItem[]): MediaItem | null {
 	);
 }
 
-/** Up to `count` not-yet-started items for `station`, sorted earliest-first. */
+/**
+ * Up to `count` not-yet-started items for `station`, sorted earliest-first.
+ * The default cap is generous (the streamer now feeds a ~50-minute mp3
+ * look-ahead window) so the "Coming Up" list shows the station's full near-term
+ * schedule rather than only the next few clips.
+ */
 export function upcomingSegments(
 	station: Station,
 	upcoming: MediaItem[],
 	nowMs: number,
-	count = 5,
+	count = 50,
 ): MediaItem[] {
 	return upcoming
 		.filter((item) => stationKey(item) === station.key && toMs(item.start_date) > nowMs)
