@@ -195,6 +195,19 @@ describe("upcomingSegments", () => {
 		expect(upcomingSegments(station("ATC"), upcoming, now, 3)).toHaveLength(3);
 	});
 
+	it("defaults to a generous cap so a deep look-ahead window is shown", () => {
+		// 20 future clips, one per minute — well past the old default of 5.
+		const upcoming = Array.from({ length: 20 }, (_, i) =>
+			item({
+				id: i + 1,
+				source: "ATC",
+				start_date: `2001-09-11T13:${String(i).padStart(2, "0")}:00Z`,
+			}),
+		);
+		const now = t("2001-09-11T12:45:00Z");
+		expect(upcomingSegments(station("ATC"), upcoming, now)).toHaveLength(20);
+	});
+
 	it("returns empty for empty upcoming list", () => {
 		expect(upcomingSegments(station("ATC"), [], new Date("2001-09-11T12:00:00Z").getTime())).toEqual([]);
 	});

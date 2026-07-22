@@ -50,7 +50,12 @@ const (
 	leadSeconds  = 30 * time.Second
 	windowMedia  = 300 * time.Second
 	windowPager  = 600 * time.Second
-	windowMp3    = 300 * time.Second
+	// mp3/radio is sparse (a handful of durational clips per window) and the
+	// Radio app surfaces this window as its "Coming Up" schedule, so it gets a
+	// deliberately long look-ahead — 10× the dense-media window — to fill that
+	// list well ahead of the clock. Data is immutable historical, so the only
+	// cost is a slightly larger, less frequent refill frame (still tiny for mp3).
+	windowMp3    = 3000 * time.Second
 	windowNews   = 600 * time.Second
 	windowUsenet = 600 * time.Second
 	// flights are dense — ~600-900 airborne rows/min — so they get media's
