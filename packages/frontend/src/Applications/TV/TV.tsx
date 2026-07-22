@@ -492,12 +492,25 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// only changes when layout/mute change — a volume drag does not re-fire the
 	// effect below. The final dragged value is committed explicitly on release.
 	const persistGridState = useCallback(() => {
+		const idToSlug = (id: number) =>
+			itemsRef.current.find((i) => i.id === id)?.source;
+		const selectedChannels = selectedPlayers
+			.map(idToSlug)
+			.filter((s): s is string => !!s);
+		const mutedChannels = mutedGridPlayers
+			.map(idToSlug)
+			.filter((s): s is string => !!s);
+		const channelVolumes: Record<string, number> = {};
+		for (const [id, vol] of Object.entries(gridPlayerVolumesRef.current)) {
+			const slug = idToSlug(Number(id));
+			if (slug) channelVolumes[slug] = vol;
+		}
 		desktopEventDispatch({
 			type: "ClassicyAppTVSetGridState",
 			multiSelectMode,
-			selectedPlayers,
-			mutedGridPlayers,
-			gridPlayerVolumes: gridPlayerVolumesRef.current,
+			selectedChannels,
+			mutedChannels,
+			channelVolumes,
 		});
 	}, [multiSelectMode, selectedPlayers, mutedGridPlayers, desktopEventDispatch]);
 
