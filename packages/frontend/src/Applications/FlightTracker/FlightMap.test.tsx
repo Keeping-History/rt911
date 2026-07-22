@@ -176,7 +176,8 @@ import {
 	POI_LAYER_IDS,
 } from "./FlightMap";
 import { motionPointsToGeoJSON, updateMotion, type MotionBuffer } from "./flightMotion";
-import { TRACK_LINE_COLOR, TRACK_SHADOW_COLOR } from "./flightMapStyle";
+import { TRACK_SHADOW_COLOR } from "./flightMapStyle";
+import { phaseLineColorExpression } from "./flightPhases";
 import { loadAircraftIconSvg } from "./aircraftIcons";
 import { buildPlaneImage, iconDisplayPx, PLANE_ICON_PX } from "./flightIcons";
 import type { BasemapStyleId } from "../../lib/basemap/basemapStyles";
@@ -937,8 +938,9 @@ describe("FlightMap", () => {
 
 		map.pitch = 0;
 		map.fire("pitch");
-		// Flat again: the ground line IS the track — full color returns.
-		expect(map.paint["track-line"]?.["line-color"]).toBe(TRACK_LINE_COLOR);
+		// Flat again: the ground line IS the track — the per-phase expression
+		// returns (defaulting to TRACK_LINE_COLOR's red for unphased segments).
+		expect(map.paint["track-line"]?.["line-color"]).toEqual(phaseLineColorExpression());
 	});
 
 	it("the flat-layer matrix swaps 2D layers on cluster and pitch", () => {
