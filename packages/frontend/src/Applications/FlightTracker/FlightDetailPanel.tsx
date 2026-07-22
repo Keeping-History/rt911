@@ -118,6 +118,7 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
 				{isObserver(selected.flight) && <span className={styles.detailBadge}>OBSERVER</span>}
 			</div>
+			<ClassicyControlLabel labelSize={"small"} label={route ?? "Flight data has been synthesized from multiple sources and may be inaccurate."} />
 			{selectionOptions.length > 1 && (
 				<div className={styles.detailSelection}>
 					<ClassicyPopUpMenu
