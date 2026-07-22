@@ -190,7 +190,7 @@ describe("TV — props handed to QuickTimeVideoEmbed", () => {
 
 	it("bumps an already-mounted grid player whose tier rises to HIGHEST when the grid shrinks to one", () => {
 		captured.props.length = 0;
-		mockAppData.value = { multiSelectMode: true, selectedPlayers: [7, 8] };
+		mockAppData.value = { multiSelectMode: true, selectedChannels: ["WABC", "WNBC"] };
 		mockItems.value = [FAKE_ITEM, FAKE_ITEM_2];
 		render(<TV />);
 
@@ -232,5 +232,46 @@ describe("TV — props handed to QuickTimeVideoEmbed", () => {
 
 		expect(api.nextLoadLevel).toBe(1); // one-fragment probe toward the ceiling
 		expect(api.nextLevel).toBe(-1); // still fully in auto mode — no flush
+	});
+});
+
+describe("TV — restores persisted selection by slug", () => {
+	// Items whose ids differ from any previously-persisted ids: restore must key
+	// off `source`, not the stale ids that a real reload would have thrown away.
+	const RELOADED_WABC = { ...FAKE_ITEM, id: 101 } as unknown as MediaItem;
+	const RELOADED_WNBC = { ...FAKE_ITEM_2, id: 202 } as unknown as MediaItem;
+
+	it("restores the single-view active channel from currentChannel", () => {
+		captured.props.length = 0;
+		mockAppData.value = { currentChannel: "WNBC" };
+		mockItems.value = [RELOADED_WABC, RELOADED_WNBC];
+		render(<TV />);
+		// Single view renders exactly one main player; it must be the restored channel.
+		const names = captured.props.map((p) => p.name);
+		expect(names).toContain("WNBC");
+		expect(names).not.toContain("WABC");
+	});
+
+	it("falls back to the first channel when currentChannel no longer exists", () => {
+		captured.props.length = 0;
+		mockAppData.value = { currentChannel: "GONE" };
+		mockItems.value = [RELOADED_WABC, RELOADED_WNBC];
+		render(<TV />);
+		const names = captured.props.map((p) => p.name);
+		expect(names).toContain("WABC"); // items[0]
+		expect(names).not.toContain("WNBC");
+	});
+
+	it("restores the MultiView grid selection from selectedChannels", () => {
+		captured.props.length = 0;
+		mockAppData.value = {
+			multiSelectMode: true,
+			selectedChannels: ["WABC", "WNBC"],
+		};
+		mockItems.value = [RELOADED_WABC, RELOADED_WNBC];
+		render(<TV />);
+		const names = captured.props.map((p) => p.name);
+		expect(names).toContain("WABC");
+		expect(names).toContain("WNBC");
 	});
 });

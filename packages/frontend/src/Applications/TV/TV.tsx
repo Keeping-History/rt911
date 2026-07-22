@@ -219,19 +219,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const [multiSelectMode, setMultiSelectMode] = useState<boolean>(
 		(appState?.data?.multiSelectMode as boolean) ?? false,
 	);
-	const [selectedPlayers, setSelectedPlayers] = useState<number[]>(
-		(appState?.data?.selectedPlayers as number[]) ?? [],
-	);
-	const [mutedGridPlayers, setMutedGridPlayers] = useState<number[]>(
-		(appState?.data?.mutedGridPlayers as number[]) ?? [],
-	);
-	// Per-player volume (0..1) keyed by item id. A missing entry plays at full
-	// (1.0), still capped by the universal volumeLimit. Persisted alongside the
-	// mute set through ClassicyAppTVSetGridState — but only on slider release,
-	// not on every drag tick (see persistGridState).
+	const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
+	const [mutedGridPlayers, setMutedGridPlayers] = useState<number[]>([]);
+	// Per-player volume (0..1) keyed by item id. Restored from channelVolumes
+	// (slug-keyed) once items arrive; see the restore effect below.
 	const [gridPlayerVolumes, setGridPlayerVolumes] = useState<
 		Record<number, number>
-	>((appState?.data?.gridPlayerVolumes as Record<number, number>) ?? {});
+	>({});
 	// Live universal volume ceiling driving every player. Seeded from the persisted
 	// value and updated on each slider tick for immediate audio response, but only
 	// written back to the store on slider release (see the slider's onCommitFunc).
@@ -328,6 +322,47 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			setActivePlayer(items[0].id);
 		}
 	}, [items, activePlayer]);
+
+	// One-shot restore of the persisted selection. Persistence stores channel
+	// identity as `source` slugs (ids rotate on program rollover / fresh stream),
+	// so we resolve slugs → current item ids the first time items arrive. Guarded
+	// by restoredRef so it runs exactly once and never clobbers later user edits.
+	const restoredRef = useRef(false);
+	useEffect(() => {
+		if (restoredRef.current || items.length === 0) return;
+		restoredRef.current = true;
+		const data = appState?.data ?? {};
+		const slugToId = (slug: string) =>
+			items.find((i) => i.source === slug)?.id;
+
+		const currentChannel = data.currentChannel as string | undefined;
+		if (currentChannel) {
+			const id = slugToId(currentChannel);
+			if (id !== undefined) setActivePlayer(id);
+		}
+
+		const selectedChannels = (data.selectedChannels as string[] | undefined) ?? [];
+		const restoredSelected = selectedChannels
+			.map(slugToId)
+			.filter((id): id is number => id !== undefined);
+		if (restoredSelected.length > 0) setSelectedPlayers(restoredSelected);
+
+		const mutedChannels = (data.mutedChannels as string[] | undefined) ?? [];
+		const restoredMuted = mutedChannels
+			.map(slugToId)
+			.filter((id): id is number => id !== undefined);
+		if (restoredMuted.length > 0) setMutedGridPlayers(restoredMuted);
+
+		const channelVolumes =
+			(data.channelVolumes as Record<string, number> | undefined) ?? {};
+		const restoredVolumes: Record<number, number> = {};
+		for (const [slug, vol] of Object.entries(channelVolumes)) {
+			const id = slugToId(slug);
+			if (id !== undefined) restoredVolumes[id] = vol;
+		}
+		if (Object.keys(restoredVolumes).length > 0)
+			setGridPlayerVolumes(restoredVolumes);
+	}, [items, appState]);
 
 	// Show the loading overlay whenever we switch channels.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on channel change
@@ -516,7 +551,15 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 
 	// Persist on mount and whenever layout/mute change (volumes ride along from
 	// the ref). Per-player volume drags persist via persistGridState on release.
+	// Skip the very first run: on mount the selection is empty/not-yet-restored,
+	// and persisting it would overwrite the stored slugs the restore effect reads.
+	// The restore effect's setState re-fires this via persistGridState's identity.
+	const persistedOnceRef = useRef(false);
 	useEffect(() => {
+		if (!persistedOnceRef.current) {
+			persistedOnceRef.current = true;
+			return;
+		}
 		persistGridState();
 	}, [persistGridState]);
 
