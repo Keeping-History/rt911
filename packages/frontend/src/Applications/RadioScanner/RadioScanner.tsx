@@ -691,6 +691,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                 id={`${appId}_main`}
                 title={appName}
                 appId={appId}
+                icon={appIcon}
                 closable={true}
                 resizable={true}
                 zoomable={true}
