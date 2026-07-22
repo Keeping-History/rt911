@@ -371,6 +371,49 @@
   z-index: 9;
 }
 
+.rsFocusedProgress {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--window-padding-size) / 2);
+  z-index: 9;
+}
+
+.rsFocusedProgressBar {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-system-05);
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--color-theme-01);
+    border: 1px solid var(--color-system-05);
+  }
+
+  &::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--color-theme-01);
+    border: 1px solid var(--color-system-05);
+  }
+}
+
+.rsFocusedTime {
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.75);
+  color: var(--color-theme-02);
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
 /* Scrim shown while the browser's autoplay policy is holding audio back —
    any click anywhere doubles as the unlock gesture, so the overlay needs no
    handler of its own. Sits above the display panels (z-index 9). */
