@@ -733,6 +733,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					id={`${appId}_settings`}
 					title={"Settings"}
 					appId={appId}
+					icon={appIcon}
 					closable={true}
 					resizable={false}
 					zoomable={false}
@@ -862,6 +863,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 				id={`${appId}_main`}
 				title={appName}
 				appId={appId}
+				icon={appIcon}
 				closable={true}
 				resizable={true}
 				zoomable={true}
