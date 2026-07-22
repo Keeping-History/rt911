@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { parseHex, pillColors, TagPills } from "./TagPills";
+import { parseHex, pillColors } from "./tagColors";
+import { TagPills } from "./TagPills";
 import type { ReadmeTag } from "./useReadmeArticles";
 
 afterEach(cleanup);
