@@ -73,4 +73,5 @@ export interface AltitudeSample {
 	lon: number;
 	alt_ft: number;
 	utc: string;
+	phase?: string;
 }
