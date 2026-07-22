@@ -3,6 +3,7 @@ import { altitudeFtAt, exaggeratedHeightM } from "./flightAltitude";
 import type { LandingClock, MotionBuffer } from "./flightMotion";
 import { extrapolate, motionNow } from "./flightMotion";
 import { TRAIL_3D_MAX_POINTS } from "./flightAltitude";
+import { phaseColorRgb01 } from "./flightPhases";
 import { lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
 
 // Smooth 3D flight track. The fill-extrusion curtain can only staircase —
@@ -21,6 +22,7 @@ export interface TrackPoint {
 	lon: number;
 	lat: number;
 	alt_ft: number;
+	phase?: string;
 }
 
 // Catmull-Rom interpolation at t∈[0,1] between p1 and p2, with p0/p3 shaping
@@ -61,11 +63,12 @@ export function splineTrack(profile: TrackPoint[], steps: number): TrackPoint[] 
 				lon: catmullRom(p0.lon, p1.lon, p2.lon, p3.lon, t),
 				lat: catmullRom(p0.lat, p1.lat, p2.lat, p3.lat, t),
 				alt_ft: catmullRom(p0.alt_ft, p1.alt_ft, p2.alt_ft, p3.alt_ft, t),
+				phase: p1.phase, // hard color break at each real sample (snap-to-point)
 			});
 		}
 	}
 	const last = profile[profile.length - 1];
-	pts.push({ lon: last.lon, lat: last.lat, alt_ft: last.alt_ft });
+	pts.push({ lon: last.lon, lat: last.lat, alt_ft: last.alt_ft, phase: last.phase });
 	return pts;
 }
 
@@ -77,6 +80,9 @@ export interface TrackTube {
 	 * shading normal) + an opacity multiplier (w; the trail fade).
 	 */
 	offsets: Float32Array;
+	/** vec3 per vertex: RGB (0..1). Present for the phase-colored track tube;
+	 * undefined for trail ribbons (which use the layer's uniform color). */
+	colors?: Float32Array;
 	vertexCount: number;
 }
 
@@ -100,6 +106,7 @@ export function buildTrackTube(
 	if (!profile || profile.length < 2) return EMPTY_TUBE;
 	const pts = splineTrack(profile, steps);
 	const n = pts.length;
+	const pointColor = pts.map((p) => phaseColorRgb01(p.phase));
 
 	// Per-point center data and ring frames.
 	const cx = new Float64Array(n); // mercator x
@@ -148,6 +155,7 @@ export function buildTrackTube(
 	const vertexCount = quads * 2 * 3;
 	const centers = new Float32Array(vertexCount * 4);
 	const offsets = new Float32Array(vertexCount * 4);
+	const colors = new Float32Array(vertexCount * 3);
 	let v = 0;
 	const emit = (ring: number, side: number) => {
 		const c4 = v * 4;
@@ -162,6 +170,11 @@ export function buildTrackTube(
 		offsets[o4 + 1] = d[k + 1];
 		offsets[o4 + 2] = d[k + 2];
 		offsets[o4 + 3] = 1; // the selected track never fades
+		const g3 = v * 3;
+		const col = pointColor[ring];
+		colors[g3] = col[0];
+		colors[g3 + 1] = col[1];
+		colors[g3 + 2] = col[2];
 		v++;
 	};
 	for (let i = 0; i < n - 1; i++) {
@@ -175,7 +188,7 @@ export function buildTrackTube(
 			emit(i, k2);
 		}
 	}
-	return { centers, offsets, vertexCount };
+	return { centers, offsets, colors, vertexCount };
 }
 
 // --- live trail ribbons --------------------------------------------------------

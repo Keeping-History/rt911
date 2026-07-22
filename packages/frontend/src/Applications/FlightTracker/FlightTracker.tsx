@@ -86,7 +86,8 @@ import {
 	SPEED_LABELS,
 } from "./loopClock";
 import styles from "./FlightTracker.module.scss";
-import type { Feature } from "geojson";
+import type { FeatureCollection } from "geojson";
+import { buildTrackSegments } from "./flightTrackSegments";
 import {
 	BASEMAP_URLS,
 	type BasemapStyleId,
@@ -775,9 +776,18 @@ export const FlightTracker: FC = () => {
 		setSelectedPoi(null);
 	}, [command, flightPositions]);
 
-	const trackGeoJSON: Feature | null = track?.geometry
-		? { type: "Feature", geometry: track.geometry, properties: {} }
-		: null;
+	const trackGeoJSON: FeatureCollection | null = useMemo(() => {
+		if (!track?.geometry) return null;
+		if (selection && isNotable(selection.flight) && profile && profile.length >= 2) {
+			const features = buildTrackSegments(profile);
+			if (features.length) return { type: "FeatureCollection", features };
+		}
+		// non-notable (or no profile yet): the decimated track as one plain feature.
+		return {
+			type: "FeatureCollection",
+			features: [{ type: "Feature", geometry: track.geometry, properties: {} }],
+		};
+	}, [track?.geometry, selection, profile]);
 
 	// A radar-scope style is inherently dark regardless of the Dark Map toggle
 	// (see effectiveTone) — pin-color buckets follow this, not settings.darkMap.

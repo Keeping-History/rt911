@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { AltitudeSample } from "./flightAltitude";
 import { exaggeratedHeightM } from "./flightAltitude";
+import { phaseColorRgb01 } from "./flightPhases";
 import { type MotionBuffer, updateMotion } from "./flightMotion";
 import { lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
 import { TUBE_SIDES, buildTrackTube, buildTrailTubes, splineTrack, trailFadeAt } from "./trackTube";
@@ -205,6 +206,38 @@ describe("buildTrailTubes (smooth 3D trail ribbons)", () => {
 		expect(buildTrailTubes(single, T0, {
 			displayPoints: 20, steps: 1, headOffsetM: 0,
 		}).vertexCount).toBe(0);
+	});
+});
+
+describe("buildTrackTube colors", () => {
+	const S = (lon: number, phase: string): AltitudeSample => ({
+		lat: 40, lon, alt_ft: 30000, utc: "2001-09-11T12:00:00Z", phase,
+	});
+
+	it("emits one vec3 color per vertex, keyed on each vertex's phase", () => {
+		const tube = buildTrackTube([S(-1, "takeoff"), S(-2, "takeoff"), S(-3, "down")]);
+		expect(tube.colors).toBeDefined();
+		expect(tube.colors!.length).toBe(tube.vertexCount * 3);
+		// takeoff green appears somewhere; down maroon appears somewhere.
+		const [tr, tg, tb] = phaseColorRgb01("takeoff");
+		const [dr, dg, db] = phaseColorRgb01("down");
+		const colors = Array.from(tube.colors!);
+		const has = (r: number, g: number, b: number) => {
+			for (let i = 0; i < colors.length; i += 3) {
+				if (Math.abs(colors[i] - r) < 1e-6 && Math.abs(colors[i + 1] - g) < 1e-6 && Math.abs(colors[i + 2] - b) < 1e-6) return true;
+			}
+			return false;
+		};
+		expect(has(tr, tg, tb)).toBe(true);
+		expect(has(dr, dg, db)).toBe(true);
+	});
+
+	it("falls back to the default color for coarse phases", () => {
+		const tube = buildTrackTube([S(-1, "cruise"), S(-2, "cruise")]);
+		const [r, g, b] = phaseColorRgb01("cruise"); // default red
+		expect(tube.colors![0]).toBeCloseTo(r);
+		expect(tube.colors![1]).toBeCloseTo(g);
+		expect(tube.colors![2]).toBeCloseTo(b);
 	});
 });
 

@@ -47,6 +47,16 @@
   "ALTITUDE: alt_src='modec' waypoints carry the transponder's Mode C pressure altitude (100 ft quanta); alt_src='interp' waypoints (transponder off) interpolate through the documented NTSB profile anchors; alt_src='anchor' are the documented anchors themselves.",
   "COVERAGE GAP 13:47:07-14:01:45Z: the previously-curated in-gap position anchors were speed/geometry-infeasible against the radar gap edges and were removed; the track crosses the gap on the great-circle chord (~350 kt closure). The documented descent (NTSB profile) is preserved as altitude-only anchors at 13:52Z (16,000 ft) and 13:59Z (7,000 ft)."
  ],
+ "phases": [
+  { "phase": "takeoff",       "utc": "2001-09-11T12:42:00Z" },
+  { "phase": "tracon",        "utc": "2001-09-11T12:43:00Z" },
+  { "phase": "artcc",         "utc": "2001-09-11T13:23:00Z" },
+  { "phase": "hijack",        "utc": "2001-09-11T13:28:00Z" },
+  { "phase": "atc_alert",     "utc": "2001-09-11T13:32:00Z" },
+  { "phase": "course_change", "utc": "2001-09-11T13:36:00Z" },
+  { "phase": "descent",       "utc": "2001-09-11T13:58:00Z" },
+  { "phase": "down",          "utc": "2001-09-11T14:03:00Z" }
+ ],
  "waypoints": [
   {
    "utc": "2001-09-11T12:42:00Z",

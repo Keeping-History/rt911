@@ -17,6 +17,7 @@ import {
 	trailColor,
 	trailGradient,
 } from "./flightMapStyle";
+import { phaseLineColorExpression } from "./flightPhases";
 import planeSvg from "./plane.svg?raw";
 import pinSvg from "./pin.svg?raw";
 import { type MapPoi, type PoiLayerConfig, layerIndexOf, splitPoisForRender } from "./mapPois";
@@ -294,7 +295,7 @@ interface FlightMapProps {
 	// that give freshly-seeded single-sample flights a heading immediately.
 	seedPositions?: FlightPosition[];
 	basemapUrls: BasemapUrls;
-	trackGeoJSON: GeoJSON.Feature | null;
+	trackGeoJSON: GeoJSON.FeatureCollection | null;
 	// Raw altitude profile of the selected flight: the smooth 3D track tube
 	// splines it in all three axes (see trackTube.ts).
 	trackProfile?: AltitudeSample[] | null;
@@ -696,7 +697,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		map.setPaintProperty(
 			"track-line",
 			"line-color",
-			pitchedRef.current ? TRACK_SHADOW_COLOR : TRACK_LINE_COLOR,
+			pitchedRef.current ? TRACK_SHADOW_COLOR : phaseLineColorExpression(),
 		);
 	};
 
@@ -744,7 +745,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			map.addSource("flight-trails", { type: "geojson", data: EMPTY_FC, lineMetrics: true });
 			map.addLayer({
 				id: "track-line", type: "line", source: "track",
-				paint: { "line-color": TRACK_LINE_COLOR, "line-width": 2 },
+				paint: { "line-color": phaseLineColorExpression(), "line-width": 2 },
 			});
 			// Breadcrumb trails under the dots, faded oldest→head by a line-gradient.
 			map.addLayer({
@@ -1208,7 +1209,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
 		const src = map.getSource("track") as maplibregl.GeoJSONSource | undefined;
-		src?.setData(trackGeoJSON ? { type: "FeatureCollection", features: [trackGeoJSON] } : EMPTY_FC);
+		src?.setData(trackGeoJSON ?? EMPTY_FC);
 	}, [trackGeoJSON]);
 
 	// Feed the two POI sources + recolor clusters when the enabled set, layer

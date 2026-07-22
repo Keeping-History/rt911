@@ -18,8 +18,16 @@ describe("profileUrl", () => {
 		expect(url.pathname).toBe("/items/flight_positions");
 		expect(url.searchParams.get("filter[flight][_eq]")).toBe("AA11");
 		expect(url.searchParams.get("filter[flight_date][_eq]")).toBe("2001-09-11");
-		expect(url.searchParams.get("fields")).toBe("lat,lon,alt_ft,utc");
+		expect(url.searchParams.get("fields")).toBe("lat,lon,alt_ft,utc,phase");
 		expect(url.searchParams.get("sort")).toBe("utc");
+	});
+
+	it("requests the phase field for per-phase coloring", () => {
+		const url = profileUrl("AA11", "2001-09-11");
+		const fields = new URL(url).searchParams.get("fields");
+		expect(fields).toContain("phase");
+		expect(fields).toContain("lat");
+		expect(fields).toContain("lon");
 	});
 });
 

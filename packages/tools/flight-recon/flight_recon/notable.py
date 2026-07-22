@@ -45,7 +45,9 @@ import psycopg
 from psycopg.types.json import Json
 
 from flight_recon.pgcopy import COLUMNS as POSITION_COLUMNS
-from flight_recon.resample import decimate_polyline, fmt_utc, parse_utc, resample_track
+from flight_recon.resample import (
+    assign_curated_phases, decimate_polyline, fmt_utc, parse_utc, resample_track,
+)
 from reconstruct import ET_OFFSET, et_seconds
 
 log = logging.getLogger(__name__)
@@ -137,6 +139,9 @@ def build_flight(data):
     LineString. Raises ValueError on any integrity violation."""
     flight = data["flight"]
     samples = resample_track(data["waypoints"])
+    curated = data.get("phases")
+    if curated:
+        assign_curated_phases(samples, curated)
 
     positions, coords, prev_min = [], [], None
     for s in samples:
