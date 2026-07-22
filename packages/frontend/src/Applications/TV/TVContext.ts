@@ -138,9 +138,9 @@ export const classicyTVEventHandler = (
 			apps[appId].data = {
 				...appData,
 				multiSelectMode: action.multiSelectMode,
-				selectedPlayers: action.selectedPlayers,
-				mutedGridPlayers: action.mutedGridPlayers,
-				gridPlayerVolumes: action.gridPlayerVolumes,
+				selectedChannels: action.selectedChannels,
+				mutedChannels: action.mutedChannels,
+				channelVolumes: action.channelVolumes,
 			};
 			return ds;
 		// Channels the user has turned off in Settings. Stored as a blacklist of

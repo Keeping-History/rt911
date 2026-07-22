@@ -142,3 +142,36 @@ describe("classicyTVEventHandler — channel order", () => {
 		).toMatchObject({ channelOrder: [] });
 	});
 });
+
+describe("classicyTVEventHandler — grid selection (slug-based)", () => {
+	it("persists selectedChannels, mutedChannels and channelVolumes", () => {
+		const out = classicyTVEventHandler(storeWithApp(), {
+			type: "ClassicyAppTVSetGridState",
+			multiSelectMode: true,
+			selectedChannels: ["WABC", "WNBC"],
+			mutedChannels: ["WNBC"],
+			channelVolumes: { WABC: 0.5 },
+		});
+		expect(
+			out.System.Manager.Applications.apps["TV.app"].data,
+		).toMatchObject({
+			multiSelectMode: true,
+			selectedChannels: ["WABC", "WNBC"],
+			mutedChannels: ["WNBC"],
+			channelVolumes: { WABC: 0.5 },
+		});
+	});
+
+	it("preserves unrelated fields when writing grid state", () => {
+		const out = classicyTVEventHandler(storeWithApp({ currentChannel: "CNN" }), {
+			type: "ClassicyAppTVSetGridState",
+			multiSelectMode: false,
+			selectedChannels: [],
+			mutedChannels: [],
+			channelVolumes: {},
+		});
+		expect(
+			out.System.Manager.Applications.apps["TV.app"].data,
+		).toMatchObject({ currentChannel: "CNN", multiSelectMode: false, selectedChannels: [] });
+	});
+});
