@@ -164,3 +164,29 @@ def _assign_phases(samples):
             s["phase"] = "descent"
         else:
             s["phase"] = "cruise"
+
+
+def assign_curated_phases(samples, phases):
+    """Override each sample's ``phase`` from curated ``{phase, utc}`` boundaries.
+
+    A sample takes the last boundary whose ``utc`` is <= the sample's ``utc``
+    (boundary-inclusive: the boundary sample gets the NEW phase). Boundaries are
+    sorted by time here, so they may be authored in real chronological order
+    even when that differs from any nominal phase list (UA93's atc_alert before
+    course_change). Samples before the first boundary take the first phase."""
+    bounds = sorted(
+        ((b["utc"] if isinstance(b["utc"], datetime) else parse_utc(b["utc"]), b["phase"])
+         for b in phases),
+        key=lambda bp: bp[0],
+    )
+    if not bounds:
+        return
+    for s in samples:
+        t = s["utc"]
+        label = bounds[0][1]
+        for bt, ph in bounds:
+            if bt <= t:
+                label = ph
+            else:
+                break
+        s["phase"] = label
