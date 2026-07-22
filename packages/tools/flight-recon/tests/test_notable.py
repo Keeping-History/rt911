@@ -20,12 +20,36 @@ from pathlib import Path
 import pytest
 
 from flight_recon import notable
+from flight_recon.notable import NOTABLE_FLIGHTS, build_all
 from flight_recon.resample import decimate_polyline, parse_utc, resample_track
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "notable_flights"
 
 # The four crashed flights (documented impact); GOFER06 is the observer.
 HIJACKED = ("AA11", "UA175", "AA77", "UA93")
+
+CURATED_PHASES = {"takeoff", "tracon", "artcc", "hijack",
+                  "course_change", "atc_alert", "descent", "down"}
+
+
+def test_notable_positions_use_curated_phases():
+    positions, _ = build_all()
+    by_flight = {}
+    for p in positions:
+        by_flight.setdefault(p["flight"], []).append(p["phase"])
+    for flight in ("AA11", "UA175", "AA77", "UA93"):
+        phases = by_flight[flight]
+        # every position of a hijacked flight carries an 8-phase value...
+        assert set(phases) <= CURATED_PHASES, f"{flight}: {set(phases) - CURATED_PHASES}"
+        # ...and the story spans at least takeoff -> down.
+        assert phases[0] == "takeoff"
+        assert phases[-1] == "down"
+
+
+def test_gofer06_keeps_altitude_phase():
+    positions, _ = build_all()
+    gofer = {p["phase"] for p in positions if p["flight"] == "GOFER06"}
+    assert gofer <= {"climb", "cruise", "descent"}
 
 
 # ------------------------------------------------------------------ resample core
