@@ -3,6 +3,8 @@ import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	activeSegments,
 	calcSeekSeconds,
+	combinedPrevious,
+	combinedUpcoming,
 	countdownLabel,
 	groupStations,
 	mergeWithSources,
@@ -330,7 +332,7 @@ describe("sortStations", () => {
 			station("Rutgers"),
 			station("WINS"),
 		];
-		expect(sortStations(stations, nowMs).map((s) => s.key)).toEqual([
+		expect(sortStations(stations, [], nowMs).map((s) => s.key)).toEqual([
 			"WINS",
 			"WCBS",
 			"ATC",
@@ -338,14 +340,14 @@ describe("sortStations", () => {
 		]);
 	});
 
-	it("orders the remaining stations online-first, keeping relative order", () => {
+	it("orders the remaining stations on-air first, keeping relative order", () => {
 		const stations = [
 			station("Rutgers"),
 			station("NY ATC", [active]),
 			station("Newark ATC", [active]),
 			station("Scanner"),
 		];
-		expect(sortStations(stations, nowMs).map((s) => s.key)).toEqual([
+		expect(sortStations(stations, [], nowMs).map((s) => s.key)).toEqual([
 			"NY ATC",
 			"Newark ATC",
 			"Rutgers",
@@ -353,8 +355,63 @@ describe("sortStations", () => {
 		]);
 	});
 
+	it("tiers non-pinned stations on-air, then upcoming, then offline", () => {
+		const upcomingItem = item({ source: "Rutgers", start_date: "2001-09-11T13:00:00Z" });
+		const stations = [
+			station("Offline1"),
+			station("Rutgers"), // quiet, but has a future item → upcoming
+			station("NY ATC", [active]), // playing now → on-air
+			station("Offline2"),
+		];
+		expect(
+			sortStations(stations, [upcomingItem], nowMs).map((s) => s.key),
+		).toEqual(["NY ATC", "Rutgers", "Offline1", "Offline2"]);
+	});
+
 	it("omits pinned stations that are absent from the list", () => {
 		const stations = [station("WCBS"), station("ATC", [active])];
-		expect(sortStations(stations, nowMs).map((s) => s.key)).toEqual(["WCBS", "ATC"]);
+		expect(sortStations(stations, [], nowMs).map((s) => s.key)).toEqual(["WCBS", "ATC"]);
+	});
+});
+
+describe("combinedUpcoming / combinedPrevious (All Traffic)", () => {
+	const nowMs = new Date("2001-09-11T12:45:00Z").getTime();
+	const station = (key: string): Station => ({ key, label: key, items: [] });
+
+	it("combinedUpcoming merges future items across the given stations, earliest-first", () => {
+		const upcoming = [
+			item({ id: 1, source: "ATC", start_date: "2001-09-11T13:00:00Z" }),
+			item({ id: 2, source: "Rutgers", start_date: "2001-09-11T12:50:00Z" }),
+			item({ id: 3, source: "WINS", start_date: "2001-09-11T12:48:00Z" }), // excluded
+			item({ id: 4, source: "ATC", start_date: "2001-09-11T12:40:00Z" }), // past
+		];
+		const result = combinedUpcoming(
+			[station("ATC"), station("Rutgers")],
+			upcoming,
+			nowMs,
+		);
+		expect(result.map((i) => i.id)).toEqual([2, 1]);
+	});
+
+	it("combinedUpcoming honors the count cap", () => {
+		const upcoming = Array.from({ length: 6 }, (_, i) =>
+			item({ id: i + 1, source: "ATC", start_date: `2001-09-11T13:0${i}:00Z` }),
+		);
+		expect(combinedUpcoming([station("ATC")], upcoming, nowMs, 2)).toHaveLength(2);
+	});
+
+	it("combinedPrevious merges ended items across stations, most recent first", () => {
+		const history = [
+			item({ id: 1, source: "ATC", start_date: "2001-09-11T12:20:00Z", end_date: "2001-09-11T12:25:00Z" }),
+			item({ id: 2, source: "Rutgers", start_date: "2001-09-11T12:30:00Z", end_date: "2001-09-11T12:35:00Z" }),
+			item({ id: 3, source: "WCBS", start_date: "2001-09-11T12:10:00Z", end_date: "2001-09-11T12:15:00Z" }), // excluded
+			item({ id: 4, source: "ATC", start_date: "2001-09-11T12:44:00Z", end_date: "2001-09-11T12:59:00Z" }), // not ended
+		];
+		const result = combinedPrevious(
+			[station("ATC"), station("Rutgers")],
+			history,
+			nowMs,
+		);
+		expect(result.map((i) => i.id)).toEqual([2, 1]);
 	});
 });

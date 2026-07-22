@@ -299,6 +299,48 @@ describe("RadioScanner schedule visibility", () => {
 	});
 });
 
+describe("RadioScanner All Traffic view", () => {
+	afterEach(cleanup);
+
+	it("renders an All Traffic button in the strip", () => {
+		renderScanner("ATC");
+		// Active station is ATC, so "All Traffic" text appears only on the button.
+		expect(screen.getByText("All Traffic")).toBeTruthy();
+	});
+
+	it("aggregates every non-live station's audio and lists per-channel checkboxes", () => {
+		renderScanner("__all_traffic__");
+		// The player is fed the synthetic aggregate station...
+		const station = stationPlayerProps.current?.station as {
+			key: string;
+			items: MediaItem[];
+		};
+		expect(station.key).toBe("__all_traffic__");
+		// ...carrying the live ATC clip (id 3) but NOT the continuous WINS/WCBS.
+		expect(station.items.map((i) => i.id)).toContain(3);
+		expect(station.items.some((i) => i.source === "WINS")).toBe(false);
+		expect(station.items.some((i) => i.source === "WCBS")).toBe(false);
+
+		// A checkbox exists for the non-live channel, but not the live ones.
+		expect(screen.getByLabelText("ATC")).toBeTruthy();
+		expect(screen.queryByLabelText("WINS")).toBeNull();
+		expect(screen.queryByLabelText("WCBS")).toBeNull();
+	});
+
+	it("drops a channel from the mix when its checkbox is unticked", () => {
+		renderScanner("__all_traffic__");
+		const before = stationPlayerProps.current?.station as { items: MediaItem[] };
+		expect(before.items.length).toBeGreaterThan(0);
+
+		// Untick ATC (the only non-live channel) — the aggregate empties out.
+		act(() => {
+			fireEvent.click(screen.getByLabelText("ATC"));
+		});
+		const after = stationPlayerProps.current?.station as { items: MediaItem[] };
+		expect(after.items).toHaveLength(0);
+	});
+});
+
 describe("RadioScanner audio-unlock overlay", () => {
 	afterEach(() => {
 		clearAudioBlocked("test-gate");

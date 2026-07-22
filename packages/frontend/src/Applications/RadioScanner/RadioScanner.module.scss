@@ -246,6 +246,21 @@
   width: 50%;
 }
 
+// All Traffic view: the per-channel on/off checkbox list. A wrapping row so it
+// stays compact above the now-playing list however many channels there are.
+.rsTrafficChannels {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.rsTrafficChannelList {
+  display: flex;
+  flex-flow: row wrap;
+  gap: var(--window-padding-size) calc(var(--window-padding-size) * 3);
+  padding: var(--window-padding-size);
+  background: rgba(255, 255, 255, 0.5);
+}
+
 .rsScheduleLabel {
   font-family: var(--ui-font);
   font-size: calc(var(--ui-font-size) * 0.75);

@@ -54,10 +54,13 @@ import {
 import { StationPlayer } from "./StationPlayer";
 import {
     activeSegments,
+    combinedPrevious,
+    combinedUpcoming,
     countdownLabel,
     mergeWithSources,
     previousSegments,
     sortStations,
+    type Station,
     startTimeLabel,
     stationStatus,
     upcomingSegments,
@@ -68,6 +71,13 @@ type RadioScannerProps = Record<string, never>;
 
 // These stations are continuous broadcasts — no Coming Up / Previous schedule.
 const CONTINUOUS_STATIONS = new Set(["WCBS", "WINS"]);
+
+// The "All Traffic" pseudo-station: a synthetic station, appended to the end of
+// the strip, that aggregates every non-live (non-continuous) station into one
+// view and mixes their audio together — a scanner "monitor everything" mode.
+// The key is a sentinel that can never collide with a real source name.
+const ALL_TRAFFIC_KEY = "__all_traffic__";
+const ALL_TRAFFIC_LABEL = "All Traffic";
 
 export const RadioScanner: React.FC<RadioScannerProps> = () => {
     const appName = "Radio Scanner";
@@ -216,6 +226,35 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         [sources.audio, items],
     );
 
+    // Non-live stations = everything except the continuous broadcasts. These are
+    // what "All Traffic" aggregates and what its channel checkboxes control.
+    const nonLiveStations = useMemo(
+        () => stations.filter((s) => !CONTINUOUS_STATIONS.has(s.key)),
+        [stations],
+    );
+
+    // All Traffic view: which non-live channels the user has switched OFF. Stored
+    // as the disabled set (ephemeral, not persisted) so channels that appear
+    // later default to ON. Toggling a checkbox flips membership.
+    const [disabledTrafficChannels, setDisabledTrafficChannels] = useState<
+        Set<string>
+    >(() => new Set());
+    const setTrafficChannelEnabled = useCallback(
+        (key: string, enabled: boolean) =>
+            setDisabledTrafficChannels((prev) => {
+                const next = new Set(prev);
+                if (enabled) next.delete(key);
+                else next.add(key);
+                return next;
+            }),
+        [],
+    );
+    const enabledTrafficStations = useMemo(
+        () => nonLiveStations.filter((s) => !disabledTrafficChannels.has(s.key)),
+        [nonLiveStations, disabledTrafficChannels],
+    );
+    const isAllTraffic = activeStation === ALL_TRAFFIC_KEY;
+
     // Snapshot of items waiting in the reveal buffer — refreshed every second.
     // biome-ignore lint/correctness/useExhaustiveDependencies: tick is the intended dependency
     const upcomingItems = useMemo(
@@ -303,7 +342,23 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         },
     ];
 
-    const activeStationObj = stations.find((s) => s.key === activeStation);
+    // The "All Traffic" aggregate: a synthetic station whose items are every
+    // ENABLED non-live station's items combined. activeSegments/StationPlayer
+    // then treat it exactly like a real station — mixing all of their audio and
+    // listing every in-window clip. Memoized so its identity is stable for the
+    // playingSegments memo and StationPlayer's volume effect.
+    const allTrafficStation = useMemo<Station>(
+        () => ({
+            key: ALL_TRAFFIC_KEY,
+            label: ALL_TRAFFIC_LABEL,
+            items: enabledTrafficStations.flatMap((s) => s.items),
+        }),
+        [enabledTrafficStations],
+    );
+
+    const activeStationObj = isAllTraffic
+        ? allTrafficStation
+        : stations.find((s) => s.key === activeStation);
 
     // The active station's in-window segments — shared by the now-playing
     // list, the solo lifecycle, and the effective-mute derivation. Memoized so
@@ -350,35 +405,51 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         isAudioBlocked,
     );
 
-    const upcomingList =
-        showSchedule && activeStationObj
-            ? upcomingSegments(activeStationObj, upcomingItems, nowMs)
-            : [];
-
     // Previous = the server's full back-catalogue (everything started before the
     // snapshot instant) plus items seen live since (which cover the gap between
-    // history snapshots). Later-seen copies win the id merge; previousSegments
-    // keeps only entries that have actually ended by nowMs.
-    const previousList =
-        showSchedule && activeStationObj
-            ? previousSegments(
-                activeStationObj,
-                Array.from(
-                    new Map(
-                        [...mp3History, ...seenItemsRef.current.values()].map(
-                            (i) => [i.id, i],
-                        ),
-                    ).values(),
-                ),
-                nowMs,
-            )
-            : [];
-
-    // Pinned stations first, then online stations, then offline ones.
-    const sortedStations = useMemo(
-        () => sortStations(stations, nowMs),
-        [stations, nowMs],
+    // history snapshots). Later-seen copies win the id merge; the segment helpers
+    // keep only entries that have actually ended by nowMs. Built fresh each render
+    // (not memoized) so it always reflects the latest seenItemsRef mutations.
+    const historyPool = Array.from(
+        new Map(
+            [...mp3History, ...seenItemsRef.current.values()].map((i) => [i.id, i]),
+        ).values(),
     );
+
+    // Coming Up / Previous: for a single station, filter to that station; for the
+    // All Traffic view, merge across every enabled non-live station.
+    const upcomingList = !showSchedule
+        ? []
+        : isAllTraffic
+            ? combinedUpcoming(enabledTrafficStations, upcomingItems, nowMs)
+            : activeStationObj
+                ? upcomingSegments(activeStationObj, upcomingItems, nowMs)
+                : [];
+    const previousList = !showSchedule
+        ? []
+        : isAllTraffic
+            ? combinedPrevious(enabledTrafficStations, historyPool, nowMs)
+            : activeStationObj
+                ? previousSegments(activeStationObj, historyPool, nowMs)
+                : [];
+
+    // Strip order: pinned live stations, then on-air, upcoming, offline.
+    const sortedStations = useMemo(
+        () => sortStations(stations, upcomingItems, nowMs),
+        [stations, upcomingItems, nowMs],
+    );
+
+    // Indicator light for the All Traffic button: on-air if ANY non-live station
+    // is playing now, upcoming if any has a queued item, else offline. Uses all
+    // non-live stations (not just enabled ones) so the light reflects available
+    // traffic regardless of the user's channel filter.
+    const allTrafficStatus = nonLiveStations.some(
+        (s) => activeSegments(s, nowMs).length > 0,
+    )
+        ? ("on-air" as const)
+        : combinedUpcoming(nonLiveStations, upcomingItems, nowMs).length > 0
+            ? ("upcoming" as const)
+            : ("offline" as const);
 
     return (
         <ClassicyApp
@@ -665,6 +736,49 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                         <p className={styles.rsDisplaySource}>
                                             {activeStationObj.label}
                                         </p>
+                                        {isAllTraffic && (
+                                            <div className={styles.rsTrafficChannels}>
+                                                <p className={styles.rsScheduleLabel}>
+                                                    Channels
+                                                </p>
+                                                <div
+                                                    className={
+                                                        styles.rsTrafficChannelList
+                                                    }
+                                                >
+                                                    {nonLiveStations.length === 0 ? (
+                                                        <span
+                                                            className={
+                                                                styles.rsScheduleItem
+                                                            }
+                                                        >
+                                                            No traffic channels
+                                                        </span>
+                                                    ) : (
+                                                        nonLiveStations.map((s) => (
+                                                            <ClassicyCheckbox
+                                                                key={s.key}
+                                                                id={`rs_traffic_${s.key}`}
+                                                                label={s.label}
+                                                                checked={
+                                                                    !disabledTrafficChannels.has(
+                                                                        s.key,
+                                                                    )
+                                                                }
+                                                                onClickFunc={(
+                                                                    checked: boolean,
+                                                                ) =>
+                                                                    setTrafficChannelEnabled(
+                                                                        s.key,
+                                                                        checked,
+                                                                    )
+                                                                }
+                                                            />
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                         <NowPlayingList
                                             segments={playingSegments}
                                             mutedItems={mutedItems}
@@ -836,6 +950,20 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                     </ClassicyButton>
                                 );
                             })}
+                            {/* All Traffic: always last, aggregates every non-live station. */}
+                            <ClassicyButton
+                                key={ALL_TRAFFIC_KEY}
+                                depressed={isAllTraffic}
+                                onClickFunc={() => {
+                                    setActiveStation(ALL_TRAFFIC_KEY);
+                                    setFocusedItem(null);
+                                }}
+                            >
+                                <StationButtonContent
+                                    label={ALL_TRAFFIC_LABEL}
+                                    status={allTrafficStatus}
+                                />
+                            </ClassicyButton>
                         </div>
                     </div>
                 </div>
