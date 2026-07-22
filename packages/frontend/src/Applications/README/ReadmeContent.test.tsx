@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { formatArticleDate, ReadmeContent } from "./ReadmeContent";
-import type { ReadmeArticle, ReadmeArticlesState } from "./useReadmeArticles";
+import type { ReadmeArticle, ReadmeArticlesState, ReadmeTag } from "./useReadmeArticles";
 
 afterEach(cleanup);
 
@@ -99,5 +99,40 @@ describe("ReadmeContent", () => {
 		expect(article?.textContent).toContain("safe");
 		expect(article?.querySelector("script")).toBeNull();
 		expect(article?.querySelector("img")?.getAttribute("onerror")).toBeNull();
+	});
+});
+
+describe("ReadmeContent tags", () => {
+	const TAG_MEDIA: ReadmeTag = { id: 20, name: "Media", color: "#3366cc" };
+	const TAG_BUG: ReadmeTag = { id: 30, name: "Bugfix", color: null };
+
+	const TAGGED: ReadmeArticle[] = [
+		{
+			id: 1, headline: "Tagged post", author: null,
+			date_created: "2026-07-16T12:00:00", date_updated: null, body: "<p>t</p>",
+			sort: null, featured: false, tags: [TAG_MEDIA, TAG_BUG],
+		},
+		{
+			id: 2, headline: "Only bugfix", author: null,
+			date_created: "2026-07-15T12:00:00", date_updated: null, body: "<p>b</p>",
+			sort: null, featured: false, tags: [TAG_BUG],
+		},
+	];
+
+	it("renders each article's tag pills in the list and reading pane", () => {
+		render(<ReadmeContent state={stateWith({ articles: TAGGED })} />);
+		// Media appears once (list row of the selected article) plus once in the
+		// body pane → at least 2 occurrences.
+		expect(screen.getAllByText("Media").length).toBeGreaterThanOrEqual(2);
+	});
+
+	it("hides articles whose every tag is hidden, keeping OR matches", () => {
+		render(
+			<ReadmeContent state={stateWith({ articles: TAGGED })} hiddenTagIds={[30]} />,
+		);
+		// Bugfix(30) hidden: "Only bugfix" (id 2, tags [30]) disappears entirely.
+		expect(screen.queryByText("Only bugfix")).toBeNull();
+		// "Tagged post" survives (still has Media 20).
+		expect(screen.getAllByText("Tagged post").length).toBeGreaterThan(0);
 	});
 });
