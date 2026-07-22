@@ -122,8 +122,12 @@ func main() {
 
 	addr := env("LISTEN_ADDR", ":8080")
 
+	// sendSources' four queries are identical for every client and time-independent;
+	// memoize them so a connection storm doesn't re-run them per init.
+	sourcesCache := db.NewSourcesCache(pool, 5*time.Minute)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, logger))
+	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, sourcesCache, logger))
 	mux.HandleFunc("/feedback", handler.NewFeedbackHandler(
 		env("GITHUB_API_URL", "https://api.github.com"),
 		env("S3_ENDPOINT", "https://s3.wasabisys.com"),
