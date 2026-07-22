@@ -1,24 +1,27 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReadmeArticle } from "./useReadmeArticles";
+import type { ReadmeArticle, ReadmeTag } from "./useReadmeArticles";
 import {
 	ARTICLES_URL,
+	allTags,
+	flattenTags,
 	PROBE_URL,
 	REFRESH_INTERVAL_MS,
 	sortArticles,
 	useReadmeArticles,
+	visibleArticles,
 } from "./useReadmeArticles";
 
 const ARTICLES: ReadmeArticle[] = [
 	{
 		id: 2, headline: "Newer post", author: "Robbie Byrd",
 		date_created: "2026-07-16T12:00:00", date_updated: null, body: "<p>Two</p>",
-		sort: null, featured: false,
+		sort: null, featured: false, tags: [],
 	},
 	{
 		id: 1, headline: "Welcome", author: "Robbie Byrd",
 		date_created: "2026-07-01T12:00:00", date_updated: "2026-07-02T09:00:00", body: "<p>One</p>",
-		sort: null, featured: false,
+		sort: null, featured: false, tags: [],
 	},
 ];
 
@@ -91,7 +94,7 @@ describe("useReadmeArticles", () => {
 			{
 				id: 3, headline: "Breaking", author: null,
 				date_created: "2026-07-17T08:00:00", date_updated: null, body: "<p>Three</p>",
-				sort: null, featured: false,
+				sort: null, featured: false, tags: [],
 			},
 			...ARTICLES,
 		];
@@ -186,7 +189,7 @@ describe("useReadmeArticles", () => {
 describe("sortArticles", () => {
 	const mk = (o: Partial<ReadmeArticle> & { id: number }): ReadmeArticle => ({
 		headline: `A${o.id}`, author: null, date_created: "2026-01-01T00:00:00",
-		date_updated: null, body: "", sort: null, featured: false, ...o,
+		date_updated: null, body: "", sort: null, featured: false, tags: [], ...o,
 	});
 
 	it("pins featured articles above everything, even sorted or newer ones", () => {
@@ -221,5 +224,75 @@ describe("sortArticles", () => {
 		const input = [mk({ id: 1, sort: 2 }), mk({ id: 2, sort: 1 })];
 		sortArticles(input);
 		expect(input.map((a) => a.id)).toEqual([1, 2]);
+	});
+});
+
+describe("flattenTags", () => {
+	it("maps Directus M2M junction rows to flat tags", () => {
+		const raw = [
+			{ readme_tags_id: { id: 1, name: "Media", color: "#cc3333" } },
+			{ readme_tags_id: { id: 2, name: "Bugfix", color: null } },
+		];
+		expect(flattenTags(raw)).toEqual([
+			{ id: 1, name: "Media", color: "#cc3333" },
+			{ id: 2, name: "Bugfix", color: null },
+		]);
+	});
+
+	it("drops null join rows and returns [] for non-arrays", () => {
+		expect(flattenTags([{ readme_tags_id: null }, null])).toEqual([]);
+		expect(flattenTags(undefined)).toEqual([]);
+		expect(flattenTags("nope")).toEqual([]);
+	});
+
+	it("defaults a missing color to null", () => {
+		expect(flattenTags([{ readme_tags_id: { id: 3, name: "News" } }])).toEqual([
+			{ id: 3, name: "News", color: null },
+		]);
+	});
+});
+
+describe("allTags", () => {
+	const mk = (id: number, tags: ReadmeTag[]): ReadmeArticle => ({
+		id, headline: `A${id}`, author: null, date_created: "2026-01-01T00:00:00",
+		date_updated: null, body: "", sort: null, featured: false, tags,
+	});
+
+	it("returns the deduped union of tags, sorted by name", () => {
+		const out = allTags([
+			mk(1, [{ id: 2, name: "Media", color: null }, { id: 1, name: "Announcement", color: null }]),
+			mk(2, [{ id: 2, name: "Media", color: null }]),
+		]);
+		expect(out.map((t) => t.name)).toEqual(["Announcement", "Media"]);
+	});
+
+	it("returns [] when no article has tags", () => {
+		expect(allTags([mk(1, [])])).toEqual([]);
+	});
+});
+
+describe("visibleArticles", () => {
+	const mk = (id: number, tags: ReadmeTag[]): ReadmeArticle => ({
+		id, headline: `A${id}`, author: null, date_created: "2026-01-01T00:00:00",
+		date_updated: null, body: "", sort: null, featured: false, tags,
+	});
+	const A = mk(1, [{ id: 10, name: "Announcement", color: null }]);
+	const B = mk(2, [
+		{ id: 20, name: "Media", color: null },
+		{ id: 30, name: "Bugfix", color: null },
+	]);
+	const C = mk(3, []); // untagged
+
+	it("returns all articles unchanged when nothing is hidden", () => {
+		expect(visibleArticles([A, B, C], [])).toEqual([A, B, C]);
+	});
+
+	it("hides an article only when ALL its tags are hidden (OR semantics)", () => {
+		// hide Announcement(10) + Media(20): A gone, B stays (has Bugfix 30), C stays (untagged)
+		expect(visibleArticles([A, B, C], [10, 20])).toEqual([B, C]);
+	});
+
+	it("never hides untagged articles even when everything is hidden", () => {
+		expect(visibleArticles([A, B, C], [10, 20, 30])).toEqual([C]);
 	});
 });

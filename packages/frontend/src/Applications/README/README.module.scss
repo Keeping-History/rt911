@@ -90,3 +90,38 @@
 	padding: 12px;
 	font-size: 12px;
 }
+
+.pills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--windows-border-size) * 2);
+	margin-top: calc(var(--windows-border-size) * 2);
+}
+
+.pill {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: 8px;
+	font-family: var(--ui-font);
+	font-size: calc(var(--ui-font-size) * 0.85);
+	line-height: 1.4;
+	white-space: nowrap;
+}
+
+.settings {
+	display: flex;
+	flex-direction: column;
+	padding: var(--window-padding-size);
+	gap: var(--window-padding-size);
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	background-color: var(--color-system-02);
+}
+
+.settingsButtons {
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+	gap: calc(var(--window-padding-size) * 0.5);
+	padding-top: calc(var(--window-padding-size) * 0.5);
+}
