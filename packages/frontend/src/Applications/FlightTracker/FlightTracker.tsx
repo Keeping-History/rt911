@@ -38,7 +38,7 @@ import { FlightMap, type FlightMapHandle } from "./FlightMap";
 import { FlightLayersPanel } from "./FlightLayersPanel";
 import { MapControls, type SelectMode } from "./MapControls";
 import { useMapPois } from "./useMapPois";
-import { visiblePois, type MapPoi } from "./mapPois";
+import { visiblePois, type MapPoi, poiLayerConfigs } from "./mapPois";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 import { useAltitudeProfile } from "./useAltitudeProfile";
 import { legEstimates } from "./flightEta";
@@ -132,6 +132,10 @@ export const FlightTracker: FC = () => {
 	const enabledPois = useMemo(
 		() => visiblePois(allPois, poiSettings.enabled, poiSettings.disabledLayers),
 		[allPois, poiSettings.enabled, poiSettings.disabledLayers],
+	);
+	const poiLayers = useMemo(
+		() => poiLayerConfigs(allPois, poiSettings),
+		[allPois, poiSettings],
 	);
 
 	const [showSettings, setShowSettings] = useState(false);
@@ -1144,6 +1148,7 @@ export const FlightTracker: FC = () => {
 								cameraMode={settings.cameraMode}
 								onClearSelection={() => { setMultiSelected([]); setSelectedPoi(null); }}
 								pois={enabledPois}
+								poiLayers={poiLayers}
 								selectedPoiId={selectedPoi?.id ?? null}
 								onSelectPoi={onSelectPoi}
 							/>
