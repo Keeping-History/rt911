@@ -43,8 +43,11 @@ describe("FlightDetailPanel", () => {
 		render(<FlightDetailPanel selected={sel} loading={false} error={null} track={baseTrack} nowMs={PRE_IMPACT} />);
 		expect(screen.getByText("AA11")).toBeTruthy();
 		expect(screen.getByText(/29,?000/)).toBeTruthy();
-		expect(screen.getByText(/BOS/)).toBeTruthy();
-		expect(screen.getByText(/LAX/)).toBeTruthy();
+		// The route also renders in the pane's header label (ClassicyControlLabel),
+		// so a bare getByText(/BOS/) now matches two nodes. Scope to the Route
+		// field's <dd> and assert the full origin → dest string there.
+		const routeValue = screen.getByText("Route").nextElementSibling;
+		expect(routeValue?.textContent).toBe("BOS → LAX");
 	});
 	it("shows a track-unavailable note on error", () => {
 		render(<FlightDetailPanel selected={sel} track={null} loading={false} error="Track unavailable" nowMs={PRE_IMPACT} />);
