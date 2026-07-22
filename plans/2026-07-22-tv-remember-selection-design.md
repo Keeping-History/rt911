@@ -105,12 +105,28 @@ ClassicyState (localStorage)
 - **Program rollover mid-session:** runtime ids change, but persistence is slug-based,
   so a later reload still resolves. Live playback is unaffected (runtime uses live ids,
   existing behavior).
-- **Channel disabled in Settings, then re-enabled:** the slug persists and resolves
-  again when the channel reappears in `items`.
-- **Persisted channel missing at the current virtual time:** slug skipped on restore;
-  single view falls back to `items[0]` via the re-home effect.
+- **Persisted channel missing at the current virtual time (or disabled in Settings):**
+  the slug is skipped on restore and single view falls back to `items[0]` via the
+  re-home effect. **Accepted limitation (see below):** this fallback is *destructive*
+  for single view — the pre-existing `currentChannel`-publish effect (`TV.tsx:208`)
+  then rewrites the stored slug to the fallback channel, so the originally-remembered
+  channel is forgotten rather than restored if it later reappears.
 - **Race with the re-home effect:** restore seeds `activePlayer` from the slug; the
   re-home effect is the fallback only when the slug does not resolve.
+
+### Accepted limitation — single-view fallback forgets the remembered channel
+
+`currentChannel` serves two roles: the restore source *and* the "where is the TV
+actually tuned" signal that the Playlist engine (`PlaylistProvider`) reads for its
+locked-focus reconciliation. When the remembered channel is unavailable at reload,
+those two roles diverge — the screen shows the fallback while the user "wants" the
+absent channel. Rather than split the field (a separate `rememberedChannel` updated
+only on explicit user tuning) or suppress the publish (which would feed Playlist a
+channel the TV isn't showing), the shipped behavior keeps `currentChannel` = the
+actually-displayed channel: reload reliably restores the last channel **when it is
+available**, and otherwise falls back to the first channel and forgets the remembered
+one. This is a deliberate scope decision, not an oversight. MultiView selection is
+unaffected — it is persisted as its own `selectedChannels` slug list.
 
 ## Testing
 
