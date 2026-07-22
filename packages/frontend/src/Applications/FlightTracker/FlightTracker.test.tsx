@@ -1062,7 +1062,7 @@ describe("FlightTracker", () => {
 			fireEvent.click(screen.getByLabelText("Major Airports"));
 			expect(dispatchMock).toHaveBeenCalledWith({
 				type: "ClassicyAppFlightTrackerSetPoiSettings",
-				poiSettings: { enabled: true, disabledLayers: ["Major Airports"] },
+				poiSettings: { enabled: true, disabledLayers: ["Major Airports"], unclusteredLayers: [] },
 			});
 		});
 
@@ -1089,6 +1089,14 @@ describe("FlightTracker", () => {
 
 			expect(screen.queryByText("Airport Details")).toBeNull();
 			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
+		});
+
+		it("passes poiLayers to FlightMap (one config for the airports layer, clustered by default)", () => {
+			// useMapPois is already mocked to one airport POI (layer "Major Airports").
+			renderWithContext({});
+			const layers = mapProps.at(-1)!.poiLayers as Array<{ layer: string; clustered: boolean }>;
+			expect(layers).toHaveLength(1);
+			expect(layers[0]).toMatchObject({ layer: "Major Airports", clustered: true });
 		});
 	});
 });
