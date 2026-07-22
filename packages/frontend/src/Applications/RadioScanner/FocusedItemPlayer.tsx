@@ -13,6 +13,7 @@ import {
 } from "./radioScannerSettings";
 import styles from "./RadioScanner.module.scss";
 import { WaveformVisualizer } from "./WaveformVisualizer";
+import { RadioProgressBar } from "./RadioProgressBar";
 import { setAudioLevel } from "./audioCapture";
 
 interface FocusedItemPlayerProps {
@@ -43,6 +44,8 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 	// Bumped in onLoadedMetadata so the waveform remounts once the element is
 	// actually ready — mirrors StationPlayer's readyVersions handling.
 	const [readyVersion, setReadyVersion] = useState(0);
+	const [currentTime, setCurrentTime] = useState(0);
+	const [duration, setDuration] = useState(0);
 
 	useEffect(() => {
 		const el = audioRef.current;
@@ -75,6 +78,14 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 		}
 	};
 
+	const seekToPct = (pct: number) => {
+		const el = audioRef.current;
+		if (!el) return;
+		const seconds = pct * (el.duration || 0);
+		el.currentTime = seconds;
+		setCurrentTime(seconds);
+	};
+
 	return (
 		<div className={styles.rsFocusedPlayer}>
 			<div className={styles.rsFocusedHeader}>
@@ -87,7 +98,13 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 				src={item.url}
 				crossOrigin="anonymous"
 				style={{ display: "none" }}
-				onLoadedMetadata={() => setReadyVersion((v) => v + 1)}
+				onLoadedMetadata={() => {
+					setReadyVersion((v) => v + 1);
+					setDuration(audioRef.current?.duration ?? 0);
+				}}
+				onDurationChange={() => setDuration(audioRef.current?.duration ?? 0)}
+				onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
+				onEnded={() => setPlaying(false)}
 			/>
 			{captionsOn && (
 				<CaptionOverlay
@@ -105,6 +122,11 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 					colors={waveColors}
 				/>
 			)}
+			<RadioProgressBar
+				currentTime={currentTime}
+				duration={duration}
+				onSeekPct={seekToPct}
+			/>
 			<div className={styles.rsFocusedControls}>
 				<ClassicyButton buttonSize="small" onClickFunc={togglePlay}>
 					{playing ? "Pause" : "Play"}
