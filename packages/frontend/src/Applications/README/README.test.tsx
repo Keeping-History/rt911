@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -105,5 +105,20 @@ describe("Readme", () => {
 		expect(screen.getAllByRole("checkbox").length).toBe(1);
 		// And its label is the tag name (appears here plus in the pills → ≥1).
 		expect(screen.getAllByText("Announcement").length).toBeGreaterThan(0);
+	});
+
+	it("unchecks a tag and dispatches the pruned filter on Save", () => {
+		render(<Readme />);
+		act(() => fileSettingsItem()?.onClickFunc?.());
+		// The only tag (Announcement, id 5) starts checked (visible).
+		const checkbox = screen.getByRole("checkbox") as HTMLInputElement;
+		expect(checkbox.checked).toBe(true);
+		// Unchecking marks id 5 hidden; Save dispatches the persisted filter.
+		fireEvent.click(checkbox);
+		fireEvent.click(screen.getByText("Save"));
+		expect(dispatched).toContainEqual({
+			type: "ClassicyAppReadmeSetSettings",
+			settings: { hiddenTagIds: [5] },
+		});
 	});
 });
