@@ -9,12 +9,12 @@ const ARTICLES: ReadmeArticle[] = [
 	{
 		id: 2, headline: "Newer post", author: "Robbie Byrd",
 		date_created: "2026-07-16T12:00:00", date_updated: null, body: "<p>Two</p>",
-		sort: null, featured: false,
+		sort: null, featured: false, tags: [],
 	},
 	{
 		id: 1, headline: "Welcome", author: null,
 		date_created: "2026-07-01T12:00:00", date_updated: null, body: "<p>One</p>",
-		sort: null, featured: false,
+		sort: null, featured: false, tags: [],
 	},
 ];
 
@@ -65,12 +65,12 @@ describe("ReadmeContent", () => {
 			{
 				id: 5, headline: "Pinned", author: null,
 				date_created: "2026-07-20T00:00:00", date_updated: null, body: "<p>x</p>",
-				sort: null, featured: true,
+				sort: null, featured: true, tags: [],
 			},
 			{
 				id: 6, headline: "Plain", author: null,
 				date_created: "2026-07-19T00:00:00", date_updated: null, body: "<p>y</p>",
-				sort: null, featured: false,
+				sort: null, featured: false, tags: [],
 			},
 		];
 		render(<ReadmeContent state={stateWith({ articles: mixed })} />);
@@ -92,7 +92,7 @@ describe("ReadmeContent", () => {
 			id: 9, headline: "XSS", author: null,
 			date_created: "2026-07-16T12:00:00", date_updated: null,
 			body: '<p>safe</p><script>window.__pwned = true</script><img src="x" onerror="window.__pwned = true">',
-			sort: null, featured: false,
+			sort: null, featured: false, tags: [],
 		};
 		const { container } = render(<ReadmeContent state={stateWith({ articles: [evil] })} />);
 		const article = container.querySelector("article");
