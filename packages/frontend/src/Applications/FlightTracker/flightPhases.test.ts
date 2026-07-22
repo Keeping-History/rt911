@@ -7,6 +7,7 @@ describe("flightPhases", () => {
 		expect(phaseColorHex("down")).toBe("#7f0000");
 		expect(phaseColorHex("cruise")).toBe("#b22222"); // coarse phase → default
 		expect(phaseColorHex(undefined)).toBe("#b22222");
+		expect(phaseColorHex("")).toBe("#b22222"); // empty string → default, not ""
 	});
 
 	it("converts to 0..1 RGB for WebGL", () => {

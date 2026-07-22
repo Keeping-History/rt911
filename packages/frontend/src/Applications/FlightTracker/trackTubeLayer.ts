@@ -267,6 +267,9 @@ ${VERTEX_BODY}`;
 
 		gl.disableVertexAttribArray(A_CENTER);
 		gl.disableVertexAttribArray(A_OFFSET);
-		if (this.hasVertexColor) gl.disableVertexAttribArray(A_COLOR);
+		// Unconditional (mirrors A_CENTER/A_OFFSET): never leave A_COLOR enabled
+		// for a later draw that doesn't rebind it — cheap insurance if a future
+		// tube stops emitting per-vertex colors.
+		gl.disableVertexAttribArray(A_COLOR);
 	}
 }

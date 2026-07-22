@@ -19,7 +19,9 @@ export const PHASE_COLORS: Record<string, string> = {
 export const DEFAULT_PHASE_COLOR = "#b22222";
 
 export function phaseColorHex(phase?: string): string {
-	return (phase && PHASE_COLORS[phase]) ?? DEFAULT_PHASE_COLOR;
+	// `phase ? …` (not `phase && …`) so an empty string also falls through to
+	// the default instead of returning "" (which would parse to a NaN color).
+	return (phase ? PHASE_COLORS[phase] : undefined) ?? DEFAULT_PHASE_COLOR;
 }
 
 export function phaseColorRgb01(phase?: string): [number, number, number] {
