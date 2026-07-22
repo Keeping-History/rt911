@@ -153,22 +153,91 @@ export function previousSegments(
 		.sort((a, b) => toMs(b.start_date) - toMs(a.start_date));
 }
 
+/** Membership test: does this item belong to any station in `keys`? */
+function itemInKeys(item: MediaItem, keys: Set<string>): boolean {
+	return keys.has(stationKey(item));
+}
+
+/**
+ * Coming Up for several stations combined (the "All Traffic" view): every
+ * not-yet-started item belonging to any of `stations`, earliest-first, capped.
+ * Mirrors upcomingSegments but matches a set of stations instead of one.
+ */
+export function combinedUpcoming(
+	stations: Station[],
+	upcoming: MediaItem[],
+	nowMs: number,
+	count = 50,
+): MediaItem[] {
+	const keys = new Set(stations.map((s) => s.key));
+	return upcoming
+		.filter((item) => itemInKeys(item, keys) && toMs(item.start_date) > nowMs)
+		.sort((a, b) => toMs(a.start_date) - toMs(b.start_date))
+		.slice(0, count);
+}
+
+/**
+ * Previous for several stations combined (the "All Traffic" view): every ended
+ * item belonging to any of `stations`, most recent first. Mirrors
+ * previousSegments but matches a set of stations instead of one.
+ */
+export function combinedPrevious(
+	stations: Station[],
+	history: MediaItem[],
+	nowMs: number,
+): MediaItem[] {
+	const keys = new Set(stations.map((s) => s.key));
+	return history
+		.filter((item) => {
+			if (!itemInKeys(item, keys)) return false;
+			const end = effectiveEndMs(item);
+			return end !== null && end <= nowMs;
+		})
+		.sort((a, b) => toMs(b.start_date) - toMs(a.start_date));
+}
+
 /** Stations pinned to the front of the strip regardless of online state. */
 export const PINNED_STATIONS = ["WINS", "WCBS"];
 
+// Strip order among non-pinned stations: on-air first (something playing now),
+// then upcoming (queued but quiet), then offline (nothing). The "All Traffic"
+// pseudo-station is appended by the view itself and is always last, so it is
+// not part of this list.
+const STATUS_RANK: Record<StationStatus, number> = {
+	"on-air": 0,
+	upcoming: 1,
+	offline: 2,
+};
+
 /**
  * Display order for the station strip: pinned stations first (in
- * PINNED_STATIONS order), then the remaining online stations, then offline
- * ones — each group keeping its incoming relative order.
+ * PINNED_STATIONS order), then the remaining stations by status — on-air, then
+ * upcoming, then offline — each group keeping its incoming relative order.
+ * `upcoming` is the reveal-buffer snapshot used to tell "upcoming" from
+ * "offline" (same input stationStatus takes).
  */
-export function sortStations(stations: Station[], nowMs: number): Station[] {
+export function sortStations(
+	stations: Station[],
+	upcoming: MediaItem[],
+	nowMs: number,
+): Station[] {
 	const pinned = PINNED_STATIONS.flatMap((key) =>
 		stations.filter((s) => s.key === key),
 	);
 	const rest = stations.filter((s) => !PINNED_STATIONS.includes(s.key));
-	const online = rest.filter((s) => activeSegments(s, nowMs).length > 0);
-	const offline = rest.filter((s) => activeSegments(s, nowMs).length === 0);
-	return [...pinned, ...online, ...offline];
+	return [
+		...pinned,
+		...rest
+			.map((s, i) => ({
+				s,
+				i,
+				rank: STATUS_RANK[stationStatus(s, upcoming, nowMs)],
+			}))
+			// Stable within a rank: break ties by original index (Array.sort is
+			// not guaranteed stable for all engines/inputs, so sort explicitly).
+			.sort((a, b) => a.rank - b.rank || a.i - b.i)
+			.map(({ s }) => s),
+	];
 }
 
 /**
