@@ -28,6 +28,14 @@ describe("RadioProgressBar", () => {
 		expect(getByText("0:01:05 / 0:02:05")).not.toBeNull();
 	});
 
+	it("announces the elapsed/total position via aria-valuetext", () => {
+		const { container } = render(
+			<RadioProgressBar currentTime={65} duration={125} onSeekPct={() => {}} />,
+		);
+		const input = container.querySelector("input") as HTMLInputElement;
+		expect(input.getAttribute("aria-valuetext")).toBe("0:01:05 of 0:02:05");
+	});
+
 	it("reports the dragged fraction through onSeekPct", () => {
 		const onSeekPct = vi.fn();
 		const { container } = render(

@@ -27,6 +27,7 @@ export const RadioProgressBar: React.FC<RadioProgressBarProps> = ({
 			step={0.001}
 			value={duration > 0 ? currentTime / duration : 0}
 			aria-label="Seek"
+			aria-valuetext={`${timeFriendly(currentTime)} of ${timeFriendly(duration)}`}
 			onChange={(e) => onSeekPct(Number.parseFloat(e.target.value))}
 		/>
 		<p className={styles.rsFocusedTime}>
