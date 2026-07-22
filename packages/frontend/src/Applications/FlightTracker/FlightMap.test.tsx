@@ -658,11 +658,14 @@ describe("FlightMap", () => {
 		map.fire("load");
 		expect(map.jumpToCalls).toHaveLength(0); // flat start: no pitch seed
 		rerender(<FlightMap {...common} threeD={true} />);
-		expect(map.maxPitchCalls.at(-1)).toBe(60);
+		// Ceiling lifts to MapLibre's hard max so right-drag can rotate the z axis
+		// past the resting angle, not lock at it.
+		expect(map.maxPitchCalls.at(-1)).toBe(85);
 		// 3D also floors the pitch: right-drag can tilt but never flatten back
 		// into 2D (max must lift before min — maplibre rejects min > max).
 		expect(map.minPitchCalls.at(-1)).toBe(10);
-		expect(map.pitchLimitLog).toEqual(["max:60", "min:10"]);
+		expect(map.pitchLimitLog).toEqual(["max:85", "min:10"]);
+		// ...but the toggle still only *eases* to the resting THREE_D_PITCH.
 		expect(map.easeToCalls.at(-1)).toMatchObject({ pitch: 60 });
 		map.pitch = 60;
 		rerender(<FlightMap {...common} threeD={false} />);
@@ -674,9 +677,10 @@ describe("FlightMap", () => {
 		// A session restored with 3D on constructs unlocked and pitches at load.
 		render(<FlightMap {...common} threeD={true} />);
 		const map2 = FakeMap.last!;
-		expect((map2.ctorOpts as { maxPitch?: number }).maxPitch).toBe(60);
+		expect((map2.ctorOpts as { maxPitch?: number }).maxPitch).toBe(85);
 		expect((map2.ctorOpts as { minPitch?: number }).minPitch).toBe(10);
 		map2.fire("load");
+		// Seeds at the resting angle even though the band now reaches 85.
 		expect(map2.jumpToCalls.at(-1)).toMatchObject({ pitch: 60 });
 		// Regression (refresh with 3D persisted): the pitch seed fires BEFORE the
 		// layers exist, so the end-of-load visibility sync must hide the 2D pins

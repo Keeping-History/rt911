@@ -377,7 +377,7 @@ function setCameraInteractive(map: maplibregl.Map, on: boolean) {
 // effect's ordering — maplibre rejects min > max).
 function restorePitchConstraints(map: maplibregl.Map, threeD: boolean) {
 	if (threeD) {
-		map.setMaxPitch(THREE_D_PITCH);
+		map.setMaxPitch(THREE_D_MAX_PITCH);
 		map.setMinPitch(THREE_D_MIN_PITCH);
 	} else {
 		map.setMinPitch(0);
@@ -513,11 +513,17 @@ const EMPTY_REPLAY_BUFFER: ReplayBuffer = new Map();
 
 const NA_CENTER: [number, number] = [-98, 39];
 const NA_ZOOM = 3;
-// Camera pitch the 3D toggle eases to (issue #223); MapLibre's default maxPitch.
+// Resting camera pitch the 3D toggle eases/jumps to (issue #223).
 export const THREE_D_PITCH = 60;
-// Pitch floor while 3D is ON: right-drag can tilt freely between these, but
-// never flatten back into 2D — leaving 3D is the toggle's job. Comfortably
-// above the 5° pitched threshold so the 3D layers can't flicker off mid-drag.
+// Pitch ceiling while 3D is ON: right-drag can tilt past the resting angle all
+// the way up to MapLibre's hard maximum (85°, same as the follow cockpit), so
+// the z axis keeps rotating instead of locking at THREE_D_PITCH. The toggle
+// still only *eases to* THREE_D_PITCH; this is purely the interactive bound.
+export const THREE_D_MAX_PITCH = 85;
+// Pitch floor while 3D is ON: right-drag can tilt freely between this and
+// THREE_D_MAX_PITCH, but never flatten back into 2D — leaving 3D is the
+// toggle's job. Comfortably above the 5° pitched threshold so the 3D layers
+// can't flicker off mid-drag.
 export const THREE_D_MIN_PITCH = 10;
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 const FRAME_MS = 66; // ~15 fps animation gate
@@ -706,11 +712,12 @@ export const FlightMap: FC<FlightMapProps> = ({
 			attributionControl: false,
 			// Pitch is exclusively the 3D toggle's domain: with 3D off the map is
 			// hard-locked flat (right-drag still rotates bearing, never the z
-			// axis); with 3D on it's confined to [THREE_D_MIN_PITCH, THREE_D_PITCH]
-			// so dragging can't flatten back into 2D either. The threeD effect
-			// moves both bounds on toggle.
+			// axis); with 3D on right-drag tilts freely across
+			// [THREE_D_MIN_PITCH, THREE_D_MAX_PITCH] — can't flatten back into 2D,
+			// but can rotate the z axis well past the resting THREE_D_PITCH. The
+			// threeD effect moves both bounds on toggle.
 			minPitch: threeDRef.current ? THREE_D_MIN_PITCH : 0,
-			maxPitch: threeDRef.current ? THREE_D_PITCH : 0,
+			maxPitch: threeDRef.current ? THREE_D_MAX_PITCH : 0,
 		});
 		mapRef.current = map;
 
@@ -1301,20 +1308,21 @@ export const FlightMap: FC<FlightMapProps> = ({
 	}, [globe]);
 
 	// 3D mode gates pitch entirely: ON confines the camera to
-	// [THREE_D_MIN_PITCH, THREE_D_PITCH] (right-drag tilts within the band but
-	// can't flatten back to 2D) and eases to the preset; OFF collapses the band
-	// to exactly 0, which snaps the camera flat and makes right-drag
-	// bearing-only. Order matters both ways: MapLibre rejects min > max, so
-	// max lifts before min on enable and min drops before max on disable.
+	// [THREE_D_MIN_PITCH, THREE_D_MAX_PITCH] (right-drag tilts freely within the
+	// band — up past the resting angle — but can't flatten back to 2D) and eases
+	// to the THREE_D_PITCH preset; OFF collapses the band to exactly 0, which
+	// snaps the camera flat and makes right-drag bearing-only. Order matters both
+	// ways: MapLibre rejects min > max, so max lifts before min on enable and min
+	// drops before max on disable.
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		// The follow lock owns the pitch band while active (cockpit needs more
-		// than THREE_D_PITCH); it re-applies these constraints from threeDRef on
-		// release, so skip here to avoid clamping the driven pitch.
+		// The follow lock owns the pitch band while active (cockpit drives its own
+		// pitch); it re-applies these constraints from threeDRef on release, so
+		// skip here to avoid clamping the driven pitch.
 		if (followActiveRef.current) return;
 		if (threeD) {
-			map.setMaxPitch(THREE_D_PITCH);
+			map.setMaxPitch(THREE_D_MAX_PITCH);
 			map.setMinPitch(THREE_D_MIN_PITCH);
 			map.easeTo({ pitch: THREE_D_PITCH, duration: 600 });
 		} else {
