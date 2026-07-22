@@ -135,6 +135,8 @@ export const TimeMachine: React.FC = () => {
 		[dateTime, setDateTime],
 	);
 
+	const handleScrubForward = () => shiftTime(5);
+	const handleScrubBack    = () => shiftTime(-5);
 	const handleSkipBack    = () => shiftTime(-skipMinutes);
 	const handleStepBack    = () => shiftTime(-(stepSeconds / 60));
 	const handleStepForward = () => shiftTime(stepSeconds / 60);
@@ -260,7 +262,7 @@ export const TimeMachine: React.FC = () => {
 				zoomable={false}
 				scrollable={false}
 				collapsable={true}
-				initialSize={[340, 130]}
+				initialSize={[380, 130]}
 				initialPosition={[300, 200]}
 				minimumSize={[340, 130]}
 				modal={false}
@@ -269,12 +271,14 @@ export const TimeMachine: React.FC = () => {
 				<div className={styles.controls}>
 					{/* Transport row */}
 					<div className={styles.transport}>
-						<ClassicyButton buttonShape="square" onClickFunc={handleSkipBack}>«</ClassicyButton>
-						<ClassicyButton buttonShape="square" onClickFunc={handleStepBack}>‹</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleSkipBack}>⇚</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleStepBack}>«</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleScrubBack}>‹</ClassicyButton>
 						<ClassicyButton onClickFunc={handlePlay}  disabled={!paused}>Play</ClassicyButton>
 						<ClassicyButton onClickFunc={handlePause} disabled={paused}>Pause</ClassicyButton>
-						<ClassicyButton buttonShape="square" onClickFunc={handleStepForward}>›</ClassicyButton>
-						<ClassicyButton buttonShape="square" onClickFunc={handleSkipForward}>»</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleScrubForward}>›</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleStepForward}>»</ClassicyButton>
+						<ClassicyButton buttonShape="square" onClickFunc={handleSkipForward}>⇛</ClassicyButton>
 					</div>
 
 					<hr className={styles.divider} />
