@@ -11,9 +11,12 @@ import {
 // Seeded Alerts.app data handed to useAppManager; toggled per test to exercise
 // the subscribe-on-mount gate (mirrors News.tsx's isRunning gate).
 const mockAppRunning = vi.hoisted(() => ({ value: true }));
+// Spy for the sound-manager dispatch so tests can assert the alert chime fires.
+const mockSoundDispatch = vi.hoisted(() => vi.fn());
 
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<typeof import("classicy")>()),
+	useSoundDispatch: () => mockSoundDispatch,
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => (
 		<div>{children}</div>
 	),
@@ -58,9 +61,15 @@ import { Alerts } from "./Alerts";
 afterEach(() => {
 	cleanup();
 	mockAppRunning.value = true;
+	mockSoundDispatch.mockClear();
 	window.localStorage.clear();
 	resetAlertsSettingsForTests();
 });
+
+const PLAY_SOSUMI = {
+	type: "ClassicySoundPlay",
+	sound: "ClassicyAlertSosumi",
+};
 
 const mk = (
 	id: number,
@@ -198,5 +207,47 @@ describe("Alerts extension: enabled/disabled gating", () => {
 		act(() => setAlertsEnabled(false));
 		act(() => setAlertsEnabled(true));
 		expect(subscribeAlerts).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("Alerts extension: alert chime", () => {
+	it("plays ClassicyAlertSosumi once when an alert dialog is displayed", () => {
+		renderWithAlerts([mk(1, "First", "2001-09-11T12:40:00Z")]);
+		expect(mockSoundDispatch).toHaveBeenCalledTimes(1);
+		expect(mockSoundDispatch).toHaveBeenCalledWith(PLAY_SOSUMI);
+	});
+
+	it("rings again for the next alert when OK advances the queue", () => {
+		renderWithAlerts([
+			mk(1, "First", "2001-09-11T12:40:00Z"),
+			mk(2, "Second", "2001-09-11T12:41:00Z"),
+		]);
+		// One chime for the first dialog...
+		expect(mockSoundDispatch).toHaveBeenCalledTimes(1);
+
+		fireEvent.click(screen.getByText("OK"));
+		// ...and a second when the next queued alert surfaces.
+		expect(mockSoundDispatch).toHaveBeenCalledTimes(2);
+		expect(mockSoundDispatch).toHaveBeenLastCalledWith(PLAY_SOSUMI);
+	});
+
+	it("does not ring when there is no alert to show", () => {
+		renderWithAlerts([]);
+		expect(mockSoundDispatch).not.toHaveBeenCalled();
+	});
+
+	it("does not ring the final dismissal (no dialog left to announce)", () => {
+		renderWithAlerts([mk(1, "Only", "2001-09-11T12:40:00Z")]);
+		expect(mockSoundDispatch).toHaveBeenCalledTimes(1);
+
+		fireEvent.click(screen.getByText("OK"));
+		// Dismissing the last alert leaves no dialog, so no new chime fires.
+		expect(mockSoundDispatch).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not ring while alerts are disabled", () => {
+		setAlertsEnabled(false);
+		renderWithAlerts([mk(1, "Suppressed", "2001-09-11T12:40:00Z")]);
+		expect(mockSoundDispatch).not.toHaveBeenCalled();
 	});
 });
