@@ -794,11 +794,13 @@ export const FlightTracker: FC = () => {
 	// notable flights with a smoothed profile get colored phases, so only they get
 	// a legend. Ordered-unique so it mirrors the drawn segments.
 	const trackPhases = useMemo<string[]>(() => {
-		if (!(selection && isNotable(selection.flight) && profile && profile.length >= 2)) {
+		if (
+			!(track?.geometry && selection && isNotable(selection.flight) && profile && profile.length >= 2)
+		) {
 			return [];
 		}
 		return orderedTrackPhases(profile);
-	}, [selection, profile]);
+	}, [track?.geometry, selection, profile]);
 
 	// A radar-scope style is inherently dark regardless of the Dark Map toggle
 	// (see effectiveTone) — pin-color buckets follow this, not settings.darkMap.
