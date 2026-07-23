@@ -58,9 +58,11 @@ function PreBootAbout({ powerOn }: { powerOn: () => void }) {
 				For questions regarding this project, please{" "}
 				<a href="mailto:robbiebyrd@keepinghistory.org">email Robbie Byrd</a>.
 			</p>
-			<ClassicyButton isDefault onClickFunc={powerOn}>
-				POWER ON
-			</ClassicyButton>
+			<div style={{ textAlign: "center" }}>
+				<ClassicyButton isDefault onClickFunc={powerOn}>
+					POWER ON
+				</ClassicyButton>
+			</div>
 		</ClassicyWindowFrame>
 	);
 }
