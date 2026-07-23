@@ -69,6 +69,10 @@ import { buildPlaneInstanceBatches, buildSphereMesh } from "./plane3dMesh";
 import { type AircraftFamily, loadAircraftMesh } from "./aircraftModels";
 import { loadAircraftIconSvg } from "./aircraftIcons";
 import { Planes3DLayer } from "./planes3DLayer";
+import { Buildings3DLayer } from "./buildings3DLayer";
+import { buildFootprintMesh } from "./buildingMesh";
+import { useBuildings } from "./useBuildings";
+import { buildingColorRgb, buildingsVisibleAtZoom } from "./buildings";
 import {
 	type DragPixels,
 	type SelectMode,
@@ -565,6 +569,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 	poisRef.current = pois;
 	const poiLayersRef = useRef(poiLayers);
 	poiLayersRef.current = poiLayers;
+	// 2001 skyline footprints (issue #229 Plan 1): loaded once per page, fed
+	// into the custom Buildings3DLayer both at load and as they arrive.
+	const buildings = useBuildings();
+	const buildingsRef = useRef(buildings);
+	buildingsRef.current = buildings;
 	const cbRef = useRef({
 		onSelectFlight, onClearSelection, onToggleFlight, onAreaSelect, onPitchedChange, aircraftFamilyOf, onSelectPoi,
 	});
@@ -676,6 +685,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const trailTubeRef = useRef<TrackTube3DLayer | null>(null);
 	// Alternating-frame gate for the ribbon rebuild (see the rAF loop).
 	const trailFrameRef = useRef(false);
+	// The static 2001-buildings custom layer (issue #229); one instance per map.
+	const buildings3DRef = useRef<Buildings3DLayer | null>(null);
 	const trackProfileRef = useRef<AltitudeSample[] | null>(trackProfile);
 	trackProfileRef.current = trackProfile;
 	// Apply the layer-visibility matrix AND the custom layers' draw gates from
@@ -701,6 +712,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 			"line-color",
 			pitchedRef.current ? TRACK_SHADOW_COLOR : phaseLineColorExpression(),
 		);
+	};
+	// The 2001 skyline only reads at city detail — hidden at the continental
+	// default view, shown once the camera zooms into a metro area.
+	const syncBuildingVisibility = (map: maplibregl.Map) => {
+		buildings3DRef.current?.setVisible(buildingsVisibleAtZoom(map.getZoom()));
 	};
 
 	// Create the map once (basemapUrls is effectively stable from env).
@@ -953,6 +969,15 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// writes while loadedRef is false — flipped only here, at the very
 			// end), so a 3D-restored session must not depend on that event: this
 			// is what hides the 2D pins after a refresh with 3D persisted on.
+			// The 2001 skyline (issue #229): static custom layer, added BEFORE the
+			// aircraft layers so planes always render on top of the buildings.
+			const buildings3D = new Buildings3DLayer();
+			buildings3DRef.current = buildings3D;
+			map.addLayer(buildings3D);
+			buildings3D.setColor(buildingColorRgb(colors.mapStyle, colors.darkMap));
+			if (buildingsRef.current.length > 0)
+				buildings3D.setMesh("footprints", buildFootprintMesh(buildingsRef.current));
+			syncBuildingVisibility(map);
 			// True-3D aircraft (issue #250): custom layer on top of the stack;
 			// its colors follow the pin pair like every other plane layer.
 			const planes3D = new Planes3DLayer();
@@ -1180,6 +1205,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		// paused map so a zoom while paused re-sizes the 3D planes.
 		map.on("zoom", () => {
 			if (pitchedRef.current) dirtyRef.current = true;
+			if (loadedRef.current) syncBuildingVisibility(map);
 		});
 
 		const ro = new ResizeObserver(() => map.resize());
@@ -1192,6 +1218,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			replayTrail3DRef.current = null;
 			trackTubeRef.current = null;
 			trailTubeRef.current = null;
+			buildings3DRef.current = null;
 			mapRef.current = null;
 			loadedRef.current = false;
 		};
@@ -1232,6 +1259,16 @@ export const FlightMap: FC<FlightMapProps> = ({
 		applyPoiData(map, pois, poiLayers, pinColor);
 		dirtyRef.current = true;
 	}, [pois, poiLayers, pinColor]);
+
+	// Feed the buildings layer once the async footprint fetch resolves — the
+	// load handler above only seeds it if the (module-cached) data already
+	// arrived before this map instance mounted.
+	useEffect(() => {
+		const layer = buildings3DRef.current;
+		if (!layer || buildings.length === 0) return;
+		layer.setMesh("footprints", buildFootprintMesh(buildings));
+		dirtyRef.current = true;
+	}, [buildings]);
 
 	// Feed the selected-pin overlay with just the selected POI (or clear it).
 	useEffect(() => {
@@ -1275,6 +1312,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				map.setPaintProperty(id, "text-halo-color", poiLabelBg);
 			}
 		}
+		buildings3DRef.current?.setColor(buildingColorRgb(mapStyle, darkMap));
 		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		// The 3D meshes get the same radar 8-bit treatment as the 2D icons, via a

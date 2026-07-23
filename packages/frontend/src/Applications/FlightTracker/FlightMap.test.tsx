@@ -184,6 +184,9 @@ import { buildPlaneImage, iconDisplayPx, PLANE_ICON_PX } from "./flightIcons";
 import { basemapPalette, type BasemapStyleId } from "../../lib/basemap/basemapStyles";
 import type { MapPoi, PoiLayerConfig } from "./mapPois";
 import { invertHex } from "./colorInvert";
+import { Buildings3DLayer } from "./buildings3DLayer";
+import { BUILDINGS_MIN_ZOOM } from "./buildings";
+import { resetBuildingsCache } from "./useBuildings";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -206,6 +209,15 @@ const baseProps = {
 	radarSweep: false, trailMultiplier: 0,
 	onSelectFlight: () => {}, onClearSelection: () => {},
 };
+
+// FlightMap now calls useBuildings() on every mount (Task 6 wiring), which
+// fetches BUILDINGS_URL. File-scope guard so the many pre-existing tests
+// below (which don't care about buildings) never hit the real network; the
+// "FlightMap 2001 buildings" describe further down overrides this per-test.
+beforeEach(() => {
+	resetBuildingsCache();
+	vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404, json: async () => ({}) })));
+});
 
 describe("FlightMap", () => {
 	beforeEach(() => { FakeMap.last = null; });
@@ -1619,5 +1631,44 @@ describe("FlightMap POI layers", () => {
 		map.queryResult = []; // nothing under the cursor
 		map.fire("click", { point: { x: 5, y: 5 }, originalEvent: { shiftKey: true } });
 		expect(onClearSelection).not.toHaveBeenCalled();
+	});
+});
+
+// --- 2001 buildings layer (issue #229) --------------------------------------
+describe("FlightMap 2001 buildings", () => {
+	beforeEach(() => {
+		FakeMap.last = null;
+		resetBuildingsCache();
+		// One WTC-shaped footprint so buildFootprintMesh yields vertices.
+		vi.stubGlobal("fetch", vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				type: "FeatureCollection",
+				features: [{
+					type: "Feature",
+					properties: { height_m: 417, base_elevation_m: 4 },
+					geometry: { type: "Polygon", coordinates: [[[-74.0137, 40.7126], [-74.0137, 40.7132], [-74.0130, 40.7132], [-74.0130, 40.7126]]] },
+				}],
+			}),
+		})));
+	});
+
+	it("adds a Buildings3DLayer, feeds it a footprint mesh, and gates it on zoom", async () => {
+		render(<FlightMap {...baseProps} />);
+		const map = FakeMap.last!;
+		map.zoom = 4; // continental default — well below BUILDINGS_MIN_ZOOM
+		await act(async () => { map.fire("load"); });
+
+		const layer = map.layers.find((l) => l.id === "buildings-3d")!.__raw as Buildings3DLayer;
+		expect(layer).toBeInstanceOf(Buildings3DLayer);
+		// The async useBuildings() fetch resolves after load; the [buildings]
+		// effect feeds the mesh once it arrives.
+		await vi.waitFor(() => expect(layer.hasMesh("footprints")).toBe(true));
+
+		// Hidden at continental zoom, shown once zoomed into the city.
+		expect(layer.visible).toBe(false);
+		map.zoom = BUILDINGS_MIN_ZOOM + 1;
+		act(() => map.fire("zoom"));
+		expect(layer.visible).toBe(true);
 	});
 });
