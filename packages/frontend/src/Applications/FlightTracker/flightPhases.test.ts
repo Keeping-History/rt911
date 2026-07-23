@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PHASE_COLORS, phaseColorHex, phaseColorRgb01, phaseLineColorExpression } from "./flightPhases";
+import { PHASE_COLORS, phaseColorHex, phaseColorRgb01, phaseLineColorExpression, orderedTrackPhases, phaseLabel } from "./flightPhases";
 
 describe("flightPhases", () => {
 	it("maps known phases and falls back to the track red", () => {
@@ -24,5 +24,27 @@ describe("flightPhases", () => {
 			expect(expr).toContain(slug);
 		}
 		expect(expr[expr.length - 1]).toBe("#b22222"); // default is last
+	});
+});
+
+describe("phaseLabel", () => {
+	it("maps known slugs to human labels and passes unknowns through", () => {
+		expect(phaseLabel("course_change")).toBe("Course Change");
+		expect(phaseLabel("hijack")).toBe("Hijack");
+		expect(phaseLabel("mystery")).toBe("mystery");
+	});
+});
+
+describe("orderedTrackPhases", () => {
+	it("returns first-seen phases in track order, deduped, skipping blanks", () => {
+		const pts = [
+			{ phase: "takeoff" }, { phase: "takeoff" }, { phase: "hijack" },
+			{}, { phase: "hijack" }, { phase: "descent" }, { phase: "takeoff" },
+		];
+		expect(orderedTrackPhases(pts)).toEqual(["takeoff", "hijack", "descent"]);
+	});
+	it("returns [] for empty or phaseless input", () => {
+		expect(orderedTrackPhases([])).toEqual([]);
+		expect(orderedTrackPhases([{}, {}])).toEqual([]);
 	});
 });

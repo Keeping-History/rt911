@@ -43,3 +43,35 @@ export function phaseLineColorExpression(): ExpressionSpecification {
 		DEFAULT_PHASE_COLOR,
 	] as unknown as ExpressionSpecification;
 }
+
+// Human-readable phase names for the detail-pane legend (issue #310). Keys match
+// PHASE_COLORS slugs written by the notable loader.
+export const PHASE_LABELS: Record<string, string> = {
+	takeoff: "Takeoff",
+	tracon: "TRACON",
+	artcc: "ARTCC",
+	hijack: "Hijack",
+	course_change: "Course Change",
+	atc_alert: "ATC Alert",
+	descent: "Descent",
+	down: "Down",
+};
+
+export function phaseLabel(phase: string): string {
+	return PHASE_LABELS[phase] ?? phase;
+}
+
+// Ordered-unique phase slugs in track order (first occurrence wins); points
+// without a phase are skipped. Mirrors the per-phase segments buildTrackSegments
+// draws, so the legend lists exactly the colors shown on the map.
+export function orderedTrackPhases(points: { phase?: string }[]): string[] {
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const p of points) {
+		if (p.phase && !seen.has(p.phase)) {
+			seen.add(p.phase);
+			out.push(p.phase);
+		}
+	}
+	return out;
+}
