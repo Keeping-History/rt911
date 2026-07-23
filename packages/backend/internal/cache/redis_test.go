@@ -165,3 +165,24 @@ func TestItemsAtEmptySecondReturnsNothing(t *testing.T) {
 		t.Fatalf("expected empty result, got %+v", got)
 	}
 }
+
+// The flight warm flushes whole minute-buckets (each up to ~100 KB of msgpack)
+// in pipelineChunk-sized Execs — a single flush can be hundreds of MB, which
+// the go-redis default ~3s write timeout can't cover, so the warm aborts with
+// an i/o timeout (hit in prod). Connect must raise the write timeout unless the
+// URL sets one explicitly.
+func TestConnectRaisesWriteTimeoutForBulkWarm(t *testing.T) {
+	c := Connect("redis://localhost:6379")
+	defer c.Close()
+	if got := c.Options().WriteTimeout; got != bulkWarmWriteTimeout {
+		t.Fatalf("expected WriteTimeout %v for bulk warm, got %v", bulkWarmWriteTimeout, got)
+	}
+}
+
+func TestConnectHonorsExplicitURLWriteTimeout(t *testing.T) {
+	c := Connect("redis://localhost:6379?write_timeout=5s")
+	defer c.Close()
+	if got := c.Options().WriteTimeout; got != 5*time.Second {
+		t.Fatalf("expected explicit URL write_timeout to win (5s), got %v", got)
+	}
+}
