@@ -204,8 +204,10 @@ export function buildSphereMesh(stacks = 8, slices = 12): PlaneMesh {
 //   i_data1 = [headingRad, pitchRad, halfSizeMeters, notableFlag]
 export const PLANE_INSTANCE_STRIDE = 8;
 
-// Visual pitch clamp (~57°): the altitude exaggeration makes real climb
-// angles dramatic already; beyond this they read as aerobatics.
+// Visual pitch clamp (~57°): real climb angles are shallow, so this rarely
+// bites in normal flight — it guards against sparse/garbage samples that imply
+// a near-vertical rate (e.g. a big altitude jump between two distant samples)
+// reading as aerobatics.
 const MAX_PITCH_RAD = 1.0;
 
 /**

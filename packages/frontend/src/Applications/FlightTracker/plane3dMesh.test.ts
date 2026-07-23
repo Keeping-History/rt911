@@ -144,8 +144,14 @@ describe("pitchRadOf", () => {
 		expect(pitchRadOf(single.get("DL404")!)).toBe(0);
 	});
 
-	it("clamps to ±1 rad even for absurd climb rates", () => {
-		expect(pitchRadOf(climbBuffer(0, 35_000).get("UA1")!)).toBe(1);
+	it("clamps to ±1 rad for a near-vertical rate (sparse/garbage samples)", () => {
+		// No horizontal movement (same lon) → ground speed ~0, so even real-scale
+		// altitude produces an absurd pitch that must clamp. This is the sample-
+		// quality guard, not exaggeration: a plain climb no longer saturates it.
+		const buf: MotionBuffer = new Map();
+		updateMotion(buf, [pos({ id: 1, flight: "UA1", lon: -74, alt_ft: 0, start_date: "2001-09-11T13:00:00Z" })]);
+		updateMotion(buf, [pos({ id: 2, flight: "UA1", lon: -74, alt_ft: 35_000, start_date: "2001-09-11T13:01:00Z" })]);
+		expect(pitchRadOf(buf.get("UA1")!)).toBe(1);
 	});
 });
 

@@ -176,6 +176,7 @@ import {
 	POI_LAYER_IDS,
 } from "./FlightMap";
 import { motionPointsToGeoJSON, updateMotion, type MotionBuffer } from "./flightMotion";
+import { ALT_EXAGGERATION, exaggeratedHeightM } from "./flightAltitude";
 import { TRACK_SHADOW_COLOR } from "./flightMapStyle";
 import { phaseLineColorExpression } from "./flightPhases";
 import { loadAircraftIconSvg } from "./aircraftIcons";
@@ -714,7 +715,7 @@ describe("FlightMap", () => {
 			render(<FlightMap {...common} terrain={true} />);
 			const map = FakeMap.last!;
 			map.fire("load");
-			expect(map.terrainCalls).toEqual([{ source: "terrain", exaggeration: 10 }]);
+			expect(map.terrainCalls).toEqual([{ source: "terrain", exaggeration: ALT_EXAGGERATION }]);
 		});
 
 		it("does not call setTerrain at load when off", () => {
@@ -729,7 +730,7 @@ describe("FlightMap", () => {
 			const map = FakeMap.last!;
 			map.fire("load");
 			rerender(<FlightMap {...common} terrain={true} />);
-			expect(map.terrainCalls.at(-1)).toEqual({ source: "terrain", exaggeration: 10 });
+			expect(map.terrainCalls.at(-1)).toEqual({ source: "terrain", exaggeration: ALT_EXAGGERATION });
 			expect(map.layout["hillshade-classic"].visibility).toBe("visible");
 			rerender(<FlightMap {...common} terrain={false} />);
 			expect(map.terrainCalls.at(-1)).toBeNull();
@@ -1132,7 +1133,7 @@ describe("FlightMap", () => {
 		map.queryResult = [];
 		map.fire("click", { point: { x: 41, y: 31 } });
 		expect(onSelect).toHaveBeenCalledWith("DL404");
-		expect(seenElevations[0]).toBeCloseTo(30_000 * 0.3048 * 10 - 5000);
+		expect(seenElevations[0]).toBeCloseTo(exaggeratedHeightM(30_000) - 5000);
 	});
 
 	it("globe pitched clicks hit-test via projectTileCoordinates (elevated, not ground)", () => {
