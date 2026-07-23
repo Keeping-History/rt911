@@ -5,6 +5,9 @@ function of its inputs so it is unit-testable without external services.
 building_recon/flow.py wires these to the I/O modules.
 """
 
+import json
+import os
+
 FT_TO_M = 0.3048
 CUTOFF_YEAR = 2001
 
@@ -48,3 +51,64 @@ def normalize(raws: list[dict]) -> list[dict]:
             "name": raw.get("name"),
         })
     return out
+
+
+_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+_WTC_PATH = os.path.join(_DATA_DIR, "wtc_complex_2001.geojson")
+
+
+def load_wtc_complex(path: str | None = None) -> list[dict]:
+    """The curated WTC complex as RawBuilding dicts (already metric)."""
+    with open(path or _WTC_PATH) as fh:
+        fc = json.load(fh)
+    out: list[dict] = []
+    for feat in fc["features"]:
+        ring = feat["geometry"]["coordinates"][0]
+        props = feat.get("properties", {})
+        out.append({
+            "ring": [[float(x), float(y)] for x, y in ring],
+            "height_m": float(props["height_m"]),
+            "base_elevation_m": float(props.get("base_elevation_m", 0.0)),
+            "area": "manhattan",
+            "source": "wtc-curated",
+            "name": props.get("name"),
+        })
+    return out
+
+
+def _closed(ring: list[list[float]]) -> list[list[float]]:
+    if ring and ring[0] != ring[-1]:
+        return [*ring, ring[0]]
+    return ring
+
+
+def build_feature_collection(features: list[dict]) -> dict:
+    """Assemble the frontend-contract FeatureCollection (Polygon + 3 props)."""
+    out_feats = []
+    for f in features:
+        out_feats.append({
+            "type": "Feature",
+            "properties": {
+                "height_m": f["height_m"],
+                "base_elevation_m": f["base_elevation_m"],
+                "area": f["area"],
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [_closed([[float(x), float(y)] for x, y in f["ring"]])],
+            },
+        })
+    return {"type": "FeatureCollection", "features": out_feats}
+
+
+def assemble(source_raws: list[dict], wtc: list[dict]) -> tuple[dict, dict]:
+    """Normalize sources, append the curated WTC, build the FeatureCollection."""
+    feats = normalize(source_raws) + list(wtc)
+    fc = build_feature_collection(feats)
+    by_source: dict[str, int] = {}
+    by_area: dict[str, int] = {}
+    for f in feats:
+        by_source[f["source"]] = by_source.get(f["source"], 0) + 1
+        by_area[f["area"]] = by_area.get(f["area"], 0) + 1
+    summary = {"total": len(feats), "by_source": by_source, "by_area": by_area}
+    return fc, summary
