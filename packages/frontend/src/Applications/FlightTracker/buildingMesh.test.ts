@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFootprintMesh, ringIsCcwLngLat, type BuildingFootprint, placeHeroMesh, type HeroPlacement } from "./buildingMesh";
-import { lngLatToMercator as l2m, mercatorPerMeter as mpm, lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
+import { lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
 
 // A unit square footprint around a NYC-ish point, CW on purpose to exercise
 // orientation normalization.
@@ -133,23 +133,40 @@ describe("placeHeroMesh", () => {
 
   it("translates to the placement lng/lat + base elevation and scales height", () => {
     const mesh = placeHeroMesh(TRI, place);
-    const [mx, my] = l2m(place.lng, place.lat);
+    const [mx, my] = lngLatToMercator(place.lng, place.lat);
     // Vertex 0 is at local origin -> exactly the placement anchor, base elev.
     expect(mesh.positions[0]).toBeCloseTo(mx, 6);
     expect(mesh.positions[1]).toBeCloseTo(my, 6);
     expect(mesh.positions[2]).toBeCloseTo(5, 6); // baseElev + 0*scale
-    expect(mesh.positions[3]).toBeCloseTo(mpm(place.lat), 6);
+    // mercPerMeter is ~3.3e-8; float32 storage error at that magnitude is
+    // ~2e-15, so 12 decimal places (tolerance 5e-13) is tight and still safe.
+    expect(mesh.positions[3]).toBeCloseTo(mercatorPerMeter(place.lat), 12);
     // Vertex 2 is 10m up * scale 2 = 20m above base.
     expect(mesh.positions[2 * 4 + 2]).toBeCloseTo(5 + 20, 6);
   });
 
   it("rotates the north-offset vertex east under a 90 deg bearing", () => {
-    const mesh = placeHeroMesh(TRI, { ...place, bearingDeg: 90 });
-    const [mx, my] = l2m(place.lng, place.lat);
-    const perM = mpm(place.lat);
-    // Local (0,1m north) at bearing 90 (clockwise from north) -> 1m east.
-    // East in mercator: +x; scale 2 -> 2m east.
-    expect(mesh.positions[1 * 4]).toBeCloseTo(mx + 2 * perM, 6);
-    expect(mesh.positions[1 * 4 + 1]).toBeCloseTo(my, 6);
+    // A 2m (or even a 2*scale m) offset is far too small to test reliably in
+    // float32 mercator units: mercator x/y are ~0.29 in magnitude, so their
+    // float32 quantization is ~1.7e-8, while a 2m east displacement in
+    // mercator units is only ~6.6e-8 -- barely above the quantization floor.
+    // Use a dedicated, large-offset fixture (10,000 m north) so the expected
+    // displacement is orders of magnitude above the quantization noise, and
+    // assert in meters (dividing out perM) rather than in raw mercator units.
+    const FAR_NORTH = {
+      positions: new Float32Array([0, 10000, 0]),
+      normals: new Float32Array([1, 0, 0]),
+      vertexCount: 1,
+    };
+    const mesh = placeHeroMesh(FAR_NORTH, { ...place, bearingDeg: 90, scale: 1 });
+    const [mx, my] = lngLatToMercator(place.lng, place.lat);
+    const perM = mercatorPerMeter(place.lat);
+    // Local (0, 10000m north) at bearing 90 (clockwise from north) -> 10000m east.
+    // This must FAIL if the rotation were a no-op (a no-op would leave the
+    // vertex at ~0m east, far from the expected 10000m).
+    const eastM = (mesh.positions[0] - mx) / perM;
+    const northM = (my - mesh.positions[1]) / perM; // mercator y grows south
+    expect(Math.abs(eastM - 10000)).toBeLessThan(5);
+    expect(Math.abs(northM)).toBeLessThan(5);
   });
 });
