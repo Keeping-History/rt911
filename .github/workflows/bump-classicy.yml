@@ -1,45 +1,71 @@
 name: Bump classicy
 
-# Manually pull the latest `classicy` release into pnpm-lock.yaml and, if it
-# actually changed, restart the image build so the deployed frontend picks it up.
+# Pull the latest `classicy` release into pnpm-lock.yaml and, if it actually
+# changed, land it on `main` so the deployed frontend picks it up.
 #
 # Why this exists: the frontend pins `classicy` to "latest" and `.husky/pre-commit`
 # auto-bumps it on every human commit — but between commits a fresh classicy
-# release won't reach production on its own. This workflow is the manual button
-# to force that refresh.
+# release won't reach production on its own. This workflow is the button (manual
+# or fired by classicy's publish) that forces that refresh. Because build.yml
+# installs with `--frozen-lockfile`, the bump MUST be committed to the lockfile
+# on `main` — "just rebuild" would reinstall the old version.
 #
-# How the rebuild is triggered: the bump commit is pushed with the default
-# GITHUB_TOKEN, and GitHub deliberately does NOT let a GITHUB_TOKEN push fire
-# another workflow's `push:` trigger (loop prevention). `workflow_dispatch` is an
-# explicit exception, so we re-trigger build.yml with `gh workflow run` instead.
+# Why a PR + auto-merge instead of a direct push: `main` requires the `streamer`,
+# `frontend` and `frontend-checks` status checks. `github-actions[bot]` is not a
+# repo admin, so a direct push of a fresh commit is rejected (GH006 — "required
+# status checks are expected"). Instead we open a PR *as the RT911_DISPATCH
+# GitHub App* and enable auto-merge: the App identity (unlike GITHUB_TOKEN) fires
+# the PR's checks, and once they go green GitHub squash-merges automatically. The
+# merge commit — also App-authored — then fires build.yml's `push:` trigger, so
+# no separate `gh workflow run` is needed.
+#
+# Prerequisites (one-time, outside this repo):
+#   - Secrets RT911_DISPATCH_APP_ID / RT911_DISPATCH_APP_PRIVATE_KEY added to this
+#     repo (the same App classicy already uses to dispatch here).
+#   - That App's installation on Keeping-History/rt911 granted BOTH
+#     "Contents: write" AND "Pull requests: write".
+#   - Repo setting "Allow auto-merge" enabled (it is).
 
 on:
   workflow_dispatch:
   # Fired by the classicy repo's Release Package workflow after it publishes a
   # new version to npm (see classicy/.github/workflows/push.yml). client_payload
-  # carries the new version tag for logging.
+  # carries the new version tag for logging / the PR title.
   repository_dispatch:
     types: [classicy-published]
 
+# The App installation token minted below carries the write permissions; the
+# built-in GITHUB_TOKEN only needs to read during checkout/install.
 permissions:
-  contents: write        # push the "Bump classicy" commit
-  actions: write         # dispatch build.yml afterwards
+  contents: read
 
 concurrency:
   group: bump-classicy
   cancel-in-progress: false
 
 env:
-  # Don't let .husky/pre-commit re-run the classicy update inside the script's commit.
+  # Don't let .husky/pre-commit re-run the classicy update inside our commit.
   HUSKY: "0"
+  BRANCH: chore/bump-classicy
 
 jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
+      # Short-lived, repo-scoped token from the "classicy dispatch" GitHub App.
+      # Authoring the branch push + PR as the App (not GITHUB_TOKEN) is what lets
+      # the PR trigger the required status checks — GITHUB_TOKEN would not.
+      - name: Mint bump token
+        id: token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RT911_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.RT911_DISPATCH_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v7
-        # Default persist-credentials wires GITHUB_TOKEN into the origin remote,
-        # which is what the script's `git push` uses.
+        with:
+          # Wire the App token into the origin remote so `git push` is App-authored.
+          token: ${{ steps.token.outputs.token }}
 
       - uses: jdx/mise-action@v4
         # Provisions node/pnpm from mise.toml, matching build.yml.
@@ -58,23 +84,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Bump classicy
-        id: bump
+      - name: Update classicy
+        run: pnpm bump:classicy
+
+      - name: Open bump PR and enable auto-merge
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          TAG: ${{ github.event.client_payload.tag }}
         run: |
-          before=$(git rev-parse HEAD)
-          pnpm bump:classicy
-          after=$(git rev-parse HEAD)
-          if [ "$before" != "$after" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::classicy bumped — new commit $after"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::classicy already up to date — no rebuild"
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "::notice::classicy already up to date — no PR needed"
+            exit 0
           fi
 
-      - name: Trigger image build
-        if: steps.bump.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REF: ${{ github.ref_name }}
-        run: gh workflow run build.yml --ref "$REF"
+          title="chore: bump classicy${TAG:+ to $TAG}"
+
+          # Roll a single, always-current bump branch. Force-push so a stacked-up
+          # release supersedes an in-flight one instead of piling up stale PRs.
+          git checkout -B "$BRANCH"
+          git add pnpm-lock.yaml
+          git commit -m "$title"
+          git push --force --set-upstream origin "$BRANCH"
+
+          # Reuse the open PR if the branch already has one; otherwise open it.
+          if ! gh pr view "$BRANCH" --json number --jq .number >/dev/null 2>&1; then
+            gh pr create \
+              --base main --head "$BRANCH" \
+              --title "$title" \
+              --body "Automated classicy bump.${TAG:+ New version: \`$TAG\`.}"
+          fi
+
+          # Merge once the required checks pass; delete the branch afterwards.
+          gh pr merge "$BRANCH" --auto --squash --delete-branch
+          echo "::notice::Bump PR opened for $BRANCH — auto-merge armed"
