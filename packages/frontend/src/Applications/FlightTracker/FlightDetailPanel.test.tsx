@@ -206,4 +206,22 @@ describe("FlightDetailPanel", () => {
 			expect(screen.getByText("Flight Details")).toBeTruthy();
 		});
 	});
+
+	it("renders a phase legend under the fields when phases are supplied (#310)", () => {
+		render(
+			<FlightDetailPanel selected={sel} loading={false} error={null} track={notableTrack}
+				nowMs={PRE_IMPACT} phases={["takeoff", "hijack", "down"]} />,
+		);
+		const legend = screen.getByLabelText("Phase colors");
+		expect(within(legend).getByText("Takeoff")).toBeTruthy();
+		expect(within(legend).getByText("Hijack")).toBeTruthy();
+		expect(within(legend).getByText("Down")).toBeTruthy();
+	});
+	it("omits the legend when no phases are supplied", () => {
+		render(
+			<FlightDetailPanel selected={sel} loading={false} error={null} track={baseTrack}
+				nowMs={PRE_IMPACT} />,
+		);
+		expect(screen.queryByLabelText("Phase colors")).toBeNull();
+	});
 });

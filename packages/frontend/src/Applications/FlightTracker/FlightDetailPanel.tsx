@@ -11,6 +11,7 @@ import {
 import { isNotable, isObserver } from "./notableFlights";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
 import { type MapPoi, POI_DETAIL_FIELDS, detailTitleFor } from "./mapPois";
+import { PHASE_COLORS, DEFAULT_PHASE_COLOR, phaseLabel } from "./flightPhases";
 
 interface FlightDetailPanelProps {
 	selected: FlightPosition | null;
@@ -39,6 +40,10 @@ interface FlightDetailPanelProps {
 	// When set, the pane renders this POI (airport) instead of a flight, and the
 	// group header switches to the POI's detail title ("Airport Details").
 	poi?: MapPoi | null;
+	// Ordered-unique phase slugs for the selected flight's track (issue #310).
+	// Non-empty only for notable flights with a per-phase profile; drives the
+	// color legend under the fields.
+	phases?: string[];
 }
 
 // "8:14 AM"-style display time for a UTC instant in the app's display tz.
@@ -53,7 +58,7 @@ function formatDisplayTime(iso: string, tzOffset: number): string {
 export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 	selected, track, loading, error, nowMs, headingDeg = null, tzOffset = -4,
 	livePos = null, estimates = null,
-	selectionOptions = [], onPickFlight, onSaveAsFilter, poi = null,
+	selectionOptions = [], onPickFlight, onSaveAsFilter, poi = null, phases = [],
 }) => {
 	if (poi) {
 		const locale = [poi.city, poi.region].filter(Boolean).join(", ");
@@ -133,6 +138,7 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 					</ClassicyButton>
 				</div>
 			)}
+			<div className={styles.detailScroll}>
 			<dl className={styles.detailFields}>
 				{selected.carrier && (<><dt>Carrier</dt><dd>{selected.carrier}</dd></>)}
 				<dt>Altitude</dt><dd>{selected.alt_ft.toLocaleString()} ft</dd>
@@ -174,6 +180,22 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				{details?.hijackers?.length ? (<><dt>Hijackers</dt><dd>{details.hijackers.join(", ")}</dd></>) : null}
 				{fateText && (<><dt>Fate</dt><dd>{fateText}</dd></>)}
 			</dl>
+			</div>
+			{phases.length > 0 && (
+				<dl className={styles.phaseLegend} aria-label="Phase colors">
+					{phases.map((ph) => (
+						<Fragment key={ph}>
+							<dt>
+								<span
+									className={styles.phaseSwatch}
+									style={{ backgroundColor: PHASE_COLORS[ph] ?? DEFAULT_PHASE_COLOR }}
+								/>
+							</dt>
+							<dd>{phaseLabel(ph)}</dd>
+						</Fragment>
+					))}
+				</dl>
+			)}
 			{loading && <p className={styles.detailNote}>Loading track…</p>}
 			{error && <p className={styles.detailNote}>{error}</p>}
 		</ClassicyControlGroup>

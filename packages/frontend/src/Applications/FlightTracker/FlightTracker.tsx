@@ -88,6 +88,7 @@ import {
 import styles from "./FlightTracker.module.scss";
 import type { FeatureCollection } from "geojson";
 import { buildTrackSegments } from "./flightTrackSegments";
+import { orderedTrackPhases } from "./flightPhases";
 import {
 	BASEMAP_URLS,
 	type BasemapStyleId,
@@ -789,6 +790,16 @@ export const FlightTracker: FC = () => {
 		};
 	}, [track?.geometry, selection, profile]);
 
+	// Phase legend (issue #310): same gate as the per-phase track segments — only
+	// notable flights with a smoothed profile get colored phases, so only they get
+	// a legend. Ordered-unique so it mirrors the drawn segments.
+	const trackPhases = useMemo<string[]>(() => {
+		if (!(selection && isNotable(selection.flight) && profile && profile.length >= 2)) {
+			return [];
+		}
+		return orderedTrackPhases(profile);
+	}, [selection, profile]);
+
 	// A radar-scope style is inherently dark regardless of the Dark Map toggle
 	// (see effectiveTone) — pin-color buckets follow this, not settings.darkMap.
 	const tone = effectiveTone(settings.mapStyle, settings.darkMap);
@@ -1279,6 +1290,7 @@ export const FlightTracker: FC = () => {
 							estimates={estimates}
 							selectionOptions={multiSelected}
 							poi={selectedPoi}
+							phases={trackPhases}
 							onPickFlight={(flight) => {
 								const i = multiSelected.findIndex((p) => p.flight === flight);
 								if (i >= 0) setActiveFlightIdx(i);

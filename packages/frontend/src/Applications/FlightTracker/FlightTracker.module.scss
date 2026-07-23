@@ -81,6 +81,9 @@
 	height: 100%;
 	fieldset {
 		height: calc(100% - var(--window-control-size) *2 - var(--window-padding-size));
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
 	}
 }
 .detail {
@@ -98,6 +101,17 @@
 .detailFields dt { color: #555; }
 .detailFields dd { margin: 0; }
 .detailNote { margin-top: 8px; color: #666; font-family: var(--ui-font) !important; }
+.detailScroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.phaseLegend {
+	display: grid; grid-template-columns: auto 1fr; gap: 2px 8px;
+	flex: 0 0 auto; margin: 8px 0 0;
+	font-family: var(--ui-font) !important; font-size: var(--ui-font-size);
+	dt, dd { margin: 0; }
+}
+.phaseSwatch {
+	display: inline-block; width: 12px; height: 12px;
+	border: 1px solid #666; vertical-align: middle;
+}
 .statusBar {
 	flex: 0 0 auto; padding: 2px 8px; border-top: 1px solid #999;
 	font-size: calc(var(--ui-font-size)*.75); display: flex; justify-content: space-between;
