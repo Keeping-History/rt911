@@ -101,7 +101,7 @@
 .detailFields dt { color: #555; }
 .detailFields dd { margin: 0; }
 .detailNote { margin-top: 8px; color: #666; font-family: var(--ui-font) !important; }
-.detailScroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.detailScroll { flex: 1 1 auto; min-height: 0; overflow-y: scroll; }
 .phaseLegend {
 	display: grid; grid-template-columns: auto 1fr; gap: 2px 8px;
 	flex: 0 0 auto; margin: 8px 0 0;
