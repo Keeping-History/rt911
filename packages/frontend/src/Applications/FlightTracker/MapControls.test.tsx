@@ -28,6 +28,7 @@ const baseProps = (): MapControlsProps => ({
 	onSetMapStyle: vi.fn(),
 	onToggleDarkMap: vi.fn(),
 	onOpenFilter: vi.fn(),
+	onClearFilter: vi.fn(),
 	onSetCameraMode: vi.fn(),
 	onToggleCameraFollow: vi.fn(),
 });
@@ -141,6 +142,19 @@ describe("MapControls", () => {
 		rerender(<MapControls {...p} filterOn={true} />);
 		expect(filter.textContent).toBe("Filter (on)…");
 		expect(filter.getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("Clear Filter is disabled with no filter, enabled + fires when a filter is applied (#310)", () => {
+		const p = baseProps();
+		const { rerender } = render(<MapControls {...p} filterOn={false} />);
+		const clear = screen.getByRole("button", { name: "Clear filter" }) as HTMLButtonElement;
+		expect(clear.disabled).toBe(true);
+		fireEvent.click(clear);
+		expect(p.onClearFilter).not.toHaveBeenCalled();
+		rerender(<MapControls {...p} filterOn={true} />);
+		expect(clear.disabled).toBe(false);
+		fireEvent.click(clear);
+		expect(p.onClearFilter).toHaveBeenCalledOnce();
 	});
 
 	it("follow toggle is disabled until a tracked flight is selectable, then arms", () => {

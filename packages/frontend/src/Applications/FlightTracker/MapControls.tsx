@@ -55,6 +55,7 @@ export interface MapControlsProps {
 	onSetMapStyle(style: BasemapStyleId): void;
 	onToggleDarkMap(): void;
 	onOpenFilter(): void;
+	onClearFilter(): void;
 	onSetCameraMode(mode: CameraMode): void;
 	onToggleCameraFollow(): void;
 }
@@ -221,6 +222,14 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			onClickFunc={p.onOpenFilter}
 		>
 			{p.filterOn ? "Filter (on)…" : "Filter…"}
+		</ClassicyButton>
+		<ClassicyButton
+			buttonSize="small"
+			aria-label="Clear filter"
+			disabled={!p.filterOn}
+			onClickFunc={p.onClearFilter}
+		>
+			Clear Filter
 		</ClassicyButton>
 		</div>
 	</div>

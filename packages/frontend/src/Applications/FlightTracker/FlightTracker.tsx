@@ -1131,6 +1131,7 @@ export const FlightTracker: FC = () => {
 							onToggleDarkMap={toggleDarkMap}
 							filterOn={!!visibleFlights}
 							onOpenFilter={openFilter}
+							onClearFilter={clearFilter}
 							cameraMode={settings.cameraMode}
 							cameraFollow={cameraFollow}
 							canFollow={canFollow}
