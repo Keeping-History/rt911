@@ -1085,33 +1085,33 @@ export const FlightTracker: FC = () => {
 				dimContents={false}
 			>
 				<div className={styles.root}>
-					<MapControls
-						globe={settings.globe}
-						threeD={settings.threeD}
-						terrain={settings.terrain}
-						cluster={settings.cluster}
-						selectMode={selectMode}
-						onZoomIn={() => mapApi.current?.zoomIn()}
-						onZoomOut={() => mapApi.current?.zoomOut()}
-						onToggleGlobe={toggleGlobe}
-						onToggleThreeD={toggleThreeD}
-						onToggleTerrain={toggleTerrain}
-						onToggleCluster={toggleCluster}
-						onSetSelectMode={setSelectMode}
-						mapStyle={settings.mapStyle}
-						darkMap={settings.darkMap}
-						onPinpoint={(center, zoom) => mapApi.current?.flyTo(center, zoom)}
-						onSetMapStyle={setMapStyle}
-						onToggleDarkMap={toggleDarkMap}
-						filterOn={!!visibleFlights}
-						onOpenFilter={openFilter}
-						cameraMode={settings.cameraMode}
-						cameraFollow={cameraFollow}
-						canFollow={canFollow}
-						onSetCameraMode={setCameraMode}
-						onToggleCameraFollow={toggleCameraFollow}
-					/>
-					<div className={styles.body}>
+					<div className={styles.mainColumn}>
+						<MapControls
+							globe={settings.globe}
+							threeD={settings.threeD}
+							terrain={settings.terrain}
+							cluster={settings.cluster}
+							selectMode={selectMode}
+							onZoomIn={() => mapApi.current?.zoomIn()}
+							onZoomOut={() => mapApi.current?.zoomOut()}
+							onToggleGlobe={toggleGlobe}
+							onToggleThreeD={toggleThreeD}
+							onToggleTerrain={toggleTerrain}
+							onToggleCluster={toggleCluster}
+							onSetSelectMode={setSelectMode}
+							mapStyle={settings.mapStyle}
+							darkMap={settings.darkMap}
+							onPinpoint={(center, zoom) => mapApi.current?.flyTo(center, zoom)}
+							onSetMapStyle={setMapStyle}
+							onToggleDarkMap={toggleDarkMap}
+							filterOn={!!visibleFlights}
+							onOpenFilter={openFilter}
+							cameraMode={settings.cameraMode}
+							cameraFollow={cameraFollow}
+							canFollow={canFollow}
+							onSetCameraMode={setCameraMode}
+							onToggleCameraFollow={toggleCameraFollow}
+						/>
 						<div className={styles.map}>
 							<FlightMap
 								ref={mapApi}
@@ -1163,128 +1163,128 @@ export const FlightTracker: FC = () => {
 								onSelectPoi={onSelectPoi}
 							/>
 						</div>
-						<div className={styles.filterPanel}>
-							<FlightDetailPanel
-								selected={selected}
-								track={track}
-								loading={loading}
-								error={error}
-								nowMs={nowMs}
-								headingDeg={headingDeg}
-								tzOffset={tzOffset}
-								livePos={livePos}
-								estimates={estimates}
-								selectionOptions={multiSelected}
-								poi={selectedPoi}
-								onPickFlight={(flight) => {
-									const i = multiSelected.findIndex((p) => p.flight === flight);
-									if (i >= 0) setActiveFlightIdx(i);
-								}}
-								onSaveAsFilter={saveSelectionAsFilter}
-							/>
+						{loopEnabled && (
+							<div className={styles.loopStrip}>
+								<ClassicyButton
+									onClickFunc={togglePause}
+									aria-label={loopClock.paused ? "Play loop" : "Pause loop"}
+								>
+									{loopClock.paused ? "▶" : "⏸"}
+								</ClassicyButton>
+								<ClassicyPopUpMenu
+									id="flight_loop_window"
+									label="Time"
+									labelPosition="left"
+									labelSize="small"
+									size="small"
+									options={[
+										{ value: "30", label: "30 min" },
+										{ value: "90", label: "90 min" },
+									]}
+									selected={String(loopMinutes)}
+									onChangeFunc={(e) =>
+										desktopEventDispatch(
+											flightTrackerSetLoopSettings({
+												...loopSettings,
+												windowMinutes: Number(e.target.value) as LoopWindowMinutes,
+											}),
+										)
+									}
+								/>
+								<ClassicyPopUpMenu
+									id="flight_loop_speed"
+									label="Speed"
+									labelPosition="left"
+									labelSize="small"
+									size="small"
+	
+									options={LOOP_SPEEDS.map((s) => ({
+										value: String(s),
+										label: SPEED_LABELS[s],
+									}))}
+									selected={String(loopClock.speed)}
+									onChangeFunc={(e) =>
+										setLoopSpeed(Number(e.target.value) as LoopSpeed)
+									}
+								/>
+								<div className={styles.loopSlider}>
+									<ClassicySlider
+										id="flight_loop_scrub"
+										value={Math.round(
+											Math.min(
+												Math.max((playheadMs - (nowMs - windowMs)) / 1000, 0),
+												windowMs / 1000,
+											),
+										)}
+										valueLabel={formatPlayhead(playheadMs, tzOffset)}
+										min={0}
+										max={windowMs / 1000}
+										step={1}
+										ariaLabel="Loop playhead"
+										onChangeFunc={(e) => scrubTo(Number(e.target.value), true)}
+										onCommitFunc={(v: number) => scrubTo(v, false)}
+									/>
+								</div>
+							</div>
+						)}
+						<div
+							className={`${styles.statusBar}${groundStop === "active" ? ` ${styles.statusBarRed}` : ""
+								}`}
+						>
+							<span className={styles.statusBarCell}>
+								{/* On the red bar the usual green/red dot would vanish; use
+								    white-on-red equivalents instead. */}
+								<span
+									style={{
+										color:
+											groundStop === "active"
+												? connected
+													? "#7fff7f"
+													: "#fff"
+												: connected
+													? "green"
+													: "red",
+									}}
+								>
+									&bull;
+								</span>{" "}
+								{connected ? (loopEnabled ? "Live (Loop)" : "Live") : "Disconnected"}
+							</span>
+							<span className={`${styles.statusBarCell} ${styles.statusBarCenter}`}>
+								{groundStop !== "none" && (
+									<span role="alert">
+										{groundStop === "active"
+											? "FAA GROUND STOP IN EFFECT"
+											: "FAA ground stop lifted — airspace reopened"}
+									</span>
+								)}
+							</span>
+							<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
+								{visibleFlights
+									? `${filteredPositions.length} of ${flightPositions.length} aircraft aloft · filtered`
+									: `${flightPositions.length} aircraft aloft`}
+							</span>
 						</div>
 					</div>
-					{loopEnabled && (
-						<div className={styles.loopStrip}>
-							<ClassicyButton
-								onClickFunc={togglePause}
-								aria-label={loopClock.paused ? "Play loop" : "Pause loop"}
-							>
-								{loopClock.paused ? "▶" : "⏸"}
-							</ClassicyButton>
-							<ClassicyPopUpMenu
-								id="flight_loop_window"
-								label="Time"
-								labelPosition="left"
-								labelSize="small"
-								size="small"
-								options={[
-									{ value: "30", label: "30 min" },
-									{ value: "90", label: "90 min" },
-								]}
-								selected={String(loopMinutes)}
-								onChangeFunc={(e) =>
-									desktopEventDispatch(
-										flightTrackerSetLoopSettings({
-											...loopSettings,
-											windowMinutes: Number(e.target.value) as LoopWindowMinutes,
-										}),
-									)
-								}
-							/>
-							<ClassicyPopUpMenu
-								id="flight_loop_speed"
-								label="Speed"
-								labelPosition="left"
-								labelSize="small"
-								size="small"
-
-								options={LOOP_SPEEDS.map((s) => ({
-									value: String(s),
-									label: SPEED_LABELS[s],
-								}))}
-								selected={String(loopClock.speed)}
-								onChangeFunc={(e) =>
-									setLoopSpeed(Number(e.target.value) as LoopSpeed)
-								}
-							/>
-							<div className={styles.loopSlider}>
-								<ClassicySlider
-									id="flight_loop_scrub"
-									value={Math.round(
-										Math.min(
-											Math.max((playheadMs - (nowMs - windowMs)) / 1000, 0),
-											windowMs / 1000,
-										),
-									)}
-									valueLabel={formatPlayhead(playheadMs, tzOffset)}
-									min={0}
-									max={windowMs / 1000}
-									step={1}
-									ariaLabel="Loop playhead"
-									onChangeFunc={(e) => scrubTo(Number(e.target.value), true)}
-									onCommitFunc={(v: number) => scrubTo(v, false)}
-								/>
-							</div>
-						</div>
-					)}
-					<div
-						className={`${styles.statusBar}${groundStop === "active" ? ` ${styles.statusBarRed}` : ""
-							}`}
-					>
-						<span className={styles.statusBarCell}>
-							{/* On the red bar the usual green/red dot would vanish; use
-							    white-on-red equivalents instead. */}
-							<span
-								style={{
-									color:
-										groundStop === "active"
-											? connected
-												? "#7fff7f"
-												: "#fff"
-											: connected
-												? "green"
-												: "red",
-								}}
-							>
-								&bull;
-							</span>{" "}
-							{connected ? (loopEnabled ? "Live (Loop)" : "Live") : "Disconnected"}
-						</span>
-						<span className={`${styles.statusBarCell} ${styles.statusBarCenter}`}>
-							{groundStop !== "none" && (
-								<span role="alert">
-									{groundStop === "active"
-										? "FAA GROUND STOP IN EFFECT"
-										: "FAA ground stop lifted — airspace reopened"}
-								</span>
-							)}
-						</span>
-						<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
-							{visibleFlights
-								? `${filteredPositions.length} of ${flightPositions.length} aircraft aloft · filtered`
-								: `${flightPositions.length} aircraft aloft`}
-						</span>
+					<div className={styles.filterPanel}>
+						<FlightDetailPanel
+							selected={selected}
+							track={track}
+							loading={loading}
+							error={error}
+							nowMs={nowMs}
+							headingDeg={headingDeg}
+							tzOffset={tzOffset}
+							livePos={livePos}
+							estimates={estimates}
+							selectionOptions={multiSelected}
+							poi={selectedPoi}
+							onPickFlight={(flight) => {
+								const i = multiSelected.findIndex((p) => p.flight === flight);
+								if (i >= 0) setActiveFlightIdx(i);
+							}}
+							onSaveAsFilter={saveSelectionAsFilter}
+						/>
 					</div>
 				</div>
 			</ClassicyWindow>

@@ -362,6 +362,18 @@ describe("FlightTracker", () => {
 		}
 	});
 
+	it("keeps toolbar, status bar, and detail prompt mounted after layout restructure (#310)", () => {
+		renderWithContext({});
+		// Toolbar Filter button, status-bar aircraft count, and the empty detail
+		// prompt must all coexist — proving mainColumn + filterPanel both mounted.
+		// (The ClassicyButton mock in this file drops aria-label, so the
+		// toolbar button's accessible name is its visible text — see the
+		// "Filter…" queries used by the filter-panel tests below.)
+		expect(screen.getByText("Filter…")).toBeTruthy();
+		expect(screen.getByText(/aircraft aloft/i)).toBeTruthy();
+		expect(screen.getByText(/select a flight/i)).toBeTruthy();
+	});
+
 	it("clears the selection when the selected flight leaves the airborne set (e.g. after a seek)", () => {
 		// useFlightTrack fires a real fetch once a flight is selected; stub it out
 		// so the test only exercises the selection-clearing behavior under test.
