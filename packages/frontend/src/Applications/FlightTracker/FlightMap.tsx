@@ -348,6 +348,7 @@ interface FlightMapProps {
 	followFlight?: string | null;
 	cameraMode?: CameraMode;
 	onSelectFlight: (flight: string) => void;
+	onToggleFlight?: (flight: string) => void;
 	onClearSelection: () => void;
 	// POI markers (airports, etc.) — enabled set computed by FlightTracker.
 	pois?: MapPoi[];
@@ -549,7 +550,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	globe = false, threeD = false, terrain = false, cluster = false,
 	selectMode = "off", onAreaSelect, onPitchedChange, aircraftFamilyOf,
 	followFlight = null, cameraMode = "track",
-	onSelectFlight, onClearSelection,
+	onSelectFlight, onClearSelection, onToggleFlight,
 	pois = [], poiLayers = [], selectedPoiId = null, onSelectPoi,
 }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -565,10 +566,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const poiLayersRef = useRef(poiLayers);
 	poiLayersRef.current = poiLayers;
 	const cbRef = useRef({
-		onSelectFlight, onClearSelection, onAreaSelect, onPitchedChange, aircraftFamilyOf, onSelectPoi,
+		onSelectFlight, onClearSelection, onToggleFlight, onAreaSelect, onPitchedChange, aircraftFamilyOf, onSelectPoi,
 	});
 	cbRef.current = {
-		onSelectFlight, onClearSelection, onAreaSelect, onPitchedChange, aircraftFamilyOf, onSelectPoi,
+		onSelectFlight, onClearSelection, onToggleFlight, onAreaSelect, onPitchedChange, aircraftFamilyOf, onSelectPoi,
 	};
 	// Families whose STL fetch has been kicked off (once per session).
 	const requestedMeshesRef = useRef(new Set<string>());
@@ -1049,6 +1050,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 		map.on("click", (e) => {
 			// While a select tool is armed, the drag handlers own the pointer.
 			if (selectModeRef.current !== "off") return;
+			// Shift-click toggles the hit flight in/out of the multi-selection
+			// instead of replacing it (issue #310).
+			const additive = !!(e as { originalEvent?: { shiftKey?: boolean } }).originalEvent?.shiftKey;
 			const { x, y } = e.point;
 			// Pitched: hit-test against the planes' ELEVATED screen positions.
 			// queryRenderedFeatures only sees fill-extrusion ground footprints,
@@ -1087,8 +1091,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 						bestFlight = p.flight;
 					}
 				}
-				if (bestFlight) cbRef.current.onSelectFlight(bestFlight);
-				else cbRef.current.onClearSelection();
+				if (bestFlight) {
+					if (additive) cbRef.current.onToggleFlight?.(bestFlight);
+					else cbRef.current.onSelectFlight(bestFlight);
+				} else if (!additive) cbRef.current.onClearSelection();
 				return;
 			}
 			// POIs first (ground-level; works in flat and pitched modes). A POI
@@ -1135,7 +1141,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				return;
 			}
 			if (near.length === 0) {
-				cbRef.current.onClearSelection();
+				if (!additive) cbRef.current.onClearSelection();
 				return;
 			}
 			let best = near[0];
@@ -1150,7 +1156,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 					best = f;
 				}
 			}
-			if (best.properties) cbRef.current.onSelectFlight(String(best.properties.flight));
+			if (best.properties) {
+				const fl = String(best.properties.flight);
+				if (additive) cbRef.current.onToggleFlight?.(fl);
+				else cbRef.current.onSelectFlight(fl);
+			}
 		});
 
 		map.on("rotate", () => setBearing(map.getBearing()));

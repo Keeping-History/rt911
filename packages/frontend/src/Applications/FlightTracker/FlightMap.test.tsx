@@ -1579,4 +1579,44 @@ describe("FlightMap POI layers", () => {
 		expect(map.paint["poi-plain-pins"]?.["text-color"]).toBe(invertHex(darkBg));
 		expect(map.paint["poi-plain-pins"]?.["text-halo-color"]).toBe(darkBg);
 	});
+
+	it("shift-click routes to onToggleFlight instead of onSelectFlight (#310)", () => {
+		const onSelectFlight = vi.fn();
+		const onToggleFlight = vi.fn();
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0}
+				playing={false} onSelectFlight={onSelectFlight} onClearSelection={() => {}}
+				onToggleFlight={onToggleFlight}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				observerPinColor="#0f766e" radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		map.queryResult = [
+			{ layer: { id: "flights-dots" }, geometry: { type: "Point", coordinates: [10, 10] }, properties: { flight: "UA175" } },
+		];
+		// Plain click selects.
+		map.fire("click", { point: { x: 10, y: 10 }, originalEvent: { shiftKey: false } });
+		expect(onSelectFlight).toHaveBeenCalledWith("UA175");
+		expect(onToggleFlight).not.toHaveBeenCalled();
+		// Shift-click toggles.
+		map.fire("click", { point: { x: 10, y: 10 }, originalEvent: { shiftKey: true } });
+		expect(onToggleFlight).toHaveBeenCalledWith("UA175");
+		expect(onSelectFlight).toHaveBeenCalledTimes(1);
+	});
+	it("shift-click on empty space does NOT clear the selection (#310)", () => {
+		const onClearSelection = vi.fn();
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0}
+				playing={false} onSelectFlight={() => {}} onClearSelection={onClearSelection}
+				onToggleFlight={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				observerPinColor="#0f766e" radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		map.queryResult = []; // nothing under the cursor
+		map.fire("click", { point: { x: 5, y: 5 }, originalEvent: { shiftKey: true } });
+		expect(onClearSelection).not.toHaveBeenCalled();
+	});
 });

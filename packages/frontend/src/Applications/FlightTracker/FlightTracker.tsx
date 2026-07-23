@@ -95,6 +95,7 @@ import {
 	effectiveTone,
 	normalizeBasemapStyle,
 } from "./flightMapStyle";
+import { toggleFlightSelection } from "./selectionToggle";
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.flightTracker.app. registerClassicyIcons assigns
@@ -750,6 +751,17 @@ export const FlightTracker: FC = () => {
 		}
 	};
 
+	// Shift-click toggles the clicked flight in/out of the multi-selection
+	// (issue #310), reusing the same list the marquee tools populate.
+	const onToggleFlight = useCallback((flight: string) => {
+		const hit = flightPositions.find((p) => p.flight === flight);
+		if (!hit) return;
+		setSelectedPoi(null);
+		const { list, activeIdx } = toggleFlightSelection(multiSelected, hit, activeFlightIdx);
+		setMultiSelected(list);
+		setActiveFlightIdx(activeIdx);
+	}, [flightPositions, multiSelected, activeFlightIdx]);
+
 	// Publish the selected callsign (playlist locked-focus reconciliation reads it).
 	const publishedFocused = appData?.focusedFlight as string | null | undefined;
 	useEffect(() => {
@@ -1163,6 +1175,7 @@ export const FlightTracker: FC = () => {
 								loopClock={loopClock}
 								replayBuffer={replayBufferRef.current}
 								onSelectFlight={onSelectFlight}
+								onToggleFlight={onToggleFlight}
 								selectMode={selectMode}
 								onAreaSelect={onAreaSelect}
 								onPitchedChange={onPitchedChange}
