@@ -15,6 +15,11 @@ name: Bump classicy
 
 on:
   workflow_dispatch:
+  # Fired by the classicy repo's Release Package workflow after it publishes a
+  # new version to npm (see classicy/.github/workflows/push.yml). client_payload
+  # carries the new version tag for logging.
+  repository_dispatch:
+    types: [classicy-published]
 
 permissions:
   contents: write        # push the "Bump classicy" commit
@@ -38,6 +43,12 @@ jobs:
 
       - uses: jdx/mise-action@v4
         # Provisions node/pnpm from mise.toml, matching build.yml.
+
+      - name: Show trigger
+        env:
+          # Empty on manual runs; set to the published tag on repository_dispatch.
+          TAG: ${{ github.event.client_payload.tag }}
+        run: echo "::notice::Triggered by ${{ github.event_name }}${TAG:+ for classicy $TAG}"
 
       - name: Configure git identity
         run: |
