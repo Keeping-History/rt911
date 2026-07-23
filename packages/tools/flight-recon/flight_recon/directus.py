@@ -167,9 +167,27 @@ class DirectusClient:
         _check(r)
         return int(r.json()["data"][0]["count"])
 
+    def _clear_cache(self):
+        """Flush Directus's response cache. This deployment runs
+        CACHE_AUTO_PURGE=false, so a mutating DELETE does NOT invalidate the
+        cached aggregate-count that delete_window's verify loop reads below —
+        without a flush, count() returns a stale pre-delete value forever and
+        the loop raises after DELETE_MAX_PASSES even though the rows are gone.
+        A `Cache-Control: no-store` header (CACHE_SKIP_ALLOWED is off) and
+        cache-busting query params (stripped from the cache key) are both
+        ignored by this instance, so an explicit clear is the only reliable
+        bust. Best-effort: if the clear is unavailable the loop still
+        terminates via its pass cap, just as before this fix."""
+        try:
+            _check(self._http.post("/utils/cache/clear"))
+        except httpx.HTTPError as e:
+            log.warning("Directus cache clear failed (%s); a stale cached count "
+                        "may make delete_window loop to its pass cap", e)
+
     def delete_window(self, collection, start, end):
         """Bulk-delete rows with flight_date in [start, end]. Returns rows deleted."""
         flt = {"flight_date": {"_between": [str(start), str(end)]}}
+        self._clear_cache()  # fresh initial count: a stale 0 would skip a real delete
         total = self.count(collection, flt)
         if total == 0:
             return 0
@@ -179,6 +197,7 @@ class DirectusClient:
             r = self._http.request("DELETE", f"/items/{collection}",
                                    json={"query": {"filter": flt, "limit": -1}})
             _check(r)
+            self._clear_cache()  # DELETE doesn't auto-purge → bust before re-counting
             if self.count(collection, flt) == 0:
                 return total
             time.sleep(0.5)
