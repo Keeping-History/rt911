@@ -69,6 +69,7 @@ export const TimeMachine: React.FC = () => {
 	const [showSettings, setShowSettings] = useState(false);
 	const [showBookmarks, setShowBookmarks] = useState(false);
 	const [settingsForm, setSettingsForm] = useState(DEFAULT_TIME_MACHINE_SETTINGS);
+	const [showOnTop, setShowOnTop] = useState(true);
 
 	const openSettings = useCallback(() => {
 		setSettingsForm({ skipMinutes, stepSeconds });
@@ -85,7 +86,7 @@ export const TimeMachine: React.FC = () => {
 	const appMenu = useMemo(
 		() => [
 			{
-				id: "file",
+				id: `${appId}_file`,
 				title: "File",
 				menuChildren: [
 					{
@@ -99,6 +100,17 @@ export const TimeMachine: React.FC = () => {
 						onClickFunc: openSettings,
 					},
 					quitMenuItemHelper(appId, appName, appIcon),
+				],
+			},
+			{
+				id: `${appId}_view`,
+				title: "View",
+				menuChildren: [
+					{
+						id: `${appId}_show_on_top`,
+						title: (showOnTop ? "✓" : " ") + "Show on Top",
+						onClickFunc: () => setShowOnTop(!showOnTop),
+					},
 				],
 			},
 		],
@@ -257,7 +269,7 @@ export const TimeMachine: React.FC = () => {
 				title={appName}
 				icon={appIcon}
 				appId={appId}
-				alwaysOnTop={true}
+				alwaysOnTop={showOnTop}
 				closable={true}
 				windowType="utility"
 				resizable={false}
