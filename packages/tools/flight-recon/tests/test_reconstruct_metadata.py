@@ -6,7 +6,9 @@ import pytest
 
 from reconstruct import reconstruct
 
-AIRPORTS = "code,lat,lon,utc_offset\nBOS,42.3656,-71.0096,-4\nLAX,33.9425,-118.4081,-7\n"
+AIRPORTS = ("code,lat,lon,utc_offset,elevation_ft\n"
+            "BOS,42.3656,-71.0096,-4,20\n"
+            "LAX,33.9425,-118.4081,-7,125\n")
 FLIGHT_COLS = ("FlightDate,Reporting_Airline,Flight_Number,Origin,Dest,"
                "WheelsOff,WheelsOn,Cancelled,Diverted,DivAirport,Distance")
 

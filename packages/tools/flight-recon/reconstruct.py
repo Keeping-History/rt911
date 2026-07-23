@@ -41,7 +41,7 @@ REQUIRED_FLIGHT_COLS = {
     "FlightDate", "Reporting_Airline", "Flight_Number", "Origin", "Dest",
     "WheelsOff", "WheelsOn", "Cancelled", "Diverted", "DivAirport",
 }
-REQUIRED_AIRPORT_COLS = {"code", "lat", "lon", "utc_offset"}
+REQUIRED_AIRPORT_COLS = {"code", "lat", "lon", "utc_offset", "elevation_ft"}
 
 
 def load_airports(airports_path):
@@ -50,7 +50,8 @@ def load_airports(airports_path):
     if missing:
         raise ValueError(f"airports CSV missing columns: {sorted(missing)}")
     airports = airports.set_index("code")
-    return {c: (r.lat, r.lon, int(r.utc_offset)) for c, r in airports.iterrows()}
+    return {c: (r.lat, r.lon, int(r.utc_offset), float(r.elevation_ft))
+            for c, r in airports.iterrows()}
 
 
 def local_hhmm_to_utc(hhmm, utc_offset, flight_date):
@@ -167,8 +168,8 @@ def reconstruct(start, end, flights_path, airports_path, fleet=None, tail_decode
             skipped.append((fid, fdate, "unknown airport"))
             continue
 
-        olat, olon, ooff = AP[r.Origin]
-        elat, elon, eoff = AP[end_code]
+        olat, olon, ooff, oelev = AP[r.Origin]
+        elat, elon, eoff, eelev = AP[end_code]
         t_off = local_hhmm_to_utc(r.WheelsOff, ooff, fdate)   # origin local -> UTC
         t_on = local_hhmm_to_utc(r.WheelsOn, eoff, fdate)     # endpoint local -> UTC
         if t_off is None or t_on is None or t_on <= t_off:
@@ -204,7 +205,7 @@ def reconstruct(start, end, flights_path, airports_path, fleet=None, tail_decode
                 "et_seconds": et_seconds(t),
                 "clock_seconds": int((t - window_start_utc).total_seconds()),
                 "lat": round(lat, 4), "lon": round(lon, 4),
-                "alt_ft": round(altitude(f)), "phase": phase(f),
+                "alt_ft": round(altitude(f, oelev, eelev)), "phase": phase(f),
                 "diverted": diverted,
             })
             coords.append([round(lon, 4), round(lat, 4)])
@@ -303,7 +304,8 @@ def main(argv=None):
     p.add_argument("--start", required=True, help="YYYY-MM-DD (inclusive)")
     p.add_argument("--end", required=True, help="YYYY-MM-DD (inclusive)")
     p.add_argument("--flights", required=True, help="BTS On-Time CSV")
-    p.add_argument("--airports", required=True, help="airports.csv (code,lat,lon,utc_offset)")
+    p.add_argument("--airports", required=True,
+                   help="airports.csv (code,lat,lon,utc_offset,elevation_ft)")
     p.add_argument("--out-dir", default=".", help="where to write positions.csv / tracks.geojson")
     p.add_argument("--plot", action="store_true", help="also write sample_tracks.png")
     args = p.parse_args(argv)

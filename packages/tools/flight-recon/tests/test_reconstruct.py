@@ -105,6 +105,25 @@ def test_window_filtering():
     assert at_ground_stop == ACCEPTANCE_FLIGHTS
 
 
+def test_descent_lands_at_destination_field_elevation(full_window):
+    """UA50 is diverted to DEN (field 5431 ft) on 9/11; its descent must end
+    near field elevation, not at 0."""
+    positions = full_window[0]
+    den_arrivals = [p for p in positions
+                    if p["flight"] == "UA50" and p["flight_date"] == "2001-09-11"
+                    and p["phase"] == "descent"]
+    assert den_arrivals, "expected UA50 9/11 DEN-diversion descent samples"
+    final = max(den_arrivals, key=lambda p: p["utc"])
+    # DEN elevation is 5431 ft; the last descent sample must be near it, far from 0.
+    assert final["alt_ft"] > 5000
+
+
+def test_load_airports_includes_elevation():
+    ap = __import__("reconstruct").load_airports(AIRPORTS)
+    assert ap["DEN"][3] == 5431   # (lat, lon, utc_offset, elevation_ft)
+    assert ap["BOS"][3] == 20
+
+
 def test_bad_inputs_raise():
     with pytest.raises(ValueError, match="precedes"):
         reconstruct("2001-09-12", "2001-09-09", FLIGHTS, AIRPORTS)
