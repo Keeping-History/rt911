@@ -184,7 +184,7 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 			{phases.length > 0 && (
 				<dl className={styles.phaseLegend} aria-label="Phase colors">
 					{phases.map((ph) => (
-						<Fragment key={ph}>
+						<div key={ph} className={styles.phaseLegendItem}>
 							<dt>
 								<span
 									className={styles.phaseSwatch}
@@ -192,7 +192,7 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 								/>
 							</dt>
 							<dd>{phaseLabel(ph)}</dd>
-						</Fragment>
+						</div>
 					))}
 				</dl>
 			)}
