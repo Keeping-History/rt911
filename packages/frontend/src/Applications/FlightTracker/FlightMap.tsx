@@ -1487,7 +1487,13 @@ export const FlightMap: FC<FlightMapProps> = ({
 				const sizeKm = plane3DTargetPx(zoom) * kmPerPixel(zoom, map.getCenter().lat);
 				// Track-tube thickness tracks the marker scale (half the trail
 				// ribbons' 0.08 width factor); radius is a uniform, so this is free.
-				trackTubeRef.current?.setRadius(sizeKm * 1000 * 0.04);
+				const tubeRadiusM = sizeKm * 1000 * 0.04;
+				trackTubeRef.current?.setRadius(tubeRadiusM);
+				// Sink the tube to just under the plane's belly so the two stop
+				// colliding at the aircraft's head: the marker's real-world half-
+				// height is sizeKm*500 m, so drop by that plus the tube's own
+				// radius. Uniform-driven, so it tracks zoom with no rebuild.
+				trackTubeRef.current?.setVerticalDrop(sizeKm * 500 + tubeRadiusM);
 				if (planes3DRef.current) {
 					// Per-airframe batches (issue #250 follow-up): each family
 					// draws its own model; unloaded families render the prism

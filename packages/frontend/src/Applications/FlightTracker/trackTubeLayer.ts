@@ -13,6 +13,7 @@ in vec4 a_offset; // ENU unit offset from the centerline (xyz, also the normal) 
 in vec3 a_color;  // per-vertex RGB (phase color); used only when u_useVertexColor=1
 
 uniform float u_radius; // meters
+uniform float u_vDrop; // meters to sink the whole centerline (keeps the tube below the plane marker)
 uniform vec3 u_color;
 uniform float u_useVertexColor; // 1 = a_color (phase-colored tube), 0 = u_color (ribbons)
 uniform float u_shaded; // 1 = light by the offset normal (tube), 0 = flat (ribbon)
@@ -25,7 +26,7 @@ const vec3 LIGHT = vec3(0.30151, 0.30151, 0.90453); // pre-normalized
 void main() {
 	// Local east/north meters → mercator world units (mercator y grows south).
 	vec2 posMerc = a_center.xy + vec2(a_offset.x, -a_offset.y) * u_radius * a_center.w;
-	float elevMeters = a_center.z + a_offset.z * u_radius;
+	float elevMeters = a_center.z + a_offset.z * u_radius - u_vDrop;
 #ifdef GLOBE
 	gl_Position = projectTileFor3D(posMerc, elevMeters);
 #else
@@ -111,6 +112,7 @@ export class TrackTube3DLayer implements CustomLayerInterface {
 	private geometryDirty = false;
 	private color: [number, number, number] = [0.7, 0.13, 0.13];
 	private radiusM = 500;
+	private dropM = 0;
 
 	setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
@@ -138,6 +140,18 @@ export class TrackTube3DLayer implements CustomLayerInterface {
 	setRadius(radiusM: number): void {
 		if (this.radiusM === radiusM) return;
 		this.radiusM = radiusM;
+		this.map?.triggerRepaint();
+	}
+
+	/**
+	 * Sink the whole centerline by this many meters so the tube rides below the
+	 * plane marker instead of piercing it at the aircraft's head. A uniform, so
+	 * it can track the (zoom-scaled) marker size per frame without a rebuild.
+	 * Left at 0 for the trail ribbons, which meet the fuselage centerline.
+	 */
+	setVerticalDrop(dropM: number): void {
+		if (this.dropM === dropM) return;
+		this.dropM = dropM;
 		this.map?.triggerRepaint();
 	}
 
@@ -204,7 +218,7 @@ ${VERTEX_BODY}`;
 		}
 		const uniforms: ProgramInfo["uniforms"] = {};
 		for (const name of [
-			...PROJECTION_UNIFORMS, "u_color", "u_radius", "u_opacity", "u_shaded", "u_useVertexColor",
+			...PROJECTION_UNIFORMS, "u_color", "u_radius", "u_vDrop", "u_opacity", "u_shaded", "u_useVertexColor",
 		]) {
 			uniforms[name] = gl.getUniformLocation(program, name);
 		}
@@ -238,6 +252,7 @@ ${VERTEX_BODY}`;
 			gl.uniform1f(u.u_projection_transition, pd.projectionTransition);
 		if (u.u_color) gl.uniform3f(u.u_color, ...this.color);
 		if (u.u_radius) gl.uniform1f(u.u_radius, this.radiusM);
+		if (u.u_vDrop) gl.uniform1f(u.u_vDrop, this.dropM);
 		if (u.u_opacity) gl.uniform1f(u.u_opacity, this.opacity);
 		if (u.u_shaded) gl.uniform1f(u.u_shaded, this.shaded ? 1 : 0);
 		if (u.u_useVertexColor) gl.uniform1f(u.u_useVertexColor, this.hasVertexColor ? 1 : 0);
