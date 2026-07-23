@@ -58,7 +58,13 @@ sample-sized loads; hours for real ones).
    `python -m flight_recon.prep_bts --raw <raw.csv> --out /srv/flight-recon-data/bts_2001-09.csv`
 3. Airports reference: `/srv/flight-recon-data/airports.csv` was built from
    OpenFlights + IANA tz offsets computed at 2001-09-11 (DST-aware; 5,201
-   IATA codes, whole-hour zones).
+   IATA codes, whole-hour zones). Field elevations (`elevation_ft` column) are
+   joined from OurAirports (https://ourairports.com/data/) via
+   `python -m flight_recon.airport_elevation --base airports.csv
+   --ourairports ourairports.csv --out airports.csv`; codes OurAirports lacks
+   default to 0 ft. The reconstruction anchors each flight's climb/descent to
+   its origin/destination field elevation so descents stop at the airport, not
+   sea level.
 4. Run with `--param flights_path=/data/bts_2001-09.csv --param airports_path=/data/airports.csv`.
 
 Known source limitation: BTS only records diversion detail (`Div*Airport`/
@@ -171,6 +177,15 @@ Defaults point at the sample fixtures baked into the image under `/app/data`.
 For a real BTS month, drop the CSV in `/srv/flight-recon-data` on the dev node
 and pass `--param flights_path=/data/<file>.csv`. (BTS has no clean API — the
 CSV is downloaded manually from TranStats.)
+
+## Rewarm after reconstruction reload
+
+After a reconstruction re-load, rewarm the streamer's flight cache so the new
+altitudes are served: `redis-cli DEL flight:minutes` then restart the streamer
+(the `flight:minutes` HASH is immutable bulk COPY output with no trigger). The
+rewarm races ArgoCD self-heal — verify the reload against Postgres (sample
+`alt_ft` for a known high-elevation arrival, e.g. any flight into DEN), not
+against Prefect run status.
 
 ## Verifying
 
