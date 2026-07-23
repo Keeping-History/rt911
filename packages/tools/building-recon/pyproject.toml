@@ -1,0 +1,26 @@
+[project]
+name = "building-recon"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "prefect>=3.7,<4",
+    "prefect-kubernetes>=0.5",
+    "httpx>=0.27",
+    "boto3>=1.36",
+    "tenacity>=8",
+    "shapely>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.4", "moto[s3]>=5"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["building_recon"]
+py-modules = ["build_2001"]
+
+[tool.ruff]
+line-length = 100
