@@ -180,8 +180,9 @@ import { TRACK_SHADOW_COLOR } from "./flightMapStyle";
 import { phaseLineColorExpression } from "./flightPhases";
 import { loadAircraftIconSvg } from "./aircraftIcons";
 import { buildPlaneImage, iconDisplayPx, PLANE_ICON_PX } from "./flightIcons";
-import type { BasemapStyleId } from "../../lib/basemap/basemapStyles";
+import { basemapPalette, type BasemapStyleId } from "../../lib/basemap/basemapStyles";
 import type { MapPoi, PoiLayerConfig } from "./mapPois";
+import { invertHex } from "./colorInvert";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -1555,5 +1556,27 @@ describe("FlightMap POI layers", () => {
 		expect(plainIds).toContain(2);
 		expect(plainIds).not.toContain(3);
 		expect(clustered.features).toHaveLength(0);
+	});
+
+	it("paints POI labels as the RGB inverse of the basemap background, halo = background (#310)", () => {
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			mapStyle: "classic" as const, darkMap: false, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", observerPinColor: "#0f766e", radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender } = render(<FlightMap {...common} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		const lightBg = basemapPalette("classic", false).background;
+		const plain = map.layers.find((l) => l.id === "poi-plain-pins") as { paint?: Record<string, unknown> };
+		expect(plain?.paint?.["text-color"]).toBe(invertHex(lightBg));
+		expect(plain?.paint?.["text-halo-color"]).toBe(lightBg);
+
+		// Toggling dark re-derives via the recolor effect (setPaintProperty).
+		rerender(<FlightMap {...common} darkMap={true} />);
+		const darkBg = basemapPalette("classic", true).background;
+		expect(map.paint["poi-plain-pins"]?.["text-color"]).toBe(invertHex(darkBg));
+		expect(map.paint["poi-plain-pins"]?.["text-halo-color"]).toBe(darkBg);
 	});
 });

@@ -5,6 +5,7 @@ import { MapCompass } from "./MapCompass";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
 import { basemapPalette, pixelPlanes, TERRAIN_SOURCE } from "../../lib/basemap/basemapStyles";
+import { invertHex } from "./colorInvert";
 import {
 	type BasemapStyleId,
 	type BasemapUrls,
@@ -917,8 +918,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 				"text-field": ["get", "iata"], "text-font": ["Noto Sans Regular"], "text-size": 10,
 				"text-offset": [0, 0.4], "text-anchor": "top", "text-allow-overlap": false, "text-optional": true,
 			};
+			const poiLabelBg = basemapPalette(colors.mapStyle, colors.darkMap).background;
 			const poiPinPaint: maplibregl.SymbolLayerSpecification["paint"] = {
-				"text-color": colors.pinColor, "text-halo-color": "#ffffff", "text-halo-width": 1,
+				"text-color": invertHex(poiLabelBg), "text-halo-color": poiLabelBg, "text-halo-width": 1,
 			};
 			map.addLayer({
 				id: "poi-cluster-pins", type: "symbol", source: "map-pois-clustered",
@@ -1256,8 +1258,12 @@ export const FlightMap: FC<FlightMapProps> = ({
 			);
 		}
 		void installPoiIcon(map, pinColor, pixelate);
+		const poiLabelBg = basemapPalette(mapStyle, darkMap).background;
 		for (const id of ["poi-cluster-pins", "poi-plain-pins"]) {
-			if (map.getLayer(id)) map.setPaintProperty(id, "text-color", pinColor);
+			if (map.getLayer(id)) {
+				map.setPaintProperty(id, "text-color", invertHex(poiLabelBg));
+				map.setPaintProperty(id, "text-halo-color", poiLabelBg);
+			}
 		}
 		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
