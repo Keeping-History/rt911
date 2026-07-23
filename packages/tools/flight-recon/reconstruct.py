@@ -83,11 +83,14 @@ def gc_interp(lat1, lon1, lat2, lon2, f):
     return math.degrees(math.atan2(z, math.hypot(x, y))), math.degrees(math.atan2(y, x))
 
 
-def altitude(f):
+def altitude(f, origin_ft=0.0, dest_ft=0.0):
+    """Synthetic vertical profile: ramp from the origin field elevation up to
+    cruise, hold, then ramp down to the destination field elevation. Endpoints
+    default to 0 (sea level) when an airport's elevation is unknown."""
     if f < CLIMB_FRAC:
-        return CRUISE_ALT_FT * f / CLIMB_FRAC
+        return origin_ft + (CRUISE_ALT_FT - origin_ft) * f / CLIMB_FRAC
     if f > 1 - CLIMB_FRAC:
-        return CRUISE_ALT_FT * (1 - f) / CLIMB_FRAC
+        return dest_ft + (CRUISE_ALT_FT - dest_ft) * (1 - f) / CLIMB_FRAC
     return CRUISE_ALT_FT
 
 
