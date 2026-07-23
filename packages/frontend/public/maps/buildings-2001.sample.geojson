@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "height_m": 417, "base_elevation_m": 4, "name": "1 WTC (North Tower)" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-74.01373,40.71264],[-74.01373,40.71321],[-74.01298,40.71321],[-74.01298,40.71264],[-74.01373,40.71264]]] } },
+    { "type": "Feature", "properties": { "height_m": 415, "base_elevation_m": 4, "name": "2 WTC (South Tower)" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-74.01268,40.71187],[-74.01268,40.71244],[-74.01193,40.71244],[-74.01193,40.71187],[-74.01268,40.71187]]] } },
+    { "type": "Feature", "properties": { "height_m": 60, "base_elevation_m": 4 },
+      "geometry": { "type": "Polygon", "coordinates": [[[-74.0115,40.7118],[-74.0115,40.7123],[-74.0109,40.7123],[-74.0109,40.7118],[-74.0115,40.7118]]] } }
+  ]
+}
