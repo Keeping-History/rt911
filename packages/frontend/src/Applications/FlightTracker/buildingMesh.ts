@@ -1,4 +1,4 @@
-import { lngLatToMercator, mercatorPerMeter, triangulate } from "./plane3dMesh";
+import { lngLatToMercator, mercatorPerMeter, triangulate, type PlaneMesh } from "./plane3dMesh";
 
 // Pure geometry for the 2001 buildings layer. Footprint polygons and placed STL
 // hero meshes are baked into ONE vertex format the custom layer draws directly:
@@ -101,4 +101,50 @@ export function buildFootprintMesh(features: BuildingFootprint[]): BuildingMesh 
 		normals: new Float32Array(nrm),
 		vertexCount: pos.length / 4,
 	};
+}
+
+export interface HeroPlacement {
+	lng: number;
+	lat: number;
+	bearingDeg: number; // clockwise from north
+	scale: number;      // multiplies the STL's local meters
+	baseElevM: number;
+}
+
+/**
+ * Transform an STL mesh (local meters, +Y north, +Z up) into building-vertex
+ * format placed at lng/lat, rotated by bearing (clockwise from north), scaled,
+ * and seated at base elevation. All vertices of one hero share the anchor's
+ * mercatorPerMeter (a hero spans a few hundred meters — latitude is constant).
+ */
+export function placeHeroMesh(stl: PlaneMesh, place: HeroPlacement): BuildingMesh {
+	const [ax, ay] = lngLatToMercator(place.lng, place.lat);
+	const perM = mercatorPerMeter(place.lat);
+	const ch = Math.cos((place.bearingDeg * Math.PI) / 180);
+	const sh = Math.sin((place.bearingDeg * Math.PI) / 180);
+	const n = stl.vertexCount;
+	const positions = new Float32Array(n * 4);
+	const normals = new Float32Array(n * 3);
+
+	for (let i = 0; i < n; i++) {
+		// Local meters (x east, y north, z up), scaled.
+		const lx = stl.positions[i * 3] * place.scale;
+		const ly = stl.positions[i * 3 + 1] * place.scale;
+		const lz = stl.positions[i * 3 + 2] * place.scale;
+		// Bearing rotation about up: clockwise from north (matches plane heading).
+		const east = lx * ch + ly * sh;
+		const north = -lx * sh + ly * ch;
+		// East/north meters -> mercator (y grows south, so north subtracts).
+		positions[i * 4] = ax + east * perM;
+		positions[i * 4 + 1] = ay - north * perM;
+		positions[i * 4 + 2] = place.baseElevM + lz;
+		positions[i * 4 + 3] = perM;
+		// Rotate the normal the same way; keep it in the (east, north, up) frame.
+		const nx = stl.normals[i * 3];
+		const ny = stl.normals[i * 3 + 1];
+		normals[i * 3] = nx * ch + ny * sh;
+		normals[i * 3 + 1] = -nx * sh + ny * ch;
+		normals[i * 3 + 2] = stl.normals[i * 3 + 2];
+	}
+	return { positions, normals, vertexCount: n };
 }

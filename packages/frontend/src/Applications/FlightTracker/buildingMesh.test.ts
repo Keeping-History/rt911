@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildFootprintMesh, ringIsCcwLngLat, type BuildingFootprint } from "./buildingMesh";
-import { lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
+import { buildFootprintMesh, ringIsCcwLngLat, type BuildingFootprint, placeHeroMesh, type HeroPlacement } from "./buildingMesh";
+import { lngLatToMercator as l2m, mercatorPerMeter as mpm, lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
 
 // A unit square footprint around a NYC-ish point, CW on purpose to exercise
 // orientation normalization.
@@ -111,5 +111,45 @@ describe("buildFootprintMesh", () => {
       }
     }
     expect(foundMatchingNormal).toBe(true);
+  });
+});
+
+// One flat-shaded triangle 1m north, 10m up, +Y north +Z up.
+const TRI = {
+  positions: new Float32Array([0, 0, 0, 0, 1, 0, 0, 0, 10]),
+  normals: new Float32Array([1, 0, 0, 1, 0, 0, 1, 0, 0]), // faces +east
+  vertexCount: 3,
+};
+
+describe("placeHeroMesh", () => {
+  const place: HeroPlacement = { lng: -74.0135, lat: 40.7127, bearingDeg: 0, scale: 2, baseElevM: 5 };
+
+  it("keeps the vertex count and stride-4 positions", () => {
+    const mesh = placeHeroMesh(TRI, place);
+    expect(mesh.vertexCount).toBe(3);
+    expect(mesh.positions.length).toBe(3 * 4);
+    expect(mesh.normals.length).toBe(3 * 3);
+  });
+
+  it("translates to the placement lng/lat + base elevation and scales height", () => {
+    const mesh = placeHeroMesh(TRI, place);
+    const [mx, my] = l2m(place.lng, place.lat);
+    // Vertex 0 is at local origin -> exactly the placement anchor, base elev.
+    expect(mesh.positions[0]).toBeCloseTo(mx, 6);
+    expect(mesh.positions[1]).toBeCloseTo(my, 6);
+    expect(mesh.positions[2]).toBeCloseTo(5, 6); // baseElev + 0*scale
+    expect(mesh.positions[3]).toBeCloseTo(mpm(place.lat), 6);
+    // Vertex 2 is 10m up * scale 2 = 20m above base.
+    expect(mesh.positions[2 * 4 + 2]).toBeCloseTo(5 + 20, 6);
+  });
+
+  it("rotates the north-offset vertex east under a 90 deg bearing", () => {
+    const mesh = placeHeroMesh(TRI, { ...place, bearingDeg: 90 });
+    const [mx, my] = l2m(place.lng, place.lat);
+    const perM = mpm(place.lat);
+    // Local (0,1m north) at bearing 90 (clockwise from north) -> 1m east.
+    // East in mercator: +x; scale 2 -> 2m east.
+    expect(mesh.positions[1 * 4]).toBeCloseTo(mx + 2 * perM, 6);
+    expect(mesh.positions[1 * 4 + 1]).toBeCloseTo(my, 6);
   });
 });
