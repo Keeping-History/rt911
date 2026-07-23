@@ -75,7 +75,12 @@ export function buildFootprintMesh(features: BuildingFootprint[]): BuildingMesh 
 		for (let i = 0; i < ccw.length; i++) {
 			const a = ccw[i];
 			const b = ccw[(i + 1) % ccw.length];
-			const dEast = b[0] - a[0];
+			// Outward normal in the (east, north) metric plane. Longitude degrees
+			// cover cos(lat)x less ground than latitude degrees, so scale the east
+			// delta before taking the perpendicular -- otherwise diagonal walls get a
+			// skewed shading normal.
+			const latRad = (((a[1] + b[1]) / 2) * Math.PI) / 180;
+			const dEast = (b[0] - a[0]) * Math.cos(latRad);
 			const dNorth = b[1] - a[1];
 			const len = Math.hypot(dEast, dNorth);
 			if (len < EPS) continue;

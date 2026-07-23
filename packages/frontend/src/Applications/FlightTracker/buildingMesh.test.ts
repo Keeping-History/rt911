@@ -49,8 +49,9 @@ describe("buildFootprintMesh", () => {
       // Use 1e-6 tolerance to safely accommodate 32-bit storage rounding.
       if (Math.abs(mesh.positions[i * 4] - mx) < 1e-6 && Math.abs(mesh.positions[i * 4 + 1] - my) < 1e-6) {
         found = true;
-        // mercPerMeter also stored at 32-bit, so use 6 decimal places (1e-6) precision
-        expect(mesh.positions[i * 4 + 3]).toBeCloseTo(mercatorPerMeter(40.711), 6);
+        // mercPerMeter is ~3.3e-8; float32 storage error at that magnitude is
+        // ~2e-15, so 12 decimal places (tolerance 5e-13) is tight and still safe.
+        expect(mesh.positions[i * 4 + 3]).toBeCloseTo(mercatorPerMeter(40.711), 12);
       }
     }
     expect(found).toBe(true);
@@ -67,5 +68,48 @@ describe("buildFootprintMesh", () => {
   it("concatenates multiple buildings", () => {
     const mesh = buildFootprintMesh([SQUARE, SQUARE]);
     expect(mesh.vertexCount).toBe(60);
+  });
+
+  it("scales wall normals for longitude/latitude degree ratio (cos(lat) correction)", () => {
+    // Diamond around ~[-74.0, 40.705] with diagonal edges (each edge moves in
+    // both lng and lat), so its wall normals expose the raw-degree-delta bug:
+    // without the cos(lat) scaling, a diagonal edge that moves equally in lng
+    // and lat degrees would incorrectly yield a normal with |nE| == |nN|.
+    const DIAMOND: BuildingFootprint = {
+      ring: [
+        [-74.0, 40.704],
+        [-73.999, 40.705],
+        [-74.0, 40.706],
+        [-74.001, 40.705],
+      ],
+      baseElevM: 0,
+      heightM: 50,
+    };
+    const mesh = buildFootprintMesh([DIAMOND]);
+
+    // Geographically-correct expected ratio for a 45-degree-in-degrees edge at
+    // ~lat 40.705: longitude degrees are compressed by cos(lat), so the
+    // outward normal's |east|/|north| ratio is 1 / cos(lat), not 1.
+    const expectedRatio = 1 / Math.cos((40.705 * Math.PI) / 180);
+    expect(expectedRatio).toBeCloseTo(1.318, 2);
+
+    let foundMatchingNormal = false;
+    for (let i = 0; i < mesh.vertexCount; i++) {
+      const nE = mesh.normals[i * 3];
+      const nN = mesh.normals[i * 3 + 1];
+      const nUp = mesh.normals[i * 3 + 2];
+
+      // All normals (roof + wall) must be unit length.
+      expect(Math.hypot(nE, nN, nUp)).toBeCloseTo(1, 5);
+
+      // Only wall normals (nUp === 0) are diagonal-edge candidates here.
+      if (nUp !== 0) continue;
+      if (Math.abs(nE) < 1e-6 || Math.abs(nN) < 1e-6) continue;
+      const ratio = Math.abs(nE) / Math.abs(nN);
+      if (Math.abs(ratio - expectedRatio) < 0.03) {
+        foundMatchingNormal = true;
+      }
+    }
+    expect(foundMatchingNormal).toBe(true);
   });
 });
