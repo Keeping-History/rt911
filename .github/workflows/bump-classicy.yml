@@ -1,0 +1,69 @@
+name: Bump classicy
+
+# Manually pull the latest `classicy` release into pnpm-lock.yaml and, if it
+# actually changed, restart the image build so the deployed frontend picks it up.
+#
+# Why this exists: the frontend pins `classicy` to "latest" and `.husky/pre-commit`
+# auto-bumps it on every human commit — but between commits a fresh classicy
+# release won't reach production on its own. This workflow is the manual button
+# to force that refresh.
+#
+# How the rebuild is triggered: the bump commit is pushed with the default
+# GITHUB_TOKEN, and GitHub deliberately does NOT let a GITHUB_TOKEN push fire
+# another workflow's `push:` trigger (loop prevention). `workflow_dispatch` is an
+# explicit exception, so we re-trigger build.yml with `gh workflow run` instead.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write        # push the "Bump classicy" commit
+  actions: write         # dispatch build.yml afterwards
+
+concurrency:
+  group: bump-classicy
+  cancel-in-progress: false
+
+env:
+  # Don't let .husky/pre-commit re-run the classicy update inside the script's commit.
+  HUSKY: "0"
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        # Default persist-credentials wires GITHUB_TOKEN into the origin remote,
+        # which is what the script's `git push` uses.
+
+      - uses: jdx/mise-action@v4
+        # Provisions node/pnpm from mise.toml, matching build.yml.
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Bump classicy
+        id: bump
+        run: |
+          before=$(git rev-parse HEAD)
+          pnpm bump:classicy
+          after=$(git rev-parse HEAD)
+          if [ "$before" != "$after" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::classicy bumped — new commit $after"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::classicy already up to date — no rebuild"
+          fi
+
+      - name: Trigger image build
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ github.ref_name }}
+        run: gh workflow run build.yml --ref "$REF"
