@@ -1,0 +1,50 @@
+<p>Hot on the heels of last week&rsquo;s big release, this update is all about polish: the Flight Tracker learns the map, Radio gets a way to hear everything at once, and the whole desktop got quieter, more keyboard-friendly, and easier to pick up where you left off.</p>
+<p>Highlights:</p>
+<ul>
+<li><strong>Airports on the map</strong> &mdash; the Flight Tracker now plots airport markers (clustered, with a dedicated Airport Details pane and per-layer toggles), and colors the four notable flights&rsquo; tracks by phase of flight in both 2D and 3D.</li>
+<li><strong>Radio &ldquo;All Traffic&rdquo;</strong> &mdash; a single view that aggregates every non-live station, plus much smoother scrubbing.</li>
+<li><strong>TV remembers your channels</strong> &mdash; your single-view and MultiView selection now survive a reload.</li>
+<li><strong>README tags</strong> &mdash; articles carry colored tag pills, with a File &rarr; Settings panel to show or hide tags you care about.</li>
+<li><strong>A more accessible desktop</strong> &mdash; pop-up menus are fully keyboard-navigable, tool palettes now behave like real Mac OS 8 windoids, a new Drive Setup control panel manages synced drives, and a long-standing text-input typing bug is fixed.</li>
+</ul>
+<hr>
+<h2 id="apps">Apps</h2>
+<h3 id="flight-tracker">Flight Tracker</h3>
+<ul>
+<li><strong>Airport markers</strong> &mdash; airports now appear as map pins in both 2D and 3D, clustering as you zoom out, with a per-layer <em>Cluster</em> toggle in the Layers window and a dedicated <strong>Airport Details</strong> pane. Selecting a pin surfaces its details alongside the flight it belongs to.</li>
+<li><strong>Phase-of-flight coloring</strong> &mdash; the tracks for AA11, UA175, AA77 and UA93 are now colored by flight phase (taxi, takeoff, climb, cruise, descent, approach and so on), on both the 2D track line and the 3D altitude tube, so you can read each flight&rsquo;s profile at a glance.</li>
+<li><strong>8-bit radar in 3D</strong> &mdash; the retro &ldquo;radar&rdquo; map style now carries into 3D with pixelated plane sprites, and you can right-drag to tilt the camera past its resting pitch for a lower, over-the-shoulder view.</li>
+<li>A disclaimer now notes where individual flight tracks have been synthesized from Bureau of Transportation Statistics data.</li>
+</ul>
+<h3 id="tv">TV</h3>
+<ul>
+<li>TV now <strong>remembers your channel selection across reloads</strong> &mdash; both a single focused channel and a full MultiView grid, including which tiles are muted &mdash; by persisting your picks as stable channel slugs rather than transient ids.</li>
+</ul>
+<h3 id="radio">Radio</h3>
+<ul>
+<li><strong>All Traffic</strong> &mdash; a new view that aggregates every non-live station into one continuous feed, so you can monitor the whole dial at once.</li>
+<li><strong>Smoother scrubbing</strong> &mdash; a 10&times; larger look-ahead window keeps items from vanishing during small rewinds and seeks.</li>
+</ul>
+<h3 id="radioscanner">RadioScanner</h3>
+<ul>
+<li>The focused player now has a <strong>seekable progress slider</strong> showing playable duration, with its position announced for screen readers.</li>
+</ul>
+<h3 id="readme">README</h3>
+<ul>
+<li><strong>Tags</strong> &mdash; articles now display colored, contrast-aware tag pills.</li>
+<li><strong>Tag filter</strong> &mdash; a File &rarr; Settings window lets you show or hide articles per tag, and your choices persist between visits.</li>
+</ul>
+<h3 id="alerts">Alerts</h3>
+<ul>
+<li>Emergency-alert dialogs now ring the classic <em>Sosumi</em> chime when they appear.</li>
+</ul>
+<hr>
+<h2 id="desktop">Across the desktop</h2>
+<p>Several improvements land at the Classicy desktop level, so they show up everywhere at once:</p>
+<ul>
+<li><strong>Keyboard-navigable pop-up menus</strong> &mdash; every dropdown now opens and moves by keyboard with native-style type-ahead, renders unclipped on top of its window, and exposes the highlighted option to assistive technology.</li>
+<li><strong>Tool-palette windows</strong> &mdash; utility windows (like the Flight Tracker&rsquo;s Layers and toolbar palettes) now use authentic Mac OS 8 half-height title bars and stay tucked behind the app you&rsquo;re focused on, instead of stealing focus.</li>
+<li><strong>Drive Setup</strong> &mdash; a new control panel that lists mounted drives and manages your synced account drive.</li>
+<li><strong>Text-input fix</strong> &mdash; a bug that stopped some fields from accepting more than a single character is resolved.</li>
+</ul>
+<p>Behind the scenes: the streamer now caches its per-connection source lookups, the Directus content backend was hardened for scale, Time Machine scrubbing was tightened, and a new pipeline automatically ships Classicy component updates into the site as they&rsquo;re published.</p>
