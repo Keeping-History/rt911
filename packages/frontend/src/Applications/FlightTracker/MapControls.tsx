@@ -74,12 +74,14 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			aria-label="Zoom out"
 			disabled={p.cameraFollow}
 			onClickFunc={p.onZoomOut}
+			margin="sm"
 		>
 			−
 		</ClassicyButton>
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Zoom in"
+			margin="sm"
 			disabled={p.cameraFollow}
 			onClickFunc={p.onZoomIn}
 		>
@@ -91,6 +93,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Globe"
+			margin="sm"
 			depressed={p.globe}
 			onClickFunc={p.onToggleGlobe}
 		>
@@ -99,6 +102,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="3D"
+			margin="sm"
 			depressed={p.threeD}
 			onClickFunc={p.onToggleThreeD}
 		>
@@ -107,6 +111,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Terrain"
+			margin="sm"
 			depressed={p.terrain}
 			onClickFunc={p.onToggleTerrain}
 		>
@@ -115,6 +120,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Cluster"
+			margin="sm"
 			depressed={p.cluster}
 			onClickFunc={p.onToggleCluster}
 		>
@@ -126,6 +132,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		{/* The marquee selectors move/read the map, so they lock out while following. */}
 		<ClassicyButton
 			buttonSize="small"
+			margin="sm"
 			aria-label="Select rectangle"
 			depressed={p.selectMode === "rect"}
 			disabled={p.cameraFollow}
@@ -135,6 +142,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		</ClassicyButton>
 		<ClassicyButton
 			buttonSize="small"
+			margin="sm"
 			aria-label="Select circle"
 			depressed={p.selectMode === "circle"}
 			disabled={p.cameraFollow}
@@ -149,6 +157,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		<div className={styles.mapControlsContainer}>
 		<ClassicyButton
 			buttonSize="small"
+			margin="sm"
 			aria-label="Follow flight"
 			depressed={p.cameraFollow}
 			disabled={!p.canFollow}
@@ -202,6 +211,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		/>
 		<ClassicyButton
 			buttonSize="small"
+			margin="sm"
 			aria-label="Dark map"
 			// A radar scope is inherently dark (effectiveTone ignores the flag),
 			// so the toggle goes dead and unpressed there — but the stored darkMap
@@ -217,6 +227,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		<div className={styles.mapControlsContainer}>
 		<ClassicyButton
 			buttonSize="small"
+			margin="sm"
 			aria-label="Filter flights"
 			depressed={p.filterOn}
 			onClickFunc={p.onOpenFilter}
@@ -225,6 +236,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		</ClassicyButton>
 		<ClassicyButton
 			buttonSize="small"
+			margin="sm"
 			aria-label="Clear filter"
 			disabled={!p.filterOn}
 			onClickFunc={p.onClearFilter}
