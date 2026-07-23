@@ -1,7 +1,20 @@
 import { type FC, useState } from "react";
-import { ClassicyButton, ClassicyPopUpMenu } from "classicy";
+import {
+	ClassicyBalloonHelp,
+	ClassicyButton,
+	ClassicyCheckbox,
+	ClassicyPopUpMenu,
+} from "classicy";
 import { PINPOINTS, pinpointById } from "./mapPinpoints";
 import styles from "./FlightTracker.module.scss";
+import mapGlobePng from "./map-globe.png";
+import map3dPng from "./map-3d.png";
+import mapTerrainPng from "./map-terrain.png";
+import mapClusterPng from "./map-cluster.png";
+import mapAirportPng from "./map-airport.png";
+import mapPlanePng from "./map-plane.png";
+import mapCameraPng from "./map-camera.png";
+import mapPalettePng from "./map-pallette.png";
 import {
 	type BasemapStyleId,
 	normalizeBasemapStyle,
@@ -69,6 +82,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 	<div className={styles.mapControls}>
 		<div className={styles.mapControlsContainer}>
 		{/* Zoom is the camera's domain while a follow lock is active. */}
+		<ClassicyBalloonHelp content="Zoom the map out to see a wider area.">
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Zoom out"
@@ -78,6 +92,8 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		>
 			−
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
+		<ClassicyBalloonHelp content="Zoom the map in for a closer view.">
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Zoom in"
@@ -87,9 +103,11 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		>
 			+
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
 		</div>
 		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
+		<ClassicyBalloonHelp content="Switch the map between a flat projection and a 3-D globe.">
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Globe"
@@ -97,8 +115,10 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			depressed={p.globe}
 			onClickFunc={p.onToggleGlobe}
 		>
-			Globe
+			<img className={styles.mapControlIcon} src={mapGlobePng} alt="" />
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
+		<ClassicyBalloonHelp content="Tilt the map into a three-dimensional perspective.">
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="3D"
@@ -106,8 +126,10 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			depressed={p.threeD}
 			onClickFunc={p.onToggleThreeD}
 		>
-			3D
+			<img className={styles.mapControlIcon} src={map3dPng} alt="" />
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
+		<ClassicyBalloonHelp content="Show shaded elevation so mountains and valleys stand out.">
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Terrain"
@@ -115,8 +137,10 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			depressed={p.terrain}
 			onClickFunc={p.onToggleTerrain}
 		>
-			Terrain
+			<img className={styles.mapControlIcon} src={mapTerrainPng} alt="" />
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
+		<ClassicyBalloonHelp content="Group nearby flights into a single marker to reduce clutter.">
 		<ClassicyButton
 			buttonSize="small"
 			aria-label="Cluster"
@@ -124,12 +148,14 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			depressed={p.cluster}
 			onClickFunc={p.onToggleCluster}
 		>
-			Cluster
+			<img className={styles.mapControlIcon} src={mapClusterPng} alt="" />
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
 		</div>
 		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
 		{/* The marquee selectors move/read the map, so they lock out while following. */}
+		<ClassicyBalloonHelp content="Drag a rectangle on the map to select the flights inside it.">
 		<ClassicyButton
 			buttonSize="small"
 			margin="sm"
@@ -138,8 +164,10 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			disabled={p.cameraFollow}
 			onClickFunc={() => p.onSetSelectMode(p.selectMode === "rect" ? "off" : "rect")}
 		>
-			▭
+			<span className={styles.mapControlGlyph}>▭</span>
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
+		<ClassicyBalloonHelp content="Drag a circle on the map to select the flights inside it.">
 		<ClassicyButton
 			buttonSize="small"
 			margin="sm"
@@ -148,42 +176,46 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			disabled={p.cameraFollow}
 			onClickFunc={() => p.onSetSelectMode(p.selectMode === "circle" ? "off" : "circle")}
 		>
-			◯
+			<span className={styles.mapControlGlyph}>◯</span>
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
 		</div>
 		<span className={styles.mapControlsDivider} />
 		{/* Camera follow (tracked flights): a toggle that locks the camera onto
-		    the selected flight, and a dropdown picking the framing. */}
+		    the selected flight, and a dropdown picking the framing. The plane icon
+		    to the left of the (now icon-only) toggle marks the camera group. */}
 		<div className={styles.mapControlsContainer}>
-		<ClassicyButton
-			buttonSize="small"
-			margin="sm"
-			aria-label="Follow flight"
-			depressed={p.cameraFollow}
+		<img className={styles.followPlaneIcon} src={mapPlanePng} alt="" />
+		<ClassicyBalloonHelp content="Lock the camera onto the selected flight and follow it as it moves. Available when a tracked flight is selected.">
+		<ClassicyCheckbox
+			id="flight_camera_follow"
+			checked={p.cameraFollow}
 			disabled={!p.canFollow}
-			onClickFunc={p.onToggleCameraFollow}
-		>
-			{p.cameraFollow ? "Following" : "Follow"}
-		</ClassicyButton>
+			// onClickFunc reports the new checked state; onToggleCameraFollow just
+			// flips the (controlled) cameraFollow flag, so the arg is ignored.
+			onClickFunc={() => p.onToggleCameraFollow()}
+		/>
+		</ClassicyBalloonHelp>
+		{/* Camera icon marks the framing dropdown (like the airport icon by Pinpoints). */}
+		<img className={styles.mapControlIcon} src={mapCameraPng} alt="Camera" />
+		<ClassicyBalloonHelp content="Choose how the camera frames the flight you are following.">
 		<ClassicyPopUpMenu
 			id="flight_camera_mode"
-			label="Camera"
-			labelPosition="left"
-			labelSize="small"
 			size="small"
 			selected={p.cameraMode}
 			options={CAMERA_MODES.map((m) => ({ value: m, label: CAMERA_MODE_LABELS[m] }))}
 			onChangeFunc={(e) => p.onSetCameraMode(normalizeCameraMode(e.target.value))}
 		/>
+		</ClassicyBalloonHelp>
 		</div>
 		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
+		{/* The airport icon stands in for the old "Pinpoints" text label. */}
+		<img className={styles.mapControlIcon} src={mapAirportPng} alt="Pinpoints" />
+		<ClassicyBalloonHelp content="Jump the map to a notable airport or location.">
 		<ClassicyPopUpMenu
 			key={pinpointNonce}
 			id="flight_map_pinpoints"
-			label="Pinpoints"
-			labelPosition="left"
-			labelSize="small"
 			size="small"
 			// A pinpoint fly-to would fight the follow lock, so it's disabled then.
 			disabled={p.cameraFollow}
@@ -196,19 +228,22 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 				setPinpointNonce((n) => n + 1);
 			}}
 		/>
+		</ClassicyBalloonHelp>
 		</div>
 		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
+		{/* Palette icon replaces the old "Style" text label (like airport/camera). */}
+		<img className={styles.mapControlIcon} src={mapPalettePng} alt="Style" />
+		<ClassicyBalloonHelp content="Choose the map's base style: Classic, Radar, or Satellite.">
 		<ClassicyPopUpMenu
 			id="flight_map_style"
-			label="Style"
-			labelPosition="left"
-			labelSize="small"
 			size="small"
 			selected={p.mapStyle}
 			options={MAP_STYLE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
 			onChangeFunc={(e) => p.onSetMapStyle(normalizeBasemapStyle(e.target.value))}
 		/>
+		</ClassicyBalloonHelp>
+		<ClassicyBalloonHelp content="Use a dark color scheme for the map. Unavailable in Radar style.">
 		<ClassicyButton
 			buttonSize="small"
 			margin="sm"
@@ -222,9 +257,11 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		>
 			Dark
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
 		</div>
 		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
+		<ClassicyBalloonHelp content="Open the filter panel to show only flights that match your criteria.">
 		<ClassicyButton
 			buttonSize="small"
 			margin="sm"
@@ -234,6 +271,8 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		>
 			{p.filterOn ? "Filter (on)…" : "Filter…"}
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
+		<ClassicyBalloonHelp content="Remove the active filter and show every flight again.">
 		<ClassicyButton
 			buttonSize="small"
 			margin="sm"
@@ -243,6 +282,7 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		>
 			Clear Filter
 		</ClassicyButton>
+		</ClassicyBalloonHelp>
 		</div>
 	</div>
 	);

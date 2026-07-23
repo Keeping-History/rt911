@@ -1,7 +1,6 @@
 import {
 	ClassicyAlert,
 	ClassicyApp,
-	ClassicyIcons,
 	ClassicySoundActionTypes,
 	useAppManager,
 	useSoundDispatch,
@@ -13,13 +12,14 @@ import {
 	MediaStreamContext,
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { useAlertsEnabled } from "./alertsSettings";
+import alertPng from "./app.png";
 
 const appId = "Alerts.app";
 const appName = "Alerts";
 // Extensions have no desktop icon / Apple-menu entry, but ClassicyApp still
 // requires an icon path; reuse an existing bundled icon rather than a
 // non-existent asset since it is never actually rendered anywhere.
-const appIcon = ClassicyIcons.applications.internetExplorer.documentWarning as string;
+const appIcon = alertPng;
 
 /**
  * Silent background extension (Task 8): subscribes to the opt-in "alerts"

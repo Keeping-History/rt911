@@ -12,11 +12,45 @@
 	// classicy's wrapper is width:100% — inline toolbar menus must size to
 	// content, or each one eats a whole wrapped row.
 	:global(.classicyPopUpMenuWrapper) { width: auto; flex: 0 0 auto; }
+	// Balloon-help anchors wrap each control; keep them sized to content and
+	// vertically centred so wrapping a button/menu doesn't disturb the row.
+	:global(.classicyBalloonHelpAnchor) { display: inline-flex; align-items: center; flex: 0 0 auto; }
 }
 .mapControlsContainer {
 	display: flex; align-items: center; gap: var(--window-padding-size); flex-wrap: wrap; flex-direction: row;
 }
 .mapControlsDivider { width: 1px; align-self: stretch; background: #999; margin: 0 4px; }
+// The Globe/3D/Terrain/Cluster toggles (and the airport/camera dropdown markers)
+// show an image instead of a text label. Source PNGs are 1024×1024; render at the
+// theme's control size with no edge smoothing so the downscale stays pixelated.
+.mapControlIcon {
+	width: var(--window-control-size);
+	height: var(--window-control-size);
+	display: block;
+	flex-shrink: 0;
+	image-rendering: pixelated;
+}
+// The marquee-select buttons draw a Unicode glyph rather than an image; give it
+// the same control-size content box as .mapControlIcon so those buttons match the
+// image icon buttons exactly.
+.mapControlGlyph {
+	width: var(--window-control-size);
+	height: var(--window-control-size);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: calc(var(--window-control-size) * 0.9);
+	line-height: 1;
+}
+// The plane icon left of the (icon-only) Follow toggle. Square source, sized to
+// the theme control size like the other toolbar icons.
+.followPlaneIcon {
+	height: var(--window-control-size);
+	width: auto;
+	display: block;
+	flex: 0 0 auto;
+	image-rendering: pixelated;
+}
 // Compass rose overlay (issue #219): a Classicy-bordered dial in the map's
 // top-right corner; the needle span counter-rotates with the map bearing.
 .compass {
