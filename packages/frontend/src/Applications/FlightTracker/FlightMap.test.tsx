@@ -1653,6 +1653,11 @@ describe("FlightMap 2001 buildings", () => {
 		})));
 	});
 
+	afterEach(() => {
+		cleanup();
+		vi.unstubAllGlobals();
+	});
+
 	it("adds a Buildings3DLayer, feeds it a footprint mesh, and gates it on zoom", async () => {
 		render(<FlightMap {...baseProps} />);
 		const map = FakeMap.last!;
