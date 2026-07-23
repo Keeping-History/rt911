@@ -46,7 +46,7 @@ export interface FlightMapSettings {
 export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	mapStyle: "classic",
 	darkMap: false,
-	pinColorLight: 0x3a3a3a, // the original dark-gray dot, legible on paper
+	pinColorLight: 0x00ffff, // cyan dot, legible on paper
 	pinColorDark: 0xffd700, // gold radar-scope accent, legible on slate
 	notablePinColorLight: 0xc0202a, // the original notable highlight
 	notablePinColorDark: 0xff4d4d, // brightened red so it reads on slate

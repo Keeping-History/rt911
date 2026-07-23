@@ -99,9 +99,9 @@ describe("readFlightMapSettings", () => {
 
 	it("defaults to independent light/dark pin colors that read on each ground", () => {
 		const s = readFlightMapSettings(undefined);
-		// Light map keeps the original dark-gray / red; dark map gets a lighter,
+		// Light map uses cyan / red; dark map gets a lighter,
 		// higher-contrast pair so pins don't vanish into the slate basemap.
-		expect(s.pinColorLight).toBe(0x3a3a3a);
+		expect(s.pinColorLight).toBe(0x00ffff);
 		expect(s.pinColorDark).toBe(0xffd700);
 		expect(s.notablePinColorLight).toBe(0xc0202a);
 		expect(s.notablePinColorDark).toBe(0xff4d4d);
