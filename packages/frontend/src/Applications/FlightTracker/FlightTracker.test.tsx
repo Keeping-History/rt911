@@ -73,6 +73,10 @@ vi.mock("classicy", () => ({
 		children?: React.ReactNode;
 		onClickFunc?: () => void;
 	}) => <button onClick={onClickFunc}>{children}</button>,
+	// Tooltip wrapper (MapControls wraps every control in one) → passthrough.
+	ClassicyBalloonHelp: ({ children }: { children?: React.ReactNode }) => (
+		<>{children}</>
+	),
 	ClassicyCheckbox: ({
 		id,
 		label,
@@ -931,9 +935,10 @@ describe("FlightTracker", () => {
 			renderWithContext({ flightPositions: [aa11], connected: true });
 			expect(mapProps.at(-1)!.followFlight).toBeNull(); // idle until armed
 			act(() => (mapProps.at(-1)!.onSelectFlight as (f: string) => void)("AA11"));
-			fireEvent.click(screen.getByText("Follow"));
+			fireEvent.click(screen.getByTestId("flight_camera_follow"));
 			expect(mapProps.at(-1)!.followFlight).toBe("AA11");
-			expect(screen.getByText("Following")).toBeTruthy();
+			// The (icon-only) toggle reflects the armed state via its checked flag.
+			expect((screen.getByTestId("flight_camera_follow") as HTMLInputElement).checked).toBe(true);
 			vi.unstubAllGlobals();
 		});
 
@@ -955,7 +960,7 @@ describe("FlightTracker", () => {
 			renderWithContext({ flightPositions: [dl404], connected: true });
 			act(() => (mapProps.at(-1)!.onSelectFlight as (f: string) => void)("DL404"));
 			// A regular flight isn't one of the five tracked flights: arming stays inert.
-			act(() => fireEvent.click(screen.getByText("Follow")));
+			act(() => fireEvent.click(screen.getByTestId("flight_camera_follow")));
 			expect(mapProps.at(-1)!.followFlight).toBeNull();
 			vi.unstubAllGlobals();
 		});

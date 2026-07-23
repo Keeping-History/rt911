@@ -257,6 +257,7 @@ export const TimeMachine: React.FC = () => {
 				title={appName}
 				icon={appIcon}
 				appId={appId}
+				alwaysOnTop={true}
 				closable={true}
 				windowType="utility"
 				resizable={false}
