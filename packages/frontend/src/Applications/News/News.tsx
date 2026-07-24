@@ -74,7 +74,14 @@ export const News: React.FC = () => {
 	const [openDocuments, setOpenDocuments] = useState<number[]>([]);
 
 	// News is delivered on its own opt-in channel; subscribe only while the app is open.
-	const { newsItems: items, subscribeNews, unsubscribeNews } = useContext(MediaStreamContext);
+	const {
+		newsItems: items,
+		subscribeNews,
+		unsubscribeNews,
+		newsBodies,
+		newsBodyErrors,
+		requestNewsBody,
+	} = useContext(MediaStreamContext);
 	useEffect(() => {
 		if (!isRunning) return;
 		subscribeNews(appId);
@@ -120,6 +127,13 @@ export const News: React.FC = () => {
 	useEffect(() => {
 		desktopEventDispatch(newsSetOpenDocuments(openDocuments));
 	}, [openDocuments, desktopEventDispatch]);
+
+	// Backlog articles arrive without content (the snapshot is headline-only), so
+	// each open detail window fetches its body. requestNewsBody de-dupes against
+	// cached and in-flight ids, so re-running on any change is safe.
+	useEffect(() => {
+		for (const docId of openDocuments) requestNewsBody(docId);
+	}, [openDocuments, requestNewsBody]);
 
 	// Apply each remote focus command exactly once, tracked by its monotonic
 	// seq (TV.tsx's pattern). Consume only when the article exists in the
@@ -381,11 +395,16 @@ export const News: React.FC = () => {
 							<p className={styles.newsDetailBullet}>
 								•••
 							</p>
+							{newsBodyErrors[docId] ? (
+								<p className={styles.newsDetailBody}>{newsBodyErrors[docId]}</p>
+							) : !(docId in newsBodies) && !getDoc(docId)?.content ? (
+								<p className={styles.newsDetailBody}>Loading…</p>
+							) : null}
 							<div
 								className={styles.newsDetailBody}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus media_items table via the MediaStream provider.
+								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus news_items table via the MediaStream provider.
 								dangerouslySetInnerHTML={{
-									__html: getDoc(docId)?.content || "",
+									__html: newsBodies[docId] ?? getDoc(docId)?.content ?? "",
 								}}
 							></div>
 						</div>
