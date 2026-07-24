@@ -2,6 +2,7 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import {
+	ROUTE_INDEX_MAX_PAGES,
 	ROUTE_INDEX_PAGE_LIMIT,
 	resetRouteIndexCache,
 	routeIndexUrl,
@@ -50,6 +51,12 @@ describe("routeIndexUrl", () => {
 		);
 		expect(url).toContain(`limit=${ROUTE_INDEX_PAGE_LIMIT}`);
 		expect(url).toContain("page=2");
+	});
+
+	it("sorts by id so offset pagination is deterministic", () => {
+		// Postgres makes no ordering guarantee for LIMIT/OFFSET without ORDER BY,
+		// so an unsorted page walk can repeat or skip rows between pages.
+		expect(routeIndexUrl("2001-09-11", 1)).toContain("sort=id");
 	});
 });
 
@@ -150,6 +157,58 @@ describe("useRouteIndex", () => {
 		expect(result.current.get("F-2001-09-10|2001-09-10")).toBeTruthy();
 		expect(result.current.get("F-2001-09-11|2001-09-11")).toBeTruthy();
 		expect(result.current.get("F-2001-09-12|2001-09-12")).toBeTruthy();
+	});
+
+	it("stops immediately when the API repeats a page instead of paginating", async () => {
+		// Reproduces the 2026-07-22 / 2026-07-24 production failure: an edge cache
+		// that ignores the query string answers every `page=N` with page 1's body,
+		// so `data.length` is always the full limit and the short-page break never
+		// fires. The old loop spun to page 5883 against a 6-page date.
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const page1 = Array.from({ length: ROUTE_INDEX_PAGE_LIMIT }, (_, i) =>
+			apiRow(`FL${i}`, "2001-09-11"),
+		);
+		const fetchMock = vi.fn().mockImplementation((url: string) => {
+			const data = dateFromUrl(url) === "2001-09-11" ? page1 : [];
+			return Promise.resolve({ ok: true, json: async () => ({ data }) });
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() =>
+			useRouteIndex([pos("FL0", "2001-09-11T13:00:00Z")]),
+		);
+
+		await waitFor(() => expect(warn).toHaveBeenCalled());
+		const pageUrls = fetchMock.mock.calls
+			.map((c) => String(c[0]))
+			.filter((u) => dateFromUrl(u) === "2001-09-11");
+		// Detected on the second identical page — not thousands of requests later.
+		expect(pageUrls).toHaveLength(2);
+		// A partial index is never cached, so a later mount can retry cleanly.
+		expect(result.current.size).toBe(0);
+	});
+
+	it("caps pages per date when the API never returns a short page", async () => {
+		// Same runaway, but with each page's body distinct so the repeat detector
+		// can't fire — the hard page ceiling is the backstop.
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let served = 0;
+		const fetchMock = vi.fn().mockImplementation((url: string) => {
+			if (dateFromUrl(url) !== "2001-09-11") {
+				return Promise.resolve({ ok: true, json: async () => ({ data: [] }) });
+			}
+			served += 1;
+			const data = Array.from({ length: ROUTE_INDEX_PAGE_LIMIT }, (_, i) =>
+				apiRow(`P${served}F${i}`, "2001-09-11"),
+			);
+			return Promise.resolve({ ok: true, json: async () => ({ data }) });
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		renderHook(() => useRouteIndex([pos("P1F0", "2001-09-11T13:00:00Z")]));
+
+		await waitFor(() => expect(warn).toHaveBeenCalled());
+		expect(served).toBe(ROUTE_INDEX_MAX_PAGES);
 	});
 
 	it("degrades gracefully on fetch failure: warns, stays empty, no throw", async () => {

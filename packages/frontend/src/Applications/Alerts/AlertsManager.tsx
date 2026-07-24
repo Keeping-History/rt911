@@ -2,6 +2,7 @@ import {
 	ClassicyApp,
 	ClassicyButton,
 	ClassicyCheckbox,
+	ClassicyControlGroup,
 	ClassicyWindow,
 	closeWindowMenuItemHelper,
 	quitAppHelper,
@@ -90,12 +91,17 @@ export const AlertsManager: React.FC = () => {
 				appMenu={appMenu}
 				backgroundColor="var(--color-system-03)"
 			>
-					<ClassicyCheckbox
-						id={"show_alerts"}
-						label={"Show Alerts"}
-						checked={enabled}
-						onClickFunc={(checked: boolean) => setAlertsEnabled(checked)}
-					/>
+					<ClassicyControlGroup
+						label="Alerts"
+						backgroundColor="var(--color-system-03)"
+					>
+						<ClassicyCheckbox
+							id={"show_alerts"}
+							label={"Show Alerts"}
+							checked={enabled}
+							onClickFunc={(checked: boolean) => setAlertsEnabled(checked)}
+						/>
+					</ClassicyControlGroup>
 				<ClassicyButton isDefault={false} onClickFunc={quitApp}>
 					Quit
 				</ClassicyButton>

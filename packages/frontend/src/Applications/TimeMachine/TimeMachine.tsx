@@ -1,5 +1,6 @@
 import {
 	ClassicyApp,
+	ClassicyBevelButton,
 	ClassicyButton,
 	ClassicyControlGroup,
 	ClassicyIcons,
@@ -446,15 +447,19 @@ export const TimeMachine: React.FC = () => {
 
 					{/* Time entry row */}
 					<div className={styles.timeEntry}>
-						<button
-							type="button"
-							className={styles.captureButton}
+						<ClassicyBevelButton
 							aria-label="Capture Bookmark"
 							title="Capture Bookmark"
-							onClick={openCaptureDialog}
+							onClickFunc={openCaptureDialog}
+							// Keep the same min-height floor as the GO ClassicyButton so
+							// the row can't collapse shorter than a standard button.
+							// (ClassicyBevelButton ignores a passed className, so this
+							// goes through `style`.) The actual height match comes from
+							// sizing the icon to one text line — see .captureIcon.
+							style={{ minHeight: "var(--hig-button-height)" }}
 						>
-							<img src={bookPng} alt="" />
-						</button>
+							<img className={styles.captureIcon} src={bookPng} alt="" />
+						</ClassicyBevelButton>
 						<ClassicySpinner
 							id="pager-filter-retention"
 							labelTitle="H"
