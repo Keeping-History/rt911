@@ -519,7 +519,7 @@ describe("FlightTracker", () => {
 
 	it("commits Settings edits on Save as a single dispatch", () => {
 		renderWithContext({});
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.click(screen.getByTestId("flight_settings_darkmap"));
 		fireEvent.click(screen.getByTestId("flight_settings_pin_color_light")); // mock → 0x0000ff
 		fireEvent.click(screen.getByTestId("flight_settings_pin_color_dark")); // mock → 0x0000ff
@@ -541,7 +541,7 @@ describe("FlightTracker", () => {
 
 	it("Settings window map-style radio round-trips through Save", () => {
 		renderWithContext({});
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.click(screen.getByLabelText("Radar"));
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
@@ -564,7 +564,7 @@ describe("FlightTracker", () => {
 	it("passes radarSweep to the map and commits the Settings checkbox on Save", () => {
 		renderWithContext({});
 		expect(mapProps[mapProps.length - 1].radarSweep).toBe(true);
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.click(screen.getByTestId("flight_settings_radar")); // on → off
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
@@ -575,7 +575,7 @@ describe("FlightTracker", () => {
 
 	it("commits the trail-length slider on Save", () => {
 		renderWithContext({});
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.change(screen.getByTestId("flight_settings_trail_multiplier"), {
 			target: { value: "3.5" },
 		});
@@ -588,7 +588,7 @@ describe("FlightTracker", () => {
 
 	it("discards Settings edits on Cancel", () => {
 		renderWithContext({});
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.click(screen.getByTestId("flight_settings_darkmap"));
 		fireEvent.click(screen.getByText("Cancel"));
 		const settingsDispatches = dispatchMock.mock.calls.filter(
@@ -748,9 +748,9 @@ describe("FlightTracker", () => {
 			expect(screen.getByText("Clear")).toBeTruthy();
 		});
 
-		it("File ▸ Filter Flights… opens the filter window", () => {
+		it("Filter ▸ Filter Flights… opens the filter window", () => {
 			renderWithContext({ connected: true });
-			act(() => menuItem("File", (t) => t.startsWith("Filter Flights"))!.onClickFunc?.());
+			act(() => menuItem("Filter", (t) => t.startsWith("Filter Flights"))!.onClickFunc?.());
 			expect(screen.getByTestId("flight_filter_carrier")).toBeTruthy();
 		});
 
@@ -1062,9 +1062,9 @@ describe("FlightTracker", () => {
 			vi.unstubAllGlobals();
 		});
 
-		it("File ▸ Layers… opens the Layers window with FlightLayersPanel's controls", () => {
+		it("View ▸ Layers… opens the Layers window with FlightLayersPanel's controls", () => {
 			renderWithContext({});
-			const item = menuItem("File", (t) => t.startsWith("Layers"));
+			const item = menuItem("View", (t) => t.startsWith("Layers"));
 			expect(item).toBeTruthy();
 			act(() => item!.onClickFunc?.());
 			expect(windowProps.some((w) => w.id === "flight-layers")).toBe(true);
@@ -1075,7 +1075,7 @@ describe("FlightTracker", () => {
 
 		it("toggling a layer off in the Layers window dispatches the POI-settings slice (separate from mapSettings)", () => {
 			renderWithContext({});
-			act(() => menuItem("File", (t) => t.startsWith("Layers"))!.onClickFunc?.());
+			act(() => menuItem("View", (t) => t.startsWith("Layers"))!.onClickFunc?.());
 			fireEvent.click(screen.getByLabelText("Major Airports"));
 			expect(dispatchMock).toHaveBeenCalledWith({
 				type: "ClassicyAppFlightTrackerSetPoiSettings",

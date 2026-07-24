@@ -528,67 +528,80 @@ export const FlightTracker: FC = () => {
 	const appMenu = useMemo(
 		() => [
 			{
-				id: "file",
+				id: appId + "_file",
 				title: "File",
 				menuChildren: [
-					{
-						id: "flight-settings-menu",
-						title: "Settings…",
-						onClickFunc: openSettings,
-					},
-					{
-						id: "flight-filter-menu",
-						title: "Filter Flights…",
-						onClickFunc: openFilter,
-					},
-					{
-						id: "flight-layers-menu",
-						title: "Layers…",
-						onClickFunc: openLayers,
-					},
 					quitMenuItemHelper(appId, appName, appIcon),
 				],
 			},
 			{
-				id: "view",
+				id: appId + "_edit",
+				title: "Edit",
+				menuChildren: [
+					{
+						id: appId + "_flight-settings-menu",
+						title: "Settings…",
+						onClickFunc: openSettings,
+					},
+				],
+			},
+			{
+				id: appId + "_filter",
+				title: "Filter",
+				menuChildren: [
+					{
+						id: appId + "_flight-filter-menu",
+						title: "Filter Flights…",
+						onClickFunc: openFilter,
+					},
+				],
+			},
+			{
+				id: appId + "_view",
 				title: "View",
-				menuChildren: [{
-					id: "map_style",
-					title: "Map Style",
-					menuChildren: [
-						{
-							id: "flight-style-classic-menu",
-							title: `${settings.mapStyle === "classic" ? "✓ " : ""}Classic Map`,
-							onClickFunc: () => setMapStyle("classic"),
-						},
-						{
-							id: "flight-style-radar-menu",
-							title: `${settings.mapStyle === "radar" ? "✓ " : ""}Radar`,
-							onClickFunc: () => setMapStyle("radar"),
-						},
-						{
-							id: "flight-style-satellite-menu",
-							title: `${settings.mapStyle === "satellite" ? "✓ " : ""}Satellite`,
-							onClickFunc: () => setMapStyle("satellite"),
-						},
-					],
-				},
-				{
-					// ClassicyMenuItem has no checked prop — the ✓ lives in the title.
-					id: "flight-darkmap-menu",
-					title: `${settings.darkMap ? "✓ " : ""}Dark Map`,
-					onClickFunc: toggleDarkMap,
-				},
-				{
-					id: "flight-radar-menu",
-					title: `${settings.radarSweep ? "✓ " : ""}Radar Sweep`,
-					onClickFunc: toggleRadarSweep,
-				},
-				{
-					id: "flight-loop-menu",
-					title: `${loopEnabled ? "✓ " : ""}Loop Playback`,
-					onClickFunc: toggleLoop,
-				},
+				menuChildren: [
+					{
+						id: appId + "_flight-layers-menu",
+						title: "Layers…",
+						onClickFunc: openLayers,
+					},
+					{
+						id: appId + "_map_style",
+						title: "Map Style",
+						menuChildren: [
+							{
+								id: appId + "_flight-style-classic-menu",
+								title: `${settings.mapStyle === "classic" ? "✓ " : ""}Classic Map`,
+								onClickFunc: () => setMapStyle("classic"),
+							},
+							{
+								id: appId + "_flight-style-radar-menu",
+								title: `${settings.mapStyle === "radar" ? "✓ " : ""}Radar`,
+								onClickFunc: () => setMapStyle("radar"),
+							},
+							{
+								id: appId + "_flight-style-satellite-menu",
+								title: `${settings.mapStyle === "satellite" ? "✓ " : ""}Satellite`,
+								onClickFunc: () => setMapStyle("satellite"),
+							},
+						],
+					},
+					{
+						// ClassicyMenuItem has no checked prop — the ✓ lives in the title.
+						id: appId + "_flight-darkmap-menu",
+						title: `${settings.darkMap ? "✓ " : ""}Dark Map`,
+						onClickFunc: toggleDarkMap,
+					},
+					{
+						id: appId + "_flight-radar-menu",
+						title: `${settings.radarSweep ? "✓ " : ""}Radar Sweep`,
+						onClickFunc: toggleRadarSweep,
+					},
+					{
+						id: appId + "_flight-loop-menu",
+						title: `${loopEnabled ? "✓ " : ""}Loop Playback`,
+						onClickFunc: toggleLoop,
+					},
 				],
 			},
 		],
@@ -1244,7 +1257,7 @@ export const FlightTracker: FC = () => {
 									labelPosition="left"
 									labelSize="small"
 									size="small"
-	
+
 									options={LOOP_SPEEDS.map((s) => ({
 										value: String(s),
 										label: SPEED_LABELS[s],
