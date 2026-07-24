@@ -1183,6 +1183,8 @@ export const FlightTracker: FC = () => {
 										? settings.observerPinColorDark
 										: settings.observerPinColorLight,
 								)}
+								buildingHeroColorLight={settings.buildingHeroColorLight}
+								buildingHeroColorDark={settings.buildingHeroColorDark}
 								radarSweep={settings.radarSweep}
 								trailMultiplier={settings.trailMultiplier}
 								globe={settings.globe}
