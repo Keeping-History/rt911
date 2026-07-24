@@ -169,19 +169,33 @@ export const TimeMachine: React.FC = () => {
 					addPersonal(created);
 				}
 				setDialogState(null);
+			} catch (err) {
+				desktopEventDispatch({
+					type: "ClassicyDesktopShowErrorDialog",
+					title: "Bookmarks",
+					message: err instanceof Error ? err.message : "Something went wrong.",
+				});
 			} finally {
 				setSaving(false);
 			}
 		},
-		[dialogState, addPersonal, updatePersonalLocal],
+		[dialogState, addPersonal, updatePersonalLocal, desktopEventDispatch],
 	);
 
 	const handleDeletePersonal = useCallback(
 		async (bookmark: PersonalBookmark) => {
-			await deletePersonalBookmark(bookmark.id);
-			removePersonalLocal(bookmark.id);
+			try {
+				await deletePersonalBookmark(bookmark.id);
+				removePersonalLocal(bookmark.id);
+			} catch (err) {
+				desktopEventDispatch({
+					type: "ClassicyDesktopShowErrorDialog",
+					title: "Bookmarks",
+					message: err instanceof Error ? err.message : "Something went wrong.",
+				});
+			}
 		},
-		[removePersonalLocal],
+		[removePersonalLocal, desktopEventDispatch],
 	);
 
 	const handleBookmarkClick = useCallback(
