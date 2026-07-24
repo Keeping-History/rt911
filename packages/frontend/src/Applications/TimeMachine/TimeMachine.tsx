@@ -30,12 +30,12 @@ import {
 import { setDateTimeFromUtc } from "./setVirtualClock";
 import styles from "./TimeMachine.module.scss";
 import {
-	DEFAULT_TIME_MACHINE_SETTINGS,
 	readTimeMachineSettings,
 	TIME_MACHINE_APP_ID,
 	timeMachineSetSettings,
 } from "./timeMachineSettings";
 import { useBookmarks } from "./useBookmarks";
+import { isWindowOpen } from "./windowState";
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.timeMachine.app. registerClassicyIcons assigns
@@ -59,6 +59,17 @@ const appName = "Time Machine";
 const appId = TIME_MACHINE_APP_ID;
 const appIcon = ICONS.applications.timeMachine.app;
 
+// Classicy persists each app's window entries (and which one was focused) to
+// localStorage, but the Settings/Bookmarks windows are gated behind ephemeral
+// React state that resets on reload. Read the persisted entries once at mount
+// so that state can be re-seeded — otherwise a window that was open (and
+// focused) before a reload is orphaned: it never re-mounts, so it never
+// re-registers its live menu handlers and File → Settings…/Bookmarks… go dead.
+const readPersistedWindows = (): { id: string; closed?: boolean }[] | undefined =>
+	typeof useAppManager.getState === "function"
+		? useAppManager.getState().System.Manager.Applications.apps[appId]?.windows
+		: undefined;
+
 export const TimeMachine: React.FC = () => {
 
 	// Skip/step durations persist in Classicy app data (the Settings window
@@ -75,9 +86,21 @@ export const TimeMachine: React.FC = () => {
 		[appData],
 	);
 
-	const [showSettings, setShowSettings] = useState(false);
-	const [showBookmarks, setShowBookmarks] = useState(false);
-	const [settingsForm, setSettingsForm] = useState(DEFAULT_TIME_MACHINE_SETTINGS);
+	// Restore visibility from the persisted store so windows survive a reload
+	// (isWindowOpen is false for absent/closed entries — the common case).
+	const [showSettings, setShowSettings] = useState(() =>
+		isWindowOpen(readPersistedWindows(), `${appId}_settings`),
+	);
+	const [showBookmarks, setShowBookmarks] = useState(() =>
+		isWindowOpen(readPersistedWindows(), `${appId}_bookmarks`),
+	);
+	// Seed the draft from the saved values (not defaults) so a Settings window
+	// restored on reload shows the persisted slider positions immediately;
+	// openSettings re-seeds on a fresh manual open.
+	const [settingsForm, setSettingsForm] = useState(() => ({
+		skipMinutes,
+		stepSeconds,
+	}));
 	const [showOnTop, setShowOnTop] = useState(true);
 
 	const openSettings = useCallback(() => {
