@@ -41,7 +41,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `seek`        | `time`            | Move the virtual clock to a new instant.      |
 | `heartbeat`   | `time`            | Report client's current virtual time.         |
 | `filter`      | `formats[]`       | Whitelist media formats.                      |
-| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`weather`/`alerts`). |
+| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`weather`/`alerts`/`chat`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
@@ -77,6 +77,9 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `weather`         | `time`, `weather[]`, `weather_forecasts[]` | Weather snapshot (latest observation per station ≤ `t`, no age limit) on subscribe/init/seek, plus a forward **window** (default 600 s) per refill while subscribed — windowed observations plus any forecast products newly issued in the window. One frame carries both lists; suppressed when both are empty. |
 | `weather_forecast` | `id`, `time`, `weather_forecasts[]` | Reply to `weather_forecast`: the forecast product covering the requested zone at the clock, or an explicit empty `weather_forecasts` when none exists. `id` echoes the request. |
 | `alerts`          | `time`, `alerts[]`            | Forward **window** (default 600 s) of alerts per refill while subscribed. **No subscribe/init/seek snapshot** — see [`alerts` field reference](#server-initiated-alerts) below for why. |
+| `chat_state`      | `enabled`, `reason`           | Pushed on `chat` subscribe, pause, resume, seek, and window-boundary crossings. See [`chat_state`](#chat_state) below. |
+| `chat_roster`     | `buddies[]`                   | Sent once on successful `chat` subscribe. See [`chat_roster`](#chat_roster) below. |
+| `chat_presence`   | `profile`, `online`           | Sent when a buddy signs on or off as the virtual clock advances. See [`chat_presence`](#chat_presence) below. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`, `sources.usenet`). Not resent on `seek`. |
@@ -264,9 +267,18 @@ in bulk on the wire, the **client reveal-gate** holds each page until its `start
 still render paced by the virtual clock rather than all at once. This pacing invariant is enforced
 client-side; consumer apps never receive a not-yet-due page.
 
-Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"`, `"weather"` and `"alerts"`;
-any other value yields `{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
-Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
+Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"`, `"weather"`, `"alerts"` and
+`"chat"`; any other value yields `{"type":"error","message":"unknown channel \"…\""}`. (HTML is
+planned.) Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
+
+`chat` is the one channel that requires authentication. Whether a session is signed in is resolved
+once, at WebSocket upgrade, from the Directus session cookie — not per message — so a lookup failure
+never affects any other channel. An anonymous session's `subscribe {"channel":"chat"}` is **not**
+accepted: the server does not add the subscription (no `subscribe_ack`) and instead replies with
+`chat_state{enabled:false, reason:"not_signed_in"}`, so the client learns why chat is unavailable
+rather than getting silence or a generic error. A signed-in session's subscribe succeeds normally
+(`subscribe_ack`) and is followed immediately by `chat_state{enabled:true, ...}` and a `chat_roster`
+snapshot — see [`chat_state`](#chat_state) and [`chat_roster`](#chat_roster) below.
 
 The `mp3` channel (Radio app) behaves the same but carries `MediaItem`s on `mp3`-typed frames
 (reusing the `items` field), and — because mp3 is durational audio — its snapshot returns the
@@ -668,6 +680,34 @@ plus one alert-only field:
 There is deliberately **no snapshot** frame for this channel (see [the `alerts` channel](#subscribe)
 above) — every `alerts` frame is a forward window, sent once per **window refill** and only when the
 window contains at least one alert; empty windows produce no frame, same as `pager`/`flights`.
+
+### `chat_state`
+
+Pushed on subscribe, pause, resume, seek, and window-boundary crossings. The
+client binds its message input's disabled state to `enabled`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `enabled` | bool | Whether the user may send |
+| `reason` | string | `ok`, `paused`, `outside_window`, `blocked`, `not_signed_in` |
+
+### `chat_roster`
+
+Sent once on successful subscribe.
+
+| Field | Type | Notes |
+|---|---|---|
+| `buddies` | array | `{id, screen_name, display_name, avatar, online}`, ordered by the admin's sort field |
+
+### `chat_presence`
+
+Sent when a buddy signs on or off as the virtual clock advances. One frame per
+changed buddy; most ticks emit none.
+
+| Field | Type | Notes |
+|---|---|---|
+| `profile` | int | `chat_profiles.id` |
+| `online` | bool | New state |
 
 ### `pause`
 

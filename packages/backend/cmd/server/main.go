@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/clock"
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/handler"
@@ -126,8 +127,17 @@ func main() {
 	// memoize them so a connection storm doesn't re-run them per init.
 	sourcesCache := db.NewSourcesCache(pool, 5*time.Minute)
 
+	// Chat profiles are a side channel: a load failure must not stop the streamer.
+	chatProfiles := handler.NewProfileCache()
+	if profiles, err := chat.LoadProfiles(ctx, pool); err != nil {
+		logger.Warn("chat profiles unavailable, chat roster will be empty", "error", err)
+	} else {
+		chatProfiles.Set(profiles)
+		logger.Info("chat profiles loaded", "count", len(profiles))
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, sourcesCache, logger))
+	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, sourcesCache, chatProfiles, logger))
 	mux.HandleFunc("/feedback", handler.NewFeedbackHandler(
 		env("GITHUB_API_URL", "https://api.github.com"),
 		env("S3_ENDPOINT", "https://s3.wasabisys.com"),

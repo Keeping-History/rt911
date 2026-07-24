@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"sync"
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 	"classicy/streamer/internal/session"
@@ -100,9 +102,30 @@ type weatherForecastMsg struct {
 	ID   int    `json:"id"`
 }
 
+// ProfileCache holds the buddy roster for the life of the process. Chat config
+// is tiny and static; every connection reads the same slice rather than querying.
+type ProfileCache struct {
+	mu       sync.RWMutex
+	profiles []chat.Profile
+}
+
+func NewProfileCache() *ProfileCache { return &ProfileCache{} }
+
+func (c *ProfileCache) Get() []chat.Profile {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.profiles
+}
+
+func (c *ProfileCache) Set(p []chat.Profile) {
+	c.mu.Lock()
+	c.profiles = p
+	c.mu.Unlock()
+}
+
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
-func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sources *db.SourcesCache, logger *slog.Logger) http.HandlerFunc {
+func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sources *db.SourcesCache, chatProfiles *ProfileCache, logger *slog.Logger) http.HandlerFunc {
 	// shedLog rate-limits the at-capacity warning: shedding kicks in exactly when
 	// connections flood, so an unthrottled per-rejection log would itself become a
 	// flood. The 503 the client receives is the real, unthrottled signal.
@@ -128,6 +151,19 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 		}
 
 		sess := session.NewSession(hub, rdb, pool, logger)
+
+		// Chat is the only channel that needs an identity. Resolving it here (not
+		// on subscribe) keeps the lookup off the message path, and a failure is
+		// non-fatal: the session stays anonymous and every other channel works.
+		if token := db.SessionTokenFrom(r); token != "" {
+			if uid, err := db.LookupSessionUser(r.Context(), pool, token); err != nil {
+				logger.Warn("directus session lookup failed", "error", err)
+			} else if uid != "" {
+				sess.SetUser(uid)
+			}
+		}
+		sess.SetProfiles(chatProfiles.Get())
+
 		hub.Register(sess)
 
 		// Late joiners are locked immediately; everyone else heard the broadcast.
@@ -291,7 +327,16 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 					sess.SendError(fmt.Sprintf("unknown channel %q", cmsg.Channel))
 					continue
 				}
+				if cmsg.Channel == session.ChannelChat && sess.UserID() == "" {
+					sess.SendChatState()
+					continue
+				}
 				sess.Subscribe(cmsg.Channel)
+				if cmsg.Channel == session.ChannelChat {
+					sess.SendChatState()
+					sess.SendChatRoster()
+					continue
+				}
 				// Deliver an immediate snapshot at the current virtual time so the
 				// client gets the active items without waiting for the next tick.
 				if t, ok := sess.VirtualTime(); ok {
@@ -605,7 +650,7 @@ func knownChannel(ch string) bool {
 	return ch == session.ChannelPager || ch == session.ChannelMp3 ||
 		ch == session.ChannelNews || ch == session.ChannelUsenet ||
 		ch == session.ChannelFlights || ch == session.ChannelWeather ||
-		ch == session.ChannelAlerts
+		ch == session.ChannelAlerts || ch == session.ChannelChat
 }
 
 // sendChannelSnapshot delivers the subscribe-time snapshot for a single channel.
