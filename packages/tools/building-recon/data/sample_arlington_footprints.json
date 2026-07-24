@@ -1,0 +1,43 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-77.056, 38.872],
+            [-77.055, 38.872],
+            [-77.055, 38.873],
+            [-77.056, 38.873],
+            [-77.056, 38.872]
+          ]
+        ]
+      },
+      "properties": {
+        "height_m": "52.3",
+        "year_built": "2000"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-77.054, 38.865],
+            [-77.053, 38.865],
+            [-77.053, 38.866],
+            [-77.054, 38.866],
+            [-77.054, 38.865]
+          ]
+        ]
+      },
+      "properties": {
+        "height_m": "28.7",
+        "year_built": "1998"
+      }
+    }
+  ]
+}
