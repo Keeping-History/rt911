@@ -176,3 +176,19 @@
 	align-items: center;
 	gap: calc(var(--window-padding-size) * 0.5);
 }
+
+.captureButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 24px;
+	padding: 0;
+	cursor: pointer;
+
+	img {
+		width: 18px;
+		height: 18px;
+		image-rendering: pixelated;
+	}
+}

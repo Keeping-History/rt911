@@ -14,10 +14,19 @@ import {
 	useClassicyDateTime,
 } from "classicy";
 import appIconPng from "./app.png";
+import bookPng from "./book.png";
 import type React from "react";
 import { type ChangeEvent, useCallback, useMemo, useState } from "react";
 import { trackPauseResume, trackVirtualTimeSet } from "../../openreplay";
+import { BookmarkDialog } from "./BookmarkDialog";
 import { BookmarksWindow } from "./BookmarksWindow";
+import { localPartsToUtcDate, toDirectusUtcString } from "./bookmarkTime";
+import {
+	createPersonalBookmark,
+	deletePersonalBookmark,
+	type PersonalBookmark,
+	updatePersonalBookmark,
+} from "./bookmarksApi";
 import { setDateTimeFromUtc } from "./setVirtualClock";
 import styles from "./TimeMachine.module.scss";
 import {
@@ -26,7 +35,7 @@ import {
 	TIME_MACHINE_APP_ID,
 	timeMachineSetSettings,
 } from "./timeMachineSettings";
-import type { Bookmark } from "./useBookmarks";
+import { useBookmarks } from "./useBookmarks";
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.timeMachine.app. registerClassicyIcons assigns
@@ -119,6 +128,70 @@ export const TimeMachine: React.FC = () => {
 
 	const { dateTime, setDateTime, tzOffset, paused, pause, resume } = useClassicyDateTime({ tick: true });
 
+	const {
+		global,
+		personal,
+		loading: bookmarksLoading,
+		error: bookmarksError,
+		signedIn,
+		addPersonal,
+		updatePersonalLocal,
+		removePersonalLocal,
+	} = useBookmarks();
+
+	const [dialogState, setDialogState] = useState<
+		{ mode: "create" | "edit"; bookmark?: PersonalBookmark } | null
+	>(null);
+	const [saving, setSaving] = useState(false);
+
+	// Capture the live virtual-clock instant (read only — never writes the clock).
+	const openCaptureDialog = useCallback(() => {
+		if (!signedIn) {
+			setShowBookmarks(true); // Personal section shows the login prompt
+			return;
+		}
+		setDialogState({ mode: "create" });
+	}, [signedIn]);
+
+	const openEditDialog = useCallback((bookmark: PersonalBookmark) => {
+		setDialogState({ mode: "edit", bookmark });
+	}, []);
+
+	const handleDialogSave = useCallback(
+		async (input: Parameters<typeof createPersonalBookmark>[0]) => {
+			setSaving(true);
+			try {
+				if (dialogState?.mode === "edit" && dialogState.bookmark) {
+					const updated = await updatePersonalBookmark(dialogState.bookmark.id, input);
+					updatePersonalLocal(updated);
+				} else {
+					const created = await createPersonalBookmark(input);
+					addPersonal(created);
+				}
+				setDialogState(null);
+			} finally {
+				setSaving(false);
+			}
+		},
+		[dialogState, addPersonal, updatePersonalLocal],
+	);
+
+	const handleDeletePersonal = useCallback(
+		async (bookmark: PersonalBookmark) => {
+			await deletePersonalBookmark(bookmark.id);
+			removePersonalLocal(bookmark.id);
+		},
+		[removePersonalLocal],
+	);
+
+	const handleBookmarkClick = useCallback(
+		(startDate: string) => {
+			const applied = setDateTimeFromUtc(setDateTime, startDate);
+			trackVirtualTimeSet(applied.toISOString(), "seek");
+		},
+		[setDateTime],
+	);
+
 	// Time entry form state — initialise from the current virtual clock in local time
 	const parseCurrentTime = useCallback(() => {
 		// Shift UTC timestamp into local space so we display the Classicy local time
@@ -159,27 +232,10 @@ export const TimeMachine: React.FC = () => {
 	// --- Time entry ---
 
 	const handleGo = useCallback(() => {
-		const localH24 =
-			(parseInt(timeForm.hours, 10) % 12) +
-			(timeForm.ampm === "PM" ? 12 : 0);
-		// User entered local time — convert to UTC by subtracting the tz offset.
-		// setUTCHours handles out-of-range values (e.g. -3 wraps to previous day 21:00).
-		const utcH = localH24 - tzOffset;
-		const base = new Date(dateTime);
-		base.setUTCHours(utcH, parseInt(timeForm.minutes, 10), parseInt(timeForm.seconds, 10), 0);
-		setDateTime(base);
-		trackVirtualTimeSet(base.toISOString(), "seek");
+		const next = localPartsToUtcDate(new Date(dateTime), timeForm, tzOffset);
+		setDateTime(next);
+		trackVirtualTimeSet(next.toISOString(), "seek");
 	}, [timeForm, dateTime, tzOffset, setDateTime]);
-
-	// --- Bookmarks ---
-
-	const handleBookmarkClick = useCallback(
-		(bookmark: Bookmark) => {
-			const applied = setDateTimeFromUtc(setDateTime, bookmark.start_date);
-			trackVirtualTimeSet(applied.toISOString(), "seek");
-		},
-		[setDateTime],
-	);
 
 	return (
 		<ClassicyApp
@@ -260,8 +316,41 @@ export const TimeMachine: React.FC = () => {
 					appMenu={appMenu}
 					icon={appIcon}
 					tzOffset={tzOffset}
-					onSelect={handleBookmarkClick}
+					global={global}
+					personal={personal}
+					loading={bookmarksLoading}
+					error={bookmarksError}
+					signedIn={signedIn}
+					onJump={handleBookmarkClick}
+					onEdit={openEditDialog}
+					onDelete={handleDeletePersonal}
 					onCloseFunc={() => setShowBookmarks(false)}
+				/>
+			)}
+			{dialogState && (
+				<BookmarkDialog
+					appId={appId}
+					icon={appIcon}
+					appMenu={appMenu}
+					mode={dialogState.mode}
+					saving={saving}
+					tzOffset={tzOffset}
+					initial={
+						dialogState.mode === "edit" && dialogState.bookmark
+							? {
+									title: dialogState.bookmark.title,
+									category: dialogState.bookmark.category,
+									startDateUtc: dialogState.bookmark.start_date,
+								}
+							: {
+									title: "",
+									category: "General",
+									// live clock -> bare UTC string for the form's base date
+									startDateUtc: toDirectusUtcString(new Date(dateTime)),
+								}
+					}
+					onSave={handleDialogSave}
+					onCancel={() => setDialogState(null)}
 				/>
 			)}
 			<ClassicyWindow
@@ -299,6 +388,15 @@ export const TimeMachine: React.FC = () => {
 
 					{/* Time entry row */}
 					<div className={styles.timeEntry}>
+						<button
+							type="button"
+							className={styles.captureButton}
+							aria-label="Capture Bookmark"
+							title="Capture Bookmark"
+							onClick={openCaptureDialog}
+						>
+							<img src={bookPng} alt="" />
+						</button>
 						<ClassicySpinner
 							id="pager-filter-retention"
 							labelTitle="H"
@@ -334,6 +432,7 @@ export const TimeMachine: React.FC = () => {
 						/>
 						<ClassicyPopUpMenu
 							id={"am_or_pm"}
+							size="small"
 							options={[
 								{ value: "AM", label: "AM" },
 								{ value: "PM", label: "PM" },
