@@ -187,4 +187,6 @@
 	width: 19px;
 	height: 19px;
 	image-rendering: pixelated;
+	aspect-ratio: 1/1 !important;
+	padding: calc(var(--window-padding-size) *1.5);
 }
