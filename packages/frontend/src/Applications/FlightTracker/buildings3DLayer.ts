@@ -72,6 +72,8 @@ export class Buildings3DLayer implements CustomLayerInterface {
 	private meshes = new Map<string, GpuMesh>();
 	private pending = new Map<string, BuildingMesh>();
 	private color: [number, number, number] = [0.62, 0.62, 0.64];
+	private heroColor: [number, number, number] = [0.78, 0.74, 0.68];
+	private heroKeys = new Set<string>();
 
 	constructor(config: Buildings3DLayerConfig = {}) {
 		this.id = config.id ?? "buildings-3d";
@@ -85,6 +87,16 @@ export class Buildings3DLayer implements CustomLayerInterface {
 
 	setColor(rgb: [number, number, number]): void {
 		this.color = rgb;
+		this.map?.triggerRepaint();
+	}
+
+	setHeroColor(rgb: [number, number, number]): void {
+		this.heroColor = rgb;
+		this.map?.triggerRepaint();
+	}
+
+	markHero(key: string): void {
+		this.heroKeys.add(key);
 		this.map?.triggerRepaint();
 	}
 
@@ -133,6 +145,7 @@ export class Buildings3DLayer implements CustomLayerInterface {
 		}
 		this.programs.clear();
 		this.meshes.clear();
+		this.heroKeys.clear();
 		this.map = null;
 		this.gl = null;
 	}
@@ -203,8 +216,6 @@ ${VERTEX_BODY}`;
 			gl.uniform4f(u.u_projection_clipping_plane, ...pd.clippingPlane);
 		if (u.u_projection_transition)
 			gl.uniform1f(u.u_projection_transition, pd.projectionTransition);
-		if (u.u_color) gl.uniform3f(u.u_color, ...this.color);
-
 		gl.enableVertexAttribArray(A_POS);
 		gl.enableVertexAttribArray(A_NORMAL);
 		// Opaque solids: depth-test against terrain/each other, cull nothing
@@ -214,8 +225,11 @@ ${VERTEX_BODY}`;
 		gl.disable(gl.CULL_FACE);
 		gl.disable(gl.BLEND);
 
-		for (const mesh of this.meshes.values()) {
+		for (const [key, mesh] of this.meshes.entries()) {
 			if (mesh.vertexCount === 0) continue;
+			if (u.u_color) {
+				gl.uniform3f(u.u_color, ...(this.heroKeys.has(key) ? this.heroColor : this.color));
+			}
 			gl.bindBuffer(gl.ARRAY_BUFFER, mesh.pos);
 			gl.vertexAttribPointer(A_POS, 4, gl.FLOAT, false, 0, 0);
 			gl.bindBuffer(gl.ARRAY_BUFFER, mesh.nrm);

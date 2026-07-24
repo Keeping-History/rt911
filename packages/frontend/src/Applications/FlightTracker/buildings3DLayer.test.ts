@@ -35,4 +35,14 @@ describe("Buildings3DLayer", () => {
     layer.setColor([0.1, 0.2, 0.3]);
     expect(map.triggerRepaint).toHaveBeenCalled();
   });
+
+  it("setHeroColor + markHero request repaints and track hero keys", () => {
+    const layer = new Buildings3DLayer();
+    const map = { triggerRepaint: vi.fn() };
+    (layer as unknown as { map: unknown }).map = map;
+    layer.setHeroColor([0.9, 0.5, 0.2]);
+    layer.markHero("wtc-complex");
+    expect(map.triggerRepaint).toHaveBeenCalled();
+    expect((layer as unknown as { heroKeys: Set<string> }).heroKeys.has("wtc-complex")).toBe(true);
+  });
 });
