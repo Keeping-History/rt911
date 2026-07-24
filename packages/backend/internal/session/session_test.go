@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/clock"
 	"classicy/streamer/internal/model"
 
@@ -38,6 +39,19 @@ func recvType(t *testing.T, s *Session) outMsg {
 	default:
 		t.Fatal("expected an outbound message, got none")
 		return outMsg{}
+	}
+}
+
+// drain discards frames emitted as a side effect of setup so a test asserts on
+// the frame it actually triggered.
+func drain(t *testing.T, s *Session) {
+	t.Helper()
+	for {
+		select {
+		case <-s.send:
+		default:
+			return
+		}
 	}
 }
 
@@ -446,7 +460,7 @@ func TestSeekResetsHorizonsAndEmitsAck(t *testing.T) {
 	seek := base.Add(30 * time.Minute)
 
 	s.Init(base, nil)
-	_ = recvType(t, s) // drain init_ack
+	drain(t, s) // drain init_ack + the chat_state Init now also emits
 
 	s.Seek(seek, []model.MediaItem{{ID: 1, Title: "x", Approved: 1, StartDate: seek}})
 
@@ -488,7 +502,7 @@ func TestPauseEmitsPauseAck(t *testing.T) {
 func TestResumeAfterPauseEmitsResumeAck(t *testing.T) {
 	s := newTestSession(t)
 	s.Pause()
-	_ = recvType(t, s) // drain pause_ack
+	drain(t, s) // drain pause_ack + the chat_state Pause now also emits
 
 	s.Resume()
 
@@ -522,7 +536,7 @@ func TestHeartbeatExceedingDriftCorrects(t *testing.T) {
 	s := newTestSession(t)
 	base := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
 	s.Init(base, nil)
-	_ = recvType(t, s) // drain init_ack
+	drain(t, s) // drain init_ack + the chat_state Init now also emits
 
 	// 10s drift exceeds driftThresh (3s) — virtual time must snap to clientTime.
 	clientTime := base.Add(10 * time.Second)
@@ -973,5 +987,83 @@ func TestBroadcastClockReachesRegisteredSessions(t *testing.T) {
 	m = recvType(t, s)
 	if m.Type != "clock" || m.Active == nil || *m.Active {
 		t.Fatalf("expected release clock broadcast, got %+v", m)
+	}
+}
+
+func TestChatStateRequiresSignIn(t *testing.T) {
+	s := newTestSession(t)
+	s.Init(time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	s.SendChatState()
+	msg := recvType(t, s)
+	if msg.Type != "chat_state" {
+		t.Fatalf("Type = %q, want chat_state", msg.Type)
+	}
+	if msg.Enabled == nil || *msg.Enabled {
+		t.Fatal("chat should be disabled for an anonymous session")
+	}
+	if msg.Reason != "not_signed_in" {
+		t.Fatalf("Reason = %q, want not_signed_in", msg.Reason)
+	}
+}
+
+func TestChatStateEnabledWhenSignedInMidWindow(t *testing.T) {
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	s.Init(time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	s.SendChatState()
+	msg := recvType(t, s)
+	if msg.Enabled == nil || !*msg.Enabled {
+		t.Fatalf("chat should be enabled; reason=%q", msg.Reason)
+	}
+	if msg.Reason != "ok" {
+		t.Fatalf("Reason = %q, want ok", msg.Reason)
+	}
+}
+
+func TestChatStateDisabledWhilePaused(t *testing.T) {
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	s.Init(time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil)
+	s.Pause()
+	drain(t, s)
+
+	s.SendChatState()
+	msg := recvType(t, s)
+	if msg.Enabled == nil || *msg.Enabled {
+		t.Fatal("chat should be disabled while paused")
+	}
+	if msg.Reason != "paused" {
+		t.Fatalf("Reason = %q, want paused", msg.Reason)
+	}
+}
+
+func TestChatRosterMarksOnlineByClock(t *testing.T) {
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	from := time.Date(2001, 9, 11, 15, 0, 0, 0, time.UTC)
+	s.SetProfiles([]chat.Profile{
+		{ID: 1, ScreenName: "mom", Sort: 0},
+		{ID: 2, ScreenName: "skaterboi1988", Sort: 1, OnlineFrom: &from},
+	})
+	s.Init(time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	s.SendChatRoster()
+	msg := recvType(t, s)
+	if msg.Type != "chat_roster" {
+		t.Fatalf("Type = %q, want chat_roster", msg.Type)
+	}
+	if len(msg.Buddies) != 2 {
+		t.Fatalf("Buddies length = %d, want 2", len(msg.Buddies))
+	}
+	if !msg.Buddies[0].Online {
+		t.Fatal("mom should be online at 14:00")
+	}
+	if msg.Buddies[1].Online {
+		t.Fatal("skaterboi1988 should be offline at 14:00 (online_from 15:00)")
 	}
 }
