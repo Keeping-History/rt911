@@ -223,6 +223,19 @@ describe("applyBasemapStyle", () => {
 		expect(map.layout["hillshade-radar"].visibility).toBe("none");
 		expect(map.layout["hillshade-satellite"].visibility).toBe("none");
 	});
+
+	it("recolors coast-land and shows it in classic, hides it in satellite", () => {
+		const classicMap = recordingMap();
+		applyBasemapStyle(classicMap, "classic", false);
+		expect(classicMap.layout["coast-land"].visibility).toBe("visible");
+		expect(classicMap.paint["coast-land"]["fill-color"]).toBe(
+			basemapPalette("classic", false).land,
+		);
+
+		const satMap = recordingMap();
+		applyBasemapStyle(satMap, "satellite", false);
+		expect(satMap.layout["coast-land"].visibility).toBe("none");
+	});
 });
 
 describe("sky (issue #221)", () => {

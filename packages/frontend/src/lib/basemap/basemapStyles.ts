@@ -332,10 +332,12 @@ export function applyBasemapStyle(
 	const g = groundVisibility(mapStyle, darkMap);
 	map.setPaintProperty("background", "background-color", p.background);
 	map.setPaintProperty("land", "fill-color", p.land);
+	map.setPaintProperty("coast-land", "fill-color", p.land);
 	map.setPaintProperty("lakes", "fill-color", p.lakes);
 	map.setPaintProperty("countries", "line-color", p.countries);
 	map.setPaintProperty("states", "line-color", p.states);
 	map.setLayoutProperty("land", "visibility", g.vector ? "visible" : "none");
+	map.setLayoutProperty("coast-land", "visibility", g.vector ? "visible" : "none");
 	map.setLayoutProperty("lakes", "visibility", g.vector ? "visible" : "none");
 	map.setLayoutProperty("satellite-day", "visibility", g.satelliteDay ? "visible" : "none");
 	map.setLayoutProperty("satellite-night", "visibility", g.satelliteNight ? "visible" : "none");
