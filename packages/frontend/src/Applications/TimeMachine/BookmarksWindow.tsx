@@ -39,6 +39,7 @@ export const BookmarksWindow: React.FC<BookmarksWindowProps> = ({
 	<ClassicyWindow
 		id={`${appId}_bookmarks`}
 		title="Bookmarks"
+		windowType="utility"
 		icon={icon}
 		appId={appId}
 		closable={true}
