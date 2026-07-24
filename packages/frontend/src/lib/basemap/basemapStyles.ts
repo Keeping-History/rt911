@@ -12,6 +12,7 @@ export interface BasemapUrls {
 	satelliteDay: string;
 	satelliteNight: string;
 	terrainDem: string;
+	coast: string;
 }
 
 // Module-scope so the object identity is stable — FlightMap/WeatherMap key
@@ -31,6 +32,11 @@ export const BASEMAP_URLS: BasemapUrls = {
 	terrainDem:
 		(import.meta.env.VITE_TERRAIN_DEM_URL as string | undefined) ??
 		"https://files.911realtime.org/maps/terrain-dem.pmtiles",
+	coast:
+		(import.meta.env.VITE_FLIGHT_COAST_BASEMAP_URL as string | undefined) ??
+		// CONUS-only high-res OSM coastline (issue: WTC-in-water). Layered over
+		// the coarse world vector; world stays the z0-7 base + rollback.
+		"https://files.911realtime.org/maps/conus-coast.pmtiles",
 };
 
 /** Persisted-state safety: anything unrecognized renders as classic. */
@@ -254,6 +260,7 @@ export function buildBasemapStyle(
 		glyphs: "https://files.911realtime.org/maps/fonts/{fontstack}/{range}.pbf",
 		sources: {
 			basemap: { type: "vector", url: `pmtiles://${urls.vector}` },
+			coast: { type: "vector", url: `pmtiles://${urls.coast}` },
 			"satellite-day": {
 				type: "raster",
 				url: `pmtiles://${urls.satelliteDay}`,
@@ -286,6 +293,8 @@ export function buildBasemapStyle(
 			{ id: "satellite-night", type: "raster", source: "satellite-night",
 				layout: vis(g.satelliteNight) },
 			{ id: "land", type: "fill", source: "basemap", "source-layer": "land",
+				layout: vis(g.vector), paint: { "fill-color": p.land } },
+			{ id: "coast-land", type: "fill", source: "coast", "source-layer": "land",
 				layout: vis(g.vector), paint: { "fill-color": p.land } },
 			{ id: "lakes", type: "fill", source: "basemap", "source-layer": "lakes",
 				layout: vis(g.vector), paint: { "fill-color": p.lakes } },

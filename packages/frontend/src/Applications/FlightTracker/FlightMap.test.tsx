@@ -198,6 +198,7 @@ const TEST_URLS = {
 	satelliteDay: "day.pmtiles",
 	satelliteNight: "night.pmtiles",
 	terrainDem: "https://x.example/dem.pmtiles",
+	coast: "coast.pmtiles",
 };
 
 // Shared minimal props: the values every existing test in this file passes by

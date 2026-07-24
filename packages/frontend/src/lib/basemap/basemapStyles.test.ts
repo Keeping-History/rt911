@@ -19,6 +19,7 @@ const URLS = {
 	satelliteDay: "https://x.example/day.pmtiles",
 	satelliteNight: "https://x.example/night.pmtiles",
 	terrainDem: "https://x.example/dem.pmtiles",
+	coast: "https://x.example/coast.pmtiles",
 };
 
 const ALL_STYLES: BasemapStyleId[] = ["classic", "radar", "satellite"];
@@ -72,10 +73,10 @@ describe("buildBasemapStyle — superset structure", () => {
 		expect(night.type).toBe("raster");
 	});
 
-	it("orders layers background → rasters → land/lakes → hillshades → countries/states", () => {
+	it("orders layers background → rasters → land/coast/lakes → hillshades → countries/states", () => {
 		expect(style.layers.map((l) => l.id)).toEqual([
 			"background", "satellite-day", "satellite-night",
-			"land", "lakes",
+			"land", "coast-land", "lakes",
 			"hillshade-classic", "hillshade-radar", "hillshade-satellite",
 			"countries", "states",
 		]);
@@ -335,5 +336,43 @@ describe("terrain source + hillshade layers", () => {
 		expect(paint("hillshade-classic")["hillshade-exaggeration"]).toBe(
 			hillshadePalette("classic", true).exaggeration,
 		);
+	});
+});
+
+describe("coast overlay (CONUS coastline)", () => {
+	const style = buildBasemapStyle(URLS, "classic", false);
+
+	it("adds the coast vector source", () => {
+		expect(style.sources.coast).toEqual({
+			type: "vector",
+			url: "pmtiles://https://x.example/coast.pmtiles",
+		});
+	});
+
+	it("adds a coast-land fill ordered after land and before lakes", () => {
+		const ids = style.layers.map((l) => l.id);
+		expect(ids).toContain("coast-land");
+		expect(ids.indexOf("coast-land")).toBeGreaterThan(ids.indexOf("land"));
+		expect(ids.indexOf("coast-land")).toBeLessThan(ids.indexOf("lakes"));
+	});
+
+	it("paints coast-land with the land color and shows it wherever the vector ground shows", () => {
+		const layer = style.layers.find((l) => l.id === "coast-land");
+		expect(layer).toMatchObject({
+			source: "coast",
+			"source-layer": "land",
+			paint: { "fill-color": basemapPalette("classic", false).land },
+			layout: { visibility: "visible" },
+		});
+	});
+
+	it("hides coast-land in satellite mode (raster is the ground)", () => {
+		const sat = buildBasemapStyle(URLS, "satellite", false);
+		const layer = sat.layers.find((l) => l.id === "coast-land");
+		expect(layer?.layout?.visibility).toBe("none");
+	});
+
+	it("BASEMAP_URLS.coast defaults to the hosted conus-coast file", () => {
+		expect(BASEMAP_URLS.coast).toContain("/maps/conus-coast.pmtiles");
 	});
 });

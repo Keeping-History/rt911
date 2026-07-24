@@ -107,6 +107,7 @@ const TEST_URLS = {
 	satelliteDay: "day.pmtiles",
 	satelliteNight: "night.pmtiles",
 	terrainDem: "https://x.example/dem.pmtiles",
+	coast: "coast.pmtiles",
 };
 
 const commonProps = {
