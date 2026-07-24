@@ -305,6 +305,30 @@ const newsSelectFrom = `
 	FROM news_items mi
 	LEFT JOIN sources s ON s.id = mi.source`
 
+// NewsEpoch is the floor for every news read: 2001-09-09 00:00 ET. September 2001
+// is EDT (UTC-4), matching the tzOffset the frontend seeds in app.tsx.
+//
+// MUST be in time.UTC: news_items.start_date is `timestamp without time zone`,
+// and pgx encodes a time.Time to that type using its wall clock in its own
+// location — a value built in any other zone would silently shift the floor.
+var NewsEpoch = time.Date(2001, 9, 9, 4, 0, 0, 0, time.UTC)
+
+// newsListSelectFrom mirrors newsSelectFrom but substitutes an empty literal for
+// mi.content. The backlog snapshot runs to ~1,320 rows whose bodies total ~7.7 MB
+// — far too large to ship on every init/seek/subscribe over a socket with no
+// compression. The client fetches one body on demand via news_body when an article
+// opens. The SQL literal (rather than a second row scanner, which is how usenet
+// solved this) keeps queryItems working unchanged; the column ORDER must still
+// match its scan list exactly.
+const newsListSelectFrom = `
+	SELECT mi.id, mi.title, mi.full_title, s.slug,
+	       mi.start_date, mi.end_date, mi.calc_duration, mi.timezone,
+	       mi.url, mi.format, mi.approved, mi.mute,
+	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption, mi.subtitles,
+	       ''::text AS content, mi.sort
+	FROM news_items mi
+	LEFT JOIN sources s ON s.id = mi.source`
+
 // AllNewsItems loads every approved news item ordered by start_date (cache warming).
 func AllNewsItems(ctx context.Context, pool *pgxpool.Pool) ([]model.MediaItem, error) {
 	return queryItems(ctx, pool,
@@ -325,23 +349,24 @@ func NewsItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.Media
 	return &items[0], nil
 }
 
-// CurrentNewsItems returns approved news items active at time t. Most news is
-// "instant" (start_date = end_date), so — like CurrentItems — instant items are
-// included for a 5-minute lookback window so a seek to t still shows headlines
-// fired in the preceding minutes. Used by the init/seek/subscribe snapshot paths.
+// CurrentNewsItems returns every approved news article from NewsEpoch up to t,
+// headline-only. This is the News app's complete back catalogue, not a window:
+// the only date gates on the read path are the 9/9 floor and the virtual-clock
+// ceiling. Articles later than t stay withheld so the replay isn't spoiled.
+//
+// The floor tests start_date alone, so a durational article that began before the
+// epoch and is still running at t is excluded. Checked against production: zero
+// approved rows straddle the boundary and 7,255 of 7,339 are instant, so this
+// guards an empty set — one honest comparison beats a compound rule.
+//
+// Used by the init/seek/subscribe snapshot paths.
 func CurrentNewsItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model.MediaItem, error) {
 	return queryItems(ctx, pool,
-		newsSelectFrom+`
+		newsListSelectFrom+`
 		 WHERE mi.approved = 1
-		   AND (
-		     (mi.start_date <= $1 AND (mi.end_date IS NULL OR mi.end_date >= $1))
-		     OR (
-		       (mi.start_date = mi.end_date OR (mi.calc_duration IS NOT NULL AND mi.calc_duration = 0))
-		       AND mi.start_date <= $1
-		       AND mi.start_date >= $1 - INTERVAL '5 minutes'
-		     )
-		   )
-		 ORDER BY mi.start_date`, t)
+		   AND mi.start_date >= $1
+		   AND mi.start_date <= $2
+		 ORDER BY mi.start_date`, NewsEpoch, t)
 }
 
 // alertSelectFrom mirrors newsSelectFrom but reads alert_items and adds the
