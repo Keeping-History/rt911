@@ -460,7 +460,7 @@ func TestSeekResetsHorizonsAndEmitsAck(t *testing.T) {
 	seek := base.Add(30 * time.Minute)
 
 	s.Init(base, nil)
-	drain(t, s) // drain init_ack + the chat_state Init now also emits
+	_ = recvType(t, s) // drain init_ack
 
 	s.Seek(seek, []model.MediaItem{{ID: 1, Title: "x", Approved: 1, StartDate: seek}})
 
@@ -502,7 +502,7 @@ func TestPauseEmitsPauseAck(t *testing.T) {
 func TestResumeAfterPauseEmitsResumeAck(t *testing.T) {
 	s := newTestSession(t)
 	s.Pause()
-	drain(t, s) // drain pause_ack + the chat_state Pause now also emits
+	_ = recvType(t, s) // drain pause_ack
 
 	s.Resume()
 
@@ -536,7 +536,7 @@ func TestHeartbeatExceedingDriftCorrects(t *testing.T) {
 	s := newTestSession(t)
 	base := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
 	s.Init(base, nil)
-	drain(t, s) // drain init_ack + the chat_state Init now also emits
+	_ = recvType(t, s) // drain init_ack
 
 	// 10s drift exceeds driftThresh (3s) — virtual time must snap to clientTime.
 	clientTime := base.Add(10 * time.Second)
@@ -1065,5 +1065,24 @@ func TestChatRosterMarksOnlineByClock(t *testing.T) {
 	}
 	if msg.Buddies[1].Online {
 		t.Fatal("skaterboi1988 should be offline at 14:00 (online_from 15:00)")
+	}
+}
+
+func TestPauseSendsNoChatStateWhenUnsubscribed(t *testing.T) {
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	s.Init(time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	s.Pause()
+
+	msg := recvType(t, s)
+	if msg.Type != "pause_ack" {
+		t.Fatalf("Type = %q, want pause_ack", msg.Type)
+	}
+	select {
+	case extra := <-s.send:
+		t.Fatalf("unsubscribed session got an extra frame after pause: %q", string(extra))
+	default:
 	}
 }

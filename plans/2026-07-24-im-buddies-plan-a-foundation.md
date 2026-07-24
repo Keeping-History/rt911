@@ -954,6 +954,29 @@ func TestChatRosterMarksOnlineByClock(t *testing.T) {
 }
 ```
 
+Plus a regression test pinning the opt-in gate, so unsolicited chat frames cannot silently return:
+
+```go
+func TestPauseSendsNoChatStateWhenUnsubscribed(t *testing.T) {
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	s.Init(time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	s.Pause()
+
+	msg := recvType(t, s)
+	if msg.Type != "pause_ack" {
+		t.Fatalf("Type = %q, want pause_ack", msg.Type)
+	}
+	select {
+	case extra := <-s.send:
+		t.Fatalf("unsubscribed session got an extra frame after pause: %q", string(extra))
+	default:
+	}
+}
+```
+
 `newTestSession(t)` and `recvType(t, s)` already exist at the top of `session_test.go` — do **not** redefine them. `drain` does not exist; add it next to `recvType`:
 
 ```go
@@ -1049,6 +1072,21 @@ func (s *Session) SendChatState() {
 	s.send_(outMsg{Type: "chat_state", Enabled: &enabled, Reason: reason})
 }
 
+// sendChatStateIfSubscribed re-evaluates the chat gate for clock transitions.
+// Unlike SendChatState it respects the opt-in convention: a session that never
+// subscribed to chat gets no chat frames. SendChatState itself stays
+// unconditional because the handler calls it to refuse an unauthenticated
+// subscribe, which deliberately does not subscribe the session first.
+func (s *Session) sendChatStateIfSubscribed() {
+	s.mu.Lock()
+	_, ok := s.subscriptions[ChannelChat]
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	s.SendChatState()
+}
+
 // SendChatRoster emits the full buddy list with each buddy's online state at the
 // current virtual time.
 func (s *Session) SendChatRoster() {
@@ -1111,17 +1149,19 @@ In `RunTimePump`, inside the tick branch that already advances `virtualTime`, af
 In `Pause()` and `Resume()`, after the existing `s.mu.Unlock()`, add:
 
 ```go
-	s.SendChatState()
+	s.sendChatStateIfSubscribed()
 ```
 
 In `Init` and `Seek`, after the existing horizon reset and unlock, add:
 
 ```go
-	s.SendChatState()
+	s.sendChatStateIfSubscribed()
 	s.syncChatPresence()
 ```
 
 Seeking outside the window must move buddies offline, which is exactly what `syncChatPresence` does once `virtualTime` has moved.
+
+**These four call sites use the gated wrapper, not `SendChatState` directly.** `packages/backend/CLAUDE.md` states that opt-in channels deliver nothing by default; emitting `chat_state` unconditionally would push chat frames at every session on every pause and seek, including sessions that never subscribed. The tell is that it forces unrelated pre-existing tests in `internal/handler/ws_test.go` to drain an extra frame — if you find yourself adding such a drain, the gate is missing.
 
 - [ ] **Step 7: Run the tests to verify they pass**
 

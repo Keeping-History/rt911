@@ -481,7 +481,7 @@ func (s *Session) Init(t time.Time, items []model.MediaItem) {
 
 	s.send_(outMsg{Type: "init_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
 
-	s.SendChatState()
+	s.sendChatStateIfSubscribed()
 	s.syncChatPresence()
 }
 
@@ -496,7 +496,7 @@ func (s *Session) Seek(t time.Time, items []model.MediaItem) {
 
 	s.send_(outMsg{Type: "seek_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
 
-	s.SendChatState()
+	s.sendChatStateIfSubscribed()
 	s.syncChatPresence()
 }
 
@@ -526,7 +526,7 @@ func (s *Session) Pause() {
 	s.paused = true
 	s.mu.Unlock()
 	s.send_(outMsg{Type: "pause_ack"})
-	s.SendChatState()
+	s.sendChatStateIfSubscribed()
 }
 
 // Resume unfreezes the client's virtual clock.
@@ -535,7 +535,7 @@ func (s *Session) Resume() {
 	s.paused = false
 	s.mu.Unlock()
 	s.send_(outMsg{Type: "resume_ack"})
-	s.SendChatState()
+	s.sendChatStateIfSubscribed()
 }
 
 // Heartbeat corrects drift if the client's reported time diverges too far.
@@ -616,6 +616,19 @@ func (s *Session) SendChatState() {
 
 	enabled, reason := chat.Available(g)
 	s.send_(outMsg{Type: "chat_state", Enabled: &enabled, Reason: reason})
+}
+
+// sendChatStateIfSubscribed re-evaluates the chat gate for clock transitions.
+// Unlike SendChatState it respects the opt-in convention: a session that never
+// subscribed to chat gets no chat frames.
+func (s *Session) sendChatStateIfSubscribed() {
+	s.mu.Lock()
+	_, ok := s.subscriptions[ChannelChat]
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	s.SendChatState()
 }
 
 // SendChatRoster emits the full buddy list with each buddy's online state at the

@@ -188,7 +188,6 @@ func TestWSHandlerPauseResume(t *testing.T) {
 	if f := readFrame(t, conn); f.Type != "pause_ack" {
 		t.Fatalf("expected pause_ack, got %q", f.Type)
 	}
-	readFrame(t, conn) // drain chat_state (Pause also re-evaluates the chat gate)
 
 	sendJSON(t, conn, map[string]string{"type": "resume"})
 	if f := readFrame(t, conn); f.Type != "resume_ack" {
@@ -452,6 +451,5 @@ func TestWSHandlerWeatherForecastIgnoredWhenZoneInvalid(t *testing.T) {
 		if f := readFrame(t, conn); f.Type != "pause_ack" {
 			t.Fatalf("zone %q: expected pause_ack (forecast request silently ignored), got %+v", zone, f)
 		}
-		readFrame(t, conn) // drain chat_state (Pause also re-evaluates the chat gate)
 	}
 }
