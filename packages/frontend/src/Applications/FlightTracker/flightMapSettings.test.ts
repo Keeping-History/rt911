@@ -29,7 +29,7 @@ function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 
 describe("classicyFlightTrackerEventHandler", () => {
 	it("persists mapSettings from a SetMapSettings action", () => {
-		const settings = { mapStyle: "radar" as const, darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, observerPinColorLight: 0x0f766e, observerPinColorDark: 0x2dd4bf, radarSweep: false, trailMultiplier: 2, globe: true, cluster: false, threeD: true, terrain: true, cameraMode: "cockpit" as const };
+		const settings = { mapStyle: "radar" as const, darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, observerPinColorLight: 0x0f766e, observerPinColorDark: 0x2dd4bf, buildingHeroColorLight: 0xb0a48c, buildingHeroColorDark: 0xc7b8a0, radarSweep: false, trailMultiplier: 2, globe: true, cluster: false, threeD: true, terrain: true, cameraMode: "cockpit" as const };
 		const out = classicyFlightTrackerEventHandler(
 			storeWithApp(),
 			flightTrackerSetMapSettings(settings),
@@ -150,6 +150,11 @@ describe("readFlightMapSettings", () => {
 		expect(
 			readFlightMapSettings({ mapSettings: { cameraMode: "orbit" } }).cameraMode,
 		).toBe("track");
+	});
+
+	it("includes hero-color defaults", () => {
+		expect(DEFAULT_FLIGHT_MAP_SETTINGS.buildingHeroColorLight).toBeTypeOf("number");
+		expect(DEFAULT_FLIGHT_MAP_SETTINGS.buildingHeroColorDark).toBeTypeOf("number");
 	});
 });
 

@@ -24,6 +24,18 @@ export function buildingColorRgb(
   return darkMap ? [0.5, 0.5, 0.53] : [0.62, 0.62, 0.64];
 }
 
+export function intToRgb01(n: number): [number, number, number] {
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+export function heroColorRgb(settings: {
+  darkMap: boolean;
+  buildingHeroColorLight: number;
+  buildingHeroColorDark: number;
+}): [number, number, number] {
+  return intToRgb01(settings.darkMap ? settings.buildingHeroColorDark : settings.buildingHeroColorLight);
+}
+
 interface GeoJSONPolygonFeature {
   properties?: { height_m?: number; base_elevation_m?: number } | null;
   geometry?: { type?: string; coordinates?: number[][][] } | null;
