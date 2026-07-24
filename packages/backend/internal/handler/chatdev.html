@@ -1,0 +1,132 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>IM Buddies dev harness</title>
+<style>
+  body { font: 13px ui-monospace, monospace; margin: 0; display: grid;
+         grid-template-columns: 220px 1fr; height: 100vh; }
+  #side { border-right: 1px solid #ccc; padding: 8px; overflow: auto; }
+  #main { display: flex; flex-direction: column; }
+  #ctl { padding: 8px; border-bottom: 1px solid #ccc; }
+  #log { flex: 1; overflow: auto; padding: 8px; white-space: pre-wrap; }
+  .off { color: #999; }
+  .bad { color: #b00; }
+</style>
+<div id="side"><b>Buddies</b><div id="roster">(not subscribed)</div></div>
+<div id="main">
+  <div id="ctl">
+    <label>clock <input id="clock" size="24" value="2001-09-11T13:00:00Z"></label>
+    <button id="seek">seek</button>
+    <button id="pause">pause</button>
+    <button id="resume">resume</button>
+    <button id="sub">subscribe chat</button>
+    <span id="state" class="bad">state: —</span>
+  </div>
+  <div id="log"></div>
+</div>
+<script>
+// Minimal msgpack decoder. The server→client wire is binary, so JSON.parse
+// shows nothing. Inlined rather than pulled from a CDN: no network dependency
+// for a local dev tool, and no third-party script in the page. Extension types
+// (time.Time) decode to null — the chat frames carry no time.Time fields, and
+// the frames that do are filtered out of the log below.
+function mp(buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const td = new TextDecoder();
+  let i = 0;
+  const str = (n) => {
+    const s = td.decode(new Uint8Array(buf.buffer, buf.byteOffset + i, n));
+    i += n;
+    return s;
+  };
+  const arr = (n) => { const a = []; for (let k = 0; k < n; k++) a.push(rd()); return a; };
+  const map = (n) => { const o = {}; for (let k = 0; k < n; k++) { const key = rd(); o[key] = rd(); } return o; };
+  function rd() {
+    const b = dv.getUint8(i++);
+    if (b <= 0x7f) return b;
+    if (b >= 0xe0) return b - 256;
+    if (b <= 0x8f) return map(b & 0x0f);
+    if (b <= 0x9f) return arr(b & 0x0f);
+    if (b <= 0xbf) return str(b & 0x1f);
+    switch (b) {
+      case 0xc0: return null;
+      case 0xc2: return false;
+      case 0xc3: return true;
+      case 0xca: { const v = dv.getFloat32(i); i += 4; return v; }
+      case 0xcb: { const v = dv.getFloat64(i); i += 8; return v; }
+      case 0xcc: return dv.getUint8(i++);
+      case 0xcd: { const v = dv.getUint16(i); i += 2; return v; }
+      case 0xce: { const v = dv.getUint32(i); i += 4; return v; }
+      case 0xcf: { const v = Number(dv.getBigUint64(i)); i += 8; return v; }
+      case 0xd0: return dv.getInt8(i++);
+      case 0xd1: { const v = dv.getInt16(i); i += 2; return v; }
+      case 0xd2: { const v = dv.getInt32(i); i += 4; return v; }
+      case 0xd3: { const v = Number(dv.getBigInt64(i)); i += 8; return v; }
+      case 0xd9: return str(dv.getUint8(i++));
+      case 0xda: { const n = dv.getUint16(i); i += 2; return str(n); }
+      case 0xdb: { const n = dv.getUint32(i); i += 4; return str(n); }
+      case 0xdc: { const n = dv.getUint16(i); i += 2; return arr(n); }
+      case 0xdd: { const n = dv.getUint32(i); i += 4; return arr(n); }
+      case 0xde: { const n = dv.getUint16(i); i += 2; return map(n); }
+      case 0xdf: { const n = dv.getUint32(i); i += 4; return map(n); }
+      case 0xc4: { const n = dv.getUint8(i++); i += n; return null; }
+      case 0xc5: { const n = dv.getUint16(i); i += 2 + n; return null; }
+      case 0xc6: { const n = dv.getUint32(i); i += 4 + n; return null; }
+      case 0xc7: { const n = dv.getUint8(i++); i += 1 + n; return null; }
+      case 0xc8: { const n = dv.getUint16(i); i += 3 + n; return null; }
+      case 0xc9: { const n = dv.getUint32(i); i += 5 + n; return null; }
+      case 0xd4: i += 2; return null;
+      case 0xd5: i += 3; return null;
+      case 0xd6: i += 5; return null;
+      case 0xd7: i += 9; return null;
+      case 0xd8: i += 17; return null;
+    }
+    throw new Error("unsupported msgpack byte 0x" + b.toString(16));
+  }
+  return rd();
+}
+
+const url = new URL(location.href);
+const ws = new WebSocket((url.protocol === "https:" ? "wss://" : "ws://") + url.host + "/stream");
+ws.binaryType = "arraybuffer";
+
+const log = (s) => {
+  const el = document.getElementById("log");
+  el.textContent += s + "\n";
+  el.scrollTop = el.scrollHeight;
+};
+const send = (o) => { ws.send(JSON.stringify(o)); log("→ " + JSON.stringify(o)); };
+
+ws.onopen = () => {
+  log("connected");
+  send({ type: "init", time: document.getElementById("clock").value });
+};
+
+ws.onmessage = (ev) => {
+  const msg = mp(new Uint8Array(ev.data));
+  if (msg.type === "chat_state") {
+    const el = document.getElementById("state");
+    el.textContent = "state: " + (msg.enabled ? "enabled" : "disabled (" + msg.reason + ")");
+    el.className = msg.enabled ? "" : "bad";
+  }
+  if (msg.type === "chat_roster") {
+    document.getElementById("roster").innerHTML = msg.buddies
+      .map((b) => `<div class="${b.online ? "" : "off"}" data-id="${b.id}">${b.screen_name}</div>`)
+      .join("");
+  }
+  if (msg.type === "chat_presence") {
+    const row = document.querySelector(`#roster [data-id="${msg.profile}"]`);
+    if (row) row.className = msg.online ? "" : "off";
+  }
+  if (msg.type !== "items" && msg.type !== "heartbeat_ack") {
+    log("← " + JSON.stringify(msg));
+  }
+};
+
+ws.onclose = () => log("disconnected");
+
+document.getElementById("seek").onclick = () =>
+  send({ type: "seek", time: document.getElementById("clock").value });
+document.getElementById("pause").onclick = () => send({ type: "pause" });
+document.getElementById("resume").onclick = () => send({ type: "resume" });
+document.getElementById("sub").onclick = () => send({ type: "subscribe", channel: "chat" });
+</script>
