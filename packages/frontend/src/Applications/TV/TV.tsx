@@ -1,5 +1,6 @@
 import {
 	ClassicyApp,
+	ClassicyBalloonHelp,
 	ClassicyButton,
 	ClassicyCheckbox,
 	ClassicyColorPicker,
@@ -724,12 +725,25 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		[orderedItems, activePlayer],
 	);
 
+	// Menu items are plain data, so balloon help rides along as the `balloon`
+	// field rather than a <ClassicyBalloonHelp> wrapper (which is only for JSX
+	// controls like the buttons below). quitMenuItemHelper builds the item
+	// without one, so the help text is layered on by spreading — built once here
+	// because the same item appears in both File and Edit and shouldn't drift.
+	const quitMenuItem = {
+		...quitMenuItemHelper(appId, appName, appIcon),
+		balloon: {
+			title: "Quit",
+			content: `Close ${appName} and stop playing every channel. Your channel order and volume are remembered for next time.`,
+		},
+	};
+
 	const appMenu = [
 		{
 			id: "file",
 			title: "File",
 			menuChildren: [
-				quitMenuItemHelper(appId, appName, appIcon),
+				quitMenuItem,
 			],
 		},
 		{
@@ -741,7 +755,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					title: "Settings…",
 					onClickFunc: openSettings,
 				},
-				quitMenuItemHelper(appId, appName, appIcon),
+				quitMenuItem,
 			],
 		},
 		{
@@ -752,16 +766,22 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					id: `${appId}_show_epg`,
 					title: "Show EPG",
 					onClickFunc: () => setShowEpg(true),
+					balloon: {
+						content:
+							"Open the on-screen program guide listing what is playing on each channel.",
+					},
 				},
 				{
 					id: `${appId}_channel_up`,
 					title: "Channel ▲",
 					onClickFunc: () => changeChannel(1),
+					balloon: { content: "Switch to the next channel up." },
 				},
 				{
 					id: `${appId}_channel_down`,
 					title: "Channel ▼",
 					onClickFunc: () => changeChannel(-1),
+					balloon: { content: "Switch to the next channel down." },
 				},
 			],
 		},
@@ -773,11 +793,22 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					id: `${appId}_mute_all`,
 					title: `${volumeLimit == 0 ? "✓ " : "  "} Mute${volumeLimit ==0 ? "d" : ""}`,
 					onClickFunc: () => volumeLimit == 0 ? setVolumeLimit(100) : setVolumeLimit(0),
+					balloon: {
+						content:
+							volumeLimit == 0
+								? "Turn the sound back on for every channel."
+								: "Silence every channel without pausing playback.",
+					},
 				},
 				{
 					id: `${appId}_pause_all`,
 					title: `${tvPaused ? "✓ " : "  "} Pause${tvPaused ? "d" : ""}`,
-					onClickFunc: () => desktopEventDispatch(tvPaused ? tvResume() : tvPause())
+					onClickFunc: () => desktopEventDispatch(tvPaused ? tvResume() : tvPause()),
+					balloon: {
+						content: tvPaused
+							? "Resume playback on every channel."
+							: "Pause playback on every channel, freezing the picture.",
+					},
 				},
 			],
 		},
@@ -1086,38 +1117,70 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					<div className={styles.tvBottomRow}>
 						<div className={styles.tvControlPanel}>
 							<div className={styles.tvControlButtons}>
-								<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
-									MultiView
-								</ClassicyButton>
-								<ClassicyButton
-									onClickFunc={() =>
-										desktopEventDispatch(tvPaused ? tvResume() : tvPause())
+								<ClassicyBalloonHelp
+									content={
+										multiSelectMode
+											? "Go back to watching one channel at a time."
+											: "Watch several channels at once. Click thumbnails below to add them to the grid."
 									}
-									depressed={tvPaused}
-									buttonSize="small"
-									margin="sm" padding="sm"
 								>
-									{tvPaused ? "Play" : "Pause"}
-								</ClassicyButton>
-								<ClassicyButton
-									onClickFunc={() => {
-										setHasInteracted(true);
-										desktopEventDispatch(tvSetMuted(!overallMuted));
-									}}
-									depressed={overallMuted}
-									buttonSize="small"
-									margin="sm" padding="sm"
+									<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
+										MultiView
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
+								<ClassicyBalloonHelp
+									content={
+										tvPaused
+											? "Resume playback on every channel."
+											: "Pause playback on every channel, freezing the picture."
+									}
 								>
-									Mute
-								</ClassicyButton>
-								<ClassicyButton
-									onClickFunc={() => setCaptionsOn((v) => !v)}
-									depressed={captionsOn}
-									buttonSize="small"
-									margin="sm" padding="sm"
+									<ClassicyButton
+										onClickFunc={() =>
+											desktopEventDispatch(tvPaused ? tvResume() : tvPause())
+										}
+										depressed={tvPaused}
+										buttonSize="small"
+										margin="sm" padding="sm"
+									>
+										{tvPaused ? "Play" : "Pause"}
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
+								<ClassicyBalloonHelp
+									content={
+										overallMuted
+											? "Turn the sound back on for every channel."
+											: "Silence every channel without pausing playback."
+									}
 								>
-									{captionsOn ? "CC On" : "CC Off"}
-								</ClassicyButton>
+									<ClassicyButton
+										onClickFunc={() => {
+											setHasInteracted(true);
+											desktopEventDispatch(tvSetMuted(!overallMuted));
+										}}
+										depressed={overallMuted}
+										buttonSize="small"
+										margin="sm" padding="sm"
+									>
+										Mute
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
+								<ClassicyBalloonHelp
+									content={
+										captionsOn
+											? "Hide the closed captions shown over the picture."
+											: "Show closed captions over the picture."
+									}
+								>
+									<ClassicyButton
+										onClickFunc={() => setCaptionsOn((v) => !v)}
+										depressed={captionsOn}
+										buttonSize="small"
+										margin="sm" padding="sm"
+									>
+										{captionsOn ? "CC On" : "CC Off"}
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
 							</div>
 							<ClassicySlider
 								id="tv_universal_volume"
@@ -1139,33 +1202,45 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 							<div className={styles.tvChannelButtons}>
 								{!multiSelectMode && (
 									<>
-										<ClassicyButton
-											onClickFunc={() => changeChannel(1)}
-											buttonSize="small"
-											margin="sm"
-											padding="sm"
-										>
-											▲
-										</ClassicyButton>
-										<ClassicyButton
-											onClickFunc={() => changeChannel(-1)}
-											buttonSize="small"
-											margin="sm"
-											padding="sm"
-										>
-											▼
-										</ClassicyButton>
+										<ClassicyBalloonHelp content="Switch to the next channel up.">
+											<ClassicyButton
+												onClickFunc={() => changeChannel(1)}
+												buttonSize="small"
+												margin="sm"
+												padding="sm"
+											>
+												▲
+											</ClassicyButton>
+										</ClassicyBalloonHelp>
+										<ClassicyBalloonHelp content="Switch to the next channel down.">
+											<ClassicyButton
+												onClickFunc={() => changeChannel(-1)}
+												buttonSize="small"
+												margin="sm"
+												padding="sm"
+											>
+												▼
+											</ClassicyButton>
+										</ClassicyBalloonHelp>
 									</>
 								)}
-								<ClassicyButton
-									onClickFunc={() => setShowEpg((v) => !v)}
-									depressed={showEpg}
-									buttonSize="small"
-									margin="sm"
-									padding="sm"
+								<ClassicyBalloonHelp
+									content={
+										showEpg
+											? "Hide the program guide."
+											: "Show the program guide listing what is playing on each channel."
+									}
 								>
-									EPG
-								</ClassicyButton>
+									<ClassicyButton
+										onClickFunc={() => setShowEpg((v) => !v)}
+										depressed={showEpg}
+										buttonSize="small"
+										margin="sm"
+										padding="sm"
+									>
+										EPG
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
 							</div>
 						</div>
 						<div className={styles.tvThumbnailStrip}>

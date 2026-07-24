@@ -175,6 +175,20 @@ $strip-height: calc(5em + 8px);
   margin-top: calc(var(--window-padding-size) * 0.5);
 }
 
+// Each control button is wrapped in a balloon-help anchor, which ships as
+// display:inline-block — as a flex child that sits on the text baseline and
+// stretches, knocking the buttons out of alignment in these rows. Same fix as
+// FlightTracker.module.scss: size the wrapper to its content so it's
+// layout-neutral and the buttons lay out exactly as they did unwrapped.
+.tvControlButtons,
+.tvChannelButtons {
+  :global(.classicyBalloonHelpAnchor) {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+}
+
 .tvThumbnailStrip {
   position: relative; // anchors the cursor-following drag outline
   flex: 1;
