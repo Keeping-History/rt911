@@ -17,10 +17,10 @@ func ptr(t time.Time) *time.Time { return &t }
 
 func TestProfileOnlineAt(t *testing.T) {
 	tests := []struct {
-		name  string
-		p     Profile
-		when  time.Time
-		want  bool
+		name string
+		p    Profile
+		when time.Time
+		want bool
 	}{
 		{"no bounds is online across the whole window", Profile{}, at("14:00"), true},
 		{"no bounds is offline before the window", Profile{}, at("11:59"), false},

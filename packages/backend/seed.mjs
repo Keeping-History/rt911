@@ -370,7 +370,7 @@ async function createCollections(token) {
         { field: "effort", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null inherits chat_settings" } },
         { field: "temperature", type: "float", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null inherits chat_settings" } },
         { field: "active", type: "integer", schema: { is_nullable: false, default_value: 1 }, meta: { interface: "boolean", width: "half" } },
-        { field: "sort", type: "integer", schema: { is_nullable: true }, meta: { hidden: true } },
+        { field: "sort", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { hidden: true } },
       ],
     });
   } else {
