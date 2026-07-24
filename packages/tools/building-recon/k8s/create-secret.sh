@@ -8,8 +8,7 @@
 #   WASABI_SECRET_ACCESS_KEY  copied from video-grabber-secrets
 #   CF_API_TOKEN              copied from video-grabber-secrets
 #   CF_ZONE_ID                copied from video-grabber-secrets
-#   DC_BUILDINGS_URL          ArcGIS FeatureServer query URL (must be set)
-#   ARLINGTON_BUILDINGS_URL   ArcGIS FeatureServer query URL (must be set)
+# (Source URLs — NYC Socrata, Arlington ArcGIS — are hardcoded in sources.py.)
 set -euo pipefail
 
 NS=video-grabber
@@ -28,16 +27,6 @@ CF_TOKEN=$(kubectl get secret -n "$NS" video-grabber-secrets \
 CF_ZONE=$(kubectl get secret -n "$NS" video-grabber-secrets \
   -o jsonpath='{.data.CF_ZONE_ID}' | base64 -d)
 
-# DC and Arlington ArcGIS URLs must be configured explicitly (see README.md)
-# Example: https://mapping.dcgis.dc.gov/arcgis/rest/services/...
-DC_URL="${DC_BUILDINGS_URL:-}"
-ARLINGTON_URL="${ARLINGTON_BUILDINGS_URL:-}"
-
-if [ -z "$DC_URL" ] || [ -z "$ARLINGTON_URL" ]; then
-  echo "ERROR: DC_BUILDINGS_URL and ARLINGTON_BUILDINGS_URL must be set as env vars"
-  exit 1
-fi
-
 kubectl create secret generic building-recon-secrets -n "$NS" \
   --from-literal=DIRECTUS_API_TOKEN="$TOKEN" \
   --from-literal=WASABI_ENDPOINT_URL="$WASABI_ENDPOINT" \
@@ -46,8 +35,6 @@ kubectl create secret generic building-recon-secrets -n "$NS" \
   --from-literal=WASABI_SECRET_ACCESS_KEY="$WASABI_SECRET" \
   --from-literal=CF_API_TOKEN="$CF_TOKEN" \
   --from-literal=CF_ZONE_ID="$CF_ZONE" \
-  --from-literal=DC_BUILDINGS_URL="$DC_URL" \
-  --from-literal=ARLINGTON_BUILDINGS_URL="$ARLINGTON_URL" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "building-recon-secrets applied in namespace $NS"

@@ -1,10 +1,10 @@
 # building-recon
 
-Reconstructs the 2001 New York and Washington DC skylines by fetching building
-footprints from open-data portals, filtering to the state as of September 11,
-2001, restoring the curated World Trade Center complex (absent from source
-datasets), and publishing both a Wasabi GeoJSON snapshot and Directus collection
-for the frontend 3D visualization.
+Reconstructs the 2001 Lower Manhattan and Pentagon/Arlington skylines by fetching
+building footprints from open-data portals, filtering to the state as of
+September 11, 2001, restoring the curated World Trade Center complex (absent from
+source datasets), and publishing both a Wasabi GeoJSON snapshot and a Directus
+collection for the frontend 3D visualization.
 
 Runs as a Prefect 3 flow on the local k3s cluster: a Kubernetes work pool
 (`building-recon-k8s`) + in-cluster worker spawn one Kubernetes Job per flow run.
@@ -15,7 +15,7 @@ Created idempotently by the flow (collection deletion + full re-insert on each r
 
 | Collection | Contents | Key fields |
 |---|---|---|
-| `buildings` | one row per 2001 building polygon | `geometry` (GeoJSON Polygon), `height_m`, `base_elevation_m`, `area` (manhattan/pentagon), `source` (nyc/dc/arlington/wtc-curated), `name`, `cnstrct_yr` |
+| `buildings` | one row per 2001 building polygon | `geometry` (GeoJSON Polygon), `height_m`, `base_elevation_m`, `area` (manhattan/pentagon), `source` (nyc/arlington/wtc-curated), `name`, `cnstrct_yr` |
 
 Directus is the **canonical** store: the flow builds `buildings` rows from the
 rich, pre-strip feature list (`build_2001.assemble`'s second return value, via
@@ -46,27 +46,31 @@ Two impact-zone bounding boxes filter which buildings are fetched:
 - **Manhattan:** Lower Manhattan from Battery Park north to City Hall, centered
   on the World Trade Center site (`-74.020, 40.701 to -74.002, 40.720`).
 - **Pentagon:** Pentagon proper and immediate Arlington surroundings
-  (`-77.064, 38.865 to -77.048, 38.876`); note that DC and Arlington are both
-  nominally in the "pentagon" area for simplicity.
+  (`-77.064, 38.865 to -77.048, 38.876`). This AOI is entirely in Arlington, VA
+  (west of the Potomac); DC data is not used.
 
 ## Data sources and field confirmation
 
-Source-specific field names are drawn from live open-data metadata and must be
-re-confirmed each run to catch upstream schema changes:
+Source field names + geometry were confirmed against live metadata on
+2026-07-24 (URLs are hardcoded in `sources.py::SOURCES`; re-confirm each run to
+catch upstream schema changes):
 
-- **NYC (Socrata `5zhs-2jue`):** `heightroof` (feet), `cnstrct_yr` (integer),
-  `groundelev` (feet, base elevation). Fetched via `within_box()` SoQL query
-  against `https://data.cityofnewyork.us/resource/5zhs-2jue.geojson`.
-  [Metadata](https://data.cityofnewyork.us/Housing-Development/Building-Footprints/nqwf-w8eh).
+- **NYC (Socrata `5zhs-2jue`, Building Footprints):** `height_roof` (feet),
+  `construction_year` (integer), `ground_elevation` (feet, base elevation).
+  Geometry is **MultiPolygon** (the parser takes the first sub-polygon's outer
+  ring). Fetched via `within_box()` SoQL against
+  `https://data.cityofnewyork.us/resource/5zhs-2jue.geojson`.
 
-- **DC (ArcGIS Building Heights 1999):** `height_m` (meters), `year_built`
-  (integer). URL via env var `DC_BUILDINGS_URL` (ArcGIS FeatureServer query).
-  Confirm `height_m` and `year_built` field names against the live service
-  metadata before use.
+- **Arlington (ArcGIS `od_Building_Height_Polygons`, "Building Heights"):**
+  `Est_Building_Height_ft` (feet), `Est_Ground_Elevation_ft` (feet); the layer
+  carries **no construction year**, so all its buildings are kept by the 2001
+  filter (unknown-year → kept). Geometry is Polygon. This layer includes the
+  Pentagon at its real ~77 ft height. Fetched via an ArcGIS envelope query
+  (`f=geojson`) against
+  `https://arlgis.arlingtonva.us/arcgis/rest/services/Open_Data/od_Building_Height_Polygons/FeatureServer/0`.
 
-- **Arlington (ArcGIS):** `height_m` (meters), `year_built` (integer). URL via
-  env var `ARLINGTON_BUILDINGS_URL`. Confirm `height_m` and `year_built` field
-  names against the live service metadata before use.
+DC (ArcGIS Building Heights 1999) was evaluated and **dropped**: the Pentagon is
+in Arlington, VA, so DC footprints fall outside the pentagon AOI entirely.
 
 ## World Trade Center provenance
 
@@ -112,8 +116,8 @@ logic (unit-tested).
 - Docker on the dev node (images are imported straight into k3s containerd —
   there is no registry, hence `imagePullPolicy: IfNotPresent` and the
   `kubernetes.io/hostname: dev.keepinghistory.org` node pin on the job template).
-- Environment variables `DC_BUILDINGS_URL` and `ARLINGTON_BUILDINGS_URL` set in
-  the `building-recon-secrets` Secret.
+- Source URLs (NYC Socrata, Arlington ArcGIS) are hardcoded in
+  `sources.py::SOURCES` — no per-source env vars are required.
 
 ## Setup
 
@@ -151,7 +155,7 @@ PREFECT_API_URL=... prefect deployment run \
 
 Parameters (defaults are sample fixtures baked into the image):
 - `directus_url`: Directus API URL (default: `$DIRECTUS_URL`)
-- `sources`: List of source names to fetch (default: `["nyc", "dc", "arlington"]`)
+- `sources`: List of source names to fetch (default: `["nyc", "arlington"]`)
 - `upload`: Whether to upload the GeoJSON to Wasabi (default: `True`)
 - `load_directus`: Whether to load the buildings collection to Directus
   (default: `True`)

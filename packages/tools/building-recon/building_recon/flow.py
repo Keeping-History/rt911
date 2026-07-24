@@ -8,7 +8,7 @@ from prefect import flow, get_run_logger
 from building_recon import directus, purge, wasabi
 from building_recon.sources import fetch_source
 
-DEFAULT_SOURCES = ["nyc", "dc", "arlington"]
+DEFAULT_SOURCES = ["nyc", "arlington"]
 WASABI_KEY = "maps/buildings-2001.geojson"
 
 

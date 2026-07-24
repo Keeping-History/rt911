@@ -3,44 +3,30 @@
   "features": [
     {
       "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [-74.01, 40.715],
-            [-74.009, 40.715],
-            [-74.009, 40.716],
-            [-74.01, 40.716],
-            [-74.01, 40.715]
-          ]
-        ]
-      },
       "properties": {
-        "heightroof": "1368",
-        "cnstrct_yr": "1972",
-        "groundelev": "13",
-        "name": "Test Building 1"
+        "height_roof": "417.0",
+        "construction_year": "1972",
+        "ground_elevation": "13",
+        "feature_code": "2100",
+        "name": "1 WTC"
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [[[[-74.0113, 40.715], [-74.0113, 40.7155], [-74.0108, 40.7155], [-74.0108, 40.715], [-74.0113, 40.715]]]]
       }
     },
     {
       "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [-73.95, 40.715],
-            [-73.949, 40.715],
-            [-73.949, 40.716],
-            [-73.95, 40.716],
-            [-73.95, 40.715]
-          ]
-        ]
-      },
       "properties": {
-        "heightroof": "850",
-        "cnstrct_yr": "1985",
-        "groundelev": "10",
-        "name": "Out of AOI Building"
+        "height_roof": "200.0",
+        "construction_year": "1960",
+        "ground_elevation": "10",
+        "feature_code": "2100",
+        "name": null
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [[[[-73.95, 40.75], [-73.95, 40.7505], [-73.9495, 40.7505], [-73.9495, 40.75], [-73.95, 40.75]]]]
       }
     }
   ]
