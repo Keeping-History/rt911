@@ -308,7 +308,7 @@ where table_name like 'chat\_%'
 group by table_name order by table_name;"
 ```
 
-Expected: nine rows. `chat_profiles` has 22 columns, `chat_messages` has 12, `chat_blocks` has 8.
+Expected: nine rows. `chat_profiles` has 21 columns, `chat_messages` has 12, `chat_blocks` has 8.
 
 ```sh
 psql "$PSQL_URL" -c "select indexname from pg_indexes where tablename like 'chat\_%' order by indexname;"
