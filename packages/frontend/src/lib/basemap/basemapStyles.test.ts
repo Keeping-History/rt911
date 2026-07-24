@@ -126,9 +126,9 @@ describe("groundVisibility matrix", () => {
 });
 
 describe("basemapPalette", () => {
-	it("classic palettes are the original paper and slate values", () => {
-		expect(basemapPalette("classic", false).background).toBe("#efe9dd");
-		expect(basemapPalette("classic", true).background).toBe("#1c1c22");
+	it("classic palettes are water-toned", () => {
+		expect(basemapPalette("classic", false).background).toBe("#aeb9bf");
+		expect(basemapPalette("classic", true).background).toBe("#12151c");
 	});
 	it("radar returns the same phosphor palette regardless of darkMap", () => {
 		expect(basemapPalette("radar", false)).toEqual(basemapPalette("radar", true));
@@ -137,6 +137,15 @@ describe("basemapPalette", () => {
 	it("satellite borders are translucent white over imagery", () => {
 		expect(basemapPalette("satellite", false).countries).toContain("rgba(255,255,255");
 		expect(basemapPalette("satellite", true).countries).toContain("rgba(255,255,255");
+	});
+	it("classic uses a water-toned background and lakes; radar/satellite unchanged", () => {
+		expect(basemapPalette("classic", false).background).toBe("#aeb9bf");
+		expect(basemapPalette("classic", false).lakes).toBe("#aeb9bf");
+		expect(basemapPalette("classic", true).background).toBe("#12151c");
+		expect(basemapPalette("classic", true).lakes).toBe("#12151c");
+		// unchanged
+		expect(basemapPalette("radar", false).background).toBe("#041004");
+		expect(basemapPalette("satellite", false).background).toBe("#0b1b33");
 	});
 });
 

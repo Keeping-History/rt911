@@ -62,16 +62,16 @@ export interface BasemapPalette {
 }
 
 const CLASSIC_LIGHT: BasemapPalette = {
-	background: "#efe9dd",
+	background: "#aeb9bf",
 	land: "#e3ddcf",
-	lakes: "#d7d3c6",
+	lakes: "#aeb9bf",
 	countries: "#8a8574",
 	states: "#b3ad9c",
 };
 const CLASSIC_DARK: BasemapPalette = {
-	background: "#1c1c22",
+	background: "#12151c",
 	land: "#26262e",
-	lakes: "#16161c",
+	lakes: "#12151c",
 	countries: "#6f6f7e",
 	states: "#44444f",
 };

@@ -75,7 +75,7 @@ describe("applyMapColors", () => {
 			pinColor: "#3a3a3a", notablePinColor: "#c0202a", observerPinColor: "#0f766e",
 			terrain: false,
 		});
-		expect(map.paint.background["background-color"]).toBe("#efe9dd");
+		expect(map.paint.background["background-color"]).toBe("#aeb9bf");
 		expect(map.layout.land.visibility).toBe("visible");
 		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("90,90,90");
 	});

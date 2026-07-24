@@ -341,7 +341,7 @@ describe("FlightMap", () => {
 		const map = FakeMap.last!;
 		map.fire("load");
 		// Basemap still themed via paint; pin colors now flow through the icons.
-		expect(map.paint["background"]?.["background-color"]).toBe("#efe9dd");
+		expect(map.paint["background"]?.["background-color"]).toBe("#aeb9bf");
 		await vi.waitFor(() => {
 			expect((map.images["plane-icon"] as { fill: string }).fill).toBe("#00aa00");
 			expect((map.images["plane-notable-icon"] as { fill: string }).fill).toBe("#123456");
@@ -351,7 +351,7 @@ describe("FlightMap", () => {
 			<FlightMap {...common} darkMap={true} mapStyle="classic" pinColor="#ffffff" notablePinColor="#ff0000" observerPinColor="#2dd4bf" />,
 		);
 		expect(FakeMap.last).toBe(map); // no map re-creation
-		expect(map.paint["background"]?.["background-color"]).toBe("#1c1c22");
+		expect(map.paint["background"]?.["background-color"]).toBe("#12151c");
 		// Trail fade uses a themed line-gradient (dark #9a9aa6 → rgb 154,154,166).
 		expect(JSON.stringify(map.paint["flight-trails"]?.["line-gradient"])).toContain("154,154,166");
 		await vi.waitFor(() => {
