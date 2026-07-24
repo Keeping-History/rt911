@@ -1086,3 +1086,94 @@ func TestPauseSendsNoChatStateWhenUnsubscribed(t *testing.T) {
 	default:
 	}
 }
+
+func TestPauseSendsChatStateWhenSubscribed(t *testing.T) {
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	s.Subscribe(ChannelChat)
+	s.Init(time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	s.Pause()
+
+	if msg := recvType(t, s); msg.Type != "pause_ack" {
+		t.Fatalf("Type = %q, want pause_ack", msg.Type)
+	}
+	msg := recvType(t, s)
+	if msg.Type != "chat_state" {
+		t.Fatalf("Type = %q, want chat_state", msg.Type)
+	}
+	if msg.Enabled == nil || *msg.Enabled {
+		t.Fatal("chat should be disabled while paused")
+	}
+	if msg.Reason != "paused" {
+		t.Fatalf("Reason = %q, want paused", msg.Reason)
+	}
+}
+
+func TestSeekEmitsPresenceOnlyOnChange(t *testing.T) {
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	s.Subscribe(ChannelChat)
+	from := time.Date(2001, 9, 11, 15, 0, 0, 0, time.UTC)
+	s.SetProfiles([]chat.Profile{
+		{ID: 1, ScreenName: "mom", Sort: 0},
+		{ID: 2, ScreenName: "skaterboi1988", Sort: 1, OnlineFrom: &from},
+	})
+	s.Init(time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	s.Seek(time.Date(2001, 9, 11, 15, 30, 0, 0, time.UTC), nil)
+
+	var presence []outMsg
+	for {
+		select {
+		case data := <-s.send:
+			var m outMsg
+			dec := msgpack.NewDecoder(bytes.NewReader(data))
+			dec.SetCustomStructTag("json")
+			if err := dec.Decode(&m); err != nil {
+				t.Fatalf("decode outbound: %v", err)
+			}
+			if m.Type == "chat_presence" {
+				presence = append(presence, m)
+			}
+			continue
+		default:
+		}
+		break
+	}
+
+	if len(presence) != 1 {
+		t.Fatalf("got %d chat_presence frames, want 1", len(presence))
+	}
+	if presence[0].Profile != 2 {
+		t.Fatalf("Profile = %d, want 2", presence[0].Profile)
+	}
+	if presence[0].Online == nil || !*presence[0].Online {
+		t.Fatal("skaterboi1988 should be online at 15:30")
+	}
+
+	s.Seek(time.Date(2001, 9, 11, 15, 45, 0, 0, time.UTC), nil)
+	drainAck := recvType(t, s)
+	if drainAck.Type != "seek_ack" {
+		t.Fatalf("Type = %q, want seek_ack", drainAck.Type)
+	}
+	for {
+		select {
+		case data := <-s.send:
+			var m outMsg
+			dec := msgpack.NewDecoder(bytes.NewReader(data))
+			dec.SetCustomStructTag("json")
+			if err := dec.Decode(&m); err != nil {
+				t.Fatalf("decode outbound: %v", err)
+			}
+			if m.Type == "chat_presence" {
+				t.Fatalf("second seek within the same window emitted chat_presence for profile %d", m.Profile)
+			}
+			continue
+		default:
+		}
+		break
+	}
+}
