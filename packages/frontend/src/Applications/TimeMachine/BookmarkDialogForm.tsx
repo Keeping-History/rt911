@@ -21,7 +21,6 @@ export interface BookmarkDialogFormProps {
 }
 
 export const BookmarkDialogForm: React.FC<BookmarkDialogFormProps> = ({
-	mode,
 	initial,
 	tzOffset,
 	saving = false,
@@ -46,7 +45,7 @@ export const BookmarkDialogForm: React.FC<BookmarkDialogFormProps> = ({
 	};
 
 	return (
-		<div className={styles.dialog} data-mode={mode}>
+		<div className={styles.dialog}>
 			<label className={styles.dialogField}>
 				Title
 				<input
