@@ -102,27 +102,36 @@ is untouched and stays the low-zoom base + rollback.
    ogr2ogr -f GeoJSON conus_land.geojson \
      land-polygons-split-4326/land_polygons.shp -clipsrc -125 24 -66 50
    ```
-3. Tile to PMTiles, one `land` layer, **z6–13**, attributes dropped:
+3. Tile to PMTiles, one `land` layer, **z6–15**, attributes dropped:
    ```sh
-   tippecanoe -o conus-coast.pmtiles -Z6 -z13 -X \
+   tippecanoe -o conus-coast.pmtiles -Z6 -z15 -X \
      -L land:conus_land.geojson \
      --coalesce-densest-as-needed --simplification=4 --force
    ```
-   - **Max zoom 13, not 15.** The coastline is a smooth boundary; z13 full
-     detail (~14 m at NYC's latitude) overzooms cleanly to building zoom and
-     still puts Manhattan crisply on land. A z15 build ballooned past 613 MB
-     for no visible gain (the original WTC-in-water failure was Natural Earth
-     being off by *miles*, not meters). MapLibre reads maxzoom from the PMTiles
-     header and overzooms automatically, so the style needs no maxzoom setting.
+   - **Max zoom 15.** An earlier z13 build put Manhattan on land but the
+     coastline was visibly *jagged/faceted* at building zoom (z15–16), because
+     MapLibre overzooms the z13 geometry 4–8× and its ~14 m vertex spacing shows
+     as facets. z15 (~3.5 m vertices) renders smooth at building zoom. MapLibre
+     reads maxzoom from the PMTiles header and overzooms automatically, so the
+     style needs no maxzoom setting.
+   - **`simplification=4`, not lower.** At z15, `=4` (~5 m tolerance) is already
+     visually crisp; `=2` bloats the archive with near-every OSM vertex for no
+     visible gain.
    - **`-X` drops all feature attributes** — the style only fills geometry, so
      the OSM FIDs would be pure tile bloat.
-   - Result: **~18 MB**, ~4 min (comparable to the 16 MB world file).
+   - Result: **~51 MB**, but the tiling is slow (~1 h; heavy on the whole US
+     coast + Great Lakes at z15).
+   - ⚠️ **Do not judge the size mid-run.** tippecanoe's *intermediate* working
+     file grows huge (it hit ~900 MB during this build) and only compacts to the
+     final ~51 MB in its last clustering pass — watching the in-progress `.pmtiles`
+     size and killing it as a "runaway" is a mistake (it cost two aborted builds
+     here). Wait for tippecanoe to exit and check the final size then.
 4. Sanity-check before uploading — the `land` layer is present, a Lower-
    Manhattan tile decodes to non-empty land, and an offshore tile is empty:
    ```sh
-   pmtiles show --metadata conus-coast.pmtiles   # vector_layers → ["land"], z6–13
-   pmtiles tile conus-coast.pmtiles 13 2411 3079 | wc -c   # WTC tile → >0 bytes
-   pmtiles tile conus-coast.pmtiles 13 2600 3079 | wc -c   # mid-Atlantic → 0 bytes
+   pmtiles show --metadata conus-coast.pmtiles   # vector_layers → ["land"], z6–15
+   pmtiles tile conus-coast.pmtiles 15 9648 12318 | wc -c   # WTC tile → >0 bytes
+   pmtiles tile conus-coast.pmtiles 15 12000 12319 | wc -c  # mid-Atlantic → 0 bytes
    ```
 
 ### Host (GATED — prod)
@@ -134,8 +143,20 @@ is untouched and stays the low-zoom base + rollback.
    bucket `files.911realtime.org`.
 2. **No infra change:** the `/maps` path is already on the file-proxy Traefik
    allow-list (added for the world basemap).
-3. Verify: `curl -I -H 'Range: bytes=0-16' https://files.911realtime.org/maps/conus-coast.pmtiles`
-   returns `206 Partial Content` (with CORS `access-control-allow-origin: *`).
+3. ⚠️ **Purge Cloudflare for the URL after any re-upload.** Overwriting the same
+   key changes the whole byte layout, so a client (or edge) holding cached
+   ranges from the old archive reads them at the new file's offsets → corrupt
+   tiles. Purge with `CF_API_TOKEN`/`CF_ZONE_ID` (also in `video-grabber-secrets`):
+   ```sh
+   curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+     -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" \
+     --data '{"files":["https://files.911realtime.org/maps/conus-coast.pmtiles"]}'
+   ```
+   Same filename ⇒ **no app redeploy needed** — clients fetch the new tiles from
+   the same URL. (A `cf-cache-status: MISS` on the next HEAD confirms the purge.)
+4. Verify: `curl -I -H 'Range: bytes=0-16' https://files.911realtime.org/maps/conus-coast.pmtiles`
+   returns `206 Partial Content`; a full `curl -I` shows the new `content-length`
+   (~51 MB) and a fresh `etag` (with CORS `access-control-allow-origin: *`).
 
 ### Notes
 - **App wiring:** the style reads `VITE_FLIGHT_COAST_BASEMAP_URL` (default the
