@@ -165,6 +165,11 @@ vi.mock("./flightIcons", async (importOriginal) => {
 vi.mock("./aircraftIcons", () => ({
 	loadAircraftIconSvg: vi.fn(async (family: string) => `<svg data-family="${family}"/>`),
 }));
+// Hero landmark STL fetch: real network I/O in real code, stubbed here so
+// individual tests control success/failure deterministically.
+vi.mock("./buildingModels", () => ({
+	loadHeroStl: vi.fn(async () => null),
+}));
 
 import { createRef } from "react";
 import {
@@ -185,8 +190,12 @@ import { basemapPalette, type BasemapStyleId } from "../../lib/basemap/basemapSt
 import type { MapPoi, PoiLayerConfig } from "./mapPois";
 import { invertHex } from "./colorInvert";
 import { Buildings3DLayer } from "./buildings3DLayer";
-import { BUILDINGS_MIN_ZOOM } from "./buildings";
+import { BUILDINGS_MIN_ZOOM, BUILDINGS_URL, parseBuildingsGeoJSON } from "./buildings";
 import { resetBuildingsCache } from "./useBuildings";
+import { resetHeroBuildingsCache, HERO_MANIFEST_URL } from "./useHeroBuildings";
+import { loadHeroStl } from "./buildingModels";
+import { buildFootprintMesh } from "./buildingMesh";
+import type { PlaneMesh } from "./plane3dMesh";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "AA1002", start_date: "2001-09-11T13:00:00Z",
@@ -1675,5 +1684,138 @@ describe("FlightMap 2001 buildings", () => {
 		map.zoom = BUILDINGS_MIN_ZOOM + 1;
 		act(() => map.fire("zoom"));
 		expect(layer.visible).toBe(true);
+	});
+});
+
+// --- Hero landmark models (issue #229 Plan 3) -------------------------------
+describe("FlightMap hero landmarks", () => {
+	// Two extruded footprints: one sits inside the hero's exclude bbox (must be
+	// hidden once the hero STL loads), one sits well outside it (must survive).
+	const buildingsFC = {
+		type: "FeatureCollection",
+		features: [
+			{
+				type: "Feature",
+				properties: { height_m: 417, base_elevation_m: 4 },
+				geometry: {
+					type: "Polygon",
+					coordinates: [[[-74.0137, 40.7126], [-74.0137, 40.7132], [-74.0130, 40.7132], [-74.0130, 40.7126]]],
+				},
+			},
+			{
+				type: "Feature",
+				properties: { height_m: 50, base_elevation_m: 0 },
+				geometry: {
+					type: "Polygon",
+					coordinates: [[[-73.9010, 40.5996], [-73.9010, 40.6004], [-73.8990, 40.6004], [-73.8990, 40.5996]]],
+				},
+			},
+		],
+	};
+	const heroManifest = {
+		heroes: [{
+			id: "wtc1",
+			stl_url: "heroes/wtc1.stl",
+			lng: -74.0134, lat: 40.7128, bearing_deg: 0, scale: 1, base_elev_m: 4,
+			// Covers only the first footprint's centroid.
+			exclude: [-74.02, 40.71, -74.00, 40.715],
+		}],
+	};
+	const fakeHeroMesh: PlaneMesh = {
+		positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+		normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+		vertexCount: 3,
+	};
+	const allFootprints = parseBuildingsGeoJSON(buildingsFC);
+	const fullVertexCount = buildFootprintMesh(allFootprints).vertexCount;
+	// Only the second (outside-the-exclude-bbox) footprint should remain.
+	const excludedVertexCount = buildFootprintMesh([allFootprints[1]]).vertexCount;
+
+	beforeEach(() => {
+		FakeMap.last = null;
+		resetBuildingsCache();
+		resetHeroBuildingsCache();
+		vi.mocked(loadHeroStl).mockReset();
+		vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+			if (url === HERO_MANIFEST_URL) return { ok: true, json: async () => heroManifest };
+			if (url === BUILDINGS_URL) return { ok: true, json: async () => buildingsFC };
+			return { ok: false, status: 404, json: async () => ({}) };
+		}));
+	});
+
+	afterEach(() => {
+		cleanup();
+		vi.unstubAllGlobals();
+	});
+
+	// Mounts, fires "load", and returns a `runFrame` helper that drives the rAF
+	// loop one tick per call (each with an increasing wall clock so the frame
+	// gate never re-skips it). `playing` keeps every tick past the idle/dirty
+	// gate, so a call always reaches the hero-loading loop with whatever
+	// `heroesRef.current` holds at that instant.
+	function mountAndLoad() {
+		let rafCb: FrameRequestCallback | null = null;
+		vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+			rafCb = cb;
+			return 1;
+		});
+		vi.stubGlobal("cancelAnimationFrame", () => {});
+		render(<FlightMap {...baseProps} playing />);
+		const map = FakeMap.last!;
+		act(() => { map.fire("load"); });
+		let wall = 0;
+		const runFrame = () => { wall += 100; act(() => rafCb?.(wall)); };
+		return { map, runFrame };
+	}
+
+	it("registers + marks the hero mesh once its STL loads, and excludes the covered footprint", async () => {
+		vi.mocked(loadHeroStl).mockResolvedValue(fakeHeroMesh);
+		const { map, runFrame } = mountAndLoad();
+		const layer = map.layers.find((l) => l.id === "buildings-3d")!.__raw as Buildings3DLayer;
+		const setMeshSpy = vi.spyOn(layer, "setMesh");
+		const footprintCalls = () =>
+			setMeshSpy.mock.calls.filter(([key]) => key === "footprints").map(([, m]) => m as { vertexCount: number });
+
+		// Both async fetches (buildings, heroes) resolve after "load"; the
+		// [buildings] effect seeds the full (un-excluded) footprint mesh first.
+		await vi.waitFor(() => expect(layer.hasMesh("footprints")).toBe(true));
+		expect(footprintCalls().at(-1)?.vertexCount).toBe(fullVertexCount);
+
+		// Drive rAF ticks until the (now-loaded) hero manifest is picked up and
+		// its STL fetch kicked off.
+		await vi.waitFor(() => {
+			runFrame();
+			expect(loadHeroStl).toHaveBeenCalledWith("heroes/wtc1.stl");
+		});
+
+		// loadHeroStl resolves asynchronously; wait for its `.then` to place the
+		// mesh, mark it hero, and rebuild the footprints excluding the covered one.
+		await vi.waitFor(() => expect(layer.hasMesh("wtc1")).toBe(true));
+		expect(setMeshSpy).toHaveBeenCalledWith("wtc1", expect.anything());
+		expect((layer as unknown as { heroKeys: Set<string> }).heroKeys.has("wtc1")).toBe(true);
+		await vi.waitFor(() => expect(footprintCalls().at(-1)?.vertexCount).toBe(excludedVertexCount));
+	});
+
+	it("keeps the covered footprint (fallback) when the hero STL fails to load", async () => {
+		vi.mocked(loadHeroStl).mockResolvedValue(null);
+		const { map, runFrame } = mountAndLoad();
+		const layer = map.layers.find((l) => l.id === "buildings-3d")!.__raw as Buildings3DLayer;
+		const setMeshSpy = vi.spyOn(layer, "setMesh");
+		const footprintCalls = () =>
+			setMeshSpy.mock.calls.filter(([key]) => key === "footprints").map(([, m]) => m as { vertexCount: number });
+
+		await vi.waitFor(() => expect(layer.hasMesh("footprints")).toBe(true));
+
+		await vi.waitFor(() => {
+			runFrame();
+			expect(loadHeroStl).toHaveBeenCalledWith("heroes/wtc1.stl");
+		});
+		// Give the resolved (null) promise's `.then` a chance to run; it must be
+		// a no-op — no hero mesh, no footprint exclusion.
+		await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+
+		expect(layer.hasMesh("wtc1")).toBe(false);
+		expect((layer as unknown as { heroKeys: Set<string> }).heroKeys.has("wtc1")).toBe(false);
+		expect(footprintCalls().at(-1)?.vertexCount).toBe(fullVertexCount);
 	});
 });
