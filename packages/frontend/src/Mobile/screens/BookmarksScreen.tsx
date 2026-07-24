@@ -15,7 +15,7 @@ import { ScreenNavContext, useScreenWheel } from "../WheelContext";
 export function BookmarksScreen({ tzOffset }: { tzOffset: number }) {
 	const { setDateTime } = useClassicyDateTime();
 	const { pop } = useContext(ScreenNavContext);
-	const { bookmarks, loading, error } = useBookmarks();
+	const { global, loading, error } = useBookmarks();
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	// Belt-and-suspenders alongside the shell's reactive eviction: gate the
 	// write itself so a wheel-select landing in the sub-frame window between
@@ -26,7 +26,7 @@ export function BookmarksScreen({ tzOffset }: { tzOffset: number }) {
 
 	const activate = (i: number) => {
 		if (dateTimeLocked) return;
-		const bookmark = bookmarks[i];
+		const bookmark = global[i];
 		if (!bookmark) return;
 		setDateTimeFromUtc(setDateTime, bookmark.start_date);
 		pop();
@@ -34,7 +34,7 @@ export function BookmarksScreen({ tzOffset }: { tzOffset: number }) {
 
 	useScreenWheel({
 		onScroll: (steps) =>
-			setSelectedIndex((i) => Math.max(0, Math.min(bookmarks.length - 1, i + steps))),
+			setSelectedIndex((i) => Math.max(0, Math.min(global.length - 1, i + steps))),
 		onSelect: () => activate(selectedIndex),
 	});
 
@@ -50,7 +50,7 @@ export function BookmarksScreen({ tzOffset }: { tzOffset: number }) {
 	}
 	return (
 		<IpodList
-			items={bookmarks.map((b) => ({
+			items={global.map((b) => ({
 				key: String(b.id),
 				label: b.title,
 				value: formatUtcAsLocalTime(b.start_date, tzOffset),

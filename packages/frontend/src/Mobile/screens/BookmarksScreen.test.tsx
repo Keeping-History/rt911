@@ -26,11 +26,16 @@ vi.mock("classicy", async (importOriginal) => ({
 }));
 vi.mock("../../Applications/TimeMachine/useBookmarks", () => ({
 	useBookmarks: () => ({
-		bookmarks: [
+		global: [
 			{ id: 1, title: "First impact", full_title: null, start_date: "2001-09-11T12:46:40" },
 		],
+		personal: [],
 		loading: false,
 		error: null,
+		signedIn: false,
+		addPersonal: vi.fn(),
+		updatePersonalLocal: vi.fn(),
+		removePersonalLocal: vi.fn(),
 	}),
 }));
 
