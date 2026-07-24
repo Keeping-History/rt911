@@ -96,6 +96,8 @@
 	flex-wrap: wrap;
 	gap: calc(var(--windows-border-size) * 2);
 	margin-top: calc(var(--windows-border-size) * 2);
+	display: flex;
+	gap: var(--window-padding-size);
 }
 
 .pill {
