@@ -1353,7 +1353,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		}
 		buildings3DRef.current?.setColor(buildingColorRgb(mapStyle, darkMap));
 		buildings3DRef.current?.setHeroColor(
-			heroColorRgb({ darkMap, buildingHeroColorLight, buildingHeroColorDark }),
+			heroColorRgb({ mapStyle, darkMap, buildingHeroColorLight, buildingHeroColorDark }),
 		);
 		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
@@ -1498,6 +1498,13 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		dirtyRef.current = true;
 	}, [trailMultiplier]);
+
+	// Hero manifest resolving (async fetch) applies next frame; wake a paused,
+	// loop-disabled, idle map so the hero STLs actually get requested/drawn
+	// instead of waiting for playback to resume.
+	useEffect(() => {
+		dirtyRef.current = true;
+	}, [heroes]);
 
 	// Entering/leaving loop mode: clear the replay-trail layer when leaving so stale
 	// replay trails don't linger under a paused map; dirtyRef redraws once either way.

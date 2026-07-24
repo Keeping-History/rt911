@@ -29,11 +29,13 @@ export function intToRgb01(n: number): [number, number, number] {
 }
 
 export function heroColorRgb(settings: {
+  mapStyle: "classic" | "radar" | "satellite";
   darkMap: boolean;
   buildingHeroColorLight: number;
   buildingHeroColorDark: number;
 }): [number, number, number] {
-  return intToRgb01(settings.darkMap ? settings.buildingHeroColorDark : settings.buildingHeroColorLight);
+  const dark = settings.mapStyle === "radar" || settings.darkMap;
+  return intToRgb01(dark ? settings.buildingHeroColorDark : settings.buildingHeroColorLight);
 }
 
 interface GeoJSONPolygonFeature {

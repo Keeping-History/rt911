@@ -20,12 +20,17 @@ import "./DirectusFlightMapPart.css";
  * Options: `notablesOnly` curates to the four hijacked flights; `flight` focuses
  * the camera on a callsign; `mapStyle`/`darkMap`/`radarSweep`/`trailMultiplier`
  * mirror the app's map settings; `pinColor`/`notablePinColor`/`observerPinColor`
- * override the pin colors. Requires WebGL and a sized card.
+ * override the pin colors; `buildingHeroColorLight`/`buildingHeroColorDark`
+ * (packed 0xRRGGBB numbers) override the hero-landmark tint. Requires WebGL
+ * and a sized card.
  */
 
 const DEFAULT_PIN = "#f5a623";
 const DEFAULT_NOTABLE_PIN = "#ff3b30";
 const DEFAULT_OBSERVER_PIN = "#4a90d9";
+// Mirrors FlightMap's own hero-landmark defaults (buildings.ts / flightMapSettings.ts).
+const DEFAULT_HERO_COLOR_LIGHT = 0xb0a48c;
+const DEFAULT_HERO_COLOR_DARK = 0xc7b8a0;
 
 function readMapStyle(v: unknown): BasemapStyleId {
 	return v === "radar" || v === "satellite" ? v : "classic";
@@ -47,6 +52,12 @@ export const DirectusFlightMapPart = ({ options, resolve, value, partId, stackId
 		typeof options.notablePinColor === "string" ? options.notablePinColor : DEFAULT_NOTABLE_PIN;
 	const observerPinColor =
 		typeof options.observerPinColor === "string" ? options.observerPinColor : DEFAULT_OBSERVER_PIN;
+	const buildingHeroColorLight =
+		typeof options.buildingHeroColorLight === "number"
+			? options.buildingHeroColorLight
+			: DEFAULT_HERO_COLOR_LIGHT;
+	const buildingHeroColorDark =
+		typeof options.buildingHeroColorDark === "number" ? options.buildingHeroColorDark : DEFAULT_HERO_COLOR_DARK;
 
 	const { flightPositions, subscribeFlights, unsubscribeFlights } = useContext(MediaStreamContext);
 
@@ -97,6 +108,8 @@ export const DirectusFlightMapPart = ({ options, resolve, value, partId, stackId
 				pinColor={pinColor}
 				notablePinColor={notablePinColor}
 				observerPinColor={observerPinColor}
+				buildingHeroColorLight={buildingHeroColorLight}
+				buildingHeroColorDark={buildingHeroColorDark}
 				radarSweep={radarSweep}
 				trailMultiplier={trailMultiplier}
 				onSelectFlight={noop}

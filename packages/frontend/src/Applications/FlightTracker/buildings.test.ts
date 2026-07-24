@@ -76,8 +76,22 @@ describe("intToRgb01 / heroColorRgb", () => {
     expect(intToRgb01(0xff8000)).toEqual([1, 128 / 255, 0]);
   });
   it("picks light vs dark by darkMap", () => {
-    const s = { darkMap: false, buildingHeroColorLight: 0x804020, buildingHeroColorDark: 0x102030 };
+    const s = {
+      mapStyle: "classic" as const,
+      darkMap: false,
+      buildingHeroColorLight: 0x804020,
+      buildingHeroColorDark: 0x102030,
+    };
     expect(heroColorRgb(s)).toEqual(intToRgb01(0x804020));
     expect(heroColorRgb({ ...s, darkMap: true })).toEqual(intToRgb01(0x102030));
+  });
+  it("treats radar as dark even when darkMap is false", () => {
+    const s = {
+      mapStyle: "radar" as const,
+      darkMap: false,
+      buildingHeroColorLight: 0x804020,
+      buildingHeroColorDark: 0x102030,
+    };
+    expect(heroColorRgb(s)).toEqual(intToRgb01(0x102030));
   });
 });
