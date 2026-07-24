@@ -305,13 +305,18 @@ const newsSelectFrom = `
 	FROM news_items mi
 	LEFT JOIN sources s ON s.id = mi.source`
 
-// NewsEpoch is the floor for every news read: 2001-09-09 00:00 ET. September 2001
-// is EDT (UTC-4), matching the tzOffset the frontend seeds in app.tsx.
+// NewsEpoch is the floor for every news read: the start of 2001-09-09.
+//
+// Deliberately midnight UTC, not midnight ET. Articles from 9/9 and 9/10 carry
+// date-only timestamps (start_date is exactly 00:00:00), so a literal midnight-ET
+// floor of 04:00Z would silently exclude every article dated 9/9. No rows have
+// times between 00:00Z and 04:00Z that day, so this admits the 9/9 articles and
+// nothing earlier.
 //
 // MUST be in time.UTC: news_items.start_date is `timestamp without time zone`,
 // and pgx encodes a time.Time to that type using its wall clock in its own
 // location — a value built in any other zone would silently shift the floor.
-var NewsEpoch = time.Date(2001, 9, 9, 4, 0, 0, 0, time.UTC)
+var NewsEpoch = time.Date(2001, 9, 9, 0, 0, 0, 0, time.UTC)
 
 // newsListSelectFrom mirrors newsSelectFrom but substitutes an empty literal for
 // mi.content. The backlog snapshot runs to ~1,320 rows whose bodies total ~7.7 MB

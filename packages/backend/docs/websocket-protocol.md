@@ -70,7 +70,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) + a forward **window** (default 600 s) per refill while subscribed. Client reveal-gate preserves forward-only pacing. |
 | `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) + a forward **window** (default 300 s) per refill while subscribed. Reuses the `items` field. |
 | `mp3_history`     | `time`, `items[]`             | The **complete** mp3 back-catalogue up to `t` (every approved item with `start_date ≤ t`), sent with each mp3 snapshot (subscribe/init/seek). Backs the Radio app's "Previous" list. Replace client state wholesale — the frame is sent even when empty so a backward seek clears it. Not reveal-gated or retention-pruned. |
-| `news`            | `time`, `items[]`             | News back catalogue (every approved article from 2001-09-09 00:00 ET up to `t`, **headline-only** — no `content`) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
+| `news`            | `time`, `items[]`             | News back catalogue (every approved article from the start of 2001-09-09 up to `t`, **headline-only** — no `content`) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `flights`         | `time`, `flights[]`           | Flights snapshot (airborne picture covering `[t−90s, t]`) on subscribe/init/seek, plus a forward **window** (default 300 s) per refill while subscribed. |
 | `flights_history` | `id`, `time`, `flights[]`, `done` | Chunked reply to a `flights_history` request (~10 minute-buckets per frame). The final frame carries `done: true` (and may be empty). `id` echoes the request. |
@@ -279,8 +279,10 @@ forward-only windows) never covers. The client replaces its history state wholes
 by definition already in the past.
 
 The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Its
-snapshot is not a window: it is the complete back catalogue from **2001-09-09 00:00 ET**
-(the `NewsEpoch` floor) up to `t`, so a client sees every headline of the replay so far
+snapshot is not a window: it is the complete back catalogue from **the start of
+2001-09-09** (the `NewsEpoch` floor, midnight UTC — not ET, since 9/9 and 9/10
+articles carry date-only `00:00:00` timestamps that a midnight-ET floor would
+exclude) up to `t`, so a client sees every headline of the replay so far
 rather than only the last few minutes. Snapshot rows are **headline-only** — `content` is
 empty, because the full bodies run to ~7.7 MB against ~200 KB for headers. The client
 fetches a body on demand via `news_body` when an article opens. Articles later than `t`
