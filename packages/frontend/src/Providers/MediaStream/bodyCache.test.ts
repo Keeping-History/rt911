@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { applyUsenetBodyFrame, emptyUsenetBodyState } from "./usenetBodyCache";
+import { applyBodyFrame, emptyBodyState } from "./bodyCache";
 
-describe("applyUsenetBodyFrame", () => {
+describe("applyBodyFrame", () => {
 	it("stores a body under its id", () => {
-		const next = applyUsenetBodyFrame(emptyUsenetBodyState, { id: 7001, body: "Hi.\n" });
+		const next = applyBodyFrame(emptyBodyState, { id: 7001, body: "Hi.\n" });
 		expect(next.bodies[7001]).toBe("Hi.\n");
 		expect(next.errors[7001]).toBeUndefined();
 	});
 
 	it("stores an empty body (genuinely empty message) without erroring", () => {
-		const next = applyUsenetBodyFrame(emptyUsenetBodyState, { id: 7001, body: "" });
+		const next = applyBodyFrame(emptyBodyState, { id: 7001, body: "" });
 		expect(next.bodies[7001]).toBe("");
 		expect(next.errors[7001]).toBeUndefined();
 	});
 
 	it("stores a failure message as an error", () => {
-		const next = applyUsenetBodyFrame(emptyUsenetBodyState, {
+		const next = applyBodyFrame(emptyBodyState, {
 			id: 7002,
 			message: "message unavailable",
 		});
@@ -24,17 +24,17 @@ describe("applyUsenetBodyFrame", () => {
 	});
 
 	it("does not mutate the input state", () => {
-		const start = emptyUsenetBodyState;
-		applyUsenetBodyFrame(start, { id: 7001, body: "Hi." });
+		const start = emptyBodyState;
+		applyBodyFrame(start, { id: 7001, body: "Hi." });
 		expect(start.bodies[7001]).toBeUndefined();
 	});
 
 	it("a later success clears a prior error for the same id", () => {
-		const errored = applyUsenetBodyFrame(emptyUsenetBodyState, {
+		const errored = applyBodyFrame(emptyBodyState, {
 			id: 7003,
 			message: "message unavailable",
 		});
-		const fixed = applyUsenetBodyFrame(errored, { id: 7003, body: "recovered" });
+		const fixed = applyBodyFrame(errored, { id: 7003, body: "recovered" });
 		expect(fixed.bodies[7003]).toBe("recovered");
 		expect(fixed.errors[7003]).toBeUndefined();
 	});

@@ -32,10 +32,10 @@ import { playlistAppMeta } from "../Playlist/playlistApps";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { mergeLatestPerStation } from "./weatherMerge";
 import {
-	applyUsenetBodyFrame,
-	emptyUsenetBodyState,
-	type UsenetBodyFrame,
-} from "./usenetBodyCache";
+	applyBodyFrame,
+	emptyBodyState,
+	type BodyFrame,
+} from "./bodyCache";
 
 // Merge incoming items into a prior list, de-duplicating by id (last write wins).
 function mergeById<T extends { id: number }>(prev: T[], incoming: T[]): T[] {
@@ -224,7 +224,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [weatherForecastByZone, setWeatherForecastByZone] = useState<
 		Record<string, WeatherForecast | null>
 	>({});
-	const [usenetBodyState, setUsenetBodyState] = useState(emptyUsenetBodyState);
+	const [usenetBodyState, setUsenetBodyState] = useState(emptyBodyState);
 	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
 	// fetches when a window re-renders before its body arrives.
 	const usenetBodyInflight = useRef(new Set<number>());
@@ -972,7 +972,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				const frame = msg as WsUsenetBodyMessage;
 				usenetBodyInflight.current.delete(frame.id);
 				setUsenetBodyState((prev) =>
-					applyUsenetBodyFrame(prev, frame as UsenetBodyFrame),
+					applyBodyFrame(prev, frame as BodyFrame),
 				);
 				return;
 			}
