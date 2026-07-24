@@ -15,7 +15,19 @@ Created idempotently by the flow (collection deletion + full re-insert on each r
 
 | Collection | Contents | Key fields |
 |---|---|---|
-| `buildings` | one row per 2001 building polygon | `geometry` (GeoJSON Polygon), `height_m`, `base_elevation_m`, `area` (manhattan/pentagon), `source` (nyc/dc/arlington/wtc-curated), `name` |
+| `buildings` | one row per 2001 building polygon | `geometry` (GeoJSON Polygon), `height_m`, `base_elevation_m`, `area` (manhattan/pentagon), `source` (nyc/dc/arlington/wtc-curated), `name`, `cnstrct_yr` |
+
+Directus is the **canonical** store: the flow builds `buildings` rows from the
+rich, pre-strip feature list (`build_2001.assemble`'s second return value, via
+`directus.rows_from_building_features`), so `source`, `name`, and `cnstrct_yr`
+are always populated (`cnstrct_yr` is `null` only where the source portal
+didn't supply one — e.g. the curated WTC complex, which has no construction
+year since it predates the open-data feeds). The Wasabi GeoJSON snapshot
+(`maps/buildings-2001.geojson`) is a separate, deliberately **stripped**
+projection built from the same assembly: the frontend contract is exactly
+three properties (`height_m`, `base_elevation_m`, `area`) and must stay that
+way — see `build_2001.build_feature_collection()` and
+`tests/test_geojson_contract.py`.
 
 **Why `geometry` is a `json` field, not a Directus `geometry` field:** rt911-db
 is stock `postgres:16` without PostGIS, which Directus geometry types want. A
@@ -154,8 +166,11 @@ GET /items/buildings
     &fields=name,height_m,source
 ```
 
-Expected sources: `nyc`, `wtc-curated`. Check one WTC building by name to
-verify height restoration.
+`name` and `source` are populated for every row (the canonical store is built
+from the rich feature list, not the stripped Wasabi GeoJSON — see "Data model"
+above), so this query returns real values rather than nulls. Expected sources:
+`nyc`, `wtc-curated`. Check one WTC building by name to verify height
+restoration.
 
 ## Cloudflare cache purge
 

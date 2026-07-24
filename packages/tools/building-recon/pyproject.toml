@@ -7,8 +7,6 @@ dependencies = [
     "prefect-kubernetes>=0.5",
     "httpx>=0.27",
     "boto3>=1.36",
-    "tenacity>=8",
-    "shapely>=2.0",
 ]
 
 [project.optional-dependencies]

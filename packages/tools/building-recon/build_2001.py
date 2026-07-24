@@ -49,6 +49,7 @@ def normalize(raws: list[dict]) -> list[dict]:
             "area": raw["area"],
             "source": raw.get("source", "unknown"),
             "name": raw.get("name"),
+            "cnstrct_yr": raw.get("cnstrct_yr"),
         })
     return out
 
@@ -101,8 +102,15 @@ def build_feature_collection(features: list[dict]) -> dict:
     return {"type": "FeatureCollection", "features": out_feats}
 
 
-def assemble(source_raws: list[dict], wtc: list[dict]) -> tuple[dict, dict]:
-    """Normalize sources, append the curated WTC, build the FeatureCollection."""
+def assemble(source_raws: list[dict], wtc: list[dict]) -> tuple[dict, list[dict], dict]:
+    """Normalize sources, append the curated WTC, build the FeatureCollection.
+
+    Returns `(feature_collection, feats, summary)`: `feature_collection` is the
+    frontend-contract GeoJSON (only `height_m`/`base_elevation_m`/`area`
+    properties, unchanged); `feats` is the rich feature list (also carrying
+    `ring`/`source`/`name`/`cnstrct_yr`) so callers can populate the canonical
+    Directus store without stripping it down to the frontend's 3 properties.
+    """
     feats = normalize(source_raws) + list(wtc)
     fc = build_feature_collection(feats)
     by_source: dict[str, int] = {}
@@ -111,4 +119,4 @@ def assemble(source_raws: list[dict], wtc: list[dict]) -> tuple[dict, dict]:
         by_source[f["source"]] = by_source.get(f["source"], 0) + 1
         by_area[f["area"]] = by_area.get(f["area"], 0) + 1
     summary = {"total": len(feats), "by_source": by_source, "by_area": by_area}
-    return fc, summary
+    return fc, feats, summary

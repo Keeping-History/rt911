@@ -64,7 +64,7 @@ def _parse_arcgis(payload: dict, area: str, source: str, height_field: str, year
             "height_m": float(h) if h not in (None, "") else None,   # DC/Arlington heights already meters (confirm)
             "height_ft": None,
             "base_elevation_m": 0.0,
-            "cnstrct_yr": int(yr) if yr not in (None, "", 0) else None,
+            "cnstrct_yr": int(yr) if yr not in (None, "", 0, "0") else None,
             "area": area,
             "source": source,
             "name": p.get("name") or None,

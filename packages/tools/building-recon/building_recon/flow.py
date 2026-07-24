@@ -12,7 +12,7 @@ DEFAULT_SOURCES = ["nyc", "dc", "arlington"]
 WASABI_KEY = "maps/buildings-2001.geojson"
 
 
-def assemble_from_sources(source_raws_by_name: dict[str, list[dict]]) -> tuple[dict, dict]:
+def assemble_from_sources(source_raws_by_name: dict[str, list[dict]]) -> tuple[dict, list[dict], dict]:
     """Flatten per-source raw buildings and assemble the 2001 FeatureCollection.
 
     Pure (no Prefect, no I/O) so the assembly step is testable on its own.
@@ -35,13 +35,13 @@ def reconstruct_buildings(directus_url: str | None = None, sources: list[str] | 
     log = get_run_logger()
     names = sources or DEFAULT_SOURCES
     raws_by_name = {name: fetch_source(name) for name in names}
-    fc, summary = assemble_from_sources(raws_by_name)
+    fc, feats, summary = assemble_from_sources(raws_by_name)
     log.info("assembled %d features: %s", summary["total"], summary["by_source"])
 
     result = {"summary": summary}
     if load_directus:
         client = _directus_client(directus_url)
-        rows = directus.rows_from_features(fc["features"])
+        rows = directus.rows_from_building_features(feats)
         result["directus"] = directus.load_buildings(client, rows)
     if upload:
         url = wasabi.upload_text(WASABI_KEY, json.dumps(fc), "application/json")

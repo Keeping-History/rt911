@@ -35,9 +35,13 @@ def test_build_feature_collection_matches_frontend_contract():
 def test_assemble_appends_wtc_and_counts():
     raws = [{"ring": [[-74.0,40.71],[-74.0,40.711],[-73.999,40.711]],
              "height_ft": 300.0, "cnstrct_yr": 1980, "area": "manhattan", "source": "nyc"}]
-    fc, summary = b.assemble(raws, b.load_wtc_complex())
+    fc, feats, summary = b.assemble(raws, b.load_wtc_complex())
     towers = [f for f in fc["features"] if f["properties"]["height_m"] in (417, 415)]
     assert len(towers) == 2                       # WTC restored
     assert summary["by_source"]["wtc-curated"] >= 7
     assert summary["total"] == len(fc["features"])
     assert all(f["properties"]["height_m"] > 0 for f in fc["features"])
+    # The rich feature list (unlike the stripped fc) carries source/name/
+    # cnstrct_yr through to the Directus row builder.
+    assert any(f["source"] == "wtc-curated" for f in feats)
+    assert len(feats) == len(fc["features"])

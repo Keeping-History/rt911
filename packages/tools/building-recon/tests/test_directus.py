@@ -46,6 +46,26 @@ def make_client(monkeypatch):
     return c, fake
 
 
+def test_rows_from_building_features_populates_canonical_fields():
+    feats = [
+        {"ring": [[0, 0], [0, 1], [1, 1]], "height_m": 100.0, "base_elevation_m": 4.0,
+         "area": "manhattan", "source": "nyc", "name": "Some Building", "cnstrct_yr": 1972},
+    ]
+    rows = directus.rows_from_building_features(feats)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["source"] == "nyc"
+    assert row["name"] == "Some Building"
+    assert row["cnstrct_yr"] == 1972
+    assert row["height_m"] == 100.0
+    assert row["base_elevation_m"] == 4.0
+    assert row["is_hero"] is False
+    assert row["geometry"] == {
+        "type": "Polygon",
+        "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]],
+    }
+
+
 def test_load_buildings_is_idempotent_and_counts_through_cache(monkeypatch):
     c, fake = make_client(monkeypatch)
     rows = directus.rows_from_features([

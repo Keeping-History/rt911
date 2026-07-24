@@ -5,7 +5,7 @@ def test_assemble_from_sources_merges_and_restores_wtc():
     raws = {"nyc": [{"ring": [[-74.0, 40.71], [-74.0, 40.711], [-73.999, 40.711]],
                      "height_ft": 300.0, "cnstrct_yr": 1980, "area": "manhattan", "source": "nyc"}],
             "dc": [], "arlington": []}
-    fc, summary = flow.assemble_from_sources(raws)
+    fc, feats, summary = flow.assemble_from_sources(raws)
     assert summary["by_source"]["wtc-curated"] >= 7      # WTC always restored
     assert any(f["properties"]["height_m"] == 417 for f in fc["features"])
 

@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Deps first (stable layer), pinned to the in-cluster Prefect server version.
 RUN pip install \
-    "prefect==3.7.4" "prefect-kubernetes>=0.5"
+    "prefect==3.7.4" "prefect-kubernetes>=0.5" "httpx>=0.27" "boto3>=1.36"
 
 COPY pyproject.toml build_2001.py ./
 COPY building_recon ./building_recon

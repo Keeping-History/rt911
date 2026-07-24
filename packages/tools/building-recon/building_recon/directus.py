@@ -177,11 +177,6 @@ class DirectusClient:
             log.info("%s: inserted %d/%d", collection, i, len(rows))
         return len(rows)
 
-    def insert_one(self, collection, row):
-        r = self._http.post(f"/items/{collection}", json=row)
-        _check(r)
-        return r.json()["data"]
-
 
 def rows_from_features(feats: list[dict]) -> list[dict]:
     """Map assembled FeatureCollection features (`{geometry, properties}`) to
@@ -208,6 +203,33 @@ def rows_from_features(feats: list[dict]) -> list[dict]:
         if "cnstrct_yr" in props:
             row["cnstrct_yr"] = props["cnstrct_yr"]
         rows.append(row)
+    return rows
+
+
+def rows_from_building_features(feats: list[dict]) -> list[dict]:
+    """Map the RICH feature list from `build_2001.assemble` (`ring`/`height_m`/
+    `base_elevation_m`/`area`/`source`/`name`/`cnstrct_yr`, not a GeoJSON
+    `geometry`/`properties` split) to `buildings` rows.
+
+    This is what makes the Directus store canonical: unlike
+    `rows_from_features` (which reads the frontend-contract FeatureCollection
+    and so never sees `source`/`name`/`cnstrct_yr`), this reads the pre-strip
+    feature dicts, so those columns are always populated."""
+    rows = []
+    for feat in feats:
+        ring = [[float(x), float(y)] for x, y in feat["ring"]]
+        if ring and ring[0] != ring[-1]:
+            ring = [*ring, ring[0]]
+        rows.append({
+            "area": feat["area"],
+            "source": feat.get("source"),
+            "name": feat.get("name"),
+            "height_m": feat["height_m"],
+            "base_elevation_m": feat["base_elevation_m"],
+            "cnstrct_yr": feat.get("cnstrct_yr"),
+            "is_hero": False,
+            "geometry": {"type": "Polygon", "coordinates": [ring]},
+        })
     return rows
 
 

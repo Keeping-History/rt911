@@ -36,3 +36,10 @@ def test_normalize_filters_and_converts():
     assert abs(out[0]["height_m"] - 121.92) < 1e-6
     assert out[0]["base_elevation_m"] == 0.0
     assert out[0]["area"] == "manhattan"
+
+
+def test_normalize_preserves_cnstrct_yr():
+    raws = [{"ring": [[0,0],[0,1],[1,1]], "height_ft": 400.0, "cnstrct_yr": 1972,
+             "area": "manhattan", "source": "nyc"}]
+    out = b.normalize(raws)
+    assert out[0]["cnstrct_yr"] == 1972
