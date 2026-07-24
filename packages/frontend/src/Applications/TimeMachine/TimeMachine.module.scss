@@ -153,3 +153,26 @@
 		image-rendering: pixelated;
 	}
 }
+
+.dialog {
+	display: flex;
+	flex-direction: column;
+	padding: var(--window-padding-size);
+	gap: calc(var(--window-padding-size) * 0.75);
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	background-color: var(--color-system-02);
+}
+
+.dialogField {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.dialogTime {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: calc(var(--window-padding-size) * 0.5);
+}
