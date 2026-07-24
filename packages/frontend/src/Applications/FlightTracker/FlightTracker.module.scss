@@ -86,7 +86,7 @@
 	border-right: calc(var(--window-padding-size)*1) solid transparent;
 	transform: translateX(-50%);
 }
-.compassNorth { top: 3px; border-bottom: calc(var(--window-padding-size)*1.25) #c0202a solid #c0202a; }
+.compassNorth { top: 3px; border-bottom: calc(var(--window-padding-size)*1.25) solid #c0202a; }
 .compassSouth { bottom: 3px; border-top: calc(var(--window-padding-size)*1.25) solid #f5f5f5; }
 // Multi-selection row in the detail pane (issue #225).
 .detailSelection {
