@@ -484,7 +484,11 @@ func TestWSHandlerNewsBodyMalformed(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	if f := readFrame(t, conn); f.Type != "error" {
+	f := readFrame(t, conn)
+	if f.Type != "error" {
 		t.Fatalf("expected error frame, got %+v", f)
+	}
+	if f.Msg != "malformed news_body message" {
+		t.Fatalf("expected malformed news_body message, got %+v", f)
 	}
 }

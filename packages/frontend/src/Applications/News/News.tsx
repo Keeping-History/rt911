@@ -112,6 +112,11 @@ export const News: React.FC = () => {
 		[filteredEntries, offset, limit],
 	);
 
+	const getDoc = useCallback(
+		(docId: number) => entries.find((entry: MediaItem) => entry.id === docId),
+		[entries],
+	);
+
 	const openDocumentDetails = useCallback((docId: number) => {
 		setOpenDocuments((prev) => Array.from(new Set([...prev, docId])));
 		const ws = (appWindows ?? []).find(
@@ -129,11 +134,19 @@ export const News: React.FC = () => {
 	}, [openDocuments, desktopEventDispatch]);
 
 	// Backlog articles arrive without content (the snapshot is headline-only), so
-	// each open detail window fetches its body. requestNewsBody de-dupes against
-	// cached and in-flight ids, so re-running on any change is safe.
+	// each open detail window fetches its body — but only when the item itself
+	// doesn't already carry one. Articles that arrive on the live forward window
+	// DO carry content, so fetching unconditionally would fire a pointless
+	// round-trip for those, and a failure on that redundant fetch would render
+	// "article unavailable" directly above the content that was already there.
+	// requestNewsBody de-dupes against cached and in-flight ids, so re-running
+	// on any change is still safe; getDoc is undefined for a window opened
+	// before its item has arrived, in which case the request correctly goes out.
 	useEffect(() => {
-		for (const docId of openDocuments) requestNewsBody(docId);
-	}, [openDocuments, requestNewsBody]);
+		for (const docId of openDocuments) {
+			if (!getDoc(docId)?.content) requestNewsBody(docId);
+		}
+	}, [openDocuments, requestNewsBody, getDoc]);
 
 	// Apply each remote focus command exactly once, tracked by its monotonic
 	// seq (TV.tsx's pattern). Consume only when the article exists in the
@@ -189,11 +202,6 @@ export const News: React.FC = () => {
 			return new Date(utc).toLocaleString("en-US", { ...options, timeZone: "UTC" });
 		},
 		[],
-	);
-
-	const getDoc = useCallback(
-		(docId: number) => entries.find((entry: MediaItem) => entry.id === docId),
-		[entries],
 	);
 
 	const getWindowOpenOffset = useCallback(

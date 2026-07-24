@@ -1,5 +1,6 @@
 import { encode } from "@msgpack/msgpack";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type React from "react";
 import { useContext, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MediaStreamContext } from "./MediaStreamContext";
@@ -68,14 +69,14 @@ function frame(payload: object): { data: ArrayBuffer } {
 }
 
 /** Advance (or rewind) the mocked virtual clock and re-render to fire the effects. */
-function setClock(iso: string, view: ReturnType<typeof render>) {
+function setClock(
+	iso: string,
+	view: ReturnType<typeof render>,
+	children: React.ReactNode = <NewsConsumer />,
+) {
 	mockDateTime = iso;
 	mockLocalDate = new Date(iso);
-	view.rerender(
-		<MediaStreamProvider>
-			<NewsConsumer />
-		</MediaStreamProvider>,
-	);
+	view.rerender(<MediaStreamProvider>{children}</MediaStreamProvider>);
 }
 
 // An article from 9/9 — two days older than INSTANT_RETENTION_MS (10 min) would
@@ -95,6 +96,24 @@ function NewsConsumer({ appId = "test.app" }: { appId?: string }) {
 		subscribeNews(appId);
 	}, [subscribeNews, appId]);
 	return <div data-testid="ids">{newsItems.map((i) => i.id).join(",")}</div>;
+}
+
+// Exposes newsBodies/requestNewsBody as well, for the body-cache-on-seek test.
+function NewsBodyConsumer({ appId = "test.app" }: { appId?: string }) {
+	const { newsItems, subscribeNews, newsBodies, requestNewsBody } =
+		useContext(MediaStreamContext);
+	useEffect(() => {
+		subscribeNews(appId);
+	}, [subscribeNews, appId]);
+	return (
+		<div>
+			<div data-testid="ids">{newsItems.map((i) => i.id).join(",")}</div>
+			<div data-testid="body-4001">{newsBodies[4001] ?? ""}</div>
+			<button type="button" onClick={() => requestNewsBody(4001)}>
+				fetch
+			</button>
+		</div>
+	);
 }
 
 describe("news backlog retention", () => {
@@ -151,5 +170,40 @@ describe("news backlog retention", () => {
 		act(() => setClock("2001-09-09T12:00:00.000Z", view));
 
 		expect(screen.getByTestId("ids").textContent).toBe("");
+	});
+
+	// Fix for the Important finding: a cached article body must not survive a
+	// backward seek past its own publication time, or a detail window left
+	// open would show article text from before the article existed.
+	it("clears a cached news body on a backward seek", () => {
+		const view = render(
+			<MediaStreamProvider>
+				<NewsBodyConsumer />
+			</MediaStreamProvider>,
+		);
+		const ws = FakeWebSocket.instances[0];
+		act(() => ws.onopen?.());
+		act(() => {
+			ws.onmessage?.(frame({ type: "news", time: NOW_ISO, items: [OLD_ARTICLE] }));
+		});
+		expect(screen.getByTestId("ids").textContent).toBe("4001");
+
+		// Request and receive the body, populating the cache.
+		act(() => {
+			fireEvent.click(screen.getByText("fetch"));
+		});
+		act(() => {
+			ws.onmessage?.(frame({ type: "news_body", id: 4001, body: "Full article text." }));
+		});
+		expect(screen.getByTestId("body-4001").textContent).toBe("Full article text.");
+
+		// Rewind past the article's publication time — the same backward seek
+		// that already clears newsItems above.
+		act(() => setClock("2001-09-09T12:00:00.000Z", view, <NewsBodyConsumer />));
+
+		expect(screen.getByTestId("ids").textContent).toBe("");
+		// The cached body must be gone too, not just the headline — otherwise a
+		// still-open detail window would keep rendering it.
+		expect(screen.getByTestId("body-4001").textContent).toBe("");
 	});
 });

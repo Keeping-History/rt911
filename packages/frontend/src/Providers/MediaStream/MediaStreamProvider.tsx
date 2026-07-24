@@ -781,6 +781,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// dated after a backward-seek target. The snapshot for the new instant
 			// repopulates the full back catalogue up to it.
 			setNewsItems([]);
+			// A cached body must not survive past its own article. If it did, a
+			// detail window left open across a backward seek would show article
+			// text from an instant BEFORE that article was published — the
+			// newsItems clear above only blanks the title/date, not the body
+			// cache, so this reset is load-bearing, not a redundant flush. The
+			// body simply re-fetches (via requestNewsBody) if the article is
+			// still valid at the new instant. Also drop in-flight markers so a
+			// news_body reply from the old timeline can't land as a stale body.
+			setNewsBodyState(emptyBodyState);
+			newsBodyInflight.current.clear();
 			alertBuffer.current.clear();
 			setAlertItems([]);
 			// The server resends a fresh usenet backlog for the active group(s) at the

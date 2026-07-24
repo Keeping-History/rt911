@@ -436,10 +436,15 @@ func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool,
 	sess.SendMp3History(t, history)
 }
 
-// sendNewsSnapshot delivers the news items active at t to the session if it is
-// subscribed to the news channel. Like the media path, the snapshot uses an
-// overlap window plus a 5-minute lookback for instant headlines (most news is
-// instant), so a seek to t still shows recently-fired stories.
+// sendNewsSnapshot delivers the complete news back catalogue — every article
+// from db.NewsEpoch up to t — to the session if it is subscribed to the news
+// channel. Unlike the media/mp3 paths, this is not a windowed/overlap query:
+// News is never client-side time-pruned, so the whole history has to arrive
+// up front (on init, seek, and subscribe) for the app to show it. Items are
+// headline-only — bodies are omitted here and fetched on demand per-article
+// via the news_body request/reply round-trip (see the "news_body" case in
+// this file) — sending bodies for the full backlog on every seek would be
+// multiple MB of payload the client mostly never reads.
 func sendNewsSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
 	if !sess.Subscribed(session.ChannelNews) {
 		return
