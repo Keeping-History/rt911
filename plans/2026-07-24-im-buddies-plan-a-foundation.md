@@ -97,7 +97,9 @@ Insert after the `tm_bookmarks` block. Each creation is guarded by `names.includ
         { field: "effort", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null inherits chat_settings" } },
         { field: "temperature", type: "float", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null inherits chat_settings" } },
         { field: "active", type: "integer", schema: { is_nullable: false, default_value: 1 }, meta: { interface: "boolean", width: "half" } },
-        { field: "sort", type: "integer", schema: { is_nullable: true }, meta: { hidden: true } },
+        // NOT NULL so a missing sort cannot outrank an explicit one. Go reads this
+        // column and re-sorts by it; a nullable column would put unset buddies first.
+        { field: "sort", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { hidden: true } },
       ],
     });
   } else {
@@ -547,7 +549,7 @@ const profileSelect = `
 	SELECT id, screen_name, display_name, avatar, online_from, online_until, sort
 	FROM chat_profiles
 	WHERE active = 1
-	ORDER BY sort NULLS LAST, id`
+	ORDER BY sort, id`
 
 // LoadProfiles reads every active buddy. Config is tiny and static, so callers
 // load once and keep the slice rather than querying per tick.
@@ -564,17 +566,13 @@ func LoadProfiles(ctx context.Context, pool *pgxpool.Pool) ([]Profile, error) {
 			p           Profile
 			displayName *string
 			avatar      *string
-			sortOrder   *int
 		)
 		if err := rows.Scan(&p.ID, &p.ScreenName, &displayName, &avatar,
-			&p.OnlineFrom, &p.OnlineUntil, &sortOrder); err != nil {
+			&p.OnlineFrom, &p.OnlineUntil, &p.Sort); err != nil {
 			return nil, fmt.Errorf("scan chat_profiles: %w", err)
 		}
 		p.DisplayName = derefStr(displayName)
 		p.Avatar = derefStr(avatar)
-		if sortOrder != nil {
-			p.Sort = *sortOrder
-		}
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
