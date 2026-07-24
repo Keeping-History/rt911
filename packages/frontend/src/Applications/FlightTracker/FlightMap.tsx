@@ -1,6 +1,6 @@
 import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
-import { type FC, type Ref, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { type FC, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { MapCompass } from "./MapCompass";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
@@ -70,9 +70,12 @@ import { type AircraftFamily, loadAircraftMesh } from "./aircraftModels";
 import { loadAircraftIconSvg } from "./aircraftIcons";
 import { Planes3DLayer } from "./planes3DLayer";
 import { Buildings3DLayer } from "./buildings3DLayer";
-import { buildFootprintMesh } from "./buildingMesh";
+import { buildFootprintMesh, placeHeroMesh } from "./buildingMesh";
 import { useBuildings } from "./useBuildings";
-import { buildingColorRgb, buildingsVisibleAtZoom } from "./buildings";
+import { buildingColorRgb, buildingsVisibleAtZoom, heroColorRgb } from "./buildings";
+import { useHeroBuildings } from "./useHeroBuildings";
+import { loadHeroStl } from "./buildingModels";
+import { excludeFootprints, manifestToPlacement } from "./heroBuildings";
 import {
 	type DragPixels,
 	type SelectMode,
@@ -312,6 +315,10 @@ interface FlightMapProps {
 	pinColor: string;
 	notablePinColor: string;
 	observerPinColor: string;
+	// Hero landmark model color (packed 0xRRGGBB), light/dark map variants;
+	// optional so existing call sites that predate hero landmarks keep working.
+	buildingHeroColorLight?: number;
+	buildingHeroColorDark?: number;
 	radarSweep: boolean;
 	// Comet-tail length as a multiple of TRAIL_POINTS; 0 turns tails off.
 	trailMultiplier: number;
@@ -548,6 +555,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 	positions, seedPositions, basemapUrls, trackGeoJSON,
 	trackProfile = null, nowMs, playing,
 	mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, radarSweep, trailMultiplier,
+	// Warm-stone defaults mirror flightMapSettings.ts's DEFAULT_FLIGHT_MAP_SETTINGS
+	// so call sites that predate hero landmarks (or omit the setting) still get a
+	// sensible hero color instead of an unset value.
+	buildingHeroColorLight = 0xb0a48c, buildingHeroColorDark = 0xc7b8a0,
 	loopEnabled = false, loopWindowMs = 1_800_000,
 	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
 	visibleFlights = null, landingClock,
@@ -574,6 +585,16 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const buildings = useBuildings();
 	const buildingsRef = useRef(buildings);
 	buildingsRef.current = buildings;
+	// Hero landmark manifest (WTC complex, Pentagon): loaded once per page,
+	// placed via their own STL fetch in the rAF loop below.
+	const heroes = useHeroBuildings();
+	const heroesRef = useRef(heroes);
+	heroesRef.current = heroes;
+	// Exclude-bboxes of heroes whose STL has actually loaded — the fallback
+	// invariant: a footprint is only ever hidden once its replacement is real.
+	const activeHeroExcludesRef = useRef<[number, number, number, number][]>([]);
+	// Heroes whose STL fetch has been kicked off (once per session).
+	const requestedHeroesRef = useRef<Set<string>>(new Set());
 	const cbRef = useRef({
 		onSelectFlight, onClearSelection, onToggleFlight, onAreaSelect, onPitchedChange, aircraftFamilyOf, onSelectPoi,
 	});
@@ -592,10 +613,16 @@ export const FlightMap: FC<FlightMapProps> = ({
 	// through React state so the visual tracks the pointer.
 	const dragRef = useRef<DragPixels | null>(null);
 	const [overlay, setOverlay] = useState<{ mode: "rect" | "circle"; d: DragPixels } | null>(null);
-	const colorsRef = useRef<FlightMapColors>({
+	const colorsRef = useRef<
+		FlightMapColors & { buildingHeroColorLight: number; buildingHeroColorDark: number }
+	>({
 		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain,
+		buildingHeroColorLight, buildingHeroColorDark,
 	});
-	colorsRef.current = { mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain };
+	colorsRef.current = {
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain,
+		buildingHeroColorLight, buildingHeroColorDark,
+	};
 	const radarSweepRef = useRef(radarSweep);
 	radarSweepRef.current = radarSweep;
 	const trailMultiplierRef = useRef(trailMultiplier);
@@ -975,8 +1002,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 			buildings3DRef.current = buildings3D;
 			map.addLayer(buildings3D);
 			buildings3D.setColor(buildingColorRgb(colors.mapStyle, colors.darkMap));
-			if (buildingsRef.current.length > 0)
-				buildings3D.setMesh("footprints", buildFootprintMesh(buildingsRef.current));
+			buildings3D.setHeroColor(heroColorRgb(colors));
+			if (buildingsRef.current.length > 0) {
+				const feats = excludeFootprints(buildingsRef.current, activeHeroExcludesRef.current);
+				buildings3D.setMesh("footprints", buildFootprintMesh(feats));
+			}
 			syncBuildingVisibility(map);
 			// True-3D aircraft (issue #250): custom layer on top of the stack;
 			// its colors follow the pin pair like every other plane layer.
@@ -1260,15 +1290,24 @@ export const FlightMap: FC<FlightMapProps> = ({
 		dirtyRef.current = true;
 	}, [pois, poiLayers, pinColor]);
 
+	// Single writer for the "footprints" mesh: always re-applies the current
+	// active hero excludes so a footprint hidden by a loaded hero STL can't
+	// reappear when the raw buildings list itself changes (or vice versa).
+	const rebuildFootprints = useCallback(() => {
+		const layer = buildings3DRef.current;
+		if (!layer) return;
+		const feats = excludeFootprints(buildingsRef.current, activeHeroExcludesRef.current);
+		layer.setMesh("footprints", buildFootprintMesh(feats));
+		dirtyRef.current = true;
+	}, []);
+
 	// Feed the buildings layer once the async footprint fetch resolves — the
 	// load handler above only seeds it if the (module-cached) data already
 	// arrived before this map instance mounted.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: refs + stable helper
 	useEffect(() => {
-		const layer = buildings3DRef.current;
-		if (!layer || buildings.length === 0) return;
-		layer.setMesh("footprints", buildFootprintMesh(buildings));
-		dirtyRef.current = true;
-	}, [buildings]);
+		if (buildings3DRef.current && buildings.length > 0) rebuildFootprints();
+	}, [buildings, rebuildFootprints]);
 
 	// Feed the selected-pin overlay with just the selected POI (or clear it).
 	useEffect(() => {
@@ -1313,6 +1352,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			}
 		}
 		buildings3DRef.current?.setColor(buildingColorRgb(mapStyle, darkMap));
+		buildings3DRef.current?.setHeroColor(
+			heroColorRgb({ mapStyle, darkMap, buildingHeroColorLight, buildingHeroColorDark }),
+		);
 		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
 		// The 3D meshes get the same radar 8-bit treatment as the 2D icons, via a
@@ -1320,7 +1362,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 		planes3DRef.current?.setPixelate(pixelate);
 		replayTrail3DRef.current?.setPixelate(pixelate);
 		trailTubeRef.current?.setColor(trailColor(mapStyle, darkMap));
-	}, [mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain]);
+	}, [
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain,
+		buildingHeroColorLight, buildingHeroColorDark,
+	]);
 
 	// Arm/disarm the select tool: panning off, crosshair cursor, stale drag
 	// cleared. Runs pre-load safely (dragPan exists from construction).
@@ -1453,6 +1498,13 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		dirtyRef.current = true;
 	}, [trailMultiplier]);
+
+	// Hero manifest resolving (async fetch) applies next frame; wake a paused,
+	// loop-disabled, idle map so the hero STLs actually get requested/drawn
+	// instead of waiting for playback to resume.
+	useEffect(() => {
+		dirtyRef.current = true;
+	}, [heroes]);
 
 	// Entering/leaving loop mode: clear the replay-trail layer when leaving so stale
 	// replay trails don't linger under a paused map; dirtyRef redraws once either way.
@@ -1614,6 +1666,24 @@ export const FlightMap: FC<FlightMapProps> = ({
 						replayPointsAt(loopState.buffer, playhead, loopState.visible),
 					);
 				}
+			}
+			// Hero landmark models (issue #229 Plan 3): kick off each hero's STL
+			// fetch once; on success, place its mesh and hide the extruded
+			// footprints it covers. A failed/pending load leaves those footprints
+			// drawn (graceful fallback) — unlike aircraft meshes, this doesn't
+			// need to be gated on pitched/3D since the buildings layer itself
+			// draws under both projections.
+			for (const hero of heroesRef.current) {
+				if (requestedHeroesRef.current.has(hero.id)) continue;
+				requestedHeroesRef.current.add(hero.id);
+				void loadHeroStl(hero.stlPath).then((stl) => {
+					const layer = buildings3DRef.current;
+					if (!stl || !layer) return; // failure -> extruded fallback stays
+					layer.setMesh(hero.id, placeHeroMesh(stl, manifestToPlacement(hero)));
+					layer.markHero(hero.id);
+					activeHeroExcludesRef.current = [...activeHeroExcludesRef.current, hero.exclude];
+					rebuildFootprints(); // hide the now-covered extruded footprints
+				});
 			}
 		};
 		let raf = requestAnimationFrame(loop);

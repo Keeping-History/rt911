@@ -3,6 +3,8 @@ import {
   BUILDINGS_MIN_ZOOM,
   buildingColorRgb,
   buildingsVisibleAtZoom,
+  heroColorRgb,
+  intToRgb01,
   parseBuildingsGeoJSON,
 } from "./buildings";
 
@@ -66,5 +68,30 @@ describe("parseBuildingsGeoJSON", () => {
   it("returns [] on malformed input", () => {
     expect(parseBuildingsGeoJSON(null)).toEqual([]);
     expect(parseBuildingsGeoJSON({ features: "nope" })).toEqual([]);
+  });
+});
+
+describe("intToRgb01 / heroColorRgb", () => {
+  it("unpacks 0xRRGGBB to 0..1 triples", () => {
+    expect(intToRgb01(0xff8000)).toEqual([1, 128 / 255, 0]);
+  });
+  it("picks light vs dark by darkMap", () => {
+    const s = {
+      mapStyle: "classic" as const,
+      darkMap: false,
+      buildingHeroColorLight: 0x804020,
+      buildingHeroColorDark: 0x102030,
+    };
+    expect(heroColorRgb(s)).toEqual(intToRgb01(0x804020));
+    expect(heroColorRgb({ ...s, darkMap: true })).toEqual(intToRgb01(0x102030));
+  });
+  it("treats radar as dark even when darkMap is false", () => {
+    const s = {
+      mapStyle: "radar" as const,
+      darkMap: false,
+      buildingHeroColorLight: 0x804020,
+      buildingHeroColorDark: 0x102030,
+    };
+    expect(heroColorRgb(s)).toEqual(intToRgb01(0x102030));
   });
 });

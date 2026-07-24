@@ -1,0 +1,14 @@
+{
+  "heroes": [
+    {
+      "id": "placeholder-wtc",
+      "stl_url": "maps/heroes/placeholder-tower.stl",
+      "lng": -74.0134,
+      "lat": 40.7127,
+      "bearing_deg": 0,
+      "scale": 1.0,
+      "base_elev_m": 4,
+      "exclude": [-74.0155, 40.7108, -74.0110, 40.7140]
+    }
+  ]
+}

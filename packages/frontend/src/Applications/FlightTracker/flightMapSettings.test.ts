@@ -151,6 +151,11 @@ describe("readFlightMapSettings", () => {
 			readFlightMapSettings({ mapSettings: { cameraMode: "orbit" } }).cameraMode,
 		).toBe("track");
 	});
+
+	it("includes hero-color defaults", () => {
+		expect(DEFAULT_FLIGHT_MAP_SETTINGS.buildingHeroColorLight).toBeTypeOf("number");
+		expect(DEFAULT_FLIGHT_MAP_SETTINGS.buildingHeroColorDark).toBeTypeOf("number");
+	});
 });
 
 describe("readFlightLoopSettings", () => {
