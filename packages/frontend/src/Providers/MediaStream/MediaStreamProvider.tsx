@@ -116,6 +116,13 @@ interface WsUsenetBodyMessage {
 	message?: string;
 }
 
+interface WsNewsBodyMessage {
+	type: "news_body";
+	id: number;
+	body?: string;
+	message?: string;
+}
+
 interface WsSourcesMessage {
 	type: "sources";
 	sources: AvailableSources;
@@ -165,6 +172,7 @@ type WsIncomingMessage =
 	| WsAlertsMessage
 	| WsUsenetMessage
 	| WsUsenetBodyMessage
+	| WsNewsBodyMessage
 	| WsSourcesMessage
 	| WsFlightsMessage
 	| WsFlightsHistoryMessage
@@ -228,6 +236,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
 	// fetches when a window re-renders before its body arrives.
 	const usenetBodyInflight = useRef(new Set<number>());
+	const [newsBodyState, setNewsBodyState] = useState(emptyBodyState);
+	// Ids with a news_body request sent but not yet answered — prevents duplicate
+	// requests when a detail window re-renders before its reply lands.
+	const newsBodyInflight = useRef(new Set<number>());
 	const [sources, setSources] = useState<AvailableSources>({ video: [], audio: [], pager: [], usenet: [] });
 	const [connected, setConnected] = useState(false);
 
@@ -668,6 +680,25 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send, usenetBodyState],
 	);
 
+	// Fetch one article's body on demand. Snapshot rows carry no content (the
+	// backlog would be ~7.7 MB with bodies), so the detail window asks for it when
+	// it opens. Cached bodies, cached errors, and in-flight ids are all skipped, so
+	// callers can fire this on every render.
+	const requestNewsBody = useCallback(
+		(id: number) => {
+			if (
+				id in newsBodyState.bodies ||
+				id in newsBodyState.errors ||
+				newsBodyInflight.current.has(id)
+			) {
+				return;
+			}
+			newsBodyInflight.current.add(id);
+			send({ type: "news_body", id });
+		},
+		[send, newsBodyState],
+	);
+
 	// On every second tick: reveal buffered items the clock has now reached, then
 	// prune expired ones. drainDue mutates the buffer (removing promoted entries);
 	// the merged-then-filtered state both surfaces newly-due items and drops
@@ -859,6 +890,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// Body requests do not survive a reconnect; clear in-flight markers so
 			// any open message window re-requests on its next render.
 			usenetBodyInflight.current.clear();
+			newsBodyInflight.current.clear();
 			heartbeatId = setInterval(() => {
 				if (ws.readyState === WebSocket.OPEN) {
 					ws.send(
@@ -974,6 +1006,13 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				setUsenetBodyState((prev) =>
 					applyBodyFrame(prev, frame as BodyFrame),
 				);
+				return;
+			}
+
+			if (msg.type === "news_body") {
+				const frame = msg as WsNewsBodyMessage;
+				newsBodyInflight.current.delete(frame.id);
+				setNewsBodyState((prev) => applyBodyFrame(prev, frame as BodyFrame));
 				return;
 			}
 
@@ -1147,6 +1186,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			usenetBodies: usenetBodyState.bodies,
 			usenetBodyErrors: usenetBodyState.errors,
 			requestUsenetBody,
+			newsBodies: newsBodyState.bodies,
+			newsBodyErrors: newsBodyState.errors,
+			requestNewsBody,
 			sources: gatedSources,
 			connected,
 			addItems,
@@ -1190,6 +1232,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			usenetItems,
 			usenetBodyState,
 			requestUsenetBody,
+			newsBodyState,
+			requestNewsBody,
 			gatedSources,
 			connected,
 			addItems,

@@ -221,6 +221,12 @@ export interface MediaStreamContextValue {
 	usenetBodyErrors: Record<number, string>;
 	/** Request one message's body by id; no-ops if already fetched or in flight. */
 	requestUsenetBody: (id: number) => void;
+	/** On-demand news article bodies, keyed by item id (snapshot rows omit content). */
+	newsBodies: Record<number, string>;
+	/** Failure messages for news bodies that could not be fetched, keyed by item id. */
+	newsBodyErrors: Record<number, string>;
+	/** Request one news article's body; de-dupes against cached and in-flight ids. */
+	requestNewsBody: (id: number) => void;
 	/** All selectable sources per filter, sent once by the server at init. */
 	sources: AvailableSources;
 	connected: boolean;
@@ -315,6 +321,9 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	usenetBodies: {},
 	usenetBodyErrors: {},
 	requestUsenetBody: () => {},
+	newsBodies: {},
+	newsBodyErrors: {},
+	requestNewsBody: () => {},
 	sources: { video: [], audio: [], pager: [], usenet: [] },
 	connected: false,
 	addItems: () => {},
