@@ -276,7 +276,7 @@ export const TimeMachine: React.FC = () => {
 				zoomable={false}
 				scrollable={false}
 				collapsable={true}
-				initialSize={[380, 130]}
+				initialSize={[380, 110]}
 				initialPosition={[300, 200]}
 				minimumSize={[340, 130]}
 				modal={false}
