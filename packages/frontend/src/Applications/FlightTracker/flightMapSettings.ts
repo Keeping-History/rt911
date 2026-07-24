@@ -27,6 +27,8 @@ export interface FlightMapSettings {
 	notablePinColorDark: number;
 	observerPinColorLight: number;
 	observerPinColorDark: number;
+	buildingHeroColorLight: number;
+	buildingHeroColorDark: number;
 	radarSweep: boolean;
 	// Comet-tail length as a multiple of the base TRAIL_POINTS; 0 = tails off.
 	trailMultiplier: number;
@@ -52,6 +54,8 @@ export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	notablePinColorDark: 0xff4d4d, // brightened red so it reads on slate
 	observerPinColorLight: 0x0f766e, // blue-green (teal) for witness aircraft
 	observerPinColorDark: 0x2dd4bf, // brightened teal so it reads on slate
+	buildingHeroColorLight: 0xb0a48c, // warm stone, distinct from the neutral mass
+	buildingHeroColorDark: 0xc7b8a0, // brightened stone for the slate map
 	radarSweep: true,
 	trailMultiplier: 5,
 	globe: false,
