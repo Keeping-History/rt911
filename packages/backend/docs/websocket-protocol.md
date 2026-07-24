@@ -46,6 +46,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
 | `usenet_body` | `id`              | Request the full body of one message by id (bodies are no longer in list frames). |
+| `news_body`   | `id`              | Request the full text of one news article by id (bodies are not in snapshot frames). |
 | `flights_history` | `minutes`, `id` | Request the trailing `minutes` (1-90; loop mode uses 30/90, the heading seed ~3) of flight positions. Requires an active `flights` subscription. `id` is echoed on every reply chunk. |
 | `weather_forecast` | `zone`, `id` | Request the forecast product covering NWS UGC `zone` (e.g. `"NYZ076"`) at the client's virtual time. Requires an active `weather` subscription. `id` is echoed on the reply. |
 | `pause`       | —                 | Stop advancing virtual time.                  |
@@ -79,6 +80,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `alerts`          | `time`, `alerts[]`            | Forward **window** (default 600 s) of alerts per refill while subscribed. **No subscribe/init/seek snapshot** — see [`alerts` field reference](#server-initiated-alerts) below for why. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
+| `news_body`       | `id`, `body` *or* `id`, `message` | Reply to `news_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`, `sources.usenet`). Not resent on `seek`. |
 | `error`           | `message`                     | Reply to a malformed or unrecognised request.          |
 

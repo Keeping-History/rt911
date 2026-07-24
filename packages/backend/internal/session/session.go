@@ -102,7 +102,8 @@ type outMsg struct {
 	Alerts  []model.AlertItem `json:"alerts,omitempty"`
 	Sources *SourceList       `json:"sources,omitempty"`
 	Msg     string            `json:"message,omitempty"`
-	// ID/Body carry a single on-demand Usenet article body (usenet_body frame).
+	// ID/Body carry a single on-demand item body — a Usenet article (usenet_body)
+	// or a news article (news_body). Both frames share these fields.
 	ID   int    `json:"id,omitempty"`
 	Body string `json:"body,omitempty"`
 	// Done marks the final chunk of a flights_history reply (the ID field above
@@ -344,6 +345,15 @@ func (s *Session) SendUsenet(t time.Time, items []model.UsenetItem) {
 // Touches no shared state, so no lock — same shape as the other Send* helpers.
 func (s *Session) SendUsenetBody(id int, body, errMsg string) {
 	s.send_(outMsg{Type: "usenet_body", ID: id, Body: body, Msg: errMsg})
+}
+
+// SendNewsBody delivers a single article body in reply to a news_body request.
+// Mirrors SendUsenetBody: on success errMsg is "" and body carries the article
+// HTML; on failure errMsg explains why and body is empty, letting the client tell
+// "unavailable" apart from an article that is genuinely empty. Touches no shared
+// state, so no lock — same shape as the other Send* helpers.
+func (s *Session) SendNewsBody(id int, body, errMsg string) {
+	s.send_(outMsg{Type: "news_body", ID: id, Body: body, Msg: errMsg})
 }
 
 // SendFlights delivers a batch of flight positions at time t on the flights

@@ -2,11 +2,13 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"classicy/streamer/internal/model"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -352,6 +354,27 @@ func NewsItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.Media
 		return nil, nil
 	}
 	return &items[0], nil
+}
+
+// NewsItemBody returns the article body for one approved news item. found is false
+// when the id is missing or unapproved, letting the caller reply "unavailable"
+// without conflating it with an article whose body is genuinely empty. Bodies are
+// excluded from list frames (see newsListSelectFrom) and fetched on demand.
+func NewsItemBody(ctx context.Context, pool *pgxpool.Pool, id int) (string, bool, error) {
+	// content is nullable — Directus emits NULL for empty rich-text fields.
+	var content *string
+	err := pool.QueryRow(ctx,
+		`SELECT content FROM news_items WHERE id = $1 AND approved = 1`, id).Scan(&content)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("query: %w", err)
+	}
+	if content == nil {
+		return "", true, nil
+	}
+	return *content, true, nil
 }
 
 // CurrentNewsItems returns every approved news article from NewsEpoch up to t,

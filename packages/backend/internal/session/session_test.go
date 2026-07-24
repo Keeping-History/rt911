@@ -975,3 +975,46 @@ func TestBroadcastClockReachesRegisteredSessions(t *testing.T) {
 		t.Fatalf("expected release clock broadcast, got %+v", m)
 	}
 }
+
+func TestSendNewsBodyEmitsBodyFrame(t *testing.T) {
+	s := newTestSession(t)
+
+	s.SendNewsBody(4210, "<p>Two planes have struck…</p>", "")
+
+	m := recvType(t, s)
+	if m.Type != "news_body" {
+		t.Fatalf("expected news_body frame, got %q", m.Type)
+	}
+	if m.ID != 4210 {
+		t.Fatalf("expected id 4210, got %d", m.ID)
+	}
+	if m.Body != "<p>Two planes have struck…</p>" {
+		t.Fatalf("unexpected body %q", m.Body)
+	}
+	if m.Msg != "" {
+		t.Fatalf("success frame must carry no message, got %q", m.Msg)
+	}
+}
+
+// A failure must still reply, with an empty body and a message — that is what lets
+// the client show an error line instead of hanging on "loading" forever, and what
+// distinguishes "unavailable" from an article that is genuinely empty.
+func TestSendNewsBodyEmitsErrorFrame(t *testing.T) {
+	s := newTestSession(t)
+
+	s.SendNewsBody(4211, "", "article unavailable")
+
+	m := recvType(t, s)
+	if m.Type != "news_body" {
+		t.Fatalf("expected news_body frame, got %q", m.Type)
+	}
+	if m.ID != 4211 {
+		t.Fatalf("expected id 4211, got %d", m.ID)
+	}
+	if m.Body != "" {
+		t.Fatalf("error frame must carry an empty body, got %q", m.Body)
+	}
+	if m.Msg != "article unavailable" {
+		t.Fatalf("expected explanatory message, got %q", m.Msg)
+	}
+}

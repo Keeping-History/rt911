@@ -30,6 +30,7 @@ type wsFrame struct {
 	Msg     string                 `json:"message,omitempty"`
 	Time    string                 `json:"time,omitempty"`
 	ID      int                    `json:"id,omitempty"`
+	Body    string                 `json:"body,omitempty"`
 	Done    bool                   `json:"done,omitempty"`
 	Flights []model.FlightPosition `json:"flights,omitempty"`
 }
@@ -451,5 +452,39 @@ func TestWSHandlerWeatherForecastIgnoredWhenZoneInvalid(t *testing.T) {
 		if f := readFrame(t, conn); f.Type != "pause_ack" {
 			t.Fatalf("zone %q: expected pause_ack (forecast request silently ignored), got %+v", zone, f)
 		}
+	}
+}
+
+// A news_body request from a client that never subscribed to news must still get a
+// reply — an empty body with a message — so the UI shows an error rather than
+// hanging on "loading". The nil pool here also exercises the nil-pool guard.
+func TestWSHandlerNewsBodyRepliesWhenUnsubscribed(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+
+	sendJSON(t, conn, map[string]any{"type": "news_body", "id": 4210})
+
+	f := readFrame(t, conn)
+	if f.Type != "news_body" {
+		t.Fatalf("expected news_body reply, got %+v", f)
+	}
+	if f.ID != 4210 {
+		t.Fatalf("expected the requested id echoed, got %d", f.ID)
+	}
+	if f.Body != "" || f.Msg == "" {
+		t.Fatalf("expected empty body with a message, got body=%q message=%q", f.Body, f.Msg)
+	}
+}
+
+func TestWSHandlerNewsBodyMalformed(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+
+	// id as a string fails to unmarshal into newsBodyMsg.ID (int).
+	if err := conn.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"news_body","id":"nope"}`)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if f := readFrame(t, conn); f.Type != "error" {
+		t.Fatalf("expected error frame, got %+v", f)
 	}
 }

@@ -72,6 +72,14 @@ type usenetBodyMsg struct {
 	ID   int    `json:"id"`
 }
 
+// newsBodyMsg requests the full text of one news article by id. Article bodies are
+// not carried in the news snapshot (see db.CurrentNewsItems); the client fetches
+// one when an article's detail window opens.
+type newsBodyMsg struct {
+	Type string `json:"type"`
+	ID   int    `json:"id"`
+}
+
 // flightsHistoryMsg requests the trailing N minutes of flight positions — the
 // Flight Tracker's loop mode uses 30/90, its heading seed a few minutes. id is
 // echoed on every reply chunk so the client can discard chunks of a superseded
@@ -280,6 +288,14 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 					continue
 				}
 				sendUsenetBody(r, sess, pool, umsg.ID, logger)
+
+			case "news_body":
+				var nmsg newsBodyMsg
+				if err := json.Unmarshal(raw, &nmsg); err != nil {
+					sess.SendError("malformed news_body message")
+					continue
+				}
+				sendNewsBody(r, sess, pool, nmsg.ID, logger)
 
 			case "subscribe":
 				var cmsg channelMsg
@@ -502,6 +518,29 @@ func sendUsenetBody(r *http.Request, sess *session.Session, pool *pgxpool.Pool, 
 		return
 	}
 	sess.SendUsenetBody(id, item.Body, "")
+}
+
+// sendNewsBody fetches one article's body by id and replies on the news_body frame.
+// Only approved articles are served; a missing/unapproved id, a query error, or a
+// request from a client not subscribed to news all send an empty body with an
+// explanatory message so the client shows an error line rather than hanging on
+// "loading" — a body request always gets a reply.
+func sendNewsBody(r *http.Request, sess *session.Session, pool *pgxpool.Pool, id int, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelNews) || pool == nil {
+		sess.SendNewsBody(id, "", "article unavailable")
+		return
+	}
+	body, found, err := db.NewsItemBody(r.Context(), pool, id)
+	if err != nil {
+		logger.Warn("news body query failed", "id", id, "error", err)
+		sess.SendNewsBody(id, "", "article unavailable")
+		return
+	}
+	if !found {
+		sess.SendNewsBody(id, "", "article unavailable")
+		return
+	}
+	sess.SendNewsBody(id, body, "")
 }
 
 // flightsSnapshotLookback covers the airborne picture at t: positions are
