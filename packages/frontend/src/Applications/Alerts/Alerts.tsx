@@ -12,7 +12,7 @@ import {
 	MediaStreamContext,
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { useAlertsEnabled } from "./alertsSettings";
-import alertPng from "./app.png";
+import alertPng from "./extension.png";
 
 const appId = "Alerts.app";
 const appName = "Alerts";
