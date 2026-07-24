@@ -73,3 +73,76 @@ cd demotiles && git sparse-checkout set font
 
 Missing fonts are non-fatal: labels just don't draw. Verify:
 `curl -I 'https://files.911realtime.org/maps/fonts/Noto%20Sans%20Regular/0-255.pbf'` → 200.
+
+## CONUS coastline overlay (conus-coast.pmtiles) — DONE 2026-07-24
+
+The world basemap above is Natural Earth 1:50m at z0–7. At city zoom the app
+overzooms that coarse z7 coastline, so Lower Manhattan (WTC/financial district)
+and other coastal cities render in "water". This overlay adds a precise
+OpenStreetMap coastline for the continental US, layered **over** the coarse
+world basemap by the style (`src/lib/basemap/basemapStyles.ts`): a `coast`
+vector source whose single **`land`** source-layer draws on top of the world
+`land` layer, so the precise CONUS shoreline wins at high zoom. The world file
+is untouched and stays the low-zoom base + rollback.
+
+> **Prereqs:** `tippecanoe` ≥ 2.x **and** GDAL/`ogr2ogr` (the OSM source is a
+> shapefile — unlike the Natural-Earth world build, this one needs GDAL).
+
+### Build
+1. Download OSM land polygons (coastline-derived land mask, precise to piers)
+   and unzip — it expands to `land-polygons-split-4326/land_polygons.shp`:
+   ```sh
+   curl -fL -o land-polygons-split-4326.zip \
+     https://osmdata.openstreetmap.de/download/land-polygons-split-4326.zip
+   unzip land-polygons-split-4326.zip
+   ```
+2. Clip to a generous CONUS bbox (`-125 24 -66 50`; excludes AK/HI by design —
+   no flights there) → GeoJSON (~178 MB; ~30 s):
+   ```sh
+   ogr2ogr -f GeoJSON conus_land.geojson \
+     land-polygons-split-4326/land_polygons.shp -clipsrc -125 24 -66 50
+   ```
+3. Tile to PMTiles, one `land` layer, **z6–13**, attributes dropped:
+   ```sh
+   tippecanoe -o conus-coast.pmtiles -Z6 -z13 -X \
+     -L land:conus_land.geojson \
+     --coalesce-densest-as-needed --simplification=4 --force
+   ```
+   - **Max zoom 13, not 15.** The coastline is a smooth boundary; z13 full
+     detail (~14 m at NYC's latitude) overzooms cleanly to building zoom and
+     still puts Manhattan crisply on land. A z15 build ballooned past 613 MB
+     for no visible gain (the original WTC-in-water failure was Natural Earth
+     being off by *miles*, not meters). MapLibre reads maxzoom from the PMTiles
+     header and overzooms automatically, so the style needs no maxzoom setting.
+   - **`-X` drops all feature attributes** — the style only fills geometry, so
+     the OSM FIDs would be pure tile bloat.
+   - Result: **~18 MB**, ~4 min (comparable to the 16 MB world file).
+4. Sanity-check before uploading — the `land` layer is present, a Lower-
+   Manhattan tile decodes to non-empty land, and an offshore tile is empty:
+   ```sh
+   pmtiles show --metadata conus-coast.pmtiles   # vector_layers → ["land"], z6–13
+   pmtiles tile conus-coast.pmtiles 13 2411 3079 | wc -c   # WTC tile → >0 bytes
+   pmtiles tile conus-coast.pmtiles 13 2600 3079 | wc -c   # mid-Atlantic → 0 bytes
+   ```
+
+### Host (GATED — prod)
+1. Upload to Wasabi under `maps/conus-coast.pmtiles` with the video-grabber
+   Wasabi creds (`WASABI_ACCESS_KEY_ID`/`WASABI_SECRET_ACCESS_KEY` in the
+   `video-grabber-secrets` k8s secret) and boto3 `request_checksum_calculation
+   ="when_required"` (Wasabi rejects boto3 ≥ 1.36's default checksum header —
+   see `storage/wasabi.py`). Endpoint `https://s3.us-central-1.wasabisys.com`,
+   bucket `files.911realtime.org`.
+2. **No infra change:** the `/maps` path is already on the file-proxy Traefik
+   allow-list (added for the world basemap).
+3. Verify: `curl -I -H 'Range: bytes=0-16' https://files.911realtime.org/maps/conus-coast.pmtiles`
+   returns `206 Partial Content` (with CORS `access-control-allow-origin: *`).
+
+### Notes
+- **App wiring:** the style reads `VITE_FLIGHT_COAST_BASEMAP_URL` (default the
+  hosted file above) and adds the `coast` source + `coast-land` fill; a missing
+  file is non-fatal (MapLibre renders empty tiles, the coarse world coastline
+  still shows). The classic palette's background/lakes are water-toned so land
+  reads against water. Regenerate only when the coastline data changes.
+- **2001 accuracy:** Lower Manhattan and DC shorelines are effectively identical
+  to modern OSM (Battery Park City predates 2001; no relevant landfill since),
+  so the modern OSM coastline is period-correct for this use.
