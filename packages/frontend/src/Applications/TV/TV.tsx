@@ -729,6 +729,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			id: "file",
 			title: "File",
 			menuChildren: [
+				quitMenuItemHelper(appId, appName, appIcon),
+			],
+		},
+		{
+			id: "edit",
+			title: "Edit",
+			menuChildren: [
 				{
 					id: `${appId}_settings`,
 					title: "Settings…",
@@ -756,7 +763,6 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					title: "Channel ▼",
 					onClickFunc: () => changeChannel(-1),
 				},
-				quitMenuItemHelper(appId, appName, appIcon),
 			],
 		},
 		{
