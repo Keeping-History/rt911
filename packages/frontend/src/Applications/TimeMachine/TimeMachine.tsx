@@ -299,7 +299,7 @@ export const TimeMachine: React.FC = () => {
 					onCloseFunc={() => setShowSettings(false)}
 				>
 					<div className={styles.settings}>
-						<ClassicyControlGroup label="Skip">
+						<ClassicyControlGroup label="Skip" backgroundColor="var(--color-system-02-)">
 							<ClassicySlider
 								id="controls_skip_minutes"
 								labelTitle="Duration:"
@@ -318,7 +318,7 @@ export const TimeMachine: React.FC = () => {
 								}
 							/>
 						</ClassicyControlGroup>
-						<ClassicyControlGroup label="Step">
+						<ClassicyControlGroup label="Step" backgroundColor="var(--color-system-02-)">
 							<ClassicySlider
 								id="controls_step_seconds"
 								labelTitle="Duration:"
