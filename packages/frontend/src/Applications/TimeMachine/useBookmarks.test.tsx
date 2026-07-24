@@ -52,6 +52,19 @@ describe("useBookmarks", () => {
 		expect(order).toEqual(["global", "personal"]); // globals resolved before personal started
 	});
 
+	it("keeps globals when the personal fetch fails", async () => {
+		mockAuth.status = "signedIn";
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+			const u = String(url);
+			if (u.includes("_personal")) return jsonResponse({ error: "no such collection" }, 500);
+			return jsonResponse({ data: [{ id: 1, title: "G1", full_title: null, start_date: "2001-09-11T12:46:00", category: "General" }] });
+		});
+		render(<Probe />);
+		await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
+		expect(screen.getByTestId("global").textContent).toBe("1");
+		expect(screen.getByTestId("personal").textContent).toBe("");
+	});
+
 	it("optimistic add/remove mutate personal without refetch", async () => {
 		mockAuth.status = "signedIn";
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>

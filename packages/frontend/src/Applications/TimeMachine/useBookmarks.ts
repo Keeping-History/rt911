@@ -57,8 +57,15 @@ export function useBookmarks(): BookmarksState {
 				const gJson = (await gRes.json()) as { data: Bookmark[] };
 				if (cancelled) return;
 				setGlobal(gJson.data);
+			} catch (err: unknown) {
+				if (cancelled || controller.signal.aborted) return;
+				setError(err instanceof Error ? err.message : String(err));
+				setLoading(false);
+				return;
+			}
 
-				if (signedIn) {
+			if (signedIn) {
+				try {
 					const pRes = await fetch(PERSONAL_URL, {
 						signal: controller.signal,
 						credentials: "include",
@@ -68,15 +75,16 @@ export function useBookmarks(): BookmarksState {
 					const pJson = (await pRes.json()) as { data: PersonalBookmark[] };
 					if (cancelled) return;
 					setPersonal(pJson.data);
-				} else {
+				} catch {
+					// Personal-only failure (network, 500, or the collection not yet live)
+					// must not blank the already-loaded globals — swallow quietly here.
+					if (cancelled || controller.signal.aborted) return;
 					setPersonal([]);
 				}
-				if (!cancelled) setLoading(false);
-			} catch (err: unknown) {
-				if (cancelled || controller.signal.aborted) return;
-				setError(err instanceof Error ? err.message : String(err));
-				setLoading(false);
+			} else {
+				setPersonal([]);
 			}
+			if (!cancelled) setLoading(false);
 		})();
 
 		return () => {
