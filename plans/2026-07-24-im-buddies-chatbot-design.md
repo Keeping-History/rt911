@@ -31,6 +31,7 @@ These were settled during design and are not open questions:
 | 7 | **Static HTML dev page + scripted Go tests** | The browser is the only place the httpOnly session cookie works, so this exercises the real auth path. |
 | 8 | **No vector store, no third-party RAG service** | The dominant filter is time, not similarity — see *Knowledge* below. |
 | 9 | **No Usenet-derived content** | Unmoderated 2001 Usenet is unreliable and toxic. Every prompt token is authored by the team or drawn from broadcast transcripts and the curated timeline. |
+| 10 | **Pluggable LLM providers, tunable globally and per profile** | Anthropic, OpenAI, and OpenRouter behind one interface, so cost can be traded against quality per buddy without a code change. |
 
 ---
 
@@ -42,8 +43,9 @@ New Go package `packages/backend/internal/chat/`, six units:
 |---|---|---|
 | `chat.Registry` | Profile / beacon / phase config loaded from Postgres. Answers "what phase is profile P in at vTime T?" and "which buddies are online at T?" | Postgres (load + NOTIFY reload) |
 | `chat.Knowledge` | Three-tier retrieval. `Retrieve(T, channels, query) []Passage`, each passage carrying its tier | Postgres |
-| `chat.Composer` | Pure function: (profile, phase, dials, passages, history, clock) → prompt. **No I/O, no network** | none |
-| `chat.Generator` | Bounded worker pool. Calls the Anthropic API, applies style post-conditions | Composer, Anthropic API |
+| `chat.Composer` | Pure function: (profile, phase, dials, passages, history, clock) → **provider-neutral prompt segments**. **No I/O, no network** | none |
+| `chat.Generator` | Bounded worker pool. Resolves the provider, calls it, applies style post-conditions | Composer, `chat.Provider` |
+| `chat.Provider` | Interface with one adapter per vendor family. Renders segments to the vendor wire format and normalizes the reply | Vendor SDK |
 | `chat.Guard` | Inbound moderation (allow / block / escalate) and block state | Postgres |
 | `chat.Store` | Appends messages to the Directus-owned log tables | Postgres |
 
@@ -70,7 +72,7 @@ crossed its next scheduled beat?         -> Session.ChatSend()
                      s.send_(chat_message)        <-- rejoins the session
 ```
 
-The session goroutine only enqueues. Hard rules #1 (never block the Hub) and #2 (`send_` must never block) hold unchanged: a slow Anthropic call cannot stall the Hub, and a full queue drops rather than blocks.
+The session goroutine only enqueues. Hard rules #1 (never block the Hub) and #2 (`send_` must never block) hold unchanged: a slow provider call cannot stall the Hub, and a full queue drops rather than blocks.
 
 Scheduled beats use a **per-user timer path**, not the shared Redis timeline — live generation means each user's beat carries their own conversational context. `Session` tracks a next-scheduled-beat horizon per subscribed buddy and queries Postgres, closer to how the `usenet` channel works (hard rule #4's documented exception) than to `pager`.
 
@@ -94,11 +96,13 @@ The server enforces every one of these. The UI disabling its input is good UX; t
 
 ## Data model
 
-Eight Directus collections.
+Nine Directus collections.
 
 ### Configuration
 
-**`chat_profiles`** — `screen_name`, `display_name`, `avatar`, `persona`, `education_level` (select: elementary / middle / high / college / adult), `writing_style` (prose), `style_exemplars` (text — a few sample messages in voice), `location`, `timezone`, `online_from`, `online_until`, `model`, `typing_speed` (chars/sec), `system_prompt_extra`, `active`, `sort`.
+**`chat_settings`** (singleton) — global defaults: `provider` (select: anthropic / openai / openrouter), `model`, `max_tokens`, `effort`, `temperature`, `openai_base_url`. See *Provider and model configuration* below.
+
+**`chat_profiles`** — `screen_name`, `display_name`, `avatar`, `persona`, `education_level` (select: elementary / middle / high / college / adult), `writing_style` (prose), `style_exemplars` (text — a few sample messages in voice), `location`, `timezone`, `online_from`, `online_until`, `typing_speed` (chars/sec), `system_prompt_extra`, `active`, `sort`, plus nullable per-profile LLM overrides `provider`, `model`, `max_tokens`, `effort`, `temperature` (null = inherit from `chat_settings`).
 
 **`chat_beacons`** — `key` (`first_impact`, `second_impact`, `pentagon`, `tower2_collapse`, `tower1_collapse`, `ua93`, …), `label`, **`at`**, **`public_at`**, `description`.
 
@@ -142,7 +146,7 @@ Two timestamps because there are genuinely two timelines: where the user was on 
 
 `chat_messages` and `chat_blocks` are private conversation records. Directus policies **must** scope reads and writes to `$CURRENT_USER`; a misconfiguration leaks one user's conversation to another. This gets an explicit verification step in the implementation plan, not a trusting checkbox.
 
-Configuration and knowledge collections are read-only to the public policy and editable by the admin/teacher policies, matching the existing `tm_bookmarks` pattern.
+Configuration and knowledge collections are read-only to the public policy and editable by the admin/teacher policies, matching the existing `tm_bookmarks` pattern. **`chat_settings` is the exception** — admin-only in both directions. It holds no credentials (those are env-only), but it is operational configuration with direct cost implications and has no reason to be publicly readable.
 
 ---
 
@@ -195,34 +199,90 @@ Explicitly **not** used: `usenet_items`. Unmoderated 2001 Usenet is unreliable a
 
 ## Generation
 
-### Model and parameters
+### Providers
 
-Go SDK `github.com/anthropics/anthropic-sdk-go`. Default `Model: "claude-opus-5"` (plain string — the SDK has no typed constant for it), overridable per profile via `chat_profiles.model`.
+Generation goes through a `chat.Provider` interface so the vendor is a configuration choice, not a code change:
+
+```go
+type Provider interface {
+    Name() string
+    Generate(ctx context.Context, req Request) (Reply, error)
+}
+```
+
+`Request` carries the provider-neutral `[]Segment` from `Composer` plus `Model`, `MaxTokens`, `Effort`, and `Temperature *float64`. `Reply` carries `Body`, `Outcome`, `TokensIn`, `TokensOut`, `CachedIn`, and `Model`.
+
+Two adapters cover all three requested vendors, because OpenRouter speaks the OpenAI chat-completions API at a different base URL:
+
+| Adapter | SDK | Covers |
+|---|---|---|
+| `anthropicProvider` | `github.com/anthropics/anthropic-sdk-go` | Anthropic |
+| `openAICompatProvider` | `github.com/openai/openai-go` with `option.WithBaseURL` | OpenAI (default base URL), OpenRouter (`https://openrouter.ai/api/v1`), and any other OpenAI-compatible endpoint |
+
+**The adapter boundary normalizes three genuine divergences** so nothing vendor-shaped leaks into `Session` or `Store`:
+
+| Concern | Anthropic | OpenAI-compatible | Normalized to |
+|---|---|---|---|
+| Declined request | `stop_reason: "refusal"`, plus server-side `fallbacks` | `finish_reason: "content_filter"`, no fallback concept | `Reply.Outcome` ∈ `ok` / `refused` / `truncated` / `error` |
+| Reasoning depth | `output_config.effort` | `reasoning_effort` on reasoning models; ignored elsewhere | `Request.Effort`, dropped where unsupported |
+| Sampling | `temperature` returns **400** | `temperature` accepted | `Request.Temperature`; the Anthropic adapter drops it |
+
+`Temperature` being usable on OpenAI and OpenRouter is a real asymmetry, not a wart: on those providers it is a second per-message variance lever that the Anthropic path structurally cannot offer, because Opus 5 rejects the parameter.
+
+**Anthropic-specific parameters**, applied by that adapter only:
 
 - **Thinking stays on at `output_config: {effort: "low"}`.** Do **not** set `thinking: {type: "disabled"}` — on Opus 5 that can leak `<thinking>` tags into the visible response, which in this product means a buddy typing `<thinking>` into an IM window.
-- **`max_tokens: 2000`.** Thinking and response text share the cap; a 40-token reply with a tight cap truncates once thinking runs. Brevity is enforced by the prompt and the post-processor, not by the token cap.
-- **No `temperature` / `top_p` / `top_k`** — rejected with a 400 on Opus 5. Per-message variety comes from the phase dials and directives, which is the only variance lever available.
 - **`stop_reason == "refusal"` is checked before reading `content`.** Opus 5 returns HTTP 200 with empty or partial content on a policy decline.
-- **`fallbacks: "default"` with beta header `server-side-fallback-2026-07-01`**, so a false-positive decline is recovered server-side rather than surfacing as a dead buddy. Server-side fallbacks require the beta endpoint, so generation calls go through `client.Beta.Messages.New` with the beta listed in `Betas`, not the plain `client.Messages.New`.
+- **`fallbacks: "default"` with beta header `server-side-fallback-2026-07-01`**, so a false-positive decline is recovered server-side rather than surfacing as a dead buddy. Server-side fallbacks require the beta endpoint, so those calls go through `client.Beta.Messages.New` with the beta listed in `Betas`, not the plain `client.Messages.New`.
+
+**Applies to every provider:**
+
+- **`max_tokens` defaults to 2000.** On both Anthropic and OpenAI reasoning models the cap covers reasoning *and* response text together, so a tight cap truncates once reasoning runs. Brevity is enforced by the prompt and the post-processor, not by the token cap.
 - **Non-streaming.** Replies are short and deliberately delayed behind a typing indicator; streaming adds complexity with no user-visible benefit.
 
-**Cost, at ~8K input tokens (~5.5K cache-read after warmup) and ~350 output per reply:** ≈2.4¢ per reply on Opus 5 ($5/$25 per MTok), so a 30-student class exchanging 40 messages each is ≈$29 per session. Haiku 4.5 ($1/$5) would be ≈0.5¢ and ≈$6. Opus 5 is the default; changing it is a per-profile configuration decision.
+**Credentials never live in Directus.** One key per provider in `rt911-secrets`. A profile naming a provider with no configured key falls back to the global default provider and logs at warn level; if that has no key either, the `chat` channel refuses `subscribe`.
+
+### Provider and model configuration
+
+Two levels, resolved per message as **profile value → global default**:
+
+**`chat_settings`** (new Directus singleton) — `provider` (select: anthropic / openai / openrouter), `model`, `max_tokens`, `effort`, `temperature`, `openai_base_url` (override for OpenAI-compatible endpoints).
+
+**`chat_profiles`** gains nullable overrides for the same five fields — `provider`, `model`, `max_tokens`, `effort`, `temperature` — where null means inherit.
+
+Global defaults live in Directus rather than env vars so cost can be retuned without a redeploy, which is the point of the feature. `Registry` reloads them on the existing NOTIFY path.
+
+Shipped defaults: `provider: anthropic`, `model: claude-opus-5`, `max_tokens: 2000`, `effort: low`, `temperature: null`.
+
+> **Per-profile model is characterization, not just a cost knob.** A profile's phase dials and style exemplars are tuned against a specific model; pointing it at a cheaper one will change how it sounds, not merely what it costs. Re-check a profile's voice after changing its model.
+
+**Cost, at ~8K input tokens (~5.5K cache-read after warmup) and ~350 output per reply:**
+
+| Model | $/MTok in / out | Per reply | 30 students × 40 messages |
+|---|---|---|---|
+| Claude Opus 5 (default) | $5 / $25 | ≈2.4¢ | ≈$29 |
+| Claude Haiku 4.5 | $1 / $5 | ≈0.5¢ | ≈$6 |
+| OpenAI / OpenRouter | varies by model | — | — |
+
+Anthropic figures are current as of 2026-07-24. OpenAI and OpenRouter pricing changes frequently enough that pinning numbers here would rot; check the provider's pricing page when choosing a model. The cost lever is exactly the point of Decision 10 — measure a real session before committing a class to the default.
 
 ### Prompt layout
 
-Render order is `tools` → `system` → `messages`, and caching is a **prefix** match.
+`Composer` emits an ordered `[]Segment`, each tagged with a stability class. It does **not** emit vendor wire format — the adapter renders it. Every provider caches on a **prefix** match, so the ordering below is what pays off everywhere; only the explicit markers are Anthropic-specific.
 
-| Position | Content | Volatility | `cache_control` |
-|---|---|---|---|
-| `system` | Persona, education level, writing style, era language rules, output constraints, style exemplars | Stable per profile | **yes** |
-| `messages[0]` | Cumulative tier-1 digest, `public_at <= T` | Append-only | **yes** |
-| next | Recent broadcast window | Rolls | no |
-| next | Conversation history from `chat_messages` | Grows | yes (last turn) |
-| last user turn | Phase directive, dials, virtual clock, user's message | Every turn | no |
+| Order | Content | Stability | Anthropic renders as | OpenAI-compatible renders as |
+|---|---|---|---|---|
+| 1 | Persona, education level, writing style, era language rules, output constraints, style exemplars | Stable per profile | `system` + `cache_control` | `system` message |
+| 2 | Cumulative tier-1 digest, `public_at <= T` | **Append-only** | `messages[0]` + `cache_control` | leading `user` message |
+| 3 | Recent broadcast window | Rolls | `messages` | `messages` |
+| 4 | Conversation history from `chat_messages` | Grows | `messages` + `cache_control` on last turn | `messages` |
+| 5 | Phase directive, dials, virtual clock, user's message | Every turn | final `user` turn | final `user` message |
+
+Anthropic uses explicit `cache_control` breakpoints at the stability boundaries (max four per request, which is exactly what the table uses). OpenAI-compatible endpoints cache prefixes automatically above roughly 1024 tokens with no markers, so the adapter simply concatenates in order. OpenRouter's behavior depends on the underlying model and upstream provider and should be treated as best-effort, not assumed.
 
 **The virtual clock must never be interpolated into the system prompt.** It changes every turn and sits at the front of the prefix, so it would invalidate everything downstream — the cache would read zero forever while paying the 1.25× write premium on every request. The clock and the phase directive both belong in the last user turn; putting the phase directive in `system` would mean crossing a beacon invalidates the digest cache.
 
-Opus 5's minimum cacheable prefix is 512 tokens, so even a compact persona block caches. `resp.Usage.CacheReadInputTokens` must be non-zero across turns.
+Opus 5's minimum cacheable prefix is 512 tokens, so even a compact persona block caches. Each adapter reports cache hits through `Reply.CachedIn`, which must be non-zero across consecutive turns on any provider that supports caching.
 
 ### Output post-processing
 
@@ -284,12 +344,13 @@ Chat is a side channel and must never take down media streaming. It is wired int
 
 | Failure | Behavior |
 |---|---|
-| Anthropic error or timeout | In-character stall message; logged with `slog`; never a raw error to the client |
+| Provider error or timeout | In-character stall message; logged with `slog`; never a raw error to the client |
 | Worker queue full | Canned stall, job dropped |
-| `stop_reason: "refusal"` (after fallback) | In-character deflect; flagged in `chat_messages.moderation` |
+| `Reply.Outcome == refused` (after any provider-side fallback) | In-character deflect; flagged in `chat_messages.moderation` |
+| Profile's provider has no configured key | Falls back to the global default provider; logged at warn |
+| No provider has a configured key | The `chat` channel refuses `subscribe`; the streamer boots and serves everything else normally |
 | `chat_messages` write fails | Message still delivers; the logging failure is logged, not fatal |
 | `directus_sessions` lookup fails | `chat_state{enabled:false, reason:"not_signed_in"}`; media streaming untouched |
-| Anthropic API key absent | The `chat` channel refuses `subscribe`; the streamer boots and serves everything else normally |
 
 ---
 
@@ -301,11 +362,13 @@ A single self-contained HTML file served by the streamer behind `CHAT_DEV_UI=1`,
 
 ### Go tests
 
-Tests live next to the code per the package's existing convention. `Generator` sits behind an interface with a scripted fake — **CI never calls the Anthropic API.**
+Tests live next to the code per the package's existing convention. `Provider` is an interface with a scripted fake — **CI never calls a real LLM API.**
 
 | Target | Coverage |
 |---|---|
-| `Composer` | Table-driven over (profile × phase × tier mix); prompt structure, dial rendering, cache-breakpoint placement |
+| `Composer` | Table-driven over (profile × phase × tier mix); segment order, stability tagging, dial rendering |
+| Adapters | Segment → wire rendering per vendor; `cache_control` placement on the Anthropic path; outcome, token, and cache-hit normalization from recorded vendor responses |
+| Config resolution | Profile override → global default fallback for all five fields; missing-key fallback to the default provider |
 | `Registry` | Beacon → `public_at` → phase resolution, including exact boundaries |
 | `Guard` | allow / block / escalate, with distress cases explicit |
 | Post-processor | Markdown, Unicode emoji, URLs, and anachronisms all stripped |
@@ -317,7 +380,8 @@ Tests live next to the code per the package's existing convention. `Generator` s
 Two items get their own plan tasks rather than a trusting checkbox:
 
 1. **Directus policies on `chat_messages` and `chat_blocks` actually scope to `$CURRENT_USER`** — verified by attempting a cross-user read with a second account's token.
-2. **`resp.Usage.CacheReadInputTokens` is non-zero across consecutive turns** — a zero means a silent cache invalidator crept into the prefix.
+2. **`Reply.CachedIn` is non-zero across consecutive turns** — a zero means a silent cache invalidator crept into the prefix.
+3. **A live provider conformance run**, behind a build tag and excluded from CI: the same scripted conversation against Anthropic, OpenAI, and OpenRouter, asserting each returns a normalized `Reply` and passes the style post-conditions. This is how a vendor API change gets caught, since CI deliberately cannot.
 
 ---
 
@@ -329,9 +393,11 @@ New configuration the streamer needs:
 
 | Variable | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Secret in `rt911-secrets`. Absent → chat channel disabled, streamer otherwise normal |
+| `ANTHROPIC_API_KEY` | Secret in `rt911-secrets` |
+| `OPENAI_API_KEY` | Secret in `rt911-secrets`. Optional |
+| `OPENROUTER_API_KEY` | Secret in `rt911-secrets`. Optional |
 | `CHAT_DEV_UI` | Dev harness gate. Unset in production |
-| `CHAT_WORKER_POOL` | Generator concurrency. Default **8** — calls are I/O-bound on the Anthropic API, so this bounds in-flight requests, not CPU |
+| `CHAT_WORKER_POOL` | Generator concurrency. Default **8** — calls are I/O-bound on the provider API, so this bounds in-flight requests, not CPU |
 | `CHAT_QUEUE_SIZE` | Bounded job queue depth. Default **256**, matching the `send` channel buffer convention. Overflow triggers the in-character stall |
 
 Directus schema additions go through `seed.mjs` so fresh installs get them, and are applied to `api-beta` as a schema operation. Per the recorded 2026-07-24 incident, check `pg_stat_activity` for a running `pg_dump` or `COPY` before any Directus schema operation — the daily backup CronJob runs at 09:20 UTC and holds `ACCESS SHARE` on all tables, which will stall a queued `ALTER`.
