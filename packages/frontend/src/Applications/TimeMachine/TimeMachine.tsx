@@ -324,6 +324,7 @@ export const TimeMachine: React.FC = () => {
 								id="controls_step_seconds"
 								labelTitle="Duration:"
 								labelPosition="left"
+								labelSize="small"
 								value={settingsForm.stepSeconds}
 								min={1}
 								max={600}
