@@ -730,11 +730,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				(item) => keepMediaItem(item, now) && isItemAvailable("radio", item.source ?? ""),
 			),
 		);
-		// news items reuse the same retention rules (mostly instant headlines).
+		// News is NOT time-pruned: the News app shows the full back catalogue from
+		// the 9/9 epoch onward, so an article stays once revealed. The playlist
+		// availability gate stays — that is availability, not date gating. A
+		// backward seek clears the list wholesale instead (see the seek effect).
 		setNewsItems((prev) =>
-			mergeById(prev, dueNews).filter(
-				(item) => keepMediaItem(item, now) && isItemAvailable("news", String(item.id)),
-			),
+			mergeById(prev, dueNews).filter((item) => isItemAvailable("news", String(item.id))),
 		);
 		// Alerts are not time-pruned: a modal persists until the extension
 		// dismisses it (Task 8), so there is no keepMediaItem/isItemAvailable
@@ -776,6 +777,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerBuffer.current.clear();
 			mp3Buffer.current.clear();
 			newsBuffer.current.clear();
+			// News is no longer time-pruned, so nothing else would drop articles
+			// dated after a backward-seek target. The snapshot for the new instant
+			// repopulates the full back catalogue up to it.
+			setNewsItems([]);
 			alertBuffer.current.clear();
 			setAlertItems([]);
 			// The server resends a fresh usenet backlog for the active group(s) at the
@@ -970,10 +975,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				if (!incomingNews || incomingNews.length === 0) return;
 				const { due, future } = partitionByDue(incomingNews, now);
 				for (const item of future) newsBuffer.current.set(item.id, item);
-				const fresh = due.filter(
-					(item) =>
-						keepMediaItem(item, now) &&
-						isItemAvailableRef.current("news", String(item.id)),
+				// No retention filter here: a backlog frame is almost entirely
+				// articles older than any retention window, and dropping them on
+				// arrival is exactly what kept the News app to a 10-minute memory.
+				const fresh = due.filter((item) =>
+					isItemAvailableRef.current("news", String(item.id)),
 				);
 				if (fresh.length > 0) setNewsItems((prev) => mergeById(prev, fresh));
 				return;
