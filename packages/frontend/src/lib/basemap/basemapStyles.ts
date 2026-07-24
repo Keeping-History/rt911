@@ -13,6 +13,7 @@ export interface BasemapUrls {
 	satelliteNight: string;
 	terrainDem: string;
 	coast: string;
+	borders: string;
 }
 
 // Module-scope so the object identity is stable — FlightMap/WeatherMap key
@@ -37,6 +38,12 @@ export const BASEMAP_URLS: BasemapUrls = {
 		// CONUS-only high-res OSM coastline (issue: WTC-in-water). Layered over
 		// the coarse world vector; world stays the z0-7 base + rollback.
 		"https://files.911realtime.org/maps/conus-coast.pmtiles",
+	borders:
+		(import.meta.env.VITE_FLIGHT_BORDERS_BASEMAP_URL as string | undefined) ??
+		// CONUS-only high-res country/state boundary LINES (Natural Earth 1:10m).
+		// Replaces the coarse NE-50m world lines at mid zoom; both fade out before
+		// building zoom (jagged/inaccurate NE-50m state line down the Hudson).
+		"https://files.911realtime.org/maps/conus-borders.pmtiles",
 };
 
 /** Persisted-state safety: anything unrecognized renders as classic. */
@@ -223,6 +230,19 @@ export function groundVisibility(mapStyle: BasemapStyleId, darkMap: boolean): Gr
 
 const NA_BBOX: [number, number, number, number] = [-150, 18, -65, 65];
 
+// Boundary-line zoom fades. The coarse Natural-Earth-50m world `countries`/
+// `states` lines only cover the low-zoom/globe view — they fade out by z7,
+// where the high-res CONUS `borders` overlay (NE 1:10m) fades in. Both the
+// world lines and the crisp overlay are gone by building zoom (z13.5), because
+// even an accurate state line (the NY/NJ border down the Hudson) is clutter at
+// street scale. Opacity, not visibility, so the handoff is a smooth crossfade.
+export const NE_BORDER_FADE: ExpressionSpecification = [
+	"interpolate", ["linear"], ["zoom"], 5, 1, 7, 0,
+];
+export const HIRES_BORDER_FADE: ExpressionSpecification = [
+	"interpolate", ["linear"], ["zoom"], 6, 0, 8, 1, 12, 1, 13.5, 0,
+];
+
 /** Source id for the raster-dem archive — shared by hillshade and setTerrain. */
 export const TERRAIN_SOURCE = "terrain";
 
@@ -261,6 +281,7 @@ export function buildBasemapStyle(
 		sources: {
 			basemap: { type: "vector", url: `pmtiles://${urls.vector}` },
 			coast: { type: "vector", url: `pmtiles://${urls.coast}` },
+			borders: { type: "vector", url: `pmtiles://${urls.borders}` },
 			"satellite-day": {
 				type: "raster",
 				url: `pmtiles://${urls.satelliteDay}`,
@@ -307,9 +328,16 @@ export function buildBasemapStyle(
 			{ id: "hillshade-satellite", type: "hillshade", source: TERRAIN_SOURCE,
 				layout: vis(h.satellite), paint: hillshadePaint(hillshadePalette("satellite", darkMap)) },
 			{ id: "countries", type: "line", source: "basemap", "source-layer": "countries",
-				paint: { "line-color": p.countries, "line-width": 0.8 } },
+				paint: { "line-color": p.countries, "line-width": 0.8, "line-opacity": NE_BORDER_FADE } },
 			{ id: "states", type: "line", source: "basemap", "source-layer": "states",
-				paint: { "line-color": p.states, "line-width": 0.4 } },
+				paint: { "line-color": p.states, "line-width": 0.4, "line-opacity": NE_BORDER_FADE } },
+			// High-res CONUS boundary lines (NE 1:10m), drawn over the coarse world
+			// lines. Fade in as the world lines fade out, and fade back out before
+			// building zoom (HIRES_BORDER_FADE).
+			{ id: "borders-countries", type: "line", source: "borders", "source-layer": "countries",
+				paint: { "line-color": p.countries, "line-width": 0.8, "line-opacity": HIRES_BORDER_FADE } },
+			{ id: "borders-states", type: "line", source: "borders", "source-layer": "states",
+				paint: { "line-color": p.states, "line-width": 0.4, "line-opacity": HIRES_BORDER_FADE } },
 		],
 	};
 }
@@ -336,6 +364,8 @@ export function applyBasemapStyle(
 	map.setPaintProperty("lakes", "fill-color", p.lakes);
 	map.setPaintProperty("countries", "line-color", p.countries);
 	map.setPaintProperty("states", "line-color", p.states);
+	map.setPaintProperty("borders-countries", "line-color", p.countries);
+	map.setPaintProperty("borders-states", "line-color", p.states);
 	map.setLayoutProperty("land", "visibility", g.vector ? "visible" : "none");
 	map.setLayoutProperty("coast-land", "visibility", g.vector ? "visible" : "none");
 	map.setLayoutProperty("lakes", "visibility", g.vector ? "visible" : "none");

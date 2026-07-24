@@ -7,6 +7,8 @@ import {
 	basemapPalette,
 	buildBasemapStyle,
 	effectiveTone,
+	HIRES_BORDER_FADE,
+	NE_BORDER_FADE,
 	groundVisibility,
 	hillshadePalette,
 	hillshadeVisibility,
@@ -20,6 +22,7 @@ const URLS = {
 	satelliteNight: "https://x.example/night.pmtiles",
 	terrainDem: "https://x.example/dem.pmtiles",
 	coast: "https://x.example/coast.pmtiles",
+	borders: "https://x.example/borders.pmtiles",
 };
 
 const ALL_STYLES: BasemapStyleId[] = ["classic", "radar", "satellite"];
@@ -78,7 +81,7 @@ describe("buildBasemapStyle — superset structure", () => {
 			"background", "satellite-day", "satellite-night",
 			"land", "coast-land", "lakes",
 			"hillshade-classic", "hillshade-radar", "hillshade-satellite",
-			"countries", "states",
+			"countries", "states", "borders-countries", "borders-states",
 		]);
 	});
 
@@ -236,6 +239,13 @@ describe("applyBasemapStyle", () => {
 		applyBasemapStyle(satMap, "satellite", false);
 		expect(satMap.layout["coast-land"].visibility).toBe("none");
 	});
+
+	it("recolors the high-res border lines on a live switch (parity with build)", () => {
+		const map = recordingMap();
+		applyBasemapStyle(map, "radar", false);
+		expect(map.paint["borders-countries"]["line-color"]).toBe(basemapPalette("radar", false).countries);
+		expect(map.paint["borders-states"]["line-color"]).toBe(basemapPalette("radar", false).states);
+	});
 });
 
 describe("sky (issue #221)", () => {
@@ -387,5 +397,47 @@ describe("coast overlay (CONUS coastline)", () => {
 
 	it("BASEMAP_URLS.coast defaults to the hosted conus-coast file", () => {
 		expect(BASEMAP_URLS.coast).toContain("/maps/conus-coast.pmtiles");
+	});
+});
+
+describe("high-res border lines (CONUS boundaries)", () => {
+	const style = buildBasemapStyle(URLS, "classic", false);
+	const layer = (id: string) => style.layers.find((l) => l.id === id);
+
+	it("adds the borders vector source", () => {
+		expect(style.sources.borders).toEqual({
+			type: "vector",
+			url: "pmtiles://https://x.example/borders.pmtiles",
+		});
+	});
+
+	it("adds borders-countries and borders-states line layers over the coarse NE lines", () => {
+		const ids = style.layers.map((l) => l.id);
+		expect(ids.indexOf("borders-countries")).toBeGreaterThan(ids.indexOf("countries"));
+		expect(ids.indexOf("borders-states")).toBeGreaterThan(ids.indexOf("states"));
+		expect(layer("borders-countries")).toMatchObject({
+			source: "borders", "source-layer": "countries",
+			paint: { "line-color": basemapPalette("classic", false).countries, "line-opacity": HIRES_BORDER_FADE },
+		});
+		expect(layer("borders-states")).toMatchObject({
+			source: "borders", "source-layer": "states",
+			paint: { "line-color": basemapPalette("classic", false).states, "line-opacity": HIRES_BORDER_FADE },
+		});
+	});
+
+	it("fades the coarse NE world lines out by z7 (handoff to the overlay)", () => {
+		const paintOf = (id: string) => layer(id)?.paint as Record<string, unknown> | undefined;
+		expect(paintOf("countries")?.["line-opacity"]).toEqual(NE_BORDER_FADE);
+		expect(paintOf("states")?.["line-opacity"]).toEqual(NE_BORDER_FADE);
+	});
+
+	it("both border tiers are gone by building zoom (opacity 0 at the last stop)", () => {
+		// HIRES fades out to 0 at z13.5; NE fades out to 0 at z7 — no boundary line at street scale.
+		expect(HIRES_BORDER_FADE.at(-1)).toBe(0);
+		expect(NE_BORDER_FADE.at(-1)).toBe(0);
+	});
+
+	it("BASEMAP_URLS.borders defaults to the hosted conus-borders file", () => {
+		expect(BASEMAP_URLS.borders).toContain("/maps/conus-borders.pmtiles");
 	});
 });
