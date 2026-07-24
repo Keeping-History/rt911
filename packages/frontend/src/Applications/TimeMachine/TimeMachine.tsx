@@ -81,7 +81,7 @@ export const TimeMachine: React.FC = () => {
 				| Record<string, unknown>
 				| undefined,
 	);
-	const { skipMinutes, stepSeconds } = useMemo(
+	const { skipMinutes, stepSeconds, scrubSeconds } = useMemo(
 		() => readTimeMachineSettings(appData),
 		[appData],
 	);
@@ -100,13 +100,14 @@ export const TimeMachine: React.FC = () => {
 	const [settingsForm, setSettingsForm] = useState(() => ({
 		skipMinutes,
 		stepSeconds,
+		scrubSeconds,
 	}));
 	const [showOnTop, setShowOnTop] = useState(true);
 
 	const openSettings = useCallback(() => {
-		setSettingsForm({ skipMinutes, stepSeconds });
+		setSettingsForm({ skipMinutes, stepSeconds, scrubSeconds });
 		setShowSettings(true);
-	}, [skipMinutes, stepSeconds]);
+	}, [skipMinutes, stepSeconds, scrubSeconds]);
 
 	const saveSettings = useCallback(() => {
 		desktopEventDispatch(timeMachineSetSettings(settingsForm));
@@ -257,8 +258,8 @@ export const TimeMachine: React.FC = () => {
 		[dateTime, setDateTime],
 	);
 
-	const handleScrubForward = () => shiftTime(5 / 60);
-	const handleScrubBack    = () => shiftTime(-5 / 60);
+	const handleScrubForward = () => shiftTime(scrubSeconds / 60);
+	const handleScrubBack    = () => shiftTime(-(scrubSeconds / 60));
 	const handleSkipBack    = () => shiftTime(-skipMinutes);
 	const handleStepBack    = () => shiftTime(-(stepSeconds / 60));
 	const handleStepForward = () => shiftTime(stepSeconds / 60);
@@ -332,6 +333,25 @@ export const TimeMachine: React.FC = () => {
 									setSettingsForm((f) => ({
 										...f,
 										stepSeconds: parseInt(e.target.value, 10),
+									}))
+								}
+							/>
+						</ClassicyControlGroup>
+						<ClassicyControlGroup label="Scrub" backgroundColor="var(--color-system-02-)">
+							<ClassicySlider
+								id="controls_scrub_seconds"
+								labelTitle="Duration:"
+								labelPosition="left"
+								labelSize="small"
+								value={settingsForm.scrubSeconds}
+								min={1}
+								max={60}
+								step={1}
+								valueLabel={formatSeconds(settingsForm.scrubSeconds)}
+								onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+									setSettingsForm((f) => ({
+										...f,
+										scrubSeconds: parseInt(e.target.value, 10),
 									}))
 								}
 							/>

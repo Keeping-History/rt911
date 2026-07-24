@@ -8,15 +8,18 @@ const appId = TIME_MACHINE_APP_ID;
 // state (open windows, the H/M/S entry form, the settings draft) is NOT
 // persisted; only the user's choices are — same split as weatherSettings.ts.
 export interface TimeMachineSettings {
-	/** «/» skip distance, minutes. Slider range 1–60. */
+	/** ⇚/⇛ skip distance, minutes. Slider range 1–60. */
 	skipMinutes: number;
-	/** ‹/› step distance, seconds. Slider range 1–600. */
+	/** «/» step distance, seconds. Slider range 1–600. */
 	stepSeconds: number;
+	/** ‹/› scrub distance, seconds. Slider range 1–60. */
+	scrubSeconds: number;
 }
 
 export const DEFAULT_TIME_MACHINE_SETTINGS: TimeMachineSettings = {
 	skipMinutes: 30,
 	stepSeconds: 300, // 5 minutes
+	scrubSeconds: 15,
 };
 
 /** Persist the whole settings object in one dispatch. */
@@ -45,6 +48,9 @@ export const readTimeMachineSettings = (
 		stepSeconds: inRange(stored.stepSeconds, 1, 600)
 			? stored.stepSeconds
 			: DEFAULT_TIME_MACHINE_SETTINGS.stepSeconds,
+		scrubSeconds: inRange(stored.scrubSeconds, 1, 60)
+			? stored.scrubSeconds
+			: DEFAULT_TIME_MACHINE_SETTINGS.scrubSeconds,
 	};
 };
 
