@@ -116,3 +116,40 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+.personalRow {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	width: 100%;
+}
+
+.rowActions {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: row;
+	gap: 2px;
+	padding-right: var(--window-padding-size);
+}
+
+.iconButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+
+	&:hover {
+		background-color: var(--color-theme-highlight, var(--color-system-04));
+	}
+
+	img {
+		width: 14px;
+		height: 14px;
+		image-rendering: pixelated;
+	}
+}
