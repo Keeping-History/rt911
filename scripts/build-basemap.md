@@ -167,3 +167,34 @@ is untouched and stays the low-zoom base + rollback.
 - **2001 accuracy:** Lower Manhattan and DC shorelines are effectively identical
   to modern OSM (Battery Park City predates 2001; no relevant landfill since),
   so the modern OSM coastline is period-correct for this use.
+
+## CONUS boundary lines overlay (conus-borders.pmtiles) — DONE 2026-07-24
+
+The world basemap's `countries`/`states` lines are Natural Earth **1:50m** — at
+city zoom they render coarse *and* geographically wrong (the NY/NJ state line
+cuts diagonally across land instead of down the Hudson). This overlay adds
+crisp **1:10m** boundary LINES for CONUS, drawn over the coarse world lines; the
+style fades the coarse lines out by z7 and the crisp overlay out by z13.5, so
+building zoom shows no boundary line at all (see `NE_BORDER_FADE` /
+`HIRES_BORDER_FADE` in `basemapStyles.ts`).
+
+### Build (tippecanoe + GDAL, same prereqs as the coastline)
+```sh
+BASE=https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson
+curl -fsSL -o countries.geojson "$BASE/ne_10m_admin_0_boundary_lines_land.geojson"
+curl -fsSL -o states.geojson    "$BASE/ne_10m_admin_1_states_provinces_lines.geojson"
+ogr2ogr -f GeoJSON countries_conus.geojson countries.geojson -clipsrc -125 24 -66 50
+ogr2ogr -f GeoJSON states_conus.geojson    states.geojson    -clipsrc -125 24 -66 50
+tippecanoe -o conus-borders.pmtiles -Z6 -z13 -X \
+  -L countries:countries_conus.geojson \
+  -L states:states_conus.geojson \
+  --simplification=2 --force
+# ~1.8 MB, seconds (lines are cheap). Layers must be named `countries` + `states`.
+```
+
+### Host
+Upload to `maps/conus-borders.pmtiles` (same Wasabi creds/flags as above). It's a
+**new key**, so no CF purge is needed. Style default is
+`VITE_FLIGHT_BORDERS_BASEMAP_URL`; adding the source is a code change, so it ships
+with the frontend build (unlike an in-place artifact swap). Missing file is
+non-fatal — the coarse world lines still cover the low-zoom view.
