@@ -923,6 +923,24 @@ export const FlightTracker: FC = () => {
 								setForm((f) => ({ ...f, observerPinColorDark: color }))
 							}
 						/>
+						<ClassicyColorPicker
+							id="flight_settings_hero_color_light"
+							labelTitle="Landmark buildings (light map)"
+							value={form.buildingHeroColorLight}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, buildingHeroColorLight: color }))
+							}
+						/>
+						<ClassicyColorPicker
+							id="flight_settings_hero_color_dark"
+							labelTitle="Landmark buildings (dark map)"
+							value={form.buildingHeroColorDark}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, buildingHeroColorDark: color }))
+							}
+						/>
 						<ClassicySlider
 							id="flight_settings_trail_multiplier"
 							labelTitle="Trail length"
