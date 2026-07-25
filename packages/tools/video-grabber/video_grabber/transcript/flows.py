@@ -42,6 +42,11 @@ def _ingest_one(source: dict, *, medium: str, cfg: Config, logger) -> int:
     written = writer.replace_segments(
         rows, medium=medium, channel=channel, channel_slug=slug, cfg=cfg
     )
+    if not written:
+        logger.warning(
+            "%s %s produced no segments — its existing rows were cleared; "
+            "check the SRT at %s", medium, source["id"], source["subtitles"]
+        )
     logger.info("ingested %s %s: %d segments", medium, source["id"], written)
     return written
 
@@ -64,7 +69,7 @@ def build_transcript_segments_flow(medium: str = "all", cfg: Config | None = Non
     if not channels and not mp3_items:
         raise RuntimeError(f"no subtitled sources found for medium={medium!r}")
 
-    result = {"channels": 0, "mp3_items": 0, "segments": 0, "failed": 0}
+    result = {"channels": 0, "mp3_items": 0, "segments": 0, "failed": 0, "empty": 0}
 
     for source, kind in [(c, "tv") for c in channels] + [(m, "radio") for m in mp3_items]:
         try:
@@ -75,6 +80,14 @@ def build_transcript_segments_flow(medium: str = "all", cfg: Config | None = Non
             continue
         result["segments"] += written
         result["channels" if kind == "tv" else "mp3_items"] += 1
+        if not written:
+            result["empty"] += 1
+
+    if result["failed"] and not result["segments"]:
+        raise RuntimeError(
+            f"every source failed ({result['failed']} of them); wrote nothing — "
+            "see the logged tracebacks"
+        )
 
     logger.info("transcript segments rebuilt: %s", result)
     return result

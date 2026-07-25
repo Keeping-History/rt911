@@ -130,6 +130,45 @@ curl -s -H "Authorization: Bearer $DIRECTUS_API_TOKEN" \
 
 ---
 
+## Known schema mismatch: `start_date`/`end_date` are `timestamp`, not `dateTime`
+
+**For the next plan, not fixed here — this branch does not own the schema.**
+
+`chat_transcript_segments.start_date` and `.end_date` were created in Directus
+as type **`timestamp`**. Every other 2001-time column this package writes —
+`tv_channels`, `media_items`, `mp3_items`, `usenet_items` — is type
+**`dateTime`**. The two types read back differently:
+
+- `dateTime` columns round-trip as **naive** strings (no offset, no `Z`).
+- `timestamp` columns are normalized to UTC and round-trip as **aware**
+  strings (`...Z` / `+00:00`).
+
+This module writes `start_date`/`end_date` as naive local-2001-time strings
+(`_stamp()` in `segments.py` calls `.isoformat()` on a naive `datetime`)
+**deliberately** — that's consistent with every other historical-time column
+in this codebase and with `_naive_utc()` in `writer.py`, which exists
+specifically to normalize *incoming* Directus timestamps to naive UTC so they
+can be subtracted against other naive values without raising
+(`TypeError: can't subtract offset-naive and offset-aware datetimes` is a
+tested bug class here — see `test_naive_utc_*` in `tests/test_transcript_writer.py`).
+
+The mismatch bites on **read**, not write: because the column is `timestamp`,
+Directus will hand back `chat_transcript_segments.start_date`/`end_date` as
+**aware** UTC strings even though this code wrote naive ones, while a query
+against `news_items` (or any `dateTime` column) in the same composer comes
+back **naive**. A consumer that reads both — e.g. the IM Buddies chat
+composer this table feeds, which is explicitly a "next plan" concern per this
+doc — and mixes them (sorts, subtracts, or compares across sources without
+normalizing) will hit exactly the naive/aware `TypeError` this package has
+scar tissue for.
+
+**Any future consumer of `chat_transcript_segments` must normalize on read**
+(e.g. via something like `writer._naive_utc()`) before comparing against
+`dateTime`-typed timestamps from other tables. This doc entry exists so that
+normalization isn't rediscovered the hard way.
+
+---
+
 ## What this deliberately leaves out
 
 - **No jobs table.** This is a regenerate-from-source backfill, not a

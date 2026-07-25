@@ -50,6 +50,9 @@ def test_builds_absolute_timestamps_from_the_channel_anchor(cfg, monkeypatch):
     assert captured["rows"][0]["text"] == "the north tower has been hit"
     assert captured["kwargs"]["channel"] == 7
     assert captured["kwargs"]["medium"] == "tv"
+    # The radio test pins that the row's channel_slug matches the delete
+    # scope; the TV side of that same invariant is the row's channel id.
+    assert captured["rows"][0]["channel"] == 7
 
 
 def test_radio_anchors_on_the_mp3_items_start_date(cfg, monkeypatch):
@@ -111,3 +114,27 @@ def test_one_failing_source_does_not_abort_the_rest(cfg, monkeypatch):
 
     assert result["channels"] == 1
     assert result["failed"] == 1
+
+
+def test_raises_when_every_source_fails(cfg, monkeypatch):
+    # Sources were found (so the zero-sources guard doesn't fire), but every
+    # one of them raised during ingest — e.g. a bad token or Directus down.
+    # A green "0 channels, 0 segments, N failed" result is the same
+    # silently-empty-success failure mode the zero-sources guard exists for,
+    # just relocated to the write step.
+    monkeypatch.setattr(flows, "get_run_logger", lambda: logging.getLogger("test"))
+    monkeypatch.setattr(flows.writer, "list_subtitled_channels", lambda c, **k: [
+        {"id": 1, "slug": "a", "start_date": datetime(2001, 9, 11, 12, 0, 0),
+         "subtitles": "https://f/a.srt"},
+        {"id": 2, "slug": "b", "start_date": datetime(2001, 9, 11, 12, 0, 0),
+         "subtitles": "https://f/b.srt"},
+    ])
+    monkeypatch.setattr(flows.writer, "list_subtitled_mp3_items", lambda c, **k: [])
+
+    def always_fails(url, **k):
+        raise RuntimeError("directus down")
+
+    monkeypatch.setattr(flows.writer, "fetch_srt", always_fails)
+
+    with pytest.raises(RuntimeError, match="every source failed"):
+        flows.build_transcript_segments_flow.fn(medium="tv", cfg=cfg)

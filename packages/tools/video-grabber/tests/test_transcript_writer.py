@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from contextlib import contextmanager
@@ -9,6 +10,13 @@ import respx
 
 from video_grabber.config import Config
 from video_grabber.transcript import writer
+
+
+def _mock_zero_count():
+    """The post-delete verification GET, mocked to report the scope is empty."""
+    return respx.get("https://directus.test/items/chat_transcript_segments").mock(
+        return_value=httpx.Response(200, json={"data": [{"count": 0}]})
+    )
 
 
 @contextmanager
@@ -47,6 +55,7 @@ def test_replace_segments_deletes_before_inserting(cfg):
     delete = respx.delete("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(204)
     )
+    _mock_zero_count()
     insert = respx.post("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(200, json={"data": []})
     )
@@ -60,9 +69,13 @@ def test_replace_segments_deletes_before_inserting(cfg):
     assert delete.called, "existing rows must be cleared before reinserting"
     assert insert.called
     # The delete must be scoped to exactly the identity the rows carry, or it
-    # matches nothing and every re-run doubles the data.
-    assert '"channel": {"_eq": 7}' in delete.calls[0].request.url.params["filter"]
-    assert '"medium": {"_eq": "tv"}' in delete.calls[0].request.url.params["filter"]
+    # matches nothing and every re-run doubles the data. Directus scopes
+    # DELETE /items/:collection from the request BODY, not the query string —
+    # a query-param `filter` is silently ignored (or 400s), so asserting on
+    # the body is what actually proves the scope reaches the server.
+    body = json.loads(delete.calls[0].request.read())
+    assert body["query"]["filter"] == {"medium": {"_eq": "tv"}, "channel": {"_eq": 7}}
+    assert body["query"]["limit"] == -1
 
 
 @respx.mock
@@ -70,6 +83,7 @@ def test_replace_segments_strips_nul_bytes(cfg):
     respx.delete("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(204)
     )
+    _mock_zero_count()
     insert = respx.post("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(200, json={"data": []})
     )
@@ -90,6 +104,7 @@ def test_replace_segments_batches_by_serialized_size(cfg, monkeypatch):
     respx.delete("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(204)
     )
+    _mock_zero_count()
     insert = respx.post("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(200, json={"data": []})
     )
@@ -108,6 +123,7 @@ def test_replace_segments_with_no_rows_still_clears(cfg):
     delete = respx.delete("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(204)
     )
+    _mock_zero_count()
     insert = respx.post("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(200, json={"data": []})
     )
@@ -124,6 +140,7 @@ def test_replace_segments_raises_on_directus_error(cfg):
     respx.delete("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(204)
     )
+    _mock_zero_count()
     respx.post("https://directus.test/items/chat_transcript_segments").mock(
         return_value=httpx.Response(400, text="bad request")
     )
@@ -133,6 +150,54 @@ def test_replace_segments_raises_on_directus_error(cfg):
              "text": "t"}]
     with pytest.raises(httpx.HTTPStatusError):
         writer.replace_segments(rows, medium="tv", channel=1, channel_slug=None, cfg=cfg)
+
+
+@respx.mock
+def test_replace_segments_scopes_the_radio_delete_by_channel_slug(cfg):
+    # Radio has no tv_channels row, so its delete scope is channel_slug rather
+    # than channel — every other replace_segments test passes an int channel,
+    # so this branch has never executed in a test before.
+    delete = respx.delete("https://directus.test/items/chat_transcript_segments").mock(
+        return_value=httpx.Response(204)
+    )
+    _mock_zero_count()
+    respx.post("https://directus.test/items/chat_transcript_segments").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+
+    rows = [{"channel": None, "channel_slug": "mp3:42", "medium": "radio",
+             "start_date": "2001-09-11T12:00:00", "end_date": "2001-09-11T12:00:30",
+             "text": "hello"}]
+    writer.replace_segments(rows, medium="radio", channel=None, channel_slug="mp3:42", cfg=cfg)
+
+    body = json.loads(delete.calls[0].request.read())
+    assert body["query"]["filter"] == {
+        "medium": {"_eq": "radio"}, "channel_slug": {"_eq": "mp3:42"}
+    }
+
+
+@respx.mock
+def test_replace_segments_raises_when_delete_leaves_rows_behind(cfg):
+    # A server-side cap on the bulk delete (QUERY_LIMIT_MAX) can leave a
+    # remainder even with limit=-1 requested. Inserting on top of that would
+    # duplicate data, so the post-delete count check must raise instead.
+    respx.delete("https://directus.test/items/chat_transcript_segments").mock(
+        return_value=httpx.Response(204)
+    )
+    respx.get("https://directus.test/items/chat_transcript_segments").mock(
+        return_value=httpx.Response(200, json={"data": [{"count": 3}]})
+    )
+    insert = respx.post("https://directus.test/items/chat_transcript_segments").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+
+    rows = [{"channel": 1, "channel_slug": None, "medium": "tv",
+             "start_date": "2001-09-11T12:00:00", "end_date": "2001-09-11T12:00:30",
+             "text": "t"}]
+    with pytest.raises(RuntimeError, match="delete left 3 rows"):
+        writer.replace_segments(rows, medium="tv", channel=1, channel_slug=None, cfg=cfg)
+
+    assert not insert.called, "must not insert on top of a partial delete"
 
 
 @respx.mock

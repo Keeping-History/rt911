@@ -149,13 +149,31 @@ def replace_segments(
     else:
         raise ValueError("replace_segments needs a channel id or a channel_slug to scope the delete")
 
-    d = client.delete(
+    d = client.request(
+        "DELETE",
         f"{cfg.directus_url}/items/{_COLLECTION}",
-        params={"filter": json.dumps(where)},
-        headers=_headers(cfg),
+        content=json.dumps({"query": {"filter": where, "limit": -1}}),
+        headers={**_headers(cfg), "Content-Type": "application/json"},
         timeout=_TIMEOUT,
     )
     d.raise_for_status()
+
+    # Directus's bulk delete can be capped server-side (QUERY_LIMIT_MAX), so
+    # "limit": -1 above is not a guarantee it ran in one pass. Verify the scope
+    # is actually empty before inserting — an insert on top of a partial delete
+    # is the exact duplicate-data outcome this module exists to prevent.
+    remaining = client.get(
+        f"{cfg.directus_url}/items/{_COLLECTION}",
+        params={"aggregate[count]": "*", "filter": json.dumps(where)},
+        headers=_headers(cfg),
+        timeout=_TIMEOUT,
+    )
+    remaining.raise_for_status()
+    left = int(remaining.json()["data"][0]["count"])
+    if left:
+        raise RuntimeError(
+            f"delete left {left} rows matching {where}; refusing to insert and duplicate"
+        )
 
     cleaned = [{k: _clean(v) for k, v in row.items()} for row in rows]
     written = 0
