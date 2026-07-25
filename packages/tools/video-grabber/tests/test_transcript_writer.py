@@ -1,3 +1,6 @@
+import os
+import time
+from contextlib import contextmanager
 from datetime import datetime
 
 import httpx
@@ -6,6 +9,32 @@ import respx
 
 from video_grabber.config import Config
 from video_grabber.transcript import writer
+
+
+@contextmanager
+def ambient_tz(name: str):
+    """Force the process timezone, then restore it.
+
+    TZ + tzset() is process-global state that does not compose with
+    monkeypatch's teardown ordering: monkeypatch restores the env var only
+    after the test body, so a tzset() inside the test would re-read the
+    patched value and leak the wrong timezone into every later test. Save and
+    restore explicitly instead.
+
+    time.tzset() is Unix-only; this package targets Linux (CI + the worker
+    pod), so that's fine, but it would need a different approach on Windows.
+    """
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = name
+    time.tzset()
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = previous
+        time.tzset()
 
 
 @pytest.fixture
@@ -126,11 +155,14 @@ def test_list_subtitled_channels_skips_rows_without_subtitles(cfg):
     assert got[0]["start_date"].tzinfo is None, "anchors must be naive UTC"
 
 
-def test_naive_utc_converts_an_aware_timestamp_to_utc():
-    # astimezone(tz=None) would convert to system-local time, which is correct
-    # only when TZ happens to be UTC. Pin the conversion to a fixed offset so
-    # the test fails on a machine configured any other way.
-    got = writer._naive_utc("2001-09-11T17:46:00+05:00")
+@pytest.mark.parametrize("tz_name", ["UTC", "America/New_York", "Asia/Kolkata"])
+def test_naive_utc_converts_an_aware_timestamp_to_utc_in_any_ambient_tz(tz_name):
+    # astimezone(tz=None) converts to system-local time, so it agrees with the
+    # correct answer only when the host is UTC. Pinning several ambient
+    # timezones is what makes this a regression guard rather than a comment:
+    # a revert fails here even though CI itself runs UTC.
+    with ambient_tz(tz_name):
+        got = writer._naive_utc("2001-09-11T17:46:00+05:00")
     assert got == datetime(2001, 9, 11, 12, 46, 0)
     assert got.tzinfo is None
 
