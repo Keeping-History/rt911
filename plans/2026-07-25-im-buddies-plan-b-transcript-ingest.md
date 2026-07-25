@@ -692,6 +692,10 @@ def test_radio_anchors_on_the_mp3_items_start_date(cfg, monkeypatch):
     assert captured["rows"][0]["start_date"] == "2001-09-11T13:30:00"
     assert captured["kwargs"]["medium"] == "radio"
     assert captured["kwargs"]["channel"] is None
+    # Radio's delete scope IS channel_slug, so this is the invariant: what the
+    # rows carry and what the delete matches on must be the same value.
+    assert captured["kwargs"]["channel_slug"] == "mp3:42"
+    assert captured["rows"][0]["channel_slug"] == "mp3:42"
 
 
 def test_raises_when_no_subtitled_sources_are_found(cfg, monkeypatch):
@@ -808,8 +812,12 @@ def build_transcript_segments_flow(medium: str = "all", cfg: Config | None = Non
     for source, kind in [(c, "tv") for c in channels] + [(m, "radio") for m in mp3_items]:
         try:
             written = _ingest_one(source, medium=kind, cfg=cfg, logger=logger)
-        except Exception as exc:  # noqa: BLE001 - one bad source must not stop the run
-            logger.error("failed %s %s: %s", kind, source["id"], exc)
+        except Exception:  # noqa: BLE001 - one bad source must not stop the run
+            # logger.exception, not logger.error: the broad catch is deliberate
+            # (one unreachable SRT must not cost a 23-channel rebuild), but without
+            # a traceback a programming error like a typo'd key reads as a data
+            # failure and is counted as one.
+            logger.exception("failed %s %s", kind, source["id"])
             result["failed"] += 1
             continue
         result["segments"] += written

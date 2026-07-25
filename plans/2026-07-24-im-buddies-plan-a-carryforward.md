@@ -143,3 +143,50 @@ nullable `sort` mapped to Go's zero value would sort an unset buddy *first* whil
 
 Until the collections exist and at least one profile row is seeded, the shipped behaviour is: boot
 logs a warning, every session gets an empty roster, and the `chat` channel is subscribable but empty.
+
+---
+
+# Plan B (transcript ingest) — carry-forward
+
+Branch `feat/transcript-ingest`, `3c232a64..655ded2a`.
+
+## Must be handled by Plan C
+
+**`chat_transcript_segments` timestamp columns return *aware* datetimes; `news_items` returns
+*naive*.** The collection was created with Directus type `timestamp` (normalizes to UTC, returns a
+trailing `Z`) while every sibling 2001-time column in this project — `tv_channels`, `media_items`,
+`mp3_items`, `usenet_items` — uses `dateTime` (stores no zone, returns naive). The ingest writes
+naive strings deliberately.
+
+Plan C's composer reads tier 2 (`chat_transcript_segments`) and tier 3 (`news_items`) in the same
+retrieval path, so it will mix aware and naive datetimes on day one. Python raises on that
+subtraction, and this package already has scar tissue from the same bug class. **Normalize on read.**
+
+## Known rough edges, safe to ship
+
+1. `segments._stamp` does a function-local `from datetime import timedelta` when `datetime` is
+   already imported at module scope. Cosmetic.
+2. `build_segments`'s float threshold comparisons inherit floating-point sensitivity from `Cue`'s
+   float times. Inherited from `transcribe/srt.py`; a boundary misfire moves one cue between two
+   adjacent segments, which is not a correctness failure for a retrieval corpus.
+3. `writer._slug_from_content`'s malformed-JSON and JSON-non-dict branches are correct by
+   inspection but untested. Both degrade to `None`, and a `None` TV slug does not break the delete
+   scope (TV keys on `channel`).
+4. `writer.py`'s `raise ValueError(...)` line is 101 chars against a configured `line-length = 100`;
+   `ruff` passes because E501 is not in this project's selected rule set.
+
+## The one that nearly shipped
+
+The delete in `replace_segments` originally sent its scoping filter as a **query parameter**.
+Directus scopes `DELETE /items/:collection` from the request **body**, and `httpx.delete()` cannot
+carry one — which is why all four sibling modules here use `client.request("DELETE", ..., content=)`.
+Left in, it would have produced either a 400 per source (swallowed by the per-source handler, run
+reports green) or a no-op delete followed by a full insert: **silent data doubling on every re-run**.
+
+Three task-scoped reviews missed it because the tests asserted on `request.url.params`, enshrining
+the wrong transport, and `respx` answers any DELETE with 204 regardless of body. Flow tests
+monkeypatched the writer out; writer tests never saw the flow. The seam where the bug lived was the
+one seam nothing crossed.
+
+The tests now assert the DELETE **body** for both the TV and radio branches, and a post-delete
+aggregate count raises rather than proceeding to insert if any rows survive.
