@@ -423,7 +423,7 @@ tv_channels, mp3_items, and usenet_items.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 
@@ -451,7 +451,11 @@ def _naive_utc(value: str) -> datetime:
     """
     dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if dt.tzinfo is not None:
-        dt = dt.astimezone(tz=None).replace(tzinfo=None)
+        # Explicitly UTC, not astimezone(tz=None): the latter converts to the
+        # *system local* timezone, so it would silently shift every anchor in
+        # any container not configured TZ=UTC — the exact failure this helper
+        # exists to prevent.
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
 
 
