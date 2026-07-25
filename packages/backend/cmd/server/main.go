@@ -143,8 +143,13 @@ func main() {
 		logger.Info("chat profiles loaded", "count", len(profiles))
 	}
 
+	// Only these origins may turn a Directus session cookie into a chat
+	// identity. CHAT_TRUSTED_ORIGINS appends to the built-in production list so
+	// dev and preview origins never ship in production config.
+	trustedOrigins := handler.NewOriginAllowlist(env("CHAT_TRUSTED_ORIGINS", ""))
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, sourcesCache, chatProfiles, logger))
+	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, sourcesCache, chatProfiles, trustedOrigins, logger))
 	if env("CHAT_DEV_UI", "") == "1" {
 		mux.HandleFunc("/chatdev", handler.NewChatDevHandler(logger))
 		logger.Warn("chat dev harness enabled at /chatdev — do not enable in production")

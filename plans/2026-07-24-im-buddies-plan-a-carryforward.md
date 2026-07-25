@@ -10,7 +10,21 @@ Branch: `feat/im-buddies-plan-a` (`3d4d6345..16caa00c`, 13 commits)
 
 ## Must be resolved before Plan B ships message history
 
-### 1. Cookie-authenticated identity rides a socket with no origin check
+### 1. Cookie-authenticated identity rides a socket with no origin check — RESOLVED 2026-07-25
+
+Fixed in `internal/handler/origin.go`. `NewOriginAllowlist` gates *identity* on an allowlist of
+origins we publish — `https://911realtime.org`, `https://www.911realtime.org`,
+`https://beta.911realtime.org`, and `https://keeping-history.github.io` (PR previews) — with
+`CHAT_TRUSTED_ORIGINS` appending dev and preview origins so they never ship in production config.
+An untrusted origin still connects and streams every other channel anonymously; only the cookie→
+identity step is refused, and the refusal is logged because it is otherwise invisible.
+
+**Known scope of the grant:** an `Origin` is scheme+host only, so trusting
+`https://keeping-history.github.io` trusts everything that org publishes to GitHub Pages, not just
+rt911 PR previews. Accepted deliberately (human decision, 2026-07-25) to let reviewers exercise chat
+in a preview.
+
+The original finding, retained for context:
 
 `internal/handler/ws.go` sets `CheckOrigin: func(r *http.Request) bool { return true }`, and Plan A
 now attaches a Directus user id to that connection. The reasoning in `internal/db/directus_session.go`

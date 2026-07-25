@@ -282,6 +282,18 @@ rather than getting silence or a generic error. A signed-in session's subscribe 
 (`subscribe_ack`) and is followed immediately by `chat_state{enabled:true, ...}` and a `chat_roster`
 snapshot — see [`chat_state`](#chat_state) and [`chat_roster`](#chat_roster) below.
 
+**The session cookie is only honoured from an allowlisted `Origin`.** The Directus cookie is scoped
+to `.911realtime.org` with `SameSite=lax`, which bounds it to the *site* rather than the origin — so
+any host under that domain, including ones serving archived third-party content, can reach the
+streamer with a signed-in user's cookie attached. The streamer therefore turns a cookie into an
+identity only for origins we publish (see `DefaultTrustedOrigins` in `internal/handler/origin.go`;
+`CHAT_TRUSTED_ORIGINS` appends more for dev and preview environments).
+
+This gates **identity, not the connection**: an untrusted origin still connects and streams every
+other channel anonymously. The visible symptom of a missing origin is therefore
+`chat_state{enabled:false, reason:"not_signed_in"}` for a user who *is* signed in — the server logs
+`session cookie ignored: untrusted origin` when this happens, which is the fastest way to diagnose it.
+
 The `mp3` channel (Radio app) behaves the same but carries `MediaItem`s on `mp3`-typed frames
 (reusing the `items` field), and — because mp3 is durational audio — its snapshot returns the
 items **active at** `t` (`start_date ≤ t ≤ end_date`), not a single second, so the client can

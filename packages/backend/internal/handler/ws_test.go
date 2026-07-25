@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 	"classicy/streamer/internal/session"
 
@@ -42,7 +43,7 @@ func newTestServer(t *testing.T, rdb *goredis.Client) *url.URL {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub := session.NewHub(logger, 0)
 	go hub.Run()
-	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, nil, NewProfileCache(), logger))
+	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, nil, NewProfileCache(), NewOriginAllowlist(""), logger))
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
 	u.Scheme = "ws"
@@ -61,7 +62,7 @@ func TestWSHandlerShedsWhenAtCapacity(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub := session.NewHub(logger, 1) // capacity of exactly one connection
 	go hub.Run()
-	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, nil, NewProfileCache(), logger))
+	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, nil, NewProfileCache(), NewOriginAllowlist(""), logger))
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
 	u.Scheme = "ws"
@@ -246,6 +247,37 @@ func TestWSHandlerChatSubscribeAnonymousRefused(t *testing.T) {
 	sendJSON(t, conn, map[string]string{"type": "pause"})
 	if f := readFrame(t, conn); f.Type != "pause_ack" {
 		t.Fatalf("expected pause_ack immediately after chat_state, got %+v", f)
+	}
+}
+
+// A session cookie presented from an origin we do not publish must not yield an
+// identity, even though SameSite=lax lets the browser attach it.
+//
+// The test server is built with a nil connection pool, so the guard is doing
+// real work here: if the origin check failed to short-circuit, the handler
+// would call LookupSessionUser with a nil pool and panic. Reaching the
+// not_signed_in assertion is therefore proof the cookie was never looked up.
+func TestWSHandlerUntrustedOriginDoesNotAuthenticate(t *testing.T) {
+	u := newTestServer(t, nil)
+
+	header := http.Header{}
+	header.Set("Origin", "https://timemachine.911realtime.org")
+	header.Set("Cookie", db.SessionCookieName+"=a-real-looking-session-token")
+
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), header)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+
+	sendJSON(t, conn, map[string]string{"type": "subscribe", "channel": "chat"})
+
+	f := readFrame(t, conn)
+	if f.Type != "chat_state" {
+		t.Fatalf("expected chat_state, got %+v", f)
+	}
+	if f.Enabled || f.Reason != "not_signed_in" {
+		t.Fatalf("a cookie from an untrusted origin must not authenticate, got %+v", f)
 	}
 }
 

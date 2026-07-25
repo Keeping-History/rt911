@@ -134,7 +134,7 @@ func (c *ProfileCache) Set(p []chat.Profile) {
 
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
-func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sources *db.SourcesCache, chatProfiles *ProfileCache, logger *slog.Logger) http.HandlerFunc {
+func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sources *db.SourcesCache, chatProfiles *ProfileCache, trustedOrigins *OriginAllowlist, logger *slog.Logger) http.HandlerFunc {
 	// shedLog rate-limits the at-capacity warning: shedding kicks in exactly when
 	// connections flood, so an unthrottled per-rejection log would itself become a
 	// flood. The 503 the client receives is the real, unthrottled signal.
@@ -169,14 +169,27 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 		// behind a lock or a saturated pool) would starve the usenet/weather
 		// tick paths too. Bound it and degrade to anonymous on timeout — same
 		// as the existing error path — never reject the connection.
+		// The cookie alone is not enough. SameSite=lax bounds it to the site,
+		// so any host under 911realtime.org — including ones serving archived
+		// third-party content — can reach us with a signed-in user's cookie
+		// attached. Only origins we publish may turn that cookie into an
+		// identity; everyone else streams anonymously.
 		if token := db.SessionTokenFrom(r); token != "" {
-			lookupCtx, lookupCancel := context.WithTimeout(r.Context(), 2*time.Second)
-			uid, err := db.LookupSessionUser(lookupCtx, pool, token)
-			lookupCancel()
-			if err != nil {
-				logger.Warn("directus session lookup failed", "error", err)
-			} else if uid != "" {
-				sess.SetUser(uid)
+			origin := r.Header.Get("Origin")
+			if !trustedOrigins.Trusted(origin) {
+				// Logged because the failure is otherwise invisible: the socket
+				// connects, media plays, and chat just reports not_signed_in to
+				// a user who is demonstrably signed in.
+				logger.Info("session cookie ignored: untrusted origin", "origin", origin)
+			} else {
+				lookupCtx, lookupCancel := context.WithTimeout(r.Context(), 2*time.Second)
+				uid, err := db.LookupSessionUser(lookupCtx, pool, token)
+				lookupCancel()
+				if err != nil {
+					logger.Warn("directus session lookup failed", "error", err)
+				} else if uid != "" {
+					sess.SetUser(uid)
+				}
 			}
 		}
 		sess.SetProfiles(chatProfiles.Get())
