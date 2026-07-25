@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { CHAT_COLLECTIONS, CHAT_INDEX_SQL } from "./chat-collections.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -314,6 +315,18 @@ async function createCollections(token) {
   }
   await ensureNumericFields("tm_bookmarks");
 
+  // ---- IM Buddies (see plans/2026-07-24-im-buddies-chatbot-design.md) ----
+  // Definitions live in chat-collections.mjs (shared with apply-chat-schema.mjs)
+  // so the two never drift apart.
+  for (const spec of CHAT_COLLECTIONS) {
+    if (!names.includes(spec.collection)) {
+      console.log(`Creating collection: ${spec.collection}`);
+      await api(token, "POST", "/collections", spec);
+    } else {
+      console.log(`Collection ${spec.collection} already exists, skipping.`);
+    }
+  }
+
   // pager_items — pager traffic lives in its own table (not media_items). Every
   // pager item is "instant": a start_date with no duration/end_date. provider is
   // a plain text column, not a sources FK.
@@ -455,6 +468,7 @@ function createStreamerIndexes() {
     CREATE INDEX IF NOT EXISTS idx_mp3_items_approved_start   ON mp3_items   (approved, start_date);
     CREATE INDEX IF NOT EXISTS idx_pager_items_approved_start ON pager_items (approved, start_date);
   `);
+  psql(CHAT_INDEX_SQL);
 }
 
 async function createRelations(token) {

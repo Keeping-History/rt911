@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 
@@ -33,6 +34,7 @@ const (
 	ChannelFlights = "flights"
 	ChannelWeather = "weather"
 	ChannelAlerts  = "alerts"
+	ChannelChat    = "chat"
 )
 
 // Look-ahead windowing. Instead of one Redis lookup + frame per virtual second,
@@ -47,9 +49,9 @@ const (
 // the client never starves. Data is immutable historical, so window size is
 // bounded only by client buffer memory, not freshness.
 const (
-	leadSeconds  = 30 * time.Second
-	windowMedia  = 300 * time.Second
-	windowPager  = 600 * time.Second
+	leadSeconds = 30 * time.Second
+	windowMedia = 300 * time.Second
+	windowPager = 600 * time.Second
 	// mp3/radio is sparse (a handful of durational clips per window) and the
 	// Radio app surfaces this window as its "Coming Up" schedule, so it gets a
 	// deliberately long look-ahead — 10× the dense-media window — to fill that
@@ -113,6 +115,14 @@ type outMsg struct {
 	// (+Time while active); heartbeat_ack carries MasterTime while forced.
 	Active     *bool  `json:"active,omitempty"`
 	MasterTime string `json:"master_time,omitempty"`
+	// Chat channel. Enabled/Reason ride chat_state; Buddies rides chat_roster;
+	// Profile/Online ride chat_presence. Enabled and Online are pointers so a
+	// false value is transmitted rather than dropped by omitempty.
+	Enabled *bool         `json:"enabled,omitempty"`
+	Reason  string        `json:"reason,omitempty"`
+	Buddies []model.Buddy `json:"buddies,omitempty"`
+	Profile int           `json:"profile,omitempty"`
+	Online  *bool         `json:"online,omitempty"`
 }
 
 // Session holds all state for a single connected client.
@@ -150,6 +160,14 @@ type Session struct {
 	// usenet channel is delivered only for these groups — a group can hold millions
 	// of messages, so nothing is sent until the client selects one. Guarded by mu.
 	usenetGroups map[string]struct{}
+
+	// userID is the authenticated Directus user id ("" = anonymous). profiles is
+	// the configured buddy roster, loaded once at connect time. presenceSeen is
+	// the last online state sent per buddy id, so syncChatPresence can emit only
+	// the buddies whose state actually changed. All guarded by mu.
+	userID       string
+	profiles     []chat.Profile
+	presenceSeen map[int]bool
 
 	send      chan []byte
 	tickCh    chan struct{}
@@ -472,6 +490,9 @@ func (s *Session) Init(t time.Time, items []model.MediaItem) {
 	s.mu.Unlock()
 
 	s.send_(outMsg{Type: "init_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
+
+	s.sendChatStateIfSubscribed()
+	s.syncChatPresence()
 }
 
 // Seek moves the client's virtual clock to t and delivers the full set of
@@ -482,7 +503,11 @@ func (s *Session) Seek(t time.Time, items []model.MediaItem) {
 	s.virtualTime = t
 	s.resetHorizons(t)
 	s.mu.Unlock()
+
 	s.send_(outMsg{Type: "seek_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
+
+	s.sendChatStateIfSubscribed()
+	s.syncChatPresence()
 }
 
 // resetHorizons points every channel's high-water mark at t so the next tick
@@ -511,6 +536,7 @@ func (s *Session) Pause() {
 	s.paused = true
 	s.mu.Unlock()
 	s.send_(outMsg{Type: "pause_ack"})
+	s.sendChatStateIfSubscribed()
 }
 
 // Resume unfreezes the client's virtual clock.
@@ -519,6 +545,7 @@ func (s *Session) Resume() {
 	s.paused = false
 	s.mu.Unlock()
 	s.send_(outMsg{Type: "resume_ack"})
+	s.sendChatStateIfSubscribed()
 }
 
 // Heartbeat corrects drift if the client's reported time diverges too far.
@@ -562,6 +589,108 @@ func (s *Session) SendError(msg string) {
 	s.send_(outMsg{Type: "error", Msg: msg})
 }
 
+// SetUser records the Directus user this connection authenticated as. An empty
+// id means anonymous, which is the steady state for most visitors — only the
+// chat channel requires an identity.
+func (s *Session) SetUser(id string) {
+	s.mu.Lock()
+	s.userID = id
+	s.mu.Unlock()
+}
+
+// UserID returns the authenticated Directus user id, or "" when anonymous.
+func (s *Session) UserID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.userID
+}
+
+// SetProfiles installs the buddy roster for this session. Config is loaded once
+// at connect time and handed in; sessions never query for it.
+func (s *Session) SetProfiles(p []chat.Profile) {
+	s.mu.Lock()
+	s.profiles = p
+	s.mu.Unlock()
+}
+
+// SendChatState emits the gate the client binds its input's disabled state to.
+func (s *Session) SendChatState() {
+	s.mu.Lock()
+	g := chat.Gate{
+		VirtualTime: s.virtualTime,
+		ClockSet:    !s.virtualTime.IsZero(),
+		Paused:      s.paused,
+		SignedIn:    s.userID != "",
+	}
+	s.mu.Unlock()
+
+	enabled, reason := chat.Available(g)
+	s.send_(outMsg{Type: "chat_state", Enabled: &enabled, Reason: reason})
+}
+
+// sendChatStateIfSubscribed re-evaluates the chat gate for clock transitions.
+// Unlike SendChatState it respects the opt-in convention: a session that never
+// subscribed to chat gets no chat frames.
+func (s *Session) sendChatStateIfSubscribed() {
+	s.mu.Lock()
+	_, ok := s.subscriptions[ChannelChat]
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	s.SendChatState()
+}
+
+// SendChatRoster emits the full buddy list with each buddy's online state at the
+// current virtual time.
+func (s *Session) SendChatRoster() {
+	s.mu.Lock()
+	profiles, t := s.profiles, s.virtualTime
+	s.mu.Unlock()
+
+	buddies := chat.Roster(profiles, t)
+
+	s.mu.Lock()
+	if s.presenceSeen == nil {
+		s.presenceSeen = make(map[int]bool, len(buddies))
+	}
+	for _, b := range buddies {
+		s.presenceSeen[b.ID] = b.Online
+	}
+	s.mu.Unlock()
+
+	s.send_(outMsg{Type: "chat_roster", Buddies: buddies})
+}
+
+// syncChatPresence emits one chat_presence frame per buddy whose online state
+// changed since the last call. Most ticks emit nothing, so this stays cheap on
+// the tick path.
+func (s *Session) syncChatPresence() {
+	s.mu.Lock()
+	if _, ok := s.subscriptions[ChannelChat]; !ok {
+		s.mu.Unlock()
+		return
+	}
+	profiles, t := s.profiles, s.virtualTime
+	if s.presenceSeen == nil {
+		s.presenceSeen = make(map[int]bool, len(profiles))
+	}
+	var changed []model.Buddy
+	for _, p := range profiles {
+		online := p.OnlineAt(t)
+		if was, seen := s.presenceSeen[p.ID]; !seen || was != online {
+			s.presenceSeen[p.ID] = online
+			changed = append(changed, model.Buddy{ID: p.ID, ScreenName: p.ScreenName, Online: online})
+		}
+	}
+	s.mu.Unlock()
+
+	for _, b := range changed {
+		online := b.Online
+		s.send_(outMsg{Type: "chat_presence", Profile: b.ID, Online: &online})
+	}
+}
+
 // RunTimePump advances virtual time on each hub tick and dispatches new items.
 // Call in a dedicated goroutine.
 func (s *Session) RunTimePump() {
@@ -595,6 +724,8 @@ func (s *Session) RunTimePump() {
 				usenetGroups = s.usenetGroupsLocked()
 			}
 			s.mu.Unlock()
+
+			s.syncChatPresence()
 
 			if doMedia {
 				if items, err := cache.ItemsInRange(ctx, s.rdb, mediaLo, mediaHi); err != nil {

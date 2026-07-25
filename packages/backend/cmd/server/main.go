@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/clock"
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/handler"
@@ -126,8 +127,28 @@ func main() {
 	// memoize them so a connection storm doesn't re-run them per init.
 	sourcesCache := db.NewSourcesCache(pool, 5*time.Minute)
 
+	// Chat profiles are a side channel: a load failure must not stop the streamer.
+	// This runs before the mux is served, so a hang (not just an error) — e.g. this
+	// read blocking behind a schema operation or a pg_dump's ACCESS SHARE lock —
+	// must not delay the pod from listening. Bound it with a short timeout and
+	// treat expiry exactly like the existing error path.
+	chatProfiles := handler.NewProfileCache()
+	chatLoadCtx, chatLoadCancel := context.WithTimeout(ctx, 2*time.Second)
+	profiles, err := chat.LoadProfiles(chatLoadCtx, pool)
+	chatLoadCancel()
+	if err != nil {
+		logger.Warn("chat profiles unavailable, chat roster will be empty", "error", err)
+	} else {
+		chatProfiles.Set(profiles)
+		logger.Info("chat profiles loaded", "count", len(profiles))
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, sourcesCache, logger))
+	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, sourcesCache, chatProfiles, logger))
+	if env("CHAT_DEV_UI", "") == "1" {
+		mux.HandleFunc("/chatdev", handler.NewChatDevHandler(logger))
+		logger.Warn("chat dev harness enabled at /chatdev — do not enable in production")
+	}
 	mux.HandleFunc("/feedback", handler.NewFeedbackHandler(
 		env("GITHUB_API_URL", "https://api.github.com"),
 		env("S3_ENDPOINT", "https://s3.wasabisys.com"),
