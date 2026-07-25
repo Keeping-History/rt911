@@ -184,4 +184,52 @@ describe("News detail window body rendering", () => {
 		openDoc("Requestable article");
 		expect(requestNewsBody).toHaveBeenCalledWith(5);
 	});
+
+	// Regression coverage for the future-article-reappears-after-rewind bug:
+	// a detail window is opened while its item is in newsItems, then a backward
+	// seek (simulated here by re-rendering with the item removed from
+	// newsItems) evicts it from the catalogue while a stale body sits in the
+	// newsBodies cache. The server applies no time gating to news_body, so
+	// that cache entry is exactly the future article text that must never
+	// come back on screen.
+	it("a document evicted from newsItems by a backward seek does not render its cached body", () => {
+		const item = makeItem({ id: 6, title: "Future article", content: "" });
+		const { rerender } = renderWithContext({
+			newsItems: [item],
+			newsBodies: { 6: "Body fetched before the rewind." },
+		});
+		openDoc("Future article");
+		expect(screen.getByText("Body fetched before the rewind.")).toBeTruthy();
+
+		rerender(
+			<MediaStreamContext.Provider
+				value={makeCtxValue({
+					newsItems: [],
+					newsBodies: { 6: "Body fetched before the rewind." },
+				})}
+			>
+				<News />
+			</MediaStreamContext.Provider>,
+		);
+
+		expect(screen.queryByText("Body fetched before the rewind.")).toBeNull();
+	});
+
+	it("a document evicted from newsItems by a backward seek does not trigger requestNewsBody", () => {
+		const requestNewsBody = vi.fn();
+		const item = makeItem({ id: 7, title: "Another future article", content: "" });
+		const { rerender } = renderWithContext({ newsItems: [item], requestNewsBody });
+		openDoc("Another future article");
+		requestNewsBody.mockClear();
+
+		rerender(
+			<MediaStreamContext.Provider
+				value={makeCtxValue({ newsItems: [], requestNewsBody })}
+			>
+				<News />
+			</MediaStreamContext.Provider>,
+		);
+
+		expect(requestNewsBody).not.toHaveBeenCalled();
+	});
 });

@@ -140,11 +140,19 @@ export const News: React.FC = () => {
 	// round-trip for those, and a failure on that redundant fetch would render
 	// "article unavailable" directly above the content that was already there.
 	// requestNewsBody de-dupes against cached and in-flight ids, so re-running
-	// on any change is still safe; getDoc is undefined for a window opened
-	// before its item has arrived, in which case the request correctly goes out.
+	// on any change is still safe.
+	//
+	// getDoc(docId) undefined means the article isn't in the *current* (clock-
+	// bounded) catalogue — either the window opened before its item arrived, or
+	// (after a backward seek) the item was evicted from newsItems. The server
+	// applies no time gating to news_body, so a request for an evicted id would
+	// happily re-fetch a future article's text into the cache; gating on doc
+	// presence here (and on the render below) is what keeps that text from
+	// coming back after a rewind.
 	useEffect(() => {
 		for (const docId of openDocuments) {
-			if (!getDoc(docId)?.content) requestNewsBody(docId);
+			const doc = getDoc(docId);
+			if (doc && !doc.content) requestNewsBody(docId);
 		}
 	}, [openDocuments, requestNewsBody, getDoc]);
 
@@ -353,72 +361,87 @@ export const News: React.FC = () => {
 					</ul>
 				</div>
 			</ClassicyWindow>
-			{openDocuments.map((docId: number) => (
-				<ClassicyWindow
-					onCloseFunc={() => {
-						setOpenDocuments((prev) => prev.filter((d) => d !== docId));
-					}}
-					id={`${appId}_newsitem_${docId}`}
-					key={`${appId}_newsitem_${docId}`}
-					icon={appIcon}
-					title={getDoc(docId)?.title}
-					appId={appId}
-					closable={true}
-					resizable={true}
-					zoomable={true}
-					scrollable={true}
-					collapsable={true}
-					initialSize={[400, 400]}
-					initialPosition={[
-						10 + getWindowOpenOffset(),
-						20 + getWindowOpenOffset(),
-					]}
-					modal={false}
-					appMenu={appMenu}
-				>
-					<div className={styles.newsBody}>
-						<h1 className={styles.newsDetailTitle}>
-							{getDoc(docId)?.title}
-						</h1>
-						<h6 className={styles.newsDetailMeta}>
-							{formatDate(getDoc(docId)?.start_date, { month: "numeric", day: "numeric", year: "numeric" })}{" "}
-							{formatDate(getDoc(docId)?.start_date, { hour: "numeric", minute: "numeric", second: "numeric" })} -{" "}
-							{getDoc(docId)?.source}
-						</h6>
+			{openDocuments.map((docId: number) => {
+				// doc absent means the article isn't in the current (clock-bounded)
+				// catalogue — most commonly a backward seek evicted it after this
+				// window was opened. newsBodies may still hold a cached body fetched
+				// before the eviction (the server applies no time gating to
+				// news_body), so that cache must never be rendered once its article
+				// has fallen out of newsItems.
+				const doc = getDoc(docId);
+				return (
+					<ClassicyWindow
+						onCloseFunc={() => {
+							setOpenDocuments((prev) => prev.filter((d) => d !== docId));
+						}}
+						id={`${appId}_newsitem_${docId}`}
+						key={`${appId}_newsitem_${docId}`}
+						icon={appIcon}
+						title={doc?.title}
+						appId={appId}
+						closable={true}
+						resizable={true}
+						zoomable={true}
+						scrollable={true}
+						collapsable={true}
+						initialSize={[400, 400]}
+						initialPosition={[
+							10 + getWindowOpenOffset(),
+							20 + getWindowOpenOffset(),
+						]}
+						modal={false}
+						appMenu={appMenu}
+					>
+						<div className={styles.newsBody}>
+							<h1 className={styles.newsDetailTitle}>
+								{doc?.title}
+							</h1>
+							<h6 className={styles.newsDetailMeta}>
+								{formatDate(doc?.start_date, { month: "numeric", day: "numeric", year: "numeric" })}{" "}
+								{formatDate(doc?.start_date, { hour: "numeric", minute: "numeric", second: "numeric" })} -{" "}
+								{doc?.source}
+							</h6>
 
-						<hr className={styles.newsDetailDivider} />
-						{getDoc(docId)?.image && (
-							<figure>
-								<img
-									src={getDoc(docId)?.image}
-									className={styles.newsDetailImage}
-									alt=""
-								/>
-								<figcaption className={styles.newsCaption}>
-									{getDoc(docId)?.image_caption}
-								</figcaption>
-							</figure>
-						)}
-						<div className={styles.newsDetailContentRow}>
-							<p className={styles.newsDetailBullet}>
-								•••
-							</p>
-							{newsBodyErrors[docId] ? (
-								<p className={styles.newsDetailBody}>{newsBodyErrors[docId]}</p>
-							) : !(docId in newsBodies) && !getDoc(docId)?.content ? (
-								<p className={styles.newsDetailBody}>Loading…</p>
-							) : null}
-							<div
-								className={styles.newsDetailBody}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus news_items table via the MediaStream provider.
-								dangerouslySetInnerHTML={{
-									__html: newsBodies[docId] ?? getDoc(docId)?.content ?? "",
-								}}
-							></div>
+							<hr className={styles.newsDetailDivider} />
+							{doc?.image && (
+								<figure>
+									<img
+										src={doc?.image}
+										className={styles.newsDetailImage}
+										alt=""
+									/>
+									<figcaption className={styles.newsCaption}>
+										{doc?.image_caption}
+									</figcaption>
+								</figure>
+							)}
+							<div className={styles.newsDetailContentRow}>
+								<p className={styles.newsDetailBullet}>
+									•••
+								</p>
+								{!doc ? (
+									<p className={styles.newsDetailBody}>
+										This article is not available at the current date and time.
+									</p>
+								) : newsBodyErrors[docId] ? (
+									<p className={styles.newsDetailBody}>{newsBodyErrors[docId]}</p>
+								) : !(docId in newsBodies) && !doc.content ? (
+									<p className={styles.newsDetailBody}>Loading…</p>
+								) : null}
+								{doc && (
+									<div
+										className={styles.newsDetailBody}
+										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus news_items table via the MediaStream provider.
+										dangerouslySetInnerHTML={{
+											__html: newsBodies[docId] ?? doc.content ?? "",
+										}}
+									></div>
+								)}
+							</div>
 						</div>
-					</div>
-				</ClassicyWindow>
-			))}
+					</ClassicyWindow>
+				);
+			})}
 		</ClassicyApp>
 	);
 };
