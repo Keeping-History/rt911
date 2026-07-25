@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { CHAT_COLLECTIONS, CHAT_INDEX_SQL } from "./chat-collections.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -315,232 +316,15 @@ async function createCollections(token) {
   await ensureNumericFields("tm_bookmarks");
 
   // ---- IM Buddies (see plans/2026-07-24-im-buddies-chatbot-design.md) ----
-  // Nine collections: one settings singleton, four configuration tables, three
-  // knowledge tiers (chat_knowledge + chat_transcript_segments; news_items is
-  // tier 3 and already exists), and two per-user state tables.
-
-  if (!names.includes("chat_settings")) {
-    console.log("Creating collection: chat_settings");
-    await api(token, "POST", "/collections", {
-      collection: "chat_settings",
-      meta: { icon: "settings", singleton: true, note: "Global LLM defaults for IM Buddies" },
-      schema: {},
-      fields: [
-        { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
-        { field: "provider", type: "string", schema: { is_nullable: false, default_value: "anthropic" },
-          meta: { interface: "select-dropdown", width: "half",
-                  options: { choices: ["anthropic", "openai", "openrouter"].map((v) => ({ text: v, value: v })) } } },
-        { field: "model", type: "string", schema: { is_nullable: false, default_value: "claude-opus-5" }, meta: { interface: "input", width: "half" } },
-        { field: "max_tokens", type: "integer", schema: { is_nullable: false, default_value: 2000 }, meta: { interface: "input", width: "half" } },
-        { field: "effort", type: "string", schema: { is_nullable: true, default_value: "low" }, meta: { interface: "input", width: "half" } },
-        { field: "temperature", type: "float", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Ignored on Anthropic (Opus 5 rejects it)" } },
-        { field: "openai_base_url", type: "text", schema: { is_nullable: true }, meta: { interface: "input", width: "full", note: "OpenRouter: https://openrouter.ai/api/v1" } },
-      ],
-    });
-  } else {
-    console.log("Collection chat_settings already exists, skipping.");
-  }
-
-  if (!names.includes("chat_profiles")) {
-    console.log("Creating collection: chat_profiles");
-    await api(token, "POST", "/collections", {
-      collection: "chat_profiles",
-      meta: { icon: "person", sort_field: "sort", note: "IM buddy personas" },
-      schema: {},
-      fields: [
-        { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
-        { field: "screen_name", type: "string", schema: { is_nullable: false }, meta: { interface: "input", width: "half" } },
-        { field: "display_name", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-        { field: "avatar", type: "text", schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
-        { field: "persona", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full" } },
-        { field: "education_level", type: "string", schema: { is_nullable: true },
-          meta: { interface: "select-dropdown", width: "half",
-                  options: { choices: ["elementary", "middle", "high", "college", "adult"].map((v) => ({ text: v, value: v })) } } },
-        { field: "writing_style", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full" } },
-        { field: "style_exemplars", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full", note: "A few sample messages in voice, one per line" } },
-        { field: "location", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-        { field: "timezone", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-        { field: "online_from", type: "timestamp", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
-        { field: "online_until", type: "timestamp", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
-        { field: "typing_speed", type: "integer", schema: { is_nullable: true, default_value: 5 }, meta: { interface: "input", width: "half", note: "Characters per second; sets the reply-delay floor" } },
-        { field: "system_prompt_extra", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full" } },
-        { field: "provider", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null inherits chat_settings" } },
-        { field: "model", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null inherits chat_settings" } },
-        { field: "max_tokens", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null inherits chat_settings" } },
-        { field: "effort", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null inherits chat_settings" } },
-        { field: "temperature", type: "float", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null inherits chat_settings" } },
-        { field: "active", type: "integer", schema: { is_nullable: false, default_value: 1 }, meta: { interface: "boolean", width: "half" } },
-        { field: "sort", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { hidden: true } },
-      ],
-    });
-  } else {
-    console.log("Collection chat_profiles already exists, skipping.");
-  }
-
-  if (!names.includes("chat_beacons")) {
-    console.log("Creating collection: chat_beacons");
-    await api(token, "POST", "/collections", {
-      collection: "chat_beacons",
-      meta: { icon: "flag", note: "Named story anchors. `at` = when it happened, `public_at` = when it became publicly known" },
-      schema: {},
-      fields: [
-        { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
-        { field: "key", type: "string", schema: { is_nullable: false, is_unique: true }, meta: { interface: "input", width: "half" } },
-        { field: "label", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-        { field: "at", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half" } },
-        { field: "public_at", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Phases advance on this, never on `at`" } },
-        { field: "description", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full" } },
-      ],
-    });
-  } else {
-    console.log("Collection chat_beacons already exists, skipping.");
-  }
-
-  if (!names.includes("chat_phases")) {
-    console.log("Creating collection: chat_phases");
-    await api(token, "POST", "/collections", {
-      collection: "chat_phases",
-      meta: { icon: "mood", sort_field: "sort", note: "Per-profile emotional arc, anchored to beacons" },
-      schema: {},
-      fields: [
-        { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
-        { field: "profile", type: "integer", schema: { is_nullable: false }, meta: { interface: "select-dropdown-m2o", width: "half" } },
-        { field: "from_beacon", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", width: "half", note: "Null = start of day" } },
-        { field: "tone", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full" } },
-        { field: "shock", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { interface: "slider", width: "half", options: { minValue: 0, maxValue: 100 } } },
-        { field: "coherence", type: "integer", schema: { is_nullable: false, default_value: 100 }, meta: { interface: "slider", width: "half", options: { minValue: 0, maxValue: 100 } } },
-        { field: "verbosity", type: "integer", schema: { is_nullable: false, default_value: 50 }, meta: { interface: "slider", width: "half", options: { minValue: 0, maxValue: 100 } } },
-        { field: "typo_rate", type: "integer", schema: { is_nullable: false, default_value: 10 }, meta: { interface: "slider", width: "half", options: { minValue: 0, maxValue: 100 } } },
-        { field: "topic_focus", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { interface: "slider", width: "half", options: { minValue: 0, maxValue: 100 } } },
-        { field: "sort", type: "integer", schema: { is_nullable: true }, meta: { hidden: true } },
-      ],
-    });
-  } else {
-    console.log("Collection chat_phases already exists, skipping.");
-  }
-
-  if (!names.includes("chat_schedules")) {
-    console.log("Creating collection: chat_schedules");
-    await api(token, "POST", "/collections", {
-      collection: "chat_schedules",
-      meta: { icon: "schedule", note: "Proactive messages. Beacon-relative is the primary form; `at` overrides" },
-      schema: {},
-      fields: [
-        { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
-        { field: "profile", type: "integer", schema: { is_nullable: false }, meta: { interface: "select-dropdown-m2o", width: "half" } },
-        { field: "at_beacon", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", width: "half" } },
-        { field: "offset_seconds", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { interface: "input", width: "half" } },
-        { field: "at", type: "timestamp", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half", note: "Absolute override; wins over at_beacon" } },
-        { field: "kind", type: "string", schema: { is_nullable: false, default_value: "generated" },
-          meta: { interface: "select-dropdown", width: "half",
-                  options: { choices: ["static", "generated"].map((v) => ({ text: v, value: v })) } } },
-        { field: "text", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full", note: "kind=static" } },
-        { field: "prompt", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full", note: "kind=generated" } },
-        { field: "requires_prior_contact", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { interface: "boolean", width: "half" } },
-        { field: "active", type: "integer", schema: { is_nullable: false, default_value: 1 }, meta: { interface: "boolean", width: "half" } },
-      ],
-    });
-  } else {
-    console.log("Collection chat_schedules already exists, skipping.");
-  }
-
-  if (!names.includes("chat_knowledge")) {
-    console.log("Creating collection: chat_knowledge");
-    await api(token, "POST", "/collections", {
-      collection: "chat_knowledge",
-      meta: { icon: "fact_check", note: "Tier 1 — curated public-knowledge timeline" },
-      schema: {},
-      fields: [
-        { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
-        { field: "public_at", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half" } },
-        { field: "until", type: "timestamp", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half", note: "When this stopped being current or was corrected" } },
-        { field: "summary", type: "text", schema: { is_nullable: false }, meta: { interface: "input-multiline", width: "full" } },
-        { field: "detail", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full" } },
-        { field: "certainty", type: "string", schema: { is_nullable: false, default_value: "reported" },
-          meta: { interface: "select-dropdown", width: "half",
-                  options: { choices: ["rumor", "reported", "confirmed"].map((v) => ({ text: v, value: v })) } } },
-        { field: "sensitivity", type: "string", schema: { is_nullable: false, default_value: "normal" },
-          meta: { interface: "select-dropdown", width: "half",
-                  options: { choices: ["normal", "handle_with_care", "do_not_discuss"].map((v) => ({ text: v, value: v })) } } },
-        { field: "topics", type: "text", schema: { is_nullable: true }, meta: { interface: "input", width: "full", note: "Comma-separated" } },
-      ],
-    });
-  } else {
-    console.log("Collection chat_knowledge already exists, skipping.");
-  }
-
-  if (!names.includes("chat_transcript_segments")) {
-    console.log("Creating collection: chat_transcript_segments");
-    await api(token, "POST", "/collections", {
-      collection: "chat_transcript_segments",
-      meta: { icon: "closed_caption", note: "Tier 2 — broadcast transcript segments, produced by video-grabber" },
-      schema: {},
-      fields: [
-        { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
-        { field: "channel", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", width: "half" } },
-        { field: "channel_slug", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Used for radio, which has no tv_channels row" } },
-        { field: "medium", type: "string", schema: { is_nullable: false, default_value: "tv" },
-          meta: { interface: "select-dropdown", width: "half",
-                  options: { choices: ["tv", "radio"].map((v) => ({ text: v, value: v })) } } },
-        { field: "start_date", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half" } },
-        { field: "end_date", type: "timestamp", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
-        { field: "text", type: "text", schema: { is_nullable: false }, meta: { interface: "input-multiline", width: "full" } },
-      ],
-    });
-  } else {
-    console.log("Collection chat_transcript_segments already exists, skipping.");
-  }
-
-  if (!names.includes("chat_messages")) {
-    console.log("Creating collection: chat_messages");
-    await api(token, "POST", "/collections", {
-      collection: "chat_messages",
-      meta: { icon: "chat", note: "Per-user conversation log. Directus policy MUST scope this to $CURRENT_USER" },
-      schema: {},
-      fields: [
-        { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
-        { field: "user", type: "uuid", schema: { is_nullable: false }, meta: { interface: "select-dropdown-m2o", width: "half" } },
-        { field: "profile", type: "integer", schema: { is_nullable: false }, meta: { interface: "select-dropdown-m2o", width: "half" } },
-        { field: "direction", type: "string", schema: { is_nullable: false },
-          meta: { interface: "select-dropdown", width: "half",
-                  options: { choices: ["in", "out"].map((v) => ({ text: v, value: v })) } } },
-        { field: "body", type: "text", schema: { is_nullable: false }, meta: { interface: "input-multiline", width: "full" } },
-        { field: "virtual_time", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Position on the 2001 clock" } },
-        { field: "created_at", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Real wall-clock time" } },
-        { field: "kind", type: "string", schema: { is_nullable: false, default_value: "typed" },
-          meta: { interface: "select-dropdown", width: "half",
-                  options: { choices: ["typed", "scheduled", "generated", "static", "stall"].map((v) => ({ text: v, value: v })) } } },
-        { field: "moderation", type: "json", schema: { is_nullable: true }, meta: { interface: "input-code", width: "full", special: ["cast-json"] } },
-        { field: "model", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-        { field: "tokens_in", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-        { field: "tokens_out", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
-      ],
-    });
-  } else {
-    console.log("Collection chat_messages already exists, skipping.");
-  }
-
-  if (!names.includes("chat_blocks")) {
-    console.log("Creating collection: chat_blocks");
-    await api(token, "POST", "/collections", {
-      collection: "chat_blocks",
-      meta: { icon: "block", note: "Moderation blocks. Directus policy MUST scope this to $CURRENT_USER" },
-      schema: {},
-      fields: [
-        { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
-        { field: "user", type: "uuid", schema: { is_nullable: false }, meta: { interface: "select-dropdown-m2o", width: "half" } },
-        { field: "scope", type: "string", schema: { is_nullable: false, default_value: "profile" },
-          meta: { interface: "select-dropdown", width: "half",
-                  options: { choices: ["profile", "global"].map((v) => ({ text: v, value: v })) } } },
-        { field: "profile", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", width: "half" } },
-        { field: "reason", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full" } },
-        { field: "evidence", type: "text", schema: { is_nullable: true }, meta: { interface: "input-multiline", width: "full" } },
-        { field: "created_at", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half" } },
-        { field: "expires", type: "timestamp", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half", note: "Null = permanent" } },
-      ],
-    });
-  } else {
-    console.log("Collection chat_blocks already exists, skipping.");
+  // Definitions live in chat-collections.mjs (shared with apply-chat-schema.mjs)
+  // so the two never drift apart.
+  for (const spec of CHAT_COLLECTIONS) {
+    if (!names.includes(spec.collection)) {
+      console.log(`Creating collection: ${spec.collection}`);
+      await api(token, "POST", "/collections", spec);
+    } else {
+      console.log(`Collection ${spec.collection} already exists, skipping.`);
+    }
   }
 
   // pager_items — pager traffic lives in its own table (not media_items). Every
@@ -683,14 +467,8 @@ function createStreamerIndexes() {
     CREATE INDEX IF NOT EXISTS idx_news_items_approved_start  ON news_items  (approved, start_date);
     CREATE INDEX IF NOT EXISTS idx_mp3_items_approved_start   ON mp3_items   (approved, start_date);
     CREATE INDEX IF NOT EXISTS idx_pager_items_approved_start ON pager_items (approved, start_date);
-    CREATE INDEX IF NOT EXISTS idx_chat_knowledge_public   ON chat_knowledge (public_at);
-    CREATE INDEX IF NOT EXISTS idx_chat_transcript_start   ON chat_transcript_segments (start_date);
-    CREATE INDEX IF NOT EXISTS idx_chat_transcript_fts     ON chat_transcript_segments USING GIN (to_tsvector('english', text));
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_user_conv ON chat_messages (( "user" ), profile, virtual_time);
-    CREATE INDEX IF NOT EXISTS idx_chat_blocks_user        ON chat_blocks (( "user" ), scope);
-    CREATE INDEX IF NOT EXISTS idx_chat_schedules_profile  ON chat_schedules (profile, active);
-    CREATE INDEX IF NOT EXISTS idx_chat_phases_profile     ON chat_phases (profile, sort);
   `);
+  psql(CHAT_INDEX_SQL);
 }
 
 async function createRelations(token) {
