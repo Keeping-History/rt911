@@ -190,3 +190,83 @@ one seam nothing crossed.
 
 The tests now assert the DELETE **body** for both the TV and radio branches, and a post-delete
 aggregate count raises rather than proceeding to insert if any rows survive.
+
+---
+
+# Plan C (knowledge + composer) — carry-forward
+
+Branch `feat/chat-knowledge-composer`, `1246f9bd..bab7130e`. Final whole-branch review: ready to
+merge, no blockers.
+
+## Plan D must resolve these two before writing its generator
+
+### 1. `ComposeInput` has no slot where a tier-3 passage satisfies both rules
+
+There are two knowledge slots. `Digest` is tagged `StabilityAppendOnly` and is the only one that
+emits the "refer to it vaguely, do not quote it" instruction. `Recent` is tagged
+`StabilityVolatile` and is headed *"What you have just heard on TV"*.
+
+Tier 3 is retrieved by a **per-message full-text search**, so its contents change every turn.
+Plan D therefore has to pick a loss:
+
+- **Tier 3 → `Digest`:** correct instruction, but an append-only-tagged segment whose bytes change
+  every turn. The adapter places a cache breakpoint there on the strength of the tag, and it misses
+  on every single message.
+- **Tier 3 → `Recent`:** caching is honest, but retrospective investigative detail renders under
+  "what you have just heard on TV" — the exact misattribution the tier system exists to prevent —
+  and without the paraphrase instruction.
+
+Neither is acceptable. Fix with a third field (`Timeline []Passage`, volatile, its own header and
+instruction) or by deriving `Stability` from tier rather than slot. Decide this in Plan D's design,
+do not discover it in its implementation.
+
+### 2. The zero-value `Phase` renders a self-contradictory directive
+
+`Coherence`'s polarity is inverted relative to the other four dials: low `Shock` is calm (benign),
+but low `Coherence` is *"You are struggling to finish a thought"* (not benign). On an empty database
+`PhaseAt` returns `(Phase{}, false)`, so a Plan D that ignores the bool — or uses `Phase{}` as a
+fallback — renders *"You are not especially worried. You are struggling to finish a thought."*
+
+The package exports no default, so Plan D has to invent one. Either export a sensible `DefaultPhase`
+or flip `Coherence` so 0 is the benign end.
+
+## Fixed during the final review
+
+**`chat_phases.sort` was nullable while `LoadPhases` scanned it into a plain `int`** — one NULL
+would have failed the entire load, leaving every buddy on their opening phase with only a log line.
+Same defect the human already ruled on for `chat_profiles.sort`, so the same resolution was applied:
+`NOT NULL DEFAULT 0`, altered on `api-beta` (table was empty) and corrected in
+`packages/backend/chat-collections.mjs`, which both `seed.mjs` and `apply-chat-schema.mjs` import.
+
+`chat_beacons.at`/`public_at` were checked at the same time and are both NOT NULL, so `LoadBeacons`
+is safe as written.
+
+## Known rough edges, safe to ship
+
+1. `knowledgeBlock`'s tier-3 instruction scans `Digest` only, not `Recent` — same root cause as
+   item 1 above; fix together.
+2. `Budget`'s `maxRunes` is **not a hard cap** — the first, most authoritative passage is admitted
+   unconditionally, so a single oversized curated row is returned in full. Deliberate (an empty
+   knowledge block reads as "this buddy knows nothing"), but Plan D will read the name as a ceiling.
+   It also counts passage text only, not headers, prefixes, persona, or history — a knowledge
+   budget, not a prompt budget.
+3. `Redact` is advisory: `Compose` accepts raw `[]Passage`, so nothing stops a caller passing loader
+   output straight through and leaking a `do_not_discuss` row. A `type Redacted []Passage` returned
+   by `Redact` and required by `ComposeInput` would make that unrepresentable. Ordering is safe
+   either way — `Budget` never resurrects a dropped passage, so the wrong order wastes budget rather
+   than leaking.
+4. The `Recent` header hardcodes "on TV"; `chat_transcript_segments` carries a `medium` column and
+   `LoadBroadcast` does not filter on it, so a radio segment is described as television.
+5. `Compose` emits one `system` segment then up to four consecutive `user` segments, with history
+   flattened into a user-role block rather than real alternating turns. Plan D's adapter must map
+   these. Consecutive same-role messages are accepted and merged, so this is a mapping decision, not
+   an error — and on Opus 5 a mid-conversation `{"role":"system"}` message inside `messages[]`
+   preserves the cached prefix and is the non-spoofable operator channel, which is a better home for
+   the phase directive than user-role text.
+
+## Design spec correction
+
+The spec's prompt-layout table puts the broadcast window at position 3 and conversation history at
+4. The implementation swaps them, and the implementation is right: the broadcast window *rolls*
+(contents change as it slides forward), so placing it ahead of the *growing* history would
+invalidate the history cache every time the window turns over. Amend the spec, not the code.

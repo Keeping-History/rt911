@@ -89,7 +89,9 @@ export const CHAT_COLLECTIONS = [
       { field: "verbosity", type: "integer", schema: { is_nullable: false, default_value: 50 }, meta: { interface: "slider", width: "half", options: { minValue: 0, maxValue: 100 } } },
       { field: "typo_rate", type: "integer", schema: { is_nullable: false, default_value: 10 }, meta: { interface: "slider", width: "half", options: { minValue: 0, maxValue: 100 } } },
       { field: "topic_focus", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { interface: "slider", width: "half", options: { minValue: 0, maxValue: 100 } } },
-      { field: "sort", type: "integer", schema: { is_nullable: true }, meta: { hidden: true } },
+      // NOT NULL for the same reason as chat_profiles.sort: Go reads this column
+        // into a plain int, so a NULL fails the whole load, not one row.
+        { field: "sort", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { hidden: true } },
     ],
   },
   {
