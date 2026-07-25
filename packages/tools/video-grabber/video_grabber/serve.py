@@ -38,6 +38,7 @@ from video_grabber.transcribe.flows import (
     transcribe_item_flow,
 )
 from video_grabber.thumbnails.batch_flow import batch_thumbnails_flow
+from video_grabber.transcript.flows import build_transcript_segments_flow
 from video_grabber.usenet.flows import (
     dispatch_usenet_flow,
     process_usenet_item_flow,
@@ -103,6 +104,9 @@ _TRANSCRIBE_STALE_MINUTES = 5
 _TRANSCRIBE_SUPERVISE_INTERVAL = 20
 _TRANSCRIBE_MAX_RETRIES = 3
 _THUMBNAIL_LIMIT = 1  # one batch run at a time; manually triggered from Prefect UI
+# Manual-only backfill over already-stitched channel/mp3 SRTs (delete+insert per
+# source); one at a time is plenty since it's triggered on demand, not scheduled.
+_TRANSCRIPT_SEGMENTS_LIMIT = 1
 # Loudness normalization: mp3 decode/encode is cheap next to the video encodes
 # sharing this pod — 2 concurrent per-item flows, serial scan. Dispatchers are
 # blocking (one item at a time each), so 2 keeps both item slots fed. NONE of
@@ -248,6 +252,12 @@ def main() -> None:
         batch_thumbnails_flow.to_deployment(
             name="batch-thumbnails",
             concurrency_limit=_THUMBNAIL_LIMIT,
+        ),
+        build_transcript_segments_flow.to_deployment(
+            name="build-transcript-segments",
+            # Manual-trigger only. The source SRTs are immutable historical
+            # artifacts, so this is a re-run-on-demand backfill, not a poller.
+            concurrency_limit=_TRANSCRIPT_SEGMENTS_LIMIT,
         ),
         scan_normalize_flow.to_deployment(
             name="scan-normalize",
