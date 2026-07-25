@@ -14,25 +14,12 @@ tv_channels.start_date + cue offset, and for radio the mp3_items row's own
 start_date + cue offset.
 """
 
-import logging
-
 from prefect import flow, get_run_logger
-from prefect.exceptions import MissingContextError
 
 from video_grabber.config import Config
 from video_grabber.transcribe.srt import parse_srt
 from video_grabber.transcript import writer
 from video_grabber.transcript.segments import build_segments, to_rows
-
-
-def _logger():
-    # Tests call the flow via `.fn()` to run it synchronously, outside any
-    # Prefect flow-run context, where get_run_logger() raises. Fall back to a
-    # stdlib logger rather than forcing every test to stub Prefect's logging.
-    try:
-        return get_run_logger()
-    except MissingContextError:
-        return logging.getLogger(__name__)
 
 
 def _ingest_one(source: dict, *, medium: str, cfg: Config, logger) -> int:
@@ -68,7 +55,7 @@ def build_transcript_segments_flow(medium: str = "all", cfg: Config | None = Non
     because a silently-empty successful run is how a fully transcribed channel
     once went missing without anyone noticing.
     """
-    logger = _logger()
+    logger = get_run_logger()
     cfg = cfg or Config()
 
     channels = writer.list_subtitled_channels(cfg) if medium in ("tv", "all") else []
@@ -82,8 +69,8 @@ def build_transcript_segments_flow(medium: str = "all", cfg: Config | None = Non
     for source, kind in [(c, "tv") for c in channels] + [(m, "radio") for m in mp3_items]:
         try:
             written = _ingest_one(source, medium=kind, cfg=cfg, logger=logger)
-        except Exception as exc:  # noqa: BLE001 - one bad source must not stop the run
-            logger.error("failed %s %s: %s", kind, source["id"], exc)
+        except Exception:  # noqa: BLE001 - one bad source must not stop the run
+            logger.exception("failed %s %s", kind, source["id"])
             result["failed"] += 1
             continue
         result["segments"] += written

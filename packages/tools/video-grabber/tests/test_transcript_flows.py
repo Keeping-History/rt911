@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 import pytest
@@ -22,6 +23,7 @@ def cfg():
 
 
 def test_builds_absolute_timestamps_from_the_channel_anchor(cfg, monkeypatch):
+    monkeypatch.setattr(flows, "get_run_logger", lambda: logging.getLogger("test"))
     monkeypatch.setattr(flows.writer, "list_subtitled_channels", lambda c, **k: [
         {"id": 7, "slug": "wnbc", "start_date": datetime(2001, 9, 11, 12, 0, 0),
          "subtitles": "https://f/wnbc.srt"}
@@ -51,6 +53,7 @@ def test_builds_absolute_timestamps_from_the_channel_anchor(cfg, monkeypatch):
 
 
 def test_radio_anchors_on_the_mp3_items_start_date(cfg, monkeypatch):
+    monkeypatch.setattr(flows, "get_run_logger", lambda: logging.getLogger("test"))
     monkeypatch.setattr(flows.writer, "list_subtitled_channels", lambda c, **k: [])
     monkeypatch.setattr(flows.writer, "list_subtitled_mp3_items", lambda c, **k: [
         {"id": 42, "slug": None, "start_date": datetime(2001, 9, 11, 13, 30, 0),
@@ -68,11 +71,17 @@ def test_radio_anchors_on_the_mp3_items_start_date(cfg, monkeypatch):
     assert captured["rows"][0]["start_date"] == "2001-09-11T13:30:00"
     assert captured["kwargs"]["medium"] == "radio"
     assert captured["kwargs"]["channel"] is None
+    # Radio's delete scope IS channel_slug (no tv_channels row to key off), so
+    # this is the one place the write/delete identity invariant is pinned for
+    # the radio path: what the rows carry must equal what the delete matches.
+    assert captured["kwargs"]["channel_slug"] == "mp3:42"
+    assert captured["rows"][0]["channel_slug"] == "mp3:42"
 
 
 def test_raises_when_no_subtitled_sources_are_found(cfg, monkeypatch):
     # A silently-empty successful run is the CCTV4 failure mode: everything
     # reports green while the derived artifact is missing.
+    monkeypatch.setattr(flows, "get_run_logger", lambda: logging.getLogger("test"))
     monkeypatch.setattr(flows.writer, "list_subtitled_channels", lambda c, **k: [])
     monkeypatch.setattr(flows.writer, "list_subtitled_mp3_items", lambda c, **k: [])
 
@@ -81,6 +90,7 @@ def test_raises_when_no_subtitled_sources_are_found(cfg, monkeypatch):
 
 
 def test_one_failing_source_does_not_abort_the_rest(cfg, monkeypatch):
+    monkeypatch.setattr(flows, "get_run_logger", lambda: logging.getLogger("test"))
     monkeypatch.setattr(flows.writer, "list_subtitled_channels", lambda c, **k: [
         {"id": 1, "slug": "a", "start_date": datetime(2001, 9, 11, 12, 0, 0),
          "subtitles": "https://f/a.srt"},
