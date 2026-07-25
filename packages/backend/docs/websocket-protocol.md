@@ -699,6 +699,12 @@ Sent once on successful subscribe.
 |---|---|---|
 | `buddies` | array | `{id, screen_name, display_name, avatar, online}`, ordered by the admin's sort field |
 
+`buddies` rides `outMsg`, the envelope shared with every server→client frame including the 1 Hz
+`items` hot path, so it carries `omitempty`. **When the roster is empty (no active `chat_profiles`
+rows) the `buddies` field is omitted from the frame entirely** — it is never sent as `null` or `[]`.
+Clients must treat an absent `buddies` field as an empty list, not as an error or a "still loading"
+signal.
+
 ### `chat_presence`
 
 Sent when a buddy signs on or off as the virtual clock advances. One frame per

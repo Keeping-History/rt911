@@ -109,9 +109,19 @@ ws.onmessage = (ev) => {
     el.className = msg.enabled ? "" : "bad";
   }
   if (msg.type === "chat_roster") {
-    document.getElementById("roster").innerHTML = msg.buddies
-      .map((b) => `<div class="${b.online ? "" : "off"}" data-id="${b.id}">${b.screen_name}</div>`)
-      .join("");
+    // `buddies` is omitted entirely (not sent as null/[]) when the roster is
+    // empty — outMsg.Buddies rides omitempty since it's shared with the 1 Hz
+    // items hot path. Treat an absent field as an empty list.
+    const buddies = msg.buddies || [];
+    const roster = document.getElementById("roster");
+    roster.textContent = "";
+    for (const b of buddies) {
+      const row = document.createElement("div");
+      row.className = b.online ? "" : "off";
+      row.dataset.id = b.id;
+      row.textContent = b.screen_name;
+      roster.appendChild(row);
+    }
   }
   if (msg.type === "chat_presence") {
     const row = document.querySelector(`#roster [data-id="${msg.profile}"]`);

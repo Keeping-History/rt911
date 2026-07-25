@@ -128,8 +128,15 @@ func main() {
 	sourcesCache := db.NewSourcesCache(pool, 5*time.Minute)
 
 	// Chat profiles are a side channel: a load failure must not stop the streamer.
+	// This runs before the mux is served, so a hang (not just an error) — e.g. this
+	// read blocking behind a schema operation or a pg_dump's ACCESS SHARE lock —
+	// must not delay the pod from listening. Bound it with a short timeout and
+	// treat expiry exactly like the existing error path.
 	chatProfiles := handler.NewProfileCache()
-	if profiles, err := chat.LoadProfiles(ctx, pool); err != nil {
+	chatLoadCtx, chatLoadCancel := context.WithTimeout(ctx, 2*time.Second)
+	profiles, err := chat.LoadProfiles(chatLoadCtx, pool)
+	chatLoadCancel()
+	if err != nil {
 		logger.Warn("chat profiles unavailable, chat roster will be empty", "error", err)
 	} else {
 		chatProfiles.Set(profiles)

@@ -32,6 +32,8 @@ type wsFrame struct {
 	ID      int                    `json:"id,omitempty"`
 	Done    bool                   `json:"done,omitempty"`
 	Flights []model.FlightPosition `json:"flights,omitempty"`
+	Enabled bool                   `json:"enabled,omitempty"`
+	Reason  string                 `json:"reason,omitempty"`
 }
 
 func newTestServer(t *testing.T, rdb *goredis.Client) *url.URL {
@@ -213,6 +215,36 @@ func TestWSHandlerUnsubscribe(t *testing.T) {
 	f := readFrame(t, conn)
 	if f.Type != "unsubscribe_ack" || f.Channel != "mp3" {
 		t.Fatalf("expected unsubscribe_ack for mp3, got %+v", f)
+	}
+}
+
+// TestWSHandlerChatSubscribeAnonymousRefused proves the chat channel's most
+// security-relevant behavior: an anonymous session (no Directus session
+// cookie) that subscribes to "chat" gets refused with a chat_state frame
+// rather than the ordinary subscribe_ack every other channel returns. The
+// request never reaches Session.Subscribe, so a nil pool is safe — with no
+// cookie on the dial, db.SessionTokenFrom returns "" and db.LookupSessionUser
+// is never called (see the gate in ws.go's "subscribe" case).
+func TestWSHandlerChatSubscribeAnonymousRefused(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+	sendJSON(t, conn, map[string]string{"type": "subscribe", "channel": "chat"})
+
+	f := readFrame(t, conn)
+	if f.Type != "chat_state" {
+		t.Fatalf("expected chat_state, got %+v", f)
+	}
+	if f.Enabled {
+		t.Fatalf("expected enabled=false for anonymous session, got %+v", f)
+	}
+	if f.Reason != "not_signed_in" {
+		t.Fatalf("expected reason=not_signed_in, got %+v", f)
+	}
+
+	// A follow-up round-trip proves that was the only frame — in particular,
+	// no subscribe_ack (or roster) followed it.
+	sendJSON(t, conn, map[string]string{"type": "pause"})
+	if f := readFrame(t, conn); f.Type != "pause_ack" {
+		t.Fatalf("expected pause_ack immediately after chat_state, got %+v", f)
 	}
 }
 

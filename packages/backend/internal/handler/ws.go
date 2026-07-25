@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -155,8 +156,16 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 		// Chat is the only channel that needs an identity. Resolving it here (not
 		// on subscribe) keeps the lookup off the message path, and a failure is
 		// non-fatal: the session stays anonymous and every other channel works.
+		// This also runs after the hub slot is acquired and holds one of the
+		// pool's connections while in flight, so an unbounded wait here (e.g.
+		// behind a lock or a saturated pool) would starve the usenet/weather
+		// tick paths too. Bound it and degrade to anonymous on timeout — same
+		// as the existing error path — never reject the connection.
 		if token := db.SessionTokenFrom(r); token != "" {
-			if uid, err := db.LookupSessionUser(r.Context(), pool, token); err != nil {
+			lookupCtx, lookupCancel := context.WithTimeout(r.Context(), 2*time.Second)
+			uid, err := db.LookupSessionUser(lookupCtx, pool, token)
+			lookupCancel()
+			if err != nil {
 				logger.Warn("directus session lookup failed", "error", err)
 			} else if uid != "" {
 				sess.SetUser(uid)
