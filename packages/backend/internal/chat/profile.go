@@ -18,17 +18,20 @@ var (
 	WindowEnd   = time.Date(2001, 9, 12, 4, 0, 0, 0, time.UTC)
 )
 
-// Profile is one configured buddy. Plan A uses only the identity and
-// availability fields; persona, style, and LLM overrides are loaded by the
-// generation layer in a later plan.
+// Profile is one configured buddy: identity, availability, and the persona
+// and style fields the composer renders into the prompt's stable system block.
 type Profile struct {
-	ID          int
-	ScreenName  string
-	DisplayName string
-	Avatar      string
-	OnlineFrom  *time.Time
-	OnlineUntil *time.Time
-	Sort        int
+	ID             int
+	ScreenName     string
+	DisplayName    string
+	Avatar         string
+	Persona        string
+	EducationLevel string
+	WritingStyle   string
+	StyleExemplars string
+	OnlineFrom     *time.Time
+	OnlineUntil    *time.Time
+	Sort           int
 }
 
 // OnlineAt reports whether this buddy is signed on at virtual time t. A nil
@@ -68,7 +71,8 @@ func Roster(profiles []Profile, t time.Time) []model.Buddy {
 }
 
 const profileSelect = `
-	SELECT id, screen_name, display_name, avatar, online_from, online_until, sort
+	SELECT id, screen_name, display_name, avatar, persona, education_level,
+	       writing_style, style_exemplars, online_from, online_until, sort
 	FROM chat_profiles
 	WHERE active = 1
 	ORDER BY sort, id`
@@ -85,16 +89,25 @@ func LoadProfiles(ctx context.Context, pool *pgxpool.Pool) ([]Profile, error) {
 	var out []Profile
 	for rows.Next() {
 		var (
-			p           Profile
-			displayName *string
-			avatar      *string
+			p              Profile
+			displayName    *string
+			avatar         *string
+			persona        *string
+			educationLevel *string
+			writingStyle   *string
+			styleExemplars *string
 		)
 		if err := rows.Scan(&p.ID, &p.ScreenName, &displayName, &avatar,
+			&persona, &educationLevel, &writingStyle, &styleExemplars,
 			&p.OnlineFrom, &p.OnlineUntil, &p.Sort); err != nil {
 			return nil, fmt.Errorf("scan chat_profiles: %w", err)
 		}
 		p.DisplayName = derefStr(displayName)
 		p.Avatar = derefStr(avatar)
+		p.Persona = derefStr(persona)
+		p.EducationLevel = derefStr(educationLevel)
+		p.WritingStyle = derefStr(writingStyle)
+		p.StyleExemplars = derefStr(styleExemplars)
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
