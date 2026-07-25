@@ -6,7 +6,7 @@ tv_channels, mp3_items, and usenet_items.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 
@@ -34,7 +34,11 @@ def _naive_utc(value: str) -> datetime:
     """
     dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if dt.tzinfo is not None:
-        dt = dt.astimezone(tz=None).replace(tzinfo=None)
+        # Convert to a fixed UTC offset before stripping tzinfo. astimezone(tz=None)
+        # would convert to the *system local* timezone instead, which only happens
+        # to equal UTC when the process's TZ is set to UTC — the exact ambient
+        # dependency this helper exists to defuse.
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
 
 

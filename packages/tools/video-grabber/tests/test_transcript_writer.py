@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import httpx
 import pytest
 import respx
@@ -122,3 +124,18 @@ def test_list_subtitled_channels_skips_rows_without_subtitles(cfg):
     assert [c["id"] for c in got] == [1]
     assert got[0]["slug"] == "wnbc"
     assert got[0]["start_date"].tzinfo is None, "anchors must be naive UTC"
+
+
+def test_naive_utc_converts_an_aware_timestamp_to_utc():
+    # astimezone(tz=None) would convert to system-local time, which is correct
+    # only when TZ happens to be UTC. Pin the conversion to a fixed offset so
+    # the test fails on a machine configured any other way.
+    got = writer._naive_utc("2001-09-11T17:46:00+05:00")
+    assert got == datetime(2001, 9, 11, 12, 46, 0)
+    assert got.tzinfo is None
+
+
+def test_naive_utc_passes_a_naive_timestamp_through_unchanged():
+    got = writer._naive_utc("2001-09-11T12:46:00")
+    assert got == datetime(2001, 9, 11, 12, 46, 0)
+    assert got.tzinfo is None
