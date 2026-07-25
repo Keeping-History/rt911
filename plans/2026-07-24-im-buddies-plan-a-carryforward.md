@@ -97,11 +97,31 @@ markup is a live XSS path.
 
 ## Operational state
 
-**The Directus collections have not been applied to any database.** They exist only in `seed.mjs`.
-`node seed.mjs` cannot be used against a live instance to apply them: its top level runs
-`createCollections` and then `importSources`, `importMediaItems`, `importMp3Items`, `importNewsItems`,
-and `importPagerItems` (seed.mjs:1180-1197), bulk-loading local JSON into the target database.
-Applying the schema needs a narrow collections-only path.
+**The Directus collections are APPLIED to api-beta** (2026-07-25 00:57Z) — all nine tables with the
+expected column counts (`chat_profiles` 21, `chat_messages` 12, `chat_blocks` 8) and all seven
+indexes. Verified via `information_schema`.
+
+They were applied with `packages/backend/apply-chat-schema.mjs`, **not** `seed.mjs`. Never use
+`seed.mjs` against a live instance to add a collection: its top level runs `createCollections` and
+then `importSources`, `importMediaItems`, `importMp3Items`, `importNewsItems`, and `importPagerItems`
+(seed.mjs:1180-1197), bulk-loading local JSON into the target database. The apply script shares its
+collection definitions with the seed via `packages/backend/chat-collections.mjs` so the two cannot
+drift; it is dry-run by default and needs `--apply` to mutate anything.
+
+**No Directus permissions were granted, and none are needed for Plan A.** The streamer reads
+`chat_profiles` over its own `pgxpool`, bypassing the Directus permission layer entirely, and the
+frontend receives the roster over the WebSocket rather than REST. Newly created Directus collections
+default to no access for any policy, so `chat_messages` and `chat_blocks` are currently
+administrator-only — the correct failure mode.
+
+**Plan D must grant and then verify** `chat_messages` / `chat_blocks` read+create scoped to
+`{"user": {"_eq": "$CURRENT_USER"}}`, and prove the scoping holds with a two-account cross-read
+probe. A policy misconfiguration there leaks one student's conversation to another, and no test in
+any plan would catch it.
+
+**No profiles are seeded**, so the live behaviour today is: boot logs a warning, every session gets
+an empty roster, and the `chat` channel is subscribable but empty. Profiles load once at boot with
+no reload path, so seeding rows requires a streamer restart.
 
 `chat_profiles.sort` is `NOT NULL DEFAULT 0` — a deliberate change from the original plan, because a
 nullable `sort` mapped to Go's zero value would sort an unset buddy *first* while the query's
