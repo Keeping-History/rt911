@@ -266,6 +266,11 @@ func main() {
 		mux.HandleFunc("/chatdev", handler.NewChatDevHandler(logger))
 		logger.Warn("chat dev harness enabled at /chatdev — do not enable in production")
 	}
+	// Answers "may I take this screen name?", which the browser cannot: reads on
+	// directus_users are scoped to $CURRENT_USER, so a client-side lookup returns
+	// zero rows for every name and would report "available" for taken ones.
+	// Authenticated, so it is not an open oracle for who holds which name.
+	mux.HandleFunc("/chat/username-available", handler.NewUsernameAvailableHandler(pool, trustedOrigins, logger))
 	mux.HandleFunc("/feedback", handler.NewFeedbackHandler(
 		env("GITHUB_API_URL", "https://api.github.com"),
 		env("S3_ENDPOINT", "https://s3.wasabisys.com"),

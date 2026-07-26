@@ -126,3 +126,30 @@ func LookupSessionUser(ctx context.Context, pool *pgxpool.Pool, token string) (s
 	}
 	return *user, displayName(username, email, firstName, lastName), nil
 }
+
+// UsernameAvailableSelectForTest exposes the query so the handler package can
+// assert on its shape without a database.
+var UsernameAvailableSelectForTest = usernameAvailableSelect
+
+const usernameAvailableSelect = `
+	SELECT NOT EXISTS(
+		SELECT 1 FROM directus_users
+		WHERE lower(username) = lower($1) AND id <> $2
+	)`
+
+// UsernameAvailable reports whether a screen name is free for this user.
+//
+// `id <> $2` is the part that matters: a user re-saving the name they already
+// hold must be told yes, or the Account app would refuse to let anyone keep
+// their own name. The comparison is case-insensitive because the app lowercases
+// before saving, so "Danny" and "danny" must not both be takeable.
+//
+// Advisory only. Two callers can be told yes about the same name in the same
+// moment; the unique index is what actually decides.
+func UsernameAvailable(ctx context.Context, pool *pgxpool.Pool, name, userID string) (bool, error) {
+	var free bool
+	if err := pool.QueryRow(ctx, usernameAvailableSelect, name, userID).Scan(&free); err != nil {
+		return false, fmt.Errorf("check username availability: %w", err)
+	}
+	return free, nil
+}

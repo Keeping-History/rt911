@@ -3,10 +3,11 @@
 // Email is absent from updateProfile by design (verified round-trip only).
 import { ClassicyButton, ClassicyControlLabel, ClassicyInput, ClassicyPopUpMenu, ClassicyTabs } from "classicy";
 import type { ChangeEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { UsernameTakenError, requestEmailChange, updateProfile } from "../../Providers/Auth/profileApi";
+import { checkUsername, type UsernameCheck } from "../../Providers/Auth/usernameApi";
 import styles from "./Account.module.scss";
 
 const EDUCATOR_ROLES = [
@@ -94,6 +95,7 @@ export const ProfileEditor: React.FC = () => {
 	const [firstName, setFirstName] = useState(user?.first_name ?? "");
 	const [lastName, setLastName] = useState(user?.last_name ?? "");
 	const [username, setUsername] = useState(user?.username ?? "");
+	const [nameCheck, setNameCheck] = useState<UsernameCheck>("unknown");
 	const [namesBusy, setNamesBusy] = useState(false);
 	const [namesMsg, setNamesMsg] = useState<string | null>(null);
 
@@ -119,6 +121,31 @@ export const ProfileEditor: React.FC = () => {
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [passwordBusy, setPasswordBusy] = useState(false);
 	const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
+
+	// Debounced availability check. Advisory only -- the unique index decides,
+	// and the save still handles a conflict -- so an unreachable endpoint leaves
+	// this at "unknown" and blocks nothing.
+	const ownName = user?.username ?? "";
+	const checkSeq = useRef(0);
+	useEffect(() => {
+		const cleaned = normalizeUsername(username);
+		if (usernameProblem(cleaned) !== null || cleaned === ownName) {
+			setNameCheck("unknown");
+			return;
+		}
+		const seq = ++checkSeq.current;
+		const ctrl = new AbortController();
+		const t = setTimeout(() => {
+			checkUsername(cleaned, ctrl.signal).then((result) => {
+				// Ignore a slow answer about a name the user has since changed.
+				if (seq === checkSeq.current) setNameCheck(result);
+			});
+		}, 400);
+		return () => {
+			clearTimeout(t);
+			ctrl.abort();
+		};
+	}, [username, ownName]);
 
 	const toggle = (list: string[], set: (v: string[]) => void) => (value: string) =>
 		set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -243,8 +270,11 @@ export const ProfileEditor: React.FC = () => {
 						onChangeFunc={(e) => setUsername(e.target.value)}
 					/>
 					<div className={styles.hint}>
-						This is what your buddies call you in chat. Lowercase letters, numbers and
-						underscores.
+						{nameCheck === "taken"
+							? `"${normalizeUsername(username)}" is already taken.`
+							: nameCheck === "available"
+								? `"${normalizeUsername(username)}" is available.`
+								: "This is what your buddies call you in chat. Lowercase letters, numbers and underscores."}
 					</div>
 					<ClassicyButton disabled={namesBusy} onClickFunc={saveNames}>
 						Save Names
