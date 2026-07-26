@@ -21,6 +21,23 @@ func TestDistressEscalatesRatherThanBlocks(t *testing.T) {
 	}
 }
 
+func TestApostrophisedDistressStillEscalates(t *testing.T) {
+	// Regression: "cant stop crying" / "cant breathe" in the term list must
+	// still match the natural, apostrophised spelling a phone or Word
+	// autocorrects to -- both the straight apostrophe (U+0027) and the curly
+	// one (U+2019) -- rather than silently falling through to allow.
+	for _, in := range []string{
+		"i can't stop crying",
+		"i can’t stop crying",
+		"i can't breathe thinking about this",
+		"i can’t breathe thinking about this",
+	} {
+		if got := CheckLocal(in, time.Now(), nil); got.Outcome != "escalate" {
+			t.Errorf("CheckLocal(%q).Outcome = %q, want escalate", in, got.Outcome)
+		}
+	}
+}
+
 func TestRawButOnTopicInputIsAllowed(t *testing.T) {
 	// Processing, not attacking. These must reach the buddy.
 	for _, in := range []string{

@@ -48,6 +48,16 @@ type Block struct {
 	Expires *time.Time
 }
 
+// apostropheReplacer normalises both the straight apostrophe (U+0027) and the
+// curly one (U+2019, what iOS and Word autocorrect to) out of a string by
+// deleting rather than substituting, so "can't" (straight) and "can’t" (curly)
+// both fold onto the same "cant" shape as the term list.
+var apostropheReplacer = strings.NewReplacer("'", "", "’", "")
+
+func stripApostrophes(s string) string {
+	return apostropheReplacer.Replace(s)
+}
+
 // CheckLocal is the zero-cost, no-network moderation tier every inbound
 // message passes through first. Order matters: length cap, then rate limit,
 // then distress, then abuse -- so a message that reads as both distress and
@@ -67,14 +77,18 @@ func CheckLocal(body string, now time.Time, recent []time.Time) Decision {
 		return Decision{Outcome: "block", Reason: "rate_limit"}
 	}
 
-	lower := strings.ToLower(body)
+	// Strip apostrophes (straight and curly) before matching so "can't" and
+	// "can't" both collapse onto the term list's "cant" spelling -- autocorrect
+	// on phones and Word both produce the curly form, and it is the more
+	// natural spelling for a student to type regardless.
+	lower := stripApostrophes(strings.ToLower(body))
 	for _, term := range distressTerms {
-		if strings.Contains(lower, term) {
+		if strings.Contains(lower, stripApostrophes(term)) {
 			return Decision{Outcome: "escalate", Reason: "distress", Evidence: term}
 		}
 	}
 	for _, term := range abuseTerms {
-		if strings.Contains(lower, term) {
+		if strings.Contains(lower, stripApostrophes(term)) {
 			return Decision{Outcome: "block", Reason: "abuse", Evidence: term}
 		}
 	}
