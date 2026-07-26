@@ -835,43 +835,14 @@ func (s *Session) ChatSend(profileID int, body string) {
 	}
 	s.persistInbound(ctx, userID, profileID, body, vTime, moderation)
 
-	var history []chat.Turn
-	var digest, recentPassages, timeline []chat.Passage
-	if s.pool != nil {
-		if h, err := chat.History(ctx, s.pool, userID, profileID, vTime, chatHistoryLimit); err != nil {
-			s.logger.Warn("chat: history load failed", "error", err)
-		} else {
-			history = h
-		}
-		if d, err := chat.LoadCurated(ctx, s.pool, vTime); err != nil {
-			s.logger.Warn("chat: load curated failed", "error", err)
-		} else {
-			digest = d
-		}
-		if r, err := chat.LoadBroadcast(ctx, s.pool, vTime, chatBroadcastLookback, nil); err != nil {
-			s.logger.Warn("chat: load broadcast failed", "error", err)
-		} else {
-			recentPassages = r
-		}
-		// Tier 3 is consulted only on a tier 1+2 miss (knowledge.go's own
-		// contract for SearchTimeline) — and it must land in Timeline, never
-		// Digest: retrospective investigative reporting presented as something
-		// the buddy plainly knows is exactly the misattribution the tier system
-		// exists to prevent. See buildChatJob and its test.
-		if len(digest) == 0 && len(recentPassages) == 0 {
-			if tl, err := chat.SearchTimeline(ctx, s.pool, vTime, body, chatTimelineLimit); err != nil {
-				s.logger.Warn("chat: search timeline failed", "error", err)
-			} else {
-				timeline = tl
-			}
-		}
-	}
+	history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, profileID, vTime, body)
 
 	s.send_(outMsg{Type: "chat_typing", Profile: profileID})
 
 	profile := findProfile(profiles, profileID)
-	deliver := s.chatDeliver(userID, profileID, vTime)
-	job := buildChatJob(userID, profile, phases, beacons, body, vTime, digest, recentPassages, timeline, history, deliver)
+	job := buildChatJob(userID, profile, phases, beacons, body, "generated", false, vTime,
+		digest, recentPassages, timeline, history, nil)
+	job.Deliver = s.chatDeliver(userID, profileID, vTime, job.Kind)
 
 	gen := s.hub.Generator()
 	if gen == nil || !gen.Enqueue(job) {
@@ -879,17 +850,66 @@ func (s *Session) ChatSend(profileID int, body string) {
 	}
 }
 
+// retrieveContext loads the same three knowledge tiers and rolling history
+// buildChatJob composes into every reply, whether the trigger is a typed
+// ChatSend or a generated scheduled beat — grounding must never drift
+// between the two paths, and duplicating this block was Task 10's original
+// mistake. query drives the tier-3 fallback search consulted only when tiers
+// 1 and 2 are both empty (knowledge.go's own contract for SearchTimeline):
+// the student's own message for ChatSend, or the curator's Prompt for a beat
+// in lieu of anything a student typed. Every value is the zero value when
+// s.pool is nil, exactly like the inline block this replaced.
+func (s *Session) retrieveContext(ctx context.Context, userID string, profileID int, vTime time.Time, query string) (history []chat.Turn, digest, recentPassages, timeline []chat.Passage) {
+	if s.pool == nil {
+		return nil, nil, nil, nil
+	}
+	if h, err := chat.History(ctx, s.pool, userID, profileID, vTime, chatHistoryLimit); err != nil {
+		s.logger.Warn("chat: history load failed", "error", err)
+	} else {
+		history = h
+	}
+	if d, err := chat.LoadCurated(ctx, s.pool, vTime); err != nil {
+		s.logger.Warn("chat: load curated failed", "error", err)
+	} else {
+		digest = d
+	}
+	if r, err := chat.LoadBroadcast(ctx, s.pool, vTime, chatBroadcastLookback, nil); err != nil {
+		s.logger.Warn("chat: load broadcast failed", "error", err)
+	} else {
+		recentPassages = r
+	}
+	// Tier 3 must land in Timeline, never Digest: retrospective investigative
+	// reporting presented as something the buddy plainly knows is exactly the
+	// misattribution the tier system exists to prevent. See buildChatJob and
+	// its test.
+	if len(digest) == 0 && len(recentPassages) == 0 {
+		if tl, err := chat.SearchTimeline(ctx, s.pool, vTime, query, chatTimelineLimit); err != nil {
+			s.logger.Warn("chat: search timeline failed", "error", err)
+		} else {
+			timeline = tl
+		}
+	}
+	return history, digest, recentPassages, timeline
+}
+
 // chatDeliver builds the Generator's Deliver callback. It runs on a worker
 // goroutine, not the session goroutine, but touches no field s.mu protects:
 // everything it needs (userID, profileID, vTime) was already read under mu in
 // ChatSend and closed over here, so it persists the reply and calls send_
 // with no lock of its own — the shortest possible window is none at all.
-func (s *Session) chatDeliver(userID string, profileID int, vTime time.Time) func(chat.Reply, error) {
+//
+// baseKind is the persisted/wire kind on a successful reply — the caller's
+// Job.Kind, so a typed reply ("generated") and a scheduled beat's generated
+// reply ("scheduled") are distinguishable in chat_messages.kind exactly as
+// the schema's enum intends. The outcome-based overrides below still take
+// priority over it: a refusal, truncation, or provider error is what it is
+// regardless of what triggered the job.
+func (s *Session) chatDeliver(userID string, profileID int, vTime time.Time, baseKind string) func(chat.Reply, error) {
 	return func(reply chat.Reply, err error) {
 		if err != nil {
 			s.logger.Warn("chat: generation failed", "profile", profileID, "error", err)
 		}
-		kind := "generated"
+		kind := baseKind
 		switch reply.Outcome {
 		case chat.OutcomeRefused:
 			kind = "refused"
@@ -953,8 +973,11 @@ func (s *Session) sendStall(ctx context.Context, userID string, profileID int, v
 // HasPriorContact -- with no pool to check against, a beat that requires
 // prior contact is skipped rather than assumed safe. kind="static" delivers
 // Text with no provider call; kind="generated" enqueues a Job through the
-// generator using Prompt as the user message, following the same
-// stall-on-full-queue degradation ChatSend uses.
+// generator using Prompt as the user message, grounded with the same
+// knowledge-tier retrieval a typed reply gets (retrieveContext) and marked
+// chat.Job.SelfInitiated so the composer renders it as the buddy speaking
+// first rather than answering, following the same stall-on-full-queue
+// degradation ChatSend uses.
 func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID string, profiles []chat.Profile, beacons map[int]chat.Beacon, phases map[int][]chat.Phase, t time.Time) {
 	if len(due) == 0 {
 		return
@@ -990,17 +1013,16 @@ func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID str
 		case "static":
 			s.deliverStaticBeat(ctx, userID, sc.ProfileID, t, sc.Text)
 		case "generated":
-			phase, _ := chat.PhaseAt(phases[sc.ProfileID], beacons, t)
+			// Grounded exactly like a typed reply: same three knowledge tiers
+			// and rolling history, via the same retrieveContext ChatSend uses.
+			// query is sc.Prompt in place of a student's message, since none
+			// exists for a beat the buddy is sending unprompted.
+			profile := findProfile(profiles, sc.ProfileID)
+			history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, sc.ProfileID, t, sc.Prompt)
 			s.send_(outMsg{Type: "chat_typing", Profile: sc.ProfileID})
-			job := chat.Job{
-				UserID:      userID,
-				Profile:     findProfile(profiles, sc.ProfileID),
-				Phase:       phase,
-				Body:        sc.Prompt,
-				Kind:        "scheduled",
-				VirtualTime: t,
-				Deliver:     s.chatDeliver(userID, sc.ProfileID, t),
-			}
+			job := buildChatJob(userID, profile, phases, beacons, sc.Prompt, "scheduled", true, t,
+				digest, recentPassages, timeline, history, nil)
+			job.Deliver = s.chatDeliver(userID, sc.ProfileID, t, job.Kind)
 			gen := s.hub.Generator()
 			if gen == nil || !gen.Enqueue(job) {
 				s.sendStall(ctx, userID, sc.ProfileID, t)
@@ -1115,28 +1137,32 @@ func moderationOf(d chat.Decision) map[string]any {
 // configuration. It is a pure mapping — no I/O — precisely so tier crossing
 // (see the package doc on chat.Tier) is a thing a test can catch directly:
 // digest, recent, and timeline must land in Job.Digest, Job.Recent, and
-// Job.Timeline respectively, with no reordering.
+// Job.Timeline respectively, with no reordering. It serves both a typed
+// ChatSend (kind "generated", selfInitiated false) and a generated scheduled
+// beat (kind "scheduled", selfInitiated true) — the only difference between
+// the two is what the caller passes in, not a second code path.
 //
 // The phase is resolved here, from phases/beacons, rather than passed in
 // pre-resolved: chat.PhaseAt already returns chat.DefaultPhase (ok == false)
 // when profile has no phases configured, so there is nothing left for this
 // function to do on a miss — a second fallback here would just be dead code
 // shadowing PhaseAt's own.
-func buildChatJob(userID string, profile chat.Profile, phases map[int][]chat.Phase, beacons map[int]chat.Beacon, body string, vTime time.Time,
+func buildChatJob(userID string, profile chat.Profile, phases map[int][]chat.Phase, beacons map[int]chat.Beacon, body, kind string, selfInitiated bool, vTime time.Time,
 	digest, recent, timeline []chat.Passage, history []chat.Turn, deliver func(chat.Reply, error)) chat.Job {
 	phase, _ := chat.PhaseAt(phases[profile.ID], beacons, vTime)
 	return chat.Job{
-		UserID:      userID,
-		Profile:     profile,
-		Phase:       phase,
-		Body:        body,
-		Kind:        "typed",
-		VirtualTime: vTime,
-		Digest:      digest,
-		Recent:      recent,
-		Timeline:    timeline,
-		History:     history,
-		Deliver:     deliver,
+		UserID:        userID,
+		Profile:       profile,
+		Phase:         phase,
+		Body:          body,
+		Kind:          kind,
+		SelfInitiated: selfInitiated,
+		VirtualTime:   vTime,
+		Digest:        digest,
+		Recent:        recent,
+		Timeline:      timeline,
+		History:       history,
+		Deliver:       deliver,
 	}
 }
 

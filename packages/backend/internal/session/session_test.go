@@ -1307,7 +1307,7 @@ func TestBuildChatJobRoutesTiersWithoutCrossing(t *testing.T) {
 	recent := []chat.Passage{{Tier: chat.TierBroadcast, Text: "recent-marker"}}
 	timeline := []chat.Passage{{Tier: chat.TierTimeline, Text: "timeline-marker"}}
 
-	job := buildChatJob("user-1", chat.Profile{ID: 3}, nil, nil, "hi",
+	job := buildChatJob("user-1", chat.Profile{ID: 3}, nil, nil, "hi", "generated", false,
 		time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC),
 		digest, recent, timeline, nil, func(chat.Reply, error) {})
 
@@ -1356,9 +1356,9 @@ func TestBuildChatJobResolvesPhaseFromVirtualTime(t *testing.T) {
 	}
 	noop := func(chat.Reply, error) {}
 
-	before := buildChatJob("user-1", chat.Profile{ID: 3}, phases, beacons, "hi",
+	before := buildChatJob("user-1", chat.Profile{ID: 3}, phases, beacons, "hi", "generated", false,
 		time.Date(2001, 9, 11, 12, 48, 0, 0, time.UTC), nil, nil, nil, nil, noop)
-	after := buildChatJob("user-1", chat.Profile{ID: 3}, phases, beacons, "hi",
+	after := buildChatJob("user-1", chat.Profile{ID: 3}, phases, beacons, "hi", "generated", false,
 		time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil, nil, nil, nil, noop)
 
 	if before.Phase.ID != 10 {
@@ -1377,11 +1377,47 @@ func TestBuildChatJobResolvesPhaseFromVirtualTime(t *testing.T) {
 // configured (nil maps, exactly like a fresh install or a unit test with no
 // SetPhaseData call) must still resolve to a Phase, not a zero value.
 func TestBuildChatJobFallsBackToDefaultPhaseWithNoConfig(t *testing.T) {
-	job := buildChatJob("user-1", chat.Profile{ID: 3}, nil, nil, "hi",
+	job := buildChatJob("user-1", chat.Profile{ID: 3}, nil, nil, "hi", "generated", false,
 		time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil, nil, nil, nil, func(chat.Reply, error) {})
 
 	if job.Phase != chat.DefaultPhase {
 		t.Fatalf("Job.Phase = %+v, want chat.DefaultPhase", job.Phase)
+	}
+}
+
+// TestGeneratedBeatJobCarriesKnowledgeTiers is the fix-round-1 regression test
+// for the grounding finding: fireBeats' generated-kind branch used to build
+// its chat.Job by hand, omitting Digest/Recent/Timeline/History entirely, so a
+// scheduled beat would generate with no curated facts, no broadcast
+// transcript, and no timeline behind it — inventing its own reaction to a
+// real event. fireBeats now retrieves the same tiers a typed ChatSend does
+// (retrieveContext) and builds its job through the same buildChatJob call
+// shape (kind "scheduled", selfInitiated true, sc.Prompt as Body); this
+// proves that shape actually carries non-empty tiers through rather than
+// dropping them, exactly as TestBuildChatJobRoutesTiersWithoutCrossing proves
+// for a typed reply.
+func TestGeneratedBeatJobCarriesKnowledgeTiers(t *testing.T) {
+	digest := []chat.Passage{{Tier: chat.TierCurated, Text: "a plane hit the north tower"}}
+	recent := []chat.Passage{{Tier: chat.TierBroadcast, Text: "breaking coverage begins"}}
+	timeline := []chat.Passage{{Tier: chat.TierTimeline, Text: "investigators later found"}}
+	history := []chat.Turn{{FromBuddy: false, Text: "hey"}, {FromBuddy: true, Text: "hey!"}}
+
+	job := buildChatJob("user-1", chat.Profile{ID: 5}, nil, nil, "react to the second impact",
+		"scheduled", true, time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC),
+		digest, recent, timeline, history, func(chat.Reply, error) {})
+
+	if len(job.Digest) == 0 || len(job.Recent) == 0 || len(job.Timeline) == 0 || len(job.History) == 0 {
+		t.Fatalf("a generated beat's job must carry every retrieved tier, got Digest=%d Recent=%d Timeline=%d History=%d",
+			len(job.Digest), len(job.Recent), len(job.Timeline), len(job.History))
+	}
+	if !job.SelfInitiated {
+		t.Error("a generated beat's job must be marked SelfInitiated so the composer never renders it as a reply")
+	}
+	if job.Kind != "scheduled" {
+		t.Errorf("Kind = %q, want scheduled", job.Kind)
+	}
+	if job.Body != "react to the second impact" {
+		t.Errorf("Body = %q, want the schedule's Prompt", job.Body)
 	}
 }
 

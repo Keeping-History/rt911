@@ -41,7 +41,12 @@ type Job struct {
 	Recent      []Passage
 	Timeline    []Passage
 	History     []Turn
-	Deliver     func(Reply, error)
+	// SelfInitiated marks a proactive scheduled beat: Body is the curator's
+	// stage direction (chat_schedules.prompt), not something the student
+	// said. Carried straight into ComposeInput.SelfInitiated — see
+	// composer.go's liveTurn for why the two must never be conflated.
+	SelfInitiated bool
+	Deliver       func(Reply, error)
 }
 
 // Generator is a bounded worker pool: the only place in this feature where
@@ -232,14 +237,15 @@ func (g *Generator) run(j Job) {
 	// sensitivity:"do_not_discuss" row and the model. Every tier goes through
 	// it, not just the curated one.
 	in := ComposeInput{
-		Profile:     j.Profile,
-		Phase:       j.Phase,
-		Digest:      Redact(j.Digest),
-		Recent:      Redact(j.Recent),
-		Timeline:    Redact(j.Timeline),
-		History:     j.History,
-		VirtualTime: j.VirtualTime,
-		UserMessage: j.Body,
+		Profile:       j.Profile,
+		Phase:         j.Phase,
+		Digest:        Redact(j.Digest),
+		Recent:        Redact(j.Recent),
+		Timeline:      Redact(j.Timeline),
+		History:       j.History,
+		VirtualTime:   j.VirtualTime,
+		UserMessage:   j.Body,
+		SelfInitiated: j.SelfInitiated,
 	}
 
 	reply, err := p.Generate(context.Background(), Request{

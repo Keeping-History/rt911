@@ -174,6 +174,43 @@ func TestComposeLabelsRadioAsRadioNotTV(t *testing.T) {
 	t.Fatal("radio passage did not render at all")
 }
 
+// TestSelfInitiatedNeverRendersAsAReply is the fix-round-1 regression test for
+// the misattribution finding: a scheduled beat's UserMessage is the curator's
+// internal stage direction (chat_schedules.prompt), never something the
+// student typed. Rendering it behind "They just said" would tell the model
+// the student sent a message that never happened, and the model would answer
+// a message nobody sent.
+func TestSelfInitiatedNeverRendersAsAReply(t *testing.T) {
+	in := composeInput()
+	in.SelfInitiated = true
+	in.UserMessage = "react to the second tower being hit"
+
+	got := Compose(in)
+	joined := allText(got)
+
+	if strings.Contains(joined, "They just said") {
+		t.Fatalf("a self-initiated beat must never render as a reply: %q", joined)
+	}
+	if !strings.Contains(joined, in.UserMessage) {
+		t.Fatalf("the stage direction must still reach the prompt: %q", joined)
+	}
+	lower := strings.ToLower(joined)
+	if !strings.Contains(lower, "messaging them first") && !strings.Contains(lower, "starting") &&
+		!strings.Contains(lower, "opening message") {
+		t.Fatalf("a self-initiated beat must tell the model it is initiating, not replying: %q", joined)
+	}
+}
+
+func TestNonSelfInitiatedStillRendersTheyJustSaid(t *testing.T) {
+	// The typed-reply path must keep today's behaviour exactly — only the new
+	// SelfInitiated branch changes.
+	got := Compose(composeInput())
+	joined := allText(got)
+	if !strings.Contains(joined, "They just said: is your mom ok") {
+		t.Fatalf("a typed reply must still render as an answer to what was said: %q", joined)
+	}
+}
+
 func TestComposeStabilityIsMonotonic(t *testing.T) {
 	segs := Compose(ComposeInput{
 		Profile:  Profile{ScreenName: "danny", Persona: "p"},

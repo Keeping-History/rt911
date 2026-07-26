@@ -43,6 +43,13 @@ type ComposeInput struct {
 	History     []Turn
 	VirtualTime time.Time
 	UserMessage string
+	// SelfInitiated marks a proactive scheduled beat (chat_schedules): the
+	// buddy is messaging first, not answering. UserMessage in this case is
+	// the curator's internal stage direction (chat_schedules.prompt), never
+	// something the student said — liveTurn must never present it as an
+	// incoming message, and must tell the model it is the one starting the
+	// conversation.
+	SelfInitiated bool
 }
 
 // Compose renders the prompt as ordered, stability-tagged segments.
@@ -199,15 +206,25 @@ func historyBlock(p Profile, turns []Turn) string {
 }
 
 // liveTurn holds everything that changes every message: the clock, the phase
-// directive, and what the user just said.
+// directive, and either what the user just said or, for a self-initiated
+// beat, what the buddy is reacting to. The two must never share a branch —
+// presenting UserMessage as something the student typed when it is actually
+// the curator's stage direction (chat_schedules.prompt) is exactly the
+// misattribution SelfInitiated exists to prevent.
 func liveTurn(in ComposeInput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "It is %s.\n", in.VirtualTime.Format("3:04 PM"))
 	if d := dialDirective(in.Phase); d != "" {
 		b.WriteString(d + "\n")
 	}
-	fmt.Fprintf(&b, "They just said: %s\n", in.UserMessage)
-	b.WriteString("Reply as one short instant message.\n")
+	if in.SelfInitiated {
+		fmt.Fprintf(&b, "Nobody has said anything to you. You are messaging them first, "+
+			"unprompted, because: %s\n", in.UserMessage)
+		b.WriteString("Send the opening message of the conversation — you are starting it, not replying to one.\n")
+	} else {
+		fmt.Fprintf(&b, "They just said: %s\n", in.UserMessage)
+	}
+	b.WriteString("Send one short instant message.\n")
 	return b.String()
 }
 
