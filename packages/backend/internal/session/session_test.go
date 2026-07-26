@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -1595,5 +1596,61 @@ func TestChatHistoryWithNilPoolStillSendsDone(t *testing.T) {
 	msg := recvType(t, s)
 	if msg.Type != "chat_history" || !msg.Done {
 		t.Fatalf("expected a terminal chat_history{done:true} frame, got %+v", msg)
+	}
+}
+
+func TestPartitionTiersRoutesEachPassageToItsOwnSlot(t *testing.T) {
+	// Tier 3 must land in Timeline and never Digest — presenting retrospective
+	// reporting as something the buddy plainly knows is the misattribution the
+	// tier system exists to prevent.
+	digest, recent, timeline := partitionTiers([]chat.Passage{
+		{Tier: chat.TierBroadcast, Text: "b"},
+		{Tier: chat.TierCurated, Text: "a"},
+		{Tier: chat.TierTimeline, Text: "c"},
+	})
+
+	if len(digest) != 1 || digest[0].Text != "a" {
+		t.Errorf("digest = %+v, want the curated passage", digest)
+	}
+	if len(recent) != 1 || recent[0].Text != "b" {
+		t.Errorf("recent = %+v, want the broadcast passage", recent)
+	}
+	if len(timeline) != 1 || timeline[0].Text != "c" {
+		t.Errorf("timeline = %+v, want the timeline passage", timeline)
+	}
+}
+
+func TestBudgetDropsTranscriptBeforeCuratedFacts(t *testing.T) {
+	// The cost lever, and the priority that makes it safe: an unbounded 10-minute
+	// window is ~261k runes at 13:00Z. When the ceiling bites it must drop the
+	// least authoritative tier, so a curated fact outranks a transcript line that
+	// merely happened to be on air.
+	long := strings.Repeat("x", 400)
+	budgeted := chat.Budget(concatPassages(
+		[]chat.Passage{{Tier: chat.TierCurated, Text: "a plane hit the north tower"}},
+		[]chat.Passage{{Tier: chat.TierBroadcast, Text: long}, {Tier: chat.TierBroadcast, Text: long}},
+		nil,
+	), 500)
+	digest, recent, _ := partitionTiers(budgeted)
+
+	if len(digest) != 1 {
+		t.Fatalf("the curated fact must survive the cap, got %+v", digest)
+	}
+	if len(recent) > 1 {
+		t.Errorf("transcript should have been trimmed to fit, got %d segments", len(recent))
+	}
+}
+
+func TestPartitionTiersPreservesWithinTierOrder(t *testing.T) {
+	// Budget's sort is stable, so tier 2 must still arrive chronologically —
+	// a buddy reading its own recent television out of order is nonsense.
+	_, recent, _ := partitionTiers([]chat.Passage{
+		{Tier: chat.TierBroadcast, Text: "first"},
+		{Tier: chat.TierCurated, Text: "curated"},
+		{Tier: chat.TierBroadcast, Text: "second"},
+	})
+
+	if len(recent) != 2 || recent[0].Text != "first" || recent[1].Text != "second" {
+		t.Errorf("within-tier order not preserved: %+v", recent)
 	}
 }

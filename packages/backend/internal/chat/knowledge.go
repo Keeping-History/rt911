@@ -121,7 +121,8 @@ const broadcastSelect = `
 	  AND ($3::bool
 	       OR channel = ANY($4::int[])
 	       OR channel_slug = ANY($5::text[]))
-	ORDER BY start_date`
+	ORDER BY start_date DESC
+	LIMIT $6`
 
 // LoadBroadcast returns transcript segments from the lookback window ending at
 // t, restricted to the sources that reached the buddy's market. This is what
@@ -130,7 +131,15 @@ const broadcastSelect = `
 //
 // A nil allow means unfiltered. A non-nil allow is applied even when it permits
 // nothing -- see the note on broadcastSelect.
-func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookback time.Duration, allow *BroadcastFilter) ([]Passage, error) {
+//
+// limit bounds the result, and the query takes the NEWEST rows: a ten-minute
+// window across the national and international sources runs to ~450 segments
+// and ~260k runes at 13:00Z, which is roughly 65k tokens against a prompt
+// budgeted for 8k. Truncating from the wrong end would keep what was on air ten
+// minutes ago and drop the last thirty seconds -- the opposite of "what you have
+// just heard". Rows are reversed before returning so the composer still reads
+// oldest-first, the way a conversation does.
+func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookback time.Duration, allow *BroadcastFilter, limit int) ([]Passage, error) {
 	unfiltered := allow == nil
 	var ids []int
 	var slugs []string
@@ -138,7 +147,7 @@ func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookbac
 		ids, slugs = allow.ChannelIDs, allow.Slugs
 	}
 	rows, err := pool.Query(ctx, broadcastSelect,
-		t.UTC().Add(-lookback), t.UTC(), unfiltered, ids, slugs)
+		t.UTC().Add(-lookback), t.UTC(), unfiltered, ids, slugs, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query chat_transcript_segments: %w", err)
 	}
@@ -166,7 +175,18 @@ func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookbac
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate chat_transcript_segments: %w", err)
 	}
-	return out, nil
+	return reversePassages(out), nil
+}
+
+// reversePassages flips newest-first rows back to chronological order. The
+// query has to sort DESC so LIMIT keeps the most recent segments; the composer
+// reads top-to-bottom, so it needs them the other way round.
+func reversePassages(newestFirst []Passage) []Passage {
+	out := make([]Passage, len(newestFirst))
+	for i, p := range newestFirst {
+		out[len(newestFirst)-1-i] = p
+	}
+	return out
 }
 
 const timelineSearch = `

@@ -780,6 +780,20 @@ const (
 	// reads as recent, short enough that it stays a rolling window rather than
 	// the whole day's transcript.
 	chatBroadcastLookback = 10 * time.Minute
+	// chatBroadcastLimit bounds how many segments that window may return. It is
+	// a transfer bound, not the real ceiling — chatKnowledgeMaxRunes is — but it
+	// keeps a busy minute from pulling hundreds of rows before they are trimmed.
+	// Measured on the live corpus: 13:00Z on 9/11 yields ~450 segments across
+	// the national and international sources.
+	chatBroadcastLimit = 150
+	// chatKnowledgeMaxRunes caps the three knowledge tiers TOGETHER, which is
+	// the actual cost lever. Unbounded, that same 13:00Z window is ~261k runes
+	// (~65k tokens) in every single message, against a design budgeted for ~8k
+	// tokens of prompt in total. Budget drops the least authoritative tier
+	// first, so a curated fact outranks a transcript line that merely happened
+	// to be on air. Roughly 6k tokens, leaving room for persona, history and
+	// the live turn.
+	chatKnowledgeMaxRunes = 24000
 	// chatTimelineLimit bounds the tier-3 fallback search, consulted only when
 	// tiers 1 and 2 turn up nothing for this virtual time.
 	chatTimelineLimit = 5
@@ -903,7 +917,7 @@ func (s *Session) retrieveContext(ctx context.Context, userID string, profileID 
 	} else {
 		digest = d
 	}
-	if r, err := chat.LoadBroadcast(ctx, s.pool, vTime, chatBroadcastLookback, allow); err != nil {
+	if r, err := chat.LoadBroadcast(ctx, s.pool, vTime, chatBroadcastLookback, allow, chatBroadcastLimit); err != nil {
 		s.logger.Warn("chat: load broadcast failed", "error", err)
 	} else {
 		recentPassages = r
@@ -919,6 +933,15 @@ func (s *Session) retrieveContext(ctx context.Context, userID string, profileID 
 			timeline = tl
 		}
 	}
+
+	// Cap the three tiers together, then put each passage back in its own slot.
+	// Budget drops the least authoritative first, so this is a single knowledge
+	// ceiling with tier priority rather than three independent ones -- a day
+	// thick with curated facts squeezes transcript, not the reverse.
+	// Partitioning by p.Tier is safe because Budget's sort is stable, so each
+	// tier keeps the order its loader returned (chronological for tier 2).
+	digest, recentPassages, timeline = partitionTiers(chat.Budget(
+		concatPassages(digest, recentPassages, timeline), chatKnowledgeMaxRunes))
 	return history, digest, recentPassages, timeline
 }
 
@@ -1166,6 +1189,32 @@ func clampChatHistoryBefore(before, virtualTime time.Time) time.Time {
 // loaded at all) falls back to a zero-value Profile carrying only the id: the
 // generator still has enough to enqueue and reply, just without persona
 // fields to render.
+func concatPassages(groups ...[]chat.Passage) []chat.Passage {
+	var out []chat.Passage
+	for _, g := range groups {
+		out = append(out, g...)
+	}
+	return out
+}
+
+// partitionTiers splits a budgeted passage set back into the composer's three
+// slots. Tier 3 must land in Timeline and never Digest: retrospective
+// investigative reporting presented as something the buddy plainly knows is the
+// misattribution the tier system exists to prevent.
+func partitionTiers(passages []chat.Passage) (digest, recent, timeline []chat.Passage) {
+	for _, p := range passages {
+		switch p.Tier {
+		case chat.TierCurated:
+			digest = append(digest, p)
+		case chat.TierBroadcast:
+			recent = append(recent, p)
+		case chat.TierTimeline:
+			timeline = append(timeline, p)
+		}
+	}
+	return digest, recent, timeline
+}
+
 func findProfile(profiles []chat.Profile, id int) chat.Profile {
 	for _, p := range profiles {
 		if p.ID == id {
