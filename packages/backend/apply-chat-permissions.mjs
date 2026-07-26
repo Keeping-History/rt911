@@ -34,12 +34,22 @@
  * refuses to proceed past an existing non-admin grant on chat_settings
  * rather than silently leaving one in place.
  *
+ * Drift detection: an existing permission row for one of the grants above is
+ * NOT treated as "already granted" unless its fields/permissions/validation/
+ * presets structurally match what's expected. A grant that exists but is
+ * unfiltered -- the exact misconfiguration this task exists to prevent -- is
+ * reported as drift, not silently skipped: the dry run lists it under "Would
+ * fix" and exits 1, and --apply PATCHes it back to the correct filter rather
+ * than leaving it alone.
+ *
  * Usage:
  *   node apply-chat-permissions.mjs            # dry run (default) -- prints
  *                                               # the plan, makes no writes,
- *                                               # issues only read requests
- *   node apply-chat-permissions.mjs --apply    # actually creates the
- *                                               # missing permission rows
+ *                                               # issues only read requests;
+ *                                               # exits 1 if drift is found
+ *   node apply-chat-permissions.mjs --apply    # creates missing permission
+ *                                               # rows and corrects drifted
+ *                                               # ones
  *
  * Required env (no defaults, on purpose -- a silent default is how you
  * configure the wrong instance):
@@ -99,6 +109,64 @@ async function findPolicyByName(token, name) {
   return res.data[0] ?? null;
 }
 
+// A missing grant and a wrong grant are different failures. A grant that
+// exists but is unfiltered -- exactly the misconfiguration this whole task
+// exists to prevent -- must never be reported as "already granted." These
+// helpers compare an existing /permissions row against the one this script
+// expects, independent of key order (Directus does not guarantee the order
+// it returns JSON object keys in) and independent of Directus normalizing an
+// absent filter to `{}` on some routes and `null` on others -- both mean "no
+// restriction" and must compare equal to each other, not just to themselves.
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function normalizeFilter(filter) {
+  if (filter == null) return null;
+  if (typeof filter === "object" && !Array.isArray(filter) && Object.keys(filter).length === 0) return null;
+  return filter;
+}
+
+function filtersEqual(a, b) {
+  return stableStringify(normalizeFilter(a)) === stableStringify(normalizeFilter(b));
+}
+
+function fieldsEqual(a, b) {
+  const sorted = (arr) => [...(arr ?? [])].sort();
+  return JSON.stringify(sorted(a)) === JSON.stringify(sorted(b));
+}
+
+// Compares an existing directus_permissions row (as returned by GET) against
+// the grant this script wants in place. Every field this script ever sets
+// is checked, not just `permissions` -- a drifted `fields` (e.g. narrowed
+// off the wildcard) or a stale `presets`/`validation` is exactly as much a
+// drift as the ownership filter itself, and this is the one function that
+// decides whether re-running this script on a misconfigured instance stays
+// silent or speaks up.
+function grantMatches(existingRow, expected) {
+  return (
+    fieldsEqual(existingRow.fields, expected.fields) &&
+    filtersEqual(existingRow.permissions, expected.permissions) &&
+    filtersEqual(existingRow.validation, expected.validation) &&
+    filtersEqual(existingRow.presets, expected.presets)
+  );
+}
+
+function expectedGrantBody(grant) {
+  return {
+    fields: grant.fields,
+    permissions: grant.permissions ?? null,
+    validation: grant.validation ?? null,
+    presets: grant.presets ?? null,
+  };
+}
+
 const OWN_FILTER = { user: { _eq: "$CURRENT_USER" } };
 
 const TEACHER_GRANTS = [
@@ -142,8 +210,8 @@ const existingOnRelevantPolicies = await api(
   `/permissions?filter[policy][_in]=${teacherPolicy.id},${publicPolicy.id}&limit=-1`,
 );
 
-function hasGrant(policyId, collection, action) {
-  return existingOnRelevantPolicies.data.some((p) => p.policy === policyId && p.collection === collection && p.action === action);
+function findExistingGrant(policyId, collection, action) {
+  return existingOnRelevantPolicies.data.find((p) => p.policy === policyId && p.collection === collection && p.action === action) ?? null;
 }
 
 // chat_settings check runs before anything else is planned: applying new
@@ -170,18 +238,23 @@ if (allChatSettingsPerms.data.length > 0) {
 
 const toCreate = [];
 const toSkip = [];
+const toFix = [];
 
-for (const grant of TEACHER_GRANTS) {
-  const entry = { policyId: teacherPolicy.id, policyLabel: "Teacher", ...grant };
-  if (hasGrant(teacherPolicy.id, grant.collection, grant.action)) toSkip.push(entry);
-  else toCreate.push(entry);
+function plan(policyId, policyLabel, grant) {
+  const expected = expectedGrantBody(grant);
+  const entry = { policyId, policyLabel, ...grant };
+  const existingRow = findExistingGrant(policyId, grant.collection, grant.action);
+  if (!existingRow) {
+    toCreate.push(entry);
+  } else if (grantMatches(existingRow, expected)) {
+    toSkip.push(entry);
+  } else {
+    toFix.push({ ...entry, permissionId: existingRow.id, existingRow, expected });
+  }
 }
 
-for (const collection of PUBLIC_READ_COLLECTIONS) {
-  const entry = { policyId: publicPolicy.id, policyLabel: "Public", collection, action: "read", fields: ["*"] };
-  if (hasGrant(publicPolicy.id, collection, "read")) toSkip.push(entry);
-  else toCreate.push(entry);
-}
+for (const grant of TEACHER_GRANTS) plan(teacherPolicy.id, "Teacher", grant);
+for (const collection of PUBLIC_READ_COLLECTIONS) plan(publicPolicy.id, "Public", { collection, action: "read", fields: ["*"] });
 
 function describe(entry) {
   return `${entry.policyLabel} policy — ${entry.collection}.${entry.action}`;
@@ -195,29 +268,46 @@ if (!APPLY) {
   if (toCreate.length === 0) console.log("  (none — every grant already exists)");
   for (const entry of toCreate) console.log(`  - ${describe(entry)}`);
 
-  console.log("\nWould skip (already granted):");
+  console.log("\nWould fix (DRIFT DETECTED — existing grant does not match the intended filter/fields):");
+  if (toFix.length === 0) console.log("  (none)");
+  for (const entry of toFix) {
+    console.log(`  - ${describe(entry)} (permission id=${entry.permissionId})`);
+    console.log(`      existing: fields=${stableStringify(entry.existingRow.fields)} permissions=${stableStringify(entry.existingRow.permissions)} validation=${stableStringify(entry.existingRow.validation)} presets=${stableStringify(entry.existingRow.presets)}`);
+    console.log(`      expected: fields=${stableStringify(entry.expected.fields)} permissions=${stableStringify(entry.expected.permissions)} validation=${stableStringify(entry.expected.validation)} presets=${stableStringify(entry.expected.presets)}`);
+  }
+
+  console.log("\nWould skip (already correct):");
   if (toSkip.length === 0) console.log("  (none)");
   for (const entry of toSkip) console.log(`  - ${describe(entry)}`);
 
+  if (toFix.length > 0) {
+    console.error("\n*** DRIFT DETECTED on the grants above. Re-run with --apply to correct them. ***");
+  }
   console.log("\nDry run complete. Re-run with --apply to make these changes.");
-  process.exit(0);
+  process.exit(toFix.length > 0 ? 1 : 0);
 }
 
 const created = [];
 for (const entry of toCreate) {
   console.log(`Granting: ${describe(entry)}`);
-  const body = { policy: entry.policyId, collection: entry.collection, action: entry.action, fields: entry.fields };
-  if (entry.permissions) body.permissions = entry.permissions;
-  if (entry.validation) body.validation = entry.validation;
-  if (entry.presets) body.presets = entry.presets;
+  const body = { policy: entry.policyId, collection: entry.collection, action: entry.action, ...expectedGrantBody(entry) };
   await api(token, "POST", "/permissions", body);
   created.push(entry);
 }
+
+const fixed = [];
+for (const entry of toFix) {
+  console.log(`Correcting drift: ${describe(entry)} (permission id=${entry.permissionId})`);
+  await api(token, "PATCH", `/permissions/${entry.permissionId}`, entry.expected);
+  fixed.push(entry);
+}
+
 for (const entry of toSkip) {
-  console.log(`Already granted, skipping: ${describe(entry)}`);
+  console.log(`Already correct, skipping: ${describe(entry)}`);
 }
 
 console.log("\n--- Summary ---");
 console.log(`Created (${created.length}): ${created.map(describe).join(", ") || "(none)"}`);
+console.log(`Fixed (${fixed.length}): ${fixed.map(describe).join(", ") || "(none)"}`);
 console.log(`Skipped (${toSkip.length}): ${toSkip.map(describe).join(", ") || "(none)"}`);
 console.log(`Admin-only, untouched: ${ADMIN_ONLY_COLLECTIONS.join(", ")}`);

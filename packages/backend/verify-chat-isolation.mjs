@@ -12,7 +12,9 @@
  *   2. Logs in as account B, GETs that row by id.
  *   3. Asserts B receives zero rows. A non-empty result exits 1 immediately
  *      -- that is a live privacy incident, not a bug to file.
- *   4. Asserts B's PATCH and DELETE of that row both fail.
+ *   4. Asserts B's PATCH and DELETE of that row both come back 401/403 --
+ *      not merely "not ok," since a 5xx or a network failure proves nothing
+ *      about the permission model and must fail loudly instead.
  *   5. Repeats 1-4 for chat_blocks (seeded by the admin account, since the
  *      Teacher policy intentionally grants no create/update/delete on
  *      chat_blocks to anyone -- see apply-chat-permissions.mjs).
@@ -81,6 +83,24 @@ function check(condition, description) {
   assertionCount++;
   if (!condition) fail(`assertion failed: ${description}`);
   console.log(`  ok - ${description}`);
+}
+
+// `!res.ok` is not proof of a permission denial -- a 500 from an unrelated
+// bug, a network hiccup, or a typo'd path would all print the same
+// reassuring "cannot" line as a real 403. Only 401 (bad/expired token) and
+// 403 (FORBIDDEN, the actual denial code) count. 404 is deliberately NOT
+// accepted here: per current Directus docs (Errors > HTTP Status Codes),
+// Directus returns FORBIDDEN instead of 404 Not Found specifically to avoid
+// revealing that a row exists at all, so a genuine ownership-filter denial
+// on this instance should surface as 403, not 404 -- a 404 here would mean
+// something other than the filter is responding (e.g. a wrong path) and
+// must fail loudly like any other unexpected status.
+function checkDenied(res, description) {
+  assertionCount++;
+  if (res.status !== 401 && res.status !== 403) {
+    fail(`${description} -- expected 401/403, got ${res.status}: ${res.text}`);
+  }
+  console.log(`  ok - ${description} (${res.status})`);
 }
 
 // Unlike apply-chat-permissions.mjs's api(), this does not throw on a
@@ -163,10 +183,10 @@ if (leakedMessages.length !== 0) {
 check(true, "account B's read of A's chat_messages row returned zero rows");
 
 const patchMsgAsB = await api(tokenB, "PATCH", `/items/chat_messages/${msgId}`, { body: "tampered by B" });
-check(!patchMsgAsB.ok, `account B cannot PATCH A's chat_messages row (got ${patchMsgAsB.status})`);
+checkDenied(patchMsgAsB, "account B cannot PATCH A's chat_messages row");
 
 const deleteMsgAsB = await api(tokenB, "DELETE", `/items/chat_messages/${msgId}`);
-check(!deleteMsgAsB.ok, `account B cannot DELETE A's chat_messages row (got ${deleteMsgAsB.status})`);
+checkDenied(deleteMsgAsB, "account B cannot DELETE A's chat_messages row");
 
 // --- chat_blocks ---
 console.log("\n--- chat_blocks ---");
@@ -197,10 +217,10 @@ if (leakedBlocks.length !== 0) {
 check(true, "account B's read of A's chat_blocks row returned zero rows");
 
 const patchBlockAsB = await api(tokenB, "PATCH", `/items/chat_blocks/${blockId}`, { reason: "tampered by B" });
-check(!patchBlockAsB.ok, `account B cannot PATCH A's chat_blocks row (got ${patchBlockAsB.status})`);
+checkDenied(patchBlockAsB, "account B cannot PATCH A's chat_blocks row");
 
 const deleteBlockAsB = await api(tokenB, "DELETE", `/items/chat_blocks/${blockId}`);
-check(!deleteBlockAsB.ok, `account B cannot DELETE A's chat_blocks row (got ${deleteBlockAsB.status})`);
+checkDenied(deleteBlockAsB, "account B cannot DELETE A's chat_blocks row");
 
 // --- cleanup ---
 console.log("\n--- cleanup (as admin — neither probe row is deletable by A) ---");
