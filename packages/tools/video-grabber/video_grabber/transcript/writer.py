@@ -32,7 +32,7 @@ def _naive_utc(value: str) -> datetime:
     Directus returns `timestamp` columns naive and `timestamptz` aware; mixing
     the two raises on subtraction, which is a tested bug class in this package.
     """
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    dt = datetime.fromisoformat(value)
     if dt.tzinfo is not None:
         # Convert to a fixed UTC offset before stripping tzinfo. astimezone(tz=None)
         # would convert to the *system local* timezone instead, which only happens
