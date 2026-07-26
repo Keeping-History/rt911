@@ -607,13 +607,21 @@ var Anachronisms = []string{
 // escaped -- a buddy typing a literal asterisk is a bug, not a style choice.
 func Sanitize(s string, maxRunes int) string {
 	s = replacements.Replace(s)
-	s = reURL.ReplaceAllString(s, "")
-	s = reMarkdown.ReplaceAllString(s, "")
 
-	// Drop anything still non-ASCII: emoji, accented characters, box drawing.
+	// Markdown BEFORE URLs, not after. A stray markdown character inside a
+	// scheme ("h*ttp://cnn.com") hides the URL from reURL, and stripping the
+	// markdown afterwards would reassemble a working link that nothing else
+	// removes -- a leak, and a violation of idempotence. The markdown class
+	// contains no character that can break URL matching, so this order is safe.
+	s = reMarkdown.ReplaceAllString(s, "")
+	s = reURL.ReplaceAllString(s, "")
+
+	// Keep printable ASCII and ordinary whitespace only. A bare `r < 128`
+	// admits the C0 controls, so ANSI escape sequences -- literally colour
+	// codes, which the requirement forbids -- would reach the UI intact.
 	var b strings.Builder
 	for _, r := range s {
-		if r < 128 {
+		if (r >= 0x20 && r < 0x7F) || r == '\t' || r == '\n' || r == '\f' || r == '\r' {
 			b.WriteRune(r)
 		}
 	}
