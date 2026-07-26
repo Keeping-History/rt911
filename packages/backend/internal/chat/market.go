@@ -3,6 +3,8 @@ package chat
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -72,11 +74,24 @@ type BroadcastFilter struct {
 // An unclassified source inside a populated set is carried rather than dropped,
 // so adding a channel cannot silently make it inaudible; LoadBroadcastSources
 // logs those gaps at boot instead.
-func AllowedFor(sources []BroadcastSource, market string) *BroadcastFilter {
+//
+// watching optionally narrows the result to the source(s) this buddy actually
+// had on -- a comma-separated list of source names. A person watched one
+// channel, not twenty-two, and without this the "what you have just heard"
+// block is a blend of CNN, NHK and Mexican network audio that no one saw.
+//
+// It only ever NARROWS. A name the buddy could not receive is ignored rather
+// than honoured, so a curator typing WINS onto an Ohio profile cannot turn a
+// mistake into a way to hear New York radio. If nothing watchable survives, the
+// full receivable set is returned instead of silence -- a typo should not
+// deafen a buddy -- and UnwatchableNames surfaces it at boot.
+func AllowedFor(sources []BroadcastSource, market, watching string) *BroadcastFilter {
 	if len(sources) == 0 {
 		return nil
 	}
-	f := &BroadcastFilter{}
+
+	want := nameSet(watching)
+	all, chosen := &BroadcastFilter{}, &BroadcastFilter{}
 	for _, s := range sources {
 		if s.Reach == ReachOutbound || s.Reach == ReachPrivate {
 			continue
@@ -84,14 +99,79 @@ func AllowedFor(sources []BroadcastSource, market string) *BroadcastFilter {
 		if s.Reach == ReachLocal && s.Market != market {
 			continue
 		}
-		switch {
-		case s.ChannelID != nil:
-			f.ChannelIDs = append(f.ChannelIDs, *s.ChannelID)
-		case s.Slug != "":
-			f.Slugs = append(f.Slugs, s.Slug)
+		add(all, s)
+		if _, ok := want[s.Name]; ok {
+			add(chosen, s)
 		}
 	}
-	return f
+
+	if len(want) > 0 && (len(chosen.ChannelIDs) > 0 || len(chosen.Slugs) > 0) {
+		return chosen
+	}
+	return all
+}
+
+func add(f *BroadcastFilter, s BroadcastSource) {
+	switch {
+	case s.ChannelID != nil:
+		f.ChannelIDs = append(f.ChannelIDs, *s.ChannelID)
+	case s.Slug != "":
+		f.Slugs = append(f.Slugs, s.Slug)
+	}
+}
+
+func nameSet(csv string) map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, n := range strings.Split(csv, ",") {
+		if n = strings.TrimSpace(n); n != "" {
+			out[n] = struct{}{}
+		}
+	}
+	return out
+}
+
+// UnwatchableNames reports profiles whose `watching` names nothing they could
+// actually receive -- a misspelling, or a source outside their market. These
+// buddies silently fall back to everything receivable, so the mistake is
+// invisible in behaviour and needs saying out loud at boot.
+func UnwatchableNames(sources []BroadcastSource, profiles []Profile) []string {
+	var out []string
+	for _, p := range profiles {
+		want := nameSet(p.Watching)
+		if len(want) == 0 {
+			continue
+		}
+		f := AllowedFor(sources, p.Market, p.Watching)
+		if f != nil && len(f.ChannelIDs) == 0 && len(f.Slugs) == 0 {
+			out = append(out, p.ScreenName+": "+p.Watching)
+			continue
+		}
+		// A narrowed filter means at least one name resolved; report the ones
+		// that did not, so a two-name value with one typo still gets flagged.
+		for name := range want {
+			if !receivable(sources, p.Market, name) {
+				out = append(out, p.ScreenName+": "+name)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func receivable(sources []BroadcastSource, market, name string) bool {
+	for _, s := range sources {
+		if s.Name != name {
+			continue
+		}
+		if s.Reach == ReachOutbound || s.Reach == ReachPrivate {
+			continue
+		}
+		if s.Reach == ReachLocal && s.Market != market {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // UnclassifiedNames lists sources with no reach set, for a boot-time warning.

@@ -880,7 +880,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 
 	profile := findProfile(profiles, profileID)
 	history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, profileID, vTime, body,
-		chat.AllowedFor(bcastSources, profile.Market))
+		chat.AllowedFor(bcastSources, profile.Market, profile.Watching))
 
 	s.send_(outMsg{Type: "chat_typing", Profile: profileID})
 
@@ -1075,7 +1075,7 @@ func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID str
 			// exists for a beat the buddy is sending unprompted.
 			profile := findProfile(profiles, sc.ProfileID)
 			history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, sc.ProfileID, t, sc.Prompt,
-				chat.AllowedFor(bcastSources, profile.Market))
+				chat.AllowedFor(bcastSources, profile.Market, profile.Watching))
 			s.send_(outMsg{Type: "chat_typing", Profile: sc.ProfileID})
 			job := buildChatJob(userID, profile, phases, beacons, sc.Prompt, "scheduled", true, t,
 				digest, recentPassages, timeline, history, nil)

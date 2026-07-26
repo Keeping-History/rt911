@@ -127,9 +127,13 @@ const CLASSIFICATION = {
 // Seeded profiles live in Columbus, which the corpus has no station for — so
 // they correctly receive national and international only. That is authentic:
 // a kid in Ohio watched CNN, not Channel 5 New York.
+// Danny is home sick with the TV on; Carol is in a school staff room. Both are
+// in Columbus, so both are limited to national and international sources
+// anyway — `watching` is what makes each one's "recently heard" block a single
+// coherent channel rather than a blend of twenty-two.
 const PROFILE_MARKETS = {
-  skaterboi1988: "columbus_oh",
-  mrsbeckwithteaches: "columbus_oh",
+  skaterboi1988: { market: "columbus_oh", watching: "CNN" },
+  mrsbeckwithteaches: { market: "columbus_oh", watching: "MSNBC" },
 };
 
 const FIELDS = [
@@ -157,6 +161,15 @@ const FIELDS = [
     field: "market",
     type: "string",
     meta: { note: "Broadcast market slug, e.g. new_york. Only meaningful when reach is local." },
+    schema: { is_nullable: true },
+  },
+  {
+    collection: "chat_profiles",
+    field: "watching",
+    type: "string",
+    meta: {
+      note: "Comma-separated source names this buddy actually had on, e.g. \"CNN\" or \"WNYW,WINS\". Empty means everything their market receives. Only ever narrows — a source outside their market is ignored.",
+    },
     schema: { is_nullable: true },
   },
   {
@@ -232,12 +245,15 @@ for (const [name, want] of Object.entries(CLASSIFICATION)) {
   summary.sources++;
 }
 
-const profiles = (await api(token, "GET", "/items/chat_profiles?fields=id,screen_name,market&limit=-1")).data;
+const profiles = (await api(token, "GET", "/items/chat_profiles?fields=id,screen_name,market,watching&limit=-1")).data;
 for (const p of profiles) {
   const want = PROFILE_MARKETS[p.screen_name];
-  if (!want || p.market === want) continue;
-  console.log(`${APPLY ? "Setting" : "Would set"} profile ${p.screen_name}: market=${want}`);
-  if (APPLY) await api(token, "PATCH", `/items/chat_profiles/${p.id}`, { market: want });
+  if (!want) continue;
+  if (p.market === want.market && p.watching === want.watching) continue;
+  console.log(
+    `${APPLY ? "Setting" : "Would set"} profile ${p.screen_name}: market=${want.market} watching=${want.watching}`,
+  );
+  if (APPLY) await api(token, "PATCH", `/items/chat_profiles/${p.id}`, want);
   summary.profiles++;
 }
 

@@ -234,6 +234,9 @@ func main() {
 	if gaps := chat.UnclassifiedNames(bcastSources); len(gaps) > 0 {
 		logger.Warn("chat broadcast sources missing reach classification", "sources", gaps)
 	}
+	if bad := chat.UnwatchableNames(bcastSources, profiles); len(bad) > 0 {
+		logger.Warn("chat profiles watching a source they cannot receive; falling back to everything in their market", "profiles", bad)
+	}
 	chatProfiles.SetBroadcastSources(bcastSources)
 
 	// Only these origins may turn a Directus session cookie into a chat
