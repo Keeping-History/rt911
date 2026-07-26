@@ -7,11 +7,24 @@
   #side { border-right: 1px solid #ccc; padding: 8px; overflow: auto; }
   #main { display: flex; flex-direction: column; }
   #ctl { padding: 8px; border-bottom: 1px solid #ccc; }
-  #log { flex: 1; overflow: auto; padding: 8px; white-space: pre-wrap; }
+  #convo { flex: 1; overflow: auto; padding: 8px; }
+  #log { height: 30%; overflow: auto; padding: 8px; white-space: pre-wrap;
+         border-top: 1px solid #ccc; background: #fafafa; color: #555; }
+  #compose { padding: 8px; border-top: 1px solid #ccc; display: flex; gap: 6px; }
+  #body { flex: 1; }
   .off { color: #999; }
   .bad { color: #b00; }
+  #roster div { cursor: pointer; padding: 2px 4px; }
+  #roster div.sel { background: #000; color: #fff; }
+  .msg { margin: 3px 0; }
+  .msg .who { font-weight: bold; }
+  .out .who { color: #06c; }
+  .in .who { color: #333; }
+  .typing { color: #999; font-style: italic; }
+  .sys { color: #b00; }
 </style>
-<div id="side"><b>Buddies</b><div id="roster">(not subscribed)</div></div>
+<div id="side"><b>Buddies</b><div id="roster">(not subscribed)</div>
+  <p style="color:#999">click a buddy to talk to them</p></div>
 <div id="main">
   <div id="ctl">
     <label>clock <input id="clock" size="24" value="2001-09-11T13:00:00Z"></label>
@@ -20,6 +33,13 @@
     <button id="resume">resume</button>
     <button id="sub">subscribe chat</button>
     <span id="state" class="bad">state: —</span>
+  </div>
+  <div id="convo"></div>
+  <div id="compose">
+    <span id="to">(no buddy selected)</span>
+    <input id="body" placeholder="pick a buddy on the left, then type here" disabled>
+    <button id="send" disabled>send</button>
+    <button id="hist" disabled>history</button>
   </div>
   <div id="log"></div>
 </div>
@@ -119,9 +139,27 @@ ws.onmessage = (ev) => {
       const row = document.createElement("div");
       row.className = b.online ? "" : "off";
       row.dataset.id = b.id;
+      row.dataset.name = b.screen_name;
       row.textContent = b.screen_name;
+      // Selecting a buddy is what enables the compose box: chat_send carries a
+      // profile id, so there is no meaningful "send" without one.
+      row.onclick = () => selectBuddy(b.id, b.screen_name);
       roster.appendChild(row);
     }
+    if (selected.id) markSelected();
+  }
+  if (msg.type === "chat_typing") {
+    showTyping(msg.profile);
+  }
+  if (msg.type === "chat_message") {
+    clearTyping();
+    // direction is from the STUDENT's point of view: "in" is what they typed,
+    // "out" is the buddy replying.
+    const who = msg.direction === "out" ? nameFor(msg.profile) : "you";
+    addMsg(who, msg.body, msg.direction === "out" ? "out" : "in", msg.kind);
+  }
+  if (msg.type === "chat_error") {
+    addSys("error: " + (msg.code || "") + " " + (msg.message || ""));
   }
   if (msg.type === "chat_presence") {
     const row = document.querySelector(`#roster [data-id="${msg.profile}"]`);
@@ -158,6 +196,84 @@ function summarize(msg) {
 }
 
 ws.onclose = () => log("disconnected");
+
+// ---- conversation ----
+
+const selected = { id: 0, name: "" };
+const convo = document.getElementById("convo");
+const bodyEl = document.getElementById("body");
+
+function nameFor(id) {
+  const row = document.querySelector(`#roster [data-id="${id}"]`);
+  return row ? row.dataset.name : "buddy " + id;
+}
+
+function markSelected() {
+  for (const r of document.querySelectorAll("#roster div")) {
+    r.classList.toggle("sel", Number(r.dataset.id) === selected.id);
+  }
+}
+
+function selectBuddy(id, name) {
+  selected.id = id;
+  selected.name = name;
+  markSelected();
+  document.getElementById("to").textContent = "to " + name + ":";
+  for (const el of ["body", "send", "hist"]) document.getElementById(el).disabled = false;
+  bodyEl.placeholder = "message " + name + " and press enter";
+  bodyEl.focus();
+}
+
+function addMsg(who, text, cls, kind) {
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  const k = kind && kind !== "typed" && kind !== "generated" ? ` [${kind}]` : "";
+  d.innerHTML = `<span class="who"></span> <span class="txt"></span><span class="k"></span>`;
+  d.querySelector(".who").textContent = who + ":";
+  d.querySelector(".txt").textContent = text;
+  d.querySelector(".k").textContent = k;
+  convo.appendChild(d);
+  convo.scrollTop = convo.scrollHeight;
+}
+
+function addSys(text) {
+  const d = document.createElement("div");
+  d.className = "msg sys";
+  d.textContent = text;
+  convo.appendChild(d);
+  convo.scrollTop = convo.scrollHeight;
+}
+
+let typingEl = null;
+function showTyping(profile) {
+  clearTyping();
+  typingEl = document.createElement("div");
+  typingEl.className = "typing";
+  typingEl.textContent = nameFor(profile) + " is typing…";
+  convo.appendChild(typingEl);
+  convo.scrollTop = convo.scrollHeight;
+}
+function clearTyping() {
+  if (typingEl) typingEl.remove();
+  typingEl = null;
+}
+
+function sendChat() {
+  const text = bodyEl.value.trim();
+  if (!text || !selected.id) return;
+  // The server echoes nothing for the inbound message, so render it locally.
+  // A chat_message with direction "in" only arrives when replaying history.
+  addMsg("you", text, "in");
+  send({ type: "chat_send", profile: selected.id, body: text });
+  bodyEl.value = "";
+}
+
+document.getElementById("send").onclick = sendChat;
+bodyEl.onkeydown = (e) => { if (e.key === "Enter") sendChat(); };
+document.getElementById("hist").onclick = () => {
+  convo.textContent = "";
+  send({ type: "chat_history", profile: selected.id, before: document.getElementById("clock").value, limit: 40 });
+};
 
 document.getElementById("seek").onclick = () =>
   send({ type: "seek", time: document.getElementById("clock").value });
