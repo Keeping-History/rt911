@@ -64,9 +64,16 @@ func (p *openAICompatProvider) Generate(ctx context.Context, r Request) (Reply, 
 	}
 	// reasoning_effort is only meaningful on reasoning models; sending it to a
 	// non-reasoning model is a request the API rejects, so it is dropped rather
-	// than sent unconditionally.
-	if r.Effort != "" && isReasoningModel(r.Model) {
-		params.ReasoningEffort = shared.ReasoningEffort(r.Effort)
+	// than sent unconditionally. Dropping it is silent to the caller by design
+	// (Reply carries no room for a warning), so an operator who configured an
+	// effort that never gets sent needs the debug log to find out.
+	if r.Effort != "" {
+		if isReasoningModel(r.Model) {
+			params.ReasoningEffort = shared.ReasoningEffort(r.Effort)
+		} else {
+			p.logger.Debug("openai effort dropped: not a reasoning model",
+				"provider", p.name, "model", r.Model, "effort", r.Effort)
+		}
 	}
 
 	completion, err := p.client.Chat.Completions.New(ctx, params)
@@ -111,7 +118,15 @@ func (p *openAICompatProvider) Generate(ctx context.Context, r Request) (Reply, 
 // the type system, and the API — not the SDK — is what rejects
 // reasoning_effort on a non-reasoning model. o-series and gpt-5-family models
 // are the reasoning families as of this writing.
+//
+// OpenRouter model ids are conventionally vendor-prefixed (e.g.
+// "openai/o3-mini"), so the prefix match runs against the segment after the
+// final "/" rather than the whole string — otherwise every OpenRouter
+// reasoning model would silently fail to match.
 func isReasoningModel(model string) bool {
+	if i := strings.LastIndex(model, "/"); i >= 0 {
+		model = model[i+1:]
+	}
 	for _, prefix := range []string{"o1", "o3", "o4", "gpt-5"} {
 		if strings.HasPrefix(model, prefix) {
 			return true

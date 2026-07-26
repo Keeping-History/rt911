@@ -31,3 +31,25 @@ func TestSegmentsRenderInOrderWithSystemFirst(t *testing.T) {
 		t.Errorf("segment order not preserved: %+v", msgs)
 	}
 }
+
+func TestIsReasoningModelRecognisesBareAndVendorPrefixedIDs(t *testing.T) {
+	// OpenRouter namespaces model ids by upstream vendor (e.g. "openai/o3-mini"),
+	// so the bare name and the OpenRouter-prefixed name must both be recognised —
+	// this is the one adapter's two vendors, in miniature.
+	cases := []struct {
+		model string
+		want  bool
+	}{
+		{"o3-mini", true},
+		{"gpt-5", true},
+		{"openai/o3-mini", true},
+		{"openai/gpt-5-mini", true},
+		{"gpt-4o", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := isReasoningModel(c.model); got != c.want {
+			t.Errorf("isReasoningModel(%q) = %v, want %v", c.model, got, c.want)
+		}
+	}
+}
