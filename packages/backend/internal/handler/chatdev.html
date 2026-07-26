@@ -127,10 +127,35 @@ ws.onmessage = (ev) => {
     const row = document.querySelector(`#roster [data-id="${msg.profile}"]`);
     if (row) row.className = msg.online ? "" : "off";
   }
-  if (msg.type !== "items" && msg.type !== "heartbeat_ack") {
+  // Allowlist chat frames rather than blocklisting noisy ones. The init reply
+  // carries the whole SourceList, which includes every Usenet newsgroup in the
+  // archive — thousands of entries that bury the chat traffic this harness
+  // exists to show. A blocklist would also need extending every time a channel
+  // is added, and would be silently wrong until someone noticed the flood.
+  if (msg.type.startsWith("chat_")) {
     log("← " + JSON.stringify(msg));
+  } else if (msg.type !== "items" && msg.type !== "heartbeat_ack") {
+    log("← " + msg.type + " " + summarize(msg));
   }
 };
+
+// One line per non-chat frame: enough to see the connection working, without
+// pasting a payload nobody is reading.
+function summarize(msg) {
+  const parts = [];
+  for (const [k, v] of Object.entries(msg)) {
+    if (k === "type") continue;
+    if (Array.isArray(v)) parts.push(`${k}[${v.length}]`);
+    else if (v && typeof v === "object") {
+      const n = Object.values(v).reduce((a, x) => a + (Array.isArray(x) ? x.length : 1), 0);
+      parts.push(`${k}{${n}}`);
+    } else {
+      const s = String(v);
+      parts.push(`${k}=${s.length > 40 ? s.slice(0, 40) + "…" : s}`);
+    }
+  }
+  return parts.join(" ");
+}
 
 ws.onclose = () => log("disconnected");
 
