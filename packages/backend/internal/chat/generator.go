@@ -48,6 +48,14 @@ type Generator struct {
 	jobs chan Job
 	wg   sync.WaitGroup
 
+	// done signals shutdown. It is closed exactly once (closeOnce) and is
+	// never the jobs channel itself: closing a channel producers may still be
+	// mid-send on is a send-on-closed-channel panic waiting to happen. See
+	// Enqueue and Close, and internal/session/session.go's send_/done for the
+	// pattern this mirrors.
+	done      chan struct{}
+	closeOnce sync.Once
+
 	mu          sync.Mutex
 	settings    Settings
 	settingsAt  time.Time
@@ -63,6 +71,7 @@ func NewGenerator(pool *pgxpool.Pool, providers map[string]Provider, settings Se
 		providers:   providers,
 		logger:      logger,
 		jobs:        make(chan Job, queue),
+		done:        make(chan struct{}),
 		settings:    settings,
 		settingsAt:  time.Now(),
 		settingsTTL: settingsTTL,
@@ -72,8 +81,13 @@ func NewGenerator(pool *pgxpool.Pool, providers map[string]Provider, settings Se
 	for i := 0; i < workers; i++ {
 		go func() {
 			defer g.wg.Done()
-			for j := range g.jobs {
-				g.run(j)
+			for {
+				select {
+				case j := <-g.jobs:
+					g.run(j)
+				case <-g.done:
+					return
+				}
 			}
 		}()
 	}
@@ -83,18 +97,32 @@ func NewGenerator(pool *pgxpool.Pool, providers map[string]Provider, settings Se
 // Enqueue submits a job for generation. It never blocks: the caller is the
 // session goroutine, and a full queue must become an in-character stall
 // upstream rather than a stalled media stream.
+//
+// The done check comes first, non-blockingly, before attempting the send —
+// same shape as Session.send_ — so a closing generator reports false instead
+// of racing the send against Close. jobs itself is never closed, so there is
+// no send-on-closed-channel panic to race against in the first place.
 func (g *Generator) Enqueue(j Job) bool {
+	select {
+	case <-g.done:
+		return false
+	default:
+	}
+
 	select {
 	case g.jobs <- j:
 		return true
+	case <-g.done:
+		return false
 	default:
 		return false
 	}
 }
 
-// Close stops accepting new jobs and waits for in-flight ones to finish.
+// Close stops accepting new jobs and waits for workers to exit. Exactly once:
+// closing done twice would itself panic.
 func (g *Generator) Close() {
-	close(g.jobs)
+	g.closeOnce.Do(func() { close(g.done) })
 	g.wg.Wait()
 }
 
@@ -105,7 +133,12 @@ func (g *Generator) run(j Job) {
 	if !ok {
 		g.logger.Warn("chat: unknown provider", "provider", settings.Provider,
 			"profile", j.Profile.ScreenName)
-		j.Deliver(Reply{Outcome: OutcomeError}, ErrNoProvider)
+		// Sanitize here too, even though Body is always empty on this path
+		// today: no Deliver call, including this one, is exempt from the
+		// "never deliver raw model output" invariant.
+		errReply := Reply{Outcome: OutcomeError}
+		errReply.Body = Sanitize(errReply.Body, maxReplyRunes)
+		j.Deliver(errReply, ErrNoProvider)
 		return
 	}
 
