@@ -46,6 +46,7 @@ type Job struct {
 	// said. Carried straight into ComposeInput.SelfInitiated — see
 	// composer.go's liveTurn for why the two must never be conflated.
 	SelfInitiated bool
+	Distress      bool
 	Deliver       func(Reply, error)
 }
 
@@ -246,6 +247,7 @@ func (g *Generator) run(j Job) {
 		VirtualTime:   j.VirtualTime,
 		UserMessage:   j.Body,
 		SelfInitiated: j.SelfInitiated,
+		Distress:      j.Distress,
 	}
 
 	reply, err := p.Generate(context.Background(), Request{

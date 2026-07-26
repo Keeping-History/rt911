@@ -50,6 +50,12 @@ type ComposeInput struct {
 	// incoming message, and must tell the model it is the one starting the
 	// conversation.
 	SelfInitiated bool
+	// Distress marks a message the guard escalated rather than allowed: the
+	// student may be genuinely upset, not merely writing something raw. It
+	// steers the reply toward a gentle in-character deflection instead of an
+	// ordinary one, which is the whole reason escalate exists as a third
+	// outcome alongside allow and block.
+	Distress bool
 }
 
 // Compose renders the prompt as ordered, stability-tagged segments.
@@ -223,6 +229,16 @@ func liveTurn(in ComposeInput) string {
 		b.WriteString("Send the opening message of the conversation — you are starting it, not replying to one.\n")
 	} else {
 		fmt.Fprintf(&b, "They just said: %s\n", in.UserMessage)
+	}
+	if in.Distress {
+		// Deflect, do not ignore: the message above still reaches the model, so
+		// the reply answers the person rather than changing the subject at them.
+		b.WriteString("They sound genuinely upset, not just curious. Notice it. " +
+			"Be kind and steady, say something that helps them feel less alone, " +
+			"and gently suggest they talk to someone with you right now — a " +
+			"parent, a teacher, whoever is nearby. Do not describe anything " +
+			"graphic, do not dwell on how many people were hurt, and do not " +
+			"pretend to be a grown-up who can fix it.\n")
 	}
 	b.WriteString("Send one short instant message.\n")
 	return b.String()

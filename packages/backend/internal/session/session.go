@@ -886,6 +886,11 @@ func (s *Session) ChatSend(profileID int, body string) {
 
 	job := buildChatJob(userID, profile, phases, beacons, body, "generated", false, vTime,
 		digest, recentPassages, timeline, history, nil)
+	// Set here rather than as another positional bool on buildChatJob, which
+	// already takes one: two adjacent booleans are a transposition waiting to
+	// happen, and swapping these would tell every ordinary reply the student is
+	// in distress while telling a distressed one it is opening the conversation.
+	job.Distress = decision.Outcome == "escalate"
 	job.Deliver = s.chatDeliver(userID, profileID, vTime, job.Kind)
 
 	gen := s.hub.Generator()

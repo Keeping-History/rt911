@@ -239,3 +239,55 @@ func allText(segs []PromptSegment) string {
 	}
 	return b.String()
 }
+
+func TestDistressAddsAGentleDeflectionDirective(t *testing.T) {
+	// The one moderation outcome that must NOT produce an ordinary reply. A
+	// student signalling distress needs the character to notice and to point
+	// them at a real person nearby.
+	segs := Compose(ComposeInput{
+		Profile:     Profile{ScreenName: "danny", Persona: "p"},
+		Phase:       DefaultPhase,
+		UserMessage: "i cant stop crying",
+		Distress:    true,
+	})
+
+	live := segs[len(segs)-1].Text
+	for _, want := range []string{"upset", "someone with you"} {
+		if !strings.Contains(live, want) {
+			t.Errorf("distress directive missing %q:\n%s", want, live)
+		}
+	}
+	if !strings.Contains(live, "Do not describe") {
+		t.Errorf("distress reply must be steered away from graphic detail:\n%s", live)
+	}
+}
+
+func TestNoDistressLeavesTheTurnUnchanged(t *testing.T) {
+	// The directive must not leak into ordinary conversation — every normal
+	// reply would otherwise be told the student is upset.
+	segs := Compose(ComposeInput{
+		Profile:     Profile{ScreenName: "danny", Persona: "p"},
+		Phase:       DefaultPhase,
+		UserMessage: "did you see that",
+	})
+
+	live := segs[len(segs)-1].Text
+	if strings.Contains(live, "upset") || strings.Contains(live, "someone with you") {
+		t.Errorf("distress directive leaked into an ordinary turn:\n%s", live)
+	}
+}
+
+func TestDistressStillCarriesWhatTheStudentSaid(t *testing.T) {
+	// Deflecting is not ignoring: the character still sees the message, so the
+	// reply is a response rather than a non-sequitur.
+	segs := Compose(ComposeInput{
+		Profile:     Profile{ScreenName: "danny", Persona: "p"},
+		Phase:       DefaultPhase,
+		UserMessage: "i cant stop crying",
+		Distress:    true,
+	})
+
+	if !strings.Contains(segs[len(segs)-1].Text, "i cant stop crying") {
+		t.Error("the student's own words must still reach the model")
+	}
+}

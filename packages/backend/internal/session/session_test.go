@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1652,5 +1653,87 @@ func TestPartitionTiersPreservesWithinTierOrder(t *testing.T) {
 
 	if len(recent) != 2 || recent[0].Text != "first" || recent[1].Text != "second" {
 		t.Errorf("within-tier order not preserved: %+v", recent)
+	}
+}
+
+type capturingProvider struct {
+	mu   sync.Mutex
+	seen []chat.Request
+}
+
+func (c *capturingProvider) Name() string { return "anthropic" }
+func (c *capturingProvider) Generate(ctx context.Context, r chat.Request) (chat.Reply, error) {
+	c.mu.Lock()
+	c.seen = append(c.seen, r)
+	c.mu.Unlock()
+	return chat.Reply{Body: "hey", Outcome: chat.OutcomeOK}, nil
+}
+
+func (c *capturingProvider) lastPrompt(t *testing.T) string {
+	t.Helper()
+	for i := 0; i < 100; i++ {
+		c.mu.Lock()
+		n := len(c.seen)
+		c.mu.Unlock()
+		if n > 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.seen) == 0 {
+		t.Fatal("provider was never called")
+	}
+	var b strings.Builder
+	for _, seg := range c.seen[len(c.seen)-1].Segments {
+		b.WriteString(seg.Text)
+	}
+	return b.String()
+}
+
+// escalateSession wires a real generator with a capturing provider onto a
+// session, so a ChatSend travels the production path end to end.
+func escalateSession(t *testing.T) (*Session, *capturingProvider) {
+	t.Helper()
+	p := &capturingProvider{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := newTestSession(t)
+	s.hub.SetGenerator(chat.NewGenerator(nil, map[string]chat.Provider{"anthropic": p},
+		chat.ShippedDefaults, 0, 1, 4, logger))
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	s.SetProfiles([]chat.Profile{{ID: 1, ScreenName: "danny", Persona: "p"}})
+	s.Subscribe(ChannelChat)
+	s.Init(time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil)
+	drain(t, s)
+	return s, p
+}
+
+func TestDistressMessageReachesTheModelAsADeflection(t *testing.T) {
+	// The wiring that makes escalate mean anything. Without it the guard's third
+	// outcome is recorded in the database and then behaves exactly like allow --
+	// a student typing "i cant stop crying" gets an ordinary reply.
+	s, p := escalateSession(t)
+	defer s.hub.Generator().Close()
+
+	s.ChatSend(1, "i cant stop crying")
+
+	prompt := p.lastPrompt(t)
+	if !strings.Contains(prompt, "genuinely upset") {
+		t.Errorf("distress directive never reached the provider:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "i cant stop crying") {
+		t.Error("the student's own words must still reach the model")
+	}
+}
+
+func TestOrdinaryMessageCarriesNoDeflection(t *testing.T) {
+	s, p := escalateSession(t)
+	defer s.hub.Generator().Close()
+
+	s.ChatSend(1, "did you see that on tv")
+
+	if prompt := p.lastPrompt(t); strings.Contains(prompt, "genuinely upset") {
+		t.Errorf("distress directive leaked into an ordinary send:\n%s", prompt)
 	}
 }
