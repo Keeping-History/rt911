@@ -291,3 +291,51 @@ func TestDistressStillCarriesWhatTheStudentSaid(t *testing.T) {
 		t.Error("the student's own words must still reach the model")
 	}
 }
+
+func TestPersonaSaysWhoTheBuddyIsTalkingTo(t *testing.T) {
+	// Carol's persona says "You are Danny's aunt". With nothing in the prompt
+	// about who is actually messaging her, the model picked the only other
+	// person it had a name for and addressed the student as Danny.
+	segs := Compose(ComposeInput{
+		Profile:     Profile{ScreenName: "mrsbeckwithteaches", Persona: "You are Carol. You are Danny's aunt."},
+		Phase:       DefaultPhase,
+		UserName:    "Robbie",
+		UserMessage: "are you safe",
+	})
+
+	sys := segs[0].Text
+	if !strings.Contains(sys, "Robbie") {
+		t.Errorf("persona never names the person being talked to:\n%s", sys)
+	}
+}
+
+func TestPersonaAlwaysDeniesTheStudentIsSomeoneFromItsOwnBackground(t *testing.T) {
+	// The load-bearing half. Naming the student is a nicety; this is the guard,
+	// and it must hold even when no name is available -- otherwise any persona
+	// that mentions another person invites the same misidentification.
+	for _, name := range []string{"Robbie", ""} {
+		segs := Compose(ComposeInput{
+			Profile:     Profile{ScreenName: "mrsbeckwithteaches", Persona: "You are Danny's aunt."},
+			Phase:       DefaultPhase,
+			UserName:    name,
+			UserMessage: "hi",
+		})
+
+		sys := segs[0].Text
+		if !strings.Contains(sys, "not anyone described") {
+			t.Errorf("UserName=%q: missing the not-someone-from-your-background guard:\n%s", name, sys)
+		}
+	}
+}
+
+func TestPersonaWithNoUserNameStillEstablishesASeparatePerson(t *testing.T) {
+	segs := Compose(ComposeInput{
+		Profile:     Profile{ScreenName: "danny"},
+		Phase:       DefaultPhase,
+		UserMessage: "hi",
+	})
+
+	if sys := segs[0].Text; !strings.Contains(sys, "buddy list") {
+		t.Errorf("an unnamed student must still be established as someone else:\n%s", sys)
+	}
+}

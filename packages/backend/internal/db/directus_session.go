@@ -72,22 +72,29 @@ func sessionClaim(cookie string) string {
 //
 // An unknown or expired token is not an error; it means "anonymous". Share-link
 // sessions have a NULL user and are treated the same way.
-func LookupSessionUser(ctx context.Context, pool *pgxpool.Pool, token string) (string, error) {
+func LookupSessionUser(ctx context.Context, pool *pgxpool.Pool, token string) (string, string, error) {
 	if token == "" {
-		return "", nil
+		return "", "", nil
 	}
-	var user *string
+	var user, firstName *string
 	err := pool.QueryRow(ctx,
-		`SELECT "user" FROM directus_sessions WHERE token = $1 AND expires > now()`,
-		token).Scan(&user)
+		`SELECT s."user", u.first_name
+		 FROM directus_sessions s
+		 LEFT JOIN directus_users u ON u.id = s."user"
+		 WHERE s.token = $1 AND s.expires > now()`,
+		token).Scan(&user, &firstName)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
+		return "", "", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("lookup directus session: %w", err)
+		return "", "", fmt.Errorf("lookup directus session: %w", err)
 	}
 	if user == nil {
-		return "", nil
+		return "", "", nil
 	}
-	return *user, nil
+	name := ""
+	if firstName != nil {
+		name = *firstName
+	}
+	return *user, name, nil
 }

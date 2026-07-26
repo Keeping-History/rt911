@@ -100,3 +100,48 @@ func TestLiveGeneration(t *testing.T) {
 		t.Errorf("reply contains post-2001 slang %q: %q", term, body)
 	}
 }
+
+// TestLiveCarolDoesNotThinkTheStudentIsDanny reproduces the misidentification
+// that shipped: Carol's persona says "You are Danny's aunt", and with nothing in
+// the prompt about who is messaging her, the model addressed the student as
+// Danny. Only a real call can prove the guard works, since the failure is the
+// model's inference rather than anything the code emits.
+func TestLiveCarolDoesNotThinkTheStudentIsDanny(t *testing.T) {
+	if os.Getenv("CHAT_LIVE_SMOKE") != "1" {
+		t.Skip("set CHAT_LIVE_SMOKE=1 to run the live provider smoke test")
+	}
+	key := os.Getenv("ANTHROPIC_API_KEY")
+	if key == "" {
+		t.Fatal("CHAT_LIVE_SMOKE=1 but ANTHROPIC_API_KEY is unset")
+	}
+	p := NewAnthropicProvider(key, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	in := ComposeInput{
+		Profile: Profile{
+			ID: 2, ScreenName: "mrsbeckwithteaches", DisplayName: "Carol",
+			Persona: "You are Carol, 41, a high school English teacher in Columbus, Ohio, " +
+				"on a free period in the staff room. You are Danny's aunt. You have a " +
+				"brother who travels for work and you are not certain where he is flying today.",
+			EducationLevel: "adult",
+			WritingStyle:   "You write in complete sentences with correct punctuation. You are warm but measured.",
+		},
+		Phase:       Phase{Tone: "shaken, working hard to stay steady", Shock: 60, Coherence: 85, Verbosity: 45, TypoRate: 10, TopicFocus: 85},
+		Digest:      []Passage{{Tier: TierCurated, Text: "Both towers have collapsed.", Certainty: "confirmed"}},
+		VirtualTime: time.Date(2001, 9, 11, 15, 0, 0, 0, time.UTC),
+		UserName:    "Robbie",
+		UserMessage: "Are you safe? What's going on?",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	reply, err := p.Generate(ctx, Request{Segments: Compose(in), Model: "claude-opus-5", MaxTokens: 2000, Effort: "low"})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	body := Sanitize(reply.Body, maxReplyRunes)
+	t.Logf("reply: %q", body)
+
+	if strings.Contains(strings.ToLower(body), "danny") {
+		t.Errorf("Carol addressed the student as Danny again: %q", body)
+	}
+}

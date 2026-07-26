@@ -47,6 +47,7 @@ type Job struct {
 	// composer.go's liveTurn for why the two must never be conflated.
 	SelfInitiated bool
 	Distress      bool
+	UserName      string
 	Deliver       func(Reply, error)
 }
 
@@ -248,6 +249,7 @@ func (g *Generator) run(j Job) {
 		UserMessage:   j.Body,
 		SelfInitiated: j.SelfInitiated,
 		Distress:      j.Distress,
+		UserName:      j.UserName,
 	}
 
 	reply, err := p.Generate(context.Background(), Request{

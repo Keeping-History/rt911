@@ -269,12 +269,16 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 				logger.Info("session cookie ignored: untrusted origin", "origin", origin)
 			} else {
 				lookupCtx, lookupCancel := context.WithTimeout(r.Context(), 2*time.Second)
-				uid, err := db.LookupSessionUser(lookupCtx, pool, token)
+				uid, name, err := db.LookupSessionUser(lookupCtx, pool, token)
 				lookupCancel()
 				if err != nil {
 					logger.Warn("directus session lookup failed", "error", err)
 				} else if uid != "" {
 					sess.SetUser(uid)
+					// Naming the student keeps a buddy from reaching for the
+					// only other name in its own persona -- Carol, written as
+					// "Danny's aunt", greeted every student as Danny.
+					sess.SetUserName(name)
 				}
 			}
 		}

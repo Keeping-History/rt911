@@ -56,6 +56,10 @@ type ComposeInput struct {
 	// ordinary one, which is the whole reason escalate exists as a third
 	// outcome alongside allow and block.
 	Distress bool
+	// UserName is how this buddy should address the student, when known. It
+	// lives in the stable system segment because the person on the other end
+	// does not change mid-conversation, so naming them costs no cache.
+	UserName string
 }
 
 // Compose renders the prompt as ordered, stability-tagged segments.
@@ -68,7 +72,7 @@ func Compose(in ComposeInput) []PromptSegment {
 	segs := []PromptSegment{{
 		Stability: StabilityStable,
 		Role:      "system",
-		Text:      persona(in.Profile),
+		Text:      persona(in.Profile, in.UserName),
 	}}
 
 	if len(in.Digest) > 0 {
@@ -108,7 +112,7 @@ func Compose(in ComposeInput) []PromptSegment {
 	return segs
 }
 
-func persona(p Profile) string {
+func persona(p Profile, userName string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "You are %s", p.ScreenName)
 	if p.DisplayName != "" {
@@ -118,6 +122,7 @@ func persona(p Profile) string {
 	if p.Persona != "" {
 		b.WriteString(p.Persona + "\n")
 	}
+	b.WriteString(whoTheyAreTalkingTo(userName))
 	if p.EducationLevel != "" {
 		fmt.Fprintf(&b, "You write like someone at a %s education level.\n", p.EducationLevel)
 	}
@@ -181,6 +186,25 @@ func timelineBlock(passages []Passage) string {
 	b.WriteString("\nYou are not sure of these details. Refer to them vaguely if at " +
 		"all, and do not quote them.\n")
 	return b.String()
+}
+
+// whoTheyAreTalkingTo establishes the student as a separate person.
+//
+// Without this the prompt never says who is messaging, so the model reaches for
+// the only other name it has -- which for a persona like "You are Danny's aunt"
+// means greeting the student as Danny. The denial matters more than the name:
+// it has to hold even when nobody is named, or any persona mentioning another
+// person invites the same mistake.
+func whoTheyAreTalkingTo(userName string) string {
+	if userName != "" {
+		return "You are talking to " + userName + ", someone on your buddy list. " +
+			userName + " is not anyone described in your own background above — " +
+			"do not call them by any other name.\n"
+	}
+	return "You are talking to someone on your buddy list. You do not know their " +
+		"real name, only that they are a friend online. They are not anyone " +
+		"described in your own background above — do not guess at who they are " +
+		"or call them by a name.\n"
 }
 
 func passageLines(passages []Passage) string {

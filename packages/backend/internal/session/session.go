@@ -190,6 +190,7 @@ type Session struct {
 	// syncChatPresence can emit only the buddies whose state actually changed.
 	// All guarded by mu.
 	userID       string
+	userName     string
 	profiles     []chat.Profile
 	beacons      map[int]chat.Beacon
 	phases       map[int][]chat.Phase
@@ -643,6 +644,14 @@ func (s *Session) UserID() string {
 
 // SetProfiles installs the buddy roster for this session. Config is loaded once
 // at connect time and handed in; sessions never query for it.
+// SetUserName records how buddies should address the student. Empty is fine --
+// the composer then establishes them as an unnamed friend rather than guessing.
+func (s *Session) SetUserName(name string) {
+	s.mu.Lock()
+	s.userName = name
+	s.mu.Unlock()
+}
+
 func (s *Session) SetProfiles(p []chat.Profile) {
 	s.mu.Lock()
 	s.profiles = p
@@ -822,6 +831,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 	now := time.Now().UTC()
 	s.mu.Lock()
 	userID, vTime, profiles := s.userID, s.virtualTime, s.profiles
+	userName := s.userName
 	beacons, phases := s.beacons, s.phases
 	bcastSources := s.bcastSources
 	s.recentSends = append(s.recentSends, now)
@@ -891,6 +901,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 	// happen, and swapping these would tell every ordinary reply the student is
 	// in distress while telling a distressed one it is opening the conversation.
 	job.Distress = decision.Outcome == "escalate"
+	job.UserName = userName
 	job.Deliver = s.chatDeliver(userID, profileID, vTime, job.Kind)
 
 	gen := s.hub.Generator()
