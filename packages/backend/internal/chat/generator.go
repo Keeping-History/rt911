@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,6 +20,13 @@ const maxReplyRunes = 600
 // different vendor than configured would produce a differently-characterised
 // buddy and an unexplained bill.
 var ErrNoProvider = errors.New("chat: no provider configured")
+
+// ErrShuttingDown is delivered to a job that Enqueue accepted but that never
+// started running before Close was called. It exists so every accepted job
+// gets exactly one Deliver call -- success, refusal, or this -- rather than
+// being silently dropped: the caller would otherwise wait forever on a reply
+// that will never come.
+var ErrShuttingDown = errors.New("chat: generator shutting down")
 
 // Job is one buddy reply to generate. Deliver is called exactly once, from a
 // worker goroutine, with either a usable Reply or a non-nil error.
@@ -56,6 +64,23 @@ type Generator struct {
 	done      chan struct{}
 	closeOnce sync.Once
 
+	// closeMu makes the closed transition atomic with respect to Enqueue's
+	// send. Without it, an Enqueue that read closed==false could still be
+	// preempted right before sending, race past the rest of Close (including
+	// every worker draining and exiting), and land a job in jobs after
+	// nothing is left to ever receive it -- silently breaking the "every
+	// accepted job is delivered exactly once" invariant. Close holds the
+	// write lock only long enough to flip the flag, so this never blocks
+	// Enqueue for anything but the width of that single assignment.
+	closeMu sync.RWMutex
+	closed  bool
+
+	// dropped counts jobs delivered ErrShuttingDown, logged exactly once
+	// (logOnce) after every worker has exited, so a queued-but-unstarted
+	// backlog at shutdown is visible to an operator instead of silent.
+	dropped atomic.Int64
+	logOnce sync.Once
+
 	mu          sync.Mutex
 	settings    Settings
 	settingsAt  time.Time
@@ -84,8 +109,14 @@ func NewGenerator(pool *pgxpool.Pool, providers map[string]Provider, settings Se
 			for {
 				select {
 				case j := <-g.jobs:
-					g.run(j)
+					g.dispatch(j)
 				case <-g.done:
+					// jobs and done can both be ready at once here (a
+					// backlog sitting behind a closed done), and select
+					// picks between ready cases at random -- so this worker
+					// cannot assume "done fired" means "jobs is empty".
+					// Sweep whatever is left before actually exiting.
+					g.drainQueued()
 					return
 				}
 			}
@@ -96,34 +127,88 @@ func NewGenerator(pool *pgxpool.Pool, providers map[string]Provider, settings Se
 
 // Enqueue submits a job for generation. It never blocks: the caller is the
 // session goroutine, and a full queue must become an in-character stall
-// upstream rather than a stalled media stream.
+// upstream rather than a stalled media stream. The read lock it briefly takes
+// is not that kind of blocking -- Close only ever holds the write lock for a
+// single assignment, never across a channel op or I/O.
 //
-// The done check comes first, non-blockingly, before attempting the send —
-// same shape as Session.send_ — so a closing generator reports false instead
-// of racing the send against Close. jobs itself is never closed, so there is
-// no send-on-closed-channel panic to race against in the first place.
+// The closed check and the send happen under the same read lock so a job can
+// never be sent after Close has committed to shutting down: see the closeMu
+// field comment for why that matters.
 func (g *Generator) Enqueue(j Job) bool {
-	select {
-	case <-g.done:
-		return false
-	default:
-	}
+	g.closeMu.RLock()
+	defer g.closeMu.RUnlock()
 
+	if g.closed {
+		return false
+	}
 	select {
 	case g.jobs <- j:
 		return true
-	case <-g.done:
-		return false
 	default:
 		return false
 	}
 }
 
-// Close stops accepting new jobs and waits for workers to exit. Exactly once:
-// closing done twice would itself panic.
+// Close stops accepting new jobs, lets whatever each worker is already
+// running finish normally, and errors out anything left queued rather than
+// running it -- so shutdown cost is bounded by in-flight calls (at most
+// `workers` of them), never by however deep the backlog happens to be.
+// Closing done wakes any worker blocked on an empty queue; jobs itself is
+// never closed (see the done field comment).
 func (g *Generator) Close() {
-	g.closeOnce.Do(func() { close(g.done) })
+	g.closeOnce.Do(func() {
+		g.closeMu.Lock()
+		g.closed = true
+		g.closeMu.Unlock()
+		close(g.done)
+	})
 	g.wg.Wait()
+
+	g.logOnce.Do(func() {
+		if n := g.dropped.Load(); n > 0 {
+			g.logger.Warn("chat: dropped queued jobs at shutdown", "dropped", n)
+		}
+	})
+}
+
+// dispatch decides, per job, whether to run it or treat it as shutdown
+// backlog. Checked per-job rather than once per worker so a job already
+// running when Close was called finishes normally (Close waits for it) while
+// one merely sitting in the queue never starts.
+func (g *Generator) dispatch(j Job) {
+	g.closeMu.RLock()
+	closed := g.closed
+	g.closeMu.RUnlock()
+
+	if closed {
+		g.deliverShutdown(j)
+		return
+	}
+	g.run(j)
+}
+
+// drainQueued claims whatever remains in the buffered channel once a worker
+// notices shutdown, so a job Enqueue accepted is never silently discarded.
+// This never blocks and does no network I/O: closed is already true by the
+// time this runs, so jobs can receive no further sends (see Enqueue), which
+// means the channel's remaining contents are fixed and this loop terminates
+// as soon as it observes empty.
+func (g *Generator) drainQueued() {
+	for {
+		select {
+		case j := <-g.jobs:
+			g.deliverShutdown(j)
+		default:
+			return
+		}
+	}
+}
+
+func (g *Generator) deliverShutdown(j Job) {
+	g.dropped.Add(1)
+	reply := Reply{Outcome: OutcomeError}
+	reply.Body = Sanitize(reply.Body, maxReplyRunes)
+	j.Deliver(reply, ErrShuttingDown)
 }
 
 func (g *Generator) run(j Job) {
