@@ -36,6 +36,39 @@ func TestHistoryIsLimited(t *testing.T) {
 	}
 }
 
+func TestInsertMessageSQLWritesUserQuoted(t *testing.T) {
+	// "user" is a reserved word in Postgres; unquoted it silently resolves to
+	// the CURRENT_USER function and the insert runs against the wrong
+	// identity instead of failing -- exactly the failure mode this test
+	// exists to catch before it reaches production.
+	for _, want := range []string{
+		`"user"`,
+		"chat_messages",
+		"profile", "direction", "body", "virtual_time", "created_at",
+		"kind", "moderation", "model", "tokens_in", "tokens_out",
+	} {
+		if !strings.Contains(insertMessage, want) {
+			t.Errorf("insertMessage missing %q:\n%s", want, insertMessage)
+		}
+	}
+}
+
+func TestPriorContactSQLFiltersByQuotedUser(t *testing.T) {
+	// HasPriorContact backs chat_schedules.requires_prior_contact; an
+	// unquoted "user" would silently check CURRENT_USER instead of the
+	// student's own history, making every buddy think it has no prior
+	// contact with anyone.
+	for _, want := range []string{
+		`"user" = $1`,
+		"profile = $2",
+		"virtual_time <= $3",
+	} {
+		if !strings.Contains(priorContactSelect, want) {
+			t.Errorf("priorContactSelect missing %q:\n%s", want, priorContactSelect)
+		}
+	}
+}
+
 func TestHistoryDetailedSQLSelectsWireFieldsScopedToUser(t *testing.T) {
 	// A chat_history reply replays turns as chat_message frames, which need id
 	// (dedupe) and virtual_time (ordering, especially after a seek) alongside
