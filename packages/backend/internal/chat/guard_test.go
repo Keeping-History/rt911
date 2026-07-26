@@ -103,6 +103,28 @@ func TestAbuseIsBlocked(t *testing.T) {
 	}
 }
 
+func TestInsertBlockSQLWritesAllColumnsUserScoped(t *testing.T) {
+	// A block that does not survive a reconnect is not a block: a student
+	// could reword the same message and sail straight through. This asserts
+	// the insert actually persists every field CreateBlock accepts, "user"
+	// double-quoted so it targets the intended student rather than resolving
+	// to the CURRENT_USER function.
+	for _, want := range []string{
+		`"user"`,
+		"chat_blocks",
+		"scope",
+		"profile",
+		"reason",
+		"evidence",
+		"created_at",
+		"expires",
+	} {
+		if !strings.Contains(insertBlock, want) {
+			t.Errorf("insertBlock missing %q:\n%s", want, insertBlock)
+		}
+	}
+}
+
 func TestBlocksSQLFiltersByUserAndExpiry(t *testing.T) {
 	// "user" is a reserved word in Postgres; unquoted it silently resolves to
 	// CURRENT_USER and returns the wrong rows instead of failing.

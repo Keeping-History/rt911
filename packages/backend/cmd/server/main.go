@@ -181,6 +181,28 @@ func main() {
 		logger.Info("chat profiles loaded", "count", len(profiles))
 	}
 
+	// Beacons/phases resolve each buddy's emotional arc across the virtual
+	// clock (chat.PhaseAt); without them every job would render with
+	// chat.DefaultPhase all day regardless of the clock. Same non-fatal,
+	// bounded, load-once pattern as profiles above — a missing table or a slow
+	// query degrades buddies to the default phase, it must never delay the pod
+	// from listening.
+	beaconCtx, beaconCancel := context.WithTimeout(ctx, 2*time.Second)
+	beacons, err := chat.LoadBeacons(beaconCtx, pool)
+	beaconCancel()
+	if err != nil {
+		logger.Warn("chat beacons unavailable, buddies will use the default phase", "error", err)
+		beacons = nil
+	}
+	phaseCtx, phaseCancel := context.WithTimeout(ctx, 2*time.Second)
+	phases, err := chat.LoadPhases(phaseCtx, pool)
+	phaseCancel()
+	if err != nil {
+		logger.Warn("chat phases unavailable, buddies will use the default phase", "error", err)
+		phases = nil
+	}
+	chatProfiles.SetPhaseData(beacons, phases)
+
 	// Only these origins may turn a Directus session cookie into a chat
 	// identity. CHAT_TRUSTED_ORIGINS appends to the built-in production list so
 	// dev and preview origins never ship in production config.

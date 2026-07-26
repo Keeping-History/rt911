@@ -169,11 +169,17 @@ type Session struct {
 	usenetGroups map[string]struct{}
 
 	// userID is the authenticated Directus user id ("" = anonymous). profiles is
-	// the configured buddy roster, loaded once at connect time. presenceSeen is
-	// the last online state sent per buddy id, so syncChatPresence can emit only
-	// the buddies whose state actually changed. All guarded by mu.
+	// the configured buddy roster, loaded once at connect time. beacons/phases
+	// are the emotional-arc configuration (also loaded once, via SetPhaseData)
+	// that resolves each profile's Phase for the virtual clock — without them a
+	// buddy would render as chat.DefaultPhase all day regardless of the clock.
+	// presenceSeen is the last online state sent per buddy id, so
+	// syncChatPresence can emit only the buddies whose state actually changed.
+	// All guarded by mu.
 	userID       string
 	profiles     []chat.Profile
+	beacons      map[int]chat.Beacon
+	phases       map[int][]chat.Phase
 	presenceSeen map[int]bool
 
 	// recentSends tracks this session's chat_send wall-clock timestamps for
@@ -625,6 +631,17 @@ func (s *Session) SetProfiles(p []chat.Profile) {
 	s.mu.Unlock()
 }
 
+// SetPhaseData installs the beacon and phase configuration used to resolve
+// each buddy's emotional arc across the virtual clock. Config is loaded once
+// at connect time and handed in, exactly like SetProfiles; sessions never
+// query for it.
+func (s *Session) SetPhaseData(beacons map[int]chat.Beacon, phases map[int][]chat.Phase) {
+	s.mu.Lock()
+	s.beacons = beacons
+	s.phases = phases
+	s.mu.Unlock()
+}
+
 // chatGate evaluates the chat.Gate from live session state. Blocked is always
 // false here — a per-user/per-profile block is a database fact, checked
 // separately in ChatSend after this gate passes, not part of the in-memory
@@ -755,6 +772,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 	now := time.Now().UTC()
 	s.mu.Lock()
 	userID, vTime, profiles := s.userID, s.virtualTime, s.profiles
+	beacons, phases := s.beacons, s.phases
 	s.recentSends = append(s.recentSends, now)
 	s.recentSends = trimBefore(s.recentSends, now.Add(-chatRateTrimWindow))
 	recent := append([]time.Time(nil), s.recentSends...)
@@ -774,6 +792,17 @@ func (s *Session) ChatSend(profileID int, body string) {
 	decision := chat.CheckLocal(body, now, recent)
 	if decision.Outcome == "block" {
 		s.persistInbound(ctx, userID, profileID, body, vTime, moderationOf(decision))
+		// Persist the block itself, not just this message's moderation flag — a
+		// block that only lasts for the ChatSend call that triggered it is not a
+		// block: reconnecting or rewording the same message would sail straight
+		// through. Scoped to this profile (not global): the design's "block"
+		// outcome is "that buddy stops responding," not "chat disabled outright."
+		if s.pool != nil {
+			pid := profileID
+			if err := chat.CreateBlock(ctx, s.pool, userID, "profile", &pid, decision.Reason, decision.Evidence, nil); err != nil {
+				s.logger.Warn("chat: create block failed", "error", err)
+			}
+		}
 		s.sendChatDisabled("blocked")
 		return
 	}
@@ -820,7 +849,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 
 	profile := findProfile(profiles, profileID)
 	deliver := s.chatDeliver(userID, profileID, vTime)
-	job := buildChatJob(userID, profile, chat.DefaultPhase, body, vTime, digest, recentPassages, timeline, history, deliver)
+	job := buildChatJob(userID, profile, phases, beacons, body, vTime, digest, recentPassages, timeline, history, deliver)
 
 	gen := s.hub.Generator()
 	if gen == nil || !gen.Enqueue(job) {
@@ -927,19 +956,18 @@ func (s *Session) ChatHistory(profileID int, before time.Time, limit int) {
 		return
 	}
 
-	turns, err := chat.History(context.Background(), s.pool, userID, profileID, before, limit)
+	messages, err := chat.HistoryDetailed(context.Background(), s.pool, userID, profileID, before, limit)
 	if err != nil {
 		s.logger.Warn("chat: chat_history query failed", "error", err)
 		s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
 		return
 	}
 
-	for _, t := range turns {
-		direction := "in"
-		if t.FromBuddy {
-			direction = "out"
-		}
-		s.send_(outMsg{Type: "chat_message", Profile: profileID, Direction: direction, Body: t.Text})
+	for _, m := range messages {
+		s.send_(outMsg{
+			Type: "chat_message", Profile: profileID, Direction: m.Direction,
+			Body: m.Body, Time: m.VirtualTime.Format(time.RFC3339), Kind: m.Kind, MessageID: m.ID,
+		})
 	}
 	s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
 }
@@ -972,13 +1000,20 @@ func moderationOf(d chat.Decision) map[string]any {
 	return m
 }
 
-// buildChatJob assembles a Generator job from already-retrieved passages. It
-// is a pure mapping — no I/O — precisely so tier crossing (see the package
-// doc on chat.Tier) is a thing a test can catch directly: digest, recent, and
-// timeline must land in Job.Digest, Job.Recent, and Job.Timeline respectively,
-// with no reordering.
-func buildChatJob(userID string, profile chat.Profile, phase chat.Phase, body string, vTime time.Time,
+// buildChatJob assembles a Generator job from already-retrieved passages and
+// configuration. It is a pure mapping — no I/O — precisely so tier crossing
+// (see the package doc on chat.Tier) is a thing a test can catch directly:
+// digest, recent, and timeline must land in Job.Digest, Job.Recent, and
+// Job.Timeline respectively, with no reordering.
+//
+// The phase is resolved here, from phases/beacons, rather than passed in
+// pre-resolved: chat.PhaseAt already returns chat.DefaultPhase (ok == false)
+// when profile has no phases configured, so there is nothing left for this
+// function to do on a miss — a second fallback here would just be dead code
+// shadowing PhaseAt's own.
+func buildChatJob(userID string, profile chat.Profile, phases map[int][]chat.Phase, beacons map[int]chat.Beacon, body string, vTime time.Time,
 	digest, recent, timeline []chat.Passage, history []chat.Turn, deliver func(chat.Reply, error)) chat.Job {
+	phase, _ := chat.PhaseAt(phases[profile.ID], beacons, vTime)
 	return chat.Job{
 		UserID:      userID,
 		Profile:     profile,

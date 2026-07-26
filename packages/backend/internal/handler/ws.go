@@ -132,11 +132,15 @@ type chatHistoryMsg struct {
 // uses.
 const chatHistoryDefaultLimit = 40
 
-// ProfileCache holds the buddy roster for the life of the process. Chat config
-// is tiny and static; every connection reads the same slice rather than querying.
+// ProfileCache holds the buddy roster, plus the beacon/phase configuration
+// that resolves each buddy's emotional arc across the virtual clock, for the
+// life of the process. Chat config is tiny and static; every connection
+// reads the same values rather than querying.
 type ProfileCache struct {
 	mu       sync.RWMutex
 	profiles []chat.Profile
+	beacons  map[int]chat.Beacon
+	phases   map[int][]chat.Phase
 }
 
 func NewProfileCache() *ProfileCache { return &ProfileCache{} }
@@ -151,6 +155,22 @@ func (c *ProfileCache) Set(p []chat.Profile) {
 	c.mu.Lock()
 	c.profiles = p
 	c.mu.Unlock()
+}
+
+// SetPhaseData installs the beacon and phase configuration. Call once at boot,
+// alongside Set.
+func (c *ProfileCache) SetPhaseData(beacons map[int]chat.Beacon, phases map[int][]chat.Phase) {
+	c.mu.Lock()
+	c.beacons, c.phases = beacons, phases
+	c.mu.Unlock()
+}
+
+// PhaseData returns the beacon and phase configuration installed by
+// SetPhaseData.
+func (c *ProfileCache) PhaseData() (map[int]chat.Beacon, map[int][]chat.Phase) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.beacons, c.phases
 }
 
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
@@ -214,6 +234,8 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 			}
 		}
 		sess.SetProfiles(chatProfiles.Get())
+		beacons, phases := chatProfiles.PhaseData()
+		sess.SetPhaseData(beacons, phases)
 
 		hub.Register(sess)
 

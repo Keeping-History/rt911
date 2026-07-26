@@ -35,3 +35,18 @@ func TestHistoryIsLimited(t *testing.T) {
 		t.Errorf("historySelect must bound its result:\n%s", historySelect)
 	}
 }
+
+func TestHistoryDetailedSQLSelectsWireFieldsScopedToUser(t *testing.T) {
+	// A chat_history reply replays turns as chat_message frames, which need id
+	// (dedupe) and virtual_time (ordering, especially after a seek) alongside
+	// direction/body/kind -- fields History's []Turn strips for the composer's
+	// prompt but the wire still needs.
+	for _, want := range []string{
+		"id", "direction", "body", "virtual_time", "kind",
+		`"user" = $1`, "profile = $2", "virtual_time <= $3", "LIMIT",
+	} {
+		if !strings.Contains(historyDetailedSelect, want) {
+			t.Errorf("historyDetailedSelect missing %q:\n%s", want, historyDetailedSelect)
+		}
+	}
+}

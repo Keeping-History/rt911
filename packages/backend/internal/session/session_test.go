@@ -1307,7 +1307,7 @@ func TestBuildChatJobRoutesTiersWithoutCrossing(t *testing.T) {
 	recent := []chat.Passage{{Tier: chat.TierBroadcast, Text: "recent-marker"}}
 	timeline := []chat.Passage{{Tier: chat.TierTimeline, Text: "timeline-marker"}}
 
-	job := buildChatJob("user-1", chat.Profile{ID: 3}, chat.DefaultPhase, "hi",
+	job := buildChatJob("user-1", chat.Profile{ID: 3}, nil, nil, "hi",
 		time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC),
 		digest, recent, timeline, nil, func(chat.Reply, error) {})
 
@@ -1329,5 +1329,58 @@ func TestBuildChatJobRoutesTiersWithoutCrossing(t *testing.T) {
 		if p.Tier != chat.TierTimeline {
 			t.Fatal("Job.Timeline must carry only tier-3 passages")
 		}
+	}
+}
+
+// TestBuildChatJobResolvesPhaseFromVirtualTime is the fix-round-1 regression
+// test for the phase-resolution finding: buildChatJob previously hardcoded
+// chat.DefaultPhase into every Job, which would make every buddy emotionally
+// flat all day regardless of the virtual clock -- the product's central idea,
+// inert. A test that only checked *a* phase was present would not have caught
+// that regression; this one requires the phase to actually change between two
+// virtual times straddling a beacon's public_at.
+func TestBuildChatJobResolvesPhaseFromVirtualTime(t *testing.T) {
+	beaconID := 1
+	beacons := map[int]chat.Beacon{
+		1: {
+			ID: 1, Key: "first_impact",
+			At:       time.Date(2001, 9, 11, 12, 46, 0, 0, time.UTC),
+			PublicAt: time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC),
+		},
+	}
+	phases := map[int][]chat.Phase{
+		3: {
+			{ID: 10, ProfileID: 3, FromBeacon: nil, Tone: "ordinary morning", Sort: 0, Shock: 0},
+			{ID: 11, ProfileID: 3, FromBeacon: &beaconID, Tone: "shaken", Sort: 1, Shock: 80},
+		},
+	}
+	noop := func(chat.Reply, error) {}
+
+	before := buildChatJob("user-1", chat.Profile{ID: 3}, phases, beacons, "hi",
+		time.Date(2001, 9, 11, 12, 48, 0, 0, time.UTC), nil, nil, nil, nil, noop)
+	after := buildChatJob("user-1", chat.Profile{ID: 3}, phases, beacons, "hi",
+		time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil, nil, nil, nil, noop)
+
+	if before.Phase.ID != 10 {
+		t.Fatalf("before the beacon's public_at, Job.Phase = %+v, want the opening phase (id 10)", before.Phase)
+	}
+	if after.Phase.ID != 11 {
+		t.Fatalf("after the beacon's public_at, Job.Phase = %+v, want the shaken phase (id 11)", after.Phase)
+	}
+	if before.Phase == after.Phase {
+		t.Fatal("Job.Phase must change with virtual time -- a hardcoded DefaultPhase would make this pass trivially")
+	}
+}
+
+// TestBuildChatJobFallsBackToDefaultPhaseWithNoConfig covers the no-content
+// path buildChatJob leaves to chat.PhaseAt: a profile with no phases
+// configured (nil maps, exactly like a fresh install or a unit test with no
+// SetPhaseData call) must still resolve to a Phase, not a zero value.
+func TestBuildChatJobFallsBackToDefaultPhaseWithNoConfig(t *testing.T) {
+	job := buildChatJob("user-1", chat.Profile{ID: 3}, nil, nil, "hi",
+		time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil, nil, nil, nil, func(chat.Reply, error) {})
+
+	if job.Phase != chat.DefaultPhase {
+		t.Fatalf("Job.Phase = %+v, want chat.DefaultPhase", job.Phase)
 	}
 }

@@ -81,6 +81,44 @@ func History(ctx context.Context, pool *pgxpool.Pool, userID string, profileID i
 	return out, nil
 }
 
+const historyDetailedSelect = `
+	SELECT id, direction, body, virtual_time, kind
+	FROM chat_messages
+	WHERE "user" = $1 AND profile = $2 AND virtual_time <= $3
+	ORDER BY virtual_time, id
+	LIMIT $4`
+
+// HistoryDetailed returns prior turns with the wire fields a chat_history
+// reply needs to replay them as chat_message frames: id (so a client can
+// dedupe) and virtual_time (so it can order them, in particular after a seek)
+// alongside direction/body/kind. History strips all of that down to []Turn
+// because the composer's prompt has no use for it; this function exists
+// specifically so that stripping doesn't also happen on the wire, where a
+// replayed turn otherwise carries message_id: 0 -- indistinguishable from "no
+// database pool" and unable to dedupe or order at all.
+func HistoryDetailed(ctx context.Context, pool *pgxpool.Pool, userID string, profileID int, before time.Time, limit int) ([]Message, error) {
+	rows, err := pool.Query(ctx, historyDetailedSelect, userID, profileID, before, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query chat_messages: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Message
+	for rows.Next() {
+		var m Message
+		if err := rows.Scan(&m.ID, &m.Direction, &m.Body, &m.VirtualTime, &m.Kind); err != nil {
+			return nil, fmt.Errorf("scan chat_messages: %w", err)
+		}
+		m.Profile = profileID
+		m.VirtualTime = m.VirtualTime.UTC()
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chat_messages: %w", err)
+	}
+	return out, nil
+}
+
 const priorContactSelect = `
 	SELECT EXISTS(
 		SELECT 1

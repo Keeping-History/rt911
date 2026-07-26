@@ -128,6 +128,28 @@ func LoadBlocks(ctx context.Context, pool *pgxpool.Pool, userID string, now time
 	return out, nil
 }
 
+const insertBlock = `
+	INSERT INTO chat_blocks
+		("user", scope, profile, reason, evidence, created_at, expires)
+	VALUES
+		($1, $2, $3, $4, $5, $6, $7)`
+
+// CreateBlock persists a block so it outlives the single ChatSend call that
+// triggered it. Without a row to load on the next message, a local `block`
+// decision would evaporate on reconnect or on a slightly reworded resend --
+// which is not a block at all. scope is "profile" (that buddy stops
+// responding) or "global" (chat disabled outright); profileID is only
+// meaningful for "profile" scope. expires is nil for a permanent block, until
+// a teacher/admin clears the row. "user" is a reserved word in Postgres --
+// unquoted it silently resolves to CURRENT_USER and writes against the wrong
+// identity instead of failing.
+func CreateBlock(ctx context.Context, pool *pgxpool.Pool, userID, scope string, profileID *int, reason, evidence string, expires *time.Time) error {
+	if _, err := pool.Exec(ctx, insertBlock, userID, scope, profileID, reason, evidence, time.Now().UTC(), expires); err != nil {
+		return fmt.Errorf("insert chat_blocks: %w", err)
+	}
+	return nil
+}
+
 // BlocksApply reports whether any block in the set currently applies to
 // profileID, and if so, why. It re-checks expiry independently of the SQL
 // filter in LoadBlocks so it stays correct when called on a slice built by
