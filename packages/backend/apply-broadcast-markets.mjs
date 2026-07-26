@@ -1,0 +1,224 @@
+#!/usr/bin/env node
+/**
+ * Classify broadcast sources by how far their signal carried in 2001, and give
+ * each chat profile a market.
+ *
+ * This is what stops a buddy in Columbus quoting Channel 5 New York or 1010
+ * WINS. Local sources reach only their own market; national and international
+ * sources reach everyone. A source left unclassified still reaches everyone —
+ * dropping it would silently mute a newly added channel — and the streamer logs
+ * the gap at boot instead.
+ *
+ * Adds `reach` + `market` to `sources` and `market` to `chat_profiles`, then
+ * seeds the classification below. Dry run by default; pass --apply to write.
+ * Idempotent: existing fields are left alone and every value is written with a
+ * PATCH, so re-running converges rather than duplicating.
+ *
+ * Not to be confused with seed.mjs, which also bulk-imports media, news and
+ * pager data and must never be pointed at a live instance to add a collection.
+ */
+
+const APPLY = process.argv.includes("--apply");
+
+const DIRECTUS_URL = required("DIRECTUS_URL");
+const ADMIN_EMAIL = required("ADMIN_EMAIL");
+const ADMIN_PASSWORD = required("ADMIN_PASSWORD");
+
+function required(name) {
+  const v = process.env[name];
+  if (!v) {
+    // No localhost default on purpose: a silent fallback is how you configure
+    // the wrong instance without noticing.
+    console.error(`${name} is required.`);
+    process.exit(1);
+  }
+  return v;
+}
+
+// Markets are slugs, not prose. chat_profiles.location stays human-readable for
+// the persona ("Columbus, Ohio"); this is the join key.
+const NEW_YORK = "new_york";
+const WASHINGTON_DC = "washington_dc";
+const BOSTON = "boston";
+
+// Classification of every source that appears in chat_transcript_segments.
+//
+// The DC market dominates the corpus (~69k segments across five stations);
+// New York contributes WNYW with 37 TV segments plus the WINS/WCBS radio, so
+// in practice the New York rule governs radio far more than television.
+//
+// Ambiguous call signs were identified from their own transcripts rather than
+// guessed: NEWSW carries a WABC feed and a reporter with "a clear view right at
+// the World Trade Towers"; TCN says "8 o'clock Central time"; GLVSN and PSC are
+// foreign-language/translator audio; WORLDNET is USIA documentary programming.
+const CLASSIFICATION = {
+  // Local — New York
+  WNYW: { reach: "local", market: NEW_YORK },
+  WINS: { reach: "local", market: NEW_YORK },
+  WCBS: { reach: "local", market: NEW_YORK },
+
+  // Local — Washington DC
+  WETA: { reach: "local", market: WASHINGTON_DC },
+  WJLA: { reach: "local", market: WASHINGTON_DC },
+  WRC: { reach: "local", market: WASHINGTON_DC },
+  WTTG: { reach: "local", market: WASHINGTON_DC },
+  WUSA: { reach: "local", market: WASHINGTON_DC },
+
+  // Local — Boston
+  WSBK: { reach: "local", market: BOSTON },
+
+  // National cable / networks — everyone with a television
+  CNN: { reach: "national", market: null },
+  MSNBC: { reach: "national", market: null },
+  BET: { reach: "national", market: null },
+  NEWSW: { reach: "national", market: null },
+  TCN: { reach: "national", market: null },
+
+  // International — available to all, per the design
+  ANT1: { reach: "international", market: null },
+  AZT: { reach: "international", market: null },
+  BBC: { reach: "international", market: null },
+  CCTV4: { reach: "international", market: null },
+  IRAQ: { reach: "international", market: null },
+  MCM: { reach: "international", market: null },
+  NHK: { reach: "international", market: null },
+  NTV: { reach: "international", market: null },
+  GLVSN: { reach: "international", market: null },
+  PSC: { reach: "international", market: null },
+  WORLDNET: { reach: "international", market: null },
+};
+
+// Seeded profiles live in Columbus, which the corpus has no station for — so
+// they correctly receive national and international only. That is authentic:
+// a kid in Ohio watched CNN, not Channel 5 New York.
+const PROFILE_MARKETS = {
+  skaterboi1988: "columbus_oh",
+  mrsbeckwithteaches: "columbus_oh",
+};
+
+const FIELDS = [
+  {
+    collection: "sources",
+    field: "reach",
+    type: "string",
+    meta: {
+      interface: "select-dropdown",
+      note: "How far this signal carried in 2001. Local sources reach only their own market.",
+      options: {
+        choices: [
+          { text: "Local", value: "local" },
+          { text: "National", value: "national" },
+          { text: "International", value: "international" },
+        ],
+      },
+    },
+    schema: { is_nullable: true },
+  },
+  {
+    collection: "sources",
+    field: "market",
+    type: "string",
+    meta: { note: "Broadcast market slug, e.g. new_york. Only meaningful when reach is local." },
+    schema: { is_nullable: true },
+  },
+  {
+    collection: "chat_profiles",
+    field: "market",
+    type: "string",
+    meta: { note: "Which market's local signals this buddy could receive, e.g. new_york." },
+    schema: { is_nullable: true },
+  },
+];
+
+async function login() {
+  const res = await fetch(`${DIRECTUS_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`POST /auth/login → ${res.status}: ${text}`);
+  return JSON.parse(text).data.access_token;
+}
+
+async function api(token, method, path, body) {
+  const res = await fetch(`${DIRECTUS_URL}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}: ${text}`);
+  return text ? JSON.parse(text) : null;
+}
+
+if (!APPLY) console.log("DRY RUN — no changes will be made (pass --apply to apply).");
+console.log(`Target: ${DIRECTUS_URL}\n`);
+const token = await login();
+
+const summary = { fields: 0, sources: 0, profiles: 0, unmatched: [] };
+
+for (const f of FIELDS) {
+  let exists = true;
+  try {
+    await api(token, "GET", `/fields/${f.collection}/${f.field}`);
+  } catch {
+    exists = false;
+  }
+  if (exists) {
+    console.log(`field ${f.collection}.${f.field}: already present`);
+    continue;
+  }
+  console.log(`${APPLY ? "Creating" : "Would create"} field ${f.collection}.${f.field}`);
+  if (APPLY) await api(token, "POST", `/fields/${f.collection}`, f);
+  summary.fields++;
+}
+
+// Match on name, which is what the call signs in CLASSIFICATION are. Anything
+// in the table we have no entry for is reported rather than silently skipped —
+// an unclassified source stays audible to everyone, so a curator needs to see it.
+const sources = (await api(token, "GET", "/items/sources?fields=id,name,reach,market&limit=-1")).data;
+const byName = new Map(sources.map((s) => [s.name, s]));
+
+for (const [name, want] of Object.entries(CLASSIFICATION)) {
+  const row = byName.get(name);
+  if (!row) {
+    summary.unmatched.push(name);
+    continue;
+  }
+  if (row.reach === want.reach && (row.market ?? null) === want.market) continue;
+  console.log(
+    `${APPLY ? "Setting" : "Would set"} ${name}: reach=${want.reach} market=${want.market ?? "—"}`,
+  );
+  if (APPLY) await api(token, "PATCH", `/items/sources/${row.id}`, want);
+  summary.sources++;
+}
+
+const profiles = (await api(token, "GET", "/items/chat_profiles?fields=id,screen_name,market&limit=-1")).data;
+for (const p of profiles) {
+  const want = PROFILE_MARKETS[p.screen_name];
+  if (!want || p.market === want) continue;
+  console.log(`${APPLY ? "Setting" : "Would set"} profile ${p.screen_name}: market=${want}`);
+  if (APPLY) await api(token, "PATCH", `/items/chat_profiles/${p.id}`, { market: want });
+  summary.profiles++;
+}
+
+const classifiedNames = new Set(Object.keys(CLASSIFICATION));
+const unclassifiedInUse = sources
+  .filter((s) => !classifiedNames.has(s.name) && !s.reach)
+  .map((s) => s.name);
+
+console.log("\n--- Summary ---");
+console.log(`Fields ${APPLY ? "created" : "to create"}: ${summary.fields}`);
+console.log(`Sources ${APPLY ? "classified" : "to classify"}: ${summary.sources}`);
+console.log(`Profiles ${APPLY ? "updated" : "to update"}: ${summary.profiles}`);
+if (summary.unmatched.length) {
+  console.log(`\nIn CLASSIFICATION but not in sources: ${summary.unmatched.join(", ")}`);
+}
+if (unclassifiedInUse.length) {
+  console.log(
+    `\nUnclassified sources (these still reach EVERY buddy — classify any that are local):\n  ${unclassifiedInUse.join(", ")}`,
+  );
+}
+if (!APPLY) console.log("\nDry run complete. Re-run with --apply to write.");
+if (APPLY) console.log("\nThe streamer loads this once at boot — restart it to pick these up.");

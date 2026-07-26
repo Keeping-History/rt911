@@ -44,6 +44,12 @@ type Profile struct {
 
 	SystemPromptExtra string
 	TypingSpeed       int
+
+	// Market is the broadcast market this buddy lived in ("new_york",
+	// "washington_dc", ...). It decides which local signals could reach them;
+	// national and international sources reach everyone. Empty means no local
+	// sources at all, which is correct for a town the corpus has no station for.
+	Market string
 }
 
 // OnlineAt reports whether this buddy is signed on at virtual time t. A nil
@@ -86,7 +92,7 @@ const profileSelect = `
 	SELECT id, screen_name, display_name, avatar, persona, education_level,
 	       writing_style, style_exemplars, online_from, online_until, sort,
 	       provider, model, max_tokens, effort, temperature,
-	       system_prompt_extra, typing_speed
+	       system_prompt_extra, typing_speed, market
 	FROM chat_profiles
 	WHERE active = 1
 	ORDER BY sort, id`
@@ -112,12 +118,13 @@ func LoadProfiles(ctx context.Context, pool *pgxpool.Pool) ([]Profile, error) {
 			styleExemplars    *string
 			systemPromptExtra *string
 			typingSpeed       *int
+			market            *string
 		)
 		if err := rows.Scan(&p.ID, &p.ScreenName, &displayName, &avatar,
 			&persona, &educationLevel, &writingStyle, &styleExemplars,
 			&p.OnlineFrom, &p.OnlineUntil, &p.Sort,
 			&p.Provider, &p.Model, &p.MaxTokens, &p.Effort, &p.Temperature,
-			&systemPromptExtra, &typingSpeed); err != nil {
+			&systemPromptExtra, &typingSpeed, &market); err != nil {
 			return nil, fmt.Errorf("scan chat_profiles: %w", err)
 		}
 		p.DisplayName = derefStr(displayName)
@@ -127,6 +134,7 @@ func LoadProfiles(ctx context.Context, pool *pgxpool.Pool) ([]Profile, error) {
 		p.WritingStyle = derefStr(writingStyle)
 		p.StyleExemplars = derefStr(styleExemplars)
 		p.SystemPromptExtra = derefStr(systemPromptExtra)
+		p.Market = derefStr(market)
 		if typingSpeed != nil {
 			p.TypingSpeed = *typingSpeed
 		}

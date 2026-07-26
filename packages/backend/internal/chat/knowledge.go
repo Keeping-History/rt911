@@ -110,24 +110,35 @@ func LoadCurated(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]Passag
 	return out, nil
 }
 
+// $3 carries "no filter at all" as its own flag rather than inferring it from
+// empty arrays. Inferring it would make an allow-list that permits nothing mean
+// permit everything -- the buddy in Columbus would hear New York local radio
+// precisely because nobody said he could.
 const broadcastSelect = `
 	SELECT start_date, text, medium
 	FROM chat_transcript_segments
 	WHERE start_date > $1 AND start_date <= $2
-	  AND ($3::int[] IS NULL OR channel = ANY($3::int[]))
+	  AND ($3::bool
+	       OR channel = ANY($4::int[])
+	       OR channel_slug = ANY($5::text[]))
 	ORDER BY start_date`
 
 // LoadBroadcast returns transcript segments from the lookback window ending at
-// t, optionally restricted to the channels the user is actually watching. This
-// is what the buddy could have heard just now, and it is why the early-morning
-// confusion ("they're saying it was a small plane") appears without being
-// authored.
-func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookback time.Duration, channelIDs []int) ([]Passage, error) {
-	var ids any
-	if len(channelIDs) > 0 {
-		ids = channelIDs
+// t, restricted to the sources that reached the buddy's market. This is what
+// they could have heard just now, and it is why the early-morning confusion
+// ("they're saying it was a small plane") appears without being authored.
+//
+// A nil allow means unfiltered. A non-nil allow is applied even when it permits
+// nothing -- see the note on broadcastSelect.
+func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookback time.Duration, allow *BroadcastFilter) ([]Passage, error) {
+	unfiltered := allow == nil
+	var ids []int
+	var slugs []string
+	if allow != nil {
+		ids, slugs = allow.ChannelIDs, allow.Slugs
 	}
-	rows, err := pool.Query(ctx, broadcastSelect, t.UTC().Add(-lookback), t.UTC(), ids)
+	rows, err := pool.Query(ctx, broadcastSelect,
+		t.UTC().Add(-lookback), t.UTC(), unfiltered, ids, slugs)
 	if err != nil {
 		return nil, fmt.Errorf("query chat_transcript_segments: %w", err)
 	}

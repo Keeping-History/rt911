@@ -1481,7 +1481,7 @@ func TestFireBeatsStaticDeliversTextWithoutProviderCall(t *testing.T) {
 	drain(t, s)
 
 	due := []chat.Schedule{{ID: 1, ProfileID: 5, Kind: "static", Text: "hang on, are you seeing this?"}}
-	s.fireBeats(context.Background(), due, "11111111-2222-3333-4444-555555555555", nil, nil, nil, vTime)
+	s.fireBeats(context.Background(), due, "11111111-2222-3333-4444-555555555555", nil, nil, nil, nil, vTime)
 
 	msg := recvType(t, s)
 	if msg.Type != "chat_message" || msg.Kind != "static" || msg.Body != "hang on, are you seeing this?" {
@@ -1500,7 +1500,7 @@ func TestFireBeatsGeneratedKindStallsWithNoGenerator(t *testing.T) {
 	drain(t, s)
 
 	due := []chat.Schedule{{ID: 1, ProfileID: 5, Kind: "generated", Prompt: "react to the news"}}
-	s.fireBeats(context.Background(), due, "11111111-2222-3333-4444-555555555555", nil, nil, nil, vTime)
+	s.fireBeats(context.Background(), due, "11111111-2222-3333-4444-555555555555", nil, nil, nil, nil, vTime)
 
 	if msg := recvType(t, s); msg.Type != "chat_typing" {
 		t.Fatalf("first frame must be chat_typing, got %q", msg.Type)
@@ -1519,7 +1519,7 @@ func TestFireBeatsSkipsWhenGateFails(t *testing.T) {
 	drain(t, s)
 
 	due := []chat.Schedule{{ID: 1, ProfileID: 5, Kind: "static", Text: "hey"}}
-	s.fireBeats(context.Background(), due, "", nil, nil, nil, time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC))
+	s.fireBeats(context.Background(), due, "", nil, nil, nil, nil, time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC))
 
 	select {
 	case data := <-s.send:
@@ -1538,7 +1538,7 @@ func TestFireBeatsSkipsRequiresPriorContactWithNilPool(t *testing.T) {
 	drain(t, s)
 
 	due := []chat.Schedule{{ID: 1, ProfileID: 5, Kind: "static", Text: "hey", RequiresPriorContact: true}}
-	s.fireBeats(context.Background(), due, "11111111-2222-3333-4444-555555555555", nil, nil, nil, vTime)
+	s.fireBeats(context.Background(), due, "11111111-2222-3333-4444-555555555555", nil, nil, nil, nil, vTime)
 
 	select {
 	case data := <-s.send:

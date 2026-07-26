@@ -216,6 +216,26 @@ func main() {
 	}
 	chatProfiles.SetSchedules(schedules)
 
+	// Which signals reached where. Local stations are market-scoped so a buddy
+	// in Ohio cannot quote Channel 5 New York; national and international reach
+	// everyone. An unclassified source still reaches everyone — dropping it
+	// would make adding a channel silently mute it — so the gap is logged
+	// instead. Same non-fatal, bounded, load-once pattern as above. On failure
+	// bcastSources stays nil and AllowedFor returns an unfiltered query, so a
+	// config-load failure degrades to the pre-existing behaviour rather than
+	// muting every buddy's broadcast tier.
+	bcastCtx, bcastCancel := context.WithTimeout(ctx, 2*time.Second)
+	bcastSources, err := chat.LoadBroadcastSources(bcastCtx, pool)
+	bcastCancel()
+	if err != nil {
+		logger.Warn("chat broadcast classification unavailable, all sources reach every buddy", "error", err)
+		bcastSources = nil
+	}
+	if gaps := chat.UnclassifiedNames(bcastSources); len(gaps) > 0 {
+		logger.Warn("chat broadcast sources missing reach classification", "sources", gaps)
+	}
+	chatProfiles.SetBroadcastSources(bcastSources)
+
 	// Only these origins may turn a Directus session cookie into a chat
 	// identity. CHAT_TRUSTED_ORIGINS appends to the built-in production list so
 	// dev and preview origins never ship in production config.

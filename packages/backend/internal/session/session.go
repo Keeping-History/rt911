@@ -182,6 +182,10 @@ type Session struct {
 	// buddy would render as chat.DefaultPhase all day regardless of the clock.
 	// schedules is the proactive-beat configuration (loaded once, via
 	// SetSchedules) that RunTimePump checks against chatHorizon each tick.
+	// broadcastSources is the reach/market classification (loaded once, via
+	// SetBroadcastSources) that decides which transcripts a buddy could have
+	// received where they live — a kid in Columbus had cable and the networks,
+	// not Channel 5 New York or 1010 WINS.
 	// presenceSeen is the last online state sent per buddy id, so
 	// syncChatPresence can emit only the buddies whose state actually changed.
 	// All guarded by mu.
@@ -190,6 +194,7 @@ type Session struct {
 	beacons      map[int]chat.Beacon
 	phases       map[int][]chat.Phase
 	schedules    []chat.Schedule
+	bcastSources []chat.BroadcastSource
 	presenceSeen map[int]bool
 
 	// recentSends tracks this session's chat_send wall-clock timestamps for
@@ -664,6 +669,15 @@ func (s *Session) SetSchedules(schedules []chat.Schedule) {
 	s.mu.Unlock()
 }
 
+// SetBroadcastSources installs the reach/market classification used to decide
+// which transcripts reach each buddy. Config is loaded once at connect time and
+// handed in, exactly like SetPhaseData; sessions never query for it.
+func (s *Session) SetBroadcastSources(sources []chat.BroadcastSource) {
+	s.mu.Lock()
+	s.bcastSources = sources
+	s.mu.Unlock()
+}
+
 // chatGate evaluates the chat.Gate from live session state. Blocked is always
 // false here — a per-user/per-profile block is a database fact, checked
 // separately in ChatSend after this gate passes, not part of the in-memory
@@ -795,6 +809,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 	s.mu.Lock()
 	userID, vTime, profiles := s.userID, s.virtualTime, s.profiles
 	beacons, phases := s.beacons, s.phases
+	bcastSources := s.bcastSources
 	s.recentSends = append(s.recentSends, now)
 	s.recentSends = trimBefore(s.recentSends, now.Add(-chatRateTrimWindow))
 	recent := append([]time.Time(nil), s.recentSends...)
@@ -849,11 +864,12 @@ func (s *Session) ChatSend(profileID int, body string) {
 	}
 	s.persistInbound(ctx, userID, profileID, body, vTime, moderation)
 
-	history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, profileID, vTime, body)
+	profile := findProfile(profiles, profileID)
+	history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, profileID, vTime, body,
+		chat.AllowedFor(bcastSources, profile.Market))
 
 	s.send_(outMsg{Type: "chat_typing", Profile: profileID})
 
-	profile := findProfile(profiles, profileID)
 	job := buildChatJob(userID, profile, phases, beacons, body, "generated", false, vTime,
 		digest, recentPassages, timeline, history, nil)
 	job.Deliver = s.chatDeliver(userID, profileID, vTime, job.Kind)
@@ -873,7 +889,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 // the student's own message for ChatSend, or the curator's Prompt for a beat
 // in lieu of anything a student typed. Every value is the zero value when
 // s.pool is nil, exactly like the inline block this replaced.
-func (s *Session) retrieveContext(ctx context.Context, userID string, profileID int, vTime time.Time, query string) (history []chat.Turn, digest, recentPassages, timeline []chat.Passage) {
+func (s *Session) retrieveContext(ctx context.Context, userID string, profileID int, vTime time.Time, query string, allow *chat.BroadcastFilter) (history []chat.Turn, digest, recentPassages, timeline []chat.Passage) {
 	if s.pool == nil {
 		return nil, nil, nil, nil
 	}
@@ -887,7 +903,7 @@ func (s *Session) retrieveContext(ctx context.Context, userID string, profileID 
 	} else {
 		digest = d
 	}
-	if r, err := chat.LoadBroadcast(ctx, s.pool, vTime, chatBroadcastLookback, nil); err != nil {
+	if r, err := chat.LoadBroadcast(ctx, s.pool, vTime, chatBroadcastLookback, allow); err != nil {
 		s.logger.Warn("chat: load broadcast failed", "error", err)
 	} else {
 		recentPassages = r
@@ -992,7 +1008,7 @@ func (s *Session) sendStall(ctx context.Context, userID string, profileID int, v
 // chat.Job.SelfInitiated so the composer renders it as the buddy speaking
 // first rather than answering, following the same stall-on-full-queue
 // degradation ChatSend uses.
-func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID string, profiles []chat.Profile, beacons map[int]chat.Beacon, phases map[int][]chat.Phase, t time.Time) {
+func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID string, profiles []chat.Profile, beacons map[int]chat.Beacon, phases map[int][]chat.Phase, bcastSources []chat.BroadcastSource, t time.Time) {
 	if len(due) == 0 {
 		return
 	}
@@ -1035,7 +1051,8 @@ func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID str
 			// query is sc.Prompt in place of a student's message, since none
 			// exists for a beat the buddy is sending unprompted.
 			profile := findProfile(profiles, sc.ProfileID)
-			history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, sc.ProfileID, t, sc.Prompt)
+			history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, sc.ProfileID, t, sc.Prompt,
+				chat.AllowedFor(bcastSources, profile.Market))
 			s.send_(outMsg{Type: "chat_typing", Profile: sc.ProfileID})
 			job := buildChatJob(userID, profile, phases, beacons, sc.Prompt, "scheduled", true, t,
 				digest, recentPassages, timeline, history, nil)
@@ -1251,13 +1268,15 @@ func (s *Session) RunTimePump() {
 			var beatProfiles []chat.Profile
 			var beatBeacons map[int]chat.Beacon
 			var beatPhases map[int][]chat.Phase
+			var beatSources []chat.BroadcastSource
 			if len(due) > 0 {
 				beatUserID, beatProfiles, beatBeacons, beatPhases = s.userID, s.profiles, s.beacons, s.phases
+				beatSources = s.bcastSources
 			}
 			s.mu.Unlock()
 
 			s.syncChatPresence()
-			s.fireBeats(ctx, due, beatUserID, beatProfiles, beatBeacons, beatPhases, t)
+			s.fireBeats(ctx, due, beatUserID, beatProfiles, beatBeacons, beatPhases, beatSources, t)
 
 			if doMedia {
 				if items, err := cache.ItemsInRange(ctx, s.rdb, mediaLo, mediaHi); err != nil {

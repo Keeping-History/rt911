@@ -149,11 +149,12 @@ func clampChatHistoryLimit(limit int) int {
 // life of the process. Chat config is tiny and static; every connection
 // reads the same values rather than querying.
 type ProfileCache struct {
-	mu        sync.RWMutex
-	profiles  []chat.Profile
-	beacons   map[int]chat.Beacon
-	phases    map[int][]chat.Phase
-	schedules []chat.Schedule
+	mu           sync.RWMutex
+	profiles     []chat.Profile
+	beacons      map[int]chat.Beacon
+	phases       map[int][]chat.Phase
+	schedules    []chat.Schedule
+	bcastSources []chat.BroadcastSource
 }
 
 func NewProfileCache() *ProfileCache { return &ProfileCache{} }
@@ -192,6 +193,21 @@ func (c *ProfileCache) SetSchedules(schedules []chat.Schedule) {
 	c.mu.Lock()
 	c.schedules = schedules
 	c.mu.Unlock()
+}
+
+// SetBroadcastSources installs the reach/market classification. Call once at
+// boot, alongside Set and SetPhaseData.
+func (c *ProfileCache) SetBroadcastSources(sources []chat.BroadcastSource) {
+	c.mu.Lock()
+	c.bcastSources = sources
+	c.mu.Unlock()
+}
+
+// BroadcastSources returns the classification installed by SetBroadcastSources.
+func (c *ProfileCache) BroadcastSources() []chat.BroadcastSource {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.bcastSources
 }
 
 // Schedules returns the proactive-beat configuration installed by
@@ -266,6 +282,8 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 		beacons, phases := chatProfiles.PhaseData()
 		sess.SetPhaseData(beacons, phases)
 		sess.SetSchedules(chatProfiles.Schedules())
+		sess.SetBroadcastSources(chatProfiles.BroadcastSources())
+		sess.SetBroadcastSources(chatProfiles.BroadcastSources())
 
 		hub.Register(sess)
 
