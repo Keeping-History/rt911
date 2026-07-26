@@ -32,6 +32,18 @@ type Profile struct {
 	OnlineFrom     *time.Time
 	OnlineUntil    *time.Time
 	Sort           int
+
+	// Provider, Model, MaxTokens, Effort, and Temperature are per-profile
+	// overrides onto Settings. nil means "inherit the global default" — see
+	// Settings.Merge — so these stay pointers rather than being derefStr'd.
+	Provider    *string
+	Model       *string
+	MaxTokens   *int
+	Effort      *string
+	Temperature *float64
+
+	SystemPromptExtra string
+	TypingSpeed       int
 }
 
 // OnlineAt reports whether this buddy is signed on at virtual time t. A nil
@@ -72,7 +84,9 @@ func Roster(profiles []Profile, t time.Time) []model.Buddy {
 
 const profileSelect = `
 	SELECT id, screen_name, display_name, avatar, persona, education_level,
-	       writing_style, style_exemplars, online_from, online_until, sort
+	       writing_style, style_exemplars, online_from, online_until, sort,
+	       provider, model, max_tokens, effort, temperature,
+	       system_prompt_extra, typing_speed
 	FROM chat_profiles
 	WHERE active = 1
 	ORDER BY sort, id`
@@ -89,17 +103,21 @@ func LoadProfiles(ctx context.Context, pool *pgxpool.Pool) ([]Profile, error) {
 	var out []Profile
 	for rows.Next() {
 		var (
-			p              Profile
-			displayName    *string
-			avatar         *string
-			persona        *string
-			educationLevel *string
-			writingStyle   *string
-			styleExemplars *string
+			p                 Profile
+			displayName       *string
+			avatar            *string
+			persona           *string
+			educationLevel    *string
+			writingStyle      *string
+			styleExemplars    *string
+			systemPromptExtra *string
+			typingSpeed       *int
 		)
 		if err := rows.Scan(&p.ID, &p.ScreenName, &displayName, &avatar,
 			&persona, &educationLevel, &writingStyle, &styleExemplars,
-			&p.OnlineFrom, &p.OnlineUntil, &p.Sort); err != nil {
+			&p.OnlineFrom, &p.OnlineUntil, &p.Sort,
+			&p.Provider, &p.Model, &p.MaxTokens, &p.Effort, &p.Temperature,
+			&systemPromptExtra, &typingSpeed); err != nil {
 			return nil, fmt.Errorf("scan chat_profiles: %w", err)
 		}
 		p.DisplayName = derefStr(displayName)
@@ -108,6 +126,10 @@ func LoadProfiles(ctx context.Context, pool *pgxpool.Pool) ([]Profile, error) {
 		p.EducationLevel = derefStr(educationLevel)
 		p.WritingStyle = derefStr(writingStyle)
 		p.StyleExemplars = derefStr(styleExemplars)
+		p.SystemPromptExtra = derefStr(systemPromptExtra)
+		if typingSpeed != nil {
+			p.TypingSpeed = *typingSpeed
+		}
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
