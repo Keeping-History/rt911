@@ -85,3 +85,29 @@ def test_to_rows_rejects_an_aware_anchor():
     with pytest.raises(ValueError, match="naive UTC"):
         to_rows([Segment(0.0, 1.0, "t")], datetime(2001, 9, 11, tzinfo=timezone.utc),
                 channel=1, channel_slug=None, medium="tv")
+
+
+def test_sorts_cues_before_grouping():
+    """A stitched channel SRT is ordered blocks in the wrong order.
+
+    Real data (cctv4) has two large backward jumps in 29k cues. Grouping without
+    sorting first makes every boundary near a jump arbitrary.
+    """
+    cues = [
+        Cue(100.0, 101.0, "later"),
+        Cue(0.0, 1.0, "earlier"),
+        Cue(1.0, 2.0, "earlier still adjacent"),
+    ]
+    segs = build_segments(cues)
+
+    assert [s.start for s in segs] == sorted(s.start for s in segs)
+    # The two cues that are adjacent in time must merge, even though a
+    # third cue sat between them in file order.
+    assert segs[0] == Segment(0.0, 2.0, "earlier earlier still adjacent")
+    assert segs[1] == Segment(100.0, 101.0, "later")
+
+
+def test_does_not_mutate_the_caller_s_cue_list():
+    cues = [Cue(100.0, 101.0, "b"), Cue(0.0, 1.0, "a")]
+    build_segments(cues)
+    assert [c.text for c in cues] == ["b", "a"]

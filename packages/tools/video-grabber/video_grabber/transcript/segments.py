@@ -34,6 +34,15 @@ def build_segments(
     A cue longer than max_seconds is emitted whole rather than split — there is
     no honest timestamp to split it at.
     """
+    # Sort before grouping. A stitched channel SRT is ordered blocks in the
+    # wrong order -- cctv4 has two large backward jumps in 29k cues -- and this
+    # function reasons about the gap between *consecutive* cues. Unsorted, those
+    # gaps go negative at a jump (so it never splits where it should) and the
+    # accumulated duration goes huge (so it splits where it shouldn't). The
+    # boundaries come out arbitrary rather than wrong-looking, which is why no
+    # unit test caught it: every fixture was already sorted.
+    cues = sorted(cues, key=lambda c: (c.start, c.end))
+
     out: list[Segment] = []
     start: float | None = None
     end = 0.0
