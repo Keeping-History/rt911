@@ -51,6 +51,8 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `weather_forecast` | `zone`, `id` | Request the forecast product covering NWS UGC `zone` (e.g. `"NYZ076"`) at the client's virtual time. Requires an active `weather` subscription. `id` is echoed on the reply. |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
+| `chat_send`   | `profile`, `body` | Send one message to a buddy on the `chat` channel. See [`chat_send`](#chat_send) below. |
+| `chat_history` | `profile`, `before`, `limit` | Request prior turns with a buddy at or before `before` (RFC3339). `limit` defaults to 40 when omitted or non-positive. See [`chat_history`](#chat_history) below. |
 
 All unknown `type` values produce an `error` reply but do not terminate the session.
 
@@ -81,6 +83,9 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `chat_state`      | `enabled`, `reason`           | Pushed on `chat` subscribe, pause, resume, seek, and window-boundary crossings. See [`chat_state`](#chat_state) below. |
 | `chat_roster`     | `buddies[]`                   | Sent once on successful `chat` subscribe. See [`chat_roster`](#chat_roster) below. |
 | `chat_presence`   | `profile`, `online`           | Sent when a buddy signs on or off as the virtual clock advances. See [`chat_presence`](#chat_presence) below. |
+| `chat_typing`     | `profile`                     | Sent immediately on accepting a `chat_send` — the reply lands 2-8s later. See [`chat_typing`](#chat_typing) below. |
+| `chat_message`    | `profile`, `direction`, `body`, `time`, `kind`, `message_id` | One turn of a chat conversation, live or replayed. See [`chat_message`](#chat_message) below. |
+| `chat_history`    | `profile`, `done`             | Terminates a `chat_history` reply (each turn itself rides `chat_message`). See [`chat_history`](#chat_history) below. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `news_body`       | `id`, `body` *or* `id`, `message` | Reply to `news_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
@@ -735,6 +740,69 @@ changed buddy; most ticks emit none.
 |---|---|---|
 | `profile` | int | `chat_profiles.id` |
 | `online` | bool | New state |
+
+### `chat_send`
+
+Request:
+
+```json
+{ "type": "chat_send", "profile": 2, "body": "did you see the news" }
+```
+
+The gate — signed in, clock inside the chat window, not paused, not blocked — is evaluated
+**before anything else**, including any database read. On refusal the server replies with
+[`chat_state`](#chat_state) carrying the reason and does nothing further; on a `chat_blocks` hit or
+a local-moderation `block` (see the design's Guard tier) it replies the same way with
+`reason: "blocked"`. A message that clears every gate is persisted to `chat_messages`, answered
+immediately with [`chat_typing`](#chat_typing), and handed to the (bounded, non-blocking) generator
+worker pool — never called inline on the session goroutine, so a slow or saturated provider call can
+never stall the Hub or any other session. If the pool is unavailable (queue full, or no provider has
+a configured API key) the buddy answers with an in-character `chat_message` stall (`kind: "stall"`)
+rather than an error frame — degradation preserves the illusion instead of breaking it. A `block`
+outcome from local moderation is the one case that does **not** enqueue a reply at all: the message
+is recorded (flagged in `chat_messages.moderation`) and the session gets `chat_state{enabled:false,
+reason:"blocked"}` instead. An `escalate` outcome (distress, not abuse) is **not** blocked — it is
+delivered and generated normally, flagged in `chat_messages.moderation` for teacher surfacing.
+
+### `chat_history`
+
+Request:
+
+```json
+{ "type": "chat_history", "profile": 2, "before": "2001-09-11T12:50:00Z", "limit": 40 }
+```
+
+Reply: up to `limit` prior turns with `profile`, oldest first, each as its own
+[`chat_message`](#chat_message) frame, followed by a `chat_history` frame carrying `done: true` as
+the completion marker — the same chunked-reply shape `flights_history` uses. History is always
+re-read fresh from `chat_messages` (never cached on the session), which is what makes a `seek`
+rebuild context correctly: the next `chat_history` (or `chat_send`, which pulls its own rolling
+context the same way) sees the new virtual time. An anonymous session, or one connected with no
+database pool, gets an immediate `chat_history{done:true}` with no turns.
+
+### `chat_typing`
+
+Sent the instant a `chat_send` is accepted (gate passed, not blocked) — before the reply is
+generated. This is the latency budget the UI shows, not decoration: the reply itself lands 2-8s
+later as a `chat_message`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `profile` | int | The buddy who is about to reply |
+
+### `chat_message`
+
+One turn of a chat conversation — a student's send, a buddy's generated reply, a stall, or a
+`chat_history` replay.
+
+| Field | Type | Notes |
+|---|---|---|
+| `profile` | int | `chat_profiles.id` |
+| `direction` | string | `"in"` (student → buddy) or `"out"` (buddy → student) |
+| `body` | string | Message text |
+| `time` | string | RFC3339 **virtual** time the message belongs to — not wall-clock send time |
+| `kind` | string | `chat_messages.kind`: `"typed"`, `"generated"`, `"refused"`, `"truncated"`, `"stall"` |
+| `message_id` | int | `chat_messages.id`, echoed so a client can dedupe; `0` when persistence was skipped (no database pool) |
 
 ### `pause`
 

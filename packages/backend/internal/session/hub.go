@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/clock"
 )
 
@@ -21,6 +22,12 @@ type Hub struct {
 	// master is the optional process-wide forced clock (nil when the feature
 	// is disabled). Set once at boot via SetMaster; reads are nil-safe.
 	master *clock.MasterClock
+
+	// gen is the optional process-wide chat reply engine (nil when no provider
+	// has a configured API key). Set once at boot via SetGenerator, mirroring
+	// SetMaster; reads are nil-safe via Generator, and a nil generator degrades
+	// ChatSend to the same in-character stall as a full queue, never an error.
+	gen *chat.Generator
 
 	// Load-shedding: maxSessions caps concurrently-admitted connections; 0 means
 	// unlimited. active is the live count, maintained synchronously by
@@ -65,6 +72,15 @@ func (h *Hub) Active() int64 { return h.active.Load() }
 
 // SetMaster wires the forced master clock. Call once at boot, before Run.
 func (h *Hub) SetMaster(m *clock.MasterClock) { h.master = m }
+
+// SetGenerator wires the chat reply engine. Call once at boot; leaving it
+// unset (a missing API key, checked non-fatally in cmd/server/main.go) is the
+// normal way chat ships disabled while media streaming continues.
+func (h *Hub) SetGenerator(g *chat.Generator) { h.gen = g }
+
+// Generator returns the process-wide chat reply engine, or nil when chat is
+// unconfigured.
+func (h *Hub) Generator() *chat.Generator { return h.gen }
 
 // MasterNow returns the forced master time, or false when the feature is
 // disabled or inactive.

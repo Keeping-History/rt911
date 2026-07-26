@@ -1219,3 +1219,115 @@ func TestSeekEmitsPresenceOnlyOnChange(t *testing.T) {
 		break
 	}
 }
+
+// TestChatSendIsRejectedWhilePaused adapts the task-9 brief's version of this
+// test: the brief never calls Init, so virtualTime stays zero and
+// chat.Available's window check (which runs before the paused check) would
+// answer "outside_window" instead of "paused" -- exactly what
+// TestChatStateDisabledWhilePaused above already establishes needs an Init
+// first. Added here so the gate is actually exercised on the paused branch.
+func TestChatSendIsRejectedWhilePaused(t *testing.T) {
+	// The UI disabling its input is UX; the server refusing is the guarantee.
+	s := newTestSession(t)
+	s.SetUser("user-1")
+	s.Subscribe(ChannelChat)
+	s.Init(time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil)
+	s.Pause()
+	drain(t, s) // subscribe_ack, init_ack, and the chat_state frames Init/Pause already emit
+
+	s.ChatSend(1, "hello")
+
+	msg := recvType(t, s)
+	if msg.Type != "chat_state" || msg.Reason != "paused" {
+		t.Errorf("expected chat_state paused, got %+v", msg)
+	}
+}
+
+func TestChatSendIsRejectedWhenNotSignedIn(t *testing.T) {
+	s := newTestSession(t)
+	s.Subscribe(ChannelChat)
+	drain(t, s)
+
+	s.ChatSend(1, "hello")
+
+	msg := recvType(t, s)
+	if msg.Reason != "not_signed_in" {
+		t.Errorf("expected not_signed_in, got %q", msg.Reason)
+	}
+}
+
+// TestChatSendEmitsTypingBeforeTheReply adapts the brief's s.SetTime, which
+// does not exist on Session, to the real clock-setting entry point: Init.
+func TestChatSendEmitsTypingBeforeTheReply(t *testing.T) {
+	// The typing indicator is the latency budget, not decoration.
+	s := newTestSession(t)
+	s.SetUser("user-1")
+	s.Subscribe(ChannelChat)
+	s.Init(time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	s.ChatSend(1, "hey")
+
+	if msg := recvType(t, s); msg.Type != "chat_typing" {
+		t.Errorf("first frame must be chat_typing, got %q", msg.Type)
+	}
+}
+
+// TestChatSendWithNilGeneratorStillStalls proves a session with no generator
+// configured (the newTestSession default -- and the production state whenever
+// no provider has a configured API key) degrades ChatSend to the same
+// in-character chat_message stall a full queue produces, rather than a panic
+// or an error frame.
+func TestChatSendWithNilGeneratorStillStalls(t *testing.T) {
+	s := newTestSession(t)
+	s.SetUser("user-1")
+	s.Subscribe(ChannelChat)
+	s.Init(time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	s.ChatSend(1, "hey")
+
+	if msg := recvType(t, s); msg.Type != "chat_typing" {
+		t.Fatalf("first frame must be chat_typing, got %q", msg.Type)
+	}
+	msg := recvType(t, s)
+	if msg.Type != "chat_message" || msg.Kind != "stall" || msg.Body == "" {
+		t.Fatalf("expected an in-character stall chat_message, got %+v", msg)
+	}
+}
+
+// TestBuildChatJobRoutesTiersWithoutCrossing guards the caller contract Task
+// 1's review carried forward: tier-3 (retrospective, investigative) passages
+// must reach Job.Timeline and must never reach Job.Digest, which the composer
+// treats as things the buddy plainly knows. A Digest/Timeline swap here would
+// present retrospective reporting as first-hand knowledge and would be
+// invisible to any test that only checks a reply came back.
+func TestBuildChatJobRoutesTiersWithoutCrossing(t *testing.T) {
+	digest := []chat.Passage{{Tier: chat.TierCurated, Text: "digest-marker"}}
+	recent := []chat.Passage{{Tier: chat.TierBroadcast, Text: "recent-marker"}}
+	timeline := []chat.Passage{{Tier: chat.TierTimeline, Text: "timeline-marker"}}
+
+	job := buildChatJob("user-1", chat.Profile{ID: 3}, chat.DefaultPhase, "hi",
+		time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC),
+		digest, recent, timeline, nil, func(chat.Reply, error) {})
+
+	if len(job.Digest) != 1 || job.Digest[0].Text != "digest-marker" {
+		t.Fatalf("Job.Digest = %+v, want exactly the curated passage", job.Digest)
+	}
+	if len(job.Recent) != 1 || job.Recent[0].Text != "recent-marker" {
+		t.Fatalf("Job.Recent = %+v, want exactly the broadcast passage", job.Recent)
+	}
+	if len(job.Timeline) != 1 || job.Timeline[0].Text != "timeline-marker" {
+		t.Fatalf("Job.Timeline = %+v, want exactly the timeline passage", job.Timeline)
+	}
+	for _, p := range job.Digest {
+		if p.Tier == chat.TierTimeline {
+			t.Fatal("a tier-3 passage reached Job.Digest -- retrospective reporting would present as first-hand knowledge")
+		}
+	}
+	for _, p := range job.Timeline {
+		if p.Tier != chat.TierTimeline {
+			t.Fatal("Job.Timeline must carry only tier-3 passages")
+		}
+	}
+}

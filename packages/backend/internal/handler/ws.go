@@ -111,6 +111,27 @@ type weatherForecastMsg struct {
 	ID   int    `json:"id"`
 }
 
+// chatSendMsg carries one student message to a buddy on the chat channel.
+type chatSendMsg struct {
+	Type    string `json:"type"`
+	Profile int    `json:"profile"`
+	Body    string `json:"body"`
+}
+
+// chatHistoryMsg requests prior turns with a buddy, at or before Before
+// (RFC3339), oldest-page-first pagination the same way usenet_more works.
+type chatHistoryMsg struct {
+	Type    string `json:"type"`
+	Profile int    `json:"profile"`
+	Before  string `json:"before"`
+	Limit   int    `json:"limit"`
+}
+
+// chatHistoryDefaultLimit caps a chat_history request that omits limit, or
+// supplies a non-positive one, at the same bound ChatSend's own context read
+// uses.
+const chatHistoryDefaultLimit = 40
+
 // ProfileCache holds the buddy roster for the life of the process. Chat config
 // is tiny and static; every connection reads the same slice rather than querying.
 type ProfileCache struct {
@@ -436,6 +457,31 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 
 			case "resume":
 				sess.Resume()
+
+			case "chat_send":
+				var cmsg chatSendMsg
+				if err := json.Unmarshal(raw, &cmsg); err != nil {
+					sess.SendError("malformed chat_send message")
+					continue
+				}
+				sess.ChatSend(cmsg.Profile, cmsg.Body)
+
+			case "chat_history":
+				var cmsg chatHistoryMsg
+				if err := json.Unmarshal(raw, &cmsg); err != nil {
+					sess.SendError("malformed chat_history message")
+					continue
+				}
+				before, err := parseTime(cmsg.Before)
+				if err != nil {
+					sess.SendError("invalid time: " + err.Error())
+					continue
+				}
+				limit := cmsg.Limit
+				if limit <= 0 {
+					limit = chatHistoryDefaultLimit
+				}
+				sess.ChatHistory(cmsg.Profile, before, limit)
 
 			default:
 				sess.SendError(fmt.Sprintf("unknown message type %q", msg.Type))

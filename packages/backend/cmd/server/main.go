@@ -121,6 +121,44 @@ func main() {
 	hub.SetMaster(masterClock)
 	go masterClock.Run(ctx)
 
+	// Chat's reply engine. Credentials come from the environment only, never
+	// from Directus (CLAUDE.md). A missing key just means one fewer provider is
+	// registered; only when NO provider ends up configured does chat stay
+	// entirely disabled (Generator stays nil, ChatSend degrades every send to
+	// the in-character stall) — media streaming is unaffected either way.
+	providers := make(map[string]chat.Provider)
+	if key := env("ANTHROPIC_API_KEY", ""); key != "" {
+		providers["anthropic"] = chat.NewAnthropicProvider(key, logger)
+	} else {
+		logger.Warn("ANTHROPIC_API_KEY unset; anthropic chat provider disabled")
+	}
+	if key := env("OPENAI_API_KEY", ""); key != "" {
+		providers["openai"] = chat.NewOpenAICompatProvider(key, "", "openai", logger)
+	} else {
+		logger.Warn("OPENAI_API_KEY unset; openai chat provider disabled")
+	}
+	if key := env("OPENROUTER_API_KEY", ""); key != "" {
+		providers["openrouter"] = chat.NewOpenAICompatProvider(key, env("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"), "openrouter", logger)
+	} else {
+		logger.Warn("OPENROUTER_API_KEY unset; openrouter chat provider disabled")
+	}
+	if len(providers) == 0 {
+		logger.Warn("no chat provider configured; chat channel will stay disabled")
+	} else {
+		settingsCtx, settingsCancel := context.WithTimeout(ctx, 2*time.Second)
+		settings, err := chat.LoadSettings(settingsCtx, pool)
+		settingsCancel()
+		if err != nil {
+			logger.Warn("chat settings unavailable; using shipped defaults", "error", err)
+			settings = chat.ShippedDefaults
+		}
+		gen := chat.NewGenerator(pool, providers, settings,
+			envDur("CHAT_SETTINGS_TTL", time.Minute),
+			envInt("CHAT_WORKERS", 4), envInt("CHAT_QUEUE", 32), logger)
+		hub.SetGenerator(gen)
+		logger.Info("chat generator ready", "providers", len(providers))
+	}
+
 	addr := env("LISTEN_ADDR", ":8080")
 
 	// sendSources' four queries are identical for every client and time-independent;

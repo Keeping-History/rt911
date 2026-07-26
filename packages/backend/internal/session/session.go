@@ -117,12 +117,19 @@ type outMsg struct {
 	MasterTime string `json:"master_time,omitempty"`
 	// Chat channel. Enabled/Reason ride chat_state; Buddies rides chat_roster;
 	// Profile/Online ride chat_presence. Enabled and Online are pointers so a
-	// false value is transmitted rather than dropped by omitempty.
-	Enabled *bool         `json:"enabled,omitempty"`
-	Reason  string        `json:"reason,omitempty"`
-	Buddies []model.Buddy `json:"buddies,omitempty"`
-	Profile int           `json:"profile,omitempty"`
-	Online  *bool         `json:"online,omitempty"`
+	// false value is transmitted rather than dropped by omitempty. Direction,
+	// Kind, and MessageID ride chat_typing/chat_message: Direction is "in"
+	// (student) or "out" (buddy), Kind mirrors chat_messages.kind ("typed",
+	// "generated", "stall", ...), and MessageID echoes the persisted
+	// chat_messages.id (0 when persistence was skipped, e.g. no pool).
+	Enabled   *bool         `json:"enabled,omitempty"`
+	Reason    string        `json:"reason,omitempty"`
+	Buddies   []model.Buddy `json:"buddies,omitempty"`
+	Profile   int           `json:"profile,omitempty"`
+	Online    *bool         `json:"online,omitempty"`
+	Direction string        `json:"direction,omitempty"`
+	Kind      string        `json:"kind,omitempty"`
+	MessageID int           `json:"message_id,omitempty"`
 }
 
 // Session holds all state for a single connected client.
@@ -168,6 +175,11 @@ type Session struct {
 	userID       string
 	profiles     []chat.Profile
 	presenceSeen map[int]bool
+
+	// recentSends tracks this session's chat_send wall-clock timestamps for
+	// CheckLocal's rate limit. Trimmed to chatRateTrimWindow on every send so it
+	// cannot grow unbounded across a long connection. Guarded by mu.
+	recentSends []time.Time
 
 	send      chan []byte
 	tickCh    chan struct{}
@@ -613,8 +625,11 @@ func (s *Session) SetProfiles(p []chat.Profile) {
 	s.mu.Unlock()
 }
 
-// SendChatState emits the gate the client binds its input's disabled state to.
-func (s *Session) SendChatState() {
+// chatGate evaluates the chat.Gate from live session state. Blocked is always
+// false here — a per-user/per-profile block is a database fact, checked
+// separately in ChatSend after this gate passes, not part of the in-memory
+// session state this snapshot draws from.
+func (s *Session) chatGate() (enabled bool, reason string) {
 	s.mu.Lock()
 	g := chat.Gate{
 		VirtualTime: s.virtualTime,
@@ -623,8 +638,20 @@ func (s *Session) SendChatState() {
 		SignedIn:    s.userID != "",
 	}
 	s.mu.Unlock()
+	return chat.Available(g)
+}
 
-	enabled, reason := chat.Available(g)
+// SendChatState emits the gate the client binds its input's disabled state to.
+func (s *Session) SendChatState() {
+	enabled, reason := s.chatGate()
+	s.send_(outMsg{Type: "chat_state", Enabled: &enabled, Reason: reason})
+}
+
+// sendChatDisabled emits chat_state{enabled:false, reason} — the shape every
+// ChatSend refusal path (gate failure, a chat_blocks hit, local moderation
+// block) shares.
+func (s *Session) sendChatDisabled(reason string) {
+	enabled := false
 	s.send_(outMsg{Type: "chat_state", Enabled: &enabled, Reason: reason})
 }
 
@@ -689,6 +716,291 @@ func (s *Session) syncChatPresence() {
 		online := b.Online
 		s.send_(outMsg{Type: "chat_presence", Profile: b.ID, Online: &online})
 	}
+}
+
+const (
+	// chatHistoryLimit bounds both the composer's rolling context (Turn slice
+	// pulled per ChatSend) and a chat_history reply.
+	chatHistoryLimit = 40
+	// chatBroadcastLookback is how far back the tier-2 (recently broadcast)
+	// retrieval reaches — long enough that "what you just heard on TV" still
+	// reads as recent, short enough that it stays a rolling window rather than
+	// the whole day's transcript.
+	chatBroadcastLookback = 10 * time.Minute
+	// chatTimelineLimit bounds the tier-3 fallback search, consulted only when
+	// tiers 1 and 2 turn up nothing for this virtual time.
+	chatTimelineLimit = 5
+	// chatRateTrimWindow bounds recentSends' growth on a long-lived connection;
+	// it only needs to outlive chat's own rate window (60s, guard.go), not the
+	// whole session.
+	chatRateTrimWindow = 5 * time.Minute
+	// chatStallBody is the canned in-character line sent when the generator is
+	// unavailable or its queue is full. Degradation must preserve the illusion,
+	// not read as a system error.
+	chatStallBody = "hang on, phones ringing"
+)
+
+// ChatSend accepts one student message addressed to profileID. The gate is
+// evaluated and, on refusal, answered before anything else runs — in
+// particular before any database read — so a nil pool (every unit test in
+// this package) never sees a query for a message the gate was always going to
+// reject. Enqueue never blocks: a full (or absent) generator degrades to an
+// in-character stall rather than an error frame, preserving the illusion.
+func (s *Session) ChatSend(profileID int, body string) {
+	if enabled, reason := s.chatGate(); !enabled {
+		s.sendChatDisabled(reason)
+		return
+	}
+
+	now := time.Now().UTC()
+	s.mu.Lock()
+	userID, vTime, profiles := s.userID, s.virtualTime, s.profiles
+	s.recentSends = append(s.recentSends, now)
+	s.recentSends = trimBefore(s.recentSends, now.Add(-chatRateTrimWindow))
+	recent := append([]time.Time(nil), s.recentSends...)
+	s.mu.Unlock()
+
+	ctx := context.Background()
+
+	if s.pool != nil {
+		if blocks, err := chat.LoadBlocks(ctx, s.pool, userID, vTime); err != nil {
+			s.logger.Warn("chat: load blocks failed", "error", err)
+		} else if blocked, _ := chat.BlocksApply(blocks, profileID); blocked {
+			s.sendChatDisabled("blocked")
+			return
+		}
+	}
+
+	decision := chat.CheckLocal(body, now, recent)
+	if decision.Outcome == "block" {
+		s.persistInbound(ctx, userID, profileID, body, vTime, moderationOf(decision))
+		s.sendChatDisabled("blocked")
+		return
+	}
+
+	var moderation map[string]any
+	if decision.Outcome != "allow" {
+		moderation = moderationOf(decision)
+	}
+	s.persistInbound(ctx, userID, profileID, body, vTime, moderation)
+
+	var history []chat.Turn
+	var digest, recentPassages, timeline []chat.Passage
+	if s.pool != nil {
+		if h, err := chat.History(ctx, s.pool, userID, profileID, vTime, chatHistoryLimit); err != nil {
+			s.logger.Warn("chat: history load failed", "error", err)
+		} else {
+			history = h
+		}
+		if d, err := chat.LoadCurated(ctx, s.pool, vTime); err != nil {
+			s.logger.Warn("chat: load curated failed", "error", err)
+		} else {
+			digest = d
+		}
+		if r, err := chat.LoadBroadcast(ctx, s.pool, vTime, chatBroadcastLookback, nil); err != nil {
+			s.logger.Warn("chat: load broadcast failed", "error", err)
+		} else {
+			recentPassages = r
+		}
+		// Tier 3 is consulted only on a tier 1+2 miss (knowledge.go's own
+		// contract for SearchTimeline) — and it must land in Timeline, never
+		// Digest: retrospective investigative reporting presented as something
+		// the buddy plainly knows is exactly the misattribution the tier system
+		// exists to prevent. See buildChatJob and its test.
+		if len(digest) == 0 && len(recentPassages) == 0 {
+			if tl, err := chat.SearchTimeline(ctx, s.pool, vTime, body, chatTimelineLimit); err != nil {
+				s.logger.Warn("chat: search timeline failed", "error", err)
+			} else {
+				timeline = tl
+			}
+		}
+	}
+
+	s.send_(outMsg{Type: "chat_typing", Profile: profileID})
+
+	profile := findProfile(profiles, profileID)
+	deliver := s.chatDeliver(userID, profileID, vTime)
+	job := buildChatJob(userID, profile, chat.DefaultPhase, body, vTime, digest, recentPassages, timeline, history, deliver)
+
+	gen := s.hub.Generator()
+	if gen == nil || !gen.Enqueue(job) {
+		s.sendStall(ctx, userID, profileID, vTime)
+	}
+}
+
+// chatDeliver builds the Generator's Deliver callback. It runs on a worker
+// goroutine, not the session goroutine, but touches no field s.mu protects:
+// everything it needs (userID, profileID, vTime) was already read under mu in
+// ChatSend and closed over here, so it persists the reply and calls send_
+// with no lock of its own — the shortest possible window is none at all.
+func (s *Session) chatDeliver(userID string, profileID int, vTime time.Time) func(chat.Reply, error) {
+	return func(reply chat.Reply, err error) {
+		if err != nil {
+			s.logger.Warn("chat: generation failed", "profile", profileID, "error", err)
+		}
+		kind := "generated"
+		switch reply.Outcome {
+		case chat.OutcomeRefused:
+			kind = "refused"
+		case chat.OutcomeTruncated:
+			kind = "truncated"
+		case chat.OutcomeError:
+			kind = "stall"
+			if reply.Body == "" {
+				reply.Body = chatStallBody
+			}
+		}
+
+		msgID := 0
+		if s.pool != nil {
+			id, appendErr := chat.AppendMessage(context.Background(), s.pool, userID, chat.Message{
+				Profile: profileID, Direction: "out", Body: reply.Body, VirtualTime: vTime,
+				Kind: kind, Model: reply.Model, TokensIn: reply.TokensIn, TokensOut: reply.TokensOut,
+			})
+			if appendErr != nil {
+				s.logger.Warn("chat: append reply failed", "error", appendErr)
+			} else {
+				msgID = id
+			}
+		}
+
+		s.send_(outMsg{
+			Type: "chat_message", Profile: profileID, Direction: "out",
+			Body: reply.Body, Time: vTime.Format(time.RFC3339), Kind: kind, MessageID: msgID,
+		})
+	}
+}
+
+// sendStall answers a job the generator never accepted (queue full, or no
+// generator configured at all) with the same canned in-character line and
+// chat_message shape a provider-side outage produces, so the client cannot
+// tell the two degradations apart.
+func (s *Session) sendStall(ctx context.Context, userID string, profileID int, vTime time.Time) {
+	msgID := 0
+	if s.pool != nil {
+		id, err := chat.AppendMessage(ctx, s.pool, userID, chat.Message{
+			Profile: profileID, Direction: "out", Body: chatStallBody, VirtualTime: vTime, Kind: "stall",
+		})
+		if err != nil {
+			s.logger.Warn("chat: append stall failed", "error", err)
+		} else {
+			msgID = id
+		}
+	}
+	s.send_(outMsg{
+		Type: "chat_message", Profile: profileID, Direction: "out",
+		Body: chatStallBody, Time: vTime.Format(time.RFC3339), Kind: "stall", MessageID: msgID,
+	})
+}
+
+// persistInbound writes the student's message and returns its id, or 0 when
+// persistence is skipped (nil pool) or fails — the message still reaches the
+// buddy either way, per the design's "chat_messages write fails: message
+// still delivers" contract.
+func (s *Session) persistInbound(ctx context.Context, userID string, profileID int, body string, vTime time.Time, moderation map[string]any) int {
+	if s.pool == nil {
+		return 0
+	}
+	id, err := chat.AppendMessage(ctx, s.pool, userID, chat.Message{
+		Profile: profileID, Direction: "in", Body: body, VirtualTime: vTime,
+		Kind: "typed", Moderation: moderation,
+	})
+	if err != nil {
+		s.logger.Warn("chat: append inbound message failed", "error", err)
+		return 0
+	}
+	return id
+}
+
+// ChatHistory replies to a request for prior turns with profileID, at or
+// before `before`, as a sequence of chat_message frames terminated by one
+// carrying Done — the same chunked-reply shape flights_history already uses.
+// Context is always re-read fresh (never cached), which is what makes a seek
+// rebuild it correctly: the next call sees the new virtual time.
+func (s *Session) ChatHistory(profileID int, before time.Time, limit int) {
+	s.mu.Lock()
+	userID := s.userID
+	s.mu.Unlock()
+
+	if userID == "" || s.pool == nil {
+		s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
+		return
+	}
+
+	turns, err := chat.History(context.Background(), s.pool, userID, profileID, before, limit)
+	if err != nil {
+		s.logger.Warn("chat: chat_history query failed", "error", err)
+		s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
+		return
+	}
+
+	for _, t := range turns {
+		direction := "in"
+		if t.FromBuddy {
+			direction = "out"
+		}
+		s.send_(outMsg{Type: "chat_message", Profile: profileID, Direction: direction, Body: t.Text})
+	}
+	s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
+}
+
+// findProfile looks up a buddy by id in the session's cached roster. A miss
+// (e.g. a stale client-side id, or — as in several unit tests — no roster
+// loaded at all) falls back to a zero-value Profile carrying only the id: the
+// generator still has enough to enqueue and reply, just without persona
+// fields to render.
+func findProfile(profiles []chat.Profile, id int) chat.Profile {
+	for _, p := range profiles {
+		if p.ID == id {
+			return p
+		}
+	}
+	return chat.Profile{ID: id}
+}
+
+// moderationOf projects a guard Decision to the JSON shape chat_messages.moderation
+// stores. Reason/Evidence are omitted when empty so an "allow" (or a bare
+// escalate/block with no term match) doesn't grow the column with empty keys.
+func moderationOf(d chat.Decision) map[string]any {
+	m := map[string]any{"outcome": d.Outcome}
+	if d.Reason != "" {
+		m["reason"] = d.Reason
+	}
+	if d.Evidence != "" {
+		m["evidence"] = d.Evidence
+	}
+	return m
+}
+
+// buildChatJob assembles a Generator job from already-retrieved passages. It
+// is a pure mapping — no I/O — precisely so tier crossing (see the package
+// doc on chat.Tier) is a thing a test can catch directly: digest, recent, and
+// timeline must land in Job.Digest, Job.Recent, and Job.Timeline respectively,
+// with no reordering.
+func buildChatJob(userID string, profile chat.Profile, phase chat.Phase, body string, vTime time.Time,
+	digest, recent, timeline []chat.Passage, history []chat.Turn, deliver func(chat.Reply, error)) chat.Job {
+	return chat.Job{
+		UserID:      userID,
+		Profile:     profile,
+		Phase:       phase,
+		Body:        body,
+		Kind:        "typed",
+		VirtualTime: vTime,
+		Digest:      digest,
+		Recent:      recent,
+		Timeline:    timeline,
+		History:     history,
+		Deliver:     deliver,
+	}
+}
+
+// trimBefore drops every timestamp strictly before cutoff, preserving order.
+func trimBefore(ts []time.Time, cutoff time.Time) []time.Time {
+	i := 0
+	for i < len(ts) && ts[i].Before(cutoff) {
+		i++
+	}
+	return ts[i:]
 }
 
 // RunTimePump advances virtual time on each hub tick and dispatches new items.
