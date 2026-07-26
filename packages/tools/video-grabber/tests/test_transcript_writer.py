@@ -236,3 +236,39 @@ def test_naive_utc_passes_a_naive_timestamp_through_unchanged():
     got = writer._naive_utc("2001-09-11T12:46:00")
     assert got == datetime(2001, 9, 11, 12, 46, 0)
     assert got.tzinfo is None
+
+
+@respx.mock
+def test_list_subtitled_mp3_items_filters_to_broadcast_sources(cfg):
+    """NEADS/NORAD tapes must never reach tier 2.
+
+    They are operational military comms: no civilian could hear them on 9/11,
+    so including them would hand a buddy knowledge the tier design exists to
+    withhold. The filter goes to Directus so the tapes are never fetched.
+    """
+    route = respx.get("https://directus.test/items/mp3_items").mock(
+        return_value=httpx.Response(200, json={"data": [
+            {"id": 144, "start_date": "2001-09-11T12:45:00", "subtitles": "https://f/144.srt"},
+        ]})
+    )
+
+    got = writer.list_subtitled_mp3_items(cfg)
+
+    assert [i["id"] for i in got] == [144]
+    sent = json.loads(route.calls[0].request.url.params["filter"])
+    assert sent == {"source": {"name": {"_in": ["WINS", "WCBS"]}}}
+
+
+@respx.mock
+def test_list_subtitled_mp3_items_honours_a_configured_source_list(cfg, monkeypatch):
+    monkeypatch.setenv("TRANSCRIPT_RADIO_SOURCES", "WINS")
+    from video_grabber.config import Config
+
+    route = respx.get("https://directus.test/items/mp3_items").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    writer.list_subtitled_mp3_items(
+        Config(directus_url="https://directus.test", directus_api_token="tok")
+    )
+    sent = json.loads(route.calls[0].request.url.params["filter"])
+    assert sent == {"source": {"name": {"_in": ["WINS"]}}}

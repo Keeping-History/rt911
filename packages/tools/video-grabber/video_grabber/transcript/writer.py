@@ -76,9 +76,20 @@ def list_subtitled_channels(cfg: Config, *, client=httpx) -> list[dict]:
 
 
 def list_subtitled_mp3_items(cfg: Config, *, client=httpx) -> list[dict]:
+    """Subtitled radio items from *broadcast* sources only.
+
+    Excluded on provenance before quality: tier 2 answers "what could this
+    person have heard?", and no civilian could hear NORAD internal comms.
+    Including them would let a buddy casually know about fighter scrambles,
+    which is the omniscience the three-tier design exists to prevent.
+    """
+    sources = cfg.transcript_radio_source_list()
+    params = {"fields": "id,start_date,subtitles", "limit": -1}
+    if sources:
+        params["filter"] = json.dumps({"source": {"name": {"_in": sources}}})
     r = client.get(
         f"{cfg.directus_url}/items/mp3_items",
-        params={"fields": "id,start_date,subtitles", "limit": -1},
+        params=params,
         headers=_headers(cfg),
         timeout=_TIMEOUT,
     )

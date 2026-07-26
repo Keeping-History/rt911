@@ -62,5 +62,19 @@ class Config:
     cf_api_token: str = field(default_factory=lambda: os.getenv("CF_API_TOKEN", ""))
     cf_zone_id: str = field(default_factory=lambda: os.getenv("CF_ZONE_ID", ""))
 
+    # --- Transcript segments (transcript/ pipeline) ---
+    # Which radio sources count as *broadcast* for chat_transcript_segments.
+    # mp3_items also holds NEADS/NORAD air-defense tapes: operational military
+    # comms no civilian could hear on 9/11, so feeding them to a buddy would
+    # hand it knowledge the tier design exists to withhold. They are also
+    # walkie-talkie audio and transcribe badly. What they contain belongs in
+    # curated tier-1 entries, written by a person.
+    transcript_radio_sources: str = field(
+        default_factory=lambda: os.getenv("TRANSCRIPT_RADIO_SOURCES", "WINS,WCBS")
+    )
+
+    def transcript_radio_source_list(self) -> list[str]:
+        return [s.strip() for s in self.transcript_radio_sources.split(",") if s.strip()]
+
     def usenet_collection_list(self) -> list[str]:
         return [c.strip() for c in self.usenet_collections.split(",") if c.strip()]
