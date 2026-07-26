@@ -84,9 +84,21 @@ def list_subtitled_mp3_items(cfg: Config, *, client=httpx) -> list[dict]:
     which is the omniscience the three-tier design exists to prevent.
     """
     sources = cfg.transcript_radio_source_list()
-    params = {"fields": "id,start_date,subtitles", "limit": -1}
-    if sources:
-        params["filter"] = json.dumps({"source": {"name": {"_in": sources}}})
+    if not sources:
+        # Refuse rather than fall back to "no filter". An empty or malformed
+        # TRANSCRIPT_RADIO_SOURCES is a misconfiguration, and the unfiltered
+        # query is the exact thing this function exists to prevent -- it would
+        # quietly re-ingest the NORAD tapes on the next backfill. An allowlist
+        # that opens when it cannot be read is not an allowlist.
+        raise ValueError(
+            "TRANSCRIPT_RADIO_SOURCES is empty; refusing to ingest every radio "
+            "source. Set it to the broadcast sources to ingest, e.g. 'WINS,WCBS'."
+        )
+    params = {
+        "fields": "id,start_date,subtitles",
+        "limit": -1,
+        "filter": json.dumps({"source": {"name": {"_in": sources}}}),
+    }
     r = client.get(
         f"{cfg.directus_url}/items/mp3_items",
         params=params,

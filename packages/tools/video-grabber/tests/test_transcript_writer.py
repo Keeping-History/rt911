@@ -272,3 +272,27 @@ def test_list_subtitled_mp3_items_honours_a_configured_source_list(cfg, monkeypa
     )
     sent = json.loads(route.calls[0].request.url.params["filter"])
     assert sent == {"source": {"name": {"_in": ["WINS"]}}}
+
+
+@pytest.mark.parametrize("value", ["", "   ", ",", " , ,"])
+@respx.mock
+def test_list_subtitled_mp3_items_refuses_an_empty_source_list(monkeypatch, value):
+    """An unreadable allowlist must fail closed, not fetch everything.
+
+    The dangerous version of this bug is silent: an unfiltered query returns
+    the NORAD tapes, the backfill writes them, and nothing looks wrong. So the
+    assertion that matters is that no request is made at all -- raising after
+    the fetch would still be a leak if a caller swallowed the error.
+    """
+    monkeypatch.setenv("TRANSCRIPT_RADIO_SOURCES", value)
+    from video_grabber.config import Config
+
+    route = respx.get("https://directus.test/items/mp3_items").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+
+    with pytest.raises(ValueError, match="TRANSCRIPT_RADIO_SOURCES"):
+        writer.list_subtitled_mp3_items(
+            Config(directus_url="https://directus.test", directus_api_token="tok")
+        )
+    assert not route.called
