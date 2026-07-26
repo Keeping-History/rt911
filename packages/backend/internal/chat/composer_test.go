@@ -68,7 +68,8 @@ func TestComposeRendersDialsAsLanguageNotNumbers(t *testing.T) {
 
 func TestComposeLabelsTierThreeAsUncertain(t *testing.T) {
 	in := composeInput()
-	in.Digest = append(in.Digest, Passage{
+	// Tier 3 has its own slot (Gap 1) rather than riding along in Digest.
+	in.Timeline = append(in.Timeline, Passage{
 		Tier: TierTimeline, Text: "NEADS scrambles fighters from Otis", Certainty: "confirmed",
 	})
 	got := Compose(in)
@@ -115,6 +116,81 @@ func TestComposeIsPure(t *testing.T) {
 	}
 	if len(in.Digest) != 1 || len(in.History) != 2 {
 		t.Fatal("Compose must not mutate its input")
+	}
+}
+
+func TestComposeRendersTimelineSeparatelyFromBroadcast(t *testing.T) {
+	segs := Compose(ComposeInput{
+		Profile:  Profile{ScreenName: "danny", Persona: "p"},
+		Phase:    DefaultPhase,
+		Recent:   []Passage{{Tier: TierBroadcast, Medium: "tv", Text: "we are getting reports"}},
+		Timeline: []Passage{{Tier: TierTimeline, Text: "investigators later concluded"}},
+	})
+
+	var broadcast, timeline string
+	for _, s := range segs {
+		if strings.Contains(s.Text, "we are getting reports") {
+			broadcast = s.Text
+		}
+		if strings.Contains(s.Text, "investigators later concluded") {
+			timeline = s.Text
+		}
+	}
+	if broadcast == "" || timeline == "" {
+		t.Fatalf("both passages must render; got broadcast=%q timeline=%q", broadcast, timeline)
+	}
+	if broadcast == timeline {
+		t.Fatal("tier 2 and tier 3 must not share a segment")
+	}
+	// The misattribution this slot exists to prevent.
+	if strings.Contains(timeline, "just heard") {
+		t.Errorf("tier 3 rendered as something the buddy just heard: %q", timeline)
+	}
+	if !strings.Contains(timeline, "do not quote") {
+		t.Errorf("tier 3 lost its paraphrase instruction: %q", timeline)
+	}
+}
+
+func TestComposeLabelsRadioAsRadioNotTV(t *testing.T) {
+	segs := Compose(ComposeInput{
+		Profile: Profile{ScreenName: "danny", Persona: "p"},
+		Phase:   DefaultPhase,
+		Recent: []Passage{
+			{Tier: TierBroadcast, Medium: "radio", Text: "ten-ten wins news time"},
+		},
+	})
+
+	for _, s := range segs {
+		if strings.Contains(s.Text, "ten-ten wins news time") {
+			if strings.Contains(s.Text, "on TV") {
+				t.Errorf("radio segment described as television: %q", s.Text)
+			}
+			if !strings.Contains(s.Text, "radio") {
+				t.Errorf("radio segment not identified as radio: %q", s.Text)
+			}
+			return
+		}
+	}
+	t.Fatal("radio passage did not render at all")
+}
+
+func TestComposeStabilityIsMonotonic(t *testing.T) {
+	segs := Compose(ComposeInput{
+		Profile:  Profile{ScreenName: "danny", Persona: "p"},
+		Phase:    DefaultPhase,
+		Digest:   []Passage{{Tier: TierCurated, Text: "a plane hit the north tower"}},
+		Recent:   []Passage{{Tier: TierBroadcast, Medium: "tv", Text: "b"}},
+		Timeline: []Passage{{Tier: TierTimeline, Text: "c"}},
+		History:  []Turn{{FromBuddy: false, Text: "hi"}},
+	})
+
+	// Prefix caching depends on this: a volatile segment before a stable one
+	// invalidates everything after it on every turn.
+	for i := 1; i < len(segs); i++ {
+		if segs[i].Stability < segs[i-1].Stability {
+			t.Fatalf("segment %d (%d) is more stable than %d (%d)",
+				i, segs[i].Stability, i-1, segs[i-1].Stability)
+		}
 	}
 }
 

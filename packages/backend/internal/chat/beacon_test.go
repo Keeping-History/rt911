@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -74,5 +75,25 @@ func TestPhaseAtOutsideTheWindowStillResolves(t *testing.T) {
 	// time outside the chat window is legitimate — a seek can land anywhere.
 	if _, ok := PhaseAt(phases(), beaconSet(), mustParse("2001-09-10T12:00:00Z")); !ok {
 		t.Fatal("PhaseAt must resolve regardless of the chat window")
+	}
+}
+
+func TestDefaultPhaseIsInternallyConsistent(t *testing.T) {
+	d := dialDirective(DefaultPhase)
+	if strings.Contains(d, "struggling to finish a thought") {
+		t.Errorf("DefaultPhase renders as incoherent: %q", d)
+	}
+	if !strings.Contains(d, "not especially worried") {
+		t.Errorf("DefaultPhase should be calm: %q", d)
+	}
+}
+
+func TestPhaseAtFallsBackToDefaultPhaseNotZeroValue(t *testing.T) {
+	got, ok := PhaseAt(nil, beaconSet(), at("14:00"))
+	if ok {
+		t.Fatal("no phases configured must report ok=false")
+	}
+	if got != DefaultPhase {
+		t.Errorf("no-match must yield DefaultPhase, got %+v", got)
 	}
 }

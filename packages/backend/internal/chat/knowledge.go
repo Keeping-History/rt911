@@ -29,6 +29,7 @@ type Passage struct {
 	Text        string
 	Certainty   string
 	Sensitivity string
+	Medium      string // "tv" or "radio" for tier 2; empty otherwise
 }
 
 // Redact removes passages the curator marked as off limits. This runs before
@@ -110,7 +111,7 @@ func LoadCurated(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]Passag
 }
 
 const broadcastSelect = `
-	SELECT start_date, text
+	SELECT start_date, text, medium
 	FROM chat_transcript_segments
 	WHERE start_date > $1 AND start_date <= $2
 	  AND ($3::int[] IS NULL OR channel = ANY($3::int[]))
@@ -134,14 +135,21 @@ func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookbac
 
 	var out []Passage
 	for rows.Next() {
-		var p Passage
-		if err := rows.Scan(&p.At, &p.Text); err != nil {
+		var (
+			p      Passage
+			at     time.Time
+			text   string
+			medium *string
+		)
+		if err := rows.Scan(&at, &text, &medium); err != nil {
 			return nil, fmt.Errorf("scan chat_transcript_segments: %w", err)
 		}
 		p.Tier = TierBroadcast
+		p.At = at.UTC()
+		p.Text = text
 		p.Certainty = "reported"
 		p.Sensitivity = "normal"
-		p.At = p.At.UTC()
+		p.Medium = derefStr(medium)
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {

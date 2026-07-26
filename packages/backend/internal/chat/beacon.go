@@ -38,13 +38,29 @@ type Phase struct {
 	Sort       int
 }
 
+// DefaultPhase is the phase a profile falls back to when it has none configured
+// or when virtual time precedes its first beacon.
+//
+// It exists because Phase's zero value is not neutral: Coherence's polarity is
+// inverted relative to the other four dials, so Phase{} renders the
+// self-contradictory "You are not especially worried. You are struggling to
+// finish a thought." The polarity itself is not flipped because chat_phases
+// already holds live rows seeded with high-means-composed.
+var DefaultPhase = Phase{
+	Shock:      0,
+	Coherence:  100,
+	Verbosity:  50,
+	TypoRate:   20,
+	TopicFocus: 0,
+}
+
 // PhaseAt returns the phase in effect at virtual time t: the one whose beacon
 // has most recently become public. A phase with no beacon is the opening state.
 //
 // It resolves for any t, including outside the chat window — deciding whether
 // chat is usable at all is Gate's job, and a seek can land anywhere.
 func PhaseAt(phases []Phase, beacons map[int]Beacon, t time.Time) (Phase, bool) {
-	var best Phase
+	best := DefaultPhase
 	var bestAt time.Time
 	found := false
 

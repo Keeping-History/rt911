@@ -39,6 +39,7 @@ type ComposeInput struct {
 	Phase       Phase
 	Digest      []Passage
 	Recent      []Passage
+	Timeline    []Passage
 	History     []Turn
 	VirtualTime time.Time
 	UserMessage string
@@ -75,7 +76,14 @@ func Compose(in ComposeInput) []PromptSegment {
 		segs = append(segs, PromptSegment{
 			Stability: StabilityVolatile,
 			Role:      "user",
-			Text:      "What you have just heard on TV:\n" + passageLines(in.Recent),
+			Text:      broadcastBlock(in.Recent),
+		})
+	}
+	if len(in.Timeline) > 0 {
+		segs = append(segs, PromptSegment{
+			Stability: StabilityVolatile,
+			Role:      "user",
+			Text:      timelineBlock(in.Timeline),
 		})
 	}
 
@@ -113,22 +121,52 @@ func persona(p Profile) string {
 	return b.String()
 }
 
-// knowledgeBlock renders the cumulative digest. Tier 3 carries an explicit
-// instruction because it is retrospective: it records what investigators later
-// established, much of it not public until years afterwards, so stating it
-// plainly would make the buddy sound like a documentary rather than a person.
+// knowledgeBlock renders the cumulative digest. Tier 3 no longer reaches this
+// block — it has its own slot in timelineBlock — so this only ever sees tier 1.
 func knowledgeBlock(passages []Passage) string {
 	var b strings.Builder
 	b.WriteString("What you know so far:\n")
 	b.WriteString(passageLines(passages))
+	return b.String()
+}
+
+// broadcastBlock renders tier 2, grouped by medium so radio is never described
+// as television — deterministic order, TV first.
+func broadcastBlock(passages []Passage) string {
+	var tv, radio []Passage
 	for _, p := range passages {
-		if p.Tier == TierTimeline {
-			b.WriteString(
-				"\nSome of the above is background you only half-heard. Refer to anything " +
-					"marked uncertain vaguely and do not quote it.\n")
-			break
+		if p.Medium == "radio" {
+			radio = append(radio, p)
+			continue
 		}
+		tv = append(tv, p)
 	}
+
+	var b strings.Builder
+	if len(tv) > 0 {
+		b.WriteString("What you have just heard on TV:\n")
+		b.WriteString(passageLines(tv))
+	}
+	if len(radio) > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("What you have just heard on the radio:\n")
+		b.WriteString(passageLines(radio))
+	}
+	return b.String()
+}
+
+// timelineBlock renders tier 3. It is deliberately not headed as something the
+// buddy saw or heard: these passages are retrospective reporting, and a buddy
+// on the day could not have had them. The instruction is what keeps the model
+// from stating them as first-hand knowledge.
+func timelineBlock(passages []Passage) string {
+	var b strings.Builder
+	b.WriteString("Background you are only half-aware of:\n")
+	b.WriteString(passageLines(passages))
+	b.WriteString("\nYou are not sure of these details. Refer to them vaguely if at " +
+		"all, and do not quote them.\n")
 	return b.String()
 }
 
