@@ -24,7 +24,7 @@ export interface ProfilePatch {
 }
 
 interface DirectusErrorBody {
-	errors?: Array<{ message?: unknown }>;
+	errors?: Array<{ message?: unknown; extensions?: unknown }>;
 }
 
 async function serverMessage(res: Response, fallback: string): Promise<string> {
@@ -37,11 +37,48 @@ async function serverMessage(res: Response, fallback: string): Promise<string> {
 	}
 }
 
+/**
+ * A screen name someone else already holds.
+ *
+ * The database is the only authority on this. A user can only read their own
+ * row (directus_users reads are scoped to $CURRENT_USER), so the client cannot
+ * look up whether a name is free -- a query would return zero rows for every
+ * name, taken or not, and reporting "available" from that would be a lie.
+ * Directus reports the conflict with a structured code, so the save itself is
+ * the check.
+ */
+export class UsernameTakenError extends Error {
+	readonly username: string;
+
+	constructor(username: string) {
+		super(`The screen name "${username}" is already taken.`);
+		this.username = username;
+	}
+}
+
 async function reject(res: Response, fallback: string): Promise<never> {
+	const conflict = await usernameConflict(res.clone());
+	if (conflict !== null) throw new UsernameTakenError(conflict);
 	const msg = await serverMessage(res, fallback);
 	if (res.status === 401) throw new AuthRequiredError(msg);
 	if (res.status === 403) throw new ForbiddenError(msg);
 	throw new Error(msg);
+}
+
+/** The rejected screen name, or null if this was not a username conflict. */
+async function usernameConflict(res: Response): Promise<string | null> {
+	try {
+		const body = (await res.json()) as DirectusErrorBody;
+		const ext = body.errors?.[0]?.extensions as
+			| { code?: string; field?: string; value?: unknown }
+			| undefined;
+		if (ext?.code === "RECORD_NOT_UNIQUE" && ext.field === "username") {
+			return typeof ext.value === "string" ? ext.value : "";
+		}
+	} catch {
+		// Not JSON, or not the shape we expect — fall through to the generic path.
+	}
+	return null;
 }
 
 export async function updateProfile(

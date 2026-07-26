@@ -6,7 +6,7 @@ import type { ChangeEvent, ReactNode } from "react";
 import { useState } from "react";
 import type React from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
-import { requestEmailChange, updateProfile } from "../../Providers/Auth/profileApi";
+import { UsernameTakenError, requestEmailChange, updateProfile } from "../../Providers/Auth/profileApi";
 import styles from "./Account.module.scss";
 
 const EDUCATOR_ROLES = [
@@ -73,6 +73,16 @@ function normalizeUsername(raw: string): string {
 		.slice(0, 24);
 }
 
+export // Shape only. Availability is deliberately NOT checked here: a user can read
+// just their own row, so a lookup would return zero rows for every name and
+// report "available" for one already taken. The save is the real check.
+function usernameProblem(name: string): string | null {
+	if (name === "") return null; // clearing it is allowed; the backend falls back
+	if (name.length < 3) return "Screen names need at least 3 characters.";
+	if (/^[0-9]+$/.test(name)) return "Screen names need at least one letter.";
+	return null;
+}
+
 export const ProfileEditor: React.FC = () => {
 	const { user, refresh } = useAuth();
 
@@ -114,18 +124,38 @@ export const ProfileEditor: React.FC = () => {
 		set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
 	const saveNames = () => {
+		const cleaned = normalizeUsername(username);
+		const problem = usernameProblem(cleaned);
+		if (problem) {
+			setNamesMsg(problem);
+			return;
+		}
+		// Show what will actually be stored, so a name that lost characters to
+		// normalising does not come back looking like a silent edit.
+		if (cleaned !== username) setUsername(cleaned);
 		setNamesBusy(true);
 		setNamesMsg(null);
 		updateProfile({
 			first_name: orNull(firstName),
 			last_name: orNull(lastName),
-			username: orNull(normalizeUsername(username)),
+			username: orNull(cleaned),
 		})
 			.then(() => {
 				setNamesMsg("Saved.");
 				return refresh();
 			})
-			.catch((err: Error) => setNamesMsg(err.message))
+			.catch((err: Error) => {
+				// The database is the only authority on availability, so the
+				// conflict arrives here rather than before the save. Offer a
+				// name that is one step away instead of just refusing.
+				if (err instanceof UsernameTakenError) {
+					const suggestion = `${err.username}${Math.floor(Math.random() * 90) + 10}`;
+					setUsername(suggestion);
+					setNamesMsg(`"${err.username}" is taken. Try ${suggestion}, or pick your own.`);
+					return;
+				}
+				setNamesMsg(err.message);
+			})
 			.finally(() => setNamesBusy(false));
 	};
 

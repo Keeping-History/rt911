@@ -4,10 +4,25 @@ import type { AuthUser } from "../../Providers/Auth/authApi";
 
 const mockUpdateProfile = vi.hoisted(() => vi.fn());
 const mockRequestEmailChange = vi.hoisted(() => vi.fn());
+// Re-declared rather than imported, because the module is fully mocked and the
+// component checks with instanceof. Hoisted because vi.mock's factory runs
+// before ordinary top-level declarations.
+const MockUsernameTakenError = vi.hoisted(
+	() =>
+		class extends Error {
+			readonly username: string;
+			constructor(username: string) {
+				super(`The screen name "${username}" is already taken.`);
+				this.username = username;
+			}
+		},
+);
+
 vi.mock("../../Providers/Auth/profileApi", () => ({
 	updateProfile: mockUpdateProfile,
 	requestEmailChange: mockRequestEmailChange,
 	confirmEmailChange: vi.fn(),
+	UsernameTakenError: MockUsernameTakenError,
 }));
 
 const mockAuth = vi.hoisted(() => ({
@@ -160,5 +175,40 @@ describe("ProfileEditor — password", () => {
 		selectTab("Password");
 		expect(screen.getByLabelText("New Password").getAttribute("type")).toBe("password");
 		expect(screen.getByLabelText("Confirm Password").getAttribute("type")).toBe("password");
+	});
+});
+
+describe("ProfileEditor — screen name", () => {
+	it("rejects a too-short name before calling the server", async () => {
+		mockAuth.user = makeUser({});
+		render(<ProfileEditor />);
+		fireEvent.change(screen.getByLabelText("Screen Name"), { target: { value: "ab" } });
+		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
+		await screen.findByText(/at least 3 characters/);
+		expect(mockUpdateProfile).not.toHaveBeenCalled();
+	});
+
+	it("normalises what it sends, so the stored name matches what is shown", async () => {
+		mockAuth.user = makeUser({});
+		render(<ProfileEditor />);
+		fireEvent.change(screen.getByLabelText("Screen Name"), { target: { value: "Skater Boi!!" } });
+		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
+		await waitFor(() =>
+			expect(mockUpdateProfile).toHaveBeenCalledWith(
+				expect.objectContaining({ username: "skaterboi" }),
+			),
+		);
+	});
+
+	it("offers an alternative when the name is already taken", async () => {
+		// Availability cannot be checked before saving — a user can only read
+		// their own row — so the conflict comes back from the server and the UI
+		// turns it into something actionable rather than a dead end.
+		mockAuth.user = makeUser({});
+		mockUpdateProfile.mockRejectedValueOnce(new MockUsernameTakenError("danny"));
+		render(<ProfileEditor />);
+		fireEvent.change(screen.getByLabelText("Screen Name"), { target: { value: "danny" } });
+		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
+		await screen.findByText(/"danny" is taken\. Try danny\d\d/);
 	});
 });
