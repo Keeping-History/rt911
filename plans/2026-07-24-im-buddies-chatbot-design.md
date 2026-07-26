@@ -240,7 +240,7 @@ Two adapters cover all three requested vendors, because OpenRouter speaks the Op
 - **`max_tokens` defaults to 2000.** On both Anthropic and OpenAI reasoning models the cap covers reasoning *and* response text together, so a tight cap truncates once reasoning runs. Brevity is enforced by the prompt and the post-processor, not by the token cap.
 - **Non-streaming.** Replies are short and deliberately delayed behind a typing indicator; streaming adds complexity with no user-visible benefit.
 
-**Credentials never live in Directus.** One key per provider in `rt911-secrets`. A profile naming a provider with no configured key falls back to the global default provider and logs at warn level; if that has no key either, the `chat` channel refuses `subscribe`.
+**Credentials never live in Directus.** One key per provider in `rt911-secrets`. A profile naming a provider with no configured key is **refused** rather than silently served by a different vendor: `Generator` returns `ErrNoProvider` and logs at warn. Quietly substituting another model would produce a differently-characterised buddy and an unexplained bill. If no provider is configured at all the generator is never constructed, `subscribe` still succeeds, and every send degrades to the in-character stall — the channel stays reachable so the UI can explain itself.
 
 ### Provider and model configuration
 

@@ -91,6 +91,13 @@ func (p *openAICompatProvider) Generate(ctx context.Context, r Request) (Reply, 
 	// content_filter is a policy decline delivered as a normal HTTP 200; length
 	// means the reply was cut off mid-thought but is still worth showing.
 	outcome := OutcomeOK
+	// A GPT model usually declines conversationally -- finish_reason "stop"
+	// with the refusal in the text -- and only sets this field for structured
+	// refusals. Checking it means a decline is reported as one instead of being
+	// delivered to a student as the buddy's own words.
+	if choice.Message.Refusal != "" {
+		outcome = OutcomeRefused
+	}
 	switch choice.FinishReason {
 	case "content_filter":
 		outcome = OutcomeRefused

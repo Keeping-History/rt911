@@ -136,3 +136,12 @@ func TestReverseMessagesRestoresOldestFirstOrder(t *testing.T) {
 		t.Errorf("reverseMessages = %+v, want ids [1 2 3]", got)
 	}
 }
+
+func TestPriorContactRequiresTheStudentToHaveSpoken(t *testing.T) {
+	// Without the direction filter a buddy's own scheduled beat counts as
+	// contact and unlocks the next one, so a student who has never replied
+	// still gets treated as mid-conversation.
+	if !strings.Contains(priorContactSelect, "direction = 'in'") {
+		t.Errorf("priorContactSelect must only count inbound messages:\n%s", priorContactSelect)
+	}
+}

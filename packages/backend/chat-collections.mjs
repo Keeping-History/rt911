@@ -202,5 +202,12 @@ export const CHAT_INDEX_SQL = `
     CREATE INDEX IF NOT EXISTS idx_chat_messages_user_conv ON chat_messages (( "user" ), profile, virtual_time);
     CREATE INDEX IF NOT EXISTS idx_chat_blocks_user        ON chat_blocks (( "user" ), scope);
     CREATE INDEX IF NOT EXISTS idx_chat_schedules_profile  ON chat_schedules (profile, active);
+    -- news_items is not a chat collection, but tier-3 retrieval searches it and
+    -- the expression must match SearchTimeline's exactly or the planner ignores
+    -- the index. Without it a query matching nothing scans all 7k rows building
+    -- a tsvector per row: measured at 1954ms, against 0.139ms with it. Tier 3
+    -- fires precisely when tiers 1 and 2 miss, which is when a no-match is most
+    -- likely, and it runs on the session goroutine.
+    CREATE INDEX IF NOT EXISTS idx_news_items_fts ON news_items USING GIN (to_tsvector('english', coalesce(title,'') || ' ' || coalesce(content,'')));
     CREATE INDEX IF NOT EXISTS idx_chat_phases_profile     ON chat_phases (profile, sort);
 `;

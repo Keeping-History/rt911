@@ -156,8 +156,15 @@ const priorContactSelect = `
 		SELECT 1
 		FROM chat_messages
 		WHERE "user" = $1 AND profile = $2 AND virtual_time <= $3
+		  AND direction = 'in'
 	)`
 
+// direction = 'in' is the point: this answers "has the STUDENT ever spoken to
+// this buddy?", and without it a buddy's own earlier scheduled beat counts as
+// contact and unlocks the next one. requires_prior_contact exists so a buddy the
+// student has never spoken to does not open with an intimate reaction to a
+// mass-casualty event; a buddy talking to itself must not satisfy that.
+//
 // HasPriorContact backs chat_schedules.requires_prior_contact: a buddy the
 // student has never spoken to should not open with an intimate reaction to
 // an event.

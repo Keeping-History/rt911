@@ -1737,3 +1737,32 @@ func TestOrdinaryMessageCarriesNoDeflection(t *testing.T) {
 		t.Errorf("distress directive leaked into an ordinary send:\n%s", prompt)
 	}
 }
+
+func TestTierRoutingSurvivesACrossedAssignment(t *testing.T) {
+	// retrieveContext has no test coverage of its own: every session test uses a
+	// nil pool, which short-circuits it before the loaders run. A reviewer
+	// proved that swapping the digest and recent assignments inside it failed
+	// nothing.
+	//
+	// It is now structurally safe rather than merely untested. Routing is
+	// derived from each passage's own Tier, set by the loader that produced it,
+	// not from which local variable it happened to land in — so even a crossed
+	// assignment lands every passage in the right slot.
+	curated := []chat.Passage{{Tier: chat.TierCurated, Text: "curated fact"}}
+	broadcast := []chat.Passage{{Tier: chat.TierBroadcast, Medium: "tv", Text: "on air now"}}
+	timeline := []chat.Passage{{Tier: chat.TierTimeline, Text: "written later"}}
+
+	// Deliberately crossed: broadcast into the digest slot and vice versa.
+	digest, recent, tl := partitionTiers(chat.Budget(
+		concatPassages(broadcast, curated, timeline), chatKnowledgeMaxRunes))
+
+	if len(digest) != 1 || digest[0].Text != "curated fact" {
+		t.Errorf("digest = %+v, want the curated passage", digest)
+	}
+	if len(recent) != 1 || recent[0].Text != "on air now" {
+		t.Errorf("recent = %+v, want the broadcast passage", recent)
+	}
+	if len(tl) != 1 || tl[0].Text != "written later" {
+		t.Errorf("timeline = %+v, want the timeline passage", tl)
+	}
+}

@@ -170,7 +170,7 @@ func main() {
 		}
 		gen = chat.NewGenerator(pool, providers, settings,
 			envDur("CHAT_SETTINGS_TTL", time.Minute),
-			envInt("CHAT_WORKERS", 4), envInt("CHAT_QUEUE", 32), logger)
+			envInt("CHAT_WORKERS", 4), envInt("CHAT_QUEUE_SIZE", 256), logger)
 		hub.SetGenerator(gen)
 		logger.Info("chat generator ready", "providers", len(providers))
 	}
