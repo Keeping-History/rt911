@@ -37,24 +37,7 @@ func (p *anthropicProvider) Name() string {
 // Temperature is dropped entirely: Opus 5 returns HTTP 400 if it is present.
 // The field stays on Request only for the OpenAI-compatible adapter.
 func (p *anthropicProvider) Generate(ctx context.Context, r Request) (Reply, error) {
-	system, messages := renderSegments(r.Segments)
-
-	params := anthropic.BetaMessageNewParams{
-		Model:     anthropic.Model(r.Model),
-		MaxTokens: int64(r.MaxTokens),
-		System:    system,
-		Messages:  messages,
-		OutputConfig: anthropic.BetaOutputConfigParam{
-			Effort: anthropic.BetaOutputConfigEffort(r.Effort),
-		},
-		// "default" lets a false-positive decline recover server-side rather
-		// than surfacing as a dead buddy. Server-side fallbacks require the
-		// beta endpoint, hence client.Beta.Messages.New below.
-		Fallbacks: anthropic.BetaFallbacksParamUnion{
-			OfDefault: constant.ValueOf[constant.Default](),
-		},
-		Betas: []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01},
-	}
+	params := anthropicParams(r)
 
 	msg, err := p.client.Beta.Messages.New(ctx, params)
 	if err != nil {
@@ -83,6 +66,38 @@ func (p *anthropicProvider) Generate(ctx context.Context, r Request) (Reply, err
 		CachedIn:  int(msg.Usage.CacheReadInputTokens),
 		Model:     string(msg.Model),
 	}, nil
+}
+
+// anthropicParams builds the beta Messages request from a vendor-neutral
+// Request. It is pure -- no client, no context -- so the one piece of
+// judgment in it (whether output_config.effort gets sent at all) is testable
+// without a network call.
+func anthropicParams(r Request) anthropic.BetaMessageNewParams {
+	system, messages := renderSegments(r.Segments)
+
+	params := anthropic.BetaMessageNewParams{
+		Model:     anthropic.Model(r.Model),
+		MaxTokens: int64(r.MaxTokens),
+		System:    system,
+		Messages:  messages,
+		// "default" lets a false-positive decline recover server-side rather
+		// than surfacing as a dead buddy. Server-side fallbacks require the
+		// beta endpoint, hence client.Beta.Messages.New in Generate.
+		Fallbacks: anthropic.BetaFallbacksParamUnion{
+			OfDefault: constant.ValueOf[constant.Default](),
+		},
+		Betas: []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01},
+	}
+	// r.Effort is empty whenever chat_settings.effort is NULL and no profile
+	// override applies; only set output_config.effort when there is an actual
+	// value to send, the same guard the OpenAI adapter uses for
+	// reasoning_effort.
+	if r.Effort != "" {
+		params.OutputConfig = anthropic.BetaOutputConfigParam{
+			Effort: anthropic.BetaOutputConfigEffort(r.Effort),
+		}
+	}
+	return params
 }
 
 // textOf concatenates every text block in the response. Non-text blocks

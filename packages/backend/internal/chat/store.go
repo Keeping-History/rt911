@@ -50,11 +50,15 @@ func AppendMessage(ctx context.Context, pool *pgxpool.Pool, userID string, m Mes
 	return id, nil
 }
 
+// historySelect orders DESC and LIMITs so a long conversation yields its most
+// recent N turns, not its first N -- the same "latest page, then reverse in
+// Go" shape as db.OlderUsenetItems. History reverses the scanned slice before
+// returning so the composer still sees the conversation oldest-first.
 const historySelect = `
 	SELECT direction, body
 	FROM chat_messages
 	WHERE "user" = $1 AND profile = $2 AND virtual_time <= $3
-	ORDER BY virtual_time, id
+	ORDER BY virtual_time DESC, id DESC
 	LIMIT $4`
 
 // History rebuilds the conversation the composer folds into the prompt. The
@@ -67,25 +71,42 @@ func History(ctx context.Context, pool *pgxpool.Pool, userID string, profileID i
 	}
 	defer rows.Close()
 
-	var out []Turn
+	var newestFirst []Turn
 	for rows.Next() {
 		var direction, body string
 		if err := rows.Scan(&direction, &body); err != nil {
 			return nil, fmt.Errorf("scan chat_messages: %w", err)
 		}
-		out = append(out, Turn{FromBuddy: direction == "out", Text: body})
+		newestFirst = append(newestFirst, Turn{FromBuddy: direction == "out", Text: body})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate chat_messages: %w", err)
 	}
-	return out, nil
+	return reverseTurns(newestFirst), nil
 }
 
+// reverseTurns turns the newest-first slice historySelect's DESC LIMIT
+// produces into the oldest-first order the composer's prompt requires -- the
+// prompt reads top-to-bottom as a conversation, so reversed history makes the
+// buddy answer the wrong question. Pulled out as a pure helper so the
+// ordering is directly testable without a database.
+func reverseTurns(newestFirst []Turn) []Turn {
+	out := make([]Turn, len(newestFirst))
+	for i, t := range newestFirst {
+		out[len(newestFirst)-1-i] = t
+	}
+	return out
+}
+
+// historyDetailedSelect orders DESC and LIMITs for the same reason
+// historySelect does: a long conversation must yield its latest N messages,
+// not its first N. HistoryDetailed reverses the scanned slice before
+// returning so replayed chat_message frames arrive in conversation order.
 const historyDetailedSelect = `
 	SELECT id, direction, body, virtual_time, kind
 	FROM chat_messages
 	WHERE "user" = $1 AND profile = $2 AND virtual_time <= $3
-	ORDER BY virtual_time, id
+	ORDER BY virtual_time DESC, id DESC
 	LIMIT $4`
 
 // HistoryDetailed returns prior turns with the wire fields a chat_history
@@ -103,7 +124,7 @@ func HistoryDetailed(ctx context.Context, pool *pgxpool.Pool, userID string, pro
 	}
 	defer rows.Close()
 
-	var out []Message
+	var newestFirst []Message
 	for rows.Next() {
 		var m Message
 		if err := rows.Scan(&m.ID, &m.Direction, &m.Body, &m.VirtualTime, &m.Kind); err != nil {
@@ -111,12 +132,23 @@ func HistoryDetailed(ctx context.Context, pool *pgxpool.Pool, userID string, pro
 		}
 		m.Profile = profileID
 		m.VirtualTime = m.VirtualTime.UTC()
-		out = append(out, m)
+		newestFirst = append(newestFirst, m)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate chat_messages: %w", err)
 	}
-	return out, nil
+	return reverseMessages(newestFirst), nil
+}
+
+// reverseMessages is HistoryDetailed's counterpart to reverseTurns: it turns
+// the newest-first slice historyDetailedSelect's DESC LIMIT produces into the
+// oldest-first order replayed chat_message frames must arrive in.
+func reverseMessages(newestFirst []Message) []Message {
+	out := make([]Message, len(newestFirst))
+	for i, m := range newestFirst {
+		out[len(newestFirst)-1-i] = m
+	}
+	return out
 }
 
 const priorContactSelect = `

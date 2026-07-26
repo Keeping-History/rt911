@@ -7,12 +7,15 @@ import (
 
 func TestHistorySQLFiltersByVirtualTimeAndUser(t *testing.T) {
 	// Seeking backward must not leave a buddy remembering a conversation that
-	// has not happened yet, and one user must never read another's log.
+	// has not happened yet, and one user must never read another's log. The
+	// query orders DESC (latest N turns, not the first N of a long
+	// conversation) -- History reverses the scanned slice in Go before
+	// returning, see TestReverseTurnsRestoresOldestFirstOrder.
 	for _, want := range []string{
 		`"user" = $1`,
 		"profile = $2",
 		"virtual_time <= $3",
-		"ORDER BY virtual_time",
+		"ORDER BY virtual_time DESC, id DESC",
 	} {
 		if !strings.Contains(historySelect, want) {
 			t.Errorf("historySelect missing %q:\n%s", want, historySelect)
@@ -20,11 +23,43 @@ func TestHistorySQLFiltersByVirtualTimeAndUser(t *testing.T) {
 	}
 }
 
-func TestTurnsAreReturnedOldestFirst(t *testing.T) {
-	// The prompt reads top-to-bottom as a conversation; reversed history makes
-	// the buddy answer the wrong question.
-	if strings.Contains(historySelect, "DESC") {
-		t.Errorf("history must reach the composer oldest-first:\n%s", historySelect)
+// TestReverseTurnsRestoresOldestFirstOrder is the ordering test that a
+// SQL-string grep cannot express: historySelect's ORDER BY ... DESC LIMIT
+// correctly returns the *latest* N turns, but only reverseTurns proves those
+// turns reach the composer oldest-first, which is what the prompt requires.
+// A prior version of this test asserted "DESC" was absent from the SQL --
+// that pinned the bug (oldest N turns, frozen after ~40 messages) instead of
+// catching it, because it could not distinguish "returns the wrong page" from
+// "returns the right page in the wrong order."
+func TestReverseTurnsRestoresOldestFirstOrder(t *testing.T) {
+	newestFirst := []Turn{
+		{FromBuddy: true, Text: "third"},
+		{FromBuddy: false, Text: "second"},
+		{FromBuddy: true, Text: "first"},
+	}
+	got := reverseTurns(newestFirst)
+	want := []Turn{
+		{FromBuddy: true, Text: "first"},
+		{FromBuddy: false, Text: "second"},
+		{FromBuddy: true, Text: "third"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("reverseTurns returned %d turns, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("reverseTurns[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestReverseTurnsHandlesEmptyAndSingleton(t *testing.T) {
+	if got := reverseTurns(nil); len(got) != 0 {
+		t.Errorf("reverseTurns(nil) = %+v, want empty", got)
+	}
+	one := []Turn{{FromBuddy: true, Text: "only"}}
+	if got := reverseTurns(one); len(got) != 1 || got[0] != one[0] {
+		t.Errorf("reverseTurns(singleton) = %+v, want %+v", got, one)
 	}
 }
 
@@ -73,13 +108,31 @@ func TestHistoryDetailedSQLSelectsWireFieldsScopedToUser(t *testing.T) {
 	// A chat_history reply replays turns as chat_message frames, which need id
 	// (dedupe) and virtual_time (ordering, especially after a seek) alongside
 	// direction/body/kind -- fields History's []Turn strips for the composer's
-	// prompt but the wire still needs.
+	// prompt but the wire still needs. Ordered DESC for the same "latest N,
+	// not first N" reason as historySelect; HistoryDetailed reverses the
+	// scanned slice before returning.
 	for _, want := range []string{
 		"id", "direction", "body", "virtual_time", "kind",
-		`"user" = $1`, "profile = $2", "virtual_time <= $3", "LIMIT",
+		`"user" = $1`, "profile = $2", "virtual_time <= $3",
+		"ORDER BY virtual_time DESC, id DESC", "LIMIT",
 	} {
 		if !strings.Contains(historyDetailedSelect, want) {
 			t.Errorf("historyDetailedSelect missing %q:\n%s", want, historyDetailedSelect)
 		}
+	}
+}
+
+func TestReverseMessagesRestoresOldestFirstOrder(t *testing.T) {
+	// HistoryDetailed's counterpart to TestReverseTurnsRestoresOldestFirstOrder:
+	// replayed chat_message frames must land on the wire oldest-first so a
+	// client rendering them in arrival order shows the real conversation.
+	newestFirst := []Message{
+		{ID: 3, Body: "third"},
+		{ID: 2, Body: "second"},
+		{ID: 1, Body: "first"},
+	}
+	got := reverseMessages(newestFirst)
+	if len(got) != 3 || got[0].ID != 1 || got[1].ID != 2 || got[2].ID != 3 {
+		t.Errorf("reverseMessages = %+v, want ids [1 2 3]", got)
 	}
 }

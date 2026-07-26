@@ -803,7 +803,10 @@ func (s *Session) ChatSend(profileID int, body string) {
 	ctx := context.Background()
 
 	if s.pool != nil {
-		if blocks, err := chat.LoadBlocks(ctx, s.pool, userID, vTime); err != nil {
+		// Wall-clock, not vTime: a moderation cool-down is about the student
+		// waiting it out in real time, not the simulated 2001 clock -- see
+		// chat.LoadBlocks' doc comment.
+		if blocks, err := chat.LoadBlocks(ctx, s.pool, userID, now); err != nil {
 			s.logger.Warn("chat: load blocks failed", "error", err)
 		} else if blocked, _ := chat.BlocksApply(blocks, profileID); blocked {
 			s.sendChatDisabled("blocked")
@@ -819,9 +822,20 @@ func (s *Session) ChatSend(profileID int, body string) {
 		// block: reconnecting or rewording the same message would sail straight
 		// through. Scoped to this profile (not global): the design's "block"
 		// outcome is "that buddy stops responding," not "chat disabled outright."
+		// expires comes from decision.CoolDown (wall-clock, per chat.LoadBlocks'
+		// doc comment) rather than nil: CheckLocal's triggers are a 5-term
+		// substring match and a rate limit, neither reliable enough to silence a
+		// buddy forever with no admin recovery path. A permanent block (expires
+		// nil) stays possible, but only as a teacher/admin action outside this
+		// package -- never as a side effect of local moderation.
 		if s.pool != nil {
 			pid := profileID
-			if err := chat.CreateBlock(ctx, s.pool, userID, "profile", &pid, decision.Reason, decision.Evidence, nil); err != nil {
+			var expires *time.Time
+			if decision.CoolDown > 0 {
+				t := now.Add(decision.CoolDown)
+				expires = &t
+			}
+			if err := chat.CreateBlock(ctx, s.pool, userID, "profile", &pid, decision.Reason, decision.Evidence, expires); err != nil {
 				s.logger.Warn("chat: create block failed", "error", err)
 			}
 		}
@@ -988,7 +1002,10 @@ func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID str
 
 	for _, sc := range due {
 		if s.pool != nil {
-			if blocks, err := chat.LoadBlocks(ctx, s.pool, userID, t); err != nil {
+			// Wall-clock, not t (the virtual time this beat fired at): see
+			// chat.LoadBlocks' doc comment on why a moderation cool-down must not
+			// be measured against the simulated clock.
+			if blocks, err := chat.LoadBlocks(ctx, s.pool, userID, time.Now().UTC()); err != nil {
 				s.logger.Warn("chat: scheduled beat load blocks failed", "profile", sc.ProfileID, "error", err)
 			} else if blocked, _ := chat.BlocksApply(blocks, sc.ProfileID); blocked {
 				continue
@@ -1081,8 +1098,14 @@ func (s *Session) persistInbound(ctx context.Context, userID string, profileID i
 // rebuild it correctly: the next call sees the new virtual time.
 func (s *Session) ChatHistory(profileID int, before time.Time, limit int) {
 	s.mu.Lock()
-	userID := s.userID
+	userID, vTime := s.userID, s.virtualTime
 	s.mu.Unlock()
+
+	// The client's own conversation can't leak 9/11 knowledge the way an
+	// unclamped `before` could on the prompt path, but this path should still
+	// enforce the same virtual-time boundary every other read enforces rather
+	// than trusting whatever the client sends.
+	before = clampChatHistoryBefore(before, vTime)
 
 	if userID == "" || s.pool == nil {
 		s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
@@ -1103,6 +1126,22 @@ func (s *Session) ChatHistory(profileID int, before time.Time, limit int) {
 		})
 	}
 	s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
+}
+
+// clampChatHistoryBefore bounds a client-supplied chat_history cursor to the
+// session's own virtual time, so the boundary is enforced server-side rather
+// than merely trusted. A zero virtualTime means the clock has not been set
+// yet this connection -- there is no boundary to enforce, so before passes
+// through unclamped rather than collapsing to the zero time and hiding every
+// row.
+func clampChatHistoryBefore(before, virtualTime time.Time) time.Time {
+	if virtualTime.IsZero() {
+		return before
+	}
+	if before.After(virtualTime) {
+		return virtualTime
+	}
+	return before
 }
 
 // findProfile looks up a buddy by id in the session's cached roster. A miss

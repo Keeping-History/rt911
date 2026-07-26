@@ -1546,3 +1546,54 @@ func TestFireBeatsSkipsRequiresPriorContactWithNilPool(t *testing.T) {
 	default:
 	}
 }
+
+func TestClampChatHistoryBeforeBoundsToVirtualTime(t *testing.T) {
+	// chat_history is the student's own conversation, so an unclamped `before`
+	// can't leak 9/11 knowledge -- but the server should still enforce the
+	// same virtual-time boundary every other read enforces rather than
+	// trusting the client to send a sane cursor.
+	vTime := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+
+	future := vTime.Add(time.Hour)
+	if got := clampChatHistoryBefore(future, vTime); !got.Equal(vTime) {
+		t.Errorf("clampChatHistoryBefore(future) = %v, want clamped to %v", got, vTime)
+	}
+
+	past := vTime.Add(-time.Hour)
+	if got := clampChatHistoryBefore(past, vTime); !got.Equal(past) {
+		t.Errorf("clampChatHistoryBefore(past) = %v, want unchanged %v", got, past)
+	}
+
+	if got := clampChatHistoryBefore(vTime, vTime); !got.Equal(vTime) {
+		t.Errorf("clampChatHistoryBefore(before == virtualTime) = %v, want unchanged %v", got, vTime)
+	}
+}
+
+func TestClampChatHistoryBeforePassesThroughWhenClockUnset(t *testing.T) {
+	// A zero virtualTime means the clock has not been set yet this
+	// connection -- there is no boundary to enforce, so clamping to the zero
+	// time would hide every row instead of leaving nothing to clamp against.
+	before := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	if got := clampChatHistoryBefore(before, time.Time{}); !got.Equal(before) {
+		t.Errorf("clampChatHistoryBefore with unset clock = %v, want unchanged %v", got, before)
+	}
+}
+
+func TestChatHistoryWithNilPoolStillSendsDone(t *testing.T) {
+	// Guards against the clamp logic added ahead of the pool/userID check
+	// panicking or otherwise breaking the "no pool" degrade path every other
+	// chat method (ChatSend, fireBeats) already relies on in this package's
+	// DB-free test convention.
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	vTime := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	s.Init(vTime, nil)
+	drain(t, s)
+
+	s.ChatHistory(5, vTime.Add(time.Hour), 40)
+
+	msg := recvType(t, s)
+	if msg.Type != "chat_history" || !msg.Done {
+		t.Fatalf("expected a terminal chat_history{done:true} frame, got %+v", msg)
+	}
+}

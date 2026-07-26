@@ -127,10 +127,22 @@ type chatHistoryMsg struct {
 	Limit   int    `json:"limit"`
 }
 
-// chatHistoryDefaultLimit caps a chat_history request that omits limit, or
-// supplies a non-positive one, at the same bound ChatSend's own context read
-// uses.
+// chatHistoryDefaultLimit is both the default a chat_history request that
+// omits limit (or supplies a non-positive one) gets, and the ceiling any
+// request is clamped to -- the same bound ChatSend's own context read uses.
+// Without the ceiling a client-supplied {"limit": 1000000} would be accepted
+// and issue that query as-is.
 const chatHistoryDefaultLimit = 40
+
+// clampChatHistoryLimit floors a non-positive or omitted limit to the default
+// and ceilings an oversized one to the same bound, rather than trusting a
+// client-supplied value in either direction.
+func clampChatHistoryLimit(limit int) int {
+	if limit <= 0 || limit > chatHistoryDefaultLimit {
+		return chatHistoryDefaultLimit
+	}
+	return limit
+}
 
 // ProfileCache holds the buddy roster, plus the beacon/phase configuration
 // that resolves each buddy's emotional arc across the virtual clock, for the
@@ -517,11 +529,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 					sess.SendError("invalid time: " + err.Error())
 					continue
 				}
-				limit := cmsg.Limit
-				if limit <= 0 {
-					limit = chatHistoryDefaultLimit
-				}
-				sess.ChatHistory(cmsg.Profile, before, limit)
+				sess.ChatHistory(cmsg.Profile, before, clampChatHistoryLimit(cmsg.Limit))
 
 			default:
 				sess.SendError(fmt.Sprintf("unknown message type %q", msg.Type))
