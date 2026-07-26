@@ -35,7 +35,7 @@ func TestUsernameCheckRejectsAnUntrustedOrigin(t *testing.T) {
 func TestUsernameCheckRejectsAMalformedNameBeforeQuerying(t *testing.T) {
 	// A nil pool would panic if this reached the database, which is what makes
 	// this test meaningful: it proves the shape check runs first.
-	for _, bad := range []string{"ab", "", "Danny!", "a-very-long-name-well-past-the-limit"} {
+	for _, bad := range []string{"a", "", "Danny!", "a-very-long-name-well-past-the-limit"} {
 		r := httptest.NewRequest("GET", "/chat/username-available?name="+bad, nil)
 		w := httptest.NewRecorder()
 
@@ -67,7 +67,7 @@ func TestUsernameCheckIsNeverCached(t *testing.T) {
 	// An answer that was true a minute ago is exactly the answer this endpoint
 	// must not serve, and this domain has a documented history of edge caching
 	// turning a filtered read into a stale one.
-	r := httptest.NewRequest("GET", "/chat/username-available?name=ab", nil)
+	r := httptest.NewRequest("GET", "/chat/username-available?name=a", nil)
 	w := httptest.NewRecorder()
 
 	usernameHandler(t)(w, r)

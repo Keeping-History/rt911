@@ -182,9 +182,9 @@ describe("ProfileEditor — screen name", () => {
 	it("rejects a too-short name before calling the server", async () => {
 		mockAuth.user = makeUser({});
 		render(<ProfileEditor />);
-		fireEvent.change(screen.getByLabelText("Screen Name"), { target: { value: "ab" } });
+		fireEvent.change(screen.getByLabelText("Screen Name"), { target: { value: "a" } });
 		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
-		await screen.findByText(/at least 3 characters/);
+		await screen.findByText(/at least 2 characters/);
 		expect(mockUpdateProfile).not.toHaveBeenCalled();
 	});
 

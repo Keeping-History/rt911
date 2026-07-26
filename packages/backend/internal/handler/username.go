@@ -17,7 +17,12 @@ import (
 
 // usernameRe is the shape the Account app normalises to before asking. Anything
 // else is a client bug rather than a name worth a database round trip.
-var usernameRe = regexp.MustCompile(`^[a-z0-9_]{3,24}$`)
+//
+// Two characters, not three: the backfill derived names from the email local
+// part with no minimum, so real accounts hold "me" and "sa". A stricter rule
+// here would call an existing user's own name malformed and lock them out of
+// saving their profile at all.
+var usernameRe = regexp.MustCompile(`^[a-z0-9_]{2,24}$`)
 
 // usernameLimiter bounds the whole endpoint rather than tracking per user.
 // Screen names are semi-public -- they are what a buddy calls you in chat -- so

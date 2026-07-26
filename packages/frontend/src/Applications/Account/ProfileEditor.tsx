@@ -79,7 +79,10 @@ export // Shape only. Availability is deliberately NOT checked here: a user can 
 // report "available" for one already taken. The save is the real check.
 function usernameProblem(name: string): string | null {
 	if (name === "") return null; // clearing it is allowed; the backend falls back
-	if (name.length < 3) return "Screen names need at least 3 characters.";
+	// Two, not three: the backfill minted names from email local parts with no
+	// minimum, so real accounts hold "me" and "sa". Demanding three would stop
+	// those users saving their own profile.
+	if (name.length < 2) return "Screen names need at least 2 characters.";
 	if (/^[0-9]+$/.test(name)) return "Screen names need at least one letter.";
 	return null;
 }
