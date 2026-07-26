@@ -53,6 +53,21 @@ func TestAllowedForIncludesOwnMarketLocals(t *testing.T) {
 	}
 }
 
+func TestPrivateTapesReachNobody(t *testing.T) {
+	// ATC, NEADS/NORAD and cockpit recordings were never broadcast. This is the
+	// same provenance rule that keeps them out of the transcript ingest: no
+	// civilian could hear them on the day, so no buddy can have heard them.
+	src := append(srcSet(), BroadcastSource{Slug: "mp3:900", Name: "NEADS/NORAD", Reach: ReachPrivate})
+
+	for _, market := range []string{"new_york", "columbus_oh", ""} {
+		for _, s := range AllowedFor(src, market).Slugs {
+			if s == "mp3:900" {
+				t.Errorf("market %q received a private ATC/military tape", market)
+			}
+		}
+	}
+}
+
 func TestOutboundReachesNobody(t *testing.T) {
 	// WORLDNET was US international broadcasting, barred from domestic airing
 	// by Smith-Mundt. No American buddy could have seen it, in any market.

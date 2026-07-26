@@ -175,7 +175,17 @@ const TEACHER_GRANTS = [
   { collection: "chat_blocks", action: "read", fields: ["*"], permissions: OWN_FILTER },
 ];
 
-const PUBLIC_READ_COLLECTIONS = ["chat_profiles", "chat_beacons", "chat_phases", "chat_schedules", "chat_knowledge"];
+// Config and knowledge collections. These are granted to BOTH policies, not
+// just Public: an authenticated user does NOT inherit the public policy's
+// permissions, so a Teacher granted nothing here gets a hard 403. Verified
+// empirically — the first isolation-probe run failed on exactly this, with
+// account A unable to read chat_profiles while the public grant was in place.
+//
+// Nothing in the running product depends on this path (the buddy roster ships
+// over the WebSocket from the streamer's own pool, bypassing Directus), which
+// is precisely why the gap could have sat unnoticed until a teacher opened the
+// collection in the admin UI and found it empty.
+const READ_COLLECTIONS = ["chat_profiles", "chat_beacons", "chat_phases", "chat_schedules", "chat_knowledge"];
 
 const ADMIN_ONLY_COLLECTIONS = ["chat_settings"];
 
@@ -254,7 +264,10 @@ function plan(policyId, policyLabel, grant) {
 }
 
 for (const grant of TEACHER_GRANTS) plan(teacherPolicy.id, "Teacher", grant);
-for (const collection of PUBLIC_READ_COLLECTIONS) plan(publicPolicy.id, "Public", { collection, action: "read", fields: ["*"] });
+for (const collection of READ_COLLECTIONS) {
+  plan(publicPolicy.id, "Public", { collection, action: "read", fields: ["*"] });
+  plan(teacherPolicy.id, "Teacher", { collection, action: "read", fields: ["*"] });
+}
 
 function describe(entry) {
   return `${entry.policyLabel} policy — ${entry.collection}.${entry.action}`;

@@ -93,6 +93,30 @@ const CLASSIFICATION = {
   GLVSN: { reach: "international", market: null },
   PSC: { reach: "international", market: null },
 
+  // Private — recorded audio that was never broadcast to anyone. Same
+  // provenance judgement that keeps these out of the transcript ingest: no
+  // civilian could hear air traffic control, NEADS/NORAD, cockpit or
+  // emergency-line tapes on the day, so no buddy can have heard them. Stated
+  // here too so these 17 sources explain themselves instead of looking like an
+  // uncurated gap on every streamer boot.
+  AA11: { reach: "private", market: null },
+  AA77: { reach: "private", market: null },
+  UA93: { reach: "private", market: null },
+  UA175: { reach: "private", market: null },
+  DL1989: { reach: "private", market: null },
+  atc: { reach: "private", market: null },
+  ATCSCC: { reach: "private", market: null },
+  FAA: { reach: "private", market: null },
+  "NEADS/NORAD": { reach: "private", market: null },
+  Langley: { reach: "private", market: null },
+  GOFER06: { reach: "private", market: null },
+  Rutgers: { reach: "private", market: null },
+  QUIT: { reach: "private", market: null },
+  ZDC: { reach: "private", market: null },
+  ZNY: { reach: "private", market: null },
+  ZOB: { reach: "private", market: null },
+  ZBW: { reach: "private", market: null },
+
   // Outbound — USIA's international service, produced in the US for foreign
   // audiences and barred from domestic broadcast by the Smith-Mundt Act. No
   // American could have been watching it, so it reaches no buddy in this
@@ -122,6 +146,7 @@ const FIELDS = [
           { text: "National", value: "national" },
           { text: "International", value: "international" },
           { text: "Outbound (US service for foreign audiences)", value: "outbound" },
+          { text: "Private (never broadcast: ATC, military, cockpit)", value: "private" },
         ],
       },
     },

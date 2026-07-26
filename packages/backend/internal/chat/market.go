@@ -28,6 +28,13 @@ const (
 	// so it currently reaches nobody; a non-US buddy would need a country
 	// dimension alongside market, which is the extension point if one is added.
 	ReachOutbound = "outbound"
+	// ReachPrivate is recorded audio that was never broadcast to anyone: air
+	// traffic control, NEADS/NORAD, cockpit and emergency-line tapes. It is the
+	// same provenance judgement that keeps these out of the transcript ingest --
+	// no civilian could hear them on the day, so no buddy can have heard them --
+	// stated a second time here so the classification explains itself rather
+	// than leaving 17 sources looking like an uncurated gap.
+	ReachPrivate = "private"
 )
 
 // BroadcastSource is one classified signal. TV sources carry a ChannelID
@@ -71,7 +78,7 @@ func AllowedFor(sources []BroadcastSource, market string) *BroadcastFilter {
 	}
 	f := &BroadcastFilter{}
 	for _, s := range sources {
-		if s.Reach == ReachOutbound {
+		if s.Reach == ReachOutbound || s.Reach == ReachPrivate {
 			continue
 		}
 		if s.Reach == ReachLocal && s.Market != market {
