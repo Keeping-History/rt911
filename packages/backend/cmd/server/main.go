@@ -203,6 +203,19 @@ func main() {
 	}
 	chatProfiles.SetPhaseData(beacons, phases)
 
+	// Scheduled beats (chat_schedules) let a buddy message first, anchored to a
+	// beacon's public_at. The live table has zero rows, so this is inert until
+	// a curator adds content — same non-fatal, bounded, load-once pattern as
+	// beacons/phases above.
+	scheduleCtx, scheduleCancel := context.WithTimeout(ctx, 2*time.Second)
+	schedules, err := chat.LoadSchedules(scheduleCtx, pool)
+	scheduleCancel()
+	if err != nil {
+		logger.Warn("chat schedules unavailable, buddies will not message first", "error", err)
+		schedules = nil
+	}
+	chatProfiles.SetSchedules(schedules)
+
 	// Only these origins may turn a Directus session cookie into a chat
 	// identity. CHAT_TRUSTED_ORIGINS appends to the built-in production list so
 	// dev and preview origins never ship in production config.

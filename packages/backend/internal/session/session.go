@@ -162,6 +162,13 @@ type Session struct {
 	flightsHorizon time.Time
 	weatherHorizon time.Time
 	alertHorizon   time.Time
+	// chatHorizon is the last virtual instant checked for scheduled beats
+	// (chat_schedules): each tick evaluates the half-open (chatHorizon,
+	// virtualTime] window so a beat fires exactly once as the clock advances.
+	// Unlike the other horizons this never triggers a lookup -- schedules is
+	// loaded once into memory (SetSchedules) and DueBetween is a pure filter --
+	// so there is no window/lead tuning, just the half-open bound itself.
+	chatHorizon time.Time
 
 	// usenetGroups is the set of newsgroups the client is currently viewing. The
 	// usenet channel is delivered only for these groups — a group can hold millions
@@ -173,6 +180,8 @@ type Session struct {
 	// are the emotional-arc configuration (also loaded once, via SetPhaseData)
 	// that resolves each profile's Phase for the virtual clock — without them a
 	// buddy would render as chat.DefaultPhase all day regardless of the clock.
+	// schedules is the proactive-beat configuration (loaded once, via
+	// SetSchedules) that RunTimePump checks against chatHorizon each tick.
 	// presenceSeen is the last online state sent per buddy id, so
 	// syncChatPresence can emit only the buddies whose state actually changed.
 	// All guarded by mu.
@@ -180,6 +189,7 @@ type Session struct {
 	profiles     []chat.Profile
 	beacons      map[int]chat.Beacon
 	phases       map[int][]chat.Phase
+	schedules    []chat.Schedule
 	presenceSeen map[int]bool
 
 	// recentSends tracks this session's chat_send wall-clock timestamps for
@@ -299,6 +309,8 @@ func (s *Session) horizonFor(channel string) *time.Time {
 		return &s.weatherHorizon
 	case ChannelAlerts:
 		return &s.alertHorizon
+	case ChannelChat:
+		return &s.chatHorizon
 	}
 	return nil
 }
@@ -539,6 +551,7 @@ func (s *Session) resetHorizons(t time.Time) {
 	s.flightsHorizon = t
 	s.weatherHorizon = t
 	s.alertHorizon = t
+	s.chatHorizon = t
 }
 
 // Pause freezes the client's virtual clock.
@@ -639,6 +652,15 @@ func (s *Session) SetPhaseData(beacons map[int]chat.Beacon, phases map[int][]cha
 	s.mu.Lock()
 	s.beacons = beacons
 	s.phases = phases
+	s.mu.Unlock()
+}
+
+// SetSchedules installs the proactive-beat configuration RunTimePump checks
+// on every tick. Config is loaded once at connect time and handed in, exactly
+// like SetPhaseData; sessions never query for it.
+func (s *Session) SetSchedules(schedules []chat.Schedule) {
+	s.mu.Lock()
+	s.schedules = schedules
 	s.mu.Unlock()
 }
 
@@ -922,6 +944,95 @@ func (s *Session) sendStall(ctx context.Context, userID string, profileID int, v
 	})
 }
 
+// fireBeats delivers every schedule dueBeats reported due, one at a time. It
+// re-checks the same gate ChatSend answers on (signed in, unpaused, inside the
+// chat window) before touching any of them -- a beat is exactly as unwelcome
+// as an inbound reply would be under those conditions, and a session ticking
+// while signed out or paused should not open with a proactive message either.
+// requires_prior_contact then gates each beat individually via
+// HasPriorContact -- with no pool to check against, a beat that requires
+// prior contact is skipped rather than assumed safe. kind="static" delivers
+// Text with no provider call; kind="generated" enqueues a Job through the
+// generator using Prompt as the user message, following the same
+// stall-on-full-queue degradation ChatSend uses.
+func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID string, profiles []chat.Profile, beacons map[int]chat.Beacon, phases map[int][]chat.Phase, t time.Time) {
+	if len(due) == 0 {
+		return
+	}
+	if enabled, _ := s.chatGate(); !enabled {
+		return
+	}
+
+	for _, sc := range due {
+		if s.pool != nil {
+			if blocks, err := chat.LoadBlocks(ctx, s.pool, userID, t); err != nil {
+				s.logger.Warn("chat: scheduled beat load blocks failed", "profile", sc.ProfileID, "error", err)
+			} else if blocked, _ := chat.BlocksApply(blocks, sc.ProfileID); blocked {
+				continue
+			}
+		}
+
+		if sc.RequiresPriorContact {
+			if s.pool == nil {
+				continue
+			}
+			has, err := chat.HasPriorContact(ctx, s.pool, userID, sc.ProfileID, t)
+			if err != nil {
+				s.logger.Warn("chat: scheduled beat prior-contact check failed", "profile", sc.ProfileID, "error", err)
+				continue
+			}
+			if !has {
+				continue
+			}
+		}
+
+		switch sc.Kind {
+		case "static":
+			s.deliverStaticBeat(ctx, userID, sc.ProfileID, t, sc.Text)
+		case "generated":
+			phase, _ := chat.PhaseAt(phases[sc.ProfileID], beacons, t)
+			s.send_(outMsg{Type: "chat_typing", Profile: sc.ProfileID})
+			job := chat.Job{
+				UserID:      userID,
+				Profile:     findProfile(profiles, sc.ProfileID),
+				Phase:       phase,
+				Body:        sc.Prompt,
+				Kind:        "scheduled",
+				VirtualTime: t,
+				Deliver:     s.chatDeliver(userID, sc.ProfileID, t),
+			}
+			gen := s.hub.Generator()
+			if gen == nil || !gen.Enqueue(job) {
+				s.sendStall(ctx, userID, sc.ProfileID, t)
+			}
+		default:
+			s.logger.Warn("chat: scheduled beat has unknown kind", "id", sc.ID, "kind", sc.Kind)
+		}
+	}
+}
+
+// deliverStaticBeat sends a curator-authored beat verbatim -- no provider
+// call, no risk of an LLM rewriting it -- persisting it the same way
+// chatDeliver persists a generated reply so history and HasPriorContact stay
+// consistent.
+func (s *Session) deliverStaticBeat(ctx context.Context, userID string, profileID int, vTime time.Time, text string) {
+	msgID := 0
+	if s.pool != nil {
+		id, err := chat.AppendMessage(ctx, s.pool, userID, chat.Message{
+			Profile: profileID, Direction: "out", Body: text, VirtualTime: vTime, Kind: "static",
+		})
+		if err != nil {
+			s.logger.Warn("chat: append static beat failed", "error", err)
+		} else {
+			msgID = id
+		}
+	}
+	s.send_(outMsg{
+		Type: "chat_message", Profile: profileID, Direction: "out",
+		Body: text, Time: vTime.Format(time.RFC3339), Kind: "static", MessageID: msgID,
+	})
+}
+
 // persistInbound writes the student's message and returns its id, or 0 when
 // persistence is skipped (nil pool) or fails — the message still reaches the
 // buddy either way, per the design's "chat_messages write fails: message
@@ -1070,9 +1181,18 @@ func (s *Session) RunTimePump() {
 			if doUsenet {
 				usenetGroups = s.usenetGroupsLocked()
 			}
+			due := s.dueBeats(t)
+			var beatUserID string
+			var beatProfiles []chat.Profile
+			var beatBeacons map[int]chat.Beacon
+			var beatPhases map[int][]chat.Phase
+			if len(due) > 0 {
+				beatUserID, beatProfiles, beatBeacons, beatPhases = s.userID, s.profiles, s.beacons, s.phases
+			}
 			s.mu.Unlock()
 
 			s.syncChatPresence()
+			s.fireBeats(ctx, due, beatUserID, beatProfiles, beatBeacons, beatPhases, t)
 
 			if doMedia {
 				if items, err := cache.ItemsInRange(ctx, s.rdb, mediaLo, mediaHi); err != nil {
@@ -1178,6 +1298,26 @@ func (s *Session) planChannelRefill(channel string, horizon *time.Time, vTime ti
 		return time.Time{}, time.Time{}, false
 	}
 	return planRefill(horizon, vTime, window)
+}
+
+// dueBeats is planChannelRefill's counterpart for chat_schedules: gated on the
+// chat subscription like every other channel, but with no window/lookup to
+// plan -- schedules is already resident in memory (SetSchedules), so the
+// half-open (chatHorizon, t] slice is computed directly and chatHorizon
+// advances to t in the same step. An empty schedules slice (the live table's
+// steady state until a curator adds rows) returns nil with no work done, so
+// this stays silent on every ordinary tick rather than logging noise. Caller
+// must hold s.mu.
+func (s *Session) dueBeats(t time.Time) []chat.Schedule {
+	if _, ok := s.subscriptions[ChannelChat]; !ok {
+		return nil
+	}
+	if len(s.schedules) == 0 {
+		return nil
+	}
+	from := s.chatHorizon
+	s.chatHorizon = t
+	return chat.DueBetween(s.schedules, s.beacons, from, t)
 }
 
 // encodeMsg serialises an outbound envelope as a MessagePack binary frame.

@@ -1384,3 +1384,129 @@ func TestBuildChatJobFallsBackToDefaultPhaseWithNoConfig(t *testing.T) {
 		t.Fatalf("Job.Phase = %+v, want chat.DefaultPhase", job.Phase)
 	}
 }
+
+// dueBeatsLocked is a small test helper mirroring the lock/unlock RunTimePump
+// wraps dueBeats in, so these tests exercise the exact function the tick path
+// calls rather than reimplementing its logic.
+func dueBeatsLocked(s *Session, t time.Time) []chat.Schedule {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dueBeats(t)
+}
+
+func TestDueBeatsRequiresChatSubscription(t *testing.T) {
+	s := newTestSession(t)
+	s.Init(time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil)
+	fireAt := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	s.SetSchedules([]chat.Schedule{{ID: 1, ProfileID: 5, Kind: "static", Text: "hey", At: &fireAt}})
+
+	if got := dueBeatsLocked(s, fireAt); len(got) != 0 {
+		t.Fatalf("a session never subscribed to chat must get no beats, got %d", len(got))
+	}
+
+	s.Subscribe(ChannelChat)
+	if got := dueBeatsLocked(s, fireAt); len(got) != 1 {
+		t.Fatalf("once subscribed, the due beat must be reported, got %d", len(got))
+	}
+}
+
+func TestDueBeatsFiresExactlyOnceAsHorizonAdvances(t *testing.T) {
+	s := newTestSession(t)
+	s.Init(time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil)
+	s.Subscribe(ChannelChat)
+	fireAt := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	s.SetSchedules([]chat.Schedule{{ID: 1, ProfileID: 5, Kind: "static", Text: "hey", At: &fireAt}})
+
+	if got := dueBeatsLocked(s, fireAt); len(got) != 1 {
+		t.Fatalf("first tick landing on the fire time must report the beat, got %d", len(got))
+	}
+	if got := dueBeatsLocked(s, fireAt.Add(time.Second)); len(got) != 0 {
+		t.Fatalf("the next tick must not report the same beat again, got %d", len(got))
+	}
+}
+
+func TestDueBeatsIsInertWithNoSchedules(t *testing.T) {
+	// chat_schedules has zero rows in production; this must produce nothing,
+	// not an error or a warning, on every ordinary tick.
+	s := newTestSession(t)
+	s.Init(time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil)
+	s.Subscribe(ChannelChat)
+
+	if got := dueBeatsLocked(s, time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC)); got != nil {
+		t.Fatalf("no schedules configured must yield nil, got %v", got)
+	}
+}
+
+func TestFireBeatsStaticDeliversTextWithoutProviderCall(t *testing.T) {
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	vTime := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	s.Init(vTime, nil)
+	drain(t, s)
+
+	due := []chat.Schedule{{ID: 1, ProfileID: 5, Kind: "static", Text: "hang on, are you seeing this?"}}
+	s.fireBeats(context.Background(), due, "11111111-2222-3333-4444-555555555555", nil, nil, nil, vTime)
+
+	msg := recvType(t, s)
+	if msg.Type != "chat_message" || msg.Kind != "static" || msg.Body != "hang on, are you seeing this?" {
+		t.Fatalf("expected a static chat_message, got %+v", msg)
+	}
+}
+
+func TestFireBeatsGeneratedKindStallsWithNoGenerator(t *testing.T) {
+	// Mirrors TestChatSendWithNilGeneratorStillStalls: a session with no
+	// generator configured (newTestSession's default) must degrade a
+	// generated beat to the same in-character stall, not a panic or silence.
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	vTime := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	s.Init(vTime, nil)
+	drain(t, s)
+
+	due := []chat.Schedule{{ID: 1, ProfileID: 5, Kind: "generated", Prompt: "react to the news"}}
+	s.fireBeats(context.Background(), due, "11111111-2222-3333-4444-555555555555", nil, nil, nil, vTime)
+
+	if msg := recvType(t, s); msg.Type != "chat_typing" {
+		t.Fatalf("first frame must be chat_typing, got %q", msg.Type)
+	}
+	msg := recvType(t, s)
+	if msg.Type != "chat_message" || msg.Kind != "stall" || msg.Body == "" {
+		t.Fatalf("expected an in-character stall chat_message, got %+v", msg)
+	}
+}
+
+func TestFireBeatsSkipsWhenGateFails(t *testing.T) {
+	// A session that is not signed in must get no beat, exactly as ChatSend
+	// refuses a send under the same gate.
+	s := newTestSession(t)
+	s.Init(time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	due := []chat.Schedule{{ID: 1, ProfileID: 5, Kind: "static", Text: "hey"}}
+	s.fireBeats(context.Background(), due, "", nil, nil, nil, time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC))
+
+	select {
+	case data := <-s.send:
+		t.Fatalf("expected no frame while the chat gate fails, got a frame: %v", data)
+	default:
+	}
+}
+
+func TestFireBeatsSkipsRequiresPriorContactWithNilPool(t *testing.T) {
+	// requires_prior_contact must gate the beat on HasPriorContact; with no
+	// pool to check against, the safe default is to skip, not to fire.
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	vTime := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	s.Init(vTime, nil)
+	drain(t, s)
+
+	due := []chat.Schedule{{ID: 1, ProfileID: 5, Kind: "static", Text: "hey", RequiresPriorContact: true}}
+	s.fireBeats(context.Background(), due, "11111111-2222-3333-4444-555555555555", nil, nil, nil, vTime)
+
+	select {
+	case data := <-s.send:
+		t.Fatalf("expected no frame when prior contact cannot be checked, got a frame: %v", data)
+	default:
+	}
+}

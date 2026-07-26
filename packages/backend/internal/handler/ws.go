@@ -137,10 +137,11 @@ const chatHistoryDefaultLimit = 40
 // life of the process. Chat config is tiny and static; every connection
 // reads the same values rather than querying.
 type ProfileCache struct {
-	mu       sync.RWMutex
-	profiles []chat.Profile
-	beacons  map[int]chat.Beacon
-	phases   map[int][]chat.Phase
+	mu        sync.RWMutex
+	profiles  []chat.Profile
+	beacons   map[int]chat.Beacon
+	phases    map[int][]chat.Phase
+	schedules []chat.Schedule
 }
 
 func NewProfileCache() *ProfileCache { return &ProfileCache{} }
@@ -171,6 +172,22 @@ func (c *ProfileCache) PhaseData() (map[int]chat.Beacon, map[int][]chat.Phase) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.beacons, c.phases
+}
+
+// SetSchedules installs the proactive-beat configuration. Call once at boot,
+// alongside Set and SetPhaseData.
+func (c *ProfileCache) SetSchedules(schedules []chat.Schedule) {
+	c.mu.Lock()
+	c.schedules = schedules
+	c.mu.Unlock()
+}
+
+// Schedules returns the proactive-beat configuration installed by
+// SetSchedules.
+func (c *ProfileCache) Schedules() []chat.Schedule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.schedules
 }
 
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
@@ -236,6 +253,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 		sess.SetProfiles(chatProfiles.Get())
 		beacons, phases := chatProfiles.PhaseData()
 		sess.SetPhaseData(beacons, phases)
+		sess.SetSchedules(chatProfiles.Schedules())
 
 		hub.Register(sess)
 
