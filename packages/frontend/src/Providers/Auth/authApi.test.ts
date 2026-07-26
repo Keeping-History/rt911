@@ -25,7 +25,7 @@ describe("fetchMe", () => {
 	});
 	it("requests the avatar field alongside the profile fields", async () => {
 		const f = vi.fn(async (...args: Parameters<typeof fetch>) => {
-			expect(String(args[0])).toContain("fields=id,email,first_name,last_name,avatar");
+			expect(String(args[0])).toContain("fields=id,email,username,first_name,last_name,avatar");
 			return jsonResponse({
 				data: { id: "u1", email: "t@x.org", first_name: "T", last_name: null, avatar: "file-1" },
 			});

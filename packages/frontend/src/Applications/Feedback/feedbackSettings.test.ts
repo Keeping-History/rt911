@@ -9,6 +9,7 @@ import {
 const makeUser = (over: Partial<AuthUser> = {}): AuthUser => ({
 	id: "1",
 	email: "ada@example.com",
+	username: null,
 	first_name: "Ada",
 	last_name: "Lovelace",
 	avatar: null,

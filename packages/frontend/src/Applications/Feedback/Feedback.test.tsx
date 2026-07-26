@@ -75,7 +75,7 @@ vi.mock("./FeedbackForm", () => ({
 const { Feedback } = await import("./Feedback");
 
 const makeUser = (over: Partial<AuthUser> = {}): AuthUser => ({
-	id: "1", email: "ada@example.com", first_name: "Ada", last_name: "Lovelace",
+	id: "1", email: "ada@example.com", username: null, first_name: "Ada", last_name: "Lovelace",
 	avatar: null, provider: "default", city: null, state: null, country: null,
 	school_name: null, educator_role: null, grade_levels: null, subjects: null,
 	...over,

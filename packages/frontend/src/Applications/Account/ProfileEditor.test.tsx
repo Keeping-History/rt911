@@ -30,7 +30,7 @@ import { ProfileEditor } from "./ProfileEditor";
 const selectTab = (name: string) => fireEvent.mouseUp(screen.getByRole("tab", { name }));
 
 const makeUser = (over: Partial<AuthUser>): AuthUser => ({
-	id: "1", email: "t@x.org", first_name: null, last_name: null, avatar: null,
+	id: "1", email: "t@x.org", username: null, first_name: null, last_name: null, avatar: null,
 	provider: "google", city: null, state: null, country: null,
 	school_name: null, educator_role: null, grade_levels: null, subjects: null,
 	...over,
@@ -54,7 +54,7 @@ describe("ProfileEditor — names", () => {
 		fireEvent.change(screen.getByLabelText("Last Name"), { target: { value: "Lovelace" } });
 		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
 		await waitFor(() =>
-			expect(mockUpdateProfile).toHaveBeenCalledWith({ first_name: "Ada", last_name: "Lovelace" }),
+			expect(mockUpdateProfile).toHaveBeenCalledWith({ first_name: "Ada", last_name: "Lovelace", username: null }),
 		);
 		expect(mockAuth.refresh).toHaveBeenCalled();
 	});
@@ -64,7 +64,11 @@ describe("ProfileEditor — names", () => {
 		fireEvent.change(screen.getByLabelText("First Name"), { target: { value: "" } });
 		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
 		await waitFor(() =>
-			expect(mockUpdateProfile).toHaveBeenCalledWith({ first_name: null, last_name: null }),
+			expect(mockUpdateProfile).toHaveBeenCalledWith({
+				first_name: null,
+				last_name: null,
+				username: null,
+			}),
 		);
 	});
 });

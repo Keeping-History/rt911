@@ -13,6 +13,38 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// displayName is the screen name a chat buddy calls this user, in the order the
+// product settles on: the username they chose, then the part of their email
+// before the @, then their name. It never invents one -- a random fallback has
+// to be PERSISTED to be any use, so that belongs to the backfill script, not to
+// a per-connection read that would hand the same person a different name every
+// time they reconnect.
+//
+// Empty is a fine answer. The composer then establishes the student as an
+// unnamed friend rather than guessing, which is the behaviour that stops a
+// buddy reaching for a name out of its own persona.
+func displayName(username, email, first, last *string) string {
+	if s := deref(username); s != "" {
+		return s
+	}
+	if s := deref(email); s != "" {
+		if at := strings.IndexByte(s, '@'); at > 0 {
+			return s[:at]
+		}
+	}
+	if s := strings.TrimSpace(deref(first) + " " + deref(last)); s != "" {
+		return s
+	}
+	return ""
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 // SessionCookieName is Directus's default session cookie. The frontend logs in
 // with mode:"session" and SESSION_COOKIE_DOMAIN is ".911realtime.org", so the
 // browser sends this on the WebSocket upgrade to stream-beta — cross-origin but
@@ -76,13 +108,13 @@ func LookupSessionUser(ctx context.Context, pool *pgxpool.Pool, token string) (s
 	if token == "" {
 		return "", "", nil
 	}
-	var user, firstName *string
+	var user, username, email, firstName, lastName *string
 	err := pool.QueryRow(ctx,
-		`SELECT s."user", u.first_name
+		`SELECT s."user", u.username, u.email, u.first_name, u.last_name
 		 FROM directus_sessions s
 		 LEFT JOIN directus_users u ON u.id = s."user"
 		 WHERE s.token = $1 AND s.expires > now()`,
-		token).Scan(&user, &firstName)
+		token).Scan(&user, &username, &email, &firstName, &lastName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", nil
 	}
@@ -92,9 +124,5 @@ func LookupSessionUser(ctx context.Context, pool *pgxpool.Pool, token string) (s
 	if user == nil {
 		return "", "", nil
 	}
-	name := ""
-	if firstName != nil {
-		name = *firstName
-	}
-	return *user, name, nil
+	return *user, displayName(username, email, firstName, lastName), nil
 }

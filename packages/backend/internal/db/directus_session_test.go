@@ -74,3 +74,26 @@ func TestSessionTokenFromIgnoresAJWTWithNoSessionClaim(t *testing.T) {
 		t.Errorf("SessionTokenFrom = %q, want empty", got)
 	}
 }
+
+func TestDisplayNamePrefersTheChosenUsername(t *testing.T) {
+	p := func(s string) *string { return &s }
+	cases := []struct {
+		name                         string
+		username, email, first, last *string
+		want                         string
+	}{
+		{"username wins", p("skaterboi1988"), p("dan@x.com"), p("Dan"), p("Reed"), "skaterboi1988"},
+		{"falls back to the email local part", nil, p("dan@x.com"), p("Dan"), p("Reed"), "dan"},
+		{"then to the name", nil, nil, p("Dan"), p("Reed"), "Dan Reed"},
+		{"first name alone is enough", nil, nil, p("Dan"), nil, "Dan"},
+		{"nothing at all yields empty, never a guess", nil, nil, nil, nil, ""},
+		{"a malformed email is not used", nil, p("no-at-sign"), nil, nil, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := displayName(c.username, c.email, c.first, c.last); got != c.want {
+				t.Errorf("displayName = %q, want %q", got, c.want)
+			}
+		})
+	}
+}

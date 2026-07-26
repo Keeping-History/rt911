@@ -62,6 +62,17 @@ const ToggleGroup: React.FC<{
 	</div>
 );
 
+export // Match what the backfill produced, so a name typed here cannot differ from one
+// assigned automatically only by case or punctuation. Directus enforces
+// uniqueness, so a clash surfaces as a save error rather than silently taking
+// someone else's name.
+function normalizeUsername(raw: string): string {
+	return raw
+		.toLowerCase()
+		.replace(/[^a-z0-9_]+/g, "")
+		.slice(0, 24);
+}
+
 export const ProfileEditor: React.FC = () => {
 	const { user, refresh } = useAuth();
 
@@ -72,6 +83,7 @@ export const ProfileEditor: React.FC = () => {
 	// Names
 	const [firstName, setFirstName] = useState(user?.first_name ?? "");
 	const [lastName, setLastName] = useState(user?.last_name ?? "");
+	const [username, setUsername] = useState(user?.username ?? "");
 	const [namesBusy, setNamesBusy] = useState(false);
 	const [namesMsg, setNamesMsg] = useState<string | null>(null);
 
@@ -104,7 +116,11 @@ export const ProfileEditor: React.FC = () => {
 	const saveNames = () => {
 		setNamesBusy(true);
 		setNamesMsg(null);
-		updateProfile({ first_name: orNull(firstName), last_name: orNull(lastName) })
+		updateProfile({
+			first_name: orNull(firstName),
+			last_name: orNull(lastName),
+			username: orNull(normalizeUsername(username)),
+		})
 			.then(() => {
 				setNamesMsg("Saved.");
 				return refresh();
@@ -189,6 +205,17 @@ export const ProfileEditor: React.FC = () => {
 						disabled={namesBusy}
 						onChangeFunc={(e) => setLastName(e.target.value)}
 					/>
+					<ClassicyInput
+						id="profile-username"
+						labelTitle="Screen Name"
+						prefillValue={username}
+						disabled={namesBusy}
+						onChangeFunc={(e) => setUsername(e.target.value)}
+					/>
+					<div className={styles.hint}>
+						This is what your buddies call you in chat. Lowercase letters, numbers and
+						underscores.
+					</div>
 					<ClassicyButton disabled={namesBusy} onClickFunc={saveNames}>
 						Save Names
 					</ClassicyButton>

@@ -11,6 +11,7 @@ import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
 
 export interface ProfilePatch {
 	first_name?: string | null;
+	username?: string | null;
 	last_name?: string | null;
 	password?: string;
 	city?: string | null;
