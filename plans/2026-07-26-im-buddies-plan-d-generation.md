@@ -943,9 +943,16 @@ func TestHistorySQLFiltersByVirtualTimeAndUser(t *testing.T) {
 func TestTurnsAreReturnedOldestFirst(t *testing.T) {
 	// The prompt reads top-to-bottom as a conversation; reversed history makes
 	// the buddy answer the wrong question.
-	if strings.Contains(historySelect, "virtual_time DESC") &&
-		!strings.Contains(historySelect, "reverse") {
-		t.Error("history must reach the composer oldest-first")
+	if strings.Contains(historySelect, "DESC") {
+		t.Errorf("history must reach the composer oldest-first:\n%s", historySelect)
+	}
+}
+
+func TestHistoryIsLimited(t *testing.T) {
+	// An unbounded history walks the whole conversation into the prompt and
+	// silently inflates cost on every turn as a session goes on.
+	if !strings.Contains(historySelect, "LIMIT") {
+		t.Errorf("historySelect must bound its result:\n%s", historySelect)
 	}
 }
 ```
