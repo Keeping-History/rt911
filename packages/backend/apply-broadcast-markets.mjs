@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
- * Classify broadcast sources by how far their signal carried in 2001, and give
- * each chat profile a market.
+ * Classify broadcast sources by who could receive them in 2001, and give each
+ * chat profile a market.
  *
- * This is what stops a buddy in Columbus quoting Channel 5 New York or 1010
- * WINS. Local sources reach only their own market; national and international
- * sources reach everyone. A source left unclassified still reaches everyone —
- * dropping it would silently mute a newly added channel — and the streamer logs
- * the gap at boot instead.
+ * This is what stops a buddy in Columbus quoting 1010 WINS. Local sources reach
+ * only their own market; national and international sources reach everyone;
+ * outbound sources reach nobody in this US-only roster. A source left
+ * unclassified still reaches everyone — dropping it would silently mute a newly
+ * added channel — and the streamer logs the gap at boot instead.
+ *
+ * It classifies PROGRAMMING, not transmitters: a network affiliate is a local
+ * transmitter but carried its network's national feed all day on 9/11, so it is
+ * national. See CLASSIFICATION below.
  *
  * Adds `reach` + `market` to `sources` and `market` to `chat_profiles`, then
  * seeds the classification below. Dry run by default; pass --apply to write.
@@ -38,36 +42,39 @@ function required(name) {
 // Markets are slugs, not prose. chat_profiles.location stays human-readable for
 // the persona ("Columbus, Ohio"); this is the join key.
 const NEW_YORK = "new_york";
-const WASHINGTON_DC = "washington_dc";
-const BOSTON = "boston";
 
 // Classification of every source that appears in chat_transcript_segments.
 //
-// The DC market dominates the corpus (~69k segments across five stations);
-// New York contributes WNYW with 37 TV segments plus the WINS/WCBS radio, so
-// in practice the New York rule governs radio far more than television.
+// This classifies PROGRAMMING, not transmitters. A network affiliate is a local
+// transmitter, but on September 11 it carried its network's national feed all
+// day — someone watching CBS in Ohio saw substantially what a Washington viewer
+// watching WUSA saw. Marking affiliates market-exclusive would claim a
+// distinction the tape does not contain, so they are national.
+//
+// That leaves `local` holding exactly the New York news radio: WINS and WCBS
+// had their own newsrooms and no national feed, which is local content in a way
+// an affiliate's 9/11 coverage simply was not.
 //
 // Ambiguous call signs were identified from their own transcripts rather than
 // guessed: NEWSW carries a WABC feed and a reporter with "a clear view right at
 // the World Trade Towers"; TCN says "8 o'clock Central time"; GLVSN and PSC are
 // foreign-language/translator audio; WORLDNET is USIA documentary programming.
 const CLASSIFICATION = {
-  // Local — New York
-  WNYW: { reach: "local", market: NEW_YORK },
+  // Local content — New York news radio, the only genuinely market-exclusive
+  // sources in this corpus.
   WINS: { reach: "local", market: NEW_YORK },
   WCBS: { reach: "local", market: NEW_YORK },
 
-  // Local — Washington DC
-  WETA: { reach: "local", market: WASHINGTON_DC },
-  WJLA: { reach: "local", market: WASHINGTON_DC },
-  WRC: { reach: "local", market: WASHINGTON_DC },
-  WTTG: { reach: "local", market: WASHINGTON_DC },
-  WUSA: { reach: "local", market: WASHINGTON_DC },
+  // Network affiliates — local transmitters carrying national programming.
+  WNYW: { reach: "national", market: null },
+  WETA: { reach: "national", market: null },
+  WJLA: { reach: "national", market: null },
+  WRC: { reach: "national", market: null },
+  WTTG: { reach: "national", market: null },
+  WUSA: { reach: "national", market: null },
+  WSBK: { reach: "national", market: null },
 
-  // Local — Boston
-  WSBK: { reach: "local", market: BOSTON },
-
-  // National cable / networks — everyone with a television
+  // National cable — everyone with a television
   CNN: { reach: "national", market: null },
   MSNBC: { reach: "national", market: null },
   BET: { reach: "national", market: null },
@@ -85,7 +92,12 @@ const CLASSIFICATION = {
   NTV: { reach: "international", market: null },
   GLVSN: { reach: "international", market: null },
   PSC: { reach: "international", market: null },
-  WORLDNET: { reach: "international", market: null },
+
+  // Outbound — USIA's international service, produced in the US for foreign
+  // audiences and barred from domestic broadcast by the Smith-Mundt Act. No
+  // American could have been watching it, so it reaches no buddy in this
+  // roster.
+  WORLDNET: { reach: "outbound", market: null },
 };
 
 // Seeded profiles live in Columbus, which the corpus has no station for — so
@@ -109,6 +121,7 @@ const FIELDS = [
           { text: "Local", value: "local" },
           { text: "National", value: "national" },
           { text: "International", value: "international" },
+          { text: "Outbound (US service for foreign audiences)", value: "outbound" },
         ],
       },
     },

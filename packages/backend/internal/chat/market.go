@@ -7,15 +7,27 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Reach describes how far a broadcast source's signal carried in 2001.
+// Reach describes who could receive a broadcast source in 2001.
 //
-// This is the difference between a buddy who could plausibly have been watching
-// something and one who could not. A kid in Columbus had CNN and the BBC on
-// cable; he did not have Channel 5 New York or 1010 WINS.
+// It classifies PROGRAMMING, not transmitters. A network affiliate is a local
+// transmitter, but on September 11 it carried its network's national feed all
+// day -- someone watching CBS in Ohio saw substantially what a Washington
+// viewer watching WUSA saw. Calling that "Washington only" would claim a
+// distinction the tape does not contain.
+//
+// So ReachLocal is for sources whose CONTENT was local: on this corpus that is
+// the New York news radio, which had its own newsroom and no national feed.
 const (
 	ReachLocal         = "local"
 	ReachNational      = "national"
 	ReachInternational = "international"
+	// ReachOutbound is US international broadcasting -- WORLDNET, the USIA
+	// service. It was produced in the United States for foreign audiences and
+	// barred from domestic broadcast by the Smith-Mundt Act, so no American
+	// could have been watching it. Every profile in this product is US-based,
+	// so it currently reaches nobody; a non-US buddy would need a country
+	// dimension alongside market, which is the extension point if one is added.
+	ReachOutbound = "outbound"
 )
 
 // BroadcastSource is one classified signal. TV sources carry a ChannelID
@@ -59,6 +71,9 @@ func AllowedFor(sources []BroadcastSource, market string) *BroadcastFilter {
 	}
 	f := &BroadcastFilter{}
 	for _, s := range sources {
+		if s.Reach == ReachOutbound {
+			continue
+		}
 		if s.Reach == ReachLocal && s.Market != market {
 			continue
 		}

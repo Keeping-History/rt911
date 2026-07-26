@@ -9,53 +9,60 @@ import (
 func srcSet() []BroadcastSource {
 	id := func(n int) *int { return &n }
 	return []BroadcastSource{
-		{ChannelID: id(18), Name: "WNYW", Reach: ReachLocal, Market: "new_york"},
-		{ChannelID: id(20), Name: "WRC", Reach: ReachLocal, Market: "washington_dc"},
-		{ChannelID: id(21), Name: "WSBK", Reach: ReachLocal, Market: "boston"},
+		// Network affiliates are NATIONAL: on 9/11 they carried their network's
+		// feed all day, so their content was not market-exclusive.
+		{ChannelID: id(18), Name: "WNYW", Reach: ReachNational},
+		{ChannelID: id(20), Name: "WRC", Reach: ReachNational},
 		{ChannelID: id(6), Name: "CNN", Reach: ReachNational},
 		{ChannelID: id(3), Name: "BBC", Reach: ReachInternational},
+		{ChannelID: id(19), Name: "WORLDNET", Reach: ReachOutbound},
+		// The genuinely market-exclusive content in this corpus: New York news
+		// radio, with its own newsroom and no national feed.
 		{Slug: "mp3:144", Name: "WINS", Reach: ReachLocal, Market: "new_york"},
 		{Slug: "mp3:200", Name: "WCBS", Reach: ReachLocal, Market: "new_york"},
 	}
 }
 
 func TestAllowedForGivesLocalOnlyToItsOwnMarket(t *testing.T) {
-	// The whole point: a buddy in Columbus cannot have been watching WNYW or
-	// listening to 1010 WINS. Those are New York signals.
+	// A buddy in Columbus could not have been listening to 1010 WINS.
+	got := AllowedFor(srcSet(), "columbus_oh")
+
+	if len(got.Slugs) != 0 {
+		t.Errorf("a Columbus buddy must hear no New York radio, got %v", got.Slugs)
+	}
+}
+
+func TestNetworkAffiliatesReachEveryMarket(t *testing.T) {
+	// The correction that matters: an affiliate is a local transmitter but
+	// carried national programming, so someone watching CBS in Ohio saw
+	// substantially what a Washington viewer saw. Classify by programming.
 	got := AllowedFor(srcSet(), "columbus_oh")
 
 	sort.Ints(got.ChannelIDs)
-	if want := []int{3, 6}; !reflect.DeepEqual(got.ChannelIDs, want) {
-		t.Errorf("channels = %v, want %v (national + international only)", got.ChannelIDs, want)
-	}
-	if len(got.Slugs) != 0 {
-		t.Errorf("a Columbus buddy must hear no New York radio, got %v", got.Slugs)
+	if want := []int{3, 6, 18, 20}; !reflect.DeepEqual(got.ChannelIDs, want) {
+		t.Errorf("channels = %v, want the affiliates + cable + international %v", got.ChannelIDs, want)
 	}
 }
 
 func TestAllowedForIncludesOwnMarketLocals(t *testing.T) {
 	got := AllowedFor(srcSet(), "new_york")
 
-	sort.Ints(got.ChannelIDs)
-	if want := []int{3, 6, 18}; !reflect.DeepEqual(got.ChannelIDs, want) {
-		t.Errorf("channels = %v, want %v", got.ChannelIDs, want)
-	}
 	sort.Strings(got.Slugs)
 	if want := []string{"mp3:144", "mp3:200"}; !reflect.DeepEqual(got.Slugs, want) {
 		t.Errorf("slugs = %v, want WINS + WCBS", got.Slugs)
 	}
 }
 
-func TestAllowedForExcludesOtherMarketsLocals(t *testing.T) {
-	got := AllowedFor(srcSet(), "washington_dc")
-
-	for _, id := range got.ChannelIDs {
-		if id == 18 || id == 21 {
-			t.Errorf("a DC buddy must not receive New York (18) or Boston (21): %v", got.ChannelIDs)
+func TestOutboundReachesNobody(t *testing.T) {
+	// WORLDNET was US international broadcasting, barred from domestic airing
+	// by Smith-Mundt. No American buddy could have seen it, in any market.
+	for _, market := range []string{"new_york", "columbus_oh", "washington_dc", ""} {
+		got := AllowedFor(srcSet(), market)
+		for _, id := range got.ChannelIDs {
+			if id == 19 {
+				t.Errorf("market %q received outbound WORLDNET: %v", market, got.ChannelIDs)
+			}
 		}
-	}
-	if len(got.Slugs) != 0 {
-		t.Errorf("New York radio must not reach a DC buddy, got %v", got.Slugs)
 	}
 }
 
@@ -64,8 +71,11 @@ func TestAllowedForWithNoMarketStillGetsNationalAndInternational(t *testing.T) {
 	got := AllowedFor(srcSet(), "")
 
 	sort.Ints(got.ChannelIDs)
-	if want := []int{3, 6}; !reflect.DeepEqual(got.ChannelIDs, want) {
+	if want := []int{3, 6, 18, 20}; !reflect.DeepEqual(got.ChannelIDs, want) {
 		t.Errorf("channels = %v, want national + international", got.ChannelIDs)
+	}
+	if len(got.Slugs) != 0 {
+		t.Errorf("no market must mean no local radio, got %v", got.Slugs)
 	}
 }
 
