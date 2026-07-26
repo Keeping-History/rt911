@@ -136,6 +136,11 @@ func persona(p Profile, userName string) string {
 		"Write only plain text. No markdown, no formatting, no unicode emoji — " +
 			"text emoticons like :-) and :-/ only. Never mention being an AI. " +
 			"If you do not know something, say so the way a person would.\n")
+	// Last, deliberately: this is a curator override, so it has to be able to
+	// beat the generic rules above rather than be contradicted by them.
+	if p.SystemPromptExtra != "" {
+		b.WriteString(p.SystemPromptExtra + "\n")
+	}
 	return b.String()
 }
 

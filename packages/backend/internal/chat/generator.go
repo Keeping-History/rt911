@@ -15,6 +15,37 @@ import (
 // held far less than this; the prompt asks for brevity and this is the backstop.
 const maxReplyRunes = 600
 
+// providerTimeout bounds one generation. Replies are short and sit behind a
+// typing indicator, so a call still running after this is not going to produce
+// something a student is waiting for.
+const providerTimeout = 60 * time.Second
+
+// Typing-delay bounds. The floor keeps a buddy from answering instantly, which
+// reads as a machine however good the words are; the ceiling keeps a curator
+// who typed 1 into typing_speed from stranding a student on "is typing".
+const (
+	typingDelayMin     = 1200 * time.Millisecond
+	typingDelayMax     = 9 * time.Second
+	defaultTypingSpeed = 5 // characters per second
+)
+
+// TypingDelay is how long to hold a finished reply so it lands at human speed.
+// The provider call has usually already eaten some of this; the caller
+// subtracts what it has spent rather than sleeping the full amount.
+func TypingDelay(body string, charsPerSecond int) time.Duration {
+	if charsPerSecond <= 0 {
+		charsPerSecond = defaultTypingSpeed
+	}
+	d := time.Duration(float64(len([]rune(body))) / float64(charsPerSecond) * float64(time.Second))
+	if d < typingDelayMin {
+		return typingDelayMin
+	}
+	if d > typingDelayMax {
+		return typingDelayMax
+	}
+	return d
+}
+
 // ErrNoProvider is returned when the resolved settings name a provider that is
 // not registered. It is delivered rather than silently substituted: using a
 // different vendor than configured would produce a differently-characterised
@@ -252,7 +283,14 @@ func (g *Generator) run(j Job) {
 		UserName:      j.UserName,
 	}
 
-	reply, err := p.Generate(context.Background(), Request{
+	// Bound the vendor call. Without a deadline a wedged provider pins this
+	// worker for the SDK's own default -- around ten minutes -- and with the
+	// default four workers, four such calls take chat down for every user on
+	// the pod. A reply nobody is still waiting for is worth less than a worker.
+	started := time.Now()
+	genCtx, cancel := context.WithTimeout(context.Background(), providerTimeout)
+	defer cancel()
+	reply, err := p.Generate(genCtx, Request{
 		Segments:    Compose(in),
 		Model:       settings.Model,
 		MaxTokens:   settings.MaxTokens,
@@ -263,6 +301,24 @@ func (g *Generator) run(j Job) {
 	// Sanitise inside the worker, not at the call site: no path can deliver
 	// raw model output, including the error and refusal paths.
 	reply.Body = Sanitize(reply.Body, maxReplyRunes)
+	// Sanitize removes standalone slang; anachronistic NOUNS survive because
+	// cutting them would wreck the sentence. Log those rather than mangle the
+	// reply -- a curator tuning a persona needs to see the drift.
+	if term, found := HasAnachronism(reply.Body); found {
+		g.logger.Warn("chat: reply contains post-2001 language",
+			"term", term, "profile", j.Profile.ScreenName, "model", settings.Model)
+	}
+
+	// Hold a fast reply back to human typing speed, counting what the provider
+	// already spent. A buddy answering a paragraph in 200ms reads as a machine
+	// however good the words are. Abandoned if the pool is closing, so a
+	// cosmetic pause cannot delay shutdown.
+	if wait := TypingDelay(reply.Body, j.Profile.TypingSpeed) - time.Since(started); wait > 0 {
+		select {
+		case <-time.After(wait):
+		case <-g.done:
+		}
+	}
 	j.Deliver(reply, err)
 }
 

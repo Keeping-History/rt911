@@ -86,3 +86,34 @@ func TestHasAnachronismCatchesPostEraSlang(t *testing.T) {
 		}
 	}
 }
+
+func TestSanitizeRemovesStandaloneSlangButNotNouns(t *testing.T) {
+	// Mechanical enforcement, but only where it degrades gracefully. Dropping
+	// an interjection leaves a readable sentence; dropping a noun does not --
+	// "i'll google it" would become "i'll it".
+	cases := []struct{ in, want string }{
+		{"smh that is awful", "that is awful"},
+		{"ngl im scared", "im scared"},
+		{"bruh", ""},
+		{"that is lowkey terrifying", "that is terrifying"},
+		{"i saw it on the news", "i saw it on the news"},
+	}
+	for _, c := range cases {
+		if got := Sanitize(c.in, 500); got != c.want {
+			t.Errorf("Sanitize(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestSanitizeLeavesAnachronisticNounsForTheCallerToNotice(t *testing.T) {
+	// These cannot be cut without wrecking the sentence, so they survive
+	// sanitising and HasAnachronism reports them instead — visible drift beats
+	// mangled text.
+	got := Sanitize("ill google it", 500)
+	if got != "ill google it" {
+		t.Errorf("noun was stripped and garbled the sentence: %q", got)
+	}
+	if term, found := HasAnachronism(got); !found || term != "google" {
+		t.Errorf("HasAnachronism(%q) = %q,%v; want google,true", got, term, found)
+	}
+}

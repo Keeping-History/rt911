@@ -21,7 +21,18 @@ var replacements = strings.NewReplacer(
 	"…", "...",
 )
 
-// Anachronisms are terms that postdate 2001 and instantly break the illusion.
+// stripSlang are post-2001 interjections safe to delete outright: each is a
+// standalone word, so removing it leaves a readable sentence. This is the
+// mechanical half of the anachronism rule -- the prompt asks, and this enforces.
+var stripSlang = []string{
+	"smh", "fr", "ngl", "bruh", "lowkey", "highkey", "sus", "yeet",
+	"cringe", "based", "salty",
+}
+
+// Anachronisms is the full list, used for DETECTION. It includes nouns like
+// "google" and "wifi" that cannot be cut without wrecking the sentence around
+// them, so those survive sanitising and are reported instead. Visible drift is
+// better than mangled text.
 var Anachronisms = []string{
 	"smh", "fr", "ngl", "bruh", "lowkey", "highkey", "sus", "yeet",
 	"cringe", "based", "vibe", "vibes", "salty", "ghosted", "selfie",
@@ -46,10 +57,32 @@ func Sanitize(s string, maxRunes int) string {
 			b.WriteRune(r)
 		}
 	}
-	s = reWhitespace.ReplaceAllString(b.String(), " ")
+	s = removeSlang(b.String())
+	s = reWhitespace.ReplaceAllString(s, " ")
 	s = strings.TrimSpace(s)
 
 	return truncateRunes(s, maxRunes)
+}
+
+// removeSlang deletes whole-word post-2001 interjections. Whole-word only, so
+// "fr" cannot fire inside "from" and "based" cannot fire inside "databased".
+func removeSlang(s string) string {
+	words := strings.Split(s, " ")
+	out := make([]string, 0, len(words))
+	for _, w := range words {
+		bare := strings.ToLower(strings.Trim(w, ".,!?;:'\"()"))
+		drop := false
+		for _, sl := range stripSlang {
+			if bare == sl {
+				drop = true
+				break
+			}
+		}
+		if !drop {
+			out = append(out, w)
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 // truncateRunes cuts at the last space before the cap so a reply never ends

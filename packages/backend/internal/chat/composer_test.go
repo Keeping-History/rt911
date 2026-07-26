@@ -339,3 +339,37 @@ func TestPersonaWithNoUserNameStillEstablishesASeparatePerson(t *testing.T) {
 		t.Errorf("an unnamed student must still be established as someone else:\n%s", sys)
 	}
 }
+
+func TestSystemPromptExtraReachesThePersona(t *testing.T) {
+	// A curator's per-buddy addendum was loaded from Directus and then never
+	// read, so typing one into the admin UI silently did nothing.
+	segs := Compose(ComposeInput{
+		Profile: Profile{
+			ScreenName:        "danny",
+			Persona:           "You are Danny.",
+			SystemPromptExtra: "Never mention your father, it upsets you.",
+		},
+		Phase:       DefaultPhase,
+		UserMessage: "hi",
+	})
+
+	if !strings.Contains(segs[0].Text, "Never mention your father") {
+		t.Errorf("system_prompt_extra never reached the prompt:\n%s", segs[0].Text)
+	}
+}
+
+func TestSystemPromptExtraSitsAfterTheOutputRules(t *testing.T) {
+	// It is an override, so it has to come last: a curator writing "reply in
+	// one word" must beat the generic instructions above it rather than being
+	// silently contradicted by them.
+	segs := Compose(ComposeInput{
+		Profile:     Profile{ScreenName: "danny", SystemPromptExtra: "ZZEXTRAZZ"},
+		Phase:       DefaultPhase,
+		UserMessage: "hi",
+	})
+
+	sys := segs[0].Text
+	if strings.Index(sys, "ZZEXTRAZZ") < strings.Index(sys, "Write only plain text") {
+		t.Errorf("extra must come after the output rules it may override:\n%s", sys)
+	}
+}

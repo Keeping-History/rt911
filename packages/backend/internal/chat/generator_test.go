@@ -323,3 +323,31 @@ func TestQueuedBacklogGetsErrShuttingDownWithoutWaitingOnItsNetworkCall(t *testi
 		t.Errorf("expected the dropped count (2) in the log line, got: %s", buf.String())
 	}
 }
+
+func TestTypingDelayScalesWithMessageLengthAndSpeed(t *testing.T) {
+	// The design treats the typing indicator as a latency budget, not
+	// decoration: a fast reply is held back so a buddy does not answer a
+	// paragraph in 200ms and read as a machine.
+	slow := TypingDelay("hello there friend", 4)  // 18 chars at 4 cps
+	fast := TypingDelay("hello there friend", 20) // same text, quick typist
+	if slow <= fast {
+		t.Errorf("a slower typist must take longer: slow=%v fast=%v", slow, fast)
+	}
+
+	long := TypingDelay(strings.Repeat("a", 200), 4)
+	short := TypingDelay("hi", 4)
+	if long <= short {
+		t.Errorf("a longer message must take longer: long=%v short=%v", long, short)
+	}
+}
+
+func TestTypingDelayIsBoundedAtBothEnds(t *testing.T) {
+	// No delay at all breaks the illusion; an unbounded one strands a student
+	// staring at "is typing" because a curator typed 1 into typing_speed.
+	if d := TypingDelay("hi", 0); d < typingDelayMin {
+		t.Errorf("unset typing_speed must still floor the delay, got %v", d)
+	}
+	if d := TypingDelay(strings.Repeat("a", 10000), 1); d > typingDelayMax {
+		t.Errorf("delay must be capped, got %v", d)
+	}
+}

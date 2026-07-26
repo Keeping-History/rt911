@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"classicy/streamer/internal/cache"
@@ -14,6 +17,8 @@ import (
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/handler"
 	"classicy/streamer/internal/session"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -31,7 +36,8 @@ func main() {
 		logger.Error("database connection failed", "error", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+	// Closed by shutdown() instead of deferred: main can now return normally, so
+	// a defer here would double-close what shutdown already released.
 
 	redisURL := env("REDIS_URL", "redis://localhost:6379")
 	rdb := cache.Connect(redisURL)
@@ -126,6 +132,7 @@ func main() {
 	// registered; only when NO provider ends up configured does chat stay
 	// entirely disabled (Generator stays nil, ChatSend degrades every send to
 	// the in-character stall) — media streaming is unaffected either way.
+	var gen *chat.Generator
 	providers := make(map[string]chat.Provider)
 	if key := env("ANTHROPIC_API_KEY", ""); key != "" {
 		providers["anthropic"] = chat.NewAnthropicProvider(key, logger)
@@ -152,7 +159,16 @@ func main() {
 			logger.Warn("chat settings unavailable; using shipped defaults", "error", err)
 			settings = chat.ShippedDefaults
 		}
-		gen := chat.NewGenerator(pool, providers, settings,
+		// A base URL set in chat_settings beats the env default, so an operator
+		// can repoint an OpenAI-compatible endpoint without a redeploy -- which
+		// is the whole reason those defaults live in Directus.
+		if settings.OpenAIBaseURL != "" {
+			if key := env("OPENAI_API_KEY", ""); key != "" {
+				providers["openai"] = chat.NewOpenAICompatProvider(key, settings.OpenAIBaseURL, "openai", logger)
+				logger.Info("openai base url overridden from chat_settings", "base_url", settings.OpenAIBaseURL)
+			}
+		}
+		gen = chat.NewGenerator(pool, providers, settings,
 			envDur("CHAT_SETTINGS_TTL", time.Minute),
 			envInt("CHAT_WORKERS", 4), envInt("CHAT_QUEUE", 32), logger)
 		hub.SetGenerator(gen)
@@ -277,11 +293,55 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	logger.Info("streamer listening", "addr", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	// Shut down on SIGTERM rather than being killed mid-flight. Kubernetes
+	// sends it on every rollout, and without this nothing deferred in main ever
+	// runs: the pool is never closed, and the generator's whole drain path --
+	// finish in-flight work, hand queued jobs ErrShuttingDown, log the count --
+	// is unreachable code. os.Exit skips defers, so the shutdown sequence is
+	// explicit here rather than deferred.
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+	serveErr := make(chan error, 1)
+	go func() {
+		logger.Info("streamer listening", "addr", addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- err
+		}
+	}()
+
+	select {
+	case err := <-serveErr:
 		logger.Error("server exited", "error", err)
+		shutdown(srv, gen, pool, logger)
 		os.Exit(1)
+	case <-ctx.Done():
+		logger.Info("signal received, shutting down")
+		shutdown(srv, gen, pool, logger)
 	}
+}
+
+// shutdownGrace bounds the whole sequence. Kubernetes' default grace period is
+// 30s and it SIGKILLs after that, so finish well inside it: the generator's
+// drain is designed to return promptly rather than wait on queued network
+// calls, and a WebSocket client reconnects on its own.
+const shutdownGrace = 10 * time.Second
+
+func shutdown(srv *http.Server, gen *chat.Generator, pool *pgxpool.Pool, logger *slog.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Warn("http shutdown did not finish cleanly", "error", err)
+	}
+	// After the listener is closed, so no new job can be accepted while the
+	// queue drains.
+	if gen != nil {
+		gen.Close()
+	}
+	pool.Close()
+	logger.Info("shutdown complete")
 }
 
 func env(key, fallback string) string {
