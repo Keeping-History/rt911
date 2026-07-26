@@ -6,10 +6,10 @@ import (
 )
 
 var (
-	reURL       = regexp.MustCompile(`https?://\S+|www\.\S+`)
-	reMarkdown  = regexp.MustCompile("[*_`~#>]+")
+	reURL        = regexp.MustCompile(`https?://\S+|www\.\S+`)
+	reMarkdown   = regexp.MustCompile("[*_`~#>]+") // Note: > also matches emoticons like >:-) but none are required
 	reWhitespace = regexp.MustCompile(`\s+`)
-	reWordChars = regexp.MustCompile(`[a-z0-9]+`)
+	reWordChars  = regexp.MustCompile(`[a-z0-9]+`)
 )
 
 // replacements maps era-incorrect typography to its ASCII equivalent. A 2001 AIM
@@ -34,13 +34,15 @@ var Anachronisms = []string{
 // escaped -- a buddy typing a literal asterisk is a bug, not a style choice.
 func Sanitize(s string, maxRunes int) string {
 	s = replacements.Replace(s)
-	s = reURL.ReplaceAllString(s, "")
 	s = reMarkdown.ReplaceAllString(s, "")
+	s = reURL.ReplaceAllString(s, "")
 
-	// Drop anything still non-ASCII: emoji, accented characters, box drawing.
+	// Drop anything still non-ASCII, control characters, or DEL: emoji, accented
+	// characters, box drawing, ANSI escapes. Keep printable ASCII (0x20-0x7E) and
+	// safe whitespace (tab, newline, carriage return, form feed).
 	var b strings.Builder
 	for _, r := range s {
-		if r < 128 {
+		if (r >= 0x20 && r < 0x7F) || r == 0x09 || r == 0x0A || r == 0x0C || r == 0x0D {
 			b.WriteRune(r)
 		}
 	}

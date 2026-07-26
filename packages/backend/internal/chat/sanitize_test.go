@@ -45,6 +45,33 @@ func TestSanitizeIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestSanitizeStripsControlCharacters(t *testing.T) {
+	// ESC, NUL, and BEL should not survive sanitization
+	in := "hi\x1b[31mred\x1b[0m\x00end\x07bell"
+	got := Sanitize(in, 500)
+	if strings.Contains(got, "\x1b") || strings.Contains(got, "\x00") || strings.Contains(got, "\x07") {
+		t.Errorf("control characters not stripped: %q", got)
+	}
+	// Should preserve the words without the escape sequences
+	if !strings.Contains(got, "hi") || !strings.Contains(got, "red") || !strings.Contains(got, "end") || !strings.Contains(got, "bell") {
+		t.Errorf("stripped too much: %q", got)
+	}
+}
+
+func TestSanitizeIdempotentWithSplitSchemeURL(t *testing.T) {
+	// Regression: markdown character inside URL scheme should not leak a URL
+	in := "see h*ttp://cnn.com now"
+	once := Sanitize(in, 500)
+	twice := Sanitize(once, 500)
+	if once != twice {
+		t.Errorf("not idempotent with split-scheme URL: first %q, second %q", once, twice)
+	}
+	// URL should be stripped (markdown removed first, then URL regex can match)
+	if strings.Contains(once, "cnn.com") || strings.Contains(once, "://") {
+		t.Errorf("URL not stripped from result: %q", once)
+	}
+}
+
 func TestHasAnachronismCatchesPostEraSlang(t *testing.T) {
 	for _, bad := range []string{"smh", "fr fr", "ngl that was wild", "bruh"} {
 		if _, found := HasAnachronism(bad); !found {
