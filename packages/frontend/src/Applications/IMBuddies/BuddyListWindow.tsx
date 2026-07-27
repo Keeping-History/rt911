@@ -108,7 +108,9 @@ const BuddyRow: React.FC<BuddyRowProps> = ({ buddy, selected, unread, onSelect, 
 	);
 };
 
-export const BuddyListWindow: React.FC = () => {
+export const BuddyListWindow: React.FC<{
+	appMenu?: React.ComponentProps<typeof ClassicyWindow>["appMenu"];
+}> = ({ appMenu }) => {
 	const {
 		buddies,
 		reason,
@@ -153,6 +155,7 @@ export const BuddyListWindow: React.FC = () => {
 			collapsable={true}
 			initialSize={[150, 320]}
 			initialPosition={["right", "top"]}
+			appMenu={appMenu}
 		>
 			<div className={styles.buddyList}>
 				<div className={styles.buddyGroups}>

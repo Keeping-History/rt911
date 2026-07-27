@@ -63,7 +63,11 @@ export function cascadePosition(index: number): [number, number] {
 	return [40 + step, 40 + step];
 }
 
-export const ChatWindow: React.FC<{ profile: number; index?: number }> = ({ profile, index = 0 }) => {
+export const ChatWindow: React.FC<{
+	profile: number;
+	index?: number;
+	appMenu?: React.ComponentProps<typeof ClassicyWindow>["appMenu"];
+}> = ({ profile, index = 0, appMenu }) => {
 	const { buddies, conversationFor, typingProfile, send, markRead, closeChat, enabled, reason } =
 		useIMBuddies();
 
@@ -141,6 +145,7 @@ export const ChatWindow: React.FC<{ profile: number; index?: number }> = ({ prof
 			initialSize={[260, 320]}
 			initialPosition={cascadePosition(index)}
 			onCloseFunc={() => closeChat(profile)}
+			appMenu={appMenu}
 		>
 			<div className={styles.chatWindow}>
 				<div className={styles.chatTranscript} ref={transcriptRef}>

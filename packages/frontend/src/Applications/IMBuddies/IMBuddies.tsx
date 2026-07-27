@@ -247,12 +247,12 @@ const IMBuddiesContent: React.FC = () => {
 			*/}
 			{connected && (
 				<>
-					<BuddyListWindow />
+					<BuddyListWindow appMenu={APP_MENU} />
 					{openChats.map((profile, i) => (
 						// `i` drives the cascade offset (#318). Windows used to
 						// open centred, one exactly on top of the last, which
 						// read as a single window being reused for every buddy.
-						<ChatWindow key={profile} profile={profile} index={i} />
+						<ChatWindow key={profile} profile={profile} index={i} appMenu={APP_MENU} />
 					))}
 					{/*
 					  ONE Get Info window, retargeted to the buddy Get Info was

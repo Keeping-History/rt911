@@ -387,15 +387,30 @@ describe("File menu", () => {
 		expect(signOn?.hasQuit).toBe(true);
 	});
 
-	// Get Info is a utility window. Classicy's focus reducer only assigns
-	// Desktop.appMenu when the focused window supplies one, so leaving this
-	// window menu-less keeps the previous window's File menu on screen rather
-	// than blanking the menu bar.
-	it("does NOT give the Get Info window a menu", () => {
-		renderApp({ connected: true, infoProfile: 1 });
-		const info = windowsWithFileMenu().find((w) => w.title.startsWith("Info:"));
-		expect(info, "expected a Get Info window").toBeDefined();
-		expect(info?.hasFile).toBe(false);
-		expect(info?.hasQuit).toBe(false);
+	// Asserted as an invariant over whatever windows are on screen rather than
+	// against hardcoded titles: every window this app opens carries File -> Quit
+	// EXCEPT Get Info. Naming the windows would couple the test to the buddy
+	// fixture's screen names, which is how the first version of this test broke.
+	it("gives every window except Get Info a File -> Quit", () => {
+		renderApp({ connected: true, openChats: [1], infoProfile: 2 });
+		const windows = windowsWithFileMenu();
+		expect(windows.length).toBeGreaterThan(1);
+
+		const info = windows.filter((w) => w.title.startsWith("Info:"));
+		const rest = windows.filter((w) => !w.title.startsWith("Info:"));
+
+		expect(info, "expected a Get Info window").toHaveLength(1);
+		expect(rest.length, "expected the Buddy List and a chat window").toBeGreaterThanOrEqual(2);
+
+		for (const win of rest) {
+			expect(win.hasFile, `${win.title} should carry a File menu`).toBe(true);
+			expect(win.hasQuit, `${win.title} should offer Quit`).toBe(true);
+		}
+		// Get Info is a utility window. Classicy's focus reducer only assigns
+		// Desktop.appMenu when the focused window supplies one, so leaving this
+		// window menu-less keeps the previous window's File menu on screen
+		// rather than blanking the menu bar.
+		expect(info[0].hasFile).toBe(false);
+		expect(info[0].hasQuit).toBe(false);
 	});
 });
