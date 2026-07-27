@@ -251,6 +251,16 @@ These are manual and block the cutover.
 Steps 5 and 6 leave no frontend gap, because `beta` continues to serve from the
 cluster until step 7.
 
+**`beta` during that window is gap-filler, not a tested fallback.** It exists so
+that no request 404s between the ingress switch and the DNS flip, and it is
+expected to work — both origin gates deliberately retain `beta` until cleanup,
+so chat from `beta` should behave exactly as it does from the apex. It is not
+separately verified, and step 7 should follow step 6 as soon as the apex checks
+pass rather than pausing to re-test a hostname that is being retired. The
+consequence to accept knowingly: if the apex is healthy but `beta` is not, that
+is discovered by a user on a bookmark during a window of a few minutes, not by
+this checklist.
+
 ## Verification
 
 - The apex returns 200 with the SPA, and `index.html` carries `no-store` as
@@ -267,7 +277,6 @@ cluster until step 7.
   distinguishable from a missing one.
 - IM Buddies signs on from the apex, the buddy roster is non-empty, and a
   message round-trips to a buddy and back.
-- During steps 5 through 7, the same two chat checks still pass from `beta`.
 - The session cookie is set on `.911realtime.org`, and chat identity resolves
   from the apex origin.
 - `go test ./...`, `pnpm test`, `tsc -b`, and `eslint .` all pass.
@@ -286,9 +295,11 @@ belongs there and not earlier. If chat identity does break unexpectedly
 mid-cutover, setting `CHAT_TRUSTED_ORIGINS` on the streamer Deployment adds an
 origin without waiting for a rebuild.
 
-This is why step 7 is last. Before it, `beta.911realtime.org` is a fully working
-escape hatch. After it, the 301 is cached in browsers and cannot be cleanly
-withdrawn.
+Step 7 is last because the 301 is the one irreversible act in the sequence —
+browsers cache it near-indefinitely, so it cannot be cleanly withdrawn. That is
+the reason for the ordering, not a tested `beta` fallback: as noted above,
+`beta` is expected to work during the window but is not verified. Rollback runs
+through reverting the infra commit, not through diverting users to `beta`.
 
 ## Out of scope
 
