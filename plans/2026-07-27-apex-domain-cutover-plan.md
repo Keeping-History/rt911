@@ -43,7 +43,7 @@ These are console operations outside both repositories. Every one of them blocks
 **Files:** none.
 
 **Interfaces:**
-- Produces: a Cloudflare API token with redirect permissions, exported as `$CF_REDIRECT_TOKEN` for Task 12; OAuth providers that accept the new callback URL.
+- Produces: OAuth providers that accept the new `api.911realtime.org` callback while still accepting the old one.
 
 - [ ] **Step 1: Add the Google OAuth redirect URI**
 
