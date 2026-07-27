@@ -112,7 +112,11 @@ describe("SignOnWindow", () => {
 		// The one place real credentials are handled. Pretending to authenticate
 		// here would be the costume lying about what it is.
 		const { signOn, openApp } = renderSignOn({ user: null, reason: "not_signed_in" });
-		fireEvent.click(screen.getByRole("button", { name: "Sign On" }));
+		// Labelled "Sign In" while signed out: it is the only live control on
+		// this window then, and what it does is open the Account app rather
+		// than sign on to chat. Calling it "Sign On" would promise the thing it
+		// cannot do.
+		fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
 		expect(signOn).not.toHaveBeenCalled();
 		expect(openApp).toHaveBeenCalledWith("Account.app");
 	});

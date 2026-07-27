@@ -167,14 +167,24 @@ export const SignOnWindow: React.FC = () => {
 				</div>
 
 				<div className={styles.signOnButtons}>
-					<ClassicyButton onClickFunc={() => {}} buttonSize="small">
+					{/*
+					  Setup is the only real configuration this app has: the screen
+					  name and the actual credentials both live in the Account app
+					  (#322). Help used to sit beside it doing nothing at all and is
+					  gone rather than disabled — see #328 for the Getting Started
+					  stack that will bring it back with something to open.
+
+					  Everything here is greyed out while signed out, except Sign On
+					  itself, which is the way OUT of that state: it opens the
+					  Account app. A window whose only working control is the one
+					  that fixes the problem is clearer than one where every button
+					  looks live and all but one silently fail.
+					*/}
+					<ClassicyButton onClickFunc={openAccountApp} buttonSize="small" disabled={!user}>
 						Setup
 					</ClassicyButton>
-					<ClassicyButton onClickFunc={() => {}} buttonSize="small">
-						Help
-					</ClassicyButton>
 					<ClassicyButton isDefault={true} onClickFunc={handleSignOn}>
-						Sign On
+						{user ? "Sign On" : "Sign In"}
 					</ClassicyButton>
 				</div>
 			</div>

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type React from "react";
 import { createContext, useContext, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +7,11 @@ import type { ChatBuddy, ChatStateReason } from "../../Providers/MediaStream/Med
 
 // This repo has no RTL auto-cleanup — every test file must do this itself.
 afterEach(cleanup);
+
+// The menu-bar extension shows the app ICON alone (#323) — its accessible name
+// comes from the extension's title and the icon's alt text, not from a visible
+// word, so tests address it by that rather than by "People"/"Window".
+const MENU_NAME = "Instant Messenger";
 
 // Same app id IMBuddies.tsx subscribes/dispatches under — not exported from
 // there, so it is repeated here (same convention every window file uses).
@@ -22,7 +27,7 @@ const imState = vi.hoisted(() => ({
 	reason: "ok" as ChatStateReason,
 	buddies: [] as ChatBuddy[],
 	openChats: [] as number[],
-	openInfo: [] as number[],
+	infoProfile: null as number | null,
 	typingProfile: null as number | null,
 	focusedAppId: "IMBuddies.app",
 	signOn: vi.fn(),
@@ -30,7 +35,7 @@ const imState = vi.hoisted(() => ({
 	openChat: vi.fn(),
 	closeChat: vi.fn(),
 	openInfoFor: vi.fn(),
-	closeInfoFor: vi.fn(),
+	closeInfo: vi.fn(),
 	send: vi.fn(),
 	markRead: vi.fn(),
 }));
@@ -73,13 +78,13 @@ vi.mock("./IMBuddiesProvider", () => ({
 			conversationFor: () => ({ messages: [], unread: 0 }),
 			typingProfile: imState.typingProfile,
 			openChats: imState.openChats,
-			openInfo: imState.openInfo,
+			infoProfile: imState.infoProfile,
 			signOn: imState.signOn,
 			signOff: imState.signOff,
 			openChat: imState.openChat,
 			closeChat: imState.closeChat,
 			openInfoFor: imState.openInfoFor,
-			closeInfoFor: imState.closeInfoFor,
+			closeInfo: imState.closeInfo,
 			send: imState.send,
 			markRead: imState.markRead,
 			selectedBuddy,
@@ -88,9 +93,12 @@ vi.mock("./IMBuddiesProvider", () => ({
 	},
 }));
 
-// SignOnWindow's one real dependency outside IMBuddiesProvider.
+// SignOnWindow's one real dependency outside IMBuddiesProvider -- and now
+// IMBuddiesContent's too, which shows a sign-in-required alert when there is
+// no session. Mutable so a test can render the signed-out case.
+const authStore = vi.hoisted(() => ({ user: null as { username?: string } | null }));
 vi.mock("../../Providers/Auth/AuthContext", () => ({
-	useAuth: () => ({ user: { username: "me" } as AuthUser }),
+	useAuth: () => ({ user: authStore.user as AuthUser | null }),
 }));
 
 // Minimal shape of the one ClassicyMenuItem field set this file's mock
@@ -191,14 +199,17 @@ function renderApp(
 		connected?: boolean;
 		buddies?: ChatBuddy[];
 		openChats?: number[];
-		openInfo?: number[];
+		infoProfile?: number | null;
 		focusedAppId?: string;
+		/** Directus session; signed in unless a test says otherwise. */
+		user?: { username?: string } | null;
 	} = {},
 ) {
 	imState.connected = overrides.connected ?? false;
 	imState.buddies = overrides.buddies ?? DEFAULT_BUDDIES;
 	imState.openChats = overrides.openChats ?? [];
-	imState.openInfo = overrides.openInfo ?? [];
+	imState.infoProfile = overrides.infoProfile ?? null;
+	authStore.user = overrides.user === undefined ? { username: "me" } : overrides.user;
 	imState.enabled = true;
 	imState.reason = "ok";
 	imState.typingProfile = null;
@@ -208,7 +219,7 @@ function renderApp(
 	imState.openChat = vi.fn();
 	imState.closeChat = vi.fn();
 	imState.openInfoFor = vi.fn();
-	imState.closeInfoFor = vi.fn();
+	imState.closeInfo = vi.fn();
 	imState.send = vi.fn();
 	imState.markRead = vi.fn();
 	render(<IMBuddies />);
@@ -252,12 +263,12 @@ describe("People/Window menus are frontmost-only", () => {
 	// renders unconditionally.
 	it("shows the People menu while this app is frontmost", () => {
 		renderApp({ connected: true, focusedAppId: APP_ID });
-		expect(screen.getByText("People")).toBeTruthy();
+		expect(screen.getByRole("button", { name: MENU_NAME })).toBeTruthy();
 	});
 
 	it("hides the People menu when another app is frontmost", () => {
 		renderApp({ connected: true, focusedAppId: "TV.app" });
-		expect(screen.queryByText("People")).toBeNull();
+		expect(screen.queryByRole("button", { name: MENU_NAME })).toBeNull();
 	});
 });
 
@@ -276,7 +287,7 @@ describe("People menu acts on the Buddy List selection", () => {
 			],
 		});
 		fireEvent.click(screen.getByText("carolm"));
-		fireEvent.click(screen.getByRole("button", { name: "People" }));
+		fireEvent.click(screen.getByRole("button", { name: MENU_NAME }));
 		fireEvent.click(screen.getByRole("button", { name: "Get Info" }));
 		expect(imState.openInfoFor).toHaveBeenCalledWith(2);
 		expect(imState.openInfoFor).not.toHaveBeenCalledWith(1);
@@ -284,10 +295,52 @@ describe("People menu acts on the Buddy List selection", () => {
 
 	it("disables Get Info with nothing selected", () => {
 		renderApp({ connected: true });
-		fireEvent.click(screen.getByRole("button", { name: "People" }));
+		fireEvent.click(screen.getByRole("button", { name: MENU_NAME }));
 		const getInfo = screen.getByRole("button", { name: "Get Info" }) as HTMLButtonElement;
 		expect(getInfo.disabled).toBe(true);
 		fireEvent.click(getInfo);
 		expect(imState.openInfoFor).not.toHaveBeenCalled();
+	});
+
+	it("renders exactly one Info window, for the profile it is retargeted to (#325)", () => {
+		// The bug: openInfoFor appended to a list, so a second Get Info opened a
+		// SECOND window at the same centred position, behind the first — and
+		// pressing Info for another buddy looked like it did nothing at all.
+		renderApp({
+			connected: true,
+			infoProfile: 2,
+			buddies: [
+				{ profile: 1, screen_name: "danny99", display_name: "Danny", avatar: "", online: true },
+				{ profile: 2, screen_name: "carolm", display_name: "Carol", avatar: "", online: true },
+			],
+		});
+		expect(screen.getAllByText(/^Info: /)).toHaveLength(1);
+		expect(screen.getByText("Info: carolm")).toBeTruthy();
+	});
+
+	it("opens no Info window when nothing has been retargeted to", () => {
+		renderApp({ connected: true, infoProfile: null });
+		expect(screen.queryByText(/^Info: /)).toBeNull();
+	});
+
+	it("warns a signed-out student, offering Quit and Sign In", () => {
+		// Signed out, nothing in this app can work: chat identity is the Directus
+		// session cookie, so the streamer refuses every send regardless. Say so
+		// rather than letting them press Sign On and land somewhere else.
+		renderApp({ connected: false, user: null });
+		expect(screen.getByText("You must be signed in to use Instant Messenger.")).toBeTruthy();
+		// Quit is unique to the alert, so it locates the alert's own button row.
+		// "Sign In" deliberately appears TWICE on screen while signed out — once
+		// here and once on the Sign On window behind it — because both do the
+		// same thing (open the Account app), so the query is scoped rather than
+		// either label being changed to make the test easier.
+		const quit = screen.getByRole("button", { name: "Quit" });
+		const alertButtons = within(quit.parentElement as HTMLElement);
+		expect(alertButtons.getByRole("button", { name: "Sign In" })).toBeTruthy();
+	});
+
+	it("does not warn a signed-in student", () => {
+		renderApp({ connected: false, user: { username: "me" } });
+		expect(screen.queryByText("You must be signed in to use Instant Messenger.")).toBeNull();
 	});
 });

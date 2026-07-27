@@ -69,7 +69,11 @@
 	// (dist/classicy.css: --color-theme-hover, falling back to
 	// --color-system-05) — this row is themed the same way any other
 	// hoverable list item in the library is.
-	&:hover {
+	// :not(.buddyRowSelected) matters. `.buddyRow:hover` is (0,2,0) and
+	// `.buddyRowSelected` was (0,1,0), so hover won -- and since your pointer is
+	// still on the row you just clicked, the selection colour was painted over
+	// at exactly the moment you looked for it, making clicking look inert (#326).
+	&:hover:not(.buddyRowSelected) {
 		background-color: var(--color-theme-hover, var(--color-system-05));
 	}
 }
@@ -79,8 +83,11 @@
 // .classicyTreeNodeSelected .classicyTreeNodeLabel{color:var(--color-white)}
 // in dist/classicy.css) — this list's selection uses the same theme tokens
 // as the library's native list widget, not a one-off color.
-.buddyRowSelected {
+.buddyRow.buddyRowSelected {
 	background: var(--color-select);
+	// Also beats .buddyRowOffline's grey below: a selected offline buddy should
+	// read as SELECTED first. Its offline state is still carried by the hollow
+	// dot, which the selection does not touch.
 	color: var(--color-white);
 }
 
@@ -148,10 +155,19 @@
 	display: flex;
 	flex-direction: column;
 	height: 100%;
+	// min-height:0 on BOTH this and .chatTranscript, or neither scrolls. A flex
+	// item defaults to min-height:auto, which refuses to shrink below its
+	// content's intrinsic height -- so the transcript GREW with the conversation
+	// instead of scrolling, scrollHeight equalled clientHeight, and the
+	// stick-to-bottom effect in ChatWindow.tsx wrote a scrollTop that could
+	// never move (#319). Same pattern as Newsgroups.module.scss's .layout.
+	min-height: 0;
 }
 
 .chatTranscript {
 	flex: 1;
+	// See .chatWindow above -- without this, overflow-y never engages.
+	min-height: 0;
 	overflow-y: auto;
 	padding: 8px;
 }
@@ -188,6 +204,13 @@
 	display: flex;
 	align-items: center;
 	gap: 6px;
+
+	// Clear the window's resize grip, which classicy draws over the bottom-right
+	// corner -- right on top of the Send button (#320). Its width is
+	// calc(var(--window-padding-size) * 2.5 + var(--window-border-size) * 1.5)
+	// in classicy.css, so the gutter is derived from the same variables rather
+	// than a guessed pixel count that would drift if the theme changed.
+	padding-right: calc(var(--window-padding-size) * 2.5 + var(--window-border-size) * 1.5);
 
 	// The compose text field is the one element in this row that should
 	// stretch to fill the space between the smiley and Send buttons.
@@ -234,4 +257,14 @@
 	background: var(--color-white);
 	padding: 6px;
 	white-space: pre-wrap;
+}
+
+// The menu-bar extension shows the app icon alone rather than a word (#323):
+// a menu-bar extra is an icon-sized slot, and two words of chrome for one app
+// crowded it.
+.menuBarIcon {
+	display: block;
+	width: 16px;
+	height: 16px;
+	object-fit: contain;
 }

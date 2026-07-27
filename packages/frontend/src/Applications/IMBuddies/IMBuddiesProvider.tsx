@@ -1,7 +1,13 @@
 // The single owner of IM Buddies chat state. Every window (Sign On, Buddy
 // List, Chat, Get Info) reads from useIMBuddies() — none of them subscribes to
 // MediaStreamContext or touches the socket directly (hard rule 1).
-import { ClassicySoundActionTypes, useClassicyDateTime, useSoundDispatch } from "classicy";
+import {
+	ClassicySoundActionTypes,
+	hasShownStartupScreenThisSession,
+	useAppManagerDispatch,
+	useClassicyDateTime,
+	useSoundDispatch,
+} from "classicy";
 import {
 	createContext,
 	type FC,
@@ -13,6 +19,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { useAuth } from "../../Providers/Auth/AuthContext";
 import {
 	type ChatBuddy,
 	type ChatMessage,
@@ -24,6 +31,20 @@ import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { IM_SOUNDS, presenceSounds } from "./sounds";
 
 const APP_ID = "IMBuddies.app";
+
+/**
+ * A virtual instant at the resolution the wire actually carries.
+ *
+ * The streamer formats every chat_message time with Go's time.RFC3339, which
+ * has no fractional-seconds component. Comparing a millisecond-precise local
+ * value against those truncated ones is comparing two different clocks: within
+ * any single second the local one always looks later. Truncating here makes the
+ * two sides comparable, and leaves same-second ordering to the arrival-order
+ * tiebreak, which is what "the order they were transmitted" means.
+ */
+export function wireTimestamp(ms: number): string {
+	return new Date(Math.floor(ms / 1000) * 1000).toISOString().replace(".000Z", "Z");
+}
 /**
  * Backlog page size for a history re-fetch — both the one a backward seek
  * triggers per open window and the one opening a window triggers for itself.
@@ -51,13 +72,17 @@ export interface IMBuddiesValue {
 	conversationFor: (profile: number) => Conversation;
 	typingProfile: number | null;
 	openChats: number[];
-	openInfo: number[];
+	/**
+	 * The buddy the single Get Info window is currently about, or null when it
+	 * is closed. One window that retargets, not one per buddy — see openInfoFor.
+	 */
+	infoProfile: number | null;
 	signOn: () => void;
 	signOff: () => void;
 	openChat: (profile: number) => void;
 	closeChat: (profile: number) => void;
 	openInfoFor: (profile: number) => void;
-	closeInfoFor: (profile: number) => void;
+	closeInfo: () => void;
 	send: (profile: number, body: string) => void;
 	markRead: (profile: number) => void;
 	/**
@@ -108,6 +133,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		appendLocalChatMessage,
 	} = useContext(MediaStreamContext);
 
+	const desktopEventDispatch = useAppManagerDispatch();
 	const soundDispatch = useSoundDispatch();
 	const play = useCallback(
 		(sound: string) =>
@@ -134,9 +160,15 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		virtualNowMsRef.current = virtualUtcMs(localDate, tzOffset);
 	}, [localDate, tzOffset]);
 
+	const { user } = useAuth();
+
 	const [signedOn, setSignedOn] = useState(false);
+	// Latches auto sign-on to at most once per browser session — see the effect
+	// below. Declared here with the state it guards rather than beside that
+	// effect, because signOff writes it too.
+	const autoSignOnDoneRef = useRef(false);
 	const [openChats, setOpenChats] = useState<number[]>([]);
-	const [openInfo, setOpenInfo] = useState<number[]>([]);
+	const [infoProfile, setInfoProfile] = useState<number | null>(null);
 	const [readMarks, setReadMarks] = useState<Record<number, number>>({});
 	const [selectedBuddy, setSelectedBuddy] = useState<number | null>(null);
 	const selectBuddy = useCallback((profile: number | null) => setSelectedBuddy(profile), []);
@@ -150,7 +182,29 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		return () => unsubscribeChat(APP_ID);
 	}, [signedOn, subscribeChat, unsubscribeChat]);
 
-	const signOn = useCallback(() => setSignedOn(true), []);
+	const signOn = useCallback(() => {
+		autoSignOnDoneRef.current = true;
+		setSignedOn(true);
+	}, []);
+
+	// Auto sign-on once the desktop has finished booting (#321). The flag lives
+	// in sessionStorage and classicy exports the reader, so this never touches
+	// storage directly.
+	//
+	// Two guards carry the weight here:
+	//
+	//   - No Directus user, no auto sign-on. SignOnWindow hands a signed-out
+	//     student to the Account app; firing that automatically would drop
+	//     someone into a login screen they never asked for on boot.
+	//   - The latch (set here, by signOn, and by signOff) makes this fire at
+	//     most once per session, so Sign Off actually signs you off.
+	useEffect(() => {
+		if (autoSignOnDoneRef.current || signedOn) return;
+		if (!user || !socketConnected) return;
+		if (!hasShownStartupScreenThisSession()) return;
+		autoSignOnDoneRef.current = true;
+		setSignedOn(true);
+	}, [user, socketConnected, signedOn]);
 
 	// unsubscribeChat deliberately does NOT clear chatBuddies/chatMessages/
 	// chatTypingProfile in MediaStreamProvider (by design — those are
@@ -161,9 +215,18 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 	const signOff = useCallback(() => {
 		setSignedOn(false);
 		setOpenChats([]);
-		setOpenInfo([]);
+		setInfoProfile(null);
 		setReadMarks({});
 		setSelectedBuddy(null);
+		// Belt-and-braces, and known to be so: every path that can set
+		// signedOn (the auto sign-on effect, and signOn itself) already latches
+		// this, so by the time anyone can sign OFF the latch is necessarily
+		// already true — removing this line does not fail a single test, which
+		// is how that was established rather than assumed. It stays because
+		// signOff is where "this session is over" is expressed, and a future
+		// third way to sign on should not be able to make Sign Off
+		// un-obeyable by forgetting to latch.
+		autoSignOnDoneRef.current = true;
 	}, []);
 
 	// A backward seek (below) re-requests history that overlaps what live
@@ -215,7 +278,13 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 				if (!Number.isNaN(ao.time) && !Number.isNaN(bo.time) && ao.time !== bo.time) {
 					return ao.time - bo.time;
 				}
-				if (a.message_id !== b.message_id) return a.message_id - b.message_id;
+				// Arrival order, NOT message_id. Within one second, "the order
+				// they were transmitted" (#327) is the order this client saw
+				// them; a local echo's message_id of 0 is the server's
+				// "not persisted" marker, and using it as a position in time
+				// sorted every unsent line to the top of the conversation.
+				// After a backward seek the array is cleared before the replay,
+				// so arrival order is the server's oldest-first order there too.
 				return ao.index - bo.index;
 			});
 		}
@@ -260,25 +329,40 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		(profile: number) => {
 			setOpenChats((prev) => withValue(prev, profile));
 			markRead(profile);
+			// Raise the window if it is ALREADY open (#324) — pressing IM for a
+			// buddy you are already talking to must bring that conversation
+			// forward rather than silently doing nothing. A window opening for
+			// the first time focuses itself on mount instead; this dispatch
+			// cannot reach it, because it does not exist yet.
+			desktopEventDispatch({
+				type: "ClassicyWindowFocus",
+				app: { id: APP_ID },
+				window: { id: `im_chat_${profile}` },
+			});
 			requestChatHistory(
 				profile,
 				new Date(virtualNowMsRef.current).toISOString(),
 				HISTORY_PAGE_LIMIT,
 			);
 		},
-		[markRead, requestChatHistory],
+		[markRead, requestChatHistory, desktopEventDispatch],
 	);
 
 	const closeChat = useCallback((profile: number) => {
 		setOpenChats((prev) => withoutValue(prev, profile));
 	}, []);
 
+	// ONE Get Info window that retargets, not one per buddy (#325). Appending
+	// to a list opened a second window at the same centred position as the
+	// first, which then stayed on top — so pressing Info for a different buddy
+	// looked like it did nothing at all. Setting a single value means the
+	// window that is already open simply changes who it is about.
 	const openInfoFor = useCallback((profile: number) => {
-		setOpenInfo((prev) => withValue(prev, profile));
+		setInfoProfile(profile);
 	}, []);
 
-	const closeInfoFor = useCallback((profile: number) => {
-		setOpenInfo((prev) => withoutValue(prev, profile));
+	const closeInfo = useCallback(() => {
+		setInfoProfile(null);
 	}, []);
 
 	const send = useCallback(
@@ -298,7 +382,12 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 				profile,
 				direction: "in",
 				body,
-				time: new Date(virtualNowMsRef.current).toISOString(),
+				// Stamped at the WIRE's resolution, not the clock's. The server
+				// formats with time.RFC3339 — whole seconds, no fractional part
+				// (session.go) — so a millisecond-precise echo of "…:03.250Z"
+				// sorted AFTER a reply stamped "…:03Z" in the same second, and
+				// the student's own line appeared below the answer to it (#327).
+				time: wireTimestamp(virtualNowMsRef.current),
 				kind: "typed",
 			});
 			play(IM_SOUNDS.send);
@@ -379,13 +468,13 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			conversationFor,
 			typingProfile: chatTypingProfile,
 			openChats,
-			openInfo,
+			infoProfile,
 			signOn,
 			signOff,
 			openChat,
 			closeChat,
 			openInfoFor,
-			closeInfoFor,
+			closeInfo,
 			send,
 			markRead,
 			selectedBuddy,
@@ -400,13 +489,13 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			conversationFor,
 			chatTypingProfile,
 			openChats,
-			openInfo,
+			infoProfile,
 			signOn,
 			signOff,
 			openChat,
 			closeChat,
 			openInfoFor,
-			closeInfoFor,
+			closeInfo,
 			send,
 			markRead,
 			selectedBuddy,

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatBuddy, ChatMessage, ChatStateReason } from "../../Providers/MediaStream/MediaStreamContext";
-import { ChatWindow, composeHintFor } from "./ChatWindow";
+import { cascadePosition, ChatWindow, composeHintFor } from "./ChatWindow";
 import { IM_SOUNDS } from "./sounds";
 
 // This repo has no RTL auto-cleanup — every test file must do this itself.
@@ -213,5 +213,29 @@ describe("ChatWindow", () => {
 		expect(screen.getByText("Carol is typing...")).toBeTruthy();
 		// Danny must not appear anywhere — not as the title, not as a speaker.
 		expect(screen.queryByText(/Danny/)).toBeNull();
+	});
+});
+
+describe("cascadePosition", () => {
+	it("puts each successive window somewhere else", () => {
+		// #318: every chat window opened at ["center","center"], so the second
+		// buddy's window landed pixel-perfect on the first and the app looked
+		// like it reused one window for every conversation. No test could see
+		// it, because every test rendered exactly one window.
+		expect(cascadePosition(0)).not.toEqual(cascadePosition(1));
+		expect(cascadePosition(1)).not.toEqual(cascadePosition(2));
+	});
+
+	it("wraps rather than walking windows off the screen", () => {
+		// Six steps then back to the start: a student with many conversations
+		// open should not have the seventh window land past the desktop edge.
+		expect(cascadePosition(6)).toEqual(cascadePosition(0));
+	});
+
+	it("moves both axes together, the way a Mac OS 8 cascade does", () => {
+		const [x, y] = cascadePosition(3);
+		const [x0, y0] = cascadePosition(0);
+		expect(x).toBeGreaterThan(x0);
+		expect(y).toBeGreaterThan(y0);
 	});
 });

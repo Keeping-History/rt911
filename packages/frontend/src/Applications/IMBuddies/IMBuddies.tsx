@@ -1,4 +1,5 @@
 import {
+	ClassicyAlert,
 	ClassicyApp,
 	ClassicyIcons,
 	ClassicyMenuBarExtension,
@@ -9,10 +10,12 @@ import {
 	useAppManagerDispatch,
 } from "classicy";
 import type React from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useAuth } from "../../Providers/Auth/AuthContext";
 import appIconPng from "./app.png";
 import { BuddyListWindow, isMessageable } from "./BuddyListWindow";
 import { ChatWindow } from "./ChatWindow";
+import styles from "./IMBuddies.module.scss";
 import { IMBuddiesProvider, useIMBuddies } from "./IMBuddiesProvider";
 import { InfoWindow } from "./InfoWindow";
 import { SignOnWindow } from "./SignOnWindow";
@@ -31,6 +34,9 @@ const ICONS = registerClassicyIcons({
 const appIcon = ICONS.applications.imBuddies.app;
 
 const BUDDY_LIST_WINDOW_ID = "im_buddylist";
+// The one app that handles real credentials — the same id SignOnWindow hands
+// off to when there is no Directus session.
+const ACCOUNT_APP_ID = "Account.app";
 
 /**
  * People and Window menus, plus Quit. `ClassicyMenuBarExtension` portal-
@@ -68,8 +74,18 @@ const IMBuddiesMenus: React.FC = () => {
 		[buddies, selectedBuddy],
 	);
 
-	const peopleItems = useMemo<ClassicyMenuItem[]>(
-		() => [
+	// ONE menu, not two (#323). People and Window were separate extensions with
+	// text titles, which put two words of chrome in the menu bar for a single
+	// app -- and a menu-bar extension is the icon-sized slot on the right, where
+	// words read as the wrong kind of thing. Merged with a separator between the
+	// people actions and the window list, the way a Mac OS 8 menu groups.
+	//
+	// Rebuilt fresh every render from openChats/buddies -- never snapshotted --
+	// so a chat window opening or closing is reflected in the very same render
+	// that adds/removes its <ChatWindow> below, not a stale copy from whenever
+	// this menu last happened to re-run.
+	const menuItems = useMemo<ClassicyMenuItem[]>(() => {
+		const items: ClassicyMenuItem[] = [
 			{
 				id: "im_menu_new_message",
 				title: "New Message",
@@ -97,16 +113,10 @@ const IMBuddiesMenus: React.FC = () => {
 				onClickFunc: signOff,
 			},
 			quitMenuItemHelper(APP_ID, APP_NAME, appIcon),
-		],
-		[connected, selectedBuddyObj, openChat, openInfoFor, signOff],
-	);
-
-	// Rebuilt fresh every render from openChats/buddies -- never snapshotted --
-	// so a chat window opening or closing is reflected in the very same render
-	// that adds/removes its <ChatWindow> below, not a stale copy from whenever
-	// this menu last happened to re-run.
-	const windowItems = useMemo<ClassicyMenuItem[]>(() => {
-		const items: ClassicyMenuItem[] = [
+			// classicy renders an item whose id is "spacer" as an <hr> rather
+			// than a row — that is the library's separator convention, not a
+			// placeholder id.
+			{ id: "spacer" },
 			{
 				id: "im_menu_buddylist",
 				title: "Buddy List",
@@ -124,28 +134,26 @@ const IMBuddiesMenus: React.FC = () => {
 			});
 		}
 		return items;
-	}, [connected, openChats, buddies, focusWindow]);
+	}, [connected, selectedBuddyObj, openChat, openInfoFor, signOff, openChats, buddies, focusWindow]);
 
 	return (
-		<>
-			<ClassicyMenuBarExtension id="im_menu_people" order={1} title="People" menuItems={peopleItems}>
-				People
-			</ClassicyMenuBarExtension>
-			<ClassicyMenuBarExtension id="im_menu_window" order={2} title="Window" menuItems={windowItems}>
-				Window
-			</ClassicyMenuBarExtension>
-		</>
+		<ClassicyMenuBarExtension id="im_menu" order={1} title={APP_NAME} menuItems={menuItems}>
+			{/* Icon only — the title above is what names it to a screen reader. */}
+			<img src={appIcon} alt={APP_NAME} className={styles.menuBarIcon} />
+		</ClassicyMenuBarExtension>
 	);
 };
 
 /**
- * Sign On while disconnected, Buddy List once connected, plus one Chat/Info
- * window per entry in openChats/openInfo -- mapped live off provider state,
- * never a fixed "all buddies" list, so a closed conversation's window
- * actually disappears instead of just losing focus.
+ * Sign On while disconnected, Buddy List once connected, one Chat window per
+ * entry in openChats, and a single retargeting Info window -- all mapped live
+ * off provider state, never a fixed "all buddies" list, so a closed
+ * conversation's window actually disappears instead of just losing focus.
  */
 const IMBuddiesContent: React.FC = () => {
-	const { connected, openChats, openInfo } = useIMBuddies();
+	const { connected, openChats, infoProfile } = useIMBuddies();
+	const { user } = useAuth();
+	const desktopEventDispatch = useAppManagerDispatch();
 	// Same selector idiom as PlaylistProvider.tsx: read app-manager state
 	// directly rather than plumbing a prop. IMBuddiesMenus is only ever
 	// mounted while this app is the frontmost one -- see the comment on that
@@ -154,15 +162,62 @@ const IMBuddiesContent: React.FC = () => {
 		(s) => s.System.Manager.Applications.focusedAppId === APP_ID,
 	);
 
+	// Shown once per app open while signed out, then dismissed. ClassicyApp
+	// renders its children only while the app is open, so this component
+	// mounting IS the app opening and the state resets on the next open -- no
+	// separate "have I shown this yet" bookkeeping to go stale.
+	const [signInAlertDismissed, setSignInAlertDismissed] = useState(false);
+
 	return (
 		<>
 			{isFrontmost && <IMBuddiesMenus />}
+			{/*
+			  Signed out, this app cannot do anything at all: chat identity is the
+			  Directus session cookie, so the streamer refuses every send no
+			  matter what the student does here. Say so up front rather than
+			  letting them press Sign On and quietly land in a different app.
+			  Quit and Sign In are the only two real options, so they are the
+			  only two buttons.
+			*/}
+			{!user && !signInAlertDismissed && (
+				<ClassicyAlert
+					id="im_signin_required"
+					appId={APP_ID}
+					alertType="stop"
+					title={APP_NAME}
+					label="You must be signed in to use Instant Messenger."
+					message="Your buddies need to know who they are talking to. Sign in with the Account app, then come back."
+					buttons={[
+						{
+							id: "im_signin_required_quit",
+							label: "Quit",
+							role: "cancel",
+							onClick: () =>
+								desktopEventDispatch({
+									type: "ClassicyAppClose",
+									app: { id: APP_ID, name: APP_NAME, icon: appIcon },
+								}),
+						},
+						{
+							id: "im_signin_required_signin",
+							label: "Sign In",
+							role: "default",
+							onClick: () =>
+								desktopEventDispatch({
+									type: "ClassicyAppOpen",
+									app: { id: ACCOUNT_APP_ID, name: "Account", icon: "" },
+								}),
+						},
+					]}
+					onClose={() => setSignInAlertDismissed(true)}
+				/>
+			)}
 			{!connected && <SignOnWindow />}
 			{/*
 			  Every window below the Sign On window is gated on `connected` too,
 			  not just the Buddy List. A dropped socket flips `connected` false
 			  (that is what CRITICAL 1's derivation bought) while openChats /
-			  openInfo are cleared only by signOff — so without this gate a
+			  infoProfile are cleared only by signOff — so without this gate a
 			  student would be left looking at chat windows sitting beside the
 			  Sign On window, on top of a conversation they can no longer
 			  continue. The lists themselves are kept, so a recovered socket
@@ -171,12 +226,18 @@ const IMBuddiesContent: React.FC = () => {
 			{connected && (
 				<>
 					<BuddyListWindow />
-					{openChats.map((profile) => (
-						<ChatWindow key={profile} profile={profile} />
+					{openChats.map((profile, i) => (
+						// `i` drives the cascade offset (#318). Windows used to
+						// open centred, one exactly on top of the last, which
+						// read as a single window being reused for every buddy.
+						<ChatWindow key={profile} profile={profile} index={i} />
 					))}
-					{openInfo.map((profile) => (
-						<InfoWindow key={profile} profile={profile} />
-					))}
+					{/*
+					  ONE Get Info window, retargeted to the buddy Get Info was
+					  last used on rather than one window per buddy (#325) — see
+					  IMBuddiesProvider.openInfoFor.
+					*/}
+					{infoProfile !== null && <InfoWindow profile={infoProfile} />}
 				</>
 			)}
 		</>

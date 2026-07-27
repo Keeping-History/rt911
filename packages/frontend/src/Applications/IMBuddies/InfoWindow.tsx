@@ -20,7 +20,7 @@ const APP_ID = "IMBuddies.app";
  * back to anything else.
  */
 export const InfoWindow: React.FC<{ profile: number }> = ({ profile }) => {
-	const { buddies, closeInfoFor } = useIMBuddies();
+	const { buddies, closeInfo } = useIMBuddies();
 	const buddy = buddies.find((b) => b.profile === profile) ?? null;
 
 	const screenName = buddy?.screen_name || "Buddy";
@@ -30,7 +30,13 @@ export const InfoWindow: React.FC<{ profile: number }> = ({ profile }) => {
 
 	return (
 		<ClassicyWindow
-			id={`im_info_${profile}`}
+			// A STABLE id, deliberately not keyed on the profile: this is ONE
+			// window that retargets to whichever buddy Get Info was last used on
+			// (#325). Keying it on the profile would remount the window — it
+			// would blink and jump back to its initial position — where a plain
+			// re-render just swaps the contents, which is what retargeting
+			// should feel like.
+			id="im_info"
 			appId={APP_ID}
 			title={`Info: ${screenName}`}
 			closable={true}
@@ -39,7 +45,7 @@ export const InfoWindow: React.FC<{ profile: number }> = ({ profile }) => {
 			collapsable={true}
 			initialSize={[220, 200]}
 			initialPosition={["center", "center"]}
-			onCloseFunc={() => closeInfoFor(profile)}
+			onCloseFunc={closeInfo}
 		>
 			<div className={styles.infoWindow}>
 				<div className={styles.infoRow}>

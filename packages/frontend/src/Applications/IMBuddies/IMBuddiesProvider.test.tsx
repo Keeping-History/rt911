@@ -46,13 +46,32 @@ const clockStore = (() => {
 // value directly.
 const mockPlaySound = vi.hoisted(() => vi.fn());
 
+// Window-focus spy: openChat raises an ALREADY-open chat window (#324), which
+// is the only case a dispatch can reach — a window opening for the first time
+// focuses itself on mount, where this provider cannot see it.
+const mockDesktopDispatch = vi.hoisted(() => vi.fn());
+// Whether the mocked classicy reports the boot splash as already shown. Auto
+// sign-on (#321) keys off this, so it defaults to false and the one test that
+// exercises that path turns it on.
+const startupScreenStore = vi.hoisted(() => ({ shown: false }));
+
 vi.mock("classicy", () => ({
 	useSoundDispatch: () => (action: { sound: string }) => mockPlaySound(action.sound),
 	ClassicySoundActionTypes: { ClassicySoundPlay: "ClassicySoundPlay" },
+	useAppManagerDispatch: () => mockDesktopDispatch,
+	hasShownStartupScreenThisSession: () => startupScreenStore.shown,
 	useClassicyDateTime: () => {
 		const iso = useSyncExternalStore(clockStore.subscribe, clockStore.get);
 		return { localDate: new Date(iso), dateTime: iso, tzOffset: tzOffsetStore.hours };
 	},
+}));
+
+// The provider reads the Directus session to decide whether auto sign-on is
+// even allowed. Signed out by default: a signed-out student must never be
+// signed on automatically (they would land in the Account app unasked).
+const authStore = vi.hoisted(() => ({ user: null as { username?: string } | null }));
+vi.mock("../../Providers/Auth/AuthContext", () => ({
+	useAuth: () => ({ user: authStore.user }),
 }));
 
 import { IMBuddiesProvider, type IMBuddiesValue, useIMBuddies } from "./IMBuddiesProvider";
@@ -70,6 +89,10 @@ interface ChatOverrides {
 	chatTypingProfile?: number | null;
 	connected?: boolean;
 	tzOffset?: number;
+	/** Directus session. Null (signed out) unless a test says otherwise. */
+	user?: { username?: string } | null;
+	/** Whether classicy reports the boot splash as already shown (#321). */
+	startupScreenShown?: boolean;
 }
 
 /**
@@ -86,6 +109,12 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 	clockStore.reset();
 	tzOffsetStore.hours = overrides.tzOffset ?? 0;
 	mockPlaySound.mockClear();
+	mockDesktopDispatch.mockClear();
+	// Signed out and pre-splash by default, so no test signs on by accident:
+	// auto sign-on (#321) needs BOTH, and a test that quietly connected would
+	// make every "not signed on yet" assertion below meaningless.
+	authStore.user = overrides.user ?? null;
+	startupScreenStore.shown = overrides.startupScreenShown ?? false;
 
 	const requestChatHistory = vi.fn();
 	const subscribeChat = vi.fn();
@@ -369,17 +398,21 @@ describe("IMBuddiesProvider", () => {
 		expect(playSound).not.toHaveBeenCalledWith(IM_SOUNDS.receive);
 	});
 
-	it("does not duplicate an already-open info window", () => {
+	it("retargets the one info window instead of opening a second (#325)", () => {
 		// `ctx` is a live getter (re-evaluated on each access, unlike a
 		// destructured snapshot) so it reflects state changes from the acts below.
 		const result = renderWithChat(<Probe />, {});
-		act(() => {
-			result.ctx.openInfoFor(3);
-			result.ctx.openInfoFor(3);
-		});
-		expect(result.ctx.openInfo).toEqual([3]);
-		act(() => result.ctx.closeInfoFor(3));
-		expect(result.ctx.openInfo).toEqual([]);
+		act(() => result.ctx.openInfoFor(3));
+		expect(result.ctx.infoProfile).toBe(3);
+
+		// The bug this replaces: openInfoFor appended, so asking for a second
+		// buddy's info opened a SECOND window at the same centred position,
+		// behind the first — and pressing Info looked like it did nothing.
+		act(() => result.ctx.openInfoFor(7));
+		expect(result.ctx.infoProfile).toBe(7);
+
+		act(() => result.ctx.closeInfo());
+		expect(result.ctx.infoProfile).toBeNull();
 	});
 
 	it("subscribes on signOn and unsubscribes on signOff", () => {
@@ -456,7 +489,12 @@ describe("IMBuddiesProvider", () => {
 		const { ctx, localEchoes } = renderWithChat(<Probe />, { tzOffset: -4 });
 		act(() => ctx.send(1, "hi"));
 		expect(localEchoes).toHaveLength(1);
-		expect(localEchoes[0].time).toBe("2001-09-11T17:00:00.000Z");
+		// No fractional seconds, deliberately (#327): the streamer formats every
+		// chat_message time with Go's time.RFC3339, which has none. A
+		// millisecond-precise echo compared against those truncated values always
+		// looked LATER within the same second, so the student's own line sorted
+		// below the reply to it.
+		expect(localEchoes[0].time).toBe("2001-09-11T17:00:00Z");
 		expect(localEchoes[0].kind).toBe("typed");
 		// id 0 means "not persisted" — it must stay out of the dedupe path, or
 		// two typed lines in a row would collapse into one.
@@ -569,5 +607,87 @@ describe("IMBuddiesProvider", () => {
 		playSound.mockClear();
 		act(() => ctx.send(1, "hi"));
 		expect(playSound).not.toHaveBeenCalledWith(IM_SOUNDS.receive);
+	});
+
+	it("keeps a sent line above a reply stamped in the same second (#327)", () => {
+		// The reported bug: the student's own message appeared BELOW the buddy's
+		// answer to it. The echo carried milliseconds while the server's reply
+		// carried whole-second RFC3339, so within one second the echo always
+		// compared later. Both sides must now be at the same resolution, leaving
+		// arrival order to decide.
+		const { ctx, pushMessage, setClock } = renderWithChat(<Probe />, {});
+		// A fractional instant is the whole point: on an exact second boundary
+		// "…:00.000Z" and "…:00Z" parse to the same value and the bug cannot
+		// reproduce, so a test written at 13:00:00 passes against the broken
+		// code too. Mutation testing caught exactly that.
+		act(() => setClock("2001-09-11T13:00:00.250Z"));
+		act(() => ctx.send(1, "are you okay"));
+		act(() =>
+			pushMessage({
+				message_id: 42,
+				profile: 1,
+				direction: "out",
+				body: "im fine",
+				// The same virtual second, at the whole-second resolution the
+				// streamer actually formats with (Go time.RFC3339).
+				time: "2001-09-11T13:00:00Z",
+			}),
+		);
+		expect(screen.getByTestId("msgs1").textContent).toBe("are you okay|im fine");
+	});
+
+	it("signs on by itself once the startup screen has been shown (#321)", () => {
+		const { ctx, subscribeChat } = renderWithChat(<Probe />, {
+			user: { username: "student" },
+			startupScreenShown: true,
+		});
+		expect(ctx.connected).toBe(true);
+		expect(subscribeChat).toHaveBeenCalled();
+	});
+
+	it("never auto signs on a signed-out student (#321)", () => {
+		// The guard that matters most: SignOnWindow hands a signed-out student
+		// to the Account app, so auto-firing this would drop someone into a
+		// login screen they never asked for, on boot.
+		const { ctx, subscribeChat } = renderWithChat(<Probe />, {
+			user: null,
+			startupScreenShown: true,
+		});
+		expect(ctx.connected).toBe(false);
+		expect(subscribeChat).not.toHaveBeenCalled();
+	});
+
+	it("does not auto sign on before the startup screen has been shown (#321)", () => {
+		const { ctx } = renderWithChat(<Probe />, {
+			user: { username: "student" },
+			startupScreenShown: false,
+		});
+		expect(ctx.connected).toBe(false);
+	});
+
+	it("stays signed off after an explicit Sign Off (#321)", () => {
+		// Without the latch the auto sign-on effect re-fires the moment signedOn
+		// flips false, and Sign Off becomes a button that cannot be obeyed.
+		// `result.ctx`, not a destructured `ctx`: the getter is re-evaluated on
+		// each access, and a snapshot taken before signOff would still report
+		// the old value and pass no matter what the latch did.
+		const result = renderWithChat(<Probe />, {
+			user: { username: "student" },
+			startupScreenShown: true,
+		});
+		expect(result.ctx.connected).toBe(true);
+		act(() => result.ctx.signOff());
+		expect(result.ctx.connected).toBe(false);
+	});
+
+	it("raises an already-open chat window rather than doing nothing (#324)", () => {
+		const { ctx } = renderWithChat(<Probe />, {});
+		act(() => ctx.openChat(5));
+		expect(mockDesktopDispatch).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "ClassicyWindowFocus",
+				window: { id: "im_chat_5" },
+			}),
+		);
 	});
 });

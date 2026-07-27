@@ -22,6 +22,11 @@ import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamConte
 // This repo has no RTL auto-cleanup — every test file must do this itself.
 afterEach(cleanup);
 
+// The menu-bar extension shows the app ICON alone (#323) — its accessible name
+// comes from the extension's title and the icon's alt text, not from a visible
+// word, so tests address it by that rather than by "People"/"Window".
+const MENU_NAME = "Instant Messenger";
+
 vi.mock("../../Providers/Auth/AuthContext", () => ({
 	useAuth: () => ({ user: { username: "skaterboi1988" } as AuthUser }),
 }));
@@ -162,7 +167,7 @@ describe("IM Buddies sign-on, with the real provider", () => {
 	it("returns to the Sign On window on Sign Off, and unsubscribes", () => {
 		const { unsubscribeChat } = renderApp();
 		fireEvent.click(screen.getByRole("button", { name: "Sign On" }));
-		fireEvent.click(screen.getByRole("button", { name: "People" }));
+		fireEvent.click(screen.getByRole("button", { name: MENU_NAME }));
 		fireEvent.click(screen.getByRole("button", { name: "Sign Off" }));
 		expect(unsubscribeChat).toHaveBeenCalledWith("IMBuddies.app");
 		expect(windowTitles()).toContain("Sign On");
