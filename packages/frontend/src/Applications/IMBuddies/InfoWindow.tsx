@@ -40,10 +40,6 @@ export const InfoWindow: React.FC<{ profile: number }> = ({ profile }) => {
 			appId={APP_ID}
 			title={`Info: ${screenName}`}
 			closable={true}
-			windowType="utility"
-			resizable={false}
-			zoomable={false}
-			collapsable={true}
 			// A palette, not a document window: classicy skips utility windows
 			// when choosing what to focus next, which is what stops Get Info
 			// being auto-focused when the Buddy List is closed. It also carries
@@ -51,6 +47,9 @@ export const InfoWindow: React.FC<{ profile: number }> = ({ profile }) => {
 			// Desktop.appMenu when the focused window supplies one, so leaving
 			// this menu-less keeps the previous window's File menu on screen.
 			windowType="utility"
+			resizable={false}
+			zoomable={false}
+			collapsable={true}
 			initialSize={[220, 200]}
 			initialPosition={["center", "center"]}
 			onCloseFunc={closeInfo}
