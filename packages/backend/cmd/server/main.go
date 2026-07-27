@@ -262,10 +262,6 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stream", handler.NewWSHandler(hub, rdb, pool, sourcesCache, chatProfiles, trustedOrigins, logger))
-	if env("CHAT_DEV_UI", "") == "1" {
-		mux.HandleFunc("/chatdev", handler.NewChatDevHandler(logger))
-		logger.Warn("chat dev harness enabled at /chatdev — do not enable in production")
-	}
 	// Answers "may I take this screen name?", which the browser cannot: reads on
 	// directus_users are scoped to $CURRENT_USER, so a client-side lookup returns
 	// zero rows for every name and would report "available" for taken ones.
