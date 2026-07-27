@@ -373,6 +373,14 @@ export interface MediaStreamContextValue {
 	sendChat: (profile: number, body: string) => void;
 	/** Request the page of chat history older than `before` for a buddy (backlog pagination). */
 	requestChatHistory: (profile: number, before: string, limit: number) => void;
+	/**
+	 * Append the student's own just-sent line to `chatMessages`. The server
+	 * never echoes an inbound turn (it persists it; live chat_message frames
+	 * are all direction "out"), so without this the student's words never
+	 * appear. Same array as the server frames — insertion order is the whole
+	 * ordering rule.
+	 */
+	appendLocalChatMessage: (message: ChatMessage) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -431,4 +439,5 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	unsubscribeChat: () => {},
 	sendChat: () => {},
 	requestChatHistory: () => {},
+	appendLocalChatMessage: () => {},
 });

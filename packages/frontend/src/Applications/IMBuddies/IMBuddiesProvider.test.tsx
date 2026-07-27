@@ -15,6 +15,11 @@ afterEach(cleanup);
 // from the top). tzOffset is fixed at 0 so localDate === the wire instant,
 // keeping the arithmetic in each test's assertions simple.
 const DEFAULT_CLOCK_ISO = "2001-09-11T13:00:00Z";
+// Display-timezone offset the mocked useClassicyDateTime reports. Default 0 so
+// localDate === the wire instant for the clock/seek tests; one test raises it
+// to prove the local echo's timestamp goes through virtualUtcMs rather than
+// shipping the display value.
+const tzOffsetStore = { hours: 0 };
 const clockStore = (() => {
 	let iso = DEFAULT_CLOCK_ISO;
 	const listeners = new Set<() => void>();
@@ -46,7 +51,7 @@ vi.mock("classicy", () => ({
 	ClassicySoundActionTypes: { ClassicySoundPlay: "ClassicySoundPlay" },
 	useClassicyDateTime: () => {
 		const iso = useSyncExternalStore(clockStore.subscribe, clockStore.get);
-		return { localDate: new Date(iso), dateTime: iso, tzOffset: 0 };
+		return { localDate: new Date(iso), dateTime: iso, tzOffset: tzOffsetStore.hours };
 	},
 }));
 
@@ -64,6 +69,7 @@ interface ChatOverrides {
 	chatReason?: MediaStreamContextValue["chatReason"];
 	chatTypingProfile?: number | null;
 	connected?: boolean;
+	tzOffset?: number;
 }
 
 /**
@@ -78,12 +84,17 @@ interface ChatOverrides {
  */
 function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 	clockStore.reset();
+	tzOffsetStore.hours = overrides.tzOffset ?? 0;
 	mockPlaySound.mockClear();
 
 	const requestChatHistory = vi.fn();
 	const subscribeChat = vi.fn();
 	const unsubscribeChat = vi.fn();
 	const sendChat = vi.fn();
+	// Records every locally-echoed line, so a test can assert on the exact
+	// ChatMessage the provider handed to MediaStreamProvider (not just on what
+	// ends up rendered).
+	const localEchoes: ChatMessage[] = [];
 
 	const ctxRef: React.MutableRefObject<IMBuddiesValue | null> = { current: null };
 	const pushMessageRef: React.MutableRefObject<
@@ -114,6 +125,16 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 		);
 		pushMessageRef.current = pushMessage;
 
+		// Stands in for MediaStreamProvider's real appendLocalChatMessage: the
+		// student's own turn is never echoed by the server (session.go only
+		// persists it; live chat_message frames are all direction "out"), so it
+		// lands in the SAME chatMessages array as server frames — one ordered
+		// list, no invented merge.
+		const appendLocalChatMessage = useCallback((message: ChatMessage) => {
+			localEchoes.push(message);
+			setChatMessages((prev) => [...prev, message]);
+		}, []);
+
 		const value = {
 			chatBuddies: overrides.chatBuddies ?? [],
 			chatEnabled: overrides.chatEnabled ?? true,
@@ -126,6 +147,7 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 			unsubscribeChat,
 			sendChat,
 			requestChatHistory,
+			appendLocalChatMessage,
 		} as unknown as MediaStreamContextValue;
 
 		return (
@@ -149,6 +171,8 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 		requestChatHistory,
 		subscribeChat,
 		unsubscribeChat,
+		sendChat,
+		localEchoes,
 		playSound: mockPlaySound,
 		setClock: (iso: string) => clockStore.set(iso),
 		pushMessage: (
@@ -164,6 +188,9 @@ function Probe() {
 			<span data-testid="open">{im.openChats.join(",")}</span>
 			<span data-testid="unread1">{im.conversationFor(1).unread}</span>
 			<span data-testid="msgs1">{im.conversationFor(1).messages.map((m) => m.body).join("|")}</span>
+			<span data-testid="dirs1">
+				{im.conversationFor(1).messages.map((m) => `${m.direction}:${m.body}`).join("|")}
+			</span>
 		</div>
 	);
 }
@@ -374,8 +401,63 @@ describe("IMBuddiesProvider", () => {
 	});
 
 	it("plays the send sound and forwards to sendChat", () => {
-		const { ctx, playSound } = renderWithChat(<Probe />, {});
+		const { ctx, playSound, sendChat } = renderWithChat(<Probe />, {});
 		act(() => ctx.send(1, "hello"));
 		expect(playSound).toHaveBeenCalledWith(IM_SOUNDS.send);
+		expect(sendChat).toHaveBeenCalledWith(1, "hello");
+	});
+
+	it("shows the student's own message in its own conversation, as direction 'in'", () => {
+		// The server never echoes the inbound turn — session.go's persistInbound
+		// only writes it, and every live chat_message frame is direction "out"
+		// ("in" comes back solely through chat_history replay). Without a local
+		// echo the student types, the field clears, and their words vanish.
+		const { ctx } = renderWithChat(<Probe />, {});
+		act(() => ctx.send(1, "are you okay"));
+		expect(screen.getByTestId("dirs1").textContent).toBe("in:are you okay");
+	});
+
+	it("keeps the local echo in the conversation it was sent to, not everyone's", () => {
+		const { ctx } = renderWithChat(<Probe />, {});
+		act(() => ctx.send(2, "meant for carol"));
+		expect(screen.getByTestId("msgs1").textContent).toBe("");
+	});
+
+	it("interleaves the local echo with server frames in send order", () => {
+		// One ordered array is what keeps this right without inventing a merge:
+		// a reply that lands after the student's line must render after it.
+		const { ctx, pushMessage } = renderWithChat(<Probe />, {});
+		act(() => ctx.send(1, "are you okay"));
+		act(() => pushMessage({ profile: 1, direction: "out", body: "im fine" }));
+		expect(screen.getByTestId("msgs1").textContent).toBe("are you okay|im fine");
+	});
+
+	it("stamps the local echo with the virtual UTC instant, not the display clock", () => {
+		// Hard rule 3: virtualUtcMs(localDate, tzOffset), never a raw localDate.
+		// With a -4 display offset the two differ by four hours, so shipping
+		// localDate here would put the student's own line four hours into the
+		// future of the conversation it joins.
+		const { ctx, localEchoes } = renderWithChat(<Probe />, { tzOffset: -4 });
+		act(() => ctx.send(1, "hi"));
+		expect(localEchoes).toHaveLength(1);
+		expect(localEchoes[0].time).toBe("2001-09-11T17:00:00.000Z");
+		expect(localEchoes[0].kind).toBe("typed");
+		// id 0 means "not persisted" — it must stay out of the dedupe path, or
+		// two typed lines in a row would collapse into one.
+		expect(localEchoes[0].message_id).toBe(0);
+	});
+
+	it("does not collapse two identical typed lines (both carry the non-identity id 0)", () => {
+		const { ctx } = renderWithChat(<Probe />, {});
+		act(() => ctx.send(1, "hello?"));
+		act(() => ctx.send(1, "hello?"));
+		expect(screen.getByTestId("msgs1").textContent).toBe("hello?|hello?");
+	});
+
+	it("does not chime the receive sound for the student's own echo", () => {
+		const { ctx, playSound } = renderWithChat(<Probe />, {});
+		playSound.mockClear();
+		act(() => ctx.send(1, "hi"));
+		expect(playSound).not.toHaveBeenCalledWith(IM_SOUNDS.receive);
 	});
 });

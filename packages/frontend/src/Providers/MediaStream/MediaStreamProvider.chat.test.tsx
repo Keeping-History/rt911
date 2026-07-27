@@ -201,6 +201,42 @@ describe("chat channel", () => {
 		expect(screen.getByTestId("reason").textContent).toBe("ok");
 	});
 
+	it("appendLocalChatMessage lands the student's own line in the same array, in order, off the wire", () => {
+		// The server never echoes an inbound turn (session.go persists it; every
+		// live chat_message frame is direction "out"), so the student's own line
+		// is rendered from here. One array means insertion order is the whole
+		// ordering rule — no second list to merge — and this must not put a
+		// second copy of the message on the wire (sendChat already did that).
+		const ws = renderWithMockSocket(<Probe />);
+		const sentBefore = ws.sent.length;
+		act(() =>
+			ws.ctx.appendLocalChatMessage({
+				message_id: 0,
+				profile: 1,
+				direction: "in",
+				body: "are you okay",
+				time: "2001-09-11T13:00:00.000Z",
+				kind: "typed",
+			}),
+		);
+		expect(screen.getByTestId("msgs").textContent).toBe("are you okay");
+		expect(ws.sent).toHaveLength(sentBefore);
+		act(() =>
+			ws.receive(
+				encode({
+					type: "chat_message",
+					profile: 1,
+					direction: "out",
+					body: "im fine",
+					time: "2001-09-11T13:00:05Z",
+					kind: "generated",
+					message_id: 9,
+				}),
+			),
+		);
+		expect(screen.getByTestId("msgs").textContent).toBe("are you okay|im fine");
+	});
+
 	it("only sends one subscribe no matter how many apps ask", () => {
 		const ws = renderWithMockSocket(<Probe />);
 		act(() => {

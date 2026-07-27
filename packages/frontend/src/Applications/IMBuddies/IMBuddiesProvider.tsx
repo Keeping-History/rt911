@@ -102,6 +102,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		unsubscribeChat,
 		sendChat,
 		requestChatHistory,
+		appendLocalChatMessage,
 	} = useContext(MediaStreamContext);
 
 	const soundDispatch = useSoundDispatch();
@@ -110,6 +111,17 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			soundDispatch({ type: ClassicySoundActionTypes.ClassicySoundPlay, sound }),
 		[soundDispatch],
 	);
+
+	// This feature only READS the clock — it never calls setDateTime/
+	// setDateTimeFromUtc. `virtualUtcMs` strips the display timezone back off
+	// (frontend hard rule 3): `localDate` is a display value, while every chat
+	// timestamp on the wire is true UTC. The ref mirror is assigned during
+	// render so `send` below can stamp the current instant WITHOUT taking
+	// localDate as a dependency — that ticks every second and would rebuild
+	// this provider's whole context value once a second.
+	const { localDate, tzOffset } = useClassicyDateTime({ tick: true });
+	const virtualNowMsRef = useRef(virtualUtcMs(localDate, tzOffset));
+	virtualNowMsRef.current = virtualUtcMs(localDate, tzOffset);
 
 	const [signedOn, setSignedOn] = useState(false);
 	const [openChats, setOpenChats] = useState<number[]>([]);
@@ -222,9 +234,26 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 	const send = useCallback(
 		(profile: number, body: string) => {
 			sendChat(profile, body);
+			// The server does not echo the inbound turn — it persists it
+			// (session.go's persistInbound) and every live chat_message frame
+			// is direction "out"; a direction "in" line comes back only through
+			// a chat_history replay. So the student's own words are rendered
+			// here or not at all. This lands in the SAME chatMessages array the
+			// server frames do, keeping one ordered list rather than two whose
+			// interleaving would need an invented sort. message_id 0 is the
+			// server's own "not persisted" marker and is already excluded from
+			// the dedupe above, so two identical typed lines both survive.
+			appendLocalChatMessage({
+				message_id: 0,
+				profile,
+				direction: "in",
+				body,
+				time: new Date(virtualNowMsRef.current).toISOString(),
+				kind: "typed",
+			});
 			play(IM_SOUNDS.send);
 		},
-		[sendChat, play],
+		[sendChat, appendLocalChatMessage, play],
 	);
 
 	// Presence sounds (door open/close), fed by Task 4's presenceSounds(prev,
@@ -277,9 +306,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 	// anachronism this product exists to prevent — so every OPEN conversation
 	// gets a fresh page re-requested. shouldSeek already encodes the forward
 	// (90s) / backward (2s) asymmetry; comparing thresholds by hand here would
-	// just duplicate (and risk drifting from) that seam. This feature only
-	// READS the clock — it never calls setDateTime/setDateTimeFromUtc.
-	const { localDate, tzOffset } = useClassicyDateTime({ tick: true });
+	// just duplicate (and risk drifting from) that seam.
 	const prevUtcMsRef = useRef<number | null>(null);
 	useEffect(() => {
 		const nowMs = virtualUtcMs(localDate, tzOffset);

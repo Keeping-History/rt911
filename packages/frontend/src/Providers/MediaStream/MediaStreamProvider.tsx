@@ -738,6 +738,20 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	// The student's own turn, rendered locally. The server never echoes it: it
+	// persists the inbound line (internal/session/session.go persistInbound)
+	// and every live chat_message frame is direction "out" — a direction "in"
+	// line only ever comes back through a chat_history replay. Without this the
+	// student types, the field clears, and their words vanish.
+	//
+	// It goes into the SAME chatMessages array the server frames land in, so
+	// insertion order alone keeps the transcript right and there is no second
+	// list to merge. The caller stamps message_id 0 ("not persisted"), which
+	// the chat app's dedupe already treats as a non-identity.
+	const appendLocalChatMessage = useCallback((message: ChatMessage) => {
+		setChatMessages((prev) => [...prev, message]);
+	}, []);
+
 	// Set the newsgroup(s) being viewed. The server resends a backlog for the new
 	// group(s), so the current items + buffer are cleared to avoid mixing groups.
 	const setUsenetGroups = useCallback(
@@ -1397,6 +1411,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeChat,
 			sendChat,
 			requestChatHistory,
+			appendLocalChatMessage,
 		}),
 		[
 			items,
@@ -1452,6 +1467,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeChat,
 			sendChat,
 			requestChatHistory,
+			appendLocalChatMessage,
 		],
 	);
 
