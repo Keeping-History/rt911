@@ -40,6 +40,7 @@ export const InfoWindow: React.FC<{ profile: number }> = ({ profile }) => {
 			appId={APP_ID}
 			title={`Info: ${screenName}`}
 			closable={true}
+			windowType="utility"
 			resizable={false}
 			zoomable={false}
 			collapsable={true}
