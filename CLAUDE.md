@@ -50,7 +50,7 @@ pytest tests/test_resolve.py::test_name
 ruff check video_grabber/ tests/
 ```
 
-CI (`.github/workflows/build.yml`) runs `tsc -b`, `eslint .`, and `vitest run` for the frontend and `go test ./...` for the backend as required checks before building/pushing images; E2E runs but is `continue-on-error`.
+CI (`.github/workflows/build.yml`) runs `tsc -b`, `eslint .`, and `vitest run` for the frontend and `go test ./...` for the backend as required checks before building/pushing images. Playwright E2E is also required: it runs in parallel with `frontend-checks`, and the `frontend` image job `needs:` it, so a red E2E blocks both the merge and the GHCR push that Argo CD rolls out.
 
 ## Cross-cutting things to know
 

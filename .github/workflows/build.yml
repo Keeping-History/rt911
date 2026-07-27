@@ -117,7 +117,11 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
   frontend:
-    needs: frontend-checks
+    # Both gates, not just the cheap one: the image this job pushes to GHCR is
+    # what Argo CD Image Updater rolls out, so an E2E failure has to stop it here
+    # or a broken desktop ships. E2E costs ~100s and starts at the same time as
+    # frontend-checks, so this rarely adds wall-clock over the old ordering.
+    needs: [frontend-checks, e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -147,10 +151,16 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
+  # Runs alongside frontend-checks rather than after it: the two are independent
+  # (Playwright drives a dev server, it doesn't consume tsc/eslint output), so
+  # gating E2E on checks only delayed the slower signal. Deliberately NOT
+  # continue-on-error — a red E2E fails the workflow, and `frontend` needs it, so
+  # a broken desktop can't be built into an image or pushed to GHCR for Argo CD
+  # to roll out. Keep `e2e` in main's required status checks so it blocks merges
+  # too; the workflow alone can't enforce that half.
   e2e:
-    needs: frontend-checks
+    name: e2e
     runs-on: ubuntu-latest
-    continue-on-error: true
     permissions:
       contents: read
       pull-requests: write
