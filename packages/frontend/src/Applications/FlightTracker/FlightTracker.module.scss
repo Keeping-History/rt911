@@ -1,8 +1,21 @@
 .root { display: flex; flex-direction: row; width: 100%; height: 100%; }
 .mainColumn { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; }
 .mapControls {
-	// wrap: the row outgrew narrow windows once the Style/Dark group landed
+	// A fixed one-row strip. The row outgrew narrow windows once the Style/Dark
+	// group landed, but stacking wrapped rows stole height from the map, so we
+	// still wrap and then clip everything below row one: since flex only breaks
+	// *between* items, a control group is either fully drawn or fully gone —
+	// never half-drawn — and widening the window un-wraps it back into view.
+	// `clip`, not `hidden`: `hidden` would make this a scroll container, so
+	// tabbing to a clipped-away control would scroll the strip out of alignment.
+	// Tallest control in the strip is a small pop-up menu, at 2x the UI font.
+	--map-controls-row-height: calc(var(--ui-font-size) * 2);
 	flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+	align-content: flex-start;
+	// row + the 2px vertical padding either side + the bottom border
+	height: calc(var(--map-controls-row-height) + 5px);
+	box-sizing: border-box;
+	overflow: clip;
 	padding: 2px var(--window-padding-size);
 	border-bottom: 1px solid #999;
 	background-color: var(--color-system-03);
@@ -17,9 +30,20 @@
 	:global(.classicyBalloonHelpAnchor) { display: inline-flex; align-items: center; flex: 0 0 auto; }
 }
 .mapControlsContainer {
-	display: flex; align-items: center; gap: var(--window-padding-size); flex-wrap: wrap; flex-direction: row;
+	display: flex; align-items: center; gap: var(--window-padding-size); flex-direction: row;
+	// A group is one atom of the strip: it holds its full width (no shrinking to
+	// a squashed half-group) and never wraps internally, so the only wrap point
+	// is between groups — which is what makes whole groups, and only whole
+	// groups, drop out of sight when the window is too narrow.
+	flex: 0 0 auto; flex-wrap: nowrap; height: var(--map-controls-row-height);
+	// The rule separating this group from the previous one. It's a border on the
+	// group rather than a standalone element between groups because CSS can't ask
+	// "did my next sibling wrap?" — a separate divider would strand itself at the
+	// right edge whenever the group it introduces got clipped away. Owned by the
+	// group, it simply leaves with it. `& + &` matches in DOM order, and the
+	// leading group of the visible row is always DOM-first, so no row opens on a rule.
+	& + & { border-left: 1px solid #999; padding-left: var(--window-padding-size); }
 }
-.mapControlsDivider { width: 1px; align-self: stretch; background: #999; margin: 0 4px; }
 // The Globe/3D/Terrain/Cluster toggles (and the airport/camera dropdown markers)
 // show an image instead of a text label. Source PNGs are 1024×1024; render at the
 // theme's control size with no edge smoothing so the downscale stays pixelated.

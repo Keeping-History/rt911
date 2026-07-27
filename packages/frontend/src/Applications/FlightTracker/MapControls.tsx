@@ -105,7 +105,6 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		</ClassicyButton>
 		</ClassicyBalloonHelp>
 		</div>
-		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
 		<ClassicyBalloonHelp content="Switch the map between a flat projection and a 3-D globe.">
 		<ClassicyButton
@@ -152,7 +151,6 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		</ClassicyButton>
 		</ClassicyBalloonHelp>
 		</div>
-		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
 		{/* The marquee selectors move/read the map, so they lock out while following. */}
 		<ClassicyBalloonHelp content="Drag a rectangle on the map to select the flights inside it.">
@@ -180,7 +178,6 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		</ClassicyButton>
 		</ClassicyBalloonHelp>
 		</div>
-		<span className={styles.mapControlsDivider} />
 		{/* Camera follow (tracked flights): a toggle that locks the camera onto
 		    the selected flight, and a dropdown picking the framing. The plane icon
 		    to the left of the (now icon-only) toggle marks the camera group. */}
@@ -208,7 +205,6 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		/>
 		</ClassicyBalloonHelp>
 		</div>
-		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
 		{/* The airport icon stands in for the old "Pinpoints" text label. */}
 		<img className={styles.mapControlIcon} src={mapAirportPng} alt="Pinpoints" />
@@ -230,7 +226,6 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		/>
 		</ClassicyBalloonHelp>
 		</div>
-		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
 		{/* Palette icon replaces the old "Style" text label (like airport/camera). */}
 		<img className={styles.mapControlIcon} src={mapPalettePng} alt="Style" />
@@ -259,7 +254,6 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 		</ClassicyButton>
 		</ClassicyBalloonHelp>
 		</div>
-		<span className={styles.mapControlsDivider} />
 		<div className={styles.mapControlsContainer}>
 		<ClassicyBalloonHelp content="Open the filter panel to show only flights that match your criteria.">
 		<ClassicyButton
