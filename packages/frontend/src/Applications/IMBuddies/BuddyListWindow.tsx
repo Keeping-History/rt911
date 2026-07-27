@@ -32,9 +32,26 @@ export function statusLineFor(reason: ChatStateReason, windowStartLabel: string)
 			return "You can't send messages right now.";
 		case "not_signed_in":
 			return "Not signed on.";
-		default:
+		case "ok":
 			return "Signed on.";
+		default: {
+			// Exhaustiveness guard: a sixth ChatStateReason added to the wire
+			// protocol without a case added here fails this type check instead
+			// of silently falling through to "Signed on.".
+			const unhandled: never = reason;
+			return unhandled;
+		}
 	}
+}
+
+/**
+ * A buddy can be messaged only while online — the server refuses anyway, but
+ * a UI that opens a dead window and then silently fails is worse than one
+ * that never opens it. Shared by the double-click activation path and the
+ * IM/Info disabled state below so the two can't drift apart on a future edit.
+ */
+function isMessageable(buddy: ChatBuddy | null): buddy is ChatBuddy {
+	return buddy !== null && buddy.online;
 }
 
 interface BuddyRowProps {
@@ -88,17 +105,13 @@ export const BuddyListWindow: React.FC = () => {
 		return { online, offline };
 	}, [buddies]);
 
-	// A buddy who is offline cannot be messaged — the server refuses anyway,
-	// but a UI that opens a dead window and then silently fails is worse than
-	// one that never opens it. This same guard covers both the double-click
-	// activation path and the IM/Info buttons below.
 	const activate = (buddy: ChatBuddy) => {
-		if (!buddy.online) return;
+		if (!isMessageable(buddy)) return;
 		openChat(buddy.profile);
 	};
 
 	const selectedBuddy = selected === null ? null : (buddies.find((b) => b.profile === selected) ?? null);
-	const actionsDisabled = selectedBuddy === null || !selectedBuddy.online;
+	const actionsDisabled = !isMessageable(selectedBuddy);
 
 	return (
 		<ClassicyWindow
@@ -143,14 +156,16 @@ export const BuddyListWindow: React.FC = () => {
 					<ClassicyButton
 						buttonSize="small"
 						disabled={actionsDisabled}
-						onClickFunc={() => selectedBuddy && openChat(selectedBuddy.profile)}
+						onClickFunc={() => isMessageable(selectedBuddy) && openChat(selectedBuddy.profile)}
 					>
 						IM
 					</ClassicyButton>
 					<ClassicyButton
 						buttonSize="small"
 						disabled={actionsDisabled}
-						onClickFunc={() => selectedBuddy && openInfoFor(selectedBuddy.profile)}
+						onClickFunc={() =>
+							isMessageable(selectedBuddy) && openInfoFor(selectedBuddy.profile)
+						}
 					>
 						Info
 					</ClassicyButton>

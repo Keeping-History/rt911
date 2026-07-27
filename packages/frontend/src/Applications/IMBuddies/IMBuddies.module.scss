@@ -65,18 +65,31 @@
 	padding: 2px 12px;
 	cursor: default;
 
+	// Same fallback pair classicy's own ClassicyPlacardMenuItem hover uses
+	// (dist/classicy.css: --color-theme-hover, falling back to
+	// --color-system-05) — this row is themed the same way any other
+	// hoverable list item in the library is.
 	&:hover {
-		background: rgba(0, 0, 0, 0.05);
+		background-color: var(--color-theme-hover, var(--color-system-05));
 	}
 }
 
+// Matches ClassicyTree's own selected-node styling
+// (.classicyTreeNodeSelected{background:var(--color-select)} /
+// .classicyTreeNodeSelected .classicyTreeNodeLabel{color:var(--color-white)}
+// in dist/classicy.css) — this list's selection uses the same theme tokens
+// as the library's native list widget, not a one-off color.
 .buddyRowSelected {
-	background: #316ac5;
-	color: #fff;
+	background: var(--color-select);
+	color: var(--color-white);
 }
 
+// Matches ClassicyTree's own disabled-node label color
+// (.classicyTreeNodeDisabled .classicyTreeNodeLabel{color:var(--color-system-05)}
+// in dist/classicy.css) — the closest existing "greyed out" convention in
+// the library, reused here for an offline buddy's row text.
 .buddyRowOffline {
-	color: #888;
+	color: var(--color-system-05);
 }
 
 .buddyDot {
@@ -84,8 +97,13 @@
 	width: 7px;
 	height: 7px;
 	border-radius: 50%;
-	background: #2fa72f;
 	flex-shrink: 0;
+
+	// Deliberate exception to the theme-token rule above: green/grey here is
+	// a semantic presence indicator (the AIM/IM "online now" traffic light),
+	// not a themed surface color, and AIM's own presence dot was never
+	// theme-coloured either — see AppearanceManager, which never targets it.
+	background: #2fa72f;
 }
 
 .buddyDotOffline {
@@ -100,7 +118,9 @@
 }
 
 .buddyListStatus {
-	border-top: 1px solid #999;
+	// Same hairline-separator token Newsgroups.module.scss uses for
+	// .paneTitle/.groupList borders.
+	border-top: 1px solid var(--color-system-07);
 	padding: 4px 8px;
 	font-size: 11px;
 }
