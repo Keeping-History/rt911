@@ -65,21 +65,30 @@ https://api.911realtime.org/auth/login/apple/callback
 
 The zone's `apple-domain=keugYYnIdg5DNIzv` TXT record is zone-level and needs no change.
 
-- [ ] **Step 3: (RESOLVED 2026-07-27 — no token needed)**
+- [x] **Step 3: Cloudflare token for Redirect Rules — DONE 2026-07-27**
 
-Originally this step created a scoped API token for Task 12. In practice the
-Cloudflare token UI on this account exposes no "Dynamic Redirect" permission:
-a token granted the nearest equivalent could list ruleset phases and reach
-`http_request_transform`, but `http_request_dynamic_redirect` returned
-`request is not authorized`, and `http_request_dynamic_redirect` did not appear
-among its visible phases at all.
+Token `rt911-apex-redirects` is saved at `~/.cf-redirect-token` (mode 600) and
+has write access to the `http_request_dynamic_redirect` phase on
+`911realtime.org`.
 
-Task 12 creates exactly one rule, once, and **verifying** that rule needs no
-token — just `curl` against the two hostnames. So the rule is created in the
-dashboard instead, and the token requirement is dropped. See Task 12.
+The permission was not obvious to find in the token editor — the first attempt
+produced a token that could list ruleset phases and reach
+`http_request_transform` but not `http_request_dynamic_redirect`. Two Cloudflare
+error strings distinguish the states, and they are easy to conflate:
 
-The old cert-manager token still covers every DNS operation in Tasks 9, 11
-and 13.
+| Response | Meaning |
+|---|---|
+| `request is not authorized` | permission denied |
+| `could not find entrypoint ruleset in the <phase> phase` | **authorized**, phase merely empty |
+
+Read access alone yields the second message too, so write was confirmed
+separately by `PUT`ing an empty `{"rules":[]}` array — a no-op that creates the
+entrypoint without changing behaviour. That entrypoint now exists as ruleset
+`ff71e18e95724c2d9099a342b9ffe227` with zero rules, which is why Task 12's
+"read before writing" step now returns a real ruleset rather than a not-found.
+
+The cert-manager token still covers every DNS operation in Tasks 9, 11 and 13;
+it cannot touch rulesets.
 
 - [x] **Step 4: Confirm the zone's SSL mode and cache rules — DONE 2026-07-27**
 
@@ -955,41 +964,55 @@ Do not proceed to Task 12 until all of these pass. Task 12 is the irreversible o
 
 ### Task 12: Create the redirect rule
 
-**Files:** none — Cloudflare dashboard.
-
-Created through the UI, not the API: this account's token editor exposes no
-"Dynamic Redirect" permission (see Task 1 Step 3). It is one rule, created once,
-and every check below is token-free.
+**Files:** none — Cloudflare API, using the token from Task 1 Step 3.
 
 **This is the irreversible step**: browsers cache a 301 near-indefinitely, so `beta.911realtime.org` cannot cleanly serve anything else afterward.
 
-- [ ] **Step 1: Create the rule in the dashboard**
+- [ ] **Step 1: Read the existing rules before writing**
 
-Go to the `911realtime.org` zone → **Rules → Redirect Rules** →
-**Create rule** → *Single Redirect*.
+The entrypoint endpoint is a **PUT that replaces every rule in the phase**, and
+the entrypoint now exists (Task 1 Step 3 created it empty), so this returns a
+real ruleset rather than a not-found:
 
-| Field | Value |
-|---|---|
-| Rule name | `Apex consolidation: www + beta` |
-| When incoming requests match | **Custom filter expression** |
-| Expression (use the *Edit expression* text box) | `(http.host eq "www.911realtime.org") or (http.host eq "beta.911realtime.org")` |
-| Type | **Dynamic** |
-| Expression (URL) | `concat("https://911realtime.org", http.request.uri.path)` |
-| Status code | **301** |
-| Preserve query string | **checked** |
+```bash
+export CF_REDIRECT_TOKEN=$(cat ~/.cf-redirect-token)
+export ZONE=08e515063f366be3278cb3de2380469c
+curl -sS -H "Authorization: Bearer $CF_REDIRECT_TOKEN" \
+  "https://api.cloudflare.com/client/v4/zones/$ZONE/rulesets/phases/http_request_dynamic_redirect/entrypoint" \
+  | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin)['result'].get('rules') or [], indent=1))"
+```
 
-Then **Deploy**.
+Expected: `[]`. Anything else must be merged into the payload below, not
+discarded.
 
-Two settings that are easy to get wrong:
+- [ ] **Step 2: Create the rule**
 
-- **Type must be Dynamic, not Static.** A static target sends every request to
-  one fixed URL, discarding the path.
-- **Use `http.request.uri.path`, not `http.request.uri`.** The latter already
-  contains the query string, so combined with *Preserve query string* it emits
-  a doubled query (`?x=1?x=1`). Step 2 tests for exactly this.
+`http.request.uri.path` carries the path only; `preserve_query_string`
+re-attaches the query. Using `http.request.uri` here instead would emit a
+doubled query string (`?x=1?x=1`), which Step 3 tests for.
 
-If the zone already has redirect rules, add this one rather than replacing
-them — the UI appends by default, but confirm the existing list survives.
+```bash
+curl -sS -X PUT -H "Authorization: Bearer $CF_REDIRECT_TOKEN" -H "Content-Type: application/json" \
+  "https://api.cloudflare.com/client/v4/zones/$ZONE/rulesets/phases/http_request_dynamic_redirect/entrypoint" \
+  --data '{
+    "rules": [{
+      "action": "redirect",
+      "description": "Apex consolidation: www + beta -> 911realtime.org",
+      "expression": "(http.host eq \"www.911realtime.org\") or (http.host eq \"beta.911realtime.org\")",
+      "action_parameters": {
+        "from_value": {
+          "status_code": 301,
+          "target_url": {
+            "expression": "concat(\"https://911realtime.org\", http.request.uri.path)"
+          },
+          "preserve_query_string": true
+        }
+      }
+    }]
+  }' | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'], d.get('errors'))"
+```
+
+Expected: `True None`.
 
 - [ ] **Step 3: Verify both redirects preserve path and query**
 
