@@ -72,6 +72,11 @@ createRoot(rootElement).render(
 							// on a fresh visit; persisted state wins on reload.
 							dateTime: "2001-09-11T12:40:00.000Z",
 							timeZoneOffset: "-4",
+							// Date & Time's Sync takes only the real-world time of
+							// day and leaves the calendar date alone — this desktop
+							// is pinned to 2001-09-11, so a plain Sync would drag it
+							// to today and strand every app with no media to play.
+							syncTimeOnly: true,
 						},
 						Applications: {
 							apps: {
