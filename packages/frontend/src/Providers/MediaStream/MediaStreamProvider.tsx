@@ -171,7 +171,32 @@ interface WsWeatherForecastMessage {
 // path, so an empty roster arrives with the field absent, not `[]`.
 interface WsChatRosterMessage {
 	type: "chat_roster";
-	buddies?: ChatBuddy[];
+	buddies?: WireBuddy[];
+}
+
+/**
+ * A roster entry EXACTLY as the wire sends it.
+ *
+ * `chat_roster` is the one chat frame that names this value `id` — it carries
+ * `model.Buddy`, whose json tag is `id` (websocket-protocol.md's chat_roster
+ * table) — while `chat_presence`, `chat_typing` and `chat_message` all call the
+ * same value `profile`. Declaring the frame as `ChatBuddy[]` and passing it
+ * straight through therefore produced a roster whose every entry had
+ * `profile: undefined`, and `buddies.find((b) => b.profile === selected)`
+ * matched the FIRST buddy for every selection: clicking any buddy opened
+ * Danny, Get Info always showed Danny, and chat_presence never matched anyone
+ * so nobody ever went offline.
+ *
+ * Kept as a distinct type rather than widening ChatBuddy, so the wire's shape
+ * and the app's shape cannot drift into each other again unnoticed.
+ */
+interface WireBuddy {
+	id: number;
+	screen_name: string;
+	display_name?: string;
+	avatar?: string;
+	online?: boolean;
+	profile_text?: string;
 }
 
 // Whether/why chat is usable right now for this client.
@@ -1215,7 +1240,20 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (msg.type === "chat_roster") {
 				// buddies rides omitempty on a struct shared with the 1 Hz items path, so an
 				// empty roster arrives as an absent field rather than [].
-				setChatBuddies((msg as WsChatRosterMessage).buddies ?? []);
+				//
+				// `id` -> `profile` is the load-bearing part: see WireBuddy. Every
+				// other chat frame keys this value `profile`, and the rest of the
+				// app does too, so the rename happens once, here at the boundary.
+				setChatBuddies(
+					((msg as WsChatRosterMessage).buddies ?? []).map((b) => ({
+						profile: b.id,
+						screen_name: b.screen_name,
+						display_name: b.display_name ?? "",
+						avatar: b.avatar ?? "",
+						online: b.online === true,
+						profile_text: b.profile_text,
+					})),
+				);
 				return;
 			}
 

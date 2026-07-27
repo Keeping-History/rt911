@@ -149,6 +149,52 @@ function Probe() {
 }
 
 describe("chat channel", () => {
+	it("keys each buddy on the `id` the wire actually sends, not `profile`", () => {
+		// chat_roster is the ONE chat frame that names this field `id`
+		// (model.Buddy's json tag, websocket-protocol.md:726); chat_presence,
+		// chat_typing and chat_message all call the same value `profile`.
+		// Passing the frame's array straight through left every buddy with
+		// profile === undefined, so `buddies.find(b => b.profile === selected)`
+		// matched the FIRST buddy for every selection — clicking anyone opened
+		// Danny, and Get Info always showed Danny's profile. Every test here
+		// missed it by building frames from the CLIENT's type instead of the
+		// wire's.
+		const ws = renderWithMockSocket(<Probe />);
+		act(() =>
+			ws.receive(
+				encode({
+					type: "chat_roster",
+					buddies: [
+						{ id: 1, screen_name: "skaterboi1988", display_name: "Danny", avatar: "", online: true },
+						{ id: 2, screen_name: "carolm", display_name: "Carol", avatar: "", online: true },
+					],
+				}),
+			),
+		);
+		expect(ws.ctx.chatBuddies.map((b) => b.profile)).toEqual([1, 2]);
+	});
+
+	it("applies chat_presence against a roster the wire keyed on `id`", () => {
+		// The same mismatch silently broke presence: chat_presence carries
+		// `profile`, and it was matched against a field that was undefined on
+		// every buddy, so buddies never went online or offline after the
+		// initial snapshot.
+		const ws = renderWithMockSocket(<Probe />);
+		act(() =>
+			ws.receive(
+				encode({
+					type: "chat_roster",
+					buddies: [
+						{ id: 1, screen_name: "a", display_name: "", avatar: "", online: true },
+						{ id: 2, screen_name: "b", display_name: "", avatar: "", online: true },
+					],
+				}),
+			),
+		);
+		act(() => ws.receive(encode({ type: "chat_presence", profile: 2, online: false })));
+		expect(ws.ctx.chatBuddies.map((b) => b.online)).toEqual([true, false]);
+	});
+
 	it("populates the roster from chat_roster", () => {
 		const ws = renderWithMockSocket(<Probe />);
 		act(() =>
@@ -156,7 +202,7 @@ describe("chat channel", () => {
 				encode({
 					type: "chat_roster",
 					buddies: [
-						{ profile: 1, screen_name: "skaterboi1988", display_name: "Danny", avatar: "", online: true },
+						{ id: 1, screen_name: "skaterboi1988", display_name: "Danny", avatar: "", online: true },
 					],
 				}),
 			),
@@ -179,8 +225,8 @@ describe("chat channel", () => {
 				encode({
 					type: "chat_roster",
 					buddies: [
-						{ profile: 1, screen_name: "a", display_name: "", avatar: "", online: true },
-						{ profile: 2, screen_name: "b", display_name: "", avatar: "", online: true },
+						{ id: 1, screen_name: "a", display_name: "", avatar: "", online: true },
+						{ id: 2, screen_name: "b", display_name: "", avatar: "", online: true },
 					],
 				}),
 			),
