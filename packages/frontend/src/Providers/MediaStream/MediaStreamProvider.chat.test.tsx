@@ -36,14 +36,17 @@ class FakeWebSocket {
 }
 
 // Same vi.mock("classicy", ...) stub used by MediaStreamProvider.news.test.tsx /
-// MediaStreamProvider.flights.test.tsx — this suite doesn't exercise the virtual
-// clock or forced-clock enforcement, so a fixed instant + no-op store is enough.
+// MediaStreamProvider.flights.test.tsx. `let`, not `const`: the seek tests
+// below advance/rewind the clock by reassigning BOTH of these and re-rendering
+// (see setClock). The Date instance must stay stable across renders that don't
+// move the clock, or the tick effect re-fires forever.
 const NOW_ISO = "2001-09-11T13:00:00.000Z";
-const FIXED_LOCAL_DATE = new Date(NOW_ISO);
+let mockDateTime = NOW_ISO;
+let mockLocalDate = new Date(NOW_ISO);
 vi.mock("classicy", () => ({
 	useClassicyDateTime: () => ({
-		localDate: FIXED_LOCAL_DATE,
-		dateTime: NOW_ISO,
+		localDate: mockLocalDate,
+		dateTime: mockDateTime,
 		tzOffset: 0,
 	}),
 	useAppManager: (selector: (s: unknown) => unknown) =>
@@ -93,23 +96,35 @@ function renderWithMockSocket(children: React.ReactNode): {
 	receive: (bytes: Uint8Array) => void;
 	sent: Array<Record<string, unknown>>;
 	ctx: MediaStreamContextValue;
+	setClock: (iso: string) => void;
 } {
 	FakeWebSocket.instances = [];
 	vi.stubGlobal("WebSocket", FakeWebSocket);
+	mockDateTime = NOW_ISO;
+	mockLocalDate = new Date(NOW_ISO);
 
 	const ctxRef: MutableRefObject<MediaStreamContextValue | null> = { current: null };
-	render(
+	// A FUNCTION, not a stored element: re-rendering the identical element
+	// object lets React bail out of the subtree entirely, so the clock effects
+	// would never re-run and a seek test would silently assert nothing.
+	const tree = () => (
 		<MediaStreamProvider>
 			<ContextBridge bridgeRef={ctxRef} />
 			{children}
-		</MediaStreamProvider>,
+		</MediaStreamProvider>
 	);
+	const view = render(tree());
 	const ws = FakeWebSocket.instances[0];
 	act(() => ws.onopen?.());
 
 	return {
 		receive: (bytes: Uint8Array) => {
 			ws.onmessage?.(toMessageEvent(bytes));
+		},
+		setClock: (iso: string) => {
+			mockDateTime = iso;
+			mockLocalDate = new Date(iso);
+			view.rerender(tree());
 		},
 		get sent(): Array<Record<string, unknown>> {
 			return ws.sent.map((s) => JSON.parse(s));
@@ -235,6 +250,75 @@ describe("chat channel", () => {
 			),
 		);
 		expect(screen.getByTestId("msgs").textContent).toBe("are you okay|im fine");
+	});
+
+	it("clears the transcript on a backward seek so a buddy stops remembering the future", () => {
+		// History turns come back as ordinary chat_message frames appended to
+		// this same flat array, so without a clear a rewound student still sees
+		// every post-seek line with the refetched older lines below them — the
+		// exact anachronism the backend's tier system exists to prevent. The
+		// neighbouring setNewsItems([]) / setUsenetItems([]) clears in the same
+		// effect are there for precisely this reason; chat was left out.
+		const ws = renderWithMockSocket(<Probe />);
+		act(() =>
+			ws.receive(
+				encode({
+					type: "chat_message",
+					profile: 1,
+					direction: "out",
+					body: "the second tower just went",
+					time: "2001-09-11T13:03:00Z",
+					kind: "generated",
+					message_id: 11,
+				}),
+			),
+		);
+		expect(screen.getByTestId("msgs").textContent).toBe("the second tower just went");
+		// 20 minutes back, far past BACKWARD_SEEK_THRESHOLD_MS (2s).
+		act(() => ws.setClock("2001-09-11T12:40:00.000Z"));
+		expect(screen.getByTestId("msgs").textContent).toBe("");
+	});
+
+	it("clears a local echo on a backward seek too", () => {
+		// The student's own words are just as anachronistic after a rewind as
+		// the buddy's; one array means one clear covers both.
+		const ws = renderWithMockSocket(<Probe />);
+		act(() =>
+			ws.ctx.appendLocalChatMessage({
+				message_id: 0,
+				profile: 1,
+				direction: "in",
+				body: "are you okay",
+				time: "2001-09-11T13:00:00.000Z",
+				kind: "typed",
+			}),
+		);
+		act(() => ws.setClock("2001-09-11T12:40:00.000Z"));
+		expect(screen.getByTestId("msgs").textContent).toBe("");
+	});
+
+	it("keeps the transcript across a FORWARD seek", () => {
+		// Forward is not an anachronism: nothing on screen is from after the new
+		// instant, and dropping it would blank a conversation a student is in
+		// the middle of. The asymmetry is shouldSeek's, not re-derived here.
+		const ws = renderWithMockSocket(<Probe />);
+		act(() =>
+			ws.receive(
+				encode({
+					type: "chat_message",
+					profile: 1,
+					direction: "out",
+					body: "still here",
+					time: "2001-09-11T13:00:30Z",
+					kind: "generated",
+					message_id: 12,
+				}),
+			),
+		);
+		// 20 minutes forward — well past SEEK_THRESHOLD_MS (90s), so this IS a
+		// seek; the transcript must survive it anyway.
+		act(() => ws.setClock("2001-09-11T13:20:00.000Z"));
+		expect(screen.getByTestId("msgs").textContent).toBe("still here");
 	});
 
 	it("only sends one subscribe no matter how many apps ask", () => {

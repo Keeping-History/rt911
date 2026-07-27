@@ -24,8 +24,11 @@ import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { IM_SOUNDS, presenceSounds } from "./sounds";
 
 const APP_ID = "IMBuddies.app";
-/** Backlog page size for the re-fetch a backward seek triggers per open window. */
-const SEEK_HISTORY_LIMIT = 40;
+/**
+ * Backlog page size for a history re-fetch — both the one a backward seek
+ * triggers per open window and the one opening a window triggers for itself.
+ */
+const HISTORY_PAGE_LIMIT = 40;
 
 export interface Conversation {
 	messages: ChatMessage[];
@@ -210,13 +213,23 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 	);
 
 	// Opening a window is also how it catches up: mark everything currently in
-	// the transcript as read immediately, same as AIM.
+	// the transcript as read immediately, same as AIM, and pull a page of
+	// backlog. The re-fetch matters because a backward seek clears the whole
+	// transcript in MediaStreamProvider and the seek effect below only
+	// re-requests for conversations that were ALREADY open — without this, a
+	// conversation reopened after a rewind would show an empty window forever.
+	// Re-delivered lines collapse on message_id in conversationsByProfile.
 	const openChat = useCallback(
 		(profile: number) => {
 			setOpenChats((prev) => withValue(prev, profile));
 			markRead(profile);
+			requestChatHistory(
+				profile,
+				new Date(virtualNowMsRef.current).toISOString(),
+				HISTORY_PAGE_LIMIT,
+			);
 		},
-		[markRead],
+		[markRead, requestChatHistory],
 	);
 
 	const closeChat = useCallback((profile: number) => {
@@ -314,7 +327,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		if (prevMs !== null && shouldSeek(prevMs, nowMs)) {
 			const before = new Date(nowMs).toISOString();
 			for (const profile of openChats) {
-				requestChatHistory(profile, before, SEEK_HISTORY_LIMIT);
+				requestChatHistory(profile, before, HISTORY_PAGE_LIMIT);
 			}
 		}
 		prevUtcMsRef.current = nowMs;

@@ -454,6 +454,16 @@ describe("IMBuddiesProvider", () => {
 		expect(screen.getByTestId("msgs1").textContent).toBe("hello?|hello?");
 	});
 
+	it("requests history when a chat window is opened, so a post-seek reopen refills", () => {
+		// A backward seek clears the whole transcript in MediaStreamProvider.
+		// The seek effect below only re-requests history for conversations that
+		// were ALREADY open, so without this a conversation reopened after a
+		// rewind would show a permanently empty window.
+		const { ctx, requestChatHistory } = renderWithChat(<Probe />, {});
+		act(() => ctx.openChat(4));
+		expect(requestChatHistory).toHaveBeenCalledWith(4, expect.any(String), expect.any(Number));
+	});
+
 	it("does not chime the receive sound for the student's own echo", () => {
 		const { ctx, playSound } = renderWithChat(<Probe />, {});
 		playSound.mockClear();

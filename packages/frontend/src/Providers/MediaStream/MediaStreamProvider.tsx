@@ -907,6 +907,19 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// new instant; drop the old-timeline messages so they don't linger.
 			usenetBuffer.current.clear();
 			setUsenetItems([]);
+			// Chat, unlike everything else here, is cleared on a BACKWARD seek
+			// only. Chat history turns arrive as ordinary chat_message frames
+			// appended to the same flat array, so after a rewind the student
+			// would otherwise still see every post-seek line with the refetched
+			// older lines below them — a character remembering what has not
+			// happened yet, the exact anachronism the backend's tier system
+			// exists to prevent. A forward seek has no such problem (nothing on
+			// screen postdates the new instant) and clearing there would blank
+			// a conversation mid-sentence. This also drops the student's own
+			// local echoes, which live in the same array by design. The chat
+			// app re-requests a page per open conversation (and on reopening
+			// one) to refill.
+			if (nowMs < prevMs) setChatMessages([]);
 			flightsBuffer.current.clear();
 			// Per-station weather state is intentionally NOT cleared here — the
 			// post-seek "weather" snapshot frame (covering every station at the
