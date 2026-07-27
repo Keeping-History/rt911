@@ -15,7 +15,9 @@ describe("renderEmoticons", () => {
 	});
 
 	it("keeps the surrounding words intact", () => {
-		expect(shown("im scared :-(").textContent).toContain("im scared");
+		const el = shown("im scared :-(");
+		expect(el.textContent).toContain("im scared");
+		expect(el.querySelectorAll("[data-emoticon]")).toHaveLength(1);
 	});
 
 	it("leaves an unmapped token as typed", () => {
@@ -36,6 +38,40 @@ describe("renderEmoticons", () => {
 	});
 
 	it("returns plain text unchanged", () => {
-		expect(shown("just words").textContent).toBe("just words");
+		const el = shown("just words");
+		expect(el.textContent).toBe("just words");
+		expect(el.querySelectorAll("[data-emoticon]")).toHaveLength(0);
+	});
+
+	it("renders an emoticon followed by a period", () => {
+		const el = shown("see you soon :-).");
+		expect(el.querySelectorAll("[data-emoticon]")).toHaveLength(1);
+	});
+
+	it("renders an emoticon followed by a comma", () => {
+		const el = shown("lol :-)," );
+		expect(el.querySelectorAll("[data-emoticon]")).toHaveLength(1);
+	});
+
+	it("renders an emoticon followed by a question mark", () => {
+		const el = shown("what :-)?");
+		expect(el.querySelectorAll("[data-emoticon]")).toHaveLength(1);
+	});
+
+	it("renders an emoticon followed by an exclamation mark", () => {
+		const el = shown("yes :-O!");
+		expect(el.querySelectorAll("[data-emoticon]")).toHaveLength(1);
+	});
+
+	it("still does not fire on colon-paren inside a word after fix", () => {
+		const el = shown("meet at 8:30");
+		expect(el.querySelectorAll("[data-emoticon]")).toHaveLength(0);
+		expect(el.textContent).toBe("meet at 8:30");
+	});
+
+	it("still does not fire on colon-digit inside a word (3:1 ratio)", () => {
+		const el = shown("ratio is 3:1");
+		expect(el.querySelectorAll("[data-emoticon]")).toHaveLength(0);
+		expect(el.textContent).toBe("ratio is 3:1");
 	});
 });
