@@ -920,7 +920,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://beta.911realtime.org/
 
 Expected: `200`. The apex is not live yet — that is Task 11.
 
-### Task 11: Flip the apex and www records
+### Task 11: Flip the apex and www records — ✅ DONE 2026-07-27
 
 **Files:** none — Cloudflare API.
 
@@ -948,7 +948,28 @@ curl -sS -X PUT -H "Authorization: Bearer $CF_DNS_TOKEN" -H "Content-Type: appli
   | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'], d['result']['content'] if d['success'] else d['errors'])"
 ```
 
-- [ ] **Step 3: Verify the apex serves the SPA**
+- [x] **Step 2b: PURGE THE CLOUDFLARE CACHE — required, not optional**
+
+Discovered in execution. Immediately after the DNS flip the apex still served
+the **old GCS site**: `x-guploader-uploadid` present, `cf-cache-status: HIT`,
+`cache-control: public,max-age=3600`. The old origin's headers had convinced
+Cloudflare to hold that HTML for an hour, and repointing DNS does not
+invalidate anything — the edge cache is keyed by URL, not by origin.
+
+Verifying that the *new* origin sends `no-store` says nothing about the object
+already cached from the *old* one.
+
+```bash
+PURGE=$(kubectl get secret -n rt911 cloudflare-purge -o jsonpath='{.data.token}' | base64 -d)
+curl -sS -X POST -H "Authorization: Bearer $PURGE" -H "Content-Type: application/json" \
+  "https://api.cloudflare.com/client/v4/zones/$ZONE/purge_cache" \
+  --data '{"hosts":["911realtime.org","www.911realtime.org"]}'
+```
+
+Expected: `"success": true`, and the apex immediately flips to
+`cache-control: no-store, must-revalidate` / `cf-cache-status: BYPASS`.
+
+- [x] **Step 3: Verify the apex serves the SPA**
 
 ```bash
 curl -sS -o /dev/null -w "%{http_code}\n" https://911realtime.org/
@@ -1012,7 +1033,7 @@ An empty roster with a working sign-on is the known `LoadProfiles` failure signa
 
 Do not proceed to Task 12 until all of these pass. Task 12 is the irreversible one.
 
-### Task 12: Create the redirect rule
+### Task 12: Create the redirect rule — ✅ DONE 2026-07-27
 
 **Files:** none — Cloudflare API, using the token from Task 1 Step 3.
 
