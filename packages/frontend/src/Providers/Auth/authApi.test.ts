@@ -230,12 +230,12 @@ describe("registrationLandingUrl", () => {
 			"https://911realtime.org/",
 		);
 	});
-	it("falls back to beta elsewhere, with boundary-safe matching", () => {
+	it("falls back to the apex elsewhere, with boundary-safe matching", () => {
 		expect(registrationLandingUrl("localhost", "http://localhost:5173")).toBe(
-			"https://beta.911realtime.org/",
+			"https://911realtime.org/",
 		);
 		expect(registrationLandingUrl("evil911realtime.org", "https://evil911realtime.org")).toBe(
-			"https://beta.911realtime.org/",
+			"https://911realtime.org/",
 		);
 	});
 });
