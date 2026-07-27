@@ -191,6 +191,157 @@ def correlate(tracks, bts_path, airports_path):
     return results
 
 
+# ------------------------------------------------------------------ matcher v2
+# Upgrades over correlate(): global mutual-best assignment (each track and each
+# BTS flight used at most once, best score first — hub congestion stops
+# producing "2+ candidates, discard"), per-airport wheels-off bias calibration
+# (BTS times are minute-quantized local; towers also differ systematically in
+# taxi/queue offsets), destination-bearing consistency (a departure's outbound
+# course must roughly agree with the great-circle bearing to its BTS
+# destination), and arrival-side matching as independent evidence (tracks
+# ending low near an airport vs BTS WheelsOn).
+
+BEARING_FREE_DEG = 35     # departures turn on SIDs; under this, no penalty
+BEARING_GATE_DEG = 100    # beyond this, the pairing is rejected outright
+BEARING_WEIGHT = 3.0      # score seconds per degree beyond the free cone
+SCORE_GATE_S = 300.0      # max acceptable score for an assignment
+COURSE_SAMPLE_S = 300     # outbound course measured at first return + this
+
+
+def bearing_deg(lat1, lon1, lat2, lon2):
+    dlon = math.radians(lon2 - lon1)
+    la1, la2 = math.radians(lat1), math.radians(lat2)
+    y = math.sin(dlon) * math.cos(la2)
+    x = math.cos(la1) * math.sin(la2) - math.sin(la1) * math.cos(la2) * math.cos(dlon)
+    return math.degrees(math.atan2(y, x)) % 360
+
+
+def ang_diff(a, b):
+    return abs((a - b + 180) % 360 - 180)
+
+
+def _endpoint_signatures(tracks, apl):
+    """Departure and arrival signatures with an outbound/inbound course."""
+    deps, arrs = [], []
+    for i, tr in enumerate(tracks):
+        pts = tr["pts"]
+        for kind, p0, seq in (("dep", pts[0], pts), ("arr", pts[-1], pts[::-1])):
+            t, lat, lon, alt, _site = p0
+            a = None if pd.isna(alt) else float(alt)
+            if a is None:
+                low = [float(q[3]) for q in seq[:5] if not pd.isna(q[3])]
+                a = min(low) if low else None
+            if a is None or a > DEP_ALT_FT:
+                continue
+            best, bd = None, DEP_AP_NM
+            for arow in apl:
+                d = dist_nm(lat, lon, arow.lat, arow.lon)
+                if d < bd:
+                    best, bd = arow.Index, d
+            if not best:
+                continue
+            # course away from (dep) / toward (arr) the airport, sampled a few
+            # minutes into / before the end of the track
+            ref = next((q for q in seq if abs(q[0] - t) >= COURSE_SAMPLE_S), seq[-1])
+            course = (bearing_deg(lat, lon, ref[1], ref[2]) if kind == "dep"
+                      else bearing_deg(ref[1], ref[2], lat, lon))
+            sig = {"track": i, "code": tr["code"], "t": t, "ap": best,
+                   "course": course, "n": len(pts)}
+            (deps if kind == "dep" else arrs).append(sig)
+    return deps, arrs
+
+
+def _assign(sigs, flights, ap, time_col, bias, lead_s, use_bearing):
+    """Greedy global mutual-best assignment. Returns {flight_key: (sig, score)}."""
+    by_airport = {}
+    for f in flights.itertuples(index=False):
+        by_airport.setdefault(getattr(f, "airport"), []).append(f)
+    pairs = []
+    for s in sigs:
+        est = s["t"] - lead_s - bias.get(s["ap"], 0.0)
+        for f in by_airport.get(s["ap"], []):
+            dt = abs(getattr(f, time_col) - est)
+            if dt > 2 * SCORE_GATE_S:
+                continue
+            score = dt
+            if use_bearing:
+                other = f.Dest if time_col == "wo_secs" else f.Origin
+                if other in ap.index:
+                    brg = bearing_deg(ap.loc[s["ap"], "lat"], ap.loc[s["ap"], "lon"],
+                                      ap.loc[other, "lat"], ap.loc[other, "lon"])
+                    diff = ang_diff(s["course"], brg)
+                    if diff > BEARING_GATE_DEG:
+                        continue
+                    score += BEARING_WEIGHT * max(0.0, diff - BEARING_FREE_DEG)
+            if score <= SCORE_GATE_S:
+                pairs.append((score, s, f))
+    pairs.sort(key=lambda x: x[0])
+    used_tracks, used_flights, out = set(), set(), {}
+    for score, s, f in pairs:
+        key = f.Reporting_Airline + str(f.Flight_Number)
+        if s["track"] in used_tracks or key in used_flights:
+            continue
+        used_tracks.add(s["track"])
+        used_flights.add(key)
+        out[key] = (s, score)
+    return out
+
+
+def correlate_v2(tracks, bts_path, airports_path, notable_codes=("1443", "3020", "3321", "3743", "1527", "2427")):
+    ap = pd.read_csv(airports_path).set_index("code")
+    bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
+    bts = bts[(bts.FlightDate == "2001-09-11") & (bts.Cancelled == 0)].copy()
+
+    def hhmm_utc(v, origin_or_dest):
+        try:
+            hhmm = int(float(v))
+            return (hhmm // 100) * 3600 + (hhmm % 100) * 60 - ap.loc[origin_or_dest, "utc_offset"] * 3600
+        except Exception:
+            return np.nan
+    bts["wo_secs"] = [hhmm_utc(r.WheelsOff, r.Origin) for r in bts.itertuples(index=False)]
+    bts["wn_secs"] = [hhmm_utc(r.WheelsOn, r.Dest) for r in bts.itertuples(index=False)]
+
+    ap_in = ap[(ap.lat > COVER["la0"]) & (ap.lat < COVER["la1"])
+               & (ap.lon > COVER["lo0"]) & (ap.lon < COVER["lo1"])]
+    apl = list(ap_in.itertuples())
+    deps, arrs = _endpoint_signatures(tracks, apl)
+    print(f"v2 signatures: {len(deps):,} departures, {len(arrs):,} arrivals")
+
+    w0, w1 = 9.5 * 3600, 13.5 * 3600
+    bd = bts.dropna(subset=["wo_secs"])
+    bd = bd[(bd.wo_secs >= w0) & (bd.wo_secs <= w1) & bd.Origin.isin(ap_in.index)].copy()
+    bd["airport"] = bd.Origin
+    ba = bts.dropna(subset=["wn_secs"])
+    ba = ba[(ba.wn_secs >= w0) & (ba.wn_secs <= w1) & ba.Dest.isin(ap_in.index)].copy()
+    ba["airport"] = ba.Dest
+
+    # pass 1 (time only, tight) → per-airport wheels-off bias from >=5 matches
+    pass1 = _assign(deps, bd, ap, "wo_secs", {}, LIFTOFF_LEAD_S, use_bearing=False)
+    resid = {}
+    for key, (s, _sc) in pass1.items():
+        f = bd[(bd.Reporting_Airline + bd.Flight_Number.astype(str)) == key].iloc[0]
+        if abs(s["t"] - LIFTOFF_LEAD_S - f.wo_secs) <= 120:
+            resid.setdefault(s["ap"], []).append(s["t"] - LIFTOFF_LEAD_S - f.wo_secs)
+    bias = {a: float(np.median(v)) for a, v in resid.items() if len(v) >= 5}
+    print(f"v2 pass1: {len(pass1):,} matches; bias calibrated for {len(bias)} airports "
+          f"(median offsets {sorted(round(b) for b in bias.values())[:8]}...)")
+
+    dep_m = _assign(deps, bd, ap, "wo_secs", bias, LIFTOFF_LEAD_S, use_bearing=True)
+    arr_m = _assign(arrs, ba, ap, "wn_secs", bias, -30, use_bearing=True)
+
+    both = {k for k in dep_m if k in arr_m
+            if dep_m[k][0]["track"] == arr_m[k][0]["track"]}
+    all_named = set(dep_m) | set(arr_m)
+    print(f"v2 named: departures {len(dep_m):,}, arrivals {len(arr_m):,}, "
+          f"both-ends-same-track {len(both):,}, union {len(all_named):,}")
+
+    # negative control: hijacked/observer squawk tracks must stay unnamed
+    bad = [k for k, (s, _sc) in list(dep_m.items()) + list(arr_m.items())
+           if s["code"] in notable_codes]
+    print(f"v2 negative control (notable squawks named): {bad or 'none'}")
+    return {"dep": dep_m, "arr": arr_m, "both": both}
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--exports-dir", required=True)
@@ -206,6 +357,7 @@ def main(argv=None):
         with open(args.out, "wb") as fh:
             pickle.dump(tracks, fh)
     results = correlate(tracks, args.bts, args.airports)
+    correlate_v2(tracks, args.bts, args.airports)
     if args.matches_out:
         payload = [{"flight": fl, "squawk": d["code"], "first_return_secs": d["t0"],
                     "airport": d["ap"], "returns": d["n"], **meta}
