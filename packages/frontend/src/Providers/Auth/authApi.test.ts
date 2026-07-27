@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { avatarUrl, fetchMe, isHostOf, loginEmail, logout, providerLoginUrl, register, registrationLandingUrl, uploadAvatar, verifyRegistration } from "./authApi";
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 const jsonResponse = (body: unknown, status = 200) =>
 	new Response(JSON.stringify(body), { status });

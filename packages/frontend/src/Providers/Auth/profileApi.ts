@@ -7,7 +7,7 @@ import {
 	ForbiddenError,
 	type AuthUser,
 } from "./authApi";
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 export interface ProfilePatch {
 	first_name?: string | null;

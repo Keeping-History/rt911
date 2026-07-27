@@ -4,7 +4,7 @@
 // (Wasabi-backed) and pointed to by the `filesystem` m2o field on directus_users.
 import { isValidFileSystemEntry } from "classicy";
 import type { ClassicyFileSystemEntry } from "classicy";
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 const FILE_FIELD = "filesystem";
 

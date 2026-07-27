@@ -1,7 +1,7 @@
 // Directus session-cookie auth. httpOnly cookies only — never read/write
 // localStorage or any client-side store here; every request rides
 // credentials:"include" and the browser-held Directus session cookie.
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 export interface AuthUser {
 	id: string;
