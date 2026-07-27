@@ -128,15 +128,30 @@ describe("BuddyListWindow", () => {
 		expect((screen.getByRole("button", { name: "IM" }) as HTMLButtonElement).disabled).toBe(true);
 	});
 
-	it("disables IM and Info when the selection is offline", () => {
-		renderBuddyList({
+	it("disables IM but NOT Info when the selection is offline", () => {
+		// The two buttons answer different questions. Messaging an offline buddy
+		// opens a window the server refuses; reading their profile does not
+		// require them to be at their computer. The People menu already made
+		// this split (IMBuddies.tsx) — the button used to contradict it.
+		const { openInfoFor } = renderBuddyList({
 			buddies: [{ profile: 1, screen_name: "a", display_name: "", avatar: "", online: false }],
 		});
 		fireEvent.click(screen.getByText("a"));
 		expect((screen.getByRole("button", { name: "IM" }) as HTMLButtonElement).disabled).toBe(true);
-		expect((screen.getByRole("button", { name: "Info" }) as HTMLButtonElement).disabled).toBe(
-			true,
-		);
+		const info = screen.getByRole("button", { name: "Info" }) as HTMLButtonElement;
+		expect(info.disabled).toBe(false);
+		fireEvent.click(info);
+		expect(openInfoFor).toHaveBeenCalledWith(1);
+	});
+
+	it("disables Info with nothing selected", () => {
+		const { openInfoFor } = renderBuddyList({
+			buddies: [{ profile: 1, screen_name: "a", display_name: "", avatar: "", online: true }],
+		});
+		const info = screen.getByRole("button", { name: "Info" }) as HTMLButtonElement;
+		expect(info.disabled).toBe(true);
+		fireEvent.click(info);
+		expect(openInfoFor).not.toHaveBeenCalled();
 	});
 
 	it("enables IM and Info once an online buddy is selected, and IM/Info act on it", () => {

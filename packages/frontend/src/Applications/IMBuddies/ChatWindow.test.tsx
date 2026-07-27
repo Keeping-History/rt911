@@ -63,7 +63,15 @@ vi.mock("./IMBuddiesProvider", () => ({
 // so nothing here needs a stub to avoid throwing.
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
-	ClassicyWindow: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
+	// `title` is surfaced as text, standing in for the real title bar: the
+	// window is titled with the buddy's name, and a wrong-buddy lookup would
+	// mis-title it as surely as it would misattribute a line.
+	ClassicyWindow: (props: { title?: string; children?: React.ReactNode }) => (
+		<div>
+			<div data-testid="window-title">{props.title}</div>
+			{props.children}
+		</div>
+	),
 	useSoundDispatch: () => (action: { type: string; sound: string }) => {
 		if (action.type === "ClassicySoundPlay") playSoundSpy(action.sound);
 	},
@@ -179,5 +187,31 @@ describe("ChatWindow", () => {
 		const studentLine = screen.getByText(/are you okay/).closest("div");
 		expect(buddyLine?.textContent).toMatch(/^Danny:/);
 		expect(studentLine?.textContent).toMatch(/^You:/);
+	});
+
+	it("names the buddy from the `profile` prop, not the first buddy on the roster", () => {
+		// Every other test in this file renders with profile=1 AND builds its
+		// roster from that same argument, so a lookup that ignored the prop and
+		// reached for buddies[0] would pass all of them — including the speaker
+		// attribution test above, which is the most user-visible thing this
+		// window can get wrong. InfoWindow had exactly this blind spot and was
+		// fixed; this is the mirror of that fix. Two buddies, and Carol
+		// (profile 2, deliberately NOT buddies[0]) is the one rendered.
+		renderChat(2, {
+			buddies: [
+				{ profile: 1, screen_name: "danny99", display_name: "Danny", avatar: "", online: true },
+				{ profile: 2, screen_name: "carolm", display_name: "Carol", avatar: "", online: true },
+			],
+			typingProfile: 2,
+			messages: [
+				{ message_id: 1, profile: 2, direction: "out", body: "im at my desk", time: "", kind: "generated" },
+			],
+		});
+		expect(screen.getByTestId("window-title").textContent).toBe("Carol");
+		const buddyLine = screen.getByText(/im at my desk/).closest("div");
+		expect(buddyLine?.textContent).toMatch(/^Carol:/);
+		expect(screen.getByText("Carol is typing...")).toBeTruthy();
+		// Danny must not appear anywhere — not as the title, not as a speaker.
+		expect(screen.queryByText(/Danny/)).toBeNull();
 	});
 });

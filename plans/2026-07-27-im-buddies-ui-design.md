@@ -120,8 +120,11 @@ The window closes once connected and reopens on Sign Off.
   scheduled beat — arrived for a buddy whose window is closed. It is not repeated on the
   Window menu: that menu lists only *open* conversations, and an open chat window marks
   itself read on every message, so the count there is always zero.
-- **IM**, **Info**, **Prefs** buttons act on the selection. IM and Info disable when no
-  buddy is selected or the selected buddy is offline.
+- **IM**, **Info**, **Prefs** buttons act on the selection. IM disables when no buddy is
+  selected or the selected buddy is offline. **Info disables only when nothing is
+  selected** — a profile is readable while its owner is offline; knowing who a person is
+  does not require them to be at their computer. (This matches the People menu, whose
+  Get Info item has always worked that way.)
 - A **status line** across the bottom carrying one sentence of clock state — see below.
 
 ### 3. Chat — one window per buddy
