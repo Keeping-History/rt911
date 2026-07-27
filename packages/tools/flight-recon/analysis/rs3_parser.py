@@ -15,7 +15,7 @@ Viewer CSV export of ``12541130.RS3`` aligns 1:1, in order, with the binary's
     w3..w4  UTC epoch seconds  (uint32)
     w5      fine time, 20 microsecond units
   Aircraft messages (Bcn/Reinf/Sch and the RTQC test targets):
-    w6      flags: b6=Ident b7=MCV b8=M3V b9=M2V
+    w6      flags: b1=Af b6=Ident b7=MCV b8=M3V b9=M2V
     w7      slant range: (w7 >> 2) / 8 nm  (b1 = Mrg)   [RTQC variants: w7/32]
     w8      azimuth: (w8 >> 1) * 360 / 4096 deg (true)
     w9      flags: b7=M3X b8=M2X b9=Disc
@@ -45,6 +45,7 @@ degrades to no-position output without pyproj).
 
 import argparse
 import csv as csvmod
+import os
 import math
 import struct
 import sys
@@ -83,6 +84,45 @@ SITE_CAL = {
     "REM": {"lat": 43.345469, "lon": -75.248787, "range_bias_nm": -0.0804, "alt_site_ft": 2721.5},
     "RIV": {"lat": 40.878652, "lon": -72.687049, "range_bias_nm": -0.0483, "alt_site_ft": -47.5},
 }
+
+# --- SEADS-configured recordings (``SEADS_*.RS3``) -------------------------
+# The site-byte -> radar mapping is per-recording-config, NOT global: the same
+# byte values name DIFFERENT radars in the SEADS files (verified: same-second
+# "GIB" returns differ between 12541200 and SEADS_12541200). These southern
+# sites were solved from the data itself — RANSAC on joint observations of
+# aircraft whose positions are known from calibrated sites, bootstrapped
+# southward in two rounds (see #263). Two independent sanity anchors: byte 10
+# fits Fort Fisher NC (= QFF) and byte 16 fits Oceana VA (= OCA) within ~2 nm
+# of their NEADS-config fits. Bytes without a converged fit decode without
+# positions.
+SEADS_SITE_IDS = {0: "SEA00", 3: "SEA03", 4: "SEA04", 5: "SEA05", 6: "SEA06",
+                  7: "SEA07", 8: "SEA08", 9: "SEA09", 10: "SEA10", 11: "SEA11",
+                  12: "SEA12", 13: "SEA13", 14: "SEA14", 15: "SEA15",
+                  16: "SEA16", 17: "SEA17"}
+SEADS_SITE_CAL = {
+    "SEA03": {"lat": 29.7986, "lon": -82.9794, "range_bias_nm": -0.542, "alt_site_ft": -8512},   # Cross City FL
+    "SEA05": {"lat": 28.1546, "lon": -80.7837, "range_bias_nm": -0.611, "alt_site_ft": 18477},   # Patrick AFB FL
+    "SEA06": {"lat": 30.4056, "lon": -81.8547, "range_bias_nm": -0.996, "alt_site_ft": -22360},  # Jacksonville FL
+    "SEA07": {"lat": 30.3957, "lon": -89.7431, "range_bias_nm": -0.359, "alt_site_ft": -38650},  # Slidell/Stennis MS
+    "SEA08": {"lat": 24.6615, "lon": -81.6707, "range_bias_nm": -1.010, "alt_site_ft": 58546},   # Cudjoe Key FL aerostat
+    "SEA09": {"lat": 30.1274, "lon": -85.5745, "range_bias_nm": -0.967, "alt_site_ft": 23005},   # Tyndall AFB FL
+    "SEA10": {"lat": 33.9530, "lon": -77.9385, "range_bias_nm": 0.510, "alt_site_ft": 150},      # Fort Fisher NC (QFF)
+    "SEA11": {"lat": 27.7678, "lon": -81.9866, "range_bias_nm": -0.866, "alt_site_ft": 6908},    # Avon Park FL
+    "SEA12": {"lat": 25.7380, "lon": -80.4952, "range_bias_nm": -1.662, "alt_site_ft": 65912},   # Miami FL
+    "SEA14": {"lat": 31.0830, "lon": -88.2012, "range_bias_nm": -0.349, "alt_site_ft": -1589},   # SW Alabama
+    "SEA15": {"lat": 33.0950, "lon": -80.2116, "range_bias_nm": -0.772, "alt_site_ft": 11406},   # Charleston SC
+    "SEA16": {"lat": 36.8053, "lon": -76.0413, "range_bias_nm": 0.508, "alt_site_ft": -24552},   # Oceana VA (OCA)
+}
+
+
+def tables_for(path):
+    """(site_ids, site_cal) for a recording — SEADS-config files are detected
+    by filename; everything else uses the validated NEADS-config tables."""
+    name = os.path.basename(path).upper()
+    if name.startswith("SEADS"):
+        return SEADS_SITE_IDS, SEADS_SITE_CAL
+    return SITE_IDS, SITE_CAL
+
 
 FIELDS = ["Id", "MsgType", "Date", "Time", "epoch_s", "Range", "AzDegs",
           "M3", "M3V", "M3X", "M2", "M2V", "M2X", "MC", "MCV", "HeightApprox",
@@ -136,6 +176,7 @@ def oct4(v):
 
 def decode(path, with_positions=True):
     """Yield decoded rows (dicts, FIELDS keys) for every aircraft message."""
+    site_ids, site_cal = tables_for(path)
     geod = None
     if with_positions:
         try:
@@ -146,7 +187,7 @@ def decode(path, with_positions=True):
         mtype = TYPE_IDS.get(words[1] & 0xFF, f"type{words[1] & 0xFF}")
         if mtype not in AIRCRAFT_TYPES:
             continue
-        site = SITE_IDS.get(words[0] & 0xFF, f"site{words[0] & 0xFF}")
+        site = site_ids.get(words[0] & 0xFF, f"site{words[0] & 0xFF}")
         epoch = words[3] | (words[4] << 16)
         t = epoch + words[5] * 20e-6
         dt = datetime.fromtimestamp(t, tz=timezone.utc)
@@ -173,10 +214,10 @@ def decode(path, with_positions=True):
             "MCV": mcv,
             "HeightApprox": w(13) * 12.5 if mtype == "Reinf" else "",
             "Ident": (w(6) >> 6) & 1, "Mrg": (w(7) >> 1) & 1,
-            "Disc": (w(9) >> 9) & 1, "Af": (w(0) >> 3) & 1,
+            "Disc": (w(9) >> 9) & 1, "Af": (w(6) >> 1) & 1,
             "DecLat": "", "DecLon": "",
         }
-        cal = SITE_CAL.get(site)
+        cal = site_cal.get(site)
         if geod is not None and cal is not None:
             alt_nm = max((mc_ft or 0) - cal["alt_site_ft"], 0.0) / FT_PER_NM
             r = max(rng + cal["range_bias_nm"], 0.05)
@@ -185,6 +226,74 @@ def decode(path, with_positions=True):
             row["DecLat"] = round(lat2, 4)
             row["DecLon"] = round(lon2, 4)
         yield row
+
+
+def decode_df(path, with_positions=True):
+    """Vectorized decode -> pandas DataFrame (FIELDS columns).
+
+    Same semantics as ``decode()`` but ~50x faster: field math and the WGS84
+    geodesic run on whole arrays. Requires numpy/pandas (+ pyproj for
+    positions)."""
+    import numpy as np
+    import pandas as pd
+    site_ids, site_cal = tables_for(path)
+    rows = []
+    for words, _n in iter_messages(path):
+        tb = words[1] & 0xFF
+        if TYPE_IDS.get(tb) not in AIRCRAFT_TYPES:
+            continue
+        w = words + (0,) * (14 - len(words))
+        rows.append((words[0] & 0xFF, tb, words[3] | (words[4] << 16), words[5],
+                     w[6], w[7], w[8], w[9], w[10], w[11], w[12], w[13]))
+    if not rows:
+        return pd.DataFrame(columns=FIELDS)
+    a = np.array(rows, dtype=np.int64)
+    site_b, type_b, epoch, fine = a[:, 0], a[:, 1], a[:, 2], a[:, 3]
+    w6, w7, w8, w9, w10, w11, w12, w13 = (a[:, i] for i in range(4, 12))
+    t = epoch + fine * 20e-6
+    m3v = (w6 >> 8) & 1
+    mcv = (w6 >> 7) & 1
+    mtype = pd.Series(type_b).map(TYPE_IDS)
+    site = pd.Series(site_b).map(lambda b: site_ids.get(b, f"site{b}"))
+    mc_ft = np.where(mcv == 1, (w12 >> 1) * 100, np.nan)
+    rng = (w7 >> 2) / 8.0
+    az = (w8 >> 1) * 360.0 / 4096.0
+    dt = pd.to_datetime(t, unit="s", utc=True)
+    df = pd.DataFrame({
+        "Id": site, "MsgType": mtype,
+        "Date": dt.strftime("%d %b %Y"),
+        "Time": dt.strftime("%H:%M:%S.%f").str[:-3],
+        "epoch_s": np.round(t, 6),
+        "Range": rng, "AzDegs": np.round(az, 3),
+        "M3": np.where(m3v | ((w10 >> 1) > 0),
+                       pd.Series(w10 >> 1).map(oct4), ""),
+        "M3V": m3v, "M3X": (w9 >> 7) & 1,
+        "M2": np.where(((w6 >> 9) & 1) | ((w11 >> 1) > 0),
+                       pd.Series(w11 >> 1).map(oct4), ""),
+        "M2V": (w6 >> 9) & 1, "M2X": (w9 >> 8) & 1,
+        "MC": mc_ft, "MCV": mcv,
+        "HeightApprox": np.where(mtype == "Reinf", w13 * 12.5, np.nan),
+        "Ident": (w6 >> 6) & 1, "Mrg": (w7 >> 1) & 1,
+        "Disc": (w9 >> 9) & 1, "Af": (w6 >> 1) & 1,
+        "DecLat": np.nan, "DecLon": np.nan,
+    })
+    if with_positions:
+        try:
+            geod = _geod()
+        except ImportError:
+            return df
+        for s, cal in site_cal.items():
+            m = np.asarray(df.Id == s)
+            if not m.any():
+                continue
+            alt_nm = np.maximum(np.nan_to_num(mc_ft[m], nan=0.0) - cal["alt_site_ft"], 0.0) / FT_PER_NM
+            r = np.maximum(rng[m] + cal["range_bias_nm"], 0.05)
+            ground = np.sqrt(np.maximum(r * r - alt_nm * alt_nm, 1e-4))
+            lon2, lat2, _ = geod.fwd(np.full(m.sum(), cal["lon"]), np.full(m.sum(), cal["lat"]),
+                                     az[m], ground * M_PER_NM)
+            df.loc[m, "DecLat"] = np.round(lat2, 4)
+            df.loc[m, "DecLon"] = np.round(lon2, 4)
+    return df
 
 
 def cmd_decode(args):
