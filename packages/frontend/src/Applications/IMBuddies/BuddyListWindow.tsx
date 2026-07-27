@@ -59,11 +59,13 @@ export function isMessageable(buddy: ChatBuddy | null): buddy is ChatBuddy {
 interface BuddyRowProps {
 	buddy: ChatBuddy;
 	selected: boolean;
+	/** Messages from this buddy since their window was last read. 0 renders nothing. */
+	unread: number;
 	onSelect: (profile: number) => void;
 	onActivate: (buddy: ChatBuddy) => void;
 }
 
-const BuddyRow: React.FC<BuddyRowProps> = ({ buddy, selected, onSelect, onActivate }) => {
+const BuddyRow: React.FC<BuddyRowProps> = ({ buddy, selected, unread, onSelect, onActivate }) => {
 	const rowClass = [
 		styles.buddyRow,
 		buddy.online ? "" : styles.buddyRowOffline,
@@ -90,13 +92,29 @@ const BuddyRow: React.FC<BuddyRowProps> = ({ buddy, selected, onSelect, onActiva
 		>
 			<span className={dotClass} aria-hidden="true" />
 			<span>{buddy.screen_name}</span>
+			{unread > 0 && (
+				// AIM's own place for this. It is the ONLY signal that a message
+				// arrived for a buddy whose window is closed — including a
+				// server-initiated scheduled beat — since the sound assets for
+				// IM_SOUNDS.receive are not shipped yet.
+				<span className={styles.buddyUnread} title={`${unread} unread`}>
+					{unread}
+				</span>
+			)}
 		</div>
 	);
 };
 
 export const BuddyListWindow: React.FC = () => {
-	const { buddies, reason, openChat, openInfoFor, selectedBuddy: selected, selectBuddy: setSelected } =
-		useIMBuddies();
+	const {
+		buddies,
+		reason,
+		openChat,
+		openInfoFor,
+		conversationFor,
+		selectedBuddy: selected,
+		selectBuddy: setSelected,
+	} = useIMBuddies();
 
 	const { online, offline } = useMemo(() => {
 		const online: ChatBuddy[] = [];
@@ -137,6 +155,7 @@ export const BuddyListWindow: React.FC = () => {
 							key={buddy.profile}
 							buddy={buddy}
 							selected={selected === buddy.profile}
+							unread={conversationFor(buddy.profile).unread}
 							onSelect={setSelected}
 							onActivate={activate}
 						/>
@@ -148,6 +167,7 @@ export const BuddyListWindow: React.FC = () => {
 							key={buddy.profile}
 							buddy={buddy}
 							selected={selected === buddy.profile}
+							unread={conversationFor(buddy.profile).unread}
 							onSelect={setSelected}
 							onActivate={activate}
 						/>

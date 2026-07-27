@@ -112,6 +112,11 @@ The window closes once connected and reopens on Sign Off.
   groups. Order is `chat_profiles.sort`; online state is the `chat_presence` frame.
 - Online buddies in black with a lit dot; offline in grey with a hollow dot.
 - Double-clicking a buddy opens their chat window (or focuses it if already open).
+- A buddy with unread messages carries the count on their row. With no receive-sound
+  asset shipped, this is the only signal that a message — including a server-initiated
+  scheduled beat — arrived for a buddy whose window is closed. It is not repeated on the
+  Window menu: that menu lists only *open* conversations, and an open chat window marks
+  itself read on every message, so the count there is always zero.
 - **IM**, **Info**, **Prefs** buttons act on the selection. IM and Info disable when no
   buddy is selected or the selected buddy is offline.
 - A **status line** across the bottom carrying one sentence of clock state — see below.

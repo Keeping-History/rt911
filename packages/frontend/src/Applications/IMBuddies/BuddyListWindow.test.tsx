@@ -27,6 +27,8 @@ const imState = vi.hoisted(() => ({
 	buddies: [] as ChatBuddy[],
 	enabled: true,
 	reason: "ok" as ChatStateReason,
+	// Unread count per profile, as conversationFor() would report it.
+	unread: {} as Record<number, number>,
 	openChat: vi.fn(),
 	openInfoFor: vi.fn(),
 }));
@@ -44,6 +46,10 @@ vi.mock("./IMBuddiesProvider", () => ({
 			buddies: imState.buddies,
 			enabled: imState.enabled,
 			reason: imState.reason,
+			conversationFor: (profile: number) => ({
+				messages: [],
+				unread: imState.unread[profile] ?? 0,
+			}),
 			openChat: imState.openChat,
 			openInfoFor: imState.openInfoFor,
 			selectedBuddy,
@@ -73,11 +79,17 @@ vi.mock("classicy", async (importOriginal) => ({
 }));
 
 function renderBuddyList(
-	overrides: { buddies?: ChatBuddy[]; enabled?: boolean; reason?: ChatStateReason } = {},
+	overrides: {
+		buddies?: ChatBuddy[];
+		enabled?: boolean;
+		reason?: ChatStateReason;
+		unread?: Record<number, number>;
+	} = {},
 ) {
 	imState.buddies = overrides.buddies ?? [];
 	imState.enabled = overrides.enabled ?? true;
 	imState.reason = overrides.reason ?? "ok";
+	imState.unread = overrides.unread ?? {};
 	imState.openChat = vi.fn();
 	imState.openInfoFor = vi.fn();
 	render(<BuddyListWindow />);
@@ -140,6 +152,42 @@ describe("BuddyListWindow", () => {
 		expect(openChat).toHaveBeenCalledWith(7);
 		fireEvent.click(info);
 		expect(openInfoFor).toHaveBeenCalledWith(7);
+	});
+
+	it("shows an unread count on the buddy's row", () => {
+		// With no receive sound asset shipped, this badge is the only signal a
+		// message arrived for a buddy whose window is closed — including a
+		// server-initiated scheduled beat.
+		renderBuddyList({
+			buddies: [
+				{ profile: 1, screen_name: "danny99", display_name: "", avatar: "", online: true },
+				{ profile: 2, screen_name: "carolm", display_name: "", avatar: "", online: true },
+			],
+			unread: { 2: 3 },
+		});
+		const carolRow = screen.getByText("carolm").closest("div");
+		expect(carolRow?.textContent).toContain("3");
+		// ...and only on that buddy's row, not everyone's.
+		expect(screen.getByText("danny99").closest("div")?.textContent).toBe("danny99");
+	});
+
+	it("shows no badge for a conversation with nothing unread", () => {
+		renderBuddyList({
+			buddies: [{ profile: 1, screen_name: "danny99", display_name: "", avatar: "", online: true }],
+			unread: { 1: 0 },
+		});
+		expect(screen.getByText("danny99").closest("div")?.textContent).toBe("danny99");
+	});
+
+	it("shows an unread count for an OFFLINE buddy too", () => {
+		// The offline group is a separate map() over the same row component; a
+		// badge wired into only the online list would look complete and still
+		// hide the scheduled beats that arrive after a buddy goes offline.
+		renderBuddyList({
+			buddies: [{ profile: 5, screen_name: "gone", display_name: "", avatar: "", online: false }],
+			unread: { 5: 2 },
+		});
+		expect(screen.getByText("gone").closest("div")?.textContent).toContain("2");
 	});
 
 	it("renders the status line for the current reason", () => {
