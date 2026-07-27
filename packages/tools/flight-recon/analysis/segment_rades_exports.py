@@ -62,6 +62,10 @@ MIN_NET_NM = 10.0
 DEP_ALT_FT = 6000
 DEP_AP_NM = 8.0
 LIFTOFF_LEAD_S = 60
+# Radar-coverage time window (UTC secs-of-day) used to bound BTS candidates.
+# The Message Viewer exports covered 09:30-13:30Z; the batch-decoded corpus
+# runs to 17:00Z. Overridable via --window HH:MM-HH:MM.
+WINDOW_S = (9.5 * 3600, 13.5 * 3600)
 
 # Coverage box (1-99th pct of track endpoints seen in the 2026-07 exports).
 COVER = dict(la0=31.2, la1=47.7, lo0=-95.6, lo1=-66.4)
@@ -77,6 +81,37 @@ def secs(t):
 
 def dist_nm(a1, o1, a2, o2):
     return math.hypot((a1 - a2) * 60, (o1 - o2) * 60 * math.cos(math.radians((a1 + a2) / 2)))
+
+
+def load_beacon_decoded(decoded_dir, raw_only=True):
+    """Beacon-return table from ``rs3_batch_decode`` output (csv.gz).
+
+    ``raw_only`` keeps recordings whose source path was under ``Data/Raw``
+    (per summary.json) — the combined/filtered products are subsets of those
+    and would double-count returns."""
+    import json as _json
+    with open(os.path.join(decoded_dir, "summary.json")) as fh:
+        summary = _json.load(fh)
+    frames = []
+    for rec in summary:
+        if rec.get("status") != "ok":
+            continue
+        if raw_only and "/Data/Raw/" not in rec["file"].replace("\\", "/"):
+            continue
+        df = pd.read_csv(os.path.join(decoded_dir, rec["out"]),
+                         usecols=["Id", "epoch_s", "M3", "M3V", "MC", "MCV", "DecLat", "DecLon"],
+                         dtype={"M3": "string"}, low_memory=False)
+        df = df[(df.M3V == 1) & df.DecLat.notna()]
+        df["secs"] = df.epoch_s % 86400
+        df["mc_ft"] = pd.to_numeric(df.MC, errors="coerce").where(df.MCV == 1)
+        frames.append(df[["Id", "secs", "M3", "DecLat", "DecLon", "mc_ft"]])
+    b = pd.concat(frames, ignore_index=True)
+    # cross-set duplicates are pre-removed by content hash; overlapping raw
+    # recordings (e.g. NEADS re-cuts) can still repeat returns — exact dedupe
+    b = b.drop_duplicates(subset=["Id", "secs", "M3", "DecLat", "DecLon"])
+    print(f"beacon returns: {len(b):,}  span {b.secs.min()/3600:.2f}h -> {b.secs.max()/3600:.2f}h  "
+          f"squawks {b.M3.nunique()}")
+    return b
 
 
 def load_beacon(exports_dir):
@@ -169,9 +204,9 @@ def correlate(tracks, bts_path, airports_path):
             deps.append({"code": tr["code"], "t0": t, "ap": best, "n": len(tr["pts"])})
     print(f"departure-signature tracks: {len(deps):,}")
 
-    w0, w1 = 9.5 * 3600, 13.5 * 3600
+    w0, w1 = WINDOW_S
     bts_in = bts[(bts.wo_secs >= w0) & (bts.wo_secs <= w1) & bts.Origin.isin(ap_in.index)]
-    print(f"BTS wheels-off 09:30-13:30Z from in-coverage airports: {len(bts_in):,}")
+    print(f"BTS wheels-off {w0/3600:.1f}-{w1/3600:.1f}Z from in-coverage airports: {len(bts_in):,}")
 
     results = {}
     for tol in (150, 300):
@@ -307,7 +342,7 @@ def correlate_v2(tracks, bts_path, airports_path, notable_codes=("1443", "3020",
     deps, arrs = _endpoint_signatures(tracks, apl)
     print(f"v2 signatures: {len(deps):,} departures, {len(arrs):,} arrivals")
 
-    w0, w1 = 9.5 * 3600, 13.5 * 3600
+    w0, w1 = WINDOW_S
     bd = bts.dropna(subset=["wo_secs"])
     bd = bd[(bd.wo_secs >= w0) & (bd.wo_secs <= w1) & bd.Origin.isin(ap_in.index)].copy()
     bd["airport"] = bd.Origin
@@ -344,14 +379,24 @@ def correlate_v2(tracks, bts_path, airports_path, notable_codes=("1443", "3020",
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--exports-dir", required=True)
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument("--exports-dir", help="RS3-app Message Viewer CSV exports")
+    src.add_argument("--decoded-dir", help="rs3_batch_decode output directory")
+    p.add_argument("--window", default=None,
+                   help="BTS candidate window as HH:MM-HH:MM UTC (default 09:30-13:30)")
     p.add_argument("--bts", default="/srv/flight-recon-data/bts_2001-09.csv")
     p.add_argument("--airports", default="/srv/flight-recon-data/airports.csv")
     p.add_argument("--out", help="pickle path for the aircraft-grade tracks")
     p.add_argument("--matches-out", help="JSON path for the +-2min 1:1 matches")
     args = p.parse_args(argv)
 
-    b = load_beacon(args.exports_dir)
+    if args.window:
+        global WINDOW_S
+        a, z = args.window.split("-")
+        to_s = lambda t: int(t.split(":")[0]) * 3600 + int(t.split(":")[1]) * 60  # noqa: E731
+        WINDOW_S = (to_s(a), to_s(z))
+    b = (load_beacon_decoded(args.decoded_dir) if args.decoded_dir
+         else load_beacon(args.exports_dir))
     tracks = segment(b)
     if args.out:
         with open(args.out, "wb") as fh:
