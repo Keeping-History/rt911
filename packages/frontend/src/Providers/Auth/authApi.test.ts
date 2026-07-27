@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { avatarUrl, fetchMe, isHostOf, loginEmail, logout, providerLoginUrl, register, registrationLandingUrl, uploadAvatar, verifyRegistration } from "./authApi";
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 const jsonResponse = (body: unknown, status = 200) =>
 	new Response(JSON.stringify(body), { status });
@@ -230,12 +230,12 @@ describe("registrationLandingUrl", () => {
 			"https://911realtime.org/",
 		);
 	});
-	it("falls back to beta elsewhere, with boundary-safe matching", () => {
+	it("falls back to the apex elsewhere, with boundary-safe matching", () => {
 		expect(registrationLandingUrl("localhost", "http://localhost:5173")).toBe(
-			"https://beta.911realtime.org/",
+			"https://911realtime.org/",
 		);
 		expect(registrationLandingUrl("evil911realtime.org", "https://evil911realtime.org")).toBe(
-			"https://beta.911realtime.org/",
+			"https://911realtime.org/",
 		);
 	});
 });

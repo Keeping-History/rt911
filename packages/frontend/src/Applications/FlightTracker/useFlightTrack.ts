@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
-// Directus REST base, read anonymously — same static-reference-data path the
-// Time Machine bookmarks use (see TimeMachine/useBookmarks.ts). Track geometry
-// is static per flight, so it is fetched over REST, not streamed.
-const DIRECTUS_URL =
-	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
-	"https://api-beta.911realtime.org";
+// Track geometry is static per flight, so it is fetched over REST, not
+// streamed — the same static-reference-data path the Time Machine bookmarks
+// use (see TimeMachine/useBookmarks.ts).
 
 // Rich curated metadata, present only on the four notable flights (AA11,
 // UA175, AA77, UA93). Every key is optional — the panel renders what exists.

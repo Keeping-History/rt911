@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import type { PersonalBookmark } from "./bookmarksApi";
-import { DIRECTUS_URL } from "../../Providers/Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 // A global (admin) Time Machine bookmark: a labelled moment the clock can jump
 // to. `start_date` is a bare UTC wall-clock Directus datetime. `category` groups

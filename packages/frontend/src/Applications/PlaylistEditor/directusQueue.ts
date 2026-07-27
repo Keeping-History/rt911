@@ -1,8 +1,7 @@
-// Serialized Directus REST access. api-beta MIXES the response bodies of
-// concurrent browser fetches (verified 2026-07-15), so every REST call in the
-// editor and its volume goes through this single global chain.
-export const DIRECTUS_URL: string =
-	import.meta.env?.VITE_DIRECTUS_URL ?? "https://api-beta.911realtime.org";
+// Serialized Directus REST access. The Directus API MIXES the response bodies
+// of concurrent browser fetches (verified 2026-07-15), so every REST call in
+// the editor and its volume goes through this single global chain.
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 let chain: Promise<unknown> = Promise.resolve();
 

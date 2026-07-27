@@ -2,7 +2,7 @@
 // teacher's Directus session cookie; permissions return a teacher's own rows
 // plus everyone's published rows, so listMine filters client-side.
 import { parsePlaylist } from "../Playlist/parsePlaylist";
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 import { AuthRequiredError, ForbiddenError } from "./authApi";
 
 export interface PlaylistSummary {

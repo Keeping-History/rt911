@@ -1,12 +1,9 @@
 // Resolve-my-playlist seam. Today: id in the URL, anonymous Directus read.
 // A future auth layer replaces only this module ("whatever playlist my teacher
 // assigned"), leaving the provider/engine untouched.
+import { DIRECTUS_URL } from "../../lib/endpoints";
 import { parsePlaylist } from "./parsePlaylist";
 import type { PlaylistDefinition } from "./playlistTypes";
-
-export const DIRECTUS_URL: string =
-	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
-	"https://api-beta.911realtime.org";
 
 // uuid-shaped: letters, digits, hyphens. Anything else is ignored (no fetch).
 const ID_RE = /^[A-Za-z0-9-]{1,64}$/;

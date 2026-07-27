@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { fetchFilesystemFileId, downloadTree, pushTree } from "./directusFilesystemApi";
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 const res = (body: unknown, ok = true, status = 200): Response =>
 	({ ok, status, json: async () => body, text: async () => JSON.stringify(body) }) as Response;

@@ -3,7 +3,7 @@
 // credentials:"include" sends the Directus session cookie; the collection's
 // own-rows policy (user_created = $CURRENT_USER) enforces isolation server-side.
 import { AuthRequiredError, ForbiddenError } from "../../Providers/Auth/authApi";
-import { DIRECTUS_URL } from "../../Providers/Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 export interface PersonalBookmark {
 	id: number;

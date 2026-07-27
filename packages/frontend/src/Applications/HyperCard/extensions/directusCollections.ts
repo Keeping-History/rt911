@@ -9,8 +9,8 @@
 // bypasses the streamer entirely).
 
 // Same env seam every other Directus caller uses; re-exported for parts.
-export { DIRECTUS_URL } from "../../../Providers/Playlist/loadPlaylist";
-import { DIRECTUS_URL } from "../../../Providers/Playlist/loadPlaylist";
+export { DIRECTUS_URL } from "../../../lib/endpoints";
+import { DIRECTUS_URL } from "../../../lib/endpoints";
 
 /**
  * A minimal registry describing which Directus collections HyperCard stacks may

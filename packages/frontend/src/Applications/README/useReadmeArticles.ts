@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 export interface ReadmeTag {
 	id:    number;
@@ -84,9 +85,6 @@ export interface ReadmeArticlesState {
 
 // Same direct-REST pattern as TimeMachine/useBookmarks.ts: reference data that
 // bypasses the streamer entirely.
-const DIRECTUS_URL =
-	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ?? "https://api-beta.911realtime.org";
-
 export const ARTICLES_URL =
 	`${DIRECTUS_URL}/items/readme_articles` +
 	"?filter[status][_eq]=published&sort=-date_created" +

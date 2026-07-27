@@ -24,6 +24,7 @@ import {
 	type WsClockMessage,
 	type WsHeartbeatAckMessage,
 } from "./MediaStreamContext";
+import { STREAM_URL } from "../../lib/endpoints";
 import { trackAck } from "./ackTracking";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
@@ -46,10 +47,6 @@ function mergeById<T extends { id: number }>(prev: T[], incoming: T[]): T[] {
 	for (const item of incoming) byId.set(item.id, item);
 	return Array.from(byId.values());
 }
-
-const WS_URL: string =
-	(import.meta.env.VITE_MEDIA_STREAM_URL as string | undefined) ??
-	"ws://localhost:8080/stream";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
@@ -1015,7 +1012,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	useEffect(() => {
 		let active = true;
 		let heartbeatId: ReturnType<typeof setInterval>;
-		const ws = new WebSocket(WS_URL);
+		const ws = new WebSocket(STREAM_URL);
 		// Must be set synchronously at construction (not in onopen) so the first
 		// binary frame arrives as an ArrayBuffer, not a Blob.
 		ws.binaryType = "arraybuffer";

@@ -25,10 +25,11 @@ env:
   FE_VITE_PROXY_PROTOCOL: "https:"
   FE_VITE_PROXY_HOST: "timemachine.911realtime.org"
   FE_VITE_PROXY_PORT: "443"
-  FE_VITE_MEDIA_STREAM_URL: "wss://stream-beta.911realtime.org/stream"
+  FE_VITE_MEDIA_STREAM_URL: "wss://stream.911realtime.org/stream"
   FE_VITE_OPENREPLAY_PROJECT_KEY: "fsiCRmSeFQkdKxDDwD0C"
   FE_VITE_OPENREPLAY_INGEST_URL: "https://openreplay.911realtime.org/ingest"
-  FE_VITE_FEEDBACK_URL: "https://stream-beta.911realtime.org"
+  FE_VITE_FEEDBACK_URL: "https://stream.911realtime.org"
+  FE_VITE_DIRECTUS_URL: "https://api.911realtime.org"
 
 jobs:
   # Type-check, lint and unit-test the frontend. The Docker image build only runs
@@ -139,6 +140,7 @@ jobs:
             VITE_OPENREPLAY_PROJECT_KEY=${{ env.FE_VITE_OPENREPLAY_PROJECT_KEY }}
             VITE_OPENREPLAY_INGEST_URL=${{ env.FE_VITE_OPENREPLAY_INGEST_URL }}
             VITE_FEEDBACK_URL=${{ env.FE_VITE_FEEDBACK_URL }}
+            VITE_DIRECTUS_URL=${{ env.FE_VITE_DIRECTUS_URL }}
           tags: |
             ghcr.io/keeping-history/rt911-frontend:${{ github.sha }}
             ghcr.io/keeping-history/rt911-frontend:${{ github.event_name == 'pull_request' && github.sha || github.ref_name }}

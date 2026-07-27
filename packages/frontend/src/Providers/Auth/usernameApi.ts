@@ -10,14 +10,7 @@
  * same moment; the unique index decides, and the save still handles
  * UsernameTakenError. This only exists to catch the common case early.
  */
-
-// Derived from the WebSocket URL so there is one place to point at an
-// environment. The streamer serves both from the same host.
-const STREAM_BASE: string = (
-	(import.meta.env.VITE_MEDIA_STREAM_URL as string | undefined) ?? "ws://localhost:8080/stream"
-)
-	.replace(/^ws/, "http")
-	.replace(/\/stream$/, "");
+import { CHAT_BASE } from "../../lib/endpoints";
 
 export type UsernameCheck = "available" | "taken" | "unknown";
 
@@ -34,7 +27,7 @@ export async function checkUsername(
 ): Promise<UsernameCheck> {
 	try {
 		const res = await fetchFn(
-			`${STREAM_BASE}/chat/username-available?name=${encodeURIComponent(name)}`,
+			`${CHAT_BASE}/chat/username-available?name=${encodeURIComponent(name)}`,
 			{ credentials: "include", signal },
 		);
 		if (!res.ok) return "unknown";

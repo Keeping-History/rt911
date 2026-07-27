@@ -1,7 +1,7 @@
 // Directus session-cookie auth. httpOnly cookies only — never read/write
 // localStorage or any client-side store here; every request rides
 // credentials:"include" and the browser-held Directus session cookie.
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 export interface AuthUser {
 	id: string;
@@ -161,14 +161,15 @@ export function isHostOf(hostname: string, domain: string): boolean {
 }
 
 // Registration verification links must land on an allow-listed URL
-// (USER_REGISTER_URL_ALLOW_LIST). Production origin by default; the frontend's
-// own origin when it's already on the product domain (future root-domain move).
+// (USER_REGISTER_URL_ALLOW_LIST). The frontend's own origin when it is already
+// on the product domain; the apex otherwise, for builds served elsewhere such
+// as the GitHub Pages PR previews.
 // Parameterized for tests — callers never pass arguments in production code.
 export function registrationLandingUrl(
 	hostname: string = window.location.hostname,
 	origin: string = window.location.origin,
 ): string {
-	return isHostOf(hostname, "911realtime.org") ? `${origin}/` : "https://beta.911realtime.org/";
+	return isHostOf(hostname, "911realtime.org") ? `${origin}/` : "https://911realtime.org/";
 }
 
 /**
