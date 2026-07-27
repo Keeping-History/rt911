@@ -33,4 +33,13 @@ describe("presenceSounds", () => {
 		// A new profile added mid-session is not someone walking through a door.
 		expect(presenceSounds(m({ 1: true }), m({ 1: true, 2: true }))).toEqual([]);
 	});
+
+	it("ignores a buddy that vanished from the roster entirely", () => {
+		// chat_roster is a wholesale replace, so an entry can disappear for
+		// reasons unrelated to a person leaving (narrowed roster, a smaller list
+		// on reconnect). That is configuration changing, not a door closing, so
+		// it earns no buddyOut chime — only entries present in BOTH maps can
+		// change state.
+		expect(presenceSounds(m({ 1: true, 2: true }), m({ 1: true }))).toEqual([]);
+	});
 });
