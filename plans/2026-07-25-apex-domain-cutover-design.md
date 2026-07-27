@@ -1,6 +1,8 @@
 # Apex Domain Cutover — Design
 
 **Date:** 2026-07-25
+**Revised:** 2026-07-27 — account for the IM Buddies app and the chat streamer
+endpoints, which landed after this design was first written.
 **Status:** Approved, pending implementation plan
 
 Move the production site from `beta.911realtime.org` to the apex `911realtime.org`,
@@ -52,7 +54,7 @@ Two facts about the existing setup shape the whole plan:
 | `www.911realtime.org` | proxied, never reaches origin | Cloudflare 301 to apex, path and query preserved |
 | `beta.911realtime.org` | proxied, never reaches origin | Cloudflare 301 to apex, path and query preserved |
 | `api.911realtime.org` | cluster, proxied | Directus |
-| `stream.911realtime.org` | cluster, proxied | streamer WSS and `/feedback` |
+| `stream.911realtime.org` | cluster, proxied | streamer: `/stream` WSS, `/chat/username-available`, `/feedback`, `/clock`, `/health`, `/ready` |
 | `files.911realtime.org` | unchanged | file-proxy |
 | `api-beta`, `stream-beta` | DNS records deleted | — |
 | `admin`, `cdn`, `cdn1-3`, `openreplay`, `timemachine` | untouched | out of scope |
@@ -88,6 +90,53 @@ name such as `staging.`.
 cluster out of the path entirely, so no ingress, certificate, or middleware is
 needed for `www` or `beta` in the end state.
 
+**Trim the compiled-in chat origin list in cleanup, not at cutover.** See below.
+
+## Chat origin gates
+
+The IM Buddies system, which landed after this design was first written, puts
+two *independent* origin gates in front of the streamer host. Both must accept
+the apex, and they are updated through different mechanisms.
+
+`stream.911realtime.org` now serves `/stream` (WebSocket), `/feedback`,
+`/clock`, `/health`, `/ready`, and — new — `/chat/username-available`.
+
+**Gate 1: the Traefik `streamer-cors` middleware.** Already carries
+`accessControlAllowCredentials: true`, because `checkUsername` calls the
+endpoint with `credentials: "include"` so the streamer can resolve the Directus
+session cookie. Its `accessControlAllowOriginList` still names `beta` and must
+gain the apex. Credentialed CORS cannot use a wildcard, so this list is the only
+thing standing between the apex and a dropped response.
+
+**Gate 2: the Go `OriginAllowlist`** (`handler.NewOriginAllowlist`), which gates
+*identity* on both `/stream` and `/chat/username-available`. An untrusted origin
+still streams media anonymously; it simply cannot turn a session cookie into a
+chat identity.
+
+Two properties of gate 2 matter for this cutover:
+
+- **`CHAT_TRUSTED_ORIGINS` is deliberately unset in production**
+  (`apps/rt911/streamer.yaml` documents why). The production trust list is
+  therefore *compiled into the streamer image*. Unlike every other allowlist
+  here, it cannot be corrected by editing a configmap — a wrong value requires
+  an image rebuild and redeploy. If a faster escape hatch is wanted during the
+  cutover window, `CHAT_TRUSTED_ORIGINS` can be set temporarily to add an origin
+  without a rebuild; note the file's warning against reintroducing it to name
+  the streamer's *own* host, which is a different and unsafe use.
+- **`beta` must stay in the list until cleanup.** Steps 5 through 7 keep `beta`
+  serving the SPA from the cluster, and that SPA dials `stream.911realtime.org`
+  with `Origin: https://beta.911realtime.org`. Trimming `beta` in the cutover PR
+  would deny identity to everyone still on `beta` and sign them out of chat
+  mid-window.
+
+**The failure mode here is silent.** `checkUsername` returns `"unknown"` for
+anything that is not a clear yes or no — including a CORS rejection — and the UI
+treats `"unknown"` as "no opinion" rather than surfacing an error. A broken
+origin list does not throw; the sign-on and Account screens simply stop warning
+about names that are already taken, and the unique index catches it later. This
+will pass a smoke test that only checks the page loads, so the verification
+section below asserts on a *positive* `available`/`taken` answer.
+
 ## Change set
 
 ### rt911 repository
@@ -109,10 +158,15 @@ source files. Editing only the CI configuration would miss production entirely.
   - `src/Applications/FlightTracker/useNotableCrashSites.ts`
   - `src/Applications/FlightTracker/useAltitudeProfile.ts`
 - `src/Providers/Auth/authApi.ts` — the fallback landing origin becomes the apex.
-- `packages/backend/internal/handler/origin.go` — trim `DefaultTrustedOrigins`
-  to the apex plus `keeping-history.github.io`. `www` and `beta` become dead
-  entries once the edge redirects them. This file landed on `main` in commit
-  `3c232a64`.
+- `packages/backend/internal/handler/origin.go` — **no change during the
+  cutover.** `DefaultTrustedOrigins` already lists the apex, `www`, `beta`, and
+  `keeping-history.github.io`, which is exactly the set needed while `beta` is
+  still serving. Trimming `www` and `beta` is deferred to the cleanup phase; see
+  "Chat origin gates" below for why doing it earlier signs users out of chat.
+- `src/Providers/Auth/usernameApi.ts` — derives its HTTP base by rewriting
+  `VITE_MEDIA_STREAM_URL` (`ws`→`http`, stripping the trailing `/stream`). This
+  transform moves into `endpoints.ts` rather than staying duplicated, so
+  `STREAM_URL` and the chat REST base come from one place.
 - `.github/workflows/build.yml` — point `FE_VITE_MEDIA_STREAM_URL` and
   `FE_VITE_FEEDBACK_URL` at `stream.911realtime.org`, and **add**
   `FE_VITE_DIRECTUS_URL` for `api.911realtime.org`.
@@ -128,7 +182,10 @@ source files. Editing only the CI configuration would miss production entirely.
 - `apps/rt911/frontend.yaml` — Ingress host and TLS SAN to the apex.
 - `apps/rt911/directus.yaml` — three `api-beta` host blocks to `api`.
 - `apps/rt911/streamer.yaml` — Ingress host to `stream`; the `streamer-cors`
-  middleware's `accessControlAllowOriginList` to the apex.
+  middleware's `accessControlAllowOriginList` gains the apex and keeps `beta`
+  until cleanup, matching the compiled-in Go list. `accessControlAllowCredentials`
+  is already `true` and needs no change. The chat LLM provider keys
+  (`ANTHROPIC_API_KEY` and friends) are outbound-only and unaffected.
 - `apps/rt911/configmap.yaml` — `PUBLIC_URL`, `CORS_ORIGIN`,
   `AUTH_GOOGLE_REDIRECT_ALLOW_LIST`, `AUTH_APPLE_REDIRECT_ALLOW_LIST`, and
   `USER_REGISTER_URL_ALLOW_LIST`. `SESSION_COOKIE_DOMAIN` is already correct and
@@ -186,8 +243,10 @@ These are manual and block the cutover.
    serves the application end to end.
 7. **Cloudflare** — create the 301 Redirect Rule for `www` and `beta`. Only now
    does `beta` stop reaching the origin.
-8. **Cleanup commit** — drop `beta` from the frontend ingress; delete the
-   `api-beta` and `stream-beta` DNS records.
+8. **Cleanup commit** — drop `beta` from the frontend ingress; remove `beta` and
+   `www` from the `streamer-cors` origin list and from `DefaultTrustedOrigins`
+   in `origin.go` (an rt911 change, so it ships as an image rebuild, not a
+   config edit); delete the `api-beta` and `stream-beta` DNS records.
 
 Steps 5 and 6 leave no frontend gap, because `beta` continues to serve from the
 cluster until step 7.
@@ -199,7 +258,16 @@ cluster until step 7.
 - `www` and `beta` return 301 with a `Location` that preserves path and query.
 - A WSS handshake succeeds against `stream.911realtime.org`.
 - A CORS preflight from the apex origin to `api.911realtime.org` succeeds.
-- Full Google **and** Apple sign-in round trips complete.
+- Full Google **and** Apple sign-in round trips complete. IM Buddies derives
+  chat identity from the resulting session cookie, so a broken OAuth redirect
+  degrades chat to anonymous rather than only breaking login.
+- **`/chat/username-available` returns a real `available` or `taken` from the
+  apex origin — not `"unknown"`.** This is the canary for both origin gates;
+  see "Chat origin gates". Check a name known to be taken, so a wrong answer is
+  distinguishable from a missing one.
+- IM Buddies signs on from the apex, the buddy roster is non-empty, and a
+  message round-trips to a buddy and back.
+- During steps 5 through 7, the same two chat checks still pass from `beta`.
 - The session cookie is set on `.911realtime.org`, and chat identity resolves
   from the apex origin.
 - `go test ./...`, `pnpm test`, `tsc -b`, and `eslint .` all pass.
@@ -208,6 +276,15 @@ cluster until step 7.
 
 Revert the infra commit and let ArgoCD re-sync, then remove the Redirect Rule.
 The old GCS origin is not a rollback target — it is being decommissioned.
+
+One asymmetry to plan for: everything in this cutover is revertible by editing
+infra config **except the chat origin allowlist**, which is compiled into the
+streamer image. Because the cutover PR leaves `DefaultTrustedOrigins` alone,
+that asymmetry costs nothing during the risky window — the list already covers
+both the apex and `beta`. It only becomes live at step 8, which is why the trim
+belongs there and not earlier. If chat identity does break unexpectedly
+mid-cutover, setting `CHAT_TRUSTED_ORIGINS` on the streamer Deployment adds an
+origin without waiting for a rebuild.
 
 This is why step 7 is last. Before it, `beta.911realtime.org` is a fully working
 escape hatch. After it, the 301 is cached in browsers and cannot be cleanly
