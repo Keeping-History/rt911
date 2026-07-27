@@ -14,18 +14,34 @@
  * quietly using the default below.
  */
 
+/**
+ * An unset build arg reaches the bundle as an EMPTY STRING, not as undefined:
+ * the Dockerfile's `ENV VITE_X=$VITE_X` assigns "" when `--build-arg VITE_X`
+ * was never passed. `??` would accept that empty string and yield a relative
+ * URL that silently targets the page's own origin, so absence has to mean
+ * "empty or missing", not just "missing".
+ */
+export function fromEnv(value: unknown, fallback: string): string {
+	return typeof value === "string" && value !== "" ? value : fallback;
+}
+
 /** Directus REST base, read anonymously for static reference data. No trailing slash. */
-export const DIRECTUS_URL: string =
-	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ?? "https://api.911realtime.org";
+export const DIRECTUS_URL: string = fromEnv(
+	import.meta.env.VITE_DIRECTUS_URL,
+	"https://api.911realtime.org",
+);
 
 /** Streamer WebSocket endpoint. */
-export const STREAM_URL: string =
-	(import.meta.env.VITE_MEDIA_STREAM_URL as string | undefined) ??
-	"wss://stream.911realtime.org/stream";
+export const STREAM_URL: string = fromEnv(
+	import.meta.env.VITE_MEDIA_STREAM_URL,
+	"wss://stream.911realtime.org/stream",
+);
 
 /** Streamer HTTP base, used by the Feedback app to POST /feedback. */
-export const FEEDBACK_URL: string =
-	(import.meta.env.VITE_FEEDBACK_URL as string | undefined) ?? "https://stream.911realtime.org";
+export const FEEDBACK_URL: string = fromEnv(
+	import.meta.env.VITE_FEEDBACK_URL,
+	"https://stream.911realtime.org",
+);
 
 /**
  * The HTTP origin serving the streamer's REST endpoints, derived from the

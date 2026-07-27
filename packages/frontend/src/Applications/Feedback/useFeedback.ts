@@ -1,5 +1,6 @@
 import html2canvas from "html2canvas-pro";
 import { useCallback, useState } from "react";
+import { FEEDBACK_URL } from "../../lib/endpoints";
 import { getSessionURL } from "../../openreplay";
 
 // Also the `id` of <ClassicyApp> in Feedback.tsx. Classicy gives every window
@@ -68,10 +69,8 @@ export function useFeedback(): {
 			body.append("attachments[]", file);
 		}
 
-		const base = import.meta.env.VITE_FEEDBACK_URL || "http://localhost:8080";
-
 		try {
-			const res = await fetch(`${base}/feedback`, { method: "POST", body });
+			const res = await fetch(`${FEEDBACK_URL}/feedback`, { method: "POST", body });
 			const json = await res.json() as { ok?: boolean; issueUrl?: string; error?: string };
 
 			if (!res.ok) {

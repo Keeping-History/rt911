@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { chatHttpBase } from "./endpoints";
+import { chatHttpBase, fromEnv } from "./endpoints";
+
+describe("fromEnv", () => {
+	it("uses the configured value when one is set", () => {
+		expect(fromEnv("https://api.example.org", "https://fallback.example")).toBe(
+			"https://api.example.org",
+		);
+	});
+
+	it("falls back when the variable is undefined", () => {
+		expect(fromEnv(undefined, "https://fallback.example")).toBe("https://fallback.example");
+	});
+
+	// The case that matters in production: the Dockerfile's ENV VITE_X=$VITE_X
+	// assigns "" when the build arg was never passed, so an empty string has to
+	// mean absent. Treating it as present yields a relative URL that quietly
+	// targets the page's own origin.
+	it("falls back on an empty string, not just on undefined", () => {
+		expect(fromEnv("", "https://fallback.example")).toBe("https://fallback.example");
+	});
+});
 
 describe("chatHttpBase", () => {
 	it("converts a wss stream URL to an https base", () => {

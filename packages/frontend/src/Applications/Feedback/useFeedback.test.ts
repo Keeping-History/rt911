@@ -10,6 +10,7 @@ vi.mock("../../openreplay", () => ({
 }));
 
 import html2canvas from "html2canvas-pro";
+import { FEEDBACK_URL } from "../../lib/endpoints";
 import { getSessionURL } from "../../openreplay";
 import { useFeedback } from "./useFeedback";
 
@@ -139,8 +140,11 @@ describe("useFeedback", () => {
 			description: "Here is what happened",
 		};
 
-		it("POSTs to VITE_FEEDBACK_URL/feedback with FormData containing all fields", async () => {
-			vi.stubEnv("VITE_FEEDBACK_URL", "http://localhost:8080");
+		// FEEDBACK_URL is resolved once at module load (Vite inlines the value at
+		// build time), so vi.stubEnv cannot influence it from here. Assert against
+		// the constant itself; fromEnv's fallback rules are covered in
+		// lib/endpoints.test.ts.
+		it("POSTs to FEEDBACK_URL/feedback with FormData containing all fields", async () => {
 			mockGetSessionURL.mockReturnValue("https://openreplay.test/s/abc");
 			vi.mocked(global.fetch).mockResolvedValue(
 				new Response(JSON.stringify({ ok: true, issueUrl: "https://github.com/issues/1" }), { status: 200 }),
@@ -153,7 +157,7 @@ describe("useFeedback", () => {
 			});
 
 			expect(global.fetch).toHaveBeenCalledWith(
-				"http://localhost:8080/feedback",
+				`${FEEDBACK_URL}/feedback`,
 				expect.objectContaining({ method: "POST" }),
 			);
 			expect(issueUrl).toBe("https://github.com/issues/1");
@@ -228,22 +232,5 @@ describe("useFeedback", () => {
 			expect(result.current.state.submitting).toBe(false);
 		});
 
-		it("falls back to http://localhost:8080 when VITE_FEEDBACK_URL is unset", async () => {
-			vi.stubEnv("VITE_FEEDBACK_URL", "");
-			mockGetSessionURL.mockReturnValue(undefined);
-			vi.mocked(global.fetch).mockResolvedValue(
-				new Response(JSON.stringify({ ok: true, issueUrl: "https://github.com/issues/4" }), { status: 200 }),
-			);
-
-			const { result } = renderHook(() => useFeedback());
-			await act(async () => {
-				await result.current.submit(fields, []);
-			});
-
-			expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
-				"http://localhost:8080/feedback",
-				expect.anything(),
-			);
-		});
 	});
 });
