@@ -927,34 +927,24 @@ Expected: `200`, and `cache-control: no-store, must-revalidate`. If the cache he
 
 The chat CORS canary. A CORS failure here returns `"unknown"` in the UI rather than an error, so assert on a real answer rather than on the request merely completing.
 
-Get a username that definitely exists straight from the database:
-
-```bash
-TAKEN=$(kubectl exec -n rt911 deploy/rt911-directus -- \
-  psql "$DATABASE_URL" -tAc \
-  "select username from directus_users where username is not null limit 1")
-echo "using: $TAKEN"
-```
-
-If that pod has no `psql`, use your own signed-in screen name instead — any name you can confirm exists works.
+**Corrected 2026-07-27:** this endpoint requires a session cookie. Without one it
+returns the literal string `sign in first`, so a `curl` without credentials can
+never produce an `available`/`taken` answer — it proves reachability only, which
+is still worth checking:
 
 ```bash
 curl -sS -H "Origin: https://911realtime.org" \
-  "https://stream.911realtime.org/chat/username-available?name=$TAKEN"
+  "https://stream.911realtime.org/chat/username-available?name=zzqq9137"
 ```
 
-Expected: `{"available":false}`.
+Expected: `sign in first` (reachable, unauthenticated). A CORS rejection, a 404,
+or a timeout all mean stop.
 
-Three distinct failures to watch for, all of which mean stop: a CORS rejection, a 404 (the route is not reachable at this hostname), or `{"available":true}` for a name you just read out of the users table — the last means the endpoint is answering but not seeing the database.
+Note also that the name must be well-formed: a name with hyphens returns
+`{"available":false,"reason":"malformed"}`, which is easy to misread as "taken".
 
-Also check a name that certainly does not exist, so a stuck `false` is distinguishable from a real answer:
-
-```bash
-curl -sS -H "Origin: https://911realtime.org" \
-  "https://stream.911realtime.org/chat/username-available?name=zzz-not-a-real-name-9137"
-```
-
-Expected: `{"available":true}`.
+The real canary — a genuine `available`/`taken` — has to run from a **signed-in
+browser**, so it is folded into Step 5 below rather than done with curl.
 
 Check the preflight carries both required headers:
 
