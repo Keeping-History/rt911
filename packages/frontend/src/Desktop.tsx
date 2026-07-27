@@ -12,6 +12,7 @@ import { AlertsManager } from "./Applications/Alerts/AlertsManager";
 import { Browser } from "./Applications/Browser/Browser";
 import { Feedback } from "./Applications/Feedback/Feedback";
 import { FlightTracker } from "./Applications/FlightTracker/FlightTracker";
+import { IMBuddies } from "./Applications/IMBuddies/IMBuddies";
 import { MarketWatch } from "./Applications/MarketWatch/MarketWatch";
 import { News } from "./Applications/News/News";
 import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
@@ -83,6 +84,7 @@ export default function Desktop() {
 			<Account />
 			<PlaylistEditor />
 			<FlightTracker />
+			<IMBuddies />
 			<MarketWatch />
 			<News />
 			<Newsgroups />
