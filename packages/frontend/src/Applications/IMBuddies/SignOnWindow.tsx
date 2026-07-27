@@ -50,7 +50,7 @@ const RunningManIcon: React.FC = () => (
 
 export const SignOnWindow: React.FC = () => {
 	const { user } = useAuth();
-	const { reason, signOn } = useIMBuddies();
+	const { signOn } = useIMBuddies();
 	const desktopEventDispatch = useAppManagerDispatch();
 	const soundDispatch = useSoundDispatch();
 
@@ -75,13 +75,22 @@ export const SignOnWindow: React.FC = () => {
 	const handleSignOn = useCallback(() => {
 		// Not signed in: there is no Directus session to subscribe chat under,
 		// so Sign On hands off to the Account app instead of connecting.
-		if (reason === "not_signed_in") {
+		//
+		// That fact is read from the local auth session, NOT from chatReason.
+		// chatReason cannot answer it here: the streamer only ever emits
+		// chat_state in reply to a `subscribe` (packages/backend/internal/
+		// handler/ws.go, "subscribe" case), and the client only subscribes
+		// after signOn() — so chatReason is still its "not_signed_in" initial
+		// value at this moment for EVERY student, signed in or not. Gating on
+		// it sent every student to the Account app and made signing on
+		// impossible.
+		if (!user) {
 			openAccountApp();
 			return;
 		}
 		signOn();
 		soundDispatch({ type: ClassicySoundActionTypes.ClassicySoundPlay, sound: IM_SOUNDS.signOn });
-	}, [reason, signOn, openAccountApp, soundDispatch]);
+	}, [user, signOn, openAccountApp, soundDispatch]);
 
 	const screenName = user?.username ?? "";
 

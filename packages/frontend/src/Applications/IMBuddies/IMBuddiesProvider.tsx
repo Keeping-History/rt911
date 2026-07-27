@@ -33,6 +33,14 @@ export interface Conversation {
 }
 
 export interface IMBuddiesValue {
+	/**
+	 * "Sign On pressed AND the chat channel is subscribed" (design.md) — NOT
+	 * the raw WebSocket flag. Exposing MediaStreamContext's `connected`
+	 * verbatim here meant a healthy socket (the normal case) hid the Sign On
+	 * window outright, so the student could never sign on at all; deriving it
+	 * from `signedOn && socketConnected` also gives the design's "socket drops
+	 * → the Sign On window returns" without a second code path.
+	 */
 	connected: boolean;
 	enabled: boolean;
 	reason: ChatStateReason;
@@ -87,7 +95,9 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		chatReason,
 		chatMessages,
 		chatTypingProfile,
-		connected,
+		// Renamed on destructure: this is the raw socket flag, which is only
+		// half of what consumers call `connected` (see IMBuddiesValue.connected).
+		connected: socketConnected,
 		subscribeChat,
 		unsubscribeChat,
 		sendChat,
@@ -285,7 +295,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 
 	const value = useMemo<IMBuddiesValue>(
 		() => ({
-			connected,
+			connected: signedOn && socketConnected,
 			enabled: chatEnabled,
 			reason: chatReason,
 			buddies: chatBuddies,
@@ -305,7 +315,8 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			selectBuddy,
 		}),
 		[
-			connected,
+			signedOn,
+			socketConnected,
 			chatEnabled,
 			chatReason,
 			chatBuddies,

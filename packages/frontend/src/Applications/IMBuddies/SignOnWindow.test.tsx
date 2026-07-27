@@ -117,6 +117,22 @@ describe("SignOnWindow", () => {
 		expect(openApp).toHaveBeenCalledWith("Account.app");
 	});
 
+	it("signs on for a signed-in student even though chatReason is still not_signed_in", () => {
+		// The streamer only emits chat_state in reply to a `subscribe`, and the
+		// client only subscribes after signOn() — so at the moment Sign On is
+		// pressed, chatReason is ALWAYS its "not_signed_in" initial value. A
+		// gate on chatReason therefore sent every student to the Account app
+		// and made signing on impossible; the local auth session is the only
+		// thing that can answer "is there a Directus session" here.
+		const { signOn, openApp } = renderSignOn({
+			user: { username: "me" } as AuthUser,
+			reason: "not_signed_in",
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Sign On" }));
+		expect(signOn).toHaveBeenCalled();
+		expect(openApp).not.toHaveBeenCalled();
+	});
+
 	it("submits nothing from the password field", () => {
 		// It is theatre: fixed bullets over a value nobody typed, read by nothing.
 		const { signOn } = renderSignOn({ user: { username: "me" } as AuthUser });
