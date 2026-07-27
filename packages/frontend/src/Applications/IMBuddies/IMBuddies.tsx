@@ -5,12 +5,13 @@ import {
 	type ClassicyMenuItem,
 	quitMenuItemHelper,
 	registerClassicyIcons,
+	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
 import type React from "react";
 import { useCallback, useMemo } from "react";
 import appIconPng from "./app.png";
-import { BuddyListWindow } from "./BuddyListWindow";
+import { BuddyListWindow, isMessageable } from "./BuddyListWindow";
 import { ChatWindow } from "./ChatWindow";
 import { IMBuddiesProvider, useIMBuddies } from "./IMBuddiesProvider";
 import { InfoWindow } from "./InfoWindow";
@@ -32,21 +33,22 @@ const appIcon = ICONS.applications.imBuddies.app;
 const BUDDY_LIST_WINDOW_ID = "im_buddylist";
 
 /**
- * People and Window menus, plus Quit. `ClassicyMenuBarExtension` is the first
- * use of this component in the repo: unlike the File/Edit-style `appMenu`
- * every other app passes to `ClassicyWindow` (rendered only while that
- * window is frontmost), it portal-renders a persistent button into the
- * desktop's menu-bar-extensions tray, visible for as long as this app is
- * open — not gated on which window (or even which app) currently has focus.
- * That is a real behavioral difference from the rest of this codebase's
- * menus, but its `title`/`children` + `menuItems` dropdown shape is what the
- * brief's People/Window menus need, so it's used as named here.
+ * People and Window menus, plus Quit. `ClassicyMenuBarExtension` portal-
+ * renders its button into the desktop's menu-bar-extensions tray rather than
+ * the File/Edit-style `appMenu` every other app passes to `ClassicyWindow` —
+ * unlike that, nothing about the component itself hides it when another app
+ * is frontmost, so this component is only ever MOUNTED while IM Buddies is
+ * the focused app (see IMBuddiesContent below); an app's own menus belong to
+ * the frontmost app, exactly like Mac OS 8's File/Edit menus, and only
+ * status extras are meant to be permanent.
  *
- * Lives inside IMBuddiesProvider (unlike the ClassicyApp wrapper below it in
- * the tree) because it reads useIMBuddies() to build the Window list.
+ * Lives inside IMBuddiesProvider (unlike the ClassicyApp wrapper further up
+ * the tree) because it reads useIMBuddies() for the Window list and the
+ * current Buddy List selection.
  */
 const IMBuddiesMenus: React.FC = () => {
-	const { connected, buddies, openChats, signOff } = useIMBuddies();
+	const { connected, buddies, openChats, openChat, openInfoFor, selectedBuddy, signOff } =
+		useIMBuddies();
 	const desktopEventDispatch = useAppManagerDispatch();
 
 	const focusWindow = useCallback(
@@ -59,23 +61,34 @@ const IMBuddiesMenus: React.FC = () => {
 		[desktopEventDispatch],
 	);
 
-	// No separate "compose" picker exists in this app (building one is out of
-	// scope for this task) -- New Message and Get Info both hand off to the
-	// Buddy List, exactly where a student picks a buddy and uses its IM/Info
-	// buttons to reach the same place these would otherwise open directly.
+	// The buddy highlighted in the Buddy List, if any -- looked up fresh each
+	// render (not cached) since `selectedBuddy` is just a profile id.
+	const selectedBuddyObj = useMemo(
+		() => buddies.find((b) => b.profile === selectedBuddy) ?? null,
+		[buddies, selectedBuddy],
+	);
+
 	const peopleItems = useMemo<ClassicyMenuItem[]>(
 		() => [
 			{
 				id: "im_menu_new_message",
 				title: "New Message",
-				disabled: !connected,
-				onClickFunc: () => focusWindow(BUDDY_LIST_WINDOW_ID),
+				// Same rule the Buddy List's own IM button enforces (isMessageable):
+				// an offline buddy can't be messaged, so there's nothing to open.
+				disabled: !connected || !isMessageable(selectedBuddyObj),
+				onClickFunc: () => {
+					if (isMessageable(selectedBuddyObj)) openChat(selectedBuddyObj.profile);
+				},
 			},
 			{
 				id: "im_menu_get_info",
 				title: "Get Info",
-				disabled: !connected,
-				onClickFunc: () => focusWindow(BUDDY_LIST_WINDOW_ID),
+				// Unlike New Message, an offline buddy's profile is still readable --
+				// only "nothing selected" disables this one.
+				disabled: !connected || selectedBuddyObj === null,
+				onClickFunc: () => {
+					if (selectedBuddyObj) openInfoFor(selectedBuddyObj.profile);
+				},
 			},
 			{
 				id: "im_menu_sign_off",
@@ -85,7 +98,7 @@ const IMBuddiesMenus: React.FC = () => {
 			},
 			quitMenuItemHelper(APP_ID, APP_NAME, appIcon),
 		],
-		[connected, signOff, focusWindow],
+		[connected, selectedBuddyObj, openChat, openInfoFor, signOff],
 	);
 
 	// Rebuilt fresh every render from openChats/buddies -- never snapshotted --
@@ -133,10 +146,17 @@ const IMBuddiesMenus: React.FC = () => {
  */
 const IMBuddiesContent: React.FC = () => {
 	const { connected, openChats, openInfo } = useIMBuddies();
+	// Same selector idiom as PlaylistProvider.tsx: read app-manager state
+	// directly rather than plumbing a prop. IMBuddiesMenus is only ever
+	// mounted while this app is the frontmost one -- see the comment on that
+	// component for why that matters.
+	const isFrontmost = useAppManager(
+		(s) => s.System.Manager.Applications.focusedAppId === APP_ID,
+	);
 
 	return (
 		<>
-			<IMBuddiesMenus />
+			{isFrontmost && <IMBuddiesMenus />}
 			{!connected && <SignOnWindow />}
 			{connected && <BuddyListWindow />}
 			{openChats.map((profile) => (

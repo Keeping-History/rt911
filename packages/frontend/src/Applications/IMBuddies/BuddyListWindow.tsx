@@ -1,6 +1,6 @@
 import { ClassicyButton, ClassicyWindow } from "classicy";
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ChatBuddy, ChatStateReason } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./IMBuddies.module.scss";
 import { useIMBuddies } from "./IMBuddiesProvider";
@@ -49,8 +49,10 @@ export function statusLineFor(reason: ChatStateReason, windowStartLabel: string)
  * a UI that opens a dead window and then silently fails is worse than one
  * that never opens it. Shared by the double-click activation path and the
  * IM/Info disabled state below so the two can't drift apart on a future edit.
+ * Exported: the People menu's New Message item (Task 10) reuses this same
+ * rule for its own disabled state rather than re-deriving it.
  */
-function isMessageable(buddy: ChatBuddy | null): buddy is ChatBuddy {
+export function isMessageable(buddy: ChatBuddy | null): buddy is ChatBuddy {
 	return buddy !== null && buddy.online;
 }
 
@@ -93,8 +95,8 @@ const BuddyRow: React.FC<BuddyRowProps> = ({ buddy, selected, onSelect, onActiva
 };
 
 export const BuddyListWindow: React.FC = () => {
-	const { buddies, reason, openChat, openInfoFor } = useIMBuddies();
-	const [selected, setSelected] = useState<number | null>(null);
+	const { buddies, reason, openChat, openInfoFor, selectedBuddy: selected, selectBuddy: setSelected } =
+		useIMBuddies();
 
 	const { online, offline } = useMemo(() => {
 		const online: ChatBuddy[] = [];

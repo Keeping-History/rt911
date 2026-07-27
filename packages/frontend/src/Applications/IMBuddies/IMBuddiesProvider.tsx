@@ -49,6 +49,14 @@ export interface IMBuddiesValue {
 	closeInfoFor: (profile: number) => void;
 	send: (profile: number, body: string) => void;
 	markRead: (profile: number) => void;
+	/**
+	 * The buddy currently highlighted in the Buddy List — lifted up from that
+	 * window's own local state (where it used to live) so the People menu's
+	 * New Message / Get Info items can act on the same selection a student
+	 * just clicked, rather than only the window itself being able to see it.
+	 */
+	selectedBuddy: number | null;
+	selectBuddy: (profile: number | null) => void;
 }
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -97,6 +105,8 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 	const [openChats, setOpenChats] = useState<number[]>([]);
 	const [openInfo, setOpenInfo] = useState<number[]>([]);
 	const [readMarks, setReadMarks] = useState<Record<number, number>>({});
+	const [selectedBuddy, setSelectedBuddy] = useState<number | null>(null);
+	const selectBuddy = useCallback((profile: number | null) => setSelectedBuddy(profile), []);
 
 	// Ref-counted subscribe while signed on. The cleanup fires both when
 	// signedOn flips back to false (signOff) and when this provider unmounts
@@ -120,6 +130,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		setOpenChats([]);
 		setOpenInfo([]);
 		setReadMarks({});
+		setSelectedBuddy(null);
 	}, []);
 
 	// A backward seek (below) re-requests history that overlaps what live
@@ -290,6 +301,8 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			closeInfoFor,
 			send,
 			markRead,
+			selectedBuddy,
+			selectBuddy,
 		}),
 		[
 			connected,
@@ -308,6 +321,8 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			closeInfoFor,
 			send,
 			markRead,
+			selectedBuddy,
+			selectBuddy,
 		],
 	);
 

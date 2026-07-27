@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatBuddy, ChatStateReason } from "../../Providers/MediaStream/MediaStreamContext";
 import { BuddyListWindow, statusLineFor } from "./BuddyListWindow";
@@ -31,13 +32,24 @@ const imState = vi.hoisted(() => ({
 }));
 
 vi.mock("./IMBuddiesProvider", () => ({
-	useIMBuddies: () => ({
-		buddies: imState.buddies,
-		enabled: imState.enabled,
-		reason: imState.reason,
-		openChat: imState.openChat,
-		openInfoFor: imState.openInfoFor,
-	}),
+	useIMBuddies: () => {
+		// Task 10 lifted buddy selection out of this window's own useState and
+		// into IMBuddiesProvider. Mocking it back in with a REAL useState here
+		// (rather than a plain object field) is what keeps this component's
+		// selection reactive across renders without mounting the real
+		// provider — clicking a row calls the returned setter, which is a
+		// genuine React state setter bound to this component's own fiber.
+		const [selectedBuddy, selectBuddy] = useState<number | null>(null);
+		return {
+			buddies: imState.buddies,
+			enabled: imState.enabled,
+			reason: imState.reason,
+			openChat: imState.openChat,
+			openInfoFor: imState.openInfoFor,
+			selectedBuddy,
+			selectBuddy,
+		};
+	},
 }));
 
 // Partial classicy mock, same shape as SignOnWindow.checkboxes.test.tsx:
