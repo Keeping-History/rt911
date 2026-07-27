@@ -3,12 +3,10 @@ import type { AltitudeSample } from "./flightAltitude";
 import type { TrackSelection } from "./useFlightTrack";
 import { flightDateOf } from "./useFlightTrack";
 import { prevUtcDay } from "./flightFilter";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
-// Directus REST base — same anonymous static-reference-data path useFlightTrack
-// uses. flight_positions is public-read (issue #224's grant).
-const DIRECTUS_URL =
-	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
-	"https://api-beta.911realtime.org";
+// Read over REST on the same anonymous static-reference-data path
+// useFlightTrack uses. flight_positions is public-read (issue #224's grant).
 
 export function profileUrl(flight: string, flightDate: string): string {
 	const params = new URLSearchParams({

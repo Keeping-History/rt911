@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import { prevUtcDay, routeKey, type RouteIndex, type RouteIndexRow } from "./flightFilter";
 import { flightDateOf } from "./useFlightTrack";
 
-// Same anonymous-read Directus base as useFlightTrack; the route index is the
-// bulk sibling of that per-flight fetch — every flight_tracks row for a date,
-// small fields only (no geometry), so airport/tail filters can see all
-// airborne flights at once instead of issuing hundreds of per-flight requests.
-const DIRECTUS_URL =
-	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
-	"https://api-beta.911realtime.org";
+// The route index is the bulk sibling of useFlightTrack's per-flight fetch —
+// every flight_tracks row for a date, small fields only (no geometry), so
+// airport/tail filters can see all airborne flights at once instead of issuing
+// hundreds of per-flight requests.
 
 // Row counts vary by an order of magnitude between dates, so multi-page walks
 // are routine, not an edge case: 2001-09-11 has ~1,950 rows (one page) but
