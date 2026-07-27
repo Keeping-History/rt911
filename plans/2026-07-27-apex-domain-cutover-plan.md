@@ -760,6 +760,32 @@ dig +short api.911realtime.org @1.1.1.1
 
 Expected: Cloudflare anycast addresses (`104.21.*` / `172.67.*`) for both, matching what `beta.911realtime.org` returns.
 
+### Task 9b: Route the new hostnames alongside the old — ✅ DONE 2026-07-27 (infra 3900d1c)
+
+**Added during execution.** The plan originally had Task 10 merge the frontend PR
+and *then* switch the Ingress hosts. That ordering is unsafe here, because the
+merge deploys itself:
+
+```
+merge -> CI pushes ghcr.io/.../rt911-frontend:<sha>
+      -> argocd-image-updater (writeBackConfig.method: git) commits the tag to infra main
+      -> rt911 app has automated{prune,selfHeal} -> deploys immediately
+```
+
+There is no checkpoint between "image built" and "image live". The new bundle
+dials `api`/`stream.911realtime.org`, which returned 404 until this task, so the
+live site would have lost Directus and the WebSocket for the several minutes
+until the routing commit landed — not the open-tab breakage the design accepted,
+but a full outage for everyone.
+
+The fix is purely additive: every Ingress now answers for **both** its old and
+new hostname with identical paths (108 insertions, 0 deletions). Merging is now
+safe in any order, and open tabs survive too.
+
+This softens the hard-cut decision only in timing, not in end state: the `-beta`
+rules are removed at Task 13 exactly as planned. It was raised with the user and
+chosen over tight sequencing and over pausing auto-sync.
+
 ### Task 10: Switch the ingress hosts and origin allowlists
 
 **Files:**
