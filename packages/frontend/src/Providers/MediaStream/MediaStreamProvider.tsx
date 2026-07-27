@@ -11,6 +11,9 @@ import {
 import {
 	type AlertItem,
 	type AvailableSources,
+	type ChatBuddy,
+	type ChatMessage,
+	type ChatStateReason,
 	type FlightPosition,
 	MediaStreamContext,
 	type MediaItem,
@@ -163,6 +166,53 @@ interface WsWeatherForecastMessage {
 	weather_forecasts?: WeatherForecast[];
 }
 
+// The buddy roster, sent wholesale on subscribe/reconnect and whenever it
+// changes. buddies rides omitempty on a struct shared with the 1 Hz items hot
+// path, so an empty roster arrives with the field absent, not `[]`.
+interface WsChatRosterMessage {
+	type: "chat_roster";
+	buddies?: ChatBuddy[];
+}
+
+// Whether/why chat is usable right now for this client.
+interface WsChatStateMessage {
+	type: "chat_state";
+	enabled?: boolean;
+	reason?: ChatStateReason;
+}
+
+// A buddy's online flag flipped; applied to the existing roster entry.
+interface WsChatPresenceMessage {
+	type: "chat_presence";
+	profile: number;
+	online?: boolean;
+}
+
+// The server accepted a generation job for this buddy — the typing indicator
+// stays up until the matching chat_message lands (no client-side timer).
+interface WsChatTypingMessage {
+	type: "chat_typing";
+	profile: number;
+}
+
+// One chat line, in or out. Its arrival is also what clears chatTypingProfile.
+interface WsChatMessageFrame {
+	type: "chat_message";
+	profile: number;
+	direction: "in" | "out";
+	body: string;
+	time?: string;
+	kind?: string;
+	message_id?: number;
+}
+
+// A chat-specific failure (e.g. a send that was refused).
+interface WsChatErrorMessage {
+	type: "chat_error";
+	code?: string;
+	message?: string;
+}
+
 type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
@@ -178,6 +228,12 @@ type WsIncomingMessage =
 	| WsFlightsHistoryMessage
 	| WsWeatherMessage
 	| WsWeatherForecastMessage
+	| WsChatRosterMessage
+	| WsChatStateMessage
+	| WsChatPresenceMessage
+	| WsChatTypingMessage
+	| WsChatMessageFrame
+	| WsChatErrorMessage
 	| WsClockMessage
 	| WsHeartbeatAckMessage
 	| { type: string };
@@ -232,6 +288,14 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [weatherForecastByZone, setWeatherForecastByZone] = useState<
 		Record<string, WeatherForecast | null>
 	>({});
+	const [chatBuddies, setChatBuddies] = useState<ChatBuddy[]>([]);
+	const [chatEnabled, setChatEnabled] = useState(false);
+	// not_signed_in until the server says otherwise: assuming a working chat before
+	// the first chat_state would flash an enabled UI at someone who cannot use it.
+	const [chatReason, setChatReason] = useState<ChatStateReason>("not_signed_in");
+	const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+	const [chatTypingProfile, setChatTypingProfile] = useState<number | null>(null);
+	const [chatError, setChatError] = useState<{ code: string; message: string } | null>(null);
 	const [usenetBodyState, setUsenetBodyState] = useState(emptyBodyState);
 	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
 	// fetches when a window re-renders before its body arrives.
@@ -255,6 +319,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const usenetSubscribers = useRef(new Set<string>());
 	const flightsSubscribers = useRef(new Set<string>());
 	const weatherSubscribers = useRef(new Set<string>());
+	const chatSubscribers = useRef(new Set<string>());
 	// Active loop-history request: window wanted (null = loop off). Loop-history
 	// and heading-seed requests share the flights_history wire type, so they draw
 	// ids from ONE counter (flightsReqGen) and each remembers its own active id
@@ -642,6 +707,37 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[sendWeatherForecastRequest],
 	);
 
+	const subscribeChat = useCallback(
+		(appId: string) => {
+			const wasEmpty = chatSubscribers.current.size === 0;
+			chatSubscribers.current.add(appId);
+			if (wasEmpty) send({ type: "subscribe", channel: "chat" });
+		},
+		[send],
+	);
+
+	const unsubscribeChat = useCallback(
+		(appId: string) => {
+			chatSubscribers.current.delete(appId);
+			if (chatSubscribers.current.size === 0) send({ type: "unsubscribe", channel: "chat" });
+		},
+		[send],
+	);
+
+	const sendChat = useCallback(
+		(profile: number, body: string) => {
+			send({ type: "chat_send", profile, body });
+		},
+		[send],
+	);
+
+	const requestChatHistory = useCallback(
+		(profile: number, before: string, limit: number) => {
+			send({ type: "chat_history", profile, before, limit });
+		},
+		[send],
+	);
+
 	// Set the newsgroup(s) being viewed. The server resends a backlog for the new
 	// group(s), so the current items + buffer are cleared to avoid mixing groups.
 	const setUsenetGroups = useCallback(
@@ -902,6 +998,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				// answer isn't silently lost to the dropped connection.
 				sendWeatherForecastRequest();
 			}
+			if (chatSubscribers.current.size > 0) {
+				ws.send(JSON.stringify({ type: "subscribe", channel: "chat" }));
+			}
 			// Body requests do not survive a reconnect; clear in-flight markers so
 			// any open message window re-requests on its next render.
 			usenetBodyInflight.current.clear();
@@ -1064,6 +1163,57 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				);
 				if (fresh.length > 0)
 					setFlightPositions((prev) => mergeById(prev, fresh));
+				return;
+			}
+
+			if (msg.type === "chat_roster") {
+				// buddies rides omitempty on a struct shared with the 1 Hz items path, so an
+				// empty roster arrives as an absent field rather than [].
+				setChatBuddies((msg as WsChatRosterMessage).buddies ?? []);
+				return;
+			}
+
+			if (msg.type === "chat_state") {
+				const m = msg as WsChatStateMessage;
+				setChatEnabled(m.enabled === true);
+				setChatReason(m.reason ?? "not_signed_in");
+				return;
+			}
+
+			if (msg.type === "chat_presence") {
+				const m = msg as WsChatPresenceMessage;
+				setChatBuddies((prev) =>
+					prev.map((b) => (b.profile === m.profile ? { ...b, online: m.online === true } : b)));
+				return;
+			}
+
+			if (msg.type === "chat_typing") {
+				setChatTypingProfile((msg as WsChatTypingMessage).profile);
+				return;
+			}
+
+			if (msg.type === "chat_message") {
+				const m = msg as WsChatMessageFrame;
+				// The reply is what ends the typing indicator — not a timer. The backend
+				// sends chat_typing on accepting the job and the message when it lands.
+				setChatTypingProfile(null);
+				setChatMessages((prev) => [
+					...prev,
+					{
+						message_id: m.message_id ?? 0,
+						profile: m.profile,
+						direction: m.direction,
+						body: m.body,
+						time: m.time ?? "",
+						kind: m.kind ?? "generated",
+					},
+				]);
+				return;
+			}
+
+			if (msg.type === "chat_error") {
+				const m = msg as WsChatErrorMessage;
+				setChatError({ code: m.code ?? "", message: m.message ?? "" });
 				return;
 			}
 
@@ -1237,6 +1387,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			chatBuddies,
+			chatEnabled,
+			chatReason,
+			chatMessages,
+			chatTypingProfile,
+			chatError,
+			subscribeChat,
+			unsubscribeChat,
+			sendChat,
+			requestChatHistory,
 		}),
 		[
 			items,
@@ -1282,6 +1442,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			chatBuddies,
+			chatEnabled,
+			chatReason,
+			chatMessages,
+			chatTypingProfile,
+			chatError,
+			subscribeChat,
+			unsubscribeChat,
+			sendChat,
+			requestChatHistory,
 		],
 	);
 

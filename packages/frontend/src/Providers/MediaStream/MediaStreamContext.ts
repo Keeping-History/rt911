@@ -184,6 +184,42 @@ export interface AvailableSources {
 	usenet: NewsgroupSource[];
 }
 
+/**
+ * Reason the chat channel is (or isn't) usable right now, mirrored from the
+ * server's chat_state frame. Starts (in the default context) at
+ * "not_signed_in" — see chatReason on MediaStreamContextValue.
+ */
+export type ChatStateReason = "ok" | "paused" | "outside_window" | "blocked" | "not_signed_in";
+
+/**
+ * One AIM-style buddy on the roster, delivered on the opt-in "chat" channel
+ * via chat_roster (full replace) and chat_presence (online flips).
+ */
+export interface ChatBuddy {
+	profile: number;
+	screen_name: string;
+	display_name: string;
+	avatar: string;
+	online: boolean;
+	profile_text?: string;
+}
+
+/**
+ * A single chat line, in or out, delivered on the "chat" channel via
+ * chat_message. Append-only client-side; the chat app splits the list by
+ * profile per conversation.
+ */
+export interface ChatMessage {
+	message_id: number;
+	profile: number;
+	direction: "in" | "out";
+	body: string;
+	/** RFC3339 virtual time. */
+	time: string;
+	/** typed | generated | scheduled | static | stall | refused | truncated */
+	kind: string;
+}
+
 /** Forced clock mode: the server owns the clock while active. */
 export interface WsClockMessage {
 	type: "clock";
@@ -309,6 +345,34 @@ export interface MediaStreamContextValue {
 	subscribeAlerts: (appId: string) => void;
 	/** Drop an alerts-channel subscription. Unsubscribes server-side when the last app leaves. */
 	unsubscribeAlerts: (appId: string) => void;
+	/** The buddy roster, replaced wholesale on each chat_roster frame. */
+	chatBuddies: ChatBuddy[];
+	/** Whether the chat channel is currently usable, from the last chat_state frame. */
+	chatEnabled: boolean;
+	/**
+	 * Why chat is (or isn't) usable. Starts at "not_signed_in" rather than
+	 * "ok" — assuming a working chat before the first chat_state frame would
+	 * flash an enabled UI at someone who cannot use it.
+	 */
+	chatReason: ChatStateReason;
+	/** Chat lines received while subscribed to the chat channel. Append-only; the app splits by profile. */
+	chatMessages: ChatMessage[];
+	/**
+	 * The buddy currently generating a reply, or null. Set by chat_typing and
+	 * cleared by the next chat_message — the reply is what ends the
+	 * indicator, not a timer.
+	 */
+	chatTypingProfile: number | null;
+	/** The last chat_error frame, or null if none has arrived (or a later message superseded it). */
+	chatError: { code: string; message: string } | null;
+	/** Opt into chat-channel delivery. Ref-counted by appId. */
+	subscribeChat: (appId: string) => void;
+	/** Drop a chat-channel subscription. Unsubscribes server-side when the last app leaves. */
+	unsubscribeChat: (appId: string) => void;
+	/** Send a chat message to a buddy. */
+	sendChat: (profile: number, body: string) => void;
+	/** Request the page of chat history older than `before` for a buddy (backlog pagination). */
+	requestChatHistory: (profile: number, before: string, limit: number) => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -357,4 +421,14 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	alertItems: [],
 	subscribeAlerts: () => {},
 	unsubscribeAlerts: () => {},
+	chatBuddies: [],
+	chatEnabled: false,
+	chatReason: "not_signed_in",
+	chatMessages: [],
+	chatTypingProfile: null,
+	chatError: null,
+	subscribeChat: () => {},
+	unsubscribeChat: () => {},
+	sendChat: () => {},
+	requestChatHistory: () => {},
 });

@@ -242,6 +242,16 @@ function makeCtxValue(
 		unsubscribeWeather: () => {},
 		requestWeatherForecast: () => {},
 		clockForced: false,
+		chatBuddies: [],
+		chatEnabled: false,
+		chatReason: "not_signed_in",
+		chatMessages: [],
+		chatTypingProfile: null,
+		chatError: null,
+		subscribeChat: () => {},
+		unsubscribeChat: () => {},
+		sendChat: () => {},
+		requestChatHistory: () => {},
 		...overrides,
 	};
 }

@@ -288,6 +288,16 @@ function makeCtxValue(
 		unsubscribeWeather: vi.fn(),
 		requestWeatherForecast: vi.fn(),
 		clockForced: false,
+		chatBuddies: [],
+		chatEnabled: false,
+		chatReason: "not_signed_in",
+		chatMessages: [],
+		chatTypingProfile: null,
+		chatError: null,
+		subscribeChat: vi.fn(),
+		unsubscribeChat: vi.fn(),
+		sendChat: vi.fn(),
+		requestChatHistory: vi.fn(),
 		...overrides,
 	};
 }
