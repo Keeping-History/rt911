@@ -220,6 +220,33 @@ describe("IMBuddiesProvider", () => {
 		expect(screen.getByTestId("msgs1").textContent).toBe("hi");
 	});
 
+	it("dedupes a message re-delivered by a history re-fetch (same message_id)", () => {
+		// websocket-protocol.md: message_id is "echoed so a client can dedupe".
+		// MediaStreamProvider appends unconditionally, so a backward seek's
+		// history re-fetch resending an already-live message must be collapsed
+		// here, not shown twice.
+		const { pushMessage } = renderWithChat(<Probe />, {
+			chatMessages: [
+				{ message_id: 5, profile: 1, direction: "out", body: "hi", time: "", kind: "generated" },
+			],
+		});
+		act(() => pushMessage({ message_id: 5, profile: 1, direction: "out", body: "hi" }));
+		expect(screen.getByTestId("msgs1").textContent).toBe("hi");
+	});
+
+	it("never dedupes id-0 messages — two distinct id-0 messages both survive", () => {
+		// message_id is 0 when persistence was skipped server-side (no db
+		// pool). It's not a real identity, so treating repeated 0s as
+		// duplicates would silently collapse unrelated messages.
+		renderWithChat(<Probe />, {
+			chatMessages: [
+				{ message_id: 0, profile: 1, direction: "out", body: "first", time: "", kind: "generated" },
+				{ message_id: 0, profile: 1, direction: "out", body: "second", time: "", kind: "generated" },
+			],
+		});
+		expect(screen.getByTestId("msgs1").textContent).toBe("first|second");
+	});
+
 	it("re-requests history for every open conversation on a backward seek", () => {
 		// Seeking back must make a buddy stop remembering what has not happened.
 		// shouldSeek() already encodes the asymmetry: forward needs 90s, backward
@@ -233,6 +260,20 @@ describe("IMBuddiesProvider", () => {
 		requestChatHistory.mockClear();
 		act(() => setClock("2001-09-11T12:40:00Z")); // backwards
 		expect(requestChatHistory).toHaveBeenCalledTimes(2);
+	});
+
+	it("treats a 30s backward seek as a seek — pinning the forward/backward asymmetry", () => {
+		// This is the case a hand-rolled `Math.abs(delta) > 90_000` symmetric
+		// check gets WRONG: 30s is within shouldSeek's 2s backward bound (a
+		// seek) but also within its 90s forward bound, so a symmetric mutant
+		// would treat it as NOT a seek. The 20-minute test above trips both the
+		// correct and the wrong threshold and so cannot tell them apart on its
+		// own — this test is the one that actually pins shouldSeek's asymmetry.
+		const { ctx, requestChatHistory, setClock } = renderWithChat(<Probe />, {});
+		act(() => ctx.openChat(1));
+		requestChatHistory.mockClear();
+		act(() => setClock("2001-09-11T12:59:30Z")); // 30s backward
+		expect(requestChatHistory).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not re-request history on ordinary forward ticks", () => {

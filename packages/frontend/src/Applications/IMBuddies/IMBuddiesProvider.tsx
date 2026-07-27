@@ -122,9 +122,26 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		setReadMarks({});
 	}, []);
 
+	// A backward seek (below) re-requests history that overlaps what live
+	// delivery already appended to chatMessages — the server resends the same
+	// message_id, and MediaStreamProvider appends unconditionally. Per
+	// websocket-protocol.md, message_id is "echoed so a client can dedupe",
+	// and this is that seam. `message_id === 0` means persistence was skipped
+	// server-side (no db pool) — it's not a real identity, so two id-0
+	// messages are never considered duplicates; only ids > 0 get deduped.
 	const conversationsByProfile = useMemo(() => {
 		const map = new Map<number, ChatMessage[]>();
+		const seenIdsByProfile = new Map<number, Set<number>>();
 		for (const message of chatMessages) {
+			if (message.message_id > 0) {
+				let seen = seenIdsByProfile.get(message.profile);
+				if (!seen) {
+					seen = new Set();
+					seenIdsByProfile.set(message.profile, seen);
+				}
+				if (seen.has(message.message_id)) continue;
+				seen.add(message.message_id);
+			}
 			const existing = map.get(message.profile);
 			if (existing) existing.push(message);
 			else map.set(message.profile, [message]);
