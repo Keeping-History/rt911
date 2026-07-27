@@ -1,15 +1,19 @@
-# IM Buddies File → Quit — Design
+# IM Buddies File → Quit, and a closable Buddy List — Design
 
 **Date:** 2026-07-27
 **Status:** Approved, pending implementation plan
 
 Give the IM Buddies windows a File menu containing Quit, the way every other
-app on this desktop does.
+app on this desktop does, and let the Buddy List be closed and reopened.
 
 ## Goal
 
 Sign On, Buddy List, and every Chat window carry a **File → Quit** item that
 quits the app. Get Info is a utility window and is deliberately excluded.
+
+The **Buddy List becomes closable**. Closing it puts the window away without
+signing off, and the menu-bar extension's existing *Buddy List* item brings it
+back.
 
 ## Current state
 
@@ -45,6 +49,28 @@ have learned.
 **Exclude InfoWindow.** It is a utility window — a small, non-resizable,
 retargeting palette — and utility windows do not own the menu bar.
 
+**Closing the Buddy List hides it; it does not sign off or quit.** Closing a
+window is not quitting, which is both the Mac convention and how AIM behaved on
+the Mac. The alternatives — closing signs you off, or closing quits — both turn
+an ordinary close box into a destructive control, and one of them duplicates the
+File → Quit this same change introduces.
+
+That decision carries an obligation: **there must be a way back.** Classicy's
+`ClassicyWindowClose` sets `closed: true`, and `ClassicyWindowFocus` does *not*
+clear it — it only sets focus and the menu bar. The menu-bar extension's
+existing *Buddy List* item dispatches Focus alone, so as written it would leave
+a user who closed the Buddy List with no route back short of quitting.
+`ClassicyWindowOpen` on a window that already exists in state does
+`{ closed: false }`, so the item must dispatch Open before Focus.
+
+**Mark InfoWindow `windowType="utility"`.** Classicy has a first-class notion of
+utility windows: its next-window-to-focus helper filters
+`!closed && windowType !== "utility"`. InfoWindow is one by description but has
+never declared it, which did not matter while nothing was closable. Once the
+Buddy List can close, Classicy has to choose what to focus next, and an
+undeclared Get Info window is eligible. TimeMachine already sets this on two
+windows, so this follows existing practice rather than inventing any.
+
 **Define the menu as a module-level constant, not a `useMemo`.** Feedback and
 TimeMachine both wrap theirs in `useMemo(…, [])`. The menu here depends only on
 `APP_ID`, `APP_NAME`, and `appIcon`, all module constants, so a hook adds
@@ -67,20 +93,34 @@ construction rather than by convention.
   gains an `appMenu` prop typed
   `React.ComponentProps<typeof ClassicyWindow>["appMenu"]`, forwarded to its
   `ClassicyWindow`.
-- **`InfoWindow.tsx`** — unchanged.
+- **`BuddyListWindow.tsx`** — `closable={false}` becomes `closable={true}`.
+- **`IMBuddies.tsx`** — `focusWindow` becomes `revealWindow`, dispatching
+  `ClassicyWindowOpen` then `ClassicyWindowFocus`. Applied to every entry in the
+  window list, not only the Buddy List: "bring this window to the front, opening
+  it if it was closed" is what a Mac Window menu does, and every window the list
+  names is mounted, so Open always finds an existing entry and only clears the
+  closed flag.
+- **`InfoWindow.tsx`** — gains `windowType="utility"`. No `appMenu`.
 
-## Open question, to be answered by observation
+## Resolved: does a menu-less window blank the menu bar?
 
-When InfoWindow is frontmost and declares no `appMenu`, does Classicy keep
-showing the app's File menu or blank it?
+No. This was going to be checked in the browser, but the reducer answers it
+directly. `ClassicyWindowFocus` resolves a menu from the focus event and calls
+`m2`, which ends:
 
-In real Mac OS the menu bar belongs to the *application*, so bringing a utility
-window forward does not remove File. Whether Classicy models it that way could
-not be read out of the minified bundle, so it will be checked in the running app
-rather than assumed.
+```js
+const d = t ?? b.menuBar;
+d && (V.System.Manager.Desktop.appMenu = d);
+```
 
-If Classicy does blank the menu bar, that is reported back rather than resolved
-by quietly giving InfoWindow a menu it was specified not to have.
+The assignment is guarded. A focused window that supplies no menu leaves
+`Desktop.appMenu` untouched, so the previously focused window's File menu stays
+on screen. Bringing Get Info forward therefore keeps File → Quit available,
+which is the Mac behaviour, and InfoWindow needs no menu of its own to achieve
+it.
+
+Still worth confirming in the running app, but it is no longer an open design
+question.
 
 ## Testing
 
@@ -92,6 +132,15 @@ Per window, assert the recorded `appMenu` contains a `file` menu whose
 `menuChildren` include the Quit item. Plus one negative test: `InfoWindow`
 passes no `appMenu`.
 
+For the closable Buddy List:
+
+- `BuddyListWindow` passes `closable={true}`.
+- `InfoWindow` passes `windowType="utility"`.
+- Choosing *Buddy List* from the menu dispatches `ClassicyWindowOpen` **and**
+  `ClassicyWindowFocus` for `im_buddylist`. This is the regression test that
+  matters most — Focus alone looks correct in review and strands the user at
+  runtime, because the bug only appears once the window has been closed.
+
 **Trap to avoid:** a wholesale `vi.mock("classicy")` in this repo breaks as soon
 as a component imports a new symbol from the library. Mock narrowly.
 
@@ -101,3 +150,6 @@ as a component imports a new symbol from the library. Mock narrowly.
   the rest stay where they are.
 - Removing or reorganising the existing menu-bar extension.
 - Giving InfoWindow a menu.
+- Making Sign On or Chat windows behave differently on close. Chat windows
+  already close via `closeChat`, which unmounts them and removes them from the
+  window list, so they cannot be stranded the way the Buddy List could.
