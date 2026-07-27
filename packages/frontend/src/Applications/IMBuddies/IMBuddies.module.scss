@@ -188,3 +188,31 @@
 	gap: 2px;
 	padding: 2px 0;
 }
+
+.infoWindow {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px;
+	height: 100%;
+}
+
+.infoRow {
+	font-size: 11px;
+}
+
+.infoLabel {
+	font-weight: bold;
+}
+
+.infoProfile {
+	flex: 1;
+	overflow-y: auto;
+	// Same hairline-separator token buddyListStatus/chatCompose use above, used
+	// here as a full border rather than just a top rule since this is a
+	// standalone read-only text area, not a divider between two rows.
+	border: 1px solid var(--color-system-07);
+	background: var(--color-white);
+	padding: 6px;
+	white-space: pre-wrap;
+}
