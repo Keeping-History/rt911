@@ -26,7 +26,6 @@ Nothing here needs a backend change. The wire protocol is complete and deployed:
 | ← client | `chat_presence` | `{profile, online}` |
 | ← client | `chat_typing` | `{profile}` |
 | ← client | `chat_message` | `{id, profile, direction, body, virtual_time, kind}` |
-| ← client | `chat_error` | `{code, message}` |
 
 Server→client frames are binary MessagePack; client→server is JSON text.
 `GET /chat/username-available` exists for the Account app and is not used here.
@@ -99,9 +98,13 @@ window.**
   furniture.
 - **Sign On** subscribes to the chat channel and opens the Buddy List.
 
-If the student is not signed in to Directus, `chat_state` returns `not_signed_in`. Sign On
-then opens the **Account** app instead, which is the one place real credentials are
-handled.
+If the student is not signed in to Directus, Sign On opens the **Account** app instead,
+which is the one place real credentials are handled. That decision is made from the local
+auth session, **not** from `chat_state`: the streamer emits `chat_state` only in reply to
+a `subscribe`, and the client subscribes only after Sign On — so at the moment the button
+is pressed, `reason` is still its initial `not_signed_in` value for every student, signed
+in or not. (`chat_state{reason: "not_signed_in"}` is still the server's authoritative
+refusal once subscribed; it is just not available early enough to gate the button.)
 
 The window closes once connected and reopens on Sign Off.
 
@@ -220,8 +223,11 @@ happened yet.
 
 ## Error handling
 
-- **`chat_error`** renders in the affected conversation as a system line, not an alert.
-  A modal over a chat window would be more disruptive than the error.
+- **Refusals** arrive as `chat_state{enabled: false, reason}` — `blocked`, `paused`,
+  `outside_window` — and disable the compose row with a one-sentence explanation under
+  it. There is no `chat_error` frame: the streamer never sends one (`grep -rn chat_error
+  packages/backend` finds it only in the dev harness's HTML), so the UI must not wait for
+  one. A modal over a chat window would be more disruptive than the refusal anyway.
 - **Queue full** arrives as a normal `chat_message` with `kind: "stall"` — the in-character
   "hang on, phones ringing". The UI shows it as the buddy speaking, because that is what it
   is meant to be. No special casing.

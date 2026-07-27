@@ -141,7 +141,6 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 			chatReason: overrides.chatReason ?? "ok",
 			chatMessages,
 			chatTypingProfile: overrides.chatTypingProfile ?? null,
-			chatError: null,
 			connected: overrides.connected ?? true,
 			subscribeChat,
 			unsubscribeChat,

@@ -145,7 +145,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 	const signOn = useCallback(() => setSignedOn(true), []);
 
 	// unsubscribeChat deliberately does NOT clear chatBuddies/chatMessages/
-	// chatTypingProfile/chatError in MediaStreamProvider (by design — those are
+	// chatTypingProfile in MediaStreamProvider (by design — those are
 	// its state, not ours, and other subscribers may still want them). But the
 	// view state layered on top HERE — which windows are open, and what's been
 	// read — is ours, and a sign-off followed by a sign-on must not resurrect a

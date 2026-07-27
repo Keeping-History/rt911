@@ -206,13 +206,6 @@ interface WsChatMessageFrame {
 	message_id?: number;
 }
 
-// A chat-specific failure (e.g. a send that was refused).
-interface WsChatErrorMessage {
-	type: "chat_error";
-	code?: string;
-	message?: string;
-}
-
 type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
@@ -233,7 +226,6 @@ type WsIncomingMessage =
 	| WsChatPresenceMessage
 	| WsChatTypingMessage
 	| WsChatMessageFrame
-	| WsChatErrorMessage
 	| WsClockMessage
 	| WsHeartbeatAckMessage
 	| { type: string };
@@ -295,7 +287,6 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [chatReason, setChatReason] = useState<ChatStateReason>("not_signed_in");
 	const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 	const [chatTypingProfile, setChatTypingProfile] = useState<number | null>(null);
-	const [chatError, setChatError] = useState<{ code: string; message: string } | null>(null);
 	const [usenetBodyState, setUsenetBodyState] = useState(emptyBodyState);
 	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
 	// fetches when a window re-renders before its body arrives.
@@ -1238,12 +1229,6 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
-			if (msg.type === "chat_error") {
-				const m = msg as WsChatErrorMessage;
-				setChatError({ code: m.code ?? "", message: m.message ?? "" });
-				return;
-			}
-
 			if (msg.type === "weather") {
 				const incomingWeather = (msg as WsWeatherMessage).weather;
 				if (!incomingWeather || incomingWeather.length === 0) return;
@@ -1419,7 +1404,6 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			chatReason,
 			chatMessages,
 			chatTypingProfile,
-			chatError,
 			subscribeChat,
 			unsubscribeChat,
 			sendChat,
@@ -1475,7 +1459,6 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			chatReason,
 			chatMessages,
 			chatTypingProfile,
-			chatError,
 			subscribeChat,
 			unsubscribeChat,
 			sendChat,

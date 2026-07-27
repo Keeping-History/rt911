@@ -118,7 +118,6 @@ function makeCtxValue(
 		chatReason: "not_signed_in",
 		chatMessages: [],
 		chatTypingProfile: null,
-		chatError: null,
 		subscribeChat: () => {},
 		unsubscribeChat: () => {},
 		sendChat: () => {},

@@ -363,8 +363,6 @@ export interface MediaStreamContextValue {
 	 * indicator, not a timer.
 	 */
 	chatTypingProfile: number | null;
-	/** The last chat_error frame, or null if none has arrived (or a later message superseded it). */
-	chatError: { code: string; message: string } | null;
 	/** Opt into chat-channel delivery. Ref-counted by appId. */
 	subscribeChat: (appId: string) => void;
 	/** Drop a chat-channel subscription. Unsubscribes server-side when the last app leaves. */
@@ -434,7 +432,6 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	chatReason: "not_signed_in",
 	chatMessages: [],
 	chatTypingProfile: null,
-	chatError: null,
 	subscribeChat: () => {},
 	unsubscribeChat: () => {},
 	sendChat: () => {},

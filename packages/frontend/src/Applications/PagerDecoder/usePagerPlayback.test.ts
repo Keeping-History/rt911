@@ -95,7 +95,6 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					chatReason: "not_signed_in",
 					chatMessages: [],
 					chatTypingProfile: null,
-					chatError: null,
 					subscribeChat: vi.fn(),
 					unsubscribeChat: vi.fn(),
 					sendChat: vi.fn(),
