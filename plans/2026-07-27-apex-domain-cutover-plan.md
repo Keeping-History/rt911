@@ -786,7 +786,7 @@ This softens the hard-cut decision only in timing, not in end state: the `-beta`
 rules are removed at Task 13 exactly as planned. It was raised with the user and
 chosen over tight sequencing and over pausing auto-sync.
 
-### Task 10: Switch the ingress hosts and origin allowlists
+### Task 10: Switch the ingress hosts and origin allowlists — ✅ DONE 2026-07-27
 
 **Files:**
 - Modify (infra): `apps/rt911/frontend.yaml`, `directus.yaml`, `streamer.yaml`, `configmap.yaml`
@@ -866,17 +866,51 @@ Leave `SESSION_COOKIE_DOMAIN: ".911realtime.org"` alone — it is already correc
 
 Do **not** touch `packages/backend/internal/handler/origin.go`. It already lists both the apex and `beta`, which is exactly the set needed now.
 
-- [ ] **Step 5: Commit, push, and watch the sync**
+- [x] **Step 5: Commit, push, and restart Directus — DONE 2026-07-27 (infra 77355d3)**
 
 ```bash
 cd /home/robbiebyrd/infra
 git add apps/rt911/
-git commit -m "rt911: serve the SPA from the apex, rename api/stream hosts"
+git commit -m "rt911: accept the apex origin, move Directus PUBLIC_URL to api"
 git push
-kubectl rollout status deployment/rt911-directus -n rt911
 ```
 
-Directus restarts to pick up the new configmap. The streamer restarts only if its own manifest changed.
+**Two corrections found in execution.** The original step read
+`kubectl rollout status deployment/rt911-directus`, which is wrong twice over:
+
+1. **The Directus Deployment is named `rt911-api`,** not `rt911-directus`.
+   (`rt911-directus-cache` is a separate service and is not it.)
+2. **A ConfigMap change does not restart anything.** `rt911-api` consumes
+   `rt911-config` via `envFrom`, and a running pod never re-reads that. ArgoCD
+   reported `Synced`, the ConfigMap in-cluster held the new value, and Directus
+   still emitted the old `PUBLIC_URL` — the pod was 5d15h old. Watching a
+   rollout that never starts would have looked like success indefinitely.
+
+The restart must be explicit:
+
+```bash
+kubectl delete pod -n rt911 -l app=rt911-api
+```
+
+`kubectl delete pod` rather than `kubectl rollout restart`: the latter stamps a
+`restartedAt` annotation that is not in git, so ArgoCD's selfHeal reverts it and
+triggers a *second* rollout. Deleting the pod produces no drift.
+
+`rt911-api` uses **`strategy: Recreate` with 1 replica**, so this is a genuine
+outage, not a rolling update — measured at **36 seconds** (18:39:32 → 18:40:08
+UTC). Directus-backed features are down for that window; the streamer is a
+separate service and media playback is unaffected. Run it before the apex is
+live, when the blast radius is smallest.
+
+Verify by reading the `redirect_uri` Directus actually emits, not by checking
+the ConfigMap:
+
+```bash
+curl -sSI https://api.911realtime.org/auth/login/google | grep -io "redirect_uri=[^&]*"
+```
+
+Expected: `redirect_uri=https%3A%2F%2Fapi.911realtime.org%2F...`. Confirmed for
+both google and apple.
 
 - [ ] **Step 6: Verify the old frontend host still works**
 
