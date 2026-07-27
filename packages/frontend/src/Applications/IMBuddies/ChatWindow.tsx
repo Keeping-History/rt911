@@ -1,17 +1,10 @@
-import {
-	ClassicyButton,
-	ClassicyInput,
-	ClassicySoundActionTypes,
-	ClassicyWindow,
-	useSoundDispatch,
-} from "classicy";
+import { ClassicyButton, ClassicyInput, ClassicyWindow } from "classicy";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatStateReason } from "../../Providers/MediaStream/MediaStreamContext";
 import { EMOTICONS, renderEmoticons } from "./emoticons";
 import styles from "./IMBuddies.module.scss";
 import { useIMBuddies } from "./IMBuddiesProvider";
-import { IM_SOUNDS } from "./sounds";
 
 // Same app id IMBuddiesProvider subscribes chat under — not exported from
 // there, so it is repeated here rather than reached into (same call as
@@ -51,12 +44,6 @@ export const ChatWindow: React.FC<{ profile: number }> = ({ profile }) => {
 	const { buddies, conversationFor, typingProfile, send, markRead, closeChat, enabled, reason } =
 		useIMBuddies();
 
-	const soundDispatch = useSoundDispatch();
-	const play = useCallback(
-		(sound: string) => soundDispatch({ type: ClassicySoundActionTypes.ClassicySoundPlay, sound }),
-		[soundDispatch],
-	);
-
 	const [text, setText] = useState("");
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
@@ -81,13 +68,14 @@ export const ChatWindow: React.FC<{ profile: number }> = ({ profile }) => {
 
 	const handleSend = useCallback(() => {
 		const trimmed = text.trim();
-		// A keystroke that does nothing must not chirp -- bail before either
-		// the wire call or the send sound for an empty/whitespace-only field.
+		// A keystroke that does nothing must not chirp -- bail before the wire
+		// call for an empty/whitespace-only field. The send sound itself is
+		// the provider's responsibility (IMBuddiesProvider.send already plays
+		// IM_SOUNDS.send) — playing it here too would chirp twice per message.
 		if (!trimmed) return;
 		send(profile, trimmed);
-		play(IM_SOUNDS.send);
 		setText("");
-	}, [text, send, profile, play]);
+	}, [text, send, profile]);
 
 	const insertEmoticon = useCallback((token: string) => {
 		setText((prev) => (prev.length === 0 || prev.endsWith(" ") ? `${prev}${token}` : `${prev} ${token}`));

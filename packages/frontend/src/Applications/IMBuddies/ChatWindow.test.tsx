@@ -113,12 +113,19 @@ describe("ChatWindow", () => {
 		expect(playSound).not.toHaveBeenCalled();
 	});
 
-	it("plays the send sound when a message actually goes", () => {
+	it("does not play the send sound itself -- IMBuddiesProvider.send already does", () => {
+		// This file mocks useIMBuddies(), so its stubbed `send` never actually
+		// calls `play`. That's deliberate: IMBuddiesProvider.send is the one
+		// place IM_SOUNDS.send gets played (see IMBuddiesProvider.test.tsx). A
+		// duplicate `play(IM_SOUNDS.send)` here would double-chirp every real
+		// send without this test (or the mocked `send` above) ever catching
+		// it -- so this asserts ChatWindow stays out of that business, and the
+		// end-to-end "exactly once" guarantee remains the provider's test.
 		const { playSound } = renderChat(1, { enabled: true, reason: "ok" });
 		const input = screen.getByRole("textbox");
 		fireEvent.change(input, { target: { value: "hey" } });
 		fireEvent.keyDown(input, { key: "Enter" });
-		expect(playSound).toHaveBeenCalledWith(IM_SOUNDS.send);
+		expect(playSound).not.toHaveBeenCalledWith(IM_SOUNDS.send);
 	});
 
 	it("disables compose and explains why when the clock is paused", () => {
@@ -150,5 +157,27 @@ describe("ChatWindow", () => {
 			],
 		});
 		expect(screen.getByText(/hang on, phones ringing/)).toBeTruthy();
+	});
+
+	it("attributes each message to the right speaker -- 'out' is the buddy, 'in' is the student", () => {
+		// Per packages/backend/docs/websocket-protocol.md's chat_message field
+		// table: direction "in" is student -> buddy, "out" is buddy -> student.
+		// Getting this backwards puts the student's own words in the mouth of a
+		// September 11 character -- the single most user-visible way this
+		// window can be wrong -- so this asserts the pairing, not just that
+		// both strings appear somewhere on the page.
+		renderChat(1, {
+			enabled: true,
+			reason: "ok",
+			buddies: [{ profile: 1, screen_name: "danny99", display_name: "Danny", avatar: "", online: true }],
+			messages: [
+				{ message_id: 1, profile: 1, direction: "out", body: "the tower is on fire", time: "", kind: "generated" },
+				{ message_id: 2, profile: 1, direction: "in", body: "are you okay", time: "", kind: "typed" },
+			],
+		});
+		const buddyLine = screen.getByText(/the tower is on fire/).closest("div");
+		const studentLine = screen.getByText(/are you okay/).closest("div");
+		expect(buddyLine?.textContent).toMatch(/^Danny:/);
+		expect(studentLine?.textContent).toMatch(/^You:/);
 	});
 });
