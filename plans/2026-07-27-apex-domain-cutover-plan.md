@@ -81,30 +81,6 @@ dashboard instead, and the token requirement is dropped. See Task 12.
 The old cert-manager token still covers every DNS operation in Tasks 9, 11
 and 13.
 
-- [ ] **Step 3 (superseded): Create a Cloudflare token that can write Redirect Rules**
-
-The existing cert-manager token is DNS-edit only. Verify that for yourself — this should fail:
-
-```bash
-CF_DNS_TOKEN=$(kubectl get secret -n cert-manager cloudflare-api-token -o jsonpath='{.data.api-token}' | base64 -d)
-curl -sS -H "Authorization: Bearer $CF_DNS_TOKEN" \
-  "https://api.cloudflare.com/client/v4/zones/08e515063f366be3278cb3de2380469c/rulesets" \
-  | python3 -m json.tool | head -5
-```
-
-Expected: `"success": false` with an `Authentication error`.
-
-In the Cloudflare dashboard → My Profile → API Tokens → Create Token → Custom token, grant **Zone → Dynamic Redirect → Edit** on zone `911realtime.org`. Export it for Task 12:
-
-```bash
-export CF_REDIRECT_TOKEN=<the new token>
-curl -sS -H "Authorization: Bearer $CF_REDIRECT_TOKEN" \
-  "https://api.cloudflare.com/client/v4/zones/08e515063f366be3278cb3de2380469c/rulesets" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['success'])"
-```
-
-Expected: `True`.
-
 - [x] **Step 4: Confirm the zone's SSL mode and cache rules — DONE 2026-07-27**
 
 **Cache: verified empirically, no action needed.** Rather than reading the rule
@@ -133,15 +109,9 @@ No Ingress claims `api.911realtime.org` yet, so Traefik serves its default
 cert. Under Full (strict) that is a **526 at the edge, not a 404** — harmless
 while nothing consumes the hostname, but it is why Task 8 must precede Task 11.
 
-- [ ] **Step 4 (superseded): Confirm the zone's SSL mode and cache rules**
+- [x] **Step 5: Record completion — Task 1 COMPLETE 2026-07-27**
 
-In the dashboard → SSL/TLS → Overview, note the encryption mode. If it is **Full (strict)**, an Ingress serving a hostname whose certificate has not been issued returns a 526 to users — which is exactly what Task 8 exists to prevent, so confirm Task 8's verification passes before Task 10.
-
-In → Caching → Cache Rules, check for the zone-wide "Cache everything" rule from the 2026-07-24 incident. Confirm it does not apply to `/index.html` on the apex. nginx sends `Cache-Control: no-store` for that path, but a Cache Rule overrides origin headers, and a stale `index.html` 404s on its old hashed asset bundle after every deploy.
-
-- [ ] **Step 5: Record completion**
-
-No commit. Confirm all four are done before proceeding.
+All prerequisites are cleared. Phase 2 is unblocked.
 
 ---
 
