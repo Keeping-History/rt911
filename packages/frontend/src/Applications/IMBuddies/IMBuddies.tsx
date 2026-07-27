@@ -34,6 +34,28 @@ const ICONS = registerClassicyIcons({
 const appIcon = ICONS.applications.imBuddies.app;
 
 const BUDDY_LIST_WINDOW_ID = "im_buddylist";
+
+/**
+ * The File menu every non-utility IM Buddies window carries, so Quit is where
+ * a Mac user reaches for it. Module-level rather than a useMemo: it closes
+ * over nothing but module constants, so there is no dependency that could
+ * change and no render it needs to be recomputed on.
+ *
+ * Quit also remains in the menu-bar extension below. That duplication is
+ * deliberate — the tray item shipped first and users may already know it.
+ *
+ * Deliberately NOT passed to InfoWindow: it is a utility window, and
+ * classicy's focus reducer only assigns Desktop.appMenu when the focused
+ * window supplies one, so a menu-less Get Info leaves this File menu on
+ * screen rather than blanking the menu bar.
+ */
+const APP_MENU: ClassicyMenuItem[] = [
+	{
+		id: "file",
+		title: "File",
+		menuChildren: [quitMenuItemHelper(APP_ID, APP_NAME, appIcon)],
+	},
+];
 // The one app that handles real credentials — the same id SignOnWindow hands
 // off to when there is no Directus session.
 const ACCOUNT_APP_ID = "Account.app";
@@ -212,7 +234,7 @@ const IMBuddiesContent: React.FC = () => {
 					onClose={() => setSignInAlertDismissed(true)}
 				/>
 			)}
-			{!connected && <SignOnWindow />}
+			{!connected && <SignOnWindow appMenu={APP_MENU} />}
 			{/*
 			  Every window below the Sign On window is gated on `connected` too,
 			  not just the Buddy List. A dropped socket flips `connected` false

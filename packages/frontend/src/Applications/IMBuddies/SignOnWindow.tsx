@@ -48,7 +48,9 @@ const RunningManIcon: React.FC = () => (
 	</svg>
 );
 
-export const SignOnWindow: React.FC = () => {
+export const SignOnWindow: React.FC<{
+	appMenu?: React.ComponentProps<typeof ClassicyWindow>["appMenu"];
+}> = ({ appMenu }) => {
 	const { user } = useAuth();
 	const { signOn } = useIMBuddies();
 	const desktopEventDispatch = useAppManagerDispatch();
@@ -105,6 +107,7 @@ export const SignOnWindow: React.FC = () => {
 			collapsable={false}
 			initialSize={[280, 0]}
 			initialPosition={["center", "center"]}
+			appMenu={appMenu}
 		>
 			<div className={styles.signOn}>
 				<div className={styles.signOnLogoRow}>

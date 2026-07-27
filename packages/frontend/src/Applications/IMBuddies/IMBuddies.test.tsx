@@ -144,9 +144,32 @@ vi.mock("classicy", async (importOriginal) => ({
 			{props.children}
 		</div>
 	),
-	ClassicyWindow: (props: { title?: string; children?: React.ReactNode }) => (
-		<div>
+	// Records the window-level props this app's tests assert on: which windows
+	// carry a File menu, which are closable, and which are utility windows.
+	// Menu items render as <span>, deliberately not <button>, so they cannot
+	// collide with the sign-in alert's real "Quit" button in a role query.
+	ClassicyWindow: (props: {
+		title?: string;
+		children?: React.ReactNode;
+		closable?: boolean;
+		windowType?: string;
+		appMenu?: { id?: string; title?: string; menuChildren?: { id?: string; title?: string }[] }[];
+	}) => (
+		<div
+			data-testid="window"
+			data-window-title={props.title}
+			data-closable={String(props.closable)}
+			data-window-type={props.windowType ?? ""}
+			data-menus={(props.appMenu ?? []).map((m) => m.id).join(",")}
+		>
 			<div>{props.title}</div>
+			{(props.appMenu ?? []).map((menu) => (
+				<div key={menu.id} data-testid={`menu-${menu.id}`}>
+					{(menu.menuChildren ?? []).map((item) => (
+						<span key={item.id}>{item.title}</span>
+					))}
+				</div>
+			))}
 			{props.children}
 		</div>
 	),
@@ -342,5 +365,37 @@ describe("People menu acts on the Buddy List selection", () => {
 	it("does not warn a signed-in student", () => {
 		renderApp({ connected: false, user: { username: "me" } });
 		expect(screen.queryByText("You must be signed in to use Instant Messenger.")).toBeNull();
+	});
+});
+
+describe("File menu", () => {
+	// Helper: the windows currently rendered, by title, with whether each one
+	// carries a File menu whose items include Quit.
+	function windowsWithFileMenu() {
+		return Array.from(document.querySelectorAll("[data-testid='window']")).map((w) => ({
+			title: w.getAttribute("data-window-title") ?? "",
+			hasFile: (w.getAttribute("data-menus") ?? "").split(",").includes("file"),
+			hasQuit: within(w as HTMLElement).queryByText("Quit") !== null,
+		}));
+	}
+
+	it("gives the Sign On window File -> Quit", () => {
+		renderApp({ connected: false });
+		const signOn = windowsWithFileMenu().find((w) => w.title === "Sign On");
+		expect(signOn).toBeDefined();
+		expect(signOn?.hasFile).toBe(true);
+		expect(signOn?.hasQuit).toBe(true);
+	});
+
+	// Get Info is a utility window. Classicy's focus reducer only assigns
+	// Desktop.appMenu when the focused window supplies one, so leaving this
+	// window menu-less keeps the previous window's File menu on screen rather
+	// than blanking the menu bar.
+	it("does NOT give the Get Info window a menu", () => {
+		renderApp({ connected: true, infoProfile: 1 });
+		const info = windowsWithFileMenu().find((w) => w.title.startsWith("Info:"));
+		expect(info, "expected a Get Info window").toBeDefined();
+		expect(info?.hasFile).toBe(false);
+		expect(info?.hasQuit).toBe(false);
 	});
 });
