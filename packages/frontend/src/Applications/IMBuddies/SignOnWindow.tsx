@@ -135,8 +135,26 @@ export const SignOnWindow: React.FC = () => {
 				/>
 
 				<div className={styles.signOnCheckboxes}>
-					<ClassicyCheckbox id="im_signon_save_password" label="Save password" checked={true} />
-					<ClassicyCheckbox id="im_signon_auto_login" label="Auto-login" checked={false} />
+					{/*
+					  Inert period furniture, not merely visually so: with no disabled
+					  prop, ClassicyCheckbox keeps its own useState seeded from
+					  `checked` and flips it on every click regardless of onClickFunc
+					  being absent — a student would watch "Save password" uncheck
+					  itself with nothing reading or storing that. disabled=true is
+					  load-bearing here, exactly like the password field above.
+					*/}
+					<ClassicyCheckbox
+						id="im_signon_save_password"
+						label="Save password"
+						checked={true}
+						disabled={true}
+					/>
+					<ClassicyCheckbox
+						id="im_signon_auto_login"
+						label="Auto-login"
+						checked={false}
+						disabled={true}
+					/>
 				</div>
 
 				<div className={styles.signOnButtons}>
