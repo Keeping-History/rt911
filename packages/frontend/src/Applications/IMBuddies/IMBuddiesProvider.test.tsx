@@ -135,6 +135,23 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 			setChatMessages((prev) => [...prev, message]);
 		}, []);
 
+		// Mirrors the REAL requestChatHistory, which drops that profile's local
+		// echoes before asking (MediaStreamProvider.tsx). The drop is folded
+		// into the request there precisely so no call site can forget it; this
+		// three-line filter is the same rule, and
+		// MediaStreamProvider.chat.test.tsx pins the real one independently so
+		// this stub cannot quietly become more forgiving than the thing it
+		// stands in for.
+		const requestChatHistoryStub = useCallback(
+			(profile: number, before: string, limit: number) => {
+				setChatMessages((prev) =>
+					prev.filter((m) => !(m.message_id === 0 && m.profile === profile)),
+				);
+				requestChatHistory(profile, before, limit);
+			},
+			[],
+		);
+
 		const value = {
 			chatBuddies: overrides.chatBuddies ?? [],
 			chatEnabled: overrides.chatEnabled ?? true,
@@ -145,7 +162,7 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 			subscribeChat,
 			unsubscribeChat,
 			sendChat,
-			requestChatHistory,
+			requestChatHistory: requestChatHistoryStub,
 			appendLocalChatMessage,
 		} as unknown as MediaStreamContextValue;
 
@@ -461,6 +478,90 @@ describe("IMBuddiesProvider", () => {
 		const { ctx, requestChatHistory } = renderWithChat(<Probe />, {});
 		act(() => ctx.openChat(4));
 		expect(requestChatHistory).toHaveBeenCalledWith(4, expect.any(String), expect.any(Number));
+	});
+
+	// --- A local echo must never coexist with its persisted copy.
+	//
+	// chat.HistoryDetailed (packages/backend/internal/chat/store.go) has NO
+	// direction filter, so a replay brings the student's own direction:"in"
+	// turns back with real message_ids — while the id-0 echo is exempt from
+	// dedupe by design. The backward-seek path is safe only because
+	// MediaStreamProvider clears the transcript first. These two paths do not
+	// clear, and both were introduced/made-reachable by the local-echo work.
+
+	it("does not duplicate the student's line when a FORWARD seek replays history", () => {
+		// A forward seek re-requests history for every open conversation but
+		// (correctly) does not clear the transcript — so without dropping the
+		// echo, the replayed persisted copy lands beside it.
+		const { ctx, pushMessage, setClock } = renderWithChat(<Probe />, {});
+		act(() => ctx.openChat(1));
+		act(() => ctx.send(1, "are you okay"));
+		act(() => setClock("2001-09-11T13:20:00Z")); // 20 min forward — a seek
+		// The replay of the persisted copy of that very line.
+		act(() =>
+			pushMessage({ message_id: 77, profile: 1, direction: "in", body: "are you okay" }),
+		);
+		expect(screen.getByTestId("msgs1").textContent).toBe("are you okay");
+	});
+
+	it("does not duplicate the student's line when a chat is closed and reopened", () => {
+		const { ctx, pushMessage } = renderWithChat(<Probe />, {});
+		act(() => ctx.openChat(1));
+		act(() => ctx.send(1, "are you okay"));
+		act(() => ctx.closeChat(1));
+		act(() => ctx.openChat(1));
+		act(() =>
+			pushMessage({ message_id: 77, profile: 1, direction: "in", body: "are you okay" }),
+		);
+		expect(screen.getByTestId("msgs1").textContent).toBe("are you okay");
+	});
+
+	it("drops only the requested profile's echoes, leaving another conversation alone", () => {
+		// The replay is authoritative for ONE conversation. Opening Danny's
+		// window must not swallow what the student said to Carol.
+		const { ctx } = renderWithChat(<Probe />, {});
+		act(() => ctx.send(1, "to danny"));
+		act(() => ctx.openChat(2));
+		expect(screen.getByTestId("msgs1").textContent).toBe("to danny");
+	});
+
+	it("orders a history replay by virtual time, not by arrival", () => {
+		// History arrives oldest-first and is appended to the same flat array,
+		// so a live beat received while the window was closed would otherwise
+		// sit ABOVE the older lines the replay brings in — a student opening a
+		// conversation for the first time sees it scrambled.
+		const { ctx, pushMessage } = renderWithChat(<Probe />, {});
+		act(() =>
+			pushMessage({
+				message_id: 50,
+				profile: 1,
+				direction: "out",
+				body: "newest",
+				time: "2001-09-11T13:03:00Z",
+			}),
+		);
+		act(() => ctx.openChat(1));
+		act(() =>
+			pushMessage({
+				message_id: 30,
+				profile: 1,
+				direction: "out",
+				body: "older",
+				time: "2001-09-11T12:50:00Z",
+			}),
+		);
+		expect(screen.getByTestId("msgs1").textContent).toBe("older|newest");
+	});
+
+	it("keeps two messages from the same virtual second in arrival order", () => {
+		// The sort tiebreak must be stable: a conversation moves faster than
+		// the one-second resolution of virtual_time, and two lines in the same
+		// second swapping places would reorder a question and its answer.
+		const { pushMessage } = renderWithChat(<Probe />, {});
+		const time = "2001-09-11T13:03:00Z";
+		act(() => pushMessage({ message_id: 0, profile: 1, direction: "in", body: "first", time }));
+		act(() => pushMessage({ message_id: 0, profile: 1, direction: "in", body: "second", time }));
+		expect(screen.getByTestId("msgs1").textContent).toBe("first|second");
 	});
 
 	it("does not chime the receive sound for the student's own echo", () => {

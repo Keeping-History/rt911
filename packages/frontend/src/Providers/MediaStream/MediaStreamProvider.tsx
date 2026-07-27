@@ -722,8 +722,36 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	// Requesting history for a profile also DROPS that profile's local echoes,
+	// in the same call, deliberately: a replay is authoritative for the
+	// conversation it covers, and it carries the persisted copies of the very
+	// lines the echoes stand in for.
+	//
+	// chat.HistoryDetailed (internal/chat/store.go) has no direction filter, so
+	// the student's own direction:"in" turns come back with real message_ids —
+	// while an echo's message_id 0 is exempt from dedupe by design (it is the
+	// server's "not persisted" marker, not an identity). Echo and persisted
+	// copy therefore cannot dedupe against each other, and every history path
+	// that does not clear the transcript first would render the line twice.
+	// Only the backward-seek path clears; a forward seek with a window open and
+	// an ordinary open/reopen do not.
+	//
+	// The drop lives INSIDE the request rather than in a separate exported
+	// helper so a future call site cannot forget it: "history requested" and
+	// "echoes for that profile dropped" are one operation.
+	//
+	// The tradeoff, taken knowingly: the line is briefly absent until the
+	// replay lands (one round trip), and permanently absent if the replay never
+	// arrives. Dropping when the replay LANDS instead would close that gap but
+	// opens a worse hole — an echo created between the request and the reply
+	// has no persisted copy in that reply, so it would be dropped and lost for
+	// good. A visible gap beats silently eating a line the student just typed,
+	// and this matches how the backward-seek clear already behaves.
 	const requestChatHistory = useCallback(
 		(profile: number, before: string, limit: number) => {
+			setChatMessages((prev) =>
+				prev.filter((m) => !(m.message_id === 0 && m.profile === profile)),
+			);
 			send({ type: "chat_history", profile, before, limit });
 		},
 		[send],

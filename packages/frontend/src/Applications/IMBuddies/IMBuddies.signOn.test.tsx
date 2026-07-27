@@ -180,4 +180,17 @@ describe("IM Buddies sign-on, with the real provider", () => {
 		expect(windowTitles()).toContain("Sign On");
 		expect(windowTitles()).not.toContain("Buddy List");
 	});
+
+	it("takes the open chat windows down with the socket, not just the Buddy List", () => {
+		// openChats/openInfo are cleared only by signOff, so a dropped socket
+		// would otherwise leave chat windows sitting beside the Sign On window,
+		// on top of a conversation the student can no longer continue.
+		const { dropSocket } = renderApp();
+		fireEvent.click(screen.getByRole("button", { name: "Sign On" }));
+		fireEvent.doubleClick(screen.getByText("danny99"));
+		expect(windowTitles()).toContain("Danny");
+		dropSocket();
+		expect(windowTitles()).not.toContain("Danny");
+		expect(windowTitles()).toContain("Sign On");
+	});
 });

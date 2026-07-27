@@ -252,6 +252,62 @@ describe("chat channel", () => {
 		expect(screen.getByTestId("msgs").textContent).toBe("are you okay|im fine");
 	});
 
+	it("requestChatHistory drops that profile's local echoes — and only that profile's", () => {
+		// chat.HistoryDetailed has no direction filter, so the replay brings the
+		// student's own direction:"in" turns back with real message_ids, while
+		// an echo's id 0 is exempt from dedupe by design. Nothing would collapse
+		// the pair, so the echo must go at request time. The drop lives inside
+		// the request so no call site can forget it.
+		const ws = renderWithMockSocket(<Probe />);
+		act(() => {
+			ws.ctx.appendLocalChatMessage({
+				message_id: 0,
+				profile: 1,
+				direction: "in",
+				body: "to danny",
+				time: "2001-09-11T13:00:00.000Z",
+				kind: "typed",
+			});
+			ws.ctx.appendLocalChatMessage({
+				message_id: 0,
+				profile: 2,
+				direction: "in",
+				body: "to carol",
+				time: "2001-09-11T13:00:01.000Z",
+				kind: "typed",
+			});
+		});
+		expect(screen.getByTestId("msgs").textContent).toBe("to danny|to carol");
+
+		act(() => ws.ctx.requestChatHistory(1, "2001-09-11T13:00:02.000Z", 40));
+		// Danny's echo is gone; the replay is authoritative for that
+		// conversation. Carol's is untouched — the replay says nothing about it.
+		expect(screen.getByTestId("msgs").textContent).toBe("to carol");
+		expect(ws.sent.filter((m) => m.type === "chat_history" && m.profile === 1)).toHaveLength(1);
+	});
+
+	it("requestChatHistory leaves persisted messages alone", () => {
+		// Only id 0 means "local echo". A real persisted line for the same
+		// profile must survive the request that is about to re-deliver it — the
+		// existing message_id dedupe is what handles that pair.
+		const ws = renderWithMockSocket(<Probe />);
+		act(() =>
+			ws.receive(
+				encode({
+					type: "chat_message",
+					profile: 1,
+					direction: "out",
+					body: "persisted",
+					time: "2001-09-11T13:00:00Z",
+					kind: "generated",
+					message_id: 42,
+				}),
+			),
+		);
+		act(() => ws.ctx.requestChatHistory(1, "2001-09-11T13:00:02.000Z", 40));
+		expect(screen.getByTestId("msgs").textContent).toBe("persisted");
+	});
+
 	it("clears the transcript on a backward seek so a buddy stops remembering the future", () => {
 		// History turns come back as ordinary chat_message frames appended to
 		// this same flat array, so without a clear a rewound student still sees

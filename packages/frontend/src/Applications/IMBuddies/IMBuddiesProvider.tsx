@@ -118,13 +118,21 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 	// This feature only READS the clock — it never calls setDateTime/
 	// setDateTimeFromUtc. `virtualUtcMs` strips the display timezone back off
 	// (frontend hard rule 3): `localDate` is a display value, while every chat
-	// timestamp on the wire is true UTC. The ref mirror is assigned during
-	// render so `send` below can stamp the current instant WITHOUT taking
-	// localDate as a dependency — that ticks every second and would rebuild
-	// this provider's whole context value once a second.
+	// timestamp on the wire is true UTC.
+	//
+	// The ref mirror lets `send`/`openChat` below stamp the current instant
+	// WITHOUT taking localDate as a dependency — that ticks every second and
+	// would rebuild this provider's whole context value once a second. It is
+	// seeded in the useRef initializer and thereafter updated in an effect, not
+	// in the render body: a ref write during render is a side effect, and
+	// idempotent-today is not a reason to leave one lying around. Both readers
+	// run from user events, which happen after commit, so the effect has always
+	// caught up by the time either is called.
 	const { localDate, tzOffset } = useClassicyDateTime({ tick: true });
 	const virtualNowMsRef = useRef(virtualUtcMs(localDate, tzOffset));
-	virtualNowMsRef.current = virtualUtcMs(localDate, tzOffset);
+	useEffect(() => {
+		virtualNowMsRef.current = virtualUtcMs(localDate, tzOffset);
+	}, [localDate, tzOffset]);
 
 	const [signedOn, setSignedOn] = useState(false);
 	const [openChats, setOpenChats] = useState<number[]>([]);
@@ -165,9 +173,23 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 	// and this is that seam. `message_id === 0` means persistence was skipped
 	// server-side (no db pool) — it's not a real identity, so two id-0
 	// messages are never considered duplicates; only ids > 0 get deduped.
+	//
+	// Arrival order is NOT conversation order. A chat_history replay arrives
+	// oldest-first and is appended to the end of this same flat array, so a
+	// live message received while the window was closed would otherwise sit
+	// above the older lines the replay brings in — a student opening a
+	// conversation for the first time would see it scrambled. Sort by
+	// (virtual_time, message_id), then by arrival index so the sort is stable
+	// on its own terms rather than relying on the engine's: a conversation
+	// moves faster than virtual_time's one-second resolution, and two lines in
+	// the same second swapping places would reorder a question and its answer.
+	// A missing/unparseable `time` falls through to the id/index tiebreak
+	// rather than poisoning every comparison it takes part in.
 	const conversationsByProfile = useMemo(() => {
 		const map = new Map<number, ChatMessage[]>();
+		const orderByMessage = new Map<ChatMessage, { time: number; index: number }>();
 		const seenIdsByProfile = new Map<number, Set<number>>();
+		let index = 0;
 		for (const message of chatMessages) {
 			if (message.message_id > 0) {
 				let seen = seenIdsByProfile.get(message.profile);
@@ -178,9 +200,24 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 				if (seen.has(message.message_id)) continue;
 				seen.add(message.message_id);
 			}
+			orderByMessage.set(message, { time: Date.parse(message.time), index: index++ });
 			const existing = map.get(message.profile);
 			if (existing) existing.push(message);
 			else map.set(message.profile, [message]);
+		}
+		for (const messages of map.values()) {
+			messages.sort((a, b) => {
+				// biome-ignore lint/style/noNonNullAssertion: every message in
+				// `map` was just recorded in `orderByMessage` on the same pass.
+				const ao = orderByMessage.get(a)!;
+				// biome-ignore lint/style/noNonNullAssertion: as above.
+				const bo = orderByMessage.get(b)!;
+				if (!Number.isNaN(ao.time) && !Number.isNaN(bo.time) && ao.time !== bo.time) {
+					return ao.time - bo.time;
+				}
+				if (a.message_id !== b.message_id) return a.message_id - b.message_id;
+				return ao.index - bo.index;
+			});
 		}
 		return map;
 	}, [chatMessages]);

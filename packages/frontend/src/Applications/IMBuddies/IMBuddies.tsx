@@ -158,13 +158,27 @@ const IMBuddiesContent: React.FC = () => {
 		<>
 			{isFrontmost && <IMBuddiesMenus />}
 			{!connected && <SignOnWindow />}
-			{connected && <BuddyListWindow />}
-			{openChats.map((profile) => (
-				<ChatWindow key={profile} profile={profile} />
-			))}
-			{openInfo.map((profile) => (
-				<InfoWindow key={profile} profile={profile} />
-			))}
+			{/*
+			  Every window below the Sign On window is gated on `connected` too,
+			  not just the Buddy List. A dropped socket flips `connected` false
+			  (that is what CRITICAL 1's derivation bought) while openChats /
+			  openInfo are cleared only by signOff — so without this gate a
+			  student would be left looking at chat windows sitting beside the
+			  Sign On window, on top of a conversation they can no longer
+			  continue. The lists themselves are kept, so a recovered socket
+			  restores the same windows rather than dumping the session.
+			*/}
+			{connected && (
+				<>
+					<BuddyListWindow />
+					{openChats.map((profile) => (
+						<ChatWindow key={profile} profile={profile} />
+					))}
+					{openInfo.map((profile) => (
+						<InfoWindow key={profile} profile={profile} />
+					))}
+				</>
+			)}
 		</>
 	);
 };
