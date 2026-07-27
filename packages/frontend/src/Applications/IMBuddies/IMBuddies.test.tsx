@@ -97,6 +97,11 @@ vi.mock("./IMBuddiesProvider", () => ({
 // IMBuddiesContent's too, which shows a sign-in-required alert when there is
 // no session. Mutable so a test can render the signed-out case.
 const authStore = vi.hoisted(() => ({ user: null as { username?: string } | null }));
+
+// Records desktop actions so a test can assert which ones a menu item fires.
+// Needed because ClassicyWindowFocus alone does NOT reopen a closed window --
+// see the Buddy List menu item test at the bottom of this file.
+const mockDesktopDispatch = vi.hoisted(() => vi.fn());
 vi.mock("../../Providers/Auth/AuthContext", () => ({
 	useAuth: () => ({ user: authStore.user as AuthUser | null }),
 }));
@@ -202,6 +207,7 @@ vi.mock("classicy", async (importOriginal) => ({
 		selector({
 			System: { Manager: { Applications: { focusedAppId: imState.focusedAppId } } },
 		}),
+	useAppManagerDispatch: () => mockDesktopDispatch,
 }));
 
 import { IMBuddies } from "./IMBuddies";
@@ -412,5 +418,53 @@ describe("File menu", () => {
 		// rather than blanking the menu bar.
 		expect(info[0].hasFile).toBe(false);
 		expect(info[0].hasQuit).toBe(false);
+	});
+});
+
+describe("window chrome", () => {
+	function windowByTitle(match: (t: string) => boolean) {
+		return Array.from(document.querySelectorAll("[data-testid='window']")).find((w) =>
+			match(w.getAttribute("data-window-title") ?? ""),
+		);
+	}
+
+	it("lets the Buddy List be closed", () => {
+		renderApp({ connected: true });
+		expect(windowByTitle((t) => t === "Buddy List")?.getAttribute("data-closable")).toBe("true");
+	});
+
+	it("marks Get Info a utility window", () => {
+		renderApp({ connected: true, infoProfile: 1 });
+		expect(windowByTitle((t) => t.startsWith("Info:"))?.getAttribute("data-window-type")).toBe(
+			"utility",
+		);
+	});
+});
+
+describe("Buddy List menu item", () => {
+	// The regression this exists for: ClassicyWindowClose sets closed:true and
+	// ClassicyWindowFocus does NOT clear it -- Focus only sets focus and the
+	// menu bar. Only ClassicyWindowOpen clears the flag. Dispatching Focus
+	// alone reads as correct in review and strands the user at runtime, and the
+	// bug is unreachable until the Buddy List becomes closable, so nothing else
+	// would catch it.
+	it("opens the window as well as focusing it, so a closed Buddy List can come back", () => {
+		mockDesktopDispatch.mockClear();
+		renderApp({ connected: true });
+
+		fireEvent.click(screen.getByLabelText(MENU_NAME));
+		// Scoped by role: "Buddy List" is BOTH this menu item and the window's
+		// own title, so a bare getByText finds two nodes.
+		fireEvent.click(screen.getByRole("button", { name: "Buddy List" }));
+
+		const windowActions = mockDesktopDispatch.mock.calls
+			.map(([action]) => action as { type: string; window?: { id: string } })
+			.filter((a) => a.type === "ClassicyWindowOpen" || a.type === "ClassicyWindowFocus");
+
+		expect(windowActions.map((a) => a.type)).toContain("ClassicyWindowOpen");
+		expect(windowActions.map((a) => a.type)).toContain("ClassicyWindowFocus");
+		for (const action of windowActions) {
+			expect(action.window?.id).toBe("im_buddylist");
+		}
 	});
 });

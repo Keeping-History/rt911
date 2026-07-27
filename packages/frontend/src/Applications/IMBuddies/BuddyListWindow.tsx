@@ -149,7 +149,11 @@ export const BuddyListWindow: React.FC<{
 			id="im_buddylist"
 			appId={APP_ID}
 			title="Buddy List"
-			closable={false}
+			// Closing puts the window away without signing off. The menu-bar
+			// extension's Buddy List item reopens it -- see revealWindow in
+			// IMBuddies.tsx, which must dispatch ClassicyWindowOpen and not
+			// only ClassicyWindowFocus, or there is no way back from here.
+			closable={true}
 			resizable={true}
 			zoomable={false}
 			collapsable={true}

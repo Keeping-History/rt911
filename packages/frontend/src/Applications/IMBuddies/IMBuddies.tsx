@@ -79,13 +79,25 @@ const IMBuddiesMenus: React.FC = () => {
 		useIMBuddies();
 	const desktopEventDispatch = useAppManagerDispatch();
 
-	const focusWindow = useCallback(
-		(windowId: string) =>
+	// Open THEN focus. ClassicyWindowClose sets closed:true and
+	// ClassicyWindowFocus does NOT clear it -- Focus only sets focus and the
+	// menu bar -- so focusing a closed window does nothing visible. On a window
+	// that already exists in state ClassicyWindowOpen just sets closed:false,
+	// which makes this safe for windows that were never closed. Without it,
+	// closing the Buddy List would leave no way back except quitting.
+	const revealWindow = useCallback(
+		(windowId: string) => {
+			desktopEventDispatch({
+				type: "ClassicyWindowOpen",
+				app: { id: APP_ID },
+				window: { id: windowId },
+			});
 			desktopEventDispatch({
 				type: "ClassicyWindowFocus",
 				app: { id: APP_ID },
 				window: { id: windowId },
-			}),
+			});
+		},
 		[desktopEventDispatch],
 	);
 
@@ -143,7 +155,7 @@ const IMBuddiesMenus: React.FC = () => {
 				id: "im_menu_buddylist",
 				title: "Buddy List",
 				disabled: !connected,
-				onClickFunc: () => focusWindow(BUDDY_LIST_WINDOW_ID),
+				onClickFunc: () => revealWindow(BUDDY_LIST_WINDOW_ID),
 			},
 		];
 		for (const profile of openChats) {
@@ -152,11 +164,11 @@ const IMBuddiesMenus: React.FC = () => {
 			items.push({
 				id: `im_menu_window_${profile}`,
 				title: name,
-				onClickFunc: () => focusWindow(`im_chat_${profile}`),
+				onClickFunc: () => revealWindow(`im_chat_${profile}`),
 			});
 		}
 		return items;
-	}, [connected, selectedBuddyObj, openChat, openInfoFor, signOff, openChats, buddies, focusWindow]);
+	}, [connected, selectedBuddyObj, openChat, openInfoFor, signOff, openChats, buddies, revealWindow]);
 
 	return (
 		<ClassicyMenuBarExtension id="im_menu" order={1} title={APP_NAME} menuItems={menuItems}>

@@ -44,6 +44,13 @@ export const InfoWindow: React.FC<{ profile: number }> = ({ profile }) => {
 			resizable={false}
 			zoomable={false}
 			collapsable={true}
+			// A palette, not a document window: classicy skips utility windows
+			// when choosing what to focus next, which is what stops Get Info
+			// being auto-focused when the Buddy List is closed. It also carries
+			// no appMenu -- classicy's focus reducer only assigns
+			// Desktop.appMenu when the focused window supplies one, so leaving
+			// this menu-less keeps the previous window's File menu on screen.
+			windowType="utility"
 			initialSize={[220, 200]}
 			initialPosition={["center", "center"]}
 			onCloseFunc={closeInfo}
