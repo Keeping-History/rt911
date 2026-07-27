@@ -11,3 +11,33 @@
 		display: block;
 	}
 }
+
+.signOn {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px;
+}
+
+.signOnLogoRow {
+	display: flex;
+	justify-content: center;
+	padding-bottom: 4px;
+}
+
+.signOnLogo {
+	display: block;
+}
+
+.signOnCheckboxes {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.signOnButtons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 6px;
+}
