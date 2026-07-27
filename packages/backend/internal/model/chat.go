@@ -9,4 +9,5 @@ type Buddy struct {
 	DisplayName string `json:"display_name,omitempty"`
 	Avatar      string `json:"avatar,omitempty"`
 	Online      bool   `json:"online"`
+	ProfileText string `json:"profile_text,omitempty"`
 }

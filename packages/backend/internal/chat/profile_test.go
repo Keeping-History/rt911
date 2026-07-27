@@ -51,6 +51,31 @@ func mustParse(s string) time.Time {
 	return t
 }
 
+func TestRosterCarriesProfileText(t *testing.T) {
+	// Get Info needs student-facing prose. It must never fall back to Persona,
+	// which is a second-person instruction to a model and would leak the
+	// mechanism -- an empty profile is a curation gap, a leaked persona is a
+	// broken illusion.
+	got := Roster([]Profile{{
+		ID: 1, ScreenName: "danny",
+		Persona:     "You are Danny, 13, in eighth grade in Columbus.",
+		ProfileText: "13. eighth grade. tony hawk pro skater 3 is the best game ever made.",
+	}}, WindowStart.Add(time.Hour))
+
+	if got[0].ProfileText != "13. eighth grade. tony hawk pro skater 3 is the best game ever made." {
+		t.Errorf("ProfileText = %q", got[0].ProfileText)
+	}
+}
+
+func TestRosterLeavesProfileTextEmptyRatherThanUsingPersona(t *testing.T) {
+	got := Roster([]Profile{{ID: 1, ScreenName: "danny", Persona: "You are Danny."}},
+		WindowStart.Add(time.Hour))
+
+	if got[0].ProfileText != "" {
+		t.Errorf("ProfileText must stay empty, got %q", got[0].ProfileText)
+	}
+}
+
 func TestRosterPreservesSortAndMarksOnline(t *testing.T) {
 	profiles := []Profile{
 		{ID: 2, ScreenName: "skaterboi1988", Sort: 1, OnlineFrom: ptr(at("13:00"))},

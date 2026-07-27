@@ -55,6 +55,12 @@ type Profile struct {
 	// actually had on -- a comma-separated list of source names. Empty means
 	// everything their market can receive.
 	Watching string
+
+	// ProfileText is student-facing prose for the Get Info window. It is
+	// deliberately separate from Persona, which is a second-person instruction
+	// to the model and would leak the mechanism if shown verbatim. Empty stays
+	// empty -- it must never fall back to Persona.
+	ProfileText string
 }
 
 // OnlineAt reports whether this buddy is signed on at virtual time t. A nil
@@ -88,6 +94,7 @@ func Roster(profiles []Profile, t time.Time) []model.Buddy {
 			DisplayName: p.DisplayName,
 			Avatar:      p.Avatar,
 			Online:      p.OnlineAt(t),
+			ProfileText: p.ProfileText,
 		})
 	}
 	return out
@@ -97,7 +104,7 @@ const profileSelect = `
 	SELECT id, screen_name, display_name, avatar, persona, education_level,
 	       writing_style, style_exemplars, online_from, online_until, sort,
 	       provider, model, max_tokens, effort, temperature,
-	       system_prompt_extra, typing_speed, market, watching
+	       system_prompt_extra, typing_speed, market, watching, profile_text
 	FROM chat_profiles
 	WHERE active = 1
 	ORDER BY sort, id`
@@ -125,12 +132,13 @@ func LoadProfiles(ctx context.Context, pool *pgxpool.Pool) ([]Profile, error) {
 			typingSpeed       *int
 			market            *string
 			watching          *string
+			profileText       *string
 		)
 		if err := rows.Scan(&p.ID, &p.ScreenName, &displayName, &avatar,
 			&persona, &educationLevel, &writingStyle, &styleExemplars,
 			&p.OnlineFrom, &p.OnlineUntil, &p.Sort,
 			&p.Provider, &p.Model, &p.MaxTokens, &p.Effort, &p.Temperature,
-			&systemPromptExtra, &typingSpeed, &market, &watching); err != nil {
+			&systemPromptExtra, &typingSpeed, &market, &watching, &profileText); err != nil {
 			return nil, fmt.Errorf("scan chat_profiles: %w", err)
 		}
 		p.DisplayName = derefStr(displayName)
@@ -142,6 +150,7 @@ func LoadProfiles(ctx context.Context, pool *pgxpool.Pool) ([]Profile, error) {
 		p.SystemPromptExtra = derefStr(systemPromptExtra)
 		p.Market = derefStr(market)
 		p.Watching = derefStr(watching)
+		p.ProfileText = derefStr(profileText)
 		if typingSpeed != nil {
 			p.TypingSpeed = *typingSpeed
 		}
