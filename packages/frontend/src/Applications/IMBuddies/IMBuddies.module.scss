@@ -124,3 +124,67 @@
 	padding: 4px 8px;
 	font-size: 11px;
 }
+
+.chatWindow {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.chatTranscript {
+	flex: 1;
+	overflow-y: auto;
+	padding: 8px;
+}
+
+.chatMessage {
+	padding: 1px 0;
+}
+
+.chatMessageName {
+	font-weight: bold;
+}
+
+.chatTyping {
+	// Same hairline-separator token buddyListStatus uses above.
+	border-top: 1px solid var(--color-system-07);
+	padding: 2px 8px;
+	font-size: 11px;
+	font-style: italic;
+	// Same "greyed out" convention as .buddyRowOffline above (matches
+	// ClassicyTree's disabled-node label color).
+	color: var(--color-system-05);
+}
+
+.chatCompose {
+	// Same hairline-separator token buddyListStatus/chatTyping use above.
+	border-top: 1px solid var(--color-system-07);
+	padding: 6px 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.chatComposeRow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+
+	// The compose text field is the one element in this row that should
+	// stretch to fill the space between the smiley and Send buttons.
+	> :nth-child(2) {
+		flex: 1;
+	}
+}
+
+.chatComposeHint {
+	font-size: 11px;
+	color: var(--color-system-05);
+}
+
+.chatEmoticonPicker {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	padding: 2px 0;
+}
