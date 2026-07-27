@@ -29,33 +29,69 @@ vi.mock("classicy", async (importOriginal) => ({
 	ClassicyWindow: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
 }));
 
-function renderInfo(profile: number, buddy: ChatBuddy) {
-	imState.buddies = [buddy];
+// Takes a full roster (not a single buddy) so tests can assert InfoWindow
+// picks the ONE buddy matching `profile` out of several -- a single-entry
+// roster can't distinguish "looked up by profile" from "just rendered
+// buddies[0]" (see the two-buddy test below).
+function renderInfo(profile: number, buddies: ChatBuddy[]) {
+	imState.buddies = buddies;
 	render(<InfoWindow profile={profile} />);
 }
 
 describe("InfoWindow", () => {
 	it("shows the student-facing profile", () => {
-		renderInfo(1, {
-			profile: 1,
-			screen_name: "skaterboi1988",
-			display_name: "Danny",
-			avatar: "",
-			online: true,
-			profile_text: "13. eighth grade.",
-		});
+		renderInfo(1, [
+			{
+				profile: 1,
+				screen_name: "skaterboi1988",
+				display_name: "Danny",
+				avatar: "",
+				online: true,
+				profile_text: "13. eighth grade.",
+			},
+		]);
 		expect(screen.getByText(/13\. eighth grade\./)).toBeTruthy();
 	});
 
 	it("says nothing rather than something wrong when there is no profile", () => {
 		// profile_text is deliberately allowed to be empty. Falling back to the
 		// persona would print a second-person instruction to a model at a student.
-		renderInfo(1, { profile: 1, screen_name: "a", display_name: "", avatar: "", online: true });
+		renderInfo(1, [{ profile: 1, screen_name: "a", display_name: "", avatar: "", online: true }]);
 		expect(screen.getByText("No profile.")).toBeTruthy();
 	});
 
 	it("shows whether they are online", () => {
-		renderInfo(1, { profile: 1, screen_name: "a", display_name: "", avatar: "", online: false });
+		renderInfo(1, [{ profile: 1, screen_name: "a", display_name: "", avatar: "", online: false }]);
 		expect(screen.getByText(/Offline/)).toBeTruthy();
+	});
+
+	it("shows the buddy matching `profile`, not just the first one in the roster", () => {
+		// Regression guard: a `buddies[0] ?? null` lookup (ignoring the `profile`
+		// prop entirely) would pass every test above, since each seeds a single
+		// buddy that always happens to match. Two Info windows can be open at
+		// once once the menu bar wires this in (Task 10) -- this is the
+		// difference between showing Carol's profile in Carol's window and
+		// showing Danny's profile in Carol's window.
+		renderInfo(2, [
+			{
+				profile: 1,
+				screen_name: "skaterboi1988",
+				display_name: "Danny",
+				avatar: "",
+				online: true,
+				profile_text: "Danny's profile text.",
+			},
+			{
+				profile: 2,
+				screen_name: "carolm",
+				display_name: "Carol",
+				avatar: "",
+				online: true,
+				profile_text: "Carol's profile text.",
+			},
+		]);
+		expect(screen.getByText(/Carol's profile text\./)).toBeTruthy();
+		expect(screen.getByText("carolm")).toBeTruthy();
+		expect(screen.queryByText(/Danny's profile text\./)).toBeNull();
 	});
 });
