@@ -41,3 +41,66 @@
 	gap: 8px;
 	margin-top: 6px;
 }
+
+.buddyList {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.buddyGroups {
+	flex: 1;
+	overflow-y: auto;
+}
+
+.buddyGroupHeader {
+	padding: 2px 6px;
+	font-weight: bold;
+}
+
+.buddyRow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 12px;
+	cursor: default;
+
+	&:hover {
+		background: rgba(0, 0, 0, 0.05);
+	}
+}
+
+.buddyRowSelected {
+	background: #316ac5;
+	color: #fff;
+}
+
+.buddyRowOffline {
+	color: #888;
+}
+
+.buddyDot {
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: #2fa72f;
+	flex-shrink: 0;
+}
+
+.buddyDotOffline {
+	background: #aaa;
+}
+
+.buddyListActions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 6px 8px;
+}
+
+.buddyListStatus {
+	border-top: 1px solid #999;
+	padding: 4px 8px;
+	font-size: 11px;
+}
