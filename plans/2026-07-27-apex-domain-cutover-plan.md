@@ -618,7 +618,7 @@ gh pr create --title "Apex cutover: repoint frontend at api/stream hostnames" \
 
 Ordered and not interchangeable. Tasks 8 through 10 are reversible; Task 12 is not.
 
-### Task 8: Extend the TLS certificates
+### Task 8: Extend the TLS certificates  — ✅ DONE 2026-07-27 (infra d32e4c1)
 
 **Files:**
 - Modify (infra): `apps/rt911/frontend.yaml:57`, `apps/rt911/directus.yaml:208,298,322`, `apps/rt911/streamer.yaml:138`
@@ -714,7 +714,7 @@ would return 526 under Full (strict) rather than serving the site.
 An HTTP 404 over a *valid* certificate is the correct state at this point —
 routing does not switch until Task 10.
 
-### Task 9: Pre-stage the DNS records
+### Task 9: Pre-stage the DNS records  — ✅ DONE 2026-07-27
 
 **Files:** none — Cloudflare API.
 
