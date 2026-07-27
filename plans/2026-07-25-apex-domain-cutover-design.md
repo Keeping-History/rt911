@@ -172,13 +172,21 @@ source files. Editing only the CI configuration would miss production entirely.
   `FE_VITE_DIRECTUS_URL` for `api.911realtime.org`.
 - `.github/workflows/pr-preview.yml` — the same three variables.
 - `packages/frontend/.env` and `.env.example`.
-- Tests asserting on `beta` origins in `authApi.test.ts`,
-  `AuthProvider.test.tsx`, and `origin_test.go`.
+- `authApi.test.ts` — the two assertions covering the off-domain fallback.
+  `origin_test.go` changes in the cleanup phase, not the cutover.
+  `AuthProvider.test.tsx` needs **no** change despite naming `beta`: it uses
+  that hostname only as a stand-in origin to prove `signInWithProvider` strips
+  the query string, an assertion that holds for any hostname.
 
 ### infra repository
 
-- New `Certificate` resources for the apex, `api`, and `stream`, applied ahead
-  of any traffic change so the TLS secrets exist before the ingresses switch.
+- The new hostnames added to each Ingress's `tls.hosts` **without** touching
+  `rules.host`, ahead of any traffic change. cert-manager's ingress-shim owns
+  the `rt911-frontend-tls`, `rt911-api-tls`, and `rt911-streamer-tls`
+  Certificates (it names them after `secretName`), so extending `tls.hosts`
+  re-issues each cert with the extra SAN while routing stays put. Standalone
+  `Certificate` resources are deliberately avoided: they would contend with
+  ingress-shim for ownership of the same secret.
 - `apps/rt911/frontend.yaml` — Ingress host and TLS SAN to the apex.
 - `apps/rt911/directus.yaml` — three `api-beta` host blocks to `api`.
 - `apps/rt911/streamer.yaml` — Ingress host to `stream`; the `streamer-cors`
@@ -229,8 +237,9 @@ These are manual and block the cutover.
 ## Cutover sequence
 
 1. Complete the prerequisites above.
-2. **infra commit A** — `Certificate` resources only. No traffic change. Wait
-   for all three TLS secrets to report `Ready`.
+2. **infra commit A** — extend each Ingress's `tls.hosts` with its new
+   hostname, leaving `rules.host` unchanged. No traffic change. Wait for all
+   three Certificates to report `Ready` with the new SAN present.
 3. **Cloudflare** — create the `stream` record, repoint `api` to the cluster.
    Traefik returns 404 for both; harmless.
 4. **rt911 PR merged to `main`** — CI builds the image with the new backend URLs
