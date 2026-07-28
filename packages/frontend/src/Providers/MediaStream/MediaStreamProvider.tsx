@@ -259,7 +259,7 @@ interface MediaStreamProviderProps {
 export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	children,
 }) => {
-	const { localDate, dateTime, tzOffset, setDateTime } = useClassicyDateTime({ tick: true });
+	const { localDate, dateTime, tzOffset, setDateTime, paused } = useClassicyDateTime({ tick: true });
 	// setDateTime is a fresh closure every render; the long-lived WebSocket
 	// onmessage handler (below) must always call the latest one, so it reads
 	// through a ref rather than closing over the destructured value directly.
@@ -383,6 +383,38 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	}, []);
 
 	const wsRef = useRef<WebSocket | null>(null);
+
+	// Live mirror of the clock's paused state for the WebSocket effect's onopen,
+	// which must assert pause on a connection opened while already paused.
+	// Reading `paused` there directly would go stale, and adding it to that
+	// effect's dependency array would tear down and rebuild the socket on every
+	// pause — a reconnect storm from a button press.
+	const pausedRef = useRef(paused);
+	pausedRef.current = paused;
+
+	// What the server was last told on THIS connection. null means nothing has
+	// been sent yet, which is also the correct state for a fresh socket: `init`
+	// resets Session.paused to false, so onopen re-establishes the truth.
+	const pauseSentRef = useRef<boolean | null>(null);
+
+	// Forward pause/resume to the streamer. Without this the server never learns
+	// the clock stopped: Session.paused stays false, chat.Available never returns
+	// "paused", and the IM Buddies composer stays open against a frozen clock.
+	useEffect(() => {
+		const ws = wsRef.current;
+		if (!ws || ws.readyState !== WebSocket.OPEN) return;
+		if (pauseSentRef.current === paused) return;
+		// Say nothing about the default unpaused state: a `resume` for a session
+		// that was never paused is meaningless traffic. onopen owns the initial
+		// assertion.
+		if (pauseSentRef.current === null && !paused) {
+			pauseSentRef.current = false;
+			return;
+		}
+		ws.send(JSON.stringify({ type: paused ? "pause" : "resume" }));
+		pauseSentRef.current = paused;
+	}, [paused]);
+
 	// Always-current virtual *UTC* instant (ms) for use inside WS callbacks and
 	// intervals. localDate is the tz-shifted display clock; the stream lives in
 	// UTC (item start_dates, the backend, seek, calcSeekSeconds), so we strip the
