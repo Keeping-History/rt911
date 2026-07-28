@@ -1101,6 +1101,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (chatSubscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "chat" }));
 			}
+			// `init` above resets Session.paused to false (protocol doc, §init), so
+			// a connection opened while the clock is paused would hand the server a
+			// running clock and re-enable the chat composer. This is not just
+			// reconnect hardening: `paused` is persisted in classicyDesktopState, so
+			// pausing and reloading the page lands here every time. Same reason the
+			// subscriptions above are replayed.
+			if (pausedRef.current) {
+				ws.send(JSON.stringify({ type: "pause" }));
+			}
+			pauseSentRef.current = pausedRef.current;
 			// Body requests do not survive a reconnect; clear in-flight markers so
 			// any open message window re-requests on its next render.
 			usenetBodyInflight.current.clear();

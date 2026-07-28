@@ -171,4 +171,43 @@ describe("MediaStreamProvider pause/resume frames", () => {
 
 		expect(ws.sent).not.toContain(JSON.stringify({ type: "resume" }));
 	});
+
+	it("asserts pause on a connection opened while already paused", () => {
+		// The load-bearing case, and an ordinary user action rather than an edge
+		// case: `paused` lives in the localStorage-persisted classicyDesktopState,
+		// so pausing and reloading the page mounts the provider already paused.
+		// onopen sends `init`, which resets Session.paused to false — without this
+		// assertion the composer silently re-enables against a frozen clock.
+		mockPaused = true;
+		renderProvider();
+		const ws = FakeWebSocket.instances[0];
+
+		act(() => ws.onopen?.());
+
+		expect(ws.sent).toContain(JSON.stringify({ type: "pause" }));
+	});
+
+	it("sends pause after init, not before", () => {
+		// init resets Session.paused to false, so a pause that arrives first is
+		// immediately undone by the very next frame.
+		mockPaused = true;
+		renderProvider();
+		const ws = FakeWebSocket.instances[0];
+
+		act(() => ws.onopen?.());
+
+		const initAt = ws.sent.findIndex((f) => JSON.parse(f).type === "init");
+		const pauseAt = ws.sent.findIndex((f) => JSON.parse(f).type === "pause");
+		expect(initAt).toBeGreaterThanOrEqual(0);
+		expect(pauseAt).toBeGreaterThan(initAt);
+	});
+
+	it("does not assert pause on a connection opened while running", () => {
+		renderProvider();
+		const ws = FakeWebSocket.instances[0];
+
+		act(() => ws.onopen?.());
+
+		expect(ws.sent).not.toContain(JSON.stringify({ type: "pause" }));
+	});
 });
