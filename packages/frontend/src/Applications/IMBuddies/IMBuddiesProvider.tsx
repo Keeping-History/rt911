@@ -28,6 +28,7 @@ import {
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { shouldSeek } from "../../Providers/MediaStream/seekDetection";
 import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
+import { isRewound } from "./composeGate";
 import { IM_SOUNDS, presenceSounds } from "./sounds";
 
 const APP_ID = "IMBuddies.app";
@@ -70,6 +71,11 @@ export interface IMBuddiesValue {
 	reason: ChatStateReason;
 	buddies: ChatBuddy[];
 	conversationFor: (profile: number) => Conversation;
+	/**
+	 * The newest message instant for a conversation, true UTC ms, or null if it
+	 * has never had one. The compose gate's input — see composeGate.ts.
+	 */
+	lastMessageAtFor: (profile: number) => number | null;
 	typingProfile: number | null;
 	openChats: number[];
 	/**
@@ -170,6 +176,36 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 	const [openChats, setOpenChats] = useState<number[]>([]);
 	const [infoProfile, setInfoProfile] = useState<number | null>(null);
 	const [readMarks, setReadMarks] = useState<Record<number, number>>({});
+
+	// Per-conversation high-water mark of the newest message instant ever seen,
+	// in true UTC ms. Deliberately NOT derived from the current transcript: a
+	// backward seek clears chatMessages outright in MediaStreamProvider, so by
+	// the moment this matters the message being rewound behind is already gone
+	// from it. Deliberately NOT cleared by signOff either (note its absence from
+	// that callback) — it is knowledge about the timeline rather than a view of
+	// it, and a history replay only ever returns messages BEFORE the current
+	// instant, so nothing could rebuild it.
+	const [lastMessageAt, setLastMessageAt] = useState<Record<number, number>>({});
+	useEffect(() => {
+		setLastMessageAt((prev) => {
+			let next = prev;
+			for (const message of chatMessages) {
+				const at = Date.parse(message.time);
+				// An unparseable time is skipped rather than allowed to poison the
+				// mark — the same tolerance conversationsByProfile's sort applies.
+				if (Number.isNaN(at)) continue;
+				if (at <= (next[message.profile] ?? Number.NEGATIVE_INFINITY)) continue;
+				if (next === prev) next = { ...prev };
+				next[message.profile] = at;
+			}
+			return next;
+		});
+	}, [chatMessages]);
+
+	const lastMessageAtFor = useCallback(
+		(profile: number): number | null => lastMessageAt[profile] ?? null,
+		[lastMessageAt],
+	);
 	const [selectedBuddy, setSelectedBuddy] = useState<number | null>(null);
 	const selectBuddy = useCallback((profile: number | null) => setSelectedBuddy(profile), []);
 
@@ -367,6 +403,11 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 
 	const send = useCallback(
 		(profile: number, body: string) => {
+			// The composer is already disabled for this case (composeGate), but a
+			// disabled button is a UI state and this is the invariant: a turn that
+			// sits before the buddy's own previous answer must never reach the
+			// wire, whatever a stale render or a stray keystroke does.
+			if (isRewound(lastMessageAt[profile] ?? null, virtualNowMsRef.current)) return;
 			sendChat(profile, body);
 			// The server does not echo the inbound turn — it persists it
 			// (session.go's persistInbound) and every live chat_message frame
@@ -392,7 +433,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			});
 			play(IM_SOUNDS.send);
 		},
-		[sendChat, appendLocalChatMessage, play],
+		[sendChat, appendLocalChatMessage, play, lastMessageAt],
 	);
 
 	// Presence sounds (door open/close), fed by Task 4's presenceSounds(prev,
@@ -466,6 +507,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			reason: chatReason,
 			buddies: chatBuddies,
 			conversationFor,
+			lastMessageAtFor,
 			typingProfile: chatTypingProfile,
 			openChats,
 			infoProfile,
@@ -487,6 +529,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			chatReason,
 			chatBuddies,
 			conversationFor,
+			lastMessageAtFor,
 			chatTypingProfile,
 			openChats,
 			infoProfile,

@@ -130,6 +130,7 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 		| ((partial: Partial<ChatMessage> & Pick<ChatMessage, "profile" | "direction" | "body">) => void)
 		| null
 	> = { current: null };
+	const clearMessagesRef: React.MutableRefObject<(() => void) | null> = { current: null };
 
 	function Harness() {
 		const [chatMessages, setChatMessages] = useState<ChatMessage[]>(
@@ -153,6 +154,14 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 			[],
 		);
 		pushMessageRef.current = pushMessage;
+
+		// Stands in for MediaStreamProvider's backward-seek branch, which clears
+		// chatMessages outright (`if (nowMs < prevMs) setChatMessages([])`). The
+		// mark must survive this — after a rewind the transcript no longer holds
+		// the message being rewound behind, so max(messages.time) is not a usable
+		// source for it.
+		const clearMessages = useCallback(() => setChatMessages([]), []);
+		clearMessagesRef.current = clearMessages;
 
 		// Stands in for MediaStreamProvider's real appendLocalChatMessage: the
 		// student's own turn is never echoed by the server (session.go only
@@ -223,6 +232,7 @@ function renderWithChat(children: React.ReactNode, overrides: ChatOverrides) {
 		pushMessage: (
 			partial: Partial<ChatMessage> & Pick<ChatMessage, "profile" | "direction" | "body">,
 		) => pushMessageRef.current?.(partial),
+		clearMessages: () => clearMessagesRef.current?.(),
 	};
 }
 
@@ -689,5 +699,124 @@ describe("IMBuddiesProvider", () => {
 				window: { id: "im_chat_5" },
 			}),
 		);
+	});
+
+	it("remembers a conversation's newest message instant", () => {
+		const view = renderWithChat(<Probe />, {});
+		expect(view.ctx.lastMessageAtFor(1)).toBeNull();
+
+		act(() => {
+			view.pushMessage({
+				profile: 1,
+				direction: "out",
+				body: "still at the office",
+				time: "2001-09-11T13:07:35Z",
+			});
+		});
+		expect(view.ctx.lastMessageAtFor(1)).toBe(Date.parse("2001-09-11T13:07:35Z"));
+		// Per conversation, not app-wide: a buddy you have not written to yet is
+		// still fully usable.
+		expect(view.ctx.lastMessageAtFor(2)).toBeNull();
+	});
+
+	it("only ever moves the mark forward", () => {
+		const view = renderWithChat(<Probe />, {});
+		act(() => {
+			view.pushMessage({
+				profile: 1,
+				direction: "out",
+				body: "later",
+				time: "2001-09-11T13:07:35Z",
+			});
+		});
+		act(() => {
+			// A history backfill inserts OLDER lines into the same flat array.
+			view.pushMessage({
+				message_id: 5,
+				profile: 1,
+				direction: "out",
+				body: "earlier",
+				time: "2001-09-11T13:01:00Z",
+			});
+		});
+		expect(view.ctx.lastMessageAtFor(1)).toBe(Date.parse("2001-09-11T13:07:35Z"));
+	});
+
+	it("survives the backward-seek wipe of chatMessages", () => {
+		const view = renderWithChat(<Probe />, {});
+		act(() => {
+			view.pushMessage({
+				profile: 1,
+				direction: "out",
+				body: "still at the office",
+				time: "2001-09-11T13:07:35Z",
+			});
+		});
+		act(() => view.clearMessages());
+		expect(view.ctx.conversationFor(1).messages).toHaveLength(0);
+		expect(view.ctx.lastMessageAtFor(1)).toBe(Date.parse("2001-09-11T13:07:35Z"));
+	});
+
+	it("survives signOff", () => {
+		// Unlike openChats/readMarks, the mark is knowledge about the timeline,
+		// not a view of it. Clearing it here would make Sign Off -> rewind ->
+		// Sign On a way back into the state this guard exists to prevent, because
+		// a history replay only ever returns messages BEFORE the current instant
+		// and so could never rebuild it.
+		const view = renderWithChat(<Probe />, {});
+		act(() => {
+			view.pushMessage({
+				profile: 1,
+				direction: "out",
+				body: "still at the office",
+				time: "2001-09-11T13:07:35Z",
+			});
+		});
+		act(() => view.ctx.signOff());
+		expect(view.ctx.lastMessageAtFor(1)).toBe(Date.parse("2001-09-11T13:07:35Z"));
+	});
+
+	it("counts the student's own line too, not just the buddy's", () => {
+		const view = renderWithChat(<Probe />, {});
+		act(() => view.ctx.send(1, "are you okay"));
+		expect(view.ctx.lastMessageAtFor(1)).toBe(Date.parse(DEFAULT_CLOCK_ISO));
+	});
+
+	it("refuses to send while the clock is rewound behind the conversation", () => {
+		const view = renderWithChat(<Probe />, {});
+		act(() => {
+			view.pushMessage({
+				profile: 1,
+				direction: "out",
+				body: "still at the office",
+				time: "2001-09-11T13:07:35Z",
+			});
+		});
+		act(() => view.setClock("2001-09-11T13:00:00Z"));
+
+		act(() => view.ctx.send(1, "this must not reach the wire"));
+
+		// A disabled button is a UI state; this is the actual invariant. No wire
+		// call, no local echo, and no send chirp for a line that never went.
+		expect(view.sendChat).not.toHaveBeenCalled();
+		expect(view.localEchoes).toHaveLength(0);
+		expect(view.playSound).not.toHaveBeenCalledWith(IM_SOUNDS.send);
+	});
+
+	it("sends again once the clock reaches the conversation", () => {
+		const view = renderWithChat(<Probe />, {});
+		act(() => {
+			view.pushMessage({
+				profile: 1,
+				direction: "out",
+				body: "still at the office",
+				time: "2001-09-11T13:07:35Z",
+			});
+		});
+		act(() => view.setClock("2001-09-11T13:00:00Z"));
+		act(() => view.setClock("2001-09-11T13:07:35Z"));
+
+		act(() => view.ctx.send(1, "sorry, back"));
+		expect(view.sendChat).toHaveBeenCalledWith(1, "sorry, back");
 	});
 });
