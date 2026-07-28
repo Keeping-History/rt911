@@ -80,7 +80,21 @@ export interface ComposeGateInput {
 export interface ComposeGate {
 	enabled: boolean;
 	hint: string;
+	/**
+	 * What the message field itself shows. Normally the hint, mirrored — but the
+	 * blocked sentence is 530px wide in the theme's 14px Charcoal against a
+	 * ~134px field in a default 260px chat window, so mirroring it there shows
+	 * "You've traveled ba" and nothing more. Measured in the running desktop,
+	 * not guessed. The full sentence still reads in the hint line below, which
+	 * wraps.
+	 */
+	placeholder: string;
 }
+
+/** What an unblocked, unhinted field invites you to do. */
+const DEFAULT_PLACEHOLDER = "Type a message";
+/** Short enough to fit the field whole; the hint line carries the detail. */
+const BLOCKED_PLACEHOLDER = "Can't chat yet";
 
 /**
  * The single answer the compose row renders: one combined `enabled` for the
@@ -103,7 +117,9 @@ export function composeGate({
 		return {
 			enabled: false,
 			hint: `You've traveled back before your last message. Chat resumes at ${resumesAt}.`,
+			placeholder: BLOCKED_PLACEHOLDER,
 		};
 	}
-	return { enabled: serverEnabled, hint: composeHintFor(reason) };
+	const hint = composeHintFor(reason);
+	return { enabled: serverEnabled, hint, placeholder: hint || DEFAULT_PLACEHOLDER };
 }

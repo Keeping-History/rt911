@@ -125,7 +125,7 @@ export const ChatWindow: React.FC<{
 	// composer the moment the clock reaches the conversation again.
 	// virtualUtcMs strips the display offset back off (hard rule 3).
 	const { localDate, tzOffset } = useClassicyDateTime({ tick: true });
-	const { enabled: composeEnabled, hint } = composeGate({
+	const { enabled: composeEnabled, hint, placeholder } = composeGate({
 		serverEnabled: enabled,
 		reason,
 		lastMessageAtMs: lastMessageAtFor(profile),
@@ -194,7 +194,7 @@ export const ChatWindow: React.FC<{
 						<ClassicyInput
 							id={`im_chat_input_${profile}`}
 							prefillValue={text}
-							placeholder={hint || "Type a message"}
+							placeholder={placeholder}
 							disabled={!composeEnabled}
 							onChangeFunc={(e) => setText(e.target.value)}
 							onEnterFunc={handleSend}

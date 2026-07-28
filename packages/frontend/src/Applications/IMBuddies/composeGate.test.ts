@@ -76,6 +76,8 @@ describe("composeGate", () => {
 		expect(gate({ serverEnabled: false, reason: "paused" })).toEqual({
 			enabled: false,
 			hint: "Start the clock to keep talking.",
+			// Unchanged from before the guard existed: the field mirrors the hint.
+			placeholder: "Start the clock to keep talking.",
 		});
 		expect(gate({ serverEnabled: false, reason: "outside_window" }).hint).toBe(
 			"Nobody is online right now.",
@@ -83,7 +85,21 @@ describe("composeGate", () => {
 	});
 
 	it("is fully enabled with no hint when the server is happy and time is not", () => {
-		expect(gate()).toEqual({ enabled: true, hint: "" });
+		expect(gate()).toEqual({
+			enabled: true,
+			hint: "",
+			placeholder: "Type a message",
+		});
+	});
+
+	it("keeps the blocked field's placeholder short enough to read", () => {
+		// The blocked sentence measures 530px in the theme's 14px Charcoal
+		// against a ~134px field in a default 260px chat window, so mirroring it
+		// would show "You've traveled ba" and stop. Measured in the running
+		// desktop. The hint line below still carries the whole sentence.
+		const { hint, placeholder } = gate({ nowMs: MARK - 7 * MIN });
+		expect(placeholder).toBe("Can't chat yet");
+		expect(hint).toMatch(/Chat resumes at/);
 	});
 
 	it("renders the resume time in the display timezone", () => {
