@@ -9,6 +9,7 @@ import { useAuth } from "../../Providers/Auth/AuthContext";
 import { UsernameTakenError, requestEmailChange, updateProfile } from "../../Providers/Auth/profileApi";
 import { checkUsername, type UsernameCheck } from "../../Providers/Auth/usernameApi";
 import styles from "./Account.module.scss";
+import { SpecialTab } from "./SpecialTab";
 
 const EDUCATOR_ROLES = [
 	{ value: "", label: "—" },
@@ -404,6 +405,10 @@ export const ProfileEditor: React.FC = () => {
 			),
 		});
 	}
+
+	// Appended last, after the conditional Password tab, so the destructive
+	// actions always sit furthest from the tabs used routinely.
+	tabs.push({ title: "Special", children: <SpecialTab /> });
 
 	return <ClassicyTabs tabs={tabs} />;
 };

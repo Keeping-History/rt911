@@ -212,3 +212,21 @@ describe("ProfileEditor — screen name", () => {
 		await screen.findByText(/"danny" is taken\. Try danny\d\d/);
 	});
 });
+
+describe("ProfileEditor — Special tab", () => {
+	it("offers both destructive actions", () => {
+		render(<ProfileEditor />);
+		selectTab("Special");
+		expect(screen.getByRole("button", { name: "Delete My Data" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Delete My Account" })).toBeTruthy();
+	});
+
+	it("is the last tab, after Password", () => {
+		// Order is deliberate: the destructive actions sit furthest from the
+		// tabs someone uses routinely.
+		mockAuth.user = makeUser({ provider: "default" });
+		render(<ProfileEditor />);
+		const titles = screen.getAllByRole("tab").map((t) => t.textContent);
+		expect(titles[titles.length - 1]).toBe("Special");
+	});
+});

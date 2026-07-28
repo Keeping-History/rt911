@@ -100,3 +100,19 @@
   color: #555;
   margin: -4px 0 4px 0;
 }
+
+// Special tab: the two irreversible actions. Kept visually quiet rather than
+// alarm-red — the alert carries the warning, and a scary-looking button invites
+// curiosity clicks.
+.riskCopy {
+	color: var(--color-system-06);
+	max-width: 40ch;
+}
+
+.destructive {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--window-padding-size) / 4);
+	align-items: flex-start;
+	padding-top: calc(var(--window-padding-size) / 2);
+}
