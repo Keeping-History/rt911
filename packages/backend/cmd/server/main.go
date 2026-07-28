@@ -255,6 +255,30 @@ func main() {
 	}
 	chatProfiles.SetBroadcastSources(bcastSources)
 
+	// Which columns of the signed-in user's own account a buddy may know about.
+	// Same non-fatal, bounded, load-once pattern as above: on failure the list
+	// stays nil and buddies fall back to knowing only a name, which is exactly
+	// the behaviour that shipped before this existed.
+	userFieldCtx, userFieldCancel := context.WithTimeout(ctx, 2*time.Second)
+	userFields, err := chat.LoadUserFields(userFieldCtx, pool)
+	userFieldCancel()
+	if err != nil {
+		logger.Warn("chat user fields unavailable, buddies will know only a name", "error", err)
+		userFields = nil
+	}
+	// A config row naming a column that does not exist, or one the denylist
+	// refuses, is dropped silently by LoadUserFields -- and from the Directus
+	// admin a silently ignored row looks exactly like a working one.
+	rejectCtx, rejectCancel := context.WithTimeout(ctx, 2*time.Second)
+	if bad, err := chat.RejectedUserFields(rejectCtx, pool); err != nil {
+		logger.Warn("chat user field validation check failed", "error", err)
+	} else if len(bad) > 0 {
+		logger.Warn("chat user fields rejected; they are not exposable columns", "fields", bad)
+	}
+	rejectCancel()
+	chatProfiles.SetUserFields(userFields)
+	logger.Info("chat user fields loaded", "count", len(userFields))
+
 	// Only these origins may turn a Directus session cookie into a chat
 	// identity. CHAT_TRUSTED_ORIGINS appends to the built-in production list so
 	// dev and preview origins never ship in production config.

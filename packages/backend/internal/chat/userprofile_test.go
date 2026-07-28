@@ -1,6 +1,13 @@
 package chat
 
-import "testing"
+import (
+	"context"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
 
 func TestExposableFieldAcceptsAConfiguredColumn(t *testing.T) {
 	columns := map[string]bool{"city": true, "school_name": true}
@@ -126,4 +133,62 @@ func TestRenderUserValueCapsRunawayLength(t *testing.T) {
 	if len([]rune(got)) > userProfileMaxRunes {
 		t.Errorf("renderUserValue returned %d runes, want <= %d", len([]rune(got)), userProfileMaxRunes)
 	}
+}
+
+// TestLiveUserProfile exercises the three queries that no offline test can
+// reach: the chat_user_fields read, the information_schema column check, and
+// the dynamically-built ::text SELECT against directus_users.
+//
+// Every other test in this file is pure. The SQL is the part that can only be
+// wrong against a real schema -- a mistyped column, a json value that does not
+// arrive shaped the way renderUserValue expects -- so it gets a smoke test
+// rather than nothing, gated the same way TestLiveGeneration is.
+//
+//	CHAT_LIVE_SMOKE=1 DATABASE_URL=... go test ./internal/chat/ -run LiveUserProfile -v
+func TestLiveUserProfile(t *testing.T) {
+	if os.Getenv("CHAT_LIVE_SMOKE") != "1" {
+		t.Skip("set CHAT_LIVE_SMOKE=1 to run the live user-profile smoke test")
+	}
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		t.Fatal("CHAT_LIVE_SMOKE=1 but DATABASE_URL is unset")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer pool.Close()
+
+	fields, err := LoadUserFields(ctx, pool)
+	if err != nil {
+		t.Fatalf("LoadUserFields: %v", err)
+	}
+	if len(fields) == 0 {
+		t.Fatal("LoadUserFields returned nothing; is chat_user_fields seeded?")
+	}
+	for _, f := range fields {
+		t.Logf("field %-14s label %-13q choices=%d", f.Field, f.Label, len(f.Choices))
+		if neverExpose[f.Field] {
+			t.Errorf("%q survived validation but is on the denylist", f.Field)
+		}
+	}
+
+	var uid string
+	if err := pool.QueryRow(ctx,
+		`SELECT id FROM directus_users WHERE city IS NOT NULL LIMIT 1`).Scan(&uid); err != nil {
+		t.Skipf("no user has a city set, nothing to render: %v", err)
+	}
+
+	profile, err := LoadUserProfile(ctx, pool, uid, fields)
+	if err != nil {
+		t.Fatalf("LoadUserProfile: %v", err)
+	}
+	if profile.Empty() {
+		t.Fatal("LoadUserProfile rendered nothing for a user known to have a city")
+	}
+	t.Log("rendered block:\n" + userProfileBlock(profile))
 }
