@@ -3,9 +3,13 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
+	"strings"
+	"unicode"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -197,4 +201,135 @@ func userChoices(ctx context.Context, pool *pgxpool.Pool) (map[string]map[string
 		out[field] = m
 	}
 	return out, rows.Err()
+}
+
+// userProfileMaxRunes caps one rendered value. The block lives in the cached
+// stable prefix, so an unbounded value is paid for on every conversation.
+const userProfileMaxRunes = 120
+
+// UserValue is one labelled fact about the person a buddy is talking to.
+type UserValue struct {
+	Label string
+	Text  string
+}
+
+// UserProfile is the signed-in user's self-reported profile, already rendered
+// to display strings and ordered for the prompt.
+type UserProfile struct {
+	Values []UserValue
+}
+
+// Empty reports whether there is nothing to tell a buddy. The composer omits
+// the whole block in that case rather than emitting an empty heading.
+func (p UserProfile) Empty() bool { return len(p.Values) == 0 }
+
+// reProfileStrip removes punctuation a value has no business carrying into a
+// system prompt: markdown emphasis and the bracketing characters a prompt uses
+// for structure. Letters are deliberately left alone, accents included --
+// Sanitize's ASCII-only rule is right for a reply a 2001 client must render,
+// and wrong for a person's own name.
+var reProfileStrip = regexp.MustCompile("[`*_~#<>{}\\[\\]|\\\\]+")
+
+// sanitizeProfileValue defuses one free-text value.
+//
+// Collapsing newlines is the load-bearing part. Every other transformation
+// here is hygiene, but a value containing a newline could open a line of its
+// own inside the system prompt and read as an instruction rather than as data.
+func sanitizeProfileValue(s string, maxRunes int) string {
+	s = reURL.ReplaceAllString(s, "")
+	s = reProfileStrip.ReplaceAllString(s, "")
+
+	var b strings.Builder
+	for _, r := range s {
+		if r == '\n' || r == '\r' || r == '\t' {
+			b.WriteRune(' ')
+			continue
+		}
+		if unicode.IsControl(r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	s = reWhitespace.ReplaceAllString(b.String(), " ")
+	return truncateRunes(strings.TrimSpace(s), maxRunes)
+}
+
+// renderUserValue turns one raw ::text column value into prompt-ready display
+// text. Every column is read as text precisely so this function does not have
+// to know the type -- a date, an integer or a boolean added to the exposure
+// list next year renders as itself with no code change.
+func renderUserValue(raw string, choices map[string]string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "null" {
+		return ""
+	}
+
+	parts := []string{raw}
+	switch raw[0] {
+	case '[':
+		var list []string
+		if err := json.Unmarshal([]byte(raw), &list); err != nil {
+			return ""
+		}
+		parts = list
+	case '"':
+		// A json-typed column holding a bare string arrives quoted.
+		var one string
+		if err := json.Unmarshal([]byte(raw), &one); err != nil {
+			return ""
+		}
+		parts = []string{one}
+	}
+
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if label, ok := choices[p]; ok {
+			p = label
+		}
+		if p = sanitizeProfileValue(p, userProfileMaxRunes); p != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
+// LoadUserProfile reads the configured columns for one user.
+//
+// Identifiers come from configuration data, so every one is quoted with
+// pgx.Identifier.Sanitize regardless of having already passed ExposableField.
+// Each is cast to text so a single []*string scan covers every column type.
+func LoadUserProfile(ctx context.Context, pool *pgxpool.Pool, userID string, fields []UserField) (UserProfile, error) {
+	if userID == "" || len(fields) == 0 {
+		return UserProfile{}, nil
+	}
+
+	cols := make([]string, len(fields))
+	for i, f := range fields {
+		cols[i] = pgx.Identifier{f.Field}.Sanitize() + "::text"
+	}
+	q := "SELECT " + strings.Join(cols, ", ") + " FROM directus_users WHERE id = $1"
+
+	raw := make([]*string, len(fields))
+	dest := make([]any, len(fields))
+	for i := range raw {
+		dest[i] = &raw[i]
+	}
+	if err := pool.QueryRow(ctx, q, userID).Scan(dest...); err != nil {
+		// A user row that vanished mid-session is anonymous, not an error --
+		// the same posture LookupSessionUser takes on an expired session.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return UserProfile{}, nil
+		}
+		return UserProfile{}, fmt.Errorf("load user profile: %w", err)
+	}
+
+	var out UserProfile
+	for i, f := range fields {
+		text := renderUserValue(derefStr(raw[i]), f.Choices)
+		if text == "" {
+			continue
+		}
+		out.Values = append(out.Values, UserValue{Label: f.Label, Text: text})
+	}
+	return out, nil
 }
