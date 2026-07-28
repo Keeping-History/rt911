@@ -188,6 +188,24 @@ export const CHAT_COLLECTIONS = [
       { field: "expires", type: "timestamp", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half", note: "Null = permanent" } },
     ],
   },
+  {
+    collection: "chat_user_fields",
+    meta: {
+      icon: "badge",
+      sort_field: "sort",
+      note: "Which directus_users columns IM buddies may know about the signed-in user. A column absent from this list never reaches a prompt.",
+    },
+    schema: {},
+    fields: [
+      { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
+      { field: "field", type: "string", schema: { is_nullable: false }, meta: { interface: "input", width: "half", note: "The directus_users column name, e.g. school_name" } },
+      { field: "label", type: "string", schema: { is_nullable: false }, meta: { interface: "input", width: "half", note: "How the prompt names it, e.g. school" } },
+      // NOT NULL so an unset sort cannot outrank an explicit one -- same
+      // reasoning as chat_profiles.sort, which Go re-sorts by.
+      { field: "sort", type: "integer", schema: { is_nullable: false, default_value: 0 }, meta: { hidden: true } },
+      { field: "active", type: "integer", schema: { is_nullable: false, default_value: 1 }, meta: { interface: "boolean", width: "half" } },
+    ],
+  },
 ];
 
 // The seven chat-specific indexes that used to ride inside seed.mjs's shared
