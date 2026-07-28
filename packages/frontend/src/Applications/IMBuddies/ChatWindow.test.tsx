@@ -2,7 +2,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatBuddy, ChatMessage, ChatStateReason } from "../../Providers/MediaStream/MediaStreamContext";
-import { cascadePosition, ChatWindow, composeHintFor } from "./ChatWindow";
+import { cascadePosition, ChatWindow } from "./ChatWindow";
+import { composeHintFor } from "./composeGate";
 import { IM_SOUNDS } from "./sounds";
 
 // This repo has no RTL auto-cleanup — every test file must do this itself.

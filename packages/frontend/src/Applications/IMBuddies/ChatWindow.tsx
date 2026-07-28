@@ -1,7 +1,7 @@
 import { ClassicyButton, ClassicyInput, ClassicyWindow, useAppManagerDispatch } from "classicy";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatStateReason } from "../../Providers/MediaStream/MediaStreamContext";
+import { composeHintFor } from "./composeGate";
 import { EMOTICONS, renderEmoticons } from "./emoticons";
 import styles from "./IMBuddies.module.scss";
 import { useIMBuddies } from "./IMBuddiesProvider";
@@ -10,35 +10,6 @@ import { useIMBuddies } from "./IMBuddiesProvider";
 // there, so it is repeated here rather than reached into (same call as
 // SignOnWindow.tsx/BuddyListWindow.tsx).
 const APP_ID = "IMBuddies.app";
-
-/**
- * Renders the one-sentence explanation for why compose is (or isn't) usable
- * right now. Pure and exported so the window itself never branches on
- * `reason` inline — it just renders whatever this returns. Unlike
- * BuddyListWindow's statusLineFor, "ok" has no news to report: an empty
- * string means the compose row simply isn't showing a hint.
- */
-export function composeHintFor(reason: ChatStateReason): string {
-	switch (reason) {
-		case "paused":
-			return "Start the clock to keep talking.";
-		case "outside_window":
-			return "Nobody is online right now.";
-		case "blocked":
-			return "You can't send messages right now.";
-		case "not_signed_in":
-			return "Sign on to send messages.";
-		case "ok":
-			return "";
-		default: {
-			// Exhaustiveness guard: a sixth ChatStateReason added to the wire
-			// protocol without a case added here fails this type check instead
-			// of silently rendering nothing.
-			const unhandled: never = reason;
-			return unhandled;
-		}
-	}
-}
 
 /**
  * How far each successive chat window is offset from the one before it, and
