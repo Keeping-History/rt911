@@ -1,7 +1,14 @@
-import { ClassicyButton, ClassicyInput, ClassicyWindow, useAppManagerDispatch } from "classicy";
+import {
+	ClassicyButton,
+	ClassicyInput,
+	ClassicyWindow,
+	useAppManagerDispatch,
+	useClassicyDateTime,
+} from "classicy";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { composeHintFor } from "./composeGate";
+import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
+import { composeGate } from "./composeGate";
 import { EMOTICONS, renderEmoticons } from "./emoticons";
 import styles from "./IMBuddies.module.scss";
 import { useIMBuddies } from "./IMBuddiesProvider";
@@ -39,8 +46,17 @@ export const ChatWindow: React.FC<{
 	index?: number;
 	appMenu?: React.ComponentProps<typeof ClassicyWindow>["appMenu"];
 }> = ({ profile, index = 0, appMenu }) => {
-	const { buddies, conversationFor, typingProfile, send, markRead, closeChat, enabled, reason } =
-		useIMBuddies();
+	const {
+		buddies,
+		conversationFor,
+		lastMessageAtFor,
+		typingProfile,
+		send,
+		markRead,
+		closeChat,
+		enabled,
+		reason,
+	} = useIMBuddies();
 
 	const desktopEventDispatch = useAppManagerDispatch();
 	const [text, setText] = useState("");
@@ -102,7 +118,20 @@ export const ChatWindow: React.FC<{
 		setPickerOpen(false);
 	}, []);
 
-	const hint = composeHintFor(reason);
+	// This window reads the clock itself rather than taking it from the provider.
+	// Two reasons: IMBuddiesProvider deliberately keeps localDate out of its
+	// context value so that value is not rebuilt once a second for every
+	// consumer, and the per-second re-render is exactly what re-enables the
+	// composer the moment the clock reaches the conversation again.
+	// virtualUtcMs strips the display offset back off (hard rule 3).
+	const { localDate, tzOffset } = useClassicyDateTime({ tick: true });
+	const { enabled: composeEnabled, hint } = composeGate({
+		serverEnabled: enabled,
+		reason,
+		lastMessageAtMs: lastMessageAtFor(profile),
+		nowMs: virtualUtcMs(localDate, tzOffset),
+		tzOffsetHours: tzOffset,
+	});
 
 	return (
 		<ClassicyWindow
@@ -146,7 +175,7 @@ export const ChatWindow: React.FC<{
 								<ClassicyButton
 									key={token}
 									buttonSize="small"
-									disabled={!enabled}
+									disabled={!composeEnabled}
 									onClickFunc={() => insertEmoticon(token)}
 								>
 									{renderEmoticons(token)}
@@ -157,7 +186,7 @@ export const ChatWindow: React.FC<{
 					<div className={styles.chatComposeRow}>
 						<ClassicyButton
 							buttonSize="small"
-							disabled={!enabled}
+							disabled={!composeEnabled}
 							onClickFunc={() => setPickerOpen((prev) => !prev)}
 						>
 							:-)
@@ -166,11 +195,11 @@ export const ChatWindow: React.FC<{
 							id={`im_chat_input_${profile}`}
 							prefillValue={text}
 							placeholder={hint || "Type a message"}
-							disabled={!enabled}
+							disabled={!composeEnabled}
 							onChangeFunc={(e) => setText(e.target.value)}
 							onEnterFunc={handleSend}
 						/>
-						<ClassicyButton isDefault={true} disabled={!enabled} onClickFunc={handleSend}>
+						<ClassicyButton isDefault={true} disabled={!composeEnabled} onClickFunc={handleSend}>
 							Send
 						</ClassicyButton>
 					</div>

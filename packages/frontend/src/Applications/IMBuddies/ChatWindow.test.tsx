@@ -27,9 +27,18 @@ const imState = vi.hoisted(() => ({
 	reason: "ok" as ChatStateReason,
 	messages: [] as ChatMessage[],
 	typingProfile: null as number | null,
+	lastMessageAt: null as number | null,
 	send: vi.fn(),
 	markRead: vi.fn(),
 	closeChat: vi.fn(),
+}));
+
+// The virtual clock ChatWindow reads for itself. A true UTC instant; the
+// component converts with virtualUtcMs, so the mock reports localDate already
+// shifted by tzOffset, exactly as the real hook does.
+const clockState = vi.hoisted(() => ({
+	utcMs: Date.parse("2001-09-11T13:10:00Z"),
+	tzOffset: -4,
 }));
 
 // Captures every sound name played through useSoundDispatch(), same shape as
@@ -47,6 +56,9 @@ vi.mock("./IMBuddiesProvider", () => ({
 			unread: 0,
 		}),
 		typingProfile: imState.typingProfile,
+		// The real one is keyed by profile; every test here drives a single
+		// conversation, so one mark stands in for whichever is asked about.
+		lastMessageAtFor: () => imState.lastMessageAt,
 		send: imState.send,
 		markRead: imState.markRead,
 		closeChat: imState.closeChat,
@@ -77,6 +89,14 @@ vi.mock("classicy", async (importOriginal) => ({
 		if (action.type === "ClassicySoundPlay") playSoundSpy(action.sound);
 	},
 	ClassicySoundActionTypes: { ClassicySoundPlay: "ClassicySoundPlay" },
+	// ChatWindow reads the clock itself (that per-second re-render is what
+	// re-enables the composer the moment the clock arrives), so this partial
+	// mock has to serve it: the real hook needs a ClassicyAppManagerProvider
+	// tree, which this file deliberately does not build.
+	useClassicyDateTime: () => ({
+		localDate: new Date(clockState.utcMs + clockState.tzOffset * 3_600_000),
+		tzOffset: clockState.tzOffset,
+	}),
 }));
 
 function renderChat(
@@ -87,6 +107,8 @@ function renderChat(
 		typingProfile?: number | null;
 		messages?: ChatMessage[];
 		buddies?: ChatBuddy[];
+		lastMessageAt?: number | null;
+		nowUtcMs?: number;
 	} = {},
 ) {
 	imState.buddies = overrides.buddies ?? [
@@ -96,6 +118,8 @@ function renderChat(
 	imState.reason = overrides.reason ?? "ok";
 	imState.messages = overrides.messages ?? [];
 	imState.typingProfile = overrides.typingProfile ?? null;
+	imState.lastMessageAt = overrides.lastMessageAt ?? null;
+	clockState.utcMs = overrides.nowUtcMs ?? Date.parse("2001-09-11T13:10:00Z");
 	imState.send = vi.fn();
 	imState.markRead = vi.fn();
 	imState.closeChat = vi.fn();
@@ -141,6 +165,59 @@ describe("ChatWindow", () => {
 		renderChat(1, { enabled: false, reason: "paused" });
 		expect((screen.getByRole("textbox") as HTMLInputElement).disabled).toBe(true);
 		expect(screen.getByText("Start the clock to keep talking.")).toBeTruthy();
+	});
+
+	it("closes the composer when the clock is rewound behind the conversation", () => {
+		renderChat(1, {
+			enabled: true,
+			reason: "ok",
+			lastMessageAt: Date.parse("2001-09-11T13:07:35Z"),
+			nowUtcMs: Date.parse("2001-09-11T13:00:00Z"),
+		});
+		expect((screen.getByRole("textbox") as HTMLInputElement).disabled).toBe(true);
+		expect(
+			screen.getByText(
+				"You've traveled back before your last message. Chat resumes at 9:07:35 AM.",
+			),
+		).toBeTruthy();
+		// The Send button goes with it — the field alone would still let Enter
+		// through the click path.
+		const send = screen.getByText("Send").closest("button");
+		expect(send?.disabled).toBe(true);
+	});
+
+	it("reopens the composer once the clock reaches the conversation", () => {
+		renderChat(1, {
+			enabled: true,
+			reason: "ok",
+			lastMessageAt: Date.parse("2001-09-11T13:07:35Z"),
+			nowUtcMs: Date.parse("2001-09-11T13:07:35Z"),
+		});
+		expect((screen.getByRole("textbox") as HTMLInputElement).disabled).toBe(false);
+		expect(screen.queryByText(/traveled back/)).toBeNull();
+	});
+
+	it("leaves a conversation with no messages alone, however far back the clock is", () => {
+		renderChat(1, {
+			enabled: true,
+			reason: "ok",
+			lastMessageAt: null,
+			nowUtcMs: Date.parse("2001-09-11T09:00:00Z"),
+		});
+		expect((screen.getByRole("textbox") as HTMLInputElement).disabled).toBe(false);
+	});
+
+	it("shows the rewind reason ahead of the paused-clock one", () => {
+		// A Time Machine rewind usually pauses the clock too. "Start the clock to
+		// keep talking." is true but not the blocker that outlives it.
+		renderChat(1, {
+			enabled: false,
+			reason: "paused",
+			lastMessageAt: Date.parse("2001-09-11T13:07:35Z"),
+			nowUtcMs: Date.parse("2001-09-11T13:00:00Z"),
+		});
+		expect(screen.queryByText("Start the clock to keep talking.")).toBeNull();
+		expect(screen.getByText(/traveled back/)).toBeTruthy();
 	});
 
 	it("shows the typing indicator only for its own buddy", () => {

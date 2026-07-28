@@ -76,6 +76,9 @@ vi.mock("./IMBuddiesProvider", () => ({
 			reason: imState.reason,
 			buddies: imState.buddies,
 			conversationFor: () => ({ messages: [], unread: 0 }),
+			// No conversation here has any history, so no chat window this file
+			// renders is ever time-blocked (see composeGate).
+			lastMessageAtFor: () => null,
 			typingProfile: imState.typingProfile,
 			openChats: imState.openChats,
 			infoProfile: imState.infoProfile,
