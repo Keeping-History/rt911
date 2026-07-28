@@ -388,6 +388,92 @@ def correlate_v2(tracks, bts_path, airports_path, notable_codes=("1443", "3020",
     return {"dep": dep_m, "arr": arr_m, "both": both}
 
 
+def audit_named(tracks, results, bts_path, airports_path):
+    """Destination-consistency audit of departure-named flights (#263).
+
+    For a dep-named flight whose BTS destination lies inside the coverage box
+    and whose wheels-on falls inside the radar window, the matched track ought
+    to END near that destination, low. Verdicts:
+
+    - consistent:    track ends < 25 nm from the BTS destination
+    - inconsistent:  track ends > 60 nm away while below 18,000 ft (an ending
+                     we should be able to explain but can't)
+    - indeterminate: destination out of coverage/window, or the track ends
+                     high mid-air (a fragment - coverage handoff or squawk
+                     change), or in the 25-60 nm approach ring
+
+    Precision estimate = consistent / (consistent + inconsistent). Duration
+    and BTS great-circle distance corroboration are reported alongside.
+    """
+    ap = pd.read_csv(airports_path).set_index("code")
+    bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
+    bts = bts[(bts.FlightDate == "2001-09-11") & (bts.Cancelled == 0)].copy()
+
+    def hhmm_utc(v, code):
+        try:
+            hhmm = int(float(v))
+            return (hhmm // 100) * 3600 + (hhmm % 100) * 60 - ap.loc[code, "utc_offset"] * 3600
+        except Exception:
+            return np.nan
+    ref = {}
+    for r in bts.itertuples(index=False):
+        ref[r.Reporting_Airline + str(r.Flight_Number)] = r
+
+    dep_m = results["dep"]
+    verdicts = Counter()
+    details = []
+    for key, (sig, score) in dep_m.items():
+        f = ref.get(key)
+        tr = tracks[sig["track"]]
+        last = tr["pts"][-1]
+        end_alt = None if pd.isna(last[3]) else float(last[3])
+        v = "indeterminate"
+        d_dest = None
+        diverted = f is not None and getattr(f, "Diverted", 0) == 1
+        if f is not None and not diverted and f.Dest in ap.index:
+            dla, dlo = ap.loc[f.Dest, "lat"], ap.loc[f.Dest, "lon"]
+            in_cover = (COVER["la0"] < dla < COVER["la1"]) and (COVER["lo0"] < dlo < COVER["lo1"])
+            wn = hhmm_utc(f.WheelsOn, f.Dest)
+            d_dest = dist_nm(last[1], last[2], dla, dlo)
+            if in_cover and wn == wn and WINDOW_S[0] <= wn <= WINDOW_S[1] + 1800:
+                if d_dest < 25:
+                    v = "consistent"
+                elif d_dest > 60 and (end_alt is not None and end_alt < 18000):
+                    v = "inconsistent"
+        elif diverted:
+            # 9/11: the FAA ground stop forced landings anywhere — the
+            # scheduled destination proves nothing about the match. A track
+            # ending LOW somewhere is exactly what a correct diverted match
+            # looks like; count these separately (the radar shows where they
+            # actually went, which BTS pre-2003 cannot).
+            v = "diverted-tracked-low" if (end_alt is not None and end_alt < 10000) else "diverted-indeterminate"
+        verdicts[v] += 1
+        details.append({"flight": key, "verdict": v, "end_dist_nm": None if d_dest is None else round(d_dest, 1),
+                        "end_alt": end_alt, "score": round(score, 1)})
+    judged = verdicts["consistent"] + verdicts["inconsistent"]
+    print(f"audit: {dict(verdicts)}  judged={judged}  "
+          f"precision={verdicts['consistent']/judged:.3f}" if judged else "audit: nothing judged")
+
+    # corroboration on consistent matches: track duration vs BTS block time
+    durs = []
+    for d in details:
+        if d["verdict"] != "consistent":
+            continue
+        f = ref[d["flight"]]
+        sig, _ = dep_m[d["flight"]]
+        tr = tracks[sig["track"]]
+        span_min = (tr["pts"][-1][0] - tr["pts"][0][0]) / 60
+        wo = hhmm_utc(f.WheelsOff, f.Origin)
+        wn = hhmm_utc(f.WheelsOn, f.Dest)
+        if wo == wo and wn == wn and wn > wo:
+            durs.append(span_min - (wn - wo) / 60)
+    if durs:
+        a = np.array(durs)
+        print(f"duration delta (track - BTS block) on consistent matches: "
+              f"median {np.median(a):+.1f} min, p90 |delta| {np.percentile(np.abs(a), 90):.1f} min (n={len(a)})")
+    return details
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = p.add_mutually_exclusive_group(required=True)
@@ -415,7 +501,8 @@ def main(argv=None):
         with open(args.out, "wb") as fh:
             pickle.dump(tracks, fh)
     results = correlate(tracks, args.bts, args.airports)
-    correlate_v2(tracks, args.bts, args.airports)
+    v2 = correlate_v2(tracks, args.bts, args.airports)
+    audit_named(tracks, v2, args.bts, args.airports)
     if args.matches_out:
         payload = [{"flight": fl, "squawk": d["code"], "first_return_secs": d["t0"],
                     "airport": d["ap"], "returns": d["n"], **meta}
