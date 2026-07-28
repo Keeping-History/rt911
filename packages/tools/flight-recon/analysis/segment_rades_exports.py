@@ -67,8 +67,19 @@ LIFTOFF_LEAD_S = 60
 # runs to 17:00Z. Overridable via --window HH:MM-HH:MM.
 WINDOW_S = (9.5 * 3600, 13.5 * 3600)
 
-# Coverage box (1-99th pct of track endpoints seen in the 2026-07 exports).
+# Coverage box: default from the 2026-07 half-day exports; refit_cover()
+# widens it to the corpus actually being analyzed (the SEADS decode extends
+# coverage to south Florida and the Gulf).
 COVER = dict(la0=31.2, la1=47.7, lo0=-95.6, lo1=-66.4)
+
+
+def refit_cover(tracks):
+    lats = [p for tr in tracks for p in (tr["pts"][0][1], tr["pts"][-1][1])]
+    lons = [p for tr in tracks for p in (tr["pts"][0][2], tr["pts"][-1][2])]
+    COVER.update(la0=float(np.percentile(lats, 1)), la1=float(np.percentile(lats, 99)),
+                 lo0=float(np.percentile(lons, 1)), lo1=float(np.percentile(lons, 99)))
+    print(f"coverage box refit: lat {COVER['la0']:.1f}..{COVER['la1']:.1f} "
+          f"lon {COVER['lo0']:.1f}..{COVER['lo1']:.1f}")
 
 
 def secs(t):
@@ -398,6 +409,8 @@ def main(argv=None):
     b = (load_beacon_decoded(args.decoded_dir) if args.decoded_dir
          else load_beacon(args.exports_dir))
     tracks = segment(b)
+    if args.decoded_dir:
+        refit_cover(tracks)
     if args.out:
         with open(args.out, "wb") as fh:
             pickle.dump(tracks, fh)
