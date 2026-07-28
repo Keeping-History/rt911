@@ -79,6 +79,7 @@ type Job struct {
 	SelfInitiated bool
 	Distress      bool
 	UserName      string
+	UserProfile   UserProfile
 	Deliver       func(Reply, error)
 }
 
@@ -281,6 +282,7 @@ func (g *Generator) run(j Job) {
 		SelfInitiated: j.SelfInitiated,
 		Distress:      j.Distress,
 		UserName:      j.UserName,
+		UserProfile:   j.UserProfile,
 	}
 
 	// Bound the vendor call. Without a deadline a wedged provider pins this

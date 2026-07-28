@@ -1766,3 +1766,30 @@ func TestTierRoutingSurvivesACrossedAssignment(t *testing.T) {
 		t.Errorf("timeline = %+v, want the timeline passage", tl)
 	}
 }
+
+func TestSetUserProfileIsReadBackByIdentity(t *testing.T) {
+	s := &Session{}
+	s.SetUserName("Dave")
+	s.SetUserProfile(chat.UserProfile{Values: []chat.UserValue{{Label: "city", Text: "Columbus"}}})
+
+	name, profile := s.identity()
+	if name != "Dave" {
+		t.Errorf("identity name = %q, want %q", name, "Dave")
+	}
+	if len(profile.Values) != 1 || profile.Values[0].Text != "Columbus" {
+		t.Errorf("identity profile = %+v, want one value Columbus", profile.Values)
+	}
+}
+
+func TestSetUserProfileOverwritesRatherThanAppends(t *testing.T) {
+	// The chat-subscribe re-read replaces the profile wholesale. If it appended,
+	// a user who cleared a field would keep answering for it forever.
+	s := &Session{}
+	s.SetUserProfile(chat.UserProfile{Values: []chat.UserValue{{Label: "city", Text: "Columbus"}}})
+	s.SetUserProfile(chat.UserProfile{Values: []chat.UserValue{{Label: "city", Text: "Toledo"}}})
+
+	_, profile := s.identity()
+	if len(profile.Values) != 1 || profile.Values[0].Text != "Toledo" {
+		t.Errorf("identity profile = %+v, want exactly one value Toledo", profile.Values)
+	}
+}
