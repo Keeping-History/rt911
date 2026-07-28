@@ -373,3 +373,74 @@ func TestSystemPromptExtraSitsAfterTheOutputRules(t *testing.T) {
 		t.Errorf("extra must come after the output rules it may override:\n%s", sys)
 	}
 }
+
+func TestComposeRendersTheUserProfileInTheStableSegment(t *testing.T) {
+	segs := Compose(ComposeInput{
+		Profile:     Profile{ScreenName: "carol_nyc", Persona: "You are Danny's aunt."},
+		UserName:    "Dave",
+		UserMessage: "hi",
+		UserProfile: UserProfile{Values: []UserValue{
+			{Label: "city", Text: "Columbus"},
+			{Label: "school", Text: "Lincoln High School"},
+		}},
+	})
+
+	var stable string
+	for _, s := range segs {
+		if s.Stability == StabilityStable {
+			stable = s.Text
+		}
+	}
+	if stable == "" {
+		t.Fatal("Compose emitted no stable segment")
+	}
+	for _, want := range []string{"city: Columbus", "school: Lincoln High School"} {
+		if !strings.Contains(stable, want) {
+			t.Errorf("stable segment missing %q:\n%s", want, stable)
+		}
+	}
+	// Background, not script. A buddy that recites your school back at you is
+	// worse than one that never knew it.
+	if !strings.Contains(stable, "Do not bring these up unprompted") {
+		t.Error("profile block is missing the do-not-volunteer instruction")
+	}
+	// The denial that stopped a persona written as "Danny's aunt" greeting
+	// every user as Danny. A richer profile block makes it MORE load-bearing.
+	if !strings.Contains(stable, "not anyone described in your own background") {
+		t.Error("profile block displaced the who-you-are-talking-to denial")
+	}
+}
+
+func TestComposeOrdersProfileValuesAsConfigured(t *testing.T) {
+	segs := Compose(ComposeInput{
+		Profile:     Profile{ScreenName: "carol_nyc"},
+		UserMessage: "hi",
+		UserProfile: UserProfile{Values: []UserValue{
+			{Label: "first name", Text: "Dave"},
+			{Label: "city", Text: "Columbus"},
+			{Label: "school", Text: "Lincoln High School"},
+		}},
+	})
+	stable := segs[0].Text
+	first := strings.Index(stable, "first name: Dave")
+	city := strings.Index(stable, "city: Columbus")
+	school := strings.Index(stable, "school: Lincoln High School")
+	if !(first < city && city < school) {
+		t.Errorf("profile values are not in configured order:\n%s", stable)
+	}
+}
+
+func TestComposeOmitsAnEmptyUserProfile(t *testing.T) {
+	segs := Compose(ComposeInput{
+		Profile:     Profile{ScreenName: "carol_nyc"},
+		UserMessage: "hi",
+	})
+	stable := segs[0].Text
+	if strings.Contains(stable, "Some things you know about them") {
+		t.Errorf("empty profile still emitted a heading:\n%s", stable)
+	}
+	// The unnamed-friend denial must survive with no profile at all.
+	if !strings.Contains(stable, "not anyone described in your own background") {
+		t.Error("the denial is missing when there is no profile")
+	}
+}
