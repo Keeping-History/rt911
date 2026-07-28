@@ -53,7 +53,11 @@ pnpm install
 - Consumes: nothing (first task).
 - Produces: `POST /profile/delete-data` and `POST /profile/delete-account`. Both require a session cookie, take no request body, and return `200 {"data":{"deleted":{"<collection>":<count>,…},"failed":["<collection>",…]}}`. Both return `401 {"errors":[{"message":…}]}` when unauthenticated. `/delete-account` additionally returns `500` if the user row itself could not be deleted.
 
-There is no test harness in `packages/directus-extensions`, so this task's verification is manual (Task 5). Write it carefully — it is the riskiest code in this change and nothing in CI covers it.
+The extension has its own vitest suite at `src/index.test.mjs`, run in CI by the `api-test` job (which gates the image build). **Extend it with cases for both new routes** — the harness stubs the express router and Directus's services, so add an `ItemsService` stub, a knex-shaped `database` stub, and an `ops` array recording every mutation *in call order*.
+
+Assert **ordering**, not just occurrence: nulling the blocking references after `deleteOne` would be useless, so the test must compare index positions. Mutation-check it by moving the loop below `deleteOne` and confirming the test fails.
+
+Manual verification (Task 5) still runs on top, because no stub proves what Postgres does with a real foreign key.
 
 - [ ] **Step 1: Fix the hardcoded confirmation host**
 
@@ -231,8 +235,13 @@ Note the ordering: erase owned data, blank the profile, clear blocking reference
 
 - [ ] **Step 6: Verify the file parses**
 
-Run: `node --check packages/directus-extensions/profile-api/src/index.js`
-Expected: no output (exit 0). This is the only automated check available for this file.
+```bash
+node --check packages/directus-extensions/profile-api/src/index.js
+npm --prefix packages/directus-extensions/profile-api ci
+npm --prefix packages/directus-extensions/profile-api test
+```
+
+Expected: parses clean, and the 10 pre-existing email-change tests still pass — the `CONFIRM_BASE_URL` change must not regress them.
 
 - [ ] **Step 7: Commit**
 
@@ -919,7 +928,7 @@ git commit -m "feat(account): show the Special tab in the profile editor"
 - Consumes: everything above.
 - Produces: a verified deployment.
 
-`packages/directus-extensions` has no test harness, so Task 1 is entirely unverified by CI. This task is where that risk gets retired. Do not skip it.
+Task 1's unit tests stub Directus's services, so they prove the routes' logic and ordering but not what Postgres actually does with a real foreign key. This task retires that residual risk. Do not skip it.
 
 - [ ] **Step 1: Build and deploy the extension image first**
 
@@ -1000,4 +1009,4 @@ Note in the PR body that the extension image must roll out before the frontend.
 
 **Type consistency:** `DeletionResult` is defined once in Task 2 and used verbatim in Task 3's mocks. `clearLocalSettings` / `reloadDesktop` / `deleteMyData` / `deleteMyAccount` keep the same names across Tasks 2, 3 and the test mocks. The server's `{deleted, failed}` shape in Task 1 matches `DeletionResult` exactly. `SETTINGS_KEYS` is `as const` in the implementation and consumed as `readonly string[]`.
 
-**Known uncovered risk:** Task 1 has no automated test of any kind — `node --check` proves only that it parses. Task 5 is the whole of its verification.
+**Residual risk:** Task 1's tests stub every Directus service, so they cannot prove real FK behaviour, real `ItemsService` filter semantics, or that knex quotes `"user"` as expected against live Postgres. Task 5 covers that. The ordering assertion was mutation-checked (moving the blocking-ref loop after `deleteOne` fails it).

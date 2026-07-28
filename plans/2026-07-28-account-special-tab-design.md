@@ -248,11 +248,20 @@ requires the same new `rt911-api` image.
   name matches exactly.
 - `ProfileEditor.test.tsx` — the Special tab is present for a signed-in user.
 
-**Known gap:** `packages/directus-extensions` has no test harness. The two
-routes get manual verification against `api-beta` with a throwaway account,
-checking each collection before and after. Building a harness for one extension
-is out of scope here, but the routes are the riskiest part of this change and
-that risk is not covered by CI.
+The extension has its own vitest suite at
+`packages/directus-extensions/profile-api/src/index.test.mjs`, run in CI by the
+`api-test` job, which gates the image build. It stubs the express router and
+Directus's context services, then invokes each route with fake `req`/`res`. The
+new routes extend that harness with an `ItemsService` stub, a knex-shaped
+`database` stub, and an `ops` array recording every mutation **in call order**.
+
+Ordering is the point. `nulls every blocking foreign key BEFORE deleting the
+row` asserts index positions rather than mere occurrence, because nulling the
+references *after* `deleteOne` would be useless — and that mutation was
+confirmed to fail the test.
+
+Manual verification against `api-beta` still runs before release, because no
+stub proves what Postgres actually does with a real FK.
 
 **The throwaway account must have an uploaded avatar and at least one row in
 every affected collection.** A fresh account with no avatar has nothing
