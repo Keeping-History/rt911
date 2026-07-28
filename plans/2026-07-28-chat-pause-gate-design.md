@@ -83,15 +83,24 @@ default unpaused state — a `resume` to a session that was never paused is
 harmless but meaningless traffic, and suppressing it keeps the frame log
 readable.
 
-### 2. Re-assert pause after a reconnect
+### 2. Assert pause on every connection, including the first
 
-This is the part that would silently rot if left out.
+Without this, the fix works only until the user's next page reload.
 
-`onopen` sends `init` on **every** connection, and the protocol doc states
-plainly that `init` sets `Session.paused = false`. So a reconnect while paused
-hands the server a running clock and quietly re-enables the composer — a bug
-that only appears after a dropped socket, which is exactly the kind that
-survives review.
+`paused` lives at `System.Manager.DateAndTime.paused` — inside the
+localStorage-persisted `classicyDesktopState`, the same snapshot that makes the
+virtual clock keep its position across a reload. So:
+
+1. The student pauses; we send `pause`; the composer correctly disables.
+2. They reload. Classicy restores `paused: true`; the clock is still frozen.
+3. `onopen` sends `init`, which the protocol doc says sets `Session.paused = false`.
+4. The composer re-enables against a frozen clock — the original bug, back.
+
+Note this is *not* about dropped connections: the socket effect is marked
+"Intentionally runs once on mount" and `onclose` does not reconnect. The
+triggers are a fresh page load with a persisted pause, and a provider remount
+(React StrictMode, or a change in the effect's callback identities). The first
+of those is an ordinary user action, not an edge case.
 
 The remedy already has a precedent inside that same function:
 
@@ -100,8 +109,13 @@ The remedy already has a precedent inside that same function:
 // does not remember subscriptions across connections.
 ```
 
-Pause is the same class of state and gets the same treatment: re-sent
+Pause is the same class of state and gets the same treatment: sent
 immediately after `init`, alongside the subscription replay.
+
+`paused` must be read through a **ref** there, not captured directly. Adding it
+to the socket effect's dependency array would tear down and rebuild the
+WebSocket on every pause and resume — a reconnect storm from a button press.
+The file already uses this pattern for `setDateTimeRef` and `isItemAvailableRef`.
 
 `seek` deliberately does *not* reset pause (protocol doc, §`seek`), so Time
 Machine seeks while paused need nothing.
@@ -120,13 +134,19 @@ No new UI, no new copy, no change to `composeGate.ts` or `BuddyListWindow.tsx`
 
 ## Testing
 
-`MediaStreamProvider.test.tsx`, against the existing mock-socket setup:
+A new `MediaStreamProvider.pause.test.tsx`. The provider's tests are split by
+topic (`.clock.`, `.chat.`, `.news.`, `.weather.`, `.flights.`), each carrying
+its own `FakeWebSocket` and `classicy` mock; pause gets its own file to match,
+with a mutable `mockPaused` the tests flip between renders.
+
+Note the existing mocks of `useClassicyDateTime` do not return `paused` at all,
+so the new file's mock must add it.
 
 - pausing sends `{"type":"pause"}`
 - resuming sends `{"type":"resume"}`
 - a re-render with no change in `paused` sends nothing
-- **a reconnect while paused re-sends `pause` after `init`** — the regression
-  that protects §2, and the one worth writing first
+- **a connection opened while already paused sends `pause` after `init`** — the
+  regression that protects §2, and the one worth writing first
 
 An `IMBuddies` test is deliberately *not* added: the composer's response to
 `chat_state` is already covered by `composeGate.test.ts`, and this change does
