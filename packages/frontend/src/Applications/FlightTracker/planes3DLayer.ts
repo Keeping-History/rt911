@@ -27,7 +27,7 @@ uniform vec3 u_color_observer;
 uniform vec3 u_color_anon;
 // Anonymous radar traffic renders behind the identified flights: its own
 // (desaturated) color and a per-instance alpha, so one draw call can mix
-// full-opacity aircraft with 75%-opacity ghosts.
+// full-opacity aircraft with 75%-opacity anonymous traffic.
 uniform float u_anon_alpha;
 
 out vec3 v_color;
@@ -188,7 +188,7 @@ export class Planes3DLayer implements CustomLayerInterface {
 	private colorNotable: [number, number, number] = [0.75, 0.13, 0.16];
 	private colorObserver: [number, number, number] = [0.06, 0.46, 0.43];
 	private colorAnon: [number, number, number] = [0.55, 0.55, 0.55];
-	// Matches the 2D ghost layer's icon-opacity (see FlightMap).
+	// Matches the 2D anonymous-traffic layer's icon-opacity (see FlightMap).
 	private anonAlpha = 0.75;
 
 	/** Radar-mode 8-bit toggle. Off = today's direct-to-framebuffer path. */

@@ -13,6 +13,15 @@ import type { ExpressionSpecification } from "maplibre-gl";
 export const SOURCE_RADAR = "radar";
 export const SOURCE_ESTIMATED = "estimated";
 
+/** The single sentence that answers "where did this track come from?".
+ * Every surface that discloses provenance must render THIS string — two
+ * near-miss phrasings previously coexisted in the detail pane and could both
+ * appear at once, since one was gated on a missing route and the other on
+ * loaded source tags. */
+export const PROVENANCE_NOTE =
+	"Flight paths are reconstructed from radar tracks and, where radar " +
+	"coverage was unavailable, historical flight records.";
+
 /** Solid, confident line for surveyed radar; the estimated fill is drawn in
  * the same hue but dashed and dimmed, so the shape reads as one flight while
  * the provenance stays legible. */

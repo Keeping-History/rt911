@@ -812,7 +812,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				id: "flight-trails", type: "line", source: "flight-trails",
 				paint: { "line-width": 1.2, "line-gradient": trailGradient(colors.mapStyle, colors.darkMap) },
 			});
-			// Anonymous radar traffic (#263): ghost styling — generic icon, smaller
+			// Anonymous radar traffic (#263): muted styling — generic icon, smaller
 			// and translucent, under the identified traffic. Empty until the
 			// flights-anon channel is subscribed (the Other toggle).
 			map.addLayer({

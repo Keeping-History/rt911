@@ -9,7 +9,7 @@ import {
 	ClassicyPopUpMenu,
 } from "classicy";
 import { isNotable, isObserver } from "./notableFlights";
-import { isEstimated, sourceLabel } from "./flightProvenance";
+import { PROVENANCE_NOTE, isEstimated, sourceLabel } from "./flightProvenance";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
 import { type MapPoi, POI_DETAIL_FIELDS, detailTitleFor } from "./mapPois";
 import { PHASE_COLORS, DEFAULT_PHASE_COLOR, phaseLabel } from "./flightPhases";
@@ -128,7 +128,10 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 					<span className={styles.detailBadge}>UNIDENTIFIED — 84 RADES RADAR</span>
 				)}
 			</div>
-			<ClassicyControlLabel labelSize={"small"} label={route ?? "Flight data has been synthesized from multiple sources and may be inaccurate."} />
+			{/* The route slot states the route, or that there isn't one — an
+			    unidentified radar target filed no flight plan. Provenance is
+			    disclosed once, in the note below the fields. */}
+			<ClassicyControlLabel labelSize={"small"} label={route ?? "Route unknown"} />
 			{selectionOptions.length > 1 && (
 				<div className={styles.detailSelection}>
 					<ClassicyPopUpMenu
@@ -208,12 +211,9 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 					))}
 				</dl>
 			)}
-			{sources.length > 0 && (
-				<p className={styles.detailNote}>
-					Flight paths are reconstructed from radar tracks and, where radar
-					coverage was unavailable, historical flight records.
-				</p>
-			)}
+			{/* Unconditional: every flight on the map is a reconstruction, so the
+			    disclosure can't depend on whether a track happens to be loaded. */}
+			<p className={styles.detailNote}>{PROVENANCE_NOTE}</p>
 			{phases.length > 0 && (
 				<dl className={styles.phaseLegend} aria-label="Phase colors">
 					{phases.map((ph) => (

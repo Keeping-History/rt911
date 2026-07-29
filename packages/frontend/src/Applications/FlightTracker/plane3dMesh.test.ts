@@ -191,7 +191,7 @@ describe("categoryFlag (3D shader instance category)", () => {
 			});
 		}
 		const out = buildPlaneInstances(buffer as never, t, 10);
-		expect(out.count).toBe(2); // the ghost is drawn, not skipped
+		expect(out.count).toBe(2); // anonymous traffic is drawn, not skipped
 		expect(out.flights).toContain("RDR-00042");
 		const flags = [];
 		for (let i = 0; i < out.count; i++) flags.push(out.data[i * PLANE_INSTANCE_STRIDE + 7]);

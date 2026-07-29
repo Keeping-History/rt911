@@ -1826,7 +1826,7 @@ describe("FlightMap hero landmarks", () => {
 });
 
 describe("anonymous traffic interaction", () => {
-	it("includes the ghost layer in click and area-select hit-testing", () => {
+	it("includes the anonymous-traffic layer in click and area-select hit-testing", () => {
 		render(
 			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
 				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
@@ -1837,7 +1837,7 @@ describe("anonymous traffic interaction", () => {
 		map.fire("load");
 		map.fire("click", { point: { x: 10, y: 10 }, lngLat: { lng: -75, lat: 40 } });
 		// every queryRenderedFeatures call that targets plane layers must be able
-		// to hit a ghost — otherwise anonymous flights are unselectable (#263).
+		// to hit one — otherwise anonymous flights are unselectable (#263).
 		const planeQueries = map.queries.filter(
 			(q: { layers?: string[] }) => q.layers?.includes("flights-dots"),
 		);

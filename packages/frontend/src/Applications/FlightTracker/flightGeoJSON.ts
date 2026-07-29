@@ -14,7 +14,7 @@ export interface FlightFeature {
 		// Witness aircraft (GOFER06): highlighted like a notable but in the
 		// observer color and with none of the crash semantics.
 		observer: boolean;
-		// Anonymous radar traffic (RDR-… ids, #263): ghost styling, never
+		// Anonymous radar traffic (RDR-… ids, #263): muted styling, never
 		// clustered, excluded from the 3D layer.
 		anon: boolean;
 		// Degrees clockwise from north; drives the plane icons' icon-rotate.

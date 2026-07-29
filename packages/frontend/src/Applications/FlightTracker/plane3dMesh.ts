@@ -6,7 +6,7 @@ import { isNotable, isObserver } from "./notableFlights";
 /**
  * Instance category the 3D shader colors by: 0 = regular, 1 = notable,
  * 2 = observer, 3 = anonymous radar traffic (drawn in the desaturated pin
- * color at reduced alpha, matching the 2D ghost layer).
+ * color at reduced alpha, matching the 2D anonymous-traffic layer).
  */
 export function categoryFlag(flight: string): number {
 	if (isNotable(flight)) return 1;
