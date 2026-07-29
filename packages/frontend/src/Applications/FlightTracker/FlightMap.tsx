@@ -1045,7 +1045,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// True-3D aircraft (issue #250): custom layer on top of the stack;
 			// its colors follow the pin pair like every other plane layer.
 			const planes3D = new Planes3DLayer();
-			planes3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor);
+			planes3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor,
+				colors.anonPinColor);
 			planes3D.setPixelate(pixelPlanes(colors.mapStyle));
 			planes3DRef.current = planes3D;
 			map.addLayer(planes3D);
@@ -1057,7 +1058,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 				buildMesh: () => buildSphereMesh(),
 				opacity: REPLAY_TRAIL_OPACITY,
 			});
-			replayTrail3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor);
+			replayTrail3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor,
+				colors.anonPinColor);
 			replayTrail3D.setPixelate(pixelPlanes(colors.mapStyle));
 			replayTrail3DRef.current = replayTrail3D;
 			map.addLayer(replayTrail3D);
@@ -1122,7 +1124,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				const b = dragBounds(mode, d);
 				const feats = map.queryRenderedFeatures(
 					[[b.minX, b.minY], [b.maxX, b.maxY]],
-					{ layers: ["flights-dots", "flights-notable", "cluster-planes"] },
+					{ layers: ["flights-dots", "flights-anon-dots", "flights-notable", "cluster-planes"] },
 				);
 				for (const f of feats) {
 					const anchor = featureAnchor(f);
@@ -1215,7 +1217,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 					[x + HIT_TOLERANCE, y + HIT_TOLERANCE],
 				],
 				{
-					layers: ["flights-dots", "flights-notable", "cluster-planes", "cluster-circles"],
+					layers: ["flights-dots", "flights-anon-dots", "flights-notable", "cluster-planes",
+						"cluster-circles"],
 				},
 			);
 			// A cluster blob expands instead of selecting.
@@ -1389,8 +1392,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 		buildings3DRef.current?.setHeroColor(
 			heroColorRgb({ mapStyle, darkMap, buildingHeroColorLight, buildingHeroColorDark }),
 		);
-		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
-		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
+		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor, anonPinColor);
+		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor, anonPinColor);
 		// The 3D meshes get the same radar 8-bit treatment as the 2D icons, via a
 		// low-res render pass rather than a re-rasterize (see Planes3DLayer).
 		planes3DRef.current?.setPixelate(pixelate);

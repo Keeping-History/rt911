@@ -166,7 +166,6 @@ export function buildReplayTrailInstances(
 	let count = 0;
 	for (const [flight, f] of buffer) {
 		if (visible && !visible.has(flight)) continue;
-		if (f.props.anon) continue; // anon traffic is 2D-only (#263)
 		const at = replaySampleAt(f, tMs);
 		if (!at || at.alt_ft <= 0) continue;
 		const [mx, my] = lngLatToMercator(at.lon, at.lat);
@@ -176,7 +175,7 @@ export function buildReplayTrailInstances(
 		data[o + 2] = exaggeratedHeightM(at.alt_ft);
 		data[o + 3] = mercatorPerMeter(at.lat);
 		data[o + 6] = radiusKm * 1000;
-		data[o + 7] = f.props.notable ? 1 : f.props.observer ? 2 : 0;
+		data[o + 7] = f.props.notable ? 1 : f.props.observer ? 2 : f.props.anon ? 3 : 0;
 		flights.push(flight);
 		count++;
 	}

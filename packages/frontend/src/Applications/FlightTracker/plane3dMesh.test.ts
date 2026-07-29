@@ -2,17 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import { updateMotion, type MotionBuffer } from "./flightMotion";
 import { PLANE_SHAPE, exaggeratedHeightM } from "./flightAltitude";
-import {
-	PLANE_INSTANCE_STRIDE,
-	PLANE_MESH_HALF_THICKNESS,
-	buildPlaneInstances,
-	buildPlaneMesh,
-	buildSphereMesh,
-	lngLatToMercator,
-	mercatorPerMeter,
-	pitchRadOf,
-	triangulate,
-} from "./plane3dMesh";
+import { PLANE_INSTANCE_STRIDE, PLANE_MESH_HALF_THICKNESS, buildPlaneInstances, buildPlaneMesh, buildSphereMesh, categoryFlag, lngLatToMercator, mercatorPerMeter, pitchRadOf, triangulate } from "./plane3dMesh";
 
 const pos = (over: Partial<FlightPosition>): FlightPosition => ({
 	id: 1, flight: "DL404", start_date: "2001-09-11T13:00:00Z",
@@ -177,5 +167,34 @@ describe("buildPlaneInstances", () => {
 		expect(pitch).toBe(0);
 		expect(halfSize).toBe(2_000); // sizeKm 4 → half size 2 km in meters
 		expect(notable).toBe(1);
+	});
+});
+
+describe("categoryFlag (3D shader instance category)", () => {
+	it("maps each corpus to its shader category", () => {
+		expect(categoryFlag("AA11")).toBe(1); // notable
+		expect(categoryFlag("GOFER06")).toBe(2); // observer
+		expect(categoryFlag("RDR-00042")).toBe(3); // anonymous radar traffic
+		expect(categoryFlag("WN367")).toBe(0); // identified airline flight
+	});
+
+	it("includes anonymous traffic in the 3D instance buffer", () => {
+		const buffer = new Map();
+		const t = Date.parse("2001-09-11T12:40:00Z");
+		for (const flight of ["WN367", "RDR-00042"]) {
+			buffer.set(flight, {
+				prev: { lat: 40, lon: -75 }, cur: { lat: 40.1, lon: -75.1 },
+				prevT: t - 60_000, curT: t,
+				item: { id: 1, flight, carrier: "", alt_ft: 30000, phase: "cruise",
+					start_date: "2001-09-11T12:40:00Z", lat: 40.1, lon: -75.1 },
+				trail: [[-75, 40, 30000]], headingDeg: 270,
+			});
+		}
+		const out = buildPlaneInstances(buffer as never, t, 10);
+		expect(out.count).toBe(2); // the ghost is drawn, not skipped
+		expect(out.flights).toContain("RDR-00042");
+		const flags = [];
+		for (let i = 0; i < out.count; i++) flags.push(out.data[i * PLANE_INSTANCE_STRIDE + 7]);
+		expect(flags.sort()).toEqual([0, 3]);
 	});
 });

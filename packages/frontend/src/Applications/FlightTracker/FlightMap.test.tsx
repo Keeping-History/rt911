@@ -37,6 +37,7 @@ const FakeMap = vi.hoisted(() => {
 			}
 		}
 		queryResult: unknown[] = [];
+		queries: { layers?: string[] }[] = [];
 		fire(ev: string, payload?: unknown) { for (const h of this.handlers[ev] ?? []) h(payload); }
 		fireLayer(ev: string, layer: string, payload: unknown) {
 			for (const h of this.layerHandlers[ev]?.[layer] ?? []) h(payload);
@@ -73,6 +74,7 @@ const FakeMap = vi.hoisted(() => {
 		}
 		queryRenderedFeatures(_geometry?: unknown, options?: { layers?: string[] }) {
 			const layers = options?.layers;
+			this.queries.push({ layers });
 			if (!layers) return this.queryResult;
 			return this.queryResult.filter(
 				(f) => layers.includes((f as { layer?: { id?: string } })?.layer?.id ?? ""),
@@ -1820,5 +1822,28 @@ describe("FlightMap hero landmarks", () => {
 		expect(layer.hasMesh("wtc1")).toBe(false);
 		expect((layer as unknown as { heroKeys: Set<string> }).heroKeys.has("wtc1")).toBe(false);
 		expect(footprintCalls().at(-1)?.vertexCount).toBe(fullVertexCount);
+	});
+});
+
+describe("anonymous traffic interaction", () => {
+	it("includes the ghost layer in click and area-select hit-testing", () => {
+		render(
+			<FlightMap positions={[]} basemapUrls={TEST_URLS} trackGeoJSON={null}
+				nowMs={0} playing={false} onSelectFlight={() => {}} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a"
+				observerPinColor="#0f766e" anonPinColor="#8b7d6b" radarSweep={false} trailMultiplier={1} />,
+		);
+		const map = FakeMap.last!;
+		map.fire("load");
+		map.fire("click", { point: { x: 10, y: 10 }, lngLat: { lng: -75, lat: 40 } });
+		// every queryRenderedFeatures call that targets plane layers must be able
+		// to hit a ghost — otherwise anonymous flights are unselectable (#263).
+		const planeQueries = map.queries.filter(
+			(q: { layers?: string[] }) => q.layers?.includes("flights-dots"),
+		);
+		expect(planeQueries.length).toBeGreaterThan(0);
+		for (const q of planeQueries) {
+			expect(q.layers).toContain("flights-anon-dots");
+		}
 	});
 });

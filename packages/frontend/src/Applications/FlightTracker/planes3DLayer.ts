@@ -24,8 +24,14 @@ in vec4 i_data1; // headingRad, pitchRad, halfSizeMeters, notableFlag
 uniform vec3 u_color;
 uniform vec3 u_color_notable;
 uniform vec3 u_color_observer;
+uniform vec3 u_color_anon;
+// Anonymous radar traffic renders behind the identified flights: its own
+// (desaturated) color and a per-instance alpha, so one draw call can mix
+// full-opacity aircraft with 75%-opacity ghosts.
+uniform float u_anon_alpha;
 
 out vec3 v_color;
+out float v_alpha;
 
 const vec3 LIGHT = vec3(0.30151, 0.30151, 0.90453); // pre-normalized
 
@@ -49,9 +55,12 @@ void main() {
 	gl_Position = projectTileFor3D(posMerc, elevMeters * i_data0.w);
 #endif
 	float shade = 0.55 + 0.45 * max(dot(normalize(n), LIGHT), 0.0);
-	// Category flag: 0 = regular, 1 = notable, 2 = observer.
-	vec3 base = i_data1.w < 0.5 ? u_color : (i_data1.w < 1.5 ? u_color_notable : u_color_observer);
+	// Category flag: 0 = regular, 1 = notable, 2 = observer, 3 = anonymous.
+	vec3 base = i_data1.w < 0.5 ? u_color
+		: (i_data1.w < 1.5 ? u_color_notable
+		: (i_data1.w < 2.5 ? u_color_observer : u_color_anon));
 	v_color = base * shade;
+	v_alpha = i_data1.w > 2.5 ? u_anon_alpha : 1.0;
 }
 `;
 
@@ -61,9 +70,11 @@ const FRAGMENT_SOURCE = `#version 300 es
 precision mediump float;
 uniform float u_opacity;
 in vec3 v_color;
+in float v_alpha;
 out vec4 fragColor;
 void main() {
-	fragColor = vec4(v_color * u_opacity, u_opacity);
+	float a = u_opacity * v_alpha;
+	fragColor = vec4(v_color * a, a);
 }
 `;
 
@@ -176,6 +187,9 @@ export class Planes3DLayer implements CustomLayerInterface {
 	private color: [number, number, number] = [0.23, 0.23, 0.23];
 	private colorNotable: [number, number, number] = [0.75, 0.13, 0.16];
 	private colorObserver: [number, number, number] = [0.06, 0.46, 0.43];
+	private colorAnon: [number, number, number] = [0.55, 0.55, 0.55];
+	// Matches the 2D ghost layer's icon-opacity (see FlightMap).
+	private anonAlpha = 0.75;
 
 	/** Radar-mode 8-bit toggle. Off = today's direct-to-framebuffer path. */
 	pixelate = false;
@@ -200,10 +214,12 @@ export class Planes3DLayer implements CustomLayerInterface {
 		this.map?.triggerRepaint();
 	}
 
-	setColors(pinHex: string, notableHex: string, observerHex?: string): void {
+	setColors(pinHex: string, notableHex: string, observerHex?: string,
+		anonHex?: string): void {
 		this.color = hexToRgb01(pinHex);
 		this.colorNotable = hexToRgb01(notableHex);
 		if (observerHex) this.colorObserver = hexToRgb01(observerHex);
+		if (anonHex) this.colorAnon = hexToRgb01(anonHex);
 		this.map?.triggerRepaint();
 	}
 
@@ -400,7 +416,8 @@ ${VERTEX_BODY}`;
 			return null;
 		}
 		const uniforms: ProgramInfo["uniforms"] = {};
-		for (const name of [...PROJECTION_UNIFORMS, "u_color", "u_color_notable", "u_color_observer", "u_opacity"]) {
+		for (const name of [...PROJECTION_UNIFORMS, "u_color", "u_color_notable", "u_color_observer", "u_color_anon",
+			"u_anon_alpha", "u_opacity"]) {
 			uniforms[name] = gl.getUniformLocation(program, name);
 		}
 		const info = { program, uniforms };
@@ -494,6 +511,8 @@ ${VERTEX_BODY}`;
 		if (u.u_color) gl.uniform3f(u.u_color, ...this.color);
 		if (u.u_color_notable) gl.uniform3f(u.u_color_notable, ...this.colorNotable);
 		if (u.u_color_observer) gl.uniform3f(u.u_color_observer, ...this.colorObserver);
+		if (u.u_color_anon) gl.uniform3f(u.u_color_anon, ...this.colorAnon);
+		if (u.u_anon_alpha) gl.uniform1f(u.u_anon_alpha, this.anonAlpha);
 		if (u.u_opacity) gl.uniform1f(u.u_opacity, this.opacity);
 
 		gl.enableVertexAttribArray(A_POS);

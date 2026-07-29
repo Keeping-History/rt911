@@ -3,6 +3,17 @@ import { extrapolate, motionNow } from "./flightMotion";
 import { PLANE_SHAPE, altitudeFtAt, exaggeratedHeightM } from "./flightAltitude";
 import { isNotable, isObserver } from "./notableFlights";
 
+/**
+ * Instance category the 3D shader colors by: 0 = regular, 1 = notable,
+ * 2 = observer, 3 = anonymous radar traffic (drawn in the desaturated pin
+ * color at reduced alpha, matching the 2D ghost layer).
+ */
+export function categoryFlag(flight: string): number {
+	if (isNotable(flight)) return 1;
+	if (isObserver(flight)) return 2;
+	return flight.startsWith("RDR-") ? 3 : 0;
+}
+
 // Geometry and per-frame instance data for the true-3D aircraft layer
 // (issue #250). Everything here is pure math — no WebGL, no maplibre — so
 // the mesh, the triangulation and the instance packing are unit-testable in
@@ -278,7 +289,7 @@ export function buildPlaneInstanceBatches(
 			data[o + 4] = (m.headingDeg * Math.PI) / 180;
 			data[o + 5] = pitchRadOf(m);
 			data[o + 6] = halfSizeM;
-			data[o + 7] = isNotable(m.item.flight) ? 1 : isObserver(m.item.flight) ? 2 : 0;
+			data[o + 7] = categoryFlag(m.item.flight);
 			count++;
 		}
 		if (count > 0) {
@@ -304,7 +315,6 @@ export function buildPlaneInstances(
 	let count = 0;
 	const halfSizeM = sizeKm * 500; // local unit 1 = half the marker size
 	for (const m of buffer.values()) {
-		if (m.item.flight.startsWith("RDR-")) continue; // anon traffic is 2D-only (#263)
 		const effNow = motionNow(m, now, landing);
 		const altFt = altitudeFtAt(m, effNow);
 		if (altFt <= 0) continue;
@@ -318,7 +328,7 @@ export function buildPlaneInstances(
 		data[o + 4] = (m.headingDeg * Math.PI) / 180;
 		data[o + 5] = pitchRadOf(m);
 		data[o + 6] = halfSizeM;
-		data[o + 7] = isNotable(m.item.flight) ? 1 : isObserver(m.item.flight) ? 2 : 0;
+		data[o + 7] = categoryFlag(m.item.flight);
 		flights.push(m.item.flight);
 		count++;
 	}
