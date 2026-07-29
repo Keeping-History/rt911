@@ -2,6 +2,9 @@ interface PhasePoint {
 	lat: number;
 	lon: number;
 	phase?: string;
+	// Provenance (#263) — segments also break where radar coverage does, so
+	// the drawn line can distinguish surveyed from estimated stretches.
+	source?: string;
 }
 
 /**
@@ -15,13 +18,19 @@ export function buildTrackSegments(points: PhasePoint[]): GeoJSON.Feature[] {
 	if (points.length < 2) return [];
 	const features: GeoJSON.Feature[] = [];
 	let start = 0;
+	// A run ends when EITHER the phase or the provenance changes, so a track
+	// can be colored by phase and dashed by provenance at the same time.
+	const runKey = (p: PhasePoint) => `${p.phase ?? ""}|${p.source ?? ""}`;
 	const flush = (end: number) => {
 		// include the boundary vertex at `end` so segments join seamlessly.
 		const slice = points.slice(start, end + 1);
 		if (slice.length < 2) return;
 		features.push({
 			type: "Feature",
-			properties: { phase: points[start].phase ?? null },
+			properties: {
+				phase: points[start].phase ?? null,
+				source: points[start].source ?? null,
+			},
 			geometry: {
 				type: "LineString",
 				coordinates: slice.map((p) => [p.lon, p.lat]),
@@ -29,7 +38,7 @@ export function buildTrackSegments(points: PhasePoint[]): GeoJSON.Feature[] {
 		});
 	};
 	for (let i = 1; i < points.length; i++) {
-		if (points[i].phase !== points[start].phase) {
+		if (runKey(points[i]) !== runKey(points[start])) {
 			flush(i); // boundary vertex i belongs to both runs
 			start = i;
 		}

@@ -19,6 +19,7 @@ import {
 	trailGradient,
 } from "./flightMapStyle";
 import { phaseLineColorExpression } from "./flightPhases";
+import { sourceDashExpression, sourceOpacityExpression } from "./flightProvenance";
 import planeSvg from "./plane.svg?raw";
 import pinSvg from "./pin.svg?raw";
 import { type MapPoi, type PoiLayerConfig, layerIndexOf, splitPoisForRender } from "./mapPois";
@@ -798,7 +799,13 @@ export const FlightMap: FC<FlightMapProps> = ({
 			map.addSource("flight-trails", { type: "geojson", data: EMPTY_FC, lineMetrics: true });
 			map.addLayer({
 				id: "track-line", type: "line", source: "track",
-				paint: { "line-color": phaseLineColorExpression(), "line-width": 2 },
+				paint: {
+					"line-color": phaseLineColorExpression(),
+					"line-width": 2,
+					// Provenance (#263): estimated stretches dash + dim.
+					"line-dasharray": sourceDashExpression(),
+					"line-opacity": sourceOpacityExpression(),
+				},
 			});
 			// Breadcrumb trails under the dots, faded oldest→head by a line-gradient.
 			map.addLayer({

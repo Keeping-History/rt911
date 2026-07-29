@@ -9,6 +9,7 @@ import {
 	ClassicyPopUpMenu,
 } from "classicy";
 import { isNotable, isObserver } from "./notableFlights";
+import { isEstimated, sourceLabel } from "./flightProvenance";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
 import { type MapPoi, POI_DETAIL_FIELDS, detailTitleFor } from "./mapPois";
 import { PHASE_COLORS, DEFAULT_PHASE_COLOR, phaseLabel } from "./flightPhases";
@@ -44,6 +45,7 @@ interface FlightDetailPanelProps {
 	// Non-empty only for notable flights with a per-phase profile; drives the
 	// color legend under the fields.
 	phases?: string[];
+	sources?: string[];
 }
 
 // "8:14 AM"-style display time for a UTC instant in the app's display tz.
@@ -58,7 +60,7 @@ function formatDisplayTime(iso: string, tzOffset: number): string {
 export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 	selected, track, loading, error, nowMs, headingDeg = null, tzOffset = -4,
 	livePos = null, estimates = null,
-	selectionOptions = [], onPickFlight, onSaveAsFilter, poi = null, phases = [],
+	selectionOptions = [], onPickFlight, onSaveAsFilter, poi = null, phases = [], sources = [],
 }) => {
 	if (poi) {
 		const locale = [poi.city, poi.region].filter(Boolean).join(", ");
@@ -184,6 +186,34 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				{fateText && (<><dt>Fate</dt><dd>{fateText}</dd></>)}
 			</dl>
 			</div>
+			{sources.length > 0 && (
+				<dl className={styles.phaseLegend} aria-label="Track provenance">
+					{sources.map((src) => (
+						<div key={src} className={styles.phaseLegendItem}>
+							<dt>
+								<span
+									className={styles.phaseSwatch}
+									style={{
+										backgroundColor: DEFAULT_PHASE_COLOR,
+										opacity: isEstimated(src) ? 0.55 : 1,
+										// mirror the map: estimated stretches read as dashes
+										backgroundImage: isEstimated(src)
+											? "repeating-linear-gradient(90deg, transparent 0 2px, rgba(255,255,255,0.9) 2px 4px)"
+											: undefined,
+									}}
+								/>
+							</dt>
+							<dd>{sourceLabel(src)}</dd>
+						</div>
+					))}
+				</dl>
+			)}
+			{sources.length > 0 && (
+				<p className={styles.detailNote}>
+					Flight paths are reconstructed from radar tracks and, where radar
+					coverage was unavailable, historical flight records.
+				</p>
+			)}
 			{phases.length > 0 && (
 				<dl className={styles.phaseLegend} aria-label="Phase colors">
 					{phases.map((ph) => (

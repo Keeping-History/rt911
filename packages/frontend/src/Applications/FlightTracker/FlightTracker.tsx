@@ -71,6 +71,7 @@ import {
 } from "./flightTrackerCommands";
 import { useNotableCrashSites } from "./useNotableCrashSites";
 import { isNotable, isObserver } from "./notableFlights";
+import { isEstimated, orderedTrackSources } from "./flightProvenance";
 import type { CameraMode } from "./flightCamera";
 import { useRouteIndex } from "./useRouteIndex";
 import { groundStopStatus } from "./groundStop";
@@ -823,9 +824,20 @@ export const FlightTracker: FC = () => {
 		setSelectedPoi(null);
 	}, [command, flightPositions]);
 
+	// Per-minute segments are used when the track needs to say something the
+	// single decimated line can't: phase colors (notables) or a provenance
+	// change (a spliced radar/estimated flight, #263).
+	const hasEstimated = useMemo(
+		() => !!profile?.some((p) => isEstimated(p.source)),
+		[profile],
+	);
+
 	const trackGeoJSON: FeatureCollection | null = useMemo(() => {
 		if (!track?.geometry) return null;
-		if (selection && isNotable(selection.flight) && profile && profile.length >= 2) {
+		if (
+			selection && profile && profile.length >= 2
+			&& (isNotable(selection.flight) || hasEstimated)
+		) {
 			const features = buildTrackSegments(profile);
 			if (features.length) return { type: "FeatureCollection", features };
 		}
@@ -834,7 +846,14 @@ export const FlightTracker: FC = () => {
 			type: "FeatureCollection",
 			features: [{ type: "Feature", geometry: track.geometry, properties: {} }],
 		};
-	}, [track?.geometry, selection, profile]);
+	}, [track?.geometry, selection, profile, hasEstimated]);
+
+	// Provenance legend: only meaningful once a track actually mixes radar and
+	// estimated stretches.
+	const trackSources = useMemo<string[]>(
+		() => (hasEstimated && profile ? orderedTrackSources(profile) : []),
+		[hasEstimated, profile],
+	);
 
 	// Phase legend (issue #310): same gate as the per-phase track segments — only
 	// notable flights with a smoothed profile get colored phases, so only they get
@@ -1384,6 +1403,7 @@ export const FlightTracker: FC = () => {
 							selectionOptions={multiSelected}
 							poi={selectedPoi}
 							phases={trackPhases}
+							sources={trackSources}
 							onPickFlight={(flight) => {
 								const i = multiSelected.findIndex((p) => p.flight === flight);
 								if (i >= 0) setActiveFlightIdx(i);
