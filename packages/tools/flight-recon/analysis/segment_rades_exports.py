@@ -364,6 +364,15 @@ BEARING_GATE_DEG = 100    # beyond this, the pairing is rejected outright
 BEARING_WEIGHT = 3.0      # score seconds per degree beyond the free cone
 SCORE_GATE_S = 300.0      # max acceptable score for an assignment
 COURSE_SAMPLE_S = 300     # outbound course measured at first return + this
+# En-route course: measured over the track's later half, after the departure
+# SID/climb turn has finished. This is the discriminating signal — two flights
+# leaving the same airport in the same minute diverge here even when their
+# climb-out headings are identical (the US1105/WN918 swap class).
+ENROUTE_MIN_NM = 15.0
+# Route-corridor audit thresholds (works even when the far endpoint is OUTSIDE
+# radar coverage, which is why most names were previously unjudgeable).
+CORRIDOR_OK_DEG = 30.0
+CORRIDOR_BAD_DEG = 90.0
 
 
 def bearing_deg(lat1, lon1, lat2, lon2):
@@ -376,6 +385,26 @@ def bearing_deg(lat1, lon1, lat2, lon2):
 
 def ang_diff(a, b):
     return abs((a - b + 180) % 360 - 180)
+
+
+def enroute_course(pts):
+    """Course over the track's later half, or None when it barely moves."""
+    if len(pts) < 6:
+        return None
+    a, b = pts[len(pts) // 2], pts[-1]
+    if dist_nm(a[1], a[2], b[1], b[2]) < ENROUTE_MIN_NM:
+        return None
+    return bearing_deg(a[1], a[2], b[1], b[2])
+
+
+def inbound_course(pts):
+    """Course over the track's earlier half (arrival-side twin)."""
+    if len(pts) < 6:
+        return None
+    a, b = pts[0], pts[len(pts) // 2]
+    if dist_nm(a[1], a[2], b[1], b[2]) < ENROUTE_MIN_NM:
+        return None
+    return bearing_deg(a[1], a[2], b[1], b[2])
 
 
 def _endpoint_signatures(tracks, apl):
@@ -404,7 +433,9 @@ def _endpoint_signatures(tracks, apl):
             course = (bearing_deg(lat, lon, ref[1], ref[2]) if kind == "dep"
                       else bearing_deg(ref[1], ref[2], lat, lon))
             sig = {"track": i, "code": tr["code"], "t": t, "ap": best,
-                   "course": course, "n": len(pts)}
+                   "course": course, "n": len(pts),
+                   # the discriminating long-baseline course (see ENROUTE_MIN_NM)
+                   "far_course": enroute_course(pts) if kind == "dep" else inbound_course(pts)}
             (deps if kind == "dep" else arrs).append(sig)
     return deps, arrs
 
@@ -425,12 +456,23 @@ def _assign(sigs, flights, ap, time_col, bias, lead_s, use_bearing):
             if use_bearing:
                 other = f.Dest if time_col == "wo_secs" else f.Origin
                 if other in ap.index:
-                    brg = bearing_deg(ap.loc[s["ap"], "lat"], ap.loc[s["ap"], "lon"],
-                                      ap.loc[other, "lat"], ap.loc[other, "lon"])
-                    diff = ang_diff(s["course"], brg)
-                    if diff > BEARING_GATE_DEG:
+                    frm, to = ((s["ap"], other) if time_col == "wo_secs"
+                               else (other, s["ap"]))
+                    brg = bearing_deg(ap.loc[frm, "lat"], ap.loc[frm, "lon"],
+                                      ap.loc[to, "lat"], ap.loc[to, "lon"])
+                    # The en-route course discriminates where the climb-out
+                    # course cannot; fall back to the climb-out one only when
+                    # the track is too short to have an en-route leg.
+                    far = s.get("far_course")
+                    if far is not None:
+                        diff = ang_diff(far, brg)
+                        free, gate = BEARING_FREE_DEG / 2, BEARING_GATE_DEG / 2
+                    else:
+                        diff = ang_diff(s["course"], brg)
+                        free, gate = BEARING_FREE_DEG, BEARING_GATE_DEG
+                    if diff > gate:
                         continue
-                    score += BEARING_WEIGHT * max(0.0, diff - BEARING_FREE_DEG)
+                    score += BEARING_WEIGHT * max(0.0, diff - free)
             if score <= SCORE_GATE_S:
                 pairs.append((score, s, f))
     pairs.sort(key=lambda x: x[0])
@@ -648,7 +690,94 @@ def audit_arrivals(tracks, results, bts_path, airports_path):
     return out
 
 
-def export_verified(tracks, results, dep_details, arr_verdicts, out_path):
+def audit_corridor(tracks, results, bts_path, airports_path, dep_details):
+    """Route-corridor audit — the evidence axis that survives out-of-coverage
+    endpoints (#263).
+
+    A track named ORIGIN->DEST should FLY toward DEST: its en-route course
+    (later half of the track, past the climb-out turn) should agree with the
+    great-circle bearing from origin to destination. This works when the
+    destination is thousands of miles outside radar coverage, which is why
+    most names were previously 'indeterminate'. Arrival-named flights get the
+    mirror test (inbound course vs bearing from origin).
+
+    Returns {flight: "corridor-consistent" | "corridor-contradicted" |
+             "corridor-ambiguous"} for names not already settled by the
+    endpoint audits."""
+    ap = pd.read_csv(airports_path).set_index("code")
+    bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
+    bts = bts[(bts.FlightDate == "2001-09-11") & (bts.Cancelled == 0)]
+    ref = {r.Reporting_Airline + str(r.Flight_Number): r for r in bts.itertuples(index=False)}
+    settled = {d["flight"] for d in dep_details
+               if d["verdict"] in ("consistent", "inconsistent", "diverted-tracked-low")}
+
+    out = Counter()
+    verdicts = {}
+    for kind, matches in (("dep", results["dep"]), ("arr", results["arr"])):
+        for key, (sig, _sc) in matches.items():
+            if key in settled or key in verdicts:
+                continue
+            f = ref.get(key)
+            if f is None or f.Origin not in ap.index or f.Dest not in ap.index:
+                out["no-airport-data"] += 1
+                continue
+            # A diverted flight never flew its filed corridor — not judgeable.
+            if getattr(f, "Diverted", 0) == 1:
+                out["diverted-skip"] += 1
+                continue
+            pts = tracks[sig["track"]]["pts"]
+            course = enroute_course(pts) if kind == "dep" else inbound_course(pts)
+            if course is None:
+                out["too-little-travel"] += 1
+                continue
+            want = bearing_deg(ap.loc[f.Origin, "lat"], ap.loc[f.Origin, "lon"],
+                               ap.loc[f.Dest, "lat"], ap.loc[f.Dest, "lon"])
+            diff = ang_diff(course, want)
+            v = ("corridor-consistent" if diff <= CORRIDOR_OK_DEG
+                 else "corridor-contradicted" if diff >= CORRIDOR_BAD_DEG
+                 else "corridor-ambiguous")
+            verdicts[key] = v
+            out[v] += 1
+    print(f"corridor audit: {dict(out)}")
+    return verdicts
+
+
+def curated_by_minute(notable_dir):
+    """Curated notable tracks as {minute -> (lat, lon)} maps."""
+    import datetime as _dt
+    out = []
+    for path in sorted(glob.glob(os.path.join(notable_dir, "*.json"))):
+        with open(path) as fh:
+            data = json.load(fh)
+        by_min = {}
+        for w in data["waypoints"]:
+            t = (_dt.datetime.strptime(w["utc"], "%Y-%m-%dT%H:%M:%SZ")
+                 - _dt.datetime(2001, 9, 11)).total_seconds()
+            by_min[int(t // 60)] = (w["lat"], w["lon"])
+        out.append((data["flight"], by_min))
+    return out
+
+
+SHADOW_PTS = 10
+SHADOW_NM = 3.0
+
+
+def shadows_notable(pts, curated):
+    """The hijacked/observer aircraft's own radar chains must never be named.
+    True when >= SHADOW_PTS same-minute positions fall within SHADOW_NM."""
+    for _flight, by_min in curated:
+        n = 0
+        for p in pts:
+            q = by_min.get(int(p[0] // 60))
+            if q is not None and dist_nm(q[0], q[1], p[1], p[2]) < SHADOW_NM:
+                n += 1
+                if n >= SHADOW_PTS:
+                    return True
+    return False
+
+
+def export_verified(tracks, results, dep_details, arr_verdicts, out_path,
+                    corridor_verdicts=None, notable_dir=None):
     """The load-grade set: names carrying independent posterior evidence."""
     tier = {}
     for d in dep_details:
@@ -661,11 +790,19 @@ def export_verified(tracks, results, dep_details, arr_verdicts, out_path):
     for key, v in arr_verdicts.items():
         if v == "consistent":
             tier.setdefault(key, []).append("origin-consistent")
+    for key, v in (corridor_verdicts or {}).items():
+        if v == "corridor-consistent":
+            tier.setdefault(key, []).append("corridor-consistent")
+    curated = curated_by_minute(notable_dir) if notable_dir else []
     payload = []
+    blocked = []
     for key, evidence in sorted(tier.items()):
         src = results["dep"].get(key) or results["arr"].get(key)
         sig, score = src
         tr = tracks[sig["track"]]
+        if curated and shadows_notable(tr["pts"], curated):
+            blocked.append(key)
+            continue
         payload.append({"flight": key, "evidence": evidence, "score": round(score, 1),
                         "codes": tr.get("codes", [tr["code"]]),
                         "returns": len(tr["pts"]),
@@ -674,6 +811,8 @@ def export_verified(tracks, results, dep_details, arr_verdicts, out_path):
     with open(out_path, "w") as fh:
         json.dump(payload, fh, indent=1)
     by_ev = Counter(e for p in payload for e in p["evidence"])
+    if blocked:
+        print(f"notable-shadow gate: BLOCKED {len(blocked)} names — {sorted(blocked)}")
     print(f"verified tier: {len(payload)} flights -> {out_path}  {dict(by_ev)}")
     return payload
 
