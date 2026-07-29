@@ -171,6 +171,7 @@ export function motionPointsToGeoJSON(
 				phase: m.item.phase ?? "",
 				notable: isNotable(m.item.flight),
 				observer: isObserver(m.item.flight),
+				anon: m.item.flight.startsWith("RDR-"),
 				heading: m.headingDeg,
 				family: familyOf?.(m) ?? "generic",
 			},

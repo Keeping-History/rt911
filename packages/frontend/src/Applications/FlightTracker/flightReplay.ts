@@ -31,6 +31,7 @@ export interface ReplayFlight {
 		phase: string;
 		notable: boolean;
 		observer: boolean;
+		anon: boolean;
 	};
 	id: number; // stable feature id (latest sample's row id)
 }
@@ -70,6 +71,7 @@ export function insertReplaySamples(
 					phase: p.phase ?? "",
 					notable: isNotable(p.flight),
 					observer: isObserver(p.flight),
+					anon: p.flight.startsWith("RDR-"),
 				},
 				id: p.id,
 			};
@@ -164,6 +166,7 @@ export function buildReplayTrailInstances(
 	let count = 0;
 	for (const [flight, f] of buffer) {
 		if (visible && !visible.has(flight)) continue;
+		if (f.props.anon) continue; // anon traffic is 2D-only (#263)
 		const at = replaySampleAt(f, tMs);
 		if (!at || at.alt_ft <= 0) continue;
 		const [mx, my] = lngLatToMercator(at.lon, at.lat);

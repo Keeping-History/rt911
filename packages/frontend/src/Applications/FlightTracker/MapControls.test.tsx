@@ -7,6 +7,7 @@ afterEach(cleanup);
 
 const baseProps = (): MapControlsProps => ({
 	globe: false,
+	anonTraffic: false,
 	threeD: false,
 	terrain: false,
 	cluster: false,
@@ -20,6 +21,7 @@ const baseProps = (): MapControlsProps => ({
 	onZoomIn: vi.fn(),
 	onZoomOut: vi.fn(),
 	onToggleGlobe: vi.fn(),
+	onToggleAnonTraffic: vi.fn(),
 	onToggleThreeD: vi.fn(),
 	onToggleTerrain: vi.fn(),
 	onToggleCluster: vi.fn(),

@@ -98,8 +98,11 @@ func main() {
 	// bypasses row triggers anyway), so the boot warm is the only sync. After a
 	// flight-recon re-load: `DEL flight:minutes` + restart to rewarm. Best-effort
 	// like every side channel — a failure must not take down media streaming.
-	if err := cache.WarmFlightCache(ctx, rdb, pool, logger); err != nil {
+	if err := cache.WarmFlightCache(ctx, rdb, pool, cache.KeyFlightMinutes, false, logger); err != nil {
 		logger.Warn("flight cache warm failed; flights channel will serve empty or partial windows", "error", err)
+	}
+	if err := cache.WarmFlightCache(ctx, rdb, pool, cache.KeyFlightAnonMinutes, true, logger); err != nil {
+		logger.Warn("flights-anon cache warm failed; anonymous traffic will serve empty or partial windows", "error", err)
 	}
 
 	// usenet (Newsgroups app) is intentionally NOT cached in Redis: messages carry

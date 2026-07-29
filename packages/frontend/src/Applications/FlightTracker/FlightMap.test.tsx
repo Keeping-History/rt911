@@ -385,6 +385,7 @@ describe("FlightMap", () => {
 		expect(dots.type).toBe("symbol");
 		expect(dots.filter).toEqual([
 			"all", ["!=", ["get", "notable"], true], ["!=", ["get", "observer"], true],
+			["!=", ["get", "anon"], true],
 		]);
 		expect(dots.layout["icon-image"]).toEqual([
 			"coalesce",

@@ -122,6 +122,9 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				<span className={styles.detailFlight}>{selected.flight}</span>
 				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
 				{isObserver(selected.flight) && <span className={styles.detailBadge}>OBSERVER</span>}
+				{selected.flight.startsWith("RDR-") && (
+					<span className={styles.detailBadge}>UNIDENTIFIED — 84 RADES RADAR</span>
+				)}
 			</div>
 			<ClassicyControlLabel labelSize={"small"} label={route ?? "Flight data has been synthesized from multiple sources and may be inaccurate."} />
 			{selectionOptions.length > 1 && (

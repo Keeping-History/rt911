@@ -32,6 +32,7 @@ review of the tier artifact + a dry-run report first.
 """
 
 import argparse
+import glob
 import json
 import logging
 import math
@@ -361,6 +362,126 @@ def run(dsn, stitched_path, tier_path, bts_path, airports_path,
     return summary
 
 
+# ------------------------------------------------------------------ story 3
+ANON_MIN_RETURNS = 50
+ANON_MIN_DUR_S = 900
+ANON_MIN_NET_NM = 20.0
+ANON_SHADOW_PTS = 10
+ANON_SHADOW_NM = 3.0
+
+
+def anon_id(index):
+    return f"RDR-{index:05d}"
+
+
+def shadows_curated(pts, curated_by_min):
+    """True when the chain shadows a curated notable track (same-minute
+    positions within ANON_SHADOW_NM at least ANON_SHADOW_PTS times) — the
+    hijacked flights' own radar chains must never load as anonymous twins."""
+    for wps in curated_by_min:
+        n = 0
+        for p in pts:
+            q = wps.get(int(p[0] // 60))
+            if q is not None and dist_nm(p[1], p[2], q[0], q[1]) < ANON_SHADOW_NM:
+                n += 1
+                if n >= ANON_SHADOW_PTS:
+                    return True
+    return False
+
+
+def load_curated_by_min(notable_dir):
+    out = []
+    for path in sorted(glob.glob(os.path.join(notable_dir, "*.json"))):
+        with open(path) as fh:
+            data = json.load(fh)
+        by_min = {}
+        for w in data["waypoints"]:
+            t = (datetime.strptime(w["utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                 - DAY).total_seconds()
+            by_min[int(t // 60)] = (w["lat"], w["lon"])
+        out.append(by_min)
+    return out
+
+
+def run_anon(dsn, stitched_path, tier_path, notable_dir,
+             dry_run=False, init_schema=False, run_id=None):
+    """Story 3: the anonymous corpus under RDR-% ids. Idempotency is
+    namespace-scoped: delete WHERE flight LIKE 'RDR-%' on the flight date."""
+    run_id = run_id or f"rades-anon-{uuid.uuid4().hex[:12]}"
+    chains, tier = load_inputs(stitched_path, tier_path)
+    used = {t["track_index"] for t in tier}
+    curated = load_curated_by_min(notable_dir)
+
+    positions_out, tracks_out = [], []
+    skipped = {"tier": 0, "gates": 0, "shadow": 0, "cleaned-away": 0}
+    for i, chain in enumerate(chains):
+        if i in used:
+            skipped["tier"] += 1
+            continue
+        pts = chain["pts"]
+        if (len(pts) < ANON_MIN_RETURNS
+                or pts[-1][0] - pts[0][0] < ANON_MIN_DUR_S
+                or dist_nm(pts[0][1], pts[0][2], pts[-1][1], pts[-1][2]) < ANON_MIN_NET_NM):
+            skipped["gates"] += 1
+            continue
+        if shadows_curated(pts, curated):
+            skipped["shadow"] += 1
+            continue
+        cleaned = clean_chain(pts)
+        wps = chain_waypoints(cleaned)
+        if len(wps) < 10:
+            skipped["cleaned-away"] += 1
+            continue
+        flight = anon_id(i)
+        positions, geometry = build_rows(flight, None, wps, diverted=False)
+        positions_out.extend(positions)
+        tracks_out.append({
+            "flight": flight, "flight_date": FLIGHT_DATE, "origin": None,
+            "scheduled_dest": None, "landed_at": None, "diverted": False,
+            "wheels_off_utc": positions[0]["utc"], "wheels_on_utc": positions[-1]["utc"],
+            "tail_number": None, "aircraft_type": None,
+            "details": {"track_source": {"kind": "rades-radar-anon",
+                                         "codes": chain.get("codes", [chain.get("code")]),
+                                         "returns": len(pts)}},
+            "geometry": {"type": "LineString", "coordinates": geometry},
+        })
+    log.info("anon build: %d tracks, %d positions, skips %s",
+             len(tracks_out), len(positions_out), skipped)
+
+    with psycopg.connect(dsn) as conn:
+        with conn.cursor() as cur:
+            if init_schema:
+                cur.execute(LOCAL_SCHEMA_DDL)
+            cur.execute("DELETE FROM flight_positions WHERE flight_date = %s AND flight LIKE 'RDR-%%'",
+                        (FLIGHT_DATE,))
+            deleted = cur.rowcount
+            cur.execute("DELETE FROM flight_tracks WHERE flight_date = %s AND flight LIKE 'RDR-%%'",
+                        (FLIGHT_DATE,))
+            copy_positions(cur, positions_out, run_id)
+            insert_tracks(cur, tracks_out, run_id)
+            cur.execute(
+                'INSERT INTO reconstruction_runs (run_id, start, "end", source_file, '
+                "flights_reconstructed, positions_count, tracks_count, skipped_count, "
+                "skipped, skipped_by_reason, cancelled_by_day, created_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (run_id, FLIGHT_DATE, FLIGHT_DATE,
+                 "84 RADES anonymous radar traffic (RDR-%% namespace) — story 3 of "
+                 "plans/2026-07-29-radar-tracks-load-design.md",
+                 len(tracks_out), len(positions_out), len(tracks_out),
+                 sum(skipped.values()), Json([]), Json(skipped), Json({}),
+                 datetime.now(timezone.utc)))
+        if dry_run:
+            conn.rollback()
+            log.warning("DRY RUN: rolled back")
+        else:
+            conn.commit()
+            log.warning("committed %d anon tracks, %d positions (run_id=%s)",
+                        len(tracks_out), len(positions_out), run_id)
+    return {"run_id": run_id, "dry_run": dry_run, "anon_tracks": len(tracks_out),
+            "positions": len(positions_out), "positions_deleted": deleted,
+            "skipped": skipped}
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--dsn", default=os.environ.get("RT911_DB_DSN"))
@@ -369,6 +490,10 @@ def main(argv=None):
                                                   "data", "rades", "verified_tier.json"))
     p.add_argument("--bts", default="/srv/flight-recon-data/bts_2001-09.csv")
     p.add_argument("--airports", default="/srv/flight-recon-data/airports.csv")
+    p.add_argument("--anon", action="store_true",
+                   help="story 3: load the anonymous corpus (RDR-%% namespace)")
+    p.add_argument("--notable-dir", default=os.path.join(os.path.dirname(__file__), os.pardir,
+                                                         "data", "notable_flights"))
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--init-schema", action="store_true")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -377,8 +502,12 @@ def main(argv=None):
                         format="%(levelname)s %(message)s")
     if not args.dsn:
         p.error("no DSN")
-    summary = run(args.dsn, args.stitched, args.tier, args.bts, args.airports,
-                  dry_run=args.dry_run, init_schema=args.init_schema)
+    if args.anon:
+        summary = run_anon(args.dsn, args.stitched, args.tier, args.notable_dir,
+                           dry_run=args.dry_run, init_schema=args.init_schema)
+    else:
+        summary = run(args.dsn, args.stitched, args.tier, args.bts, args.airports,
+                      dry_run=args.dry_run, init_schema=args.init_schema)
     print(json.dumps(summary, indent=1, default=str))
 
 

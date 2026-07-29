@@ -404,7 +404,8 @@ export function nonNotableFeatures(fc: FlightFeatureCollection): FlightFeatureCo
 	return {
 		type: "FeatureCollection",
 		features: fc.features.filter(
-			(f) => f.properties.notable !== true && f.properties.observer !== true,
+			(f) => f.properties.notable !== true && f.properties.observer !== true
+				&& f.properties.anon !== true,
 		),
 	};
 }
@@ -507,6 +508,7 @@ export function planeLayerVisibility(
 	return {
 		"flights-dots": !cluster && !pitched,
 		"flights-notable": !pitched,
+		"flights-anon-dots": !pitched,
 		"flight-trails": !cluster && !pitched,
 		"cluster-circles": cluster && !pitched,
 		"cluster-counts": cluster && !pitched,
@@ -797,9 +799,26 @@ export const FlightMap: FC<FlightMapProps> = ({
 				id: "flight-trails", type: "line", source: "flight-trails",
 				paint: { "line-width": 1.2, "line-gradient": trailGradient(colors.mapStyle, colors.darkMap) },
 			});
+			// Anonymous radar traffic (#263): ghost styling — generic icon, smaller
+			// and translucent, under the identified traffic. Empty until the
+			// flights-anon channel is subscribed (the Other toggle).
+			map.addLayer({
+				id: "flights-anon-dots", type: "symbol", source: "flights",
+				filter: ["==", ["get", "anon"], true],
+				layout: {
+					"icon-image": ["image", PLANE_ICON_ID],
+					"icon-size": 0.8,
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
+				},
+				paint: { "icon-opacity": 0.55 },
+			});
 			map.addLayer({
 				id: "flights-dots", type: "symbol", source: "flights",
-				filter: ["all", ["!=", ["get", "notable"], true], ["!=", ["get", "observer"], true]],
+				filter: ["all", ["!=", ["get", "notable"], true], ["!=", ["get", "observer"], true],
+					["!=", ["get", "anon"], true]],
 				layout: {
 					"icon-image": FAMILY_ICON_IMAGE,
 					// Grow to 1.5× while zooming in, capping at ~zoom 9 — where a

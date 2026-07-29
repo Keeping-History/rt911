@@ -39,6 +39,9 @@ export interface FlightMapSettings {
 	threeD: boolean;
 	// Topographic relief (hillshade + 3D ground mesh) — one switch for both.
 	terrain: boolean;
+	// Anonymous radar traffic (RDR-… ids, #263): opt-in "Other" layer — the
+	// extra stream is subscribed only while this is on.
+	anonTraffic: boolean;
 	// Camera-follow framing for the tracked flights (track/cockpit/highlight).
 	// Persisted as a preference; the follow on/off toggle itself is ephemeral
 	// (it needs a live selection), so it lives in FlightTracker, not here.
@@ -62,6 +65,7 @@ export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	cluster: false,
 	threeD: false,
 	terrain: true,
+	anonTraffic: false,
 	cameraMode: DEFAULT_CAMERA_MODE,
 };
 

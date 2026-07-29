@@ -238,6 +238,8 @@ import { FlightTracker } from "./FlightTracker";
 // the same context plumbing every other app relies on.
 const subscribeFlights = vi.fn();
 const unsubscribeFlights = vi.fn();
+const subscribeFlightsAnon = vi.fn();
+const unsubscribeFlightsAnon = vi.fn();
 
 function makeCtxValue(
 	overrides: Partial<MediaStreamContextValue>,
@@ -277,6 +279,8 @@ function makeCtxValue(
 		flightPositions: [],
 		subscribeFlights,
 		unsubscribeFlights,
+		subscribeFlightsAnon,
+		unsubscribeFlightsAnon,
 		flightsHistory: [],
 		flightsHistoryDone: false,
 		flightsSeed: [],

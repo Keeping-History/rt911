@@ -231,6 +231,8 @@ function makeCtxValue(
 		flightPositions: [],
 		subscribeFlights: () => {},
 		unsubscribeFlights: () => {},
+		subscribeFlightsAnon: () => {},
+		unsubscribeFlightsAnon: () => {},
 		flightsHistory: [],
 		flightsHistoryDone: false,
 		flightsSeed: [],

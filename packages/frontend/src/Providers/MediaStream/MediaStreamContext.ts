@@ -297,8 +297,11 @@ export interface MediaStreamContextValue {
 	flightPositions: FlightPosition[];
 	/** Opt into flights-channel delivery. Ref-counted by appId. */
 	subscribeFlights: (appId: string) => void;
+	/** Opt into the anonymous radar-traffic corpus (RDR-… ids, #263). */
+	subscribeFlightsAnon: (appId: string) => void;
 	/** Drop a flights-channel subscription. Unsubscribes server-side when the last app leaves. */
 	unsubscribeFlights: (appId: string) => void;
+	unsubscribeFlightsAnon: (appId: string) => void;
 	/** Accumulated flights_history chunks for the active loop-mode request. */
 	flightsHistory: FlightPosition[];
 	/** True once the active history request's done frame has arrived. */
@@ -412,7 +415,9 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	requestUsenetOlder: () => {},
 	flightPositions: [],
 	subscribeFlights: () => {},
+	subscribeFlightsAnon: () => {},
 	unsubscribeFlights: () => {},
+	unsubscribeFlightsAnon: () => {},
 	flightsHistory: [],
 	flightsHistoryDone: false,
 	flightsSeed: [],

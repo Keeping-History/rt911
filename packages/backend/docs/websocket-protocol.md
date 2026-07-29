@@ -41,13 +41,13 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `seek`        | `time`            | Move the virtual clock to a new instant.      |
 | `heartbeat`   | `time`            | Report client's current virtual time.         |
 | `filter`      | `formats[]`       | Whitelist media formats.                      |
-| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`weather`/`alerts`/`chat`). |
+| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`flights-anon`/`weather`/`alerts`/`chat`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
 | `usenet_body` | `id`              | Request the full body of one message by id (bodies are no longer in list frames). |
 | `news_body`   | `id`              | Request the full text of one news article by id (bodies are not in snapshot frames). |
-| `flights_history` | `minutes`, `id` | Request the trailing `minutes` (1-90; loop mode uses 30/90, the heading seed ~3) of flight positions. Requires an active `flights` subscription. `id` is echoed on every reply chunk. |
+| `flights_history` | `minutes`, `id`, `channel?` | Request the trailing `minutes` (1-90; loop mode uses 30/90, the heading seed ~3) of flight positions. `channel` selects the corpus: omitted/`flights` (default) or `flights-anon`; the matching subscription is required. `id` is echoed on every reply chunk. |
 | `weather_forecast` | `zone`, `id` | Request the forecast product covering NWS UGC `zone` (e.g. `"NYZ076"`) at the client's virtual time. Requires an active `weather` subscription. `id` is echoed on the reply. |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
@@ -76,6 +76,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `news`            | `time`, `items[]`             | News back catalogue (every approved article from the start of 2001-09-09 up to `t`, **headline-only** — no `content`) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `flights`         | `time`, `flights[]`           | Flights snapshot (airborne picture covering `[t−90s, t]`) on subscribe/init/seek, plus a forward **window** (default 300 s) per refill while subscribed. |
+| `flights_anon`    | `time`, `flights[]`           | Identical contract to `flights` for the anonymous radar-traffic corpus (`RDR-…` ids, issue #263). Delivered only while subscribed to `flights-anon`; cached separately (`flight-anon:minutes`), so unsubscribed clients pay nothing. |
 | `flights_history` | `id`, `time`, `flights[]`, `done` | Chunked reply to a `flights_history` request (~10 minute-buckets per frame). The final frame carries `done: true` (and may be empty). `id` echoes the request. |
 | `weather`         | `time`, `weather[]`, `weather_forecasts[]` | Weather snapshot (latest observation per station ≤ `t`, no age limit) on subscribe/init/seek, plus a forward **window** (default 600 s) per refill while subscribed — windowed observations plus any forecast products newly issued in the window. One frame carries both lists; suppressed when both are empty. |
 | `weather_forecast` | `id`, `time`, `weather_forecasts[]` | Reply to `weather_forecast`: the forecast product covering the requested zone at the clock, or an explicit empty `weather_forecasts` when none exists. `id` echoes the request. |
@@ -274,7 +275,7 @@ in bulk on the wire, the **client reveal-gate** holds each page until its `start
 still render paced by the virtual clock rather than all at once. This pacing invariant is enforced
 client-side; consumer apps never receive a not-yet-due page.
 
-Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"`, `"weather"`, `"alerts"` and
+Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"`, `"flights-anon"`, `"weather"`, `"alerts"` and
 `"chat"`; any other value yields `{"type":"error","message":"unknown channel \"…\""}`. (HTML is
 planned.) Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
 

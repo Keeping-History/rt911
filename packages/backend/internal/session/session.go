@@ -32,6 +32,9 @@ const (
 	ChannelNews    = "news"
 	ChannelUsenet  = "usenet"
 	ChannelFlights = "flights"
+	// Anonymous radar traffic (RDR-% ids, issue #263) — its own channel so the
+	// dense extra payload is paid only by clients that enable the map toggle.
+	ChannelFlightsAnon = "flights-anon"
 	ChannelWeather = "weather"
 	ChannelAlerts  = "alerts"
 	ChannelChat    = "chat"
@@ -159,7 +162,8 @@ type Session struct {
 	mp3Horizon     time.Time
 	newsHorizon    time.Time
 	usenetHorizon  time.Time
-	flightsHorizon time.Time
+	flightsHorizon     time.Time
+	flightsAnonHorizon time.Time
 	weatherHorizon time.Time
 	alertHorizon   time.Time
 	// chatHorizon is the last virtual instant checked for scheduled beats
@@ -311,6 +315,8 @@ func (s *Session) horizonFor(channel string) *time.Time {
 		return &s.usenetHorizon
 	case ChannelFlights:
 		return &s.flightsHorizon
+	case ChannelFlightsAnon:
+		return &s.flightsAnonHorizon
 	case ChannelWeather:
 		return &s.weatherHorizon
 	case ChannelAlerts:
@@ -418,6 +424,16 @@ func (s *Session) SendFlights(t time.Time, items []model.FlightPosition) {
 		return
 	}
 	s.send_(outMsg{Type: "flights", Time: t.Format(time.RFC3339), Flights: items})
+}
+
+// SendFlightsAnon mirrors SendFlights on the flights-anon channel: same
+// FlightPosition payload, its own frame type so the client routes it to the
+// anonymous-traffic buffers only while the toggle is on.
+func (s *Session) SendFlightsAnon(t time.Time, items []model.FlightPosition) {
+	if len(items) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "flights_anon", Time: t.Format(time.RFC3339), Flights: items})
 }
 
 // SendFlightsHistory delivers one chunk of a flights_history reply, echoing the
@@ -555,6 +571,7 @@ func (s *Session) resetHorizons(t time.Time) {
 	s.newsHorizon = t
 	s.usenetHorizon = t
 	s.flightsHorizon = t
+	s.flightsAnonHorizon = t
 	s.weatherHorizon = t
 	s.alertHorizon = t
 	s.chatHorizon = t
@@ -1322,6 +1339,7 @@ func (s *Session) RunTimePump() {
 			newsLo, newsHi, doNews := s.planChannelRefill(ChannelNews, &s.newsHorizon, t, windowNews)
 			usenetLo, usenetHi, doUsenet := s.planChannelRefill(ChannelUsenet, &s.usenetHorizon, t, windowUsenet)
 			flightsLo, flightsHi, doFlights := s.planChannelRefill(ChannelFlights, &s.flightsHorizon, t, windowFlights)
+			anonLo, anonHi, doAnon := s.planChannelRefill(ChannelFlightsAnon, &s.flightsAnonHorizon, t, windowFlights)
 			weatherLo, weatherHi, doWeather := s.planChannelRefill(ChannelWeather, &s.weatherHorizon, t, windowWeather)
 			alertLo, alertHi, doAlert := s.planChannelRefill(ChannelAlerts, &s.alertHorizon, t, windowAlert)
 			var usenetGroups []string
@@ -1382,10 +1400,17 @@ func (s *Session) RunTimePump() {
 				}
 			}
 			if doFlights {
-				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, flightsLo, flightsHi, s.logger); err != nil {
+				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, cache.KeyFlightMinutes, flightsLo, flightsHi, s.logger); err != nil {
 					s.logger.Warn("flights range lookup failed", "error", err)
 				} else {
 					s.SendFlights(t, items)
+				}
+			}
+			if doAnon {
+				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, cache.KeyFlightAnonMinutes, anonLo, anonHi, s.logger); err != nil {
+					s.logger.Warn("flights-anon range lookup failed", "error", err)
+				} else {
+					s.SendFlightsAnon(t, items)
 				}
 			}
 			// usenet refills per active group, reading Postgres directly (not Redis):

@@ -304,6 +304,7 @@ export function buildPlaneInstances(
 	let count = 0;
 	const halfSizeM = sizeKm * 500; // local unit 1 = half the marker size
 	for (const m of buffer.values()) {
+		if (m.item.flight.startsWith("RDR-")) continue; // anon traffic is 2D-only (#263)
 		const effNow = motionNow(m, now, landing);
 		const altFt = altitudeFtAt(m, effNow);
 		if (altFt <= 0) continue;

@@ -26,7 +26,10 @@ import (
 // There is no Upsert/Forget/NOTIFY path: flight data is immutable bulk data
 // loaded via COPY (which bypasses row triggers anyway). After a flight-recon
 // re-load, rewarm with `DEL flight:minutes` + a streamer restart.
-const keyFlightMinutes = "flight:minutes" // HASH  unix-minute epoch → msgpack []FlightPosition
+const (
+	KeyFlightMinutes     = "flight:minutes"      // HASH  unix-minute epoch → msgpack []FlightPosition
+	KeyFlightAnonMinutes = "flight-anon:minutes" // same shape, RDR-% anonymous radar traffic (#263)
+)
 
 // minuteKey returns the HASH field for the minute containing t.
 func minuteKey(t time.Time) string {
@@ -59,12 +62,12 @@ func decodeFlightBucket(data []byte) ([]model.FlightPosition, error) {
 // PutFlightBucket stores the positions for one minute, replacing any existing
 // bucket. The warm path writes via its own pipeline; this single-key variant
 // exists for tests and one-off repairs.
-func PutFlightBucket(ctx context.Context, rdb *goredis.Client, minute time.Time, items []model.FlightPosition) error {
+func PutFlightBucket(ctx context.Context, rdb *goredis.Client, key string, minute time.Time, items []model.FlightPosition) error {
 	data, err := encodeFlightBucket(items)
 	if err != nil {
 		return fmt.Errorf("encode flight bucket: %w", err)
 	}
-	return rdb.HSet(ctx, keyFlightMinutes, minuteKey(minute), data).Err()
+	return rdb.HSet(ctx, key, minuteKey(minute), data).Err()
 }
 
 // FlightPositionsInRange returns flight positions whose start_date is in the
@@ -76,7 +79,7 @@ func PutFlightBucket(ctx context.Context, rdb *goredis.Client, minute time.Time,
 // skipped — one corrupt bucket loses ≤1 minute of data, not the window; the
 // logger parameter (absent from the sibling *ItemsInRange helpers) exists for
 // exactly that partial-failure report.
-func FlightPositionsInRange(ctx context.Context, rdb *goredis.Client, lo, hi time.Time, logger *slog.Logger) ([]model.FlightPosition, error) {
+func FlightPositionsInRange(ctx context.Context, rdb *goredis.Client, key string, lo, hi time.Time, logger *slog.Logger) ([]model.FlightPosition, error) {
 	if !hi.After(lo) {
 		return nil, nil
 	}
@@ -84,7 +87,7 @@ func FlightPositionsInRange(ctx context.Context, rdb *goredis.Client, lo, hi tim
 	for m := lo.Truncate(time.Minute); m.Before(hi); m = m.Add(time.Minute) {
 		fields = append(fields, minuteKey(m))
 	}
-	vals, err := rdb.HMGet(ctx, keyFlightMinutes, fields...).Result()
+	vals, err := rdb.HMGet(ctx, key, fields...).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -110,22 +113,22 @@ func FlightPositionsInRange(ctx context.Context, rdb *goredis.Client, lo, hi tim
 // WarmFlightCache loads all flight positions from PostgreSQL into per-minute
 // Redis buckets if not already present. One streaming scan at boot; there is no
 // incremental sync (see the keyFlightMinutes comment).
-func WarmFlightCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) error {
-	n, err := rdb.HLen(ctx, keyFlightMinutes).Result()
+func WarmFlightCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, key string, anon bool, logger *slog.Logger) error {
+	n, err := rdb.HLen(ctx, key).Result()
 	if err == nil && n > 0 {
-		logger.Info("flight cache already warm", "minutes", n)
+		logger.Info("flight cache already warm", "key", key, "minutes", n)
 		return nil
 	}
 
-	logger.Info("warming flight cache from database…")
+	logger.Info("warming flight cache from database…", "key", key)
 	pipe := rdb.Pipeline()
 	buckets, positions := 0, 0
-	err = db.StreamFlightPositions(ctx, pool, func(minute time.Time, items []model.FlightPosition) error {
+	err = db.StreamFlightPositions(ctx, pool, anon, func(minute time.Time, items []model.FlightPosition) error {
 		data, err := encodeFlightBucket(items)
 		if err != nil {
 			return fmt.Errorf("encode flight bucket %s: %w", minuteKey(minute), err)
 		}
-		pipe.HSet(ctx, keyFlightMinutes, minuteKey(minute), data)
+		pipe.HSet(ctx, key, minuteKey(minute), data)
 		buckets++
 		positions += len(items)
 		pipe, err = flushIfFull(ctx, rdb, pipe, buckets)
@@ -135,13 +138,13 @@ func WarmFlightCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Poo
 		// A partial warm must not satisfy the HLEN warm-skip guard on the next
 		// boot — flights has no listener to self-heal, so drop what was written
 		// and let the next restart retry from scratch.
-		rdb.Del(ctx, keyFlightMinutes)
+		rdb.Del(ctx, key)
 		return fmt.Errorf("load flight positions: %w", err)
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
-		rdb.Del(ctx, keyFlightMinutes)
+		rdb.Del(ctx, key)
 		return fmt.Errorf("pipeline exec: %w", err)
 	}
-	logger.Info("flight cache warm", "minutes", buckets, "positions", positions)
+	logger.Info("flight cache warm", "key", key, "minutes", buckets, "positions", positions)
 	return nil
 }

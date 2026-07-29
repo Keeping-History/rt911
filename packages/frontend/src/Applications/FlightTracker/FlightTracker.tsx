@@ -243,6 +243,11 @@ export const FlightTracker: FC = () => {
 			return !on;
 		});
 	}, []);
+	const toggleAnonTraffic = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, anonTraffic: !settings.anonTraffic }),
+		);
+	}, [settings, desktopEventDispatch]);
 	const toggleGlobe = useCallback(() => {
 		desktopEventDispatch(
 			flightTrackerSetMapSettings({ ...settings, globe: !settings.globe }),
@@ -283,6 +288,8 @@ export const FlightTracker: FC = () => {
 		flightPositions,
 		subscribeFlights,
 		unsubscribeFlights,
+		subscribeFlightsAnon,
+		unsubscribeFlightsAnon,
 		connected,
 		flightsHistory,
 		flightsSeed,
@@ -340,6 +347,12 @@ export const FlightTracker: FC = () => {
 			: allPositions;
 		return dropLandedPositions(visible, routeIndex, nowMs);
 	}, [allPositions, visibleFlights, routeIndex, nowMs]);
+	// Anonymous radar traffic is counted separately in the status bar; its
+	// RDR- prefix is the corpus discriminator everywhere.
+	const anonAloft = useMemo(
+		() => flightPositions.filter((p) => p.flight.startsWith("RDR-")).length,
+		[flightPositions],
+	);
 	// Wheels-down/crash instants for the airborne set: the map's dead-reckoning
 	// clamp (a landed flight freezes at its track end instead of overshooting).
 	const landingClock = useMemo(
@@ -384,6 +397,14 @@ export const FlightTracker: FC = () => {
 		subscribeFlights(appId);
 		return () => unsubscribeFlights(appId);
 	}, [isRunning, subscribeFlights, unsubscribeFlights, appId]);
+
+	// The anonymous-traffic corpus rides its own channel, paid for only while
+	// the "Other" toggle is on (#263).
+	useEffect(() => {
+		if (!isRunning || !settings.anonTraffic) return;
+		subscribeFlightsAnon(appId);
+		return () => unsubscribeFlightsAnon(appId);
+	}, [isRunning, settings.anonTraffic, subscribeFlightsAnon, unsubscribeFlightsAnon, appId]);
 
 	// Selection is a LIST (issue #225): a plain click yields one entry; an
 	// area-select drag yields many, toggled via the detail pane's dropdown.
@@ -1154,6 +1175,8 @@ export const FlightTracker: FC = () => {
 							onToggleThreeD={toggleThreeD}
 							onToggleTerrain={toggleTerrain}
 							onToggleCluster={toggleCluster}
+							anonTraffic={settings.anonTraffic}
+							onToggleAnonTraffic={toggleAnonTraffic}
 							onSetSelectMode={setSelectMode}
 							mapStyle={settings.mapStyle}
 							darkMap={settings.darkMap}
@@ -1321,8 +1344,8 @@ export const FlightTracker: FC = () => {
 							</span>
 							<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
 								{visibleFlights
-									? `${filteredPositions.length} of ${flightPositions.length} aircraft aloft · filtered`
-									: `${flightPositions.length} aircraft aloft`}
+									? `${filteredPositions.length} of ${flightPositions.length - anonAloft} aircraft aloft · filtered${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`
+									: `${flightPositions.length - anonAloft} aircraft aloft${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`}
 							</span>
 						</div>
 					</div>

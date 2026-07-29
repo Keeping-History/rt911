@@ -47,6 +47,7 @@ export interface MapControlsProps {
 	threeD: boolean;
 	terrain: boolean;
 	cluster: boolean;
+	anonTraffic: boolean;
 	selectMode: SelectMode;
 	mapStyle: BasemapStyleId;
 	darkMap: boolean;
@@ -63,6 +64,7 @@ export interface MapControlsProps {
 	onToggleThreeD(): void;
 	onToggleTerrain(): void;
 	onToggleCluster(): void;
+	onToggleAnonTraffic(): void;
 	onSetSelectMode(mode: SelectMode): void;
 	onPinpoint(center: [number, number], zoom: number): void;
 	onSetMapStyle(style: BasemapStyleId): void;
@@ -148,6 +150,16 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			onClickFunc={p.onToggleCluster}
 		>
 			<img className={styles.mapControlIcon} src={mapClusterPng} alt="" />
+		</ClassicyButton>
+		</ClassicyBalloonHelp>
+		<ClassicyBalloonHelp content="Show the unidentified radar traffic (84 RADES) alongside the airline flights.">
+		<ClassicyButton
+			buttonSize="small"
+			aria-label="Other traffic"
+			depressed={p.anonTraffic}
+			onClickFunc={p.onToggleAnonTraffic}
+		>
+			Other
 		</ClassicyButton>
 		</ClassicyBalloonHelp>
 		</div>

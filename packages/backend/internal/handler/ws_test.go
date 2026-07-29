@@ -367,7 +367,7 @@ func TestWSHandlerFlightsHistoryChunksAndDone(t *testing.T) {
 		items := []model.FlightPosition{{
 			ID: i + 1, Flight: "AA11", StartDate: m, Lat: 42.0, Lon: -71.0, AltFt: 30000,
 		}}
-		if err := cache.PutFlightBucket(context.Background(), rdb, m, items); err != nil {
+		if err := cache.PutFlightBucket(context.Background(), rdb, cache.KeyFlightMinutes, m, items); err != nil {
 			t.Fatalf("seed bucket: %v", err)
 		}
 	}
@@ -426,7 +426,7 @@ func TestWSHandlerFlightsHistoryShortSeedLookback(t *testing.T) {
 		items := []model.FlightPosition{{
 			ID: i + 1, Flight: "AA11", StartDate: m, Lat: 42.0, Lon: -71.0, AltFt: 30000,
 		}}
-		if err := cache.PutFlightBucket(context.Background(), rdb, m, items); err != nil {
+		if err := cache.PutFlightBucket(context.Background(), rdb, cache.KeyFlightMinutes, m, items); err != nil {
 			t.Fatalf("seed bucket: %v", err)
 		}
 	}

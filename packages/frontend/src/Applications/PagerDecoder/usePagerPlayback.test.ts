@@ -78,6 +78,8 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					flightPositions: [],
 					subscribeFlights: vi.fn(),
 					unsubscribeFlights: vi.fn(),
+					subscribeFlightsAnon: vi.fn(),
+					unsubscribeFlightsAnon: vi.fn(),
 					flightsHistory: [],
 					flightsHistoryDone: false,
 					flightsSeed: [],

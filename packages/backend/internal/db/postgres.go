@@ -736,13 +736,20 @@ func queryItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) 
 // table needs no serving index. COALESCE handles Directus NULLs in one place
 // instead of per-field pointer scans (the derefStr pattern) — every nullable
 // column here has an obvious zero value.
-func StreamFlightPositions(ctx context.Context, pool *pgxpool.Pool, fn func(minute time.Time, items []model.FlightPosition) error) error {
+// The anon parameter splits the corpus at the id namespace: anonymous radar
+// traffic (issue #263) is loaded under RDR-% ids and served on its own
+// channel/cache, so the main flights warm must exclude it and vice versa.
+func StreamFlightPositions(ctx context.Context, pool *pgxpool.Pool, anon bool, fn func(minute time.Time, items []model.FlightPosition) error) error {
+	cond := "AND flight NOT LIKE 'RDR-%'"
+	if anon {
+		cond = "AND flight LIKE 'RDR-%'"
+	}
 	rows, err := pool.Query(ctx, `
 		SELECT id, flight, COALESCE(carrier, ''), utc,
 		       COALESCE(lat, 0), COALESCE(lon, 0), COALESCE(alt_ft, 0),
 		       COALESCE(phase, ''), COALESCE(diverted, false)
 		FROM flight_positions
-		WHERE utc IS NOT NULL
+		WHERE utc IS NOT NULL `+cond+`
 		ORDER BY utc`)
 	if err != nil {
 		return err
