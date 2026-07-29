@@ -94,3 +94,56 @@ def test_spike_filter_survives_a_real_turn():
         pts.append((t, 40.0 + 0.03 * math.sin(ang), -75.0 - 0.03 * (1 - math.cos(ang)), 20000.0))
     out = clean_chain(pts)
     assert len(out) >= 35  # at most a point or two shaved, the turn preserved
+
+
+class TestSplice:
+    """Full-track hybrid: radar where the radars saw it, estimated head/tail
+    from the BTS airports,each position tagged (#263)."""
+
+    def _wps(self):
+        from flight_recon.rades_load import chain_waypoints, clean_chain
+        return chain_waypoints(clean_chain(_cruise(n=60, t0=44000.0)))
+
+    def test_prepends_origin_and_appends_destination(self):
+        from datetime import datetime, timedelta, timezone
+        from flight_recon.rades_load import splice_waypoints
+        wps = self._wps()
+        t0 = datetime(2001, 9, 11, tzinfo=timezone.utc) + timedelta(seconds=44000.0)
+        out, rf, rt = splice_waypoints(wps, (42.0, -71.0), (34.0, -118.0),
+                                       t0 - timedelta(minutes=40), t0 + timedelta(minutes=90))
+        assert out[0]["alt_ft"] == 0 and out[-1]["alt_ft"] == 0
+        assert (out[0]["lat"], out[0]["lon"]) == (42.0, -71.0)
+        assert (out[-1]["lat"], out[-1]["lon"]) == (34.0, -118.0)
+        assert rf == wps[0]["utc"] and rt == wps[-1]["utc"]
+        stamps = [w["utc"] for w in out]
+        assert stamps == sorted(stamps)
+
+    def test_tags_each_position_radar_or_estimated(self):
+        from datetime import datetime, timedelta, timezone
+        from flight_recon.rades_load import SRC_EST, SRC_RADAR, build_rows, splice_waypoints
+        wps = self._wps()
+        t0 = datetime(2001, 9, 11, tzinfo=timezone.utc) + timedelta(seconds=44000.0)
+        out, rf, rt = splice_waypoints(wps, (42.0, -71.0), (34.0, -118.0),
+                                       t0 - timedelta(minutes=40), t0 + timedelta(minutes=90))
+        positions, _geom = build_rows("XX1", "XX", out, False, radar_span=(rf, rt))
+        srcs = {p["source"] for p in positions}
+        assert srcs == {SRC_RADAR, SRC_EST}
+        # the estimated head precedes every radar sample, the tail follows them
+        radar_times = [p["utc"] for p in positions if p["source"] == SRC_RADAR]
+        assert min(radar_times) >= rf and max(radar_times) <= rt
+
+    def test_small_gaps_are_not_spliced(self):
+        from datetime import datetime, timedelta, timezone
+        from flight_recon.rades_load import splice_waypoints
+        wps = self._wps()
+        t0 = datetime(2001, 9, 11, tzinfo=timezone.utc) + timedelta(seconds=44000.0)
+        out, _rf, _rt = splice_waypoints(wps, (42.0, -71.0), (34.0, -118.0),
+                                         t0 - timedelta(seconds=30), None)
+        assert out == wps  # radar already covers the runway; nothing to estimate
+
+    def test_pure_radar_track_is_all_radar(self):
+        from flight_recon.rades_load import SRC_RADAR, build_rows
+        wps = self._wps()
+        positions, _g = build_rows("RDR-00001", None, wps, False,
+                                   radar_span=(wps[0]["utc"], wps[-1]["utc"]))
+        assert {p["source"] for p in positions} == {SRC_RADAR}

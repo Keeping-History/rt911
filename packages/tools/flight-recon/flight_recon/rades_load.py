@@ -45,10 +45,10 @@ import psycopg
 from psycopg.types.json import Json
 
 from flight_recon.notable import (
-    FLIGHT_DATE, LOCAL_SCHEMA_DDL, _WINDOW_START_UTC,
-    copy_positions, insert_tracks,
+    FLIGHT_DATE, LOCAL_SCHEMA_DDL, _WINDOW_START_UTC, insert_tracks,
 )
-from flight_recon.resample import decimate_polyline, fmt_utc, resample_track
+from flight_recon.pgcopy import COLUMNS as BASE_POSITION_COLUMNS
+from flight_recon.resample import decimate_polyline, fmt_utc, parse_utc, resample_track
 from reconstruct import ET_OFFSET, et_seconds  # noqa: F401  (ET_OFFSET re-exported)
 
 log = logging.getLogger(__name__)
@@ -62,6 +62,19 @@ DEVIATION_MAX_SPAN_S = 90.0
 MODEC_JUMP_FT = 2500.0
 ALT_MAX_FT = 45000
 LANDING_AP_NM = 8.0
+
+# --- splice (story: full-track hybrid) -------------------------------------
+# Radar coverage is bounded; BTS wheels times are not. A named flight's track
+# is therefore RADAR where the radars saw it and ESTIMATED (great-circle from
+# the airport, as the BTS reconstruction did) for the head/tail outside
+# coverage. Every position carries `source` so the map can draw the two
+# differently — "reconstructed from radar tracks and, where not available,
+# historical tracks".
+SPLICE_MIN_S = 120.0     # ignore gaps this small (radar caught the runway)
+SPLICE_CLIMB_FRAC = 0.25  # estimated head: climb over the first quarter
+SPLICE_DESC_FRAC = 0.25   # estimated tail: descend over the last quarter
+SRC_RADAR = "radar"
+SRC_EST = "estimated"
 
 
 def dist_nm(a1, o1, a2, o2):
@@ -142,9 +155,69 @@ def chain_waypoints(pts):
     return wps
 
 
-def build_rows(flight, carrier, wps, diverted):
-    """Waypoints -> (positions rows, dense geometry) via the per-minute core."""
+# `source` rides alongside the loader-managed position columns (radar vs the
+# estimated head/tail introduced by splicing).
+POSITION_COLUMNS = list(BASE_POSITION_COLUMNS) + ["source"]
+
+
+def copy_positions(cur, positions, run_id):
+    """COPY positions including the provenance column."""
+    with cur.copy(f"COPY flight_positions ({', '.join(POSITION_COLUMNS)}) FROM STDIN") as cp:
+        for p in positions:
+            cp.write_row([p["flight"], p["carrier"], p["flight_date"], p["utc"],
+                          p["et_seconds"], p["clock_seconds"], p["lat"], p["lon"],
+                          p["alt_ft"], p["phase"], p["diverted"], run_id,
+                          p.get("source")])
+    return len(positions)
+
+
+def splice_waypoints(wps, origin, dest, wheels_off, wheels_on):
+    """Prepend an origin waypoint and append a destination one so the track
+    spans the whole flight, and report the radar span.
+
+    ``origin``/``dest`` are (lat, lon) or None; ``wheels_off``/``wheels_on``
+    are UTC datetimes or None. Shape: the estimated head climbs over its first
+    SPLICE_CLIMB_FRAC and then holds the junction altitude (rather than
+    ramping linearly across several hundred miles); the tail mirrors it.
+    Returns (waypoints, radar_from_utc, radar_to_utc)."""
+    radar_from, radar_to = wps[0]["utc"], wps[-1]["utc"]
+    out = list(wps)
+    t0, t1 = parse_utc(radar_from), parse_utc(radar_to)
+
+    if origin and wheels_off and (t0 - wheels_off).total_seconds() > SPLICE_MIN_S:
+        span = (t0 - wheels_off).total_seconds()
+        head = [{"utc": fmt_utc(wheels_off), "lat": round(origin[0], 5),
+                 "lon": round(origin[1], 5), "alt_ft": 0}]
+        # level-off point: at SPLICE_CLIMB_FRAC of the way, already at the
+        # altitude radar first saw, so the long remainder is a cruise leg.
+        if span > 600:
+            f = SPLICE_CLIMB_FRAC
+            head.append({"utc": fmt_utc(wheels_off + timedelta(seconds=span * f)),
+                         "lat": round(origin[0] + (wps[0]["lat"] - origin[0]) * f, 5),
+                         "lon": round(origin[1] + (wps[0]["lon"] - origin[1]) * f, 5),
+                         "alt_ft": wps[0]["alt_ft"]})
+        out = head + out
+    if dest and wheels_on and (wheels_on - t1).total_seconds() > SPLICE_MIN_S:
+        span = (wheels_on - t1).total_seconds()
+        tail = []
+        if span > 600:
+            f = 1.0 - SPLICE_DESC_FRAC
+            tail.append({"utc": fmt_utc(t1 + timedelta(seconds=span * f)),
+                         "lat": round(wps[-1]["lat"] + (dest[0] - wps[-1]["lat"]) * f, 5),
+                         "lon": round(wps[-1]["lon"] + (dest[1] - wps[-1]["lon"]) * f, 5),
+                         "alt_ft": wps[-1]["alt_ft"]})
+        tail.append({"utc": fmt_utc(wheels_on), "lat": round(dest[0], 5),
+                     "lon": round(dest[1], 5), "alt_ft": 0})
+        out = out + tail
+    return out, radar_from, radar_to
+
+
+def build_rows(flight, carrier, wps, diverted, radar_span=None):
+    """Waypoints -> (positions rows, dense geometry) via the per-minute core.
+
+    ``radar_span`` (from splice_waypoints) tags each position's ``source``."""
     samples = resample_track(wps)
+    rf, rt = (parse_utc(radar_span[0]), parse_utc(radar_span[1])) if radar_span else (None, None)
     positions, coords = [], {}
     for s in samples:
         positions.append({
@@ -153,6 +226,7 @@ def build_rows(flight, carrier, wps, diverted):
             "clock_seconds": int((s["utc"] - _WINDOW_START_UTC).total_seconds()),
             "lat": s["lat"], "lon": s["lon"], "alt_ft": s["alt_ft"],
             "phase": s["phase"], "diverted": diverted,
+            "source": (SRC_RADAR if rf is None or (rf <= s["utc"] <= rt) else SRC_EST),
         })
         coords[fmt_utc(s["utc"])] = (s["lon"], s["lat"])
     for w in wps:
@@ -175,24 +249,41 @@ def load_inputs(stitched_path, tier_path):
 
 
 def bts_leg_index(bts_path, airports_path):
-    """flight-id -> BTS leg metadata for the tier flights (wheels-off UTC,
-    carrier, origin/dest, tail). Multi-leg numbers keep ALL legs."""
+    """flight-id -> BTS leg metadata (wheels-off/on UTC, carrier, airports,
+    tail). Multi-leg numbers keep ALL legs.
+
+    NOTE: pandas hands back numpy scalars, and ``timedelta(seconds=np.int64)``
+    raises — a bare except here previously swallowed that and silently made
+    every wheels time None (which in turn made the leg-mismatch guard vacuous
+    and the splice a no-op). Values are coerced explicitly and parse failures
+    are counted and logged rather than hidden."""
     import pandas as pd
     ap = pd.read_csv(airports_path).set_index("code")
     bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
     bts = bts[(bts.FlightDate == FLIGHT_DATE) & (bts.Cancelled == 0)]
-    out = {}
-    for r in bts.itertuples(index=False):
+
+    def wheels_utc(raw, code):
+        if code not in ap.index or raw != raw or raw is None:
+            return None
         try:
-            hhmm = int(float(r.WheelsOff))
-            off = ap.loc[r.Origin, "utc_offset"]
-            wo = DAY + timedelta(seconds=(hhmm // 100) * 3600 + (hhmm % 100) * 60 - off * 3600)
-        except Exception:
-            wo = None
+            hhmm = int(float(raw))
+        except (TypeError, ValueError):
+            return None
+        off = float(ap.loc[code, "utc_offset"])
+        return DAY + timedelta(seconds=(hhmm // 100) * 3600 + (hhmm % 100) * 60 - off * 3600)
+
+    out, unparsed = {}, 0
+    for r in bts.itertuples(index=False):
+        wo = wheels_utc(r.WheelsOff, r.Origin)
+        won = wheels_utc(r.WheelsOn, r.Dest)
+        if wo is None:
+            unparsed += 1
         out.setdefault(r.Reporting_Airline + str(r.Flight_Number), []).append(
             {"carrier": r.Reporting_Airline, "origin": r.Origin, "dest": r.Dest,
-             "wheels_off": wo, "diverted": int(r.Diverted) == 1,
+             "wheels_off": wo, "wheels_on": won, "diverted": int(r.Diverted) == 1,
              "tail": None if r.Tail_Number != r.Tail_Number else str(r.Tail_Number)})
+    log.info("BTS leg index: %d flight ids, %d rows without a usable wheels-off",
+             len(out), unparsed)
     return out
 
 
@@ -206,7 +297,14 @@ def nearest_airport(lat, lon, airports_path):
 
 def build_all(chains, tier, bts_path, airports_path):
     """-> (named: {flight: (positions, geometry, meta)}, diverted: {...}, skips)"""
+    import pandas as pd
+    ap = pd.read_csv(airports_path).set_index("code")
     legs = bts_leg_index(bts_path, airports_path)
+
+    def coords(code):
+        if code and code in ap.index:
+            return (float(ap.loc[code, "lat"]), float(ap.loc[code, "lon"]))
+        return None
     named, diverted, skips = {}, {}, []
     for entry in tier:
         flight = entry["flight"]
@@ -221,11 +319,30 @@ def build_all(chains, tier, bts_path, airports_path):
             continue
         is_diverted = "diverted-tracked" in entry["evidence"]
         carrier = legs.get(flight, [{}])[0].get("carrier") or flight[:2]
-        positions, geometry = build_rows(flight, carrier, wps, is_diverted)
+        # Pick the BTS leg nearest this track so the splice uses the right
+        # airports and wheels times (multi-leg numbers exist).
+        leg = None
+        if flight in legs:
+            t0 = parse_utc(wps[0]["utc"])
+            cands = [x for x in legs[flight] if x["wheels_off"]]
+            if cands:
+                leg = min(cands, key=lambda x: abs((x["wheels_off"] - t0).total_seconds()))
+        # A diverted flight never reached its filed destination, so only its
+        # head (origin -> first radar contact) may be estimated.
+        origin = coords(leg["origin"]) if leg else None
+        dest = None if is_diverted else (coords(leg["dest"]) if leg else None)
+        wheels_on = None if is_diverted else (leg or {}).get("wheels_on")
+        wps, radar_from, radar_to = splice_waypoints(
+            wps, origin, dest, (leg or {}).get("wheels_off"), wheels_on)
+        positions, geometry = build_rows(flight, carrier, wps, is_diverted,
+                                         radar_span=(radar_from, radar_to))
+        n_est = sum(1 for q in positions if q["source"] == SRC_EST)
         meta = {"entry": entry, "wps": len(wps),
                 "track_source": {"kind": "rades-radar", "evidence": entry["evidence"],
                                  "codes": entry.get("codes", []),
-                                 "returns": entry.get("returns")}}
+                                 "returns": entry.get("returns"),
+                                 "radar_from": radar_from, "radar_to": radar_to,
+                                 "estimated_positions": n_est}}
         if is_diverted:
             end = pts[-1]
             code, d = nearest_airport(end[1], end[2], airports_path)
@@ -237,12 +354,6 @@ def build_all(chains, tier, bts_path, airports_path):
             meta["leg"] = leg or (legs.get(flight) or [None])[0]
             diverted[flight] = (positions, geometry, meta)
         else:
-            leg = None
-            if flight in legs:
-                t0 = DAY + timedelta(seconds=positions[0]["et_seconds"] - ET_OFFSET * 3600)
-                leg = min((x for x in legs[flight] if x["wheels_off"]),
-                          key=lambda x: abs((x["wheels_off"] - t0).total_seconds()),
-                          default=None)
             meta["leg"] = leg
             named[flight] = (positions, geometry, meta)
     log.info("built %d named upgrades, %d diverted additions, %d skips",
@@ -264,6 +375,7 @@ def run(dsn, stitched_path, tier_path, bts_path, airports_path,
         with conn.cursor() as cur:
             if init_schema:
                 cur.execute(LOCAL_SCHEMA_DDL)
+                cur.execute("ALTER TABLE flight_positions ADD COLUMN IF NOT EXISTS source varchar")
                 log.warning("ensured scratch schema")
 
             # --- story 1: named upgrades, metadata-preserving
@@ -308,9 +420,14 @@ def run(dsn, stitched_path, tier_path, bts_path, airports_path,
             # --- story 2: diverted additions (id must be absent)
             load_div = []
             for flight, (positions, geometry, meta) in sorted(diverted.items()):
-                cur.execute("SELECT 1 FROM flight_tracks WHERE flight = %s AND flight_date = %s",
+                # An id that exists because WE added it on a previous run is
+                # ours to refresh; an id belonging to a BTS leg is not.
+                cur.execute("SELECT count(*), count(*) FILTER (WHERE "
+                            "details->'track_source'->>'kind' = 'rades-radar') "
+                            "FROM flight_tracks WHERE flight = %s AND flight_date = %s",
                             (flight, FLIGHT_DATE))
-                if cur.fetchone() is not None:
+                n_rows, n_ours = cur.fetchone()
+                if n_rows and n_rows != n_ours:
                     summary["skipped"].append([flight, "id exists in prod (other leg) — not adding"])
                     continue
                 leg = meta["leg"] or {}
@@ -433,6 +550,7 @@ def run_anon(dsn, stitched_path, tier_path, notable_dir,
             skipped["cleaned-away"] += 1
             continue
         flight = anon_id(i)
+        # Anonymous traffic has no BTS row to splice against — pure radar.
         positions, geometry = build_rows(flight, None, wps, diverted=False)
         positions_out.extend(positions)
         tracks_out.append({
@@ -452,6 +570,7 @@ def run_anon(dsn, stitched_path, tier_path, notable_dir,
         with conn.cursor() as cur:
             if init_schema:
                 cur.execute(LOCAL_SCHEMA_DDL)
+                cur.execute("ALTER TABLE flight_positions ADD COLUMN IF NOT EXISTS source varchar")
             cur.execute("DELETE FROM flight_positions WHERE flight_date = %s AND flight LIKE 'RDR-%%'",
                         (FLIGHT_DATE,))
             deleted = cur.rowcount
