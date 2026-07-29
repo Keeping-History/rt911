@@ -1,0 +1,4673 @@
+[
+ {
+  "flight": "AA1440",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 11.9,
+  "codes": [
+   "6621"
+  ],
+  "returns": 1649,
+  "t0": 45715.77499997616,
+  "t1": 51787.12000000477,
+  "track_index": 19348
+ },
+ {
+  "flight": "AA1731",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 72.3,
+  "codes": [
+   "1102"
+  ],
+  "returns": 3441,
+  "t0": 38423.62000000477,
+  "t1": 47276.15999996662,
+  "track_index": 19677
+ },
+ {
+  "flight": "AA1811",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 96.5,
+  "codes": [
+   "7325"
+  ],
+  "returns": 1303,
+  "t0": 38859.59000003338,
+  "t1": 43302.735000014305,
+  "track_index": 16431
+ },
+ {
+  "flight": "AA631",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 103.4,
+  "codes": [
+   "3542"
+  ],
+  "returns": 513,
+  "t0": 37802.55499994755,
+  "t1": 39887.35500001907,
+  "track_index": 19111
+ },
+ {
+  "flight": "AA671",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 24.9,
+  "codes": [
+   "1771"
+  ],
+  "returns": 3970,
+  "t0": 41449.30999994278,
+  "t1": 51140.21000003815,
+  "track_index": 21967
+ },
+ {
+  "flight": "AA695",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 32.1,
+  "codes": [
+   "2124"
+  ],
+  "returns": 3320,
+  "t0": 42439.674999952316,
+  "t1": 50936.28499996662,
+  "track_index": 22056
+ },
+ {
+  "flight": "AA881",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.2,
+  "codes": [
+   "1134"
+  ],
+  "returns": 3376,
+  "t0": 39180.78499996662,
+  "t1": 48416.23000001907,
+  "track_index": 20250
+ },
+ {
+  "flight": "AA941",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 29.1,
+  "codes": [
+   "4514"
+  ],
+  "returns": 637,
+  "t0": 47347.66499996185,
+  "t1": 49712.25499999523,
+  "track_index": 21056
+ },
+ {
+  "flight": "AA953",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 32.2,
+  "codes": [
+   "1037"
+  ],
+  "returns": 738,
+  "t0": 47414.174999952316,
+  "t1": 49916.19500005245,
+  "track_index": 18170
+ },
+ {
+  "flight": "AA971",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 72.2,
+  "codes": [
+   "3573"
+  ],
+  "returns": 3479,
+  "t0": 38138.84000003338,
+  "t1": 47372.16499996185,
+  "track_index": 19385
+ },
+ {
+  "flight": "AA979",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.0,
+  "codes": [
+   "2737"
+  ],
+  "returns": 1420,
+  "t0": 44406.700000047684,
+  "t1": 49496.25999999046,
+  "track_index": 21630
+ },
+ {
+  "flight": "AA989",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 83.0,
+  "codes": [
+   "1121"
+  ],
+  "returns": 3160,
+  "t0": 39215.28499996662,
+  "t1": 48284.22000002861,
+  "track_index": 20263
+ },
+ {
+  "flight": "CO1131",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 59.6,
+  "codes": [
+   "2734"
+  ],
+  "returns": 1870,
+  "t0": 42804.87000000477,
+  "t1": 48417.27999997139,
+  "track_index": 22632
+ },
+ {
+  "flight": "CO1219",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 287.2,
+  "codes": [
+   "5731"
+  ],
+  "returns": 1277,
+  "t0": 40651.46500003338,
+  "t1": 45028.05999994278,
+  "track_index": 22774
+ },
+ {
+  "flight": "CO124",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 147.3,
+  "codes": [
+   "6012"
+  ],
+  "returns": 1019,
+  "t0": 42521.15999996662,
+  "t1": 46235.25999999046,
+  "track_index": 19394
+ },
+ {
+  "flight": "CO1251",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.2,
+  "codes": [
+   "1131"
+  ],
+  "returns": 1195,
+  "t0": 38615.72500002384,
+  "t1": 43016.69500005245,
+  "track_index": 19810
+ },
+ {
+  "flight": "CO1262",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 116.8,
+  "codes": [
+   "4136"
+  ],
+  "returns": 759,
+  "t0": 43339.764999985695,
+  "t1": 47088.53499996662,
+  "track_index": 19635
+ },
+ {
+  "flight": "CO145",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 59.7,
+  "codes": [
+   "2745"
+  ],
+  "returns": 1133,
+  "t0": 41940.90999996662,
+  "t1": 45497.69000005722,
+  "track_index": 22223
+ },
+ {
+  "flight": "CO1530",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 29.1,
+  "codes": [
+   "4101"
+  ],
+  "returns": 932,
+  "t0": 42793.78999996185,
+  "t1": 46899.84000003338,
+  "track_index": 17868
+ },
+ {
+  "flight": "CO1531",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 178.5,
+  "codes": [
+   "3503"
+  ],
+  "returns": 1336,
+  "t0": 37587.35500001907,
+  "t1": 43734.31500005722,
+  "track_index": 18983
+ },
+ {
+  "flight": "CO1581",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 49.7,
+  "codes": [
+   "2743"
+  ],
+  "returns": 2624,
+  "t0": 43764.60000002384,
+  "t1": 51499.860000014305,
+  "track_index": 22858
+ },
+ {
+  "flight": "CO1592",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 60.1,
+  "codes": [
+   "1547"
+  ],
+  "returns": 2871,
+  "t0": 44640.53499996662,
+  "t1": 51986.235000014305,
+  "track_index": 18166
+ },
+ {
+  "flight": "CO1739",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 91.8,
+  "codes": [
+   "5103"
+  ],
+  "returns": 162,
+  "t0": 47211.23000001907,
+  "t1": 48919.08500003815,
+  "track_index": 20475
+ },
+ {
+  "flight": "CO1750",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 76.8,
+  "codes": [
+   "6001"
+  ],
+  "returns": 925,
+  "t0": 42308.669999957085,
+  "t1": 45731.60000002384,
+  "track_index": 22408
+ },
+ {
+  "flight": "CO1757",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 36.1,
+  "codes": [
+   "3305"
+  ],
+  "returns": 706,
+  "t0": 44064.53499996662,
+  "t1": 46707.674999952316,
+  "track_index": 23005
+ },
+ {
+  "flight": "CO1801",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 12.1,
+  "codes": [
+   "1151"
+  ],
+  "returns": 1955,
+  "t0": 45708.48000001907,
+  "t1": 51381.35500001907,
+  "track_index": 20294
+ },
+ {
+  "flight": "CO1962",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 51.6,
+  "codes": [
+   "7155"
+  ],
+  "returns": 612,
+  "t0": 41076.65499997139,
+  "t1": 43719.65499997139,
+  "track_index": 19941
+ },
+ {
+  "flight": "CO238",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 35.9,
+  "codes": [
+   "2711"
+  ],
+  "returns": 3040,
+  "t0": 42564.674999952316,
+  "t1": 51296.25999999046,
+  "track_index": 22529
+ },
+ {
+  "flight": "CO256",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 2.1,
+  "codes": [
+   "7431"
+  ],
+  "returns": 497,
+  "t0": 43825.06500005722,
+  "t1": 46958.85000002384,
+  "track_index": 18746
+ },
+ {
+  "flight": "CO307",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 39.3,
+  "codes": [
+   "2310",
+   "1103"
+  ],
+  "returns": 1007,
+  "t0": 40337.80499994755,
+  "t1": 44664.6970000267,
+  "track_index": 21125
+ },
+ {
+  "flight": "CO363",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 47.8,
+  "codes": [
+   "1125"
+  ],
+  "returns": 279,
+  "t0": 46272.825000047684,
+  "t1": 47895.92999994755,
+  "track_index": 19314
+ },
+ {
+  "flight": "CO389",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 35.9,
+  "codes": [
+   "3336"
+  ],
+  "returns": 410,
+  "t0": 43944.674999952316,
+  "t1": 45854.98000001907,
+  "track_index": 22242
+ },
+ {
+  "flight": "CO506",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 36.3,
+  "codes": [
+   "2315"
+  ],
+  "returns": 725,
+  "t0": 39747.75499999523,
+  "t1": 42960.60500001907,
+  "track_index": 20648
+ },
+ {
+  "flight": "CO562",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 27.8,
+  "codes": [
+   "7336"
+  ],
+  "returns": 544,
+  "t0": 39040.360000014305,
+  "t1": 41508.825000047684,
+  "track_index": 18353
+ },
+ {
+  "flight": "CO683",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 148.7,
+  "codes": [
+   "1462"
+  ],
+  "returns": 258,
+  "t0": 43491.52499997616,
+  "t1": 45851.25,
+  "track_index": 17601
+ },
+ {
+  "flight": "CO731",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 34.6,
+  "codes": [
+   "1141"
+  ],
+  "returns": 745,
+  "t0": 45576.49000000954,
+  "t1": 48355.42999994755,
+  "track_index": 19827
+ },
+ {
+  "flight": "CO800",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 26.7,
+  "codes": [
+   "3655"
+  ],
+  "returns": 394,
+  "t0": 38288.05499994755,
+  "t1": 40416.73000001907,
+  "track_index": 19520
+ },
+ {
+  "flight": "CO801",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 89.2,
+  "codes": [
+   "1650"
+  ],
+  "returns": 640,
+  "t0": 41460.62999999523,
+  "t1": 44184.27999997139,
+  "track_index": 17003
+ },
+ {
+  "flight": "CO803",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 85.3,
+  "codes": [
+   "1501"
+  ],
+  "returns": 1142,
+  "t0": 45371.59500002861,
+  "t1": 49710.49500000477,
+  "track_index": 18036
+ },
+ {
+  "flight": "CO804",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 36.3,
+  "codes": [
+   "2465"
+  ],
+  "returns": 824,
+  "t0": 46578.37000000477,
+  "t1": 50048.625,
+  "track_index": 17994
+ },
+ {
+  "flight": "CO838",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 84.0,
+  "codes": [
+   "1754"
+  ],
+  "returns": 454,
+  "t0": 40656.610000014305,
+  "t1": 42735.13499999046,
+  "track_index": 21422
+ },
+ {
+  "flight": "CO839",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 120.5,
+  "codes": [
+   "7301"
+  ],
+  "returns": 604,
+  "t0": 38319.47500002384,
+  "t1": 41172.68499994278,
+  "track_index": 19570
+ },
+ {
+  "flight": "CO840",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.1,
+  "codes": [
+   "1133"
+  ],
+  "returns": 421,
+  "t0": 39540.52499997616,
+  "t1": 41475.419999957085,
+  "track_index": 20505
+ },
+ {
+  "flight": "CO841",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 237.1,
+  "codes": [
+   "3452"
+  ],
+  "returns": 615,
+  "t0": 36711.35500001907,
+  "t1": 39780.82000005245,
+  "track_index": 18273
+ },
+ {
+  "flight": "CO842",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 59.9,
+  "codes": [
+   "3303"
+  ],
+  "returns": 293,
+  "t0": 44460.674999952316,
+  "t1": 46155.80499994755,
+  "track_index": 17262
+ },
+ {
+  "flight": "DL1438",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 40.8,
+  "codes": [
+   "5367"
+  ],
+  "returns": 266,
+  "t0": 48367.48000001907,
+  "t1": 49668.544999957085,
+  "track_index": 21068
+ },
+ {
+  "flight": "DL1456",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 281.6,
+  "codes": [
+   "0071"
+  ],
+  "returns": 447,
+  "t0": 43812.735000014305,
+  "t1": 45475.32000005245,
+  "track_index": 21544
+ },
+ {
+  "flight": "DL1489",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 22.3,
+  "codes": [
+   "3441"
+  ],
+  "returns": 2090,
+  "t0": 45062.62999999523,
+  "t1": 51460.06500005722,
+  "track_index": 18715
+ },
+ {
+  "flight": "DL1740",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 19.8,
+  "codes": [
+   "3643"
+  ],
+  "returns": 471,
+  "t0": 38359.639999985695,
+  "t1": 40501.21000003815,
+  "track_index": 19612
+ },
+ {
+  "flight": "DL1741",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 22.9,
+  "codes": [
+   "1104"
+  ],
+  "returns": 574,
+  "t0": 38772.99500000477,
+  "t1": 41016.014999985695,
+  "track_index": 19952
+ },
+ {
+  "flight": "DL1742",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 86.9,
+  "codes": [
+   "2157"
+  ],
+  "returns": 593,
+  "t0": 42326.02499997616,
+  "t1": 44617.235000014305,
+  "track_index": 22415
+ },
+ {
+  "flight": "DL1743",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 31.4,
+  "codes": [
+   "3034"
+  ],
+  "returns": 627,
+  "t0": 41916.950000047684,
+  "t1": 44482.09000003338,
+  "track_index": 20519
+ },
+ {
+  "flight": "DL1744",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 25.4,
+  "codes": [
+   "6570"
+  ],
+  "returns": 937,
+  "t0": 46209.325000047684,
+  "t1": 50115.22500002384,
+  "track_index": 22832
+ },
+ {
+  "flight": "DL1745",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 21.4,
+  "codes": [
+   "6672"
+  ],
+  "returns": 587,
+  "t0": 43787.89999997616,
+  "t1": 46078.33500003815,
+  "track_index": 14508
+ },
+ {
+  "flight": "DL1820",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 23.8,
+  "codes": [
+   "1116"
+  ],
+  "returns": 382,
+  "t0": 38819.764999985695,
+  "t1": 40599.64999997616,
+  "track_index": 18637
+ },
+ {
+  "flight": "DL1822",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 12.1,
+  "codes": [
+   "3043"
+  ],
+  "returns": 300,
+  "t0": 43248.00499999523,
+  "t1": 44871.924999952316,
+  "track_index": 18797
+ },
+ {
+  "flight": "DL1823",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 62.7,
+  "codes": [
+   "1407"
+  ],
+  "returns": 566,
+  "t0": 42399.44000005722,
+  "t1": 44999.66499996185,
+  "track_index": 22462
+ },
+ {
+  "flight": "DL1989",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 55.2,
+  "codes": [
+   "1451"
+  ],
+  "returns": 326,
+  "t0": 44715.955000042915,
+  "t1": 46800.35399997234,
+  "track_index": 11766
+ },
+ {
+  "flight": "DL2180",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.3,
+  "codes": [
+   "1504"
+  ],
+  "returns": 373,
+  "t0": 36695.63499999046,
+  "t1": 38463.450000047684,
+  "track_index": 18256
+ },
+ {
+  "flight": "DL2181",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 120.4,
+  "codes": [
+   "1536"
+  ],
+  "returns": 602,
+  "t0": 36767.625,
+  "t1": 39062.62999999523,
+  "track_index": 18304
+ },
+ {
+  "flight": "DL2182",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 27.0,
+  "codes": [
+   "2467"
+  ],
+  "returns": 473,
+  "t0": 36667.764999985695,
+  "t1": 38723.549999952316,
+  "track_index": 18239
+ },
+ {
+  "flight": "DL2315",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 5.8,
+  "codes": [
+   "1323"
+  ],
+  "returns": 2100,
+  "t0": 44930.59500002861,
+  "t1": 51075.80499994755,
+  "track_index": 20709
+ },
+ {
+  "flight": "DL2323",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 9.1,
+  "codes": [
+   "2076"
+  ],
+  "returns": 2855,
+  "t0": 42350.75,
+  "t1": 51595.139999985695,
+  "track_index": 20681
+ },
+ {
+  "flight": "DL236",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 0.0,
+  "codes": [
+   "0765"
+  ],
+  "returns": 3123,
+  "t0": 40310.14999997616,
+  "t1": 50017.46000003815,
+  "track_index": 13567
+ },
+ {
+  "flight": "DL2417",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 44.1,
+  "codes": [
+   "2024"
+  ],
+  "returns": 3331,
+  "t0": 40562.02499997616,
+  "t1": 49610.43499994278,
+  "track_index": 21341
+ },
+ {
+  "flight": "DL2431",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 0.2,
+  "codes": [
+   "3526"
+  ],
+  "returns": 1867,
+  "t0": 46490.580000042915,
+  "t1": 51515.69500005245,
+  "track_index": 19147
+ },
+ {
+  "flight": "DL2443",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 18.3,
+  "codes": [
+   "0527"
+  ],
+  "returns": 2145,
+  "t0": 39300.075000047684,
+  "t1": 45566.41499996185,
+  "track_index": 20053
+ },
+ {
+  "flight": "DL2450",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 36.1,
+  "codes": [
+   "3001"
+  ],
+  "returns": 2108,
+  "t0": 41354.049999952316,
+  "t1": 47721.02499997616,
+  "track_index": 18491
+ },
+ {
+  "flight": "DL2465",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.0,
+  "codes": [
+   "1667"
+  ],
+  "returns": 2563,
+  "t0": 41160.60500001907,
+  "t1": 48602.419999957085,
+  "track_index": 17633
+ },
+ {
+  "flight": "DL2470",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 12.0,
+  "codes": [
+   "3052"
+  ],
+  "returns": 2777,
+  "t0": 42662.10000002384,
+  "t1": 49975.389999985695,
+  "track_index": 22180
+ },
+ {
+  "flight": "DL2493",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 33.1,
+  "codes": [
+   "2011"
+  ],
+  "returns": 3201,
+  "t0": 39950.49500000477,
+  "t1": 48302.36500000954,
+  "track_index": 20790
+ },
+ {
+  "flight": "DL2498",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 12.0,
+  "codes": [
+   "0770"
+  ],
+  "returns": 3115,
+  "t0": 40202.05999994278,
+  "t1": 48254.24000000954,
+  "track_index": 17392
+ },
+ {
+  "flight": "DL2529",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 30.2,
+  "codes": [
+   "3444"
+  ],
+  "returns": 1704,
+  "t0": 45340.05999994278,
+  "t1": 50423.38499999046,
+  "track_index": 17985
+ },
+ {
+  "flight": "DL2545",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 133.5,
+  "codes": [
+   "7371"
+  ],
+  "returns": 4406,
+  "t0": 40395.30999994278,
+  "t1": 51847.82000005245,
+  "track_index": 11761
+ },
+ {
+  "flight": "DL2551",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 186.6,
+  "codes": [
+   "6646"
+  ],
+  "returns": 2552,
+  "t0": 44075.15499997139,
+  "t1": 52116.75499999523,
+  "track_index": 13742
+ },
+ {
+  "flight": "DL407",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 10.9,
+  "codes": [
+   "1171"
+  ],
+  "returns": 3856,
+  "t0": 39865.01999998093,
+  "t1": 49567.860000014305,
+  "track_index": 20724
+ },
+ {
+  "flight": "DL469",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 15.5,
+  "codes": [
+   "3012"
+  ],
+  "returns": 353,
+  "t0": 40155.52499997616,
+  "t1": 41735.075000047684,
+  "track_index": 20174
+ },
+ {
+  "flight": "DL565",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 125.2,
+  "codes": [
+   "5335",
+   "2052"
+  ],
+  "returns": 1667,
+  "t0": 40695.52999997139,
+  "t1": 48692.55999994278,
+  "track_index": 20621
+ },
+ {
+  "flight": "DL667",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 23.7,
+  "codes": [
+   "1564"
+  ],
+  "returns": 2663,
+  "t0": 37259.62999999523,
+  "t1": 44666.37999999523,
+  "track_index": 18743
+ },
+ {
+  "flight": "HP280",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 71.9,
+  "codes": [
+   "1117"
+  ],
+  "returns": 894,
+  "t0": 46316.75999999046,
+  "t1": 50861.575000047684,
+  "track_index": 18730
+ },
+ {
+  "flight": "HP61",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 113.9,
+  "codes": [
+   "1426"
+  ],
+  "returns": 454,
+  "t0": 41643.56500005722,
+  "t1": 44688.63499999046,
+  "track_index": 22067
+ },
+ {
+  "flight": "HP681",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 133.7,
+  "codes": [
+   "1626",
+   "6532"
+  ],
+  "returns": 1495,
+  "t0": 41400.72000002861,
+  "t1": 47444.41499996185,
+  "track_index": 21743
+ },
+ {
+  "flight": "HP85",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 286.9,
+  "codes": [
+   "7055"
+  ],
+  "returns": 1089,
+  "t0": 47721.64499998093,
+  "t1": 51579.200000047684,
+  "track_index": 18836
+ },
+ {
+  "flight": "MQ4460",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.2,
+  "codes": [
+   "3421"
+  ],
+  "returns": 463,
+  "t0": 35896.01999998093,
+  "t1": 38844.90999996662,
+  "track_index": 17713
+ },
+ {
+  "flight": "MQ4462",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 87.9,
+  "codes": [
+   "7441"
+  ],
+  "returns": 952,
+  "t0": 39832.25,
+  "t1": 43405.37999999523,
+  "track_index": 20690
+ },
+ {
+  "flight": "MQ4463",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 24.1,
+  "codes": [
+   "1135"
+  ],
+  "returns": 1030,
+  "t0": 46740.05499994755,
+  "t1": 50617.44000005722,
+  "track_index": 20213
+ },
+ {
+  "flight": "MQ4488",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 42.1,
+  "codes": [
+   "3456",
+   "2707"
+  ],
+  "returns": 717,
+  "t0": 36713.35500001907,
+  "t1": 39589.14499998093,
+  "track_index": 18275
+ },
+ {
+  "flight": "MQ4500",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 0.3,
+  "codes": [
+   "3543"
+  ],
+  "returns": 422,
+  "t0": 40120.075000047684,
+  "t1": 42697.35500001907,
+  "track_index": 20946
+ },
+ {
+  "flight": "MQ4501",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 22.9,
+  "codes": [
+   "3346"
+  ],
+  "returns": 337,
+  "t0": 42013.02499997616,
+  "t1": 43885.64499998093,
+  "track_index": 22257
+ },
+ {
+  "flight": "MQ4503",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 3.5,
+  "codes": [
+   "7407"
+  ],
+  "returns": 1065,
+  "t0": 38760.60500001907,
+  "t1": 42840.63499999046,
+  "track_index": 19943
+ },
+ {
+  "flight": "MQ4504",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 36.1,
+  "codes": [
+   "2646",
+   "5775",
+   "4043"
+  ],
+  "returns": 1530,
+  "t0": 43692.00499999523,
+  "t1": 52113.03999996185,
+  "track_index": 21284
+ },
+ {
+  "flight": "MQ4515",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 24.1,
+  "codes": [
+   "2664"
+  ],
+  "returns": 389,
+  "t0": 45660.0,
+  "t1": 48207.52999997139,
+  "track_index": 17841
+ },
+ {
+  "flight": "MQ4536",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.2,
+  "codes": [
+   "3656"
+  ],
+  "returns": 708,
+  "t0": 38088.075000047684,
+  "t1": 40969.34500002861,
+  "track_index": 11730
+ },
+ {
+  "flight": "MQ4560",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 30.2,
+  "codes": [
+   "2613"
+  ],
+  "returns": 247,
+  "t0": 42887.044999957085,
+  "t1": 44703.92999994755,
+  "track_index": 20950
+ },
+ {
+  "flight": "MQ4576",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 42.0,
+  "codes": [
+   "3426"
+  ],
+  "returns": 534,
+  "t0": 36075.41499996185,
+  "t1": 39432.43499994278,
+  "track_index": 17691
+ },
+ {
+  "flight": "MQ4582",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 41.9,
+  "codes": [
+   "7346"
+  ],
+  "returns": 404,
+  "t0": 39615.514999985695,
+  "t1": 42084.55499994755,
+  "track_index": 17024
+ },
+ {
+  "flight": "MQ4591",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 12.2,
+  "codes": [
+   "3350"
+  ],
+  "returns": 994,
+  "t0": 45332.71500003338,
+  "t1": 48263.330000042915,
+  "track_index": 22666
+ },
+ {
+  "flight": "MQ4619",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 23.4,
+  "codes": [
+   "4665"
+  ],
+  "returns": 312,
+  "t0": 41243.37999999523,
+  "t1": 44055.63499999046,
+  "track_index": 16627
+ },
+ {
+  "flight": "MQ4622",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 5.9,
+  "codes": [
+   "7161"
+  ],
+  "returns": 332,
+  "t0": 38243.16499996185,
+  "t1": 40299.53499996662,
+  "track_index": 19482
+ },
+ {
+  "flight": "MQ4629",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 0.7,
+  "codes": [
+   "5372"
+  ],
+  "returns": 314,
+  "t0": 46199.264999985695,
+  "t1": 49490.77999997139,
+  "track_index": 20925
+ },
+ {
+  "flight": "MQ4637",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 5.9,
+  "codes": [
+   "4643"
+  ],
+  "returns": 145,
+  "t0": 34925.39499998093,
+  "t1": 36711.330000042915,
+  "track_index": 17357
+ },
+ {
+  "flight": "MQ4640",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 116.3,
+  "codes": [
+   "7303"
+  ],
+  "returns": 610,
+  "t0": 38487.580000042915,
+  "t1": 41304.59000003338,
+  "track_index": 19569
+ },
+ {
+  "flight": "MQ4641",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.5,
+  "codes": [
+   "1741"
+  ],
+  "returns": 370,
+  "t0": 42421.11500000954,
+  "t1": 44235.90999996662,
+  "track_index": 22477
+ },
+ {
+  "flight": "MQ4665",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 11.9,
+  "codes": [
+   "6676"
+  ],
+  "returns": 1083,
+  "t0": 45828.74000000954,
+  "t1": 49355.40499997139,
+  "track_index": 18722
+ },
+ {
+  "flight": "MQ4741",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 0.5,
+  "codes": [
+   "4677"
+  ],
+  "returns": 384,
+  "t0": 36119.51999998093,
+  "t1": 39243.580000042915,
+  "track_index": 17813
+ },
+ {
+  "flight": "MQ4757",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 5.9,
+  "codes": [
+   "4630"
+  ],
+  "returns": 128,
+  "t0": 39737.21000003815,
+  "t1": 41343.60500001907,
+  "track_index": 16020
+ },
+ {
+  "flight": "MQ4767",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 108.3,
+  "codes": [
+   "1513"
+  ],
+  "returns": 358,
+  "t0": 45504.544999957085,
+  "t1": 47846.91499996185,
+  "track_index": 18009
+ },
+ {
+  "flight": "MQ4790",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 81.2,
+  "codes": [
+   "0526"
+  ],
+  "returns": 975,
+  "t0": 39240.56500005722,
+  "t1": 42567.55499994755,
+  "track_index": 20279
+ },
+ {
+  "flight": "MQ4791",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 53.0,
+  "codes": [
+   "7351"
+  ],
+  "returns": 975,
+  "t0": 39459.55799996853,
+  "t1": 42980.37000000477,
+  "track_index": 20435
+ },
+ {
+  "flight": "MQ4792",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 45.6,
+  "codes": [
+   "6234",
+   "1710"
+  ],
+  "returns": 911,
+  "t0": 46696.78999996185,
+  "t1": 49862.78999996185,
+  "track_index": 22318
+ },
+ {
+  "flight": "MQ4877",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 82.5,
+  "codes": [
+   "5740"
+  ],
+  "returns": 946,
+  "t0": 36314.25999999046,
+  "t1": 40467.514999985695,
+  "track_index": 17946
+ },
+ {
+  "flight": "MQ4880",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 33.3,
+  "codes": [
+   "1441"
+  ],
+  "returns": 978,
+  "t0": 42591.514999985695,
+  "t1": 48143.87999999523,
+  "track_index": 17311
+ },
+ {
+  "flight": "MQ4891",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 36.2,
+  "codes": [
+   "4656"
+  ],
+  "returns": 339,
+  "t0": 36464.830000042915,
+  "t1": 38583.455000042915,
+  "track_index": 18073
+ },
+ {
+  "flight": "MQ4904",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 5.9,
+  "codes": [
+   "1637"
+  ],
+  "returns": 353,
+  "t0": 39431.27499997616,
+  "t1": 41511.59000003338,
+  "track_index": 20421
+ },
+ {
+  "flight": "MQ4922",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 6.2,
+  "codes": [
+   "4616"
+  ],
+  "returns": 326,
+  "t0": 42531.299999952316,
+  "t1": 44986.98000001907,
+  "track_index": 22510
+ },
+ {
+  "flight": "MQ4939",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 38.1,
+  "codes": [
+   "3657"
+  ],
+  "returns": 1183,
+  "t0": 38350.12999999523,
+  "t1": 42483.375,
+  "track_index": 19598
+ },
+ {
+  "flight": "MQ4956",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 234.0,
+  "codes": [
+   "2030"
+  ],
+  "returns": 897,
+  "t0": 40011.53999996185,
+  "t1": 45069.06500005722,
+  "track_index": 20836
+ },
+ {
+  "flight": "MQ4968",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 23.8,
+  "codes": [
+   "2476"
+  ],
+  "returns": 1102,
+  "t0": 37020.19000005722,
+  "t1": 41031.62000000477,
+  "track_index": 18531
+ },
+ {
+  "flight": "MQ4993",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 108.8,
+  "codes": [
+   "2702"
+  ],
+  "returns": 629,
+  "t0": 40821.09000003338,
+  "t1": 43527.610000014305,
+  "track_index": 21545
+ },
+ {
+  "flight": "MQ5011",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 6.0,
+  "codes": [
+   "2367"
+  ],
+  "returns": 487,
+  "t0": 46667.12000000477,
+  "t1": 49382.955000042915,
+  "track_index": 22206
+ },
+ {
+  "flight": "MQ5045",
+  "evidence": [
+   "dest-consistent",
+   "origin-consistent"
+  ],
+  "score": 28.7,
+  "codes": [
+   "0562"
+  ],
+  "returns": 623,
+  "t0": 40206.03499996662,
+  "t1": 42613.50999999046,
+  "track_index": 21026
+ },
+ {
+  "flight": "MQ5046",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 35.8,
+  "codes": [
+   "3437"
+  ],
+  "returns": 375,
+  "t0": 36616.14999997616,
+  "t1": 38639.28999996185,
+  "track_index": 18179
+ },
+ {
+  "flight": "MQ5059",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 6.2,
+  "codes": [
+   "1162"
+  ],
+  "returns": 723,
+  "t0": 39887.34000003338,
+  "t1": 43159.71399998665,
+  "track_index": 20745
+ },
+ {
+  "flight": "MQ5060",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 15.7,
+  "codes": [
+   "7063"
+  ],
+  "returns": 344,
+  "t0": 47090.47000002861,
+  "t1": 49616.53999996185,
+  "track_index": 18641
+ },
+ {
+  "flight": "MQ5068",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 48.0,
+  "codes": [
+   "3444"
+  ],
+  "returns": 723,
+  "t0": 36373.09500002861,
+  "t1": 39827.26999998093,
+  "track_index": 17983
+ },
+ {
+  "flight": "MQ5089",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 29.9,
+  "codes": [
+   "1502"
+  ],
+  "returns": 270,
+  "t0": 43151.06500005722,
+  "t1": 45136.21500003338,
+  "track_index": 18421
+ },
+ {
+  "flight": "MQ5110",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 86.4,
+  "codes": [
+   "4107"
+  ],
+  "returns": 1028,
+  "t0": 36829.40499997139,
+  "t1": 40319.299999952316,
+  "track_index": 18365
+ },
+ {
+  "flight": "MQ5115",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 7.2,
+  "codes": [
+   "2610"
+  ],
+  "returns": 512,
+  "t0": 44087.330000042915,
+  "t1": 46875.44500005245,
+  "track_index": 22424
+ },
+ {
+  "flight": "MQ5140",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 84.3,
+  "codes": [
+   "3551"
+  ],
+  "returns": 325,
+  "t0": 37172.953999996185,
+  "t1": 39299.235000014305,
+  "track_index": 12313
+ },
+ {
+  "flight": "MQ5160",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 165.3,
+  "codes": [
+   "2455",
+   "1614"
+  ],
+  "returns": 646,
+  "t0": 36178.450000047684,
+  "t1": 39047.19000005722,
+  "track_index": 17852
+ },
+ {
+  "flight": "MQ5161",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 9.1,
+  "codes": [
+   "7050"
+  ],
+  "returns": 563,
+  "t0": 37525.65999996662,
+  "t1": 39971.27999997139,
+  "track_index": 18937
+ },
+ {
+  "flight": "MQ5239",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 172.3,
+  "codes": [
+   "4643"
+  ],
+  "returns": 699,
+  "t0": 46040.49500000477,
+  "t1": 49351.84500002861,
+  "track_index": 17362
+ },
+ {
+  "flight": "MQ5274",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 10.2,
+  "codes": [
+   "3223"
+  ],
+  "returns": 1659,
+  "t0": 43560.544999957085,
+  "t1": 49616.14499998093,
+  "track_index": 17423
+ },
+ {
+  "flight": "MQ5370",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 94.7,
+  "codes": [
+   "4532"
+  ],
+  "returns": 274,
+  "t0": 47379.33500003815,
+  "t1": 49076.24000000954,
+  "track_index": 19558
+ },
+ {
+  "flight": "MQ5410",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 97.2,
+  "codes": [
+   "1673"
+  ],
+  "returns": 748,
+  "t0": 40550.13499999046,
+  "t1": 43784.125,
+  "track_index": 19015
+ },
+ {
+  "flight": "NW1025",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 22.3,
+  "codes": [
+   "4275"
+  ],
+  "returns": 118,
+  "t0": 43717.73000001907,
+  "t1": 45279.57000005245,
+  "track_index": 17536
+ },
+ {
+  "flight": "NW111",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 6.3,
+  "codes": [
+   "7036"
+  ],
+  "returns": 1365,
+  "t0": 37061.03499996662,
+  "t1": 44727.27499997616,
+  "track_index": 18565
+ },
+ {
+  "flight": "NW1112",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.1,
+  "codes": [
+   "1567"
+  ],
+  "returns": 1158,
+  "t0": 37200.71500003338,
+  "t1": 41600.99500000477,
+  "track_index": 18282
+ },
+ {
+  "flight": "NW1116",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 47.2,
+  "codes": [
+   "5250"
+  ],
+  "returns": 330,
+  "t0": 41469.90499997139,
+  "t1": 43717.77999997139,
+  "track_index": 21985
+ },
+ {
+  "flight": "NW1117",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 24.9,
+  "codes": [
+   "5233"
+  ],
+  "returns": 377,
+  "t0": 39868.919999957085,
+  "t1": 42510.59000003338,
+  "track_index": 20726
+ },
+ {
+  "flight": "NW1180",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 54.8,
+  "codes": [
+   "7415"
+  ],
+  "returns": 1052,
+  "t0": 38882.22000002861,
+  "t1": 43190.41499996185,
+  "track_index": 20034
+ },
+ {
+  "flight": "NW1223",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 19.6,
+  "codes": [
+   "0770"
+  ],
+  "returns": 374,
+  "t0": 47797.44500005245,
+  "t1": 50300.49000000954,
+  "track_index": 17394
+ },
+ {
+  "flight": "NW1405",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 25.7,
+  "codes": [
+   "7035"
+  ],
+  "returns": 705,
+  "t0": 37096.03499996662,
+  "t1": 40781.92999994755,
+  "track_index": 18629
+ },
+ {
+  "flight": "NW1415",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 27.9,
+  "codes": [
+   "5164"
+  ],
+  "returns": 489,
+  "t0": 37860.200000047684,
+  "t1": 40711.325000047684,
+  "track_index": 19078
+ },
+ {
+  "flight": "NW1419",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 5.9,
+  "codes": [
+   "2720"
+  ],
+  "returns": 892,
+  "t0": 46954.325000047684,
+  "t1": 50991.080000042915,
+  "track_index": 17110
+ },
+ {
+  "flight": "NW1444",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 37.8,
+  "codes": [
+   "2642"
+  ],
+  "returns": 366,
+  "t0": 39742.15499997139,
+  "t1": 42570.96500003338,
+  "track_index": 20642
+ },
+ {
+  "flight": "NW1451",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 11.9,
+  "codes": [
+   "7014"
+  ],
+  "returns": 1155,
+  "t0": 37092.18499994278,
+  "t1": 42560.82000005245,
+  "track_index": 18614
+ },
+ {
+  "flight": "NW1464",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 30.1,
+  "codes": [
+   "2327",
+   "1175"
+  ],
+  "returns": 610,
+  "t0": 42146.985000014305,
+  "t1": 45182.51999998093,
+  "track_index": 22338
+ },
+ {
+  "flight": "NW1477",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 2.1,
+  "codes": [
+   "7134"
+  ],
+  "returns": 731,
+  "t0": 37737.92999994755,
+  "t1": 41631.16499996185,
+  "track_index": 19072
+ },
+ {
+  "flight": "NW1481",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 85.4,
+  "codes": [
+   "5244"
+  ],
+  "returns": 223,
+  "t0": 40924.235000014305,
+  "t1": 43258.28999996185,
+  "track_index": 21452
+ },
+ {
+  "flight": "NW1494",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 8.3,
+  "codes": [
+   "5230"
+  ],
+  "returns": 436,
+  "t0": 40428.77499997616,
+  "t1": 43163.78499996662,
+  "track_index": 21230
+ },
+ {
+  "flight": "NW1515",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 1.3,
+  "codes": [
+   "5742"
+  ],
+  "returns": 699,
+  "t0": 40944.27999997139,
+  "t1": 46119.21000003815,
+  "track_index": 18120
+ },
+ {
+  "flight": "NW1518",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 54.0,
+  "codes": [
+   "0710"
+  ],
+  "returns": 824,
+  "t0": 39903.044999957085,
+  "t1": 43568.93499994278,
+  "track_index": 20754
+ },
+ {
+  "flight": "NW1533",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 10.8,
+  "codes": [
+   "0701"
+  ],
+  "returns": 178,
+  "t0": 46726.21500003338,
+  "t1": 48537.98000001907,
+  "track_index": 20139
+ },
+ {
+  "flight": "NW1539",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 4.7,
+  "codes": [
+   "6215"
+  ],
+  "returns": 1032,
+  "t0": 47092.924999952316,
+  "t1": 51738.84000003338,
+  "track_index": 22080
+ },
+ {
+  "flight": "NW1543",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 0.2,
+  "codes": [
+   "1520"
+  ],
+  "returns": 1215,
+  "t0": 45900.37999999523,
+  "t1": 51162.59000003338,
+  "track_index": 14989
+ },
+ {
+  "flight": "NW1556",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 49.9,
+  "codes": [
+   "7033"
+  ],
+  "returns": 315,
+  "t0": 46090.05499994755,
+  "t1": 48555.14999997616,
+  "track_index": 18351
+ },
+ {
+  "flight": "NW157",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 113.6,
+  "codes": [
+   "1453"
+  ],
+  "returns": 1720,
+  "t0": 44043.77999997139,
+  "t1": 50861.51999998093,
+  "track_index": 17397
+ },
+ {
+  "flight": "NW171",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 48.0,
+  "codes": [
+   "3540"
+  ],
+  "returns": 617,
+  "t0": 37453.13499999046,
+  "t1": 40994.39999997616,
+  "track_index": 17027
+ },
+ {
+  "flight": "NW1723",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 32.6,
+  "codes": [
+   "4143"
+  ],
+  "returns": 656,
+  "t0": 46382.25,
+  "t1": 50234.25999999046,
+  "track_index": 19252
+ },
+ {
+  "flight": "NW1775",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 59.7,
+  "codes": [
+   "3311"
+  ],
+  "returns": 1029,
+  "t0": 42105.15999996662,
+  "t1": 46543.64999997616,
+  "track_index": 22292
+ },
+ {
+  "flight": "NW1781",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 35.8,
+  "codes": [
+   "3524"
+  ],
+  "returns": 1416,
+  "t0": 37312.03999996185,
+  "t1": 42925.07000005245,
+  "track_index": 18800
+ },
+ {
+  "flight": "NW1831",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 24.0,
+  "codes": [
+   "7107"
+  ],
+  "returns": 986,
+  "t0": 40100.924999952316,
+  "t1": 44339.81500005722,
+  "track_index": 20876
+ },
+ {
+  "flight": "NW1843",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 35.2,
+  "codes": [
+   "4126"
+  ],
+  "returns": 783,
+  "t0": 47859.200000047684,
+  "t1": 51859.49500000477,
+  "track_index": 19145
+ },
+ {
+  "flight": "NW1882",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 72.6,
+  "codes": [
+   "7424"
+  ],
+  "returns": 1120,
+  "t0": 39104.46500003338,
+  "t1": 43564.299999952316,
+  "track_index": 20203
+ },
+ {
+  "flight": "NW189",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 169.1,
+  "codes": [
+   "3517"
+  ],
+  "returns": 2123,
+  "t0": 37671.38499999046,
+  "t1": 46839.14499998093,
+  "track_index": 19041
+ },
+ {
+  "flight": "NW197",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 81.3,
+  "codes": [
+   "1473"
+  ],
+  "returns": 1587,
+  "t0": 43994.73000001907,
+  "t1": 51828.05999994278,
+  "track_index": 14632
+ },
+ {
+  "flight": "NW207",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 38.1,
+  "codes": [
+   "5730"
+  ],
+  "returns": 510,
+  "t0": 46998.99000000954,
+  "t1": 51927.205000042915,
+  "track_index": 17976
+ },
+ {
+  "flight": "NW225",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 3.6,
+  "codes": [
+   "1356"
+  ],
+  "returns": 755,
+  "t0": 43231.14999997616,
+  "t1": 46968.25499999523,
+  "track_index": 18626
+ },
+ {
+  "flight": "NW227",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.2,
+  "codes": [
+   "3614"
+  ],
+  "returns": 847,
+  "t0": 37954.53900003433,
+  "t1": 42217.38499999046,
+  "track_index": 19246
+ },
+ {
+  "flight": "NW238",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 28.7,
+  "codes": [
+   "4135"
+  ],
+  "returns": 508,
+  "t0": 46948.31500005722,
+  "t1": 50591.60500001907,
+  "track_index": 10603
+ },
+ {
+  "flight": "NW281",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 19.0,
+  "codes": [
+   "3626"
+  ],
+  "returns": 775,
+  "t0": 38656.68499994278,
+  "t1": 42864.05499994755,
+  "track_index": 19844
+ },
+ {
+  "flight": "NW301",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 13.5,
+  "codes": [
+   "2115"
+  ],
+  "returns": 804,
+  "t0": 47388.25,
+  "t1": 51491.294999957085,
+  "track_index": 17780
+ },
+ {
+  "flight": "NW323",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 7.7,
+  "codes": [
+   "2305"
+  ],
+  "returns": 138,
+  "t0": 40984.80999994278,
+  "t1": 42393.674999952316,
+  "track_index": 21665
+ },
+ {
+  "flight": "NW345",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 153.5,
+  "codes": [
+   "3466"
+  ],
+  "returns": 1337,
+  "t0": 45891.919999957085,
+  "t1": 51395.41499996185,
+  "track_index": 18523
+ },
+ {
+  "flight": "NW348",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 36.1,
+  "codes": [
+   "7274"
+  ],
+  "returns": 1093,
+  "t0": 40640.94500005245,
+  "t1": 45387.94000005722,
+  "track_index": 21405
+ },
+ {
+  "flight": "NW353",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 11.9,
+  "codes": [
+   "2666"
+  ],
+  "returns": 1535,
+  "t0": 44124.00999999046,
+  "t1": 50853.71500003338,
+  "track_index": 17641
+ },
+ {
+  "flight": "NW364",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 90.1,
+  "codes": [
+   "5234"
+  ],
+  "returns": 117,
+  "t0": 39990.08500003815,
+  "t1": 41004.21500003338,
+  "track_index": 20822
+ },
+ {
+  "flight": "NW388",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 42.0,
+  "codes": [
+   "4170"
+  ],
+  "returns": 1022,
+  "t0": 46635.03999996185,
+  "t1": 51181.98000001907,
+  "track_index": 21686
+ },
+ {
+  "flight": "NW409",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 31.3,
+  "codes": [
+   "4137"
+  ],
+  "returns": 505,
+  "t0": 42091.32000005245,
+  "t1": 45915.15999996662,
+  "track_index": 19173
+ },
+ {
+  "flight": "NW522",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 47.7,
+  "codes": [
+   "7441"
+  ],
+  "returns": 1137,
+  "t0": 45189.37999999523,
+  "t1": 50728.48000001907,
+  "track_index": 20691
+ },
+ {
+  "flight": "NW540",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 14.3,
+  "codes": [
+   "0725"
+  ],
+  "returns": 778,
+  "t0": 40782.799999952316,
+  "t1": 44206.860000014305,
+  "track_index": 21524
+ },
+ {
+  "flight": "NW569",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 25.0,
+  "codes": [
+   "6556"
+  ],
+  "returns": 1224,
+  "t0": 44290.705000042915,
+  "t1": 51831.08500003815,
+  "track_index": 21110
+ },
+ {
+  "flight": "NW673",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 34.2,
+  "codes": [
+   "2522"
+  ],
+  "returns": 404,
+  "t0": 47757.23000001907,
+  "t1": 50478.830000042915,
+  "track_index": 22456
+ },
+ {
+  "flight": "NW680",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 46.1,
+  "codes": [
+   "4253"
+  ],
+  "returns": 126,
+  "t0": 38413.919999957085,
+  "t1": 39927.77499997616,
+  "track_index": 19669
+ },
+ {
+  "flight": "NW681",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 36.1,
+  "codes": [
+   "1541"
+  ],
+  "returns": 1755,
+  "t0": 36848.75499999523,
+  "t1": 45183.37000000477,
+  "track_index": 18371
+ },
+ {
+  "flight": "NW691",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 11.9,
+  "codes": [
+   "3445"
+  ],
+  "returns": 1554,
+  "t0": 37708.450000047684,
+  "t1": 43592.24500000477,
+  "track_index": 19067
+ },
+ {
+  "flight": "NW719",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 37.5,
+  "codes": [
+   "7127"
+  ],
+  "returns": 1793,
+  "t0": 38099.71000003815,
+  "t1": 46431.18499994278,
+  "track_index": 19356
+ },
+ {
+  "flight": "NW781",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 46.1,
+  "codes": [
+   "4207"
+  ],
+  "returns": 243,
+  "t0": 42226.05999994278,
+  "t1": 44379.35500001907,
+  "track_index": 20365
+ },
+ {
+  "flight": "NW87",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 62.5,
+  "codes": [
+   "1765"
+  ],
+  "returns": 1075,
+  "t0": 41413.05999994278,
+  "t1": 45805.76999998093,
+  "track_index": 21944
+ },
+ {
+  "flight": "NW870",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 38.9,
+  "codes": [
+   "3521"
+  ],
+  "returns": 1073,
+  "t0": 36884.62999999523,
+  "t1": 41449.41499996185,
+  "track_index": 18427
+ },
+ {
+  "flight": "TW187",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 117.4,
+  "codes": [
+   "3004"
+  ],
+  "returns": 3097,
+  "t0": 42047.19000005722,
+  "t1": 50804.25499999523,
+  "track_index": 22274
+ },
+ {
+  "flight": "TW469",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 11.8,
+  "codes": [
+   "3406"
+  ],
+  "returns": 956,
+  "t0": 46562.58500003815,
+  "t1": 50604.52999997139,
+  "track_index": 18644
+ },
+ {
+  "flight": "TW788",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 67.7,
+  "codes": [
+   "0717"
+  ],
+  "returns": 2716,
+  "t0": 39602.125,
+  "t1": 46943.12999999523,
+  "track_index": 17188
+ },
+ {
+  "flight": "TW946",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 93.5,
+  "codes": [
+   "3353"
+  ],
+  "returns": 3277,
+  "t0": 42887.044999957085,
+  "t1": 51614.28999996185,
+  "track_index": 22675
+ },
+ {
+  "flight": "UA1023",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 18.5,
+  "codes": [
+   "3061"
+  ],
+  "returns": 583,
+  "t0": 43464.08500003815,
+  "t1": 46006.48000001907,
+  "track_index": 22350
+ },
+ {
+  "flight": "UA1141",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 24.1,
+  "codes": [
+   "2372"
+  ],
+  "returns": 995,
+  "t0": 46760.794999957085,
+  "t1": 50638.125,
+  "track_index": 22634
+ },
+ {
+  "flight": "UA1211",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 87.6,
+  "codes": [
+   "1112"
+  ],
+  "returns": 1044,
+  "t0": 46616.700000047684,
+  "t1": 50526.44500005245,
+  "track_index": 19496
+ },
+ {
+  "flight": "UA1569",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 133.8,
+  "codes": [
+   "1064"
+  ],
+  "returns": 1343,
+  "t0": 47762.21500003338,
+  "t1": 51948.63499999046,
+  "track_index": 20184
+ },
+ {
+  "flight": "UA163",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 267.3,
+  "codes": [
+   "4656"
+  ],
+  "returns": 175,
+  "t0": 41091.47000002861,
+  "t1": 43024.37999999523,
+  "track_index": 18075
+ },
+ {
+  "flight": "UA1833",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 16.5,
+  "codes": [
+   "6214"
+  ],
+  "returns": 1041,
+  "t0": 47185.24500000477,
+  "t1": 50872.080000042915,
+  "track_index": 23210
+ },
+ {
+  "flight": "UA1846",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 59.1,
+  "codes": [
+   "3630"
+  ],
+  "returns": 1023,
+  "t0": 38382.66499996185,
+  "t1": 41943.59500002861,
+  "track_index": 19638
+ },
+ {
+  "flight": "UA1877",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 153.4,
+  "codes": [
+   "7335"
+  ],
+  "returns": 1305,
+  "t0": 39123.59000003338,
+  "t1": 43576.19500005245,
+  "track_index": 20228
+ },
+ {
+  "flight": "UA1960",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 42.1,
+  "codes": [
+   "2150"
+  ],
+  "returns": 874,
+  "t0": 42539.64499998093,
+  "t1": 45699.89999997616,
+  "track_index": 21901
+ },
+ {
+  "flight": "UA1966",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 70.5,
+  "codes": [
+   "4662"
+  ],
+  "returns": 336,
+  "t0": 44791.78999996185,
+  "t1": 50661.424999952316,
+  "track_index": 18289
+ },
+ {
+  "flight": "UA211",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 54.1,
+  "codes": [
+   "1433"
+  ],
+  "returns": 1121,
+  "t0": 42663.32000005245,
+  "t1": 46792.43499994278,
+  "track_index": 22490
+ },
+ {
+  "flight": "UA641",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 24.6,
+  "codes": [
+   "2307"
+  ],
+  "returns": 1417,
+  "t0": 45972.46000003815,
+  "t1": 51223.60399997234,
+  "track_index": 20363
+ },
+ {
+  "flight": "UA895",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 137.6,
+  "codes": [
+   "3462"
+  ],
+  "returns": 534,
+  "t0": 45519.89499998093,
+  "t1": 48658.514999985695,
+  "track_index": 18153
+ },
+ {
+  "flight": "UA988",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 18.1,
+  "codes": [
+   "3351"
+  ],
+  "returns": 356,
+  "t0": 43199.25499999523,
+  "t1": 45015.89499998093,
+  "track_index": 17425
+ },
+ {
+  "flight": "US1058",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 62.3,
+  "codes": [
+   "3150"
+  ],
+  "returns": 405,
+  "t0": 48400.639999985695,
+  "t1": 50424.14499998093,
+  "track_index": 17350
+ },
+ {
+  "flight": "US1102",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 78.0,
+  "codes": [
+   "2650"
+  ],
+  "returns": 1701,
+  "t0": 41556.330000042915,
+  "t1": 46649.97200000286,
+  "track_index": 17138
+ },
+ {
+  "flight": "US1135",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 10.9,
+  "codes": [
+   "7126"
+  ],
+  "returns": 759,
+  "t0": 37944.98000001907,
+  "t1": 40737.78999996185,
+  "track_index": 19228
+ },
+ {
+  "flight": "US1146",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 19.5,
+  "codes": [
+   "3450"
+  ],
+  "returns": 785,
+  "t0": 36428.64999997616,
+  "t1": 39536.99000000954,
+  "track_index": 18032
+ },
+ {
+  "flight": "US1188",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 2.8,
+  "codes": [
+   "3644"
+  ],
+  "returns": 247,
+  "t0": 37298.49500000477,
+  "t1": 38936.96000003815,
+  "track_index": 18787
+ },
+ {
+  "flight": "US1197",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 48.3,
+  "codes": [
+   "2320"
+  ],
+  "returns": 1282,
+  "t0": 46976.62000000477,
+  "t1": 52183.96500003338,
+  "track_index": 16855
+ },
+ {
+  "flight": "US131",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 11.8,
+  "codes": [
+   "2327"
+  ],
+  "returns": 369,
+  "t0": 44853.110000014305,
+  "t1": 47435.26999998093,
+  "track_index": 22339
+ },
+ {
+  "flight": "US1418",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 16.5,
+  "codes": [
+   "7317"
+  ],
+  "returns": 1094,
+  "t0": 38955.919999957085,
+  "t1": 43004.924999952316,
+  "track_index": 15976
+ },
+ {
+  "flight": "US1474",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 48.4,
+  "codes": [
+   "2627"
+  ],
+  "returns": 689,
+  "t0": 44876.544999957085,
+  "t1": 47304.53499996662,
+  "track_index": 14552
+ },
+ {
+  "flight": "US1535",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 115.1,
+  "codes": [
+   "3423"
+  ],
+  "returns": 618,
+  "t0": 41522.53999996185,
+  "t1": 44109.21500003338,
+  "track_index": 15730
+ },
+ {
+  "flight": "US1579",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 66.9,
+  "codes": [
+   "2411"
+  ],
+  "returns": 308,
+  "t0": 42289.63499999046,
+  "t1": 44385.17999994755,
+  "track_index": 18087
+ },
+ {
+  "flight": "US1603",
+  "evidence": [
+   "diverted-tracked",
+   "both-ends"
+  ],
+  "score": 169.0,
+  "codes": [
+   "7350"
+  ],
+  "returns": 1237,
+  "t0": 39242.55999994278,
+  "t1": 43231.24000000954,
+  "track_index": 19037
+ },
+ {
+  "flight": "US1605",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 1.1,
+  "codes": [
+   "4125"
+  ],
+  "returns": 770,
+  "t0": 37322.925999999046,
+  "t1": 40273.36500000954,
+  "track_index": 17502
+ },
+ {
+  "flight": "US163",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 14.4,
+  "codes": [
+   "6550"
+  ],
+  "returns": 357,
+  "t0": 44720.330000042915,
+  "t1": 47012.73000001907,
+  "track_index": 21460
+ },
+ {
+  "flight": "US1704",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 19.4,
+  "codes": [
+   "2622"
+  ],
+  "returns": 2293,
+  "t0": 41150.08500003815,
+  "t1": 48031.625,
+  "track_index": 21959
+ },
+ {
+  "flight": "US1715",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 23.9,
+  "codes": [
+   "7135"
+  ],
+  "returns": 2288,
+  "t0": 37568.825000047684,
+  "t1": 44246.299999952316,
+  "track_index": 18966
+ },
+ {
+  "flight": "US1749",
+  "evidence": [
+   "diverted-tracked",
+   "both-ends"
+  ],
+  "score": 34.8,
+  "codes": [
+   "7431"
+  ],
+  "returns": 693,
+  "t0": 38909.28499996662,
+  "t1": 42016.49500000477,
+  "track_index": 18745
+ },
+ {
+  "flight": "US1806",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 48.5,
+  "codes": [
+   "3575"
+  ],
+  "returns": 850,
+  "t0": 38113.24500000477,
+  "t1": 41587.69500005245,
+  "track_index": 17275
+ },
+ {
+  "flight": "US183",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 101.7,
+  "codes": [
+   "1414"
+  ],
+  "returns": 1020,
+  "t0": 42436.25999999046,
+  "t1": 46377.080000042915,
+  "track_index": 16368
+ },
+ {
+  "flight": "US1946",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 27.7,
+  "codes": [
+   "3666"
+  ],
+  "returns": 1569,
+  "t0": 46639.41499996185,
+  "t1": 50877.30499994755,
+  "track_index": 20549
+ },
+ {
+  "flight": "US1979",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 66.4,
+  "codes": [
+   "7475"
+  ],
+  "returns": 766,
+  "t0": 38961.674999952316,
+  "t1": 42061.43499994278,
+  "track_index": 20096
+ },
+ {
+  "flight": "US1995",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 204.4,
+  "codes": [
+   "1436"
+  ],
+  "returns": 820,
+  "t0": 43143.205000042915,
+  "t1": 47228.83500003815,
+  "track_index": 22419
+ },
+ {
+  "flight": "US201",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 19.2,
+  "codes": [
+   "7007"
+  ],
+  "returns": 242,
+  "t0": 43516.44500005245,
+  "t1": 45189.174999952316,
+  "track_index": 18286
+ },
+ {
+  "flight": "US2058",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 18.1,
+  "codes": [
+   "6742"
+  ],
+  "returns": 763,
+  "t0": 41906.36500000954,
+  "t1": 46053.03999996185,
+  "track_index": 17291
+ },
+ {
+  "flight": "US2060",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 124.0,
+  "codes": [
+   "2342"
+  ],
+  "returns": 668,
+  "t0": 46892.450000047684,
+  "t1": 49778.77499997616,
+  "track_index": 20933
+ },
+ {
+  "flight": "US2129",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 12.2,
+  "codes": [
+   "2302"
+  ],
+  "returns": 1861,
+  "t0": 45932.674999952316,
+  "t1": 51396.12999999523,
+  "track_index": 21490
+ },
+ {
+  "flight": "US2146",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 122.3,
+  "codes": [
+   "3440"
+  ],
+  "returns": 666,
+  "t0": 36518.65999996662,
+  "t1": 39441.044999957085,
+  "track_index": 16813
+ },
+ {
+  "flight": "US2161",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 66.2,
+  "codes": [
+   "1402"
+  ],
+  "returns": 995,
+  "t0": 41765.12999999523,
+  "t1": 45885.110000014305,
+  "track_index": 20103
+ },
+ {
+  "flight": "US225",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 48.1,
+  "codes": [
+   "2624"
+  ],
+  "returns": 2699,
+  "t0": 43736.76999998093,
+  "t1": 50990.25499999523,
+  "track_index": 20437
+ },
+ {
+  "flight": "US2298",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 18.8,
+  "codes": [
+   "7055"
+  ],
+  "returns": 518,
+  "t0": 37349.44000005722,
+  "t1": 39981.03499996662,
+  "track_index": 18835
+ },
+ {
+  "flight": "US2325",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 229.9,
+  "codes": [
+   "1125"
+  ],
+  "returns": 633,
+  "t0": 38036.81500005722,
+  "t1": 40683.50999999046,
+  "track_index": 19313
+ },
+ {
+  "flight": "US2332",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 60.2,
+  "codes": [
+   "1623"
+  ],
+  "returns": 1104,
+  "t0": 39764.72500002384,
+  "t1": 44107.39999997616,
+  "track_index": 20654
+ },
+ {
+  "flight": "US2601",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 63.2,
+  "codes": [
+   "3634",
+   "3720"
+  ],
+  "returns": 2443,
+  "t0": 38132.450000047684,
+  "t1": 45739.924999952316,
+  "track_index": 19376
+ },
+ {
+  "flight": "US2602",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 42.0,
+  "codes": [
+   "3566"
+  ],
+  "returns": 3730,
+  "t0": 38235.50499999523,
+  "t1": 48283.83500003815,
+  "track_index": 19477
+ },
+ {
+  "flight": "US2611",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 149.8,
+  "codes": [
+   "1401"
+  ],
+  "returns": 903,
+  "t0": 41823.49000000954,
+  "t1": 45148.58500003815,
+  "track_index": 17116
+ },
+ {
+  "flight": "US2614",
+  "evidence": [
+   "diverted-tracked",
+   "both-ends"
+  ],
+  "score": 48.1,
+  "codes": [
+   "3541"
+  ],
+  "returns": 831,
+  "t0": 37982.60000002384,
+  "t1": 41110.735000014305,
+  "track_index": 19259
+ },
+ {
+  "flight": "US2617",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 126.6,
+  "codes": [
+   "7054"
+  ],
+  "returns": 2005,
+  "t0": 37262.83899998665,
+  "t1": 44407.80499994755,
+  "track_index": 18751
+ },
+ {
+  "flight": "US2623",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 58.5,
+  "codes": [
+   "0515"
+  ],
+  "returns": 2365,
+  "t0": 39157.15999996662,
+  "t1": 45830.44000005722,
+  "track_index": 20243
+ },
+ {
+  "flight": "US2636",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 121.4,
+  "codes": [
+   "1343"
+  ],
+  "returns": 3116,
+  "t0": 42667.49000000954,
+  "t1": 51345.12999999523,
+  "track_index": 22694
+ },
+ {
+  "flight": "US2654",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 48.0,
+  "codes": [
+   "0473"
+  ],
+  "returns": 45,
+  "t0": 46309.044999957085,
+  "t1": 46932.37000000477,
+  "track_index": 18039
+ },
+ {
+  "flight": "US2659",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 72.7,
+  "codes": [
+   "6562"
+  ],
+  "returns": 2487,
+  "t0": 44517.07000005245,
+  "t1": 51410.450000047684,
+  "track_index": 23062
+ },
+ {
+  "flight": "US2670",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 201.7,
+  "codes": [
+   "3617"
+  ],
+  "returns": 538,
+  "t0": 44803.01999998093,
+  "t1": 48059.12999999523,
+  "track_index": 17623
+ },
+ {
+  "flight": "US2683",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 168.9,
+  "codes": [
+   "1455"
+  ],
+  "returns": 3648,
+  "t0": 43160.75999999046,
+  "t1": 52370.28999996185,
+  "track_index": 21233
+ },
+ {
+  "flight": "US2686",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 24.3,
+  "codes": [
+   "3477"
+  ],
+  "returns": 1061,
+  "t0": 36531.91499996185,
+  "t1": 40205.5,
+  "track_index": 18128
+ },
+ {
+  "flight": "US2690",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 176.5,
+  "codes": [
+   "1302"
+  ],
+  "returns": 2815,
+  "t0": 41515.625,
+  "t1": 49567.30999994278,
+  "track_index": 22872
+ },
+ {
+  "flight": "US2726",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 175.1,
+  "codes": [
+   "7042"
+  ],
+  "returns": 2110,
+  "t0": 44981.75499999523,
+  "t1": 50862.46000003815,
+  "track_index": 18440
+ },
+ {
+  "flight": "US2729",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 90.3,
+  "codes": [
+   "1112"
+  ],
+  "returns": 2810,
+  "t0": 38257.00999999046,
+  "t1": 46267.84500002861,
+  "track_index": 19495
+ },
+ {
+  "flight": "US2773",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 161.7,
+  "codes": [
+   "1472"
+  ],
+  "returns": 1199,
+  "t0": 47527.82000005245,
+  "t1": 51687.99000000954,
+  "track_index": 19388
+ },
+ {
+  "flight": "US2847",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 41.5,
+  "codes": [
+   "3515",
+   "0552"
+  ],
+  "returns": 1260,
+  "t0": 46455.93499994278,
+  "t1": 50701.87000000477,
+  "track_index": 18526
+ },
+ {
+  "flight": "US2979",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 113.4,
+  "codes": [
+   "1342"
+  ],
+  "returns": 833,
+  "t0": 42551.485000014305,
+  "t1": 45567.89499998093,
+  "track_index": 22524
+ },
+ {
+  "flight": "US2990",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 26.9,
+  "codes": [
+   "2765"
+  ],
+  "returns": 3458,
+  "t0": 42143.75499999523,
+  "t1": 51138.94500005245,
+  "track_index": 22334
+ },
+ {
+  "flight": "US359",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 69.6,
+  "codes": [
+   "2072"
+  ],
+  "returns": 694,
+  "t0": 41948.674999952316,
+  "t1": 44636.98000001907,
+  "track_index": 21762
+ },
+ {
+  "flight": "US381",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 140.0,
+  "codes": [
+   "3565"
+  ],
+  "returns": 1102,
+  "t0": 38312.924999952316,
+  "t1": 41802.09500002861,
+  "track_index": 19562
+ },
+ {
+  "flight": "US437",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 0.4,
+  "codes": [
+   "2303"
+  ],
+  "returns": 1844,
+  "t0": 46544.5,
+  "t1": 51921.47500002384,
+  "track_index": 20834
+ },
+ {
+  "flight": "US524",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 70.2,
+  "codes": [
+   "3735"
+  ],
+  "returns": 2412,
+  "t0": 40209.09000003338,
+  "t1": 47388.27499997616,
+  "track_index": 20630
+ },
+ {
+  "flight": "US528",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 11.0,
+  "codes": [
+   "1147"
+  ],
+  "returns": 673,
+  "t0": 39264.92999994755,
+  "t1": 41830.61500000954,
+  "track_index": 20020
+ },
+ {
+  "flight": "US530",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 18.1,
+  "codes": [
+   "2611"
+  ],
+  "returns": 2260,
+  "t0": 40356.23000001907,
+  "t1": 47108.62999999523,
+  "track_index": 21649
+ },
+ {
+  "flight": "US532",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 43.6,
+  "codes": [
+   "5744"
+  ],
+  "returns": 1389,
+  "t0": 40097.360000014305,
+  "t1": 44847.90499997139,
+  "track_index": 18764
+ },
+ {
+  "flight": "US551",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 11.3,
+  "codes": [
+   "1357"
+  ],
+  "returns": 545,
+  "t0": 42959.61500000954,
+  "t1": 45429.02999997139,
+  "track_index": 19283
+ },
+ {
+  "flight": "US6400",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 54.9,
+  "codes": [
+   "3623"
+  ],
+  "returns": 1040,
+  "t0": 38633.674999952316,
+  "t1": 42111.580000042915,
+  "track_index": 19823
+ },
+ {
+  "flight": "US6402",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 6.3,
+  "codes": [
+   "2131"
+  ],
+  "returns": 921,
+  "t0": 41921.05999994278,
+  "t1": 45063.89999997616,
+  "track_index": 22210
+ },
+ {
+  "flight": "US6404",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 22.2,
+  "codes": [
+   "6572"
+  ],
+  "returns": 1061,
+  "t0": 45792.49500000477,
+  "t1": 49322.77499997616,
+  "track_index": 22232
+ },
+ {
+  "flight": "US653",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 114.6,
+  "codes": [
+   "3331"
+  ],
+  "returns": 328,
+  "t0": 42241.02999997139,
+  "t1": 44301.24500000477,
+  "track_index": 22377
+ },
+ {
+  "flight": "US675",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 17.6,
+  "codes": [
+   "7170"
+  ],
+  "returns": 2550,
+  "t0": 38290.76999998093,
+  "t1": 45746.33500003815,
+  "track_index": 19527
+ },
+ {
+  "flight": "US680",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 6.1,
+  "codes": [
+   "3433"
+  ],
+  "returns": 1060,
+  "t0": 35957.37000000477,
+  "t1": 40293.00999999046,
+  "track_index": 17746
+ },
+ {
+  "flight": "US6800",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.3,
+  "codes": [
+   "1502"
+  ],
+  "returns": 387,
+  "t0": 36875.669999957085,
+  "t1": 38643.48000001907,
+  "track_index": 18420
+ },
+ {
+  "flight": "US6802",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 47.0,
+  "codes": [
+   "1717"
+  ],
+  "returns": 429,
+  "t0": 40728.97000002861,
+  "t1": 42663.34500002861,
+  "track_index": 21488
+ },
+ {
+  "flight": "US6803",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 41.9,
+  "codes": [
+   "7377"
+  ],
+  "returns": 553,
+  "t0": 39855.58500003815,
+  "t1": 42385.61500000954,
+  "track_index": 17410
+ },
+ {
+  "flight": "US6804",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.1,
+  "codes": [
+   "1546"
+  ],
+  "returns": 278,
+  "t0": 44315.985000014305,
+  "t1": 45891.90499997139,
+  "track_index": 18475
+ },
+ {
+  "flight": "US6848",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 10.1,
+  "codes": [
+   "2474"
+  ],
+  "returns": 466,
+  "t0": 36524.84000003338,
+  "t1": 38593.19000005722,
+  "track_index": 18123
+ },
+ {
+  "flight": "US6849",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 161.3,
+  "codes": [
+   "1520"
+  ],
+  "returns": 580,
+  "t0": 36623.639999985695,
+  "t1": 38943.5,
+  "track_index": 14985
+ },
+ {
+  "flight": "US6850",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 7.0,
+  "codes": [
+   "0567"
+  ],
+  "returns": 797,
+  "t0": 40241.761999964714,
+  "t1": 43523.169999957085,
+  "track_index": 19864
+ },
+ {
+  "flight": "US6851",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 44.5,
+  "codes": [
+   "1742"
+  ],
+  "returns": 658,
+  "t0": 40525.24500000477,
+  "t1": 43100.15499997139,
+  "track_index": 21309
+ },
+ {
+  "flight": "US6852",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 102.6,
+  "codes": [
+   "6520"
+  ],
+  "returns": 552,
+  "t0": 44303.388000011444,
+  "t1": 46440.85500001907,
+  "track_index": 17405
+ },
+ {
+  "flight": "US6853",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 49.9,
+  "codes": [
+   "1604"
+  ],
+  "returns": 562,
+  "t0": 44399.94000005722,
+  "t1": 46566.52999997139,
+  "track_index": 16263
+ },
+ {
+  "flight": "US687",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 24.4,
+  "codes": [
+   "2775"
+  ],
+  "returns": 1731,
+  "t0": 46220.49000000954,
+  "t1": 51112.60500001907,
+  "track_index": 22357
+ },
+ {
+  "flight": "US714",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 46.8,
+  "codes": [
+   "3756"
+  ],
+  "returns": 941,
+  "t0": 48711.455000042915,
+  "t1": 51324.66499996185,
+  "track_index": 20339
+ },
+ {
+  "flight": "US721",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 0.2,
+  "codes": [
+   "3613"
+  ],
+  "returns": 620,
+  "t0": 46223.825000047684,
+  "t1": 48166.69000005722,
+  "track_index": 19547
+ },
+ {
+  "flight": "US808",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 0.0,
+  "codes": [
+   "0724"
+  ],
+  "returns": 1473,
+  "t0": 46730.110000014305,
+  "t1": 50920.72000002861,
+  "track_index": 18844
+ },
+ {
+  "flight": "US857",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 48.6,
+  "codes": [
+   "7145"
+  ],
+  "returns": 1018,
+  "t0": 47276.330000042915,
+  "t1": 50291.36500000954,
+  "track_index": 19981
+ },
+ {
+  "flight": "US979",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 42.4,
+  "codes": [
+   "3542"
+  ],
+  "returns": 1025,
+  "t0": 47139.83500003815,
+  "t1": 50760.84500002861,
+  "track_index": 19112
+ },
+ {
+  "flight": "US981",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 32.9,
+  "codes": [
+   "7062"
+  ],
+  "returns": 568,
+  "t0": 45601.87000000477,
+  "t1": 48196.31500005722,
+  "track_index": 18913
+ },
+ {
+  "flight": "WN101",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 142.6,
+  "codes": [
+   "7376"
+  ],
+  "returns": 1092,
+  "t0": 40240.27999997139,
+  "t1": 43826.18499994278,
+  "track_index": 21040
+ },
+ {
+  "flight": "WN113",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 10.0,
+  "codes": [
+   "6565"
+  ],
+  "returns": 1014,
+  "t0": 44445.69500005245,
+  "t1": 48909.46500003338,
+  "track_index": 19443
+ },
+ {
+  "flight": "WN1153",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 119.7,
+  "codes": [
+   "1446"
+  ],
+  "returns": 3184,
+  "t0": 43016.65999996662,
+  "t1": 51420.71500003338,
+  "track_index": 17581
+ },
+ {
+  "flight": "WN1179",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 47.9,
+  "codes": [
+   "2070"
+  ],
+  "returns": 932,
+  "t0": 41840.72500002384,
+  "t1": 44815.049999952316,
+  "track_index": 22170
+ },
+ {
+  "flight": "WN1187",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 143.8,
+  "codes": [
+   "7001"
+  ],
+  "returns": 1004,
+  "t0": 47268.55499994755,
+  "t1": 50900.71000003815,
+  "track_index": 18416
+ },
+ {
+  "flight": "WN1253",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 4.5,
+  "codes": [
+   "0316"
+  ],
+  "returns": 56,
+  "t0": 44455.549999952316,
+  "t1": 45127.169999957085,
+  "track_index": 18624
+ },
+ {
+  "flight": "WN1283",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 84.5,
+  "codes": [
+   "1306",
+   "3545"
+  ],
+  "returns": 3432,
+  "t0": 41947.49500000477,
+  "t1": 50907.44000005722,
+  "track_index": 18343
+ },
+ {
+  "flight": "WN145",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 12.3,
+  "codes": [
+   "1430"
+  ],
+  "returns": 839,
+  "t0": 42638.455000042915,
+  "t1": 45529.81500005722,
+  "track_index": 22558
+ },
+ {
+  "flight": "WN1557",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 45.0,
+  "codes": [
+   "1345"
+  ],
+  "returns": 1597,
+  "t0": 42799.80999994278,
+  "t1": 47434.76999998093,
+  "track_index": 20641
+ },
+ {
+  "flight": "WN1582",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 49.7,
+  "codes": [
+   "3407"
+  ],
+  "returns": 876,
+  "t0": 38846.62999999523,
+  "t1": 41741.84500002861,
+  "track_index": 17388
+ },
+ {
+  "flight": "WN1652",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 79.4,
+  "codes": [
+   "4612"
+  ],
+  "returns": 539,
+  "t0": 43495.53999996185,
+  "t1": 45535.88499999046,
+  "track_index": 15721
+ },
+ {
+  "flight": "WN1735",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 95.8,
+  "codes": [
+   "2563"
+  ],
+  "returns": 1214,
+  "t0": 48510.87000000477,
+  "t1": 52728.82000005245,
+  "track_index": 23537
+ },
+ {
+  "flight": "WN1750",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 163.1,
+  "codes": [
+   "2106"
+  ],
+  "returns": 2127,
+  "t0": 41432.19000005722,
+  "t1": 48128.0,
+  "track_index": 21964
+ },
+ {
+  "flight": "WN1986",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 18.0,
+  "codes": [
+   "1617"
+  ],
+  "returns": 212,
+  "t0": 39515.21500003338,
+  "t1": 40753.78999996185,
+  "track_index": 20470
+ },
+ {
+  "flight": "WN200",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 60.0,
+  "codes": [
+   "3007"
+  ],
+  "returns": 818,
+  "t0": 41076.27999997139,
+  "t1": 44179.72500002384,
+  "track_index": 23037
+ },
+ {
+  "flight": "WN2019",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 282.6,
+  "codes": [
+   "0325"
+  ],
+  "returns": 89,
+  "t0": 44510.07000005245,
+  "t1": 45004.80900001526,
+  "track_index": 19253
+ },
+ {
+  "flight": "WN2097",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 215.5,
+  "codes": [
+   "6554"
+  ],
+  "returns": 2506,
+  "t0": 44231.21500003338,
+  "t1": 51470.325000047684,
+  "track_index": 21897
+ },
+ {
+  "flight": "WN214",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 42.5,
+  "codes": [
+   "3237"
+  ],
+  "returns": 1495,
+  "t0": 45338.205000042915,
+  "t1": 50107.30499994755,
+  "track_index": 23748
+ },
+ {
+  "flight": "WN2498",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 56.3,
+  "codes": [
+   "3272"
+  ],
+  "returns": 408,
+  "t0": 46574.14499998093,
+  "t1": 48091.14499998093,
+  "track_index": 23719
+ },
+ {
+  "flight": "WN267",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 23.7,
+  "codes": [
+   "3653"
+  ],
+  "returns": 435,
+  "t0": 40722.99500000477,
+  "t1": 42506.26999998093,
+  "track_index": 17212
+ },
+ {
+  "flight": "WN294",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 47.7,
+  "codes": [
+   "3527"
+  ],
+  "returns": 1388,
+  "t0": 46588.06500005722,
+  "t1": 51293.03499996662,
+  "track_index": 18932
+ },
+ {
+  "flight": "WN299",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 77.8,
+  "codes": [
+   "1335"
+  ],
+  "returns": 2016,
+  "t0": 42607.87000000477,
+  "t1": 48858.90999996662,
+  "track_index": 19382
+ },
+ {
+  "flight": "WN400",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 112.2,
+  "codes": [
+   "0540"
+  ],
+  "returns": 928,
+  "t0": 39681.299999952316,
+  "t1": 42541.72500002384,
+  "track_index": 12173
+ },
+ {
+  "flight": "WN420",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 51.9,
+  "codes": [
+   "1316"
+  ],
+  "returns": 2778,
+  "t0": 41899.235000014305,
+  "t1": 49388.66499996185,
+  "track_index": 23048
+ },
+ {
+  "flight": "WN423",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 89.3,
+  "codes": [
+   "6542",
+   "4147"
+  ],
+  "returns": 666,
+  "t0": 43909.59500002861,
+  "t1": 46515.69500005245,
+  "track_index": 21751
+ },
+ {
+  "flight": "WN447",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 36.3,
+  "codes": [
+   "6642"
+  ],
+  "returns": 1350,
+  "t0": 47383.99000000954,
+  "t1": 51007.96500003338,
+  "track_index": 21061
+ },
+ {
+  "flight": "WN470",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 0.8,
+  "codes": [
+   "7474"
+  ],
+  "returns": 710,
+  "t0": 39303.28999996185,
+  "t1": 42087.200000047684,
+  "track_index": 20332
+ },
+ {
+  "flight": "WN480",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 54.9,
+  "codes": [
+   "4640"
+  ],
+  "returns": 434,
+  "t0": 44592.84000003338,
+  "t1": 46255.51999998093,
+  "track_index": 16442
+ },
+ {
+  "flight": "WN510",
+  "evidence": [
+   "dest-consistent",
+   "both-ends",
+   "origin-consistent"
+  ],
+  "score": 181.9,
+  "codes": [
+   "3540"
+  ],
+  "returns": 978,
+  "t0": 45568.10500001907,
+  "t1": 49174.30499994755,
+  "track_index": 17029
+ },
+ {
+  "flight": "WN556",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 22.3,
+  "codes": [
+   "4603"
+  ],
+  "returns": 504,
+  "t0": 43257.07000005245,
+  "t1": 45355.794999957085,
+  "track_index": 18685
+ },
+ {
+  "flight": "WN604",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 36.0,
+  "codes": [
+   "1436"
+  ],
+  "returns": 1536,
+  "t0": 47611.65499997139,
+  "t1": 52590.93499994278,
+  "track_index": 22420
+ },
+ {
+  "flight": "WN624",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 74.2,
+  "codes": [
+   "2452"
+  ],
+  "returns": 1123,
+  "t0": 45910.90999996662,
+  "t1": 49467.44500005245,
+  "track_index": 18338
+ },
+ {
+  "flight": "WN654",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 37.4,
+  "codes": [
+   "7425"
+  ],
+  "returns": 2365,
+  "t0": 43121.43499994278,
+  "t1": 50822.32000005245,
+  "track_index": 19787
+ },
+ {
+  "flight": "WN707",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 12.0,
+  "codes": [
+   "3341"
+  ],
+  "returns": 1822,
+  "t0": 43879.73000001907,
+  "t1": 51870.49500000477,
+  "track_index": 22657
+ },
+ {
+  "flight": "WN728",
+  "evidence": [
+   "diverted-tracked"
+  ],
+  "score": 151.9,
+  "codes": [
+   "1437"
+  ],
+  "returns": 2793,
+  "t0": 43009.87699997425,
+  "t1": 51720.60500001907,
+  "track_index": 14117
+ },
+ {
+  "flight": "WN773",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 18.1,
+  "codes": [
+   "2655"
+  ],
+  "returns": 1191,
+  "t0": 46272.47000002861,
+  "t1": 49735.830000042915,
+  "track_index": 11738
+ },
+ {
+  "flight": "WN910",
+  "evidence": [
+   "origin-consistent"
+  ],
+  "score": 213.9,
+  "codes": [
+   "5302"
+  ],
+  "returns": 229,
+  "t0": 40681.74500000477,
+  "t1": 42689.919999957085,
+  "track_index": 19584
+ },
+ {
+  "flight": "WN938",
+  "evidence": [
+   "dest-consistent"
+  ],
+  "score": 69.6,
+  "codes": [
+   "1310"
+  ],
+  "returns": 202,
+  "t0": 43309.924999952316,
+  "t1": 44579.13499999046,
+  "track_index": 18228
+ }
+]
