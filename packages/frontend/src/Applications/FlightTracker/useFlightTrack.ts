@@ -44,9 +44,40 @@ export function trackUrl(flight: string, flightDate: string): string {
 		"filter[flight][_eq]": flight,
 		"filter[flight_date][_eq]": flightDate,
 		fields: "flight,origin,scheduled_dest,landed_at,diverted,geometry,tail_number,aircraft_type,details,wheels_off_utc,wheels_on_utc",
-		limit: "1",
+		// Multi-leg flight numbers (e.g. WN6 flying several legs on 9/11) have
+		// one row PER LEG — fetch them all and pick by time (pickLeg below).
+		limit: "10",
 	});
 	return `${DIRECTUS_URL}/items/flight_tracks?${params.toString()}`;
+}
+
+// Slack around a leg's wheels span when matching the selection instant —
+// positions exist a little before wheels-off (taxi/radar pickup) and the
+// click can land just after wheels-on while the pin lingers.
+const LEG_SLACK_MS = 10 * 60_000;
+
+/**
+ * The leg whose [wheels_off, wheels_on] span (with slack) contains the
+ * selection instant. Single-row responses (almost every flight) short-circuit;
+ * with no time match the earliest leg wins — the previous behavior, but
+ * deterministic instead of row-order luck.
+ */
+export function pickLeg(rows: FlightTrack[], atMs: number): FlightTrack | null {
+	if (rows.length <= 1) return rows[0] ?? null;
+	const spanOf = (r: FlightTrack): [number, number] => [
+		r.wheels_off_utc ? Date.parse(r.wheels_off_utc) - LEG_SLACK_MS : Number.NEGATIVE_INFINITY,
+		r.wheels_on_utc ? Date.parse(r.wheels_on_utc) + LEG_SLACK_MS : Number.POSITIVE_INFINITY,
+	];
+	const inSpan = rows.filter((r) => {
+		const [lo, hi] = spanOf(r);
+		return atMs >= lo && atMs <= hi;
+	});
+	const pool = inSpan.length > 0 ? inSpan : rows;
+	return [...pool].sort((a, b) => {
+		const ta = a.wheels_off_utc ? Date.parse(a.wheels_off_utc) : 0;
+		const tb = b.wheels_off_utc ? Date.parse(b.wheels_off_utc) : 0;
+		return ta - tb;
+	})[0];
 }
 
 // Fetch the selected flight's full track, cached by flight|date (tracks are
@@ -71,7 +102,10 @@ export function useFlightTrack(selection: TrackSelection | null): {
 			return;
 		}
 		const date = flightDateOf(selection.startDate);
-		const key = `${selection.flight}|${date}`;
+		const atMs = Date.parse(selection.startDate);
+		// Cache per selection instant's leg, not just per flight — a multi-leg
+		// number resolves to different rows at different times of day.
+		const key = `${selection.flight}|${date}|${Number.isNaN(atMs) ? 0 : Math.floor(atMs / 3_600_000)}`;
 		const cached = cache.current.get(key);
 		if (cached) {
 			setTrack(cached);
@@ -88,7 +122,7 @@ export function useFlightTrack(selection: TrackSelection | null): {
 				if (controller.signal.aborted) return;
 				if (!res.ok) throw new Error(`HTTP ${res.status}`);
 				const json = (await res.json()) as { data: FlightTrack[] };
-				const row = json.data[0] ?? null;
+				const row = pickLeg(json.data, atMs);
 				if (!row) {
 					setTrack(null);
 					setError("Track unavailable");

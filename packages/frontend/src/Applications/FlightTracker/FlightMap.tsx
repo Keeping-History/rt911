@@ -27,6 +27,7 @@ import {
 	PLANE_ICON_PX,
 	PLANE_NOTABLE_ICON_ID,
 	PLANE_NOTABLE_ICON_PX,
+	PLANE_ANON_ICON_ID,
 	PLANE_OBSERVER_ICON_ID,
 	buildPlaneImage,
 	familyIconId,
@@ -113,13 +114,15 @@ async function installPlaneIcons(
 	pinColor: string,
 	notablePinColor: string,
 	observerPinColor: string,
+	anonPinColor: string,
 	pixelate: boolean,
 ) {
 	try {
-		const [regular, notable, observer] = await Promise.all([
+		const [regular, notable, observer, anon] = await Promise.all([
 			buildPlaneImage(planeSvg, pinColor, iconDisplayPx(PLANE_ICON_PX, pixelate), pixelate),
 			buildPlaneImage(planeSvg, notablePinColor, PLANE_NOTABLE_ICON_PX, pixelate),
 			buildPlaneImage(planeSvg, observerPinColor, PLANE_NOTABLE_ICON_PX, pixelate),
+			buildPlaneImage(planeSvg, anonPinColor, iconDisplayPx(PLANE_ICON_PX, pixelate), pixelate),
 		]);
 		if (map.hasImage(PLANE_ICON_ID)) map.updateImage(PLANE_ICON_ID, regular);
 		else map.addImage(PLANE_ICON_ID, regular, { pixelRatio: 2 });
@@ -127,6 +130,8 @@ async function installPlaneIcons(
 		else map.addImage(PLANE_NOTABLE_ICON_ID, notable, { pixelRatio: 2 });
 		if (map.hasImage(PLANE_OBSERVER_ICON_ID)) map.updateImage(PLANE_OBSERVER_ICON_ID, observer);
 		else map.addImage(PLANE_OBSERVER_ICON_ID, observer, { pixelRatio: 2 });
+		if (map.hasImage(PLANE_ANON_ICON_ID)) map.updateImage(PLANE_ANON_ICON_ID, anon);
+		else map.addImage(PLANE_ANON_ICON_ID, anon, { pixelRatio: 2 });
 	} catch (err) {
 		console.warn("plane icons unavailable:", err);
 	}
@@ -315,6 +320,7 @@ interface FlightMapProps {
 	pinColor: string;
 	notablePinColor: string;
 	observerPinColor: string;
+	anonPinColor: string;
 	// Hero landmark model color (packed 0xRRGGBB), light/dark map variants;
 	// optional so existing call sites that predate hero landmarks keep working.
 	buildingHeroColorLight?: number;
@@ -556,7 +562,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	ref: handleRef,
 	positions, seedPositions, basemapUrls, trackGeoJSON,
 	trackProfile = null, nowMs, playing,
-	mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, radarSweep, trailMultiplier,
+	mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, radarSweep, trailMultiplier,
 	// Warm-stone defaults mirror flightMapSettings.ts's DEFAULT_FLIGHT_MAP_SETTINGS
 	// so call sites that predate hero landmarks (or omit the setting) still get a
 	// sensible hero color instead of an unset value.
@@ -618,11 +624,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const colorsRef = useRef<
 		FlightMapColors & { buildingHeroColorLight: number; buildingHeroColorDark: number }
 	>({
-		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain,
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, terrain,
 		buildingHeroColorLight, buildingHeroColorDark,
 	});
 	colorsRef.current = {
-		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain,
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, terrain,
 		buildingHeroColorLight, buildingHeroColorDark,
 	};
 	const radarSweepRef = useRef(radarSweep);
@@ -806,7 +812,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				id: "flights-anon-dots", type: "symbol", source: "flights",
 				filter: ["==", ["get", "anon"], true],
 				layout: {
-					"icon-image": ["image", PLANE_ICON_ID],
+					"icon-image": ["image", PLANE_ANON_ICON_ID],
 					"icon-size": 0.8,
 					"icon-rotate": ["-", ["get", "heading"], 90],
 					"icon-rotation-alignment": "map",
@@ -847,7 +853,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			});
 			void installPlaneIcons(
 				map, colors.pinColor, colors.notablePinColor, colors.observerPinColor,
-				pixelPlanes(colors.mapStyle),
+				colors.anonPinColor, pixelPlanes(colors.mapStyle),
 			);
 			// Cluster mode (issue #222): a second, pre-clustered source — MapLibre
 			// fixes the cluster option at addSource time, so toggling is a
@@ -1352,11 +1358,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain });
+		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, terrain });
 		// mapStyle is already a dep, so switching to/from radar re-rasterizes
 		// every registered icon into (or out of) its 8-bit variant for free.
 		const pixelate = pixelPlanes(mapStyle);
-		void installPlaneIcons(map, pinColor, notablePinColor, observerPinColor, pixelate);
+		void installPlaneIcons(map, pinColor, notablePinColor, observerPinColor, anonPinColor, pixelate);
 		for (const [family, svg] of loadedIconSvgsRef.current) {
 			void installFamilyIcon(
 				map, family, svg, pinColor, notablePinColor, observerPinColor, pixelate,

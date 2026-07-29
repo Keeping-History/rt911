@@ -71,6 +71,7 @@ export interface FlightMapColors {
 	pinColor: string;
 	notablePinColor: string;
 	observerPinColor: string;
+	anonPinColor: string;
 	// Topography toggle: hillshade visibility rides the shared basemap switch.
 	terrain: boolean;
 }

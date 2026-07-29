@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { flightDateOf, trackUrl, useFlightTrack } from "./useFlightTrack";
+import { type FlightTrack, flightDateOf, pickLeg, trackUrl, useFlightTrack } from "./useFlightTrack";
 
 describe("flightDateOf", () => {
 	it("takes the UTC date component of an ISO start_date", () => {
@@ -43,5 +43,34 @@ describe("useFlightTrack error handling", () => {
 		expect(result.current.track).toBeNull();
 		expect(result.current.error).toBe("Track unavailable");
 		expect(result.current.error).not.toContain("403");
+	});
+});
+
+describe("pickLeg (multi-leg flight numbers)", () => {
+	const leg = (off: string, on: string): FlightTrack => ({
+		flight: "WN6", origin: "BWI", scheduled_dest: "MDW", landed_at: "MDW",
+		diverted: false, geometry: null, tail_number: null, aircraft_type: null,
+		details: null, wheels_off_utc: off, wheels_on_utc: on,
+	});
+	const morning = leg("2001-09-11T11:00:00Z", "2001-09-11T13:00:00Z");
+	const noon = leg("2001-09-11T15:30:00Z", "2001-09-11T17:00:00Z");
+
+	it("returns the sole row untouched", () => {
+		expect(pickLeg([morning], Date.parse("2001-09-11T20:00:00Z"))).toBe(morning);
+		expect(pickLeg([], 0)).toBeNull();
+	});
+
+	it("picks the leg whose wheels span contains the selection instant", () => {
+		expect(pickLeg([noon, morning], Date.parse("2001-09-11T12:00:00Z"))).toBe(morning);
+		expect(pickLeg([noon, morning], Date.parse("2001-09-11T16:00:00Z"))).toBe(noon);
+	});
+
+	it("allows slack around the span (taxi / lingering pin)", () => {
+		expect(pickLeg([noon, morning], Date.parse("2001-09-11T10:55:00Z"))).toBe(morning);
+		expect(pickLeg([noon, morning], Date.parse("2001-09-11T17:05:00Z"))).toBe(noon);
+	});
+
+	it("falls back to the earliest leg when nothing matches", () => {
+		expect(pickLeg([noon, morning], Date.parse("2001-09-11T23:00:00Z"))).toBe(morning);
 	});
 });

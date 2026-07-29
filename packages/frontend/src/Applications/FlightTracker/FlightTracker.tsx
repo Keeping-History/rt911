@@ -949,6 +949,24 @@ export const FlightTracker: FC = () => {
 							}
 						/>
 						<ClassicyColorPicker
+							id="flight_settings_anon_pin_color_light"
+							labelTitle="Other traffic pins (light map)"
+							value={form.anonPinColorLight}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, anonPinColorLight: color }))
+							}
+						/>
+						<ClassicyColorPicker
+							id="flight_settings_anon_pin_color_dark"
+							labelTitle="Other traffic pins (dark map)"
+							value={form.anonPinColorDark}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, anonPinColorDark: color }))
+							}
+						/>
+						<ClassicyColorPicker
 							id="flight_settings_observer_pin_color_dark"
 							labelTitle="Observer aircraft pins (dark map)"
 							value={form.observerPinColorDark}
@@ -1218,6 +1236,9 @@ export const FlightTracker: FC = () => {
 									tone === "dark"
 										? settings.observerPinColorDark
 										: settings.observerPinColorLight,
+								)}
+								anonPinColor={intToHex(
+									tone === "dark" ? settings.anonPinColorDark : settings.anonPinColorLight,
 								)}
 								buildingHeroColorLight={settings.buildingHeroColorLight}
 								buildingHeroColorDark={settings.buildingHeroColorDark}

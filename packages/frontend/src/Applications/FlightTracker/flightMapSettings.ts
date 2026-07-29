@@ -27,6 +27,8 @@ export interface FlightMapSettings {
 	notablePinColorDark: number;
 	observerPinColorLight: number;
 	observerPinColorDark: number;
+	anonPinColorLight: number;
+	anonPinColorDark: number;
 	buildingHeroColorLight: number;
 	buildingHeroColorDark: number;
 	radarSweep: boolean;
@@ -57,6 +59,8 @@ export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	notablePinColorDark: 0xff4d4d, // brightened red so it reads on slate
 	observerPinColorLight: 0x0f766e, // blue-green (teal) for witness aircraft
 	observerPinColorDark: 0x2dd4bf, // brightened teal so it reads on slate
+	anonPinColorLight: 0x8b7d6b, // muted taupe — "uncertain" ghost traffic
+	anonPinColorDark: 0x9ca3af, // cool gray, quiet against the gold pins
 	buildingHeroColorLight: 0xb0a48c, // warm stone, distinct from the neutral mass
 	buildingHeroColorDark: 0xc7b8a0, // brightened stone for the slate map
 	radarSweep: true,
