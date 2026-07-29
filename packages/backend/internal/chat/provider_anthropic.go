@@ -118,6 +118,10 @@ func textOf(blocks []anthropic.BetaContentBlockUnion) string {
 // System segments and conversation segments are interleaved in Segments, but
 // the SDK carries them in two separate fields — the breakpoint index refers
 // to a position in the original combined slice either way.
+//
+// The SDK ships no NewBetaAssistantMessage helper (its assistant-side
+// convenience is Message.ToParam, for echoing a response back), so an assistant
+// turn is built from the param struct directly.
 func renderSegments(segs []PromptSegment) ([]anthropic.BetaTextBlockParam, []anthropic.BetaMessageParam) {
 	breaks := make(map[int]bool)
 	for _, i := range cacheBreakpoints(segs) {
@@ -140,7 +144,14 @@ func renderSegments(segs []PromptSegment) ([]anthropic.BetaTextBlockParam, []ant
 		if breaks[i] {
 			block.OfText.CacheControl = ephemeralCacheControl
 		}
-		messages = append(messages, anthropic.NewBetaUserMessage(block))
+		role := anthropic.BetaMessageParamRoleUser
+		if seg.Role == "assistant" {
+			role = anthropic.BetaMessageParamRoleAssistant
+		}
+		messages = append(messages, anthropic.BetaMessageParam{
+			Role:    role,
+			Content: []anthropic.BetaContentBlockParamUnion{block},
+		})
 	}
 	return system, messages
 }

@@ -51,6 +51,14 @@ type Provider interface {
 // the last segment of each non-volatile stability run. Anthropic permits four
 // per request; volatile segments are never marked because they differ every turn
 // and would pay the 1.25x write premium for a guaranteed miss.
+//
+// One marker per run is what makes the append-only run accrue rather than
+// rebuild. The run's last segment is the newest conversation turn, so the lookup
+// finds the entry the previous message wrote — every turn but the newest is a
+// read, and only the new turn pays the write. That only holds because the
+// conversation is now one segment per turn: while it was a single block that grew
+// each turn, this marker sat on content that was different every time and the
+// whole prefix behind it was rewritten on every message.
 func cacheBreakpoints(segs []PromptSegment) []int {
 	var out []int
 	for i, s := range segs {

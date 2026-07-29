@@ -1311,7 +1311,7 @@ func TestBuildChatJobRoutesTiersWithoutCrossing(t *testing.T) {
 
 	job := buildChatJob("user-1", chat.Profile{ID: 3}, nil, nil, "hi", "generated", false,
 		time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC),
-		digest, recent, timeline, nil, func(chat.Reply, error) {})
+		digest, recent, nil, timeline, nil, func(chat.Reply, error) {})
 
 	if len(job.Digest) != 1 || job.Digest[0].Text != "digest-marker" {
 		t.Fatalf("Job.Digest = %+v, want exactly the curated passage", job.Digest)
@@ -1359,9 +1359,9 @@ func TestBuildChatJobResolvesPhaseFromVirtualTime(t *testing.T) {
 	noop := func(chat.Reply, error) {}
 
 	before := buildChatJob("user-1", chat.Profile{ID: 3}, phases, beacons, "hi", "generated", false,
-		time.Date(2001, 9, 11, 12, 48, 0, 0, time.UTC), nil, nil, nil, nil, noop)
+		time.Date(2001, 9, 11, 12, 48, 0, 0, time.UTC), nil, nil, nil, nil, nil, noop)
 	after := buildChatJob("user-1", chat.Profile{ID: 3}, phases, beacons, "hi", "generated", false,
-		time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil, nil, nil, nil, noop)
+		time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC), nil, nil, nil, nil, nil, noop)
 
 	if before.Phase.ID != 10 {
 		t.Fatalf("before the beacon's public_at, Job.Phase = %+v, want the opening phase (id 10)", before.Phase)
@@ -1380,7 +1380,7 @@ func TestBuildChatJobResolvesPhaseFromVirtualTime(t *testing.T) {
 // SetPhaseData call) must still resolve to a Phase, not a zero value.
 func TestBuildChatJobFallsBackToDefaultPhaseWithNoConfig(t *testing.T) {
 	job := buildChatJob("user-1", chat.Profile{ID: 3}, nil, nil, "hi", "generated", false,
-		time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil, nil, nil, nil, func(chat.Reply, error) {})
+		time.Date(2001, 9, 11, 12, 50, 0, 0, time.UTC), nil, nil, nil, nil, nil, func(chat.Reply, error) {})
 
 	if job.Phase != chat.DefaultPhase {
 		t.Fatalf("Job.Phase = %+v, want chat.DefaultPhase", job.Phase)
@@ -1406,7 +1406,7 @@ func TestGeneratedBeatJobCarriesKnowledgeTiers(t *testing.T) {
 
 	job := buildChatJob("user-1", chat.Profile{ID: 5}, nil, nil, "react to the second impact",
 		"scheduled", true, time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC),
-		digest, recent, timeline, history, func(chat.Reply, error) {})
+		digest, recent, nil, timeline, history, func(chat.Reply, error) {})
 
 	if len(job.Digest) == 0 || len(job.Recent) == 0 || len(job.Timeline) == 0 || len(job.History) == 0 {
 		t.Fatalf("a generated beat's job must carry every retrieved tier, got Digest=%d Recent=%d Timeline=%d History=%d",

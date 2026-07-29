@@ -40,10 +40,28 @@ def test_builds_absolute_timestamps_from_the_channel_anchor(cfg, monkeypatch):
 
     monkeypatch.setattr(flows.writer, "replace_segments", fake_replace)
 
+    minute_capture = {}
+
+    def fake_replace_minutes(rows, **kwargs):
+        minute_capture["rows"] = rows
+        minute_capture["kwargs"] = kwargs
+        return len(rows)
+
+    monkeypatch.setattr(flows.writer, "replace_minutes", fake_replace_minutes)
+
     result = flows.build_transcript_segments_flow.fn(medium="tv", cfg=cfg)
 
     assert result["channels"] == 1
     assert result["segments"] == 1
+    # Both outputs derive from the same parse, so the minute rows must agree with
+    # the segments on provenance — the prompt falls back from one to the other
+    # and applies the same market filter to whichever it read.
+    assert result["minutes"] == 1
+    assert minute_capture["rows"][0]["minute"] == "2001-09-11T12:00:00"
+    assert minute_capture["rows"][0]["summary"] == "the north tower has been hit"
+    assert minute_capture["rows"][0]["channel"] == 7
+    assert minute_capture["kwargs"]["channel"] == 7
+    assert minute_capture["kwargs"]["medium"] == "tv"
     # Cue offsets are relative to the file; the row must be absolute 2001 time.
     assert captured["rows"][0]["start_date"] == "2001-09-11T12:00:00"
     assert captured["rows"][0]["end_date"] == "2001-09-11T12:00:04"
@@ -67,6 +85,9 @@ def test_radio_anchors_on_the_mp3_items_start_date(cfg, monkeypatch):
     captured = {}
     monkeypatch.setattr(flows.writer, "replace_segments",
                         lambda rows, **kw: captured.update(rows=rows, kwargs=kw) or len(rows))
+    minutes = {}
+    monkeypatch.setattr(flows.writer, "replace_minutes",
+                        lambda rows, **kw: minutes.update(rows=rows, kwargs=kw) or len(rows))
 
     result = flows.build_transcript_segments_flow.fn(medium="radio", cfg=cfg)
 
@@ -79,6 +100,11 @@ def test_radio_anchors_on_the_mp3_items_start_date(cfg, monkeypatch):
     # the radio path: what the rows carry must equal what the delete matches.
     assert captured["kwargs"]["channel_slug"] == "mp3:42"
     assert captured["rows"][0]["channel_slug"] == "mp3:42"
+    # Radio's minute rows must carry the same synthetic slug, for the same
+    # reason: it is the only handle the market filter has on a radio source.
+    assert minutes["kwargs"]["channel_slug"] == "mp3:42"
+    assert minutes["rows"][0]["channel_slug"] == "mp3:42"
+    assert minutes["rows"][0]["medium"] == "radio"
 
 
 def test_raises_when_no_subtitled_sources_are_found(cfg, monkeypatch):
@@ -109,6 +135,7 @@ def test_one_failing_source_does_not_abort_the_rest(cfg, monkeypatch):
 
     monkeypatch.setattr(flows.writer, "fetch_srt", flaky_fetch)
     monkeypatch.setattr(flows.writer, "replace_segments", lambda rows, **kw: len(rows))
+    monkeypatch.setattr(flows.writer, "replace_minutes", lambda rows, **kw: len(rows))
 
     result = flows.build_transcript_segments_flow.fn(medium="tv", cfg=cfg)
 

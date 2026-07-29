@@ -13,12 +13,19 @@ type Stability int
 
 const (
 	StabilityStable     Stability = 0 // per-profile, unchanged for the life of the conversation
-	StabilityAppendOnly Stability = 1 // grows forward only, never rewritten
-	StabilityVolatile   Stability = 2 // differs every turn
+	StabilityWindowed   Stability = 1 // floored to a virtual minute: identical for every message in that minute
+	StabilityAppendOnly Stability = 2 // grows forward only, never rewritten
+	StabilityVolatile   Stability = 3 // differs every turn
 )
 
 // PromptSegment is one ordered piece of the prompt. Compose emits these rather
 // than a finished vendor payload so a single composer serves every provider.
+//
+// Role is "system", "user", or "assistant". Prior buddy replies are genuinely
+// assistant-role rather than transcript lines inside a user block: a cache read
+// requires a byte-identical prefix, and one growing block is a new prefix on
+// every turn, so a conversation rendered as a single block can never be reused.
+// Split across per-turn blocks, everything but the newest turn is a cache hit.
 type PromptSegment struct {
 	Stability Stability
 	Role      string
@@ -35,11 +42,17 @@ type Turn struct {
 // no connection: Compose is pure, which is what makes the prompt exhaustively
 // testable without a database or a network.
 type ComposeInput struct {
-	Profile     Profile
-	Phase       Phase
-	Digest      []Passage
-	Recent      []Passage
-	Timeline    []Passage
+	Profile  Profile
+	Phase    Phase
+	Digest   []Passage
+	Recent   []Passage
+	Timeline []Passage
+	// Live is the tail of tier 2 that Recent cannot hold: the segments aired
+	// since the top of the current virtual minute. Recent is floored to that
+	// minute so it stays byte-identical (and therefore cacheable) for every
+	// message sent within it, which necessarily leaves the partial minute out;
+	// Live carries it, and is the one knowledge block that must stay volatile.
+	Live        []Passage
 	History     []Turn
 	VirtualTime time.Time
 	UserMessage string
@@ -64,10 +77,18 @@ type ComposeInput struct {
 
 // Compose renders the prompt as ordered, stability-tagged segments.
 //
-// The ordering is the load-bearing part: stable content first, append-only
-// next, volatile last. The virtual clock and the user's message must never
-// appear in a stable segment — they change every turn, and at the front of the
-// prefix they would invalidate the entire cache on every message.
+// The ordering is the load-bearing part, and it is ordered by *stability*, not
+// by narrative: stable, then windowed, then append-only, then volatile. A cache
+// read needs a byte-identical prefix, so a block is only ever reusable if every
+// block ahead of it is also unchanged — which means the least-stable content has
+// to come last or it invalidates everything behind it.
+//
+// That is why the knowledge tiers now precede the conversation. Tier 2 is the
+// largest thing in the prompt by a wide margin, and behind the history it was
+// re-billed in full on every single message; ahead of it, it is a cache read for
+// every message sent in the same virtual minute. The virtual clock and the
+// user's message stay in the final volatile segment, where they cost nothing but
+// themselves.
 func Compose(in ComposeInput) []PromptSegment {
 	segs := []PromptSegment{{
 		Stability: StabilityStable,
@@ -77,23 +98,26 @@ func Compose(in ComposeInput) []PromptSegment {
 
 	if len(in.Digest) > 0 {
 		segs = append(segs, PromptSegment{
-			Stability: StabilityAppendOnly,
+			Stability: StabilityWindowed,
 			Role:      "user",
 			Text:      knowledgeBlock(in.Digest),
 		})
 	}
-	if len(in.History) > 0 {
+	if len(in.Recent) > 0 {
 		segs = append(segs, PromptSegment{
-			Stability: StabilityAppendOnly,
+			Stability: StabilityWindowed,
 			Role:      "user",
-			Text:      historyBlock(in.Profile, in.History),
+			Text:      broadcastBlock(in.Recent),
 		})
 	}
-	if len(in.Recent) > 0 {
+
+	segs = append(segs, historySegments(trimEchoedTurn(in), len(segs) == 1)...)
+
+	if len(in.Live) > 0 {
 		segs = append(segs, PromptSegment{
 			Stability: StabilityVolatile,
 			Role:      "user",
-			Text:      broadcastBlock(in.Recent),
+			Text:      broadcastBlock(in.Live),
 		})
 	}
 	if len(in.Timeline) > 0 {
@@ -227,17 +251,71 @@ func passageLines(passages []Passage) string {
 	return b.String()
 }
 
-func historyBlock(p Profile, turns []Turn) string {
-	var b strings.Builder
-	b.WriteString("Your conversation so far:\n")
-	for _, t := range turns {
-		who := "them"
-		if t.FromBuddy {
-			who = p.ScreenName
-		}
-		fmt.Fprintf(&b, "%s: %s\n", who, t.Text)
+// trimEchoedTurn drops the trailing history turn when it is the very message the
+// live turn is about to quote.
+//
+// ChatSend persists the student's message before it retrieves context — on
+// purpose, so a message is recorded even if generation never happens — and
+// History is bounded by the same virtual time, so the message just written is
+// already the last turn. Left in, every prompt states it twice: once as the last
+// line of the conversation and again as "They just said". Only an inbound turn is
+// ever dropped, and never on a self-initiated beat, where UserMessage is the
+// curator's stage direction and matching it against a student turn would be
+// comparing two unrelated things.
+func trimEchoedTurn(in ComposeInput) []Turn {
+	if in.SelfInitiated || len(in.History) == 0 {
+		return in.History
 	}
-	return b.String()
+	if last := in.History[len(in.History)-1]; !last.FromBuddy && last.Text == in.UserMessage {
+		return in.History[:len(in.History)-1]
+	}
+	return in.History
+}
+
+// historySegments renders the conversation as real alternating turns.
+//
+// The buddy's own prior replies are assistant-role messages, not "screenname:"
+// lines inside one user block. That is cheaper and more faithful at once: it
+// drops a label from every line plus the block header, it lets the model see its
+// own voice as its own, and — the reason it matters most — it makes the
+// conversation cacheable. One block that grows by a line per turn is a different
+// prefix every turn and can never be read back; per-turn blocks share every byte
+// except the newest.
+//
+// leadsMessages says no knowledge block precedes these, in which case a
+// buddy-opened conversation would put an assistant message first. The
+// conversation has to open on a user turn, so the opening line gets a minimal
+// frame instead of being dropped — silently discarding the buddy's own first
+// message would rewrite the start of the conversation.
+func historySegments(turns []Turn, leadsMessages bool) []PromptSegment {
+	var segs []PromptSegment
+	for _, t := range turns {
+		role := "user"
+		if t.FromBuddy {
+			role = "assistant"
+		}
+		if leadsMessages && len(segs) == 0 && role == "assistant" {
+			segs = append(segs, PromptSegment{
+				Stability: StabilityAppendOnly,
+				Role:      "user",
+				Text:      "Your conversation so far:",
+			})
+		}
+		// Coalesce consecutive same-role turns: two buddy messages in a row (a
+		// scheduled beat then a reply) or two student messages in a row (the
+		// first one stalled) are one side speaking twice, and back-to-back
+		// same-role messages are not universally accepted.
+		if n := len(segs); n > 0 && segs[n-1].Role == role {
+			segs[n-1].Text += "\n" + t.Text
+			continue
+		}
+		segs = append(segs, PromptSegment{
+			Stability: StabilityAppendOnly,
+			Role:      role,
+			Text:      t.Text,
+		})
+	}
+	return segs
 }
 
 // liveTurn holds everything that changes every message: the clock, the phase

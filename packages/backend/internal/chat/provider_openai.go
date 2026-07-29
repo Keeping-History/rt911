@@ -167,11 +167,17 @@ func openAIMessages(segs []PromptSegment) []openAIMessage {
 func toSDKMessages(msgs []openAIMessage) []openai.ChatCompletionMessageParamUnion {
 	out := make([]openai.ChatCompletionMessageParamUnion, 0, len(msgs))
 	for _, m := range msgs {
-		if m.Role == "system" {
+		switch m.Role {
+		case "system":
 			out = append(out, openai.SystemMessage(m.Content))
-			continue
+		case "assistant":
+			// Must not collapse to UserMessage: prior buddy replies are the
+			// model's own turns, and handing them back as the student's words
+			// makes the buddy answer itself.
+			out = append(out, openai.AssistantMessage(m.Content))
+		default:
+			out = append(out, openai.UserMessage(m.Content))
 		}
-		out = append(out, openai.UserMessage(m.Content))
 	}
 	return out
 }

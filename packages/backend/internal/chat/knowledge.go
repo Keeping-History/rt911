@@ -77,11 +77,30 @@ const curatedSelect = `
 	WHERE public_at <= $1 AND (until IS NULL OR until > $1)
 	ORDER BY public_at`
 
+// FloorMinute truncates to the top of the virtual minute.
+//
+// Every windowed retrieval bound goes through this. An upper bound of "now"
+// moves every virtual second, which made the knowledge blocks byte-different on
+// every single message and therefore impossible to cache; floored, they are
+// identical for every message sent inside the same minute. The cost is that a
+// fact or transcript line can be up to a minute late, which the volatile live
+// tail (segments since the floor) covers for the tier where immediacy matters.
+func FloorMinute(t time.Time) time.Time {
+	return t.UTC().Truncate(time.Minute)
+}
+
 // LoadCurated returns every curated entry that was public at t and has not been
 // superseded. It is cumulative rather than a window: this is the running digest
 // of what an ordinary person knew by now, and it is the tier the composer is
 // allowed to state plainly.
-func LoadCurated(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]Passage, error) {
+//
+// detailWindow bounds how far back an entry's `detail` column is carried. The
+// digest is cumulative, so by mid-afternoon it holds every fact of the day, and
+// pasting each one's full detail paragraph into every message was the second
+// largest thing in the prompt after the transcript. Older entries keep their
+// summary — what the buddy knows — and drop the elaboration they are no longer
+// actively reacting to. A zero or negative window keeps detail on everything.
+func LoadCurated(ctx context.Context, pool *pgxpool.Pool, t time.Time, detailWindow time.Duration) ([]Passage, error) {
 	rows, err := pool.Query(ctx, curatedSelect, t.UTC())
 	if err != nil {
 		return nil, fmt.Errorf("query chat_knowledge: %w", err)
@@ -97,17 +116,26 @@ func LoadCurated(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]Passag
 		if err := rows.Scan(&p.At, &p.Text, &detail, &p.Certainty, &p.Sensitivity); err != nil {
 			return nil, fmt.Errorf("scan chat_knowledge: %w", err)
 		}
-		if d := derefStr(detail); d != "" {
+		p.At = p.At.UTC()
+		if d := derefStr(detail); d != "" && withinDetailWindow(p.At, t, detailWindow) {
 			p.Text = p.Text + " " + d
 		}
 		p.Tier = TierCurated
-		p.At = p.At.UTC()
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate chat_knowledge: %w", err)
 	}
 	return out, nil
+}
+
+// withinDetailWindow reports whether an entry published at `at` is recent enough
+// (relative to the virtual clock `now`) to carry its detail column.
+func withinDetailWindow(at, now time.Time, window time.Duration) bool {
+	if window <= 0 {
+		return true
+	}
+	return !at.Before(now.Add(-window))
 }
 
 // $3 carries "no filter at all" as its own flag rather than inferring it from
@@ -124,10 +152,17 @@ const broadcastSelect = `
 	ORDER BY start_date DESC
 	LIMIT $6`
 
-// LoadBroadcast returns transcript segments from the lookback window ending at
-// t, restricted to the sources that reached the buddy's market. This is what
-// they could have heard just now, and it is why the early-morning confusion
-// ("they're saying it was a small plane") appears without being authored.
+// LoadBroadcast returns transcript segments aired in (lo, hi], restricted to the
+// sources that reached the buddy's market. This is what they could have heard
+// just now, and it is why the early-morning confusion ("they're saying it was a
+// small plane") appears without being authored.
+//
+// The bounds are explicit rather than a lookback from "now" because the caller
+// splits the window in two: a floored, cacheable span ending at the top of the
+// current minute, and the volatile remainder since that floor. Both halves are
+// this same query, which is what keeps the market allow-list identical across
+// them — a second, subtly different filter is how a buddy in Columbus ends up
+// hearing New York local radio.
 //
 // A nil allow means unfiltered. A non-nil allow is applied even when it permits
 // nothing -- see the note on broadcastSelect.
@@ -139,7 +174,7 @@ const broadcastSelect = `
 // minutes ago and drop the last thirty seconds -- the opposite of "what you have
 // just heard". Rows are reversed before returning so the composer still reads
 // oldest-first, the way a conversation does.
-func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookback time.Duration, allow *BroadcastFilter, limit int) ([]Passage, error) {
+func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, lo, hi time.Time, allow *BroadcastFilter, limit int) ([]Passage, error) {
 	unfiltered := allow == nil
 	var ids []int
 	var slugs []string
@@ -147,7 +182,7 @@ func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookbac
 		ids, slugs = allow.ChannelIDs, allow.Slugs
 	}
 	rows, err := pool.Query(ctx, broadcastSelect,
-		t.UTC().Add(-lookback), t.UTC(), unfiltered, ids, slugs, limit)
+		lo.UTC(), hi.UTC(), unfiltered, ids, slugs, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query chat_transcript_segments: %w", err)
 	}
@@ -174,6 +209,71 @@ func LoadBroadcast(ctx context.Context, pool *pgxpool.Pool, t time.Time, lookbac
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate chat_transcript_segments: %w", err)
+	}
+	return reversePassages(out), nil
+}
+
+// The filter clause is deliberately character-for-character the same shape as
+// broadcastSelect's, including the $3 "unfiltered" flag. These two queries are
+// interchangeable sources for the same tier, so any divergence in how the market
+// allow-list is applied would mean a buddy hears different stations depending on
+// whether the minute happens to have been summarized yet.
+const broadcastMinuteSelect = `
+	SELECT minute, summary, medium
+	FROM chat_transcript_minutes
+	WHERE minute > $1 AND minute <= $2
+	  AND ($3::bool
+	       OR channel = ANY($4::int[])
+	       OR channel_slug = ANY($5::text[]))
+	ORDER BY minute DESC
+	LIMIT $6`
+
+// LoadBroadcastMinutes returns the pre-summarized per-(channel, minute) rows for
+// (lo, hi] — the condensed form of exactly what LoadBroadcast returns raw.
+//
+// Raw ASR is the single largest thing in the prompt: a ten-minute window is
+// hundreds of overlapping segments of half-sentences, repetition and
+// mis-transcription, and the trimming that kept it inside budget was dropping
+// whole minutes of coverage. One condensed line per channel per minute says the
+// same thing in a fraction of the tokens, and reads cleaner than the ASR did.
+//
+// An empty result is not an error: it means the summarizer has not reached this
+// span yet, and the caller falls back to the raw segments.
+func LoadBroadcastMinutes(ctx context.Context, pool *pgxpool.Pool, lo, hi time.Time, allow *BroadcastFilter, limit int) ([]Passage, error) {
+	unfiltered := allow == nil
+	var ids []int
+	var slugs []string
+	if allow != nil {
+		ids, slugs = allow.ChannelIDs, allow.Slugs
+	}
+	rows, err := pool.Query(ctx, broadcastMinuteSelect,
+		lo.UTC(), hi.UTC(), unfiltered, ids, slugs, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query chat_transcript_minutes: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Passage
+	for rows.Next() {
+		var (
+			p      Passage
+			at     time.Time
+			text   string
+			medium *string
+		)
+		if err := rows.Scan(&at, &text, &medium); err != nil {
+			return nil, fmt.Errorf("scan chat_transcript_minutes: %w", err)
+		}
+		p.Tier = TierBroadcast
+		p.At = at.UTC()
+		p.Text = text
+		p.Certainty = "reported"
+		p.Sensitivity = "normal"
+		p.Medium = derefStr(medium)
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chat_transcript_minutes: %w", err)
 	}
 	return reversePassages(out), nil
 }

@@ -42,3 +42,63 @@ func TestOutcomeConstantsAreStable(t *testing.T) {
 		t.Error("outcome constants drifted from the wire contract")
 	}
 }
+
+func TestCacheBreakpointsOnTheRealPromptLayout(t *testing.T) {
+	// The shape Compose actually emits: persona, the two windowed knowledge
+	// blocks, one segment per conversation turn, then the volatile tail.
+	segs := []PromptSegment{
+		{Stability: StabilityStable, Role: "system"},        // 0 persona
+		{Stability: StabilityWindowed, Role: "user"},        // 1 digest
+		{Stability: StabilityWindowed, Role: "user"},        // 2 broadcast  <- windowed run ends
+		{Stability: StabilityAppendOnly, Role: "user"},      // 3
+		{Stability: StabilityAppendOnly, Role: "assistant"}, // 4
+		{Stability: StabilityAppendOnly, Role: "user"},      // 5 newest turn <- run ends
+		{Stability: StabilityVolatile, Role: "user"},        // 6 live tail
+		{Stability: StabilityVolatile, Role: "user"},        // 7 live turn
+	}
+
+	got := cacheBreakpoints(segs)
+
+	want := []int{0, 2, 5}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("cacheBreakpoints = %v, want %v", got, want)
+	}
+}
+
+func TestTheAppendOnlyBreakpointSitsOnTheNewestTurn(t *testing.T) {
+	// This is what makes the conversation accrue instead of rebuild: the marker
+	// goes on the last turn, so the lookup finds the entry the previous message
+	// wrote and only the new turn pays the write premium. A marker anywhere
+	// earlier in the run would leave the newest turns permanently uncached.
+	segs := []PromptSegment{
+		{Stability: StabilityStable},
+		{Stability: StabilityAppendOnly},
+		{Stability: StabilityAppendOnly},
+		{Stability: StabilityAppendOnly},
+		{Stability: StabilityVolatile},
+	}
+
+	got := cacheBreakpoints(segs)
+
+	last := got[len(got)-1]
+	if last != 3 {
+		t.Errorf("last breakpoint at %d, want 3 (the newest append-only segment)", last)
+	}
+}
+
+func TestNoBreakpointEverLandsOnAVolatileSegment(t *testing.T) {
+	// A marker on volatile content pays 1.25x to write a prefix that is
+	// guaranteed never to be read.
+	segs := []PromptSegment{
+		{Stability: StabilityStable},
+		{Stability: StabilityWindowed},
+		{Stability: StabilityAppendOnly},
+		{Stability: StabilityVolatile},
+		{Stability: StabilityVolatile},
+	}
+	for _, i := range cacheBreakpoints(segs) {
+		if segs[i].Stability == StabilityVolatile {
+			t.Errorf("breakpoint %d sits on a volatile segment", i)
+		}
+	}
+}
