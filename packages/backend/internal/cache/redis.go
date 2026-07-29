@@ -47,6 +47,17 @@ func flushIfFull(ctx context.Context, rdb *goredis.Client, pipe goredis.Pipeline
 // so live serving is unaffected.
 const bulkWarmWriteTimeout = 30 * time.Second
 
+// ResolveRedisURLs returns the (read, write) connection URLs. writeURL is
+// optional: empty means single-instance mode where reads and writes share
+// one URL. A distinct writeURL is used when this pod reads a local replica
+// but must write (cache warms, master clock) through the primary.
+func ResolveRedisURLs(readURL, writeURL string) (string, string) {
+	if writeURL == "" {
+		return readURL, readURL
+	}
+	return readURL, writeURL
+}
+
 // Connect parses a Redis URL and returns a client. It raises the write timeout
 // to bulkWarmWriteTimeout for the bulk cache warms unless the URL sets one.
 func Connect(url string) *goredis.Client {
