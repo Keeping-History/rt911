@@ -44,10 +44,15 @@ func main() {
 		env("REDIS_WRITE_URL", ""))
 	rdb := cache.Connect(redisURL)
 	// rdbWrite is a distinct client only when REDIS_WRITE_URL diverges from
-	// REDIS_URL (a read-replica deployment): cache warms and the master clock
-	// go through it so a replica pod still writes through to the primary.
-	// Unset REDIS_WRITE_URL keeps rdbWrite == rdb — same single client
-	// instance as before this seam existed.
+	// REDIS_URL (a read-replica deployment): every Redis WRITE at boot and in
+	// the background — cache warms, the master clock, and the NOTIFY-driven
+	// Listen* resync goroutines (their pipe.Exec would hit READONLY forever
+	// against an actual read-only replica, freezing incremental cache updates
+	// at boot-warm state) — goes through it so a replica pod still writes
+	// through to the primary. Serving reads (session/hub/handlers, /ready)
+	// keep the local rdb read client. Unset REDIS_WRITE_URL keeps
+	// rdbWrite == rdb — same single client instance as before this seam
+	// existed.
 	rdbWrite := rdb
 	if redisWriteURL != redisURL {
 		rdbWrite = cache.Connect(redisWriteURL)
@@ -73,7 +78,7 @@ func main() {
 	} else if err := cache.WarmPagerCache(ctx, rdbWrite, pool, logger); err != nil {
 		logger.Warn("pager cache warm failed; pager channel disabled", "error", err)
 	} else {
-		go cache.ListenPager(ctx, dbURL, rdb, pool, logger)
+		go cache.ListenPager(ctx, dbURL, rdbWrite, pool, logger)
 	}
 
 	// mp3 (Radio app) is likewise an opt-in side channel with its own table and
@@ -83,7 +88,7 @@ func main() {
 	} else if err := cache.WarmMp3Cache(ctx, rdbWrite, pool, logger); err != nil {
 		logger.Warn("mp3 cache warm failed; mp3 channel disabled", "error", err)
 	} else {
-		go cache.ListenMp3(ctx, dbURL, rdb, pool, logger)
+		go cache.ListenMp3(ctx, dbURL, rdbWrite, pool, logger)
 	}
 
 	// news (News app) — same opt-in side-channel pattern, best-effort init.
@@ -92,7 +97,7 @@ func main() {
 	} else if err := cache.WarmNewsCache(ctx, rdbWrite, pool, logger); err != nil {
 		logger.Warn("news cache warm failed; news channel disabled", "error", err)
 	} else {
-		go cache.ListenNews(ctx, dbURL, rdb, pool, logger)
+		go cache.ListenNews(ctx, dbURL, rdbWrite, pool, logger)
 	}
 
 	// alerts (Alerts extension) — same opt-in side-channel pattern, best-effort init.
@@ -101,7 +106,7 @@ func main() {
 	} else if err := cache.WarmAlertCache(ctx, rdbWrite, pool, logger); err != nil {
 		logger.Warn("alert cache warm failed; alerts channel disabled", "error", err)
 	} else {
-		go cache.ListenAlert(ctx, dbURL, rdb, pool, logger)
+		go cache.ListenAlert(ctx, dbURL, rdbWrite, pool, logger)
 	}
 
 	// flights is an opt-in side channel like pager, but with no triggers and no
@@ -122,7 +127,7 @@ func main() {
 	// session.RunTimePump and db.UsenetItemsInRange.
 
 	// Keep Redis in sync with tv_channels changes for the process lifetime.
-	go cache.Listen(ctx, dbURL, rdb, pool, logger)
+	go cache.Listen(ctx, dbURL, rdbWrite, pool, logger)
 
 	// MAX_SESSIONS caps concurrent connections per pod for load-shedding; 0 means
 	// unlimited. Set it (from a load-tested per-pod ceiling) so an overloaded pod
