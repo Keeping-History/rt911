@@ -272,10 +272,17 @@ def run(dsn, stitched_path, tier_path, bts_path, airports_path,
                             "wheels_off_utc, wheels_on_utc, tail_number, aircraft_type, "
                             "details FROM flight_tracks WHERE flight = %s AND flight_date = %s",
                             (flight, FLIGHT_DATE))
-                row = cur.fetchone()
-                if row is None:
+                rows = cur.fetchall()
+                if not rows:
                     summary["skipped"].append([flight, "no existing prod row"])
                     continue
+                if len(rows) > 1:
+                    # multi-leg flight number: the by-id delete would remove the
+                    # sibling leg too (this bit us once — run rades-repair-*).
+                    summary["skipped"].append(
+                        [flight, f"multi-leg id in prod ({len(rows)} rows) — not touching"])
+                    continue
+                row = rows[0]
                 (origin, sdest, landed_at, dvt, wo, wn, tail, actype, details) = row
                 leg = meta["leg"]
                 if leg and leg["wheels_off"] and wo is not None:
