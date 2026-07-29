@@ -30,12 +30,17 @@
 	:global(.classicyBalloonHelpAnchor) { display: inline-flex; align-items: center; flex: 0 0 auto; }
 }
 .mapControlsContainer {
-	display: flex; align-items: center; gap: var(--window-padding-size); flex-direction: row;
+	display: flex;
+	align-items: center;
+	gap: var(--window-border-size);
+	flex-direction: row;
 	// A group is one atom of the strip: it holds its full width (no shrinking to
 	// a squashed half-group) and never wraps internally, so the only wrap point
 	// is between groups — which is what makes whole groups, and only whole
 	// groups, drop out of sight when the window is too narrow.
-	flex: 0 0 auto; flex-wrap: nowrap; height: var(--map-controls-row-height);
+	flex: 0 0 auto;
+	flex-wrap: nowrap;
+	height: var(--map-controls-row-height);
 	// The rule separating this group from the previous one. It's a border on the
 	// group rather than a standalone element between groups because CSS can't ask
 	// "did my next sibling wrap?" — a separate divider would strand itself at the
