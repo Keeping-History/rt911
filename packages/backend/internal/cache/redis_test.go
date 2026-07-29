@@ -186,3 +186,18 @@ func TestConnectHonorsExplicitURLWriteTimeout(t *testing.T) {
 		t.Fatalf("expected explicit URL write_timeout to win (5s), got %v", got)
 	}
 }
+
+// ResolveRedisURLs backs the REDIS_WRITE_URL seam: an edge pod reads a local
+// replica but must write cache warms and the master clock through the
+// primary. An empty write URL means single-instance mode (reads and writes
+// share one URL) — the default path must stay byte-for-byte the old behavior.
+func TestResolveRedisURLs(t *testing.T) {
+	read, write := ResolveRedisURLs("redis://replica:6379", "")
+	if read != "redis://replica:6379" || write != "redis://replica:6379" {
+		t.Fatalf("empty write should default to read, got %q %q", read, write)
+	}
+	read, write = ResolveRedisURLs("redis://replica:6379", "redis://primary:6379")
+	if read != "redis://replica:6379" || write != "redis://primary:6379" {
+		t.Fatalf("explicit write must be preserved, got %q %q", read, write)
+	}
+}
