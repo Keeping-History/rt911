@@ -19,10 +19,11 @@ from prefect import flow, get_run_logger
 from video_grabber.config import Config
 from video_grabber.transcribe.srt import parse_srt
 from video_grabber.transcript import writer
+from video_grabber.transcript.minutes import build_minutes, to_minute_rows
 from video_grabber.transcript.segments import build_segments, to_rows
 
 
-def _ingest_one(source: dict, *, medium: str, cfg: Config, logger) -> int:
+def _ingest_one(source: dict, *, medium: str, cfg: Config, logger) -> tuple[int, int]:
     # The identity written into the rows and the identity the delete scopes on
     # MUST be the same, or the delete matches nothing and every re-run doubles
     # the data. Radio has no tv_channels row, so it is identified by a synthetic
@@ -47,8 +48,24 @@ def _ingest_one(source: dict, *, medium: str, cfg: Config, logger) -> int:
             "%s %s produced no segments — its existing rows were cleared; "
             "check the SRT at %s", medium, source["id"], source["subtitles"]
         )
-    logger.info("ingested %s %s: %d segments", medium, source["id"], written)
-    return written
+
+    # Both outputs come from the one parse above rather than from a second flow
+    # reading the segments back. The prompt falls back to raw segments for any
+    # span with no summaries, so the two must describe the same audio — deriving
+    # them together is what guarantees that, and it costs nothing extra.
+    minute_rows = to_minute_rows(
+        build_minutes(segments, source["start_date"]),
+        channel=channel,
+        channel_slug=slug,
+        medium=medium,
+    )
+    minutes = writer.replace_minutes(
+        minute_rows, medium=medium, channel=channel, channel_slug=slug, cfg=cfg
+    )
+    logger.info(
+        "ingested %s %s: %d segments, %d minutes", medium, source["id"], written, minutes
+    )
+    return written, minutes
 
 
 @flow(name="build-transcript-segments")
@@ -69,16 +86,19 @@ def build_transcript_segments_flow(medium: str = "all", cfg: Config | None = Non
     if not channels and not mp3_items:
         raise RuntimeError(f"no subtitled sources found for medium={medium!r}")
 
-    result = {"channels": 0, "mp3_items": 0, "segments": 0, "failed": 0, "empty": 0}
+    result = {
+        "channels": 0, "mp3_items": 0, "segments": 0, "minutes": 0, "failed": 0, "empty": 0,
+    }
 
     for source, kind in [(c, "tv") for c in channels] + [(m, "radio") for m in mp3_items]:
         try:
-            written = _ingest_one(source, medium=kind, cfg=cfg, logger=logger)
+            written, minutes = _ingest_one(source, medium=kind, cfg=cfg, logger=logger)
         except Exception:  # noqa: BLE001 - one bad source must not stop the run
             logger.exception("failed %s %s", kind, source["id"])
             result["failed"] += 1
             continue
         result["segments"] += written
+        result["minutes"] += minutes
         result["channels" if kind == "tv" else "mp3_items"] += 1
         if not written:
             result["empty"] += 1

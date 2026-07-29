@@ -3,6 +3,7 @@ package chat
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRedactDropsDoNotDiscussEntirely(t *testing.T) {
@@ -93,5 +94,53 @@ func TestBudgetNeverDropsEveryPassage(t *testing.T) {
 func TestBudgetWithNoPassagesIsEmptyNotNil(t *testing.T) {
 	if got := Budget(nil, 100); got == nil || len(got) != 0 {
 		t.Fatalf("got %v, want an empty non-nil slice", got)
+	}
+}
+
+func TestFloorMinuteTruncatesToTheTopOfTheMinute(t *testing.T) {
+	// An upper bound that moves every second is what made the knowledge blocks
+	// byte-different on every message and therefore impossible to cache.
+	got := FloorMinute(time.Date(2001, 9, 11, 13, 3, 47, 500_000_000, time.UTC))
+	want := time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Errorf("FloorMinute = %s, want %s", got, want)
+	}
+}
+
+func TestFloorMinuteIsStableAcrossASecondAndNormalizesToUTC(t *testing.T) {
+	base := time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC)
+	for _, sec := range []int{0, 1, 30, 59} {
+		if got := FloorMinute(base.Add(time.Duration(sec) * time.Second)); !got.Equal(base) {
+			t.Fatalf("second %d floored to %s, want %s — every message in a minute must "+
+				"produce an identical bound", sec, got, base)
+		}
+	}
+	// A non-UTC input must not shift the bound: the whole corpus is UTC, and a
+	// zone-local floor would silently select a different minute.
+	east := time.FixedZone("EDT", -4*60*60)
+	if got := FloorMinute(base.In(east)); !got.Equal(base) {
+		t.Errorf("FloorMinute in %v = %s, want %s", east, got, base)
+	}
+}
+
+func TestDetailWindowKeepsRecentEntriesAndDropsOldOnes(t *testing.T) {
+	now := time.Date(2001, 9, 11, 13, 0, 0, 0, time.UTC)
+	window := 20 * time.Minute
+
+	if !withinDetailWindow(now.Add(-5*time.Minute), now, window) {
+		t.Error("an entry 5 minutes old must keep its detail — the buddy is still reacting to it")
+	}
+	if withinDetailWindow(now.Add(-90*time.Minute), now, window) {
+		t.Error("an entry 90 minutes old must drop its detail; the cumulative digest holds the whole day")
+	}
+	// Exactly on the boundary counts as inside, so the rule has no one-second gap.
+	if !withinDetailWindow(now.Add(-window), now, window) {
+		t.Error("the boundary itself must be inside the window")
+	}
+	// A zero window means "no trimming at all" rather than "trim everything" —
+	// the fail-open direction here is the safe one, since detail is content the
+	// curator authored.
+	if !withinDetailWindow(now.Add(-24*time.Hour), now, 0) {
+		t.Error("a zero window must keep detail on everything")
 	}
 }

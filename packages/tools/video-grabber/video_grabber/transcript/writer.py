@@ -13,6 +13,7 @@ import httpx
 from video_grabber.config import Config
 
 _COLLECTION = "chat_transcript_segments"
+_MINUTE_COLLECTION = "chat_transcript_minutes"
 
 # Directus 413s past roughly 1MB, so batches are sized by serialized bytes
 # rather than row count — a long transcript segment is far bigger than a short one.
@@ -148,6 +149,26 @@ def _size_batches(payloads: list[dict]):
         yield batch
 
 
+def _source_scope(
+    *, medium: str, channel: int | None, channel_slug: str | None, what: str
+) -> dict:
+    """Build the filter identifying exactly one source's rows.
+
+    The identity written into the rows and the identity the delete scopes on MUST
+    be the same, or the delete matches nothing and every re-run doubles the data.
+    Shared between the segment and minute writers so the two can never drift into
+    scoping differently.
+    """
+    where: dict = {"medium": {"_eq": medium}}
+    if channel is not None:
+        where["channel"] = {"_eq": channel}
+    elif channel_slug is not None:
+        where["channel_slug"] = {"_eq": channel_slug}
+    else:
+        raise ValueError(f"{what} needs a channel id or a channel_slug to scope the delete")
+    return where
+
+
 def replace_segments(
     rows: list[dict],
     *,
@@ -164,17 +185,40 @@ def replace_segments(
     already rebuilt. The delete runs even when there are no rows, so a source
     whose transcript became empty does not keep stale segments.
     """
-    where = {"medium": {"_eq": medium}}
-    if channel is not None:
-        where["channel"] = {"_eq": channel}
-    elif channel_slug is not None:
-        where["channel_slug"] = {"_eq": channel_slug}
-    else:
-        raise ValueError("replace_segments needs a channel id or a channel_slug to scope the delete")
+    where = _source_scope(
+        medium=medium, channel=channel, channel_slug=channel_slug, what="replace_segments"
+    )
+    return _replace_scoped(rows, collection=_COLLECTION, where=where, cfg=cfg, client=client)
 
+
+def replace_minutes(
+    rows: list[dict],
+    *,
+    medium: str,
+    channel: int | None,
+    channel_slug: str | None,
+    cfg: Config,
+    client=httpx,
+) -> int:
+    """Same regenerate-and-replace contract as replace_segments, for the condensed
+    per-minute rows the chat prompt reads instead of raw ASR."""
+    where = _source_scope(
+        medium=medium, channel=channel, channel_slug=channel_slug, what="replace_minutes"
+    )
+    return _replace_scoped(rows, collection=_MINUTE_COLLECTION, where=where, cfg=cfg, client=client)
+
+
+def _replace_scoped(
+    rows: list[dict],
+    *,
+    collection: str,
+    where: dict,
+    cfg: Config,
+    client=httpx,
+) -> int:
     d = client.request(
         "DELETE",
-        f"{cfg.directus_url}/items/{_COLLECTION}",
+        f"{cfg.directus_url}/items/{collection}",
         content=json.dumps({"query": {"filter": where, "limit": -1}}),
         headers={**_headers(cfg), "Content-Type": "application/json"},
         timeout=_TIMEOUT,
@@ -186,7 +230,7 @@ def replace_segments(
     # is actually empty before inserting — an insert on top of a partial delete
     # is the exact duplicate-data outcome this module exists to prevent.
     remaining = client.get(
-        f"{cfg.directus_url}/items/{_COLLECTION}",
+        f"{cfg.directus_url}/items/{collection}",
         params={"aggregate[count]": "*", "filter": json.dumps(where)},
         headers=_headers(cfg),
         timeout=_TIMEOUT,
@@ -202,7 +246,7 @@ def replace_segments(
     written = 0
     for batch in _size_batches(cleaned):
         r = client.post(
-            f"{cfg.directus_url}/items/{_COLLECTION}",
+            f"{cfg.directus_url}/items/{collection}",
             json=batch,
             headers=_headers(cfg),
             timeout=_TIMEOUT,

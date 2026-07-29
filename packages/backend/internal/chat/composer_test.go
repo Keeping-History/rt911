@@ -373,3 +373,213 @@ func TestSystemPromptExtraSitsAfterTheOutputRules(t *testing.T) {
 		t.Errorf("extra must come after the output rules it may override:\n%s", sys)
 	}
 }
+
+// --- conversation rendering -------------------------------------------------
+
+func TestHistoryRendersAsAlternatingRolesNotATranscriptBlock(t *testing.T) {
+	in := composeInput()
+	in.History = []Turn{
+		{FromBuddy: false, Text: "are you seeing this"},
+		{FromBuddy: true, Text: "yeah"},
+	}
+
+	got := Compose(in)
+
+	var roles []string
+	for _, seg := range got {
+		if seg.Text == "are you seeing this" || seg.Text == "yeah" {
+			roles = append(roles, seg.Role)
+		}
+	}
+	if len(roles) != 2 || roles[0] != "user" || roles[1] != "assistant" {
+		t.Fatalf("history roles = %v, want [user assistant]: the buddy's own reply must be an "+
+			"assistant turn, not a line in a user block", roles)
+	}
+
+	// The old rendering glued every turn into one block with a "screenname:"
+	// label per line and a header. That cost tokens on every message and, far
+	// worse, made the conversation a new prefix every turn so it could never be
+	// read back from cache.
+	for _, seg := range got {
+		if strings.Contains(seg.Text, "skaterboi1988: ") || strings.Contains(seg.Text, "them: ") {
+			t.Fatalf("found a transcript label in %q; turns carry their role instead", seg.Text)
+		}
+	}
+}
+
+func TestKnowledgePrecedesTheConversation(t *testing.T) {
+	// Tier 2 is the largest thing in the prompt. Behind the history it was
+	// re-billed in full on every message, because the history changes every turn
+	// and invalidates everything after it. Ahead of it, it is a cache read.
+	got := Compose(composeInput())
+
+	broadcast, firstTurn := -1, -1
+	for i, seg := range got {
+		if strings.Contains(seg.Text, "second aircraft") && broadcast < 0 {
+			broadcast = i
+		}
+		if seg.Role == "assistant" && firstTurn < 0 {
+			firstTurn = i
+		}
+	}
+	if broadcast < 0 || firstTurn < 0 {
+		t.Fatalf("expected both a broadcast block and an assistant turn, got %d and %d", broadcast, firstTurn)
+	}
+	if broadcast > firstTurn {
+		t.Fatal("the broadcast block must sit ahead of the conversation, or the cached prefix ends before it")
+	}
+}
+
+func TestConsecutiveSameRoleTurnsAreCoalesced(t *testing.T) {
+	in := composeInput()
+	in.UserMessage = "still there?"
+	in.History = []Turn{
+		{FromBuddy: false, Text: "hello"},
+		{FromBuddy: true, Text: "hi"},
+		{FromBuddy: true, Text: "sorry, phone was ringing"},
+	}
+
+	got := Compose(in)
+
+	var assistant []string
+	for _, seg := range got {
+		if seg.Role == "assistant" {
+			assistant = append(assistant, seg.Text)
+		}
+	}
+	if len(assistant) != 1 {
+		t.Fatalf("got %d assistant segments, want the two consecutive buddy turns coalesced into one", len(assistant))
+	}
+	if !strings.Contains(assistant[0], "hi") || !strings.Contains(assistant[0], "phone was ringing") {
+		t.Fatalf("coalescing lost content: %q", assistant[0])
+	}
+}
+
+func TestABuddyOpenedConversationStillStartsOnAUserTurn(t *testing.T) {
+	// With no knowledge to precede it, a scheduled beat would put an assistant
+	// message first. Dropping that opening line would silently rewrite the start
+	// of the conversation, so it gets a minimal user frame instead.
+	in := composeInput()
+	in.Digest = nil
+	in.Recent = nil
+	in.History = []Turn{{FromBuddy: true, Text: "danny are you there"}}
+
+	got := Compose(in)
+
+	var first *PromptSegment
+	for i := range got {
+		if got[i].Role != "system" {
+			first = &got[i]
+			break
+		}
+	}
+	if first == nil {
+		t.Fatal("expected at least one message segment")
+	}
+	if first.Role != "user" {
+		t.Fatalf("first message segment is %q; the conversation must open on a user turn", first.Role)
+	}
+	var found bool
+	for _, seg := range got {
+		if seg.Role == "assistant" && seg.Text == "danny are you there" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the buddy's opening message was dropped rather than framed")
+	}
+}
+
+// --- the echoed-turn trim --------------------------------------------------
+
+func TestTheStudentsMessageIsNotStatedTwice(t *testing.T) {
+	// ChatSend persists the inbound message before it retrieves context, and
+	// History is bounded by the same virtual time, so the message being answered
+	// arrives as the last turn as well as in the live turn.
+	in := composeInput()
+	in.UserMessage = "is your mom ok"
+	in.History = []Turn{
+		{FromBuddy: true, Text: "yeah"},
+		{FromBuddy: false, Text: "is your mom ok"},
+	}
+
+	got := Compose(in)
+
+	var count int
+	for _, seg := range got {
+		count += strings.Count(seg.Text, "is your mom ok")
+	}
+	if count != 1 {
+		t.Fatalf("the student's message appears %d times, want exactly once (in the live turn)", count)
+	}
+}
+
+func TestSelfInitiatedNeverTrimsAStudentTurn(t *testing.T) {
+	in := composeInput()
+	in.SelfInitiated = true
+	in.UserMessage = "react to the second impact"
+	in.History = []Turn{{FromBuddy: false, Text: "react to the second impact"}}
+
+	got := Compose(in)
+
+	var found bool
+	for _, seg := range got {
+		if seg.Role == "user" && seg.Text == "react to the second impact" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("a student turn was trimmed on a self-initiated beat")
+	}
+}
+
+func TestAGenuineRepeatKeepsTheEarlierTurn(t *testing.T) {
+	// Only the trailing turn is ever dropped. Someone typing the same thing
+	// twice still has their earlier message in the conversation.
+	in := composeInput()
+	in.UserMessage = "what?"
+	in.History = []Turn{
+		{FromBuddy: false, Text: "what?"},
+		{FromBuddy: true, Text: "the tower"},
+		{FromBuddy: false, Text: "what?"},
+	}
+
+	got := Compose(in)
+
+	var count int
+	for _, seg := range got {
+		count += strings.Count(seg.Text, "what?")
+	}
+	if count != 2 {
+		t.Fatalf("got %d occurrences, want 2: the earlier repeat plus the live turn", count)
+	}
+}
+
+// --- the live broadcast tail ----------------------------------------------
+
+func TestLiveTailIsVolatileAndFollowsTheConversation(t *testing.T) {
+	in := composeInput()
+	in.Live = []Passage{{Tier: TierBroadcast, Text: "we are just hearing the pentagon"}}
+
+	got := Compose(in)
+
+	idx := -1
+	for i, seg := range got {
+		if strings.Contains(seg.Text, "just hearing the pentagon") {
+			idx = i
+		}
+	}
+	if idx < 0 {
+		t.Fatal("the live tail never made it into the prompt")
+	}
+	if got[idx].Stability != StabilityVolatile {
+		t.Fatalf("live tail stability = %v, want volatile: it moves every second and must never "+
+			"sit inside a cached prefix", got[idx].Stability)
+	}
+	for i := 0; i < idx; i++ {
+		if got[i].Role == "assistant" {
+			return
+		}
+	}
+	t.Fatal("the live tail must follow the conversation, not precede it")
+}

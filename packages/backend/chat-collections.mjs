@@ -149,6 +149,29 @@ export const CHAT_COLLECTIONS = [
     ],
   },
   {
+    collection: "chat_transcript_minutes",
+    meta: {
+      icon: "compress",
+      note: "Tier 2, condensed — one extractive line per channel per minute, produced by video-grabber. The prompt reads this and falls back to chat_transcript_segments for any span not summarized yet.",
+    },
+    schema: {},
+    fields: [
+      { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
+      // channel/channel_slug/medium mirror chat_transcript_segments exactly: the
+      // streamer filters tier 2 by the stations that reached a buddy's market,
+      // and it applies the identical filter to whichever of the two tables it
+      // read — a summary row missing its provenance could not be filtered.
+      { field: "channel", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", width: "half" } },
+      { field: "channel_slug", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Used for radio, which has no tv_channels row" } },
+      { field: "medium", type: "string", schema: { is_nullable: false, default_value: "tv" },
+        meta: { interface: "select-dropdown", width: "half",
+                options: { choices: ["tv", "radio"].map((v) => ({ text: v, value: v })) } } },
+      { field: "minute", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Top of the minute this line covers" } },
+      { field: "summary", type: "text", schema: { is_nullable: false }, meta: { interface: "input-multiline", width: "full", note: "Extractive: deduped and truncated broadcast words, never paraphrased" } },
+      { field: "segment_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "How many raw segments condensed into this line" } },
+    ],
+  },
+  {
     collection: "chat_messages",
     meta: { icon: "chat", note: "Per-user conversation log. Directus policy MUST scope this to $CURRENT_USER" },
     schema: {},
@@ -169,6 +192,9 @@ export const CHAT_COLLECTIONS = [
       { field: "model", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
       { field: "tokens_in", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
       { field: "tokens_out", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+      { field: "cached_in", type: "integer", schema: { is_nullable: true },
+        meta: { interface: "input", width: "half",
+                note: "Of tokens_in, how much the provider served from its prompt cache. Zero across a whole conversation means prompt caching is not working." } },
     ],
   },
   {
@@ -198,6 +224,12 @@ export const CHAT_COLLECTIONS = [
 export const CHAT_INDEX_SQL = `
     CREATE INDEX IF NOT EXISTS idx_chat_knowledge_public   ON chat_knowledge (public_at);
     CREATE INDEX IF NOT EXISTS idx_chat_transcript_start   ON chat_transcript_segments (start_date);
+    -- LoadBroadcastMinutes runs on the session goroutine for every message, and
+    -- it is a range scan on minute plus a channel/slug filter. Leading with
+    -- minute matches that shape (the range is the selective part — ten minutes
+    -- out of nine days); without it this is a seq scan of the whole table on
+    -- the hot path, which is the same mistake idx_news_items_fts documents.
+    CREATE INDEX IF NOT EXISTS idx_chat_minutes_minute    ON chat_transcript_minutes (minute, medium);
     CREATE INDEX IF NOT EXISTS idx_chat_transcript_fts     ON chat_transcript_segments USING GIN (to_tsvector('english', text));
     CREATE INDEX IF NOT EXISTS idx_chat_messages_user_conv ON chat_messages (( "user" ), profile, virtual_time);
     CREATE INDEX IF NOT EXISTS idx_chat_blocks_user        ON chat_blocks (( "user" ), scope);
