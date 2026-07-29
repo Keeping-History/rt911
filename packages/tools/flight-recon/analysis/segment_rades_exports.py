@@ -179,6 +179,118 @@ def segment(b):
     return [{"code": tr["code"], "pts": tr["pts"]} for tr in good]
 
 
+# ------------------------------------------------------------------ stitching
+# A single aircraft often yields several tracks: the crew changes squawk on a
+# handoff (UA175 flew 1470 -> 3020 -> 3321), or coverage lapses longer than
+# GAP_S. Stitching links track B after track A when B begins shortly after A
+# ends, at a position consistent with A's terminal velocity, with plausible
+# altitude continuity. Links are greedy mutual-best; chains are transitive.
+STITCH_MAX_DT_S = 600.0     # same-code relink (coverage lapse)
+STITCH_CODECHANGE_DT_S = 240.0   # code-change relink (handoffs are near-instant)
+STITCH_BASE_NM = 8.0
+STITCH_CODECHANGE_NM = 5.0
+STITCH_ALT_FPM = 6000.0
+STITCH_LOW_ALT_FT = 5000.0  # below this a track may be landing/departing:
+                            # never link identities across the ground
+STITCH_HDG_DEG = 75.0       # terminal vs initial course agreement
+
+
+def _velocity(pts, at_end, tail=5):
+    seg = pts[-min(tail, len(pts)):] if at_end else pts[:min(tail, len(pts))]
+    a, b = seg[0], seg[-1]
+    dt = b[0] - a[0]
+    if dt <= 0:
+        return None
+    return (b[1] - a[1]) / dt, (b[2] - a[2]) / dt
+
+
+def _alt_of(p):
+    return None if pd.isna(p[3]) else float(p[3])
+
+
+def stitch(tracks):
+    ends = sorted(range(len(tracks)), key=lambda i: tracks[i]["pts"][-1][0])
+    starts = sorted(range(len(tracks)), key=lambda i: tracks[i]["pts"][0][0])
+    start_times = [tracks[i]["pts"][0][0] for i in starts]
+    import bisect
+    links = []
+    for i in ends:
+        A = tracks[i]["pts"]
+        tA, laA, loA = A[-1][0], A[-1][1], A[-1][2]
+        altA = _alt_of(A[-1])
+        vA = _velocity(A, at_end=True)
+        if vA is None:
+            continue
+        vla, vlo = vA
+        lo_i = bisect.bisect_left(start_times, tA)
+        hi_i = bisect.bisect_right(start_times, tA + STITCH_MAX_DT_S)
+        for k in range(lo_i, hi_i):
+            j = starts[k]
+            if j == i:
+                continue
+            B = tracks[j]["pts"]
+            dt = B[0][0] - tA
+            if dt <= 0 or B[0][0] < A[0][0]:
+                continue
+            same_code = tracks[i]["code"] == tracks[j]["code"]
+            altB = _alt_of(B[0])
+            # identity never crosses the ground: a low ending (landing) or a
+            # low start (fresh departure) links only as a same-code coverage
+            # blink — this is what glued the post-impact traffic onto UA175
+            low = ((altA is not None and altA < STITCH_LOW_ALT_FT)
+                   or (altB is not None and altB < STITCH_LOW_ALT_FT))
+            max_dt = STITCH_MAX_DT_S if same_code else STITCH_CODECHANGE_DT_S
+            if low and not (same_code and dt <= GAP_S * 2):
+                continue
+            if dt > max_dt:
+                continue
+            pla, plo = laA + vla * dt, loA + vlo * dt
+            d = dist_nm(B[0][1], B[0][2], pla, plo)
+            base = STITCH_BASE_NM if same_code else STITCH_CODECHANGE_NM
+            gate = min(base + dt / 3600.0 * 150.0, dt / 3600.0 * MAX_KT + base)
+            if d > gate:
+                continue
+            if not (altA is None or altB is None):
+                max_dalt = (STITCH_ALT_FPM if same_code else 2000.0) * max(dt / 60.0, 1.0)
+                if abs(altB - altA) > max_dalt:
+                    continue
+            # course agreement between A's terminal and B's initial velocity
+            vB = _velocity(B, at_end=False)
+            if vB is not None:
+                hA = math.degrees(math.atan2(vlo, vla)) % 360
+                hB = math.degrees(math.atan2(vB[1], vB[0])) % 360
+                if abs((hA - hB + 180) % 360 - 180) > STITCH_HDG_DEG:
+                    continue
+            links.append((d + dt / 60.0 + (0 if same_code else 2.0), i, j))
+    links.sort()
+    nxt, prv = {}, {}
+    for _sc, i, j in links:
+        if i in nxt or j in prv:
+            continue
+        nxt[i], prv[j] = j, i
+    stitched = []
+    consumed = set()
+    for i in range(len(tracks)):
+        if i in prv or i in consumed:
+            continue
+        chain, k = [i], i
+        while k in nxt:
+            k = nxt[k]
+            chain.append(k)
+        consumed.update(chain)
+        pts = [p for k in chain for p in tracks[k]["pts"]]
+        codes = []
+        for k in chain:
+            if tracks[k]["code"] not in codes:
+                codes.append(tracks[k]["code"])
+        stitched.append({"code": tracks[chain[0]]["code"], "codes": codes,
+                         "pts": pts, "n_fragments": len(chain)})
+    multi = sum(1 for t in stitched if t["n_fragments"] > 1)
+    print(f"stitched: {len(tracks):,} tracks -> {len(stitched):,} chains "
+          f"({multi:,} multi-fragment; longest {max(t['n_fragments'] for t in stitched)})")
+    return stitched
+
+
 def correlate(tracks, bts_path, airports_path):
     ap = pd.read_csv(airports_path).set_index("code")
     bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
@@ -375,6 +487,37 @@ def correlate_v2(tracks, bts_path, airports_path, notable_codes=("1443", "3020",
     dep_m = _assign(deps, bd, ap, "wo_secs", bias, LIFTOFF_LEAD_S, use_bearing=True)
     arr_m = _assign(arrs, ba, ap, "wn_secs", bias, -30, use_bearing=True)
 
+    # Same-origin swap guard (the US1105/WN918 failure class): when another
+    # BTS flight departed the same airport within the time gate on a similar
+    # outbound bearing, time+bearing evidence cannot tell the two apart —
+    # refuse the name rather than guess.
+    def dest_bearing(f):
+        if f.Dest not in ap.index or f.Origin not in ap.index:
+            return None
+        return bearing_deg(ap.loc[f.Origin, "lat"], ap.loc[f.Origin, "lon"],
+                           ap.loc[f.Dest, "lat"], ap.loc[f.Dest, "lon"])
+    by_airport = {}
+    for f in bd.itertuples(index=False):
+        by_airport.setdefault(f.airport, []).append(f)
+    ambiguous = []
+    for key, (sig, _sc) in list(dep_m.items()):
+        f = next(x for x in by_airport.get(sig["ap"], [])
+                 if x.Reporting_Airline + str(x.Flight_Number) == key)
+        bf = dest_bearing(f)
+        for g in by_airport.get(sig["ap"], []):
+            gk = g.Reporting_Airline + str(g.Flight_Number)
+            if gk == key or abs(g.wo_secs - f.wo_secs) > 240:
+                continue
+            bg = dest_bearing(g)
+            if bf is None or bg is None or ang_diff(bf, bg) < 40:
+                ambiguous.append(key)
+                break
+    # Report-only: posterior audits (destination/origin consistency) outrank
+    # prior ambiguity — the verified tier is gated by those, not by this.
+    print(f"v2 swap guard: {len(ambiguous)} dep names are same-origin-ambiguous "
+          f"(reported; verified-tier membership decided by the audits)")
+    results_ambiguous = set(ambiguous)
+
     both = {k for k in dep_m if k in arr_m
             if dep_m[k][0]["track"] == arr_m[k][0]["track"]}
     all_named = set(dep_m) | set(arr_m)
@@ -385,7 +528,7 @@ def correlate_v2(tracks, bts_path, airports_path, notable_codes=("1443", "3020",
     bad = [k for k, (s, _sc) in list(dep_m.items()) + list(arr_m.items())
            if s["code"] in notable_codes]
     print(f"v2 negative control (notable squawks named): {bad or 'none'}")
-    return {"dep": dep_m, "arr": arr_m, "both": both}
+    return {"dep": dep_m, "arr": arr_m, "both": both, "ambiguous": results_ambiguous}
 
 
 def audit_named(tracks, results, bts_path, airports_path):
@@ -472,6 +615,67 @@ def audit_named(tracks, results, bts_path, airports_path):
         print(f"duration delta (track - BTS block) on consistent matches: "
               f"median {np.median(a):+.1f} min, p90 |delta| {np.percentile(np.abs(a), 90):.1f} min (n={len(a)})")
     return details
+
+
+def audit_arrivals(tracks, results, bts_path, airports_path):
+    """Origin-consistency audit for arrival-named flights: the matched track
+    should START low near the BTS origin (when the origin is in coverage)."""
+    ap = pd.read_csv(airports_path).set_index("code")
+    bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
+    bts = bts[(bts.FlightDate == "2001-09-11") & (bts.Cancelled == 0)]
+    ref = {r.Reporting_Airline + str(r.Flight_Number): r for r in bts.itertuples(index=False)}
+    verdicts = Counter()
+    out = {}
+    for key, (sig, _sc) in results["arr"].items():
+        f = ref.get(key)
+        tr = tracks[sig["track"]]
+        first = tr["pts"][0]
+        alt0 = None if pd.isna(first[3]) else float(first[3])
+        v = "indeterminate"
+        if f is not None and f.Origin in ap.index:
+            ola, olo = ap.loc[f.Origin, "lat"], ap.loc[f.Origin, "lon"]
+            if (COVER["la0"] < ola < COVER["la1"]) and (COVER["lo0"] < olo < COVER["lo1"]):
+                d = dist_nm(first[1], first[2], ola, olo)
+                if d < 25 and (alt0 is None or alt0 < 12000):
+                    v = "consistent"
+                elif d > 60 and alt0 is not None and alt0 < 12000:
+                    v = "inconsistent"
+        verdicts[v] += 1
+        out[key] = v
+    judged = verdicts["consistent"] + verdicts["inconsistent"]
+    if judged:
+        print(f"arrival audit: {dict(verdicts)}  precision={verdicts['consistent']/judged:.3f}")
+    return out
+
+
+def export_verified(tracks, results, dep_details, arr_verdicts, out_path):
+    """The load-grade set: names carrying independent posterior evidence."""
+    tier = {}
+    for d in dep_details:
+        if d["verdict"] == "consistent":
+            tier.setdefault(d["flight"], []).append("dest-consistent")
+        elif d["verdict"] == "diverted-tracked-low":
+            tier.setdefault(d["flight"], []).append("diverted-tracked")
+    for key in results.get("both", set()):
+        tier.setdefault(key, []).append("both-ends")
+    for key, v in arr_verdicts.items():
+        if v == "consistent":
+            tier.setdefault(key, []).append("origin-consistent")
+    payload = []
+    for key, evidence in sorted(tier.items()):
+        src = results["dep"].get(key) or results["arr"].get(key)
+        sig, score = src
+        tr = tracks[sig["track"]]
+        payload.append({"flight": key, "evidence": evidence, "score": round(score, 1),
+                        "codes": tr.get("codes", [tr["code"]]),
+                        "returns": len(tr["pts"]),
+                        "t0": tr["pts"][0][0], "t1": tr["pts"][-1][0],
+                        "track_index": sig["track"]})
+    with open(out_path, "w") as fh:
+        json.dump(payload, fh, indent=1)
+    by_ev = Counter(e for p in payload for e in p["evidence"])
+    print(f"verified tier: {len(payload)} flights -> {out_path}  {dict(by_ev)}")
+    return payload
 
 
 def main(argv=None):

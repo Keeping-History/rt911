@@ -2985,8 +2985,8 @@ packages:
     resolution: {integrity: sha512-Ph4CNOoQUkfUZpuxA7rZQXeDhJBgvnNHZXeFBqTlI1KKBRbgIqaWWpwNWM6YTjUKUDMDH1qfyEy5/n5JBRHQsA==}
     hasBin: true
 
-  pdfjs-dist@6.1.200:
-    resolution: {integrity: sha512-o8MolyzirkkLrcdsae/HEOiIcXWI7DS5zGpvqW8xTC2YUsW30rltFw2bDGvw/fskUdEMrQm2br68jzDS5BH2vw==}
+  pdfjs-dist@6.2.108:
+    resolution: {integrity: sha512-YxFb+SQcodN2rnX9Tn3dHYlqfb7NjlzzfONPpJd+AKoKtUjEdevTfbC07d5TcczzOK6261auRkP/M8OBHs9vFQ==}
     engines: {node: '>=22.13.0 || >=24'}
 
   picocolors@1.1.1:
@@ -5872,7 +5872,7 @@ snapshots:
       he: 1.2.0
       howler: 2.2.4
       immer: 11.1.15
-      pdfjs-dist: 6.1.200
+      pdfjs-dist: 6.2.108
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
       react-json-tree: 0.20.0(@types/react@19.2.17)(react@19.2.7)
@@ -7386,7 +7386,7 @@ snapshots:
     dependencies:
       resolve-protobuf-schema: 2.1.0
 
-  pdfjs-dist@6.1.200:
+  pdfjs-dist@6.2.108:
     optionalDependencies:
       '@napi-rs/canvas': 1.0.3
 
