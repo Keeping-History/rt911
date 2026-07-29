@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type React from "react";
-import { createContext, useContext, useState } from "react";
+import { Fragment, createContext, useContext, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "../../Providers/Auth/authApi";
 import type { ChatBuddy, ChatStateReason } from "../../Providers/MediaStream/MediaStreamContext";
@@ -38,6 +38,7 @@ const imState = vi.hoisted(() => ({
 	closeInfo: vi.fn(),
 	send: vi.fn(),
 	markRead: vi.fn(),
+	clearChatData: vi.fn(),
 }));
 
 // selectedBuddy/selectBuddy were lifted from BuddyListWindow's own useState
@@ -90,6 +91,7 @@ vi.mock("./IMBuddiesProvider", () => ({
 			closeInfo: imState.closeInfo,
 			send: imState.send,
 			markRead: imState.markRead,
+			clearChatData: imState.clearChatData,
 			selectedBuddy,
 			selectBuddy,
 		};
@@ -117,7 +119,35 @@ interface MockMenuItem {
 	title?: string;
 	disabled?: boolean;
 	onClickFunc?: () => void;
+	menuChildren?: MockMenuItem[];
 }
+
+/**
+ * Window menu items, rendered RECURSIVELY: Edit -> Settings -> Delete Chat Data
+ * is two levels deep, and the one-level version of this mock silently dropped
+ * it — the item was untestable while looking present in the source.
+ *
+ * Still <span> rather than <button>, deliberately: the sign-in alert renders
+ * real buttons, and a menu "Quit" button would collide with the alert's own in
+ * a role query. Clicking a span works fine in fireEvent.
+ */
+const renderMockMenuItems = (items: MockMenuItem[] = []): React.ReactNode =>
+	items.map((item) => (
+		<Fragment key={item.id}>
+			{/* A click-only span is fine in a stub standing in for a menu the real
+			    classicy component renders accessibly; making it a <button> would
+			    collide with the alert's real buttons in role queries. */}
+			{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
+			<span
+				data-menu-item={item.id}
+				data-disabled={String(Boolean(item.disabled))}
+				onClick={item.disabled ? undefined : item.onClickFunc}
+			>
+				{item.title}
+			</span>
+			{renderMockMenuItems(item.menuChildren)}
+		</Fragment>
+	));
 
 // Partial classicy mock, same shape as ChatWindow.test.tsx/InfoWindow.test.tsx
 // (importOriginal spread, override only what needs a real desktop/provider
@@ -161,7 +191,7 @@ vi.mock("classicy", async (importOriginal) => ({
 		children?: React.ReactNode;
 		closable?: boolean;
 		windowType?: string;
-		appMenu?: { id?: string; title?: string; menuChildren?: { id?: string; title?: string }[] }[];
+		appMenu?: { id?: string; title?: string; menuChildren?: MockMenuItem[] }[];
 	}) => (
 		<div
 			data-testid="window"
@@ -173,9 +203,7 @@ vi.mock("classicy", async (importOriginal) => ({
 			<div>{props.title}</div>
 			{(props.appMenu ?? []).map((menu) => (
 				<div key={menu.id} data-testid={`menu-${menu.id}`}>
-					{(menu.menuChildren ?? []).map((item) => (
-						<span key={item.id}>{item.title}</span>
-					))}
+					{renderMockMenuItems(menu.menuChildren as MockMenuItem[] | undefined)}
 				</div>
 			))}
 			{props.children}
@@ -254,6 +282,7 @@ function renderApp(
 	imState.closeInfo = vi.fn();
 	imState.send = vi.fn();
 	imState.markRead = vi.fn();
+	imState.clearChatData = vi.fn();
 	render(<IMBuddies />);
 }
 
@@ -469,5 +498,61 @@ describe("Buddy List menu item", () => {
 		for (const action of windowActions) {
 			expect(action.window?.id).toBe("im_buddylist");
 		}
+	});
+});
+
+describe("Edit -> Settings -> Delete Chat Data", () => {
+	// The item lives two menus deep, so these address it by its stable id
+	// rather than by walking titles.
+	const item = () => document.querySelector("[data-menu-item='im_settings_delete_chat_data']");
+	const openConfirm = () => {
+		const el = item();
+		expect(el, "expected the Delete Chat Data item to be rendered").toBeTruthy();
+		fireEvent.click(el as HTMLElement);
+	};
+
+	it("offers the item under Edit -> Settings on a connected window", () => {
+		renderApp({ connected: true });
+		expect(item()).toBeTruthy();
+		// Nested exactly where the user asked for it, not flattened onto Edit.
+		const edit = screen.getAllByTestId("menu-edit")[0];
+		expect(within(edit).getByText("Settings")).toBeTruthy();
+		expect(within(edit).getByText("Delete Chat Data…")).toBeTruthy();
+	});
+
+	it("disables the item while signed out — the streamer would reject the clear", () => {
+		renderApp({ connected: false, user: null });
+		expect(item()?.getAttribute("data-disabled")).toBe("true");
+	});
+
+	it("warns that the action cannot be undone before doing anything", () => {
+		renderApp({ connected: true });
+		openConfirm();
+		expect(screen.getByText("This cannot be undone.")).toBeTruthy();
+		// Opening the confirmation must not itself clear anything.
+		expect(imState.clearChatData).not.toHaveBeenCalled();
+	});
+
+	it("Cancel closes the alert and clears nothing", () => {
+		renderApp({ connected: true });
+		openConfirm();
+		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+		expect(imState.clearChatData).not.toHaveBeenCalled();
+		expect(screen.queryByText("This cannot be undone.")).toBeNull();
+	});
+
+	it("Confirm clears the chat data once and closes the alert", () => {
+		renderApp({ connected: true });
+		openConfirm();
+		fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+		expect(imState.clearChatData).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("This cannot be undone.")).toBeNull();
+	});
+
+	it("does not open the confirmation until the menu item is used", () => {
+		// Guards against the alert being rendered unconditionally — which would
+		// put an irreversible action in front of every student on app open.
+		renderApp({ connected: true });
+		expect(screen.queryByText("This cannot be undone.")).toBeNull();
 	});
 });

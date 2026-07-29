@@ -254,6 +254,7 @@ function makeCtxValue(
 		sendChat: () => {},
 		requestChatHistory: () => {},
 		appendLocalChatMessage: () => {},
+		clearChatData: () => {},
 		...overrides,
 	};
 }

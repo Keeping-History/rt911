@@ -36,10 +36,14 @@ const appIcon = ICONS.applications.imBuddies.app;
 const BUDDY_LIST_WINDOW_ID = "im_buddylist";
 
 /**
- * The File menu every non-utility IM Buddies window carries, so Quit is where
- * a Mac user reaches for it. Module-level rather than a useMemo: it closes
- * over nothing but module constants, so there is no dependency that could
- * change and no render it needs to be recomputed on.
+ * The menus every non-utility IM Buddies window carries: File, so Quit is where
+ * a Mac user reaches for it, and Edit → Settings → Delete Chat Data…
+ *
+ * A factory rather than the module-level constant this was, because the Edit
+ * item has to reach component state — it opens a confirmation rather than
+ * acting. `canClear` greys the item out while signed out or disconnected: the
+ * streamer would reject the clear anyway, and a disabled item says so before
+ * the click instead of after it.
  *
  * Quit also remains in the menu-bar extension below. That duplication is
  * deliberate — the tray item shipped first and users may already know it.
@@ -49,13 +53,35 @@ const BUDDY_LIST_WINDOW_ID = "im_buddylist";
  * window supplies one, so a menu-less Get Info leaves this File menu on
  * screen rather than blanking the menu bar.
  */
-const APP_MENU: ClassicyMenuItem[] = [
-	{
-		id: "file",
-		title: "File",
-		menuChildren: [quitMenuItemHelper(APP_ID, APP_NAME, appIcon)],
-	},
-];
+function appMenuFor(onDeleteChatData: () => void, canClear: boolean): ClassicyMenuItem[] {
+	return [
+		{
+			id: "file",
+			title: "File",
+			menuChildren: [quitMenuItemHelper(APP_ID, APP_NAME, appIcon)],
+		},
+		{
+			id: "edit",
+			title: "Edit",
+			menuChildren: [
+				{
+					id: "im_edit_settings",
+					title: "Settings",
+					menuChildren: [
+						{
+							id: "im_settings_delete_chat_data",
+							title: "Delete Chat Data…",
+							// Ellipsis per Mac OS convention: the item opens a
+							// dialog rather than acting immediately.
+							disabled: !canClear,
+							onClickFunc: onDeleteChatData,
+						},
+					],
+				},
+			],
+		},
+	];
+}
 // The one app that handles real credentials — the same id SignOnWindow hands
 // off to when there is no Directus session.
 const ACCOUNT_APP_ID = "Account.app";
@@ -185,7 +211,7 @@ const IMBuddiesMenus: React.FC = () => {
  * conversation's window actually disappears instead of just losing focus.
  */
 const IMBuddiesContent: React.FC = () => {
-	const { connected, openChats, infoProfile } = useIMBuddies();
+	const { connected, openChats, infoProfile, clearChatData } = useIMBuddies();
 	const { user } = useAuth();
 	const desktopEventDispatch = useAppManagerDispatch();
 	// Same selector idiom as PlaylistProvider.tsx: read app-manager state
@@ -201,6 +227,14 @@ const IMBuddiesContent: React.FC = () => {
 	// mounting IS the app opening and the state resets on the next open -- no
 	// separate "have I shown this yet" bookkeeping to go stale.
 	const [signInAlertDismissed, setSignInAlertDismissed] = useState(false);
+
+	// Confirmation for Edit → Settings → Delete Chat Data…. The menu only opens
+	// this; the clear itself is dispatched by the Confirm button below.
+	const [confirmingClear, setConfirmingClear] = useState(false);
+	const appMenu = useMemo(
+		() => appMenuFor(() => setConfirmingClear(true), Boolean(user) && connected),
+		[user, connected],
+	);
 
 	return (
 		<>
@@ -246,7 +280,46 @@ const IMBuddiesContent: React.FC = () => {
 					onClose={() => setSignInAlertDismissed(true)}
 				/>
 			)}
-			{!connected && <SignOnWindow appMenu={APP_MENU} />}
+			{/*
+			  Confirming Delete Chat Data. The transcript is NOT emptied here —
+			  Confirm only sends the request, and the provider empties it when the
+			  server confirms the write landed (see MediaStreamProvider's
+			  chat_cleared handler). A failed clear therefore leaves the
+			  conversation on screen rather than faking success.
+			*/}
+			{confirmingClear && (
+				<ClassicyAlert
+					id="im_delete_chat_data"
+					appId={APP_ID}
+					alertType="stop"
+					title={APP_NAME}
+					label="This cannot be undone."
+					message="Your conversations with every buddy will be cleared from Instant Messenger, and your buddies will not remember them."
+					// HIG, and the same choice Account → Special makes: on an action
+					// that risks data loss the SAFE button is the default, so Return
+					// dismisses rather than destroys.
+					defaultButtonId="im_delete_chat_data_cancel"
+					buttons={[
+						{
+							id: "im_delete_chat_data_cancel",
+							label: "Cancel",
+							role: "cancel",
+							onClick: () => setConfirmingClear(false),
+						},
+						{
+							id: "im_delete_chat_data_confirm",
+							label: "Confirm",
+							role: "normal",
+							onClick: () => {
+								clearChatData();
+								setConfirmingClear(false);
+							},
+						},
+					]}
+					onClose={() => setConfirmingClear(false)}
+				/>
+			)}
+			{!connected && <SignOnWindow appMenu={appMenu} />}
 			{/*
 			  Every window below the Sign On window is gated on `connected` too,
 			  not just the Buddy List. A dropped socket flips `connected` false
@@ -259,12 +332,12 @@ const IMBuddiesContent: React.FC = () => {
 			*/}
 			{connected && (
 				<>
-					<BuddyListWindow appMenu={APP_MENU} />
+					<BuddyListWindow appMenu={appMenu} />
 					{openChats.map((profile, i) => (
 						// `i` drives the cascade offset (#318). Windows used to
 						// open centred, one exactly on top of the last, which
 						// read as a single window being reused for every buddy.
-						<ChatWindow key={profile} profile={profile} index={i} appMenu={APP_MENU} />
+						<ChatWindow key={profile} profile={profile} index={i} appMenu={appMenu} />
 					))}
 					{/*
 					  ONE Get Info window, retargeted to the buddy Get Info was

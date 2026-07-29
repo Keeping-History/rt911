@@ -438,3 +438,80 @@ describe("chat channel", () => {
 		).toHaveLength(1);
 	});
 });
+
+describe("chat_clear / chat_cleared", () => {
+	// Two buddies' conversations, so a clear that only emptied the "current" one
+	// would be visible here.
+	function seedTwoConversations(ws: ReturnType<typeof renderWithMockSocket>) {
+		act(() => {
+			ws.receive(
+				encode({
+					type: "chat_message", profile: 1, direction: "out", body: "from danny",
+					time: "2001-09-11T13:00:00Z", kind: "generated", message_id: 11,
+				}),
+			);
+			ws.receive(
+				encode({
+					type: "chat_message", profile: 2, direction: "out", body: "from carol",
+					time: "2001-09-11T13:00:01Z", kind: "generated", message_id: 12,
+				}),
+			);
+		});
+		expect(screen.getByTestId("msgs").textContent).toBe("from danny|from carol");
+	}
+
+	it("clearChatData asks the server and leaves the transcript alone until it answers", () => {
+		// The optimistic version of this would empty the transcript here. It must
+		// not: an unauthenticated or failed clear would then show the student a
+		// blank conversation that the next reconnect quietly refills.
+		const ws = renderWithMockSocket(<Probe />);
+		seedTwoConversations(ws);
+
+		act(() => ws.ctx.clearChatData());
+
+		expect(ws.sent.filter((m) => m.type === "chat_clear")).toHaveLength(1);
+		expect(screen.getByTestId("msgs").textContent).toBe("from danny|from carol");
+	});
+
+	it("empties every buddy's transcript once the server confirms", () => {
+		const ws = renderWithMockSocket(<Probe />);
+		seedTwoConversations(ws);
+
+		act(() => ws.ctx.clearChatData());
+		act(() => ws.receive(encode({ type: "chat_cleared", cleared: 2 })));
+
+		expect(screen.getByTestId("msgs").textContent).toBe("");
+	});
+
+	it("treats a confirmation with no count as success — an empty history still clears", () => {
+		// The server omits `cleared` when it is zero (msgpack omitempty), so a
+		// client keying off the count rather than the frame would ignore this.
+		const ws = renderWithMockSocket(<Probe />);
+		seedTwoConversations(ws);
+
+		act(() => ws.receive(encode({ type: "chat_cleared" })));
+
+		expect(screen.getByTestId("msgs").textContent).toBe("");
+	});
+
+	it("keeps the transcript when the clear is refused", () => {
+		// Not signed in / no pool: the server replies `error`, never chat_cleared.
+		const ws = renderWithMockSocket(<Probe />);
+		seedTwoConversations(ws);
+
+		act(() => ws.ctx.clearChatData());
+		act(() => ws.receive(encode({ type: "error", message: "not signed in" })));
+
+		expect(screen.getByTestId("msgs").textContent).toBe("from danny|from carol");
+	});
+
+	it("stops any typing indicator, so no buddy is left composing into a cleared window", () => {
+		const ws = renderWithMockSocket(<Probe />);
+		act(() => ws.receive(encode({ type: "chat_typing", profile: 1 })));
+		expect(screen.getByTestId("typing").textContent).toBe("1");
+
+		act(() => ws.receive(encode({ type: "chat_cleared", cleared: 1 })));
+
+		expect(screen.getByTestId("typing").textContent).toBe("null");
+	});
+});

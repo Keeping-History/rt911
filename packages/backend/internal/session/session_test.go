@@ -1766,3 +1766,42 @@ func TestTierRoutingSurvivesACrossedAssignment(t *testing.T) {
 		t.Errorf("timeline = %+v, want the timeline passage", tl)
 	}
 }
+
+// The two ChatClear guards below both assert the SAME thing about the failure
+// shape: no chat_cleared frame. That frame is the client's signal to empty the
+// transcript on screen, so sending it when the write did not land would show
+// the student a blank conversation that the next reconnect quietly refills --
+// the worst outcome for an action they were warned is irreversible.
+
+func TestChatClearWithoutSignInSendsErrorNotConfirmation(t *testing.T) {
+	s := newTestSession(t)
+	vTime := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	s.Init(vTime, nil)
+	drain(t, s)
+
+	s.ChatClear()
+
+	msg := recvType(t, s)
+	if msg.Type != "error" {
+		t.Fatalf("expected an error frame for an unauthenticated clear, got %+v", msg)
+	}
+}
+
+func TestChatClearWithNilPoolSendsErrorNotConfirmation(t *testing.T) {
+	// A signed-in user whose history cannot be reached is still a failed clear.
+	s := newTestSession(t)
+	s.SetUser("11111111-2222-3333-4444-555555555555")
+	vTime := time.Date(2001, 9, 11, 12, 51, 0, 0, time.UTC)
+	s.Init(vTime, nil)
+	drain(t, s)
+
+	s.ChatClear()
+
+	msg := recvType(t, s)
+	if msg.Type == "chat_cleared" {
+		t.Fatalf("a clear that never reached the database must not confirm: %+v", msg)
+	}
+	if msg.Type != "error" {
+		t.Fatalf("expected an error frame, got %+v", msg)
+	}
+}

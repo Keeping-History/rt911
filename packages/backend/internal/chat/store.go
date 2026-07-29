@@ -54,10 +54,15 @@ func AppendMessage(ctx context.Context, pool *pgxpool.Pool, userID string, m Mes
 // recent N turns, not its first N -- the same "latest page, then reverse in
 // Go" shape as db.OlderUsenetItems. History reverses the scanned slice before
 // returning so the composer still sees the conversation oldest-first.
+// cleared_at IS NULL is what makes "Delete Chat Data" mean anything on the
+// prompt path: a cleared conversation must leave the buddy's context, or the
+// buddy answers from a transcript the student can no longer see. See
+// ClearMessages for why the rows survive the clear.
 const historySelect = `
 	SELECT direction, body
 	FROM chat_messages
 	WHERE "user" = $1 AND profile = $2 AND virtual_time <= $3
+	  AND cleared_at IS NULL
 	ORDER BY virtual_time DESC, id DESC
 	LIMIT $4`
 
@@ -102,10 +107,14 @@ func reverseTurns(newestFirst []Turn) []Turn {
 // historySelect does: a long conversation must yield its latest N messages,
 // not its first N. HistoryDetailed reverses the scanned slice before
 // returning so replayed chat_message frames arrive in conversation order.
+// cleared_at IS NULL here is what empties the transcript on screen: this is the
+// query a reconnecting or seeking client replays its conversation from, so a
+// cleared history that still matched would reappear on the next chat_history.
 const historyDetailedSelect = `
 	SELECT id, direction, body, virtual_time, kind
 	FROM chat_messages
 	WHERE "user" = $1 AND profile = $2 AND virtual_time <= $3
+	  AND cleared_at IS NULL
 	ORDER BY virtual_time DESC, id DESC
 	LIMIT $4`
 
@@ -151,13 +160,49 @@ func reverseMessages(newestFirst []Message) []Message {
 	return out
 }
 
+// cleared_at IS NULL completes the clean slate: after clearing, a buddy the
+// student had spoken to reverts to never-contacted, so it re-introduces itself
+// instead of opening on an intimate beat about a conversation that is gone from
+// the student's screen. The cost is deliberate -- scheduled beats gated on
+// prior contact stay locked until the student speaks again.
 const priorContactSelect = `
 	SELECT EXISTS(
 		SELECT 1
 		FROM chat_messages
 		WHERE "user" = $1 AND profile = $2 AND virtual_time <= $3
 		  AND direction = 'in'
+		  AND cleared_at IS NULL
 	)`
+
+// clearMessagesUpdate marks a user's whole history "old" instead of deleting
+// it: the transcript leaves the product while the log survives. This is NOT
+// account deletion -- Account → Special genuinely erases chat_messages, because
+// that action is a data-erasure request. This one is a reset.
+//
+// The quotes around "user" are load-bearing. Unquoted, `user` is a Postgres
+// reserved word that resolves to CURRENT_USER: the statement would still parse,
+// still succeed, and mark the wrong rows (or none) without ever erroring.
+//
+// `AND cleared_at IS NULL` makes the write idempotent and, more importantly,
+// preserves the FIRST clear's timestamp -- a second clear must not rewrite when
+// an earlier conversation was cleared, since that timestamp is the only record
+// of it.
+const clearMessagesUpdate = `
+	UPDATE chat_messages
+	SET cleared_at = $2
+	WHERE "user" = $1 AND cleared_at IS NULL`
+
+// ClearMessages soft-deletes one user's entire chat history, across every
+// buddy, and reports how many rows it marked. Scoped to a single user by
+// construction: there is no profile argument to narrow it and no way for a
+// caller to widen it beyond the one userID passed in.
+func ClearMessages(ctx context.Context, pool *pgxpool.Pool, userID string) (int64, error) {
+	tag, err := pool.Exec(ctx, clearMessagesUpdate, userID, time.Now().UTC())
+	if err != nil {
+		return 0, fmt.Errorf("update chat_messages cleared_at: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
 
 // direction = 'in' is the point: this answers "has the STUDENT ever spoken to
 // this buddy?", and without it a buddy's own earlier scheduled beat counts as

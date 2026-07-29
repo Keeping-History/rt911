@@ -53,6 +53,7 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `resume`      | —                 | Resume advancing virtual time.                |
 | `chat_send`   | `profile`, `body` | Send one message to a buddy on the `chat` channel. See [`chat_send`](#chat_send) below. |
 | `chat_history` | `profile`, `before`, `limit` | Request prior turns with a buddy at or before `before` (RFC3339). `limit` defaults to 40 when omitted or non-positive. See [`chat_history`](#chat_history) below. |
+| `chat_clear`  | —                 | Soft-delete the signed-in user's entire chat history, across every buddy. See [`chat_clear`](#chat_clear) below. |
 
 All unknown `type` values produce an `error` reply but do not terminate the session.
 
@@ -87,6 +88,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `chat_typing`     | `profile`                     | Sent immediately on accepting a `chat_send` — the reply lands 2-8s later. See [`chat_typing`](#chat_typing) below. |
 | `chat_message`    | `profile`, `direction`, `body`, `time`, `kind`, `message_id` | One turn of a chat conversation, live or replayed. See [`chat_message`](#chat_message) below. |
 | `chat_history`    | `profile`, `done`             | Terminates a `chat_history` reply (each turn itself rides `chat_message`). See [`chat_history`](#chat_history) below. |
+| `chat_cleared`    | `cleared`                     | Confirms a `chat_clear` succeeded; the client empties its transcript on this frame. See [`chat_clear`](#chat_clear) below. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `news_body`       | `id`, `body` *or* `id`, `message` | Reply to `news_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
@@ -780,6 +782,39 @@ re-read fresh from `chat_messages` (never cached on the session), which is what 
 rebuild context correctly: the next `chat_history` (or `chat_send`, which pulls its own rolling
 context the same way) sees the new virtual time. An anonymous session, or one connected with no
 database pool, gets an immediate `chat_history{done:true}` with no turns.
+
+### `chat_clear`
+
+Request (no fields — the target is always the session's own authenticated user, so there is nothing
+for a client to specify and no way to aim the clear at another user's history):
+
+```json
+{ "type": "chat_clear" }
+```
+
+Reply on success:
+
+```json
+{ "type": "chat_cleared", "cleared": 42 }
+```
+
+`cleared` is how many rows were marked, and is informational only — the client resets on the frame's
+arrival, not its count, so clearing an already-empty history is still a success (and `cleared` is
+then omitted, being zero).
+
+**Nothing is deleted.** Every matching `chat_messages` row gets a `cleared_at` timestamp, and all
+three conversation reads (`History` for the buddy's prompt context, `HistoryDetailed` for replay, and
+`HasPriorContact` for schedule gating) skip rows that carry one. The transcript therefore leaves the
+product — and the buddies' memory with it — while the log survives for research. Re-clearing does not
+rewrite an earlier clear's timestamp. Contrast Account → Special → Delete My Data, which genuinely
+erases `chat_messages`: that action is a data-erasure request, this one is a reset.
+
+Because a buddy's prior contact is also cleared, scheduled beats gated on `requires_prior_contact`
+stay locked until the student speaks to that buddy again.
+
+An unauthenticated session, or one with no database pool, gets an `error` frame and **no**
+`chat_cleared` — a client that emptied its transcript on an unconfirmed clear would show a blank
+conversation that the next reconnect refills.
 
 ### `chat_typing`
 

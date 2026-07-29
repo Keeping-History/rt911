@@ -228,6 +228,14 @@ interface WsChatMessageFrame {
 	message_id?: number;
 }
 
+// The server confirming a chat_clear landed. `cleared` is the row count and is
+// informational only — arrival alone empties the transcript, so a zero (an
+// already-empty history, which msgpack omits) is still a success.
+interface WsChatClearedMessage {
+	type: "chat_cleared";
+	cleared?: number;
+}
+
 type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
@@ -248,6 +256,7 @@ type WsIncomingMessage =
 	| WsChatPresenceMessage
 	| WsChatTypingMessage
 	| WsChatMessageFrame
+	| WsChatClearedMessage
 	| WsClockMessage
 	| WsHeartbeatAckMessage
 	| { type: string };
@@ -852,6 +861,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send],
 	);
 
+	// Ask the server to soft-delete this user's whole chat history. Deliberately
+	// does NOT touch chatMessages here — the transcript is emptied when the
+	// server's chat_cleared frame arrives (see the handler), so an unauthorized
+	// or failed clear leaves what is on screen exactly where it was.
+	//
+	// No arguments: the server scopes the clear to the session's authenticated
+	// user, so there is nothing here that could aim it at anyone else.
+	const clearChatData = useCallback(() => {
+		send({ type: "chat_clear" });
+	}, [send]);
+
 	// Requesting history for a profile also DROPS that profile's local echoes,
 	// in the same call, deliberately: a replay is authoritative for the
 	// conversation it covers, and it carries the persisted copies of the very
@@ -1419,6 +1439,19 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			// Emptying the transcript is driven by the server's confirmation, never
+			// optimistically by the click: the rows are only hidden once the write
+			// lands, and a failed clear replies with an `error` instead — so the
+			// student never sees a blank conversation that a reconnect refills.
+			//
+			// Clearing every profile at once (rather than filtering by one) matches
+			// what the server did: chat_clear has no profile field.
+			if (msg.type === "chat_cleared") {
+				setChatMessages([]);
+				setChatTypingProfile(null);
+				return;
+			}
+
 			if (msg.type === "weather") {
 				const incomingWeather = (msg as WsWeatherMessage).weather;
 				if (!incomingWeather || incomingWeather.length === 0) return;
@@ -1601,6 +1634,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			sendChat,
 			requestChatHistory,
 			appendLocalChatMessage,
+			clearChatData,
 		}),
 		[
 			items,
@@ -1658,6 +1692,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			sendChat,
 			requestChatHistory,
 			appendLocalChatMessage,
+			clearChatData,
 		],
 	);
 

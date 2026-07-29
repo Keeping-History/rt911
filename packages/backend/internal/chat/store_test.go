@@ -145,3 +145,47 @@ func TestPriorContactRequiresTheStudentToHaveSpoken(t *testing.T) {
 		t.Errorf("priorContactSelect must only count inbound messages:\n%s", priorContactSelect)
 	}
 }
+
+// TestEveryReadPathHidesClearedMessages is the guard that makes "Delete Chat
+// Data" trustworthy. Three separate queries read a conversation, and each one
+// hides a different leak if it forgets the filter: historySelect would leave the
+// cleared transcript in the buddy's prompt, historyDetailedSelect would redraw
+// it on the next reconnect or seek, and priorContactSelect would keep a buddy
+// treating the student as mid-conversation. A future fourth read path must be
+// added here too.
+func TestEveryReadPathHidesClearedMessages(t *testing.T) {
+	for name, query := range map[string]string{
+		"historySelect":         historySelect,
+		"historyDetailedSelect": historyDetailedSelect,
+		"priorContactSelect":    priorContactSelect,
+	} {
+		if !strings.Contains(query, "cleared_at IS NULL") {
+			t.Errorf("%s must exclude cleared messages:\n%s", name, query)
+		}
+	}
+}
+
+func TestClearMessagesQuotesTheUserColumn(t *testing.T) {
+	// `user` is a Postgres reserved word. Unquoted it resolves to CURRENT_USER,
+	// so the UPDATE still parses and still succeeds while matching the wrong
+	// rows -- a silent mis-scope on a destructive write, with no error to catch.
+	if !strings.Contains(clearMessagesUpdate, `"user" = $1`) {
+		t.Errorf("clearMessagesUpdate must quote the user column:\n%s", clearMessagesUpdate)
+	}
+}
+
+func TestClearMessagesIsScopedAndIdempotent(t *testing.T) {
+	// No profile predicate: the product action clears every buddy at once.
+	if strings.Contains(clearMessagesUpdate, "profile") {
+		t.Errorf("clearMessagesUpdate must not narrow to one buddy:\n%s", clearMessagesUpdate)
+	}
+	// Re-clearing must not rewrite the first clear's timestamp, which is the
+	// only record of when an earlier conversation was cleared.
+	if !strings.Contains(clearMessagesUpdate, "cleared_at IS NULL") {
+		t.Errorf("clearMessagesUpdate must skip already-cleared rows:\n%s", clearMessagesUpdate)
+	}
+	// A soft delete that deletes is not a soft delete.
+	if strings.Contains(strings.ToUpper(clearMessagesUpdate), "DELETE") {
+		t.Errorf("clearMessagesUpdate must not delete rows:\n%s", clearMessagesUpdate)
+	}
+}

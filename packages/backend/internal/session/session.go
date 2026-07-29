@@ -133,6 +133,11 @@ type outMsg struct {
 	Direction string        `json:"direction,omitempty"`
 	Kind      string        `json:"kind,omitempty"`
 	MessageID int           `json:"message_id,omitempty"`
+	// Cleared rides chat_cleared: how many messages the clear marked. Purely
+	// informational (the client resets on the frame's arrival, not its count),
+	// so omitempty dropping a zero is harmless -- clearing an already-empty
+	// history is still a successful clear.
+	Cleared int64 `json:"cleared,omitempty"`
 }
 
 // Session holds all state for a single connected client.
@@ -1199,6 +1204,39 @@ func (s *Session) ChatHistory(profileID int, before time.Time, limit int) {
 		})
 	}
 	s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
+}
+
+// ChatClear marks the signed-in user's entire chat history old and confirms
+// with a chat_cleared frame, which is what the client resets its transcript on.
+// No rows are deleted — see chat.ClearMessages.
+//
+// Every failure path sends an error instead of a confirmation, deliberately: a
+// client that emptied its transcript on an unconfirmed clear would show the
+// student a blank conversation that the next reconnect silently refills.
+func (s *Session) ChatClear() {
+	s.mu.Lock()
+	userID := s.userID
+	s.mu.Unlock()
+
+	// The user id is read from the authenticated session, never from the
+	// request, so no client field can aim the clear at another user's history.
+	if userID == "" {
+		s.SendError("not signed in")
+		return
+	}
+	if s.pool == nil {
+		s.SendError("chat history is unavailable")
+		return
+	}
+
+	cleared, err := chat.ClearMessages(context.Background(), s.pool, userID)
+	if err != nil {
+		s.logger.Warn("chat: clear history failed", "error", err)
+		s.SendError("could not clear chat history")
+		return
+	}
+	s.logger.Info("chat: cleared history", "messages", cleared)
+	s.send_(outMsg{Type: "chat_cleared", Cleared: cleared})
 }
 
 // clampChatHistoryBefore bounds a client-supplied chat_history cursor to the

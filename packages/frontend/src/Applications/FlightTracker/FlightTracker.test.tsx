@@ -302,6 +302,7 @@ function makeCtxValue(
 		sendChat: vi.fn(),
 		requestChatHistory: vi.fn(),
 		appendLocalChatMessage: vi.fn(),
+		clearChatData: vi.fn(),
 		...overrides,
 	};
 }

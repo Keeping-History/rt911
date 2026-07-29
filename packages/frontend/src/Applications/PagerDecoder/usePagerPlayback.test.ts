@@ -102,6 +102,7 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					sendChat: vi.fn(),
 					requestChatHistory: vi.fn(),
 					appendLocalChatMessage: vi.fn(),
+					clearChatData: vi.fn(),
 				},
 				children,
 			}),

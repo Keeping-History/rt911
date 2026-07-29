@@ -567,6 +567,11 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 				}
 				sess.ChatHistory(cmsg.Profile, before, clampChatHistoryLimit(cmsg.Limit))
 
+			// No payload to unmarshal: the target is always the session's own
+			// authenticated user, so there is nothing for a client to specify.
+			case "chat_clear":
+				sess.ChatClear()
+
 			default:
 				sess.SendError(fmt.Sprintf("unknown message type %q", msg.Type))
 			}

@@ -382,6 +382,13 @@ export interface MediaStreamContextValue {
 	 * ordering rule.
 	 */
 	appendLocalChatMessage: (message: ChatMessage) => void;
+	/**
+	 * Soft-delete this user's entire chat history, every buddy at once. The
+	 * server marks the rows old rather than deleting them and replies
+	 * `chat_cleared`; `chatMessages` empties on THAT frame, not on this call, so
+	 * a rejected or failed clear leaves the transcript on screen untouched.
+	 */
+	clearChatData: () => void;
 }
 
 export const MediaStreamContext = createContext<MediaStreamContextValue>({
@@ -442,4 +449,5 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	sendChat: () => {},
 	requestChatHistory: () => {},
 	appendLocalChatMessage: () => {},
+	clearChatData: () => {},
 });
