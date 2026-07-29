@@ -826,7 +826,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"icon-allow-overlap": true,
 					"icon-ignore-placement": true,
 				},
-				paint: { "icon-opacity": 0.55 },
+				// Anonymous traffic sits behind the identified flights: 50% less
+				// saturated (see flightMapSettings.desaturate) at 75% opacity.
+				paint: { "icon-opacity": 0.75 },
 			});
 			map.addLayer({
 				id: "flights-dots", type: "symbol", source: "flights",

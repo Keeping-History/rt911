@@ -27,8 +27,6 @@ export interface FlightMapSettings {
 	notablePinColorDark: number;
 	observerPinColorLight: number;
 	observerPinColorDark: number;
-	anonPinColorLight: number;
-	anonPinColorDark: number;
 	buildingHeroColorLight: number;
 	buildingHeroColorDark: number;
 	radarSweep: boolean;
@@ -59,8 +57,6 @@ export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	notablePinColorDark: 0xff4d4d, // brightened red so it reads on slate
 	observerPinColorLight: 0x0f766e, // blue-green (teal) for witness aircraft
 	observerPinColorDark: 0x2dd4bf, // brightened teal so it reads on slate
-	anonPinColorLight: 0x8b7d6b, // muted taupe — "uncertain" ghost traffic
-	anonPinColorDark: 0x9ca3af, // cool gray, quiet against the gold pins
 	buildingHeroColorLight: 0xb0a48c, // warm stone, distinct from the neutral mass
 	buildingHeroColorDark: 0xc7b8a0, // brightened stone for the slate map
 	radarSweep: true,
@@ -183,6 +179,26 @@ export const readFlightPoiSettings = (
 		(data?.poiSettings as Partial<FlightPoiSettings> | undefined) ?? {};
 	return { ...DEFAULT_FLIGHT_POI_SETTINGS, ...stored };
 };
+
+/**
+ * Desaturate a packed color toward its own grey by `amount` (0-1), keeping
+ * lightness. Anonymous radar traffic (#263) renders at half the saturation of
+ * the identified pins so it reads as background texture without becoming a
+ * second hue to learn — and it follows automatically when the pin color is
+ * changed in Settings.
+ */
+export const desaturate = (color: number, amount: number): number => {
+	const r = (color >> 16) & 255;
+	const g = (color >> 8) & 255;
+	const b = color & 255;
+	// Rec. 601 luma keeps the greyed color at the same perceived lightness.
+	const grey = 0.299 * r + 0.587 * g + 0.114 * b;
+	const mix = (c: number) => Math.round(c + (grey - c) * amount);
+	return (mix(r) << 16) | (mix(g) << 8) | mix(b);
+};
+
+/** Fraction of saturation removed from the pin color for anonymous traffic. */
+export const ANON_DESATURATION = 0.5;
 
 /** Packed int → CSS hex; the single place the two color formats meet. */
 export const intToHex = (color: number): string =>
