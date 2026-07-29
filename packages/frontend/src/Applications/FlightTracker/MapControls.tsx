@@ -11,6 +11,7 @@ import mapGlobePng from "./map-globe.png";
 import map3dPng from "./map-3d.png";
 import mapTerrainPng from "./map-terrain.png";
 import mapClusterPng from "./map-cluster.png";
+import mapExpandRadar from "./target.png";
 import mapAirportPng from "./map-airport.png";
 import mapPlanePng from "./map-plane.png";
 import mapCameraPng from "./map-camera.png";
@@ -152,14 +153,14 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			<img className={styles.mapControlIcon} src={mapClusterPng} alt="" />
 		</ClassicyButton>
 		</ClassicyBalloonHelp>
-		<ClassicyBalloonHelp content="Show the unidentified radar traffic (84 RADES) alongside the airline flights.">
+		<ClassicyBalloonHelp content="Show the unidentified radar traffic alongside the known airline flights.">
 		<ClassicyButton
 			buttonSize="small"
-			aria-label="Other traffic"
+			aria-label="Expand Radar"
 			depressed={p.anonTraffic}
 			onClickFunc={p.onToggleAnonTraffic}
 		>
-			Other
+			<img className={styles.mapControlIcon} src={mapExpandRadar} alt="" />
 		</ClassicyButton>
 		</ClassicyBalloonHelp>
 		</div>
