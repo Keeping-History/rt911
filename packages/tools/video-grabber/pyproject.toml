@@ -18,6 +18,8 @@ dependencies = [
     # fastapi<0.137 was required for Prefect 3.7.4 (PrefectRouter compat bug).
     # Prefect 3.7.6 fixed it; <0.139 verified green via dependabot PR #132.
     "fastapi<0.141",
+    # Transcript minute summarisation (video_grabber/transcript/summarize.py).
+    "anthropic>=0.60",
 ]
 
 [project.optional-dependencies]

@@ -169,6 +169,15 @@ export const CHAT_COLLECTIONS = [
       { field: "minute", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Top of the minute this line covers" } },
       { field: "summary", type: "text", schema: { is_nullable: false }, meta: { interface: "input-multiline", width: "full", note: "Extractive: deduped and truncated broadcast words, never paraphrased" } },
       { field: "segment_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "How many raw segments condensed into this line" } },
+      // Provenance, so rows produced by different methods can be audited and
+      // re-run separately. "llm-extract" is verbatim source text the model only
+      // selected; "llm-abstract" is a rewrite that passed the containment gate;
+      // "extractive" is the mechanical fallback, which also means the LLM path
+      // was refused or unavailable for that minute.
+      { field: "method", type: "string", schema: { is_nullable: true },
+        meta: { interface: "select-dropdown", width: "half",
+                options: { choices: ["llm-extract", "llm-abstract", "extractive"].map((v) => ({ text: v, value: v })) } } },
+      { field: "model", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null for mechanically condensed rows" } },
     ],
   },
   {
