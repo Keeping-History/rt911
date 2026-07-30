@@ -36,7 +36,21 @@ type Reply struct {
 	TokensIn  int
 	TokensOut int
 	CachedIn  int
-	Model     string
+	// CacheWriteIn is the prompt tokens written to cache this request, billed at
+	// ~1.25x. It is what closes the arithmetic: the three input counts are
+	// disjoint, so the full prompt is TokensIn + CacheWriteIn + CachedIn and the
+	// billable cost is 1.0x + 1.25x + 0.1x of them respectively.
+	//
+	// Without it a cache *write* turn reads as a suspiciously tiny prompt, and —
+	// worse — the pathological case is invisible: paying the write premium every
+	// turn for a prefix that is never read back. That is precisely the bug this
+	// feature shipped with for months, undetected. Recording the write is what
+	// makes it detectable next time.
+	//
+	// OpenAI-compatible providers leave this zero: their prefix caching is
+	// automatic and carries no write premium, so there is no such count to read.
+	CacheWriteIn int
+	Model        string
 }
 
 // Provider is implemented once per vendor. Generate must return a non-nil

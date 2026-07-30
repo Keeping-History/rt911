@@ -1068,7 +1068,7 @@ func (s *Session) chatDeliver(userID string, profileID int, vTime time.Time, bas
 			id, appendErr := chat.AppendMessage(context.Background(), s.pool, userID, chat.Message{
 				Profile: profileID, Direction: "out", Body: reply.Body, VirtualTime: vTime,
 				Kind: kind, Model: reply.Model, TokensIn: reply.TokensIn, TokensOut: reply.TokensOut,
-				CachedIn: reply.CachedIn,
+				CachedIn: reply.CachedIn, CacheWriteIn: reply.CacheWriteIn,
 			})
 			if appendErr != nil {
 				s.logger.Warn("chat: append reply failed", "error", appendErr)

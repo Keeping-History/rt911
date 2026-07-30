@@ -169,6 +169,15 @@ export const CHAT_COLLECTIONS = [
       { field: "minute", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Top of the minute this line covers" } },
       { field: "summary", type: "text", schema: { is_nullable: false }, meta: { interface: "input-multiline", width: "full", note: "Extractive: deduped and truncated broadcast words, never paraphrased" } },
       { field: "segment_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "How many raw segments condensed into this line" } },
+      // Provenance, so rows produced by different methods can be audited and
+      // re-run separately. "llm-extract" is verbatim source text the model only
+      // selected; "llm-abstract" is a rewrite that passed the containment gate;
+      // "extractive" is the mechanical fallback, which also means the LLM path
+      // was refused or unavailable for that minute.
+      { field: "method", type: "string", schema: { is_nullable: true },
+        meta: { interface: "select-dropdown", width: "half",
+                options: { choices: ["llm-extract", "llm-abstract", "extractive"].map((v) => ({ text: v, value: v })) } } },
+      { field: "model", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null for mechanically condensed rows" } },
     ],
   },
   {
@@ -185,6 +194,13 @@ export const CHAT_COLLECTIONS = [
       { field: "body", type: "text", schema: { is_nullable: false }, meta: { interface: "input-multiline", width: "full" } },
       { field: "virtual_time", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Position on the 2001 clock" } },
       { field: "created_at", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Real wall-clock time" } },
+      // Soft delete, not a hard one: the transcript leaves the product while the
+      // log survives. EVERY conversation read must filter on this being NULL —
+      // history, replayed history, and the prior-contact check — or a cleared
+      // conversation comes back through whichever path forgot.
+      { field: "cleared_at", type: "timestamp", schema: { is_nullable: true },
+        meta: { interface: "datetime", width: "full", readonly: true,
+                note: "Set when the student cleared their chat history (IM Buddies > Edit > Settings > Delete Chat Data). Rows are retained; every conversation read skips those carrying this." } },
       { field: "kind", type: "string", schema: { is_nullable: false, default_value: "typed" },
         meta: { interface: "select-dropdown", width: "half",
                 options: { choices: ["typed", "scheduled", "generated", "static", "stall"].map((v) => ({ text: v, value: v })) } } },
@@ -194,7 +210,10 @@ export const CHAT_COLLECTIONS = [
       { field: "tokens_out", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
       { field: "cached_in", type: "integer", schema: { is_nullable: true },
         meta: { interface: "input", width: "half",
-                note: "Of tokens_in, how much the provider served from its prompt cache. Zero across a whole conversation means prompt caching is not working." } },
+                note: "Prompt tokens served from cache, billed at ~0.1x. DISJOINT from tokens_in, which counts only the uncached remainder — the full prompt is tokens_in + cache_write_in + cached_in. Zero across a whole conversation means prompt caching is not working." } },
+      { field: "cache_write_in", type: "integer", schema: { is_nullable: true },
+        meta: { interface: "input", width: "half",
+                note: "Prompt tokens written to cache, billed at ~1.25x. Watch for this staying high while cached_in stays zero: that is the write premium being paid every turn for a prefix nothing ever reads back — the exact failure this feature shipped with, undetected, for months." } },
     ],
   },
   {
