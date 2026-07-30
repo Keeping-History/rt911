@@ -125,7 +125,7 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
 				{isObserver(selected.flight) && <span className={styles.detailBadge}>OBSERVER</span>}
 				{selected.flight.startsWith("RDR-") && (
-					<span className={styles.detailBadge}>UNIDENTIFIED — 84 RADES RADAR</span>
+					<span className={styles.detailBadge}>UNIDENTIFIED</span>
 				)}
 			</div>
 			{/* The route slot states the route, or that there isn't one — an
