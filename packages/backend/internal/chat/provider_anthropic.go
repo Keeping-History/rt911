@@ -59,12 +59,13 @@ func (p *anthropicProvider) Generate(ctx context.Context, r Request) (Reply, err
 	}
 
 	return Reply{
-		Body:      textOf(msg.Content),
-		Outcome:   outcome,
-		TokensIn:  int(msg.Usage.InputTokens),
-		TokensOut: int(msg.Usage.OutputTokens),
-		CachedIn:  int(msg.Usage.CacheReadInputTokens),
-		Model:     string(msg.Model),
+		Body:         textOf(msg.Content),
+		Outcome:      outcome,
+		TokensIn:     int(msg.Usage.InputTokens),
+		TokensOut:    int(msg.Usage.OutputTokens),
+		CachedIn:     int(msg.Usage.CacheReadInputTokens),
+		CacheWriteIn: int(msg.Usage.CacheCreationInputTokens),
+		Model:        string(msg.Model),
 	}, nil
 }
 

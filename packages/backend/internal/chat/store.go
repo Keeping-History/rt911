@@ -20,22 +20,27 @@ type Message struct {
 	Model       string
 	TokensIn    int
 	TokensOut   int
-	// CachedIn is how much of TokensIn the provider served from its prompt
-	// cache. Without it there is no way to tell whether the prompt's whole
+	// CachedIn is the prompt tokens the provider served from its cache. It is
+	// DISJOINT from TokensIn, which counts only the uncached remainder — not a
+	// subset of it. Without it there is no way to tell whether the prompt's whole
 	// stability-ordered, breakpointed layout is doing anything at all: a prefix
 	// too short to cache, or one invalidated by a block that changes every turn,
 	// both fail silently — the API reports zero cached tokens and raises nothing.
 	// This is the only signal that distinguishes "caching works" from "caching
 	// has never once hit", so it is persisted rather than logged and dropped.
-	CachedIn   int
-	Moderation map[string]any
+	CachedIn int
+	// CacheWriteIn is prompt tokens written to cache (~1.25x). Stored alongside
+	// CachedIn so the three input counts reconcile to the full prompt and the
+	// per-message bill is computable from the row alone -- see Reply.CacheWriteIn.
+	CacheWriteIn int
+	Moderation   map[string]any
 }
 
 const insertMessage = `
 	INSERT INTO chat_messages
-		("user", profile, direction, body, virtual_time, created_at, kind, moderation, model, tokens_in, tokens_out, cached_in)
+		("user", profile, direction, body, virtual_time, created_at, kind, moderation, model, tokens_in, tokens_out, cached_in, cache_write_in)
 	VALUES
-		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	RETURNING id`
 
 // AppendMessage writes one turn of the conversation. created_at is real
@@ -50,7 +55,7 @@ func AppendMessage(ctx context.Context, pool *pgxpool.Pool, userID string, m Mes
 	var id int
 	err := pool.QueryRow(ctx, insertMessage,
 		userID, m.Profile, m.Direction, m.Body, m.VirtualTime, time.Now().UTC(),
-		m.Kind, moderation, m.Model, m.TokensIn, m.TokensOut, m.CachedIn,
+		m.Kind, moderation, m.Model, m.TokensIn, m.TokensOut, m.CachedIn, m.CacheWriteIn,
 	).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("insert chat_messages: %w", err)
