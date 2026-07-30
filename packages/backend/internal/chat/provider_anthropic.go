@@ -80,13 +80,22 @@ func anthropicParams(r Request) anthropic.BetaMessageNewParams {
 		MaxTokens: int64(r.MaxTokens),
 		System:    system,
 		Messages:  messages,
-		// "default" lets a false-positive decline recover server-side rather
-		// than surfacing as a dead buddy. Server-side fallbacks require the
-		// beta endpoint, hence client.Beta.Messages.New in Generate.
-		Fallbacks: anthropic.BetaFallbacksParamUnion{
+	}
+	// "default" lets a false-positive decline recover server-side rather than
+	// surfacing as a dead buddy. Server-side fallbacks require the beta
+	// endpoint, hence client.Beta.Messages.New in Generate.
+	//
+	// Gated, because fallbacks is a per-model capability and a model that does
+	// not have it rejects the WHOLE request with a 400. Sent unconditionally,
+	// it meant a curator changing chat_settings.model in Directus — an ordinary
+	// config edit, no deploy — took every buddy down at once, each one answering
+	// with the canned stall line. That is what happened on 2026-07-30 when the
+	// model was switched to claude-sonnet-5.
+	if supportsServerSideFallback(r.Model) {
+		params.Fallbacks = anthropic.BetaFallbacksParamUnion{
 			OfDefault: constant.ValueOf[constant.Default](),
-		},
-		Betas: []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01},
+		}
+		params.Betas = []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01}
 	}
 	// r.Effort is empty whenever chat_settings.effort is NULL and no profile
 	// override applies; only set output_config.effort when there is an actual
@@ -98,6 +107,29 @@ func anthropicParams(r Request) anthropic.BetaMessageNewParams {
 		}
 	}
 	return params
+}
+
+// supportsServerSideFallback reports whether a model accepts the server-side
+// `fallbacks` parameter.
+//
+// An allow-list rather than a deny-list, deliberately. The failure modes are not
+// symmetric: omitting fallbacks from a model that supports them costs only
+// server-side recovery from a false-positive safety decline, which the caller
+// already handles as an ordinary error; sending them to a model that does not
+// support them costs every single message. So an unrecognised model — including
+// any released after this was written — gets no fallbacks and keeps working.
+//
+// Kept as an explicit list rather than read from /v1/models' allowed_fallback_models
+// because that lookup would put a network call, and a new startup failure mode,
+// in front of a feature whose entire purpose is resilience. Add a model here when
+// it is verified to accept the parameter.
+func supportsServerSideFallback(model string) bool {
+	switch model {
+	case "claude-opus-5", "claude-fable-5", "claude-mythos-5":
+		return true
+	default:
+		return false
+	}
 }
 
 // textOf concatenates every text block in the response. Non-text blocks
