@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { avatarUrl, fetchMe, isHostOf, loginEmail, logout, providerLoginUrl, register, registrationLandingUrl, uploadAvatar, verifyRegistration } from "./authApi";
+import { avatarUrl, fetchMe, isHostOf, loginEmail, logout, providerLoginUrl, register, registrationLandingUrl, secureOrigin, uploadAvatar, verifyRegistration } from "./authApi";
 import { DIRECTUS_URL } from "../../lib/endpoints";
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -230,12 +230,38 @@ describe("registrationLandingUrl", () => {
 			"https://911realtime.org/",
 		);
 	});
+	it("never hands back a plaintext product-domain URL", () => {
+		expect(registrationLandingUrl("911realtime.org", "http://911realtime.org")).toBe(
+			"https://911realtime.org/",
+		);
+	});
 	it("falls back to the apex elsewhere, with boundary-safe matching", () => {
 		expect(registrationLandingUrl("localhost", "http://localhost:5173")).toBe(
 			"https://911realtime.org/",
 		);
 		expect(registrationLandingUrl("evil911realtime.org", "https://evil911realtime.org")).toBe(
 			"https://911realtime.org/",
+		);
+	});
+});
+
+describe("secureOrigin", () => {
+	it("upgrades a plaintext product-domain origin to https", () => {
+		expect(secureOrigin("911realtime.org", "http://911realtime.org")).toBe(
+			"https://911realtime.org",
+		);
+		expect(secureOrigin("beta.911realtime.org", "http://beta.911realtime.org")).toBe(
+			"https://beta.911realtime.org",
+		);
+	});
+	it("leaves https and non-product origins untouched", () => {
+		expect(secureOrigin("911realtime.org", "https://911realtime.org")).toBe(
+			"https://911realtime.org",
+		);
+		// Dev servers and PR previews must keep their own scheme/port.
+		expect(secureOrigin("localhost", "http://localhost:5173")).toBe("http://localhost:5173");
+		expect(secureOrigin("evil911realtime.org", "http://evil911realtime.org")).toBe(
+			"http://evil911realtime.org",
 		);
 	});
 });
