@@ -10,7 +10,18 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_TIME = re.compile(r"(?P<h>\d{2}):(?P<m>\d{2}):(?P<s>\d{2})[,.](?P<ms>\d{3})")
+# Hours are \d+, not \d{2}. A stitched channel spans nine days, so the hour field
+# runs past 99 and grows a third digit -- which _fmt has always emitted correctly,
+# because {h:02d} is a MINIMUM width. Only reading was broken.
+#
+# The anchor matters as much as the quantifier. This was previously matched with
+# .search() and a two-digit hour, so "100:00:05,000" quietly matched the SUBSTRING
+# "00:00:05,000" starting one character in: hour 100 read as hour 0, no error, no
+# warning. Every cue past hour 99 landed exactly 100 hours early, which put 09-13
+# coverage at 09-09 and fed buddies post-attack television as "what you have just
+# heard" on the morning of 9/11. Anchoring makes a partial match impossible rather
+# than merely unlikely.
+_TIME = re.compile(r"\s*(?P<h>\d+):(?P<m>\d{2}):(?P<s>\d{2})[,.](?P<ms>\d{3})")
 _ARROW = re.compile(r"\s*-->\s*")
 
 
@@ -22,7 +33,7 @@ class Cue:
 
 
 def _parse_ts(ts: str) -> float:
-    m = _TIME.search(ts)
+    m = _TIME.match(ts)
     if not m:
         raise ValueError(f"bad timestamp: {ts!r}")
     return int(m["h"]) * 3600 + int(m["m"]) * 60 + int(m["s"]) + int(m["ms"]) / 1000.0
