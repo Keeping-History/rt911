@@ -140,7 +140,6 @@ def summarize_transcript_minutes_flow(
     complete = anthropic_completer(cfg)
 
     def one(key):
-        channel, slug, medium, minute = key
         result = summarize_minute(
             buckets[key],
             tier=tier,
