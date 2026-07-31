@@ -99,3 +99,42 @@ def test_dedupe_consecutive_handles_whitespace_variants():
 
 def test_dedupe_consecutive_empty():
     assert dedupe_consecutive([]) == []
+
+
+def test_parses_hours_beyond_two_digits():
+    """A stitched 9-day channel runs past hour 99, and the hour field grows.
+
+    This was a live data-corruption bug, not a theoretical one. _TIME required
+    exactly two digits and used .search(), so "100:00:05,000" quietly matched the
+    SUBSTRING "00:00:05,000" -- hour 100 read as hour 0. Every cue past hour 99
+    landed exactly 100 hours early, which put 09-13 coverage at 09-09 and fed
+    buddies post-attack content as "what you have just heard on TV" on the
+    morning of 9/11. CNN alone had 114,038 affected timestamps.
+    """
+    cues = parse_srt("1\n100:00:05,000 --> 100:00:09,000\nlater-day line\n")
+    assert len(cues) == 1
+    assert cues[0].start == 360005.0, "hour 100 must not be read as hour 0"
+    assert cues[0].end == 360009.0
+
+
+def test_parses_three_digit_hours_at_the_end_of_a_nine_day_stream():
+    # 9 days is 216 hours; the last cues of a full stitched channel look like this.
+    cues = parse_srt("1\n215:59:58,500 --> 215:59:59,900\nfinal line\n")
+    assert cues[0].start == 777598.5
+    assert cues[0].end == 777599.9
+
+
+def test_round_trips_a_three_digit_hour_through_render():
+    # The writer was never broken -- _fmt's {h:02d} is a MINIMUM width, so it
+    # already emits "100:00:05,000". Only the reader was. Pin both directions so
+    # they cannot drift apart again.
+    original = [Cue(360005.0, 360009.0, "later-day line")]
+    assert parse_srt(render_srt(original)) == original
+
+
+def test_a_cue_never_parses_to_an_end_before_its_start():
+    # The observable symptom in production: a cue spanning the 99->100 hour
+    # boundary parsed as start=359985, end=4, because only the end had three
+    # digits. An end before a start is impossible and must never parse silently.
+    cues = parse_srt("1\n99:59:45,000 --> 100:00:04,000\nspans the boundary\n")
+    assert cues[0].end > cues[0].start

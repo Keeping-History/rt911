@@ -132,11 +132,14 @@ def summarize_transcript_minutes_flow(
     if not buckets:
         raise RuntimeError(f"no transcript segments in [{start}, {end}) — nothing to summarise")
 
-    keys = sorted(buckets)[: limit or None]
+    # Sort on a stringified key. The tuples mix types by design -- TV carries an
+    # int channel and a null slug, radio the reverse -- so sorting them directly
+    # raises TypeError comparing None to int the moment both media are in range.
+    keys = sorted(buckets, key=lambda k: tuple("" if p is None else str(p) for p in k))
+    keys = keys[: limit or None]
     complete = anthropic_completer(cfg)
 
     def one(key):
-        channel, slug, medium, minute = key
         result = summarize_minute(
             buckets[key],
             tier=tier,
@@ -181,8 +184,11 @@ def summarize_transcript_minutes_flow(
 
     written = 0
     for (channel, slug, medium), rows in rows_by_source.items():
+        # Window-scoped: this run owns [start, end) for this source and must not
+        # delete minutes a previous run paid for outside it.
         written += writer.replace_minutes(
-            rows, medium=medium, channel=channel, channel_slug=slug, cfg=cfg
+            rows, medium=medium, channel=channel, channel_slug=slug, cfg=cfg,
+            minute_gte=start, minute_lt=end,
         )
     logger.info("summarised %d minutes, wrote %d rows", len(results), written)
     return {

@@ -220,3 +220,19 @@ def test_quantities_and_hedges_are_never_stopwords():
         assert validate_abstract(invented, src) is not None, f"gate let through: {invented}"
     # ...while pure syntax is fine
     assert validate_abstract("because the building is on fire", src) is None
+
+
+def test_mixed_tv_and_radio_keys_sort_without_raising():
+    # TV rows carry an int channel and a null slug; radio the reverse. Sorting
+    # the grouped keys directly raises TypeError comparing None to int as soon
+    # as both media are in the window -- which is every real run.
+    from video_grabber.transcript.summarize_flows import _group
+
+    buckets = _group([
+        {"channel": 7, "channel_slug": None, "medium": "tv",
+         "start_date": "2001-09-11T13:00:30", "text": "tv line"},
+        {"channel": None, "channel_slug": "mp3:42", "medium": "radio",
+         "start_date": "2001-09-11T13:00:10", "text": "radio line"},
+    ])
+    keys = sorted(buckets, key=lambda k: tuple("" if p is None else str(p) for p in k))
+    assert len(keys) == 2
