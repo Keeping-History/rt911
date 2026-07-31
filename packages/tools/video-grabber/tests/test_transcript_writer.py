@@ -338,3 +338,56 @@ def test_replace_minutes_refuses_without_a_scope(cfg):
     # source's minutes, and the following insert would leave only this one's.
     with pytest.raises(ValueError, match="channel id or a channel_slug"):
         writer.replace_minutes([], medium="tv", channel=None, channel_slug=None, cfg=cfg)
+
+
+@respx.mock
+def test_replace_minutes_scopes_the_delete_to_the_window(cfg):
+    """An incremental run must not delete minutes outside the window it wrote.
+
+    replace_segments deletes everything for a source because it rebuilds a whole
+    SRT. Summarisation is windowed and paid-for, so source-only scoping would let
+    a 14:00-15:00 run silently wipe the 13:00-14:00 rows -- delete succeeds,
+    insert succeeds, row count drops, nothing errors.
+    """
+    captured = {}
+
+    def capture_delete(request):
+        captured["filter"] = json.loads(request.content)["query"]["filter"]
+        return httpx.Response(200)
+
+    respx.delete("https://directus.test/items/chat_transcript_minutes").mock(side_effect=capture_delete)
+    respx.get("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": [{"count": 0}]}))
+    respx.post("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": []}))
+
+    writer.replace_minutes(
+        [{"channel": 7, "channel_slug": "wnbc", "medium": "tv",
+          "minute": "2001-09-11T14:00:00", "summary": "x", "segment_count": 1}],
+        medium="tv", channel=7, channel_slug="wnbc", cfg=cfg,
+        minute_gte="2001-09-11T14:00:00", minute_lt="2001-09-11T15:00:00",
+    )
+
+    assert captured["filter"]["channel"] == {"_eq": 7}
+    assert captured["filter"]["minute"] == {
+        "_gte": "2001-09-11T14:00:00", "_lt": "2001-09-11T15:00:00"}
+
+
+@respx.mock
+def test_replace_minutes_without_a_window_still_clears_the_source(cfg):
+    # A full rebuild is a legitimate call; only omit the window when that is
+    # genuinely the intent.
+    captured = {}
+
+    def capture_delete(request):
+        captured["filter"] = json.loads(request.content)["query"]["filter"]
+        return httpx.Response(200)
+
+    respx.delete("https://directus.test/items/chat_transcript_minutes").mock(side_effect=capture_delete)
+    respx.get("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": [{"count": 0}]}))
+    respx.post("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": []}))
+
+    writer.replace_minutes([], medium="tv", channel=7, channel_slug="wnbc", cfg=cfg)
+    assert "minute" not in captured["filter"]

@@ -199,12 +199,25 @@ def replace_minutes(
     channel_slug: str | None,
     cfg: Config,
     client=httpx,
+    minute_gte: str | None = None,
+    minute_lt: str | None = None,
 ) -> int:
-    """Same regenerate-and-replace contract as replace_segments, for the condensed
-    per-minute rows the chat prompt reads instead of raw ASR."""
+    """Regenerate-and-replace, scoped to a source AND a time window.
+
+    The window is the difference from replace_segments, and it is not optional
+    in practice. That function rebuilds a source's ENTIRE transcript from one
+    SRT, so deleting everything for the source is exactly right. Summarisation
+    is windowed — it runs an hour or a day at a time, and it costs money, so it
+    will be run incrementally. Scoped only by source, summarising 14:00-15:00
+    would delete the 13:00-14:00 rows a previous run had just paid for, and
+    nothing would report it: the delete succeeds, the insert succeeds, and the
+    row count quietly goes down.
+    """
     where = _source_scope(
         medium=medium, channel=channel, channel_slug=channel_slug, what="replace_minutes"
     )
+    if minute_gte is not None and minute_lt is not None:
+        where["minute"] = {"_gte": minute_gte, "_lt": minute_lt}
     return _replace_scoped(rows, collection=_MINUTE_COLLECTION, where=where, cfg=cfg, client=client)
 
 
