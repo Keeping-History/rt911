@@ -67,7 +67,12 @@ while without well may might must don't won't can't isn't wasn't doesn't didn't
 haven't hasn't couldn't shouldn't wouldn't i'm we're they're it's that's there's
 """.split())
 
-_WORD = re.compile(r"[a-z0-9']+")
+# Must START with an alphanumeric. "[a-z0-9']+" also matched a BARE apostrophe as
+# a token; it strips to the empty string, can never match anything in the source,
+# and so was reported as an invented word. That produced a spurious containment
+# failure on real data -- harmless for tier 1, but in tier 2 every false rejection
+# costs a real summary and falls back.
+_WORD = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)*")
 
 
 @dataclass(frozen=True)

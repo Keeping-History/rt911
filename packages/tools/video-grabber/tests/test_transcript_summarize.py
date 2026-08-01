@@ -236,3 +236,16 @@ def test_mixed_tv_and_radio_keys_sort_without_raising():
     ])
     keys = sorted(buckets, key=lambda k: tuple("" if p is None else str(p) for p in k))
     assert len(keys) == 2
+
+
+def test_a_bare_apostrophe_is_not_treated_as_an_invented_word():
+    # Found verifying 1,500 production rows: one summary was flagged as
+    # containing a word absent from its source, and the "word" was a lone
+    # apostrophe. It strips to empty, so it could never match anything.
+    src = "the smoke is still billowing out behind you as the events unfolded"
+    assert validate_abstract("the smoke ' is still billowing out behind you", src) is None
+
+
+def test_contractions_and_possessives_still_tokenize():
+    got = content_words("the city's tower isn't standing")
+    assert _stem("city") in got and _stem("tower") in got
