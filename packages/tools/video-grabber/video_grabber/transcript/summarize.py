@@ -39,6 +39,12 @@ from video_grabber.transcript.minutes import clean
 TIER_EXTRACT = "llm-extract"
 TIER_ABSTRACT = "llm-abstract"
 TIER_MECHANICAL = "extractive"
+# A minute with no speech at all. Distinct from every tier because NOTHING ran --
+# labelling it with the requested tier claims a summariser produced an empty
+# string, which is false and actively misleading: it made 100 silent minutes look
+# like 100 accepted rewrites that then failed containment, and cost a real
+# analysis its conclusion until the contradiction was chased down.
+TIER_NONE = "none"
 
 # Sentence-ish split. Broadcast ASR punctuates unreliably, so a unit is often a
 # clause rather than a sentence; that is fine, units only need to be small
@@ -271,7 +277,7 @@ def summarize_minute(
     """
     units = units_of(texts)
     if not units:
-        return SummaryResult(text="", method=tier, rejected="no speech in minute")
+        return SummaryResult(text="", method=TIER_NONE, rejected="no speech in minute")
 
     source = " ".join(units)
 

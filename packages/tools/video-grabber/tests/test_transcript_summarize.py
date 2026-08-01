@@ -6,6 +6,7 @@ from video_grabber.transcript.summarize import (
     TIER_ABSTRACT,
     TIER_EXTRACT,
     TIER_MECHANICAL,
+    TIER_NONE,
     build_extract_messages,
     content_words,
     parse_extract,
@@ -173,6 +174,9 @@ def test_a_minute_of_pure_annotation_is_reported_empty_not_summarised():
                            complete=complete, fallback=_fallback)
     assert got.text == ""
     assert got.rejected == "no speech in minute"
+    # NOT the requested tier: nothing ran, and claiming otherwise makes silent
+    # minutes indistinguishable from accepted summaries in any later analysis.
+    assert got.method == TIER_NONE
 
 
 def test_unknown_tier_is_a_programming_error():
