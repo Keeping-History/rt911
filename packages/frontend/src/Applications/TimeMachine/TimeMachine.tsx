@@ -424,9 +424,9 @@ export const TimeMachine: React.FC = () => {
 				zoomable={false}
 				scrollable={false}
 				collapsable={true}
-				initialSize={[380, 90]}
+				initialSize={[380, 105]}
 				initialPosition={[300, 200]}
-				minimumSize={[340, 130]}
+				minimumSize={[380, 105]}
 				modal={false}
 				appMenu={appMenu}
 			>
