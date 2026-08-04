@@ -22,6 +22,20 @@ export type ModelCredit = {
 	note?: string;
 };
 
+/**
+ * Every shipped STL passes through process_models.py (see
+ * scripts/aircraft-models/README.md's "Rebuilding from scratch" step 3):
+ * auto-oriented, rescaled to the map layer's unit grid, and decimated by
+ * vertex clustering to <=6k triangles. That makes each one a modified
+ * derivative of its linked original, not a verbatim copy -- CC-BY 4.0
+ * §3(a)(1)(B) requires indicating such modifications, and CC-BY-SA
+ * derivatives must be offered under the same/compatible license with
+ * recipients told so. Rendered once under the "3D models" heading rather
+ * than repeated across every entry.
+ */
+export const AIRCRAFT_MODEL_DERIVATIVE_NOTICE =
+	"All models are reoriented, rescaled and decimated to ≤6k triangles for rendering; each is a modified derivative of the linked original. Derivatives of CC-BY-SA originals are distributed under CC-BY-SA 3.0.";
+
 export const WTC_HERO_CREDIT: ModelCredit = {
 	model: "World Trade Center complex (1974–2001)",
 	author: "NanoRay",
@@ -51,7 +65,7 @@ export const AIRCRAFT_CREDITS: ModelCredit[] = [
 			"Liam Gathercole, Skyop, Isais Prestes; reworked by Juuso Tapaninen (FlightGear 757-200 AUTHORS)",
 		license: "GPL-2.0+",
 		url: "https://sourceforge.net/p/flightgear/fgaddon/HEAD/tree/trunk/Aircraft/757-200/",
-		note: "FlightGear FGAddon; converted from AC3D to STL locally via ac2stl.py; the derivative remains GPL.",
+		note: "FlightGear FGAddon; converted from AC3D to STL locally via ac2stl.py; the derivative remains GPL. Preferred form for modification (GPL-2.0 §3): the upstream FlightGear FGAddon AC3D source linked above, plus this repo's conversion tooling at scripts/aircraft-models/ (ac2stl.py, process_models.py).",
 	},
 	{
 		model: "Boeing 767-300ER",
@@ -70,7 +84,7 @@ export const AIRCRAFT_CREDITS: ModelCredit[] = [
 		author: "Bogdan Deac (yuppy)",
 		license: "GPL-2.0",
 		url: "https://www.thingiverse.com/thing:3452615",
-		note: "Converted from OBJ to STL locally via obj2stl.py; the derivative remains GPL-2.0.",
+		note: "Converted from OBJ to STL locally via obj2stl.py; the derivative remains GPL-2.0. Preferred form for modification (GPL-2.0 §3): the upstream Thingiverse OBJ source linked above, plus this repo's conversion tooling at scripts/aircraft-models/ (obj2stl.py, process_models.py).",
 	},
 	{
 		model: "Boeing 717 (MD-95; stands in for DC-9/MD-80/MD-88/717 T-tail family)",

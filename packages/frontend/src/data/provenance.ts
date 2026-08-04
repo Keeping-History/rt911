@@ -25,7 +25,7 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 	"PagerDecoder.app": {
 		appName: "Pager Decoder",
 		blurb:
-			"Pager traffic from September 11, 2001 — 448,358 messages across the Metrocall, Skytel and Arch networks, replayed as each was transmitted.",
+			"Pager traffic from September 11, 2001 — roughly 448,000 messages across the Skytel, Arch, Metrocall and Weblink networks, replayed as each was transmitted.",
 		sources: [
 			{
 				name: "WikiLeaks — 9/11 Pager Intercepts",
@@ -61,12 +61,12 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 			{
 				name: "Rutgers Law Review — “A New Type of War”",
 				url: "https://www.rutgerslawreview.com/a-new-type-of-war/",
-				feeds: "The Rutgers channel (48 clips) — FAA and NORAD audio published with the monograph.",
+				feeds: "The Rutgers channel — FAA and NORAD audio published with the monograph.",
 			},
 			{
 				name: "Audacy",
 				url: "https://www.audacy.com/1010wins",
-				feeds: "1010 WINS coverage (24 clips).",
+				feeds: "1010 WINS coverage.",
 			},
 			{
 				name: "WCBS Audio Archives",
@@ -77,7 +77,7 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 				name: "Internet Archive",
 				url: "https://archive.org/details/911datasets",
 				feeds:
-					"The remaining 512 clips — ATC and NORAD channels (NEADS/NORAD, Langley, ZNY, ZBW, ZOB, ZDC, ATCSCC, FAA) and per-flight channels (AA11, UA175, AA77, UA93, DL1989, GOFER06).",
+					"The remaining clips — the ATC and NORAD channels (atc, NEADS/NORAD, Langley, FAA, ATCSCC, ZNY, ZBW, ZOB, ZDC) and the per-flight channels (AA11, UA175, AA77, UA93, DL1989, GOFER06).",
 				note: "From a NIST release or uploaded directly to the Archive.",
 			},
 		],
@@ -185,13 +185,29 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 				url: "https://mesonet.agron.iastate.edu/",
 				feeds: "Archived NEXRAD CONUS radar composites at five-minute intervals, and the AFOS text products behind the forecasts.",
 			},
+			{
+				name: "OpenStreetMap",
+				url: "https://www.openstreetmap.org/copyright",
+				feeds: "The radar map's vector base layer — land, lakes and place labels.",
+				note: "© OpenStreetMap contributors, ODbL. Tiles built with Protomaps.",
+			},
+			{
+				name: "OpenStreetMap Data — coastlines",
+				url: "https://osmdata.openstreetmap.de/data/coastlines.html",
+				feeds: "The detailed coastline under the radar map at closer zooms.",
+			},
+			{
+				name: "NASA Visible Earth",
+				url: "https://visibleearth.nasa.gov/",
+				feeds: "Blue Marble day and City Lights night imagery for the radar map's Satellite style.",
+			},
 		],
 	},
 
 	"FlightTracker.app": {
 		appName: "Flight Tracker",
 		blurb:
-			"United States air traffic on September 11, 2001 — roughly 34,000 flights, including the four that were hijacked.",
+			"United States air traffic on September 11, 2001 — about 8,700 flights, including the four that were hijacked.",
 		sources: [
 			{
 				name: "Bureau of Transportation Statistics — TranStats",
@@ -241,7 +257,7 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 			{
 				name: "OpenStreetMap",
 				url: "https://www.openstreetmap.org/copyright",
-				feeds: "The vector basemap — land, borders, lakes and place labels.",
+				feeds: "The vector basemap — land, lakes and place labels.",
 				note: "© OpenStreetMap contributors, ODbL. Tiles built with Protomaps.",
 			},
 			{
@@ -250,9 +266,22 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 				feeds: "The detailed coastline used at closer zooms.",
 			},
 			{
+				name: "Natural Earth",
+				url: "https://www.naturalearthdata.com/",
+				feeds:
+					"Country and state/province boundary lines — the coarse 1:50m set for the world view and the detailed 1:10m set over the continental US.",
+				note: "Public domain.",
+			},
+			{
 				name: "NASA Visible Earth",
 				url: "https://visibleearth.nasa.gov/",
 				feeds: "Blue Marble day and City Lights night imagery for satellite view.",
+			},
+			{
+				name: "Mapterhorn",
+				url: "https://mapterhorn.com/attribution/",
+				feeds: "The terrain elevation data behind the 3D terrain toggle.",
+				note: "Mapterhorn aggregates open elevation datasets (e.g. Copernicus DEM, swissALTI3D) rather than publishing its own survey — see its attribution page for the underlying sources covering this map's extent.",
 			},
 		],
 		method: [

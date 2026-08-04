@@ -60,9 +60,15 @@
 }
 
 .aboutAppFeeds,
-.aboutAppNote {
+.aboutAppNote,
+.aboutAppDerivativeNotice {
 	display: block;
 	font-size: calc(var(--ui-font-size) * 0.9);
+}
+
+.aboutAppDerivativeNotice {
+	margin: 0 0 0.5rem;
+	opacity: 0.75;
 }
 
 .aboutAppNote {
