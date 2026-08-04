@@ -1,0 +1,76 @@
+// Tokens below are Classicy's own theme custom properties, injected at
+// runtime by the active AppearanceManager theme (see e.g.
+// Applications/README/README.module.scss and Applications/News/News.module.scss
+// for the same font tokens, and Applications/TV/TV.module.scss,
+// Applications/Newsgroups/Newsgroups.module.scss for --color-system-05 as a
+// divider). No hardcoded colors, so the window follows theme changes.
+
+.aboutAppWindow {
+	padding: 0.75rem;
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+
+	h1 {
+		font-family: var(--header-font);
+		font-size: var(--header-font-size);
+		margin: 0;
+	}
+
+	h2 {
+		font-size: var(--ui-font-size);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin: 1rem 0 0.35rem;
+		border-bottom: 1px solid var(--color-system-05);
+		padding-bottom: 0.15rem;
+	}
+}
+
+.aboutAppHeader {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+
+	img {
+		width: 32px;
+		height: 32px;
+	}
+}
+
+.aboutAppBlurb {
+	margin: 0.6rem 0 0;
+}
+
+.aboutAppSources,
+.aboutAppMethod,
+.aboutAppCredits {
+	margin: 0;
+	padding-left: 1.1rem;
+
+	li {
+		margin-bottom: 0.5rem;
+	}
+}
+
+.aboutAppSources li,
+.aboutAppCredits li {
+	display: block;
+	list-style: none;
+	margin-left: -1.1rem;
+}
+
+.aboutAppFeeds,
+.aboutAppNote {
+	display: block;
+	font-size: calc(var(--ui-font-size) * 0.9);
+}
+
+.aboutAppNote {
+	opacity: 0.75;
+}
+
+.aboutAppFooter {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 1rem;
+}
