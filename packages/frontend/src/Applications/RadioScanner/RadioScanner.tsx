@@ -27,6 +27,7 @@ import {
     useState,
     useSyncExternalStore,
 } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { FocusedItemPlayer } from "./FocusedItemPlayer";
@@ -83,6 +84,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
     const appName = "Radio Scanner";
     const appId = "RadioScanner.app";
     const appIcon = ClassicyIcons.applications.radio.app as string;
+    const aboutWindow = useAboutApp(appId, appIcon);
 
     const desktopEventDispatch = useAppManagerDispatch();
     const appState = useAppManager(
@@ -969,6 +971,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                     </div>
                 </div>
             </ClassicyWindow>
+            {aboutWindow}
         </ClassicyApp>
     );
 };

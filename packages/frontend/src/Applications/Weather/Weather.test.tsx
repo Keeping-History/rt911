@@ -117,6 +117,7 @@ vi.mock("classicy", () => ({
 	ClassicyIcons: { applications: {} },
 	registerClassicyIcons: <T,>(icons: T) => icons,
 	quitMenuItemHelper: () => ({}),
+	useClassicyHelpMenu: () => {},
 	useClassicyDateTime: () => ({
 		dateTime: mockClock.current,
 		tzOffset: 0,

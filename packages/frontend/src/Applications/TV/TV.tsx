@@ -18,6 +18,7 @@ import {
 } from "classicy";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import type {
 	MediaItem,
 	MediaStreamFilter,
@@ -91,6 +92,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const appName = "TV";
 	const appId = "TV.app";
 	const appIcon = ClassicyIcons.applications.epg.app as string;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const desktopEventDispatch = useAppManagerDispatch();
 	const appState = useAppManager(
@@ -1319,6 +1321,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					</div>
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

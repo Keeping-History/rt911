@@ -28,6 +28,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import {
 	MediaStreamContext,
 	type FlightPosition,
@@ -115,6 +116,7 @@ export const FlightTracker: FC = () => {
 	const appId = "FlightTracker.app";
 	const appName = "Flight Tracker";
 	const appIcon = ICONS.applications.flightTracker.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const isRunning = useAppManager(
 		(s) => appId in (s.System.Manager.Applications.apps ?? {}),
@@ -1400,6 +1402,7 @@ export const FlightTracker: FC = () => {
 					</div>
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

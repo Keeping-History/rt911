@@ -21,6 +21,7 @@ import {
 	useState,
 } from "react";
 
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import { trackAppToggle } from "../../openreplay";
 import "./Browser.scss";
 import "./BrowserContext";
@@ -156,6 +157,7 @@ export const Browser = () => {
 	const appName = "Browser";
 	const appId = "Browser.app";
 	const appIcon = ClassicyIcons.applications.internetExplorer.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const desktopEventDispatch = useAppManagerDispatch();
 	const appState = useAppManager(
@@ -677,6 +679,7 @@ export const Browser = () => {
 					<div className="browserStatusBar">{statusText}</div>
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };
