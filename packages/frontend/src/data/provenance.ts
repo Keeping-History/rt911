@@ -29,7 +29,7 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 		sources: [
 			{
 				name: "WikiLeaks — 9/11 Pager Intercepts",
-				url: "https://wikileaks.org/wiki/9/11_tragedy_pager_intercept_data",
+				url: "https://911.wikileaks.org/",
 				feeds: "Every pager message, with its provider, channel and mode as released.",
 				note: "Released November 2009.",
 			},
@@ -60,12 +60,12 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 		sources: [
 			{
 				name: "Rutgers Law Review — “A New Type of War”",
-				url: "https://www.rutgerslawreview.com/",
+				url: "https://www.rutgerslawreview.com/a-new-type-of-war/",
 				feeds: "The Rutgers channel (48 clips) — FAA and NORAD audio published with the monograph.",
 			},
 			{
 				name: "Audacy",
-				url: "https://www.audacy.com/",
+				url: "https://www.audacy.com/1010wins",
 				feeds: "1010 WINS coverage (24 clips).",
 			},
 			{
@@ -129,9 +129,9 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 		sources: [
 			{
 				name: "History Commons — the Complete 9/11 Timeline",
-				url: "https://www.historycommons.org/",
+				url: "https://ic911.org/complete-911-timeline/",
 				feeds: "Every timeline entry and its accompanying images.",
-				note: "Images are mirrored locally from cdn.historycommons.org.",
+				note: "historycommons.org went offline; the timeline was restored by the International Center for 9/11 Justice at ic911.org. Images are mirrored locally from cdn.historycommons.org.",
 			},
 		],
 		method: [
@@ -220,7 +220,7 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 			},
 			{
 				name: "OpenFlights",
-				url: "https://openflights.org/data.html",
+				url: "https://openflights.org/data.php",
 				feeds: "Airport locations and time zones.",
 			},
 			{
