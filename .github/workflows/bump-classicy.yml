@@ -57,7 +57,7 @@ jobs:
       # the PR trigger the required status checks — GITHUB_TOKEN would not.
       - name: Mint bump token
         id: token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.RT911_DISPATCH_APP_ID }}
           private-key: ${{ secrets.RT911_DISPATCH_APP_PRIVATE_KEY }}
