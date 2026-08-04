@@ -118,16 +118,6 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({
                 prefillValue={title}
                 onChangeFunc={(e) => setTitle(e.target.value)}
             />
-            {/* Description keeps its label above: a multi-line box next to a
-                one-line label column reads badly and wastes the editor's width. */}
-            <ClassicyTextEditor
-                id="fb-description"
-                labelTitle="Description"
-                prefillValue={description}
-                onChangeFunc={(e) => setDescription(e.target.value)}
-                autoHeight
-                border
-            />
             <ClassicyFileInput
                 ref={fileInputRef}
                 id="fb-files"
@@ -138,6 +128,16 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({
                 maxFiles={MAX_FILES}
                 maxFileSizeMb={MAX_FILE_MB}
                 onChangeFunc={setAttachments}
+            />
+            {/* Description keeps its label above: a multi-line box next to a
+                one-line label column reads badly and wastes the editor's width. */}
+            <ClassicyTextEditor
+                id="fb-description"
+                labelTitle="Description"
+                prefillValue={description}
+                onChangeFunc={(e) => setDescription(e.target.value)}
+                autoHeight
+                border
             />
             <div className={styles.fbActions}>
                 <ClassicyButton onClickFunc={() => void handleScreenshot()}>
