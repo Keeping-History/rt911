@@ -1841,13 +1841,8 @@ packages:
     resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
     engines: {node: '>= 20.19.0'}
 
-<<<<<<< HEAD
-  classicy@0.69.2:
-    resolution: {integrity: sha512-1vW/ELAIj0ogO8J2DwXPkyXUQFsn9fsV//qFCTPQuL0gva06Sdj5tktNaCcGl1YSGMgN0wdzWF5ZmAmuZ9y0xw==}
-=======
   classicy@0.69.3:
     resolution: {integrity: sha512-efWwFdSF9eT7J49DMkTZJaXgdwp41/03egZf1iEGlruThYNZDWcwopdPGmbjALTb/JPXuWwXMH4PuMaL2J+lJA==}
->>>>>>> d5d8ed1e (Bump classicy)
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
@@ -5847,11 +5842,7 @@ snapshots:
       readdirp: 5.0.0
     optional: true
 
-<<<<<<< HEAD
-  classicy@0.69.2(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(yjs@13.6.30):
-=======
   classicy@0.69.3(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/dlv@1.1.5)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(yjs@13.6.30):
->>>>>>> d5d8ed1e (Bump classicy)
     dependencies:
       '@analytics/google-tag-manager': 0.6.0
       '@mdxeditor/editor': 3.55.0(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(yjs@13.6.30)
