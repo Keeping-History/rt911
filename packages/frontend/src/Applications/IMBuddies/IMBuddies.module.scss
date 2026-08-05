@@ -150,9 +150,10 @@
 	// .paneTitle/.groupList borders.
 	border-top: var(--window-border-size) solid var(--color-system-07);
 	height: calc(var(--window-padding-size)*2 + var(--window-border-size)*2);
+	padding: 0 var(--window-padding-size);
 	font-size: calc(var(--ui-font-size)*.75);
 	font-family: var(--ui-font);
-	background: var(--color-system-02);
+	background: var(--color-system-03);
 }
 
 .chatWindow {
