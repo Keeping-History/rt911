@@ -106,14 +106,22 @@ jobs:
           git commit -m "$title"
           git push --force --set-upstream origin "$BRANCH"
 
-          # Reuse the open PR if the branch already has one; otherwise open it.
-          if ! gh pr view "$BRANCH" --json number --jq .number >/dev/null 2>&1; then
-            gh pr create \
+          # Reuse the branch's PR only if one is actually OPEN, and address it by
+          # number from here on. Resolving a PR by branch name is ambiguous:
+          # neither `gh pr view` nor `gh pr merge` filters by state, so both
+          # happily match a long-since-merged PR on this recycled branch name.
+          # That is how the v0.70.1 bump stalled — #313 ("bump classicy to
+          # v0.57.2") answered the guard, `gh pr create` was skipped, auto-merge
+          # was armed on a closed PR, and the bump commit sat on the branch with
+          # no PR while main stayed on the broken release.
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            pr=$(gh pr create \
               --base main --head "$BRANCH" \
               --title "$title" \
-              --body "Automated classicy bump.${TAG:+ New version: \`$TAG\`.}"
+              --body "Automated classicy bump.${TAG:+ New version: \`$TAG\`.}")
           fi
 
           # Merge once the required checks pass; delete the branch afterwards.
-          gh pr merge "$BRANCH" --auto --squash --delete-branch
-          echo "::notice::Bump PR opened for $BRANCH — auto-merge armed"
+          gh pr merge "$pr" --auto --squash --delete-branch
+          echo "::notice::Bump PR $pr opened for $BRANCH — auto-merge armed"
