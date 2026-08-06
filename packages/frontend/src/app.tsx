@@ -2,6 +2,13 @@ import { Component, lazy, StrictMode, Suspense, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "./app.css";
 import "classicy/dist/classicy.css";
+// Opt-in since classicy 0.70.0, which split every base64 @font-face rule out
+// of classicy.css into this sibling stylesheet so consumers aren't forced to
+// download ~900 kB of fonts they may not use. We DO use them — Chicago,
+// Geneva, Monaco and Charcoal are the whole Platinum look — so we opt in.
+// Dropping this import doesn't error, it just silently falls back to system
+// fonts everywhere.
+import "classicy/dist/fonts.css";
 import { ClassicyAppManagerProvider, registerClassicyFileSystemAdapter } from "classicy";
 import { directusFilesystemAdapter } from "./Providers/FilesystemSync/directusFilesystemAdapter";
 import { FilesystemSyncProvider } from "./Providers/FilesystemSync/FilesystemSyncProvider";
