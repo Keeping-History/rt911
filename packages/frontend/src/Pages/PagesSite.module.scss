@@ -118,6 +118,15 @@
 	ul,
 	ol { margin: 0 0 1em 1.5em; }
 
+	/* Classicy paints every marker under .classicyDesktop with a chrome colour
+	   (`.classicyDesktop *::marker`) — right for its own UI lists, wrong for
+	   authored prose, where a bullet or number is body text and reads black.
+	   Setting .body's `color` can't fix it: that rule declares ::marker colour
+	   explicitly, so there is nothing left to inherit. This selector's
+	   specificity (0,1,2) is what actually beats it (0,1,1) — don't drop the
+	   `li`. Covers ol numbers as well as ul bullets. */
+	li::marker { color: var(--color-black); }
+
 	blockquote {
 		margin: 0 0 1em;
 		padding-left: calc(var(--window-padding-size) * 2);
