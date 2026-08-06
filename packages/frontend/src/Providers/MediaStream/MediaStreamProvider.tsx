@@ -35,6 +35,7 @@ import { usePlaylist } from "../Playlist/PlaylistContext";
 import { playlistAppMeta } from "../Playlist/playlistApps";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { mergeLatestPerStation } from "./weatherMerge";
+import { reconnectDelayMs } from "./reconnectBackoff";
 import {
 	applyBodyFrame,
 	emptyBodyState,
@@ -399,6 +400,23 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	}, []);
 
 	const wsRef = useRef<WebSocket | null>(null);
+
+	// Bumping this re-runs the WebSocket effect, which is what actually performs a
+	// reconnect: the cleanup closes the dead socket and the fresh pass builds a new
+	// one, so `onopen`'s subscription replay is reached by exactly one code path
+	// whether the connection is the first or the fifth.
+	//
+	// The streamer is redeployed on every merge to main and each rollout drops
+	// every socket. Until this existed, `onclose` only flipped `connected` to
+	// false: nothing constructed a second socket, so that replay could only ever
+	// run at mount, and every later send() silently no-oped against a CLOSED
+	// socket (see `send`). That is why a Flight Tracker that had gone empty could
+	// not be recovered by seeking — the `seek` frame was swallowed too — and only
+	// a page reload brought flights back.
+	const [connectGen, setConnectGen] = useState(0);
+	// Consecutive failed attempts, reset by a successful open. Drives the backoff.
+	const reconnectAttempt = useRef(0);
+	const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Live mirror of the clock's paused state for the WebSocket effect's onopen,
 	// which must assert pause on a connection opened while already paused.
@@ -1153,6 +1171,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 			setConnected(true);
+			// A connection that opened is a connection that worked; the next outage
+			// starts its backoff from scratch rather than inheriting this one's.
+			reconnectAttempt.current = 0;
 			ws.send(
 				JSON.stringify({
 					type: "init",
@@ -1526,6 +1547,15 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (!active) return;
 			setConnected(false);
 			clearInterval(heartbeatId);
+			// Schedule the rebuild rather than doing it here: bumping connectGen
+			// re-runs this effect, whose cleanup closes this socket properly before
+			// the new one is made.
+			const delay = reconnectDelayMs(reconnectAttempt.current);
+			reconnectAttempt.current += 1;
+			reconnectTimer.current = setTimeout(() => {
+				reconnectTimer.current = null;
+				setConnectGen((g) => g + 1);
+			}, delay);
 		};
 
 		ws.onerror = () => {
@@ -1535,6 +1565,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		return () => {
 			active = false;
 			clearInterval(heartbeatId);
+			// A pending retry must not outlive the provider, or it bumps state on an
+			// unmounted tree and resurrects the socket after teardown.
+			if (reconnectTimer.current !== null) {
+				clearTimeout(reconnectTimer.current);
+				reconnectTimer.current = null;
+			}
 			ws.onclose = null;
 			// Calling close() on a CONNECTING socket logs a browser error.
 			// Defer to onopen so it can close cleanly once the handshake finishes.
@@ -1545,11 +1581,13 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			wsRef.current = null;
 		};
-		// Intentionally runs once on mount; utcMsRef carries the live value.
-		// sendFlightsHistoryRequest/sendFlightsSeedRequest/sendWeatherForecastRequest/
-		// setForced/applyForcedTime are all stable (empty or `send`-only deps), so
-		// listing them satisfies the lint without re-running the effect.
+		// Re-runs only when connectGen changes (a scheduled reconnect); utcMsRef
+		// carries the live value. sendFlightsHistoryRequest/sendFlightsSeedRequest/
+		// sendWeatherForecastRequest/setForced/applyForcedTime are all stable (empty
+		// or `send`-only deps), so listing them satisfies the lint without
+		// re-running the effect.
 	}, [
+		connectGen,
 		sendFlightsHistoryRequest,
 		sendFlightsSeedRequest,
 		sendWeatherForecastRequest,
