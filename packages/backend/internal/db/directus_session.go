@@ -13,17 +13,23 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// displayName is the screen name a chat buddy calls this user, in the order the
-// product settles on: the username they chose, then the part of their email
-// before the @, then their name. It never invents one -- a random fallback has
-// to be PERSISTED to be any use, so that belongs to the backfill script, not to
-// a per-connection read that would hand the same person a different name every
-// time they reconnect.
+// displayName is the name a chat buddy calls this user, in the order the
+// product settles on: the real first name they gave, then the username they
+// chose, then the part of their email before the @, then whatever name is
+// left. A friend says "Dave", not "skaterboi1988" -- the screen name is what
+// the chat window shows, not what a person says out loud.
+//
+// It never invents one. A random fallback has to be PERSISTED to be any use,
+// so that belongs to the backfill script, not to a per-connection read that
+// would hand the same person a different name every time they reconnect.
 //
 // Empty is a fine answer. The composer then establishes the student as an
 // unnamed friend rather than guessing, which is the behaviour that stops a
 // buddy reaching for a name out of its own persona.
 func displayName(username, email, first, last *string) string {
+	if s := strings.TrimSpace(deref(first)); s != "" {
+		return s
+	}
 	if s := deref(username); s != "" {
 		return s
 	}

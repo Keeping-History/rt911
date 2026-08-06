@@ -73,6 +73,12 @@ type ComposeInput struct {
 	// lives in the stable system segment because the person on the other end
 	// does not change mid-conversation, so naming them costs no cache.
 	UserName string
+	// UserProfile is what this buddy knows about the student beyond their
+	// name -- where they live, what they do. It sits in the stable segment
+	// alongside UserName for the same reason: the person on the other end does
+	// not change mid-conversation, so it costs one cached prefix rather than a
+	// per-turn rewrite.
+	UserProfile UserProfile
 }
 
 // Compose renders the prompt as ordered, stability-tagged segments.
@@ -93,7 +99,7 @@ func Compose(in ComposeInput) []PromptSegment {
 	segs := []PromptSegment{{
 		Stability: StabilityStable,
 		Role:      "system",
-		Text:      persona(in.Profile, in.UserName),
+		Text:      persona(in.Profile, in.UserName, in.UserProfile),
 	}}
 
 	if len(in.Digest) > 0 {
@@ -136,7 +142,7 @@ func Compose(in ComposeInput) []PromptSegment {
 	return segs
 }
 
-func persona(p Profile, userName string) string {
+func persona(p Profile, userName string, up UserProfile) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "You are %s", p.ScreenName)
 	if p.DisplayName != "" {
@@ -147,6 +153,7 @@ func persona(p Profile, userName string) string {
 		b.WriteString(p.Persona + "\n")
 	}
 	b.WriteString(whoTheyAreTalkingTo(userName))
+	b.WriteString(userProfileBlock(up))
 	if p.EducationLevel != "" {
 		fmt.Fprintf(&b, "You write like someone at a %s education level.\n", p.EducationLevel)
 	}
@@ -234,6 +241,27 @@ func whoTheyAreTalkingTo(userName string) string {
 		"real name, only that they are a friend online. They are not anyone " +
 		"described in your own background above — do not guess at who they are " +
 		"or call them by a name.\n"
+}
+
+// userProfileBlock renders what the buddy knows about the person it is talking
+// to.
+//
+// The instruction after the list is the whole point. Without it the model
+// treats a list of facts as a checklist to work through, and the buddy opens
+// by telling you your own job -- which reads as surveillance rather than as
+// friendship, and is the failure mode this feature was designed around.
+func userProfileBlock(p UserProfile) string {
+	if p.Empty() {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Some things you know about them, the way you would know them about a friend:\n")
+	for _, v := range p.Values {
+		fmt.Fprintf(&b, "- %s: %s\n", v.Label, v.Text)
+	}
+	b.WriteString("Do not bring these up unprompted and never list them back. " +
+		"Use them only if the conversation goes there on its own.\n")
+	return b.String()
 }
 
 func passageLines(passages []Passage) string {

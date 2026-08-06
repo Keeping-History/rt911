@@ -200,6 +200,7 @@ type Session struct {
 	// All guarded by mu.
 	userID       string
 	userName     string
+	userProfile  chat.UserProfile
 	profiles     []chat.Profile
 	beacons      map[int]chat.Beacon
 	phases       map[int][]chat.Phase
@@ -674,6 +675,25 @@ func (s *Session) SetUserName(name string) {
 	s.mu.Unlock()
 }
 
+// SetUserProfile records what buddies know about the student beyond their
+// name. Called at connect and again when the chat channel is subscribed, so
+// opening IM Buddies picks up an edit made moments earlier in the Account app.
+// A zero value is fine -- the composer then omits the block entirely.
+func (s *Session) SetUserProfile(p chat.UserProfile) {
+	s.mu.Lock()
+	s.userProfile = p
+	s.mu.Unlock()
+}
+
+// identity returns how buddies address this student and what they know about
+// them. Both are refreshed on chat subscribe, so callers must read them at use
+// time rather than caching a copy from connect.
+func (s *Session) identity() (string, chat.UserProfile) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.userName, s.userProfile
+}
+
 func (s *Session) SetProfiles(p []chat.Profile) {
 	s.mu.Lock()
 	s.profiles = p
@@ -875,6 +895,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 	s.mu.Lock()
 	userID, vTime, profiles := s.userID, s.virtualTime, s.profiles
 	userName := s.userName
+	userProfile := s.userProfile
 	beacons, phases := s.beacons, s.phases
 	bcastSources := s.bcastSources
 	s.recentSends = append(s.recentSends, now)
@@ -945,6 +966,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 	// in distress while telling a distressed one it is opening the conversation.
 	job.Distress = decision.Outcome == "escalate"
 	job.UserName = userName
+	job.UserProfile = userProfile
 	job.Deliver = s.chatDeliver(userID, profileID, vTime, job.Kind)
 
 	gen := s.hub.Generator()
@@ -1154,6 +1176,12 @@ func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID str
 			}
 		}
 
+		// A proactive beat addresses the student exactly as a reply does. This
+		// path never set UserName at all, so until now a buddy that messaged
+		// you first did not know your name -- the same bug the reply path
+		// already fixed.
+		userName, userProfile := s.identity()
+
 		switch sc.Kind {
 		case "static":
 			s.deliverStaticBeat(ctx, userID, sc.ProfileID, t, sc.Text)
@@ -1168,6 +1196,8 @@ func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID str
 			s.send_(outMsg{Type: "chat_typing", Profile: sc.ProfileID})
 			job := buildChatJob(userID, profile, phases, beacons, sc.Prompt, "scheduled", true, t,
 				digest, recentPassages, live, timeline, history, nil)
+			job.UserName = userName
+			job.UserProfile = userProfile
 			job.Deliver = s.chatDeliver(userID, sc.ProfileID, t, job.Kind)
 			gen := s.hub.Generator()
 			if gen == nil || !gen.Enqueue(job) {

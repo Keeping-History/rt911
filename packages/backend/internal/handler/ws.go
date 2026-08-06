@@ -158,6 +158,7 @@ type ProfileCache struct {
 	phases       map[int][]chat.Phase
 	schedules    []chat.Schedule
 	bcastSources []chat.BroadcastSource
+	userFields   []chat.UserField
 }
 
 func NewProfileCache() *ProfileCache { return &ProfileCache{} }
@@ -221,6 +222,21 @@ func (c *ProfileCache) Schedules() []chat.Schedule {
 	return c.schedules
 }
 
+// SetUserFields installs which directus_users columns buddies may know about
+// the signed-in user. Call once at boot, alongside Set and SetPhaseData.
+func (c *ProfileCache) SetUserFields(fields []chat.UserField) {
+	c.mu.Lock()
+	c.userFields = fields
+	c.mu.Unlock()
+}
+
+// UserFields returns the exposure list installed by SetUserFields.
+func (c *ProfileCache) UserFields() []chat.UserField {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.userFields
+}
+
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
 func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sources *db.SourcesCache, chatProfiles *ProfileCache, trustedOrigins *OriginAllowlist, logger *slog.Logger) http.HandlerFunc {
@@ -273,7 +289,6 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 			} else {
 				lookupCtx, lookupCancel := context.WithTimeout(r.Context(), 2*time.Second)
 				uid, name, err := db.LookupSessionUser(lookupCtx, pool, token)
-				lookupCancel()
 				if err != nil {
 					logger.Warn("directus session lookup failed", "error", err)
 				} else if uid != "" {
@@ -282,14 +297,26 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 					// only other name in its own persona -- Carol, written as
 					// "Danny's aunt", greeted every student as Danny.
 					sess.SetUserName(name)
+					// Bounded by the same lookupCtx as the identity read
+					// above, and non-fatal for the same reason: a slow or
+					// failed profile read must leave the user signed in and
+					// every other channel working, not reject the connection.
+					if fields := chatProfiles.UserFields(); len(fields) > 0 {
+						profile, err := chat.LoadUserProfile(lookupCtx, pool, uid, fields)
+						if err != nil {
+							logger.Warn("chat user profile load failed", "error", err)
+						} else {
+							sess.SetUserProfile(profile)
+						}
+					}
 				}
+				lookupCancel()
 			}
 		}
 		sess.SetProfiles(chatProfiles.Get())
 		beacons, phases := chatProfiles.PhaseData()
 		sess.SetPhaseData(beacons, phases)
 		sess.SetSchedules(chatProfiles.Schedules())
-		sess.SetBroadcastSources(chatProfiles.BroadcastSources())
 		sess.SetBroadcastSources(chatProfiles.BroadcastSources())
 
 		hub.Register(sess)
@@ -469,6 +496,23 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 				}
 				sess.Subscribe(cmsg.Channel)
 				if cmsg.Channel == session.ChannelChat {
+					// Opening IM Buddies is the natural moment to pick up a
+					// profile edit made moments earlier in the Account app. A
+					// failed re-read KEEPS the previous value rather than
+					// blanking it: a buddy that forgets your name because one
+					// query timed out is worse than a slightly stale one.
+					if uid := sess.UserID(); uid != "" {
+						if fields := chatProfiles.UserFields(); len(fields) > 0 {
+							subCtx, subCancel := context.WithTimeout(r.Context(), 2*time.Second)
+							profile, err := chat.LoadUserProfile(subCtx, pool, uid, fields)
+							subCancel()
+							if err != nil {
+								logger.Warn("chat user profile refresh failed", "error", err)
+							} else {
+								sess.SetUserProfile(profile)
+							}
+						}
+					}
 					sess.SendChatState()
 					sess.SendChatRoster()
 					continue
