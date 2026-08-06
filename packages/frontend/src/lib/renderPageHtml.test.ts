@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedEmbedSrc, renderPageHtml } from "./renderPageHtml";
+import { isAllowedEmbedSrc, renderPageHtml, TABLE_WRAPPER_CLASS } from "./renderPageHtml";
 
 /**
  * These carry the security weight of the CMS pages feature, so each assertion is
@@ -132,5 +132,68 @@ describe("renderPageHtml", () => {
 		expect(renderPageHtml("")).toBe("");
 		expect(renderPageHtml(null)).toBe("");
 		expect(renderPageHtml(undefined)).toBe("");
+	});
+});
+
+/**
+ * The wrapper is what lets the stylesheet keep tables as real tables (banded,
+ * full-column-width) while wide ones scroll instead of widening the page.
+ */
+describe("renderPageHtml table wrapping", () => {
+	/** Parse the output so assertions are about structure, not string shape. */
+	function parse(html: string): HTMLElement {
+		const host = document.createElement("div");
+		host.innerHTML = html;
+		return host;
+	}
+
+	it("wraps an authored table in a scroll container", () => {
+		const host = parse(renderPageHtml("<table><tr><td>a</td></tr></table>"));
+
+		const wrapper = host.querySelector(`.${TABLE_WRAPPER_CLASS}`);
+		expect(wrapper).not.toBeNull();
+		// The table must be *inside* the wrapper — a sibling would leave the
+		// overflow container empty and the table unclipped.
+		expect(wrapper?.firstElementChild?.tagName).toBe("TABLE");
+		expect(host.querySelectorAll("table")).toHaveLength(1);
+	});
+
+	it("wraps each of several tables", () => {
+		const host = parse(
+			renderPageHtml("<table><tr><td>a</td></tr></table><p>x</p><table><tr><td>b</td></tr></table>"),
+		);
+		expect(host.querySelectorAll(`.${TABLE_WRAPPER_CLASS}`)).toHaveLength(2);
+	});
+
+	// A nested table already scrolls with its ancestor; a wrapper of its own
+	// would nest a second scrollbar inside the first.
+	it("wraps only the outermost table when tables are nested", () => {
+		const host = parse(
+			renderPageHtml("<table><tr><td><table><tr><td>inner</td></tr></table></td></tr></table>"),
+		);
+		expect(host.querySelectorAll(`.${TABLE_WRAPPER_CLASS}`)).toHaveLength(1);
+		expect(host.querySelectorAll("table")).toHaveLength(2);
+		expect(host.querySelector("td .pageTableScroll")).toBeNull();
+	});
+
+	it("does not re-wrap a table an author already wrapped", () => {
+		const host = parse(
+			renderPageHtml(
+				`<div class="${TABLE_WRAPPER_CLASS}"><table><tr><td>a</td></tr></table></div>`,
+			),
+		);
+		expect(host.querySelectorAll(`.${TABLE_WRAPPER_CLASS}`)).toHaveLength(1);
+	});
+
+	it("leaves the table's own content untouched", () => {
+		const host = parse(
+			renderPageHtml("<table><thead><tr><th>Name</th></tr></thead><tbody><tr><td>a</td></tr></tbody></table>"),
+		);
+		expect(host.querySelector("th")?.textContent).toBe("Name");
+		expect(host.querySelector("tbody td")?.textContent).toBe("a");
+	});
+
+	it("leaves bodies with no table alone", () => {
+		expect(renderPageHtml("<p>plain</p>")).not.toContain(TABLE_WRAPPER_CLASS);
 	});
 });

@@ -1,3 +1,4 @@
+import { ClassicyButton } from "classicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DIRECTUS_URL } from "../lib/endpoints";
 import { renderPageHtml } from "../lib/renderPageHtml";
@@ -101,6 +102,12 @@ export default function PagesSite() {
 		window.history.pushState({}, "", `/${next}`);
 		setSlug(next);
 	}, []);
+
+	// Printing the live document rather than opening a print-only copy in a
+	// hidden iframe: one source of markup, so an author's page can never render
+	// one way on screen and another on paper. What the printed sheet drops or
+	// reflows is decided entirely in the stylesheet's @media print block.
+	const handlePrint = useCallback(() => window.print(), []);
 
 	const menuItems = useMemo(() => flattenForMenu(nav), [nav]);
 	const html = useMemo(() => renderPageHtml(page?.body), [page?.body]);
@@ -272,7 +279,24 @@ export default function PagesSite() {
 
 							{!loading && !error && page && (
 								<>
-									{page.title && <h1>{page.title}</h1>}
+									{/* Print-only, and first in the flow so it heads the sheet.
+									    Built from origin + slug rather than location.href so it
+									    never depends on whether this render happened before or
+									    after the pushState in `navigate`. */}
+									<div className={styles.printSource} aria-hidden="true">
+										911realtime.org — {`${window.location.origin}/${slug}`}
+									</div>
+
+									{page.title && <h1 className={styles.docTitle}>{page.title}</h1>}
+
+									{/* Under the title, above the byline: the reader has seen what
+									    the document is before being offered the action on it. */}
+									<div className={styles.actions}>
+										<ClassicyButton margin="sm" onClickFunc={handlePrint}>
+											Print…
+										</ClassicyButton>
+									</div>
+
 									{page.author && (
 										<div className={styles.byline}>
 											{page.author.avatar && (

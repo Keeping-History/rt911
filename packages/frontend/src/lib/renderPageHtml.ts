@@ -80,6 +80,42 @@ export function isAllowedEmbedSrc(src: string | null | undefined): boolean {
 }
 
 /**
+ * Class placed on the wrapper this module puts around every authored table.
+ *
+ * Exported so the stylesheet's `:global()` selector and the tests name the same
+ * string. A `<table>` cannot both fill the reading column and scroll when it is
+ * wider than the frame: `display: block` on the table itself buys the scroll,
+ * but then `width: 100%` sizes the block box while the anonymous table box
+ * inside it shrink-to-fits, so row bands stop short of the right edge. A
+ * wrapper keeps the table a real table and moves the overflow off it. Authors
+ * write plain `<table>` in Directus, so the wrapper has to be added here.
+ */
+export const TABLE_WRAPPER_CLASS = "pageTableScroll";
+
+/**
+ * Wrap each authored table in a horizontally scrollable block.
+ *
+ * Only outermost tables are wrapped: a table nested in a cell already scrolls
+ * with its ancestor, and wrapping it would put a second scrollbar inside the
+ * first. Re-wrapping is skipped so the function is safe over already-wrapped
+ * markup.
+ */
+function wrapTables(root: DocumentFragment): void {
+	for (const table of Array.from(root.querySelectorAll("table"))) {
+		const parent = table.parentElement;
+		// `parent?.closest` rather than `table.closest`: closest() matches the
+		// element itself, so asking the table would find the table.
+		if (parent?.closest("table")) continue;
+		if (parent?.classList.contains(TABLE_WRAPPER_CLASS)) continue;
+
+		const wrapper = document.createElement("div");
+		wrapper.className = TABLE_WRAPPER_CLASS;
+		table.replaceWith(wrapper);
+		wrapper.appendChild(table);
+	}
+}
+
+/**
  * Sanitize a Directus page body into HTML safe to inject.
  *
  * Returns a string for `dangerouslySetInnerHTML`, matching how Browser.tsx and
@@ -108,6 +144,10 @@ export function renderPageHtml(dirty: string | null | undefined): string {
 			frame.remove();
 		}
 	}
+
+	// Presentation, not security — but it runs on the same already-parsed tree,
+	// and after sanitizing so it can never reintroduce a dropped element.
+	wrapTables(tpl.content);
 
 	return tpl.innerHTML;
 }
