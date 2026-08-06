@@ -171,11 +171,20 @@ for (const p of PAGES_PERMISSIONS) {
 }
 
 async function findPublicPolicy(tok) {
-  const rows = (await api(tok, "GET", "/policies?fields=id,name,roles&limit=-1")).data ?? [];
-  // The public policy is the one with no roles attached.
-  const found = rows.find((r) => !r.roles || r.roles.length === 0);
-  if (!found) throw new Error("could not identify the public policy from GET /policies");
-  return found.id;
+  const rows = (await api(tok, "GET", "/policies?fields=id,name,roles.role,roles.user&limit=-1")).data ?? [];
+  // Directus 12 always returns a non-empty `roles` array — those are
+  // directus_access junction rows, not role ids. The public policy is the
+  // one whose access rows bind to neither a role nor a user.
+  const found = rows.filter(
+    (r) => Array.isArray(r.roles) && r.roles.length > 0 && r.roles.every((a) => !a.role && !a.user),
+  );
+  if (found.length !== 1) {
+    throw new Error(
+      `expected exactly 1 public policy, found ${found.length}: ` +
+        JSON.stringify(rows.map((r) => ({ id: r.id, name: r.name, roles: r.roles }))),
+    );
+  }
+  return found[0].id;
 }
 
 console.log("\nPlan:");
