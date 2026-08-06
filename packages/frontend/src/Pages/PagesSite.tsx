@@ -61,7 +61,9 @@ const APPLE_ICON =
 
 export default function PagesSite() {
 	const [slug, setSlug] = useState(currentSlug);
-	const [menuOpen, setMenuOpen] = useState(false);
+	// Which top-level menu is open, by page id. Only one at a time, as a menu
+	// bar behaves; null means none.
+	const [openMenu, setOpenMenu] = useState<number | null>(null);
 	// Zoom toggles the window between reading width and full width, the way a
 	// classic zoom box does. Kept functional so the control is not decoration.
 	const [zoomed, setZoomed] = useState(false);
@@ -82,13 +84,13 @@ export default function PagesSite() {
 
 	// Click-away closes an open menu.
 	useEffect(() => {
-		if (!menuOpen) return;
+		if (openMenu === null) return;
 		const onDown = (e: MouseEvent) => {
-			if (!barRef.current?.contains(e.target as Node)) setMenuOpen(false);
+			if (!barRef.current?.contains(e.target as Node)) setOpenMenu(null);
 		};
 		document.addEventListener("mousedown", onDown);
 		return () => document.removeEventListener("mousedown", onDown);
-	}, [menuOpen]);
+	}, [openMenu]);
 
 	// Nav items stay real anchors so they remain right-clickable and copyable;
 	// the handler only intercepts plain left clicks, leaving modified clicks
@@ -98,7 +100,11 @@ export default function PagesSite() {
 			return;
 		}
 		e.preventDefault();
-		setMenuOpen(false);
+		// Without this the click keeps bubbling to the enclosing menu title,
+		// whose onClick toggles the menu straight back open — so picking an item
+		// would leave the menu hanging open over the page it just navigated to.
+		e.stopPropagation();
+		setOpenMenu(null);
 		window.history.pushState({}, "", `/${next}`);
 		setSlug(next);
 	}, []);
@@ -109,7 +115,6 @@ export default function PagesSite() {
 	// reflows is decided entirely in the stylesheet's @media print block.
 	const handlePrint = useCallback(() => window.print(), []);
 
-	const menuItems = useMemo(() => flattenForMenu(nav), [nav]);
 	const html = useMemo(() => renderPageHtml(page?.body), [page?.body]);
 
 	useEffect(() => {
@@ -137,58 +142,107 @@ export default function PagesSite() {
 						</p>
 					</li>
 
-					{/* Classicy's own show/hide rule is
+					{nav.length === 0 && (
+						<li className="classicyMenuItem classicyMenuItemDisabled" role="menuitem" tabIndex={-1}>
+							<p>(no pages)</p>
+						</li>
+					)}
+
+					{/* Every page without a parent is its own menu-bar title, and its
+					    descendants hang beneath it — so the tree the author builds in
+					    Directus is the menu bar itself.
+
+					    A childless root is a plain link and navigates on click. A root
+					    with children opens a menu instead, and lists itself first so the
+					    parent page stays reachable rather than becoming a label for its
+					    own children.
+
+					    Classicy's show/hide rule is
 					    `.classicyMenuItemOpen > .classicyMenuWrapper > ul { display: flex }`,
-					    so the submenu is always rendered and the open class drives
+					    so each submenu is always rendered and the open class drives
 					    visibility. The nesting below is what that selector requires. */}
-					<li
-						className={cx(
-							"classicyMenuItem",
-							"classicyMenuItemChildMenuIndicator",
-							styles.menuTitle,
-							menuOpen && "classicyMenuItemOpen",
-						)}
-						role="menuitem"
-						tabIndex={0}
-						aria-haspopup="menu"
-						aria-expanded={menuOpen}
-						onClick={() => setMenuOpen((o) => !o)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								setMenuOpen((o) => !o);
-							} else if (e.key === "Escape") {
-								setMenuOpen(false);
-							}
-						}}
-					>
-						<p>Pages</p>
-						<div className="classicyMenuWrapper">
-							<ul className="classicySubMenu">
-								{menuItems.length === 0 && (
-									<li className="classicyMenuItem classicyMenuItemDisabled">
-										<p>(no pages)</p>
-									</li>
+					{nav.map((root) => {
+						const hasChildren = root.children.length > 0;
+						const isOpen = openMenu === root.id;
+						// Highlight the title when the current page is anywhere beneath it.
+						const containsCurrent =
+							root.slug === slug ||
+							flattenForMenu(root.children).some(({ node }) => node.slug === slug);
+
+						if (!hasChildren) {
+							return (
+								<li
+									key={root.id}
+									className={cx(
+										"classicyMenuItem",
+										styles.menuTitle,
+										// Marked on the <li> in both branches, so "is this title
+										// current?" is answered the same way regardless of whether
+										// the root happens to have children.
+										containsCurrent && styles.menuCurrent,
+									)}
+									role="menuitem"
+									tabIndex={-1}
+								>
+									<p>
+										<a href={`/${root.slug}`} onClick={(e) => navigate(e, root.slug)}>
+											{root.title}
+										</a>
+									</p>
+								</li>
+							);
+						}
+
+						return (
+							<li
+								key={root.id}
+								className={cx(
+									"classicyMenuItem",
+									"classicyMenuItemChildMenuIndicator",
+									styles.menuTitle,
+									containsCurrent && styles.menuCurrent,
+									isOpen && "classicyMenuItemOpen",
 								)}
-								{menuItems.map(({ node, depth }) => (
-									<li key={node.id} className="classicyMenuItem">
-										<p>
-											<a
-												href={`/${node.slug}`}
-												className={cx(
-													depth > 0 && styles.menuChild,
-													node.slug === slug && styles.menuCurrent,
-												)}
-												onClick={(e) => navigate(e, node.slug)}
-											>
-												{node.title}
-											</a>
-										</p>
-									</li>
-								))}
-							</ul>
-						</div>
-					</li>
+								role="menuitem"
+								tabIndex={0}
+								aria-haspopup="menu"
+								aria-expanded={isOpen}
+								onClick={() => setOpenMenu((o) => (o === root.id ? null : root.id))}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										setOpenMenu((o) => (o === root.id ? null : root.id));
+									} else if (e.key === "Escape") {
+										setOpenMenu(null);
+									}
+								}}
+							>
+								<p>{root.title}</p>
+								<div className="classicyMenuWrapper">
+									<ul className="classicySubMenu">
+										{[{ node: root, depth: 0 }, ...flattenForMenu(root.children)].map(
+											({ node, depth }) => (
+												<li key={node.id} className="classicyMenuItem">
+													<p>
+														<a
+															href={`/${node.slug}`}
+															className={cx(
+																depth > 0 && styles.menuChild,
+																node.slug === slug && styles.menuCurrent,
+															)}
+															onClick={(e) => navigate(e, node.slug)}
+														>
+															{node.title}
+														</a>
+													</p>
+												</li>
+											),
+										)}
+									</ul>
+								</div>
+							</li>
+						);
+					})}
 					</ul>
 				</div>
 			</nav>
