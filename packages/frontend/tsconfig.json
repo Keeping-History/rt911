@@ -4,7 +4,14 @@
 		"useDefineForClassFields": true,
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"module": "ESNext",
-		"types": ["vite/client", "geojson"],
+		// "node" is required by co-located tests that read fixtures off disk
+		// (node:fs, node:path, __dirname) and stub globals. It used to arrive
+		// by accident: `types` is an allow-list, but a `/// <reference
+		// types="node" />` inside a *transitive* dependency's .d.ts is honoured
+		// regardless of it. Dropping two classicy peer deps removed that
+		// reference and 15 pre-existing type errors appeared at once, in files
+		// nobody had touched. Declare it explicitly so it can't vanish again.
+		"types": ["vite/client", "geojson", "node"],
 		"skipLibCheck": true,
 		"resolveJsonModule": true,
 		/* Bundler mode */
