@@ -11,11 +11,15 @@
  * content and have no fixture data to load.
  */
 
-// Root-level paths that nginx or Directus already answer. A page slugged
-// with one of these would be created successfully and then be permanently
-// unreachable, so Directus rejects them at save time via the `slug` field's
-// validation filter below.
-export const RESERVED_SLUGS = ["assets", "admin", "api"];
+// Entries in the frontend docroot (packages/frontend/nginx.conf) that nginx's
+// `try_files $uri $uri/ /index.html` resolves BEFORE the SPA fallback. A page
+// slugged with one of these would be created successfully and then be
+// permanently unreachable, so Directus rejects them at save time via the
+// `slug` field's validation filter below. Verified directly against the
+// production docroot: 50x.html, assets, img, index.html, maps, stacks.
+// `50x.html` and `index.html` are files, not usable slug shapes, so they are
+// omitted here. This list must be revisited if the docroot gains directories.
+export const RESERVED_SLUGS = ["assets", "img", "maps", "stacks"];
 
 const STATUS_CHOICES = ["published", "draft", "archived"].map((v) => ({ text: v, value: v }));
 
@@ -107,12 +111,17 @@ export const PAGES_RELATIONS = [
     meta: { sort_field: null }, schema: { on_delete: "SET NULL" } },
 ];
 
-// fields: ["*"] on both — per-field permission limits are unverified on this
-// instance and this design deliberately does not depend on them. Both
-// collections are public-safe by construction; the one exposure is the
-// user_created/user_updated UUIDs, which resolve to nobody without public
-// read on directus_users (which does not exist and must not be added).
+// Field-level limits ARE enforced on this instance — three public grants
+// (news_items, sources, tv_channels) already use narrowed lists. Listing
+// fields explicitly keeps the user_created/user_updated audit UUIDs out of
+// public reads. Any field added to `pages` must be added here too, or it
+// will be invisible to the frontend.
+const PAGES_PUBLIC_FIELDS = [
+  "id", "status", "title", "slug", "parent", "author",
+  "body", "show_in_nav", "sort", "date_created", "date_updated",
+];
+
 export const PAGES_PERMISSIONS = [
-  { collection: "pages", action: "read", fields: ["*"], permissions: { status: { _eq: "published" } } },
+  { collection: "pages", action: "read", fields: PAGES_PUBLIC_FIELDS, permissions: { status: { _eq: "published" } } },
   { collection: "page_authors", action: "read", fields: ["*"], permissions: {} },
 ];

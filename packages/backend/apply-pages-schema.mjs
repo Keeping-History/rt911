@@ -22,6 +22,11 @@
  * Required env (no defaults, on purpose — a silent localhost default is how
  * you accidentally target the wrong Directus instance):
  *   DIRECTUS_URL, ADMIN_EMAIL, ADMIN_PASSWORD
+ *
+ * Limitation: --apply creates missing collections wholesale and cannot add a
+ * field to an existing collection. There is no POST /fields path. Adding a
+ * field to an already-created collection requires a POST /fields/<collection>
+ * by hand, or a future extension to this script.
  */
 
 import {
@@ -92,14 +97,46 @@ function preflight() {
 
   const known = new Set(PAGE_COLLECTIONS.map((c) => c.collection));
   for (const p of PAGES_PERMISSIONS) {
-    if (!known.has(p.collection)) problems.push(`permission on ${p.collection}: not defined in PAGE_COLLECTIONS`);
+    if (!known.has(p.collection)) {
+      problems.push(`permission on ${p.collection}: not defined in PAGE_COLLECTIONS`);
+      continue;
+    }
+    // fields: ["*"] means "every field" and has nothing to check against a
+    // declared list. A typo in an explicit list would otherwise silently
+    // hide a field from the frontend, which is exactly the class of error
+    // preflight exists to catch.
+    if (Array.isArray(p.fields) && !(p.fields.length === 1 && p.fields[0] === "*")) {
+      const declaredFields = declared.get(p.collection) ?? new Set();
+      for (const f of p.fields) {
+        if (!declaredFields.has(f)) {
+          problems.push(`permission on ${p.collection}: fields lists "${f}", which is not a declared field on ${p.collection}`);
+        }
+      }
+    }
   }
 
-  // page_authors must be created before pages, because pages.author is an
-  // M2O onto it.
+  // page_authors must be created before pages. At POST /collections time
+  // pages.author is a plain integer column with no FK — the dependency only
+  // materializes at POST /relations, which runs after both collections
+  // exist — but the ordering invariant is still worth enforcing here so the
+  // relation step never has to special-case creation order.
   const order = PAGE_COLLECTIONS.map((c) => c.collection);
   if (order.indexOf("page_authors") > order.indexOf("pages")) {
     problems.push("PAGE_COLLECTIONS order: page_authors must come before pages (pages.author references it)");
+  }
+
+  // Collection-level meta that references a field by name (archive_field,
+  // sort_field) is a string with no schema-level validation on Directus's
+  // side; a typo passes POST /collections and silently breaks the
+  // archive/sort UI.
+  for (const col of PAGE_COLLECTIONS) {
+    const declaredFields = declared.get(col.collection) ?? new Set();
+    for (const metaKey of ["archive_field", "sort_field"]) {
+      const value = col.meta?.[metaKey];
+      if (value != null && !declaredFields.has(value)) {
+        problems.push(`${col.collection}.meta.${metaKey} references "${value}", which is not a declared field on ${col.collection}`);
+      }
+    }
   }
 
   if (problems.length) {
@@ -139,6 +176,28 @@ async function exists(token, path) {
   } catch {
     return false;
   }
+}
+
+// Used by --verify to compare nested field/permission definitions
+// (meta.validation, etc.) without being tripped up by key-order differences
+// between the local literal and whatever Directus's API returns.
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    return a.length === b.length && a.every((v, i) => deepEqual(v, b[i]));
+  }
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+  return aKeys.length === bKeys.length && aKeys.every((k, i) => k === bKeys[i] && deepEqual(a[k], b[k]));
+}
+
+// Order-insensitive comparison for `fields`/`special` string-array properties.
+function sortedArraysEqual(a, b) {
+  const as = JSON.stringify([...(a ?? [])].sort());
+  const bs = JSON.stringify([...(b ?? [])].sort());
+  return as === bs;
 }
 
 preflight();
@@ -202,9 +261,41 @@ if (VERIFY) {
       continue;
     }
     // /fields/<collection> is admin-only, which is fine — we hold an admin token.
-    const liveFields = new Set(((await api(token, "GET", `/fields/${col.collection}`)).data ?? []).map((f) => f.field));
+    const liveFieldRows = (await api(token, "GET", `/fields/${col.collection}`)).data ?? [];
+    const liveFieldsByName = new Map(liveFieldRows.map((f) => [f.field, f]));
     for (const f of col.fields) {
-      if (!liveFields.has(f.field)) drift.push(`${col.collection}.${f.field}: MISSING`);
+      const live = liveFieldsByName.get(f.field);
+      if (!live) {
+        drift.push(`${col.collection}.${f.field}: MISSING`);
+        continue;
+      }
+
+      if (f.type !== undefined && live.type !== f.type) {
+        drift.push(`${col.collection}.${f.field}: type is ${JSON.stringify(live.type)}, expected ${JSON.stringify(f.type)}`);
+      }
+
+      // Directus omits is_unique entirely on the live row when it is false —
+      // treat a missing/null live value as false rather than as drift.
+      if (f.schema?.is_unique !== undefined) {
+        const liveIsUnique = live.schema?.is_unique ?? false;
+        if (liveIsUnique !== f.schema.is_unique) {
+          drift.push(`${col.collection}.${f.field}: schema.is_unique is ${JSON.stringify(liveIsUnique)}, expected ${JSON.stringify(f.schema.is_unique)}`);
+        }
+      }
+
+      if (f.meta?.validation !== undefined) {
+        const liveValidation = live.meta?.validation ?? null;
+        if (!deepEqual(liveValidation, f.meta.validation)) {
+          drift.push(`${col.collection}.${f.field}: meta.validation is ${JSON.stringify(liveValidation)}, expected ${JSON.stringify(f.meta.validation)}`);
+        }
+      }
+
+      if (f.meta?.special !== undefined) {
+        const liveSpecial = live.meta?.special ?? [];
+        if (!sortedArraysEqual(liveSpecial, f.meta.special)) {
+          drift.push(`${col.collection}.${f.field}: meta.special is ${JSON.stringify([...liveSpecial].sort())}, expected ${JSON.stringify([...f.meta.special].sort())}`);
+        }
+      }
     }
   }
 
@@ -218,9 +309,16 @@ if (VERIFY) {
 
   for (const p of PAGES_PERMISSIONS) {
     const match = livePerms.find((lp) => lp.collection === p.collection && lp.action === p.action);
-    if (!match) drift.push(`permission ${p.collection}:${p.action}: MISSING`);
-    else if (JSON.stringify(match.permissions ?? {}) !== JSON.stringify(p.permissions))
+    if (!match) {
+      drift.push(`permission ${p.collection}:${p.action}: MISSING`);
+      continue;
+    }
+    if (JSON.stringify(match.permissions ?? {}) !== JSON.stringify(p.permissions))
       drift.push(`permission ${p.collection}:${p.action}: filter is ${JSON.stringify(match.permissions)}, expected ${JSON.stringify(p.permissions)}`);
+
+    if (!sortedArraysEqual(match.fields, p.fields)) {
+      drift.push(`permission ${p.collection}:${p.action}: fields is ${JSON.stringify([...(match.fields ?? [])].sort())}, expected ${JSON.stringify([...p.fields].sort())}`);
+    }
   }
 
   if (drift.length) {
