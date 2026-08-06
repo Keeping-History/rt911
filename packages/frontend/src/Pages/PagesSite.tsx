@@ -232,7 +232,7 @@ export default function PagesSite() {
 							    the title text — that is how the classic title bar is drawn. */}
 							<div className="classicyWindowTitleLeft" />
 							<div className="classicyWindowTitleText">
-								<p>{page?.title ?? "911 Realtime"}</p>
+								<p className={styles.pageTitle}>{page?.title ?? "911 Realtime"}</p>
 							</div>
 							<div className="classicyWindowTitleRight" />
 						</div>

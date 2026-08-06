@@ -20,6 +20,10 @@
 	flex-direction: column;
 }
 
+.pageTitle {
+	font-family: var(--header-font), sans-serif;
+}
+
 /* .classicyDesktop sets overflow:hidden; the page area is what scrolls. */
 .desktopArea {
 	flex: 1 1 auto;
@@ -108,10 +112,16 @@
 		margin: 1.4em 0 .4em;
 	}
 
-	h1 { font-size: calc(var(--header-font-size) * 1.25); }
-	h2 { font-size: var(--header-font-size); }
-	h3 { font-size: calc(var(--header-font-size) * .85); }
-	h4 { font-size: var(--ui-font-size); }
+	/* Headings run a quarter larger than Classicy's chrome-scaled header size,
+	   which is tuned for title bars and menus rather than prose. Applied as one
+	   ratio so each heading keeps its own relationship to the theme baseline and
+	   a future adjustment stays a single number. */
+	--page-heading-scale: 1.25;
+
+	h1 { font-size: calc(var(--header-font-size) * 1.25 * var(--page-heading-scale)); }
+	h2 { font-size: calc(var(--header-font-size) * var(--page-heading-scale)); }
+	h3 { font-size: calc(var(--header-font-size) * .85 * var(--page-heading-scale)); }
+	h4 { font-size: calc(var(--ui-font-size) * var(--page-heading-scale)); }
 
 	p { margin: 0 0 1em; }
 
