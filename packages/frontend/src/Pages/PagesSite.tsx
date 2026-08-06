@@ -1,4 +1,4 @@
-import { ClassicyButton } from "classicy";
+import { ClassicyButton, ClassicyIcons } from "classicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DIRECTUS_URL } from "../lib/endpoints";
 import { renderPageHtml } from "../lib/renderPageHtml";
@@ -265,6 +265,13 @@ export default function PagesSite() {
 							<>
 								<div className={styles.actions}>
 									<ClassicyButton margin="sm" onClickFunc={handlePrint}>
+										{/* Decorative: the label beside it already names the
+										    action, so alt text here would be announced twice. */}
+										<img
+											className={styles.buttonIcon}
+											src={ClassicyIcons.system.printer as string}
+											alt=""
+										/>
 										Print…
 									</ClassicyButton>
 								</div>

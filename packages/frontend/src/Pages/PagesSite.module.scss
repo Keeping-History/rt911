@@ -287,6 +287,19 @@
 	padding: 0 var(--window-padding-size);
 }
 
+/* The icon sits inside the button, so it can't be styled through ClassicyButton
+   (which overwrites className) — the rule targets the child img instead. The
+   source art is a full-size 32px system icon; height is capped to the button's
+   text so the control keeps its standard height, and `vertical-align` does the
+   optical centring against the label since the button lays its children out as
+   inline content, not as a flex row. */
+.buttonIcon {
+	height: calc(var(--ui-font-size) * 1.25);
+	width: auto;
+	margin-right: calc(var(--window-padding-size) * .5);
+	vertical-align: middle;
+}
+
 /* Present in the DOM at all times but only ever rendered on paper — a printout
    that has lost its browser chrome has nothing else that says where it came
    from. Kept out of the accessibility tree since the address is already the
