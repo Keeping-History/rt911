@@ -1,0 +1,118 @@
+/**
+ * pages-collections.mjs
+ *
+ * Schema definitions for the two CMS page collections (see
+ * plans/2026-08-06-cms-pages-design.md). Pure data — no I/O, no side
+ * effects — so this module can be imported by anything without
+ * consequence. apply-pages-schema.mjs is the only consumer today.
+ *
+ * Deliberately NOT added to seed.mjs. That script bulk-imports historical
+ * media/news/pager fixtures on import; these collections are authored
+ * content and have no fixture data to load.
+ */
+
+// Root-level paths that nginx or Directus already answer. A page slugged
+// with one of these would be created successfully and then be permanently
+// unreachable, so Directus rejects them at save time via the `slug` field's
+// validation filter below.
+export const RESERVED_SLUGS = ["assets", "admin", "api"];
+
+const STATUS_CHOICES = ["published", "draft", "archived"].map((v) => ({ text: v, value: v }));
+
+export const PAGE_COLLECTIONS = [
+  {
+    collection: "page_authors",
+    meta: {
+      icon: "person",
+      note: "Public byline records for CMS pages. Everything here is intended to be publicly readable.",
+      display_template: "{{name}}",
+    },
+    schema: {},
+    fields: [
+      { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
+      { field: "name", type: "string", schema: { is_nullable: false },
+        meta: { interface: "input", width: "half", required: true } },
+      { field: "email", type: "string", schema: { is_nullable: true },
+        meta: { interface: "input", width: "half", note: "Rendered publicly as a mailto link. Expect it to be scraped." } },
+      { field: "avatar", type: "uuid", schema: { is_nullable: true },
+        meta: { interface: "file-image", special: ["file"], width: "half" } },
+    ],
+  },
+  {
+    collection: "pages",
+    meta: {
+      icon: "description",
+      sort_field: "sort",
+      note: "CMS pages (not blog posts). `parent` groups the nav menu; slugs stay flat and globally unique.",
+      display_template: "{{title}}",
+      archive_field: "status",
+      archive_value: "archived",
+      unarchive_value: "draft",
+    },
+    schema: {},
+    fields: [
+      { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
+      { field: "status", type: "string", schema: { is_nullable: false, default_value: "draft" },
+        meta: { interface: "select-dropdown", width: "half", options: { choices: STATUS_CHOICES } } },
+      { field: "title", type: "string", schema: { is_nullable: false },
+        meta: { interface: "input", width: "half", required: true } },
+      // is_unique gives the DB-level guarantee; the validation filter is a
+      // separate concern (reserved words, not collisions).
+      { field: "slug", type: "string", schema: { is_nullable: false, is_unique: true },
+        meta: {
+          interface: "input", width: "half", required: true,
+          options: { slug: true, trim: true },
+          validation: { slug: { _nin: RESERVED_SLUGS } },
+          validation_message: `Reserved path — pick another slug. Reserved: ${RESERVED_SLUGS.join(", ")}`,
+          note: "Served at the site root, e.g. slug `about` → /about",
+        } },
+      { field: "parent", type: "integer", schema: { is_nullable: true },
+        meta: { interface: "select-dropdown-m2o", width: "half", options: { template: "{{title}}" },
+                note: "Groups this page under another in the nav menu. Does NOT affect the URL." } },
+      { field: "author", type: "integer", schema: { is_nullable: true },
+        meta: { interface: "select-dropdown-m2o", width: "half", options: { template: "{{name}}" } } },
+      // options intentionally omitted -> Directus's default WYSIWYG toolbar,
+      // which already carries the image, media (iframe embed), and source-code
+      // buttons. Matches readme_articles.body, whose options are null.
+      { field: "body", type: "text", schema: { is_nullable: true },
+        meta: { interface: "input-rich-text-html", width: "full" } },
+      { field: "show_in_nav", type: "boolean", schema: { is_nullable: false, default_value: true },
+        meta: { interface: "boolean", width: "half", note: "Unchecked pages still resolve by URL, they just leave the menu." } },
+      { field: "sort", type: "integer", schema: { is_nullable: true }, meta: { hidden: true } },
+      { field: "date_created", type: "timestamp", schema: { is_nullable: true },
+        meta: { special: ["date-created"], interface: "datetime", readonly: true, hidden: true, width: "half" } },
+      { field: "date_updated", type: "timestamp", schema: { is_nullable: true },
+        meta: { special: ["date-updated"], interface: "datetime", readonly: true, hidden: true, width: "half" } },
+      { field: "user_created", type: "uuid", schema: { is_nullable: true },
+        meta: { special: ["user-created"], interface: "select-dropdown-m2o", readonly: true, hidden: true, width: "half" } },
+      { field: "user_updated", type: "uuid", schema: { is_nullable: true },
+        meta: { special: ["user-updated"], interface: "select-dropdown-m2o", readonly: true, hidden: true, width: "half" } },
+    ],
+  },
+];
+
+// Directus does NOT infer relations from field naming — without these rows,
+// `parent`/`author` render as bare number inputs and REST field expansion
+// (`fields=author.name`) silently returns nothing.
+export const PAGES_RELATIONS = [
+  { collection: "pages", field: "parent", related_collection: "pages",
+    meta: { sort_field: null }, schema: { on_delete: "SET NULL" } },
+  { collection: "pages", field: "author", related_collection: "page_authors",
+    meta: { sort_field: null }, schema: { on_delete: "SET NULL" } },
+  { collection: "page_authors", field: "avatar", related_collection: "directus_files",
+    meta: { sort_field: null }, schema: { on_delete: "SET NULL" } },
+  { collection: "pages", field: "user_created", related_collection: "directus_users",
+    meta: { sort_field: null }, schema: { on_delete: "SET NULL" } },
+  { collection: "pages", field: "user_updated", related_collection: "directus_users",
+    meta: { sort_field: null }, schema: { on_delete: "SET NULL" } },
+];
+
+// fields: ["*"] on both — per-field permission limits are unverified on this
+// instance and this design deliberately does not depend on them. Both
+// collections are public-safe by construction; the one exposure is the
+// user_created/user_updated UUIDs, which resolve to nobody without public
+// read on directus_users (which does not exist and must not be added).
+export const PAGES_PERMISSIONS = [
+  { collection: "pages", action: "read", fields: ["*"], permissions: { status: { _eq: "published" } } },
+  { collection: "page_authors", action: "read", fields: ["*"], permissions: {} },
+];
