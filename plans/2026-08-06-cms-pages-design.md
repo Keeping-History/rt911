@@ -24,7 +24,7 @@ allowlist from being re-litigated when the renderer is built.
 | Slug shape | Flat, **globally unique**, served at **root level** (`/about`, not `/pages/about`). |
 | Author | Separate `page_authors` collection (name, email, avatar) with an M2O from `pages`. `directus_users` stays unexposed. |
 | Author email | **Public byline contact**, rendered as a `mailto:` link. Harvesting is an accepted cost. |
-| Audit fields | `user_created` / `user_updated` kept for internal use. Their UUIDs may be publicly readable; accepted (see Permissions). |
+| Audit fields | `user_created` / `user_updated` kept for internal use. Excluded from the public `pages` read grant's `fields` list, so their UUIDs are not publicly readable (see Permissions). |
 | Embeds | `<iframe>` survives sanitization, then a post-pass strips any iframe failing a **host *and* path** allowlist. |
 | WYSIWYG config | Leave interface `options` as `null` — Directus's default toolbar already has image, media, and source-code buttons. Matches `readme_articles.body`. |
 | Extra fields | None. No `featured`, no hero image, no publish-date-distinct-from-created. |
@@ -90,8 +90,12 @@ are worth adding the day a prerender step exists, and not before.
 Public policy (`abf8a154-5b1c-4a46-ac9c-7300570f4f17`, Directus's well-known static
 Public-policy UUID) gets:
 
-- `read` on `pages`, `fields: ["*"]`, permission filter `status = published`
-- `read` on `page_authors`, `fields: ["*"]`, no filter
+- `read` on `pages`, explicit `fields` list (`id`, `status`, `title`, `slug`, `parent`,
+  `author`, `body`, `show_in_nav`, `sort`, `date_created`, `date_updated`), permission
+  filter `status = published`. `user_created` / `user_updated` are deliberately
+  excluded so their audit UUIDs are not publicly readable.
+- `read` on `page_authors`, `fields: ["*"]`, no filter — every field there is public
+  by design.
 - `read` on `directus_files` — **verify before adding.** Avatar and inline WYSIWYG
   images are served from `/assets/<uuid>`, which does not require a `directus_files`
   row read. Only add this grant if the renderer needs file *metadata* (dimensions,
@@ -99,16 +103,21 @@ Public-policy UUID) gets:
 
 ### On field-level limits
 
-Prior work in this repo records per-field permission limits as license-gated (hit on
-`flight_positions`), while a later note says the license key is installed and rules
-verified un-gated. This is unresolved, and **no permission grant in this repo has ever
-used a narrowed `fields` list** — every existing grant is `["*"]`.
+Field-level permission limits **are enforced on this instance**. Prior work recorded
+them as license-gated and unresolved; that has since been verified against the live
+public policy directly: of 17 grants, three already use a narrowed `fields` list and
+are working —
 
-This design does not depend on the answer. Both collections are public-safe by
-construction, with one exception: `user_created` / `user_updated` on `pages` will be
-publicly readable as opaque UUIDs. That is accepted. Resolving a UUID to a person
-requires public read on `directus_users`, which does not exist and must not be added.
-The residual leak is the count of distinct editors and which pages each one touched.
+| Collection | `fields` |
+|---|---|
+| `news_items` | `id`, `title`, `source`, `start_date` |
+| `sources` | `id`, `slug`, `name`, `type` |
+| `tv_channels` | `id`, `title`, `full_title`, `url`, `source`, `start_date`, `end_date`, `calc_duration`, `timezone`, `subtitles` |
+
+The `pages` grant follows the same pattern and lists its public fields explicitly,
+omitting `user_created` and `user_updated` so those audit UUIDs are not publicly
+readable. Any field added to `pages` in the future must also be added to that list,
+or it will be silently invisible to the frontend even though it exists in the schema.
 
 ## Provisioning: `packages/backend/apply-pages-schema.mjs`
 
@@ -165,9 +174,15 @@ schema, while slugs are typed by authors in the Directus UI long after it has ru
 `slug` carries a `meta.validation` filter of `{ "slug": { "_nin": [...] } }`, applied
 once by the provisioning script and enforced by Directus on every save thereafter.
 
-Initial reserved list: `assets`, `admin`, `api`. These are paths nginx or Directus
-already answer, so a page slugged with one would be created successfully and then be
-permanently unreachable — a silent failure worth blocking at authoring time.
+Initial reserved list: `assets`, `img`, `maps`, `stacks` — entries in the frontend
+docroot (`packages/frontend/nginx.conf`) that nginx's `try_files $uri $uri/
+/index.html` resolves before the SPA fallback, verified directly against the
+production docroot (`50x.html`, `assets`, `img`, `index.html`, `maps`, `stacks`; the
+two files are not usable slug shapes). A page slugged with one of these would be
+created successfully and then be permanently unreachable — a silent failure worth
+blocking at authoring time. `admin` and `api` are **not** reserved: they are served
+from `api.911realtime.org`, a different origin, and can never shadow a slug on the
+site host.
 
 ### Mount point
 
@@ -286,6 +301,7 @@ Nav-tree builder tests:
   adding to the reserved list, or a page slug will shadow it. Low likelihood, cheap to
   fix, but it is a one-way door on URL shape.
 - **The publicly readable author email will be scraped.** Accepted explicitly.
-- **Field-limit enforcement remains unverified.** This design routes around it rather
-  than resolving it; if a future collection genuinely needs a hidden field, that
-  question has to be settled first with a live probe.
+- **The `pages` public grant lists fields explicitly.** Any field added to `pages` in
+  the future must also be added to that grant's `fields` list, or it will exist in the
+  schema but be invisible to the frontend — the same failure shape as an unlisted
+  column silently not coming back over the API.

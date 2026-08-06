@@ -16,7 +16,7 @@
 - **Idempotent.** Existing collections, fields, relations, and permissions are detected and skipped, never recreated or silently overwritten.
 - **Never import or run `seed.mjs`.** Its top-level module body bulk-imports media/mp3/news/pager fixtures into whatever database it is pointed at. Importing it *at all* executes those side effects.
 - **Log response bodies on failure.** Directus schema errors are frequently opaque `400`s whose body is the only useful diagnostic.
-- **Reserved slugs:** `assets`, `admin`, `api`.
+- **Reserved slugs:** `assets`, `img`, `maps`, `stacks` — entries in the frontend docroot that nginx resolves before the SPA fallback (verified against the production docroot). `admin`/`api` are served from a different origin and are not reserved.
 - **Embed allowlist** (for the future renderer, recorded here so it is not re-derived): `www.youtube-nocookie.com` + `/embed/`, `www.youtube.com` + `/embed/`, `player.vimeo.com` + `/video/`, `archive.org` + `/embed/`.
 - **Scope:** collections and provisioning only. The renderer (root-level slugs, static Classicy shell, `renderPageHtml.ts` sanitizer) is specced in the design doc and is a **separate future plan**. Do not build it here.
 
@@ -621,6 +621,8 @@ Expected: a small number of short-running rows. **Stop and wait** if you see a l
 
 This is not ceremony. A Directus field-add `ALTER` previously queued behind a running `pg_dump` in this project and stalled live reads for roughly two minutes. The nightly backup CronJob is the collision to avoid.
 
+The concrete mechanism to worry about here: relations 3–5 (`page_authors.avatar` → `directus_files`, `pages.user_created` / `pages.user_updated` → `directus_users`) each add a foreign key. Adding an FK takes `ACCESS EXCLUSIVE` on the new, empty, instantly-locked table — but it *also* takes `SHARE ROW EXCLUSIVE` on the **referenced** table. For the two relations onto `directus_users`, that referenced table is the one live sign-ins write to. A `SHARE ROW EXCLUSIVE` lock queued behind a long-running transaction on `directus_users` is the statement that can stall authentication, not the collection/field creates earlier in the run. The ordering is favorable, though: those three FK-adding relations run last in `PAGES_RELATIONS`, so if this check is followed and something still goes wrong there, everything before it — both collections, `pages.parent`, and `pages.author` — is already done.
+
 - [ ] **Step 2: Dry run against production one more time**
 
 Run the dry-run command from Task 1 Step 4. Read the plan. Confirm it lists exactly the two collections, five relations, and two permissions — nothing unexpected.
@@ -631,7 +633,7 @@ Same command with `--apply` appended.
 
 Expected: `creating collection page_authors`, `creating collection pages`, five `creating relation` lines, two `granting public read` lines, then `apply complete`.
 
-If any step throws, the error message contains the Directus response body. Do not retry blindly — read it. A partially-created schema is safe to re-run against, because every step is existence-checked.
+If any step throws, the error message contains the Directus response body. Do not retry blindly — read it. A partially-created schema is safe to re-run against **at collection, relation, and permission granularity** — every step at those levels is existence-checked. It is **not** safe at field granularity: `plan.collections` is computed from whole-collection existence only, and the apply loop's only action for a collection is `POST /collections` — there is no `POST /fields` path anywhere in this script. So if a collection already exists but is missing a field the definitions now declare, re-running prints "already present, skipping" for that collection and never touches the field. That gap does not affect this task (Step 3 runs against a schema that does not exist yet, so every collection is genuinely all-or-nothing), but it means this script cannot be used to add a field to `pages` or `page_authors` later — that requires a `POST /fields/<collection>` by hand.
 
 - [ ] **Step 4: Verify**
 
@@ -648,29 +650,34 @@ export DTOKEN=$(curl -sS -X POST "$DHOST/auth/login" -H "Content-Type: applicati
 
 curl -sS -X POST "$DHOST/items/page_authors" \
   -H "Authorization: Bearer $DTOKEN" -H "Content-Type: application/json" \
-  -d '{ "name": "911 Realtime", "email": "info@911realtime.org" }' | head -c 300; echo
+  -d '{ "name": "911 Realtime", "email": "info@911realtime.org" }' | tee /tmp/author.json | head -c 300; echo
+export AUTHOR_ID=$(python3 -c 'import json; print(json.load(open("/tmp/author.json"))["data"]["id"])')
 
 curl -sS -X POST "$DHOST/items/pages" \
   -H "Authorization: Bearer $DTOKEN" -H "Content-Type: application/json" \
-  -d '{
-    "title": "About",
-    "slug": "about",
-    "status": "published",
-    "author": 1,
-    "show_in_nav": true,
-    "body": "<p>Placeholder. Replace this from the Directus editor.</p>"
-  }' | head -c 300; echo
+  -d "{
+    \"title\": \"About\",
+    \"slug\": \"about\",
+    \"status\": \"published\",
+    \"author\": $AUTHOR_ID,
+    \"show_in_nav\": true,
+    \"body\": \"<p>Placeholder. Replace this from the Directus editor.</p>\"
+  }" | head -c 300; echo
 ```
+
+Capture the `page_authors` row's id (`$AUTHOR_ID`) and use it rather than hardcoding `"author": 1` — a retried or previously-failed author insert could otherwise leave `pages.author` pointing at a dangling or wrong row.
 
 - [ ] **Step 6: Confirm the reserved-slug validation actually rejects**
 
 ```bash
-curl -sS -o /dev/null -w "%{http_code}\n" -X POST "$DHOST/items/pages" \
+curl -sS -X POST "$DHOST/items/pages" \
   -H "Authorization: Bearer $DTOKEN" -H "Content-Type: application/json" \
-  -d '{ "title": "Bad", "slug": "admin", "status": "draft" }'
+  -d '{ "title": "Bad", "slug": "maps", "status": "draft" }' | tee /tmp/bad-slug.json
 ```
 
-Expected: `400`. If this returns `200`, the `validation` filter did not take effect — delete the created row, then fix the field's meta via `PATCH /fields/pages/slug` before continuing.
+Uses `maps` — a real directory in the frontend docroot — not `admin`. `admin` is served from a different origin (`api.911realtime.org`) and is **not** in `RESERVED_SLUGS`, so it is expected to succeed; probing it here would now assert the wrong result.
+
+Expected: `400`, with no `data.id` in the response. If it returns `200` with a created row, the `validation` filter did not take effect — delete the row using the id captured in `/tmp/bad-slug.json`, then fix the field's meta via `PATCH /fields/pages/slug` before continuing. Capturing the full response (rather than `-o /dev/null`) is what makes that id available if this step turns up the failure it's designed to catch.
 
 - [ ] **Step 7: Confirm anonymous public read works and respects the status filter**
 
@@ -681,13 +688,14 @@ curl -sS "$DHOST/items/pages?fields=id,title,slug,author.name,author.email&filte
 # A draft must NOT appear.
 curl -sS -X POST "$DHOST/items/pages" -H "Authorization: Bearer $DTOKEN" \
   -H "Content-Type: application/json" \
-  -d '{ "title": "Draft Only", "slug": "draft-only", "status": "draft" }' > /dev/null
+  -d '{ "title": "Draft Only", "slug": "draft-only", "status": "draft" }' | tee /tmp/draft-only.json
+export DRAFT_ONLY_ID=$(python3 -c 'import json; print(json.load(open("/tmp/draft-only.json"))["data"]["id"])')
 curl -sS "$DHOST/items/pages?filter[slug][_eq]=draft-only" | head -c 200; echo
 ```
 
 Expected: the first returns the About page **with `author.name` populated** — that is the proof the relation was created correctly, since field expansion silently returns nothing without it. The second returns `{"data":[]}`.
 
-Clean up: delete the `draft-only` row.
+Clean up: `curl -sS -X DELETE "$DHOST/items/pages/$DRAFT_ONLY_ID" -H "Authorization: Bearer $DTOKEN"` — using the id captured above rather than discarding it.
 
 - [ ] **Step 8: Note the script in the backend guidance**
 
