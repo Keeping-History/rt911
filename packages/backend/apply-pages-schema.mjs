@@ -193,6 +193,45 @@ console.log(`  relations to create:   ${plan.relations.length ? plan.relations.j
 console.log(`  permissions:           ${plan.permissions.length ? plan.permissions.join(", ") : "(none — all present)"}`);
 console.log(`  public policy id:      ${publicPolicy}`);
 
+if (VERIFY) {
+  const drift = [];
+
+  for (const col of PAGE_COLLECTIONS) {
+    if (!(await exists(token, `/collections/${col.collection}`))) {
+      drift.push(`collection ${col.collection}: MISSING`);
+      continue;
+    }
+    // /fields/<collection> is admin-only, which is fine — we hold an admin token.
+    const liveFields = new Set(((await api(token, "GET", `/fields/${col.collection}`)).data ?? []).map((f) => f.field));
+    for (const f of col.fields) {
+      if (!liveFields.has(f.field)) drift.push(`${col.collection}.${f.field}: MISSING`);
+    }
+  }
+
+  for (const rel of PAGES_RELATIONS) {
+    const key = relKey(rel.collection, rel.field);
+    const live = liveRelations.find((r) => relKey(r.collection, r.field) === key);
+    if (!live) drift.push(`relation ${key}: MISSING`);
+    else if (live.related_collection !== rel.related_collection)
+      drift.push(`relation ${key}: points at ${live.related_collection}, expected ${rel.related_collection}`);
+  }
+
+  for (const p of PAGES_PERMISSIONS) {
+    const match = livePerms.find((lp) => lp.collection === p.collection && lp.action === p.action);
+    if (!match) drift.push(`permission ${p.collection}:${p.action}: MISSING`);
+    else if (JSON.stringify(match.permissions ?? {}) !== JSON.stringify(p.permissions))
+      drift.push(`permission ${p.collection}:${p.action}: filter is ${JSON.stringify(match.permissions)}, expected ${JSON.stringify(p.permissions)}`);
+  }
+
+  if (drift.length) {
+    console.error("\nVerify FAILED — live schema does not match the definitions:");
+    for (const d of drift) console.error(`  - ${d}`);
+    process.exit(1);
+  }
+  console.log("\nVerify OK — live schema matches the definitions");
+  process.exit(0);
+}
+
 if (APPLY) {
   // Sequential, never concurrent. Bursts of schema operations wedge
   // Directus's introspection cache and require an rt911-api pod restart to
