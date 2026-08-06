@@ -261,6 +261,16 @@ export default function PagesSite() {
 					</div>
 
 					<div className="classicyWindowContents">
+						{!loading && !error && page && (
+							<>
+								<div className={styles.actions}>
+									<ClassicyButton margin="sm" onClickFunc={handlePrint}>
+										Print…
+									</ClassicyButton>
+								</div>
+							</>
+						)}
+
 						<div className={cx("classicyWindowContentsInner", styles.document)}>
 							{loading && <p className={styles.status}>Loading…</p>}
 
@@ -288,15 +298,6 @@ export default function PagesSite() {
 									</div>
 
 									{page.title && <h1 className={styles.docTitle}>{page.title}</h1>}
-
-									{/* Under the title, above the byline: the reader has seen what
-									    the document is before being offered the action on it. */}
-									<div className={styles.actions}>
-										<ClassicyButton margin="sm" onClickFunc={handlePrint}>
-											Print…
-										</ClassicyButton>
-									</div>
-
 									{page.author && (
 										<div className={styles.byline}>
 											{page.author.avatar && (

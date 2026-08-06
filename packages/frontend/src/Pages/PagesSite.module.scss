@@ -282,6 +282,9 @@
 	display: flex;
 	align-items: center;
 	margin: 0 0 calc(var(--window-padding-size) * 2) calc(var(--window-padding-size) * -.5);
+	background-color: var(--color-system-03);
+	border-bottom: 1px solid black;
+	padding: 0 var(--window-padding-size);
 }
 
 /* Present in the DOM at all times but only ever rendered on paper — a printout
