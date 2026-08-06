@@ -272,6 +272,7 @@ export default function PagesSite() {
 
 							{!loading && !error && page && (
 								<>
+									{page.title && <h1>{page.title}</h1>}
 									{page.author && (
 										<div className={styles.byline}>
 											{page.author.avatar && (
