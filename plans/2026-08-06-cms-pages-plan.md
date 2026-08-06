@@ -39,6 +39,32 @@ The data/runner split mirrors `chat-collections.mjs` / `apply-chat-schema.mjs`, 
 
 Steps below use these as the test cycle: run it, see it fail, fix, see it pass.
 
+## Amendments after execution
+
+Tasks 1–3 were executed, reviewed, and then amended by a fix wave that a final
+whole-branch review prompted. **`packages/backend/pages-collections.mjs` and
+`packages/backend/apply-pages-schema.mjs` as committed are authoritative** — the
+source blocks embedded in Tasks 1–3 below are the original instructions, kept as
+the historical record, and are no longer byte-identical to the shipped files.
+
+What changed after the fact:
+
+- `RESERVED_SLUGS` became `["assets", "img", "maps", "stacks"]`. The original list
+  guarded `admin`/`api`, which are served from `api.911realtime.org` — a different
+  origin that cannot shadow a slug on the site host — while missing `img`, `maps`,
+  and `stacks`, which are real docroot directories that can.
+- The `pages` read grant lists its public fields explicitly instead of `["*"]`, so
+  `user_created`/`user_updated` are not publicly readable. Field-level limits are
+  enforced on this instance; the original claim that they were unverified was wrong.
+- `--verify` compares more than field-name presence: `type`, `schema.is_unique`,
+  `meta.validation`, and `meta.special` where the definition declares them, plus
+  permission `fields` as sorted arrays.
+- Preflight additionally validates the public field list and the collection-level
+  `archive_field` / `sort_field` references.
+
+**Task 4 is the operator runbook and is fully current.** It was updated by the same
+fix wave and reflects the shipped code.
+
 ---
 
 ### Task 1: Schema definitions and the dry-run planner
@@ -73,11 +99,12 @@ Create `packages/backend/pages-collections.mjs`:
  * content and have no fixture data to load.
  */
 
-// Root-level paths that nginx or Directus already answer. A page slugged
-// with one of these would be created successfully and then be permanently
-// unreachable, so Directus rejects them at save time via the `slug` field's
-// validation filter below.
-export const RESERVED_SLUGS = ["assets", "admin", "api"];
+// Entries in the frontend docroot, which nginx resolves via
+// `try_files $uri $uri/ /index.html` BEFORE the SPA fallback runs. A page
+// slugged with one of these would be created successfully and then be
+// permanently unreachable, so Directus rejects them at save time via the
+// `slug` field's validation filter below.
+export const RESERVED_SLUGS = ["assets", "img", "maps", "stacks"];
 
 const STATUS_CHOICES = ["published", "draft", "archived"].map((v) => ({ text: v, value: v }));
 
@@ -169,13 +196,19 @@ export const PAGES_RELATIONS = [
     meta: { sort_field: null }, schema: { on_delete: "SET NULL" } },
 ];
 
-// fields: ["*"] on both — per-field permission limits are unverified on this
-// instance and this design deliberately does not depend on them. Both
-// collections are public-safe by construction; the one exposure is the
-// user_created/user_updated UUIDs, which resolve to nobody without public
-// read on directus_users (which does not exist and must not be added).
+// Field-level limits ARE enforced on this instance — three public grants
+// (news_items, sources, tv_channels) already use narrowed lists. Listing
+// fields explicitly keeps the user_created/user_updated audit UUIDs out of
+// public reads. Any field added to `pages` must be added here too, or it
+// will be invisible to the frontend. page_authors stays ["*"] — every field
+// there is public by design.
+const PAGES_PUBLIC_FIELDS = [
+  "id", "status", "title", "slug", "parent", "author",
+  "body", "show_in_nav", "sort", "date_created", "date_updated",
+];
+
 export const PAGES_PERMISSIONS = [
-  { collection: "pages", action: "read", fields: ["*"], permissions: { status: { _eq: "published" } } },
+  { collection: "pages", action: "read", fields: PAGES_PUBLIC_FIELDS, permissions: { status: { _eq: "published" } } },
   { collection: "page_authors", action: "read", fields: ["*"], permissions: {} },
 ];
 ```
@@ -641,6 +674,15 @@ Same command with `--verify` appended.
 
 Expected: `Verify OK — live schema matches the definitions`, exit `0`.
 
+**One expected-drift caveat before you conclude the apply failed.** `meta.validation`
+is the only field property here with no precedent on this instance — zero of its ~864
+fields currently carry one — so whether Directus stores the `_nin` filter verbatim or
+normalizes it (e.g. wrapping it in an `_and`) is unverified. If the *only* drift line
+is `pages.slug: meta.validation is …`, that is normalization, not a failed write:
+check `GET /fields/pages/slug` to confirm the filter is present in some form, and
+confirm the guard actually works via Step 6, which tests it behaviorally. Any other
+drift line means something really did go wrong.
+
 - [ ] **Step 5: Seed one author and one page**
 
 ```bash
@@ -727,7 +769,7 @@ git commit -m "docs(backend): note the pages schema provisioning script"
 | `pages` collection, all fields | Task 1 Step 1 |
 | Globally unique slug | Task 1 Step 1 (`is_unique: true`) |
 | Reserved-slug validation | Task 1 Step 1 (`meta.validation`), proven in Task 4 Step 6 |
-| Permissions, `fields: ["*"]` | Task 1 Step 1, applied Task 4 Step 3, proven Task 4 Step 7 |
+| Permissions (`pages` narrowed, `page_authors` `["*"]`) | Task 1 Step 1, applied Task 4 Step 3, proven Task 4 Step 7 |
 | Relations (M2O, self-ref, file, users) | Task 1 Step 1, applied Task 4 Step 3, proven Task 4 Step 7 |
 | WYSIWYG with `options` omitted | Task 1 Step 1 |
 | Idempotency | Task 2 Step 1 (existence checks on every loop) |
