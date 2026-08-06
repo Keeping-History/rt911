@@ -9,6 +9,7 @@ import {
 } from 'classicy'
 import { useEffect, useMemo, useRef } from 'react'
 
+import { useAboutApp } from '../../Components/AboutApp/AboutApp'
 import { virtualUtcMs } from '../../Providers/MediaStream/virtualClock'
 import { trackAppToggle } from '../../openreplay'
 import appIconPng from './app.png'
@@ -62,6 +63,7 @@ export const MarketWatch = () => {
     const appId = 'MarketWatch.app'
     const appName = 'MarketWatch'
     const appIcon = ICONS.applications.marketWatch.app
+    const aboutWindow = useAboutApp(appId, appIcon)
 
     const isOpen = useAppManager((state) => state.System.Manager.Applications.apps[appId]?.open ?? false)
     const prevIsOpenRef = useRef<boolean | undefined>(undefined)
@@ -166,6 +168,7 @@ export const MarketWatch = () => {
                     )}
                 </div>
             </ClassicyWindow>
+            {aboutWindow}
         </ClassicyApp>
     )
 }

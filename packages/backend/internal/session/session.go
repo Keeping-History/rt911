@@ -32,9 +32,12 @@ const (
 	ChannelNews    = "news"
 	ChannelUsenet  = "usenet"
 	ChannelFlights = "flights"
-	ChannelWeather = "weather"
-	ChannelAlerts  = "alerts"
-	ChannelChat    = "chat"
+	// Anonymous radar traffic (RDR-% ids, issue #263) — its own channel so the
+	// dense extra payload is paid only by clients that enable the map toggle.
+	ChannelFlightsAnon = "flights-anon"
+	ChannelWeather     = "weather"
+	ChannelAlerts      = "alerts"
+	ChannelChat        = "chat"
 )
 
 // Look-ahead windowing. Instead of one Redis lookup + frame per virtual second,
@@ -130,6 +133,11 @@ type outMsg struct {
 	Direction string        `json:"direction,omitempty"`
 	Kind      string        `json:"kind,omitempty"`
 	MessageID int           `json:"message_id,omitempty"`
+	// Cleared rides chat_cleared: how many messages the clear marked. Purely
+	// informational (the client resets on the frame's arrival, not its count),
+	// so omitempty dropping a zero is harmless -- clearing an already-empty
+	// history is still a successful clear.
+	Cleared int64 `json:"cleared,omitempty"`
 }
 
 // Session holds all state for a single connected client.
@@ -154,14 +162,15 @@ type Session struct {
 	// Per-channel look-ahead high-water marks: the exclusive upper edge of the
 	// last window sent on each channel. Channels are subscribed at different
 	// times, so each refills independently. All guarded by mu.
-	mediaHorizon   time.Time
-	pagerHorizon   time.Time
-	mp3Horizon     time.Time
-	newsHorizon    time.Time
-	usenetHorizon  time.Time
-	flightsHorizon time.Time
-	weatherHorizon time.Time
-	alertHorizon   time.Time
+	mediaHorizon       time.Time
+	pagerHorizon       time.Time
+	mp3Horizon         time.Time
+	newsHorizon        time.Time
+	usenetHorizon      time.Time
+	flightsHorizon     time.Time
+	flightsAnonHorizon time.Time
+	weatherHorizon     time.Time
+	alertHorizon       time.Time
 	// chatHorizon is the last virtual instant checked for scheduled beats
 	// (chat_schedules): each tick evaluates the half-open (chatHorizon,
 	// virtualTime] window so a beat fires exactly once as the clock advances.
@@ -312,6 +321,8 @@ func (s *Session) horizonFor(channel string) *time.Time {
 		return &s.usenetHorizon
 	case ChannelFlights:
 		return &s.flightsHorizon
+	case ChannelFlightsAnon:
+		return &s.flightsAnonHorizon
 	case ChannelWeather:
 		return &s.weatherHorizon
 	case ChannelAlerts:
@@ -419,6 +430,16 @@ func (s *Session) SendFlights(t time.Time, items []model.FlightPosition) {
 		return
 	}
 	s.send_(outMsg{Type: "flights", Time: t.Format(time.RFC3339), Flights: items})
+}
+
+// SendFlightsAnon mirrors SendFlights on the flights-anon channel: same
+// FlightPosition payload, its own frame type so the client routes it to the
+// anonymous-traffic buffers only while the toggle is on.
+func (s *Session) SendFlightsAnon(t time.Time, items []model.FlightPosition) {
+	if len(items) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "flights_anon", Time: t.Format(time.RFC3339), Flights: items})
 }
 
 // SendFlightsHistory delivers one chunk of a flights_history reply, echoing the
@@ -556,6 +577,7 @@ func (s *Session) resetHorizons(t time.Time) {
 	s.newsHorizon = t
 	s.usenetHorizon = t
 	s.flightsHorizon = t
+	s.flightsAnonHorizon = t
 	s.weatherHorizon = t
 	s.alertHorizon = t
 	s.chatHorizon = t
@@ -815,13 +837,34 @@ const (
 	// Measured on the live corpus: 13:00Z on 9/11 yields ~450 segments across
 	// the national and international sources.
 	chatBroadcastLimit = 150
-	// chatKnowledgeMaxRunes caps the three knowledge tiers TOGETHER, which is
-	// the actual cost lever. Unbounded, that same 13:00Z window is ~261k runes
-	// (~65k tokens) in every single message, against a design budgeted for ~8k
-	// tokens of prompt in total. Budget drops the least authoritative tier
-	// first, so a curated fact outranks a transcript line that merely happened
-	// to be on air. Roughly 6k tokens, leaving room for persona, history and
-	// the live turn.
+	// chatBroadcastMinuteLimit bounds the summarized form of that same window.
+	// One row per channel per minute, so a ten-minute window over a market's
+	// handful of stations lands far under this; it is a runaway guard, not a
+	// budget.
+	chatBroadcastMinuteLimit = 60
+	// chatBroadcastLiveLimit bounds the volatile tail — the segments aired since
+	// the top of the current virtual minute. At most sixty seconds of one
+	// market's stations, so it is small by construction.
+	chatBroadcastLiveLimit = 40
+	// chatLiveMaxRunes caps that tail independently of chatKnowledgeMaxRunes.
+	// It is the one knowledge block that cannot be cached (it moves every
+	// second), so it is the one worth keeping deliberately small.
+	chatLiveMaxRunes = 3000
+	// chatCuratedDetailWindow is how recent a curated entry must be to carry its
+	// detail column as well as its summary. The digest is cumulative, so by the
+	// afternoon it holds the whole day; the elaboration only earns its tokens
+	// while the buddy is still reacting to the event.
+	chatCuratedDetailWindow = 20 * time.Minute
+	// chatKnowledgeMaxRunes caps the three knowledge tiers TOGETHER. Unbounded,
+	// the 13:00Z window is ~261k runes (~65k tokens) in every single message,
+	// against a design budgeted for ~8k tokens of prompt in total. Budget drops
+	// the least authoritative tier first, so a curated fact outranks a transcript
+	// line that merely happened to be on air.
+	//
+	// This stays a backstop rather than the lever it used to be: once tier 2
+	// arrives pre-summarized the window fits well inside it on its own, and the
+	// ceiling only binds on the raw-segment fallback — where it is still what
+	// keeps an unsummarized span from blowing the budget.
 	chatKnowledgeMaxRunes = 24000
 	// chatTimelineLimit bounds the tier-3 fallback search, consulted only when
 	// tiers 1 and 2 turn up nothing for this virtual time.
@@ -910,13 +953,13 @@ func (s *Session) ChatSend(profileID int, body string) {
 	s.persistInbound(ctx, userID, profileID, body, vTime, moderation)
 
 	profile := findProfile(profiles, profileID)
-	history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, profileID, vTime, body,
+	history, digest, recentPassages, live, timeline := s.retrieveContext(ctx, userID, profileID, vTime, body,
 		chat.AllowedFor(bcastSources, profile.Market, profile.Watching))
 
 	s.send_(outMsg{Type: "chat_typing", Profile: profileID})
 
 	job := buildChatJob(userID, profile, phases, beacons, body, "generated", false, vTime,
-		digest, recentPassages, timeline, history, nil)
+		digest, recentPassages, live, timeline, history, nil)
 	// Set here rather than as another positional bool on buildChatJob, which
 	// already takes one: two adjacent booleans are a transposition waiting to
 	// happen, and swapping these would tell every ordinary reply the student is
@@ -941,30 +984,54 @@ func (s *Session) ChatSend(profileID int, body string) {
 // the student's own message for ChatSend, or the curator's Prompt for a beat
 // in lieu of anything a student typed. Every value is the zero value when
 // s.pool is nil, exactly like the inline block this replaced.
-func (s *Session) retrieveContext(ctx context.Context, userID string, profileID int, vTime time.Time, query string, allow *chat.BroadcastFilter) (history []chat.Turn, digest, recentPassages, timeline []chat.Passage) {
+// The windowed tiers are read at the top of the current virtual minute rather
+// than at vTime itself. That floor is what makes them cacheable — an upper bound
+// that moves every second produced a byte-different prompt prefix on every
+// message — and `live` carries the remainder since the floor so nothing on air in
+// the last few seconds is lost.
+func (s *Session) retrieveContext(ctx context.Context, userID string, profileID int, vTime time.Time, query string, allow *chat.BroadcastFilter) (history []chat.Turn, digest, recentPassages, live, timeline []chat.Passage) {
 	if s.pool == nil {
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil
 	}
+	floor := chat.FloorMinute(vTime)
 	if h, err := chat.History(ctx, s.pool, userID, profileID, vTime, chatHistoryLimit); err != nil {
 		s.logger.Warn("chat: history load failed", "error", err)
 	} else {
 		history = h
 	}
-	if d, err := chat.LoadCurated(ctx, s.pool, vTime); err != nil {
+	if d, err := chat.LoadCurated(ctx, s.pool, floor, chatCuratedDetailWindow); err != nil {
 		s.logger.Warn("chat: load curated failed", "error", err)
 	} else {
 		digest = d
 	}
-	if r, err := chat.LoadBroadcast(ctx, s.pool, vTime, chatBroadcastLookback, allow, chatBroadcastLimit); err != nil {
-		s.logger.Warn("chat: load broadcast failed", "error", err)
+	// Prefer the pre-summarized minutes and fall back to raw segments for the
+	// same span, so an unsummarized stretch degrades to the old behaviour rather
+	// than to a buddy who heard nothing. Both paths take the identical allow
+	// filter — see LoadBroadcastMinutes on why that has to stay true.
+	if m, err := chat.LoadBroadcastMinutes(ctx, s.pool, floor.Add(-chatBroadcastLookback), floor, allow, chatBroadcastMinuteLimit); err != nil {
+		s.logger.Warn("chat: load broadcast minutes failed", "error", err)
 	} else {
-		recentPassages = r
+		recentPassages = m
+	}
+	if len(recentPassages) == 0 {
+		if r, err := chat.LoadBroadcast(ctx, s.pool, floor.Add(-chatBroadcastLookback), floor, allow, chatBroadcastLimit); err != nil {
+			s.logger.Warn("chat: load broadcast failed", "error", err)
+		} else {
+			recentPassages = r
+		}
+	}
+	if vTime.After(floor) {
+		if l, err := chat.LoadBroadcast(ctx, s.pool, floor, vTime, allow, chatBroadcastLiveLimit); err != nil {
+			s.logger.Warn("chat: load broadcast live failed", "error", err)
+		} else {
+			live = chat.Budget(l, chatLiveMaxRunes)
+		}
 	}
 	// Tier 3 must land in Timeline, never Digest: retrospective investigative
 	// reporting presented as something the buddy plainly knows is exactly the
 	// misattribution the tier system exists to prevent. See buildChatJob and
 	// its test.
-	if len(digest) == 0 && len(recentPassages) == 0 {
+	if len(digest) == 0 && len(recentPassages) == 0 && len(live) == 0 {
 		if tl, err := chat.SearchTimeline(ctx, s.pool, vTime, query, chatTimelineLimit); err != nil {
 			s.logger.Warn("chat: search timeline failed", "error", err)
 		} else {
@@ -978,9 +1045,14 @@ func (s *Session) retrieveContext(ctx context.Context, userID string, profileID 
 	// thick with curated facts squeezes transcript, not the reverse.
 	// Partitioning by p.Tier is safe because Budget's sort is stable, so each
 	// tier keeps the order its loader returned (chronological for tier 2).
+	//
+	// live is deliberately outside this: it shares tier 2's Tier value, so
+	// feeding it through partitionTiers would merge it back into recentPassages
+	// and collapse the cacheable/volatile split the whole windowing rests on. It
+	// carries its own ceiling (chatLiveMaxRunes) instead.
 	digest, recentPassages, timeline = partitionTiers(chat.Budget(
 		concatPassages(digest, recentPassages, timeline), chatKnowledgeMaxRunes))
-	return history, digest, recentPassages, timeline
+	return history, digest, recentPassages, live, timeline
 }
 
 // chatDeliver builds the Generator's Deliver callback. It runs on a worker
@@ -1018,6 +1090,7 @@ func (s *Session) chatDeliver(userID string, profileID int, vTime time.Time, bas
 			id, appendErr := chat.AppendMessage(context.Background(), s.pool, userID, chat.Message{
 				Profile: profileID, Direction: "out", Body: reply.Body, VirtualTime: vTime,
 				Kind: kind, Model: reply.Model, TokensIn: reply.TokensIn, TokensOut: reply.TokensOut,
+				CachedIn: reply.CachedIn, CacheWriteIn: reply.CacheWriteIn,
 			})
 			if appendErr != nil {
 				s.logger.Warn("chat: append reply failed", "error", appendErr)
@@ -1118,11 +1191,11 @@ func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID str
 			// query is sc.Prompt in place of a student's message, since none
 			// exists for a beat the buddy is sending unprompted.
 			profile := findProfile(profiles, sc.ProfileID)
-			history, digest, recentPassages, timeline := s.retrieveContext(ctx, userID, sc.ProfileID, t, sc.Prompt,
+			history, digest, recentPassages, live, timeline := s.retrieveContext(ctx, userID, sc.ProfileID, t, sc.Prompt,
 				chat.AllowedFor(bcastSources, profile.Market, profile.Watching))
 			s.send_(outMsg{Type: "chat_typing", Profile: sc.ProfileID})
 			job := buildChatJob(userID, profile, phases, beacons, sc.Prompt, "scheduled", true, t,
-				digest, recentPassages, timeline, history, nil)
+				digest, recentPassages, live, timeline, history, nil)
 			job.UserName = userName
 			job.UserProfile = userProfile
 			job.Deliver = s.chatDeliver(userID, sc.ProfileID, t, job.Kind)
@@ -1214,6 +1287,39 @@ func (s *Session) ChatHistory(profileID int, before time.Time, limit int) {
 	s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
 }
 
+// ChatClear marks the signed-in user's entire chat history old and confirms
+// with a chat_cleared frame, which is what the client resets its transcript on.
+// No rows are deleted — see chat.ClearMessages.
+//
+// Every failure path sends an error instead of a confirmation, deliberately: a
+// client that emptied its transcript on an unconfirmed clear would show the
+// student a blank conversation that the next reconnect silently refills.
+func (s *Session) ChatClear() {
+	s.mu.Lock()
+	userID := s.userID
+	s.mu.Unlock()
+
+	// The user id is read from the authenticated session, never from the
+	// request, so no client field can aim the clear at another user's history.
+	if userID == "" {
+		s.SendError("not signed in")
+		return
+	}
+	if s.pool == nil {
+		s.SendError("chat history is unavailable")
+		return
+	}
+
+	cleared, err := chat.ClearMessages(context.Background(), s.pool, userID)
+	if err != nil {
+		s.logger.Warn("chat: clear history failed", "error", err)
+		s.SendError("could not clear chat history")
+		return
+	}
+	s.logger.Info("chat: cleared history", "messages", cleared)
+	s.send_(outMsg{Type: "chat_cleared", Cleared: cleared})
+}
+
 // clampChatHistoryBefore bounds a client-supplied chat_history cursor to the
 // session's own virtual time, so the boundary is enforced server-side rather
 // than merely trusted. A zero virtualTime means the clock has not been set
@@ -1299,7 +1405,7 @@ func moderationOf(d chat.Decision) map[string]any {
 // function to do on a miss — a second fallback here would just be dead code
 // shadowing PhaseAt's own.
 func buildChatJob(userID string, profile chat.Profile, phases map[int][]chat.Phase, beacons map[int]chat.Beacon, body, kind string, selfInitiated bool, vTime time.Time,
-	digest, recent, timeline []chat.Passage, history []chat.Turn, deliver func(chat.Reply, error)) chat.Job {
+	digest, recent, live, timeline []chat.Passage, history []chat.Turn, deliver func(chat.Reply, error)) chat.Job {
 	phase, _ := chat.PhaseAt(phases[profile.ID], beacons, vTime)
 	return chat.Job{
 		UserID:        userID,
@@ -1311,6 +1417,7 @@ func buildChatJob(userID string, profile chat.Profile, phases map[int][]chat.Pha
 		VirtualTime:   vTime,
 		Digest:        digest,
 		Recent:        recent,
+		Live:          live,
 		Timeline:      timeline,
 		History:       history,
 		Deliver:       deliver,
@@ -1352,6 +1459,7 @@ func (s *Session) RunTimePump() {
 			newsLo, newsHi, doNews := s.planChannelRefill(ChannelNews, &s.newsHorizon, t, windowNews)
 			usenetLo, usenetHi, doUsenet := s.planChannelRefill(ChannelUsenet, &s.usenetHorizon, t, windowUsenet)
 			flightsLo, flightsHi, doFlights := s.planChannelRefill(ChannelFlights, &s.flightsHorizon, t, windowFlights)
+			anonLo, anonHi, doAnon := s.planChannelRefill(ChannelFlightsAnon, &s.flightsAnonHorizon, t, windowFlights)
 			weatherLo, weatherHi, doWeather := s.planChannelRefill(ChannelWeather, &s.weatherHorizon, t, windowWeather)
 			alertLo, alertHi, doAlert := s.planChannelRefill(ChannelAlerts, &s.alertHorizon, t, windowAlert)
 			var usenetGroups []string
@@ -1412,10 +1520,17 @@ func (s *Session) RunTimePump() {
 				}
 			}
 			if doFlights {
-				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, flightsLo, flightsHi, s.logger); err != nil {
+				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, cache.KeyFlightMinutes, flightsLo, flightsHi, s.logger); err != nil {
 					s.logger.Warn("flights range lookup failed", "error", err)
 				} else {
 					s.SendFlights(t, items)
+				}
+			}
+			if doAnon {
+				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, cache.KeyFlightAnonMinutes, anonLo, anonHi, s.logger); err != nil {
+					s.logger.Warn("flights-anon range lookup failed", "error", err)
+				} else {
+					s.SendFlightsAnon(t, items)
 				}
 			}
 			// usenet refills per active group, reading Postgres directly (not Redis):

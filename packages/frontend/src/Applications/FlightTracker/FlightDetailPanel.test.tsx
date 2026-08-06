@@ -4,6 +4,7 @@ import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamCont
 import type { FlightTrack } from "./useFlightTrack";
 import type { MapPoi } from "./mapPois";
 import { FlightDetailPanel } from "./FlightDetailPanel";
+import { PROVENANCE_NOTE } from "./flightProvenance";
 
 afterEach(cleanup);
 
@@ -223,5 +224,29 @@ describe("FlightDetailPanel", () => {
 				nowMs={PRE_IMPACT} />,
 		);
 		expect(screen.queryByLabelText("Phase colors")).toBeNull();
+	});
+
+	describe("provenance disclosure (#263)", () => {
+		// Two near-miss phrasings once coexisted here — one gated on a missing
+		// route, the other on loaded source tags — so an unidentified track with
+		// a loaded track showed both. These pin it to exactly one sentence.
+		it("states provenance exactly once, in the canonical wording", () => {
+			render(<FlightDetailPanel selected={sel} loading={false} error={null}
+				track={baseTrack} nowMs={PRE_IMPACT} sources={["radar", "estimated"]} />);
+			expect(screen.getAllByText(PROVENANCE_NOTE)).toHaveLength(1);
+			// any second provenance sentence, however worded, fails this
+			expect(screen.queryAllByText(/reconstructed|synthesized/i)).toHaveLength(1);
+		});
+		it("discloses provenance even when no track has loaded", () => {
+			render(<FlightDetailPanel selected={{ ...sel, flight: "RDR-26155", carrier: undefined }}
+				loading={false} error={null} track={null} nowMs={PRE_IMPACT} />);
+			expect(screen.getAllByText(PROVENANCE_NOTE)).toHaveLength(1);
+		});
+		it("says the route is unknown rather than restating provenance", () => {
+			render(<FlightDetailPanel selected={{ ...sel, flight: "RDR-26155", carrier: undefined }}
+				loading={false} error={null} track={null} nowMs={PRE_IMPACT} />);
+			expect(screen.getByText("Route unknown")).toBeTruthy();
+			expect(screen.queryByText(/synthesized/i)).toBeNull();
+		});
 	});
 });

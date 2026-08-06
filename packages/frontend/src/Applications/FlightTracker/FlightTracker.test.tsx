@@ -197,6 +197,7 @@ vi.mock("classicy", () => ({
 	registerClassicyIcons: <T,>(icons: T) => icons,
 	quitMenuItemHelper: () => ({}),
 	registerAppEventHandler: () => {},
+	useClassicyHelpMenu: () => {},
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({
 			System: {
@@ -238,6 +239,8 @@ import { FlightTracker } from "./FlightTracker";
 // the same context plumbing every other app relies on.
 const subscribeFlights = vi.fn();
 const unsubscribeFlights = vi.fn();
+const subscribeFlightsAnon = vi.fn();
+const unsubscribeFlightsAnon = vi.fn();
 
 function makeCtxValue(
 	overrides: Partial<MediaStreamContextValue>,
@@ -277,6 +280,8 @@ function makeCtxValue(
 		flightPositions: [],
 		subscribeFlights,
 		unsubscribeFlights,
+		subscribeFlightsAnon,
+		unsubscribeFlightsAnon,
 		flightsHistory: [],
 		flightsHistoryDone: false,
 		flightsSeed: [],
@@ -298,6 +303,7 @@ function makeCtxValue(
 		sendChat: vi.fn(),
 		requestChatHistory: vi.fn(),
 		appendLocalChatMessage: vi.fn(),
+		clearChatData: vi.fn(),
 		...overrides,
 	};
 }

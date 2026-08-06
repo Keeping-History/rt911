@@ -70,6 +70,7 @@ type Job struct {
 	VirtualTime time.Time
 	Digest      []Passage
 	Recent      []Passage
+	Live        []Passage
 	Timeline    []Passage
 	History     []Turn
 	// SelfInitiated marks a proactive scheduled beat: Body is the curator's
@@ -275,6 +276,7 @@ func (g *Generator) run(j Job) {
 		Phase:         j.Phase,
 		Digest:        Redact(j.Digest),
 		Recent:        Redact(j.Recent),
+		Live:          Redact(j.Live),
 		Timeline:      Redact(j.Timeline),
 		History:       j.History,
 		VirtualTime:   j.VirtualTime,

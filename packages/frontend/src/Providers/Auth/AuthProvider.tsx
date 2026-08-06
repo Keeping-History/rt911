@@ -3,7 +3,7 @@
 // cookie via fetchMe(), same non-persistence stance as PlaylistProvider.
 import { type FC, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { identifyUser } from "../../openreplay";
-import { fetchMe, loginEmail, logout, providerLoginUrl, type AuthUser,
+import { fetchMe, loginEmail, logout, providerLoginUrl, secureOrigin, type AuthUser,
 	register as apiRegister,
 } from "./authApi";
 import { runBeforeSignOutHooks } from "./beforeSignOut";
@@ -53,8 +53,10 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
 	const signInWithProvider = useCallback((provider: "google" | "facebook" | "apple") => {
 		// Use bare origin, not href, to avoid including query strings that
-		// Directus's AUTH_GOOGLE_REDIRECT_ALLOW_LIST would reject (exact match only).
-		window.location.assign(providerLoginUrl(provider, window.location.origin + "/"));
+		// Directus's AUTH_GOOGLE_REDIRECT_ALLOW_LIST would reject (exact match only);
+		// secureOrigin() forces https on the product domain, because the allow list
+		// holds no http entries and the edge still serves the app over plaintext.
+		window.location.assign(providerLoginUrl(provider, secureOrigin() + "/"));
 	}, []);
 
 	const signOut = useCallback(async () => {

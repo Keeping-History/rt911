@@ -11,8 +11,10 @@ func TestOriginAllowlistTrusted(t *testing.T) {
 		want   bool
 	}{
 		{"apex", "https://911realtime.org", true},
-		{"www", "https://www.911realtime.org", true},
-		{"beta", "https://beta.911realtime.org", true},
+		// Retired in the apex cutover's cleanup step. www 301s at the edge, so
+		// it can never produce a browser origin; beta 301s there too.
+		{"www is retired", "https://www.911realtime.org", false},
+		{"beta is retired", "https://beta.911realtime.org", false},
 		{"pr previews", "https://keeping-history.github.io", true},
 		{"absent origin is never trusted", "", false},
 		{"unrelated site", "https://evil.example", false},
@@ -20,12 +22,12 @@ func TestOriginAllowlistTrusted(t *testing.T) {
 		// SameSite=lax, so the browser sends the cookie, but it must not
 		// yield an identity.
 		{"sibling host under the same registrable domain", "https://timemachine.911realtime.org", false},
-		{"http scheme is a different origin", "http://beta.911realtime.org", false},
-		{"port makes a different origin", "https://beta.911realtime.org:8443", false},
-		{"path is not part of an origin", "https://beta.911realtime.org/app", false},
-		{"case is normalized", "HTTPS://Beta.911RealTime.org", true},
-		{"trailing slash is tolerated", "https://beta.911realtime.org/", true},
-		{"whitespace is trimmed", "  https://beta.911realtime.org  ", true},
+		{"http scheme is a different origin", "http://911realtime.org", false},
+		{"port makes a different origin", "https://911realtime.org:8443", false},
+		{"path is not part of an origin", "https://911realtime.org/app", false},
+		{"case is normalized", "HTTPS://911RealTime.org", true},
+		{"trailing slash is tolerated", "https://911realtime.org/", true},
+		{"whitespace is trimmed", "  https://911realtime.org  ", true},
 	}
 
 	for _, tc := range tests {
@@ -46,7 +48,7 @@ func TestOriginAllowlistExtras(t *testing.T) {
 	if !a.Trusted("https://preview.example") {
 		t.Fatal("extras should be normalized like the defaults")
 	}
-	if !a.Trusted("https://beta.911realtime.org") {
+	if !a.Trusted("https://911realtime.org") {
 		t.Fatal("extras must add to the defaults, not replace them")
 	}
 	if a.Trusted("http://localhost:4173") {

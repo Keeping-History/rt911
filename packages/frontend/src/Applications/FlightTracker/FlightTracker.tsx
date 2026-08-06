@@ -28,6 +28,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import {
 	MediaStreamContext,
 	type FlightPosition,
@@ -51,6 +52,8 @@ import {
 	flightTrackerSetLoopSettings,
 	flightTrackerSetMapSettings,
 	flightTrackerSetPoiSettings,
+	ANON_DESATURATION,
+	desaturate,
 	intToHex,
 	readFlightFilterSettings,
 	readFlightLoopSettings,
@@ -71,6 +74,7 @@ import {
 } from "./flightTrackerCommands";
 import { useNotableCrashSites } from "./useNotableCrashSites";
 import { isNotable, isObserver } from "./notableFlights";
+import { isEstimated, orderedTrackSources } from "./flightProvenance";
 import type { CameraMode } from "./flightCamera";
 import { useRouteIndex } from "./useRouteIndex";
 import { groundStopStatus } from "./groundStop";
@@ -112,6 +116,7 @@ export const FlightTracker: FC = () => {
 	const appId = "FlightTracker.app";
 	const appName = "Flight Tracker";
 	const appIcon = ICONS.applications.flightTracker.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const isRunning = useAppManager(
 		(s) => appId in (s.System.Manager.Applications.apps ?? {}),
@@ -243,6 +248,11 @@ export const FlightTracker: FC = () => {
 			return !on;
 		});
 	}, []);
+	const toggleAnonTraffic = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, anonTraffic: !settings.anonTraffic }),
+		);
+	}, [settings, desktopEventDispatch]);
 	const toggleGlobe = useCallback(() => {
 		desktopEventDispatch(
 			flightTrackerSetMapSettings({ ...settings, globe: !settings.globe }),
@@ -283,6 +293,8 @@ export const FlightTracker: FC = () => {
 		flightPositions,
 		subscribeFlights,
 		unsubscribeFlights,
+		subscribeFlightsAnon,
+		unsubscribeFlightsAnon,
 		connected,
 		flightsHistory,
 		flightsSeed,
@@ -340,6 +352,12 @@ export const FlightTracker: FC = () => {
 			: allPositions;
 		return dropLandedPositions(visible, routeIndex, nowMs);
 	}, [allPositions, visibleFlights, routeIndex, nowMs]);
+	// Anonymous radar traffic is counted separately in the status bar; its
+	// RDR- prefix is the corpus discriminator everywhere.
+	const anonAloft = useMemo(
+		() => flightPositions.filter((p) => p.flight.startsWith("RDR-")).length,
+		[flightPositions],
+	);
 	// Wheels-down/crash instants for the airborne set: the map's dead-reckoning
 	// clamp (a landed flight freezes at its track end instead of overshooting).
 	const landingClock = useMemo(
@@ -384,6 +402,14 @@ export const FlightTracker: FC = () => {
 		subscribeFlights(appId);
 		return () => unsubscribeFlights(appId);
 	}, [isRunning, subscribeFlights, unsubscribeFlights, appId]);
+
+	// The anonymous-traffic corpus rides its own channel, paid for only while
+	// the "Other" toggle is on (#263).
+	useEffect(() => {
+		if (!isRunning || !settings.anonTraffic) return;
+		subscribeFlightsAnon(appId);
+		return () => unsubscribeFlightsAnon(appId);
+	}, [isRunning, settings.anonTraffic, subscribeFlightsAnon, unsubscribeFlightsAnon, appId]);
 
 	// Selection is a LIST (issue #225): a plain click yields one entry; an
 	// area-select drag yields many, toggled via the detail pane's dropdown.
@@ -802,9 +828,20 @@ export const FlightTracker: FC = () => {
 		setSelectedPoi(null);
 	}, [command, flightPositions]);
 
+	// Per-minute segments are used when the track needs to say something the
+	// single decimated line can't: phase colors (notables) or a provenance
+	// change (a spliced radar/estimated flight, #263).
+	const hasEstimated = useMemo(
+		() => !!profile?.some((p) => isEstimated(p.source)),
+		[profile],
+	);
+
 	const trackGeoJSON: FeatureCollection | null = useMemo(() => {
 		if (!track?.geometry) return null;
-		if (selection && isNotable(selection.flight) && profile && profile.length >= 2) {
+		if (
+			selection && profile && profile.length >= 2
+			&& (isNotable(selection.flight) || hasEstimated)
+		) {
 			const features = buildTrackSegments(profile);
 			if (features.length) return { type: "FeatureCollection", features };
 		}
@@ -813,7 +850,14 @@ export const FlightTracker: FC = () => {
 			type: "FeatureCollection",
 			features: [{ type: "Feature", geometry: track.geometry, properties: {} }],
 		};
-	}, [track?.geometry, selection, profile]);
+	}, [track?.geometry, selection, profile, hasEstimated]);
+
+	// Provenance legend: only meaningful once a track actually mixes radar and
+	// estimated stretches.
+	const trackSources = useMemo<string[]>(
+		() => (hasEstimated && profile ? orderedTrackSources(profile) : []),
+		[hasEstimated, profile],
+	);
 
 	// Phase legend (issue #310): same gate as the per-phase track segments — only
 	// notable flights with a smoothed profile get colored phases, so only they get
@@ -1154,6 +1198,8 @@ export const FlightTracker: FC = () => {
 							onToggleThreeD={toggleThreeD}
 							onToggleTerrain={toggleTerrain}
 							onToggleCluster={toggleCluster}
+							anonTraffic={settings.anonTraffic}
+							onToggleAnonTraffic={toggleAnonTraffic}
 							onSetSelectMode={setSelectMode}
 							mapStyle={settings.mapStyle}
 							darkMap={settings.darkMap}
@@ -1195,6 +1241,12 @@ export const FlightTracker: FC = () => {
 									tone === "dark"
 										? settings.observerPinColorDark
 										: settings.observerPinColorLight,
+								)}
+								anonPinColor={intToHex(
+									desaturate(
+										tone === "dark" ? settings.pinColorDark : settings.pinColorLight,
+										ANON_DESATURATION,
+									),
 								)}
 								buildingHeroColorLight={settings.buildingHeroColorLight}
 								buildingHeroColorDark={settings.buildingHeroColorDark}
@@ -1321,8 +1373,8 @@ export const FlightTracker: FC = () => {
 							</span>
 							<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
 								{visibleFlights
-									? `${filteredPositions.length} of ${flightPositions.length} aircraft aloft · filtered`
-									: `${flightPositions.length} aircraft aloft`}
+									? `${filteredPositions.length} of ${flightPositions.length - anonAloft} aircraft aloft · filtered${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`
+									: `${flightPositions.length - anonAloft} aircraft aloft${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`}
 							</span>
 						</div>
 					</div>
@@ -1340,6 +1392,7 @@ export const FlightTracker: FC = () => {
 							selectionOptions={multiSelected}
 							poi={selectedPoi}
 							phases={trackPhases}
+							sources={trackSources}
 							onPickFlight={(flight) => {
 								const i = multiSelected.findIndex((p) => p.flight === flight);
 								if (i >= 0) setActiveFlightIdx(i);
@@ -1349,6 +1402,7 @@ export const FlightTracker: FC = () => {
 					</div>
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

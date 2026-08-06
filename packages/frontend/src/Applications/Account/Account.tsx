@@ -164,7 +164,7 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 				zoomable={false}
 				scrollable={false}
 				collapsable={false}
-				initialSize={["35%", 0]}
+				initialSize={["50%", 0]}
 				initialPosition={[280, 160]}
 				modal={false}
 				appMenu={appMenu}

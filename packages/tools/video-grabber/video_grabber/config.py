@@ -24,6 +24,16 @@ class Config:
     ia_rate_per_sec: int = field(default_factory=lambda: _int("IA_RATE_PER_SEC", 2))
     min_duration_seconds: int = field(default_factory=lambda: _int("MIN_DURATION_SECONDS", 720))
 
+    # --- Transcript minute summarisation ---
+    # Tier defaults to llm-extract: the model only chooses which source lines to
+    # keep and the output is rebuilt verbatim, so it cannot fabricate. llm-abstract
+    # compresses harder but its output has to clear the containment gate.
+    anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
+    summarize_model: str = field(default_factory=lambda: os.getenv("SUMMARIZE_MODEL", "claude-haiku-4-5"))
+    summarize_tier: str = field(default_factory=lambda: os.getenv("SUMMARIZE_TIER", "llm-extract"))
+    summarize_max_units: int = field(default_factory=lambda: _int("SUMMARIZE_MAX_UNITS", 3))
+    summarize_concurrency: int = field(default_factory=lambda: _int("SUMMARIZE_CONCURRENCY", 8))
+
     # --- Audio transcription (whisper.cpp) ---
     whisper_bin: str = field(default_factory=lambda: os.getenv("WHISPER_BIN", "whisper-cli"))
     whisper_model: str = field(default_factory=lambda: os.getenv("WHISPER_MODEL", "/opt/models/ggml-medium.en.bin"))

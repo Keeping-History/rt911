@@ -39,6 +39,9 @@ export interface FlightMapSettings {
 	threeD: boolean;
 	// Topographic relief (hillshade + 3D ground mesh) — one switch for both.
 	terrain: boolean;
+	// Anonymous radar traffic (RDR-… ids, #263): opt-in "Other" layer — the
+	// extra stream is subscribed only while this is on.
+	anonTraffic: boolean;
 	// Camera-follow framing for the tracked flights (track/cockpit/highlight).
 	// Persisted as a preference; the follow on/off toggle itself is ephemeral
 	// (it needs a live selection), so it lives in FlightTracker, not here.
@@ -62,6 +65,7 @@ export const DEFAULT_FLIGHT_MAP_SETTINGS: FlightMapSettings = {
 	cluster: false,
 	threeD: false,
 	terrain: true,
+	anonTraffic: false,
 	cameraMode: DEFAULT_CAMERA_MODE,
 };
 
@@ -175,6 +179,26 @@ export const readFlightPoiSettings = (
 		(data?.poiSettings as Partial<FlightPoiSettings> | undefined) ?? {};
 	return { ...DEFAULT_FLIGHT_POI_SETTINGS, ...stored };
 };
+
+/**
+ * Desaturate a packed color toward its own grey by `amount` (0-1), keeping
+ * lightness. Anonymous radar traffic (#263) renders at half the saturation of
+ * the identified pins so it reads as background texture without becoming a
+ * second hue to learn — and it follows automatically when the pin color is
+ * changed in Settings.
+ */
+export const desaturate = (color: number, amount: number): number => {
+	const r = (color >> 16) & 255;
+	const g = (color >> 8) & 255;
+	const b = color & 255;
+	// Rec. 601 luma keeps the greyed color at the same perceived lightness.
+	const grey = 0.299 * r + 0.587 * g + 0.114 * b;
+	const mix = (c: number) => Math.round(c + (grey - c) * amount);
+	return (mix(r) << 16) | (mix(g) << 8) | mix(b);
+};
+
+/** Fraction of saturation removed from the pin color for anonymous traffic. */
+export const ANON_DESATURATION = 0.5;
 
 /** Packed int → CSS hex; the single place the two color formats meet. */
 export const intToHex = (color: number): string =>

@@ -41,18 +41,19 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `seek`        | `time`            | Move the virtual clock to a new instant.      |
 | `heartbeat`   | `time`            | Report client's current virtual time.         |
 | `filter`      | `formats[]`       | Whitelist media formats.                      |
-| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`weather`/`alerts`/`chat`). |
+| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`flights-anon`/`weather`/`alerts`/`chat`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
 | `usenet_body` | `id`              | Request the full body of one message by id (bodies are no longer in list frames). |
 | `news_body`   | `id`              | Request the full text of one news article by id (bodies are not in snapshot frames). |
-| `flights_history` | `minutes`, `id` | Request the trailing `minutes` (1-90; loop mode uses 30/90, the heading seed ~3) of flight positions. Requires an active `flights` subscription. `id` is echoed on every reply chunk. |
+| `flights_history` | `minutes`, `id`, `channel?` | Request the trailing `minutes` (1-90; loop mode uses 30/90, the heading seed ~3) of flight positions. `channel` selects the corpus: omitted/`flights` (default) or `flights-anon`; the matching subscription is required. `id` is echoed on every reply chunk. |
 | `weather_forecast` | `zone`, `id` | Request the forecast product covering NWS UGC `zone` (e.g. `"NYZ076"`) at the client's virtual time. Requires an active `weather` subscription. `id` is echoed on the reply. |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
 | `chat_send`   | `profile`, `body` | Send one message to a buddy on the `chat` channel. See [`chat_send`](#chat_send) below. |
 | `chat_history` | `profile`, `before`, `limit` | Request prior turns with a buddy at or before `before` (RFC3339). `limit` defaults to 40 when omitted or non-positive. See [`chat_history`](#chat_history) below. |
+| `chat_clear`  | —                 | Soft-delete the signed-in user's entire chat history, across every buddy. See [`chat_clear`](#chat_clear) below. |
 
 All unknown `type` values produce an `error` reply but do not terminate the session.
 
@@ -76,6 +77,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `news`            | `time`, `items[]`             | News back catalogue (every approved article from the start of 2001-09-09 up to `t`, **headline-only** — no `content`) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `flights`         | `time`, `flights[]`           | Flights snapshot (airborne picture covering `[t−90s, t]`) on subscribe/init/seek, plus a forward **window** (default 300 s) per refill while subscribed. |
+| `flights_anon`    | `time`, `flights[]`           | Identical contract to `flights` for the anonymous radar-traffic corpus (`RDR-…` ids, issue #263). Delivered only while subscribed to `flights-anon`; cached separately (`flight-anon:minutes`), so unsubscribed clients pay nothing. |
 | `flights_history` | `id`, `time`, `flights[]`, `done` | Chunked reply to a `flights_history` request (~10 minute-buckets per frame). The final frame carries `done: true` (and may be empty). `id` echoes the request. |
 | `weather`         | `time`, `weather[]`, `weather_forecasts[]` | Weather snapshot (latest observation per station ≤ `t`, no age limit) on subscribe/init/seek, plus a forward **window** (default 600 s) per refill while subscribed — windowed observations plus any forecast products newly issued in the window. One frame carries both lists; suppressed when both are empty. |
 | `weather_forecast` | `id`, `time`, `weather_forecasts[]` | Reply to `weather_forecast`: the forecast product covering the requested zone at the clock, or an explicit empty `weather_forecasts` when none exists. `id` echoes the request. |
@@ -86,6 +88,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `chat_typing`     | `profile`                     | Sent immediately on accepting a `chat_send` — the reply lands 2-8s later. See [`chat_typing`](#chat_typing) below. |
 | `chat_message`    | `profile`, `direction`, `body`, `time`, `kind`, `message_id` | One turn of a chat conversation, live or replayed. See [`chat_message`](#chat_message) below. |
 | `chat_history`    | `profile`, `done`             | Terminates a `chat_history` reply (each turn itself rides `chat_message`). See [`chat_history`](#chat_history) below. |
+| `chat_cleared`    | `cleared`                     | Confirms a `chat_clear` succeeded; the client empties its transcript on this frame. See [`chat_clear`](#chat_clear) below. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `news_body`       | `id`, `body` *or* `id`, `message` | Reply to `news_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
@@ -274,7 +277,7 @@ in bulk on the wire, the **client reveal-gate** holds each page until its `start
 still render paced by the virtual clock rather than all at once. This pacing invariant is enforced
 client-side; consumer apps never receive a not-yet-due page.
 
-Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"`, `"weather"`, `"alerts"` and
+Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"`, `"flights-anon"`, `"weather"`, `"alerts"` and
 `"chat"`; any other value yields `{"type":"error","message":"unknown channel \"…\""}`. (HTML is
 planned.) Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
 
@@ -779,6 +782,39 @@ re-read fresh from `chat_messages` (never cached on the session), which is what 
 rebuild context correctly: the next `chat_history` (or `chat_send`, which pulls its own rolling
 context the same way) sees the new virtual time. An anonymous session, or one connected with no
 database pool, gets an immediate `chat_history{done:true}` with no turns.
+
+### `chat_clear`
+
+Request (no fields — the target is always the session's own authenticated user, so there is nothing
+for a client to specify and no way to aim the clear at another user's history):
+
+```json
+{ "type": "chat_clear" }
+```
+
+Reply on success:
+
+```json
+{ "type": "chat_cleared", "cleared": 42 }
+```
+
+`cleared` is how many rows were marked, and is informational only — the client resets on the frame's
+arrival, not its count, so clearing an already-empty history is still a success (and `cleared` is
+then omitted, being zero).
+
+**Nothing is deleted.** Every matching `chat_messages` row gets a `cleared_at` timestamp, and all
+three conversation reads (`History` for the buddy's prompt context, `HistoryDetailed` for replay, and
+`HasPriorContact` for schedule gating) skip rows that carry one. The transcript therefore leaves the
+product — and the buddies' memory with it — while the log survives for research. Re-clearing does not
+rewrite an earlier clear's timestamp. Contrast Account → Special → Delete My Data, which genuinely
+erases `chat_messages`: that action is a data-erasure request, this one is a reset.
+
+Because a buddy's prior contact is also cleared, scheduled beats gated on `requires_prior_contact`
+stay locked until the student speaks to that buddy again.
+
+An unauthenticated session, or one with no database pool, gets an `error` frame and **no**
+`chat_cleared` — a client that emptied its transcript on an unconfirmed clear would show a blank
+conversation that the next reconnect refills.
 
 ### `chat_typing`
 

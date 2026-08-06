@@ -19,6 +19,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import {
 	MediaStreamContext,
 	type MediaItem,
@@ -31,6 +32,7 @@ export const News: React.FC = () => {
 	const appName = "News";
 	const appId = "News.app";
 	const appIcon = ClassicyIcons.applications.news.app as string;
+	const aboutWindow = useAboutApp(appId, appIcon);
 	const appMenu = useMemo(
 		() => [
 			{
@@ -442,6 +444,7 @@ export const News: React.FC = () => {
 					</ClassicyWindow>
 				);
 			})}
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

@@ -30,12 +30,17 @@
 	:global(.classicyBalloonHelpAnchor) { display: inline-flex; align-items: center; flex: 0 0 auto; }
 }
 .mapControlsContainer {
-	display: flex; align-items: center; gap: var(--window-padding-size); flex-direction: row;
+	display: flex;
+	align-items: center;
+	gap: var(--window-border-size);
+	flex-direction: row;
 	// A group is one atom of the strip: it holds its full width (no shrinking to
 	// a squashed half-group) and never wraps internally, so the only wrap point
 	// is between groups — which is what makes whole groups, and only whole
 	// groups, drop out of sight when the window is too narrow.
-	flex: 0 0 auto; flex-wrap: nowrap; height: var(--map-controls-row-height);
+	flex: 0 0 auto;
+	flex-wrap: nowrap;
+	height: var(--map-controls-row-height);
 	// The rule separating this group from the previous one. It's a border on the
 	// group rather than a standalone element between groups because CSS can't ask
 	// "did my next sibling wrap?" — a separate divider would strand itself at the
@@ -159,8 +164,8 @@
 .detailFields { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0; font-family: var(--ui-font) !important; font-size: var(--ui-font-size); }
 .detailFields dt { color: #555; }
 .detailFields dd { margin: 0; }
-.detailNote { margin-top: 8px; color: #666; font-family: var(--ui-font) !important; }
-.detailScroll { flex: 1 1 auto; min-height: 0; overflow-y: scroll; }
+.detailNote { font-size: calc(var(--ui-font-size)*.75); margin-top: 8px; color: #666; font-family: var(--ui-font) !important; }
+.detailScroll { flex: 1 1 auto; min-height: 0; overflow-y: scroll; height: 50%;}
 .phaseLegend {
 	display: flex; flex-wrap: wrap; gap: 2px 12px;
 	flex: 0 0 auto; margin: 8px 0 0;

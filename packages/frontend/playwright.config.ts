@@ -1,5 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Overridable so a dev port already held by an unrelated process (e.g. another
+// worktree's `pnpm dev`) doesn't make Playwright silently attach to the wrong
+// server at the hardcoded default — `reuseExistingServer` trusts whatever is
+// already listening at `url`. Unset in CI, so the default (5173) is unchanged
+// there. --strictPort makes Vite fail fast instead of picking yet another port
+// out from under this config if PW_PORT is also occupied.
+const port = Number(process.env.PW_PORT) || 5173;
+const baseURL = `http://localhost:${port}`;
+
 export default defineConfig({
   testDir: './e2e/tests',
   fullyParallel: true,
@@ -12,7 +21,7 @@ export default defineConfig({
     ['list'],
   ],
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -36,8 +45,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:5173',
+    command: `pnpm exec vite -d --port ${port} --strictPort`,
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
   },
 });

@@ -28,6 +28,7 @@ import "./DirectusFlightMapPart.css";
 const DEFAULT_PIN = "#f5a623";
 const DEFAULT_NOTABLE_PIN = "#ff3b30";
 const DEFAULT_OBSERVER_PIN = "#4a90d9";
+const DEFAULT_ANON_PIN = "#8b7d6b";
 // Mirrors FlightMap's own hero-landmark defaults (buildings.ts / flightMapSettings.ts).
 const DEFAULT_HERO_COLOR_LIGHT = 0xb0a48c;
 const DEFAULT_HERO_COLOR_DARK = 0xc7b8a0;
@@ -50,6 +51,8 @@ export const DirectusFlightMapPart = ({ options, resolve, value, partId, stackId
 	const pinColor = typeof options.pinColor === "string" ? options.pinColor : DEFAULT_PIN;
 	const notablePinColor =
 		typeof options.notablePinColor === "string" ? options.notablePinColor : DEFAULT_NOTABLE_PIN;
+	const anonPinColor =
+		typeof options.anonPinColor === "string" ? options.anonPinColor : DEFAULT_ANON_PIN;
 	const observerPinColor =
 		typeof options.observerPinColor === "string" ? options.observerPinColor : DEFAULT_OBSERVER_PIN;
 	const buildingHeroColorLight =
@@ -108,6 +111,7 @@ export const DirectusFlightMapPart = ({ options, resolve, value, partId, stackId
 				pinColor={pinColor}
 				notablePinColor={notablePinColor}
 				observerPinColor={observerPinColor}
+			anonPinColor={anonPinColor}
 				buildingHeroColorLight={buildingHeroColorLight}
 				buildingHeroColorDark={buildingHeroColorDark}
 				radarSweep={radarSweep}

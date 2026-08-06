@@ -47,10 +47,15 @@ def _ingest_one(source: dict, *, medium: str, cfg: Config, logger) -> int:
             "%s %s produced no segments — its existing rows were cleared; "
             "check the SRT at %s", medium, source["id"], source["subtitles"]
         )
-    logger.info("ingested %s %s: %d segments", medium, source["id"], written)
+
     return written
 
 
+# chat_transcript_minutes is NOT written here. It was, and that coupling meant
+# populating minutes required a full segment re-ingest -- and once summarisation
+# became an LLM pass, it would also have re-run every paid call on any segment
+# rebuild. summarize-transcript-minutes owns that table and reads these rows back,
+# which also guarantees the two describe the same audio.
 @flow(name="build-transcript-segments")
 def build_transcript_segments_flow(medium: str = "all", cfg: Config | None = None) -> dict:
     """Rebuild chat_transcript_segments for TV, radio, or both.

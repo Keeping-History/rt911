@@ -22,6 +22,27 @@ def cfg():
     return Config(directus_url="https://directus.test", directus_api_token="tok")
 
 
+def test_segment_flow_does_not_touch_the_minutes_table(cfg, monkeypatch):
+    # chat_transcript_minutes is owned by summarize-transcript-minutes. If this
+    # flow wrote it again, a segment rebuild would silently overwrite paid LLM
+    # summaries with the mechanical fallback.
+    monkeypatch.setattr(flows, "get_run_logger", lambda: logging.getLogger("test"))
+    monkeypatch.setattr(flows.writer, "list_subtitled_channels", lambda c, **k: [
+        {"id": 7, "slug": "wnbc", "start_date": datetime(2001, 9, 11, 12, 0, 0),
+         "subtitles": "https://f/wnbc.srt"}])
+    monkeypatch.setattr(flows.writer, "list_subtitled_mp3_items", lambda c, **k: [])
+    monkeypatch.setattr(flows.writer, "fetch_srt", lambda url, **k: SRT)
+    monkeypatch.setattr(flows.writer, "replace_segments", lambda rows, **kw: len(rows))
+
+    def boom(*a, **k):
+        raise AssertionError("build-transcript-segments must not write minutes")
+
+    monkeypatch.setattr(flows.writer, "replace_minutes", boom)
+    result = flows.build_transcript_segments_flow.fn(medium="tv", cfg=cfg)
+    assert result["segments"] == 1
+    assert "minutes" not in result
+
+
 def test_builds_absolute_timestamps_from_the_channel_anchor(cfg, monkeypatch):
     monkeypatch.setattr(flows, "get_run_logger", lambda: logging.getLogger("test"))
     monkeypatch.setattr(flows.writer, "list_subtitled_channels", lambda c, **k: [

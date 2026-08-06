@@ -9,6 +9,7 @@ import {
 	ClassicyPopUpMenu,
 } from "classicy";
 import { isNotable, isObserver } from "./notableFlights";
+import { PROVENANCE_NOTE, isEstimated, sourceLabel } from "./flightProvenance";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
 import { type MapPoi, POI_DETAIL_FIELDS, detailTitleFor } from "./mapPois";
 import { PHASE_COLORS, DEFAULT_PHASE_COLOR, phaseLabel } from "./flightPhases";
@@ -44,6 +45,7 @@ interface FlightDetailPanelProps {
 	// Non-empty only for notable flights with a per-phase profile; drives the
 	// color legend under the fields.
 	phases?: string[];
+	sources?: string[];
 }
 
 // "8:14 AM"-style display time for a UTC instant in the app's display tz.
@@ -58,7 +60,7 @@ function formatDisplayTime(iso: string, tzOffset: number): string {
 export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 	selected, track, loading, error, nowMs, headingDeg = null, tzOffset = -4,
 	livePos = null, estimates = null,
-	selectionOptions = [], onPickFlight, onSaveAsFilter, poi = null, phases = [],
+	selectionOptions = [], onPickFlight, onSaveAsFilter, poi = null, phases = [], sources = [],
 }) => {
 	if (poi) {
 		const locale = [poi.city, poi.region].filter(Boolean).join(", ");
@@ -122,8 +124,14 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				<span className={styles.detailFlight}>{selected.flight}</span>
 				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
 				{isObserver(selected.flight) && <span className={styles.detailBadge}>OBSERVER</span>}
+				{selected.flight.startsWith("RDR-") && (
+					<span className={styles.detailBadge}>UNIDENTIFIED</span>
+				)}
 			</div>
-			<ClassicyControlLabel labelSize={"small"} label={route ?? "Flight data has been synthesized from multiple sources and may be inaccurate."} />
+			{/* The route slot states the route, or that there isn't one — an
+			    unidentified radar target filed no flight plan. Provenance is
+			    disclosed once, in the note below the fields. */}
+			<ClassicyControlLabel labelSize={"small"} label={route ?? "Route unknown"} />
 			{selectionOptions.length > 1 && (
 				<div className={styles.detailSelection}>
 					<ClassicyPopUpMenu
@@ -181,6 +189,31 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				{fateText && (<><dt>Fate</dt><dd>{fateText}</dd></>)}
 			</dl>
 			</div>
+			{sources.length > 0 && (
+				<dl className={styles.phaseLegend} aria-label="Track provenance">
+					{sources.map((src) => (
+						<div key={src} className={styles.phaseLegendItem}>
+							<dt>
+								<span
+									className={styles.phaseSwatch}
+									style={{
+										backgroundColor: DEFAULT_PHASE_COLOR,
+										opacity: isEstimated(src) ? 0.55 : 1,
+										// mirror the map: estimated stretches read as dashes
+										backgroundImage: isEstimated(src)
+											? "repeating-linear-gradient(90deg, transparent 0 2px, rgba(255,255,255,0.9) 2px 4px)"
+											: undefined,
+									}}
+								/>
+							</dt>
+							<dd>{sourceLabel(src)}</dd>
+						</div>
+					))}
+				</dl>
+			)}
+			{/* Unconditional: every flight on the map is a reconstruction, so the
+			    disclosure can't depend on whether a track happens to be loaded. */}
+			<p className={styles.detailNote}>{PROVENANCE_NOTE}</p>
 			{phases.length > 0 && (
 				<dl className={styles.phaseLegend} aria-label="Phase colors">
 					{phases.map((ph) => (

@@ -85,7 +85,6 @@
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
-	gap: calc(var(--window-padding-size) / 4);
 }
 
 .fieldNote {
@@ -96,6 +95,7 @@
 // Sub-label under an input: explains what a field is for without competing with
 // the field's own label.
 .hint {
+  font-family: var(--ui-font), sans-serif;
   font-size: 11px;
   color: #555;
   margin: -4px 0 4px 0;
@@ -105,6 +105,7 @@
 // alarm-red — the alert carries the warning, and a scary-looking button invites
 // curiosity clicks.
 .riskCopy {
+	font-family: var(--ui-font), sans-serif;
 	color: var(--color-system-06);
 	max-width: 40ch;
 }

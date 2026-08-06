@@ -228,6 +228,14 @@ interface WsChatMessageFrame {
 	message_id?: number;
 }
 
+// The server confirming a chat_clear landed. `cleared` is the row count and is
+// informational only — arrival alone empties the transcript, so a zero (an
+// already-empty history, which msgpack omits) is still a success.
+interface WsChatClearedMessage {
+	type: "chat_cleared";
+	cleared?: number;
+}
+
 type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
@@ -248,6 +256,7 @@ type WsIncomingMessage =
 	| WsChatPresenceMessage
 	| WsChatTypingMessage
 	| WsChatMessageFrame
+	| WsChatClearedMessage
 	| WsClockMessage
 	| WsHeartbeatAckMessage
 	| { type: string };
@@ -259,7 +268,7 @@ interface MediaStreamProviderProps {
 export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	children,
 }) => {
-	const { localDate, dateTime, tzOffset, setDateTime } = useClassicyDateTime({ tick: true });
+	const { localDate, dateTime, tzOffset, setDateTime, paused } = useClassicyDateTime({ tick: true });
 	// setDateTime is a fresh closure every render; the long-lived WebSocket
 	// onmessage handler (below) must always call the latest one, so it reads
 	// through a ref rather than closing over the destructured value directly.
@@ -331,6 +340,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const alertSubscribers = useRef(new Set<string>());
 	const usenetSubscribers = useRef(new Set<string>());
 	const flightsSubscribers = useRef(new Set<string>());
+	// Anonymous radar traffic (RDR-… ids, #263): its own opt-in channel so the
+	// dense extra payload is paid only while the map's "Other traffic" toggle
+	// is on. Frames merge into the same position pipeline — the id prefix is
+	// the discriminator everywhere downstream.
+	const flightsAnonSubscribers = useRef(new Set<string>());
 	const weatherSubscribers = useRef(new Set<string>());
 	const chatSubscribers = useRef(new Set<string>());
 	// Active loop-history request: window wanted (null = loop off). Loop-history
@@ -342,6 +356,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const flightsHistoryMinutes = useRef<30 | 90 | null>(null);
 	const flightsReqGen = useRef(0);
 	const flightsLoopReqId = useRef(0);
+	const flightsAnonLoopReqId = useRef(0);
+	const flightsAnonSeedReqId = useRef(0);
 	const flightsSeedReqId = useRef(0);
 	// The single active forecast request (null = none pending) and a generation
 	// id echoed by the server, mirroring flightsHistoryGen: a reply whose id
@@ -383,6 +399,38 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	}, []);
 
 	const wsRef = useRef<WebSocket | null>(null);
+
+	// Live mirror of the clock's paused state for the WebSocket effect's onopen,
+	// which must assert pause on a connection opened while already paused.
+	// Reading `paused` there directly would go stale, and adding it to that
+	// effect's dependency array would tear down and rebuild the socket on every
+	// pause — a reconnect storm from a button press.
+	const pausedRef = useRef(paused);
+	pausedRef.current = paused;
+
+	// What the server was last told on THIS connection. null means nothing has
+	// been sent yet, which is also the correct state for a fresh socket: `init`
+	// resets Session.paused to false, so onopen re-establishes the truth.
+	const pauseSentRef = useRef<boolean | null>(null);
+
+	// Forward pause/resume to the streamer. Without this the server never learns
+	// the clock stopped: Session.paused stays false, chat.Available never returns
+	// "paused", and the IM Buddies composer stays open against a frozen clock.
+	useEffect(() => {
+		const ws = wsRef.current;
+		if (!ws || ws.readyState !== WebSocket.OPEN) return;
+		if (pauseSentRef.current === paused) return;
+		// Say nothing about the default unpaused state: a `resume` for a session
+		// that was never paused is meaningless traffic. onopen owns the initial
+		// assertion.
+		if (pauseSentRef.current === null && !paused) {
+			pauseSentRef.current = false;
+			return;
+		}
+		ws.send(JSON.stringify({ type: paused ? "pause" : "resume" }));
+		pauseSentRef.current = paused;
+	}, [paused]);
+
 	// Always-current virtual *UTC* instant (ms) for use inside WS callbacks and
 	// intervals. localDate is the tz-shifted display clock; the stream lives in
 	// UTC (item start_dates, the backend, seek, calcSeekSeconds), so we strip the
@@ -613,6 +661,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			minutes: FLIGHTS_SEED_LOOKBACK_MINUTES,
 			id: flightsSeedReqId.current,
 		});
+		if (flightsAnonSubscribers.current.size > 0) {
+			flightsReqGen.current += 1;
+			flightsAnonSeedReqId.current = flightsReqGen.current;
+			send({
+				type: "flights_history",
+				channel: "flights-anon",
+				minutes: FLIGHTS_SEED_LOOKBACK_MINUTES,
+				id: flightsAnonSeedReqId.current,
+			});
+		}
 	}, [send]);
 
 	const subscribeFlights = useCallback(
@@ -649,6 +707,55 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 
 	// (Re-)issue the active history request: fresh id, reset the accumulated
 	// window, ask again. No-op while loop mode is off.
+	const subscribeFlightsAnon = useCallback(
+		(appId: string) => {
+			const wasEmpty = flightsAnonSubscribers.current.size === 0;
+			flightsAnonSubscribers.current.add(appId);
+			if (wasEmpty) {
+				send({ type: "subscribe", channel: "flights-anon" });
+				// Join any active loop window / heading seed mid-flight.
+				if (flightsHistoryMinutes.current !== null) {
+					flightsReqGen.current += 1;
+					flightsAnonLoopReqId.current = flightsReqGen.current;
+					send({
+						type: "flights_history",
+						channel: "flights-anon",
+						minutes: flightsHistoryMinutes.current,
+						id: flightsAnonLoopReqId.current,
+					});
+				}
+				flightsReqGen.current += 1;
+				flightsAnonSeedReqId.current = flightsReqGen.current;
+				send({
+					type: "flights_history",
+					channel: "flights-anon",
+					minutes: FLIGHTS_SEED_LOOKBACK_MINUTES,
+					id: flightsAnonSeedReqId.current,
+				});
+			}
+		},
+		[send],
+	);
+
+	const unsubscribeFlightsAnon = useCallback(
+		(appId: string) => {
+			flightsAnonSubscribers.current.delete(appId);
+			if (flightsAnonSubscribers.current.size === 0) {
+				send({ type: "unsubscribe", channel: "flights-anon" });
+				// Purge only the anonymous corpus — named flights stay live.
+				setFlightPositions((prev) => prev.filter((p) => !p.flight.startsWith("RDR-")));
+				for (const [id, p] of flightsBuffer.current) {
+					if (p.flight.startsWith("RDR-")) flightsBuffer.current.delete(id);
+				}
+				setFlightsHistory((prev) => prev.filter((p) => !p.flight.startsWith("RDR-")));
+				setFlightsSeed((prev) => prev.filter((p) => !p.flight.startsWith("RDR-")));
+				flightsAnonLoopReqId.current = 0;
+				flightsAnonSeedReqId.current = 0;
+			}
+		},
+		[send],
+	);
+
 	const sendFlightsHistoryRequest = useCallback(() => {
 		const minutes = flightsHistoryMinutes.current;
 		if (minutes === null) return;
@@ -657,6 +764,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		setFlightsHistory([]);
 		setFlightsHistoryDone(false);
 		send({ type: "flights_history", minutes, id: flightsLoopReqId.current });
+		if (flightsAnonSubscribers.current.size > 0) {
+			flightsReqGen.current += 1;
+			flightsAnonLoopReqId.current = flightsReqGen.current;
+			send({
+				type: "flights_history",
+				channel: "flights-anon",
+				minutes,
+				id: flightsAnonLoopReqId.current,
+			});
+		}
 	}, [send]);
 
 	const requestFlightsHistory = useCallback(
@@ -743,6 +860,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		},
 		[send],
 	);
+
+	// Ask the server to soft-delete this user's whole chat history. Deliberately
+	// does NOT touch chatMessages here — the transcript is emptied when the
+	// server's chat_cleared frame arrives (see the handler), so an unauthorized
+	// or failed clear leaves what is on screen exactly where it was.
+	//
+	// No arguments: the server scopes the clear to the session's authenticated
+	// user, so there is nothing here that could aim it at anyone else.
+	const clearChatData = useCallback(() => {
+		send({ type: "chat_clear" });
+	}, [send]);
 
 	// Requesting history for a profile also DROPS that profile's local echoes,
 	// in the same call, deliberately: a replay is authoritative for the
@@ -1054,6 +1182,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			if (flightsSubscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "flights" }));
+				if (flightsAnonSubscribers.current.size > 0) {
+					ws.send(JSON.stringify({ type: "subscribe", channel: "flights-anon" }));
+				}
 				// Loop mode survives a reconnect: re-seed its window at the fresh clock.
 				sendFlightsHistoryRequest();
 				// The subscribe-time heading seed was lost with the old connection.
@@ -1069,6 +1200,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (chatSubscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "chat" }));
 			}
+			// `init` above resets Session.paused to false (protocol doc, §init), so
+			// a connection opened while the clock is paused would hand the server a
+			// running clock and re-enable the chat composer. This is not just
+			// reconnect hardening: `paused` is persisted in classicyDesktopState, so
+			// pausing and reloading the page lands here every time. Same reason the
+			// subscriptions above are replayed.
+			if (pausedRef.current) {
+				ws.send(JSON.stringify({ type: "pause" }));
+			}
+			pauseSentRef.current = pausedRef.current;
 			// Body requests do not survive a reconnect; clear in-flight markers so
 			// any open message window re-requests on its next render.
 			usenetBodyInflight.current.clear();
@@ -1205,21 +1346,27 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				// echoed request id says which consumer (if either) each chunk is
 				// for. An active id is never 0 (the counter starts at 1), so the
 				// 0-means-inactive sentinel can't match a real frame.
-				if (hist.id !== 0 && hist.id === flightsSeedReqId.current) {
+				if (hist.id !== 0
+					&& (hist.id === flightsSeedReqId.current
+						|| hist.id === flightsAnonSeedReqId.current)) {
 					const incoming = hist.flights ?? [];
 					if (incoming.length > 0)
 						setFlightsSeed((prev) => [...prev, ...incoming]);
 					return;
 				}
-				if (hist.id === 0 || hist.id !== flightsLoopReqId.current) return; // superseded
+				if (hist.id === 0
+					|| (hist.id !== flightsLoopReqId.current
+						&& hist.id !== flightsAnonLoopReqId.current)) return; // superseded
 				const incoming = hist.flights ?? [];
 				if (incoming.length > 0)
 					setFlightsHistory((prev) => [...prev, ...incoming]);
-				if (hist.done) setFlightsHistoryDone(true);
+				// The named-corpus request drives the loop's ready flag; the anon
+				// chunks enrich the window as they arrive.
+				if (hist.done && hist.id === flightsLoopReqId.current) setFlightsHistoryDone(true);
 				return;
 			}
 
-			if (msg.type === "flights") {
+			if (msg.type === "flights" || msg.type === "flights_anon") {
 				const incomingFlights = (msg as WsFlightsMessage).flights;
 				if (!incomingFlights || incomingFlights.length === 0) return;
 				const { due, future } = partitionByDue(incomingFlights, now);
@@ -1289,6 +1436,19 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 						kind: m.kind ?? "generated",
 					},
 				]);
+				return;
+			}
+
+			// Emptying the transcript is driven by the server's confirmation, never
+			// optimistically by the click: the rows are only hidden once the write
+			// lands, and a failed clear replies with an `error` instead — so the
+			// student never sees a blank conversation that a reconnect refills.
+			//
+			// Clearing every profile at once (rather than filtering by one) matches
+			// what the server did: chat_clear has no profile field.
+			if (msg.type === "chat_cleared") {
+				setChatMessages([]);
+				setChatTypingProfile(null);
 				return;
 			}
 
@@ -1451,6 +1611,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			flightPositions,
 			subscribeFlights,
 			unsubscribeFlights,
+			subscribeFlightsAnon,
+			unsubscribeFlightsAnon,
 			flightsHistory,
 			flightsHistoryDone,
 			flightsSeed,
@@ -1472,6 +1634,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			sendChat,
 			requestChatHistory,
 			appendLocalChatMessage,
+			clearChatData,
 		}),
 		[
 			items,
@@ -1506,6 +1669,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			flightPositions,
 			subscribeFlights,
 			unsubscribeFlights,
+			subscribeFlightsAnon,
+			unsubscribeFlightsAnon,
 			flightsHistory,
 			flightsHistoryDone,
 			flightsSeed,
@@ -1527,6 +1692,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			sendChat,
 			requestChatHistory,
 			appendLocalChatMessage,
+			clearChatData,
 		],
 	);
 

@@ -424,9 +424,9 @@ export const TimeMachine: React.FC = () => {
 				zoomable={false}
 				scrollable={false}
 				collapsable={true}
-				initialSize={[380, 110]}
+				initialSize={[380, 105]}
 				initialPosition={[300, 200]}
-				minimumSize={[340, 130]}
+				minimumSize={[380, 105]}
 				modal={false}
 				appMenu={appMenu}
 			>
@@ -449,13 +449,9 @@ export const TimeMachine: React.FC = () => {
 					<div className={styles.timeEntry}>
 						<ClassicyBevelButton
 							aria-label="Capture Bookmark"
+							square={true}
 							title="Capture Bookmark"
 							onClickFunc={openCaptureDialog}
-							// Keep the same min-height floor as the GO ClassicyButton so
-							// the row can't collapse shorter than a standard button.
-							// (ClassicyBevelButton ignores a passed className, so this
-							// goes through `style`.) The actual height match comes from
-							// sizing the icon to one text line — see .captureIcon.
 							style={{ minHeight: "var(--hig-button-height)" }}
 						>
 							<img className={styles.captureIcon} src={bookPng} alt="" />

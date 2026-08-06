@@ -88,6 +88,9 @@ type newsBodyMsg struct {
 // echoed on every reply chunk so the client can discard chunks of a superseded
 // request (and route seed vs loop replies, which share this message type).
 type flightsHistoryMsg struct {
+	// Channel selects the corpus: "" or "flights" (default) or "flights-anon"
+	// (requires the matching subscription).
+	Channel string `json:"channel,omitempty"`
 	Type    string `json:"type"`
 	Minutes int    `json:"minutes"`
 	ID      int    `json:"id"`
@@ -542,14 +545,25 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 					sess.SendError("invalid flights_history minutes")
 					continue
 				}
-				// History (loop or heading seed) is a flights-channel feature; without
-				// the subscription there is nothing to serve, so the request is
-				// silently dropped.
-				if !sess.Subscribed(session.ChannelFlights) {
+				// History (loop or heading seed) is a channel feature; without the
+				// matching subscription there is nothing to serve, so the request
+				// is silently dropped.
+				key := cache.KeyFlightMinutes
+				needed := session.ChannelFlights
+				switch fmsg.Channel {
+				case "", session.ChannelFlights:
+				case session.ChannelFlightsAnon:
+					key = cache.KeyFlightAnonMinutes
+					needed = session.ChannelFlightsAnon
+				default:
+					sess.SendError("invalid flights_history channel")
+					continue
+				}
+				if !sess.Subscribed(needed) {
 					continue
 				}
 				if t, ok := sess.VirtualTime(); ok {
-					sendFlightsHistory(r, sess, rdb, fmsg.ID, t, fmsg.Minutes, logger)
+					sendFlightsHistory(r, sess, rdb, key, fmsg.ID, t, fmsg.Minutes, logger)
 				}
 
 			case "weather_forecast":
@@ -596,6 +610,11 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 					continue
 				}
 				sess.ChatHistory(cmsg.Profile, before, clampChatHistoryLimit(cmsg.Limit))
+
+			// No payload to unmarshal: the target is always the session's own
+			// authenticated user, so there is nothing for a client to specify.
+			case "chat_clear":
+				sess.ChatClear()
 
 			default:
 				sess.SendError(fmt.Sprintf("unknown message type %q", msg.Type))
@@ -789,12 +808,26 @@ func sendFlightsSnapshot(r *http.Request, sess *session.Session, rdb *goredis.Cl
 	if !sess.Subscribed(session.ChannelFlights) {
 		return
 	}
-	items, err := cache.FlightPositionsInRange(r.Context(), rdb, t.Add(-flightsSnapshotLookback), t.Add(time.Second), logger)
+	items, err := cache.FlightPositionsInRange(r.Context(), rdb, cache.KeyFlightMinutes, t.Add(-flightsSnapshotLookback), t.Add(time.Second), logger)
 	if err != nil {
 		logger.Warn("flights snapshot lookup failed", "error", err)
 		return
 	}
 	sess.SendFlights(t, items)
+}
+
+// sendFlightsAnonSnapshot is the flights-anon twin: same airborne-picture
+// lookback against the anonymous-traffic bucket key, its own frame type.
+func sendFlightsAnonSnapshot(r *http.Request, sess *session.Session, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelFlightsAnon) {
+		return
+	}
+	items, err := cache.FlightPositionsInRange(r.Context(), rdb, cache.KeyFlightAnonMinutes, t.Add(-flightsSnapshotLookback), t.Add(time.Second), logger)
+	if err != nil {
+		logger.Warn("flights-anon snapshot lookup failed", "error", err)
+		return
+	}
+	sess.SendFlightsAnon(t, items)
 }
 
 // flightsHistoryChunk bounds one flights_history reply frame at ~10 minute
@@ -807,7 +840,7 @@ const flightsHistoryChunk = 10 * time.Minute
 // flights_history frames, ending with an (always-sent) done frame. A chunk that
 // fails to read is skipped: the client still gets the rest of the window and
 // the done marker — a hole in the loop beats no loop.
-func sendFlightsHistory(r *http.Request, sess *session.Session, rdb *goredis.Client, reqID int, t time.Time, minutes int, logger *slog.Logger) {
+func sendFlightsHistory(r *http.Request, sess *session.Session, rdb *goredis.Client, key string, reqID int, t time.Time, minutes int, logger *slog.Logger) {
 	lo := t.Add(-time.Duration(minutes) * time.Minute)
 	hi := t.Add(time.Second) // include the current instant, like the snapshot
 	for chunkLo := lo; chunkLo.Before(hi); chunkLo = chunkLo.Add(flightsHistoryChunk) {
@@ -815,7 +848,7 @@ func sendFlightsHistory(r *http.Request, sess *session.Session, rdb *goredis.Cli
 		if chunkHi.After(hi) {
 			chunkHi = hi
 		}
-		items, err := cache.FlightPositionsInRange(r.Context(), rdb, chunkLo, chunkHi, logger)
+		items, err := cache.FlightPositionsInRange(r.Context(), rdb, key, chunkLo, chunkHi, logger)
 		if err != nil {
 			logger.Warn("flights history lookup failed", "error", err)
 			continue
@@ -875,8 +908,9 @@ func sendSources(r *http.Request, sess *session.Session, sources *db.SourcesCach
 func knownChannel(ch string) bool {
 	return ch == session.ChannelPager || ch == session.ChannelMp3 ||
 		ch == session.ChannelNews || ch == session.ChannelUsenet ||
-		ch == session.ChannelFlights || ch == session.ChannelWeather ||
-		ch == session.ChannelAlerts || ch == session.ChannelChat
+		ch == session.ChannelFlights || ch == session.ChannelFlightsAnon ||
+		ch == session.ChannelWeather || ch == session.ChannelAlerts ||
+		ch == session.ChannelChat
 }
 
 // sendChannelSnapshot delivers the subscribe-time snapshot for a single channel.
@@ -892,6 +926,8 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 		sendUsenetSnapshot(r, sess, pool, t, logger)
 	case session.ChannelFlights:
 		sendFlightsSnapshot(r, sess, rdb, t, logger)
+	case session.ChannelFlightsAnon:
+		sendFlightsAnonSnapshot(r, sess, rdb, t, logger)
 	case session.ChannelWeather:
 		sendWeatherSnapshot(r, sess, pool, t, logger)
 	}
@@ -905,5 +941,6 @@ func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpo
 	sendNewsSnapshot(r, sess, pool, t, logger)
 	sendUsenetSnapshot(r, sess, pool, t, logger)
 	sendFlightsSnapshot(r, sess, rdb, t, logger)
+	sendFlightsAnonSnapshot(r, sess, rdb, t, logger)
 	sendWeatherSnapshot(r, sess, pool, t, logger)
 }

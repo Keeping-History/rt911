@@ -90,6 +90,12 @@ export interface IMBuddiesValue {
 	openInfoFor: (profile: number) => void;
 	closeInfo: () => void;
 	send: (profile: number, body: string) => void;
+	/**
+	 * Soft-delete every conversation this user has had. Passed straight through
+	 * from MediaStreamContext: the transcript empties when the server confirms,
+	 * so a failed clear is visibly a no-op rather than a false success.
+	 */
+	clearChatData: () => void;
 	markRead: (profile: number) => void;
 	/**
 	 * The buddy currently highlighted in the Buddy List — lifted up from that
@@ -137,6 +143,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 		sendChat,
 		requestChatHistory,
 		appendLocalChatMessage,
+		clearChatData,
 	} = useContext(MediaStreamContext);
 
 	const desktopEventDispatch = useAppManagerDispatch();
@@ -518,6 +525,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			openInfoFor,
 			closeInfo,
 			send,
+			clearChatData,
 			markRead,
 			selectedBuddy,
 			selectBuddy,
@@ -540,6 +548,7 @@ export const IMBuddiesProvider: FC<{ children: ReactNode }> = ({ children }) => 
 			openInfoFor,
 			closeInfo,
 			send,
+			clearChatData,
 			markRead,
 			selectedBuddy,
 			selectBuddy,

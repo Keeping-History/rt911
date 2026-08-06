@@ -117,6 +117,7 @@ vi.mock("classicy", () => ({
 	ClassicyIcons: { applications: {} },
 	registerClassicyIcons: <T,>(icons: T) => icons,
 	quitMenuItemHelper: () => ({}),
+	useClassicyHelpMenu: () => {},
 	useClassicyDateTime: () => ({
 		dateTime: mockClock.current,
 		tzOffset: 0,
@@ -231,6 +232,8 @@ function makeCtxValue(
 		flightPositions: [],
 		subscribeFlights: () => {},
 		unsubscribeFlights: () => {},
+		subscribeFlightsAnon: () => {},
+		unsubscribeFlightsAnon: () => {},
 		flightsHistory: [],
 		flightsHistoryDone: false,
 		flightsSeed: [],
@@ -252,6 +255,7 @@ function makeCtxValue(
 		sendChat: () => {},
 		requestChatHistory: () => {},
 		appendLocalChatMessage: () => {},
+		clearChatData: () => {},
 		...overrides,
 	};
 }

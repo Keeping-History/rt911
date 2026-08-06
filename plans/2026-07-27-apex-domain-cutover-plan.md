@@ -43,7 +43,7 @@ These are console operations outside both repositories. Every one of them blocks
 **Files:** none.
 
 **Interfaces:**
-- Produces: a Cloudflare API token with redirect permissions, exported as `$CF_REDIRECT_TOKEN` for Task 12; OAuth providers that accept the new callback URL.
+- Produces: OAuth providers that accept the new `api.911realtime.org` callback while still accepting the old one.
 
 - [ ] **Step 1: Add the Google OAuth redirect URI**
 
@@ -65,39 +65,62 @@ https://api.911realtime.org/auth/login/apple/callback
 
 The zone's `apple-domain=keugYYnIdg5DNIzv` TXT record is zone-level and needs no change.
 
-- [ ] **Step 3: Create a Cloudflare token that can write Redirect Rules**
+- [x] **Step 3: Cloudflare token for Redirect Rules — DONE 2026-07-27**
 
-The existing cert-manager token is DNS-edit only. Verify that for yourself — this should fail:
+Token `rt911-apex-redirects` is saved at `~/.cf-redirect-token` (mode 600) and
+has write access to the `http_request_dynamic_redirect` phase on
+`911realtime.org`.
 
-```bash
-CF_DNS_TOKEN=$(kubectl get secret -n cert-manager cloudflare-api-token -o jsonpath='{.data.api-token}' | base64 -d)
-curl -sS -H "Authorization: Bearer $CF_DNS_TOKEN" \
-  "https://api.cloudflare.com/client/v4/zones/08e515063f366be3278cb3de2380469c/rulesets" \
-  | python3 -m json.tool | head -5
+The permission was not obvious to find in the token editor — the first attempt
+produced a token that could list ruleset phases and reach
+`http_request_transform` but not `http_request_dynamic_redirect`. Two Cloudflare
+error strings distinguish the states, and they are easy to conflate:
+
+| Response | Meaning |
+|---|---|
+| `request is not authorized` | permission denied |
+| `could not find entrypoint ruleset in the <phase> phase` | **authorized**, phase merely empty |
+
+Read access alone yields the second message too, so write was confirmed
+separately by `PUT`ing an empty `{"rules":[]}` array — a no-op that creates the
+entrypoint without changing behaviour. That entrypoint now exists as ruleset
+`ff71e18e95724c2d9099a342b9ffe227` with zero rules, which is why Task 12's
+"read before writing" step now returns a real ruleset rather than a not-found.
+
+The cert-manager token still covers every DNS operation in Tasks 9, 11 and 13;
+it cannot touch rulesets.
+
+- [x] **Step 4: Confirm the zone's SSL mode and cache rules — DONE 2026-07-27**
+
+**Cache: verified empirically, no action needed.** Rather than reading the rule
+config, the behaviour itself was measured against `beta`, which sits in the same
+zone under the same zone-wide rules:
+
+| URL | `cache-control` | `cf-cache-status` |
+|---|---|---|
+| `/` and `/index.html` | `no-store, must-revalidate` | `BYPASS` |
+| `/assets/index-<hash>.js` | `max-age=31536000, immutable` | `MISS` → `HIT` |
+
+The zone-wide rule is not overriding nginx on `index.html`. Re-confirm on the
+apex at Task 11 Step 3, which already does exactly this.
+
+**SSL mode: could not be read** — the setting requires Zone Settings Read, which
+neither available token has. This is **non-blocking**, because Task 8 makes the
+SANs exist regardless of mode. The risk it guards against was demonstrated
+directly:
+
+```
+SNI beta.911realtime.org -> CN = beta.911realtime.org        (real LE cert)
+SNI api.911realtime.org  -> CN = TRAEFIK DEFAULT CERT        (self-signed)
 ```
 
-Expected: `"success": false` with an `Authentication error`.
+No Ingress claims `api.911realtime.org` yet, so Traefik serves its default
+cert. Under Full (strict) that is a **526 at the edge, not a 404** — harmless
+while nothing consumes the hostname, but it is why Task 8 must precede Task 11.
 
-In the Cloudflare dashboard → My Profile → API Tokens → Create Token → Custom token, grant **Zone → Dynamic Redirect → Edit** on zone `911realtime.org`. Export it for Task 12:
+- [x] **Step 5: Record completion — Task 1 COMPLETE 2026-07-27**
 
-```bash
-export CF_REDIRECT_TOKEN=<the new token>
-curl -sS -H "Authorization: Bearer $CF_REDIRECT_TOKEN" \
-  "https://api.cloudflare.com/client/v4/zones/08e515063f366be3278cb3de2380469c/rulesets" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['success'])"
-```
-
-Expected: `True`.
-
-- [ ] **Step 4: Confirm the zone's SSL mode and cache rules**
-
-In the dashboard → SSL/TLS → Overview, note the encryption mode. If it is **Full (strict)**, an Ingress serving a hostname whose certificate has not been issued returns a 526 to users — which is exactly what Task 8 exists to prevent, so confirm Task 8's verification passes before Task 10.
-
-In → Caching → Cache Rules, check for the zone-wide "Cache everything" rule from the 2026-07-24 incident. Confirm it does not apply to `/index.html` on the apex. nginx sends `Cache-Control: no-store` for that path, but a Cache Rule overrides origin headers, and a stale `index.html` 404s on its old hashed asset bundle after every deploy.
-
-- [ ] **Step 5: Record completion**
-
-No commit. Confirm all four are done before proceeding.
+All prerequisites are cleared. Phase 2 is unblocked.
 
 ---
 
@@ -595,7 +618,7 @@ gh pr create --title "Apex cutover: repoint frontend at api/stream hostnames" \
 
 Ordered and not interchangeable. Tasks 8 through 10 are reversible; Task 12 is not.
 
-### Task 8: Extend the TLS certificates
+### Task 8: Extend the TLS certificates  — ✅ DONE 2026-07-27 (infra d32e4c1)
 
 **Files:**
 - Modify (infra): `apps/rt911/frontend.yaml:57`, `apps/rt911/directus.yaml:208,298,322`, `apps/rt911/streamer.yaml:138`
@@ -669,7 +692,29 @@ Expected: `911realtime.org` in the frontend cert, `api.911realtime.org` in the a
 
 If a SAN is missing, do not proceed. Task 10 depends on these certs existing.
 
-### Task 9: Pre-stage the DNS records
+- [ ] **Step 5: Verify Traefik actually serves the new cert for the new SNI**
+
+A correct SAN in the secret is necessary but not sufficient — Traefik picks a
+certificate by SNI from the Ingress TLS config, and the point of this task is
+that it should now answer for a hostname whose `rules.host` it does not yet
+serve. Before this task, that SNI gets the self-signed fallback:
+
+```bash
+for h in 911realtime.org api.911realtime.org stream.911realtime.org; do
+  printf "%-28s " "$h"
+  echo | openssl s_client -connect dev.keepinghistory.org:443 -servername "$h" 2>/dev/null \
+    | openssl x509 -noout -subject
+done
+```
+
+Expected: a real Let's Encrypt subject for each. Seeing `CN = TRAEFIK DEFAULT
+CERT` means Traefik is still falling back, and pointing DNS at it in Task 11
+would return 526 under Full (strict) rather than serving the site.
+
+An HTTP 404 over a *valid* certificate is the correct state at this point —
+routing does not switch until Task 10.
+
+### Task 9: Pre-stage the DNS records  — ✅ DONE 2026-07-27
 
 **Files:** none — Cloudflare API.
 
@@ -715,7 +760,33 @@ dig +short api.911realtime.org @1.1.1.1
 
 Expected: Cloudflare anycast addresses (`104.21.*` / `172.67.*`) for both, matching what `beta.911realtime.org` returns.
 
-### Task 10: Switch the ingress hosts and origin allowlists
+### Task 9b: Route the new hostnames alongside the old — ✅ DONE 2026-07-27 (infra 3900d1c)
+
+**Added during execution.** The plan originally had Task 10 merge the frontend PR
+and *then* switch the Ingress hosts. That ordering is unsafe here, because the
+merge deploys itself:
+
+```
+merge -> CI pushes ghcr.io/.../rt911-frontend:<sha>
+      -> argocd-image-updater (writeBackConfig.method: git) commits the tag to infra main
+      -> rt911 app has automated{prune,selfHeal} -> deploys immediately
+```
+
+There is no checkpoint between "image built" and "image live". The new bundle
+dials `api`/`stream.911realtime.org`, which returned 404 until this task, so the
+live site would have lost Directus and the WebSocket for the several minutes
+until the routing commit landed — not the open-tab breakage the design accepted,
+but a full outage for everyone.
+
+The fix is purely additive: every Ingress now answers for **both** its old and
+new hostname with identical paths (108 insertions, 0 deletions). Merging is now
+safe in any order, and open tabs survive too.
+
+This softens the hard-cut decision only in timing, not in end state: the `-beta`
+rules are removed at Task 13 exactly as planned. It was raised with the user and
+chosen over tight sequencing and over pausing auto-sync.
+
+### Task 10: Switch the ingress hosts and origin allowlists — ✅ DONE 2026-07-27
 
 **Files:**
 - Modify (infra): `apps/rt911/frontend.yaml`, `directus.yaml`, `streamer.yaml`, `configmap.yaml`
@@ -795,17 +866,51 @@ Leave `SESSION_COOKIE_DOMAIN: ".911realtime.org"` alone — it is already correc
 
 Do **not** touch `packages/backend/internal/handler/origin.go`. It already lists both the apex and `beta`, which is exactly the set needed now.
 
-- [ ] **Step 5: Commit, push, and watch the sync**
+- [x] **Step 5: Commit, push, and restart Directus — DONE 2026-07-27 (infra 77355d3)**
 
 ```bash
 cd /home/robbiebyrd/infra
 git add apps/rt911/
-git commit -m "rt911: serve the SPA from the apex, rename api/stream hosts"
+git commit -m "rt911: accept the apex origin, move Directus PUBLIC_URL to api"
 git push
-kubectl rollout status deployment/rt911-directus -n rt911
 ```
 
-Directus restarts to pick up the new configmap. The streamer restarts only if its own manifest changed.
+**Two corrections found in execution.** The original step read
+`kubectl rollout status deployment/rt911-directus`, which is wrong twice over:
+
+1. **The Directus Deployment is named `rt911-api`,** not `rt911-directus`.
+   (`rt911-directus-cache` is a separate service and is not it.)
+2. **A ConfigMap change does not restart anything.** `rt911-api` consumes
+   `rt911-config` via `envFrom`, and a running pod never re-reads that. ArgoCD
+   reported `Synced`, the ConfigMap in-cluster held the new value, and Directus
+   still emitted the old `PUBLIC_URL` — the pod was 5d15h old. Watching a
+   rollout that never starts would have looked like success indefinitely.
+
+The restart must be explicit:
+
+```bash
+kubectl delete pod -n rt911 -l app=rt911-api
+```
+
+`kubectl delete pod` rather than `kubectl rollout restart`: the latter stamps a
+`restartedAt` annotation that is not in git, so ArgoCD's selfHeal reverts it and
+triggers a *second* rollout. Deleting the pod produces no drift.
+
+`rt911-api` uses **`strategy: Recreate` with 1 replica**, so this is a genuine
+outage, not a rolling update — measured at **36 seconds** (18:39:32 → 18:40:08
+UTC). Directus-backed features are down for that window; the streamer is a
+separate service and media playback is unaffected. Run it before the apex is
+live, when the blast radius is smallest.
+
+Verify by reading the `redirect_uri` Directus actually emits, not by checking
+the ConfigMap:
+
+```bash
+curl -sSI https://api.911realtime.org/auth/login/google | grep -io "redirect_uri=[^&]*"
+```
+
+Expected: `redirect_uri=https%3A%2F%2Fapi.911realtime.org%2F...`. Confirmed for
+both google and apple.
 
 - [ ] **Step 6: Verify the old frontend host still works**
 
@@ -815,7 +920,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://beta.911realtime.org/
 
 Expected: `200`. The apex is not live yet — that is Task 11.
 
-### Task 11: Flip the apex and www records
+### Task 11: Flip the apex and www records — ✅ DONE 2026-07-27
 
 **Files:** none — Cloudflare API.
 
@@ -843,7 +948,28 @@ curl -sS -X PUT -H "Authorization: Bearer $CF_DNS_TOKEN" -H "Content-Type: appli
   | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'], d['result']['content'] if d['success'] else d['errors'])"
 ```
 
-- [ ] **Step 3: Verify the apex serves the SPA**
+- [x] **Step 2b: PURGE THE CLOUDFLARE CACHE — required, not optional**
+
+Discovered in execution. Immediately after the DNS flip the apex still served
+the **old GCS site**: `x-guploader-uploadid` present, `cf-cache-status: HIT`,
+`cache-control: public,max-age=3600`. The old origin's headers had convinced
+Cloudflare to hold that HTML for an hour, and repointing DNS does not
+invalidate anything — the edge cache is keyed by URL, not by origin.
+
+Verifying that the *new* origin sends `no-store` says nothing about the object
+already cached from the *old* one.
+
+```bash
+PURGE=$(kubectl get secret -n rt911 cloudflare-purge -o jsonpath='{.data.token}' | base64 -d)
+curl -sS -X POST -H "Authorization: Bearer $PURGE" -H "Content-Type: application/json" \
+  "https://api.cloudflare.com/client/v4/zones/$ZONE/purge_cache" \
+  --data '{"hosts":["911realtime.org","www.911realtime.org"]}'
+```
+
+Expected: `"success": true`, and the apex immediately flips to
+`cache-control: no-store, must-revalidate` / `cf-cache-status: BYPASS`.
+
+- [x] **Step 3: Verify the apex serves the SPA**
 
 ```bash
 curl -sS -o /dev/null -w "%{http_code}\n" https://911realtime.org/
@@ -856,34 +982,24 @@ Expected: `200`, and `cache-control: no-store, must-revalidate`. If the cache he
 
 The chat CORS canary. A CORS failure here returns `"unknown"` in the UI rather than an error, so assert on a real answer rather than on the request merely completing.
 
-Get a username that definitely exists straight from the database:
-
-```bash
-TAKEN=$(kubectl exec -n rt911 deploy/rt911-directus -- \
-  psql "$DATABASE_URL" -tAc \
-  "select username from directus_users where username is not null limit 1")
-echo "using: $TAKEN"
-```
-
-If that pod has no `psql`, use your own signed-in screen name instead — any name you can confirm exists works.
+**Corrected 2026-07-27:** this endpoint requires a session cookie. Without one it
+returns the literal string `sign in first`, so a `curl` without credentials can
+never produce an `available`/`taken` answer — it proves reachability only, which
+is still worth checking:
 
 ```bash
 curl -sS -H "Origin: https://911realtime.org" \
-  "https://stream.911realtime.org/chat/username-available?name=$TAKEN"
+  "https://stream.911realtime.org/chat/username-available?name=zzqq9137"
 ```
 
-Expected: `{"available":false}`.
+Expected: `sign in first` (reachable, unauthenticated). A CORS rejection, a 404,
+or a timeout all mean stop.
 
-Three distinct failures to watch for, all of which mean stop: a CORS rejection, a 404 (the route is not reachable at this hostname), or `{"available":true}` for a name you just read out of the users table — the last means the endpoint is answering but not seeing the database.
+Note also that the name must be well-formed: a name with hyphens returns
+`{"available":false,"reason":"malformed"}`, which is easy to misread as "taken".
 
-Also check a name that certainly does not exist, so a stuck `false` is distinguishable from a real answer:
-
-```bash
-curl -sS -H "Origin: https://911realtime.org" \
-  "https://stream.911realtime.org/chat/username-available?name=zzz-not-a-real-name-9137"
-```
-
-Expected: `{"available":true}`.
+The real canary — a genuine `available`/`taken` — has to run from a **signed-in
+browser**, so it is folded into Step 5 below rather than done with curl.
 
 Check the preflight carries both required headers:
 
@@ -917,27 +1033,34 @@ An empty roster with a working sign-on is the known `LoadProfiles` failure signa
 
 Do not proceed to Task 12 until all of these pass. Task 12 is the irreversible one.
 
-### Task 12: Create the redirect rule
+### Task 12: Create the redirect rule — ✅ DONE 2026-07-27
 
-**Files:** none — Cloudflare API.
+**Files:** none — Cloudflare API, using the token from Task 1 Step 3.
 
-Uses `$CF_REDIRECT_TOKEN` from Task 1. **This is the irreversible step**: browsers cache a 301 near-indefinitely, so `beta.911realtime.org` cannot cleanly serve anything else afterward.
+**This is the irreversible step**: browsers cache a 301 near-indefinitely, so `beta.911realtime.org` cannot cleanly serve anything else afterward.
 
-- [ ] **Step 1: Read the existing rules in the phase before writing**
+- [ ] **Step 1: Read the existing rules before writing**
 
-The entrypoint endpoint is a **PUT that replaces every rule in the phase**. Check what is already there:
+The entrypoint endpoint is a **PUT that replaces every rule in the phase**, and
+the entrypoint now exists (Task 1 Step 3 created it empty), so this returns a
+real ruleset rather than a not-found:
 
 ```bash
+export CF_REDIRECT_TOKEN=$(cat ~/.cf-redirect-token)
+export ZONE=08e515063f366be3278cb3de2380469c
 curl -sS -H "Authorization: Bearer $CF_REDIRECT_TOKEN" \
   "https://api.cloudflare.com/client/v4/zones/$ZONE/rulesets/phases/http_request_dynamic_redirect/entrypoint" \
-  | python3 -m json.tool
+  | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin)['result'].get('rules') or [], indent=1))"
 ```
 
-If this returns rules, add them to the payload in the next step rather than overwriting them. A `success: false` with "could not find" means the phase is empty, which is the expected case.
+Expected: `[]`. Anything else must be merged into the payload below, not
+discarded.
 
 - [ ] **Step 2: Create the rule**
 
-`http.request.uri.path` carries the path only; `preserve_query_string` re-attaches the query. Using `http.request.uri` here instead would duplicate the query string.
+`http.request.uri.path` carries the path only; `preserve_query_string`
+re-attaches the query. Using `http.request.uri` here instead would emit a
+doubled query string (`?x=1?x=1`), which Step 3 tests for.
 
 ```bash
 curl -sS -X PUT -H "Authorization: Bearer $CF_REDIRECT_TOKEN" -H "Content-Type: application/json" \

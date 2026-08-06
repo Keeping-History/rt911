@@ -17,8 +17,6 @@ import (
 // everything that org publishes to GitHub Pages.
 var DefaultTrustedOrigins = []string{
 	"https://911realtime.org",
-	"https://www.911realtime.org",
-	"https://beta.911realtime.org",
 	"https://keeping-history.github.io",
 }
 

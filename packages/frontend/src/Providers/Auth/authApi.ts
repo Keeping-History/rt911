@@ -160,6 +160,25 @@ export function isHostOf(hostname: string, domain: string): boolean {
 	return hostname === domain || hostname.endsWith(`.${domain}`);
 }
 
+/**
+ * Directus's URL allow-lists (AUTH_*_REDIRECT_ALLOW_LIST,
+ * USER_REGISTER_URL_ALLOW_LIST) hold https origins only, deliberately — an
+ * http entry would let a session land back over plaintext. But the edge still
+ * answers `http://911realtime.org/` with the app, so a visitor who arrives
+ * without TLS has an `http:` origin, and every URL derived from it was
+ * rejected with INVALID_PAYLOAD. Upgrade the scheme for product-domain hosts;
+ * every other origin (localhost dev servers, PR previews) is passed through
+ * untouched so it keeps its own scheme and port.
+ * Parameterized for tests — callers never pass arguments in production code.
+ */
+export function secureOrigin(
+	hostname: string = window.location.hostname,
+	origin: string = window.location.origin,
+): string {
+	if (!isHostOf(hostname, "911realtime.org")) return origin;
+	return origin.replace(/^http:\/\//, "https://");
+}
+
 // Registration verification links must land on an allow-listed URL
 // (USER_REGISTER_URL_ALLOW_LIST). The frontend's own origin when it is already
 // on the product domain; the apex otherwise, for builds served elsewhere such
@@ -169,7 +188,9 @@ export function registrationLandingUrl(
 	hostname: string = window.location.hostname,
 	origin: string = window.location.origin,
 ): string {
-	return isHostOf(hostname, "911realtime.org") ? `${origin}/` : "https://911realtime.org/";
+	return isHostOf(hostname, "911realtime.org")
+		? `${secureOrigin(hostname, origin)}/`
+		: "https://911realtime.org/";
 }
 
 /**

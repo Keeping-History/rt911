@@ -296,3 +296,98 @@ def test_list_subtitled_mp3_items_refuses_an_empty_source_list(monkeypatch, valu
             Config(directus_url="https://directus.test", directus_api_token="tok")
         )
     assert not route.called
+
+
+@respx.mock
+def test_replace_minutes_targets_the_minutes_collection(cfg):
+    """Every request must go to chat_transcript_minutes, not the segments table.
+
+    _replace_scoped is shared by both writers and takes the collection as an
+    argument. A leftover reference to the segments constant in any of its three
+    calls (delete, post-delete verify, insert) would silently write condensed
+    minute rows into the raw-segment table and wipe the wrong scope on the way —
+    both tables carry channel/medium, so nothing would error.
+    """
+    delete = respx.delete("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200)
+    )
+    verify = respx.get("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": [{"count": 0}]})
+    )
+    insert = respx.post("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    # Any call landing on the segments collection is the bug this test exists for.
+    segments_route = respx.route(
+        url__startswith="https://directus.test/items/chat_transcript_segments"
+    ).mock(return_value=httpx.Response(500))
+
+    written = writer.replace_minutes(
+        [{"channel": 7, "channel_slug": "wnbc", "medium": "tv",
+          "minute": "2001-09-11T12:40:00", "summary": "on the air", "segment_count": 2}],
+        medium="tv", channel=7, channel_slug="wnbc", cfg=cfg,
+    )
+
+    assert written == 1
+    assert delete.called and verify.called and insert.called
+    assert not segments_route.called
+
+
+def test_replace_minutes_refuses_without_a_scope(cfg):
+    # Same guard replace_segments has: an unscoped delete would clear every
+    # source's minutes, and the following insert would leave only this one's.
+    with pytest.raises(ValueError, match="channel id or a channel_slug"):
+        writer.replace_minutes([], medium="tv", channel=None, channel_slug=None, cfg=cfg)
+
+
+@respx.mock
+def test_replace_minutes_scopes_the_delete_to_the_window(cfg):
+    """An incremental run must not delete minutes outside the window it wrote.
+
+    replace_segments deletes everything for a source because it rebuilds a whole
+    SRT. Summarisation is windowed and paid-for, so source-only scoping would let
+    a 14:00-15:00 run silently wipe the 13:00-14:00 rows -- delete succeeds,
+    insert succeeds, row count drops, nothing errors.
+    """
+    captured = {}
+
+    def capture_delete(request):
+        captured["filter"] = json.loads(request.content)["query"]["filter"]
+        return httpx.Response(200)
+
+    respx.delete("https://directus.test/items/chat_transcript_minutes").mock(side_effect=capture_delete)
+    respx.get("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": [{"count": 0}]}))
+    respx.post("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": []}))
+
+    writer.replace_minutes(
+        [{"channel": 7, "channel_slug": "wnbc", "medium": "tv",
+          "minute": "2001-09-11T14:00:00", "summary": "x", "segment_count": 1}],
+        medium="tv", channel=7, channel_slug="wnbc", cfg=cfg,
+        minute_gte="2001-09-11T14:00:00", minute_lt="2001-09-11T15:00:00",
+    )
+
+    assert captured["filter"]["channel"] == {"_eq": 7}
+    assert captured["filter"]["minute"] == {
+        "_gte": "2001-09-11T14:00:00", "_lt": "2001-09-11T15:00:00"}
+
+
+@respx.mock
+def test_replace_minutes_without_a_window_still_clears_the_source(cfg):
+    # A full rebuild is a legitimate call; only omit the window when that is
+    # genuinely the intent.
+    captured = {}
+
+    def capture_delete(request):
+        captured["filter"] = json.loads(request.content)["query"]["filter"]
+        return httpx.Response(200)
+
+    respx.delete("https://directus.test/items/chat_transcript_minutes").mock(side_effect=capture_delete)
+    respx.get("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": [{"count": 0}]}))
+    respx.post("https://directus.test/items/chat_transcript_minutes").mock(
+        return_value=httpx.Response(200, json={"data": []}))
+
+    writer.replace_minutes([], medium="tv", channel=7, channel_slug="wnbc", cfg=cfg)
+    assert "minute" not in captured["filter"]

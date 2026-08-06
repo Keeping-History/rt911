@@ -19,6 +19,7 @@ import {
 	trailGradient,
 } from "./flightMapStyle";
 import { phaseLineColorExpression } from "./flightPhases";
+import { sourceDashExpression, sourceOpacityExpression } from "./flightProvenance";
 import planeSvg from "./plane.svg?raw";
 import pinSvg from "./pin.svg?raw";
 import { type MapPoi, type PoiLayerConfig, layerIndexOf, splitPoisForRender } from "./mapPois";
@@ -27,6 +28,7 @@ import {
 	PLANE_ICON_PX,
 	PLANE_NOTABLE_ICON_ID,
 	PLANE_NOTABLE_ICON_PX,
+	PLANE_ANON_ICON_ID,
 	PLANE_OBSERVER_ICON_ID,
 	buildPlaneImage,
 	familyIconId,
@@ -113,13 +115,15 @@ async function installPlaneIcons(
 	pinColor: string,
 	notablePinColor: string,
 	observerPinColor: string,
+	anonPinColor: string,
 	pixelate: boolean,
 ) {
 	try {
-		const [regular, notable, observer] = await Promise.all([
+		const [regular, notable, observer, anon] = await Promise.all([
 			buildPlaneImage(planeSvg, pinColor, iconDisplayPx(PLANE_ICON_PX, pixelate), pixelate),
 			buildPlaneImage(planeSvg, notablePinColor, PLANE_NOTABLE_ICON_PX, pixelate),
 			buildPlaneImage(planeSvg, observerPinColor, PLANE_NOTABLE_ICON_PX, pixelate),
+			buildPlaneImage(planeSvg, anonPinColor, iconDisplayPx(PLANE_ICON_PX, pixelate), pixelate),
 		]);
 		if (map.hasImage(PLANE_ICON_ID)) map.updateImage(PLANE_ICON_ID, regular);
 		else map.addImage(PLANE_ICON_ID, regular, { pixelRatio: 2 });
@@ -127,6 +131,8 @@ async function installPlaneIcons(
 		else map.addImage(PLANE_NOTABLE_ICON_ID, notable, { pixelRatio: 2 });
 		if (map.hasImage(PLANE_OBSERVER_ICON_ID)) map.updateImage(PLANE_OBSERVER_ICON_ID, observer);
 		else map.addImage(PLANE_OBSERVER_ICON_ID, observer, { pixelRatio: 2 });
+		if (map.hasImage(PLANE_ANON_ICON_ID)) map.updateImage(PLANE_ANON_ICON_ID, anon);
+		else map.addImage(PLANE_ANON_ICON_ID, anon, { pixelRatio: 2 });
 	} catch (err) {
 		console.warn("plane icons unavailable:", err);
 	}
@@ -315,6 +321,7 @@ interface FlightMapProps {
 	pinColor: string;
 	notablePinColor: string;
 	observerPinColor: string;
+	anonPinColor: string;
 	// Hero landmark model color (packed 0xRRGGBB), light/dark map variants;
 	// optional so existing call sites that predate hero landmarks keep working.
 	buildingHeroColorLight?: number;
@@ -404,7 +411,8 @@ export function nonNotableFeatures(fc: FlightFeatureCollection): FlightFeatureCo
 	return {
 		type: "FeatureCollection",
 		features: fc.features.filter(
-			(f) => f.properties.notable !== true && f.properties.observer !== true,
+			(f) => f.properties.notable !== true && f.properties.observer !== true
+				&& f.properties.anon !== true,
 		),
 	};
 }
@@ -507,6 +515,7 @@ export function planeLayerVisibility(
 	return {
 		"flights-dots": !cluster && !pitched,
 		"flights-notable": !pitched,
+		"flights-anon-dots": !pitched,
 		"flight-trails": !cluster && !pitched,
 		"cluster-circles": cluster && !pitched,
 		"cluster-counts": cluster && !pitched,
@@ -554,7 +563,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 	ref: handleRef,
 	positions, seedPositions, basemapUrls, trackGeoJSON,
 	trackProfile = null, nowMs, playing,
-	mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, radarSweep, trailMultiplier,
+	mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, radarSweep, trailMultiplier,
 	// Warm-stone defaults mirror flightMapSettings.ts's DEFAULT_FLIGHT_MAP_SETTINGS
 	// so call sites that predate hero landmarks (or omit the setting) still get a
 	// sensible hero color instead of an unset value.
@@ -616,11 +625,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const colorsRef = useRef<
 		FlightMapColors & { buildingHeroColorLight: number; buildingHeroColorDark: number }
 	>({
-		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain,
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, terrain,
 		buildingHeroColorLight, buildingHeroColorDark,
 	});
 	colorsRef.current = {
-		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain,
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, terrain,
 		buildingHeroColorLight, buildingHeroColorDark,
 	};
 	const radarSweepRef = useRef(radarSweep);
@@ -790,16 +799,41 @@ export const FlightMap: FC<FlightMapProps> = ({
 			map.addSource("flight-trails", { type: "geojson", data: EMPTY_FC, lineMetrics: true });
 			map.addLayer({
 				id: "track-line", type: "line", source: "track",
-				paint: { "line-color": phaseLineColorExpression(), "line-width": 2 },
+				paint: {
+					"line-color": phaseLineColorExpression(),
+					"line-width": 2,
+					// Provenance (#263): estimated stretches dash + dim.
+					"line-dasharray": sourceDashExpression(),
+					"line-opacity": sourceOpacityExpression(),
+				},
 			});
 			// Breadcrumb trails under the dots, faded oldest→head by a line-gradient.
 			map.addLayer({
 				id: "flight-trails", type: "line", source: "flight-trails",
 				paint: { "line-width": 1.2, "line-gradient": trailGradient(colors.mapStyle, colors.darkMap) },
 			});
+			// Anonymous radar traffic (#263): muted styling — generic icon, smaller
+			// and translucent, under the identified traffic. Empty until the
+			// flights-anon channel is subscribed (the Other toggle).
+			map.addLayer({
+				id: "flights-anon-dots", type: "symbol", source: "flights",
+				filter: ["==", ["get", "anon"], true],
+				layout: {
+					"icon-image": ["image", PLANE_ANON_ICON_ID],
+					"icon-size": 0.8,
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
+				},
+				// Anonymous traffic sits behind the identified flights: 50% less
+				// saturated (see flightMapSettings.desaturate) at 75% opacity.
+				paint: { "icon-opacity": 0.75 },
+			});
 			map.addLayer({
 				id: "flights-dots", type: "symbol", source: "flights",
-				filter: ["all", ["!=", ["get", "notable"], true], ["!=", ["get", "observer"], true]],
+				filter: ["all", ["!=", ["get", "notable"], true], ["!=", ["get", "observer"], true],
+					["!=", ["get", "anon"], true]],
 				layout: {
 					"icon-image": FAMILY_ICON_IMAGE,
 					// Grow to 1.5× while zooming in, capping at ~zoom 9 — where a
@@ -828,7 +862,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			});
 			void installPlaneIcons(
 				map, colors.pinColor, colors.notablePinColor, colors.observerPinColor,
-				pixelPlanes(colors.mapStyle),
+				colors.anonPinColor, pixelPlanes(colors.mapStyle),
 			);
 			// Cluster mode (issue #222): a second, pre-clustered source — MapLibre
 			// fixes the cluster option at addSource time, so toggling is a
@@ -1011,7 +1045,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// True-3D aircraft (issue #250): custom layer on top of the stack;
 			// its colors follow the pin pair like every other plane layer.
 			const planes3D = new Planes3DLayer();
-			planes3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor);
+			planes3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor,
+				colors.anonPinColor);
 			planes3D.setPixelate(pixelPlanes(colors.mapStyle));
 			planes3DRef.current = planes3D;
 			map.addLayer(planes3D);
@@ -1023,7 +1058,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 				buildMesh: () => buildSphereMesh(),
 				opacity: REPLAY_TRAIL_OPACITY,
 			});
-			replayTrail3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor);
+			replayTrail3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor,
+				colors.anonPinColor);
 			replayTrail3D.setPixelate(pixelPlanes(colors.mapStyle));
 			replayTrail3DRef.current = replayTrail3D;
 			map.addLayer(replayTrail3D);
@@ -1088,7 +1124,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 				const b = dragBounds(mode, d);
 				const feats = map.queryRenderedFeatures(
 					[[b.minX, b.minY], [b.maxX, b.maxY]],
-					{ layers: ["flights-dots", "flights-notable", "cluster-planes"] },
+					{ layers: ["flights-dots", "flights-anon-dots", "flights-notable", "cluster-planes"] },
 				);
 				for (const f of feats) {
 					const anchor = featureAnchor(f);
@@ -1181,7 +1217,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 					[x + HIT_TOLERANCE, y + HIT_TOLERANCE],
 				],
 				{
-					layers: ["flights-dots", "flights-notable", "cluster-planes", "cluster-circles"],
+					layers: ["flights-dots", "flights-anon-dots", "flights-notable", "cluster-planes",
+						"cluster-circles"],
 				},
 			);
 			// A cluster blob expands instead of selecting.
@@ -1333,11 +1370,11 @@ export const FlightMap: FC<FlightMapProps> = ({
 	useEffect(() => {
 		const map = mapRef.current;
 		if (!map || !loadedRef.current) return;
-		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain });
+		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, terrain });
 		// mapStyle is already a dep, so switching to/from radar re-rasterizes
 		// every registered icon into (or out of) its 8-bit variant for free.
 		const pixelate = pixelPlanes(mapStyle);
-		void installPlaneIcons(map, pinColor, notablePinColor, observerPinColor, pixelate);
+		void installPlaneIcons(map, pinColor, notablePinColor, observerPinColor, anonPinColor, pixelate);
 		for (const [family, svg] of loadedIconSvgsRef.current) {
 			void installFamilyIcon(
 				map, family, svg, pinColor, notablePinColor, observerPinColor, pixelate,
@@ -1355,8 +1392,8 @@ export const FlightMap: FC<FlightMapProps> = ({
 		buildings3DRef.current?.setHeroColor(
 			heroColorRgb({ mapStyle, darkMap, buildingHeroColorLight, buildingHeroColorDark }),
 		);
-		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
-		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor);
+		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor, anonPinColor);
+		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor, anonPinColor);
 		// The 3D meshes get the same radar 8-bit treatment as the 2D icons, via a
 		// low-res render pass rather than a re-rasterize (see Planes3DLayer).
 		planes3DRef.current?.setPixelate(pixelate);

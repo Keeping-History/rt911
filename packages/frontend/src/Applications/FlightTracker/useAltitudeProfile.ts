@@ -12,7 +12,7 @@ export function profileUrl(flight: string, flightDate: string): string {
 	const params = new URLSearchParams({
 		"filter[flight][_eq]": flight,
 		"filter[flight_date][_eq]": flightDate,
-		fields: "lat,lon,alt_ft,utc,phase",
+		fields: "lat,lon,alt_ft,utc,phase,source",
 		sort: "utc",
 		limit: "2000",
 	});

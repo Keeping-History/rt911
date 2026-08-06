@@ -149,6 +149,38 @@ export const CHAT_COLLECTIONS = [
     ],
   },
   {
+    collection: "chat_transcript_minutes",
+    meta: {
+      icon: "compress",
+      note: "Tier 2, condensed — one extractive line per channel per minute, produced by video-grabber. The prompt reads this and falls back to chat_transcript_segments for any span not summarized yet.",
+    },
+    schema: {},
+    fields: [
+      { field: "id", type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true } },
+      // channel/channel_slug/medium mirror chat_transcript_segments exactly: the
+      // streamer filters tier 2 by the stations that reached a buddy's market,
+      // and it applies the identical filter to whichever of the two tables it
+      // read — a summary row missing its provenance could not be filtered.
+      { field: "channel", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", width: "half" } },
+      { field: "channel_slug", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Used for radio, which has no tv_channels row" } },
+      { field: "medium", type: "string", schema: { is_nullable: false, default_value: "tv" },
+        meta: { interface: "select-dropdown", width: "half",
+                options: { choices: ["tv", "radio"].map((v) => ({ text: v, value: v })) } } },
+      { field: "minute", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Top of the minute this line covers" } },
+      { field: "summary", type: "text", schema: { is_nullable: false }, meta: { interface: "input-multiline", width: "full", note: "Extractive: deduped and truncated broadcast words, never paraphrased" } },
+      { field: "segment_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "How many raw segments condensed into this line" } },
+      // Provenance, so rows produced by different methods can be audited and
+      // re-run separately. "llm-extract" is verbatim source text the model only
+      // selected; "llm-abstract" is a rewrite that passed the containment gate;
+      // "extractive" is the mechanical fallback, which also means the LLM path
+      // was refused or unavailable for that minute.
+      { field: "method", type: "string", schema: { is_nullable: true },
+        meta: { interface: "select-dropdown", width: "half",
+                options: { choices: ["llm-extract", "llm-abstract", "extractive"].map((v) => ({ text: v, value: v })) } } },
+      { field: "model", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Null for mechanically condensed rows" } },
+    ],
+  },
+  {
     collection: "chat_messages",
     meta: { icon: "chat", note: "Per-user conversation log. Directus policy MUST scope this to $CURRENT_USER" },
     schema: {},
@@ -162,6 +194,13 @@ export const CHAT_COLLECTIONS = [
       { field: "body", type: "text", schema: { is_nullable: false }, meta: { interface: "input-multiline", width: "full" } },
       { field: "virtual_time", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Position on the 2001 clock" } },
       { field: "created_at", type: "timestamp", schema: { is_nullable: false }, meta: { interface: "datetime", width: "half", note: "Real wall-clock time" } },
+      // Soft delete, not a hard one: the transcript leaves the product while the
+      // log survives. EVERY conversation read must filter on this being NULL —
+      // history, replayed history, and the prior-contact check — or a cleared
+      // conversation comes back through whichever path forgot.
+      { field: "cleared_at", type: "timestamp", schema: { is_nullable: true },
+        meta: { interface: "datetime", width: "full", readonly: true,
+                note: "Set when the student cleared their chat history (IM Buddies > Edit > Settings > Delete Chat Data). Rows are retained; every conversation read skips those carrying this." } },
       { field: "kind", type: "string", schema: { is_nullable: false, default_value: "typed" },
         meta: { interface: "select-dropdown", width: "half",
                 options: { choices: ["typed", "scheduled", "generated", "static", "stall"].map((v) => ({ text: v, value: v })) } } },
@@ -169,6 +208,12 @@ export const CHAT_COLLECTIONS = [
       { field: "model", type: "string", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
       { field: "tokens_in", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
       { field: "tokens_out", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+      { field: "cached_in", type: "integer", schema: { is_nullable: true },
+        meta: { interface: "input", width: "half",
+                note: "Prompt tokens served from cache, billed at ~0.1x. DISJOINT from tokens_in, which counts only the uncached remainder — the full prompt is tokens_in + cache_write_in + cached_in. Zero across a whole conversation means prompt caching is not working." } },
+      { field: "cache_write_in", type: "integer", schema: { is_nullable: true },
+        meta: { interface: "input", width: "half",
+                note: "Prompt tokens written to cache, billed at ~1.25x. Watch for this staying high while cached_in stays zero: that is the write premium being paid every turn for a prefix nothing ever reads back — the exact failure this feature shipped with, undetected, for months." } },
     ],
   },
   {
@@ -216,6 +261,12 @@ export const CHAT_COLLECTIONS = [
 export const CHAT_INDEX_SQL = `
     CREATE INDEX IF NOT EXISTS idx_chat_knowledge_public   ON chat_knowledge (public_at);
     CREATE INDEX IF NOT EXISTS idx_chat_transcript_start   ON chat_transcript_segments (start_date);
+    -- LoadBroadcastMinutes runs on the session goroutine for every message, and
+    -- it is a range scan on minute plus a channel/slug filter. Leading with
+    -- minute matches that shape (the range is the selective part — ten minutes
+    -- out of nine days); without it this is a seq scan of the whole table on
+    -- the hot path, which is the same mistake idx_news_items_fts documents.
+    CREATE INDEX IF NOT EXISTS idx_chat_minutes_minute    ON chat_transcript_minutes (minute, medium);
     CREATE INDEX IF NOT EXISTS idx_chat_transcript_fts     ON chat_transcript_segments USING GIN (to_tsvector('english', text));
     CREATE INDEX IF NOT EXISTS idx_chat_messages_user_conv ON chat_messages (( "user" ), profile, virtual_time);
     CREATE INDEX IF NOT EXISTS idx_chat_blocks_user        ON chat_blocks (( "user" ), scope);

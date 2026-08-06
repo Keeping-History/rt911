@@ -76,4 +76,8 @@ export interface AltitudeSample {
 	alt_ft: number;
 	utc: string;
 	phase?: string;
+	// Provenance (#263): "radar" = an 84 RADES surveyed position, "estimated"
+	// = great-circle reconstruction where the radars had no coverage. Absent
+	// on wholly-reconstructed (historical) flights.
+	source?: string;
 }

@@ -17,6 +17,7 @@ vi.mock('classicy', () => ({
     ClassicyIcons: { applications: {} },
     registerClassicyIcons: <T,>(icons: T) => icons,
     quitMenuItemHelper: () => ({}),
+    useClassicyHelpMenu: () => {},
     useAppManager: (sel: (s: unknown) => unknown) =>
         sel({
             System: {

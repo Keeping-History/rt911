@@ -11,6 +11,7 @@ import mapGlobePng from "./map-globe.png";
 import map3dPng from "./map-3d.png";
 import mapTerrainPng from "./map-terrain.png";
 import mapClusterPng from "./map-cluster.png";
+import mapExpandRadar from "./target.png";
 import mapAirportPng from "./map-airport.png";
 import mapPlanePng from "./map-plane.png";
 import mapCameraPng from "./map-camera.png";
@@ -47,6 +48,7 @@ export interface MapControlsProps {
 	threeD: boolean;
 	terrain: boolean;
 	cluster: boolean;
+	anonTraffic: boolean;
 	selectMode: SelectMode;
 	mapStyle: BasemapStyleId;
 	darkMap: boolean;
@@ -63,6 +65,7 @@ export interface MapControlsProps {
 	onToggleThreeD(): void;
 	onToggleTerrain(): void;
 	onToggleCluster(): void;
+	onToggleAnonTraffic(): void;
 	onSetSelectMode(mode: SelectMode): void;
 	onPinpoint(center: [number, number], zoom: number): void;
 	onSetMapStyle(style: BasemapStyleId): void;
@@ -148,6 +151,16 @@ export const MapControls: FC<MapControlsProps> = (p) => {
 			onClickFunc={p.onToggleCluster}
 		>
 			<img className={styles.mapControlIcon} src={mapClusterPng} alt="" />
+		</ClassicyButton>
+		</ClassicyBalloonHelp>
+		<ClassicyBalloonHelp content="Show the unidentified radar traffic alongside the known airline flights.">
+		<ClassicyButton
+			buttonSize="small"
+			aria-label="Expand Radar"
+			depressed={p.anonTraffic}
+			onClickFunc={p.onToggleAnonTraffic}
+		>
+			<img className={styles.mapControlIcon} src={mapExpandRadar} alt="" />
 		</ClassicyButton>
 		</ClassicyBalloonHelp>
 		</div>
