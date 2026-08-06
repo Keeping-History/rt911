@@ -1,171 +1,66 @@
 @use 'classicy/scss/appearance';
 
 /**
- * Static chrome styled to resemble Classicy. This is deliberately NOT
- * ClassicyDesktop: no app manager, no window manager, no draggable windows —
- * which is what makes the whole surface safe to lazy-load. It borrows Classicy's
- * CSS custom properties so it tracks the active theme.
+ * Only what Classicy does not already provide.
+ *
+ * The chrome itself — menu bar, menus, window frame, title bar — uses
+ * Classicy's own global classes (classicyDesktop, classicyDesktopMenu,
+ * classicyMenuItem, classicyWindowFrame, …). Everything here is layout glue for
+ * a static page plus typography for author-written prose, and every value comes
+ * from a theme variable rather than a literal.
  */
 
+/* Classicy's .classicyDesktop is width/height 100%, so it needs a sized
+   parent. This makes the surface fill the viewport and stack the menu bar
+   above the page area. */
 .root {
 	position: fixed;
 	inset: 0;
 	display: flex;
 	flex-direction: column;
-	background: var(--color-theme-03, #999);
-	font-family: var(--font-family, Charcoal, Geneva, Tahoma, sans-serif);
-	color: var(--color-black, #000);
-	overflow: hidden;
 }
 
-/* ---- menu bar ---- */
-
-.menuBar {
-	flex: 0 0 auto;
-	display: flex;
-	align-items: stretch;
-	height: 20px;
-	background: var(--color-theme-01, #ddd);
-	border-bottom: 1px solid var(--color-black, #000);
-	box-shadow: 0 1px 0 var(--color-theme-05, #888);
-	padding: 0 4px;
-	font-size: 12px;
-	user-select: none;
-	z-index: 10;
-}
-
-/* Positioning context for the dropdown, which is a sibling of the button
-   rather than a child (a <ul> inside a <button> is invalid HTML). */
-.menuGroup {
-	position: relative;
-	display: flex;
-	align-items: stretch;
-}
-
-.menuItem {
-	display: flex;
-	align-items: center;
-	padding: 0 10px;
-	background: none;
-	border: none;
-	font: inherit;
-	color: inherit;
-	cursor: default;
-
-	&:hover,
-	&[aria-expanded='true'] {
-		background: var(--color-theme-06, #000);
-		color: var(--color-theme-01, #fff);
-	}
-}
-
-.appleItem {
-	font-size: 14px;
-	padding: 0 8px;
-}
-
-.menuDropdown {
-	position: absolute;
-	top: 100%;
-	left: 0;
-	min-width: 180px;
-	margin: 0;
-	padding: 2px 0;
-	list-style: none;
-	background: var(--color-theme-01, #ddd);
-	border: 1px solid var(--color-black, #000);
-	box-shadow: 2px 2px 0 rgb(0 0 0 / 35%);
-	text-align: left;
-	z-index: 20;
-}
-
-.menuLink {
-	display: block;
-	padding: 3px 18px 3px 14px;
-	color: inherit;
-	text-decoration: none;
-	white-space: nowrap;
-
-	&:hover {
-		background: var(--color-theme-06, #000);
-		color: var(--color-theme-01, #fff);
-	}
-}
-
-/* A nested page renders indented under its parent, the way a hierarchical
-   Mac OS menu reads, rather than as a submenu that needs hover-intent. */
-.menuLinkChild {
-	padding-left: 30px;
-}
-
-.menuCurrent {
-	font-weight: bold;
-}
-
-/* ---- desktop + window ---- */
-
-.desktop {
+/* .classicyDesktop sets overflow:hidden; the page area is what scrolls. */
+.desktopArea {
 	flex: 1 1 auto;
 	min-height: 0;
+	overflow-y: auto;
 	display: flex;
 	justify-content: center;
 	align-items: flex-start;
-	padding: 28px 16px;
-	overflow: auto;
-	background-image:
-		radial-gradient(var(--color-theme-05, #888) 1px, transparent 1px);
-	background-size: 4px 4px;
+	padding: calc(var(--window-padding-size) * 4) calc(var(--window-padding-size) * 2);
 }
 
+/* Classicy's .classicyWindow is absolutely positioned and height-capped by the
+   window manager. This surface has no window manager: the window sits in normal
+   flow, sized for reading, and grows with its content while .desktopArea
+   scrolls. Everything else about the class — frame, bevel, title bar — is left
+   exactly as Classicy draws it. */
 .window {
-	width: min(820px, 100%);
-	display: flex;
-	flex-direction: column;
-	background: var(--color-window-frame, #ddd);
-	border: var(--window-border-size, 1px) solid var(--color-window-border, #000);
-	box-shadow: 3px 3px 0 rgb(0 0 0 / 40%);
+	position: relative;
+	max-height: none;
+	width: min(56rem, 100%);
 }
 
-.titleBar {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: 3px 6px;
-	border-bottom: 1px solid var(--color-window-border, #000);
-	background:
-		repeating-linear-gradient(
-			to bottom,
-			var(--color-theme-01, #ddd) 0 1px,
-			var(--color-theme-03, #999) 1px 2px
-		);
+.windowZoomed {
+	width: 100%;
 }
 
-/* Purely decorative: this window is not draggable and has no controls, so the
-   box is a button-shaped affordance only, hidden from assistive tech. */
-.titleBarBox {
-	width: 11px;
-	height: 11px;
-	flex: 0 0 auto;
-	border: 1px solid var(--color-window-border, #000);
-	background: var(--color-theme-01, #ddd);
+/* The window contents area is chrome-coloured; authored text sits on document
+   white, as a document window does. */
+.document {
+	background: var(--color-window-document);
+	padding: calc(var(--window-padding-size) * 3);
+	min-height: 16rem;
+	overflow-wrap: break-word;
 }
 
-.titleBarText {
-	flex: 1 1 auto;
-	text-align: center;
-	font-size: 12px;
-	font-weight: bold;
-	padding: 0 4px;
-	background: var(--color-window-frame, #ddd);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.content {
-	background: var(--color-window-document, #fff);
-	padding: 20px 24px 28px;
-	min-height: 240px;
+/* Classicy sets --ui-font/--ui-font-size on .classicyMenuWrapper, which the bar
+   now has. Restating them on the top-level item keeps it correct even if that
+   wrapper moves or a future menu item is rendered outside one. */
+.menuTitle {
+	font-family: var(--ui-font), sans-serif;
+	font-size: var(--ui-font-size);
 }
 
 /* ---- byline ---- */
@@ -173,64 +68,82 @@
 .byline {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	margin-bottom: 16px;
-	padding-bottom: 12px;
-	border-bottom: 1px solid var(--color-theme-05, #888);
-	font-size: 12px;
+	gap: calc(var(--window-padding-size) * 2);
+	margin-bottom: calc(var(--window-padding-size) * 3);
+	padding-bottom: calc(var(--window-padding-size) * 2);
+	border-bottom: var(--window-border-size) solid var(--color-system-05);
+	font-family: var(--ui-font), sans-serif;
+	font-size: var(--ui-font-size);
 }
 
 .avatar {
-	width: 32px;
-	height: 32px;
+	width: var(--icon-size-regular);
+	height: var(--icon-size-regular);
 	object-fit: cover;
-	border: 1px solid var(--color-theme-05, #888);
+	border: var(--window-border-size) solid var(--color-system-05);
 }
 
 .bylineName {
-	font-weight: bold;
+	font-weight: 700;
 }
 
-.bylineMeta {
-	color: var(--color-theme-06, #444);
+.bylineMeta a {
+	color: var(--color-theme-04);
 }
 
 /* ---- authored body ---- */
 
 .body {
-	font-family: Georgia, 'Times New Roman', serif;
-	font-size: 15px;
-	line-height: 1.6;
+	font-family: var(--body-font), serif;
+	font-size: var(--body-font-size);
+	line-height: 1.55;
+	color: var(--color-black);
 
+	h1,
 	h2,
-	h3 {
-		font-family: var(--font-family, Charcoal, Geneva, sans-serif);
-		line-height: 1.25;
-		margin: 1.4em 0 0.4em;
+	h3,
+	h4 {
+		font-family: var(--header-font), sans-serif;
+		line-height: 1.2;
+		margin: 1.4em 0 .4em;
 	}
 
-	h2 { font-size: 18px; }
-	h3 { font-size: 15px; }
+	h1 { font-size: calc(var(--header-font-size) * 1.25); }
+	h2 { font-size: var(--header-font-size); }
+	h3 { font-size: calc(var(--header-font-size) * .85); }
+	h4 { font-size: var(--ui-font-size); }
 
 	p { margin: 0 0 1em; }
 
-	/* Authored media must never widen the window and force a horizontal
-	   scrollbar on the whole page. */
+	ul,
+	ol { margin: 0 0 1em 1.5em; }
+
+	blockquote {
+		margin: 0 0 1em;
+		padding-left: calc(var(--window-padding-size) * 2);
+		border-left: calc(var(--window-border-size) * 2) solid var(--color-system-05);
+		color: var(--color-system-07);
+	}
+
+	a { color: var(--color-theme-04); }
+
+	/* Authored media must never widen the frame and force the page to scroll
+	   sideways. */
 	img,
 	iframe {
 		display: block;
 		max-width: 100%;
 		height: auto;
 		margin: 1em 0;
-		border: 1px solid var(--color-theme-05, #888);
+		border: var(--window-border-size) solid var(--color-system-05);
 	}
 
 	iframe {
-		aspect-ratio: 16 / 9;
 		width: 100%;
+		aspect-ratio: 16 / 9;
 	}
 
-	/* Wide content scrolls inside its own box for the same reason. */
+	/* Wide content scrolls inside its own box, for the same reason. */
 	pre,
 	table {
 		display: block;
@@ -239,17 +152,27 @@
 	}
 
 	code {
-		font-family: Monaco, 'Courier New', monospace;
-		font-size: 0.9em;
-		background: var(--color-theme-01, #eee);
-		padding: 0 3px;
+		font-family: var(--mono-font), monospace;
+		font-size: var(--mono-font-size);
+		background: var(--color-system-02);
+		padding: 0 .25em;
 	}
-
-	a { color: #00c; }
 }
 
 .status {
-	padding: 40px 0;
+	font-family: var(--ui-font), sans-serif;
+	font-size: var(--ui-font-size);
+	padding: calc(var(--window-padding-size) * 6) 0;
 	text-align: center;
-	color: var(--color-theme-06, #444);
+	color: var(--color-system-07);
+}
+
+/* Menu links inherit Classicy's .classicyMenuItem p a styling; this only marks
+   nesting depth and the current page. */
+.menuChild {
+	padding-left: calc(var(--window-padding-size) * 3);
+}
+
+.menuCurrent {
+	font-weight: 700;
 }

@@ -1,19 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DIRECTUS_URL } from "../lib/endpoints";
 import { renderPageHtml } from "../lib/renderPageHtml";
+import { classicyThemeVars } from "./classicyTheme";
 import type { PageNode } from "./pageTree";
 import { pagesRouteSlug } from "./route";
 import { usePages } from "./usePages";
 import styles from "./PagesSite.module.scss";
 
 /**
- * The CMS pages surface: static Classicy-styled chrome around one authored page,
- * with the page tree in the menu bar.
+ * The CMS pages surface: one authored page inside Classicy chrome, with the
+ * page tree in the menu bar.
  *
  * Deliberately not a Classicy app. It mounts no ClassicyDesktop and no
  * ClassicyAppManagerProvider, which is why app.tsx can lazy-load it — the
  * eager-import constraint documented there applies to ClassicyDesktop, not to
  * arbitrary lazy children.
+ *
+ * The chrome uses Classicy's own global class names and DOM shape rather than a
+ * lookalike — `classicyDesktop`, the `classicyDesktopMenuBar` nav, and the
+ * `classicyWindow` structure a real ClassicyWindow renders (frame edges, title
+ * bar with control boxes and pinstripe fills, contents/contentsInner). Those
+ * class names are load-bearing, not cosmetic: classicy.css scopes its title-bar
+ * and content rules under `.classicyWindow`, so a different wrapper renders
+ * visibly wrong.
+ *
+ * Because the app manager is absent, the theme's CSS custom properties are
+ * applied to the root element here instead — see classicyTheme.ts.
  */
 
 /**
@@ -33,12 +45,32 @@ function flattenForMenu(nodes: PageNode[], depth = 0): { node: PageNode; depth: 
 	]);
 }
 
+function cx(...parts: (string | false | undefined)[]): string {
+	return parts.filter(Boolean).join(" ");
+}
+
+/**
+ * The Apple menu icon, taken from Classicy's own desktop menu bar.
+ *
+ * Inlined rather than referenced as a glyph: U+F8FF renders as nothing in the
+ * Charcoal/ChicagoFLF web fonts, so the menu item came out blank. 586 bytes.
+ */
+const APPLE_ICON =
+	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAAN1wAADdcBQiibeAAAAAd0SU1FB9sJBRIcJEs1Gp0AAAElSURBVDjL7ZOhUsNAEIa/MIiTxeUVKg8Hso/AK1xcJRZZWWRcInkE6ops3K1rHqGydcT9iHSmGdKEwiC7Zud29/75/p07uMZorBFLNDZy8ysxA1b/RbdEzMbpfiaKiEVHJCLW48LnLS/QfBbY+gIejuJrxB4wwMPFtCpmkpC0PWak6KUCqfBSQMWzHxS77Zf2gICkPVqn1UDpIHu15GLBujKmAbAC6gw+ATOsASYGm3GHvR027hustWTegTu05Xc/vL8e+g6Uxgh5pC4z7jq97TFX7Rz5mfs9y+m8oA6RaRmYApSnBe69owFSYGdVtzlsOcmzpAEslDA51c07GgcRqMwAd5nlzmOUD0/gGixfgU/x949Y/AA7AC/JH77LQvCm4fM1gC+rGoNLjWKRdwAAAABJRU5ErkJggg==";
+
 export default function PagesSite() {
 	const [slug, setSlug] = useState(currentSlug);
-	const [menuOpen, setMenuOpen] = useState<string | null>(null);
+	const [menuOpen, setMenuOpen] = useState(false);
+	// Zoom toggles the window between reading width and full width, the way a
+	// classic zoom box does. Kept functional so the control is not decoration.
+	const [zoomed, setZoomed] = useState(false);
 	const barRef = useRef<HTMLDivElement>(null);
 
 	const { nav, page, loading, notFound, error } = usePages(slug);
+
+	// Theme variables are stable for the session; computing them once avoids
+	// re-deriving the whole map on every render.
+	const themeVars = useMemo(() => classicyThemeVars(), []);
 
 	// Back/forward must swap content rather than reloading the bundle.
 	useEffect(() => {
@@ -49,9 +81,9 @@ export default function PagesSite() {
 
 	// Click-away closes an open menu.
 	useEffect(() => {
-		if (menuOpen === null) return;
+		if (!menuOpen) return;
 		const onDown = (e: MouseEvent) => {
-			if (!barRef.current?.contains(e.target as Node)) setMenuOpen(null);
+			if (!barRef.current?.contains(e.target as Node)) setMenuOpen(false);
 		};
 		document.addEventListener("mousedown", onDown);
 		return () => document.removeEventListener("mousedown", onDown);
@@ -65,7 +97,7 @@ export default function PagesSite() {
 			return;
 		}
 		e.preventDefault();
-		setMenuOpen(null);
+		setMenuOpen(false);
 		window.history.pushState({}, "", `/${next}`);
 		setSlug(next);
 	}, []);
@@ -78,105 +110,193 @@ export default function PagesSite() {
 	}, [page]);
 
 	return (
-		<div className={styles.root}>
-			<div className={styles.menuBar} ref={barRef}>
-				<a className={`${styles.menuItem} ${styles.appleItem}`} href="/" title="Back to the desktop">
-					&#63743;
-				</a>
-
-				{/* The dropdown is a SIBLING of the button, not a child: a <ul>
-				    inside a <button> is invalid HTML, and nesting it would make every
-				    menu-item click re-trigger the button that opened it. */}
-				<div className={styles.menuGroup}>
-					<button
-						type="button"
-						className={styles.menuItem}
-						aria-expanded={menuOpen === "pages"}
-						aria-haspopup="menu"
-						onClick={() => setMenuOpen((m) => (m === "pages" ? null : "pages"))}
+		<div className={cx("classicyDesktop", styles.root)} style={themeVars}>
+			{/* The real desktop renders <nav class="classicyDesktopMenuBar"> wrapping
+			    a .classicyMenuWrapper around the <ul>. That wrapper is also where
+			    classicy applies --ui-font / --ui-font-size, so omitting it left the
+			    menu bar unstyled. */}
+			<nav className="classicyDesktopMenuBar" ref={barRef}>
+				<div className="classicyMenuWrapper">
+					<ul className="classicyDesktopMenu">
+					<li
+						className="classicyMenuItem classicyMenuItemNoImage classicyDesktopMenuAppleMenu"
+						role="menuitem"
+						tabIndex={-1}
 					>
-						Pages
-					</button>
-					{menuOpen === "pages" && (
-						<ul className={styles.menuDropdown} role="menu">
-							{menuItems.length === 0 && (
-								<li role="none">
-									<span className={styles.menuLink}>(no pages)</span>
-								</li>
-							)}
-							{menuItems.map(({ node, depth }) => (
-								<li key={node.id} role="none">
-									<a
-										role="menuitem"
-										href={`/${node.slug}`}
-										className={[
-											styles.menuLink,
-											depth > 0 ? styles.menuLinkChild : "",
-											node.slug === slug ? styles.menuCurrent : "",
-										]
-											.filter(Boolean)
-											.join(" ")}
-										onClick={(e) => navigate(e, node.slug)}
-									>
-										{node.title}
-									</a>
-								</li>
-							))}
-						</ul>
-					)}
-				</div>
-			</div>
+						<p>
+							<a href="/" title="Back to the desktop" aria-label="Back to the desktop">
+								<img src={APPLE_ICON} alt="" />
+							</a>
+						</p>
+					</li>
 
-			<div className={styles.desktop}>
-				<div className={styles.window}>
-					<div className={styles.titleBar}>
-						<span className={styles.titleBarBox} aria-hidden="true" />
-						<span className={styles.titleBarText}>{page?.title ?? "911 Realtime"}</span>
-						<span className={styles.titleBarBox} aria-hidden="true" />
+					{/* Classicy's own show/hide rule is
+					    `.classicyMenuItemOpen > .classicyMenuWrapper > ul { display: flex }`,
+					    so the submenu is always rendered and the open class drives
+					    visibility. The nesting below is what that selector requires. */}
+					<li
+						className={cx(
+							"classicyMenuItem",
+							"classicyMenuItemChildMenuIndicator",
+							styles.menuTitle,
+							menuOpen && "classicyMenuItemOpen",
+						)}
+						role="menuitem"
+						tabIndex={0}
+						aria-haspopup="menu"
+						aria-expanded={menuOpen}
+						onClick={() => setMenuOpen((o) => !o)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								setMenuOpen((o) => !o);
+							} else if (e.key === "Escape") {
+								setMenuOpen(false);
+							}
+						}}
+					>
+						<p>Pages</p>
+						<div className="classicyMenuWrapper">
+							<ul className="classicySubMenu">
+								{menuItems.length === 0 && (
+									<li className="classicyMenuItem classicyMenuItemDisabled">
+										<p>(no pages)</p>
+									</li>
+								)}
+								{menuItems.map(({ node, depth }) => (
+									<li key={node.id} className="classicyMenuItem">
+										<p>
+											<a
+												href={`/${node.slug}`}
+												className={cx(
+													depth > 0 && styles.menuChild,
+													node.slug === slug && styles.menuCurrent,
+												)}
+												onClick={(e) => navigate(e, node.slug)}
+											>
+												{node.title}
+											</a>
+										</p>
+									</li>
+								))}
+							</ul>
+						</div>
+					</li>
+					</ul>
+				</div>
+			</nav>
+
+			<div className={styles.desktopArea}>
+				{/* Mirrors what ClassicyWindow actually renders — verified against a
+				    live window in the running desktop. The class names matter beyond
+				    naming: every title-bar rule in classicy.css is scoped under
+				    `.classicyWindow`, so the outer class is what makes the pinstriped
+				    title bar, control boxes and content bevel style at all.
+				    classicyWindowFrame, used here previously, is a different
+				    component entirely and looked visibly wrong. */}
+				<div
+					className={cx(
+						"classicyWindow",
+						"classicyWindowDocument",
+						"classicyWindowActive",
+						styles.window,
+						zoomed && styles.windowZoomed,
+					)}
+				>
+					<div className="classicyWindowFrameEdge classicyWindowFrameEdge-top" />
+					<div className="classicyWindowFrameEdge classicyWindowFrameEdge-right" />
+					<div className="classicyWindowFrameEdge classicyWindowFrameEdge-bottom" />
+					<div className="classicyWindowFrameEdge classicyWindowFrameEdge-left" />
+
+					<div className="classicyWindowTitleBar">
+						<div className="classicyWindowControlBox">
+							{/* A real control, not decoration: closing a page returns you
+							    to the desktop. A dead close box would be worse than none. */}
+							<div
+								className="classicyWindowCloseBox"
+								role="button"
+								tabIndex={0}
+								title="Back to the desktop"
+								aria-label="Back to the desktop"
+								onClick={() => {
+									window.location.href = "/";
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") window.location.href = "/";
+								}}
+							/>
+						</div>
+
+						<div className="classicyWindowTitle">
+							{/* Left and Right carry the pinstripe fill and flex-grow around
+							    the title text — that is how the classic title bar is drawn. */}
+							<div className="classicyWindowTitleLeft" />
+							<div className="classicyWindowTitleText">
+								<p>{page?.title ?? "911 Realtime"}</p>
+							</div>
+							<div className="classicyWindowTitleRight" />
+						</div>
+
+						<div className="classicyWindowControlBox">
+							<div
+								className="classicyWindowZoomBox"
+								role="button"
+								tabIndex={0}
+								title={zoomed ? "Reduce" : "Zoom"}
+								aria-label={zoomed ? "Reduce window" : "Zoom window"}
+								aria-pressed={zoomed}
+								onClick={() => setZoomed((z) => !z)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") setZoomed((z) => !z);
+								}}
+							/>
+						</div>
 					</div>
 
-					<div className={styles.content}>
-						{loading && <p className={styles.status}>Loading…</p>}
+					<div className="classicyWindowContents">
+						<div className={cx("classicyWindowContentsInner", styles.document)}>
+							{loading && <p className={styles.status}>Loading…</p>}
 
-						{!loading && error && (
-							<p className={styles.status}>Could not load this page: {error}</p>
-						)}
+							{!loading && error && (
+								<p className={styles.status}>Could not load this page: {error}</p>
+							)}
 
-						{!loading && !error && notFound && (
-							<>
-								<h2>Page not found</h2>
-								<p>
-									No published page has the address <code>/{slug}</code>.
-								</p>
-							</>
-						)}
+							{!loading && !error && notFound && (
+								<div className={styles.body}>
+									<h2>Page not found</h2>
+									<p>
+										No published page has the address <code>/{slug}</code>.
+									</p>
+								</div>
+							)}
 
-						{!loading && !error && page && (
-							<>
-								{page.author && (
-									<div className={styles.byline}>
-										{page.author.avatar && (
-											<img
-												className={styles.avatar}
-												src={`${DIRECTUS_URL}/assets/${page.author.avatar}`}
-												alt=""
-											/>
-										)}
-										<div>
-											<div className={styles.bylineName}>{page.author.name}</div>
-											{page.author.email && (
-												<div className={styles.bylineMeta}>
-													<a href={`mailto:${page.author.email}`}>{page.author.email}</a>
-												</div>
+							{!loading && !error && page && (
+								<>
+									{page.author && (
+										<div className={styles.byline}>
+											{page.author.avatar && (
+												<img
+													className={styles.avatar}
+													src={`${DIRECTUS_URL}/assets/${page.author.avatar}`}
+													alt=""
+												/>
 											)}
+											<div>
+												<div className={styles.bylineName}>{page.author.name}</div>
+												{page.author.email && (
+													<div className={styles.bylineMeta}>
+														<a href={`mailto:${page.author.email}`}>{page.author.email}</a>
+													</div>
+												)}
+											</div>
 										</div>
-									</div>
-								)}
-								{/* Sanitized by renderPageHtml: DOMPurify plus an iframe
-								    src allowlist. Browser.tsx / ReadmeContent.tsx precedent. */}
-								<div className={styles.body} dangerouslySetInnerHTML={{ __html: html }} />
-							</>
-						)}
+									)}
+									{/* Sanitized by renderPageHtml: DOMPurify plus an iframe
+									    src allowlist. Browser.tsx / ReadmeContent.tsx precedent. */}
+									<div className={styles.body} dangerouslySetInnerHTML={{ __html: html }} />
+								</>
+							)}
+						</div>
 					</div>
 				</div>
 			</div>
