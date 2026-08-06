@@ -125,3 +125,36 @@ export const PAGES_PERMISSIONS = [
   { collection: "pages", action: "read", fields: PAGES_PUBLIC_FIELDS, permissions: { status: { _eq: "published" } } },
   { collection: "page_authors", action: "read", fields: ["*"], permissions: {} },
 ];
+
+/**
+ * Directus folder that page images and author avatars are uploaded into.
+ *
+ * This exists because `/assets/<uuid>` is NOT public by default: it enforces
+ * read permission on the directus_files ROW, so without a grant every inline
+ * image and every avatar 403s for anonymous visitors. Verified against the live
+ * instance — an uploaded image returned 403 until this grant existed.
+ *
+ * A blanket grant on directus_files is not acceptable: the same table holds the
+ * per-user Classicy filesystem snapshots written by the filesystem-sync
+ * feature, and `/assets/<uuid>` would serve those private JSON documents to
+ * anyone. Scoping the grant to one folder is what keeps CMS imagery public
+ * while leaving everything else unreadable.
+ */
+export const PAGES_ASSET_FOLDER = "CMS Pages";
+
+/**
+ * Public read on directus_files, confined to the CMS asset folder.
+ *
+ * Takes the folder id because Directus generates it at creation time, so it
+ * cannot be a static constant here. Fields are narrowed to what a renderer
+ * could legitimately want (dimensions, alt text) — filename_download and
+ * uploaded_by are deliberately absent.
+ */
+export function pagesFilesPermission(folderId) {
+  return {
+    collection: "directus_files",
+    action: "read",
+    fields: ["id", "title", "description", "type", "width", "height", "filesize", "folder"],
+    permissions: { folder: { _eq: folderId } },
+  };
+}

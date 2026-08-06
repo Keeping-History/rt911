@@ -1,15 +1,41 @@
 import react from "@vitejs/plugin-react";
 import path from "path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+import { pagesRouteSlug } from "./src/Pages/route";
+
+/**
+ * COOP/COEP exist so the Infinite Mac emulator can use SharedArrayBuffer. They
+ * are cross-origin isolation headers, and COEP blocks third-party iframes:
+ * verified against the dev server, a YouTube embed fails with
+ * ERR_BLOCKED_BY_RESPONSE while COEP is set and loads (200) the moment it is
+ * removed.
+ *
+ * The emulator only ever runs on the desktop, which is served at `/`. CMS pages
+ * are served at their own root-level slugs and must be able to embed video, so
+ * they are served without the headers. Mirrors the `location` split in
+ * nginx.conf — change both together or dev and production will disagree about
+ * whether embeds work.
+ */
+function crossOriginIsolationExceptPages(): Plugin {
+	return {
+		name: "rt911-coop-coep-except-pages",
+		configureServer(server) {
+			server.middlewares.use((req, res, next) => {
+				const pathname = (req.url ?? "/").split("?")[0];
+				if (pagesRouteSlug(pathname) === null) {
+					res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+					res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+				}
+				next();
+			});
+		},
+	};
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-	plugins: [react()],
+	plugins: [react(), crossOriginIsolationExceptPages()],
 	server: {
-		headers: {
-			"Cross-Origin-Opener-Policy": "same-origin",
-			"Cross-Origin-Embedder-Policy": "credentialless",
-		},
 		proxy: {
 			"/feedback": {
 				target: "http://localhost:8080",

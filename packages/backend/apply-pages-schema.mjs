@@ -33,6 +33,8 @@ import {
   PAGE_COLLECTIONS,
   PAGES_RELATIONS,
   PAGES_PERMISSIONS,
+  PAGES_ASSET_FOLDER,
+  pagesFilesPermission,
   RESERVED_SLUGS,
 } from "./pages-collections.mjs";
 
@@ -95,6 +97,9 @@ function preflight() {
     }
   }
 
+  // Static definitions only. The directus_files grant is built at runtime from
+  // a folder id and targets a built-in collection, so it is deliberately not
+  // checked here — it has no declared-field list to validate against.
   const known = new Set(PAGE_COLLECTIONS.map((c) => c.collection));
   for (const p of PAGES_PERMISSIONS) {
     if (!known.has(p.collection)) {
@@ -221,12 +226,40 @@ for (const rel of PAGES_RELATIONS) {
 }
 
 const publicPolicy = await findPublicPolicy(token);
+
+// The CMS asset folder and its file grant. Without this, /assets/<uuid>
+// enforces read permission on the directus_files row and every inline page
+// image and author avatar 403s for anonymous visitors.
+const assetFolderId = await resolveAssetFolder(token);
+const allPermissions = assetFolderId
+  ? [...PAGES_PERMISSIONS, pagesFilesPermission(assetFolderId)]
+  : PAGES_PERMISSIONS;
+
 const livePerms = (await api(token, "GET", `/permissions?filter[policy][_eq]=${publicPolicy}&limit=-1`)).data ?? [];
-for (const p of PAGES_PERMISSIONS) {
+for (const p of allPermissions) {
   const match = livePerms.find((lp) => lp.collection === p.collection && lp.action === p.action);
   if (!match) plan.permissions.push(`${p.collection}:${p.action} (create)`);
   else if (JSON.stringify(match.permissions ?? {}) !== JSON.stringify(p.permissions))
     plan.permissions.push(`${p.collection}:${p.action} (DRIFT — live filter ${JSON.stringify(match.permissions)}, expected ${JSON.stringify(p.permissions)})`);
+}
+
+/**
+ * Find the CMS asset folder, creating it under --apply if absent.
+ *
+ * Returns null in dry run when the folder does not exist yet — the caller then
+ * plans without the file grant and says so, rather than inventing an id.
+ */
+async function resolveAssetFolder(tok) {
+  const q = `/folders?filter[name][_eq]=${encodeURIComponent(PAGES_ASSET_FOLDER)}&fields=id,name&limit=1`;
+  const existing = ((await api(tok, "GET", q)).data ?? [])[0];
+  if (existing) return existing.id;
+
+  if (!APPLY) {
+    console.log(`folder "${PAGES_ASSET_FOLDER}": absent — would create (file grant planned after it exists)`);
+    return null;
+  }
+  console.log(`creating folder "${PAGES_ASSET_FOLDER}"`);
+  return (await api(tok, "POST", "/folders", { name: PAGES_ASSET_FOLDER })).data.id;
 }
 
 async function findPublicPolicy(tok) {
@@ -307,7 +340,7 @@ if (VERIFY) {
       drift.push(`relation ${key}: points at ${live.related_collection}, expected ${rel.related_collection}`);
   }
 
-  for (const p of PAGES_PERMISSIONS) {
+  for (const p of allPermissions) {
     const match = livePerms.find((lp) => lp.collection === p.collection && lp.action === p.action);
     if (!match) {
       drift.push(`permission ${p.collection}:${p.action}: MISSING`);
@@ -353,7 +386,7 @@ if (APPLY) {
     await api(token, "POST", "/relations", rel);
   }
 
-  for (const p of PAGES_PERMISSIONS) {
+  for (const p of allPermissions) {
     const match = livePerms.find((lp) => lp.collection === p.collection && lp.action === p.action);
     if (match) {
       // Drift is reported, never silently overwritten — an operator may have

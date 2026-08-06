@@ -22,6 +22,7 @@ import { DefaultFileSystem } from "./data/DefaultFileSystem";
 // Re-splitting the desktop chunk for mobile is blocked on a classicy fix.
 import Desktop from "./Desktop";
 import { isMobileDevice } from "./Mobile/detectMobile";
+import { pagesRouteSlug } from "./Pages/route";
 import { AuthProvider } from "./Providers/Auth/AuthProvider";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
 import { PlaylistProvider } from "./Providers/Playlist/PlaylistProvider";
@@ -34,6 +35,11 @@ initTracker();
 registerClassicyFileSystemAdapter(directusFilesystemAdapter, { snapshotDebounceMs: 3000 });
 
 const IpodShell = lazy(() => import("./Mobile/IpodShell"));
+
+// The CMS pages surface. Safe to lazy-load, unlike Desktop: it is static chrome
+// styled to resemble Classicy and mounts no ClassicyDesktop, so the app-manager
+// corruption described above does not apply.
+const PagesSite = lazy(() => import("./Pages/PagesSite"));
 
 // If the mobile chunk fails to load (bad network, stale deploy), fall back to
 // the desktop branch — never a blank page.
@@ -64,7 +70,21 @@ const mobile = isMobileDevice();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Root element not found");
+
+// A CMS page is present-day static content: it reads Directus directly and has
+// nothing to do with the virtual clock, the streamer, playlists, auth, or the
+// user filesystem. Branching here rather than inside the tree means visiting
+// /about does not spin up a WebSocket to the streamer or boot the app manager.
+const pageSlug = pagesRouteSlug(window.location.pathname);
+
 createRoot(rootElement).render(
+	pageSlug !== null ? (
+		<StrictMode>
+			<Suspense fallback={null}>
+				<PagesSite />
+			</Suspense>
+		</StrictMode>
+	) : (
 	<StrictMode>
 		<ClassicyAppManagerProvider
 			gaMeasurementIds={["G-YV25XK2Y3R"]}
@@ -128,5 +148,6 @@ createRoot(rootElement).render(
 				</AuthProvider>
 			</PlaylistProvider>
 		</ClassicyAppManagerProvider>
-	</StrictMode>,
+	</StrictMode>
+	),
 );
