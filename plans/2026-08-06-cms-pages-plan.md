@@ -358,11 +358,20 @@ for (const p of PAGES_PERMISSIONS) {
 }
 
 async function findPublicPolicy(tok) {
-  const rows = (await api(tok, "GET", "/policies?fields=id,name,roles&limit=-1")).data ?? [];
-  // The public policy is the one with no roles attached.
-  const found = rows.find((r) => !r.roles || r.roles.length === 0);
-  if (!found) throw new Error("could not identify the public policy from GET /policies");
-  return found.id;
+  const rows = (await api(tok, "GET", "/policies?fields=id,name,roles.role,roles.user&limit=-1")).data ?? [];
+  // Directus 12 always returns a non-empty `roles` array — those are
+  // directus_access junction rows, not role ids. The public policy is the
+  // one whose access rows bind to neither a role nor a user.
+  const found = rows.filter(
+    (r) => Array.isArray(r.roles) && r.roles.length > 0 && r.roles.every((a) => !a.role && !a.user),
+  );
+  if (found.length !== 1) {
+    throw new Error(
+      `expected exactly 1 public policy, found ${found.length}: ` +
+        JSON.stringify(rows.map((r) => ({ id: r.id, name: r.name, roles: r.roles }))),
+    );
+  }
+  return found[0].id;
 }
 
 console.log("\nPlan:");
@@ -416,10 +425,17 @@ Plan:
   collections to create: page_authors, pages
   relations to create:   pages.parent, pages.author, page_authors.avatar, pages.user_created, pages.user_updated
   permissions:           pages:read (create), page_authors:read (create)
-  public policy id:      <a uuid>
+  public policy id:      abf8a154-5b1c-4a46-ac9c-7300570f4f17
 
 dry run complete — re-run with --apply to change anything
 ```
+
+`abf8a154-5b1c-4a46-ac9c-7300570f4f17` is Directus's well-known static
+public-policy UUID, so seeing it confirms discovery found the right row. It is
+deliberately **not** hardcoded — the discovery logic stays, and the
+`found.length !== 1` guard dumps every policy if the shape changes again. A grant
+written to the wrong policy is this script's worst failure mode: it would either
+silently do nothing or expose data to the wrong audience.
 
 Confirm no writes occurred: `curl -s -o /dev/null -w "%{http_code}\n" https://api.911realtime.org/items/pages` still returns `403`.
 
