@@ -193,6 +193,47 @@ console.log(`  relations to create:   ${plan.relations.length ? plan.relations.j
 console.log(`  permissions:           ${plan.permissions.length ? plan.permissions.join(", ") : "(none — all present)"}`);
 console.log(`  public policy id:      ${publicPolicy}`);
 
-if (!APPLY && !VERIFY) {
+if (APPLY) {
+  // Sequential, never concurrent. Bursts of schema operations wedge
+  // Directus's introspection cache and require an rt911-api pod restart to
+  // recover (observed previously in this project).
+  for (const col of PAGE_COLLECTIONS) {
+    if (!plan.collections.includes(col.collection)) {
+      console.log(`collection ${col.collection}: already present, skipping`);
+      continue;
+    }
+    console.log(`creating collection ${col.collection}`);
+    await api(token, "POST", "/collections", col);
+  }
+
+  for (const rel of PAGES_RELATIONS) {
+    const key = relKey(rel.collection, rel.field);
+    if (!plan.relations.includes(key)) {
+      console.log(`relation ${key}: already present, skipping`);
+      continue;
+    }
+    console.log(`creating relation ${key} → ${rel.related_collection}`);
+    await api(token, "POST", "/relations", rel);
+  }
+
+  for (const p of PAGES_PERMISSIONS) {
+    const match = livePerms.find((lp) => lp.collection === p.collection && lp.action === p.action);
+    if (match) {
+      // Drift is reported, never silently overwritten — an operator may have
+      // narrowed this grant deliberately.
+      const drifted = JSON.stringify(match.permissions ?? {}) !== JSON.stringify(p.permissions);
+      console.log(
+        drifted
+          ? `permission ${p.collection}:${p.action}: EXISTS BUT DRIFTED — left alone. Live filter ${JSON.stringify(match.permissions)}, expected ${JSON.stringify(p.permissions)}. Reconcile by hand.`
+          : `permission ${p.collection}:${p.action}: already present, skipping`,
+      );
+      continue;
+    }
+    console.log(`granting public ${p.action} on ${p.collection}`);
+    await api(token, "POST", "/permissions", { policy: publicPolicy, ...p });
+  }
+
+  console.log("\napply complete — run with --verify to confirm the live schema matches");
+} else if (!VERIFY) {
   console.log("\ndry run complete — re-run with --apply to change anything");
 }
