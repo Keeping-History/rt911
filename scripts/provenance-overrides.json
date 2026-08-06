@@ -1,0 +1,17 @@
+{
+  "_comment": [
+    "Hand corrections to scripts/provenance.mjs's classification.",
+    "A SHA listed here overrides the heuristic permanently, and the change is",
+    "reviewable in git like any other edit. Add an entry whenever you know the",
+    "heuristic got a commit wrong — that is the mechanism by which this record",
+    "gets more accurate over time rather than less.",
+    "",
+    "Buckets: ai-attributed | ai-inferred | human-inferred | structural | pre-ai",
+    "",
+    "CAVEAT: entries are keyed by SHA, and this repository's branches do get",
+    "rebased, which rewrites SHAs. An override whose SHA no longer exists is",
+    "silently inert — it does not error. Prefer fixing the commit trailer at the",
+    "time of writing over correcting it here afterwards."
+  ],
+  "commits": {}
+}
