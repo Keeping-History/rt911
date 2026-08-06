@@ -223,7 +223,7 @@
 	/* The bevel is what makes a header read as a clickable column header rather
 	   than a shaded first row — same inset pair Classicy puts on
 	   .classicyFileBrowserViewTableColumnHeader. */
-	thead th {
+	th, thead th {
 		position: relative;
 		background: var(--color-system-03);
 		box-shadow:
