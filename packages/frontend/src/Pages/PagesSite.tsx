@@ -1,5 +1,6 @@
 import { ClassicyButton, ClassicyIcons } from "classicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { initGoogleAnalytics, trackPageView } from "../lib/analytics";
 import { DIRECTUS_URL } from "../lib/endpoints";
 import { renderPageHtml } from "../lib/renderPageHtml";
 import { classicyThemeVars } from "./classicyTheme";
@@ -51,6 +52,14 @@ function cx(...parts: (string | false | undefined)[]): string {
 }
 
 /**
+ * The document title for a page. Shared by the `document.title` effect and the
+ * analytics page_view so the tab and the GA report can never disagree.
+ */
+function pageTitle(page: { title: string } | null): string {
+	return page ? `${page.title} — 911 Realtime` : "911 Realtime";
+}
+
+/**
  * The Apple menu icon, taken from Classicy's own desktop menu bar.
  *
  * Inlined rather than referenced as a glyph: U+F8FF renders as nothing in the
@@ -69,7 +78,7 @@ export default function PagesSite() {
 	const [zoomed, setZoomed] = useState(false);
 	const barRef = useRef<HTMLDivElement>(null);
 
-	const { nav, page, loading, notFound, error } = usePages(slug);
+	const { nav, page, loading, notFound, error, resolvedSlug } = usePages(slug);
 
 	// Theme variables are stable for the session; computing them once avoids
 	// re-deriving the whole map on every render.
@@ -117,9 +126,28 @@ export default function PagesSite() {
 
 	const html = useMemo(() => renderPageHtml(page?.body), [page?.body]);
 
+	const title = pageTitle(page);
+
 	useEffect(() => {
-		document.title = page ? `${page.title} — 911 Realtime` : "911 Realtime";
-	}, [page]);
+		document.title = title;
+	}, [title]);
+
+	// This surface mounts outside ClassicyAppManagerProvider, which is what
+	// gives the desktop branch its tag — so it loads its own. See lib/analytics.ts.
+	useEffect(() => {
+		initGoogleAnalytics();
+	}, []);
+
+	// One view per slug, sent only once the fetched data actually describes that
+	// slug. Gating on `loading` alone is NOT enough: for a render after a
+	// navigation the hook still holds the previous page (loading has not flipped
+	// yet), which sent a second, wrongly-titled hit for the new path — caught in
+	// a browser, not by the mocked test. Declared after the document.title
+	// effect so the reported title matches the tab.
+	useEffect(() => {
+		if (resolvedSlug !== slug) return;
+		trackPageView({ path: `/${slug}`, title, notFound });
+	}, [slug, resolvedSlug, notFound, title]);
 
 	return (
 		<div className={cx("classicyDesktop", styles.root)} style={themeVars}>

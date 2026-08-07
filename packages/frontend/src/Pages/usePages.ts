@@ -47,6 +47,15 @@ export interface PagesState {
 	/** Set only when the slug resolved to nothing — drives the 404 view. */
 	notFound: boolean;
 	error: string | null;
+	/**
+	 * The slug this state actually describes, or null before the first fetch
+	 * settles. Lags the requested slug for the render or two between a
+	 * navigation and the new data landing, which is exactly the window where
+	 * `page`/`notFound` still describe the PREVIOUS page. Consumers that must
+	 * not act on stale data — analytics reporting a page_view, say — should
+	 * gate on `resolvedSlug === slug` rather than on `loading` alone.
+	 */
+	resolvedSlug: string | null;
 }
 
 export function usePages(slug: string): PagesState {
@@ -56,6 +65,7 @@ export function usePages(slug: string): PagesState {
 		loading: true,
 		notFound: false,
 		error: null,
+		resolvedSlug: null,
 	});
 
 	useEffect(() => {
@@ -83,6 +93,7 @@ export function usePages(slug: string): PagesState {
 					loading: false,
 					notFound: page === null,
 					error: null,
+					resolvedSlug: slug,
 				});
 			} catch (err) {
 				if (controller.signal.aborted) return;
@@ -92,6 +103,7 @@ export function usePages(slug: string): PagesState {
 					loading: false,
 					notFound: false,
 					error: err instanceof Error ? err.message : String(err),
+					resolvedSlug: slug,
 				});
 			}
 		};
