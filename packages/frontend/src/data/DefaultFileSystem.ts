@@ -674,6 +674,22 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 			_url: stackUrl("oregon-trail.stack.json"),
 			_size: 130901,
 		},
+		// The present-day CMS pages, as web shortcuts. These open in a real
+		// browser tab rather than the in-desktop viewer: they are current
+		// content to be read, printed and shared, and the desktop (and the
+		// replay running on it) survives untouched in the original tab.
+		"Press Room": {
+			_type: ClassicyFileSystemEntryFileType.Shortcut,
+			_icon: ClassicyIcons.applications.internetExplorer.documentShortcut,
+			_url: "/press",
+			_openIn: "browser-new",
+		},
+		"For Teachers": {
+			_type: ClassicyFileSystemEntryFileType.Shortcut,
+			_icon: ClassicyIcons.applications.internetExplorer.documentShortcut,
+			_url: "/teachers",
+			_openIn: "browser-new",
+		},
 		Documents: {
 			_type: ClassicyFileSystemEntryFileType.Directory,
 			_icon: ClassicyIcons.system.folders.directory,

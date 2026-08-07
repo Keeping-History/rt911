@@ -1,5 +1,12 @@
 import "maplibre-gl/dist/maplibre-gl.css";
-import { ClassicyButton, ClassicyDesktop, ClassicyWindowFrame } from "classicy";
+import {
+	ClassicyButton,
+	ClassicyDesktop,
+	ClassicyIcons,
+	ClassicyWindowFrame,
+	useAppManagerDispatch,
+} from "classicy";
+import { useEffect } from "react";
 // Side effect: register the Directus-collection HyperCard extension parts and
 // stacks with classicy's HyperCard plugin registries. The HyperCard app itself
 // is bundled in classicy and auto-mounted by ClassicyDesktop.
@@ -68,12 +75,50 @@ function PreBootAbout({ powerOn }: { powerOn: () => void }) {
 	);
 }
 
+/**
+ * The present-day CMS pages, as desktop shortcuts.
+ *
+ * Registered here as well as in DefaultFileSystem because the two reach
+ * different users: rt911 runs `defaultFileSystemMode="exclusive"` and syncs
+ * each signed-in user's tree to Directus, so a new default-tree entry may never
+ * arrive for someone who already has a synced filesystem. Icon registration
+ * re-runs on every mount and has no such gap.
+ */
+const PAGE_SHORTCUTS = [
+	{ id: "shortcut_press", name: "Press Room", url: "/press" },
+	{ id: "shortcut_teachers", name: "For Teachers", url: "/teachers" },
+] as const;
+
+function PageShortcutIcons() {
+	const dispatch = useAppManagerDispatch();
+	useEffect(() => {
+		for (const shortcut of PAGE_SHORTCUTS) {
+			dispatch({
+				type: "ClassicyDesktopIconAdd",
+				app: {
+					id: shortcut.id,
+					name: shortcut.name,
+					icon: ClassicyIcons.applications.internetExplorer.documentShortcut,
+				},
+				kind: "shortcut",
+				// The id is not a registered app; without this the double-click
+				// would also dispatch ClassicyDesktopIconOpen and conjure one.
+				noLaunch: true,
+				event: "ClassicyDesktopOpenUrl",
+				eventData: { url: shortcut.url, disposition: "browser-new" },
+			});
+		}
+	}, [dispatch]);
+	return null;
+}
+
 /** The desktop branch: the Mac OS 8 desktop and every desktop app. */
 export default function Desktop() {
 	return (
 		<ClassicyDesktop
 			preBootScreen={(powerOn) => <PreBootAbout powerOn={powerOn} />}
 		>
+			<PageShortcutIcons />
 			<Alerts />
 			<AlertsManager />
 			<HyperCardClockBridge />
