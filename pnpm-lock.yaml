@@ -29,7 +29,7 @@ importers:
         version: 18.1.2
       classicy:
         specifier: latest
-        version: 0.71.1(@tanstack/react-table@8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/dlv@1.1.5)(@types/react@19.2.18)(immer@11.1.16)(react-dom@19.2.8(react@19.2.8))(react-player@3.4.0(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(zustand@5.0.14(@types/react@19.2.18)(immer@11.1.16)(react@19.2.8))
+        version: 0.71.2(@tanstack/react-table@8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/dlv@1.1.5)(@types/react@19.2.18)(immer@11.1.16)(react-dom@19.2.8(react@19.2.8))(react-player@3.4.0(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(zustand@5.0.14(@types/react@19.2.18)(immer@11.1.16)(react@19.2.8))
       classnames:
         specifier: ^2.5.1
         version: 2.5.1
@@ -1032,8 +1032,8 @@ packages:
     resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
     engines: {node: '>= 20.19.0'}
 
-  classicy@0.71.1:
-    resolution: {integrity: sha512-OcRP4cJyQ38bFm3ckBKbDmCjYM/mYkJ63rw0Xeu0Wlcke3IP2EK9F1SBuZU8ty1CjQUPKcICXEci29oy7GsoFA==}
+  classicy@0.71.2:
+    resolution: {integrity: sha512-Rb1aFVqFLwKTiOsCQDnKu1WURfIKWcR7HV4yfJwG7XWOhDpb7lr1oS4gqdlenGH7drVgJTrgDi0dYvux23xTBg==}
     peerDependencies:
       '@tanstack/react-table': ^8.21.3
       immer: ^11.1.8
@@ -3462,7 +3462,7 @@ snapshots:
       readdirp: 5.0.0
     optional: true
 
-  classicy@0.71.1(@tanstack/react-table@8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/dlv@1.1.5)(@types/react@19.2.18)(immer@11.1.16)(react-dom@19.2.8(react@19.2.8))(react-player@3.4.0(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(zustand@5.0.14(@types/react@19.2.18)(immer@11.1.16)(react@19.2.8)):
+  classicy@0.71.2(@tanstack/react-table@8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/dlv@1.1.5)(@types/react@19.2.18)(immer@11.1.16)(react-dom@19.2.8(react@19.2.8))(react-player@3.4.0(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(zustand@5.0.14(@types/react@19.2.18)(immer@11.1.16)(react@19.2.8)):
     dependencies:
       '@analytics/google-tag-manager': 0.6.0
       '@noble/hashes': 2.3.0
