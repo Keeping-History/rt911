@@ -2,7 +2,6 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import {
 	ClassicyButton,
 	ClassicyDesktop,
-	ClassicyIcons,
 	ClassicyWindowFrame,
 	useAppManagerDispatch,
 } from "classicy";
@@ -14,6 +13,11 @@ import "./Applications/HyperCard";
 import { HyperCardClockBridge } from "./Applications/HyperCard/extensions/HyperCardClockBridge";
 import { HyperCardStackAuthBridge } from "./Applications/HyperCard/extensions/stackProviderAuth";
 import { Account } from "./Applications/Account/Account";
+import {
+	PAGE_SHORTCUTS,
+	PAGE_SHORTCUT_DISPOSITION,
+	pageShortcutIcon,
+} from "./data/pageShortcuts";
 import { Alerts } from "./Applications/Alerts/Alerts";
 import { AlertsManager } from "./Applications/Alerts/AlertsManager";
 import { Browser } from "./Applications/Browser/Browser";
@@ -76,7 +80,9 @@ function PreBootAbout({ powerOn }: { powerOn: () => void }) {
 }
 
 /**
- * The present-day CMS pages, as desktop shortcuts.
+ * The present-day CMS pages, as desktop shortcuts. The shared list
+ * (PAGE_SHORTCUTS, from ./data/pageShortcuts) is also what DefaultFileSystem
+ * spreads into the Finder drive root, so the two surfaces can't drift apart.
  *
  * Registered here as well as in DefaultFileSystem because the two reach
  * different users: rt911 runs `defaultFileSystemMode="exclusive"` and syncs
@@ -84,11 +90,6 @@ function PreBootAbout({ powerOn }: { powerOn: () => void }) {
  * arrive for someone who already has a synced filesystem. Icon registration
  * re-runs on every mount and has no such gap.
  */
-const PAGE_SHORTCUTS = [
-	{ id: "shortcut_press", name: "Press Room", url: "/press" },
-	{ id: "shortcut_teachers", name: "For Teachers", url: "/teachers" },
-] as const;
-
 function PageShortcutIcons() {
 	const dispatch = useAppManagerDispatch();
 	useEffect(() => {
@@ -96,16 +97,19 @@ function PageShortcutIcons() {
 			dispatch({
 				type: "ClassicyDesktopIconAdd",
 				app: {
-					id: shortcut.id,
+					id: shortcut.iconId,
 					name: shortcut.name,
-					icon: ClassicyIcons.applications.internetExplorer.documentShortcut,
+					icon: pageShortcutIcon,
 				},
 				kind: "shortcut",
 				// The id is not a registered app; without this the double-click
 				// would also dispatch ClassicyDesktopIconOpen and conjure one.
 				noLaunch: true,
 				event: "ClassicyDesktopOpenUrl",
-				eventData: { url: shortcut.url, disposition: "browser-new" },
+				eventData: {
+					url: shortcut.url,
+					disposition: PAGE_SHORTCUT_DISPOSITION,
+				},
 			});
 		}
 	}, [dispatch]);
