@@ -503,7 +503,7 @@ Create `src/SystemFolder/WebViewer/WebViewer.test.tsx`:
 
 ```tsx
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
 	dispatch,
 	useAppManager,
@@ -523,6 +523,22 @@ function renderViewer() {
 		</ClassicyAppManagerProvider>,
 	);
 }
+
+// useAppManager is a module-level zustand store created once at import, so it
+// survives between tests in this file — setup.ts only swaps localStorage.
+// Without this, every test after the first inherits the previous test's open
+// windows. DriveSetupController.test.tsx clears its own request the same way.
+afterEach(() => {
+	const openUrls =
+		useAppManager.getState().System.Manager.Applications.apps[
+			WebViewerAppInfo.id
+		]?.data?.openUrls;
+	if (Array.isArray(openUrls)) {
+		for (const entry of [...openUrls]) {
+			dispatch({ type: "ClassicyAppWebViewerCloseUrl", url: entry.url });
+		}
+	}
+});
 
 describe("WebViewer", () => {
 	it("renders a same-origin target with no sandbox attribute", async () => {
@@ -552,17 +568,27 @@ describe("WebViewer", () => {
 		expect(await screen.findByTitle("For Teachers")).toBeInTheDocument();
 	});
 
-	it("renders nothing when no URL is open", () => {
+	it("renders no frame until a URL is opened", () => {
+		const { container } = renderViewer();
+		expect(container.querySelector("iframe")).toBeNull();
+	});
+
+	it("stops rendering a frame once its URL is closed", async () => {
 		renderViewer();
-		expect(
-			useAppManager.getState().System.Manager.Applications.apps[
-				WebViewerAppInfo.id
-			]?.data,
-		).toBeDefined();
-		expect(document.querySelector("iframe")).toBeNull();
+		openUrl("/press", "Press Room");
+		expect(await screen.findByTitle("Press Room")).toBeInTheDocument();
+		dispatch({ type: "ClassicyAppWebViewerCloseUrl", url: "/press" });
+		await waitFor(() =>
+			expect(screen.queryByTitle("Press Room")).not.toBeInTheDocument(),
+		);
 	});
 });
 ```
+
+Add `waitFor` to the `@testing-library/react` import for the last case. Scope the
+empty-state assertion to `container`, not `document` — Testing Library renders
+into a container appended to `document.body`, and a stray mount from an earlier
+case would make a `document`-wide query lie.
 
 - [ ] **Step 7: Run test to verify it fails**
 
@@ -745,7 +771,7 @@ Note the deliberate omission of `handlesFileTypes`: registering `WebViewer` as t
 cd ~/classicy && pnpm exec vitest run src/SystemFolder/WebViewer/
 ```
 
-Expected: PASS, 9 tests across both files.
+Expected: PASS, 10 tests across both files.
 
 - [ ] **Step 11: Typecheck, lint, commit**
 
