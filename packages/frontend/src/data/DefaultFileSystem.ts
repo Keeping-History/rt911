@@ -63,7 +63,7 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 			Newspapers: {
 				_type: ClassicyFileSystemEntryFileType.Directory,
 				_icon: ClassicyIcons.system.folders.directory,
-				"September 11": {
+				"September 12": {
 					_type: ClassicyFileSystemEntryFileType.Directory,
 					_icon: ClassicyIcons.system.folders.directory,
 					...newspaperEntries,

@@ -29,7 +29,7 @@ export const PAGE_SHORTCUTS = [
 export const PAGE_SHORTCUT_DISPOSITION = "browser-new";
 
 export const pageShortcutIcon =
-	ClassicyIcons.applications.internetExplorer.documentShortcut;
+	ClassicyIcons.applications.internetExplorer.document;
 
 /** Drive-root Finder entries for the CMS page shortcuts, keyed by display name. */
 export const pageShortcutEntries: ClassicyFileSystemTree = Object.fromEntries(
