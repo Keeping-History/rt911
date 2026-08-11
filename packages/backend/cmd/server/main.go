@@ -340,7 +340,10 @@ func main() {
 	))
 	mux.HandleFunc("/clock", handler.NewClockHandler(masterClock, env("CLOCK_CONTROL_KEY", ""), logger))
 	mux.HandleFunc("/alert", handler.NewAlertHandler(pool, alertBus, env("ALERT_CONTROL_KEY", ""), logger))
-	mux.HandleFunc("/room", handler.NewRoomHandler(roomBus, env("ROOM_CONTROL_KEY", ""), logger))
+	// Authorised per playlist, not by a shared key: only the Directus user who
+	// created a playlist may drive its room. Hence pool + trustedOrigins rather
+	// than a control key.
+	mux.HandleFunc("/room", handler.NewRoomHandler(pool, roomBus, trustedOrigins, logger))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

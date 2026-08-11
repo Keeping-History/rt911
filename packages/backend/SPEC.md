@@ -178,9 +178,7 @@ clock. This endpoint is that path: the row is read once on the receiving pod,
 fanned out over Redis pub/sub (`alerts:push`), and each pod restamps it with
 each session's own virtual time so it is immediately due for that client.
 
-### `POST /room` — live teacher control (operator only)
-
-Guarded by `X-Room-Key` (`ROOM_CONTROL_KEY`; unset ⇒ 404, feature off).
+### `POST /room` — live teacher control
 
 - `POST /room {"room":"42","action":"jump","time":"2001-09-11T13:03:00Z"}`
 - `POST /room {"room":"42","action":"focus","app":"TV.app"}`
@@ -191,10 +189,22 @@ out over Redis pub/sub (`room:command`) so a class split across pods stays in
 step, and are delivered only to sessions in that room. Nothing is persisted — a
 disconnected client does not receive the command on reconnect.
 
-**Authorisation is coarse:** the shared key authenticates "an operator", not
-"the teacher who owns playlist 42". Anyone holding it can drive any room.
-Binding a command to the caller's Directus identity and that playlist's owner
-is deliberately not implemented.
+**Authorisation is per playlist, not a shared credential.** There is no control
+key: the caller's Directus session cookie is resolved to a user id and compared
+against the playlist's `user_created`. Only the user who created a playlist may
+drive its room, so a session belonging to some *other* playlist's owner grants
+nothing. Origin is checked first (the cookie is `SameSite=lax`, which bounds it
+to the site rather than the origin), and the endpoint is rate-limited because
+each request costs a session lookup and an ownership lookup before it can be
+refused.
+
+A playlist with **no** recorded creator is drivable by nobody — treating an
+empty `user_created` as "unowned, so anyone" would make every seeded or
+imported row a public remote control for whoever found its id.
+
+Responses: `401` not signed in, `403` untrusted origin or not your playlist,
+`404`/`403` are deliberately not distinguished for a missing playlist (that
+would be an oracle for which ids exist), `429` rate limited, `202` accepted.
 
 ---
 

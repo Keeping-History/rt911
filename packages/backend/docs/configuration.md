@@ -25,10 +25,11 @@ than an open door.
 | ------------------- | --------------- | --------- | -------------------------------------------------------------- |
 | `CLOCK_CONTROL_KEY` | `X-Clock-Key`   | `/clock`  | Forced clock mode: slave every session to an operator-set time. |
 | `ALERT_CONTROL_KEY` | `X-Alert-Key`   | `/alert`  | Raise an `alert_items` row on every client immediately.         |
-| `ROOM_CONTROL_KEY`  | `X-Room-Key`    | `/room`   | Live teacher control (jump/focus/message) over one room.        |
 
-`ROOM_CONTROL_KEY` authenticates *an operator*, not a specific teacher — anyone
-holding it can drive any room. See [`SPEC.md`](../SPEC.md#post-room--live-teacher-control-operator-only).
+`/room` (live teacher control) has **no** control key: it authorises per
+playlist, comparing the caller's Directus session against the playlist's
+`user_created`, so only the teacher who created a playlist can drive it. See
+[`SPEC.md`](../SPEC.md#post-room--live-teacher-control).
 
 ---
 

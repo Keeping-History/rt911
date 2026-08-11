@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/fanout"
 	"classicy/streamer/internal/model"
 
@@ -15,7 +16,14 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-func newRoomTestHandler(t *testing.T, key string) http.HandlerFunc {
+// A nil pool is deliberate: every case using this helper must be rejected
+// before the handler reaches the session or ownership lookup, and a nil pool
+// panicking is what proves it.
+//
+// The authorised path needs Directus tables, so it is not exercised end to end
+// here. It is pinned instead by the two tests at the bottom: mayDriveRoom for
+// the decision, and the query-shape assertion for what the decision is fed.
+func newRoomTestHandler(t *testing.T) http.HandlerFunc {
 	t.Helper()
 	mr, err := miniredis.Run()
 	if err != nil {
@@ -26,36 +34,41 @@ func newRoomTestHandler(t *testing.T, key string) http.HandlerFunc {
 	t.Cleanup(func() { rdb.Close() })
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	bus := fanout.New[model.RoomCommand](rdb, "room:command", logger)
-	return NewRoomHandler(bus, key, logger)
+	return NewRoomHandler(nil, bus, NewOriginAllowlist(""), logger)
 }
 
-func roomPost(t *testing.T, h http.HandlerFunc, key, body string) *httptest.ResponseRecorder {
+func roomPost(t *testing.T, h http.HandlerFunc, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	r := httptest.NewRequest("POST", "/room", strings.NewReader(body))
-	if key != "" {
-		r.Header.Set("X-Room-Key", key)
-	}
 	w := httptest.NewRecorder()
 	h(w, r)
 	return w
 }
 
-func TestRoomControlDisabledWithoutKey(t *testing.T) {
-	w := roomPost(t, newRoomTestHandler(t, ""), "anything", `{"room":"42","action":"message","message":"hi"}`)
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", w.Code)
+func TestRoomControlRejectsNonPost(t *testing.T) {
+	r := httptest.NewRequest("GET", "/room", nil)
+	w := httptest.NewRecorder()
+	newRoomTestHandler(t)(w, r)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", w.Code)
 	}
 }
 
-func TestRoomControlRejectsAWrongKey(t *testing.T) {
-	w := roomPost(t, newRoomTestHandler(t, "right"), "wrong", `{"room":"42","action":"message","message":"hi"}`)
+// The session cookie is SameSite=lax, which bounds it to the site rather than
+// the origin — so without this any page under 911realtime.org could drive a
+// signed-in teacher's classroom on their behalf.
+func TestRoomControlRejectsAnUntrustedOrigin(t *testing.T) {
+	r := httptest.NewRequest("POST", "/room", strings.NewReader(`{"room":"42","action":"message","message":"hi"}`))
+	r.Header.Set("Origin", "https://archived-third-party.911realtime.org")
+	w := httptest.NewRecorder()
+	newRoomTestHandler(t)(w, r)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", w.Code)
 	}
 }
 
 func TestRoomControlRequiresARoom(t *testing.T) {
-	w := roomPost(t, newRoomTestHandler(t, "k"), "k", `{"action":"message","message":"hi"}`)
+	w := roomPost(t, newRoomTestHandler(t), `{"action":"message","message":"hi"}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
 	}
@@ -65,21 +78,27 @@ func TestRoomControlRequiresARoom(t *testing.T) {
 // clients that silently ignore it, so a typo would look like a working command
 // that simply did nothing.
 func TestRoomControlRejectsAnUnknownAction(t *testing.T) {
-	h := newRoomTestHandler(t, "k")
+	h := newRoomTestHandler(t)
 	for _, body := range []string{
 		`{"room":"42","action":"explode"}`,
 		`{"room":"42","action":""}`,
 		`{"room":"42"}`,
 	} {
-		w := roomPost(t, h, "k", body)
-		if w.Code != http.StatusBadRequest {
+		if w := roomPost(t, h, body); w.Code != http.StatusBadRequest {
 			t.Fatalf("body %s: status = %d, want 400", body, w.Code)
 		}
 	}
 }
 
+func TestRoomControlRejectsBadJSON(t *testing.T) {
+	w := roomPost(t, newRoomTestHandler(t), `{not json`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
 func TestRoomControlValidatesPerActionPayload(t *testing.T) {
-	h := newRoomTestHandler(t, "k")
+	h := newRoomTestHandler(t)
 	cases := map[string]string{
 		"jump without a time":   `{"room":"42","action":"jump"}`,
 		"jump with a bad time":  `{"room":"42","action":"jump","time":"not-a-time"}`,
@@ -87,21 +106,64 @@ func TestRoomControlValidatesPerActionPayload(t *testing.T) {
 		"message without a msg": `{"room":"42","action":"message"}`,
 	}
 	for name, body := range cases {
-		if w := roomPost(t, h, "k", body); w.Code != http.StatusBadRequest {
+		if w := roomPost(t, h, body); w.Code != http.StatusBadRequest {
 			t.Fatalf("%s: status = %d, want 400", name, w.Code)
 		}
 	}
 }
 
-func TestRoomControlAcceptsValidCommands(t *testing.T) {
-	h := newRoomTestHandler(t, "k")
-	for name, body := range map[string]string{
-		"jump":    `{"room":"42","action":"jump","time":"2001-09-11T13:03:00Z"}`,
-		"focus":   `{"room":"42","action":"focus","app":"TV.app"}`,
-		"message": `{"room":"42","action":"message","message":"Look at channel 4"}`,
-	} {
-		if w := roomPost(t, h, "k", body); w.Code != http.StatusAccepted {
-			t.Fatalf("%s: status = %d, want 202 (body %q)", name, w.Code, w.Body.String())
+// buildRoomCommand is the pure half of the handler, so the accepted payloads
+// can be asserted without a database standing in the way.
+func TestBuildRoomCommandAcceptsValidPayloads(t *testing.T) {
+	jump, err := buildRoomCommand(roomRequest{Room: "42", Action: "jump", Time: "2001-09-11T13:03:00Z"})
+	if err != nil {
+		t.Fatalf("jump: %v", err)
+	}
+	if jump.Time.Format("2006-01-02T15:04:05Z") != "2001-09-11T13:03:00Z" {
+		t.Fatalf("jump time = %v", jump.Time)
+	}
+	focus, err := buildRoomCommand(roomRequest{Room: "42", Action: "focus", App: "TV.app"})
+	if err != nil || focus.App != "TV.app" {
+		t.Fatalf("focus: %+v err=%v", focus, err)
+	}
+	msg, err := buildRoomCommand(roomRequest{Room: "42", Action: "message", Message: "Look at channel 4"})
+	if err != nil || msg.Message != "Look at channel 4" {
+		t.Fatalf("message: %+v err=%v", msg, err)
+	}
+}
+
+// The authorisation rule lives in one SQL predicate, so assert its shape here:
+// a regression that dropped the WHERE, or matched on something other than the
+// creator, would make every playlist drivable by any signed-in user.
+func TestPlaylistOwnerQueryMatchesCreatorOfTheRequestedPlaylist(t *testing.T) {
+	q := strings.Join(strings.Fields(db.PlaylistOwnerSelectForTest), " ")
+	want := "SELECT user_created FROM playlists WHERE id::text = $1"
+	if q != want {
+		t.Fatalf("owner query changed:\n got: %s\nwant: %s", q, want)
+	}
+}
+
+// The authorisation rule itself. The handler cannot reach this with a nil pool,
+// so the decision is tested directly — including the two blank cases, which are
+// what an `owner == uid` check alone would get catastrophically wrong.
+func TestMayDriveRoom(t *testing.T) {
+	const teacher = "11111111-1111-1111-1111-111111111111"
+	const someoneElse = "22222222-2222-2222-2222-222222222222"
+
+	cases := []struct {
+		name       string
+		owner, uid string
+		want       bool
+	}{
+		{"the creator drives their own playlist", teacher, teacher, true},
+		{"another signed-in user may not", teacher, someoneElse, false},
+		{"an unauthenticated caller may not", teacher, "", false},
+		{"an unowned playlist is drivable by nobody", "", teacher, false},
+		{"blank owner and blank caller must not match", "", "", false},
+	}
+	for _, c := range cases {
+		if got := mayDriveRoom(c.owner, c.uid); got != c.want {
+			t.Errorf("%s: mayDriveRoom(%q, %q) = %v, want %v", c.name, c.owner, c.uid, got, c.want)
 		}
 	}
 }
