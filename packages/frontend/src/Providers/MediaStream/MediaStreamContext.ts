@@ -240,13 +240,21 @@ export interface WsHeartbeatAckMessage {
  * split over several replicas stays in step.
  */
 export interface RoomCommand {
-	action: "jump" | "focus" | "message";
+	action: "jump" | "focus" | "message" | "lock";
 	/** Virtual-clock target for "jump", as a UTC string. */
 	time?: string;
 	/** Classicy app id for "focus", e.g. "TV.app". */
 	app?: string;
 	/** Note body for "message". */
 	message?: string;
+	/** Lock surface for "lock". Only the clock is implemented today. */
+	target?: "clock";
+	/**
+	 * Lock state for "lock". Optional-but-meaningful: the server sends it as a
+	 * pointer precisely so an unlock (`false`) survives the wire, so treat a
+	 * missing value as "no instruction" rather than as `false`.
+	 */
+	on?: boolean;
 	/** Monotonic per-client counter; see roomCommand above. */
 	seq: number;
 }

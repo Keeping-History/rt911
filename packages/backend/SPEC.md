@@ -183,6 +183,7 @@ each session's own virtual time so it is immediately due for that client.
 - `POST /room {"room":"42","action":"jump","time":"2001-09-11T13:03:00Z"}`
 - `POST /room {"room":"42","action":"focus","app":"TV.app"}`
 - `POST /room {"room":"42","action":"message","message":"Look at channel 4"}`
+- `POST /room {"room":"42","action":"lock","target":"clock","on":true}` — lock/unlock the clock
 
 A room is a playlist id; clients join with the `join_room` frame. Commands fan
 out over Redis pub/sub (`room:command`) so a class split across pods stays in

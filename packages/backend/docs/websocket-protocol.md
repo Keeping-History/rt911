@@ -722,6 +722,7 @@ command addressed to that room:
 { "type": "room_command", "action": "jump", "time": "2001-09-11T13:03:00Z" }
 { "type": "room_command", "action": "focus", "app": "TV.app" }
 { "type": "room_command", "action": "message", "message": "Look at channel 4" }
+{ "type": "room_command", "action": "lock", "target": "clock", "on": true }
 ```
 
 | Field     | Type   | Notes                                                                    |
@@ -730,6 +731,8 @@ command addressed to that room:
 | `time`    | string | `jump` only — the virtual instant to move every student's clock to.       |
 | `app`     | string | `focus` only — the Classicy app id to bring to front (e.g. `TV.app`).     |
 | `message` | string | `message` only — the note body to display.                                |
+| `target`  | string | `lock` only — the surface to lock. `clock` is the only one implemented.   |
+| `on`      | bool   | `lock` only — the state to move to. **Always present on a lock frame**, including `false`: it rides a pointer server-side so an unlock is not dropped by `omitempty`. A client that receives a lock frame without `on` should do nothing rather than assume `false`. |
 
 A **room is a playlist id**: students following `?playlist=<id>` are its members. The streamer
 never resolves the id — playlists are authored in Directus and executed client-side; the id
@@ -744,6 +747,13 @@ lives on the session, so a client must re-send `join_room` after every reconnect
 
 A `jump` is ignored by the client while [forced clock mode](#forced-clock-mode-server--client-clock-heartbeat_ackmaster_time)
 is active — the operator's master clock outranks a teacher.
+
+`lock` is **absolute, never a toggle**: the streamer holds no lock state, so the teacher's client owns
+the on/off and sends the value it wants. Two consequences: reopening the teacher's Control window
+resets its buttons (students stay locked — only the button forgets), and two teachers driving one
+playlist will not see each other's state. `content` is a deliberate non-target — it exists as a
+disabled button in the teacher UI and the server rejects it with 400, so a dead control can never
+look like a working one.
 
 ### `chat_state`
 

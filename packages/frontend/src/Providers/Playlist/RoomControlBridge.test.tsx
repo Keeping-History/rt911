@@ -109,3 +109,27 @@ describe("RoomControlBridge", () => {
 		expect(hooks.dispatch).not.toHaveBeenCalled();
 	});
 });
+
+describe("RoomControlBridge lock", () => {
+	it("locks the classicy clock", () => {
+		mount({ action: "lock", target: "clock", on: true, seq: 1 });
+		expect(hooks.dispatch).toHaveBeenCalledWith({ type: "ClassicyManagerDateTimeLock" });
+	});
+
+	it("unlocks it again", () => {
+		mount({ action: "lock", target: "clock", on: false, seq: 1 });
+		expect(hooks.dispatch).toHaveBeenCalledWith({ type: "ClassicyManagerDateTimeUnlock" });
+	});
+
+	// A frame that lost `on` in transit must not be read as "unlock" — that
+	// would quietly free a classroom the teacher had locked.
+	it("does nothing when the lock state is missing", () => {
+		mount({ action: "lock", target: "clock", seq: 1 });
+		expect(hooks.dispatch).not.toHaveBeenCalled();
+	});
+
+	it("ignores a target it cannot act on", () => {
+		mount({ action: "lock", target: "content", on: true, seq: 1 } as never);
+		expect(hooks.dispatch).not.toHaveBeenCalled();
+	});
+});

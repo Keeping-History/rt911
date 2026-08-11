@@ -30,6 +30,8 @@ type roomRequest struct {
 	Time    string `json:"time,omitempty"`
 	App     string `json:"app,omitempty"`
 	Message string `json:"message,omitempty"`
+	Target  string `json:"target,omitempty"`
+	On      bool   `json:"on"`
 }
 
 // NewRoomHandler serves live teacher control over a room of students:
@@ -149,7 +151,10 @@ func mayDriveRoom(owner, uid string) bool {
 // buildRoomCommand validates the per-action payload and returns the command to
 // publish. The action itself is already known valid.
 func buildRoomCommand(req roomRequest) (model.RoomCommand, error) {
-	cmd := model.RoomCommand{Room: req.Room, Action: req.Action, App: req.App, Message: req.Message}
+	cmd := model.RoomCommand{
+		Room: req.Room, Action: req.Action, App: req.App,
+		Message: req.Message, Target: req.Target,
+	}
 	switch req.Action {
 	case model.RoomActionJump:
 		t, err := parseTime(req.Time)
@@ -165,6 +170,11 @@ func buildRoomCommand(req roomRequest) (model.RoomCommand, error) {
 		if req.Message == "" {
 			return cmd, errRoomMessageRequired
 		}
+	case model.RoomActionLock:
+		if !model.ValidRoomLockTarget(req.Target) {
+			return cmd, errRoomLockTarget
+		}
+		cmd.On = req.On
 	}
 	return cmd, nil
 }
@@ -176,4 +186,5 @@ func (e roomError) Error() string { return string(e) }
 const (
 	errRoomAppRequired     = roomError("app required")
 	errRoomMessageRequired = roomError("message required")
+	errRoomLockTarget      = roomError("unknown lock target")
 )

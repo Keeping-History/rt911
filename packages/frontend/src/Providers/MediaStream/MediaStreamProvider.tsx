@@ -110,10 +110,12 @@ interface WsAlertsMessage {
 // so it arrives regardless of which replica this client's socket landed on.
 interface WsRoomCommandMessage {
 	type: "room_command";
-	action: "jump" | "focus" | "message";
+	action: "jump" | "focus" | "message" | "lock";
 	time?: string;
 	app?: string;
 	message?: string;
+	target?: "clock";
+	on?: boolean;
 }
 
 // usenet messages ride their own field (not items) and carry per-message newsgroup.
@@ -1538,6 +1540,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 					time: m.time,
 					app: m.app,
 					message: m.message,
+					target: m.target,
+					on: m.on,
 					seq: (prev?.seq ?? 0) + 1,
 				}));
 				return;

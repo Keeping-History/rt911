@@ -164,3 +164,34 @@ func TestRoomCommandCrossesPods(t *testing.T) {
 		t.Fatalf("jump time = %q, want %q", got.Time, target.Format(time.RFC3339))
 	}
 }
+
+// The lock frame must carry `on` in both directions. It rides a *bool in outMsg
+// precisely because an unlock is `false`, which plain omitempty would drop —
+// leaving the client unable to tell "unlock" from "no lock field at all".
+func TestRoomLockFrameTransmitsBothStates(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	hub := NewHub(logger, 0)
+	s := roomSession(t, hub, "42")
+
+	hub.BroadcastRoom(model.RoomCommand{
+		Room: "42", Action: model.RoomActionLock, Target: model.RoomLockClock, On: true,
+	})
+	m := recvType(t, s)
+	if m.Action != model.RoomActionLock || m.Target != model.RoomLockClock {
+		t.Fatalf("lock frame = %+v", m)
+	}
+	if m.On == nil || !*m.On {
+		t.Fatalf("lock on: got %v, want true", m.On)
+	}
+
+	hub.BroadcastRoom(model.RoomCommand{
+		Room: "42", Action: model.RoomActionLock, Target: model.RoomLockClock, On: false,
+	})
+	m = recvType(t, s)
+	if m.On == nil {
+		t.Fatal("unlock dropped `on` from the frame; the client cannot tell unlock from absent")
+	}
+	if *m.On {
+		t.Fatalf("unlock on: got %v, want false", *m.On)
+	}
+}

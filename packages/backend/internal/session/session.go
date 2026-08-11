@@ -138,6 +138,10 @@ type outMsg struct {
 	// existing Time field and the note rides Msg.
 	Action string `json:"action,omitempty"`
 	App    string `json:"app,omitempty"`
+	// Target/On ride a room_command with action "lock". On is a pointer so an
+	// unlock (false) is transmitted rather than dropped by omitempty.
+	Target string `json:"target,omitempty"`
+	On     *bool  `json:"on,omitempty"`
 	// Cleared rides chat_cleared: how many messages the clear marked. Purely
 	// informational (the client resets on the frame's arrival, not its count),
 	// so omitempty dropping a zero is harmless -- clearing an already-empty
@@ -552,6 +556,10 @@ func (s *Session) SendRoomCommand(cmd model.RoomCommand) {
 		out.App = cmd.App
 	case model.RoomActionMessage:
 		out.Msg = cmd.Message
+	case model.RoomActionLock:
+		out.Target = cmd.Target
+		on := cmd.On
+		out.On = &on
 	}
 	s.send_(out)
 }

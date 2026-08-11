@@ -69,6 +69,20 @@ export function RoomControlBridge() {
 				setNote({ seq, body: roomCommand.message });
 				return;
 			}
+			case "lock": {
+				// Only the clock is a real target today; "content" is a disabled
+				// button in the teacher UI and the server refuses to relay it.
+				if (roomCommand.target !== "clock") return;
+				// `on` absent means the field never made it, not "unlock" —
+				// acting on that would silently free a locked classroom.
+				if (typeof roomCommand.on !== "boolean") return;
+				dispatch({
+					type: roomCommand.on
+						? "ClassicyManagerDateTimeLock"
+						: "ClassicyManagerDateTimeUnlock",
+				});
+				return;
+			}
 		}
 		// Intentionally keyed on seq alone — see the doc comment.
 		// eslint-disable-next-line react-hooks/exhaustive-deps

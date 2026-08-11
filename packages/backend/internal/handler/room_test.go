@@ -167,3 +167,31 @@ func TestMayDriveRoom(t *testing.T) {
 		}
 	}
 }
+
+func TestRoomControlValidatesLockTarget(t *testing.T) {
+	h := newRoomTestHandler(t)
+	for _, body := range []string{
+		`{"room":"42","action":"lock"}`,
+		`{"room":"42","action":"lock","target":""}`,
+		// "content" is a real button in the teacher UI, but disabled and wired
+		// to nothing — relaying it would make a dead control look live.
+		`{"room":"42","action":"lock","target":"content","on":true}`,
+	} {
+		if w := roomPost(t, h, body); w.Code != http.StatusBadRequest {
+			t.Fatalf("body %s: status = %d, want 400", body, w.Code)
+		}
+	}
+}
+
+// The unlock command is `on:false`, which is also bool's zero value — so this
+// pins that it survives decoding and reaches the published command.
+func TestBuildRoomCommandCarriesLockState(t *testing.T) {
+	on, err := buildRoomCommand(roomRequest{Room: "42", Action: "lock", Target: "clock", On: true})
+	if err != nil || on.Target != "clock" || !on.On {
+		t.Fatalf("lock on: %+v err=%v", on, err)
+	}
+	off, err := buildRoomCommand(roomRequest{Room: "42", Action: "lock", Target: "clock", On: false})
+	if err != nil || off.Target != "clock" || off.On {
+		t.Fatalf("lock off: %+v err=%v", off, err)
+	}
+}

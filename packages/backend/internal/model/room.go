@@ -14,6 +14,18 @@ const (
 	RoomActionFocus = "focus"
 	// RoomActionMessage shows Message to the room.
 	RoomActionMessage = "message"
+	// RoomActionLock locks or unlocks one control surface for the room: Target
+	// names the surface and On is the state to move it to. A toggle is resolved
+	// by the teacher's client, not here — the server holds no lock state, so
+	// each command carries the absolute value it wants rather than "flip it".
+	RoomActionLock = "lock"
+)
+
+// Lock targets. Only the clock is implemented; "content" exists in the teacher
+// UI as a disabled control and is deliberately NOT accepted here yet. Accepting
+// a target no client acts on would make a dead button look like a working one.
+const (
+	RoomLockClock = "clock"
 )
 
 // RoomCommand is one live teacher action, addressed to a room.
@@ -30,6 +42,11 @@ type RoomCommand struct {
 	Time    time.Time `json:"time,omitempty"`
 	App     string    `json:"app,omitempty"`
 	Message string    `json:"message,omitempty"`
+	// Target is the lock surface for RoomActionLock (see RoomLock*).
+	Target string `json:"target,omitempty"`
+	// On is the lock state for RoomActionLock. No omitempty: false is the
+	// unlock command, and omitempty would drop it off the wire entirely.
+	On bool `json:"on"`
 }
 
 // ValidRoomAction reports whether action is one this server will relay.
@@ -37,8 +54,14 @@ type RoomCommand struct {
 // so a typo fails visibly instead of reaching clients that silently ignore it.
 func ValidRoomAction(action string) bool {
 	switch action {
-	case RoomActionJump, RoomActionFocus, RoomActionMessage:
+	case RoomActionJump, RoomActionFocus, RoomActionMessage, RoomActionLock:
 		return true
 	}
 	return false
+}
+
+// ValidRoomLockTarget reports whether target is a lock surface this server
+// will relay.
+func ValidRoomLockTarget(target string) bool {
+	return target == RoomLockClock
 }
