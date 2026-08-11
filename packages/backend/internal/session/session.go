@@ -488,6 +488,35 @@ func (s *Session) SendAlerts(t time.Time, items []model.AlertItem) {
 	s.send_(outMsg{Type: "alerts", Time: t.Format(time.RFC3339), Alerts: items})
 }
 
+// SendAlertNow delivers a single operator-initiated alert on the alerts channel,
+// wherever this session's virtual clock happens to sit. It reuses the ordinary
+// "alerts" frame — there is no separate wire type — by rewriting the item's
+// start_date to just behind the session's virtual time, which is what the client
+// reveal-gates on. Returns false when the session is not subscribed, so the
+// caller can count who was actually reached.
+func (s *Session) SendAlertNow(item model.AlertItem) bool {
+	s.mu.Lock()
+	_, subscribed := s.subscriptions[ChannelAlerts]
+	vTime := s.virtualTime
+	s.mu.Unlock()
+	if !subscribed {
+		return false
+	}
+
+	item.StartDate = vTime.Add(-alertNowLookback)
+	item.EndDate = nil
+	s.send_(outMsg{Type: "alerts", Time: vTime.Format(time.RFC3339), Alerts: []model.AlertItem{item}})
+	return true
+}
+
+// alertNowLookback backdates an on-demand alert's start_date relative to the
+// session's virtual clock. Stamping it at exactly vTime would leave the client
+// to reveal it a tick late whenever its own clock lags the server's — and never
+// at all on a paused session, whose clock stops advancing and so never drains
+// the reveal buffer. The margin is small enough that the alert still sorts after
+// anything that genuinely fired a minute ago in the client's alert queue.
+const alertNowLookback = 10 * time.Second
+
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the
 // usenet channel and acks. Resetting the usenet horizon to the current virtual time
 // makes the next tick refill a fresh forward window for the new group(s); the

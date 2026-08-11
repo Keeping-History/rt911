@@ -165,6 +165,54 @@ forward from wherever the master left them — nothing jumps back. See
 [`docs/websocket-protocol.md`](./docs/websocket-protocol.md) for the wire
 frames (`clock`, `heartbeat_ack.master_time`).
 
+### `POST /alerts` — on-demand alerts (operator only)
+
+Fires an alert at every connected client immediately, instead of waiting for the
+virtual clock to cross a scheduled `alert_items` row. Guarded by the
+`X-Alert-Key` header (constant-time compare against `ALERT_CONTROL_KEY`;
+unset ⇒ 404, feature off). `content` is rendered as HTML by the client's Alerts
+extension, so the key is the whole access control — treat it like an admin
+credential.
+
+```
+POST /alerts
+X-Alert-Key: …
+
+{"title": "Server maintenance in 10 minutes",
+ "content": "<p>The site will be briefly unavailable.</p>",
+ "severity": "caution",
+ "image": "https://files.911realtime.org/…jpg",
+ "image_caption": "…"}
+```
+
+`title` is required, `severity` is one of `note` (default) / `caution` / `stop`,
+and every other field is optional. Passing `{"id": 42}` instead broadcasts that
+`alert_items` row as-is, which is the way to fire a curated alert early; every
+other field is then ignored, and an unknown id is a 404.
+
+The reply is `{"delivered": 3, "alert": {…}}` — `delivered` counts the sessions
+the alert was handed to (connected *and* subscribed to the alerts channel), not
+modals actually displayed, and `alert` echoes exactly what went on the wire.
+
+Two deliberate limits:
+
+- **Ad-hoc alerts are never persisted** — not to Postgres, not to the Redis
+  alert cache. They reach the clients connected at that moment and nothing else;
+  a client that connects a second later sees nothing. Anything that should
+  survive belongs in `alert_items`.
+- **Delivery is per-pod.** The alert reaches the sessions on the pod that served
+  the request. Fanning out across pods would need a Redis pub/sub path like the
+  master clock's (`clock:master:changed`); until an operator has more than one
+  pod to hit, that machinery isn't worth carrying.
+
+Each ad-hoc alert is issued a negative `id` from a per-process counter so it can
+never collide with a Directus row id in the client's dedupe/dismissed sets, and
+its `start_date` is rewritten per session to just behind that session's virtual
+clock — that backdating is what makes the client's reveal gate surface it on
+arrival (and what reaches a *paused* client, whose clock never advances to drain
+a reveal buffer). See
+[`docs/websocket-protocol.md`](./docs/websocket-protocol.md#out-of-band-alerts).
+
 ---
 
 ## 4. Non-functional requirements

@@ -357,8 +357,9 @@ backfills anything, only the forward tick delivers alerts. This is deliberate, n
 an alert is meant to fire exactly once, at the instant the virtual clock crosses its `start_date`
 (fire-on-cross); a snapshot would surface alerts whose moment has already passed, which is fine for
 news's headline lookback but wrong for something meant to interrupt. Forward refills use the same
-600 s window as pager/news/usenet. See [`alerts` field reference](#server-initiated-alerts) below
-for the frame shape.
+600 s window as pager/news/usenet. Alerts can additionally be fired **on demand** by an operator
+(`POST /alerts`), which reuses the same frame — see [`alerts` field reference](#server-initiated-alerts)
+below for the frame shape and [out-of-band alerts](#out-of-band-alerts) for how those differ.
 
 ### `usenet_filter` and the `usenet` channel
 
@@ -707,8 +708,24 @@ plus one alert-only field:
 | `severity` | string? | `note` \| `caution` \| `stop` — selects the client's alert icon/treatment. Omitted when empty (rows predating the column). |
 
 There is deliberately **no snapshot** frame for this channel (see [the `alerts` channel](#subscribe)
-above) — every `alerts` frame is a forward window, sent once per **window refill** and only when the
-window contains at least one alert; empty windows produce no frame, same as `pager`/`flights`.
+above) — every scheduled `alerts` frame is a forward window, sent once per **window refill** and only
+when the window contains at least one alert; empty windows produce no frame, same as
+`pager`/`flights`.
+
+#### Out-of-band alerts
+
+An operator can also fire an alert *now*, at every connected client, without waiting for the virtual
+clock to cross a scheduled `alert_items` row — see [`POST /alerts`](../SPEC.md#post-alerts--on-demand-alerts-operator-only).
+There is **no separate frame type** for this: the alert rides the ordinary `alerts` frame above,
+carrying a single item whose `start_date` the server rewrites to just behind *that session's* virtual
+clock, so the client's reveal gate surfaces it on arrival instead of buffering it. Two consequences
+worth knowing on the client side:
+
+- An ad-hoc alert (one not backed by an `alert_items` row) carries a **negative `id`**, issued by a
+  per-process counter. Directus ids are always positive, so the two can never collide in the client's
+  dedupe map or its dismissed set.
+- The `start_date` on the wire is the delivery instant, not an authored time, and it differs per
+  session. Don't treat it as stable across clients.
 
 ### `chat_state`
 

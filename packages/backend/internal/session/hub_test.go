@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"classicy/streamer/internal/model"
 )
 
 // waitSessions polls until the hub's session count reaches want or times out.
@@ -173,4 +175,42 @@ func TestHubNonBlockingOnSlowSession(t *testing.T) {
 	fast := NewSession(hub, nil, nil, logger)
 	hub.Register(fast)
 	waitSessions(t, hub, 2)
+}
+
+func TestBroadcastAlertReachesOnlySubscribers(t *testing.T) {
+	hub := newTestHub(t)
+
+	subscribed := NewSession(hub, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	subscribed.Init(time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC), nil)
+	subscribed.Subscribe(ChannelAlerts)
+
+	quiet := NewSession(hub, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	quiet.Init(time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC), nil)
+
+	hub.Register(subscribed)
+	hub.Register(quiet)
+	waitSessions(t, hub, 2)
+
+	drainSession(subscribed)
+	drainSession(quiet)
+
+	if n := hub.BroadcastAlert(model.AlertItem{MediaItem: model.MediaItem{ID: -1, Title: "Evacuate"}}); n != 1 {
+		t.Fatalf("expected exactly one session reached, got %d", n)
+	}
+	if len(subscribed.send) != 1 {
+		t.Fatalf("expected the subscriber to receive one frame, got %d", len(subscribed.send))
+	}
+	if len(quiet.send) != 0 {
+		t.Fatalf("expected the non-subscriber to receive nothing, got %d frames", len(quiet.send))
+	}
+}
+
+func drainSession(s *Session) {
+	for {
+		select {
+		case <-s.send:
+		default:
+			return
+		}
+	}
 }

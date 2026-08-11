@@ -71,7 +71,13 @@ Structured keys you'll see:
 
 ## Security posture
 
-The streamer is **read-only and unauthenticated**. It assumes:
+The streamer is **read-only and unauthenticated** on `/stream`. Two operator endpoints are the
+exception, and both are off unless you give them a key: `/clock` (`CLOCK_CONTROL_KEY`, forced clock
+mode) and `/alerts` (`ALERT_CONTROL_KEY`, on-demand alerts). Unset ⇒ the endpoint 404s. Treat both
+keys as admin credentials — an `/alerts` body's `content` is rendered as HTML by every connected
+client's Alerts extension.
+
+Beyond those, it assumes:
 
 1. The reverse proxy (or CDN) terminates TLS.
 2. The reverse proxy enforces origin allow-listing if you care — the in-process `CheckOrigin` returns `true` for everything.

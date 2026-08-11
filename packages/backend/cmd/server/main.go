@@ -320,6 +320,9 @@ func main() {
 		logger,
 	))
 	mux.HandleFunc("/clock", handler.NewClockHandler(masterClock, env("CLOCK_CONTROL_KEY", ""), logger))
+	// Out-of-band alerts: fire one at every connected client now, rather than
+	// waiting for the virtual clock to cross a scheduled alert_items row.
+	mux.HandleFunc("/alerts", handler.NewAlertsHandler(hub, pool, env("ALERT_CONTROL_KEY", ""), logger))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

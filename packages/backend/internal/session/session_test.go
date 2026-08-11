@@ -1832,3 +1832,82 @@ func TestChatClearWithNilPoolSendsErrorNotConfirmation(t *testing.T) {
 		t.Fatalf("expected an error frame, got %+v", msg)
 	}
 }
+
+func TestSendAlertNowRequiresSubscription(t *testing.T) {
+	s := newTestSession(t)
+	s.Init(time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC), nil)
+	drain(t, s)
+
+	if s.SendAlertNow(model.AlertItem{MediaItem: model.MediaItem{ID: -1, Title: "Evacuate"}}) {
+		t.Fatal("an unsubscribed session must not be counted as reached")
+	}
+	select {
+	case <-s.send:
+		t.Fatal("an unsubscribed session must receive no alerts frame")
+	default:
+	}
+}
+
+func TestSendAlertNowBackdatesToTheSessionClock(t *testing.T) {
+	// The client reveal-gates alerts on start_date, so an on-demand alert must
+	// arrive already due at the session's virtual clock — not at the wall clock,
+	// and not at whatever start_date the caller happened to supply.
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC)
+	s.Init(at, nil)
+	s.Subscribe(ChannelAlerts)
+	drain(t, s)
+
+	severity := "stop"
+	if !s.SendAlertNow(model.AlertItem{
+		MediaItem: model.MediaItem{
+			ID:        -1,
+			Title:     "Evacuate the building",
+			StartDate: time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC),
+		},
+		Severity: &severity,
+	}) {
+		t.Fatal("expected a subscribed session to be reached")
+	}
+
+	m := recvType(t, s)
+	if m.Type != "alerts" {
+		t.Fatalf("expected an alerts frame, got %q", m.Type)
+	}
+	if len(m.Alerts) != 1 {
+		t.Fatalf("expected exactly one alert, got %+v", m.Alerts)
+	}
+	got := m.Alerts[0]
+	if !got.StartDate.Equal(at.Add(-alertNowLookback)) {
+		t.Fatalf("expected start_date backdated to %v, got %v", at.Add(-alertNowLookback), got.StartDate)
+	}
+	if got.EndDate != nil {
+		t.Fatalf("an on-demand alert must not carry an end_date, got %v", got.EndDate)
+	}
+	if got.Severity == nil || *got.Severity != "stop" {
+		t.Fatalf("expected severity to survive, got %v", got.Severity)
+	}
+}
+
+func TestSendAlertNowIgnoresPause(t *testing.T) {
+	// A paused client's clock never advances, so it would never drain a reveal
+	// buffer. The backdated start_date is what keeps an operator alert reaching
+	// it anyway.
+	s := newTestSession(t)
+	at := time.Date(2001, 9, 11, 13, 3, 0, 0, time.UTC)
+	s.Init(at, nil)
+	s.Subscribe(ChannelAlerts)
+	s.Pause()
+	drain(t, s)
+
+	if !s.SendAlertNow(model.AlertItem{MediaItem: model.MediaItem{ID: -1, Title: "Evacuate"}}) {
+		t.Fatal("expected a paused but subscribed session to be reached")
+	}
+	m := recvType(t, s)
+	if m.Type != "alerts" || len(m.Alerts) != 1 {
+		t.Fatalf("expected one alert on a paused session, got %+v", m)
+	}
+	if !m.Alerts[0].StartDate.Before(at) {
+		t.Fatalf("expected start_date before the frozen clock %v, got %v", at, m.Alerts[0].StartDate)
+	}
+}

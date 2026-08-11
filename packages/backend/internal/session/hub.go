@@ -8,6 +8,7 @@ import (
 
 	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/clock"
+	"classicy/streamer/internal/model"
 )
 
 // Hub manages all active sessions and drives the global 1-second clock tick.
@@ -70,6 +71,15 @@ func (h *Hub) Release() { h.active.Add(-1) }
 // Active reports the number of currently-admitted connections.
 func (h *Hub) Active() int64 { return h.active.Load() }
 
+// Count reports how many sessions Run has registered. This lags Active under a
+// burst — registration goes through a channel — so it is the number a broadcast
+// would actually reach, not the admission count.
+func (h *Hub) Count() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.sessions)
+}
+
 // SetMaster wires the forced master clock. Call once at boot, before Run.
 func (h *Hub) SetMaster(m *clock.MasterClock) { h.master = m }
 
@@ -103,6 +113,21 @@ func (h *Hub) BroadcastClock(st clock.State) {
 			s.SendClock(false, time.Time{})
 		}
 	}
+}
+
+// BroadcastAlert pushes an operator-initiated alert to every session subscribed
+// to the alerts channel and reports how many were reached. RLock + non-blocking
+// send_ per session — same discipline as BroadcastClock and the tick loop.
+func (h *Hub) BroadcastAlert(item model.AlertItem) int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	n := 0
+	for _, s := range h.sessions {
+		if s.SendAlertNow(item) {
+			n++
+		}
+	}
+	return n
 }
 
 func (h *Hub) Register(s *Session) {
