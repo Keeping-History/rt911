@@ -18,6 +18,7 @@ import {
 	MediaStreamContext,
 	type MediaItem,
 	type PagerItem,
+	type RoomCommand,
 	type UsenetItem,
 	type WeatherForecast,
 	type WeatherObservation,
@@ -31,6 +32,7 @@ import { drainDue, partitionByDue } from "./revealBuffer";
 import { keepInstantItem, keepMediaItem } from "./retention";
 import { shouldSeek } from "./seekDetection";
 import { virtualUtcMs } from "./virtualClock";
+import { playlistIdFromSearch } from "../Playlist/loadPlaylist";
 import { usePlaylist } from "../Playlist/PlaylistContext";
 import { playlistAppMeta } from "../Playlist/playlistApps";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
@@ -102,6 +104,16 @@ interface WsNewsMessage {
 interface WsAlertsMessage {
 	type: "alerts";
 	alerts: AlertItem[];
+}
+
+// A live teacher command for the joined room. Relayed cross-pod by the streamer,
+// so it arrives regardless of which replica this client's socket landed on.
+interface WsRoomCommandMessage {
+	type: "room_command";
+	action: "jump" | "focus" | "message";
+	time?: string;
+	app?: string;
+	message?: string;
 }
 
 // usenet messages ride their own field (not items) and carry per-message newsgroup.
@@ -466,6 +478,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	// long-lived socket closure, which needs the current value synchronously
 	// (state updates are not visible until the next render).
 	const [clockForced, setClockForced] = useState(false);
+	// Latest live teacher command for the joined room; see RoomCommand.
+	const [roomCommand, setRoomCommand] = useState<RoomCommand | null>(null);
 	const clockForcedRef = useRef(false);
 
 	// Snap the local clock to `iso` via the sanctioned setDateTimeFromUtc seam,
@@ -1180,6 +1194,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 					time: new Date(utcMsRef.current).toISOString(),
 				}),
 			);
+			// Rejoin the teacher-controlled room. Same reason as the
+			// subscriptions below: room membership lives on the session, so a
+			// reconnect (or a failover onto another pod) starts with none.
+			const room = playlistIdFromSearch(window.location.search);
+			if (room) ws.send(JSON.stringify({ type: "join_room", room }));
 			// Re-establish channel subscriptions after a reconnect — the server
 			// does not remember subscriptions across connections.
 			if (pagerSubscribers.current.size > 0) {
@@ -1510,6 +1529,20 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "room_command") {
+				const m = msg as WsRoomCommandMessage;
+				// seq is what makes a repeated identical command observable —
+				// a teacher may focus the same app twice on purpose.
+				setRoomCommand((prev) => ({
+					action: m.action,
+					time: m.time,
+					app: m.app,
+					message: m.message,
+					seq: (prev?.seq ?? 0) + 1,
+				}));
+				return;
+			}
+
 			if (msg.type === "clock") {
 				const m = msg as WsClockMessage;
 				setForced(m.active);
@@ -1662,6 +1695,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			roomCommand,
 			chatBuddies,
 			chatEnabled,
 			chatReason,
@@ -1720,6 +1754,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			roomCommand,
 			chatBuddies,
 			chatEnabled,
 			chatReason,

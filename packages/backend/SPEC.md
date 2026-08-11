@@ -165,6 +165,37 @@ forward from wherever the master left them — nothing jumps back. See
 [`docs/websocket-protocol.md`](./docs/websocket-protocol.md) for the wire
 frames (`clock`, `heartbeat_ack.master_time`).
 
+### `POST /alert` — operator alert push
+
+Guarded by `X-Alert-Key` (`ALERT_CONTROL_KEY`; unset ⇒ 404, feature off).
+
+- `POST /alert {"id": 42}` — raise `alert_items` row 42 on every connected client now
+
+Alert *content* already reaches every pod through the `alert_items` NOTIFY
+listener; what that path cannot do is raise an alert off-schedule, because
+delivery is gated on the row's `start_date` against each client's virtual
+clock. This endpoint is that path: the row is read once on the receiving pod,
+fanned out over Redis pub/sub (`alerts:push`), and each pod restamps it with
+each session's own virtual time so it is immediately due for that client.
+
+### `POST /room` — live teacher control (operator only)
+
+Guarded by `X-Room-Key` (`ROOM_CONTROL_KEY`; unset ⇒ 404, feature off).
+
+- `POST /room {"room":"42","action":"jump","time":"2001-09-11T13:03:00Z"}`
+- `POST /room {"room":"42","action":"focus","app":"TV.app"}`
+- `POST /room {"room":"42","action":"message","message":"Look at channel 4"}`
+
+A room is a playlist id; clients join with the `join_room` frame. Commands fan
+out over Redis pub/sub (`room:command`) so a class split across pods stays in
+step, and are delivered only to sessions in that room. Nothing is persisted — a
+disconnected client does not receive the command on reconnect.
+
+**Authorisation is coarse:** the shared key authenticates "an operator", not
+"the teacher who owns playlist 42". Anyone holding it can drive any room.
+Binding a command to the caller's Directus identity and that playlist's owner
+is deliberately not implemented.
+
 ---
 
 ## 4. Non-functional requirements

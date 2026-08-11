@@ -14,6 +14,22 @@ Every knob the streamer exposes, in one place. The service reads configuration e
 
 All three have sensible local-dev defaults, so `go run ./cmd/server` works against a default `docker compose up` without any env tweaks.
 
+## Operator control keys
+
+Each of these guards one operator endpoint with a constant-time header compare.
+**All default to empty, and empty means the endpoint 404s** — an unconfigured
+deployment exposes none of them, so leaving one unset is the safe state rather
+than an open door.
+
+| Variable            | Header          | Endpoint  | Purpose                                                        |
+| ------------------- | --------------- | --------- | -------------------------------------------------------------- |
+| `CLOCK_CONTROL_KEY` | `X-Clock-Key`   | `/clock`  | Forced clock mode: slave every session to an operator-set time. |
+| `ALERT_CONTROL_KEY` | `X-Alert-Key`   | `/alert`  | Raise an `alert_items` row on every client immediately.         |
+| `ROOM_CONTROL_KEY`  | `X-Room-Key`    | `/room`   | Live teacher control (jump/focus/message) over one room.        |
+
+`ROOM_CONTROL_KEY` authenticates *an operator*, not a specific teacher — anyone
+holding it can drive any room. See [`SPEC.md`](../SPEC.md#post-room--live-teacher-control-operator-only).
+
 ---
 
 ## Compose-derived variables
@@ -71,7 +87,9 @@ Structured keys you'll see:
 
 ## Security posture
 
-The streamer is **read-only and unauthenticated**. It assumes:
+The streamer is **read-only and unauthenticated** on its data paths (the
+operator endpoints above are the exception, each gated by its own key). It
+assumes:
 
 1. The reverse proxy (or CDN) terminates TLS.
 2. The reverse proxy enforces origin allow-listing if you care — the in-process `CheckOrigin` returns `true` for everything.

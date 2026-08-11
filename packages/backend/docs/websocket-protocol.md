@@ -54,6 +54,8 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `chat_send`   | `profile`, `body` | Send one message to a buddy on the `chat` channel. See [`chat_send`](#chat_send) below. |
 | `chat_history` | `profile`, `before`, `limit` | Request prior turns with a buddy at or before `before` (RFC3339). `limit` defaults to 40 when omitted or non-positive. See [`chat_history`](#chat_history) below. |
 | `chat_clear`  | —                 | Soft-delete the signed-in user's entire chat history, across every buddy. See [`chat_clear`](#chat_clear) below. |
+| `join_room`   | `room`            | Join a teacher-controlled room (the client's `?playlist=` id, max 128 chars). See [room control](#room-control-server--client-room_command) below. |
+| `leave_room`  | —                 | Leave the current room. |
 
 All unknown `type` values produce an `error` reply but do not terminate the session.
 
@@ -65,6 +67,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `seek_ack`        | `time`, `items[]`             | Reply to `seek`.                                       |
 | `heartbeat_ack`   | `time`, `master_time`         | Reply to `heartbeat`. `time` is server's vTime; `master_time` is present only while forced clock mode is active (see "Forced clock mode" below). |
 | `clock`           | `active`, `time`              | Forced-clock state push: on connect and on every activate/jump/release (see "Forced clock mode" below). |
+| `room_command`    | `action`, `time`/`app`/`message` | A live teacher command for the room this client joined (see "Room control" below). |
 | `filter_ack`      | —                             | Reply to `filter`.                                     |
 | `subscribe_ack`   | `channel`                     | Reply to `subscribe`.                                  |
 | `unsubscribe_ack` | `channel`                     | Reply to `unsubscribe`.                                |
@@ -709,6 +712,38 @@ plus one alert-only field:
 There is deliberately **no snapshot** frame for this channel (see [the `alerts` channel](#subscribe)
 above) — every `alerts` frame is a forward window, sent once per **window refill** and only when the
 window contains at least one alert; empty windows produce no frame, same as `pager`/`flights`.
+
+### Room control (server → client `room_command`)
+
+Live teacher control over a class. A client that joined a room with `join_room` receives every
+command addressed to that room:
+
+```json
+{ "type": "room_command", "action": "jump", "time": "2001-09-11T13:03:00Z" }
+{ "type": "room_command", "action": "focus", "app": "TV.app" }
+{ "type": "room_command", "action": "message", "message": "Look at channel 4" }
+```
+
+| Field     | Type   | Notes                                                                    |
+| --------- | ------ | ------------------------------------------------------------------------ |
+| `action`  | string | `jump` \| `focus` \| `message`. Unknown actions are rejected at the operator endpoint and never reach a client. |
+| `time`    | string | `jump` only — the virtual instant to move every student's clock to.       |
+| `app`     | string | `focus` only — the Classicy app id to bring to front (e.g. `TV.app`).     |
+| `message` | string | `message` only — the note body to display.                                |
+
+A **room is a playlist id**: students following `?playlist=<id>` are its members. The streamer
+never resolves the id — playlists are authored in Directus and executed client-side; the id
+travels as an opaque string.
+
+Commands originate on whichever pod served the teacher's `POST /room` call and are relayed to the
+others over Redis pub/sub (`internal/fanout`), so a class spread across replicas stays in step.
+That relay is **fire-and-forget and nothing is persisted**: a client that is disconnected when a
+command is sent does not receive it on reconnect, and a `jump` is not replayed. Room membership
+lives on the session, so a client must re-send `join_room` after every reconnect (the frontend's
+`MediaStreamProvider` does this alongside its channel re-subscribes).
+
+A `jump` is ignored by the client while [forced clock mode](#forced-clock-mode-server--client-clock-heartbeat_ackmaster_time)
+is active — the operator's master clock outranks a teacher.
 
 ### `chat_state`
 

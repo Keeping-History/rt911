@@ -121,6 +121,24 @@ func (h *Hub) BroadcastAlert(item model.AlertItem) {
 	}
 }
 
+// BroadcastRoom relays a teacher command to this pod's sessions in cmd.Room.
+// A blank room matches nothing — it would otherwise address every session not
+// following a playlist, which is the opposite of what an unset field means.
+//
+// Same RLock + non-blocking send_ discipline as the tick loop.
+func (h *Hub) BroadcastRoom(cmd model.RoomCommand) {
+	if cmd.Room == "" {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, s := range h.sessions {
+		if s.Room() == cmd.Room {
+			s.SendRoomCommand(cmd)
+		}
+	}
+}
+
 func (h *Hub) Register(s *Session) {
 	h.reg <- s
 }

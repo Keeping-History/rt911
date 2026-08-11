@@ -156,6 +156,15 @@ func main() {
 	alertBus.OnMessage(hub.BroadcastAlert)
 	go alertBus.Run(ctx)
 
+	// Live teacher control, scoped to a room (a playlist id). One channel for
+	// every room rather than one per room: pods filter by membership on
+	// receipt, which avoids dynamically subscribing and unsubscribing Redis
+	// channels as classes come and go, and the command volume is a handful of
+	// clicks per lesson.
+	roomBus := fanout.New[model.RoomCommand](rdbWrite, "room:command", logger)
+	roomBus.OnMessage(hub.BroadcastRoom)
+	go roomBus.Run(ctx)
+
 	// Chat's reply engine. Credentials come from the environment only, never
 	// from Directus (CLAUDE.md). A missing key just means one fewer provider is
 	// registered; only when NO provider ends up configured does chat stay
@@ -331,6 +340,7 @@ func main() {
 	))
 	mux.HandleFunc("/clock", handler.NewClockHandler(masterClock, env("CLOCK_CONTROL_KEY", ""), logger))
 	mux.HandleFunc("/alert", handler.NewAlertHandler(pool, alertBus, env("ALERT_CONTROL_KEY", ""), logger))
+	mux.HandleFunc("/room", handler.NewRoomHandler(roomBus, env("ROOM_CONTROL_KEY", ""), logger))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
