@@ -8,6 +8,7 @@ import (
 
 	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/clock"
+	"classicy/streamer/internal/model"
 )
 
 // Hub manages all active sessions and drives the global 1-second clock tick.
@@ -102,6 +103,21 @@ func (h *Hub) BroadcastClock(st clock.State) {
 		} else {
 			s.SendClock(false, time.Time{})
 		}
+	}
+}
+
+// BroadcastAlert pushes an operator alert to every session on this pod that is
+// subscribed to the alerts channel. Only this pod's sessions — the caller is
+// the fan-out subscriber (see internal/fanout), which is what carries the alert
+// to the other pods' hubs.
+//
+// RLock + non-blocking send_ per session, the same discipline as the tick loop
+// and BroadcastClock.
+func (h *Hub) BroadcastAlert(item model.AlertItem) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, s := range h.sessions {
+		s.PushAlert(item)
 	}
 }
 

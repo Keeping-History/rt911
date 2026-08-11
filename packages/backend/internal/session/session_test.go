@@ -27,17 +27,25 @@ func newTestSession(t *testing.T) *Session {
 }
 
 // recvType drains one queued outbound message and returns its decoded envelope.
+// decodeFrame decodes one outbound frame off the wire. Split out of recvType so
+// tests that pull from s.send themselves (the cross-pod poll loop) decode the
+// same way rather than re-implementing the msgpack tag setup.
+func decodeFrame(t *testing.T, data []byte) outMsg {
+	t.Helper()
+	var m outMsg
+	dec := msgpack.NewDecoder(bytes.NewReader(data))
+	dec.SetCustomStructTag("json")
+	if err := dec.Decode(&m); err != nil {
+		t.Fatalf("decode outbound: %v", err)
+	}
+	return m
+}
+
 func recvType(t *testing.T, s *Session) outMsg {
 	t.Helper()
 	select {
 	case data := <-s.send:
-		var m outMsg
-		dec := msgpack.NewDecoder(bytes.NewReader(data))
-		dec.SetCustomStructTag("json")
-		if err := dec.Decode(&m); err != nil {
-			t.Fatalf("decode outbound: %v", err)
-		}
-		return m
+		return decodeFrame(t, data)
 	default:
 		t.Fatal("expected an outbound message, got none")
 		return outMsg{}

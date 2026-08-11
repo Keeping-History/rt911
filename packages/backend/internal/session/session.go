@@ -488,6 +488,28 @@ func (s *Session) SendAlerts(t time.Time, items []model.AlertItem) {
 	s.send_(outMsg{Type: "alerts", Time: t.Format(time.RFC3339), Alerts: items})
 }
 
+// PushAlert delivers an operator-pushed alert to this session immediately,
+// regardless of the alert's own scheduled start_date. No-op when the session
+// has not subscribed to the alerts channel or has not initialised yet.
+//
+// The stamp is deliberate. The client reveal-gates alerts by start_date against
+// its own virtual clock (partitionByDue in MediaStreamProvider), and every
+// session sits at a different instant unless forced clock mode is on — so a
+// push carrying the row's real start_date would land in most clients' future
+// buffer and never show. Rewriting the copy to this session's own virtual time
+// is what makes "push this alert now" mean now, for each client.
+func (s *Session) PushAlert(item model.AlertItem) {
+	s.mu.Lock()
+	_, subscribed := s.subscriptions[ChannelAlerts]
+	vt := s.virtualTime
+	s.mu.Unlock()
+	if !subscribed || vt.IsZero() {
+		return
+	}
+	item.StartDate = vt
+	s.SendAlerts(vt, []model.AlertItem{item})
+}
+
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the
 // usenet channel and acks. Resetting the usenet horizon to the current virtual time
 // makes the next tick refill a fresh forward window for the new group(s); the
