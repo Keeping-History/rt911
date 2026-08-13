@@ -109,11 +109,13 @@ export function PlaylistDocumentWindow({
 		// `edit`, `openPlaylist`, and `toggleClockLock` come from
 		// PlaylistEditorProvider: `edit`/`openPlaylist` are useCallbacks with an
 		// empty dep array (stable for the component's whole lifetime), and
-		// `toggleClockLock`'s only dep is `locks`, which is already listed
-		// below — so none of the three can go stale without a listed dep also
-		// changing. `save` and `runAdd` ARE rebuilt on every render (save's
-		// chain bottoms out in an unmemoized `onSaved` closure passed to
-		// useSavePlaylist; `runAdd` is a plain, unmemoized closure), so no dep
+		// `toggleClockLock`'s deps are `locks` (already listed below) and
+		// `sendLock`, a stable default-parameter reference to the
+		// module-level `sendRoomLock` — so none of the three can go stale
+		// without a listed dep also changing. `save` and `runAdd` ARE rebuilt
+		// on every render (save's chain bottoms out in an unmemoized
+		// `onSaved` closure passed to useSavePlaylist; `runAdd` is a plain,
+		// unmemoized closure), so no dep
 		// array could keep them "fresh" relative to this memo — but both close
 		// only over values already listed below (`state`, `playlistId`,
 		// `edit`), so an older captured copy behaves identically to a newer
