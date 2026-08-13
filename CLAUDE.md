@@ -24,6 +24,7 @@ From the repo root:
 pnpm install
 pnpm dev              # frontend dev server (vite -d), localhost:5173
 pnpm build            # tsc -b && vite build (frontend)
+pnpm preview:auth     # build + serve a PRODUCTION bundle locally, able to reach Directus
 pnpm test             # vitest run (frontend)
 pnpm lint             # eslint . (frontend)
 pnpm setup            # seed the backend data store (packages/backend/seed.mjs)

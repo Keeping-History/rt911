@@ -5,6 +5,7 @@
 	"scripts": {
 		"dev": "pnpm --filter @rt911/frontend dev",
 		"build": "pnpm --filter @rt911/frontend build",
+		"preview:auth": "pnpm --filter @rt911/frontend preview:auth",
 		"test": "pnpm --filter @rt911/frontend test",
 		"lint": "pnpm --filter @rt911/frontend lint",
 		"setup": "node packages/backend/seed.mjs",
