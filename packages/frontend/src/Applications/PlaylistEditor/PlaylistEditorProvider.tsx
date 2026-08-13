@@ -19,6 +19,23 @@ export interface PlaylistEditorContextValue {
 	locks: Record<string, LockState>;
 	lockError: { playlistId: string; message: string } | null;
 	dialogMode: "media" | "file" | null;
+	/**
+	 * Bumped every time `openPlaylist` runs, per playlist. The document window
+	 * watches its own entry and raises itself, which is what makes reopening an
+	 * already-open (or previously closed) document come to the front:
+	 * `ClassicyWindowOpen` on an id the store already knows only clears
+	 * `closed`, it does not focus, so without this a reopened document could
+	 * come up behind the list window.
+	 */
+	openTicks: Record<string, number>;
+	/**
+	 * Bumped whenever something outside the list window changes what the list
+	 * should show (create, save, rename, duplicate, delete). The
+	 * list window refetches when it changes — it now never unmounts, so it has
+	 * no other moment at which to notice.
+	 */
+	listVersion: number;
+	refreshList: () => void;
 	openPlaylist: (record: PlaylistRecord) => void;
 	closePlaylist: (playlistId: string) => void;
 	setActive: (playlistId: string) => void;
@@ -50,6 +67,10 @@ export function PlaylistEditorProvider({
 	const [locks, setLocks] = useState<Record<string, LockState>>({});
 	const [lockError, setLockError] = useState<{ playlistId: string; message: string } | null>(null);
 	const [dialogMode, setDialogMode] = useState<"media" | "file" | null>(null);
+	const [openTicks, setOpenTicks] = useState<Record<string, number>>({});
+	const [listVersion, setListVersion] = useState(0);
+
+	const refreshList = useCallback(() => setListVersion((v) => v + 1), []);
 
 	const openPlaylist = useCallback((record: PlaylistRecord) => {
 		dispatchStates({ kind: "open", record });
@@ -57,6 +78,9 @@ export function PlaylistEditorProvider({
 		// Opening focuses, which is also what makes a freshly duplicated
 		// playlist the palette's target.
 		setActiveId(record.id);
+		// Raising the window is the document window's job — it is the only
+		// component that knows the window exists in classicy's store yet.
+		setOpenTicks((t) => ({ ...t, [record.id]: (t[record.id] ?? 0) + 1 }));
 	}, []);
 
 	const closePlaylist = useCallback((playlistId: string) => {
@@ -129,12 +153,14 @@ export function PlaylistEditorProvider({
 
 	const value = useMemo<PlaylistEditorContextValue>(
 		() => ({
-			states, openIds, activeId, locks, lockError, dialogMode,
+			states, openIds, activeId, locks, lockError, dialogMode, openTicks,
+			listVersion, refreshList,
 			openPlaylist, closePlaylist, setActive, edit,
 			toggleClockLock, dismissLockError, setDialogMode,
 		}),
 		[
-			states, openIds, activeId, locks, lockError, dialogMode,
+			states, openIds, activeId, locks, lockError, dialogMode, openTicks,
+			listVersion, refreshList,
 			openPlaylist, closePlaylist, setActive, edit, toggleClockLock, dismissLockError,
 		],
 	);

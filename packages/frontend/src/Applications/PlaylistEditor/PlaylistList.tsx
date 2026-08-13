@@ -17,9 +17,17 @@ const EMPTY_DEFINITION = { version: 1 as const, mode: "annotate" as const, entri
 export function PlaylistList({
 	meId,
 	onOpen,
+	refreshToken = 0,
 }: {
 	meId: string;
 	onOpen: (record: PlaylistRecord) => void;
+	/**
+	 * Refetch whenever this changes. This window never unmounts now, so a save,
+	 * rename, duplicate, create or delete performed anywhere else in the app
+	 * would otherwise never reach it — leaving stale titles and rows whose Open
+	 * button 404s.
+	 */
+	refreshToken?: number;
 }) {
 	const [rowsState, setRows] = useState<PlaylistSummary[]>([]);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -41,7 +49,7 @@ export function PlaylistList({
 
 	useEffect(() => {
 		void refresh();
-	}, [refresh]);
+	}, [refresh, refreshToken]);
 
 	const selected = rowsState.find((r) => r.id === selectedId) ?? null;
 
@@ -101,6 +109,7 @@ export function PlaylistList({
 					onClickFunc={run(async () => {
 						const record = await createPlaylist("Untitled Playlist", EMPTY_DEFINITION);
 						onOpen(record);
+						await refresh();
 					})}
 				>
 					New

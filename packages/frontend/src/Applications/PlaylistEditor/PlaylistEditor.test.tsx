@@ -105,15 +105,23 @@ describe("PlaylistEditor", () => {
 		expect(screen.getByTestId("win-playlist_editor_list")).not.toBeNull();
 	});
 
-	// With no document open the palette is the only menu-bearing window; once
-	// one exists it must go menu-less so clicking it does not swap the bar.
-	it("gives the palette a menu only while no document window is open", () => {
+	// The palette is the app's menu of last resort. Withholding `appMenu` once a
+	// document opens does NOT make it menu-less to classicy — the focus reducer
+	// falls back to the window's stored menuBar and the SetMenuBar effect never
+	// clears it — so the bar would swap to a STALE palette menu. Supplying it
+	// always keeps Quit reachable and the menu current. See design decision 9.
+	it("always gives the palette a menu, document windows open or not", () => {
 		render(<PlaylistEditor />);
 		expect(windows.current.playlist_editor_tools.appMenu).toBeDefined();
 
 		act(() => screen.getByRole("button", { name: "Mock Open" }).click());
 
-		expect(windows.current.playlist_editor_tools.appMenu).toBeUndefined();
+		const palette = windows.current.playlist_editor_tools.appMenu;
+		expect(palette).toBeDefined();
+		expect(palette?.map((m) => m.id)).toEqual(["file", "window"]);
+		// …and it is the CURRENT menu: the open document shows up in it.
+		const windowMenu = palette?.find((m) => m.id === "window");
+		expect(windowMenu?.menuChildren?.some((c) => c.id === "playlist_window_doc_p1")).toBe(true);
 	});
 
 	// The file-open dialog moved from PlaylistEditorMain (Task 8 stripped its

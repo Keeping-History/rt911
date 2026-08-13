@@ -13,7 +13,7 @@ import { listFileMenu, paletteFileMenu, windowMenu } from "./playlistMenus";
 import { PlaylistDocumentWindow } from "./PlaylistDocumentWindow";
 import { PlaylistEditorProvider, usePlaylistEditor } from "./PlaylistEditorProvider";
 import { PlaylistList } from "./PlaylistList";
-import { ToolsPalette } from "./ToolsPalette";
+import { ToolsPalette, TOOLS_WINDOW_ID } from "./ToolsPalette";
 import appIconPng from "./app.png";
 
 const appId = "PlaylistEditor.app";
@@ -26,13 +26,13 @@ const ICONS = registerClassicyIcons({
 const appIcon = ICONS.applications.playlistEditor.app;
 
 const LIST_WINDOW = "playlist_editor_list";
-const TOOLS_WINDOW = "playlist_editor_tools";
 
 function PlaylistEditorContent() {
 	const { user } = useAuth();
 	const dispatch = useAppManagerDispatch();
 	const {
-		states, openIds, activeId, dialogMode, openPlaylist, edit, setDialogMode,
+		states, openIds, activeId, dialogMode, listVersion,
+		openPlaylist, edit, setDialogMode, refreshList,
 	} = usePlaylistEditor();
 
 	const fs = useClassicyFileSystem();
@@ -73,14 +73,17 @@ function PlaylistEditorContent() {
 	// whenever the list was already frontmost.
 	const onNew = useCallback(() => {
 		void createPlaylist("Untitled Playlist", { version: 1, mode: "annotate", entries: [] })
-			.then(openPlaylist)
+			.then((record) => {
+				openPlaylist(record);
+				refreshList();
+			})
 			.catch(() => {
 				/* the list window surfaces its own errors; nothing to add here */
 			});
-	}, [openPlaylist]);
+	}, [openPlaylist, refreshList]);
 
 	const onFocusList = useCallback(() => reveal(LIST_WINDOW), [reveal]);
-	const onFocusTools = useCallback(() => reveal(TOOLS_WINDOW), [reveal]);
+	const onFocusTools = useCallback(() => reveal(TOOLS_WINDOW_ID), [reveal]);
 	const onFocusDocument = useCallback(
 		(playlistId: string) => reveal(`playlist_doc_${playlistId}`),
 		[reveal],
@@ -103,17 +106,17 @@ function PlaylistEditorContent() {
 		[onNew, onFocusList, quitItem, sharedWindowMenu],
 	);
 
-	// The menu of last resort. With every window closable and quitting reachable
-	// only from File > Quit, closing everything would otherwise leave the menu
-	// bar showing a dead window's menus and no way to quit. Supplied ONLY when
-	// no document window is open, so clicking the palette during normal use
-	// leaves the frontmost document's menus alone.
+	// The menu of last resort, supplied unconditionally. With every window
+	// closable and quitting reachable only from File > Quit, closing everything
+	// would otherwise leave the menu bar showing a dead window's menus and no
+	// way to quit. The design wanted this only while no document was open, so
+	// that clicking the palette never swapped the bar — but withholding the
+	// prop cannot deliver that (classicy's focus reducer falls back to the
+	// window's stored `menuBar`, which the SetMenuBar effect never clears), and
+	// the bar would swap to a STALE palette menu instead. See decision 9.
 	const paletteMenu = useMemo(
-		() =>
-			openIds.length === 0
-				? [paletteFileMenu({ onOpenList: onFocusList, quitItem }), sharedWindowMenu]
-				: undefined,
-		[openIds.length, onFocusList, quitItem, sharedWindowMenu],
+		() => [paletteFileMenu({ onOpenList: onFocusList, quitItem }), sharedWindowMenu],
+		[onFocusList, quitItem, sharedWindowMenu],
 	);
 
 	const handleDialogOpen = (selections: ClassicyFileOpenSelection[]) => {
@@ -139,7 +142,11 @@ function PlaylistEditorContent() {
 				initialPosition={[100, 80]}
 				appMenu={listMenu}
 			>
-				<PlaylistList meId={user?.id ?? ""} onOpen={openPlaylist} />
+				<PlaylistList
+					meId={user?.id ?? ""}
+					onOpen={openPlaylist}
+					refreshToken={listVersion}
+				/>
 			</ClassicyWindow>
 
 			{openIds.map((playlistId, index) => (

@@ -49,12 +49,17 @@ export function RenameDialogForm({ initialTitle, onRename, onCancel }: RenameDia
 
 export function RenameDialog({
 	appId,
+	playlistId,
 	icon,
 	...formProps
-}: RenameDialogFormProps & { appId: string; icon: string }) {
+}: RenameDialogFormProps & { appId: string; playlistId: string; icon: string }) {
 	return (
 		<ClassicyWindow
-			id="playlist_rename_dialog"
+			// Per playlist, not a singleton: one of these is rendered inside
+			// every document window, so a shared id would let two simultaneous
+			// renames collide in the store — and the first to unmount would
+			// destroy the other's entry with it.
+			id={`playlist_rename_${playlistId}`}
 			appId={appId}
 			title="Rename Playlist"
 			icon={icon}

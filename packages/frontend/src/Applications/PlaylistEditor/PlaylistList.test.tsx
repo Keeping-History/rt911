@@ -82,6 +82,20 @@ describe("PlaylistList", () => {
 		expect(api.listMine).toHaveBeenCalledTimes(2);
 	});
 
+	// This window never unmounts now, so a rename or save in a document window
+	// reaches it only through the refresh token.
+	it("refetches when the refresh token changes", async () => {
+		const { rerender } = render(<PlaylistList meId="u1" onOpen={() => {}} refreshToken={0} />);
+		expect(await screen.findByText("Lesson One")).not.toBeNull();
+		expect(api.listMine).toHaveBeenCalledTimes(1);
+
+		api.listMine.mockResolvedValue([{ ...rows[0], title: "Renamed Lesson" }]);
+		rerender(<PlaylistList meId="u1" onOpen={() => {}} refreshToken={1} />);
+
+		expect(await screen.findByText("Renamed Lesson")).not.toBeNull();
+		expect(screen.queryByText("Lesson One")).toBeNull();
+	});
+
 	it("shows Copy Link only for published playlists", async () => {
 		render(<PlaylistList meId="u1" onOpen={() => {}} />);
 		fireEvent.click(await screen.findByText("Lesson One"));

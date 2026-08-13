@@ -1,5 +1,7 @@
-import { ClassicyAlert, type ClassicyMenuItem, ClassicyWindow, useAppManager } from "classicy";
-import { useEffect, useMemo, useState } from "react";
+import {
+	ClassicyAlert, type ClassicyMenuItem, ClassicyWindow, useAppManager, useAppManagerDispatch,
+} from "classicy";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deletePlaylist, duplicatePlaylist, getPlaylist, updatePlaylist } from "../../Providers/Auth/playlistApi";
 import { ADD_ACTIONS, type AddAction, runAddAction } from "./addActions";
 import {
@@ -30,20 +32,73 @@ export function PlaylistDocumentWindow({
 	onOpenList: () => void;
 }) {
 	const {
-		states, openIds, locks, lockError, edit, setActive, closePlaylist,
-		openPlaylist, toggleClockLock, dismissLockError, setDialogMode,
+		states, openIds, locks, lockError, openTicks, edit, setActive, closePlaylist,
+		openPlaylist, toggleClockLock, dismissLockError, setDialogMode, refreshList,
 	} = usePlaylistEditor();
 	const state = states[playlistId];
 	const windowId = `playlist_doc_${playlistId}`;
+	const dispatch = useAppManagerDispatch();
 
 	const [pending, setPending] = useState<Pending>(null);
 	const [renaming, setRenaming] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	const { prompt, save, confirmSave, dismiss } = useSavePlaylist(
-		state,
-		() => edit(playlistId, { type: "markSaved" }),
-	);
+	// Open THEN focus, the same idiom PlaylistEditor's `reveal` uses:
+	// ClassicyWindowFocus does not clear `closed`, so focusing a window the
+	// close box just closed would leave it off screen.
+	const revealSelf = useCallback(() => {
+		dispatch({ type: "ClassicyWindowOpen", app: { id: appId }, window: { id: windowId } });
+		dispatch({ type: "ClassicyWindowFocus", app: { id: appId }, window: { id: windowId } });
+	}, [dispatch, appId, windowId]);
+
+	/**
+	 * Take the window out of classicy's store. Unmounting is not enough:
+	 * classicy self-destroys only MODAL windows on unmount, so an ordinary
+	 * document would linger as `closed: false, focused: true` and the menu bar
+	 * would keep serving this document's File/Edit/Control menus — whose
+	 * closures still run, PATCHing a deleted id. Closing lets the reducer
+	 * refocus the next non-utility window and correct the bar.
+	 */
+	const dismissWindow = useCallback(() => {
+		dispatch({ type: "ClassicyWindowClose", app: { id: appId }, window: { id: windowId } });
+	}, [dispatch, appId, windowId]);
+
+	// Raise this window whenever the provider is asked to open this playlist —
+	// including on mount, and including a reopen into a store entry that
+	// already exists (where ClassicyWindowOpen only clears `closed`). The
+	// window's own ClassicyWindow child has already registered itself by the
+	// time this parent effect runs, so the store entry is guaranteed to exist.
+	const hasState = state !== undefined;
+	const openTick = openTicks[playlistId] ?? 0;
+	useEffect(() => {
+		if (!hasState) return;
+		revealSelf();
+	}, [hasState, openTick, revealSelf]);
+
+	/**
+	 * Set when Save is chosen from the dirty-close prompt, so the save's
+	 * success path — and only its success path — finishes the close the user
+	 * asked for. A ref rather than state because it is read inside the save
+	 * callback, never rendered.
+	 */
+	const closeAfterSave = useRef(false);
+
+	const { prompt, save, confirmSave, dismiss } = useSavePlaylist(state, () => {
+		edit(playlistId, { type: "markSaved" });
+		refreshList();
+		if (closeAfterSave.current) {
+			closeAfterSave.current = false;
+			dismissWindow();
+			closePlaylist(playlistId);
+		}
+	});
+
+	// Abandoning the save abandons the close it was going to finish; otherwise
+	// the flag would survive to close the window on some later, unrelated save.
+	const dismissSave = () => {
+		closeAfterSave.current = false;
+		dismiss();
+	};
 
 	// Claim the palette's target whenever this window is the focused one.
 	// Focusing the PALETTE does not run this, which is exactly right: a
@@ -82,7 +137,10 @@ export function PlaylistDocumentWindow({
 					onDuplicate: () => {
 						void duplicatePlaylist(playlistId)
 							.then((copy) => getPlaylist(copy.id))
-							.then(openPlaylist)
+							.then((copy) => {
+								openPlaylist(copy);
+								refreshList();
+							})
 							.catch((e) => setError(e instanceof Error ? e.message : "Couldn't duplicate."));
 					},
 					onDelete: () => setPending({ kind: "delete" }),
@@ -106,9 +164,10 @@ export function PlaylistDocumentWindow({
 				}),
 			];
 		},
-		// `edit`, `openPlaylist`, and `toggleClockLock` come from
-		// PlaylistEditorProvider: `edit`/`openPlaylist` are useCallbacks with an
-		// empty dep array (stable for the component's whole lifetime), and
+		// `edit`, `openPlaylist`, `refreshList`, and `toggleClockLock` come from
+		// PlaylistEditorProvider: `edit`/`openPlaylist`/`refreshList` are
+		// useCallbacks with an empty dep array (stable for the component's
+		// whole lifetime), and
 		// `toggleClockLock`'s deps are `locks` (already listed below) and
 		// `sendLock`, a stable default-parameter reference to the
 		// module-level `sendRoomLock` — so none of the three can go stale
@@ -165,7 +224,11 @@ export function PlaylistDocumentWindow({
 							id: "delete", label: "Delete", role: "normal",
 							onClick: () => {
 								void deletePlaylist(playlistId)
-									.then(() => closePlaylist(playlistId))
+									.then(() => {
+										dismissWindow();
+										closePlaylist(playlistId);
+										refreshList();
+									})
 									.catch((e) => {
 										setPending(null);
 										setError(e instanceof Error ? e.message : "Couldn't delete.");
@@ -183,10 +246,21 @@ export function PlaylistDocumentWindow({
 					id={`${windowId}_close`} appId={appId} alertType="caution"
 					title="Playlists" label={`Save changes to "${state.title}" before closing?`}
 					buttons={[
-						{ id: "save", label: "Save", role: "default", onClick: save },
+						{
+							id: "save", label: "Save", role: "default",
+							onClick: () => { closeAfterSave.current = true; save(); },
+						},
 						{
 							id: "dont", label: "Don't Save", role: "normal",
-							onClick: () => { setPending(null); closePlaylist(playlistId); },
+							// The close box's own close was undone when the prompt
+							// re-asserted the window, so this has to close it again
+							// — otherwise unmounting alone would strand a focused
+							// entry in the store.
+							onClick: () => {
+								setPending(null);
+								dismissWindow();
+								closePlaylist(playlistId);
+							},
 						},
 						{ id: "cancel", label: "Cancel", role: "cancel", onClick: () => setPending(null) },
 					]}
@@ -199,8 +273,8 @@ export function PlaylistDocumentWindow({
 				<ClassicyAlert
 					id={`${windowId}_save_msg`} appId={appId} alertType="stop"
 					title="Playlists" label={prompt.message}
-					buttons={[{ id: "ok", label: "OK", role: "default", onClick: dismiss }]}
-					onClose={dismiss}
+					buttons={[{ id: "ok", label: "OK", role: "default", onClick: dismissSave }]}
+					onClose={dismissSave}
 				/>
 			);
 		}
@@ -211,8 +285,8 @@ export function PlaylistDocumentWindow({
 					title="Playlists"
 					label="Some entries are incomplete and would be lost — fix them before saving."
 					message={<ul>{prompt.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
-					buttons={[{ id: "ok", label: "OK", role: "default", onClick: dismiss }]}
-					onClose={dismiss}
+					buttons={[{ id: "ok", label: "OK", role: "default", onClick: dismissSave }]}
+					onClose={dismissSave}
 				/>
 			);
 		}
@@ -224,9 +298,9 @@ export function PlaylistDocumentWindow({
 					message={<ul>{prompt.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
 					buttons={[
 						{ id: "anyway", label: "Save Anyway", role: "default", onClick: confirmSave },
-						{ id: "keep", label: "Keep Editing", role: "cancel", onClick: dismiss },
+						{ id: "keep", label: "Keep Editing", role: "cancel", onClick: dismissSave },
 					]}
-					onClose={dismiss}
+					onClose={dismissSave}
 				/>
 			);
 		}
@@ -253,6 +327,12 @@ export function PlaylistDocumentWindow({
 						closePlaylist(playlistId);
 						return;
 					}
+					// The close box has ALREADY set `closed: true` in the store
+					// by the time this runs, so without re-asserting the window
+					// the prompt would be asking about a document the user can
+					// no longer see — and Cancel would leave it invisible but
+					// open. Put it back first; Cancel is then a true no-op.
+					revealSelf();
 					setPending({ kind: "close" });
 				}}
 			>
@@ -262,6 +342,7 @@ export function PlaylistDocumentWindow({
 			{renaming && (
 				<RenameDialog
 					appId={appId}
+					playlistId={playlistId}
 					icon={appIcon}
 					initialTitle={state.title}
 					onRename={(title) => {
@@ -272,7 +353,10 @@ export function PlaylistDocumentWindow({
 						// document's dirty flag untouched, since the title it
 						// carries is already saved.
 						void updatePlaylist(playlistId, { title })
-							.then(() => edit(playlistId, { type: "renamed", title }))
+							.then(() => {
+								edit(playlistId, { type: "renamed", title });
+								refreshList();
+							})
 							.catch((e) => setError(e instanceof Error ? e.message : "Couldn't rename."));
 					}}
 					onCancel={() => setRenaming(false)}
