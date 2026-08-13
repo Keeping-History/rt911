@@ -9,6 +9,7 @@ import { getAppManifest, listScriptableActions } from "classicy";
 import "./Applications/TV/TVContext";
 import "./Applications/FlightTracker/flightMapSettings";
 import "./Applications/FlightTracker/flightTrackerCommands";
+import "./Applications/Browser/BrowserContext";
 
 // [appId, expected prefixes, spot-checked action types, has a state schema]
 const CASES: Array<[string, string[], string[], boolean]> = [
@@ -22,6 +23,12 @@ const CASES: Array<[string, string[], string[], boolean]> = [
 		"FlightTracker.app",
 		["ClassicyAppFlightTracker", "ClassicyAppFlightRemote"],
 		["ClassicyAppFlightTrackerSetMapSettings", "ClassicyAppFlightRemoteFocus"],
+		true,
+	],
+	[
+		"Browser.app",
+		["ClassicyAppBrowser"],
+		["ClassicyAppBrowserNavigate", "ClassicyAppBrowserAddFavorite", "ClassicyAppBrowserClearHistory"],
 		true,
 	],
 ];
