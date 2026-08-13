@@ -1,12 +1,32 @@
-import { ClassicyAlert, ClassicyApp, useAppManager, useAppManagerDispatch, useClassicyDateTime } from "classicy";
+import {
+	ClassicyAlert,
+	ClassicyApp,
+	ClassicyIcons,
+	registerClassicyIcons,
+	useAppManager,
+	useAppManagerDispatch,
+	useClassicyDateTime,
+} from "classicy";
 import { useContext, useEffect, useRef, useState } from "react";
 import { clampClockIso } from "../../Applications/HyperCard/extensions/dateRange";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { MediaStreamContext } from "../MediaStream/MediaStreamContext";
+import classroomIconPng from "./classroom.png";
 import { playlistAppMeta } from "./playlistApps";
 
 const appId = "RoomControl.app";
 const appName = "Classroom";
+
+// This app's own icon, registered into the shared registry at
+// ClassicyIcons.applications.roomControl.app. registerClassicyIcons assigns
+// shallowly, so the existing applications namespace is spread in to keep
+// classicy's bundled app icons (and other apps' registrations) intact.
+const ICONS = registerClassicyIcons({
+	applications: {
+		...ClassicyIcons.applications,
+		roomControl: { app: classroomIconPng },
+	},
+});
 
 /**
  * Applies live teacher commands to this desktop.
@@ -89,7 +109,13 @@ export function RoomControlBridge() {
 	}, [seq]);
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon="" extension addSystemMenu={false}>
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={ICONS.applications.roomControl.app}
+			extension
+			addSystemMenu={false}
+		>
 			{note && (
 				<ClassicyAlert
 					key={note.seq}
