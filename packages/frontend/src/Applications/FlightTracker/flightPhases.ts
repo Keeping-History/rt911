@@ -58,6 +58,11 @@ export const PHASE_LABELS: Record<string, string> = {
 	descent: "Descent",
 	down: "Down",
 	ground: "On Ground",
+	// Altitude-derived phases (resample._assign_phases). Only flights whose
+	// legend is enabled — the notables and AF1 — ever surface these, but without
+	// entries here they render as raw lowercase slugs next to the labeled ones.
+	climb: "Climb",
+	cruise: "Cruise",
 };
 
 export function phaseLabel(phase: string): string {

@@ -39,6 +39,13 @@ describe("phaseLabel", () => {
 		expect(PHASE_COLORS.ground).not.toBe(DEFAULT_PHASE_COLOR);
 		expect(phaseLabel("ground")).toBe("On Ground");
 	});
+
+	it("labels the altitude-derived phases AF1's legend surfaces", () => {
+		// AF1 has no curated phase ramp, so its legend renders climb/cruise
+		// alongside ground/descent — unlabeled they showed as raw slugs.
+		expect(phaseLabel("climb")).toBe("Climb");
+		expect(phaseLabel("cruise")).toBe("Cruise");
+	});
 });
 
 describe("orderedTrackPhases", () => {
