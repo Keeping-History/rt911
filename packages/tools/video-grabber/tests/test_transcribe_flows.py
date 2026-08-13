@@ -173,3 +173,32 @@ def test_build_channel_subtitles_raises_when_channel_lookup_misses():
          patch.object(flows, "get_tv_channel_start_date", return_value=None):
         with pytest.raises(ValueError, match="no tv_channels row"):
             flows.build_channel_subtitles_flow("cctv4")
+
+
+def _mp3_job(job_id):
+    return SimpleNamespace(
+        id=job_id, kind="mp3",
+        source_key="audio/AA77/x.mp3",
+        source_url="https://files.911realtime.org/audio/AA77/x.mp3",
+    )
+
+
+def test_transcribe_item_fails_when_no_mp3_items_row_matches(flow_env):
+    """A miss means the SRT is in the bucket with nothing pointing at it.
+
+    This warned-and-continued for 575 jobs while every run reported success.
+    """
+    flow_env.monkeypatch.setattr(flows, "transcribe_wav", flow_env.make_transcriber())
+    flow_env.monkeypatch.setattr(flows, "get_transcribe_job", _mp3_job)
+    flow_env.monkeypatch.setattr(flows, "patch_mp3_subtitles", lambda *a, **k: False)
+    with pytest.raises(RuntimeError, match="matched no mp3_items row"):
+        flows.transcribe_item_flow.fn("job-1")
+    assert _stages(flow_env.conns)[-1] == "failed"
+
+
+def test_transcribe_item_succeeds_when_the_row_matches(flow_env):
+    flow_env.monkeypatch.setattr(flows, "transcribe_wav", flow_env.make_transcriber())
+    flow_env.monkeypatch.setattr(flows, "get_transcribe_job", _mp3_job)
+    flow_env.monkeypatch.setattr(flows, "patch_mp3_subtitles", lambda *a, **k: True)
+    flows.transcribe_item_flow.fn("job-1")
+    assert _stages(flow_env.conns) == ["transcribing", "done"]

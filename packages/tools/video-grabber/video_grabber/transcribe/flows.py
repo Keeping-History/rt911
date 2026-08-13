@@ -190,11 +190,14 @@ def transcribe_item_flow(job_id: str) -> None:
         if job.kind == "mp3":
             matched = patch_mp3_subtitles(job.source_url, wasabi_public_url(srt_key), cfg)
             if not matched:
-                logger.warning(
-                    "transcribe-item: patch_mp3_subtitles found no mp3_items row for "
-                    "source_url=%s source_key=%s — SRT/VTT uploaded but Directus not updated",
-                    job.source_url,
-                    job.source_key,
+                # A miss means the SRT is in the bucket but nothing points at it.
+                # This warned-and-continued for 575 jobs while every run reported
+                # success — which is how the URL-encoding bug survived 18 months.
+                # It is a failure, not a note.
+                raise RuntimeError(
+                    f"patch_mp3_subtitles matched no mp3_items row for "
+                    f"source_url={job.source_url!r} (source_key={job.source_key!r}). "
+                    f"SRT/VTT uploaded to {srt_key!r} but the row is unlinked."
                 )
 
         transition_transcribe_job(job_id, "done", srt_key=srt_key)
