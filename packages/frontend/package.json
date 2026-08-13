@@ -9,6 +9,7 @@
 		"test": "vitest run",
 		"lint": "eslint .",
 		"preview": "vite preview",
+		"preview:auth": "tsc -b && vite build --mode preview && vite preview",
 		"use:local": "npm link classicy --ignore-scripts",
 		"use:published": "npm unlink classicy && npm install",
 		"proxy": "npm run proxy:up",
