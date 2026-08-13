@@ -25,10 +25,10 @@ from prefect.deployments import run_deployment
 
 from video_grabber.config import Config
 from video_grabber.directus.writer import (
-    _WASABI_BASE,
     get_tv_channel_start_date,
     patch_mp3_subtitles,
     patch_tv_channel_subtitles,
+    wasabi_public_url,
 )
 from video_grabber.storage import wasabi
 from video_grabber.transcribe.audio import extract_audio
@@ -132,7 +132,7 @@ def scan_transcribe_flow() -> None:
         """)).mappings().all()
         tv_n = 0
         for r in tv_rows:
-            src_url = f"{_WASABI_BASE}/{r['wasabi_key']}"
+            src_url = wasabi_public_url(r["wasabi_key"])
             res = db.execute(sa.text("""
                 INSERT INTO transcribe_jobs (kind, source_key, channel_slug, source_url, stage)
                 VALUES ('tv', :sk, :slug, :url, 'pending')
@@ -145,7 +145,7 @@ def scan_transcribe_flow() -> None:
         mp3_keys = [k for k in wasabi.list_keys("audio/", cfg) if k.lower().endswith(".mp3")]
         mp3_n = 0
         for key in mp3_keys:
-            src_url = f"{_WASABI_BASE}/{key}"
+            src_url = wasabi_public_url(key)
             res = db.execute(sa.text("""
                 INSERT INTO transcribe_jobs (kind, source_key, source_url, stage)
                 VALUES ('mp3', :sk, :url, 'pending')
@@ -188,7 +188,7 @@ def transcribe_item_flow(job_id: str) -> None:
         wasabi.upload_text(vtt_path.read_text(), f"{base_key}.vtt", cfg)
 
         if job.kind == "mp3":
-            matched = patch_mp3_subtitles(job.source_url, f"{_WASABI_BASE}/{srt_key}", cfg)
+            matched = patch_mp3_subtitles(job.source_url, wasabi_public_url(srt_key), cfg)
             if not matched:
                 logger.warning(
                     "transcribe-item: patch_mp3_subtitles found no mp3_items row for "
@@ -253,7 +253,7 @@ def build_channel_subtitles_flow(channel_slug: str) -> None:
     srt_key = f"{base_key}.srt"
     wasabi.upload_text(render_srt(cues), srt_key, cfg)
     wasabi.upload_text(render_vtt(cues), f"{base_key}.vtt", cfg)
-    patch_tv_channel_subtitles(channel_slug, f"{_WASABI_BASE}/{srt_key}", cfg)
+    patch_tv_channel_subtitles(channel_slug, wasabi_public_url(srt_key), cfg)
     logger.info("build-channel-subtitles: %s merged %d programs → %s",
                 channel_slug, len(rows), srt_key)
 
