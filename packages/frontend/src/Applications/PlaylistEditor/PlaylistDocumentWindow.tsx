@@ -89,16 +89,19 @@ export function PlaylistDocumentWindow({
 	};
 
 	/**
-	 * Leaving the close prompt without saving abandons the close it was going to
-	 * finish, so the flag has to go with it. It is not merely tidy: the cascade
-	 * below tests `pending?.kind === "close"` BEFORE `prompt.kind`, so a save
-	 * launched from this prompt that a validation gate blocks (warnings/dropped,
-	 * or a failed write) renders its alert UNDERNEATH this one — the user sees no
-	 * feedback and Cancel is their only way out. Without this the flag would
-	 * survive that exit and close the document on some later, unrelated save.
+	 * Cancelling the close prompt withdraws the close request, so the flag that
+	 * would have finished it has to go too. The case it guards is a close asked
+	 * for and then taken back while the write it started is still in flight:
+	 * choose Save, close the document again before the server answers, then
+	 * Cancel — without this, the resolving write would close the window the user
+	 * just decided to keep, and any later save could inherit the same armed flag.
 	 *
-	 * The prompt's other two exits need no equivalent: Don't Save and (from the
-	 * File menu) Delete both close the document, taking this ref with it.
+	 * It goes on the button's `onClick`, NOT on the alert's `onClose`:
+	 * ClassicyAlert fires `onClose` after EVERY button (see its
+	 * `/** Called after any button is clicked … *\/`), so disarming there would
+	 * also disarm the Save that just armed it — and Save would then leave the
+	 * document open. The prompt's other exits need nothing: Don't Save closes the
+	 * document outright, and Save must stay armed.
 	 */
 	const cancelClose = () => {
 		closeAfterSave.current = false;
@@ -267,7 +270,9 @@ export function PlaylistDocumentWindow({
 						},
 						{ id: "cancel", label: "Cancel", role: "cancel", onClick: cancelClose },
 					]}
-					onClose={cancelClose}
+					// Deliberately NOT `cancelClose`: this runs after every button,
+					// Save included, and would disarm the close Save just armed.
+					onClose={() => setPending(null)}
 				/>
 			);
 		}

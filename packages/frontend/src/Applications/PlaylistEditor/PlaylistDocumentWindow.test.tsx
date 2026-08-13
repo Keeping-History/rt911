@@ -17,14 +17,27 @@ vi.mock("classicy", async (importOriginal) => ({
 		if (id && onCloseFunc) closeFns.current[id] = onCloseFunc;
 		return <div data-testid={`win-${id}`} data-title={title}>{children}</div>;
 	},
-	ClassicyAlert: ({ label, buttons, defaultButtonId }: {
-		label?: string; defaultButtonId?: string;
+	// `onClose` fires after EVERY button, not just a dismissing one — classicy
+	// runs `(button.onClick?.(), onClose?.())`, and its published type says so:
+	// "Called after any button is clicked (in addition to that button's
+	// onClick)." A mock that only wires onClick cannot see a handler pair that
+	// undoes itself, which is exactly the bug this file failed to catch once.
+	ClassicyAlert: ({ label, buttons, defaultButtonId, onClose }: {
+		label?: string; defaultButtonId?: string; onClose?: () => void;
 		buttons?: { id: string; label: string; onClick?: () => void }[];
 	}) => (
 		<div data-testid="alert" data-default-button={defaultButtonId}>
 			<p>{label}</p>
 			{buttons?.map((b) => (
-				<button key={b.id} onClick={b.onClick}>{b.label}</button>
+				<button
+					key={b.id}
+					onClick={() => {
+						b.onClick?.();
+						onClose?.();
+					}}
+				>
+					{b.label}
+				</button>
 			))}
 		</div>
 	),
@@ -172,7 +185,7 @@ describe("PlaylistDocumentWindow", () => {
 		act(() => closeFns.current.playlist_doc_p1?.());
 		dispatchMock.mockClear();
 
-		screen.getByRole("button", { name: "Don't Save" }).click();
+		fireEvent.click(screen.getByRole("button", { name: "Don't Save" }));
 
 		expect(saveMock).not.toHaveBeenCalled();
 		// The prompt re-asserted the window, so this path owes the store a close —
@@ -199,7 +212,7 @@ describe("PlaylistDocumentWindow", () => {
 			type: "ClassicyWindowFocus", app: { id: APP }, window: { id: WIN },
 		});
 
-		screen.getByRole("button", { name: "Cancel" }).click();
+		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
 		expect(closePlaylist).not.toHaveBeenCalled();
 		expect(closePlaylistWindow).not.toHaveBeenCalled();
@@ -209,12 +222,15 @@ describe("PlaylistDocumentWindow", () => {
 		expect(screen.getByTestId("win-playlist_doc_p1")).not.toBeNull();
 	});
 
-	// Save from the close prompt must finish the close the user asked for —
-	// and only on success, so a failed write leaves the document open.
+	// Save from the close prompt must finish the close the user asked for — and
+	// only on success, so a failed write leaves the document open. The trap this
+	// guards is the alert's `onClose`, which classicy fires after EVERY button:
+	// anything that disarms the close-after-save flag there also disarms the Save
+	// that just armed it, and the document silently stays open.
 	it("Save from the close prompt closes the document once the save succeeds", () => {
 		renderWindow({ dirty: true });
 		act(() => closeFns.current.playlist_doc_p1?.());
-		screen.getByRole("button", { name: "Save" }).click();
+		fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
 		expect(saveMock).toHaveBeenCalled();
 		// Nothing closes until the write comes back.
@@ -227,23 +243,25 @@ describe("PlaylistDocumentWindow", () => {
 		expect(closePlaylistWindow).toHaveBeenCalledWith("p1");
 	});
 
-	// The alert cascade tests the close prompt BEFORE the save prompts, so a save
-	// launched from the close prompt that a validation gate blocks renders its
-	// alert underneath this one: the user gets no feedback and Cancel is their
-	// only exit. If Cancel left the close-after-save flag armed, the next
-	// successful save — of any kind — would close the document out from under
-	// them, with no prompt at all.
-	it("Cancel from the close prompt disarms a Save that never completed", () => {
+	// Cancelling withdraws the close request, so the flag that would have
+	// finished it has to go too. Reachable while a write is still in flight: ask
+	// to close, choose Save, then — before the server answers — try to close
+	// again and cancel. Without the disarm the resolving write closes the window
+	// the user just decided to keep, and any later save inherits the same flag.
+	it("Cancel withdraws a close whose Save is still in flight", () => {
 		renderWindow({ dirty: true });
 		act(() => closeFns.current.playlist_doc_p1?.());
+		fireEvent.click(screen.getByRole("button", { name: "Save" }));
+		// The write is away but has not come back: still dirty, still open.
+		expect(saveMock).toHaveBeenCalled();
+		expect(closePlaylistWindow).not.toHaveBeenCalled();
 
-		screen.getByRole("button", { name: "Save" }).click();
-		// …the write is blocked (or never returns), so the user backs out.
-		screen.getByRole("button", { name: "Cancel" }).click();
+		// Second thoughts — close again, then cancel.
+		act(() => closeFns.current.playlist_doc_p1?.());
+		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 		dispatchMock.mockClear();
 
-		// A later, unrelated File > Save that DOES succeed.
-		act(() => item("file", "playlist_file_save").onClickFunc?.());
+		// The in-flight write now succeeds. It must not close anything.
 		act(() => onSaved.current?.());
 
 		expect(closePlaylist).not.toHaveBeenCalled();
@@ -307,7 +325,7 @@ describe("PlaylistDocumentWindow", () => {
 			renderWindow();
 			act(() => item("file", "playlist_file_delete").onClickFunc?.());
 
-			screen.getByRole("button", { name: "Cancel" }).click();
+			fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
 			expect(playlistApi.deletePlaylist).not.toHaveBeenCalled();
 			expect(closePlaylistWindow).not.toHaveBeenCalled();
@@ -321,7 +339,7 @@ describe("PlaylistDocumentWindow", () => {
 			renderWindow();
 			act(() => item("file", "playlist_file_delete").onClickFunc?.());
 
-			screen.getByRole("button", { name: "Delete" }).click();
+			fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
 			await waitFor(() => expect(closePlaylistWindow).toHaveBeenCalledWith("p1"));
 			expect(playlistApi.deletePlaylist).toHaveBeenCalledWith("p1");
