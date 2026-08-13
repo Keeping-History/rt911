@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useReducer, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useReducer, useRef, useState } from "react";
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import { RoomCommandError, sendRoomLock } from "../../Providers/Playlist/roomApi";
 import type { EditorAction } from "./editorState";
@@ -77,25 +77,49 @@ export function PlaylistEditorProvider({
 	 * nothing to query. Two consequences worth knowing: the checkmark resets
 	 * when the app is reopened (students stay locked — only the menu forgets),
 	 * and two teachers driving one playlist will not see each other's state.
+	 *
+	 * `busy` in `LockState` is a display flag for consumers (disable the menu
+	 * item) — it is NOT what guards against a second invocation for the same
+	 * playlist landing while the first is still in flight. React state can't
+	 * be read synchronously, so a functional `setLocks` can't serve as that
+	 * guard: two calls in the same tick (or one arriving through a stale
+	 * `toggleClockLock` reference a consumer's own memo failed to refresh)
+	 * would both see `busy === false` and both call `sendLock`. `inFlight`
+	 * closes that gap with a synchronous check-and-add before the `await`.
+	 * With multiple document windows plus the palette all able to reach this
+	 * function for the same document, that surface is wide enough to hit.
 	 */
+	const inFlight = useRef<Set<string>>(new Set());
+
 	const toggleClockLock = useCallback(
 		async (playlistId: string) => {
-			const current = locks[playlistId] ?? { clock: false, busy: false };
-			if (current.busy) return;
-			const next = !current.clock;
-			setLocks((l) => ({ ...l, [playlistId]: { ...current, busy: true } }));
-			setLockError(null);
+			if (inFlight.current.has(playlistId)) return;
+			inFlight.current.add(playlistId);
 			try {
-				await sendLock(playlistId, "clock", next);
-				// Only after the server accepts. Flipping first would leave the
-				// menu claiming a lock that never reached a single student.
-				setLocks((l) => ({ ...l, [playlistId]: { clock: next, busy: false } }));
-			} catch (err) {
-				setLocks((l) => ({ ...l, [playlistId]: { ...current, busy: false } }));
-				setLockError({
-					playlistId,
-					message: err instanceof RoomCommandError ? err.message : "Command failed.",
-				});
+				const current = locks[playlistId] ?? { clock: false, busy: false };
+				const next = !current.clock;
+				setLocks((l) => ({ ...l, [playlistId]: { clock: (l[playlistId] ?? current).clock, busy: true } }));
+				setLockError(null);
+				try {
+					await sendLock(playlistId, "clock", next);
+					// Only after the server accepts. Flipping first would leave the
+					// menu claiming a lock that never reached a single student.
+					// Read fresh from `l` rather than the closed-over `current` so a
+					// concurrent change to this playlist's entry (from elsewhere)
+					// can't be clobbered by this call's stale snapshot.
+					setLocks((l) => ({ ...l, [playlistId]: { clock: next, busy: false } }));
+				} catch (err) {
+					setLocks((l) => ({
+						...l,
+						[playlistId]: { clock: (l[playlistId] ?? current).clock, busy: false },
+					}));
+					setLockError({
+						playlistId,
+						message: err instanceof RoomCommandError ? err.message : "Command failed.",
+					});
+				}
+			} finally {
+				inFlight.current.delete(playlistId);
 			}
 		},
 		[locks, sendLock],

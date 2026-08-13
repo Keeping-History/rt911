@@ -44,6 +44,39 @@ describe("PlaylistEditorProvider", () => {
 		expect(api.activeId).toBeNull();
 	});
 
+	// Both existing lock tests await toggleClockLock to completion before
+	// asserting, so an incorrect "flip optimistically, revert on catch"
+	// implementation would produce the same final-state assertions and pass.
+	// This test inspects state WHILE the command is still in flight, which is
+	// the only way to tell the two implementations apart.
+	it("does not flip the lock until the server accepts — only busy flips first", async () => {
+		let resolveLock!: () => void;
+		const sendLock = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveLock = resolve;
+				}),
+		);
+		renderProvider(sendLock);
+		act(() => api.openPlaylist(rec("p1")));
+
+		let pending!: Promise<void>;
+		act(() => {
+			pending = api.toggleClockLock("p1");
+		});
+
+		expect(api.locks.p1?.clock ?? false).toBe(false);
+		expect(api.locks.p1?.busy).toBe(true);
+
+		await act(async () => {
+			resolveLock();
+			await pending;
+		});
+
+		expect(api.locks.p1?.clock).toBe(true);
+		expect(api.locks.p1?.busy).toBe(false);
+	});
+
 	// The palette targets the last-focused document; focusing the palette
 	// itself must not retarget it.
 	it("setActive retargets to the focused document", () => {
