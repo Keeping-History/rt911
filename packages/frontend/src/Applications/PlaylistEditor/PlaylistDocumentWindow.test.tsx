@@ -226,6 +226,32 @@ describe("PlaylistDocumentWindow", () => {
 		});
 	});
 
+	// The alert cascade tests the close prompt BEFORE the save prompts, so a save
+	// launched from the close prompt that a validation gate blocks renders its
+	// alert underneath this one: the user gets no feedback and Cancel is their
+	// only exit. If Cancel left the close-after-save flag armed, the next
+	// successful save — of any kind — would close the document out from under
+	// them, with no prompt at all.
+	it("Cancel from the close prompt disarms a Save that never completed", () => {
+		renderWindow({ dirty: true });
+		act(() => closeFns.current.playlist_doc_p1?.());
+
+		screen.getByRole("button", { name: "Save" }).click();
+		// …the write is blocked (or never returns), so the user backs out.
+		screen.getByRole("button", { name: "Cancel" }).click();
+		dispatchMock.mockClear();
+
+		// A later, unrelated File > Save that DOES succeed.
+		act(() => item("file", "playlist_file_save").onClickFunc?.());
+		act(() => onSaved.current?.());
+
+		expect(closePlaylist).not.toHaveBeenCalled();
+		expect(dispatchMock).not.toHaveBeenCalledWith(
+			expect.objectContaining({ type: "ClassicyWindowClose" }),
+		);
+		expect(screen.getByTestId("win-playlist_doc_p1")).not.toBeNull();
+	});
+
 	it("a save that was not closing anything leaves the document open", () => {
 		renderWindow({ dirty: true });
 		dispatchMock.mockClear();

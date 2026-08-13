@@ -100,6 +100,23 @@ export function PlaylistDocumentWindow({
 		dismiss();
 	};
 
+	/**
+	 * Leaving the close prompt without saving abandons the close it was going to
+	 * finish, so the flag has to go with it. It is not merely tidy: the cascade
+	 * below tests `pending?.kind === "close"` BEFORE `prompt.kind`, so a save
+	 * launched from this prompt that a validation gate blocks (warnings/dropped,
+	 * or a failed write) renders its alert UNDERNEATH this one — the user sees no
+	 * feedback and Cancel is their only way out. Without this the flag would
+	 * survive that exit and close the document on some later, unrelated save.
+	 *
+	 * The prompt's other two exits need no equivalent: Don't Save and (from the
+	 * File menu) Delete both close the document, taking this ref with it.
+	 */
+	const cancelClose = () => {
+		closeAfterSave.current = false;
+		setPending(null);
+	};
+
 	// Claim the palette's target whenever this window is the focused one.
 	// Focusing the PALETTE does not run this, which is exactly right: a
 	// palette click must keep acting on the document the user was last in.
@@ -262,9 +279,9 @@ export function PlaylistDocumentWindow({
 								closePlaylist(playlistId);
 							},
 						},
-						{ id: "cancel", label: "Cancel", role: "cancel", onClick: () => setPending(null) },
+						{ id: "cancel", label: "Cancel", role: "cancel", onClick: cancelClose },
 					]}
-					onClose={() => setPending(null)}
+					onClose={cancelClose}
 				/>
 			);
 		}
