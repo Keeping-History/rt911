@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PHASE_COLORS, phaseColorHex, phaseColorRgb01, phaseLineColorExpression, orderedTrackPhases, phaseLabel } from "./flightPhases";
+import { DEFAULT_PHASE_COLOR, PHASE_COLORS, phaseColorHex, phaseColorRgb01, phaseLineColorExpression, orderedTrackPhases, phaseLabel } from "./flightPhases";
 
 describe("flightPhases", () => {
 	it("maps known phases and falls back to the track red", () => {
@@ -32,6 +32,12 @@ describe("phaseLabel", () => {
 		expect(phaseLabel("course_change")).toBe("Course Change");
 		expect(phaseLabel("hijack")).toBe("Hijack");
 		expect(phaseLabel("mystery")).toBe("mystery");
+	});
+
+	it("ground phase has a neutral color and label distinct from the default", () => {
+		expect(PHASE_COLORS.ground).toBeDefined();
+		expect(PHASE_COLORS.ground).not.toBe(DEFAULT_PHASE_COLOR);
+		expect(phaseLabel("ground")).toBe("On Ground");
 	});
 });
 

@@ -12,6 +12,8 @@ export const PHASE_COLORS: Record<string, string> = {
 	atc_alert: "#d84315",
 	descent: "#c62828",
 	down: "#7f0000",
+	// AF1 parked stretches — neutral, outside the escalation ramp
+	ground: "#8a8a8a",
 };
 
 // Coarse altitude phases (climb/cruise/descent) and unknowns fall back to the
@@ -55,6 +57,7 @@ export const PHASE_LABELS: Record<string, string> = {
 	atc_alert: "ATC Alert",
 	descent: "Descent",
 	down: "Down",
+	ground: "On Ground",
 };
 
 export function phaseLabel(phase: string): string {

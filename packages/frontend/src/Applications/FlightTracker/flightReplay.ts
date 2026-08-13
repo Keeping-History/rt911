@@ -1,7 +1,7 @@
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
 import { exaggeratedHeightM } from "./flightAltitude";
-import { isNotable, isObserver } from "./notableFlights";
+import { isNotable, isObserverStyled } from "./notableFlights";
 import {
 	PLANE_INSTANCE_STRIDE,
 	type PlaneInstances,
@@ -70,7 +70,7 @@ export function insertReplaySamples(
 					alt_ft: p.alt_ft,
 					phase: p.phase ?? "",
 					notable: isNotable(p.flight),
-					observer: isObserver(p.flight),
+					observer: isObserverStyled(p.flight),
 					anon: p.flight.startsWith("RDR-"),
 				},
 				id: p.id,
