@@ -29,8 +29,21 @@ describe("readRadioScannerSettings", () => {
 			colorDim: 0x330000,
 			maxVolume: 40,
 			captionStyle: DEFAULT_CAPTION_STYLE,
+			playOriginalAudio: true,
 		};
 		expect(readRadioScannerSettings({ settings: stored })).toEqual(stored);
+	});
+
+	it("defaults playOriginalAudio to false so the enhanced render is heard first", () => {
+		const out = readRadioScannerSettings({ settings: {} });
+		expect(out.playOriginalAudio).toBe(false);
+	});
+
+	it("falls back playOriginalAudio when the stored value is not a boolean", () => {
+		const out = readRadioScannerSettings({
+			settings: { playOriginalAudio: "yes" },
+		});
+		expect(out.playOriginalAudio).toBe(false);
 	});
 
 	it("falls back per field on invalid values", () => {

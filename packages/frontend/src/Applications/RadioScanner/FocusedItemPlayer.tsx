@@ -15,6 +15,7 @@ import styles from "./RadioScanner.module.scss";
 import { WaveformVisualizer } from "./WaveformVisualizer";
 import { RadioProgressBar } from "./RadioProgressBar";
 import { setAudioLevel } from "./audioCapture";
+import { resolveAudioUrl } from "./audioSource";
 
 interface FocusedItemPlayerProps {
 	item: MediaItem;
@@ -26,6 +27,8 @@ interface FocusedItemPlayerProps {
 	onCycleVizMode: () => void;
 	waveColors: { bright: string; dim: string } | null;
 	maxVolume: number;
+	/** true = play the source recording rather than the enhanced render. */
+	playOriginalAudio?: boolean;
 }
 
 export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
@@ -38,6 +41,7 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 	onCycleVizMode,
 	waveColors,
 	maxVolume,
+	playOriginalAudio = false,
 }) => {
 	const audioRef = useRef<HTMLAudioElement>(null);
 	const [playing, setPlaying] = useState(false);
@@ -95,7 +99,7 @@ export const FocusedItemPlayer: React.FC<FocusedItemPlayerProps> = ({
 			{/* eslint-disable-next-line jsx-a11y/media-has-caption -- captions are rendered by the CaptionOverlay sibling, not a native <track> (audio has no display surface for one) */}
 			<audio
 				ref={audioRef}
-				src={item.url}
+				src={resolveAudioUrl(item, playOriginalAudio)}
 				crossOrigin="anonymous"
 				style={{ display: "none" }}
 				onLoadedMetadata={() => {
