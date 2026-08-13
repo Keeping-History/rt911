@@ -1,0 +1,144 @@
+{
+ "flight": "AF1",
+ "carrier": "USAF",
+ "flight_date": "2001-09-10",
+ "origin": "ADW",
+ "scheduled_dest": "SRQ",
+ "landed_at": "SRQ",
+ "aircraft": "Boeing VC-25A",
+ "registration": "SAM 28000",
+ "wheels_off_utc": "2001-09-10T18:00:00Z",
+ "wheels_on_utc": "2001-09-10T21:30:00Z",
+ "details": {
+  "crew": {
+   "captain": "Col. Mark Tillman"
+  },
+  "ground_stops": [
+   {
+    "code": "NIP",
+    "name": "Naval Air Station Jacksonville",
+    "start": "2001-09-10T19:25:00Z",
+    "end": "2001-09-10T20:50:00Z"
+   },
+   {
+    "code": "SRQ",
+    "name": "Sarasota-Bradenton International Airport",
+    "start": "2001-09-10T21:30:00Z",
+    "end": "2001-09-11T03:59:00Z"
+   }
+  ],
+  "fate": {
+   "text": "Positioning flight the day before the attacks: Andrews to a Jacksonville education event, then on to Sarasota, where the aircraft stayed overnight",
+   "utc": "2001-09-10T21:30:00Z"
+  }
+ },
+ "ground_spans": [
+  {
+   "start": "2001-09-10T19:25:00Z",
+   "end": "2001-09-10T20:50:00Z",
+   "base": "NIP"
+  },
+  {
+   "start": "2001-09-10T21:30:00Z",
+   "end": "2001-09-11T03:59:00Z",
+   "base": "SRQ"
+  }
+ ],
+ "sources": [
+  "Sarasota Magazine, \"The President in Sarasota: September 11, 2001\" (sarasotamagazine.com/articles/2016/9/7/the-president-in-sarasota) - contemporaneous first-person account; source of the 14:00 ET hall-opening, 15:50 ET program start and 16:30 ET program end at Justina Road Elementary in Jacksonville, the 18:00 ET Colony Beach Resort motorcade arrival, and the \"approximately 50 minutes\" JAX->SRQ flight time of the trailing press charter",
+  "Your Observer, \"9.11 Remembered: 24 hours in Sarasota\" (yourobserver.com) - independent corroboration of the September 10 Jacksonville-then-Sarasota routing and of the 17:00 ET closure of Sarasota-Bradenton ahead of AF1's arrival",
+  "FAA / AirNav / SkyVector / Wikipedia airport pages - airport reference-point coordinates and field elevations for KADW (280 ft), KNIP and KSRQ (30 ft)"
+ ],
+ "provenance_notes": [
+  "RECONSTRUCTED, NOT SURVEYED: no radar record was found for either September 10 leg. Every waypoint in this file is source=\"estimated\" - documented ground-event anchors plus great-circle interpolation between airport reference points. Nothing here is a radar fix, and nothing here should be read as one.",
+  "ALL FOUR WHEELS TIMES ARE DERIVED, NOT SOURCED. No source consulted states a clock time for the Andrews departure, the Jacksonville arrival, the Jacksonville departure or the Sarasota arrival. Each is a point value chosen from a derived range: ADW wheels-off 18:00Z (range ~17:40-18:15Z, derived from the Jacksonville arrival minus an estimated ~1h20-1h35 for the 567 nm leg); JAX wheels-on 19:25Z (range ~19:15-19:35Z, derived from the sourced 15:50 ET event start minus a generic 15-35 min airport-to-venue motorcade lead); JAX wheels-off 20:50Z (range ~20:30-21:00Z, derived from the Sarasota arrival minus an estimated 40-50 min for the 177 nm leg, itself anchored to the sourced \"approximately 50 minutes\" press-charter analog); SRQ wheels-on 21:30Z (range ~21:20-21:40Z, derived from the sourced 18:00 ET Colony Resort motorcade arrival minus a 20-40 min transit over a sourced \"twenty miles\"). The ADW wheels-off is the lowest-confidence figure in this file - a two-layer derivation with no sourced anchor upstream of it - and should be replaced if a Presidential Daily Diary release surfaces.",
+  "THREE-LEG ROUTING, NOT DIRECT. The commonly-repeated \"Andrews direct to Sarasota\" framing is not what the record supports: two independent retrospectives place President Bush at Justina Road Elementary School in Jacksonville on the afternoon of September 10 for a Reading First event running ~15:50-16:30 ET, flying on to Sarasota afterwards. This file therefore models two airborne legs with a Jacksonville ground stop between them.",
+  "WHICH JACKSONVILLE FIELD IS UNRESOLVED. No source consulted names the airport. Naval Air Station Jacksonville (KNIP, 30.2358/-81.6804) is used here as the more likely field, inferred only from a same-city precedent under a different administration (Air Force One used KNIP for a 2009 Obama visit); Jacksonville International (KJAX, 30.4941/-81.6879) cannot be ruled out and the two fields are ~15 nm apart. The KNIP field elevation used for the ground rows (21 ft) is the published field elevation and was NOT part of the research pass's verified-elevation table.",
+  "CRUISE ALTITUDES ARE CONVENTIONAL, NOT SOURCED: FL350 for the 567 nm Andrews-Jacksonville leg and FL200 for the 177 nm Jacksonville-Sarasota hop. No source gives an altitude for either September 10 leg. Climb and descent anchors are placed so implied ground speeds stay in a plausible 240-450 kt band for a VC-25A; the short Jacksonville-Sarasota hop runs ~265 kt block, consistent with the sourced ~50-minute press-charter analog for that route.",
+  "HANDOFF TO THE 9/11 FILE: the Sarasota overnight ground span deliberately ends at 2001-09-11T03:59:00Z, the minute before af1.json picks the aircraft up parked at Sarasota at 04:00:00Z (ET midnight). The two files are one continuous day-and-a-half with no gap and no overlap.",
+  "APRON COORDINATES ARE AIRPORT REFERENCE POINTS, not surveyed 2001 parking spots; no source documents where AF1 actually parked at any of these fields, except that Sarasota Magazine describes it parked \"close to the terminal building\" at Sarasota."
+ ],
+ "waypoints": [
+  {
+   "utc": "2001-09-10T18:00:00Z",
+   "lat": 38.8106,
+   "lon": -76.8681,
+   "alt_ft": 280,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-10T18:14:00Z",
+   "lat": 37.6226,
+   "lon": -77.6052,
+   "alt_ft": 35000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-10T19:09:00Z",
+   "lat": 31.3778,
+   "lon": -81.0987,
+   "alt_ft": 35000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-10T19:25:00Z",
+   "lat": 30.2358,
+   "lon": -81.6804,
+   "alt_ft": 21,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-10T20:50:00Z",
+   "lat": 30.2358,
+   "lon": -81.6804,
+   "alt_ft": 21,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-10T21:02:00Z",
+   "lat": 29.4639,
+   "lon": -81.9229,
+   "alt_ft": 20000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-10T21:18:00Z",
+   "lat": 28.1765,
+   "lon": -82.3189,
+   "alt_ft": 20000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-10T21:30:00Z",
+   "lat": 27.3954,
+   "lon": -82.5544,
+   "alt_ft": 30,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T03:59:00Z",
+   "lat": 27.3954,
+   "lon": -82.5544,
+   "alt_ft": 30,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  }
+ ]
+}

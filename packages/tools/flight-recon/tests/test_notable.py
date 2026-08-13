@@ -35,6 +35,11 @@ HIJACKED = ("AA11", "UA175", "AA77", "UA93")
 CURRENT_FLIGHTS = tuple(sorted(
     notable.load_flight_file(p)["flight"] for p in DATA_DIR.glob("*.json")))
 
+# One track per curated file, not per flight ID: AF1 has two files (the 9/10
+# positioning flight and the 9/11 full day), so the loaded-track count is the
+# file count, not len(set(CURRENT_FLIGHTS)).
+CURATED_FILE_COUNT = len(CURRENT_FLIGHTS)
+
 CURATED_PHASES = {"takeoff", "tracon", "artcc", "hijack",
                   "course_change", "atc_alert", "descent", "down"}
 
@@ -149,7 +154,16 @@ def test_track_ends_at_documented_impact(built, flight):
     assert abs(end_lat - data["impact"]["lat"]) <= 1e-3
 
 
-@pytest.mark.parametrize("flight", CURRENT_FLIGHTS)
+# AF1 is the one curated flight that is radar-surveyed for only part of its
+# track: its 9/11 file spans a whole day (1,100+ per-minute rows) of which ~98
+# minutes are RADES returns, and its 9/10 file has no radar at all. The
+# whole-track "more vertices than minutes" invariant therefore cannot hold for
+# it; test_af1_geometry_keeps_leg1_radar_returns asserts its radar density
+# instead.
+RADAR_DENSE = tuple(f for f in CURRENT_FLIGHTS if f != "AF1")
+
+
+@pytest.mark.parametrize("flight", RADAR_DENSE)
 def test_track_geometry_is_radar_dense(built, flight):
     """The RADES upgrade's point: geometry follows the surveyed returns, not
     the per-minute resample — even after decimation it must retain more shape
@@ -295,13 +309,14 @@ def test_end_to_end_scoped_idempotency(scratch_db):
     assert base[0] == 5 and base[1] == 6 and base[2] == 1 and base[3] == {}
 
     first = notable.run(scratch_db, dry_run=False)
-    assert first["flights"] == 5
+    assert first["flights"] == CURATED_FILE_COUNT
     after1 = _counts(scratch_db)
-    # five flights loaded; sentinel + BTS counts identical to the seed
+    # every curated flight loaded; sentinel + BTS counts identical to the seed
     assert set(after1[3]) == set(notable.NOTABLE_FLIGHTS)
     assert (after1[0], after1[1], after1[2]) == (base[0], base[1], base[2])
 
-    # re-run: scoped delete removes ONLY the five, re-inserts -> no dupes, sentinel safe
+    # re-run: scoped delete removes ONLY the curated set, re-inserts -> no dupes,
+    # sentinel safe
     second = notable.run(scratch_db, dry_run=False)
     assert second["positions_deleted"] == first["positions"]   # deleted exactly its own
     after2 = _counts(scratch_db)
@@ -313,7 +328,7 @@ def test_end_to_end_scoped_idempotency(scratch_db):
 def test_dry_run_persists_nothing(scratch_db):
     base = _counts(scratch_db)
     summary = notable.run(scratch_db, dry_run=True)
-    assert summary["dry_run"] is True and summary["flights"] == 5
+    assert summary["dry_run"] is True and summary["flights"] == CURATED_FILE_COUNT
     assert _counts(scratch_db) == base    # rolled back
 
 
@@ -457,3 +472,138 @@ def test_scoped_delete_pairs_only_touch_their_dates(scratch_db):
     assert ("AA1002", "2001-09-10") in remaining_trk
     assert ("AA1002", "2001-09-11") in remaining_pos
     assert ("AA1002", "2001-09-11") in remaining_trk
+
+
+def _load_af1():
+    return (load_flight_file(os.path.join(DATA_DIR, "af1_0910.json")),
+            load_flight_file(os.path.join(DATA_DIR, "af1.json")))
+
+
+def test_af1_files_build_and_are_continuous():
+    d0910, d0911 = _load_af1()
+    p0, _ = build_flight(d0910)
+    p1, t1 = build_flight(d0911)
+    assert p0[0]["flight_date"] == "2001-09-10"
+    assert p1[0]["flight_date"] == "2001-09-11"
+    # 9/11 file starts at ET midnight parked at SRQ and ends at the Andrews landing
+    assert p1[0]["utc"] == "2001-09-11T04:00:00Z"
+    assert p1[0]["phase"] == "ground"
+    assert t1["landed_at"] == "ADW"
+    assert t1["wheels_on_utc"] is not None
+    # seamless handoff: the 9/10 file's ground tail ends the minute before 04:00Z
+    assert p0[-1]["utc"] == "2001-09-11T03:59:00Z"
+
+
+def test_af1_ground_stops_cover_barksdale_and_offutt():
+    _, d0911 = _load_af1()
+    p1, t1 = build_flight(d0911)
+    phases = [(p["utc"], p["phase"]) for p in p1]
+    grounded = [u for u, ph in phases if ph == "ground"]
+    airborne = [u for u, ph in phases if ph != "ground"]
+    assert grounded and airborne
+    # three airborne legs => the phase sequence alternates ground/air 3 times
+    blocks = []
+    for _, ph in phases:
+        b = ph == "ground"
+        if not blocks or blocks[-1] != b:
+            blocks.append(b)
+    assert blocks == [True, False, True, False, True, False]
+    # detail-panel ground copy: curated stop list present with UTC bounds
+    stops = t1["details"]["ground_stops"]
+    assert [s["code"] for s in stops] == ["SRQ", "BAD", "OFF"]
+    for s in stops:
+        assert s["name"] and s["start"] and s["end"]
+
+
+def test_af1_identity_fields():
+    d0910, d0911 = _load_af1()
+    for d in (d0910, d0911):
+        assert d["flight"] == "AF1"
+        assert d["registration"] == "SAM 28000"
+        assert d["aircraft"] == "Boeing VC-25A"
+        assert d["sources"] and d["provenance_notes"]
+
+
+def test_af1_geometry_keeps_leg1_radar_returns():
+    """AF1's day is too long for the whole-track density invariant (see
+    RADAR_DENSE), but the radar-surveyed Sarasota->Barksdale leg must still
+    survive decimation as real shape rather than collapsing to its endpoints."""
+    _, d0911 = _load_af1()
+    _, track = build_flight(d0911)
+    verts = {tuple(c) for c in track["geometry"]["coordinates"]}
+    radar = [w for w in d0911["waypoints"] if w.get("source") == "radar"]
+    assert len(radar) == 97, "leg 1 carries the exported RADES track verbatim"
+    kept = [w for w in radar if (round(w["lon"], 5), round(w["lat"], 5)) in verts]
+    assert len(kept) > len(radar) // 2
+
+
+def test_af1_both_files_are_sane_linestrings():
+    """The `built` fixture keys by flight name, so the two AF1 files collapse to
+    one entry there and the parametrized geometry tests only ever see whichever
+    file glob returned last. Cover both explicitly."""
+    for d in _load_af1():
+        positions, track = build_flight(d)
+        geom = track["geometry"]
+        assert geom["type"] == "LineString" and len(geom["coordinates"]) >= 2
+        for lon, lat in geom["coordinates"]:
+            assert -150 < lon < -65 and 18 < lat < 65
+        assert geom["coordinates"][0] == pytest.approx(
+            [positions[0]["lon"], positions[0]["lat"]], abs=1e-4)
+        assert geom["coordinates"][-1] == pytest.approx(
+            [positions[-1]["lon"], positions[-1]["lat"]], abs=1e-4)
+
+
+def test_af1_waypoint_provenance_is_marked_and_legs_are_estimated():
+    """Every AF1 waypoint carries an explicit source mark; only leg 1 of the
+    9/11 file is radar, and the 9/10 positioning file is wholly estimated."""
+    d0910, d0911 = _load_af1()
+    assert {w["source"] for w in d0910["waypoints"]} == {"estimated"}
+    assert {w["source"] for w in d0911["waypoints"]} == {"radar", "estimated"}
+    p0, _ = build_flight(d0910)
+    p1, _ = build_flight(d0911)
+    assert {p["source"] for p in p0} == {"estimated"}
+    assert {p["source"] for p in p1} == {"radar", "estimated"}
+    # the radar-marked positions cover exactly the leg-1 window. The resample
+    # grid is whole minutes (only the very first/last waypoints of a track are
+    # pinned off-minute), so the marked run starts at the first whole minute
+    # inside the radar span (13:54:41Z) and ends at the last one before it
+    # closes (15:32:02Z).
+    radar_utc = sorted(p["utc"] for p in p1 if p["source"] == "radar")
+    assert radar_utc[0] == "2001-09-11T13:55:00Z"
+    assert radar_utc[-1] == "2001-09-11T15:32:00Z"
+    assert len(radar_utc) == 98
+
+
+def test_af1_wheels_times_match_the_researched_anchors():
+    d0910, d0911 = _load_af1()
+    # 9/10 positioning: derived estimates, three-leg ADW -> Jacksonville -> SRQ
+    assert (d0910["origin"], d0910["scheduled_dest"], d0910["landed_at"]) == (
+        "ADW", "SRQ", "SRQ")
+    assert d0910["wheels_off_utc"] == "2001-09-10T18:00:00Z"
+    assert d0910["wheels_on_utc"] == "2001-09-10T21:30:00Z"
+    assert [s["code"] for s in d0910["details"]["ground_stops"]] == ["NIP", "SRQ"]
+    # 9/11: sourced anchors — 09:54 ET off SRQ, 18:34 ET on at Andrews
+    assert (d0911["origin"], d0911["scheduled_dest"], d0911["landed_at"]) == (
+        "SRQ", "ADW", "ADW")
+    assert d0911["wheels_off_utc"] == "2001-09-11T13:54:00Z"
+    assert d0911["wheels_on_utc"] == "2001-09-11T22:34:00Z"
+    stops = {s["code"]: s for s in d0911["details"]["ground_stops"]}
+    assert stops["BAD"]["start"] == "2001-09-11T15:45:00Z"   # Commission "about 11:45"
+    assert stops["BAD"]["end"] == "2001-09-11T17:44:00Z"     # 13:44 ET, chosen mid-range
+    assert stops["OFF"]["start"] == "2001-09-11T18:50:00Z"   # 14:50 ET, well corroborated
+    assert stops["OFF"]["end"] == "2001-09-11T20:33:00Z"     # 16:33 ET
+    assert d0911["details"]["fate"]["utc"] == d0911["wheels_on_utc"]
+    assert d0911["details"]["crew"]["captain"] == "Col. Mark Tillman"
+
+
+def test_af1_leg1_cruise_is_fl390_not_45000():
+    """Radar refuted the widely-repeated 45,000 ft for the Sarasota->Barksdale
+    leg; only the Offutt->Andrews leg is modelled at 45,000 ft."""
+    _, d0911 = _load_af1()
+    radar = [w for w in d0911["waypoints"] if w["source"] == "radar"]
+    assert max(w["alt_ft"] for w in radar) == 39000
+    p1, _ = build_flight(d0911)
+    # loader bound is 45,000 ft inclusive — nothing may exceed it
+    assert max(p["alt_ft"] for p in p1) == 45000
+    top = [p["utc"] for p in p1 if p["alt_ft"] == 45000]
+    assert top[0] > "2001-09-11T20:33:00Z"   # after the Offutt departure
