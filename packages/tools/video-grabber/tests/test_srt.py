@@ -1,4 +1,5 @@
 from video_grabber.transcribe.srt import (
+    collapse_repetition_loops,
     Cue,
     dedupe_consecutive,
     parse_srt,
@@ -155,7 +156,63 @@ def test_keeps_inaudible_markers_because_they_mark_real_speech():
     assert len(strip_nonspeech_cues(cues)) == 2
 
 
-def test_leaves_ordinary_speech_untouched():
+def test_strip_leaves_ordinary_speech_untouched():
     from video_grabber.transcribe.srt import strip_nonspeech_cues
     cues = [Cue(0, 1, "American 77, Indy Center")]
     assert strip_nonspeech_cues(cues) == cues
+
+
+# ---- alternating hallucination loops ----------------------------------------
+#
+# dedupe_consecutive only collapses runs of IDENTICAL neighbours. The NEADS MCC
+# tape produced an A/B/A/B loop 447 cues long — every cue differed from the one
+# before it, so every one survived and inflated the transcript from ~2,177 real
+# words to 4,738.
+
+def _cues(texts):
+    return [Cue(float(i), float(i) + 1, t) for i, t in enumerate(texts)]
+
+
+def test_collapses_an_alternating_two_phrase_loop():
+    cues = _cues(["start"] + ["A", "B"] * 8 + ["end"])
+    got = [c.text for c in collapse_repetition_loops(cues)]
+    assert got == ["start", "A", "B", "end"]
+
+
+def test_collapses_a_single_phrase_loop():
+    cues = _cues(["start"] + ["A"] * 10 + ["end"])
+    assert [c.text for c in collapse_repetition_loops(cues)] == ["start", "A", "end"]
+
+
+def test_collapses_a_three_phrase_cycle():
+    cues = _cues(["A", "B", "C"] * 5)
+    assert [c.text for c in collapse_repetition_loops(cues)] == ["A", "B", "C"]
+
+
+def test_keeps_scattered_repeats_that_are_not_a_loop():
+    # "Okay" recurs all over real ATC audio between genuine content. Only
+    # cycles are artifacts; scattered repetition is speech.
+    texts = ["Okay", "turn left", "Okay", "descend", "Okay", "contact center"]
+    assert [c.text for c in collapse_repetition_loops(_cues(texts))] == texts
+
+
+def test_keeps_a_short_repeat_that_is_not_yet_a_loop():
+    # A readback repeats a phrase twice. Two is not a hallucination loop.
+    texts = ["3743", "3743", "American 77"]
+    assert [c.text for c in collapse_repetition_loops(_cues(texts))] == texts
+
+
+def test_preserves_timing_of_the_surviving_cycle():
+    cues = _cues(["A", "B"] * 6)
+    got = collapse_repetition_loops(cues)
+    assert (got[0].start, got[0].text) == (0.0, "A")
+    assert (got[1].start, got[1].text) == (1.0, "B")
+
+
+def test_empty_input():
+    assert collapse_repetition_loops([]) == []
+
+
+def test_loops_leave_ordinary_speech_untouched():
+    texts = ["American 77, Indy Center", "Roger, 3743", "Contact departure"]
+    assert [c.text for c in collapse_repetition_loops(_cues(texts))] == texts

@@ -175,31 +175,37 @@ def _start_transcribe_workers() -> None:
     thread (a) respawns any worker that dies — a native whisper/Vulkan crash would
     otherwise permanently lose a slot — and (b) periodically re-queues jobs orphaned
     in 'transcribing' by such a crash. Workers write to /tmp/transcribe-worker-N.log."""
-    if _TRANSCRIBE_DISPATCH_LIMIT == 0:
-        # Return BEFORE the startup orphan recovery below. That recovery re-queues
-        # every 'transcribing' row outright, ignoring heartbeats, on the assumption
-        # that no worker can be alive across a restart of this process. That is
-        # false when another host claims from the same table: it would yank jobs
-        # the Mac Studio is actively transcribing, every time this pod rolls.
-        print("[serve] TRANSCRIBE_DISPATCH_LIMIT=0 — not claiming transcribe jobs "
-              "on this host; leaving them to remote workers", flush=True)
-        return
-
     from video_grabber.config import Config
     from video_grabber.transcribe.flows import _sync_db_url
 
     cfg = Config()
     engine = sa.create_engine(_sync_db_url(cfg.database_url))
 
-    # On boot no worker is running, so every 'transcribing' row is an orphan.
-    n = _recover_orphaned_transcribing(engine, 0)
-    if n:
-        print(f"[serve] recovered {n} orphaned transcribing job(s) at startup", flush=True)
-
+    claims_locally = _TRANSCRIBE_DISPATCH_LIMIT > 0
     procs = {}
-    for i in range(_TRANSCRIBE_DISPATCH_LIMIT):
-        procs[i] = _spawn_transcribe_worker(i)
-        print(f"[serve] started transcribe-worker-{i} pid={procs[i].pid}", flush=True)
+
+    if claims_locally:
+        # On boot no LOCAL worker is running, so every 'transcribing' row is an
+        # orphan. This deliberately ignores heartbeats, which is only sound while
+        # this host is the sole claimer.
+        n = _recover_orphaned_transcribing(engine, 0)
+        if n:
+            print(f"[serve] recovered {n} orphaned transcribing job(s) at startup", flush=True)
+
+        for i in range(_TRANSCRIBE_DISPATCH_LIMIT):
+            procs[i] = _spawn_transcribe_worker(i)
+            print(f"[serve] started transcribe-worker-{i} pid={procs[i].pid}", flush=True)
+    else:
+        # No local claiming, but the supervisor below still runs. Remote workers
+        # (the Mac Studio) have no supervisor of their own, so without this a
+        # worker that dies mid-job leaves its row stuck in 'transcribing' forever.
+        #
+        # The boot recovery above is skipped precisely because it ignores
+        # heartbeats: a remote worker CAN be alive across a restart of this
+        # process, and re-queueing its row would yank a job it is still running.
+        # The periodic pass is heartbeat-aware and therefore safe.
+        print("[serve] TRANSCRIBE_DISPATCH_LIMIT=0 — not claiming transcribe jobs "
+              "on this host; supervising remote workers' orphans only", flush=True)
 
     def supervise() -> None:
         while True:

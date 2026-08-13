@@ -35,6 +35,7 @@ from video_grabber.storage import wasabi
 from video_grabber.transcribe.audio import extract_audio
 from video_grabber.transcribe.chunking import windows
 from video_grabber.transcribe.srt import (
+    collapse_repetition_loops,
     Cue,
     dedupe_consecutive,
     merge,
@@ -283,7 +284,13 @@ def transcribe_item_flow(job_id: str) -> None:
         # collapsing is what made six hours of open-mic NEADS audio look like a
         # clean 84-word transcript. dedupe then removes genuine hallucination
         # loops, where whisper repeats a phrase over silence.
-        clean_cues = dedupe_consecutive(strip_nonspeech_cues(cues))
+        # Order matters. strip first so markers are removed outright rather than
+        # collapsed to one; then collapse cycles, which catches the alternating
+        # A/B/A/B loops dedupe_consecutive cannot see; then dedupe the leftover
+        # identical pairs a cycle of two repeats leaves behind.
+        clean_cues = dedupe_consecutive(
+            collapse_repetition_loops(strip_nonspeech_cues(cues))
+        )
         out_base = scratch / "out"
         out_base.parent.mkdir(parents=True, exist_ok=True)
         srt_path = out_base.with_suffix(".srt")
