@@ -17,6 +17,7 @@ import "./Applications/Feedback/FeedbackContext";
 import "./Applications/README/ReadmeContext";
 import "./Applications/News/NewsContext";
 import "./Applications/PagerDecoder/PagerDecoderContext";
+import "./Providers/Playlist/playlistStoreActions";
 
 // [appId, expected prefixes, spot-checked action types, has a state schema]
 const CASES: Array<[string, string[], string[], boolean]> = [
@@ -60,6 +61,7 @@ const CASES: Array<[string, string[], string[], boolean]> = [
 		["ClassicyAppPagerDecoderInitSettings", "ClassicyAppPagerDecoderUpdateSettings"],
 		true,
 	],
+	["PlaylistEditor.app", ["ClassicyAppPlaylist"], ["ClassicyAppPlaylistMergeData"], false],
 ];
 
 describe("app manifests", () => {
