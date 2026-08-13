@@ -293,6 +293,7 @@ function makeCtxValue(
 		unsubscribeWeather: vi.fn(),
 		requestWeatherForecast: vi.fn(),
 		clockForced: false,
+		roomCommand: null,
 		chatBuddies: [],
 		chatEnabled: false,
 		chatReason: "not_signed_in",

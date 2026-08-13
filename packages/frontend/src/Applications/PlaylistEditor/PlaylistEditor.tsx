@@ -8,9 +8,10 @@ import {
 	registerClassicyIcons,
 	useAppManagerDispatch,
 } from "classicy";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { type PlaylistRecord } from "../../Providers/Auth/playlistApi";
+import { ControlPanel } from "./ControlPanel";
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
 import { PlaylistList } from "./PlaylistList";
 import appIconPng from "./app.png";
@@ -36,6 +37,19 @@ export function PlaylistEditor() {
 	// onDirtyChange synchronously as it changes, keeping this current.
 	const dirtyRef = useRef(false);
 	const [closing, setClosing] = useState(false);
+	const [showControl, setShowControl] = useState(false);
+
+	// Reveal + focus, the same shape TV's Settings window uses: the window is
+	// rendered conditionally, so focusing it makes the menu item feel like it
+	// brought an already-open window forward when it is reopened.
+	const openControl = useCallback(() => {
+		setShowControl(true);
+		dispatch({
+			type: "ClassicyWindowFocus",
+			app: { id: appId },
+			window: { id: "playlist_editor_control" },
+		});
+	}, [dispatch]);
 
 	const appMenu = useMemo(
 		() => [
@@ -44,8 +58,19 @@ export function PlaylistEditor() {
 				title: "File",
 				menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
 			},
+			{
+				id: "window",
+				title: "Window",
+				menuChildren: [
+					{
+						id: `${appId}_control`,
+						title: "Control",
+						onClickFunc: openControl,
+					},
+				],
+			},
 		],
-		[],
+		[openControl],
 	);
 
 	const quit = () => dispatch(quitAppHelper(appId, appName, appIcon));
@@ -123,6 +148,27 @@ export function PlaylistEditor() {
 							onQuit={quit}
 						/>
 					)}
+				</ClassicyWindow>
+			)}
+			{status === "signedIn" && showControl && (
+				<ClassicyWindow
+					id="playlist_editor_control"
+					appId={appId}
+					title="Control"
+					icon={appIcon}
+					closable={true}
+					resizable={false}
+					zoomable={false}
+					collapsable={true}
+					scrollable={false}
+					initialSize={[300, 0]}
+					initialPosition={[420, 160]}
+					onCloseFunc={() => setShowControl(false)}
+				>
+					<ControlPanel
+						playlistId={openRecord?.id ?? null}
+						playlistTitle={openRecord?.title}
+					/>
 				</ClassicyWindow>
 			)}
 			{/* status === "loading": render no window; auth resolves within a tick of boot */}

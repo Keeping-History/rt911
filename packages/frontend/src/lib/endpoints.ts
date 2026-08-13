@@ -54,3 +54,10 @@ export function chatHttpBase(streamUrl: string): string {
 
 /** Base for the streamer's chat REST endpoints, e.g. /chat/username-available. */
 export const CHAT_BASE: string = chatHttpBase(STREAM_URL);
+
+/**
+ * Base for the streamer's room-control endpoint (`POST /room`). The same host
+ * as CHAT_BASE — both are the streamer's HTTP side — but named separately so a
+ * teacher's room command does not read as a chat call at the call site.
+ */
+export const ROOM_BASE: string = CHAT_BASE;

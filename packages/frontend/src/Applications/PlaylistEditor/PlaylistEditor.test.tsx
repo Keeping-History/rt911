@@ -6,6 +6,11 @@ const dispatchMock = vi.fn();
 // simulate the user clicking the window's real close box without needing to
 // render classicy's actual chrome.
 const windowCloseFns = vi.hoisted(() => ({ current: {} as Record<string, () => void> }));
+// Captures the app menu so a test can invoke a menu item without rendering
+// classicy's real menu bar.
+const appMenus = vi.hoisted(() => ({ current: [] as MenuGroup[] }));
+type MenuItem = { id?: string; title?: string; onClickFunc?: () => void };
+type MenuGroup = { id?: string; title?: string; menuChildren?: MenuItem[] };
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<typeof import("classicy")>()),
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -14,13 +19,16 @@ vi.mock("classicy", async (importOriginal) => ({
 		title,
 		id,
 		onCloseFunc,
+		appMenu,
 	}: {
 		children?: React.ReactNode;
 		title?: string;
 		id?: string;
 		onCloseFunc?: () => void;
+		appMenu?: MenuGroup[];
 	}) => {
 		if (id && onCloseFunc) windowCloseFns.current[id] = onCloseFunc;
+		if (appMenu) appMenus.current = appMenu;
 		return <div data-testid={`window-${title}`}>{children}</div>;
 	},
 	useAppManagerDispatch: () => dispatchMock,
@@ -52,6 +60,7 @@ vi.mock("./PlaylistList", () => ({
 	),
 }));
 
+import { CONTROL_NO_PLAYLIST } from "./ControlPanel";
 import { PlaylistEditor } from "./PlaylistEditor";
 
 beforeEach(() => {
@@ -157,5 +166,46 @@ describe("PlaylistEditor dirty-close", () => {
 		expect(dispatchMock).not.toHaveBeenCalled();
 		expect(mainProps.current?.closeRequested).toBe(false);
 		expect(screen.getByText("EDITING")).not.toBeNull();
+	});
+});
+
+describe("Control window", () => {
+	const controlItem = () =>
+		appMenus.current
+			.find((g) => g.title === "Window")
+			?.menuChildren?.find((i) => i.title === "Control");
+
+	beforeEach(() => {
+		mockAuth.status = "signedIn";
+		mockAuth.user = { id: "u1" };
+		appMenus.current = [];
+	});
+
+	it("is closed until the Window menu opens it", () => {
+		render(<PlaylistEditor />);
+		expect(screen.queryByTestId("window-Control")).toBeNull();
+
+		const item = controlItem();
+		expect(item).toBeTruthy();
+		act(() => item?.onClickFunc?.());
+
+		expect(screen.getByTestId("window-Control")).toBeTruthy();
+	});
+
+	it("closes again from its close box", () => {
+		render(<PlaylistEditor />);
+		act(() => controlItem()?.onClickFunc?.());
+		expect(screen.getByTestId("window-Control")).toBeTruthy();
+
+		act(() => windowCloseFns.current.playlist_editor_control?.());
+		expect(screen.queryByTestId("window-Control")).toBeNull();
+	});
+
+	// With no playlist open there is nothing to address a command to, so the
+	// panel says so rather than offering controls that would 400.
+	it("has nothing to control before a playlist is opened", () => {
+		render(<PlaylistEditor />);
+		act(() => controlItem()?.onClickFunc?.());
+		expect(screen.getByText(CONTROL_NO_PLAYLIST)).toBeTruthy();
 	});
 });

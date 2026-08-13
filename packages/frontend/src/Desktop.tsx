@@ -18,6 +18,7 @@ import {
 	PAGE_SHORTCUT_DISPOSITION,
 	pageShortcutIcon,
 } from "./data/pageShortcuts";
+import { RoomControlBridge } from "./Providers/Playlist/RoomControlBridge";
 import { Alerts } from "./Applications/Alerts/Alerts";
 import { AlertsManager } from "./Applications/Alerts/AlertsManager";
 import { Browser } from "./Applications/Browser/Browser";
@@ -126,6 +127,7 @@ export default function Desktop() {
 			<Alerts />
 			<AlertsManager />
 			<HyperCardClockBridge />
+			<RoomControlBridge />
 			<HyperCardStackAuthBridge />
 			<Browser />
 			<TimeMachine />

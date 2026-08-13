@@ -8,6 +8,15 @@ Guidance for AI coding assistants working in this Go service. Read [`SPEC.md`](.
 
 A WebSocket streamer that drives a **virtual clock** per client and pushes `media_items` whose `start_date` falls in the current virtual second. Postgres (Directus-owned) is the source of truth; Redis is the per-second hot cache; one goroutine per session manages the clock and one shared `Hub` goroutine fans out 1 Hz ticks.
 
+Cross-pod delivery goes through [`internal/fanout`](./internal/fanout) — a typed
+Redis pub/sub bus. The streamer runs as N replicas, so anything originating on a
+single pod (an operator's HTTP call, a teacher's command) reaches only that
+pod's sessions unless it is republished. The bus carries **no persistence and no
+delivery guarantee**: a pod that is down for the publish never sees the message,
+which is why `internal/clock` keeps its own Redis key for boot recovery and uses
+the bus only for the live edge. Anything a late joiner must still observe has to
+persist separately — don't add persistence to the bus, add it beside the bus.
+
 Module: `classicy/streamer` (see [`go.mod`](./go.mod)).
 Entrypoint: [`cmd/server/main.go`](./cmd/server/main.go).
 All non-entry code lives under [`internal/`](./internal) and is intentionally not importable from outside this module.

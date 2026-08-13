@@ -234,6 +234,31 @@ export interface WsHeartbeatAckMessage {
 	master_time?: string;
 }
 
+/**
+ * A live teacher action pushed to every student in a room. Rooms are playlist
+ * ids: the streamer relays these across pods (see internal/fanout) so a class
+ * split over several replicas stays in step.
+ */
+export interface RoomCommand {
+	action: "jump" | "focus" | "message" | "lock";
+	/** Virtual-clock target for "jump", as a UTC string. */
+	time?: string;
+	/** Classicy app id for "focus", e.g. "TV.app". */
+	app?: string;
+	/** Note body for "message". */
+	message?: string;
+	/** Lock surface for "lock". Only the clock is implemented today. */
+	target?: "clock";
+	/**
+	 * Lock state for "lock". Optional-but-meaningful: the server sends it as a
+	 * pointer precisely so an unlock (`false`) survives the wire, so treat a
+	 * missing value as "no instruction" rather than as `false`.
+	 */
+	on?: boolean;
+	/** Monotonic per-client counter; see roomCommand above. */
+	seq: number;
+}
+
 export interface MediaStreamContextValue {
 	items: MediaItem[];
 	/** Pager items received while subscribed to the pager channel. */
@@ -342,6 +367,14 @@ export interface MediaStreamContextValue {
 	requestWeatherForecast: (zone: string) => void;
 	/** True while the server is forcing the clock (Time Machine locked). */
 	clockForced: boolean;
+
+	/**
+	 * The most recent live teacher command for the room this client joined
+	 * (its `?playlist=` id), or null if none has arrived. `seq` increments on
+	 * every command so an identical repeat — a teacher pressing "focus TV"
+	 * twice — is still observable as a new event by effects keyed on it.
+	 */
+	roomCommand: RoomCommand | null;
 	/** alerts received while subscribed to the alerts channel. */
 	alertItems: AlertItem[];
 	/** Opt into alerts-channel delivery. Ref-counted by appId. */
@@ -436,6 +469,7 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	unsubscribeWeather: () => {},
 	requestWeatherForecast: () => {},
 	clockForced: false,
+	roomCommand: null,
 	alertItems: [],
 	subscribeAlerts: () => {},
 	unsubscribeAlerts: () => {},

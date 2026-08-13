@@ -15,7 +15,9 @@ import (
 	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/clock"
 	"classicy/streamer/internal/db"
+	"classicy/streamer/internal/fanout"
 	"classicy/streamer/internal/handler"
+	"classicy/streamer/internal/model"
 	"classicy/streamer/internal/session"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -145,6 +147,23 @@ func main() {
 	}
 	hub.SetMaster(masterClock)
 	go masterClock.Run(ctx)
+
+	// Operator alert pushes. Alert *content* already reaches every pod through
+	// the alert_items NOTIFY listener; this bus carries the out-of-schedule
+	// "raise it now" command, which originates on whichever pod served the
+	// operator's HTTP call and would otherwise stop there.
+	alertBus := fanout.New[model.AlertItem](rdbWrite, "alerts:push", logger)
+	alertBus.OnMessage(hub.BroadcastAlert)
+	go alertBus.Run(ctx)
+
+	// Live teacher control, scoped to a room (a playlist id). One channel for
+	// every room rather than one per room: pods filter by membership on
+	// receipt, which avoids dynamically subscribing and unsubscribing Redis
+	// channels as classes come and go, and the command volume is a handful of
+	// clicks per lesson.
+	roomBus := fanout.New[model.RoomCommand](rdbWrite, "room:command", logger)
+	roomBus.OnMessage(hub.BroadcastRoom)
+	go roomBus.Run(ctx)
 
 	// Chat's reply engine. Credentials come from the environment only, never
 	// from Directus (CLAUDE.md). A missing key just means one fewer provider is
@@ -320,6 +339,11 @@ func main() {
 		logger,
 	))
 	mux.HandleFunc("/clock", handler.NewClockHandler(masterClock, env("CLOCK_CONTROL_KEY", ""), logger))
+	mux.HandleFunc("/alert", handler.NewAlertHandler(pool, alertBus, env("ALERT_CONTROL_KEY", ""), logger))
+	// Authorised per playlist, not by a shared key: only the Directus user who
+	// created a playlist may drive its room. Hence pool + trustedOrigins rather
+	// than a control key.
+	mux.HandleFunc("/room", handler.NewRoomHandler(pool, roomBus, trustedOrigins, logger))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

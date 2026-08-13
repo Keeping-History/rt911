@@ -133,6 +133,15 @@ type outMsg struct {
 	Direction string        `json:"direction,omitempty"`
 	Kind      string        `json:"kind,omitempty"`
 	MessageID int           `json:"message_id,omitempty"`
+	// Action/App ride room_command: Action is one of model.RoomAction*, App is
+	// the Classicy app id a "focus" action targets. The jump target rides the
+	// existing Time field and the note rides Msg.
+	Action string `json:"action,omitempty"`
+	App    string `json:"app,omitempty"`
+	// Target/On ride a room_command with action "lock". On is a pointer so an
+	// unlock (false) is transmitted rather than dropped by omitempty.
+	Target string `json:"target,omitempty"`
+	On     *bool  `json:"on,omitempty"`
 	// Cleared rides chat_cleared: how many messages the clear marked. Purely
 	// informational (the client resets on the frame's arrival, not its count),
 	// so omitempty dropping a zero is harmless -- clearing an already-empty
@@ -158,6 +167,9 @@ type Session struct {
 	paused        bool
 	formatFilter  map[string]struct{} // nil = send all formats
 	subscriptions map[string]struct{} // opt-in delivery channels (e.g. "pager")
+	// room is the teacher-controlled room this session follows (a playlist id),
+	// or "" for none. Guarded by mu like every other session field.
+	room string
 
 	// Per-channel look-ahead high-water marks: the exclusive upper edge of the
 	// last window sent on each channel. Channels are subscribed at different
@@ -486,6 +498,70 @@ func (s *Session) SendAlerts(t time.Time, items []model.AlertItem) {
 		return
 	}
 	s.send_(outMsg{Type: "alerts", Time: t.Format(time.RFC3339), Alerts: items})
+}
+
+// PushAlert delivers an operator-pushed alert to this session immediately,
+// regardless of the alert's own scheduled start_date. No-op when the session
+// has not subscribed to the alerts channel or has not initialised yet.
+//
+// The stamp is deliberate. The client reveal-gates alerts by start_date against
+// its own virtual clock (partitionByDue in MediaStreamProvider), and every
+// session sits at a different instant unless forced clock mode is on — so a
+// push carrying the row's real start_date would land in most clients' future
+// buffer and never show. Rewriting the copy to this session's own virtual time
+// is what makes "push this alert now" mean now, for each client.
+func (s *Session) PushAlert(item model.AlertItem) {
+	s.mu.Lock()
+	_, subscribed := s.subscriptions[ChannelAlerts]
+	vt := s.virtualTime
+	s.mu.Unlock()
+	if !subscribed || vt.IsZero() {
+		return
+	}
+	item.StartDate = vt
+	s.SendAlerts(vt, []model.AlertItem{item})
+}
+
+// JoinRoom puts this session in a teacher-controlled room, replacing any
+// previous membership. The room id is the playlist the student is following;
+// it is opaque here (see model.RoomCommand). An empty id leaves the room.
+func (s *Session) JoinRoom(room string) {
+	s.mu.Lock()
+	s.room = room
+	s.mu.Unlock()
+}
+
+// LeaveRoom drops this session's room membership.
+func (s *Session) LeaveRoom() { s.JoinRoom("") }
+
+// Room reports the session's current room, or "" when it is in none.
+func (s *Session) Room() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.room
+}
+
+// SendRoomCommand relays one live teacher action to this client.
+//
+// The room is not re-checked here: the hub already matched membership, and
+// re-reading it would only reintroduce a race with a concurrent JoinRoom
+// without preventing anything — the command was addressed to the room the
+// session was in when the hub looked.
+func (s *Session) SendRoomCommand(cmd model.RoomCommand) {
+	out := outMsg{Type: "room_command", Action: cmd.Action}
+	switch cmd.Action {
+	case model.RoomActionJump:
+		out.Time = cmd.Time.UTC().Format(time.RFC3339)
+	case model.RoomActionFocus:
+		out.App = cmd.App
+	case model.RoomActionMessage:
+		out.Msg = cmd.Message
+	case model.RoomActionLock:
+		out.Target = cmd.Target
+		on := cmd.On
+		out.On = &on
+	}
+	s.send_(out)
 }
 
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the

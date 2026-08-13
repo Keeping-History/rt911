@@ -39,6 +39,14 @@ type inMsg struct {
 	Time string `json:"time,omitempty"`
 }
 
+// maxRoomIDLen bounds a client-supplied room id. Playlist ids are short; this
+// is only a guard against a client parking megabytes in a session field.
+const maxRoomIDLen = 128
+
+type roomMsg struct {
+	Room string `json:"room"`
+}
+
 // filterMsg carries a format whitelist from the client.
 // Formats nil or empty means "send all formats".
 type filterMsg struct {
@@ -522,6 +530,24 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 				if t, ok := sess.VirtualTime(); ok {
 					sendChannelSnapshot(r, sess, pool, rdb, cmsg.Channel, t, logger)
 				}
+
+			case "join_room":
+				var rmsg roomMsg
+				if err := json.Unmarshal(raw, &rmsg); err != nil {
+					sess.SendError("malformed join_room message")
+					continue
+				}
+				// Bounded because it is echoed back in no frame but is held per
+				// session and compared on every broadcast; an unbounded id is
+				// free memory for a client to waste.
+				if len(rmsg.Room) > maxRoomIDLen {
+					sess.SendError("room id too long")
+					continue
+				}
+				sess.JoinRoom(rmsg.Room)
+
+			case "leave_room":
+				sess.LeaveRoom()
 
 			case "unsubscribe":
 				var cmsg channelMsg
