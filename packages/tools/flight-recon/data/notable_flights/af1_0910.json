@@ -47,7 +47,7 @@
  "sources": [
   "Sarasota Magazine, \"The President in Sarasota: September 11, 2001\" (sarasotamagazine.com/articles/2016/9/7/the-president-in-sarasota) - contemporaneous first-person account; source of the 14:00 ET hall-opening, 15:50 ET program start and 16:30 ET program end at Justina Road Elementary in Jacksonville, the 18:00 ET Colony Beach Resort motorcade arrival, and the \"approximately 50 minutes\" JAX->SRQ flight time of the trailing press charter",
   "Your Observer, \"9.11 Remembered: 24 hours in Sarasota\" (yourobserver.com) - independent corroboration of the September 10 Jacksonville-then-Sarasota routing and of the 17:00 ET closure of Sarasota-Bradenton ahead of AF1's arrival",
-  "FAA / AirNav / SkyVector / Wikipedia airport pages - airport reference-point coordinates and field elevations for KADW (280 ft), KNIP and KSRQ (30 ft)"
+  "FAA / AirNav / SkyVector / Wikipedia airport pages - airport reference-point coordinates for KADW, KNIP and KSRQ, and verified field elevations for KADW (280 ft) and KSRQ (30 ft). KNIP's field elevation is NOT sourced here - see provenance_notes"
  ],
  "provenance_notes": [
   "RECONSTRUCTED, NOT SURVEYED: no radar record was found for either September 10 leg. Every waypoint in this file is source=\"estimated\" - documented ground-event anchors plus great-circle interpolation between airport reference points. Nothing here is a radar fix, and nothing here should be read as one.",

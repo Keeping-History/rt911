@@ -15,6 +15,7 @@ green without a DB.
 """
 
 import os
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -25,20 +26,23 @@ from flight_recon.resample import decimate_polyline, parse_utc, resample_track
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "notable_flights"
 
-# The four crashed flights (documented impact); GOFER06 is the observer.
-HIJACKED = ("AA11", "UA175", "AA77", "UA93")
+# CURATED FILES ARE KEYED BY FILE STEM, NOT BY FLIGHT ID. AF1 has two curated
+# files — af1_0910.json (the 9/10 positioning flight) and af1.json (the 9/11 full
+# day) — that share the flight ID "AF1". Keying anything by flight ID collapses
+# them and keeps whichever Path.glob happened to yield last, which is filesystem
+# order: the surviving file then differs between machines and half the AF1 data
+# goes untested. Every real-file-backed collection below is therefore stem-keyed.
+DATA_FILES = sorted(DATA_DIR.glob("*.json"))
+CURATED_STEMS = tuple(p.stem for p in DATA_FILES)
 
-# notable.NOTABLE_FLIGHTS now includes AF1, whose curated data/notable_flights/
-# JSON lands in a later task; parametrize the real-file-backed tests over what
-# actually exists in DATA_DIR today so they don't KeyError on a file that
-# hasn't been curated yet.
-CURRENT_FLIGHTS = tuple(sorted(
-    notable.load_flight_file(p)["flight"] for p in DATA_DIR.glob("*.json")))
+# The four crashed flights (documented impact); gofer06 is the observer, and the
+# two af1 files are neither.
+HIJACKED = ("aa11", "ua175", "aa77", "ua93")
 
-# One track per curated file, not per flight ID: AF1 has two files (the 9/10
-# positioning flight and the 9/11 full day), so the loaded-track count is the
-# file count, not len(set(CURRENT_FLIGHTS)).
-CURATED_FILE_COUNT = len(CURRENT_FLIGHTS)
+# One loaded track per curated file. Deliberately a literal, not len(...) of a
+# glob: a self-referential count would silently lower the bar for the DSN-gated
+# end-to-end assertions if a curated file ever vanished.
+CURATED_FILE_COUNT = 7
 
 CURATED_PHASES = {"takeoff", "tracon", "artcc", "hijack",
                   "course_change", "atc_alert", "descent", "down"}
@@ -118,19 +122,24 @@ def test_resample_rejects_non_increasing_times():
 # ------------------------------------------------------------------ build_flight
 @pytest.fixture(scope="module")
 def built():
-    """Every notable flight built from its real curated data file."""
+    """Every curated data file, built and keyed by its file stem (see CURATED_STEMS
+    — flight IDs are not unique across files)."""
     out = {}
-    for path in DATA_DIR.glob("*.json"):
+    for path in DATA_FILES:
         data = notable.load_flight_file(path)
-        out[data["flight"]] = (data, *notable.build_flight(data))
+        out[path.stem] = (data, *notable.build_flight(data))
     return out
 
 
-def test_all_five_flights_present(built):
-    assert set(built) == set(CURRENT_FLIGHTS)
+def test_every_curated_file_is_built(built):
+    assert set(built) == set(CURATED_STEMS)
+    # both AF1 files survive the fixture independently — the bug this keying fixes
+    assert {"af1", "af1_0910"} <= set(built)
+    assert built["af1"][0]["flight_date"] == "2001-09-11"
+    assert built["af1_0910"][0]["flight_date"] == "2001-09-10"
 
 
-@pytest.mark.parametrize("flight", CURRENT_FLIGHTS)
+@pytest.mark.parametrize("flight", CURATED_STEMS)
 def test_track_is_a_sane_linestring(built, flight):
     data, positions, track = built[flight]
     geom = track["geometry"]
@@ -160,7 +169,7 @@ def test_track_ends_at_documented_impact(built, flight):
 # whole-track "more vertices than minutes" invariant therefore cannot hold for
 # it; test_af1_geometry_keeps_leg1_radar_returns asserts its radar density
 # instead.
-RADAR_DENSE = tuple(f for f in CURRENT_FLIGHTS if f != "AF1")
+RADAR_DENSE = tuple(f for f in CURATED_STEMS if not f.startswith("af1"))
 
 
 @pytest.mark.parametrize("flight", RADAR_DENSE)
@@ -173,7 +182,7 @@ def test_track_geometry_is_radar_dense(built, flight):
 
 
 def test_gofer06_is_an_observer_not_a_crash(built):
-    data, positions, track = built["GOFER06"]
+    data, positions, track = built["gofer06"]
     assert "impact" not in data
     assert track["landed_at"] is None and track["wheels_on_utc"] is None
     # fate text is curated but no impact instant is injected
@@ -191,25 +200,28 @@ def test_decimate_polyline_collapses_straight_keeps_turns():
     assert decimate_polyline(detour) == detour
 
 
-@pytest.mark.parametrize("flight", CURRENT_FLIGHTS)
+@pytest.mark.parametrize("flight", CURATED_STEMS)
 def test_positions_have_per_minute_clock_keys(built, flight):
     _, positions, _ = built[flight]
     # interior rows are whole minutes -> et_seconds multiples of 60 (clean airborne
     # snapshot); endpoints are pinned to the true takeoff/impact instants and may
     # be off-minute (AA77's first radar return is 12:19:58Z). clock_seconds
-    # anchors at the prod BTS window start (2001-09-09 ET midnight), so 9/11 rows
-    # sit exactly two days into the replay clock — matching every existing prod
-    # row (clock_seconds - et_seconds = 172800, verified).
+    # anchors at the prod BTS window start (2001-09-09 ET midnight), so a row sits
+    # (flight_date - 2001-09-09) whole days into the replay clock — 172800 for the
+    # 9/11 flights, matching every existing prod row (verified), and 86400 for
+    # AF1's 9/10 positioning file.
+    day = date.fromisoformat(positions[0]["flight_date"]) - date(2001, 9, 9)
+    offset = 86400 * day.days
     for p in positions[1:-1]:
         assert p["et_seconds"] % 60 == 0
     for p in positions:
-        assert p["clock_seconds"] == p["et_seconds"] + 172800
+        assert p["clock_seconds"] == p["et_seconds"] + offset
         assert p["diverted"] is False
 
 
 def test_airborne_at_T_window(built):
     """AA11 is aloft 11:59-12:46:40 UTC (et 28740-31600); not before/after."""
-    _, positions, _ = built["AA11"]
+    _, positions, _ = built["aa11"]
     ets = {p["et_seconds"] for p in positions}
     assert 30600 in ets          # 12:30:00Z = 08:30 ET -> a row exists
     assert 28680 not in ets      # 11:58:00Z, before takeoff
@@ -220,7 +232,7 @@ def test_airborne_at_T_window(built):
 def test_ua93_uses_corrected_shanksville_longitude(built):
     """Guards the flagged fix: crater is at 78deg54'17\"W = -78.90472, not the
     design doc's -78.8539 (~4 km east)."""
-    data, _, track = built["UA93"]
+    data, _, track = built["ua93"]
     assert abs(data["impact"]["lon"] - (-78.90472)) < 1e-4
     assert track["geometry"]["coordinates"][-1][0] == pytest.approx(-78.90472, abs=1e-3)
 
@@ -333,11 +345,11 @@ def test_dry_run_persists_nothing(scratch_db):
 
 
 # ------------------------------------------------------------------ details/metadata
-@pytest.mark.parametrize("flight", CURRENT_FLIGHTS)
+@pytest.mark.parametrize("flight", CURATED_STEMS)
 def test_tracks_carry_aircraft_and_registration(built, flight):
     data, _, track = built[flight]
     assert track["tail_number"] == data["registration"]
-    maker = "Lockheed " if flight == "GOFER06" else "Boeing "
+    maker = "Lockheed " if flight == "gofer06" else "Boeing "
     assert track["aircraft_type"].startswith(maker), track["aircraft_type"]
 
 
@@ -351,7 +363,7 @@ def test_details_souls_are_internally_consistent(built, flight):
 
 def test_fate_utc_is_injected_from_impact(built):
     # AA11's documented impact instant; the JSON's details.fate has no utc key
-    _, _, aa11 = built["AA11"]
+    _, _, aa11 = built["aa11"]
     assert aa11["details"]["fate"]["utc"] == "2001-09-11T12:46:40Z"
     for flight in HIJACKED:
         data, _, track = built[flight]
@@ -535,22 +547,6 @@ def test_af1_geometry_keeps_leg1_radar_returns():
     assert len(radar) == 97, "leg 1 carries the exported RADES track verbatim"
     kept = [w for w in radar if (round(w["lon"], 5), round(w["lat"], 5)) in verts]
     assert len(kept) > len(radar) // 2
-
-
-def test_af1_both_files_are_sane_linestrings():
-    """The `built` fixture keys by flight name, so the two AF1 files collapse to
-    one entry there and the parametrized geometry tests only ever see whichever
-    file glob returned last. Cover both explicitly."""
-    for d in _load_af1():
-        positions, track = build_flight(d)
-        geom = track["geometry"]
-        assert geom["type"] == "LineString" and len(geom["coordinates"]) >= 2
-        for lon, lat in geom["coordinates"]:
-            assert -150 < lon < -65 and 18 < lat < 65
-        assert geom["coordinates"][0] == pytest.approx(
-            [positions[0]["lon"], positions[0]["lat"]], abs=1e-4)
-        assert geom["coordinates"][-1] == pytest.approx(
-            [positions[-1]["lon"], positions[-1]["lat"]], abs=1e-4)
 
 
 def test_af1_waypoint_provenance_is_marked_and_legs_are_estimated():
