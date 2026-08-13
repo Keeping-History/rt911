@@ -1,0 +1,40 @@
+1
+00:00:00,000 --> 00:00:02,300
+ Okay, we'll wait for your call. She's taking us to you.
+
+2
+00:00:02,300 --> 00:00:06,080
+ Colton 1065, contact COW 128.42.
+
+3
+00:00:06,080 --> 00:00:08,800
+ COW 128.42, Colton 1065.
+
+4
+00:00:08,800 --> 00:00:13,580
+ Blue Ridge 224, have you intercepted the localizer? It appears you're slightly west.
+
+5
+00:00:13,580 --> 00:00:16,680
+ We are right on it, for the left side.
+
+6
+00:00:19,900 --> 00:00:27,060
+ Blue Ridge 224, 2 from ERASE. Cross ERASE at above 4,000. Clear to ALICE, stand in the runway 1L approach.
+
+7
+00:00:27,060 --> 00:00:28,460
+ Clear to ALICE, 1L.
+
+8
+00:00:28,460 --> 00:00:30,060
+ Blue Ridge 224.
+
+9
+00:00:58,460 --> 00:01:08,080
+ National 62, anybody quickly please.
+
+10
+00:01:08,080 --> 00:01:16,700
+ No, we've got a primary target heading for P-56 to the west, 10 west, fast moving.
+

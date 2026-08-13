@@ -1,0 +1,8 @@
+1
+00:00:00,000 --> 00:00:03,640
+ American 77, turn 10 degrees to the right, vector for traffic.
+
+2
+00:00:03,640 --> 00:00:05,640
+ 10 right, American 77.
+
