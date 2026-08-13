@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest";
 import { getAppManifest, listScriptableActions } from "classicy";
 
 import "./Applications/TV/TVContext";
+import "./Applications/FlightTracker/flightMapSettings";
+import "./Applications/FlightTracker/flightTrackerCommands";
 
 // [appId, expected prefixes, spot-checked action types, has a state schema]
 const CASES: Array<[string, string[], string[], boolean]> = [
@@ -14,6 +16,12 @@ const CASES: Array<[string, string[], string[], boolean]> = [
 		"TV.app",
 		["ClassicyAppTV"],
 		["ClassicyAppTVTuneChannel", "ClassicyAppTVSetGridState", "ClassicyAppTVSetChannelOrder"],
+		true,
+	],
+	[
+		"FlightTracker.app",
+		["ClassicyAppFlightTracker", "ClassicyAppFlightRemote"],
+		["ClassicyAppFlightTrackerSetMapSettings", "ClassicyAppFlightRemoteFocus"],
 		true,
 	],
 ];

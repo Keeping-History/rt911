@@ -1,5 +1,6 @@
 import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerAppEventHandler } from "classicy";
+import { registerApp } from "classicy";
+import { z } from "zod";
 import type { LoopSpeed, LoopWindowMinutes } from "./loopClock";
 import { type CameraMode, DEFAULT_CAMERA_MODE, normalizeCameraMode } from "./flightCamera";
 import { EMPTY_FLIGHT_FILTER, type FlightFilter } from "./flightFilter";
@@ -230,7 +231,106 @@ export const classicyFlightTrackerEventHandler = (
 	}
 };
 
-registerAppEventHandler(
-	"ClassicyAppFlightTracker",
-	classicyFlightTrackerEventHandler,
-);
+const FLIGHT_TRACKER_DESCRIPTION =
+	"Radar-reconstructed flight map for September 11, 2001 — tracks, loops, and airport POIs.";
+
+export const FlightTrackerDataSchema = z.looseObject({
+	mapSettings: z
+		.looseObject({
+			mapStyle: z.string().describe("Basemap display mode id (classic/radar/satellite)."),
+			darkMap: z.boolean().describe("Dark basemap variant; orthogonal to mapStyle."),
+			pinColorLight: z.number().describe("Aircraft pin color on light basemaps, packed 0xRRGGBB."),
+			pinColorDark: z.number().describe("Aircraft pin color on dark basemaps, packed 0xRRGGBB."),
+			notablePinColorLight: z.number().describe("Notable-flight pin color on light basemaps, packed 0xRRGGBB."),
+			notablePinColorDark: z.number().describe("Notable-flight pin color on dark basemaps, packed 0xRRGGBB."),
+			observerPinColorLight: z.number().describe("Witness-aircraft pin color on light basemaps, packed 0xRRGGBB."),
+			observerPinColorDark: z.number().describe("Witness-aircraft pin color on dark basemaps, packed 0xRRGGBB."),
+			buildingHeroColorLight: z.number().describe("Hero-building color on light basemaps, packed 0xRRGGBB."),
+			buildingHeroColorDark: z.number().describe("Hero-building color on dark basemaps, packed 0xRRGGBB."),
+			radarSweep: z.boolean().describe("Whether the radar sweep animation is shown."),
+			trailMultiplier: z.number().describe("Comet-tail length as a multiple of base TRAIL_POINTS; 0 = off."),
+			globe: z.boolean().describe("Globe projection toggle."),
+			cluster: z.boolean().describe("Marker clustering toggle."),
+			threeD: z.boolean().describe("3D buildings/extrusion toggle."),
+			terrain: z.boolean().describe("Topographic relief (hillshade + 3D ground mesh)."),
+			anonTraffic: z.boolean().describe("Show anonymous radar traffic (RDR-… ids) as an opt-in layer."),
+			cameraMode: z.string().describe("Camera-follow framing for tracked flights (track/cockpit/highlight)."),
+		})
+		.partial()
+		.optional()
+		.describe("Map appearance and layer-toggle preferences (the Settings dialog)."),
+	loopSettings: z
+		.looseObject({
+			enabled: z.boolean().describe("Whether radar-loop replay mode is on."),
+			windowMinutes: z.union([z.literal(30), z.literal(90)]).describe("Replay window length in minutes."),
+			speed: z
+				.union([z.literal(10), z.literal(20), z.literal(50), z.literal(100), z.literal(500)])
+				.describe("Replay speed multiplier."),
+		})
+		.partial()
+		.optional()
+		.describe("Loop-strip playback preferences; ephemeral playhead state is never persisted."),
+	filterSettings: z
+		.looseObject({
+			flight: z.string().describe("Flight-number criterion; \"\" = any."),
+			tail: z.string().describe("Tail-number criterion; \"\" = any."),
+			carrier: z.string().describe("Carrier criterion; \"\" = any."),
+			origin: z.string().describe("Origin-airport criterion; \"\" = any."),
+			dest: z.string().describe("Destination-airport criterion; \"\" = any."),
+			flights: z.array(z.string()).describe("Explicit flight list from an area selection; [] = inactive."),
+		})
+		.partial()
+		.optional()
+		.describe("The Filter Flights window's criteria; ANDed together."),
+	poiSettings: z
+		.looseObject({
+			enabled: z.boolean().describe("Master POI-layer toggle."),
+			disabledLayers: z.array(z.string()).describe("POI layers turned off (blacklist: new layers default visible)."),
+			unclusteredLayers: z.array(z.string()).describe("POI layers with clustering off (default: all cluster)."),
+		})
+		.partial()
+		.optional()
+		.describe("Airport/POI marker-layer preferences (the Layers… window)."),
+	// Written by flightTrackerCommands.ts (secondary module, handoff §3 convention):
+	command: z
+		.object({
+			seq: z.number().describe("Monotonic sequence so each focus command applies exactly once."),
+			kind: z.literal("focus").describe("Command kind; only \"focus\" exists."),
+			callsign: z.string().describe("Callsign to select, e.g. \"AA11\"."),
+		})
+		.optional()
+		.describe("Pending one-shot remote focus command."),
+	focusedFlight: z
+		.string()
+		.nullable()
+		.optional()
+		.describe("Currently selected flight's callsign, published for playlist locked-focus."),
+});
+
+export type FlightTrackerData = z.infer<typeof FlightTrackerDataSchema>;
+
+registerApp({
+	id: appId,
+	description: FLIGHT_TRACKER_DESCRIPTION,
+	prefix: "ClassicyAppFlightTracker",
+	handler: classicyFlightTrackerEventHandler,
+	actions: {
+		ClassicyAppFlightTrackerSetMapSettings: {
+			description: "Persist the whole map-appearance settings object.",
+			params: z.object({ mapSettings: z.record(z.string(), z.unknown()).describe("Full FlightMapSettings object.") }),
+		},
+		ClassicyAppFlightTrackerSetLoopSettings: {
+			description: "Persist the whole loop-playback settings object.",
+			params: z.object({ loopSettings: z.record(z.string(), z.unknown()).describe("Full FlightLoopSettings object.") }),
+		},
+		ClassicyAppFlightTrackerSetFilterSettings: {
+			description: "Persist the whole flight-filter criteria object.",
+			params: z.object({ filterSettings: z.record(z.string(), z.unknown()).describe("Full FlightFilter object.") }),
+		},
+		ClassicyAppFlightTrackerSetPoiSettings: {
+			description: "Persist the whole POI-layer settings object.",
+			params: z.object({ poiSettings: z.record(z.string(), z.unknown()).describe("Full FlightPoiSettings object.") }),
+		},
+	},
+	state: FlightTrackerDataSchema,
+});
