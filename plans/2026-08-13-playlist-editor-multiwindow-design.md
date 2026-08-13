@@ -1,8 +1,13 @@
-# Playlist Editor: one window per playlist, menus, and a Control Window
+# Playlist Editor: one window per playlist, menus, and a Tools palette
 
 **Date:** 2026-08-13
 **Status:** Approved, not implemented
 **Repo:** `rt911` (this repo), `packages/frontend`
+**Baseline:** `main` @ `ac0dadee` — *includes* `cd6cc056` (Control window) and
+`1dd67972` (live teacher room control). An earlier draft of this spec was
+written against a branch predating both and invented a tool palette without
+knowing a Control window already existed; the Decisions below reflect the
+corrected baseline.
 
 ## Problem
 
@@ -62,6 +67,30 @@ change to the `classicy` package.
   `updatePlaylist`, `deletePlaylist`, and `duplicatePlaylist`. Rename and
   publish/draft are both `updatePlaylist` calls; no new API surface is needed.
 
+### The Control window, which already ships
+
+`cd6cc056` added a second window to this app, and this design must not be read
+as proposing it:
+
+- **`playlist_editor_control`, titled "Control"**, holding `ControlPanel.tsx` —
+  the teacher end of live room control (clock lock shipped; content lock present
+  but disabled, so the group reads as the pair it will become).
+- It is revealed by an existing **`Window > Control`** menu item using a
+  reveal-and-focus idiom borrowed from TV's Settings window: `setShowControl(true)`
+  followed by a `ClassicyWindowFocus` dispatch, so re-picking the item brings an
+  already-open window forward instead of doing nothing.
+- **It already has the "which playlist am I acting on?" problem this design
+  solves.** It takes `playlistId={openRecord?.id ?? null}` and degrades to
+  `CONTROL_NO_PLAYLIST` ("Open a playlist to control it live.") when nothing is
+  open. Once playlists are multi-window, `openRecord` stops being meaningful and
+  the Control window needs exactly the `activeId` routing the Add tools need —
+  one seam serves both surfaces.
+- `ControlPanel` holds lock state locally and flips it **only after the server
+  accepts**, because room commands are fire-and-forget and the streamer stores
+  nothing to read back. That behavior is load-bearing and out of scope here.
+- `Providers/Playlist/RoomControlBridge.tsx` and `roomApi.ts` are the student
+  end and the transport. Untouched by this design.
+
 ## Decisions
 
 Each of these was chosen explicitly; the rejected alternative is recorded so a
@@ -70,13 +99,22 @@ later reader doesn't relitigate it.
 1. **The list window persists.** "My Playlists" is the app's `defaultWindow` and
    stays open behind the document windows, as a home base. *Rejected:* closing
    the list on open (loses the home base), and folding the playlist list into
-   the Control Window (conflates a tool palette with navigation).
+   the Tools palette (conflates a tool palette with navigation).
 
-2. **One global Control Window, not one per document.** A single utility window
+2. **One global Tools palette, not one per document.** A single utility window
    whose buttons act on the frontmost playlist document. *Rejected:* a palette
    paired to each document (doubles window count), and hiding the palette when
    no document is open (appearing/disappearing chrome is jumpy — it greys out
    instead).
+
+2a. **The Add tools get their own palette; they do NOT join the existing
+   Control window.** The Control window drives a *live* session — locking the
+   clock for students watching right now. The Add tools *author* a playlist.
+   Those are different modes of use, and merging them would put a button that
+   changes what thirty students see next to a button that appends a row to a
+   draft. *Rejected:* adding the toolbar to `ControlPanel.tsx` alongside the Lock
+   group, and one window split into Tools/Live sections. The cost accepted here
+   is one more window and one more `Window` menu item.
 
 3. **File > Rename… renames in place.** No copy is created; `File > Duplicate`
    already covers the copy case. *Rejected:* true "Save As" semantics, and
@@ -104,40 +142,66 @@ later reader doesn't relitigate it.
    bespoke art. Balloon help carries the meaning; swapping in custom PNGs later
    changes only the imports.
 
-9. **The palette carries a menu of last resort.** Decision 6 creates a hole:
-   with every window closable and no "last window quits" rule, closing all
-   windows leaves no window supplying an `appMenu`, so the menu bar keeps
-   showing the *stale* File menu of a window that no longer exists — its Save
-   and Delete items pointing at a dead document, and no reachable `File > Quit`.
-   The palette therefore passes an `appMenu` **only while zero document windows
-   are open**: a two-item File menu (Open, Quit). While any document window
-   exists the palette stays menu-less, so clicking it leaves the frontmost
-   document's menus on screen instead of swapping the menu bar out from under
-   the user mid-click. The palette itself is `closable={false}`, so the app
-   always retains at least one window while it runs.
+9. **The Tools palette carries a menu of last resort, and is the one
+   non-closable window.** Decision 6 creates a hole: with every window closable
+   and no "last window quits" rule, closing all windows leaves no window
+   supplying an `appMenu`, so the menu bar keeps showing the *stale* File menu of
+   a window that no longer exists — its Save and Delete items pointing at a dead
+   document, and no reachable `File > Quit`. The palette therefore passes an
+   `appMenu` **only while zero document windows are open**: a short File +
+   Window menu. While any document window exists the palette stays menu-less, so
+   clicking it leaves the frontmost document's menus on screen instead of
+   swapping the menu bar out from under the user mid-click.
+
+   The palette is consequently `closable={false}` (but `collapsable`), which is
+   a deliberate departure from the Control window's closable + `Window > Control`
+   reveal pattern. The palette is the app's guaranteed menu anchor; the Control
+   window is not, and keeps its existing behavior unchanged.
+
+10. **A `Window` menu with a live open-window list.** The app already has
+   `Window > Control`. With N playlist documents, a window buried behind others
+   would otherwise be unreachable, so the menu gains Tools plus one item per open
+   window. Following `IMBuddies`, the list is rebuilt from provider state on
+   every render — never snapshotted — so a window opening or closing is
+   reflected in the same render that mounts or unmounts it.
 
 ## Architecture
 
 ### Windows
 
-Four window kinds under one `ClassicyApp` (`PlaylistEditor.app`):
+Six window kinds under one `ClassicyApp` (`PlaylistEditor.app`). Two of them —
+Control and the gate — already exist and change only where noted:
 
 | Window | id | Type | Menus | Notes |
 |---|---|---|---|---|
-| My Playlists | `playlist_editor_list` | document | File (short) | `defaultWindow`. Persistent. |
-| Playlist document | `playlist_doc_<playlistId>` | document | File, Edit | One per open playlist; cascaded by index. |
-| Control Window | `playlist_editor_palette` | **utility** | File (only when no document is open) | `closable={false}`. Not `alwaysOnTop`. |
-| Rename dialog | `playlist_rename_dialog` | modal | — | Singleton; targets `activeId`. |
-| Sign-in gate | `playlist_editor_gate` | modal | — | Unchanged from today. |
+| My Playlists | `playlist_editor_list` | document | File, Window | `defaultWindow`. Persistent. Renamed from `playlist_editor_main`. |
+| Playlist document | `playlist_doc_<playlistId>` | document | File, Edit, Window | One per open playlist; cascaded by index. |
+| Tools palette | `playlist_editor_tools` | **utility** | File, Window (only when no document is open) | **New.** `closable={false}`, `collapsable`. Not `alwaysOnTop`. |
+| Control | `playlist_editor_control` | document | — | **Exists.** Only its `playlistId` source changes: `openRecord?.id` → `activeId`. |
+| Rename dialog | `playlist_rename_dialog` | modal | — | **New.** Singleton; targets `activeId`. |
+| Sign-in gate | `playlist_editor_gate` | modal | — | Unchanged. |
+
+`playlist_editor_main` is renamed to `playlist_editor_list` because it stops
+being "the app's one window" and becomes specifically the list. Window ids are
+persisted in the Classicy store, so a returning user's saved geometry for the old
+id is simply not found and the window opens at its `initialPosition` — acceptable
+for a rename that also changes the window's size and role.
+
+The Control window stays a plain document window, `closable`, revealed by
+`Window > Control`. It is **not** converted to a utility palette: it is not the
+menu anchor (decision 9), and changing its class would alter shipped behavior
+this design has no reason to touch. It supplies no `appMenu` today and continues
+not to, so focusing it leaves the frontmost document's menus on screen.
 
 A document window's title is the playlist's current title, tracking
 `state.title` live as Rename changes it. Mac OS 8 has no dirty-title convention,
 so an unsaved document is not marked in its title bar; `File > Save` being
 enabled is the dirty indicator.
 
-**Signed out**, only the gate renders — no list window, no palette. That is
-today's behavior and decision 6 does not change it: the gate is modal, and
-closing it still quits, because a signed-out app has nothing it could do.
+**Signed out**, only the gate renders — no list window, no palette, no Control
+window. That is today's behavior (every other window is already gated on
+`status === "signedIn"`) and decision 6 does not change it: the gate is modal,
+and closing it still quits, because a signed-out app has nothing it could do.
 
 `ClassicyAlert` cannot host the Rename field — its contract is explicitly "only
 an icon, text, and buttons — no other controls." The Rename dialog is therefore
@@ -176,6 +240,11 @@ The provider holds:
   window's cascade offset.
 - `activeId: string | null` — the last-focused document window's playlist id.
 - `dialogMode: "media" | "file" | null` — the singleton file-open dialog.
+- `renaming: boolean` — whether the Rename dialog is up.
+- `showControl: boolean` — kept exactly as it is today, for `Window > Control`.
+
+The Tools palette needs no visibility flag: it is non-closable and always
+rendered while signed in (decision 9).
 
 ### How the palette reaches the active document
 
@@ -195,6 +264,15 @@ a palette button never has to be preceded by re-selecting the document.
 
 With `activeId === null` (only the list open, or nothing at all), every palette
 button and every `Edit > Add…` item is disabled.
+
+**The Control window rides the same seam.** It changes from
+`playlistId={openRecord?.id ?? null}` to `playlistId={activeId}`, with
+`playlistTitle` read from `states[activeId].title` so a rename is reflected
+immediately. Its existing `CONTROL_NO_PLAYLIST` fallback then covers "no document
+window is frontmost" without any change to `ControlPanel.tsx` itself — the
+component's props already model exactly this. Note the consequence worth stating
+plainly: with several playlists open, `Lock > Clock` acts on the **last-focused**
+one, which is why the window names the playlist it is controlling in its body.
 
 `ClassicyFileOpenDialog` moves up to the provider level alongside the palette. It
 is already a singleton (`id="playlist_editor_open"`), it is now triggered from
@@ -264,16 +342,29 @@ The six `Add…` children and the six palette buttons dispatch through one share
 helper (`addActions(dispatch, playlistId)`), so the two surfaces cannot drift
 apart as entry kinds are added.
 
+### Every window — Window
+
+Shared by the list window and every playlist document (decision 10):
+
+| Item | Behavior |
+|---|---|
+| Control | Existing item, unchanged: reveal-and-focus `playlist_editor_control`. |
+| Tools | Focus `playlist_editor_tools`. No reveal needed — it is never closed. |
+| `spacer` | |
+| My Playlists | Reveal-and-focus the list window. |
+| *(one per open document)* | The playlist's title; focuses its window. Rebuilt every render from `openIds`. |
+
 ### List window — File
 
 New · Open · `spacer` · Quit. The list window's existing action buttons (New,
 Open, Duplicate, Delete, Copy Link) are unchanged.
 
-### Palette — File (only while no document window is open)
+### Tools palette — File and Window (only while no document window is open)
 
-Open · `spacer` · Quit. See decision 9.
+File: Open · `spacer` · Quit. Window: as above, minus the empty document list.
+See decision 9 for why these appear conditionally.
 
-## Control Window contents
+## Tools palette contents
 
 A `ClassicyButtonToolbar` of six icon-only `ClassicyBevelButton`s, each wrapped
 in `ClassicyBalloonHelp`, in three groups — the toolbar draws the engraved
@@ -305,7 +396,7 @@ today.
 | Status `<select>` | `File > Status ▸` |
 | Save button | `File > Save` (⌘S) |
 | `SaveBar` inline warnings | `ClassicyAlert` per document window |
-| Six "Add …" text buttons | Control Window + `Edit > Add… ▸` |
+| Six "Add …" text buttons | Tools palette + `Edit > Add… ▸` |
 
 The dirty-close flow stops replacing the window body with a strip and becomes a
 Save / Don't Save / Cancel `ClassicyAlert`, consistent with decision 4. Per
@@ -322,6 +413,12 @@ longer quits the app.
 **Rewritten:** `PlaylistEditor.test.tsx`, `PlaylistEditorMain.test.tsx`,
 `SaveBar.test.tsx` (becomes `useSavePlaylist.test.ts`),
 `PlaylistEditor.integration.test.tsx`.
+
+**`ControlPanel.test.tsx` keeps all its existing cases** — the component's props
+are unchanged, so only the wiring above it moves. One case is added at the
+`PlaylistEditor` level: the Control window's `playlistId` follows `activeId`, so
+focusing a different playlist window retargets it, and closing the last document
+window returns it to `CONTROL_NO_PLAYLIST`.
 
 **New coverage:**
 
@@ -341,6 +438,8 @@ longer quits the app.
 - Signed out, neither the list window nor the palette renders — only the gate,
   and closing the gate still quits.
 - `File > Delete…` on a dirty document does not raise the dirty-save prompt.
+- The `Window` menu lists exactly the open document windows, and picking one
+  focuses it.
 
 Frontend vitest has no RTL auto-cleanup — every new test file needs its own
 `afterEach(cleanup)`.
@@ -350,6 +449,12 @@ Frontend vitest has no RTL auto-cleanup — every new test file needs its own
 - Any change to the `classicy` package.
 - Any change to the playlist runtime engine (`Providers/Playlist/*`), the wire
   protocol, or the Directus schema.
+- **Live room control.** `ControlPanel.tsx`'s internals, `roomApi.ts`,
+  `RoomControlBridge.tsx`, and the streamer's `/room` endpoint are untouched.
+  The only change in that area is which playlist id the Control window is handed
+  — a one-prop change at the call site, not inside the component.
+- Content locking (the disabled second button in the Control window's Lock
+  group) remains unbuilt.
 - Visual polish of the editor body beyond removing the two chrome rows.
 - Bespoke palette icon art (decision 8 defers it; the imports are the only thing
   that would change).
