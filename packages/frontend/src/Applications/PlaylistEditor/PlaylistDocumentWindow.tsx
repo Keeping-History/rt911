@@ -61,45 +61,69 @@ export function PlaylistDocumentWindow({
 		runAddAction(action, { playlistId, edit, setDialogMode });
 
 	const appMenu = useMemo<ClassicyMenuItem[]>(
-		() => [
-			documentFileMenu({
-				dirty: state.dirty,
-				status: state.status,
-				onOpenList,
-				onSave: save,
-				onRename: () => setRenaming(true),
-				// Rename writes the title ALONE. updatePlaylist takes a partial
-				// patch, so omitting `definition` means renaming cannot smuggle
-				// the document's unsaved entry edits into a save the user did
-				// not ask for.
-				onDuplicate: () => {
-					void duplicatePlaylist(playlistId)
-						.then((copy) => getPlaylist(copy.id))
-						.then(openPlaylist)
-						.catch((e) => setError(e instanceof Error ? e.message : "Couldn't duplicate."));
-				},
-				onDelete: () => setPending({ kind: "delete" }),
-				onSetStatus: (status) => edit(playlistId, { type: "setStatus", status }),
-				quitItem,
-			}),
-			documentEditMenu({
-				mode: state.mode,
-				onSetMode: (mode) => edit(playlistId, { type: "setMode", mode }),
-				addItems: addMenuItems(ADD_ACTIONS, runAdd),
-			}),
-			documentControlMenu({
-				lock: locks[playlistId] ?? { clock: false, busy: false },
-				onToggleClock: () => void toggleClockLock(playlistId),
-			}),
-			windowMenu({
-				onFocusTools,
-				onFocusList,
-				onFocusDocument,
-				documents: openIds.map((id) => ({ playlistId: id, title: states[id]?.title ?? "" })),
-			}),
-		],
+		() => {
+			// `state` can briefly be missing on the render where a window
+			// mounts before its EditorStates entry lands (not reachable from
+			// this provider today — it batches `openIds` and `states` together
+			// — but this memo runs before the `if (!state) return null` guard
+			// below, so it must not assume `state` is defined).
+			if (!state) return [];
+			return [
+				documentFileMenu({
+					dirty: state.dirty,
+					status: state.status,
+					onOpenList,
+					onSave: save,
+					onRename: () => setRenaming(true),
+					// Rename writes the title ALONE. updatePlaylist takes a partial
+					// patch, so omitting `definition` means renaming cannot smuggle
+					// the document's unsaved entry edits into a save the user did
+					// not ask for.
+					onDuplicate: () => {
+						void duplicatePlaylist(playlistId)
+							.then((copy) => getPlaylist(copy.id))
+							.then(openPlaylist)
+							.catch((e) => setError(e instanceof Error ? e.message : "Couldn't duplicate."));
+					},
+					onDelete: () => setPending({ kind: "delete" }),
+					onSetStatus: (status) => edit(playlistId, { type: "setStatus", status }),
+					quitItem,
+				}),
+				documentEditMenu({
+					mode: state.mode,
+					onSetMode: (mode) => edit(playlistId, { type: "setMode", mode }),
+					addItems: addMenuItems(ADD_ACTIONS, runAdd),
+				}),
+				documentControlMenu({
+					lock: locks[playlistId] ?? { clock: false, busy: false },
+					onToggleClock: () => void toggleClockLock(playlistId),
+				}),
+				windowMenu({
+					onFocusTools,
+					onFocusList,
+					onFocusDocument,
+					documents: openIds.map((id) => ({ playlistId: id, title: states[id]?.title ?? "" })),
+				}),
+			];
+		},
+		// `edit`, `openPlaylist`, and `toggleClockLock` come from
+		// PlaylistEditorProvider: `edit`/`openPlaylist` are useCallbacks with an
+		// empty dep array (stable for the component's whole lifetime), and
+		// `toggleClockLock`'s only dep is `locks`, which is already listed
+		// below — so none of the three can go stale without a listed dep also
+		// changing. `save` and `runAdd` ARE rebuilt on every render (save's
+		// chain bottoms out in an unmemoized `onSaved` closure passed to
+		// useSavePlaylist; `runAdd` is a plain, unmemoized closure), so no dep
+		// array could keep them "fresh" relative to this memo — but both close
+		// only over values already listed below (`state`, `playlistId`,
+		// `edit`), so an older captured copy behaves identically to a newer
+		// one. Listing all five would make this memo recompute on every
+		// render, which defeats the point of memoizing it.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[state, locks, openIds, states, playlistId, quitItem],
+		[
+			state, locks, openIds, states, playlistId, quitItem,
+			onOpenList, onFocusTools, onFocusList, onFocusDocument,
+		],
 	);
 
 	if (!state) return null;

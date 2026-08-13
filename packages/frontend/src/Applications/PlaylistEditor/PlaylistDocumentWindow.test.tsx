@@ -165,4 +165,48 @@ describe("PlaylistDocumentWindow", () => {
 			entries: [{ entry: { kind: "jump", at: "", to: "" } }],
 		});
 	});
+
+	// Not reachable from PlaylistEditorProvider today — it batches `openIds`
+	// and `states` together in the same callback, so a mounted playlistId
+	// always has a matching state entry. But nothing enforces that from this
+	// component's side, so it must survive `states` lacking this window's
+	// entry rather than throwing out of the appMenu memo.
+	it("returns null rather than throwing when this window's state hasn't landed yet", () => {
+		ctx.current = {
+			states: {},
+			openIds: [],
+			activeId: null,
+			locks: {},
+			lockError: null,
+			edit: editMock,
+			setActive: vi.fn(),
+			closePlaylist,
+			toggleClockLock,
+			dismissLockError: vi.fn(),
+			openPlaylist: vi.fn(),
+			setDialogMode: setDialogModeMock,
+			dialogMode: null,
+		};
+
+		// If the appMenu memo dereferences `state` without guarding it, this
+		// `render` call throws synchronously — a plain TypeError, not a
+		// graceful null — and the test fails right here rather than at the
+		// assertions below.
+		const { container } = render(
+			<PlaylistDocumentWindow
+				playlistId="p1"
+				index={0}
+				appId="PlaylistEditor.app"
+				appIcon="i.png"
+				quitItem={{ id: "quit", title: "Quit" }}
+				onFocusTools={vi.fn()}
+				onFocusList={vi.fn()}
+				onFocusDocument={vi.fn()}
+				onOpenList={vi.fn()}
+			/>,
+		);
+
+		expect(container.firstChild).toBeNull();
+		expect(screen.queryByTestId("win-playlist_doc_p1")).toBeNull();
+	});
 });
