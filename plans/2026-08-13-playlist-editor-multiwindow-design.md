@@ -151,10 +151,23 @@ later reader doesn't relitigate it.
    supplying an `appMenu`, so the menu bar keeps showing the *stale* File menu of
    a window that no longer exists — its Save and Delete items pointing at a dead
    document, and no reachable `File > Quit`. The palette therefore passes an
-   `appMenu` **only while zero document windows are open**: a short File +
-   Window menu. While any document window exists the palette stays menu-less, so
-   clicking it leaves the frontmost document's menus on screen instead of
-   swapping the menu bar out from under the user mid-click.
+   `appMenu`: a short File + Window menu.
+
+   **Amended during the final review — the palette supplies that menu
+   *unconditionally*.** This decision originally called for supplying it *only
+   while zero document windows are open*, so that clicking the palette left the
+   frontmost document's menus alone rather than swapping the bar out mid-click.
+   That is not achievable without modifying `classicy`, which is out of scope:
+   passing `appMenu={undefined}` does not make a window menu-less to classicy.
+   Its focus reducer falls back to the window's **stored** `menuBar`, and
+   `ClassicyWindow`'s `ClassicyWindowSetMenuBar` effect early-returns when no
+   menu is supplied — so the palette never clears the menu it stored while zero
+   documents were open. The conditional therefore did not prevent the swap; it
+   only made the swapped-in menu **stale**. Given a choice between "no menu →
+   dead menu items and an unreachable Quit" and "always a menu → the bar swaps
+   when you deliberately click the palette", the second is strictly safer, and
+   it also removes the stale-vs-fresh divergence. The palette's File and Window
+   menus are consequently always present and always current.
 
    The palette is consequently `closable={false}` (but `collapsable`). With the
    Control window removed by decision 11 the palette is the app's only
@@ -214,8 +227,8 @@ Five window kinds under one `ClassicyApp` (`PlaylistEditor.app`):
 |---|---|---|---|---|
 | My Playlists | `playlist_editor_list` | document | File, Window | `defaultWindow`. Persistent. Renamed from `playlist_editor_main`. |
 | Playlist document | `playlist_doc_<playlistId>` | document | File, Edit, Control, Window | One per open playlist; cascaded by index. |
-| Tools palette | `playlist_editor_tools` | **utility** | File, Window (only when no document is open) | **New.** `closable={false}`, `collapsable`. Not `alwaysOnTop`. |
-| Rename dialog | `playlist_rename_dialog` | modal | — | **New.** Singleton; targets `activeId`. |
+| Tools palette | `playlist_editor_tools` | **utility** | File, Window (always — see decision 9's amendment) | **New.** `closable={false}`, `collapsable`. Not `alwaysOnTop`. |
+| Rename dialog | `playlist_rename_<playlistId>` | modal | — | **New.** One per document window, so two simultaneous renames cannot collide in the store. |
 | Sign-in gate | `playlist_editor_gate` | modal | — | Unchanged. |
 
 **Deleted:** `playlist_editor_control` and its `ControlPanel` — decision 11.
@@ -270,10 +283,22 @@ independently testable reducer.
 The provider holds:
 
 - `states: EditorStates` — keyed editor state, one entry per open document.
-- `records: Record<string, PlaylistRecord>` — the last-saved record per open
-  document, so a save can refresh the list window without a refetch.
+- `listVersion: number` + `refreshList()` — a refresh seam the list window
+  watches. *(Amended during the final review. This was originally specified as
+  `records: Record<string, PlaylistRecord>`, "the last-saved record per open
+  document, so a save can refresh the list window without a refetch" — but that
+  map only ever holds the **open** documents, while the list window shows every
+  playlist the teacher owns, so it cannot drive the list on its own. A version
+  counter bumped on create, save, rename, duplicate and delete is what the list
+  window actually needs: it never unmounts now, so without it nothing done in a
+  document window ever reaches it.)*
 - `openIds: string[]` — open documents in open order; the index drives each
   window's cascade offset.
+- `openTicks: Record<string, number>` — bumped per playlist on every
+  `openPlaylist`. Each document window watches its own entry and raises itself,
+  because `ClassicyWindowOpen` on an id the store already knows only clears
+  `closed` — it does not focus — so a reopened document would otherwise come up
+  behind the list window.
 - `activeId: string | null` — the last-focused document window's playlist id.
 - `dialogMode: "media" | "file" | null` — the singleton file-open dialog.
 - `renaming: boolean` — whether the Rename dialog is up.
@@ -431,10 +456,11 @@ Shared by the list window and every playlist document (decision 10):
 New · Open · `spacer` · Quit. The list window's existing action buttons (New,
 Open, Duplicate, Delete, Copy Link) are unchanged.
 
-### Tools palette — File and Window (only while no document window is open)
+### Tools palette — File and Window
 
-File: Open · `spacer` · Quit. Window: as above, minus the empty document list.
-See decision 9 for why these appear conditionally.
+File: Open · `spacer` · Quit. Window: as above. Both are always supplied — see
+decision 9's amendment for why the original "only while no document window is
+open" condition could not work.
 
 ## Tools palette contents
 

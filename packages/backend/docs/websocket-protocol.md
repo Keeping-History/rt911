@@ -749,8 +749,8 @@ A `jump` is ignored by the client while [forced clock mode](#forced-clock-mode-s
 is active — the operator's master clock outranks a teacher.
 
 `lock` is **absolute, never a toggle**: the streamer holds no lock state, so the teacher's client owns
-the on/off and sends the value it wants. Two consequences: reopening the teacher's Control window
-resets its buttons (students stay locked — only the button forgets), and two teachers driving one
+the on/off and sends the value it wants. Two consequences: reopening the teacher's playlist document
+window resets its Control menu (students stay locked — only the checkmark forgets), and two teachers driving one
 playlist will not see each other's state. `content` is a deliberate non-target — it exists as a
 disabled button in the teacher UI and the server rejects it with 400, so a dead control can never
 look like a working one.
