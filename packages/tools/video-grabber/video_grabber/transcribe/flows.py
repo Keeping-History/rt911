@@ -15,6 +15,7 @@ airing at air_date sits at (air_date − tv_channels.start_date) seconds in the
 stream (see ../epg/assembler.py and docs/transcription.md)."""
 import os
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,7 +33,17 @@ from video_grabber.directus.writer import (
 )
 from video_grabber.storage import wasabi
 from video_grabber.transcribe.audio import extract_audio
-from video_grabber.transcribe.srt import Cue, dedupe_consecutive, merge, parse_srt, render_srt, render_vtt, shift
+from video_grabber.transcribe.chunking import windows
+from video_grabber.transcribe.srt import (
+    Cue,
+    dedupe_consecutive,
+    merge,
+    parse_srt,
+    render_srt,
+    render_vtt,
+    shift,
+    strip_nonspeech_cues,
+)
 from video_grabber.transcribe.whisper import transcribe_wav
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
@@ -111,6 +122,40 @@ def build_channel_cues(window_start: datetime, programs: list[tuple[datetime, st
     for air_date, srt_text in programs:
         offset = (_as_utc(air_date) - ws_utc).total_seconds()
         blocks.append(shift(parse_srt(srt_text), offset))
+    return merge(blocks)
+
+
+def probe_duration_seconds(path: Path) -> float:
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", str(path)],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0 or not r.stdout.strip():
+        raise RuntimeError(f"ffprobe could not read a duration from {path}")
+    return float(r.stdout.strip())
+
+
+def transcribe_windows(wav: Path, scratch: Path, cfg, duration_s: float) -> list[Cue]:
+    """Transcribe a recording as a sequence of bounded windows, merged onto one
+    timeline.
+
+    Whole-file transcription collapses on the long position tapes: a single
+    5-minute window of the NEADS MCC tape yields 150 words while the entire
+    6.67-hour file yields 84. See
+    plans/2026-08-13-audio-enhancement-findings.md.
+
+    VAD is enabled for every window. On the short clips it costs nothing; on the
+    tapes it is what stops hours of open-mic silence swamping the decoder.
+    """
+    blocks: list[list[Cue]] = []
+    for i, (offset_ms, length_ms) in enumerate(
+        windows(duration_s, cfg.chunk_seconds, cfg.chunk_overlap_seconds)
+    ):
+        base = scratch / f"w{i:04d}"
+        srt_path = transcribe_wav(wav, base, cfg, offset_ms=offset_ms,
+                                  duration_ms=length_ms, vad=True)
+        blocks.append(shift(parse_srt(srt_path.read_text()), offset_ms / 1000.0))
     return merge(blocks)
 
 
@@ -231,14 +276,18 @@ def transcribe_item_flow(job_id: str) -> None:
     try:
         transition_transcribe_job(job_id, "transcribing")
         wav = extract_audio(job.source_url, scratch / "audio.wav")
-        out_base = scratch / "out"
-        srt_path = transcribe_wav(wav, out_base, cfg)
-        vtt_path = out_base.with_suffix(".vtt")
+        cues = transcribe_windows(wav, scratch, cfg, probe_duration_seconds(wav))
 
-        # Overwrite both files with hallucination-loop-cleaned cues. Whisper
-        # sometimes repeats a phrase over silence at the end of a file; keeping
-        # only the first occurrence of each consecutive identical cue removes it.
-        clean_cues = dedupe_consecutive(parse_srt(srt_path.read_text()))
+        # strip_nonspeech_cues runs BEFORE dedupe_consecutive so [Music] and
+        # [BLANK_AUDIO] are removed outright rather than collapsed to one cue —
+        # collapsing is what made six hours of open-mic NEADS audio look like a
+        # clean 84-word transcript. dedupe then removes genuine hallucination
+        # loops, where whisper repeats a phrase over silence.
+        clean_cues = dedupe_consecutive(strip_nonspeech_cues(cues))
+        out_base = scratch / "out"
+        out_base.parent.mkdir(parents=True, exist_ok=True)
+        srt_path = out_base.with_suffix(".srt")
+        vtt_path = out_base.with_suffix(".vtt")
         srt_path.write_text(render_srt(clean_cues))
         vtt_path.write_text(render_vtt(clean_cues))
 

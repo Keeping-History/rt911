@@ -100,13 +100,16 @@ def flow_env(monkeypatch, tmp_path):
         ),
     )
     monkeypatch.setattr(flows, "extract_audio", lambda url, dst: dst)
+    # The wav is never written, so ffprobe cannot read it; the chunking maths is
+    # covered by test_transcribe_chunking.py and test_transcribe_windows_*.
+    monkeypatch.setattr(flows, "probe_duration_seconds", lambda p: 12.0)
     monkeypatch.setattr(
         flows, "wasabi",
         SimpleNamespace(upload_text=lambda text, key, cfg: None, list_keys=lambda *a: []),
     )
 
     def make_transcriber(fail=None):
-        def fake_transcribe(wav, out_base, cfg):
+        def fake_transcribe(wav, out_base, cfg, **kw):
             # idle_session_timeout fires mid-transcription: every connection
             # opened before this point is now dead.
             for c in conns:
@@ -173,6 +176,26 @@ def test_build_channel_subtitles_raises_when_channel_lookup_misses():
          patch.object(flows, "get_tv_channel_start_date", return_value=None):
         with pytest.raises(ValueError, match="no tv_channels row"):
             flows.build_channel_subtitles_flow("cctv4")
+
+
+def test_transcribe_windows_shifts_each_window_onto_the_file_timeline(monkeypatch, tmp_path):
+    calls = []
+
+    def fake(wav, out_base, cfg, *, offset_ms=0, duration_ms=0, vad=False, runner=None):
+        calls.append((offset_ms, vad))
+        out_base.parent.mkdir(parents=True, exist_ok=True)
+        srt = out_base.with_suffix(".srt")
+        srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nword\n")
+        return srt
+
+    monkeypatch.setattr(flows, "transcribe_wav", fake)
+    cfg = SimpleNamespace(chunk_seconds=600, chunk_overlap_seconds=0)
+    cues = flows.transcribe_windows(tmp_path / "a.wav", tmp_path, cfg, duration_s=1200.0)
+    assert [c[0] for c in calls] == [0, 600000]
+    # VAD must be on for every window -- it is the whole point of the change.
+    assert all(vad for _, vad in calls)
+    # the second window's 1s cue lands at 601s on the file timeline
+    assert any(abs(c.start - 601.0) < 0.01 for c in cues)
 
 
 def test_existing_srt_key_prefers_the_mirrored_path():

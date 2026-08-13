@@ -37,6 +37,9 @@ class Config:
     # --- Audio transcription (whisper.cpp) ---
     whisper_bin: str = field(default_factory=lambda: os.getenv("WHISPER_BIN", "whisper-cli"))
     whisper_model: str = field(default_factory=lambda: os.getenv("WHISPER_MODEL", "/opt/models/ggml-medium.en.bin"))
+    vad_model: str = field(default_factory=lambda: os.getenv("VAD_MODEL", "/opt/models/ggml-silero-v5.1.2.bin"))
+    chunk_seconds: int = field(default_factory=lambda: _int("TRANSCRIBE_CHUNK_SECONDS", 600))
+    chunk_overlap_seconds: int = field(default_factory=lambda: _int("TRANSCRIBE_CHUNK_OVERLAP_SECONDS", 5))
     whisper_threads: int = field(default_factory=lambda: _int("WHISPER_THREADS", 4))
     subtitles_prefix: str = field(default_factory=lambda: os.getenv("SUBTITLES_PREFIX", "subtitles"))
 
