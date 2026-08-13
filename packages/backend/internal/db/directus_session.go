@@ -53,7 +53,7 @@ func deref(s *string) string {
 
 // SessionCookieName is Directus's default session cookie. The frontend logs in
 // with mode:"session" and SESSION_COOKIE_DOMAIN is ".911realtime.org", so the
-// browser sends this on the WebSocket upgrade to stream-beta — cross-origin but
+// browser sends this on the WebSocket upgrade to stream — cross-origin but
 // same-site, which SameSite=lax permits.
 const SessionCookieName = "directus_session_token"
 
