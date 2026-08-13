@@ -12,10 +12,11 @@ are reused across the airspace (see ``segment_rades_exports.py``).
 
 Method:
 
-1. **Load** only the decoded recordings that cover 13:30-16:30Z with southern
-   coverage — the SEADS (Southeast Air Defense Sector) half-hour raw files,
-   whose sensors do reach Sarasota, plus (with ``--all-files``) the whole raw
-   corpus via ``segment_rades_exports.load_beacon_decoded``.
+1. **Select and load** recordings by content: every SEADS (Southeast Air Defense
+   Sector) raw recording, whose sensors do reach Sarasota, plus every other raw
+   recording probed to hold returns inside the corridor box during the window.
+   ``--all-files`` instead loads the whole raw corpus via
+   ``segment_rades_exports.load_beacon_decoded``.
 2. **Clip** to the Florida->Louisiana corridor box (lat 26-34, lon -94.5..-81)
    and 13:30-16:10Z.
 3. **Chain** with the segmenter's own machinery: ``segment()`` (per-code
@@ -26,15 +27,19 @@ Method:
 4. **Seed** on returns within SEED_DEG of SRQ between 13:40 and 14:30Z, and
    report every chain touching a seed with >= MIN_CHAIN_RETURNS returns:
    first/last fix, course over the first 15 min, Mode C profile, beacon codes.
-5. **Export** the chosen chain (``--pick <index>``) as a waypoint file in the
-   curated notable-flight shape, decimated to ~1 per DECIMATE_S with the first
-   and last returns kept verbatim.
+5. **Export** the chosen chain — named by beacon code + first-return time, never
+   by its position in the report — as a waypoint file in the curated
+   notable-flight shape, decimated to ~1 per DECIMATE_S with the first and last
+   returns kept verbatim.
 
-Not part of the shipped package — offline analysis:
+Not part of the shipped package — offline analysis. Run it bare first to read the
+report, then re-run naming the chain you want. The command below reproduces the
+committed AF1 leg-1 file exactly:
 
     python analysis/find_af1_leg1.py \
         --decoded-dir "../../../Radar_Evaluation_Squadron_(RADES)/decoded" \
-        [--pick 0 --out data/rades/af1_leg1_waypoints.json]
+        --pick-code 3755 --pick-first 13:54:41 \
+        --out data/rades/af1_leg1_waypoints.json
 
 Requires pandas (the flight-recon venv has it).
 """
@@ -74,11 +79,12 @@ HUNT_MIN_RETURNS = 8
 HUNT_MIN_DUR_S = 120
 HUNT_MIN_NET_NM = 3.0
 
-# Recordings that cover 13:30Z onward with coverage over peninsular Florida.
-# (The Pentagon/WTC/UA93 sets' sensors are northeastern; SEADS is the Southeast
-# Air Defense Sector and is the only part of the corpus that sees Sarasota.)
-WINDOW_FILE_KEYS = ("SEADS_12541330", "SEADS_12541400", "SEADS_12541430",
-                    "SEADS_12541500", "SEADS_12541530", "SEADS_12541600")
+# File selection is by *content*, not by a hand-written allow-list: every SEADS
+# (Southeast Air Defense Sector) raw recording is taken unconditionally, and
+# every other raw recording is probed for returns that actually land inside the
+# corridor box during the hunt window. A hardcoded list would silently decide
+# the search's own negative result.
+SEADS_KEY = "SEADS_1254"
 
 
 def hms(secs):
@@ -89,25 +95,70 @@ def utc_iso(secs):
     return (DAY + timedelta(seconds=float(secs))).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def raw_recordings(decoded_dir):
+    """The ``Data/Raw`` originals from the batch decoder's summary.
+
+    The combined/filtered products in the corpus are subsets of these and would
+    double-count returns — the same ``raw_only`` rule ``load_beacon_decoded``
+    applies.
+    """
+    with open(os.path.join(decoded_dir, "summary.json")) as fh:
+        summary = json.load(fh)
+    return [r for r in summary
+            if r.get("status") == "ok"
+            and "/Data/Raw/" in r["file"].replace("\\", "/")]
+
+
+def contributes_to_corridor(path):
+    """True when a recording holds any return inside the corridor + window.
+
+    Reads three columns only, so probing the whole corpus is cheap relative to
+    loading it. Position validity is not checked here: this is a screen, and a
+    file with no positioned returns in the box cannot gain any later.
+    """
+    df = pd.read_csv(path, usecols=["epoch_s", "DecLat", "DecLon"], low_memory=False)
+    secs = df.epoch_s % 86400
+    return bool(((secs >= T0) & (secs <= T1)
+                 & df.DecLat.between(BBOX["la0"], BBOX["la1"])
+                 & df.DecLon.between(BBOX["lo0"], BBOX["lo1"])).any())
+
+
+def select_recordings(decoded_dir):
+    """Every SEADS raw recording, plus any other raw recording with corridor content.
+
+    Prints the accept/reject decision for every non-SEADS recording so the
+    search's coverage claim is auditable rather than asserted.
+    """
+    raw = raw_recordings(decoded_dir)
+    seads = [r for r in raw if SEADS_KEY in r["out"]]
+    others = [r for r in raw if SEADS_KEY not in r["out"]]
+    print(f"recording selection: {len(seads)} SEADS + probing {len(others)} others "
+          f"for corridor content")
+    extra, rejected = [], []
+    for rec in others:
+        if contributes_to_corridor(os.path.join(decoded_dir, rec["out"])):
+            extra.append(rec)
+            print(f"  + {rec['out']}: has corridor returns in window")
+        else:
+            rejected.append(rec["out"])
+    print(f"  - {len(rejected)} recordings contribute nothing to the corridor/window")
+    picked = seads + extra
+    if not picked:
+        raise SystemExit(f"no usable recordings found under {decoded_dir}")
+    return picked
+
+
 def load_window(decoded_dir, all_files=False):
     """Beacon-return table for the hunt window.
 
-    ``--all-files`` delegates to the segmenter's own corpus loader; the default
-    reads only WINDOW_FILE_KEYS with the identical column/validity contract
-    (valid Mode 3, decoded position, Mode C only where its valid bit is set),
-    because loading all 56 raw recordings costs ~16 M rows for data that is
-    almost entirely outside this window and this part of the country.
+    ``--all-files`` delegates to the segmenter's own corpus loader (the whole
+    raw corpus, ~16 M rows); the default reads the content-selected recordings
+    with the identical column/validity contract (valid Mode 3, decoded position,
+    Mode C only where its valid bit is set).
     """
     if all_files:
         return seg.load_beacon_decoded(decoded_dir)
-    with open(os.path.join(decoded_dir, "summary.json")) as fh:
-        summary = json.load(fh)
-    picked = [r for r in summary
-              if r.get("status") == "ok"
-              and "/Data/Raw/" in r["file"].replace("\\", "/")
-              and any(k in r["out"] for k in WINDOW_FILE_KEYS)]
-    if not picked:
-        raise SystemExit(f"no window recordings found under {decoded_dir}")
+    picked = select_recordings(decoded_dir)
     frames = []
     for rec in picked:
         df = pd.read_csv(os.path.join(decoded_dir, rec["out"]),
@@ -210,13 +261,21 @@ def drop_modec_spikes(pts, jump_ft=MODEC_JUMP_FT, half=3):
     steady FL390 cruise. Position is left untouched; only the altitude is
     invalidated, so the fix can still be decimated away or carried as a
     no-Mode-C return.
+
+    The neighbour set excludes the reading under test **by index, not by value**.
+    Excluding by value inverts the guard on exactly the windows it exists for: in
+    six 39,000 ft readings around one 43,800 ft spike, every good reading's
+    neighbour set collapses to ``[43800]`` and the guard blanks the six good
+    readings along with the spike.
     """
     alts = [None if pd.isna(p[3]) else float(p[3]) for p in pts]
     out, dropped = [], 0
     for i, p in enumerate(pts):
         a = alts[i]
         if a is not None:
-            near = [x for x in alts[max(0, i - half):i + half + 1] if x is not None and x != a]
+            lo = max(0, i - half)
+            near = [x for j, x in enumerate(alts[lo:i + half + 1], start=lo)
+                    if x is not None and j != i]
             if near and abs(a - float(np.median(near))) > jump_ft:
                 p = (p[0], p[1], p[2], np.nan, p[4])
                 dropped += 1
@@ -260,15 +319,25 @@ def export(tr, out_path):
 
     Every emitted waypoint carries a real Mode C reading — no interpolation and
     no carry-forward, because ``alt_src: "modec"`` has to mean what it says.
+    Dropping a Mode-C-less fix mid-track is fine (the next one is 60 s away);
+    dropping the *first* or *last* one silently would break the documented
+    verbatim-endpoints contract, so that is called out loudly instead.
     """
+    kept = decimate(drop_modec_spikes(tr["pts"]))
     rows, no_alt = [], 0
-    for t, lat, lon, alt, site in decimate(drop_modec_spikes(tr["pts"])):
+    for idx, (t, lat, lon, alt, site) in enumerate(kept):
         if pd.isna(alt):
             no_alt += 1
+            if idx in (0, len(kept) - 1):
+                print(f"WARNING: {'first' if idx == 0 else 'last'} fix ({hms(t)}Z) has no "
+                      f"valid Mode C and was dropped — the exported endpoint is NOT the "
+                      f"chain's endpoint")
             continue
         rows.append({"utc": utc_iso(t), "lat": round(float(lat), 4),
                      "lon": round(float(lon), 4), "alt_ft": int(round(float(alt))),
                      "site": str(site), "alt_src": "modec", "source": "radar"})
+    if not rows:
+        raise SystemExit("no exportable waypoints: the chain has no valid Mode C at all")
     if no_alt:
         print(f"dropped {no_alt} decimated fix(es) with no valid Mode C")
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
@@ -279,14 +348,37 @@ def export(tr, out_path):
     return rows
 
 
+def find_chain(reported, code, first_hms, tol_s=60):
+    """The reported chain carrying ``code`` whose first return is at ``first_hms``.
+
+    Selection is by content, never by position in the report: the reported list
+    is ordered by first-return time and its indices shift whenever the corpus or
+    any constant changes, so an index would quietly export a different aircraft.
+    Ambiguity is an error, not a coin flip.
+    """
+    h, m, s = (int(x) for x in first_hms.split(":"))
+    want = h * 3600 + m * 60 + s
+    hit = [tr for tr in reported
+           if code in tr.get("codes", [tr["code"]])
+           and abs(tr["pts"][0][0] - want) <= tol_s]
+    if len(hit) != 1:
+        raise SystemExit(
+            f"--pick-code {code} --pick-first {first_hms} matched {len(hit)} chains "
+            f"(need exactly 1). Re-read the report above and pass the code and "
+            f"first-return time of the chain you mean.")
+    return hit[0]
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--decoded-dir", required=True, help="rs3_batch_decode output directory")
     p.add_argument("--all-files", action="store_true",
-                   help="load the whole raw corpus instead of the window recordings")
-    p.add_argument("--pick", type=int, default=None,
-                   help="index of the reported chain to export as waypoints")
-    p.add_argument("--out", default=None, help="waypoint JSON path (with --pick)")
+                   help="load the whole raw corpus instead of the content-selected recordings")
+    p.add_argument("--pick-code", default=None,
+                   help="beacon code of the reported chain to export (with --pick-first)")
+    p.add_argument("--pick-first", default=None,
+                   help="that chain's first-return time, HH:MM:SS UTC")
+    p.add_argument("--out", default=None, help="waypoint JSON path")
     args = p.parse_args(argv)
 
     b = clip(load_window(args.decoded_dir, args.all_files))
@@ -299,10 +391,10 @@ def main(argv=None):
     for i, tr in enumerate(reported):
         describe(tr, i)
 
-    if args.pick is not None:
-        if not args.out:
-            raise SystemExit("--pick requires --out")
-        export(reported[args.pick], args.out)
+    if args.pick_code or args.pick_first:
+        if not (args.pick_code and args.pick_first and args.out):
+            raise SystemExit("exporting needs --pick-code, --pick-first and --out")
+        export(find_chain(reported, args.pick_code, args.pick_first), args.out)
 
 
 if __name__ == "__main__":
