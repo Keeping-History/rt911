@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ADD_ACTIONS } from "./addActions";
 import { ToolsPalette } from "./ToolsPalette";
 
 const editMock = vi.fn();
@@ -54,5 +55,35 @@ describe("ToolsPalette", () => {
 
 		expect(setDialogModeMock).toHaveBeenCalledWith("media");
 		expect(editMock).not.toHaveBeenCalled();
+	});
+
+	// Verify all six add actions are present in the toolbar and dispatch correctly.
+	// This parametrized test catches both dispatch wiring and silent drops due to GROUPS/ADD_ACTIONS mismatches.
+	describe("add action dispatch coverage", () => {
+		ADD_ACTIONS.forEach((action) => {
+			it(`${action.label} button is present and dispatches correctly`, () => {
+				ctx.current.activeId = "p1";
+				render(<ToolsPalette appId="PlaylistEditor.app" icon="i.png" />);
+
+				// Assert the button exists by accessible name — catches a missing or mis-typed GROUPS entry.
+				const button = screen.getByRole("button", { name: action.label });
+				expect(button).toBeDefined();
+
+				fireEvent.click(button);
+
+				if (action.entry === null) {
+					// Dialog actions (media, file) open the file dialog and do NOT dispatch an entry.
+					expect(setDialogModeMock).toHaveBeenCalledWith(action.id);
+					expect(editMock).not.toHaveBeenCalled();
+				} else {
+					// Entry actions dispatch via edit with the action's entry payload.
+					expect(editMock).toHaveBeenCalledWith("p1", {
+						type: "addEntries",
+						entries: [{ entry: action.entry }],
+					});
+					expect(setDialogModeMock).not.toHaveBeenCalled();
+				}
+			});
+		});
 	});
 });
