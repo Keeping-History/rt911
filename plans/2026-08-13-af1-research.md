@@ -66,6 +66,38 @@ A dedicated search pass for the George W. Bush Presidential Library's "President
 - **Escort:** None initially. At 11:28 ET, two Texas ANG F-16s ("Cowry 45," 111th Fighter Squadron out of Ellington Field, scrambled ~20 min earlier) joined up roughly 50 miles off the Louisiana coast, shortly before landing. (Escort details noted per brief instruction — out of scope for further modeling.)
 - **Wheels-on Barksdale:** ~11:45 ET (15:45Z), per Commission Report and corroborated by multiple secondary sources (11:44–11:45).
 
+#### Leg 1 — RADES radar track FOUND (supersedes the anchors-plus-great-circle fallback)
+
+Task 2's bounded search of the decoded RADES corpus (`analysis/find_af1_leg1.py`) **found the leg-1 track**: 2,010 radar returns, 13:54:41Z → 15:32:02Z, exported (decimated to ~1/60 s, first and last verbatim) as `packages/tools/flight-recon/data/rades/af1_leg1_waypoints.json` — 97 waypoints, every one a real Mode C reading.
+
+**What the track is.** Beacon code **3755**, seen by nine SEADS sensors (SEA03/04/05/06/07/09/11/12/14) in relay:
+
+| | |
+|---|---|
+| First return | 13:54:41Z, 27.4868, −82.5386, **800 ft** — 5.5 nm north-northwest of the SRQ threshold, i.e. a fix taken seconds after rotation |
+| Climb | continuous 800 → 39,000 ft in 18 min; level at **exactly FL390 at 14:12:53Z** and holds it for 62 min |
+| Route | initial climb **north** up the peninsula (course 356°/022°) to 29.3 N over north-central Florida, then a turn **west-northwest at ~14:11–14:13Z**, thence a straight 283–295° run the length of the Florida panhandle (Tallahassee → Panama City → Pensacola → Mobile → Hattiesburg → Natchez), ground speed steady at 390–460 kt |
+| Descent | begins 15:15:29Z out of FL390, continuous to **7,100 ft at 15:32:02Z** at 32.1993, −92.8561 — **44.7 nm east of Barksdale AFB, on a 283° course, i.e. established on the arrival** |
+| End | not an aircraft event: the track simply leaves SEADS sensor coverage at low altitude on final approach |
+
+**Identification argument.** Time + origin + course + continuity, in that order — never the beacon code, which is reused across the airspace:
+
+1. **Origin and time.** The national ground stop was complete by ~13:25Z. Of 2,771 chains in the Florida→Louisiana corridor between 13:30 and 16:10Z, exactly **50** touch a 0.4° box around SRQ between 13:40 and 14:30Z, and of those exactly **one** starts *low and near the field* inside the window: this one, at 800 ft, 5.5 nm out, at 13:54:41Z. Every other seeded chain is either already at altitude at 13:30Z (pre-ground-stop traffic descending into Florida fields) or a local, sub-40-nm flight. There was no second candidate to weigh.
+2. **Wheels-off match.** 13:54:41Z at 800 ft implies rotation ~13:54:15–13:54:30Z, sitting exactly on the Commission Report's 09:55 ET and Your Observer's 09:54, and 2–3 min before The Aviationist's 09:57.
+3. **Destination match.** The chain flies 607 nm net and terminates descending through 7,100 ft, 45 nm from Barksdale, at 15:32Z — a ~13 min final, i.e. wheels-on ~15:45Z. That is the Commission Report's "about 11:45" to the minute, and it is an *independent* corroboration: nothing in the search used Barksdale as an input.
+4. **Continuity.** The chain is a single unbroken fragment (no stitching required) with no beacon-code change; 3755 appears 2,011 times in the whole 13:30–16:30Z SEADS window and *every one* of those returns belongs to this track. No code reuse to disambiguate.
+5. **Profile plausibility.** 800 ft → FL390 climb, 390–460 kt cruise, continuous descent — a heavy four-engine jet's profile, and consistent with the VC-25 in a hurry.
+
+**What the radar settles about the narrative:**
+
+- **FL390 is confirmed, and the "45,000 ft" figure is refuted for this leg.** The aircraft levels at exactly 39,000 ft and never leaves it until descent. Of 2,010 returns exactly one reads above FL390 (43,800 ft, 14:47:39Z) and it is a garbled plot — its neighbours on both sides read 39,000, and the script's Mode C spike guard blanks it. Conflicts #8 should be closed in favour of 39,000 ft; History.com's "45,000 ft during the holding pattern phase over the Gulf" is not what the radar shows.
+- **There was no holding pattern.** The track is a single continuous climb-cruise-descent with one course change. No orbit, no reversal, no loiter.
+- **"Largely over the Gulf of Mexico" is not what the radar shows** — a correction to the Leg 1 route note above. AF1 climbed *north* up the Florida peninsula, then ran the panhandle **overland/along the coast**, staying north of 30.1 N the whole way. It never went out over open water. The Aviationist's narrower phrasing ("the length of the Florida panhandle direct to Barksdale") is accurate; the "over the Gulf" gloss found in secondary sources is not.
+- **The westward turn happened at ~14:11–14:13Z (10:11–10:13 ET)**, corroborating the "around 10:10 the aircraft turned west and climbed to 39,000 ft" account almost exactly.
+- **The brief's "initial northwest/low-altitude phase" is refuted.** The initial climb-out is a 313–323° left turn off the runway for ~2 min, then straight *north* (354–356°, then 022°) for 12 min. Nothing low-and-northwest, and nothing evasive.
+
+**Caveats.** (a) The track ends 45 nm short of Barksdale because SEADS coverage runs out, not because the flight did — the last ~13 min of the approach is unrecorded and Task 5 must interpolate it to the BAD threshold. (b) Mode C is *pressure* altitude in 100-ft quanta, not AGL or GPS. (c) Positions are the RS3-computed lat/lon per sensor; the cross-site registration bias documented in `extract_rades_notables.py` (~0.5–2.4 nm) applies at the SEA11→SEA05→SEA09→SEA06→SEA14→SEA04 handoffs, visible as small course wobbles at 14:10, 14:52 and 15:24. No cross-site bias correction was applied here; if Task 5 wants the curated flights' smoothness it should reuse that module's primary-site-with-bias-corrected-fill approach.
+
 ### Leg 2 — Sept 11: Barksdale AFB (BAD) → Offutt AFB (OFF)
 
 - **Ground time at Barksdale:** 11:45 → 13:44 = **1h59m (~2h)**. (Recomputed from this document's chosen wheels-on/wheels-off values; an earlier draft of this document stated ~1h45m, which was arithmetically wrong — it matched the *rejected* 13:30 alternate wheels-off time, not the chosen 13:44.) Bush delivered taped (not live) remarks before re-boarding.
@@ -126,7 +158,7 @@ These are airport reference-point coordinates (FAA/AirNav published), **not** ve
 
 7. **"3:07 PM" Offutt arrival vs. 2:50 PM landing:** One local retrospective (nonpareilonline.com) states "3:07 P.M. — President Bush arrives at U.S. Strategic Air Command at Offutt Air Force Base," which appears to conflate the AF1 landing time (2:50 PM, well-corroborated by the Commission Report and two other independent sources) with the motorcade's arrival at the STRATCOM headquarters/bunker building a few minutes later. Treated as **not a real conflict** — landing time is 14:50 ET; the STRATCOM-building arrival (a ground-transport event, not an aircraft event) is ~15:07 ET.
 
-8. **Leg 1 altitude — 39,000 ft vs. 45,000 ft.** The Aviationist's radar-sourced figure for the SRQ→BAD cruise is 39,000 ft. History.com separately attributes 45,000 ft specifically to "the holding pattern phase over the Gulf of Mexico" — part of the same leg. **Chosen: 39,000 ft** as the primary cruise figure (radar-sourced, more specific), with 45,000 ft noted as a possible brief, higher excursion during the evasive/holding phase, or possibly an inaccurate generalization repeated across secondary sources (the same 45,000 ft/"service ceiling" phrase recurs, vaguely attributed, across several unrelated secondary articles — see Leg 2/3 altitude notes). Not fully resolved.
+8. **Leg 1 altitude — 39,000 ft vs. 45,000 ft.** The Aviationist's radar-sourced figure for the SRQ→BAD cruise is 39,000 ft. History.com separately attributes 45,000 ft specifically to "the holding pattern phase over the Gulf of Mexico" — part of the same leg. **Chosen: 39,000 ft** as the primary cruise figure (radar-sourced, more specific), with 45,000 ft noted as a possible brief, higher excursion during the evasive/holding phase, or possibly an inaccurate generalization repeated across secondary sources (the same 45,000 ft/"service ceiling" phrase recurs, vaguely attributed, across several unrelated secondary articles — see Leg 2/3 altitude notes). **RESOLVED by Task 2's radar track** (see "Leg 1 — RADES radar track FOUND"): the aircraft levels at exactly FL390 at 14:12:53Z and holds it for 62 minutes until top of descent; the single return above FL390 in 2,010 is a garbled plot. There was also no holding pattern at all. 39,000 ft stands; 45,000 ft is refuted for this leg.
 
 9. **Colony Beach Resort motorcade-arrival time — 18:00 vs. 18:15 ET.** Sarasota Magazine's direct, contemporaneous, first-person account states "The President's motorcade arrived at 6 p.m." Your Observer's retrospective states 6:15 p.m. **Chosen: 18:00 ET**, from the more contemporaneous/specific source; the 15-minute gap is used as the basis for the Leg 0 SRQ-wheels-on derivation's uncertainty band rather than picked as a hard conflict to resolve further.
 
