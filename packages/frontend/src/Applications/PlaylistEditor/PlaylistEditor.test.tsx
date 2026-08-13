@@ -1,211 +1,150 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ClassicyFileOpenSelection, ClassicyMenuItem } from "classicy";
+import { PlaylistEditor } from "./PlaylistEditor";
 
 const dispatchMock = vi.fn();
-// Captures each ClassicyWindow's onCloseFunc by window id, so tests can
-// simulate the user clicking the window's real close box without needing to
-// render classicy's actual chrome.
-const windowCloseFns = vi.hoisted(() => ({ current: {} as Record<string, () => void> }));
-// Captures the app menu so a test can invoke a menu item without rendering
-// classicy's real menu bar.
-const appMenus = vi.hoisted(() => ({ current: [] as MenuGroup[] }));
-type MenuItem = { id?: string; title?: string; onClickFunc?: () => void };
-type MenuGroup = { id?: string; title?: string; menuChildren?: MenuItem[] };
+const windows = vi.hoisted(() => ({ current: {} as Record<string, { appMenu?: ClassicyMenuItem[] }> }));
+// Captures ClassicyFileOpenDialog's props, the same way `windows` captures
+// ClassicyWindow's appMenu — needed to invoke onOpenFunc and to observe
+// whether the dialog closed (open flips false) without rendering classicy's
+// real file-dialog chrome.
+const fileOpenDialog = vi.hoisted(() => ({
+	current: null as null | {
+		open?: boolean;
+		onOpenFunc?: (selections: ClassicyFileOpenSelection[]) => void;
+	},
+}));
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<typeof import("classicy")>()),
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ClassicyWindow: ({
-		children,
-		title,
-		id,
-		onCloseFunc,
-		appMenu,
-	}: {
-		children?: React.ReactNode;
-		title?: string;
-		id?: string;
-		onCloseFunc?: () => void;
-		appMenu?: MenuGroup[];
+	ClassicyWindow: ({ children, id, appMenu }: {
+		children?: React.ReactNode; id?: string; appMenu?: ClassicyMenuItem[];
 	}) => {
-		if (id && onCloseFunc) windowCloseFns.current[id] = onCloseFunc;
-		if (appMenu) appMenus.current = appMenu;
-		return <div data-testid={`window-${title}`}>{children}</div>;
+		if (id) windows.current[id] = { appMenu };
+		return <div data-testid={`win-${id}`}>{children}</div>;
+	},
+	ClassicyFileOpenDialog: (props: {
+		open?: boolean;
+		onOpenFunc?: (selections: ClassicyFileOpenSelection[]) => void;
+	}) => {
+		fileOpenDialog.current = props;
+		return null;
 	},
 	useAppManagerDispatch: () => dispatchMock,
+	useAppManager: () => false,
 }));
 
-const mockAuth = vi.hoisted(() => ({
-	status: "anonymous" as string,
-	user: null as { id: string } | null,
-}));
-vi.mock("../../Providers/Auth/AuthContext", () => ({
-	useAuth: () => mockAuth,
-}));
-
-const mainProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
-vi.mock("./PlaylistEditorMain", () => ({
-	PlaylistEditorMain: (props: Record<string, unknown>) => {
-		mainProps.current = props;
-		return <div data-testid="editor-main">{props.closeRequested ? "CLOSING" : "EDITING"}</div>;
-	},
+const mockAuth = vi.hoisted(() => ({ status: "signedIn" as string, user: { id: "u1" } as { id: string } | null }));
+vi.mock("../../Providers/Auth/AuthContext", () => ({ useAuth: () => mockAuth }));
+vi.mock("../../Providers/MediaStream/useMediaStream", () => ({
+	useMediaStream: () => ({ sources: { video: [], audio: [] } }),
 }));
 
 const testRecord = {
 	id: "p1", title: "Lesson", status: "draft", date_updated: null, user_created: "u1",
-	definition: { version: 1, mode: "restrict", entries: [] },
+	definition: { version: 1, mode: "annotate", entries: [] },
+};
+// A second record, opened only by the file-dialog test below, to prove a
+// selection lands on whichever playlist is ACTIVE rather than the one that
+// happened to open first.
+const testRecord2 = {
+	id: "p2", title: "Lesson Two", status: "draft", date_updated: null, user_created: "u1",
+	definition: { version: 1, mode: "annotate", entries: [] },
 };
 vi.mock("./PlaylistList", () => ({
 	PlaylistList: ({ onOpen }: { onOpen: (r: unknown) => void }) => (
-		<button onClick={() => onOpen(testRecord)}>Mock Open</button>
+		<>
+			<button onClick={() => onOpen(testRecord)}>Mock Open</button>
+			<button onClick={() => onOpen(testRecord2)}>Mock Open 2</button>
+		</>
 	),
 }));
+// Captures each open document's `state.entries` by playlist id, so the
+// file-dialog test can tell which document actually received the dispatched
+// entry instead of just asserting *some* dispatch happened.
+const mainEntries = vi.hoisted(() => ({ current: {} as Record<string, unknown[]> }));
+vi.mock("./PlaylistEditorMain", () => ({
+	PlaylistEditorMain: ({ state }: { state: { playlistId: string; entries: unknown[] } }) => {
+		mainEntries.current[state.playlistId] = state.entries;
+		return <div data-testid="body" />;
+	},
+}));
 
-import { CONTROL_NO_PLAYLIST } from "./ControlPanel";
-import { PlaylistEditor } from "./PlaylistEditor";
-
-beforeEach(() => {
-	mockAuth.status = "anonymous";
-	mockAuth.user = null;
-});
 afterEach(() => {
 	cleanup();
+	windows.current = {};
+	fileOpenDialog.current = null;
+	mainEntries.current = {};
+	mockAuth.status = "signedIn";
 	vi.clearAllMocks();
-	windowCloseFns.current = {};
-	mainProps.current = null;
 });
 
-describe("PlaylistEditor gating", () => {
-	it("shows the sign-in alert with a Quit button when anonymous", () => {
+describe("PlaylistEditor", () => {
+	it("shows the list and the Tools palette once signed in", () => {
 		render(<PlaylistEditor />);
-		expect(screen.getByText("You must be signed in to create playlists.")).not.toBeNull();
-		expect(screen.getByRole("button", { name: "Quit" })).not.toBeNull();
-		expect(screen.queryByText("My Playlists")).toBeNull();
+		expect(screen.getByTestId("win-playlist_editor_list")).not.toBeNull();
+		expect(screen.getByTestId("win-playlist_editor_tools")).not.toBeNull();
 	});
 
-	it("dispatches a quit action when Quit is clicked", () => {
+	it("shows only the gate while signed out — no list, no palette", () => {
+		mockAuth.status = "anonymous";
 		render(<PlaylistEditor />);
-		fireEvent.click(screen.getByRole("button", { name: "Quit" }));
-		expect(dispatchMock).toHaveBeenCalledWith(
-			expect.objectContaining({ app: expect.objectContaining({ id: "PlaylistEditor.app" }) }),
-		);
+
+		expect(screen.getByTestId("win-playlist_editor_gate")).not.toBeNull();
+		expect(screen.queryByTestId("win-playlist_editor_list")).toBeNull();
+		expect(screen.queryByTestId("win-playlist_editor_tools")).toBeNull();
 	});
 
-	it("renders neither alert nor editor while auth is loading", () => {
-		mockAuth.status = "loading";
+	it("opens a playlist into its own window, keeping the list open", () => {
 		render(<PlaylistEditor />);
-		expect(screen.queryByText("You must be signed in to create playlists.")).toBeNull();
-		expect(screen.queryByText("My Playlists")).toBeNull();
+
+		act(() => screen.getByRole("button", { name: "Mock Open" }).click());
+
+		expect(screen.getByTestId("win-playlist_doc_p1")).not.toBeNull();
+		expect(screen.getByTestId("win-playlist_editor_list")).not.toBeNull();
 	});
 
-	it("renders the editor when signed in", () => {
-		mockAuth.status = "signedIn";
-		mockAuth.user = { id: "u1" };
+	// With no document open the palette is the only menu-bearing window; once
+	// one exists it must go menu-less so clicking it does not swap the bar.
+	it("gives the palette a menu only while no document window is open", () => {
 		render(<PlaylistEditor />);
-		expect(screen.queryByText("You must be signed in to create playlists.")).toBeNull();
-		// list view (PlaylistList, mocked below) is what's shown before a record is opened
-		expect(screen.getByRole("button", { name: "Mock Open" })).not.toBeNull();
-	});
-});
+		expect(windows.current.playlist_editor_tools.appMenu).toBeDefined();
 
-describe("PlaylistEditor dirty-close", () => {
-	beforeEach(() => {
-		mockAuth.status = "signedIn";
-		mockAuth.user = { id: "u1" };
+		act(() => screen.getByRole("button", { name: "Mock Open" }).click());
+
+		expect(windows.current.playlist_editor_tools.appMenu).toBeUndefined();
 	});
 
-	it("quits directly on window close when no record is open (list view)", () => {
+	// The file-open dialog moved from PlaylistEditorMain (Task 8 stripped its
+	// tests along with the component) up to app level in this file. Nothing
+	// else in the plan exercises the wiring, so this proves a selection is
+	// dispatched into the ACTIVE document — not the first-opened one, and not
+	// silently dropped — and that the dialog closes afterwards.
+	it("dispatches an opened selection to the active document and closes the dialog", () => {
 		render(<PlaylistEditor />);
-		act(() => windowCloseFns.current.playlist_editor_main());
-		expect(dispatchMock).toHaveBeenCalledWith(
-			expect.objectContaining({ app: expect.objectContaining({ id: "PlaylistEditor.app" }) }),
-		);
-	});
 
-	it("quits directly on window close when the open editor is clean (not dirty)", () => {
-		render(<PlaylistEditor />);
-		fireEvent.click(screen.getByRole("button", { name: "Mock Open" }));
-		expect(mainProps.current?.closeRequested).toBe(false);
+		act(() => screen.getByRole("button", { name: "Mock Open" }).click()); // opens p1
+		act(() => screen.getByRole("button", { name: "Mock Open 2" }).click()); // opens p2, focuses it
 
-		act(() => windowCloseFns.current.playlist_editor_main());
-		expect(dispatchMock).toHaveBeenCalledWith(
-			expect.objectContaining({ app: expect.objectContaining({ id: "PlaylistEditor.app" }) }),
-		);
-	});
+		act(() => fireEvent.click(screen.getByRole("button", { name: "Add Media…" })));
+		expect(fileOpenDialog.current?.open).toBe(true);
 
-	it("shows the close-confirm strip (via closeRequested) instead of quitting when the editor is dirty", () => {
-		render(<PlaylistEditor />);
-		fireEvent.click(screen.getByRole("button", { name: "Mock Open" }));
-		act(() => (mainProps.current?.onDirtyChange as (d: boolean) => void)(true));
+		const selection: ClassicyFileOpenSelection = {
+			volumeId: "archive",
+			path: ["TV Channels"],
+			entry: {
+				id: "tv-CNN", name: "CNN", kind: "file",
+				fileType: "tv-channel", meta: { app: "tv", itemId: "CNN" },
+			},
+		};
+		act(() => fileOpenDialog.current?.onOpenFunc?.([selection]));
 
-		act(() => windowCloseFns.current.playlist_editor_main());
-		expect(dispatchMock).not.toHaveBeenCalled();
-		expect(mainProps.current?.closeRequested).toBe(true);
-		expect(screen.getByText("CLOSING")).not.toBeNull();
-	});
-
-	it("onQuit (wired to the same quit as the File-menu Quit) dispatches when invoked from the strip", () => {
-		render(<PlaylistEditor />);
-		fireEvent.click(screen.getByRole("button", { name: "Mock Open" }));
-		act(() => (mainProps.current?.onDirtyChange as (d: boolean) => void)(true));
-		act(() => windowCloseFns.current.playlist_editor_main());
-
-		act(() => (mainProps.current?.onQuit as () => void)());
-		expect(dispatchMock).toHaveBeenCalledWith(
-			expect.objectContaining({ app: expect.objectContaining({ id: "PlaylistEditor.app" }) }),
-		);
-	});
-
-	it("Cancel (onCancelClose) returns to the editor without quitting", () => {
-		render(<PlaylistEditor />);
-		fireEvent.click(screen.getByRole("button", { name: "Mock Open" }));
-		act(() => (mainProps.current?.onDirtyChange as (d: boolean) => void)(true));
-		act(() => windowCloseFns.current.playlist_editor_main());
-		expect(mainProps.current?.closeRequested).toBe(true);
-
-		act(() => (mainProps.current?.onCancelClose as () => void)());
-		expect(dispatchMock).not.toHaveBeenCalled();
-		expect(mainProps.current?.closeRequested).toBe(false);
-		expect(screen.getByText("EDITING")).not.toBeNull();
-	});
-});
-
-describe("Control window", () => {
-	const controlItem = () =>
-		appMenus.current
-			.find((g) => g.title === "Window")
-			?.menuChildren?.find((i) => i.title === "Control");
-
-	beforeEach(() => {
-		mockAuth.status = "signedIn";
-		mockAuth.user = { id: "u1" };
-		appMenus.current = [];
-	});
-
-	it("is closed until the Window menu opens it", () => {
-		render(<PlaylistEditor />);
-		expect(screen.queryByTestId("window-Control")).toBeNull();
-
-		const item = controlItem();
-		expect(item).toBeTruthy();
-		act(() => item?.onClickFunc?.());
-
-		expect(screen.getByTestId("window-Control")).toBeTruthy();
-	});
-
-	it("closes again from its close box", () => {
-		render(<PlaylistEditor />);
-		act(() => controlItem()?.onClickFunc?.());
-		expect(screen.getByTestId("window-Control")).toBeTruthy();
-
-		act(() => windowCloseFns.current.playlist_editor_control?.());
-		expect(screen.queryByTestId("window-Control")).toBeNull();
-	});
-
-	// With no playlist open there is nothing to address a command to, so the
-	// panel says so rather than offering controls that would 400.
-	it("has nothing to control before a playlist is opened", () => {
-		render(<PlaylistEditor />);
-		act(() => controlItem()?.onClickFunc?.());
-		expect(screen.getByText(CONTROL_NO_PLAYLIST)).toBeTruthy();
+		expect(mainEntries.current.p2).toHaveLength(1);
+		expect((mainEntries.current.p2[0] as { entry: unknown }).entry).toEqual({
+			kind: "media", app: "tv", itemId: "CNN",
+		});
+		expect(mainEntries.current.p1 ?? []).toHaveLength(0);
+		expect(fileOpenDialog.current?.open).toBe(false);
 	});
 });
