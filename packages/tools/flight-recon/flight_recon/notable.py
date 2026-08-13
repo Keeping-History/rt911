@@ -46,14 +46,19 @@ from psycopg.types.json import Json
 
 from flight_recon.pgcopy import COLUMNS as POSITION_COLUMNS
 from flight_recon.resample import (
-    assign_curated_phases, decimate_polyline, fmt_utc, parse_utc, resample_track,
+    assign_curated_phases, assign_sources, decimate_polyline, fmt_utc, parse_utc,
+    resample_track,
 )
 from reconstruct import ET_OFFSET, et_seconds
 
 log = logging.getLogger(__name__)
 
 FLIGHT_DATE = "2001-09-11"
-NOTABLE_FLIGHTS = ("AA11", "UA175", "AA77", "UA93", "GOFER06")
+NOTABLE_FLIGHTS = ("AA11", "UA175", "AA77", "UA93", "GOFER06", "AF1")
+
+# COPY column list: the shared BTS columns plus per-position provenance
+# (source stays NULL for files without waypoint marks).
+NOTABLE_POSITION_COLUMNS = POSITION_COLUMNS[:-1] + ["source", "run_id"]
 DATA_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "data", "notable_flights")
 
 # clock_seconds anchor: continuous seconds since ET midnight of the loaded BTS
@@ -86,6 +91,7 @@ CREATE TABLE IF NOT EXISTS flight_positions (
     alt_ft        integer,
     phase         varchar,
     diverted      boolean,
+    source        varchar,
     run_id        varchar NOT NULL
 );
 CREATE TABLE IF NOT EXISTS flight_tracks (
@@ -138,10 +144,17 @@ def build_flight(data):
     ``track`` is a ``flight_tracks`` dict whose ``geometry`` is a GeoJSON
     LineString. Raises ValueError on any integrity violation."""
     flight = data["flight"]
+    flight_date = data.get("flight_date", FLIGHT_DATE)
     samples = resample_track(data["waypoints"])
     curated = data.get("phases")
     if curated:
         assign_curated_phases(samples, curated)
+    assign_sources(samples, data["waypoints"])
+    for span in data.get("ground_spans", []):
+        s0, s1 = parse_utc(span["start"]), parse_utc(span["end"])
+        for s in samples:
+            if s0 <= s["utc"] <= s1:
+                s["phase"] = "ground"
 
     positions, coords, prev_min = [], [], None
     for s in samples:
@@ -155,12 +168,12 @@ def build_flight(data):
             raise ValueError(f"{flight}: non-increasing minute bucket at {utc}")
         prev_min = minute
         positions.append({
-            "flight": flight, "carrier": data["carrier"], "flight_date": FLIGHT_DATE,
+            "flight": flight, "carrier": data["carrier"], "flight_date": flight_date,
             "utc": fmt_utc(utc),
             "et_seconds": et_seconds(utc),
             "clock_seconds": int((utc - _WINDOW_START_UTC).total_seconds()),
             "lat": s["lat"], "lon": s["lon"], "alt_ft": s["alt_ft"],
-            "phase": s["phase"], "diverted": False,
+            "phase": s["phase"], "diverted": False, "source": s.get("source"),
         })
         coords.append([s["lon"], s["lat"]])
 
@@ -199,10 +212,12 @@ def build_flight(data):
     geometry_coords = decimate_polyline(dense)
 
     track = {
-        "flight": flight, "flight_date": FLIGHT_DATE, "origin": data["origin"],
-        "scheduled_dest": data["scheduled_dest"], "landed_at": None,
-        "diverted": False, "wheels_off_utc": positions[0]["utc"],
-        "wheels_on_utc": None,
+        "flight": flight, "flight_date": flight_date, "origin": data["origin"],
+        "scheduled_dest": data["scheduled_dest"],
+        "landed_at": data.get("landed_at"),
+        "diverted": False,
+        "wheels_off_utc": data.get("wheels_off_utc", positions[0]["utc"]),
+        "wheels_on_utc": data.get("wheels_on_utc"),
         "tail_number": data.get("registration"),
         "aircraft_type": data.get("aircraft"),
         "details": details,
@@ -233,27 +248,29 @@ def build_all(data_dir=DATA_DIR):
 
 
 # ----------------------------------------------------------------- db writes
-def scoped_delete(cur, flights=NOTABLE_FLIGHTS, flight_date=FLIGHT_DATE):
-    """Delete ONLY the given flight IDs on ``flight_date`` — never a date window.
+def scoped_delete(cur, pairs):
+    """Delete ONLY the given (flight, flight_date) pairs — never a date window.
 
     Returns (positions_deleted, tracks_deleted)."""
-    ids = list(flights)
-    cur.execute("DELETE FROM flight_positions WHERE flight_date = %s AND flight = ANY(%s)",
-                (flight_date, ids))
-    pos = cur.rowcount
-    cur.execute("DELETE FROM flight_tracks WHERE flight_date = %s AND flight = ANY(%s)",
-                (flight_date, ids))
-    trk = cur.rowcount
-    log.info("scoped delete: %d positions, %d tracks for %s on %s", pos, trk, ids, flight_date)
+    pos = trk = 0
+    for flight, fdate in pairs:
+        cur.execute("DELETE FROM flight_positions WHERE flight_date = %s AND flight = %s",
+                    (fdate, flight))
+        pos += cur.rowcount
+        cur.execute("DELETE FROM flight_tracks WHERE flight_date = %s AND flight = %s",
+                    (fdate, flight))
+        trk += cur.rowcount
+    log.info("scoped delete: %d positions, %d tracks for %s", pos, trk, pairs)
     return pos, trk
 
 
 def copy_positions(cur, positions, run_id):
-    with cur.copy(f"COPY flight_positions ({', '.join(POSITION_COLUMNS)}) FROM STDIN") as cp:
+    with cur.copy(f"COPY flight_positions ({', '.join(NOTABLE_POSITION_COLUMNS)}) FROM STDIN") as cp:
         for p in positions:
             cp.write_row([p["flight"], p["carrier"], p["flight_date"], p["utc"],
                           p["et_seconds"], p["clock_seconds"], p["lat"], p["lon"],
-                          p["alt_ft"], p["phase"], p["diverted"], run_id])
+                          p["alt_ft"], p["phase"], p["diverted"], p.get("source"),
+                          run_id])
     return len(positions)
 
 
@@ -270,18 +287,22 @@ def insert_tracks(cur, tracks, run_id):
     return len(tracks)
 
 
-def insert_run(cur, run_id, positions_count, tracks_count):
+def insert_run(cur, run_id, positions_count, tracks):
     """Append one provenance row citing the radar sources (append-only ledger)."""
     source = ("84 RADES radar returns (FOIA release, FBI analysis 13 Sep 2001) for "
               "AA11, UA175, AA77, UA93, GOFER06 + NTSB Flight Path Studies "
               "(2002-02-19) / 9/11 Commission Report Ch.1 gap anchors — curated "
-              "notable_flights load")
+              "notable_flights load; AF1 (SAM 28000) curated from published "
+              "timeline sources")
+    tracks_count = len(tracks)
+    start = min(t["flight_date"] for t in tracks)
+    end = max(t["flight_date"] for t in tracks)
     cur.execute(
         'INSERT INTO reconstruction_runs (run_id, start, "end", source_file, '
         "flights_reconstructed, positions_count, tracks_count, skipped_count, "
         "skipped, skipped_by_reason, cancelled_by_day, created_at) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        (run_id, FLIGHT_DATE, FLIGHT_DATE, source, tracks_count, positions_count,
+        (run_id, start, end, source, tracks_count, positions_count,
          tracks_count, 0, Json([]), Json({}), Json({}),
          datetime.now(timezone.utc)))
 
@@ -298,10 +319,11 @@ def run(dsn, data_dir=DATA_DIR, dry_run=False, init_schema=False, run_id=None):
             if init_schema:
                 cur.execute(LOCAL_SCHEMA_DDL)
                 log.warning("ensured scratch schema (flight_positions/tracks/runs)")
-            pos_del, trk_del = scoped_delete(cur)
+            pairs = sorted({(t["flight"], t["flight_date"]) for t in tracks})
+            pos_del, trk_del = scoped_delete(cur, pairs)
             n_pos = copy_positions(cur, positions, run_id)
             n_trk = insert_tracks(cur, tracks, run_id)
-            insert_run(cur, run_id, n_pos, n_trk)
+            insert_run(cur, run_id, n_pos, tracks)
         if dry_run:
             conn.rollback()
             log.warning("DRY RUN: rolled back — nothing persisted")

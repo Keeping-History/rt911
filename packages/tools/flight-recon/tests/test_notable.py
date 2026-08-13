@@ -20,13 +20,20 @@ from pathlib import Path
 import pytest
 
 from flight_recon import notable
-from flight_recon.notable import NOTABLE_FLIGHTS, build_all
+from flight_recon.notable import build_all, build_flight, load_flight_file
 from flight_recon.resample import decimate_polyline, parse_utc, resample_track
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "notable_flights"
 
 # The four crashed flights (documented impact); GOFER06 is the observer.
 HIJACKED = ("AA11", "UA175", "AA77", "UA93")
+
+# notable.NOTABLE_FLIGHTS now includes AF1, whose curated data/notable_flights/
+# JSON lands in a later task; parametrize the real-file-backed tests over what
+# actually exists in DATA_DIR today so they don't KeyError on a file that
+# hasn't been curated yet.
+CURRENT_FLIGHTS = tuple(sorted(
+    notable.load_flight_file(p)["flight"] for p in DATA_DIR.glob("*.json")))
 
 CURATED_PHASES = {"takeoff", "tracon", "artcc", "hijack",
                   "course_change", "atc_alert", "descent", "down"}
@@ -115,10 +122,10 @@ def built():
 
 
 def test_all_five_flights_present(built):
-    assert set(built) == set(notable.NOTABLE_FLIGHTS)
+    assert set(built) == set(CURRENT_FLIGHTS)
 
 
-@pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
+@pytest.mark.parametrize("flight", CURRENT_FLIGHTS)
 def test_track_is_a_sane_linestring(built, flight):
     data, positions, track = built[flight]
     geom = track["geometry"]
@@ -142,7 +149,7 @@ def test_track_ends_at_documented_impact(built, flight):
     assert abs(end_lat - data["impact"]["lat"]) <= 1e-3
 
 
-@pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
+@pytest.mark.parametrize("flight", CURRENT_FLIGHTS)
 def test_track_geometry_is_radar_dense(built, flight):
     """The RADES upgrade's point: geometry follows the surveyed returns, not
     the per-minute resample — even after decimation it must retain more shape
@@ -170,7 +177,7 @@ def test_decimate_polyline_collapses_straight_keeps_turns():
     assert decimate_polyline(detour) == detour
 
 
-@pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
+@pytest.mark.parametrize("flight", CURRENT_FLIGHTS)
 def test_positions_have_per_minute_clock_keys(built, flight):
     _, positions, _ = built[flight]
     # interior rows are whole minutes -> et_seconds multiples of 60 (clean airborne
@@ -216,15 +223,18 @@ class _FakeCursor:
 
 def test_scoped_delete_targets_only_the_four_ids_never_a_window():
     cur = _FakeCursor()
-    notable.scoped_delete(cur)
-    assert len(cur.calls) == 2
+    notable.scoped_delete(cur, [(f, "2001-09-11") for f in notable.NOTABLE_FLIGHTS])
+    assert len(cur.calls) == 2 * len(notable.NOTABLE_FLIGHTS)
+    seen_flights = set()
     for sql, params in cur.calls:
-        assert "flight_date = %s" in sql and "flight = ANY(%s)" in sql
+        assert "flight_date = %s" in sql and "flight = %s" in sql
         assert "BETWEEN" not in sql and "_between" not in sql   # NOT a date window
-        date_arg, ids = params
+        assert "ANY" not in sql                                 # NOT a bulk ID filter
+        date_arg, flight = params
         assert date_arg == "2001-09-11"
-        assert ids == list(notable.NOTABLE_FLIGHTS)
-        assert "AA1002" not in ids                              # sentinel BTS flight
+        assert flight != "AA1002"                               # sentinel BTS flight
+        seen_flights.add(flight)
+    assert seen_flights == set(notable.NOTABLE_FLIGHTS)
     assert "flight_positions" in cur.calls[0][0]
     assert "flight_tracks" in cur.calls[1][0]
 
@@ -308,7 +318,7 @@ def test_dry_run_persists_nothing(scratch_db):
 
 
 # ------------------------------------------------------------------ details/metadata
-@pytest.mark.parametrize("flight", notable.NOTABLE_FLIGHTS)
+@pytest.mark.parametrize("flight", CURRENT_FLIGHTS)
 def test_tracks_carry_aircraft_and_registration(built, flight):
     data, _, track = built[flight]
     assert track["tail_number"] == data["registration"]
@@ -332,3 +342,118 @@ def test_fate_utc_is_injected_from_impact(built):
         data, _, track = built[flight]
         assert track["details"]["fate"]["utc"] == data["impact"]["utc"], flight
         assert track["details"]["fate"]["text"], f"{flight}: fate.text missing"
+
+
+# ------------------------------------------------------------------ AF1: per-file
+# dates, ground spans, landing fields, per-position source
+def _af1_fixture():
+    """Minimal synthetic AF1-shaped file: parked, one hop, parked."""
+    return {
+        "flight": "AF1", "carrier": "USAF", "flight_date": "2001-09-10",
+        "origin": "ADW", "scheduled_dest": "SRQ",
+        "aircraft": "Boeing VC-25A", "registration": "SAM 28000",
+        "landed_at": "SRQ",
+        "wheels_off_utc": "2001-09-10T21:05:00Z",
+        "wheels_on_utc": "2001-09-10T21:15:00Z",
+        "ground_spans": [
+            {"start": "2001-09-10T21:15:00Z", "end": "2001-09-10T21:20:00Z", "base": "SRQ"},
+        ],
+        "details": {"fate": {"text": "Landed safely at Andrews AFB"}},
+        "sources": ["test"], "provenance_notes": ["test"],
+        "waypoints": [
+            {"utc": "2001-09-10T21:05:00Z", "lat": 38.81, "lon": -76.87, "alt_ft": 280},
+            {"utc": "2001-09-10T21:10:00Z", "lat": 33.00, "lon": -79.70, "alt_ft": 25000},
+            {"utc": "2001-09-10T21:15:00Z", "lat": 27.3954, "lon": -82.5544, "alt_ft": 28},
+            {"utc": "2001-09-10T21:20:00Z", "lat": 27.3954, "lon": -82.5544, "alt_ft": 28},
+        ],
+    }
+
+
+def test_af1_per_file_flight_date_and_clock_anchor():
+    positions, track = build_flight(_af1_fixture())
+    assert all(p["flight_date"] == "2001-09-10" for p in positions)
+    assert track["flight_date"] == "2001-09-10"
+    # clock anchors at the 2001-09-09 window start: 9/10 21:05Z is
+    # 1 day + 17h05m - 4h(ET offset) past 09-09T04:00Z.
+    first = positions[0]
+    assert first["clock_seconds"] == first["et_seconds"] + 86400
+
+
+def test_af1_ground_span_overrides_phase():
+    positions, _ = build_flight(_af1_fixture())
+    by_utc = {p["utc"]: p["phase"] for p in positions}
+    assert by_utc["2001-09-10T21:16:00Z"] == "ground"
+    assert by_utc["2001-09-10T21:20:00Z"] == "ground"
+    assert by_utc["2001-09-10T21:07:00Z"] != "ground"
+
+
+def test_af1_landing_fields_on_track():
+    _, track = build_flight(_af1_fixture())
+    assert track["landed_at"] == "SRQ"
+    assert track["wheels_off_utc"] == "2001-09-10T21:05:00Z"
+    assert track["wheels_on_utc"] == "2001-09-10T21:15:00Z"
+
+
+def test_af1_waypoint_sources_reach_positions():
+    data = _af1_fixture()
+    for w in data["waypoints"]:
+        w["source"] = "estimated"
+    data["waypoints"][0]["source"] = "radar"
+    data["waypoints"][1]["source"] = "radar"
+    positions, _ = build_flight(data)
+    by_utc = {p["utc"]: p.get("source") for p in positions}
+    assert by_utc["2001-09-10T21:07:00Z"] == "radar"
+    assert by_utc["2001-09-10T21:12:00Z"] == "estimated"
+
+
+def test_existing_notables_have_no_source():
+    positions, _ = build_flight(load_flight_file(
+        os.path.join(DATA_DIR, "aa11.json")))
+    assert all(p.get("source") is None for p in positions)
+
+
+@requires_db
+def test_scoped_delete_pairs_only_touch_their_dates(scratch_db):
+    """Deleting one (flight, flight_date) pair must leave that same flight on
+    a different date, and a different flight sharing that date, untouched —
+    mirrors scratch_db's own AA1002-sentinel setup in
+    test_end_to_end_scoped_idempotency, but scoped per-pair rather than
+    per-flight-id-set."""
+    import psycopg
+    with psycopg.connect(scratch_db) as conn:
+        with conn.cursor() as cur:
+            for flight, fdate in (("AF1", "2001-09-10"), ("AF1", "2001-09-11"),
+                                   ("AA1002", "2001-09-10"), ("AA1002", "2001-09-11")):
+                cur.execute(
+                    "INSERT INTO flight_positions (flight, carrier, flight_date, utc, "
+                    "et_seconds, clock_seconds, lat, lon, alt_ft, phase, diverted, run_id) "
+                    "VALUES (%s,%s,%s,%s,30000,30000,40,-90,35000,'cruise',false,'seed')",
+                    (flight, flight[:2], fdate, f"{fdate}T12:00:00Z"))
+                cur.execute(
+                    "INSERT INTO flight_tracks (flight, flight_date, origin, scheduled_dest, "
+                    "diverted, run_id, geometry) VALUES (%s,%s,'JFK','LAX',false,'seed',"
+                    "'{\"type\":\"LineString\",\"coordinates\":[[0,0],[1,1]]}')",
+                    (flight, fdate))
+        conn.commit()
+
+        with conn.cursor() as cur:
+            pos_del, trk_del = notable.scoped_delete(cur, [("AF1", "2001-09-10")])
+        conn.commit()
+        assert (pos_del, trk_del) == (1, 1)
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT flight, flight_date::text FROM flight_positions "
+                        "WHERE flight = ANY(%s)", (["AF1", "AA1002"],))
+            remaining_pos = set(cur.fetchall())
+            cur.execute("SELECT flight, flight_date::text FROM flight_tracks "
+                        "WHERE flight = ANY(%s)", (["AF1", "AA1002"],))
+            remaining_trk = set(cur.fetchall())
+
+    assert ("AF1", "2001-09-10") not in remaining_pos
+    assert ("AF1", "2001-09-10") not in remaining_trk
+    assert ("AF1", "2001-09-11") in remaining_pos
+    assert ("AF1", "2001-09-11") in remaining_trk
+    assert ("AA1002", "2001-09-10") in remaining_pos
+    assert ("AA1002", "2001-09-10") in remaining_trk
+    assert ("AA1002", "2001-09-11") in remaining_pos
+    assert ("AA1002", "2001-09-11") in remaining_trk
