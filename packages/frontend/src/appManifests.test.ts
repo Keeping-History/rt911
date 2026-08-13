@@ -12,6 +12,9 @@ import "./Applications/FlightTracker/flightTrackerCommands";
 import "./Applications/Browser/BrowserContext";
 import "./Applications/RadioScanner/RadioScannerContext";
 import "./Applications/Weather/weatherSettings";
+import "./Applications/TimeMachine/timeMachineSettings";
+import "./Applications/Feedback/FeedbackContext";
+import "./Applications/README/ReadmeContext";
 
 // [appId, expected prefixes, spot-checked action types, has a state schema]
 const CASES: Array<[string, string[], string[], boolean]> = [
@@ -45,6 +48,9 @@ const CASES: Array<[string, string[], string[], boolean]> = [
 		["ClassicyAppWeatherSetLoopSettings", "ClassicyAppWeatherSetMapSettings"],
 		true,
 	],
+	["TimeMachine.app", ["ClassicyAppTimeMachine"], ["ClassicyAppTimeMachineSetSettings"], true],
+	["Feedback.app", ["ClassicyAppFeedback"], ["ClassicyAppFeedbackSetGithub"], true],
+	["Readme.app", ["ClassicyAppReadme"], ["ClassicyAppReadmeSetSettings"], true],
 ];
 
 describe("app manifests", () => {
