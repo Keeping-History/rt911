@@ -14,7 +14,8 @@ const sel: FlightPosition = {
 };
 
 const baseTrack: FlightTrack = {
-	flight: "AA11", origin: "BOS", scheduled_dest: "LAX", landed_at: null,
+	flight: "AA11", flight_date: "2001-09-11", origin: "BOS", scheduled_dest: "LAX",
+	landed_at: null,
 	diverted: false, geometry: null,
 	tail_number: null, aircraft_type: null, details: null,
 	wheels_off_utc: null, wheels_on_utc: null,

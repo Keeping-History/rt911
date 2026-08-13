@@ -73,7 +73,7 @@ import {
 	flightTrackerSetFocusedFlight,
 } from "./flightTrackerCommands";
 import { useNotableCrashSites } from "./useNotableCrashSites";
-import { isNotable, isObserverStyled } from "./notableFlights";
+import { isNotable, isObserverStyled, isPresidential } from "./notableFlights";
 import { isEstimated, orderedTrackSources } from "./flightProvenance";
 import type { CameraMode } from "./flightCamera";
 import { useRouteIndex } from "./useRouteIndex";
@@ -363,6 +363,12 @@ export const FlightTracker: FC = () => {
 	const groundedCount = useMemo(
 		() => flightPositions.filter((p) => p.phase === "ground").length,
 		[flightPositions],
+	);
+	// Status-bar numerator. Must share the denominator's semantics: filtering to
+	// a parked aircraft otherwise reads "1 of 0 aircraft aloft".
+	const filteredAloft = useMemo(
+		() => filteredPositions.filter((p) => p.phase !== "ground").length,
+		[filteredPositions],
 	);
 	// Wheels-down/crash instants for the airborne set: the map's dead-reckoning
 	// clamp (a landed flight freezes at its track end instead of overshooting).
@@ -705,8 +711,11 @@ export const FlightTracker: FC = () => {
 		[selected],
 	);
 	const { track, loading, error } = useFlightTrack(selection);
-	// Altitude profile → smooth 3D track tube for the selected flight.
-	const { profile } = useAltitudeProfile(selection);
+	// Altitude profile → smooth 3D track tube for the selected flight, and (for
+	// notable/estimated flights) the drawn track itself. Keyed to the SELECTED
+	// leg's flight_date so a two-row flight (AF1: 9/10 and 9/11) can't be served
+	// the other day's route — see useAltitudeProfile's doc comment.
+	const { profile } = useAltitudeProfile(selection, track?.flight_date ?? null);
 
 	// Live fix for the selected flight (`selected` is a click-time snapshot; the
 	// streamed set updates each minute-bucket). Heading is the bearing of the
@@ -867,13 +876,15 @@ export const FlightTracker: FC = () => {
 		[hasEstimated, profile],
 	);
 
-	// Phase legend (issue #310): same gate as the per-phase track segments — only
-	// notable flights with a smoothed profile get colored phases, so only they get
-	// a legend. Ordered-unique so it mirrors the drawn segments.
+	// Phase legend (issue #310): notable flights and AF1 get colored phase
+	// segments (AF1's include the parked-gray "ground" phase), so both get a
+	// legend. Deliberately NOT every hasEstimated flight: those are segmented by
+	// provenance, which the trackSources legend above already explains.
+	// Ordered-unique so it mirrors the drawn segments.
 	const trackPhases = useMemo<string[]>(() => {
-		if (
-			!(track?.geometry && selection && isNotable(selection.flight) && profile && profile.length >= 2)
-		) {
+		const phaseColored = !!selection
+			&& (isNotable(selection.flight) || isPresidential(selection.flight));
+		if (!(track?.geometry && phaseColored && profile && profile.length >= 2)) {
 			return [];
 		}
 		return orderedTrackPhases(profile);
@@ -1381,7 +1392,7 @@ export const FlightTracker: FC = () => {
 							</span>
 							<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
 								{visibleFlights
-									? `${filteredPositions.length} of ${flightPositions.length - anonAloft - groundedCount} aircraft aloft · filtered${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`
+									? `${filteredAloft} of ${flightPositions.length - anonAloft - groundedCount} aircraft aloft · filtered${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`
 									: `${flightPositions.length - anonAloft - groundedCount} aircraft aloft${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`}
 							</span>
 						</div>
