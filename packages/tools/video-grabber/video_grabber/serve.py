@@ -24,6 +24,8 @@ import time
 import sqlalchemy as sa
 from prefect import serve
 
+from video_grabber.config import _int
+
 from video_grabber.pipeline.flows import (
     build_channel_flow,
     dispatch_discovered_flow,
@@ -104,7 +106,11 @@ _USENET_DISPATCH_INTERVAL = 300
 # writes one shared per-channel SRT so keep at 1.
 _TRANSCRIBE_ITEM_LIMIT = 3
 _TRANSCRIBE_SCAN_LIMIT = 1
-_TRANSCRIBE_DISPATCH_LIMIT = 3
+# Local claiming slots. Set TRANSCRIBE_DISPATCH_LIMIT=0 to stop this host claiming
+# transcribe_jobs at all — used to hand transcription to the Mac Studio's Metal
+# workers, which poll the same table directly and are several times faster than
+# this CPU-only pod. The Prefect deployments stay registered either way.
+_TRANSCRIBE_DISPATCH_LIMIT = _int("TRANSCRIBE_DISPATCH_LIMIT", 3)
 _BUILD_CHANNEL_SUBS_LIMIT = 1
 # A live worker heartbeats its claimed job's last_transition_at every minute, so a
 # 'transcribing' row untouched for this long means its worker died — recover it.
@@ -169,6 +175,16 @@ def _start_transcribe_workers() -> None:
     thread (a) respawns any worker that dies — a native whisper/Vulkan crash would
     otherwise permanently lose a slot — and (b) periodically re-queues jobs orphaned
     in 'transcribing' by such a crash. Workers write to /tmp/transcribe-worker-N.log."""
+    if _TRANSCRIBE_DISPATCH_LIMIT == 0:
+        # Return BEFORE the startup orphan recovery below. That recovery re-queues
+        # every 'transcribing' row outright, ignoring heartbeats, on the assumption
+        # that no worker can be alive across a restart of this process. That is
+        # false when another host claims from the same table: it would yank jobs
+        # the Mac Studio is actively transcribing, every time this pod rolls.
+        print("[serve] TRANSCRIBE_DISPATCH_LIMIT=0 — not claiming transcribe jobs "
+              "on this host; leaving them to remote workers", flush=True)
+        return
+
     from video_grabber.config import Config
     from video_grabber.transcribe.flows import _sync_db_url
 
@@ -259,7 +275,10 @@ def main() -> None:
         ),
         dispatch_transcribe_flow.to_deployment(
             name="dispatch-transcribe",
-            concurrency_limit=_TRANSCRIBE_DISPATCH_LIMIT,
+            # Never 0: a deployment with zero concurrency can never run, and this
+            # flow stays useful for kicking the queue even when this host does no
+            # claiming of its own.
+            concurrency_limit=max(1, _TRANSCRIBE_DISPATCH_LIMIT),
         ),
         build_channel_subtitles_flow.to_deployment(
             name="build-channel-subtitles",
