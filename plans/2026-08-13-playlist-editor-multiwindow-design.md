@@ -87,9 +87,13 @@ as proposing it:
   one seam serves both surfaces.
 - `ControlPanel` holds lock state locally and flips it **only after the server
   accepts**, because room commands are fire-and-forget and the streamer stores
-  nothing to read back. That behavior is load-bearing and out of scope here.
+  nothing to read back. That ordering is load-bearing and is preserved exactly.
 - `Providers/Playlist/RoomControlBridge.tsx` and `roomApi.ts` are the student
   end and the transport. Untouched by this design.
+
+**This design removes that window** and re-homes its two controls as a `Control`
+menu — see decision 11. `sendRoomLock` and the accept-then-flip ordering survive
+verbatim; only the surface changes.
 
 ## Decisions
 
@@ -107,14 +111,13 @@ later reader doesn't relitigate it.
    no document is open (appearing/disappearing chrome is jumpy — it greys out
    instead).
 
-2a. **The Add tools get their own palette; they do NOT join the existing
-   Control window.** The Control window drives a *live* session — locking the
-   clock for students watching right now. The Add tools *author* a playlist.
-   Those are different modes of use, and merging them would put a button that
-   changes what thirty students see next to a button that appends a row to a
-   draft. *Rejected:* adding the toolbar to `ControlPanel.tsx` alongside the Lock
-   group, and one window split into Tools/Live sections. The cost accepted here
-   is one more window and one more `Window` menu item.
+2a. **The Add tools get their own palette, and are the palette's only
+   contents.** Authoring tools and live-session controls are different modes of
+   use; merging them would put a button that changes what thirty students see
+   next to a button that appends a row to a draft. *Rejected:* adding the
+   toolbar to `ControlPanel.tsx` alongside the Lock group, and one window split
+   into Tools/Live sections. Decision 11 then removes the live-controls window
+   entirely, so only one palette ever exists.
 
 3. **File > Rename… renames in place.** No copy is created; `File > Duplicate`
    already covers the copy case. *Rejected:* true "Save As" semantics, and
@@ -153,33 +156,69 @@ later reader doesn't relitigate it.
    clicking it leaves the frontmost document's menus on screen instead of
    swapping the menu bar out from under the user mid-click.
 
-   The palette is consequently `closable={false}` (but `collapsable`), which is
-   a deliberate departure from the Control window's closable + `Window > Control`
-   reveal pattern. The palette is the app's guaranteed menu anchor; the Control
-   window is not, and keeps its existing behavior unchanged.
+   The palette is consequently `closable={false}` (but `collapsable`). With the
+   Control window removed by decision 11 the palette is the app's only
+   non-document window, so this is no longer an inconsistency with a closable
+   sibling palette — it is simply the property of the app's one guaranteed menu
+   anchor. Collapsing it reduces it to a title bar, which covers the "get it out
+   of my way" need a close box would have served.
 
-10. **A `Window` menu with a live open-window list.** The app already has
-   `Window > Control`. With N playlist documents, a window buried behind others
-   would otherwise be unreachable, so the menu gains Tools plus one item per open
-   window. Following `IMBuddies`, the list is rebuilt from provider state on
-   every render — never snapshotted — so a window opening or closing is
-   reflected in the same render that mounts or unmounts it.
+10. **A `Window` menu with a live open-window list.** With N playlist documents,
+   a window buried behind others would otherwise be unreachable, so the menu
+   carries Tools, My Playlists, and one item per open document. Following
+   `IMBuddies`, the list is rebuilt from provider state on every render — never
+   snapshotted — so a window opening or closing is reflected in the same render
+   that mounts or unmounts it.
+
+11. **The Control window is removed; its two locks become a `Control` menu.**
+   `playlist_editor_control`, `ControlPanel.tsx`, `ControlPanel.test.tsx`, and
+   the `Window > Control` item and its `showControl` state all go away. In their
+   place, every document window carries a top-level `Control` menu holding
+   **Lock Clock** and **Lock Contents** as checkmarked toggles.
+
+   This removes a whole class of ambiguity the previous draft had to write
+   around: a window whose target was the *last-focused* document, sitting on
+   screen next to the document it was not acting on. A menu belongs to the
+   window it drops from, so `Control` acts unambiguously on that window's
+   playlist, and the "which one is it controlling?" body text is unnecessary.
+   It also lets the Tools palette stop being a special case (see decision 9's
+   amendment below).
+
+   Three things the window did that a menu cannot, and where they go:
+
+   - **Error text** (`"Command failed."`, `RoomCommandError.message`) → a
+     `ClassicyAlert` on the owning window, consistent with decision 4.
+   - **The explanatory line** *"Students cannot change the time until you unlock
+     the clock."* → balloon help on the `Lock Clock` item, where it is readable
+     *before* acting rather than only after.
+   - **`CONTROL_NO_PLAYLIST`** ("Open a playlist to control it live.") →
+     unnecessary. The menu only exists on document windows, so there is always a
+     playlist; the items are instead disabled while a lock request is in flight.
+
+   **Lock Contents stays disabled.** Content locking is not built — the shipped
+   window disables that button for exactly that reason, and moving it to a menu
+   does not implement it. It is present so the pair reads as the pair it will
+   become.
+
+   *Rejected:* keeping the window and retargeting it via `activeId` (the
+   ambiguity above), and dropping the live controls entirely (they ship today
+   and teachers depend on them).
 
 ## Architecture
 
 ### Windows
 
-Six window kinds under one `ClassicyApp` (`PlaylistEditor.app`). Two of them —
-Control and the gate — already exist and change only where noted:
+Five window kinds under one `ClassicyApp` (`PlaylistEditor.app`):
 
 | Window | id | Type | Menus | Notes |
 |---|---|---|---|---|
 | My Playlists | `playlist_editor_list` | document | File, Window | `defaultWindow`. Persistent. Renamed from `playlist_editor_main`. |
-| Playlist document | `playlist_doc_<playlistId>` | document | File, Edit, Window | One per open playlist; cascaded by index. |
+| Playlist document | `playlist_doc_<playlistId>` | document | File, Edit, Control, Window | One per open playlist; cascaded by index. |
 | Tools palette | `playlist_editor_tools` | **utility** | File, Window (only when no document is open) | **New.** `closable={false}`, `collapsable`. Not `alwaysOnTop`. |
-| Control | `playlist_editor_control` | document | — | **Exists.** Only its `playlistId` source changes: `openRecord?.id` → `activeId`. |
 | Rename dialog | `playlist_rename_dialog` | modal | — | **New.** Singleton; targets `activeId`. |
 | Sign-in gate | `playlist_editor_gate` | modal | — | Unchanged. |
+
+**Deleted:** `playlist_editor_control` and its `ControlPanel` — decision 11.
 
 `playlist_editor_main` is renamed to `playlist_editor_list` because it stops
 being "the app's one window" and becomes specifically the list. Window ids are
@@ -187,11 +226,8 @@ persisted in the Classicy store, so a returning user's saved geometry for the ol
 id is simply not found and the window opens at its `initialPosition` — acceptable
 for a rename that also changes the window's size and role.
 
-The Control window stays a plain document window, `closable`, revealed by
-`Window > Control`. It is **not** converted to a utility palette: it is not the
-menu anchor (decision 9), and changing its class would alter shipped behavior
-this design has no reason to touch. It supplies no `appMenu` today and continues
-not to, so focusing it leaves the frontmost document's menus on screen.
+The Rename dialog supplies no `appMenu`, so focusing it leaves the owning
+document's menus on screen rather than blanking the bar.
 
 A document window's title is the playlist's current title, tracking
 `state.title` live as Rename changes it. Mac OS 8 has no dirty-title convention,
@@ -241,10 +277,25 @@ The provider holds:
 - `activeId: string | null` — the last-focused document window's playlist id.
 - `dialogMode: "media" | "file" | null` — the singleton file-open dialog.
 - `renaming: boolean` — whether the Rename dialog is up.
-- `showControl: boolean` — kept exactly as it is today, for `Window > Control`.
+- `locks: Record<string, { clock: boolean; busy: boolean }>` — per-playlist room
+  lock state, keyed by playlist id.
 
 The Tools palette needs no visibility flag: it is non-closable and always
 rendered while signed in (decision 9).
+
+**`locks` must be keyed by playlist id**, not held once for the app. It is
+component-local `useState` inside `ControlPanel` today, which was correct when a
+single window controlled a single playlist. With N documents open, one shared
+flag would show playlist B as clock-locked because the teacher locked playlist A.
+
+The semantics `ControlPanel` established are preserved exactly: the flag flips
+**only after `sendRoomLock` resolves**, never optimistically, because a room
+command is fire-and-forget and the streamer keeps no state to read back — so a
+failed command must not leave a menu claiming a lock that reached no student.
+The state is still not read back from the server, which means it resets when the
+app is reopened (students stay locked; only the checkmark forgets) and two
+teachers driving one playlist will not see each other's state. That was true of
+the window and remains true of the menu.
 
 ### How the palette reaches the active document
 
@@ -265,14 +316,15 @@ a palette button never has to be preceded by re-selecting the document.
 With `activeId === null` (only the list open, or nothing at all), every palette
 button and every `Edit > Add…` item is disabled.
 
-**The Control window rides the same seam.** It changes from
-`playlistId={openRecord?.id ?? null}` to `playlistId={activeId}`, with
-`playlistTitle` read from `states[activeId].title` so a rename is reflected
-immediately. Its existing `CONTROL_NO_PLAYLIST` fallback then covers "no document
-window is frontmost" without any change to `ControlPanel.tsx` itself — the
-component's props already model exactly this. Note the consequence worth stating
-plainly: with several playlists open, `Lock > Clock` acts on the **last-focused**
-one, which is why the window names the playlist it is controlling in its body.
+**The `Control` menu does not use this seam at all.** A menu belongs to the
+window it drops from, so `Control > Lock Clock` acts on *that window's*
+`playlistId` directly — never on `activeId`. This is the whole reason decision 11
+is an improvement over retargeting the old window: there is no last-focused
+indirection to reason about, and no way to lock the wrong classroom.
+
+`activeId` therefore governs exactly one thing: what the Tools palette and the
+file-open dialog target, because those are the only surfaces that float free of
+a document window.
 
 `ClassicyFileOpenDialog` moves up to the provider level alongside the palette. It
 is already a singleton (`id="playlist_editor_open"`), it is now triggered from
@@ -342,13 +394,33 @@ The six `Add…` children and the six palette buttons dispatch through one share
 helper (`addActions(dispatch, playlistId)`), so the two surfaces cannot drift
 apart as entry kinds are added.
 
+### Playlist document window — Control
+
+New in decision 11, and present only on document windows — never on the list
+window or the palette, because both lack a playlist to act on.
+
+| Item | Behavior |
+|---|---|
+| Lock Clock | Checkmarked toggle. `sendRoomLock(playlistId, "clock", next)`; flips **only** on resolve. Disabled while `busy`. Carries `balloon`. |
+| Lock Contents | Checkmarked toggle, permanently `disabled` — content locking is not built. Carries a `balloon` saying so. |
+
+Balloon copy:
+
+- **Lock Clock** — "Students following this playlist cannot change the time
+  until you unlock the clock."
+- **Lock Contents** — "Not yet available. This will stop students from switching
+  channels or stations on their own."
+
+A failed command raises a `ClassicyAlert` on the owning document window carrying
+`RoomCommandError.message`, or "Command failed." for anything else. The
+checkmark stays off, because the lock never reached a student.
+
 ### Every window — Window
 
 Shared by the list window and every playlist document (decision 10):
 
 | Item | Behavior |
 |---|---|
-| Control | Existing item, unchanged: reveal-and-focus `playlist_editor_control`. |
 | Tools | Focus `playlist_editor_tools`. No reveal needed — it is never closed. |
 | `spacer` | |
 | My Playlists | Reveal-and-focus the list window. |
@@ -414,11 +486,22 @@ longer quits the app.
 `SaveBar.test.tsx` (becomes `useSavePlaylist.test.ts`),
 `PlaylistEditor.integration.test.tsx`.
 
-**`ControlPanel.test.tsx` keeps all its existing cases** — the component's props
-are unchanged, so only the wiring above it moves. One case is added at the
-`PlaylistEditor` level: the Control window's `playlistId` follows `activeId`, so
-focusing a different playlist window retargets it, and closing the last document
-window returns it to `CONTROL_NO_PLAYLIST`.
+**Deleted:** `ControlPanel.tsx` and `ControlPanel.test.tsx`. Its behavioral cases
+do not disappear — they are **ported** to the `Control` menu, because they cover
+the room-control contract rather than the component:
+
+- A successful lock flips the checkmark; `sendRoomLock` is called with
+  `(playlistId, "clock", true)`.
+- A rejected lock leaves the checkmark **off** and raises the alert carrying the
+  `RoomCommandError` message — the accept-then-flip ordering is the case most
+  worth keeping, since inverting it would silently claim a lock no student got.
+- A non-`RoomCommandError` failure shows "Command failed."
+- The item is disabled while a command is in flight.
+- `Lock Contents` is disabled and dispatches nothing.
+
+Ported with a new case that the single-window version could not have: locking
+playlist A leaves playlist B's `Control` menu unchecked, and `sendRoomLock` is
+called with A's id, not the focused window's.
 
 **New coverage:**
 
@@ -449,12 +532,13 @@ Frontend vitest has no RTL auto-cleanup — every new test file needs its own
 - Any change to the `classicy` package.
 - Any change to the playlist runtime engine (`Providers/Playlist/*`), the wire
   protocol, or the Directus schema.
-- **Live room control.** `ControlPanel.tsx`'s internals, `roomApi.ts`,
-  `RoomControlBridge.tsx`, and the streamer's `/room` endpoint are untouched.
-  The only change in that area is which playlist id the Control window is handed
-  — a one-prop change at the call site, not inside the component.
-- Content locking (the disabled second button in the Control window's Lock
-  group) remains unbuilt.
+- **The room-control transport.** `roomApi.ts` (`sendRoomLock`,
+  `RoomCommandError`), `RoomControlBridge.tsx`, the wire protocol, and the
+  streamer's `/room` endpoint are untouched. Decision 11 moves the *teacher's
+  surface* from a window to a menu and re-homes the lock flag into the provider;
+  the call it makes and the order it makes it in are unchanged.
+- **Content locking remains unbuilt.** `Lock Contents` ships disabled, exactly as
+  the button it replaces does.
 - Visual polish of the editor body beyond removing the two chrome rows.
 - Bespoke palette icon art (decision 8 defers it; the imports are the only thing
   that would change).
