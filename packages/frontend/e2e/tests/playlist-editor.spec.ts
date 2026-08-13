@@ -60,11 +60,19 @@ test("signed-in teacher creates and saves a playlist", async ({ page }) => {
 
 	await page.goto("/");
 	await page.getByRole("button", { name: "Playlists" }).dblclick();
-	await expect(page.getByText("My Playlists", { exact: true })).toBeVisible();
+	// The list window's heading, specifically: "My Playlists" is also the text
+	// of the Window menu's item for that window, so a bare getByText is
+	// ambiguous now that the app has a Window menu.
+	const listHeading = page.getByRole("heading", { name: "My Playlists" });
+	await expect(listHeading).toBeVisible();
 
 	await page.getByRole("button", { name: "New", exact: true }).click();
 
-	await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
-	await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Untitled Playlist");
+	// The header title field is gone: a new playlist now opens in its OWN
+	// document window, whose title bar carries the playlist title…
+	await expect(page.getByRole("application", { name: "Untitled Playlist" })).toBeVisible();
+	// …and the list window stays open alongside it, which is the whole point of
+	// the document-based rework.
+	await expect(listHeading).toBeVisible();
 	expect(createdBody).toMatchObject({ title: "Untitled Playlist", status: "draft" });
 });

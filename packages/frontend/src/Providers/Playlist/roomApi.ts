@@ -11,7 +11,7 @@ import { ROOM_BASE } from "../../lib/endpoints";
 
 export type RoomLockTarget = "clock";
 
-/** Thrown with a human-usable reason so the Control window can show it. */
+/** Thrown with a human-usable reason so the Control menu's window can show it. */
 export class RoomCommandError extends Error {}
 
 const REASONS: Record<number, string> = {

@@ -33,6 +33,7 @@ export type EditorState = {
 export type EditorAction =
 	| { type: "load"; record: PlaylistRecord }
 	| { type: "setTitle"; title: string }
+	| { type: "renamed"; title: string }
 	| { type: "setMode"; mode: "restrict" | "annotate" }
 	| { type: "setStatus"; status: "draft" | "published" }
 	| {
@@ -71,6 +72,12 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 			return initialEditorState(action.record);
 		case "setTitle":
 			return { ...state, title: action.title, dirty: true };
+		case "renamed":
+			// Rename has ALREADY written the title to the server, so unlike
+			// setTitle this must not mark the document dirty — that would make
+			// the next Save re-send the whole definition, including edits the
+			// user has not chosen to save yet.
+			return { ...state, title: action.title };
 		case "setMode":
 			return { ...state, mode: action.mode, dirty: true };
 		case "setStatus":

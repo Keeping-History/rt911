@@ -79,6 +79,17 @@ describe("editorReducer", () => {
 		expect(dirty.dirty).toBe(true);
 		expect(editorReducer(dirty, { type: "markSaved" }).dirty).toBe(false);
 	});
+	it("renamed adopts the title without marking the document dirty", () => {
+		const clean = initialEditorState({
+			id: "p1", title: "Lesson", status: "draft", date_updated: null, user_created: "u1",
+			definition: { version: 1, mode: "annotate", entries: [] },
+		});
+
+		const after = editorReducer(clean, { type: "renamed", title: "Lesson Two" });
+
+		expect(after.title).toBe("Lesson Two");
+		expect(after.dirty).toBe(false);
+	});
 });
 
 describe("assembleDefinition", () => {
