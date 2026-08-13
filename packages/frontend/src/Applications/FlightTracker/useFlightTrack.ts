@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DIRECTUS_URL } from "../../lib/endpoints";
-import { prevUtcDay } from "./flightFilter";
+import { flightDateOf, prevUtcDay } from "./flightDates";
 import type { GroundStop } from "./groundStops";
 
 // Track geometry is static per flight, so it is fetched over REST, not
@@ -38,17 +38,11 @@ export interface TrackSelection {
 	startDate: string;
 }
 
-// flight_date is the UTC date component of the flight's own start_date — the
-// streamer serves the 2001-09-09..09-18 window, so this is not hardcoded.
-export function flightDateOf(startDate: string): string {
-	return startDate.slice(0, 10);
-}
-
 export function trackUrl(flight: string, flightDate: string): string {
 	const params = new URLSearchParams();
 	params.set("filter[flight][_eq]", flight);
 	// Tolerant of the same local/UTC flight_date boundary routeRowFor works
-	// around (flightFilter.ts's prevUtcDay): a leg that spans midnight UTC —
+	// around (flightDates.ts's prevUtcDay): a leg that spans midnight UTC —
 	// AF1's overnight SRQ ground stop is dated 9/10 but covers early-9/11
 	// instants — is filed under the day before its UTC start_date. An OR
 	// across both days keeps that leg in the result set for pickLeg to

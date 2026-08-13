@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AltitudeSample } from "./flightAltitude";
 import type { TrackSelection } from "./useFlightTrack";
-import { flightDateOf } from "./useFlightTrack";
-import { prevUtcDay } from "./flightFilter";
+import { flightDateOf, prevUtcDay } from "./flightDates";
 import { DIRECTUS_URL } from "../../lib/endpoints";
 
 // Read over REST on the same anonymous static-reference-data path
@@ -23,7 +22,7 @@ export function profileUrl(flight: string, flightDate: string): string {
  * Per-minute altitude profile for the selected flight, feeding the 3D curtain
  * wall (curtainToGeoJSON). flight_date is the BTS *local* departure date while
  * the selection's startDate is UTC, so an empty result falls back one UTC day
- * — the same join quirk routeRowFor handles (see flightFilter.prevUtcDay).
+ * — the same join quirk routeRowFor handles (see flightDates.prevUtcDay).
  *
  * Graceful-degrade contract matches useFlightTrack: any failure yields
  * profile null (no curtain), never a throw.

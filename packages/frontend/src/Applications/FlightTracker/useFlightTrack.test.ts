@@ -1,13 +1,6 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type FlightTrack, flightDateOf, pickLeg, trackUrl, useFlightTrack } from "./useFlightTrack";
-
-describe("flightDateOf", () => {
-	it("takes the UTC date component of an ISO start_date", () => {
-		expect(flightDateOf("2001-09-11T12:46:40Z")).toBe("2001-09-11");
-		expect(flightDateOf("2001-09-15T00:03:00.000Z")).toBe("2001-09-15");
-	});
-});
+import { type FlightTrack, pickLeg, trackUrl, useFlightTrack } from "./useFlightTrack";
 
 describe("trackUrl", () => {
 	it("builds a filtered flight_tracks query against VITE_DIRECTUS_URL", () => {
@@ -20,7 +13,7 @@ describe("trackUrl", () => {
 		expect(url).toContain("limit=1");
 	});
 
-	it("ORs flight_date across both the sample's UTC day and the day before (flightFilter's prevUtcDay boundary)", () => {
+	it("ORs flight_date across both the sample's UTC day and the day before (flightDates' prevUtcDay boundary)", () => {
 		const url = trackUrl("AF1", "2001-09-11");
 		expect(url).toContain("filter%5B_or%5D%5B0%5D%5Bflight_date%5D%5B_eq%5D=2001-09-11");
 		expect(url).toContain("filter%5B_or%5D%5B1%5D%5Bflight_date%5D%5B_eq%5D=2001-09-10");
