@@ -1,3 +1,5 @@
+import "@testing-library/jest-dom/vitest";
+
 // jsdom does not implement IntersectionObserver; react-marquee-text
 // (NowPlayingList) requires it at mount. Minimal inert stub for tests.
 class IntersectionObserverStub {
