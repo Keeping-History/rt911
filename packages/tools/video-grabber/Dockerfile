@@ -57,6 +57,16 @@ RUN mkdir -p /build/whisper-libs && \
     find /build/whisper.cpp/build -name '*.so*' -type f -exec cp -av {} /build/whisper-libs/ \;
 RUN cd whisper.cpp && bash ./models/download-ggml-model.sh medium.en && \
     mkdir -p /opt/models && cp models/ggml-medium.en.bin /opt/models/
+# Silero VAD. whisper-cli --vad requires an explicit --vad-model and fails at
+# runtime without it. Fetched here so the runtime image needs no network.
+# Falls back to a direct download if the helper script is absent from the pinned
+# whisper.cpp checkout; a missing model must break the build, not the pipeline.
+RUN cd whisper.cpp && \
+    (bash ./models/download-vad-model.sh silero-v5.1.2 || \
+     curl -fsSL -o models/ggml-silero-v5.1.2.bin \
+       https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin) && \
+    cp models/ggml-silero-v5.1.2.bin /opt/models/ && \
+    test -s /opt/models/ggml-silero-v5.1.2.bin
 
 # ---- runtime image ---------------------------------------------------------
 FROM python:3.14-slim

@@ -109,3 +109,24 @@ def render_vtt(cues: list[Cue]) -> str:
         out.append(c.text)
         out.append("")
     return "\n".join(out)
+
+
+# Markers whisper emits for non-speech audio. Deliberately excludes
+# [unintelligible] / [inaudible]: those mark speech that could not be resolved,
+# which is information worth keeping.
+_NONSPEECH = re.compile(
+    r"^\s*[\[\(]?\s*(music|blank_audio|silence|sound|noise|applause)\s*[\]\)]?\s*$",
+    re.I,
+)
+_MUSIC_GLYPHS = re.compile(r"^[\s♪♫♩♬]+$")
+
+
+def strip_nonspeech_cues(cues: list[Cue]) -> list[Cue]:
+    """Drop cues that carry no speech at all.
+
+    dedupe_consecutive() collapses runs of identical cues, which turned six hours
+    of open-mic [Music] into a single cue and made an empty transcript look like a
+    clean one. Removing them outright is the honest representation.
+    """
+    return [c for c in cues
+            if not _NONSPEECH.match(c.text) and not _MUSIC_GLYPHS.match(c.text)]

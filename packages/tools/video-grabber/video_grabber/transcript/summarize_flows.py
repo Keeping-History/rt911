@@ -34,20 +34,24 @@ from video_grabber.transcript.summarize import (
 )
 
 
-def anthropic_completer(cfg: Config):
-    """Build a `complete(system, user) -> str` bound to the configured model.
+def anthropic_completer(cfg: Config, *, model: str | None = None, max_tokens: int = 400):
+    """Build a `complete(system, user) -> str` bound to a model.
 
     Wrapped rather than passed as a client so summarize.py stays free of the SDK
     and its rules — every judgment in there is unit-testable without a key.
+
+    Defaults to the summarizer's model and budget; party identification passes
+    its own, since it needs more reasoning and a larger JSON reply.
     """
     import anthropic
 
     client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
+    chosen = model or cfg.summarize_model
 
     def complete(system: str, user: str) -> str:
         msg = client.messages.create(
-            model=cfg.summarize_model,
-            max_tokens=400,
+            model=chosen,
+            max_tokens=max_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
         )

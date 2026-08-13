@@ -79,6 +79,12 @@ export interface RadioScannerSettings {
 	maxVolume: number;
 	/** Closed-caption appearance (the CC on/off toggle is separate, live state). */
 	captionStyle: CaptionStyle;
+	/**
+	 * true = play the source recording instead of the noise-reduced render.
+	 * Defaults false: the enhanced copy is easier to listen to, but the original
+	 * stays one click away because this is a primary-source archive.
+	 */
+	playOriginalAudio: boolean;
 }
 
 export const DEFAULT_RADIO_SCANNER_SETTINGS: RadioScannerSettings = {
@@ -88,6 +94,7 @@ export const DEFAULT_RADIO_SCANNER_SETTINGS: RadioScannerSettings = {
 	colorDim: 0x00b446, // the pre-theme hardcoded dim green
 	maxVolume: 100, // no attenuation
 	captionStyle: DEFAULT_CAPTION_STYLE,
+	playOriginalAudio: false,
 };
 
 /** Persist the whole settings object in one dispatch. */
@@ -157,6 +164,10 @@ export const readRadioScannerSettings = (
 			? stored.maxVolume
 			: DEFAULT_RADIO_SCANNER_SETTINGS.maxVolume,
 		captionStyle: readCaptionStyle(stored.captionStyle),
+		playOriginalAudio:
+			typeof stored.playOriginalAudio === "boolean"
+				? stored.playOriginalAudio
+				: DEFAULT_RADIO_SCANNER_SETTINGS.playOriginalAudio,
 	};
 };
 

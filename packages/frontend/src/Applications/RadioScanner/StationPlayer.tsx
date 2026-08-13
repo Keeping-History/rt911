@@ -9,6 +9,7 @@ import {
 	DEFAULT_CAPTION_STYLE,
 	type VizMode,
 } from "./radioScannerSettings";
+import { resolveAudioUrl } from "./audioSource";
 import {
 	activeSegments,
 	calcSeekSeconds,
@@ -31,6 +32,8 @@ interface StationPlayerProps {
 	onCycleVizMode: () => void;
 	waveColors: { bright: string; dim: string } | null;
 	maxVolume: number;
+	/** true = play the source recording rather than the enhanced render. */
+	playOriginalAudio?: boolean;
 }
 
 /**
@@ -53,6 +56,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	onCycleVizMode,
 	waveColors,
 	maxVolume,
+	playOriginalAudio = false,
 }) => {
 	const segments = activeSegments(station, nowMs);
 	const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
@@ -236,7 +240,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 				<audio
 					key={item.id}
 					ref={audioRef(item.id)}
-					src={item.url}
+					src={resolveAudioUrl(item, playOriginalAudio)}
 					crossOrigin="anonymous"
 					style={{ display: "none" }}
 					onLoadedMetadata={(e) => {

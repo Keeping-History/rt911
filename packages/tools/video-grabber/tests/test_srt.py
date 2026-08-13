@@ -138,3 +138,24 @@ def test_a_cue_never_parses_to_an_end_before_its_start():
     # digits. An end before a start is impossible and must never parse silently.
     cues = parse_srt("1\n99:59:45,000 --> 100:00:04,000\nspans the boundary\n")
     assert cues[0].end > cues[0].start
+
+
+def test_strips_music_and_blank_audio_markers():
+    from video_grabber.transcribe.srt import strip_nonspeech_cues
+    cues = [Cue(0, 1, "[Music]"), Cue(1, 2, "Bravo 112"),
+            Cue(2, 3, "[BLANK_AUDIO]"), Cue(3, 4, "♪♪")]
+    assert [c.text for c in strip_nonspeech_cues(cues)] == ["Bravo 112"]
+
+
+def test_keeps_inaudible_markers_because_they_mark_real_speech():
+    # '[unintelligible]' means someone spoke and whisper could not resolve it.
+    # That is information; '[Music]' over an open mic is not.
+    from video_grabber.transcribe.srt import strip_nonspeech_cues
+    cues = [Cue(0, 1, "[unintelligible]"), Cue(1, 2, "Bravo 112")]
+    assert len(strip_nonspeech_cues(cues)) == 2
+
+
+def test_leaves_ordinary_speech_untouched():
+    from video_grabber.transcribe.srt import strip_nonspeech_cues
+    cues = [Cue(0, 1, "American 77, Indy Center")]
+    assert strip_nonspeech_cues(cues) == cues

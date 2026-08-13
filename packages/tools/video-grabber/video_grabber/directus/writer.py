@@ -8,12 +8,26 @@ Directus media_items writer.
 """
 import json
 from datetime import timedelta
+from urllib.parse import quote
 
 import httpx
 
 from video_grabber.config import Config
 
 _WASABI_BASE = "https://files.911realtime.org"
+
+
+def wasabi_public_url(key: str) -> str:
+    """Public URL for a bucket key, encoded the way mp3_items.url stores it.
+
+    Load-bearing: patch_mp3_subtitles matches mp3_items.url with an exact _eq
+    filter. Directus stores '…/0812%20aa77….mp3'; passing the raw key matched
+    only the three folders whose filenames contain no spaces, silently leaving
+    575 of 621 rows unlinked while the pipeline reported success.
+
+    quote() leaves '/' alone by default, so path structure survives.
+    """
+    return f"{_WASABI_BASE}/{quote(key)}"
 
 
 def get_directus_token(cfg: Config) -> str:

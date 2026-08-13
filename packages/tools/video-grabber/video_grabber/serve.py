@@ -34,6 +34,7 @@ from video_grabber.pipeline.flows import (
 from video_grabber.transcribe.flows import (
     build_channel_subtitles_flow,
     dispatch_transcribe_flow,
+    reconcile_transcribe_jobs_flow,
     scan_transcribe_flow,
     transcribe_item_flow,
 )
@@ -50,6 +51,15 @@ from video_grabber.normalize.flows import (
     dispatch_normalize_flow,
     normalize_item_flow,
     scan_normalize_flow,
+)
+from video_grabber.catalogue.flows import (
+    backfill_mp3_catalogue_flow,
+    link_mp3_subtitles_flow,
+)
+from video_grabber.parties.flows import identify_parties_flow
+from video_grabber.enhance.flows import (
+    render_audition_flow,
+    render_enhanced_corpus_flow,
 )
 
 # Four concurrent download+encode pipelines. These jobs are largely
@@ -241,6 +251,12 @@ def main() -> None:
             name="scan-transcribe",
             concurrency_limit=_TRANSCRIBE_SCAN_LIMIT,
         ),
+        # MANUAL ONLY — never give this a schedule. It seeds transcribe_jobs from
+        # the SRTs already in the bucket so scan-transcribe stops re-enqueueing
+        # ~296h of already-captioned audio.
+        reconcile_transcribe_jobs_flow.to_deployment(
+            name="reconcile-transcribe-jobs",
+        ),
         dispatch_transcribe_flow.to_deployment(
             name="dispatch-transcribe",
             concurrency_limit=_TRANSCRIBE_DISPATCH_LIMIT,
@@ -280,6 +296,14 @@ def main() -> None:
             name="normalize-item",
             concurrency_limit=_NORMALIZE_ITEM_LIMIT,
         ),
+        # Catalogue / parties / enhancement — all MANUAL ONLY. Each writes to the
+        # live Directus catalogue or the bucket and every one defaults to a dry
+        # run; none of them should ever acquire a schedule.
+        backfill_mp3_catalogue_flow.to_deployment(name="backfill-mp3-catalogue"),
+        link_mp3_subtitles_flow.to_deployment(name="link-mp3-subtitles"),
+        identify_parties_flow.to_deployment(name="identify-parties"),
+        render_audition_flow.to_deployment(name="render-audition"),
+        render_enhanced_corpus_flow.to_deployment(name="render-enhanced-corpus"),
     )
 
 

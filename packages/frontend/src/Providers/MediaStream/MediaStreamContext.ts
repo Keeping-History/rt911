@@ -44,6 +44,14 @@ export interface MediaItem {
 	image_caption?: string;
 	/** Public URL to the .srt subtitle file; the .vtt sibling is derived for <track>. */
 	subtitles?: string;
+	/**
+	 * Public URL to the noise-reduced render, when one exists.
+	 *
+	 * `url` stays canonical and always points at the source recording — it is the
+	 * join key for the whole audio pipeline. This is the listening copy, and it is
+	 * null until the enhancement pass has processed that file.
+	 */
+	enhanced_url?: string | null;
 	content?: string;
 	sort?: number;
 }

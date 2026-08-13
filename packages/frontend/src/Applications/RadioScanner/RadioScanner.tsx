@@ -493,6 +493,19 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                 }
                             />
                         </ClassicyControlGroup>
+                        <ClassicyControlGroup label="Audio">
+                            <ClassicyCheckbox
+                                id="radioscanner_settings_play_original"
+                                label="Play original recording (more noise)"
+                                checked={settingsForm.playOriginalAudio}
+                                onClickFunc={(checked: boolean) =>
+                                    setSettingsForm((f) => ({
+                                        ...f,
+                                        playOriginalAudio: checked,
+                                    }))
+                                }
+                            />
+                        </ClassicyControlGroup>
                         <ClassicyControlGroup label="Waveform Colors">
                             <ClassicyCheckbox
                                 id="radioscanner_settings_use_theme"
@@ -731,6 +744,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                 onCycleVizMode={onCycleVizMode}
                                 waveColors={waveColors}
                                 maxVolume={maxVolume}
+                                playOriginalAudio={settings.playOriginalAudio}
                             />
                         ) : (
                             activeStationObj && (
@@ -913,6 +927,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                         onCycleVizMode={onCycleVizMode}
                                         waveColors={waveColors}
                                         maxVolume={maxVolume}
+                                        playOriginalAudio={settings.playOriginalAudio}
                                     />
                                 </>
                             )
