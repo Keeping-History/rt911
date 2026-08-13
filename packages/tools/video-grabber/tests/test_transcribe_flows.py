@@ -178,6 +178,46 @@ def test_build_channel_subtitles_raises_when_channel_lookup_misses():
             flows.build_channel_subtitles_flow("cctv4")
 
 
+class _ScanConn:
+    """Minimal Connection stub: scan-transcribe calls .mappings().all()."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, stmt, params=None):
+        return SimpleNamespace(
+            mappings=lambda: SimpleNamespace(all=lambda: []),
+            rowcount=0,
+        )
+
+    def commit(self):
+        pass
+
+
+def test_scan_transcribe_never_enqueues_enhanced_audio(monkeypatch):
+    """Transcripts must come from the source recording, never from a render.
+
+    Enhanced audio lives at audio-enhanced/ and mp3_items gains an enhanced_url
+    field, so anything deriving transcribe work from Directus rows rather than
+    from the audio/ prefix would silently start transcribing processed audio.
+    """
+    seen = []
+
+    def list_keys(prefix, cfg):
+        seen.append(prefix)
+        return []
+
+    monkeypatch.setattr(flows, "wasabi", SimpleNamespace(list_keys=list_keys))
+    monkeypatch.setattr(flows, "get_db", _ScanConn)
+    monkeypatch.setattr(flows, "get_run_logger", lambda: logging.getLogger("test"))
+    flows.scan_transcribe_flow.fn()
+    assert "audio/" in seen
+    assert not any(p.startswith("audio-enhanced") for p in seen)
+
+
 def test_transcribe_windows_shifts_each_window_onto_the_file_timeline(monkeypatch, tmp_path):
     calls = []
 
