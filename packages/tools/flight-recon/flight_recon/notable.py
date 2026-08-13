@@ -1,7 +1,9 @@
 """
 Load the notable September 11, 2001 flights — the four hijacked aircraft (AA11,
-UA175, AA77, UA93) plus the C-130H observer that witnessed two of the crashes
-(GOFER06) — into the same ``flight_positions`` / ``flight_tracks`` /
+UA175, AA77, UA93), the C-130H observer that witnessed two of the crashes
+(GOFER06), and Air Force One (AF1, curated as TWO files: the September 10
+positioning flight and the September 11 day) — into the same
+``flight_positions`` / ``flight_tracks`` /
 ``reconstruction_runs`` tables the BTS reconstruction writes, so they appear on
 the streamer ``flights`` channel and in the Flight Tracker exactly like the
 1,945 BTS-derived flights.
@@ -16,11 +18,29 @@ validates, and loads them.
 
 CRITICAL — scoped idempotency
 -----------------------------
-Re-running deletes ONLY these five flight IDs for ``flight_date='2001-09-11'``
-before re-inserting. It must NOT reuse the BTS loader's delete-by-``flight_date``
-window (``pgcopy.copy_positions`` / ``directus.delete_window``), which would wipe
-the 1,945 real flights that share that date. A sentinel BTS flight (e.g. AA1002)
-and the BTS row count must survive a re-run untouched.
+Six flights across seven curated files and TWO dates: AA11, UA175, AA77, UA93
+and GOFER06 on ``2001-09-11``, and AF1 on BOTH ``2001-09-10`` (af1_0910.json,
+the Andrews→Jacksonville→Sarasota positioning flight) and ``2001-09-11``
+(af1.json). Flight ID alone is therefore NOT the load's identity — the
+(flight, flight_date) PAIR is, and ``build_all`` rejects two files claiming the
+same pair.
+
+Re-running deletes ONLY the (flight, flight_date) pairs derived from the LOADED
+FILES (``run`` builds them from the built tracks and hands them to
+``scoped_delete``) before re-inserting. It must NEVER widen to a date window —
+not the BTS loader's delete-by-``flight_date`` (``pgcopy.copy_positions`` /
+``directus.delete_window``), and not "every notable ID on every date in range",
+either of which would wipe the 1,945 real BTS flights sharing those dates. A
+sentinel BTS flight (e.g. AA1002) and the BTS row count must survive a re-run
+untouched.
+
+BEHAVIOR CHANGE — pairs come from the files, so the delete follows the CURRENT
+data, not the previously-loaded data. Changing a curated file's ``flight_date``
+(or deleting a file) leaves the rows written under the OLD pair behind as
+orphans: this loader will never see that pair again and so will never delete it.
+That is deliberate — the alternative is a wider delete that can reach BTS rows.
+An operator who re-dates or removes a curated file must delete the orphaned
+(flight, old_date) rows by hand.
 
 This is a standalone one-time load (a fixed curated set), not a repeatable BTS
 Prefect flow, so it is a plain CLI::
@@ -71,6 +91,9 @@ _WINDOW_START_UTC = datetime(2001, 9, 9, -ET_OFFSET, 0, 0, tzinfo=timezone.utc)
 # Validation bounds (match the BTS loader's North-America envelope).
 _LON_MIN, _LON_MAX = -150.0, -65.0
 _LAT_MIN, _LAT_MAX = 18.0, 65.0
+# INCLUSIVE bound with zero headroom by design: af1.json's leg 3 (Offutt →
+# Andrews) cruises at exactly 45,000 ft — Col. Tillman's sourced figure — so any
+# tightening here, or an off-by-one to `<`, rejects the shipped data.
 _ALT_MIN, _ALT_MAX = 0, 45000
 _IMPACT_TOL_DEG = 1e-3   # last track vertex vs documented impact (~110 m)
 
@@ -150,11 +173,28 @@ def build_flight(data):
     if curated:
         assign_curated_phases(samples, curated)
     assign_sources(samples, data["waypoints"])
+    # A ground span is a claim that the aircraft is PARKED for its whole length.
+    # Validate that claim against the resampled track — a curated waypoint that
+    # drifts (or climbs) inside a span would otherwise load as a "parked"
+    # aircraft sliding across the apron, with nothing downstream to catch it.
     for span in data.get("ground_spans", []):
         s0, s1 = parse_utc(span["start"]), parse_utc(span["end"])
-        for s in samples:
-            if s0 <= s["utc"] <= s1:
-                s["phase"] = "ground"
+        inside = [s for s in samples if s0 <= s["utc"] <= s1]
+        base = span.get("base", "?")
+        for s in inside:
+            s["phase"] = "ground"
+        if inside:
+            anchor = inside[0]
+            for s in inside[1:]:
+                if (s["lat"], s["lon"]) != (anchor["lat"], anchor["lon"]):
+                    raise ValueError(
+                        f"{flight}: ground span {span['start']}..{span['end']} ({base}) "
+                        f"moves at {s['utc']}: {s['lat']},{s['lon']} != "
+                        f"{anchor['lat']},{anchor['lon']}")
+                if s["alt_ft"] != anchor["alt_ft"]:
+                    raise ValueError(
+                        f"{flight}: ground span {span['start']}..{span['end']} ({base}) "
+                        f"changes altitude at {s['utc']}: {s['alt_ft']} != {anchor['alt_ft']}")
 
     positions, coords, prev_min = [], [], None
     for s in samples:
@@ -236,12 +276,18 @@ def build_all(data_dir=DATA_DIR):
         data = load_flight_file(path)
         if data["flight"] not in NOTABLE_FLIGHTS:
             raise ValueError(f"{path}: flight {data['flight']} not in {NOTABLE_FLIGHTS}")
-        seen.add(data["flight"])
+        pair = (data["flight"], data.get("flight_date", FLIGHT_DATE))
+        # (flight, flight_date) is the load's identity key — scoped_delete's
+        # pairs, and therefore the idempotency guarantee, collapse if two files
+        # claim the same one: whichever loaded second would delete the first's rows.
+        if pair in seen:
+            raise ValueError(f"{path}: duplicate (flight, flight_date) {pair} across files")
+        seen.add(pair)
         positions, track = build_flight(data)
         all_positions.extend(positions)
         all_tracks.append(track)
         log.info("built %s: %d positions", data["flight"], len(positions))
-    missing = set(NOTABLE_FLIGHTS) - seen
+    missing = set(NOTABLE_FLIGHTS) - {flight for flight, _ in seen}
     if missing:
         log.warning("notable-flight files missing for: %s", sorted(missing))
     return all_positions, all_tracks

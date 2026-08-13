@@ -4,8 +4,10 @@ Tests for the notable-flights loader.
 Pure tests (no DB) cover the accuracy-critical core: per-minute resample cadence
 with pinned endpoints, interpolation sanity, track geometry ending at impact
 (for the four crashed flights; GOFER06 has no impact), airborne-at-T, and —
-crucially — that the delete is SCOPED to the five flight IDs and never a date
-window.
+crucially — that the delete is SCOPED to the (flight, flight_date) pairs the
+loaded files produce and never a date window. Six flights live in seven curated
+files across two dates (AF1 is loaded from both a 9/10 and a 9/11 file), so the
+pair — not the flight ID — is the identity key everything here asserts against.
 
 The end-to-end idempotency test (scoped delete leaves a sentinel BTS flight
 AA1002 and the BTS row count untouched across a re-run) needs a real Postgres.
@@ -404,6 +406,35 @@ def test_af1_per_file_flight_date_and_clock_anchor():
     # 1 day + 17h05m - 4h(ET offset) past 09-09T04:00Z.
     first = positions[0]
     assert first["clock_seconds"] == first["et_seconds"] + 86400
+
+
+def test_ground_span_rejects_a_moving_parked_aircraft():
+    """A ground span asserts the aircraft is PARKED: every sample inside it must
+    hold one lat/lon and one altitude. A curated waypoint that drifts inside a
+    span would otherwise load as a 'parked' aircraft sliding across the apron."""
+    data = _af1_fixture()
+    # 21:20Z sits inside the 21:15-21:20 SRQ ground span — move it.
+    data["waypoints"][-1] = {**data["waypoints"][-1], "lat": 27.50}
+    with pytest.raises(ValueError, match="ground span"):
+        build_flight(data)
+
+
+def test_ground_span_rejects_changing_altitude_while_parked():
+    data = _af1_fixture()
+    data["waypoints"][-1] = {**data["waypoints"][-1], "alt_ft": 900}
+    with pytest.raises(ValueError, match="ground span"):
+        build_flight(data)
+
+
+def test_build_all_rejects_two_files_claiming_the_same_flight_and_date(tmp_path):
+    """AF1 is loaded from two files keyed by (flight, flight_date); a duplicate
+    pair would make scoped_delete's pairs collapse and one file's rows silently
+    delete the other's on re-run."""
+    import json as _json
+    for name in ("a.json", "b.json"):
+        (tmp_path / name).write_text(_json.dumps(_af1_fixture()))
+    with pytest.raises(ValueError, match="duplicate"):
+        build_all(str(tmp_path))
 
 
 def test_af1_ground_span_overrides_phase():
