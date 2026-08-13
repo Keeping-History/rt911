@@ -31,6 +31,13 @@ class Config:
     anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
     summarize_model: str = field(default_factory=lambda: os.getenv("SUMMARIZE_MODEL", "claude-haiku-4-5"))
     summarize_tier: str = field(default_factory=lambda: os.getenv("SUMMARIZE_TIER", "llm-extract"))
+    # Party identification is judgment-heavy; the summarizer's haiku default is
+    # too light for deciding who is speaking on a garbled tape.
+    parties_model: str = field(default_factory=lambda: os.getenv("PARTIES_MODEL", "claude-sonnet-5"))
+    enhance_chain: str = field(default_factory=lambda: os.getenv("ENHANCE_CHAIN", ""))
+    deep_filter_bin: str = field(
+        default_factory=lambda: os.getenv("DEEP_FILTER_BIN", "/usr/local/bin/deep-filter")
+    )
     summarize_max_units: int = field(default_factory=lambda: _int("SUMMARIZE_MAX_UNITS", 3))
     summarize_concurrency: int = field(default_factory=lambda: _int("SUMMARIZE_CONCURRENCY", 8))
 

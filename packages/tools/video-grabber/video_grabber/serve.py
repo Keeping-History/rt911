@@ -52,6 +52,15 @@ from video_grabber.normalize.flows import (
     normalize_item_flow,
     scan_normalize_flow,
 )
+from video_grabber.catalogue.flows import (
+    backfill_mp3_catalogue_flow,
+    link_mp3_subtitles_flow,
+)
+from video_grabber.parties.flows import identify_parties_flow
+from video_grabber.enhance.flows import (
+    render_audition_flow,
+    render_enhanced_corpus_flow,
+)
 
 # Four concurrent download+encode pipelines. These jobs are largely
 # download-bound (pulling the ~200 MB .ogv derivative from IA) with VAAPI doing
@@ -287,6 +296,14 @@ def main() -> None:
             name="normalize-item",
             concurrency_limit=_NORMALIZE_ITEM_LIMIT,
         ),
+        # Catalogue / parties / enhancement — all MANUAL ONLY. Each writes to the
+        # live Directus catalogue or the bucket and every one defaults to a dry
+        # run; none of them should ever acquire a schedule.
+        backfill_mp3_catalogue_flow.to_deployment(name="backfill-mp3-catalogue"),
+        link_mp3_subtitles_flow.to_deployment(name="link-mp3-subtitles"),
+        identify_parties_flow.to_deployment(name="identify-parties"),
+        render_audition_flow.to_deployment(name="render-audition"),
+        render_enhanced_corpus_flow.to_deployment(name="render-enhanced-corpus"),
     )
 
 
