@@ -15,6 +15,8 @@ import "./Applications/Weather/weatherSettings";
 import "./Applications/TimeMachine/timeMachineSettings";
 import "./Applications/Feedback/FeedbackContext";
 import "./Applications/README/ReadmeContext";
+import "./Applications/News/NewsContext";
+import "./Applications/PagerDecoder/PagerDecoderContext";
 
 // [appId, expected prefixes, spot-checked action types, has a state schema]
 const CASES: Array<[string, string[], string[], boolean]> = [
@@ -51,6 +53,13 @@ const CASES: Array<[string, string[], string[], boolean]> = [
 	["TimeMachine.app", ["ClassicyAppTimeMachine"], ["ClassicyAppTimeMachineSetSettings"], true],
 	["Feedback.app", ["ClassicyAppFeedback"], ["ClassicyAppFeedbackSetGithub"], true],
 	["Readme.app", ["ClassicyAppReadme"], ["ClassicyAppReadmeSetSettings"], true],
+	["News.app", ["ClassicyAppNews"], ["ClassicyAppNewsFocusItem", "ClassicyAppNewsSetOpenDocuments"], true],
+	[
+		"PagerDecoder.app",
+		["ClassicyAppPagerDecoder"],
+		["ClassicyAppPagerDecoderInitSettings", "ClassicyAppPagerDecoderUpdateSettings"],
+		true,
+	],
 ];
 
 describe("app manifests", () => {

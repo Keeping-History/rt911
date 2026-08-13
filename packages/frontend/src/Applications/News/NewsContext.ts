@@ -2,7 +2,8 @@
 // commands and published state ride apps["News.app"].data through a handler
 // registered ahead of the core app reducer.
 import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerAppEventHandler } from "classicy";
+import { registerApp } from "classicy";
+import { z } from "zod";
 
 const appId = "News.app";
 
@@ -53,4 +54,39 @@ export const classicyNewsEventHandler = (ds: ClassicyStore, action: ActionMessag
 	}
 };
 
-registerAppEventHandler("ClassicyAppNews", classicyNewsEventHandler);
+export const NewsDataSchema = z.looseObject({
+	command: z
+		.object({
+			seq: z.number().describe("Monotonic sequence so each focus command applies exactly once."),
+			kind: z.literal("focus").describe("Command kind; only \"focus\" exists."),
+			docId: z.number().describe("MediaItem id of the article to open."),
+		})
+		.optional()
+		.describe("Pending one-shot remote focus command (open an article's detail window)."),
+	openDocuments: z
+		.array(z.number())
+		.optional()
+		.describe("MediaItem ids of the article detail windows currently open (playlist locked-focus reads this)."),
+});
+
+export type NewsData = z.infer<typeof NewsDataSchema>;
+
+registerApp({
+	id: appId,
+	description: "Wire-service and newspaper headlines, revealed live to the virtual clock.",
+	prefix: "ClassicyAppNews",
+	handler: classicyNewsEventHandler,
+	actions: {
+		ClassicyAppNewsFocusItem: {
+			description: "Open the detail window for an article by MediaItem id (one-shot; retries until it exists).",
+			params: z.object({ docId: z.number().describe("Article's MediaItem id.") }),
+		},
+		ClassicyAppNewsSetOpenDocuments: {
+			description: "Publish which article detail windows are open.",
+			params: z.object({
+				openDocuments: z.array(z.number()).describe("Open articles' MediaItem ids."),
+			}),
+		},
+	},
+	state: NewsDataSchema,
+});
