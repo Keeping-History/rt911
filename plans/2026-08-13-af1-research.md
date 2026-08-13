@@ -9,7 +9,7 @@ All times below are given as **ET (UTC−4)** with **UTC** alongside. 2001-09-10
 | # | Event | ET | UTC | Source(s) |
 |---|---|---|---|---|
 | 0a | **[9/10, DERIVED] AF1 wheels-off, Andrews AFB (ADW)** | ~13:40–14:15 (derived — lowest-confidence figure in this document, see Leg 0) | ~17:40–18:15Z (9/10) | DERIVED: JAX wheels-on (0b, itself derived) minus ~1h20–1h35 estimated ADW–JAX flight time (~570 nm great-circle) — no source names an ADW departure time |
-| 0b | **[9/10, DERIVED] AF1 wheels-on, Jacksonville, FL (field unconfirmed — NAS Jacksonville or Jacksonville Intl, see Conflicts)** | ~15:15–15:35 (derived) | ~19:15–19:35Z (9/10) | DERIVED: Justina Road Elementary event-start time (1, below, sourced) minus ~15–35 min typical airport-to-venue motorcade/security lead time |
+| 0b | **[9/10, DERIVED] AF1 wheels-on, Jacksonville, FL (field unconfirmed — NAS Jacksonville or Jacksonville Intl, see Conflicts)** | ~15:15–15:35 (derived) | ~19:15–19:35Z (9/10) | DERIVED: Justina Road Elementary event-start time (2, below, sourced) minus ~15–35 min typical airport-to-venue motorcade/security lead time |
 | 1 | Guests admitted to the multi-purpose room, Justina Road Elementary, Jacksonville | 14:00 | 18:00Z (9/10) | Sarasota Magazine, "The President in Sarasota" ("At 2 p.m. we were let into the multi-purpose room...") |
 | 2 | Bush enters the Justina Road Elementary program | 15:50 | 19:50Z (9/10) | Sarasota Magazine ("precisely at 3:50, the President entered"); Your Observer's "3:45 p.m." is a close (5-min) corroboration, likely rounding the same event |
 | 3 | Justina Road Elementary program ends | 16:30 | 20:30Z (9/10) | Sarasota Magazine ("At precisely 4:30 the program was over") |
