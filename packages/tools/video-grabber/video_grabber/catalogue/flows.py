@@ -69,12 +69,24 @@ def backfill_mp3_catalogue_flow(dry_run: bool = True) -> None:
     have = {row["url"] for row in _page_mp3_items(cfg, "url") if row.get("url")}
     keys = [k for k in wasabi.list_keys("audio/", cfg) if k.lower().endswith(".mp3")]
 
-    created = unreadable = 0
+    created = unreadable = untimeable = 0
     for key in keys:
         url = wasabi_public_url(key)
         if url in have:
             continue
         parsed = parse_key(key)
+        if parsed.start_utc is None:
+            # mp3_items.start_date is NOT NULL, and this whole product is driven
+            # by the virtual clock — a row with no time can never be served.
+            # The existing NORAD tapes show the precedent: their start times were
+            # curated by hand from the recordings, not derived from filenames.
+            # So refuse, and surface these for the same treatment.
+            logger.warning(
+                "backfill: %s has no parseable timestamp; skipping. It needs a "
+                "hand-curated start_date, as the NORAD tapes were given.", key,
+            )
+            untimeable += 1
+            continue
         duration = probe_duration(url)
         if duration is None:
             # calc_duration gates clip/tape tiering downstream; a row without it
@@ -90,9 +102,8 @@ def backfill_mp3_catalogue_flow(dry_run: bool = True) -> None:
             "calc_duration": duration,
             "timezone": "EDT",
             "approved": 0,
+            "start_date": parsed.start_utc.strftime("%Y-%m-%d %H:%M:%S"),
         }
-        if parsed.start_utc is not None:
-            body["start_date"] = parsed.start_utc.strftime("%Y-%m-%d %H:%M:%S")
         if dry_run:
             logger.info("DRY RUN would create: %s", body)
         else:
@@ -100,8 +111,11 @@ def backfill_mp3_catalogue_flow(dry_run: bool = True) -> None:
                            json=body, headers=_auth_headers(cfg))
             r.raise_for_status()
         created += 1
-    logger.info("backfill-mp3-catalogue: %d rows %s, %d unreadable",
-                created, "would be created" if dry_run else "created", unreadable)
+    logger.info(
+        "backfill-mp3-catalogue: %d rows %s, %d unreadable, %d untimeable "
+        "(need a hand-curated start_date)",
+        created, "would be created" if dry_run else "created", unreadable, untimeable,
+    )
 
 
 @flow(name="link-mp3-subtitles")
