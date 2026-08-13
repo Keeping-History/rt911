@@ -34,6 +34,7 @@ from video_grabber.pipeline.flows import (
 from video_grabber.transcribe.flows import (
     build_channel_subtitles_flow,
     dispatch_transcribe_flow,
+    reconcile_transcribe_jobs_flow,
     scan_transcribe_flow,
     transcribe_item_flow,
 )
@@ -240,6 +241,12 @@ def main() -> None:
         scan_transcribe_flow.to_deployment(
             name="scan-transcribe",
             concurrency_limit=_TRANSCRIBE_SCAN_LIMIT,
+        ),
+        # MANUAL ONLY — never give this a schedule. It seeds transcribe_jobs from
+        # the SRTs already in the bucket so scan-transcribe stops re-enqueueing
+        # ~296h of already-captioned audio.
+        reconcile_transcribe_jobs_flow.to_deployment(
+            name="reconcile-transcribe-jobs",
         ),
         dispatch_transcribe_flow.to_deployment(
             name="dispatch-transcribe",

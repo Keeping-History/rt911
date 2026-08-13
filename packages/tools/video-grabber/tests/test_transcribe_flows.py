@@ -175,6 +175,41 @@ def test_build_channel_subtitles_raises_when_channel_lookup_misses():
             flows.build_channel_subtitles_flow("cctv4")
 
 
+def test_existing_srt_key_prefers_the_mirrored_path():
+    stems = {"0812 aa77 taxi"}
+    paths = {"subtitles/audio/AA77/0812 aa77 taxi.srt"}
+    assert flows.existing_srt_key("audio/AA77/0812 aa77 taxi.mp3", stems, paths) == \
+        "subtitles/audio/AA77/0812 aa77 taxi.srt"
+
+
+def test_existing_srt_key_falls_back_to_the_flat_stem():
+    stems = {"0812 aa77 taxi"}
+    assert flows.existing_srt_key("audio/AA77/0812 aa77 taxi.mp3", stems, set()) == \
+        "subtitles/audio/0812 aa77 taxi.srt"
+
+
+def test_existing_srt_key_returns_none_when_untranscribed():
+    assert flows.existing_srt_key("audio/AA77/never.mp3", set(), set()) is None
+
+
+def test_subtitle_base_key_mirrors_the_audio_path():
+    cfg = SimpleNamespace(subtitles_prefix="subtitles")
+    assert flows.subtitle_base_key("mp3", "audio/AA77/0812 aa77 taxi.mp3", cfg) == \
+        "subtitles/audio/AA77/0812 aa77 taxi"
+
+
+def test_subtitle_base_key_disambiguates_colliding_basenames():
+    cfg = SimpleNamespace(subtitles_prefix="subtitles")
+    a = flows.subtitle_base_key("mp3", "audio/AA11/081015 aa11 fl290.mp3", cfg)
+    b = flows.subtitle_base_key("mp3", "audio/faa_atc/clips/aa11/081015 aa11 fl290.mp3", cfg)
+    assert a != b
+
+
+def test_subtitle_base_key_leaves_tv_alone():
+    cfg = SimpleNamespace(subtitles_prefix="subtitles")
+    assert flows.subtitle_base_key("tv", "TCN_test", cfg) == "subtitles/programs/TCN_test"
+
+
 def _mp3_job(job_id):
     return SimpleNamespace(
         id=job_id, kind="mp3",

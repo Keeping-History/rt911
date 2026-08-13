@@ -114,6 +114,35 @@ def build_channel_cues(window_start: datetime, programs: list[tuple[datetime, st
     return merge(blocks)
 
 
+def existing_srt_key(mp3_key: str, srt_stems: set[str], srt_paths: set[str]) -> str | None:
+    """Return the SRT key already in the bucket for *mp3_key*, or None.
+
+    Checks the mirrored layout first and falls back to the historical flat-stem
+    layout, so this stays correct whichever layout the bucket is currently in.
+    """
+    mirrored = f"subtitles/{Path(mp3_key).with_suffix('.srt')}"
+    if mirrored in srt_paths:
+        return mirrored
+    stem = Path(mp3_key).stem
+    if stem in srt_stems:
+        return f"subtitles/audio/{stem}.srt"
+    return None
+
+
+def subtitle_base_key(job_kind: str, source_key: str, cfg) -> str:
+    """Extension-less subtitle key for a source.
+
+    mp3 keys mirror their full audio/ path rather than collapsing to a bare
+    stem: 93 basenames repeat across folders, and a flat namespace makes the
+    second transcription silently overwrite the first. Those 93 are currently
+    genuine duplicates of the same clip, so nothing is corrupt today — this is
+    hardening against the first real collision.
+    """
+    if job_kind == "tv":
+        return f"{cfg.subtitles_prefix}/programs/{source_key}"
+    return f"{cfg.subtitles_prefix}/{Path(source_key).with_suffix('')}"
+
+
 # ---- flows ----------------------------------------------------------------
 
 @flow(name="scan-transcribe")
@@ -156,6 +185,41 @@ def scan_transcribe_flow() -> None:
         logger.info("scan-transcribe: +%d tv, +%d mp3 new jobs", tv_n, mp3_n)
 
 
+@flow(name="reconcile-transcribe-jobs")
+def reconcile_transcribe_jobs_flow() -> None:
+    """Seed transcribe_jobs as 'done' for every mp3 whose SRT already exists.
+
+    Load-bearing guard. transcribe_jobs is empty, and scan-transcribe only
+    de-duplicates against rows that are already there — so without this, the next
+    scan re-enqueues all 789 mp3s and re-transcribes ~296 hours of audio that is
+    already captioned. Idempotent: ON CONFLICT DO NOTHING.
+    """
+    logger = get_run_logger()
+    cfg = Config()
+    srt_keys = [k for k in wasabi.list_keys(f"{cfg.subtitles_prefix}/", cfg)
+                if k.endswith(".srt")]
+    srt_paths = set(srt_keys)
+    srt_stems = {Path(k).stem for k in srt_keys}
+    mp3_keys = [k for k in wasabi.list_keys("audio/", cfg) if k.lower().endswith(".mp3")]
+
+    seeded = skipped = 0
+    with get_db() as db:
+        for key in mp3_keys:
+            srt_key = existing_srt_key(key, srt_stems, srt_paths)
+            if srt_key is None:
+                skipped += 1
+                continue
+            res = db.execute(sa.text("""
+                INSERT INTO transcribe_jobs (kind, source_key, source_url, stage, srt_key)
+                VALUES ('mp3', :sk, :url, 'done', :srt)
+                ON CONFLICT (source_key) DO NOTHING
+            """), {"sk": key, "url": wasabi_public_url(key), "srt": srt_key})
+            seeded += res.rowcount or 0
+        db.commit()
+    logger.info("reconcile-transcribe-jobs: seeded %d done, %d still untranscribed",
+                seeded, skipped)
+
+
 @flow(name="transcribe-item", retries=1, retry_delay_seconds=60)
 def transcribe_item_flow(job_id: str) -> None:
     """Transcribe one unit. Produces per-unit SRT/VTT in Wasabi; mp3 also PATCHes
@@ -178,11 +242,7 @@ def transcribe_item_flow(job_id: str) -> None:
         srt_path.write_text(render_srt(clean_cues))
         vtt_path.write_text(render_vtt(clean_cues))
 
-        if job.kind == "tv":
-            base_key = f"{cfg.subtitles_prefix}/programs/{job.source_key}"
-        else:  # mp3 → mirror the audio/ basename
-            stem = Path(job.source_key).stem
-            base_key = f"{cfg.subtitles_prefix}/audio/{stem}"
+        base_key = subtitle_base_key(job.kind, job.source_key, cfg)
         srt_key = f"{base_key}.srt"
         wasabi.upload_text(srt_path.read_text(), srt_key, cfg)
         wasabi.upload_text(vtt_path.read_text(), f"{base_key}.vtt", cfg)
