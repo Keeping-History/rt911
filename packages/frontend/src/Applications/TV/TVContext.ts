@@ -1,5 +1,6 @@
 import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerAppEventHandler } from "classicy";
+import { registerApp } from "classicy";
+import { z } from "zod";
 
 export interface CaptionStyle {
 	font: string;
@@ -223,4 +224,111 @@ export const classicyTVEventHandler = (
 	}
 };
 
-registerAppEventHandler("ClassicyAppTV", classicyTVEventHandler);
+const captionStyleSchema = z.object({
+	font: z.string().describe("CSS custom-property name for the caption font family, e.g. \"--ui-font\"."),
+	color: z.number().describe("Caption text color, packed 0xRRGGBB."),
+	colorOpacity: z.number().describe("Caption text alpha, 0..1."),
+	bgColor: z.number().describe("Caption background color, packed 0xRRGGBB."),
+	bgOpacity: z.number().describe("Caption background alpha, 0..1."),
+	size: z.number().describe("Caption font-size scale, percent (100 = base size)."),
+});
+
+const channelRefSchema = z
+	.union([z.number(), z.string()])
+	.describe("A channel by numeric MediaItem id or by source slug (e.g. \"WETA\").");
+
+export const TvDataSchema = z.looseObject({
+	multiSelectMode: z.boolean().optional().describe("Whether grid view is in multi-select mode."),
+	selectedChannels: z.array(z.string()).optional().describe("Source slugs of the channels selected in grid view."),
+	mutedChannels: z.array(z.string()).optional().describe("Source slugs of grid channels the user has muted."),
+	channelVolumes: z.record(z.string(), z.number()).optional().describe("Per-channel volume (0..1) keyed by source slug."),
+	disabledChannels: z.array(z.string()).optional().describe("Source slugs the user turned off in Settings (blacklist: new channels default on)."),
+	command: z
+		.object({
+			seq: z.number().describe("Monotonic sequence so each one-shot command applies exactly once."),
+			kind: z.enum(["tune", "grid", "exitGrid"]).describe("Which remote command to run."),
+			channel: channelRefSchema.optional(),
+			channels: z.array(channelRefSchema).optional(),
+		})
+		.optional()
+		.describe("Pending one-shot remote-control command (tune / grid / exitGrid)."),
+	volumeLimit: z.number().optional().describe("Maximum volume (0..1) applied to any playing video."),
+	overallMuted: z.boolean().optional().describe("Whether every video is muted at once."),
+	tvPaused: z.boolean().optional().describe("Whether playback is frozen (the virtual clock keeps running)."),
+	captionsOn: z.boolean().optional().describe("Whether closed captions are shown."),
+	captionStyle: captionStyleSchema.optional().describe("Closed-caption display style."),
+	activePlayer: z.number().optional().describe("MediaItem id of the active single-view player."),
+	currentChannel: z.string().optional().describe("Source slug of the active channel, published for external controllers (playlist locked-focus)."),
+	channelOrder: z.array(z.string()).optional().describe("User's drag-ordered source slugs for the thumbnail strip."),
+});
+
+export type TvData = z.infer<typeof TvDataSchema>;
+
+registerApp({
+	id: TV_APP_ID,
+	description: "Watch the synchronized 9/11 broadcast channels, live to the virtual clock.",
+	prefix: "ClassicyAppTV",
+	handler: classicyTVEventHandler,
+	actions: {
+		ClassicyAppTVSetGridState: {
+			description: "Persist grid view's selection, mute, and volume state.",
+			params: z.object({
+				multiSelectMode: z.boolean().describe("Whether multi-select mode is on."),
+				selectedChannels: z.array(z.string()).describe("Selected channels' source slugs."),
+				mutedChannels: z.array(z.string()).describe("Muted channels' source slugs."),
+				channelVolumes: z.record(z.string(), z.number()).describe("Per-channel volume (0..1) keyed by source slug."),
+			}),
+		},
+		ClassicyAppTVSetDisabledChannels: {
+			description: "Persist which channels the user turned off in Settings.",
+			params: z.object({
+				disabledChannels: z.array(z.string()).describe("Disabled channels' source slugs."),
+			}),
+		},
+		ClassicyAppTVTuneChannel: {
+			description: "Tune to a single channel and show it as the only video.",
+			params: z.object({ channel: channelRefSchema }),
+		},
+		ClassicyAppTVSetGrid: {
+			description: "Show a grid of the given channels.",
+			params: z.object({ channels: z.array(channelRefSchema).describe("Channels to show in the grid.") }),
+		},
+		ClassicyAppTVExitGrid: {
+			description: "Leave grid view and return to a single active channel.",
+		},
+		ClassicyAppTVSetVolumeLimit: {
+			description: "Set the maximum volume applied to any playing video.",
+			params: z.object({ volumeLimit: z.number().describe("Volume ceiling, 0..1.") }),
+		},
+		ClassicyAppTVSetMuted: {
+			description: "Mute or unmute every video at once.",
+			params: z.object({ muted: z.boolean().describe("true = mute all.") }),
+		},
+		ClassicyAppTVPause: {
+			description: "Freeze every video; the virtual clock keeps running.",
+		},
+		ClassicyAppTVPlay: {
+			description: "Resume playback at the live virtual-clock time (not where it paused).",
+		},
+		ClassicyAppTVSetCaptionState: {
+			description: "Set whether closed captions are on and their display style.",
+			params: z.object({
+				captionsOn: z.boolean().describe("Whether captions are shown."),
+				captionStyle: captionStyleSchema,
+			}),
+		},
+		ClassicyAppTVSetActivePlayer: {
+			description: "Persist which channel is the active single-view player.",
+			params: z.object({ activePlayer: z.number().describe("Active player's MediaItem id.") }),
+		},
+		ClassicyAppTVSetCurrentChannel: {
+			description: "Publish the active channel's source slug for external controllers.",
+			params: z.object({ source: z.string().describe("The active channel's source slug.") }),
+		},
+		ClassicyAppTVSetChannelOrder: {
+			description: "Persist the user's drag-ordered channel strip.",
+			params: z.object({ channelOrder: z.array(z.string()).describe("Source slugs in display order.") }),
+		},
+	},
+	state: TvDataSchema,
+});

@@ -56,8 +56,24 @@ The Mac OS 8-style desktop shell for 911realtime.org. It is built on the [`class
 
 ### Add a new desktop app
 1. Create `src/Applications/<Name>/<Name>.tsx` following the `ClassicyApp`/`ClassicyWindow` shape above — `TimeMachine/TimeMachine.tsx`, `Feedback/Feedback.tsx`, and `PagerDecoder/PagerDecoder.tsx` are good, small references.
-2. Wire it into `src/app.tsx` (import + render inside `ClassicyDesktop`).
-3. Add a co-located `<Name>.test.tsx`.
+2. If the app has a custom reducer, register it **with a manifest** via `registerApp` (next section) from a context/settings module that loads at import time.
+3. Wire it into `src/app.tsx` (import + render inside `ClassicyDesktop`).
+4. Add a co-located `<Name>.test.tsx`, and a row to `src/appManifests.test.ts` if you registered a manifest.
+
+### Register an app's reducer + manifest (`registerApp`)
+
+Every app with a custom reducer registers it at module load from its context file via classicy's `registerApp({ id, description, prefix, handler, actions, state })` — **never** the deprecated `registerAppEventHandler`. The manifest's text is a product surface: it powers balloon help, HyperCard script discovery, and dev-mode state validation. `TV/TVContext.ts` is the fullest example; `Feedback/FeedbackContext.ts` the smallest.
+
+Rules (all enforced or pinned by `src/appManifests.test.ts`):
+
+- **`state` MUST be `z.looseObject`, never `z.object`**, with every top-level field `.optional()` and `.describe()`d. The kernel writes undeclared keys (e.g. `openFiles`) into `apps[id].data`, and data is legitimately `{}`/`undefined` before the app's first action. The `.describe()` text is the balloon-help copy — write it for end users. Derive the data type via `z.infer` so type and schema can't drift.
+- **Declare every action the reducer's `switch` handles**, each with a `description`; `params` is a `z.object` matching *exactly* the fields that case reads off `action` (name them as the reducer reads them — e.g. TV's `SetCurrentChannel` takes `source`, not `currentChannel`). Actions the reducer reads nothing from (`Pause`, `ExitGrid`) take no `params`. For replace-whole-object settings actions, `z.record(z.string(), z.unknown())` with a "Full X object." describe is the house pattern — the detailed field shapes live on the *state* schema.
+- **`scriptable: true` is a product/security decision, not a default** — it exposes the action to untrusted HyperCard stack scripts. Nothing is scriptable today and `appManifests.test.ts` pins `listScriptableActions()` to the exact expected list (`[]`); flipping any action on requires explicit sign-off and updating that assertion in the same PR.
+- **Multi-module apps** (one id, several prefixes — see FlightTracker): the primary module registers the `state` schema, *covering the keys secondary modules write* (e.g. `command`/`focusedFlight`); secondaries register prefix + actions only; both repeat an identical `description` literal (first-wins) rather than importing each other. A store plugin that writes into *other* apps' data (see `Providers/Playlist/playlistStoreActions.ts`) registers no `state` at all.
+- **Test-mock hazard:** a test whose import graph reaches a registered module and that `vi.mock("classicy", () => ({...}))` with a full factory needs `registerApp: () => {}` in the factory (and `describeAppState`/`ClassicyBalloonHelp` if the graph reaches `TimeMachine.tsx`). Prefer `importOriginal` spreads, which dodge the whole class of breakage. `src/appManifests.test.ts` itself must never mock classicy — it exercises the real registry.
+- **Dev builds validate `apps[id].data` against the schema after every action** and `console.warn` on mismatch (prod skips this entirely). A warning means the schema or the reducer is wrong — fix the schema to match the reducer's reality, never mangle state to satisfy the schema. After touching a reducer or schema, run the app's flows once with the console open.
+- **Balloon help from the manifest:** `describeAppState(appId, "path.to.field")` returns `{title, content}` or `undefined` (render the bare control on undefined). Supply your own human title — the returned one is the raw field name. The three TimeMachine settings sliders in `TimeMachine/TimeMachine.tsx` are the wired exemplar.
+- Sub-schemas for objects the reducer always writes whole (`captionStyle`, `favorites` entries) are deliberately strict; if their interface ever grows a field, make the sub-schema `.partial()` in the same change or older persisted data will dev-warn on every related action.
 
 ### Add new virtual-file-system content (a PDF, an image collection, etc.)
 1. Upload the actual asset to Wasabi (`files.911realtime.org`) first — `_url` is a plain remote URL; nothing in this repo serves the bytes.

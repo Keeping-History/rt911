@@ -60,6 +60,7 @@ vi.mock("classicy", () => ({
 		}),
 	useAppManagerDispatch: () => vi.fn(),
 	ClassicyIcons: { applications: {} },
+	registerApp: () => {},
 }));
 
 // Turns an already-msgpack-encoded payload (the return of `encode(...)`) into

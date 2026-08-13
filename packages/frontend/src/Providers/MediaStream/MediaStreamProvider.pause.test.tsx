@@ -34,6 +34,7 @@ vi.mock("classicy", () => ({
 		}),
 	useAppManagerDispatch: () => dispatchMock,
 	ClassicyIcons: { applications: {} },
+	registerApp: () => {},
 }));
 
 class FakeWebSocket {

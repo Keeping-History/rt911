@@ -64,6 +64,7 @@ vi.mock("classicy", () => ({
 		const iso = useSyncExternalStore(clockStore.subscribe, clockStore.get);
 		return { localDate: new Date(iso), dateTime: iso, tzOffset: tzOffsetStore.hours };
 	},
+	registerApp: () => {},
 }));
 
 // The provider reads the Directus session to decide whether auto sign-on is
