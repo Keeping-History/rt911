@@ -67,6 +67,16 @@ RUN cd whisper.cpp && \
        https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin) && \
     cp models/ggml-silero-v5.1.2.bin /opt/models/ && \
     test -s /opt/models/ggml-silero-v5.1.2.bin
+# DeepFilterNet 3 — the speech enhancer behind the audio-enhanced/ renders.
+# The statically-linked musl release is used deliberately: the pip package needs
+# torch, and the runtime image is Python 3.14, for which no torch wheels exist.
+# Discriminative (mask-estimating) by construction — it can only remove energy
+# from the real recording, never synthesise speech that was never said.
+ARG DEEP_FILTER_VERSION=0.5.6
+RUN curl -fsSL -o /build/deep-filter \
+      "https://github.com/Rikorose/DeepFilterNet/releases/download/v${DEEP_FILTER_VERSION}/deep-filter-${DEEP_FILTER_VERSION}-x86_64-unknown-linux-musl" && \
+    chmod +x /build/deep-filter && \
+    /build/deep-filter --help > /dev/null
 
 # ---- runtime image ---------------------------------------------------------
 FROM python:3.14-slim
@@ -94,6 +104,7 @@ COPY --from=whisper-builder /build/whisper-cli /usr/local/bin/whisper-cli
 COPY --from=whisper-builder /build/whisper-libs/ /usr/local/lib/
 RUN ldconfig
 COPY --from=whisper-builder /opt/models/ /opt/models/
+COPY --from=whisper-builder /build/deep-filter /usr/local/bin/deep-filter
 WORKDIR /app
 COPY pyproject.toml .
 COPY video_grabber/ ./video_grabber/
