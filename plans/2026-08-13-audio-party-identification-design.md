@@ -76,6 +76,12 @@ single party-pair for those is meaningless.
   against sampled transcript windows; `side_b` is `various` plus a list of
   recurring counterparties.
 
+The threshold reads `mp3_items.calc_duration`. That column is populated for
+existing rows but not for the 168 backfilled ones, so Piece 2 must ffprobe each new
+object and write `calc_duration` before Piece 3 runs. A null `calc_duration` at
+identification time is an error, not a default — silently treating it as a clip
+would send a 6.75 h transcript through the clip prompt.
+
 ### Broadcast exclusion
 
 WINS (24 files) and WCBS (1 file) are news-radio broadcasts, not two-party
@@ -86,6 +92,14 @@ The exclusion is implemented as an **affirmative allow-list, not a deny-list**: 
 folder carries an explicit `media_kind` of `conversation` or `broadcast`, and
 identification runs only where `media_kind == "conversation"`. An unrecognised
 folder is skipped with a loud warning rather than defaulting to identification.
+
+The map is a module-level constant in `parties/identify.py` keyed on the first path
+segment under `audio/`, not an environment variable — it is a property of the
+corpus, not of the deployment, and an env var is one more thing that can arrive
+empty. Current classification: `broadcast` for `wins1010` and `wcbs`;
+`conversation` for `AA11`, `AA77`, `UA93`, `UA175`, `DL1989`, `NEADS`, `norad`,
+`Langley`, `QUIT`, `GOFER06`, `ATCSCC`, `FAA`, `ZBW`, `ZDC`, `ZNY`, `ZOB`,
+`faa_atc`, `fdny_dispatch`, `rutgers_audiograph`.
 
 This direction is deliberate. A deny-list that fails to load, or a typo'd folder
 name, silently re-admits WINS and WCBS; an allow-list that fails to load identifies
