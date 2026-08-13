@@ -58,6 +58,9 @@ COLLECTIONS = {
             {"field": "alt_ft", "type": "integer"},
             {"field": "phase", "type": "string"},
             {"field": "diverted", "type": "boolean"},
+            # Per-position provenance ("radar" / "estimated"), written by the
+            # notable-flights loader; NULL for BTS-derived rows.
+            {"field": "source", "type": "string"},
             {"field": "run_id", "type": "string", "schema": {"is_nullable": False}},
         ],
     },

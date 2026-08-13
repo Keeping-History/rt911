@@ -14,7 +14,8 @@ const sel: FlightPosition = {
 };
 
 const baseTrack: FlightTrack = {
-	flight: "AA11", origin: "BOS", scheduled_dest: "LAX", landed_at: null,
+	flight: "AA11", flight_date: "2001-09-11", origin: "BOS", scheduled_dest: "LAX",
+	landed_at: null,
 	diverted: false, geometry: null,
 	tail_number: null, aircraft_type: null, details: null,
 	wheels_off_utc: null, wheels_on_utc: null,
@@ -224,6 +225,23 @@ describe("FlightDetailPanel", () => {
 				nowMs={PRE_IMPACT} />,
 		);
 		expect(screen.queryByLabelText("Phase colors")).toBeNull();
+	});
+
+	it("shows the PRESIDENTIAL badge and ground status for a parked AF1", () => {
+		const selected: FlightPosition = {
+			id: 1, flight: "AF1", start_date: "2001-09-11T16:00:00Z", lat: 32.5, lon: -93.66, alt_ft: 166, phase: "ground",
+		};
+		const track: FlightTrack = {
+			...baseTrack,
+			flight: "AF1", origin: "SRQ", scheduled_dest: "ADW",
+			wheels_off_utc: "2001-09-11T13:54:00Z", wheels_on_utc: "2001-09-11T22:54:00Z",
+			aircraft_type: "Boeing VC-25A", tail_number: "SAM 28000",
+			details: { ground_stops: [{ code: "BAD", name: "Barksdale Air Force Base", start: "2001-09-11T15:45:00Z", end: "2001-09-11T17:37:00Z" }] },
+		};
+		render(<FlightDetailPanel selected={selected} track={track} loading={false} error={null}
+			nowMs={Date.parse("2001-09-11T16:00:00Z")} />);
+		expect(screen.getByText("PRESIDENTIAL")).toBeDefined();
+		expect(screen.getByText("On the ground at Barksdale Air Force Base")).toBeDefined();
 	});
 
 	describe("provenance disclosure (#263)", () => {

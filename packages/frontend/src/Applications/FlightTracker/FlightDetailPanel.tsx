@@ -8,11 +8,12 @@ import {
 	ClassicyControlLabel,
 	ClassicyPopUpMenu,
 } from "classicy";
-import { isNotable, isObserver } from "./notableFlights";
+import { isNotable, isObserver, isPresidential } from "./notableFlights";
 import { PROVENANCE_NOTE, isEstimated, sourceLabel } from "./flightProvenance";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
 import { type MapPoi, POI_DETAIL_FIELDS, detailTitleFor } from "./mapPois";
 import { PHASE_COLORS, DEFAULT_PHASE_COLOR, phaseLabel } from "./flightPhases";
+import { groundStopAt } from "./groundStops";
 
 interface FlightDetailPanelProps {
 	selected: FlightPosition | null;
@@ -124,6 +125,9 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				<span className={styles.detailFlight}>{selected.flight}</span>
 				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
 				{isObserver(selected.flight) && <span className={styles.detailBadge}>OBSERVER</span>}
+				{isPresidential(selected.flight) && (
+					<span className={styles.detailBadge}>PRESIDENTIAL</span>
+				)}
 				{selected.flight.startsWith("RDR-") && (
 					<span className={styles.detailBadge}>UNIDENTIFIED</span>
 				)}
@@ -151,6 +155,14 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				{selected.carrier && (<><dt>Carrier</dt><dd>{selected.carrier}</dd></>)}
 				<dt>Altitude</dt><dd>{selected.alt_ft.toLocaleString()} ft</dd>
 				{selected.phase && (<><dt>Phase</dt><dd>{selected.phase}</dd></>)}
+				{(livePos ?? selected).phase === "ground" && (
+					<><dt>Status</dt><dd>
+						{(() => {
+							const stop = groundStopAt(details, nowMs);
+							return stop ? `On the ground at ${stop.name}` : "On the ground";
+						})()}
+					</dd></>
+				)}
 				{headingDeg != null && (<><dt>Heading</dt><dd>{`${Math.round(headingDeg) % 360}°`}</dd></>)}
 				{livePos && (<><dt>Position</dt><dd>{formatCoords(livePos.lat, livePos.lon)}</dd></>)}
 				{estimates?.fromOrigin && (

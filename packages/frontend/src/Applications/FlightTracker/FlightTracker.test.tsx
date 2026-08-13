@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -821,6 +821,22 @@ describe("FlightTracker", () => {
 			expect(screen.getByText("Filter…")).toBeTruthy();
 		});
 
+		it("never counts a parked aircraft as filtered-aloft (no '1 of 0')", () => {
+			// AF1 parked at Barksdale: on the map, excluded from the denominator.
+			// Filtering to it alone must read "0 of 1", not "1 of 1" — the
+			// numerator has to share the denominator's aloft semantics.
+			const af1 = {
+				id: 3, flight: "AF1", carrier: "USAF",
+				start_date: "2001-09-11T13:00:00Z", lat: 32.5, lon: -93.66, alt_ft: 166,
+				phase: "ground",
+			};
+			mockAppData.current = { filterSettings: { carrier: "USAF" } };
+			renderWithContext({ flightPositions: [aa11, af1], connected: true });
+			const last = mapProps[mapProps.length - 1];
+			expect((last.positions as { flight: string }[]).map((p) => p.flight)).toEqual(["AF1"]);
+			expect(screen.getByText("0 of 1 aircraft aloft · filtered")).toBeTruthy();
+		});
+
 		it("a manual camera flatten un-persists the 3D toggle (issue #223)", () => {
 			mockAppData.current = { mapSettings: { threeD: true } };
 			renderWithContext({ connected: true });
@@ -981,6 +997,19 @@ describe("FlightTracker", () => {
 			// A regular flight isn't one of the five tracked flights: arming stays inert.
 			act(() => fireEvent.click(screen.getByTestId("flight_camera_follow")));
 			expect(mapProps.at(-1)!.followFlight).toBeNull();
+			vi.unstubAllGlobals();
+		});
+
+		it("arms the follow lock onto Air Force One (observer-styled, not notable)", () => {
+			stubFetch();
+			const af1 = {
+				id: 3, flight: "AF1", carrier: "",
+				start_date: "2001-09-11T13:00:00Z", lat: 39, lon: -77, alt_ft: 0,
+			};
+			renderWithContext({ flightPositions: [af1], connected: true });
+			act(() => (mapProps.at(-1)!.onSelectFlight as (f: string) => void)("AF1"));
+			fireEvent.click(screen.getByTestId("flight_camera_follow"));
+			expect(mapProps.at(-1)!.followFlight).toBe("AF1");
 			vi.unstubAllGlobals();
 		});
 	});
@@ -1166,6 +1195,53 @@ describe("FlightTracker", () => {
 			const layers = mapProps.at(-1)!.poiLayers as Array<{ layer: string; clustered: boolean }>;
 			expect(layers).toHaveLength(1);
 			expect(layers[0]).toMatchObject({ layer: "Major Airports", clustered: true });
+		});
+	});
+
+	describe("Air Force One (presidential category)", () => {
+		const af1Pos = {
+			id: 7, flight: "AF1", carrier: "USAF",
+			start_date: "2001-09-11T13:00:00Z", lat: 27.4, lon: -82.55, alt_ft: 30,
+			phase: "ground",
+		};
+		const af1Track = {
+			flight: "AF1", flight_date: "2001-09-11", origin: "SRQ",
+			scheduled_dest: "ADW", landed_at: "ADW", diverted: false,
+			geometry: { type: "LineString", coordinates: [[-82.55, 27.4], [-93.66, 32.5]] },
+			tail_number: "SAM 28000", aircraft_type: "Boeing VC-25A", details: null,
+			wheels_off_utc: "2001-09-11T13:54:00Z", wheels_on_utc: "2001-09-11T22:34:00Z",
+		};
+		const af1Profile = [
+			{ lat: 27.4, lon: -82.55, alt_ft: 30, utc: "2001-09-11T13:00:00Z", phase: "ground", source: "estimated" },
+			{ lat: 29.0, lon: -85.0, alt_ft: 39000, utc: "2001-09-11T14:30:00Z", phase: "cruise", source: "radar" },
+		];
+
+		it("renders the phase legend for AF1 — presidential flights get colored phases too", async () => {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async (url: string) => ({
+					ok: true,
+					json: async () => ({
+						data: String(url).includes("flight_tracks")
+							? [af1Track]
+							: String(url).includes("flight_positions")
+								? af1Profile
+								: [],
+					}),
+				})),
+			);
+			renderWithContext({ flightPositions: [af1Pos], connected: true });
+			const onSelectFlight = mapProps.at(-1)!.onSelectFlight as (f: string) => void;
+			act(() => onSelectFlight("AF1"));
+
+			// "On Ground" is the phase legend's label for AF1's parked stretches —
+			// it only renders when trackPhases is non-empty, which was gated on
+			// isNotable (the crashed four) and so excluded AF1 entirely.
+			await waitFor(() => {
+				expect(screen.getByLabelText("Phase colors")).toBeTruthy();
+			});
+			const legend = screen.getByLabelText("Phase colors");
+			expect(legend.textContent).toContain("On Ground");
 		});
 	});
 });

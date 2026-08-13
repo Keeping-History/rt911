@@ -27,7 +27,7 @@ const apiRow = (flight: string, flight_date: string): ApiRow => ({
 
 // Dispatches on the `flight_date` embedded in the URL rather than call order,
 // since a single sample date now triggers fetches for both it and the
-// previous UTC day (see flightFilter.prevUtcDay) — call order alone can't
+// previous UTC day (see flightDates.prevUtcDay) — call order alone can't
 // pin a response to a specific date.
 function dateFromUrl(url: string): string {
 	return /flight_date%5D%5B_eq%5D=([0-9-]+)/.exec(String(url))![1];
@@ -71,7 +71,7 @@ describe("useRouteIndex", () => {
 	it("fetches a sample date and its previous UTC day, and exposes rows keyed flight|date", async () => {
 		// A single sample date now fetches TWO dates: the sample's own UTC date
 		// and the day before it, since flight_date can land on either (see
-		// flightFilter.prevUtcDay).
+		// flightDates.prevUtcDay).
 		const fetchMock = mockFetchByDate({
 			"2001-09-11": () => [apiRow("AA11", "2001-09-11")],
 			"2001-09-10": () => [],

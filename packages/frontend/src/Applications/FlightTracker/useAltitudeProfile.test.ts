@@ -73,6 +73,57 @@ describe("useAltitudeProfile", () => {
 		expect(String(fetchMock.mock.calls[1][0])).toContain("2001-09-11");
 	});
 
+	// AF1 has flight_positions on BOTH 9/10 and 9/11, so "did the primary day
+	// return zero rows?" can never distinguish them: a 9/10-evening instant whose
+	// UTC date is already 9/11 hits the 9/11 day and gets the WRONG day's profile
+	// — which FlightTracker also draws AF1's track from. The selected track's own
+	// flight_date is the only authority.
+	describe("two-day flights (AF1)", () => {
+		const day = (d: string) => [
+			{ lat: 27.3954, lon: -82.5544, alt_ft: 30, utc: `${d}T02:00:00.000Z` },
+			{ lat: 27.3954, lon: -82.5544, alt_ft: 30, utc: `${d}T02:01:00.000Z` },
+		];
+		const twoDayFetch = () =>
+			vi.fn(async (url: string) => ({
+				ok: true,
+				json: async () => ({
+					data: String(url).includes("2001-09-10") ? day("2001-09-10") : day("2001-09-11"),
+				}),
+			}));
+
+		it("keys the profile off the selected track's flight_date, not the sample's UTC day", async () => {
+			const fetchMock = twoDayFetch();
+			vi.stubGlobal("fetch", fetchMock);
+
+			// 02:00Z on 9/11 is still the 9/10-dated overnight leg.
+			const { result } = renderHook(() =>
+				useAltitudeProfile({ flight: "AF1", startDate: "2001-09-11T02:00:00Z" }, "2001-09-10"),
+			);
+			await waitFor(() => expect(result.current.profile).not.toBeNull());
+			expect(String(fetchMock.mock.calls[0][0])).toContain("2001-09-10");
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			expect(result.current.profile?.every((p) => p.utc.startsWith("2001-09-10"))).toBe(true);
+		});
+
+		it("caches per track flight_date, so the same instant on the other row refetches", async () => {
+			const fetchMock = twoDayFetch();
+			vi.stubGlobal("fetch", fetchMock);
+
+			const { result, rerender } = renderHook(
+				({ d }) => useAltitudeProfile({ flight: "AF1", startDate: "2001-09-11T02:00:00Z" }, d),
+				{ initialProps: { d: "2001-09-10" } },
+			);
+			await waitFor(() =>
+				expect(result.current.profile?.[0].utc.startsWith("2001-09-10")).toBe(true),
+			);
+			rerender({ d: "2001-09-11" });
+			await waitFor(() =>
+				expect(result.current.profile?.[0].utc.startsWith("2001-09-11")).toBe(true),
+			);
+			expect(fetchMock).toHaveBeenCalledTimes(2);
+		});
+	});
+
 	it("yields null on HTTP failure and for a cleared selection", async () => {
 		vi.spyOn(console, "warn").mockImplementation(() => {});
 		vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500 })));

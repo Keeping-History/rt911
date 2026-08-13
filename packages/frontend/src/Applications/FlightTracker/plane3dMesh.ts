@@ -1,7 +1,7 @@
 import type { FlightMotion, LandingClock, MotionBuffer } from "./flightMotion";
 import { extrapolate, motionNow } from "./flightMotion";
 import { PLANE_SHAPE, altitudeFtAt, exaggeratedHeightM } from "./flightAltitude";
-import { isNotable, isObserver } from "./notableFlights";
+import { isNotable, isObserverStyled } from "./notableFlights";
 
 /**
  * Instance category the 3D shader colors by: 0 = regular, 1 = notable,
@@ -10,7 +10,7 @@ import { isNotable, isObserver } from "./notableFlights";
  */
 export function categoryFlag(flight: string): number {
 	if (isNotable(flight)) return 1;
-	if (isObserver(flight)) return 2;
+	if (isObserverStyled(flight)) return 2;
 	return flight.startsWith("RDR-") ? 3 : 0;
 }
 
