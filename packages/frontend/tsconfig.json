@@ -11,7 +11,7 @@
 		// regardless of it. Dropping two classicy peer deps removed that
 		// reference and 15 pre-existing type errors appeared at once, in files
 		// nobody had touched. Declare it explicitly so it can't vanish again.
-		"types": ["vite/client", "geojson", "node", "@testing-library/jest-dom"],
+		"types": ["vite/client", "geojson", "node"],
 		"skipLibCheck": true,
 		"resolveJsonModule": true,
 		/* Bundler mode */

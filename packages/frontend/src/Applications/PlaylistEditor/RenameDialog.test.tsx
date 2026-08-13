@@ -11,7 +11,7 @@ describe("RenameDialogForm", () => {
 		const onRename = vi.fn();
 		render(<RenameDialogForm initialTitle="Lesson" onRename={onRename} onCancel={vi.fn()} />);
 
-		expect(field()).toHaveValue("Lesson");
+		expect((field() as HTMLInputElement).value).toBe("Lesson");
 		fireEvent.change(field(), { target: { value: "Lesson Two" } });
 		fireEvent.click(screen.getByRole("button", { name: "Rename" }));
 
@@ -25,7 +25,7 @@ describe("RenameDialogForm", () => {
 
 		fireEvent.change(field(), { target: { value: "   " } });
 
-		expect(screen.getByRole("button", { name: "Rename" })).toBeDisabled();
+		expect((screen.getByRole("button", { name: "Rename" }) as HTMLButtonElement).disabled).toBe(true);
 		fireEvent.click(screen.getByRole("button", { name: "Rename" }));
 		expect(onRename).not.toHaveBeenCalled();
 	});

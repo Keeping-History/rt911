@@ -39,7 +39,6 @@
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
 		"@playwright/test": "^1.62.1",
-		"@testing-library/jest-dom": "^7.0.1",
 		"@testing-library/react": "^16.3.2",
 		"@types/dompurify": "^3.0.5",
 		"@types/geojson": "^7946.0.16",
