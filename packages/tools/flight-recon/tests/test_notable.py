@@ -470,6 +470,15 @@ def test_existing_notables_have_no_source():
     assert all(p.get("source") is None for p in positions)
 
 
+def test_run_source_string_fits_the_prod_varchar_255():
+    # reconstruction_runs.source_file is a Directus-managed varchar(255) in
+    # prod (LOCAL_SCHEMA_DDL's source_file column matches that width); a
+    # longer string 500s insert_run's INSERT with StringDataRightTruncation
+    # (caught in a prod dry-run — LOCAL_SCHEMA_DDL's old unbounded varchar
+    # masked it in scratch testing). No DB needed: this is a pure string check.
+    assert len(notable.NOTABLE_RUN_SOURCE) <= 255
+
+
 @requires_db
 def test_scoped_delete_pairs_only_touch_their_dates(scratch_db):
     """Deleting one (flight, flight_date) pair must leave that same flight on

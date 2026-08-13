@@ -81,6 +81,16 @@ NOTABLE_FLIGHTS = ("AA11", "UA175", "AA77", "UA93", "GOFER06", "AF1")
 NOTABLE_POSITION_COLUMNS = POSITION_COLUMNS[:-1] + ["source", "run_id"]
 DATA_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "data", "notable_flights")
 
+# reconstruction_runs.source_file is a Directus-managed varchar(255) in prod
+# (LOCAL_SCHEMA_DDL's source_file column matches that width so scratch testing
+# can't mask a length overflow the way an unbounded varchar did before). Keep
+# this compact — count it before adding to it.
+NOTABLE_RUN_SOURCE = (
+    "84 RADES radar returns (FOIA) + NTSB Flight Path Studies / 9/11 Commission "
+    "anchors — AA11, UA175, AA77, UA93, GOFER06; AF1 (SAM 28000) from RADES leg-1 "
+    "returns + published timeline sources. Curated notable_flights load."
+)
+
 # clock_seconds anchor: continuous seconds since ET midnight of the loaded BTS
 # window's FIRST day — not of flight_date. Every prod run in reconstruction_runs
 # used [2001-09-09, 2001-09-12], and every prod 9/11 position row has
@@ -137,7 +147,7 @@ CREATE TABLE IF NOT EXISTS reconstruction_runs (
     run_id                 varchar PRIMARY KEY,
     start                  date,
     "end"                  date,
-    source_file            varchar,
+    source_file            varchar(255),
     flights_reconstructed  integer,
     positions_count        integer,
     tracks_count           integer,
@@ -335,11 +345,6 @@ def insert_tracks(cur, tracks, run_id):
 
 def insert_run(cur, run_id, positions_count, tracks):
     """Append one provenance row citing the radar sources (append-only ledger)."""
-    source = ("84 RADES radar returns (FOIA release, FBI analysis 13 Sep 2001) for "
-              "AA11, UA175, AA77, UA93, GOFER06 + NTSB Flight Path Studies "
-              "(2002-02-19) / 9/11 Commission Report Ch.1 gap anchors — curated "
-              "notable_flights load; AF1 (SAM 28000) curated from published "
-              "timeline sources")
     tracks_count = len(tracks)
     start = min(t["flight_date"] for t in tracks)
     end = max(t["flight_date"] for t in tracks)
@@ -348,7 +353,7 @@ def insert_run(cur, run_id, positions_count, tracks):
         "flights_reconstructed, positions_count, tracks_count, skipped_count, "
         "skipped, skipped_by_reason, cancelled_by_day, created_at) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        (run_id, start, end, source, tracks_count, positions_count,
+        (run_id, start, end, NOTABLE_RUN_SOURCE, tracks_count, positions_count,
          tracks_count, 0, Json([]), Json({}), Json({}),
          datetime.now(timezone.utc)))
 
