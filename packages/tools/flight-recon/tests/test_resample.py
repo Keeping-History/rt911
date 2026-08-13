@@ -64,6 +64,10 @@ def test_assign_sources_radar_bracket_and_default():
     assert by_min["13:57"] == "radar"       # bracketed radar-radar
     assert by_min["13:55"] == "estimated"   # estimated-radar bracket
     assert by_min["13:59"] == "estimated"   # radar-estimated bracket
+    assert by_min["13:56"] == "radar"       # exact hit on a radar waypoint
+    assert by_min["13:58"] == "radar"       # exact hit on a radar waypoint
+    assert by_min["13:54"] == "estimated"   # exact hit on an estimated waypoint
+    assert by_min["14:00"] == "estimated"   # exact hit on an estimated waypoint
 
 
 def test_assign_sources_absent_when_unmarked():
@@ -75,3 +79,18 @@ def test_assign_sources_absent_when_unmarked():
     samples = resample_track(wps)
     assign_sources(samples, wps)
     assert all("source" not in s for s in samples)
+
+
+def test_assign_sources_single_marked_waypoint():
+    # One lone radar mark: only the sample at that instant is radar.
+    wps = [
+        {"utc": "2001-09-11T13:54:00Z", "lat": 27.4, "lon": -82.55, "alt_ft": 28, "source": "radar"},
+        {"utc": "2001-09-11T13:56:00Z", "lat": 27.5, "lon": -82.60, "alt_ft": 3000},
+        {"utc": "2001-09-11T13:58:00Z", "lat": 27.6, "lon": -82.65, "alt_ft": 6000},
+    ]
+    samples = resample_track(wps)
+    assign_sources(samples, wps)
+    by_min = {s["utc"].strftime("%H:%M"): s["source"] for s in samples}
+    assert by_min["13:54"] == "radar"
+    assert by_min["13:55"] == "estimated"
+    assert by_min["13:58"] == "estimated"

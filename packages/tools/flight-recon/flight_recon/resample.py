@@ -195,9 +195,9 @@ def assign_curated_phases(samples, phases):
 def assign_sources(samples, waypoints):
     """Per-sample provenance from optional waypoint ``source`` marks.
 
-    A sample is ``"radar"`` only when its time is bracketed by two waypoints
-    both marked ``source: "radar"`` (an exact waypoint hit counts its own
-    bracket); anything else in a marked file is ``"estimated"``. Files whose
+    A sample exactly on a waypoint takes that waypoint's own mark; an interior
+    sample is ``"radar"`` only when both bracketing waypoints are marked
+    ``"radar"``. Anything else in a marked file is ``"estimated"``. Files whose
     waypoints carry no marks (the original five notables) are left untouched
     so their positions keep loading with source NULL (wholly-historical)."""
     if not any("source" in w for w in waypoints):
@@ -209,8 +209,13 @@ def assign_sources(samples, waypoints):
     for s in samples:
         t = s["utc"]
         label = "estimated"
-        for (t0, s0), (t1, s1) in zip(wps, wps[1:]):
-            if t0 <= t <= t1:
-                label = "radar" if (s0 == "radar" and s1 == "radar") else "estimated"
+        for i, (t0, s0) in enumerate(wps):
+            if t == t0:
+                label = s0  # exact hit: the waypoint's own provenance
                 break
+            if i + 1 < len(wps):
+                t1, s1 = wps[i + 1]
+                if t0 < t < t1:
+                    label = "radar" if (s0 == "radar" and s1 == "radar") else "estimated"
+                    break
         s["source"] = label
