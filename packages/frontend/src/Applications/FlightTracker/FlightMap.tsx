@@ -859,6 +859,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"icon-allow-overlap": true,
 					"icon-ignore-placement": true,
 				},
+				// A parked highlight (AF1 at a ground stop) dims so a motionless
+				// icon reads as "on the ground", not a stuck render.
+				paint: { "icon-opacity": ["case", ["==", ["get", "phase"], "ground"], 0.55, 1] },
 			});
 			void installPlaneIcons(
 				map, colors.pinColor, colors.notablePinColor, colors.observerPinColor,

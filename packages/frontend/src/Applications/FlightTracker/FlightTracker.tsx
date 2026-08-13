@@ -358,6 +358,12 @@ export const FlightTracker: FC = () => {
 		() => flightPositions.filter((p) => p.flight.startsWith("RDR-")).length,
 		[flightPositions],
 	);
+	// Parked aircraft (AF1 during its ground stops) are on the map but not
+	// "aloft" — the status bar subtracts them like it subtracts anon traffic.
+	const groundedCount = useMemo(
+		() => flightPositions.filter((p) => p.phase === "ground").length,
+		[flightPositions],
+	);
 	// Wheels-down/crash instants for the airborne set: the map's dead-reckoning
 	// clamp (a landed flight freezes at its track end instead of overshooting).
 	const landingClock = useMemo(
@@ -1375,8 +1381,8 @@ export const FlightTracker: FC = () => {
 							</span>
 							<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
 								{visibleFlights
-									? `${filteredPositions.length} of ${flightPositions.length - anonAloft} aircraft aloft · filtered${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`
-									: `${flightPositions.length - anonAloft} aircraft aloft${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`}
+									? `${filteredPositions.length} of ${flightPositions.length - anonAloft - groundedCount} aircraft aloft · filtered${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`
+									: `${flightPositions.length - anonAloft - groundedCount} aircraft aloft${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`}
 							</span>
 						</div>
 					</div>

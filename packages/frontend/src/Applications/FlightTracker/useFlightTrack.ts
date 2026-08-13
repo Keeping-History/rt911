@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DIRECTUS_URL } from "../../lib/endpoints";
+import { prevUtcDay } from "./flightFilter";
+import type { GroundStop } from "./groundStops";
 
 // Track geometry is static per flight, so it is fetched over REST, not
 // streamed — the same static-reference-data path the Time Machine bookmarks
@@ -12,6 +14,9 @@ export interface FlightDetails {
 	souls?: { passengers?: number; crew?: number; hijackers?: number; total?: number };
 	hijackers?: string[];
 	fate?: { text?: string; utc?: string };
+	// Curated ground-stop intervals (AF1's Sarasota/Barksdale/Offutt stops) —
+	// see groundStops.ts, which matches these against the replay clock.
+	ground_stops?: GroundStop[];
 }
 
 export interface FlightTrack {
@@ -40,14 +45,23 @@ export function flightDateOf(startDate: string): string {
 }
 
 export function trackUrl(flight: string, flightDate: string): string {
-	const params = new URLSearchParams({
-		"filter[flight][_eq]": flight,
-		"filter[flight_date][_eq]": flightDate,
-		fields: "flight,origin,scheduled_dest,landed_at,diverted,geometry,tail_number,aircraft_type,details,wheels_off_utc,wheels_on_utc",
-		// Multi-leg flight numbers (e.g. WN6 flying several legs on 9/11) have
-		// one row PER LEG — fetch them all and pick by time (pickLeg below).
-		limit: "10",
-	});
+	const params = new URLSearchParams();
+	params.set("filter[flight][_eq]", flight);
+	// Tolerant of the same local/UTC flight_date boundary routeRowFor works
+	// around (flightFilter.ts's prevUtcDay): a leg that spans midnight UTC —
+	// AF1's overnight SRQ ground stop is dated 9/10 but covers early-9/11
+	// instants — is filed under the day before its UTC start_date. An OR
+	// across both days keeps that leg in the result set for pickLeg to
+	// choose from instead of silently excluding it.
+	params.set("filter[_or][0][flight_date][_eq]", flightDate);
+	params.set("filter[_or][1][flight_date][_eq]", prevUtcDay(flightDate));
+	params.set(
+		"fields",
+		"flight,origin,scheduled_dest,landed_at,diverted,geometry,tail_number,aircraft_type,details,wheels_off_utc,wheels_on_utc",
+	);
+	// Multi-leg flight numbers (e.g. WN6 flying several legs on 9/11) have
+	// one row PER LEG — fetch them all and pick by time (pickLeg below).
+	params.set("limit", "10");
 	return `${DIRECTUS_URL}/items/flight_tracks?${params.toString()}`;
 }
 

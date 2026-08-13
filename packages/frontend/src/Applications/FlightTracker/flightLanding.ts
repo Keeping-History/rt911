@@ -64,6 +64,10 @@ export function dropLandedPositions(
 ): FlightPosition[] {
 	return positions.filter((p) => {
 		if (isNotable(p.flight)) return true;
+		// An explicit ground row is a statement the aircraft is parked and
+		// should be shown (AF1's ground stops) — landing linger only removes
+		// flights that landed and STOPPED emitting positions.
+		if (p.phase === "ground") return true;
 		const landedMs = landingMsFor(index, p);
 		return landedMs === null || nowMs < landedMs + LANDED_LINGER_MS;
 	});
