@@ -10,6 +10,8 @@ import "./Applications/TV/TVContext";
 import "./Applications/FlightTracker/flightMapSettings";
 import "./Applications/FlightTracker/flightTrackerCommands";
 import "./Applications/Browser/BrowserContext";
+import "./Applications/RadioScanner/RadioScannerContext";
+import "./Applications/Weather/weatherSettings";
 
 // [appId, expected prefixes, spot-checked action types, has a state schema]
 const CASES: Array<[string, string[], string[], boolean]> = [
@@ -29,6 +31,18 @@ const CASES: Array<[string, string[], string[], boolean]> = [
 		"Browser.app",
 		["ClassicyAppBrowser"],
 		["ClassicyAppBrowserNavigate", "ClassicyAppBrowserAddFavorite", "ClassicyAppBrowserClearHistory"],
+		true,
+	],
+	[
+		"RadioScanner.app",
+		["ClassicyAppRadioScanner"],
+		["ClassicyAppRadioScannerTuneStation", "ClassicyAppRadioScannerSetSettings"],
+		true,
+	],
+	[
+		"Weather.app",
+		["ClassicyAppWeather"],
+		["ClassicyAppWeatherSetLoopSettings", "ClassicyAppWeatherSetMapSettings"],
 		true,
 	],
 ];
