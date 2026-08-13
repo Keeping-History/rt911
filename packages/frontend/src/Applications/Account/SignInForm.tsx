@@ -1,6 +1,6 @@
 import type React from "react";
 import { useState } from "react";
-import { ClassicyButton, ClassicyInput } from "classicy";
+import { ClassicyButton, ClassicyInput, ClassicyControlGroup } from "classicy";
 import { isHostOf } from "../../Providers/Auth/authApi";
 
 type Provider = "google" | "facebook" | "apple";
@@ -102,28 +102,23 @@ export const SignInForm: React.FC<SignInFormProps> = ({
 
 	return (
 		<div>
-			{view === "signin" && (
-				<>
-					{PROVIDERS.map((provider) => (
-						<ClassicyButton key={provider} onClickFunc={() => onSignInWithProvider(provider)}>
-							{`Sign in with ${PROVIDER_LABEL[provider]}`}
-						</ClassicyButton>
-					))}
-				</>
-			)}
+			<ClassicyControlGroup label={"Sign In With Email"} layout="form">
 			<ClassicyInput
 				id="account-email"
 				labelTitle="Email"
+				labelPosition="left"
 				prefillValue={email}
 				onChangeFunc={(e) => setEmail(e.target.value)}
 			/>
 			<ClassicyInput
 				id="account-password"
 				labelTitle="Password"
+				labelPosition="left"
 				type="password"
 				prefillValue={password}
 				onChangeFunc={(e) => setPassword(e.target.value)}
 			/>
+			</ClassicyControlGroup>
 			{view === "register" && (
 				<ClassicyInput
 					id="account-confirm-password"
@@ -150,6 +145,15 @@ export const SignInForm: React.FC<SignInFormProps> = ({
 					<ClassicyButton disabled={submitting} onClickFunc={() => switchView("signin")}>
 						Back to Sign In
 					</ClassicyButton>
+				</>
+			)}
+			{view === "signin" && (
+				<>
+					{PROVIDERS.map((provider) => (
+						<ClassicyButton key={provider} onClickFunc={() => onSignInWithProvider(provider)}>
+							{`Sign in with ${PROVIDER_LABEL[provider]}`}
+						</ClassicyButton>
+					))}
 				</>
 			)}
 			{reason && <div>{reason}</div>}
