@@ -983,6 +983,19 @@ describe("FlightTracker", () => {
 			expect(mapProps.at(-1)!.followFlight).toBeNull();
 			vi.unstubAllGlobals();
 		});
+
+		it("arms the follow lock onto Air Force One (observer-styled, not notable)", () => {
+			stubFetch();
+			const af1 = {
+				id: 3, flight: "AF1", carrier: "",
+				start_date: "2001-09-11T13:00:00Z", lat: 39, lon: -77, alt_ft: 0,
+			};
+			renderWithContext({ flightPositions: [af1], connected: true });
+			act(() => (mapProps.at(-1)!.onSelectFlight as (f: string) => void)("AF1"));
+			fireEvent.click(screen.getByTestId("flight_camera_follow"));
+			expect(mapProps.at(-1)!.followFlight).toBe("AF1");
+			vi.unstubAllGlobals();
+		});
 	});
 
 	describe("POI wiring (Task 8)", () => {

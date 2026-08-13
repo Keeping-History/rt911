@@ -73,7 +73,7 @@ import {
 	flightTrackerSetFocusedFlight,
 } from "./flightTrackerCommands";
 import { useNotableCrashSites } from "./useNotableCrashSites";
-import { isNotable, isObserver } from "./notableFlights";
+import { isNotable, isObserverStyled } from "./notableFlights";
 import { isEstimated, orderedTrackSources } from "./flightProvenance";
 import type { CameraMode } from "./flightCamera";
 import { useRouteIndex } from "./useRouteIndex";
@@ -428,12 +428,14 @@ export const FlightTracker: FC = () => {
 		setSelectedPoi(poi);
 	}, []);
 
-	// Camera follow targets the five tracked flights (the notables + observer).
-	// canFollow gates the toggle; followFlight (null unless armed AND a tracked
-	// flight is selected) is what FlightMap locks onto. Keeping cameraFollow in
-	// lockstep with canFollow means "following" never lingers with nothing to
-	// follow — so cameraFollow alone drives the toolbar's locked-out controls.
-	const canFollow = !!selected && (isNotable(selected.flight) || isObserver(selected.flight));
+	// Camera follow targets the curated highlight flights — notables, observer,
+	// Air Force One. canFollow gates the toggle; followFlight (null unless armed
+	// AND a tracked flight is selected) is what FlightMap locks onto. Keeping
+	// cameraFollow in lockstep with canFollow means "following" never lingers
+	// with nothing to follow — so cameraFollow alone drives the toolbar's
+	// locked-out controls. Follow is a viewport convenience, not a crash-
+	// semantics behavior, so it uses the observer-styled union (not isNotable-only).
+	const canFollow = !!selected && (isNotable(selected.flight) || isObserverStyled(selected.flight));
 	useEffect(() => {
 		if (cameraFollow && !canFollow) setCameraFollow(false);
 	}, [cameraFollow, canFollow]);
