@@ -3,14 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EditorState } from "./editorState";
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
 
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
-	useClassicyFileSystem: () => ({ fs: {}, separator: ":", resolve: () => undefined }),
-}));
-vi.mock("../../Providers/MediaStream/useMediaStream", () => ({
-	useMediaStream: () => ({ sources: { video: [], audio: [] } }),
-}));
-
 afterEach(cleanup);
 
 const state = (over: Partial<EditorState> = {}): EditorState => ({
@@ -57,5 +49,35 @@ describe("PlaylistEditorMain", () => {
 		screen.getByRole("button", { name: "Remove" }).click();
 
 		expect(edit).toHaveBeenCalledWith("p1", { type: "removeEntry", uid: "e1" });
+	});
+
+	it("routes an entry's Edit click through the injected dispatcher as a select action", () => {
+		const edit = vi.fn();
+		render(
+			<PlaylistEditorMain
+				state={state({
+					entries: [{ uid: "e1", entry: { kind: "browser", url: "http://example.com", at: "" } }],
+				})}
+				edit={edit}
+			/>,
+		);
+
+		screen.getByRole("button", { name: "Edit" }).click();
+
+		expect(edit).toHaveBeenCalledWith("p1", { type: "select", uid: "e1" });
+	});
+
+	it("renders EntryForm for the selected entry, and renders nothing when no entry is selected", () => {
+		const entries: EditorState["entries"] = [
+			{ uid: "e1", entry: { kind: "browser", url: "http://example.com", at: "" } },
+		];
+
+		const { rerender } = render(
+			<PlaylistEditorMain state={state({ entries, selectedUid: null })} edit={vi.fn()} />,
+		);
+		expect(screen.queryByLabelText("URL")).toBeNull();
+
+		rerender(<PlaylistEditorMain state={state({ entries, selectedUid: "e1" })} edit={vi.fn()} />);
+		expect(screen.getByLabelText("URL")).not.toBeNull();
 	});
 });
