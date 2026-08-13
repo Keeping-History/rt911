@@ -11,6 +11,7 @@ import {
 } from "../../Providers/Auth/playlistApi";
 import { AuthRequiredError } from "../../Providers/Auth/authApi";
 import { useAuth } from "../../Providers/Auth/AuthContext";
+import { usePlaylistEditor } from "./PlaylistEditorProvider";
 
 const EMPTY_DEFINITION = { version: 1 as const, mode: "annotate" as const, entries: [] };
 
@@ -34,6 +35,7 @@ export function PlaylistList({
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const { refresh: refreshAuth } = useAuth();
+	const { openIds, closePlaylistWindow } = usePlaylistEditor();
 
 	const refresh = useCallback(async () => {
 		try {
@@ -91,7 +93,18 @@ export function PlaylistList({
 					<span>{`Delete "${selected.title}"? This cannot be undone.`}</span>
 					<ClassicyButton
 						onClickFunc={run(async () => {
-							await deletePlaylist(selected.id);
+							const deletedId = selected.id;
+							await deletePlaylist(deletedId);
+							// A document window open on the deleted playlist would
+							// otherwise stay fully mounted on an id that no longer
+							// exists, with its File/Edit/Control menus still acting on
+							// it (Save PATCHes a 404, Lock Clock sends a doomed room
+							// command). Close it exactly the way File > Delete… closes
+							// its own window. Guarded, because closing a window classicy
+							// has never heard of would still make its reducer refocus
+							// this app's topmost window — stealing focus from the list
+							// when the deleted playlist was not open at all.
+							if (openIds.includes(deletedId)) closePlaylistWindow(deletedId);
 							setConfirmingDelete(false);
 							setSelectedId(null);
 							await refresh();

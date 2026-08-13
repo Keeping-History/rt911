@@ -4,7 +4,18 @@ import { RoomCommandError } from "../../Providers/Playlist/roomApi";
 import { PlaylistEditorProvider, usePlaylistEditor } from "./PlaylistEditorProvider";
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 
-afterEach(cleanup);
+const dispatchMock = vi.fn();
+vi.mock("classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("classicy")>()),
+	useAppManagerDispatch: () => dispatchMock,
+}));
+
+const APP = "PlaylistEditor.app";
+
+afterEach(() => {
+	cleanup();
+	vi.clearAllMocks();
+});
 
 const rec = (id: string, title = "Lesson"): PlaylistRecord => ({
 	id, title, status: "draft", date_updated: null, user_created: "u1",
@@ -18,7 +29,7 @@ function Probe() {
 }
 const renderProvider = (sendLock = vi.fn().mockResolvedValue(undefined)) =>
 	render(
-		<PlaylistEditorProvider sendLock={sendLock}>
+		<PlaylistEditorProvider appId={APP} sendLock={sendLock}>
 			<Probe />
 		</PlaylistEditorProvider>,
 	);
@@ -42,6 +53,40 @@ describe("PlaylistEditorProvider", () => {
 
 		expect(api.openIds).toEqual([]);
 		expect(api.activeId).toBeNull();
+	});
+
+	// Closing a document the APP decided to close owes classicy a window close as
+	// well as the state drop: classicy self-destroys only modal windows on
+	// unmount, so an ordinary document would linger as an open, focused entry
+	// whose File/Edit/Control menus stay on the menu bar and keep acting on it.
+	it("closePlaylistWindow drops the document AND closes its window in the store", () => {
+		renderProvider();
+		act(() => api.openPlaylist(rec("p1")));
+		act(() => api.openPlaylist(rec("p2")));
+
+		act(() => api.closePlaylistWindow("p2"));
+
+		expect(api.openIds).toEqual(["p1"]);
+		expect(api.activeId).toBeNull();
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyWindowClose",
+			app: { id: APP },
+			window: { id: "playlist_doc_p2" },
+		});
+	});
+
+	// The close box has already set `closed: true` by the time onCloseFunc runs,
+	// so that path must NOT dispatch again — closePlaylist is the state-only half.
+	it("closePlaylist touches only the editor state", () => {
+		renderProvider();
+		act(() => api.openPlaylist(rec("p1")));
+
+		act(() => api.closePlaylist("p1"));
+
+		expect(api.openIds).toEqual([]);
+		expect(dispatchMock).not.toHaveBeenCalledWith(
+			expect.objectContaining({ type: "ClassicyWindowClose" }),
+		);
 	});
 
 	// Both existing lock tests await toggleClockLock to completion before

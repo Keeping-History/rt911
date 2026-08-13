@@ -26,6 +26,16 @@ vi.mock("../../Providers/Auth/AuthContext", () => ({
 	useAuth: () => mockAuth,
 }));
 
+// The list lives inside PlaylistEditorProvider and now reaches it directly, to
+// close a document window whose playlist it just deleted.
+const editorCtx = vi.hoisted(() => ({
+	openIds: [] as string[],
+	closePlaylistWindow: vi.fn(),
+}));
+vi.mock("./PlaylistEditorProvider", () => ({
+	usePlaylistEditor: () => editorCtx,
+}));
+
 import { PlaylistList } from "./PlaylistList";
 
 const rows = [
@@ -36,6 +46,7 @@ const rows = [
 beforeEach(() => {
 	api.listMine.mockResolvedValue(rows);
 	mockAuth.refresh.mockResolvedValue(undefined);
+	editorCtx.openIds = [];
 });
 afterEach(() => {
 	cleanup();
@@ -80,6 +91,49 @@ describe("PlaylistList", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Delete \"Lesson One\"" }));
 		await waitFor(() => expect(api.deletePlaylist).toHaveBeenCalledWith("p1"));
 		expect(api.listMine).toHaveBeenCalledTimes(2);
+	});
+
+	// New to the multi-window rework: before it, the list and the editor shared a
+	// window, so a deleted playlist could not still be open somewhere. Now the
+	// document window would stay mounted on a dead id, with File > Save PATCHing
+	// a 404 and Control > Lock Clock sending a doomed room command.
+	it("closes the document window of a playlist deleted from the list", async () => {
+		editorCtx.openIds = ["p1"];
+		api.deletePlaylist.mockResolvedValue(undefined);
+		render(<PlaylistList meId="u1" onOpen={() => {}} />);
+		fireEvent.click(await screen.findByText("Lesson One"));
+		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+		fireEvent.click(screen.getByRole("button", { name: "Delete \"Lesson One\"" }));
+
+		await waitFor(() => expect(editorCtx.closePlaylistWindow).toHaveBeenCalledWith("p1"));
+	});
+
+	// Closing a window classicy has never heard of is not a no-op: its reducer
+	// still refocuses this app's topmost window, which would pull focus off the
+	// list the user is standing in.
+	it("touches no document window when the deleted playlist is not open", async () => {
+		editorCtx.openIds = ["p2"];
+		api.deletePlaylist.mockResolvedValue(undefined);
+		render(<PlaylistList meId="u1" onOpen={() => {}} />);
+		fireEvent.click(await screen.findByText("Lesson One"));
+		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+		fireEvent.click(screen.getByRole("button", { name: "Delete \"Lesson One\"" }));
+
+		await waitFor(() => expect(api.deletePlaylist).toHaveBeenCalledWith("p1"));
+		expect(editorCtx.closePlaylistWindow).not.toHaveBeenCalled();
+	});
+
+	// A failed delete leaves the playlist there, so its window must stay too.
+	it("leaves the document window alone when the delete fails", async () => {
+		editorCtx.openIds = ["p1"];
+		api.deletePlaylist.mockRejectedValue(new Error("nope"));
+		render(<PlaylistList meId="u1" onOpen={() => {}} />);
+		fireEvent.click(await screen.findByText("Lesson One"));
+		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+		fireEvent.click(screen.getByRole("button", { name: "Delete \"Lesson One\"" }));
+
+		await waitFor(() => expect(document.querySelector(".playlistListError")).not.toBeNull());
+		expect(editorCtx.closePlaylistWindow).not.toHaveBeenCalled();
 	});
 
 	// This window never unmounts now, so a rename or save in a document window

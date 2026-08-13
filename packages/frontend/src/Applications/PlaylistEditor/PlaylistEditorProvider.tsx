@@ -1,3 +1,4 @@
+import { useAppManagerDispatch } from "classicy";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useReducer, useRef, useState } from "react";
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import { RoomCommandError, sendRoomLock } from "../../Providers/Playlist/roomApi";
@@ -37,7 +38,23 @@ export interface PlaylistEditorContextValue {
 	listVersion: number;
 	refreshList: () => void;
 	openPlaylist: (record: PlaylistRecord) => void;
+	/**
+	 * Drop a document's editor state. Use this only when classicy has ALREADY
+	 * closed the window itself — i.e. from a window's own close box, which sets
+	 * `closed: true` before `onCloseFunc` runs. Anywhere else, see
+	 * `closePlaylistWindow`.
+	 */
 	closePlaylist: (playlistId: string) => void;
+	/**
+	 * Close a document the app itself decided to close: drop its editor state AND
+	 * take its window out of classicy's store. Both halves are required, because
+	 * classicy self-destroys only MODAL windows on unmount — an ordinary document
+	 * would linger as `closed: false, focused: true` and the menu bar would keep
+	 * serving its File/Edit/Control menus, whose closures still act on the
+	 * playlist (Save PATCHes it, Control sends a room command for it). Shared by
+	 * both delete paths and by the dirty-close prompt.
+	 */
+	closePlaylistWindow: (playlistId: string) => void;
 	setActive: (playlistId: string) => void;
 	edit: (playlistId: string, action: EditorAction) => void;
 	toggleClockLock: (playlistId: string) => Promise<void>;
@@ -55,10 +72,13 @@ export function usePlaylistEditor(): PlaylistEditorContextValue {
 
 export function PlaylistEditorProvider({
 	children,
+	appId,
 	/** Injectable for tests; defaults to the real API call. */
 	sendLock = sendRoomLock,
 }: {
 	children: ReactNode;
+	/** The owning ClassicyApp, so `closePlaylistWindow` can address its windows. */
+	appId: string;
 	sendLock?: typeof sendRoomLock;
 }) {
 	const [states, dispatchStates] = useReducer(editorStatesReducer, {});
@@ -88,6 +108,21 @@ export function PlaylistEditorProvider({
 		setOpenIds((ids) => ids.filter((id) => id !== playlistId));
 		setActiveId((current) => (current === playlistId ? null : current));
 	}, []);
+
+	// `playlist_doc_<id>` is PlaylistDocumentWindow's own `windowId` — this is the
+	// one place outside that component that has to name it.
+	const dispatch = useAppManagerDispatch();
+	const closePlaylistWindow = useCallback(
+		(playlistId: string) => {
+			dispatch({
+				type: "ClassicyWindowClose",
+				app: { id: appId },
+				window: { id: `playlist_doc_${playlistId}` },
+			});
+			closePlaylist(playlistId);
+		},
+		[dispatch, appId, closePlaylist],
+	);
 
 	const setActive = useCallback((playlistId: string) => setActiveId(playlistId), []);
 
@@ -155,13 +190,14 @@ export function PlaylistEditorProvider({
 		() => ({
 			states, openIds, activeId, locks, lockError, dialogMode, openTicks,
 			listVersion, refreshList,
-			openPlaylist, closePlaylist, setActive, edit,
+			openPlaylist, closePlaylist, closePlaylistWindow, setActive, edit,
 			toggleClockLock, dismissLockError, setDialogMode,
 		}),
 		[
 			states, openIds, activeId, locks, lockError, dialogMode, openTicks,
 			listVersion, refreshList,
-			openPlaylist, closePlaylist, setActive, edit, toggleClockLock, dismissLockError,
+			openPlaylist, closePlaylist, closePlaylistWindow, setActive, edit,
+			toggleClockLock, dismissLockError,
 		],
 	);
 

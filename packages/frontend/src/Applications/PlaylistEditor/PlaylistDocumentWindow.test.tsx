@@ -73,6 +73,7 @@ const ctx = vi.hoisted(() => ({
 }));
 const toggleClockLock = vi.fn().mockResolvedValue(undefined);
 const closePlaylist = vi.fn();
+const closePlaylistWindow = vi.fn();
 const editMock = vi.fn();
 const setDialogModeMock = vi.fn();
 const refreshListMock = vi.fn();
@@ -91,6 +92,7 @@ const renderWindow = (over: Partial<EditorState> = {}) => {
 		edit: editMock,
 		setActive: vi.fn(),
 		closePlaylist,
+		closePlaylistWindow,
 		toggleClockLock,
 		dismissLockError: vi.fn(),
 		openPlaylist: openPlaylistMock,
@@ -172,12 +174,12 @@ describe("PlaylistDocumentWindow", () => {
 
 		screen.getByRole("button", { name: "Don't Save" }).click();
 
-		expect(closePlaylist).toHaveBeenCalledWith("p1");
 		expect(saveMock).not.toHaveBeenCalled();
-		// The prompt re-asserted the window, so this path owes the store a close.
-		expect(dispatchMock).toHaveBeenCalledWith({
-			type: "ClassicyWindowClose", app: { id: APP }, window: { id: WIN },
-		});
+		// The prompt re-asserted the window, so this path owes the store a close —
+		// which is what closePlaylistWindow (not bare closePlaylist) delivers.
+		// PlaylistEditorProvider.test.tsx proves it dispatches ClassicyWindowClose.
+		expect(closePlaylistWindow).toHaveBeenCalledWith("p1");
+		expect(closePlaylist).not.toHaveBeenCalled();
 	});
 
 	// Classicy's close box sets `closed: true` BEFORE running onCloseFunc, so
@@ -200,6 +202,7 @@ describe("PlaylistDocumentWindow", () => {
 		screen.getByRole("button", { name: "Cancel" }).click();
 
 		expect(closePlaylist).not.toHaveBeenCalled();
+		expect(closePlaylistWindow).not.toHaveBeenCalled();
 		expect(dispatchMock).not.toHaveBeenCalledWith(
 			expect.objectContaining({ type: "ClassicyWindowClose" }),
 		);
@@ -215,15 +218,13 @@ describe("PlaylistDocumentWindow", () => {
 
 		expect(saveMock).toHaveBeenCalled();
 		// Nothing closes until the write comes back.
-		expect(closePlaylist).not.toHaveBeenCalled();
+		expect(closePlaylistWindow).not.toHaveBeenCalled();
 
-		dispatchMock.mockClear();
 		act(() => onSaved.current?.());
 
-		expect(closePlaylist).toHaveBeenCalledWith("p1");
-		expect(dispatchMock).toHaveBeenCalledWith({
-			type: "ClassicyWindowClose", app: { id: APP }, window: { id: WIN },
-		});
+		// Both halves, via the shared provider helper: the React state AND the
+		// window classicy would otherwise keep serving menus for.
+		expect(closePlaylistWindow).toHaveBeenCalledWith("p1");
 	});
 
 	// The alert cascade tests the close prompt BEFORE the save prompts, so a save
@@ -246,6 +247,7 @@ describe("PlaylistDocumentWindow", () => {
 		act(() => onSaved.current?.());
 
 		expect(closePlaylist).not.toHaveBeenCalled();
+		expect(closePlaylistWindow).not.toHaveBeenCalled();
 		expect(dispatchMock).not.toHaveBeenCalledWith(
 			expect.objectContaining({ type: "ClassicyWindowClose" }),
 		);
@@ -259,9 +261,7 @@ describe("PlaylistDocumentWindow", () => {
 		act(() => onSaved.current?.());
 
 		expect(closePlaylist).not.toHaveBeenCalled();
-		expect(dispatchMock).not.toHaveBeenCalledWith(
-			expect.objectContaining({ type: "ClassicyWindowClose" }),
-		);
+		expect(closePlaylistWindow).not.toHaveBeenCalled();
 		expect(refreshListMock).toHaveBeenCalled();
 	});
 
@@ -310,26 +310,22 @@ describe("PlaylistDocumentWindow", () => {
 			screen.getByRole("button", { name: "Cancel" }).click();
 
 			expect(playlistApi.deletePlaylist).not.toHaveBeenCalled();
-			expect(closePlaylist).not.toHaveBeenCalled();
+			expect(closePlaylistWindow).not.toHaveBeenCalled();
 		});
 
 		// Unmounting alone would leave the store holding a focused entry for the
-		// deleted document, and the menu bar would keep serving its File menu.
-		it("closes its own window in the store, not just in React", async () => {
+		// deleted document, and the menu bar would keep serving its File menu —
+		// so this path owes the store a close, not just React.
+		it("closes its own window, not just its editor state", async () => {
 			playlistApi.deletePlaylist.mockResolvedValue(undefined);
 			renderWindow();
 			act(() => item("file", "playlist_file_delete").onClickFunc?.());
-			dispatchMock.mockClear();
 
 			screen.getByRole("button", { name: "Delete" }).click();
 
-			await waitFor(() =>
-				expect(dispatchMock).toHaveBeenCalledWith({
-					type: "ClassicyWindowClose", app: { id: APP }, window: { id: WIN },
-				}),
-			);
+			await waitFor(() => expect(closePlaylistWindow).toHaveBeenCalledWith("p1"));
 			expect(playlistApi.deletePlaylist).toHaveBeenCalledWith("p1");
-			expect(closePlaylist).toHaveBeenCalledWith("p1");
+			expect(closePlaylist).not.toHaveBeenCalled();
 			expect(refreshListMock).toHaveBeenCalled();
 		});
 	});
@@ -399,6 +395,7 @@ describe("PlaylistDocumentWindow", () => {
 			edit: editMock,
 			setActive: vi.fn(),
 			closePlaylist,
+		closePlaylistWindow,
 			toggleClockLock,
 			dismissLockError: vi.fn(),
 			openPlaylist: openPlaylistMock,

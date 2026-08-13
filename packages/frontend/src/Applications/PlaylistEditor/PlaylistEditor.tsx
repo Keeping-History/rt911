@@ -229,7 +229,7 @@ export function PlaylistEditor() {
 				</ClassicyWindow>
 			)}
 			{status === "signedIn" && (
-				<PlaylistEditorProvider>
+				<PlaylistEditorProvider appId={appId}>
 					<PlaylistEditorContent />
 				</PlaylistEditorProvider>
 			)}

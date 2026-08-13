@@ -33,7 +33,8 @@ export function PlaylistDocumentWindow({
 }) {
 	const {
 		states, openIds, locks, lockError, openTicks, edit, setActive, closePlaylist,
-		openPlaylist, toggleClockLock, dismissLockError, setDialogMode, refreshList,
+		closePlaylistWindow, openPlaylist, toggleClockLock, dismissLockError, setDialogMode,
+		refreshList,
 	} = usePlaylistEditor();
 	const state = states[playlistId];
 	const windowId = `playlist_doc_${playlistId}`;
@@ -49,18 +50,6 @@ export function PlaylistDocumentWindow({
 	const revealSelf = useCallback(() => {
 		dispatch({ type: "ClassicyWindowOpen", app: { id: appId }, window: { id: windowId } });
 		dispatch({ type: "ClassicyWindowFocus", app: { id: appId }, window: { id: windowId } });
-	}, [dispatch, appId, windowId]);
-
-	/**
-	 * Take the window out of classicy's store. Unmounting is not enough:
-	 * classicy self-destroys only MODAL windows on unmount, so an ordinary
-	 * document would linger as `closed: false, focused: true` and the menu bar
-	 * would keep serving this document's File/Edit/Control menus — whose
-	 * closures still run, PATCHing a deleted id. Closing lets the reducer
-	 * refocus the next non-utility window and correct the bar.
-	 */
-	const dismissWindow = useCallback(() => {
-		dispatch({ type: "ClassicyWindowClose", app: { id: appId }, window: { id: windowId } });
 	}, [dispatch, appId, windowId]);
 
 	// Raise this window whenever the provider is asked to open this playlist —
@@ -88,8 +77,7 @@ export function PlaylistDocumentWindow({
 		refreshList();
 		if (closeAfterSave.current) {
 			closeAfterSave.current = false;
-			dismissWindow();
-			closePlaylist(playlistId);
+			closePlaylistWindow(playlistId);
 		}
 	});
 
@@ -242,8 +230,7 @@ export function PlaylistDocumentWindow({
 							onClick: () => {
 								void deletePlaylist(playlistId)
 									.then(() => {
-										dismissWindow();
-										closePlaylist(playlistId);
+										closePlaylistWindow(playlistId);
 										refreshList();
 									})
 									.catch((e) => {
@@ -275,8 +262,7 @@ export function PlaylistDocumentWindow({
 							// entry in the store.
 							onClick: () => {
 								setPending(null);
-								dismissWindow();
-								closePlaylist(playlistId);
+								closePlaylistWindow(playlistId);
 							},
 						},
 						{ id: "cancel", label: "Cancel", role: "cancel", onClick: cancelClose },

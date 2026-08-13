@@ -33,6 +33,7 @@ const apiMocks = vi.hoisted(() => ({
 	getPlaylist: vi.fn(),
 	updatePlaylist: vi.fn(),
 	duplicatePlaylist: vi.fn(),
+	deletePlaylist: vi.fn(),
 }));
 vi.mock("../../Providers/Auth/playlistApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../Providers/Auth/playlistApi")>()),
@@ -151,6 +152,35 @@ describe("PlaylistEditor integration with real PlaylistList", () => {
 		// …and the list window refetched rather than keeping the stale row.
 		expect(await screen.findByText("Renamed Lesson")).not.toBeNull();
 		expect(screen.queryByTestId("window-Lesson One")).toBeNull();
+	});
+
+	// Unreachable before the rework — the list and the editor shared one window,
+	// so a deleted playlist could not still be open. Both halves are asserted:
+	// React must unmount the document window, AND classicy's store must lose it,
+	// because classicy self-destroys only modal windows on unmount and the menu
+	// bar would otherwise keep serving the deleted document's menus.
+	it("deleting from the list closes the open document window for that playlist", async () => {
+		apiMocks.listMine
+			.mockResolvedValueOnce([summary("p1", "Lesson One")])
+			.mockResolvedValue([]);
+		apiMocks.getPlaylist.mockResolvedValue(record("p1", "Lesson One"));
+		apiMocks.deletePlaylist.mockResolvedValue(undefined);
+		render(<PlaylistEditor />);
+
+		await openFromList("Lesson One");
+		await waitFor(() => expect(screen.getByTestId("window-Lesson One")).not.toBeNull());
+		dispatchMock.mockClear();
+
+		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+		fireEvent.click(screen.getByRole("button", { name: 'Delete "Lesson One"' }));
+
+		await waitFor(() => expect(screen.queryByTestId("window-Lesson One")).toBeNull());
+		expect(apiMocks.deletePlaylist).toHaveBeenCalledWith("p1");
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyWindowClose",
+			app: { id: "PlaylistEditor.app" },
+			window: { id: "playlist_doc_p1" },
+		});
 	});
 
 	it("File > Duplicate opens the copy in a second window, leaving the original", async () => {
