@@ -32,6 +32,41 @@ function crossOriginIsolationExceptPages(): Plugin {
 	};
 }
 
+/**
+ * Where the dev-server Directus proxy forwards to. Production by default —
+ * there is no separate staging instance — but overridable from the shell so a
+ * locally-run Directus can be targeted without editing this file.
+ *
+ * Deliberately NOT `VITE_`-prefixed: that prefix means "inlined into browser
+ * code", and this value is only ever read here, in Node, at config time.
+ */
+const DIRECTUS_PROXY_TARGET = process.env.DIRECTUS_PROXY_TARGET ?? "https://api.911realtime.org";
+
+/**
+ * Re-bind an upstream `Set-Cookie` so the dev server can hold it.
+ *
+ * Directus issues its session cookie with `Domain=.911realtime.org; Secure`.
+ * The domain attribute alone makes the browser discard the cookie on
+ * `localhost` — a cookie can only be scoped to the origin's own domain or a
+ * parent of it. `Secure` is dropped too: Chrome and Firefox treat localhost as
+ * a trustworthy origin and would accept it over plain http, but that is a
+ * browser-specific allowance rather than a guarantee, and nothing is protected
+ * by keeping it on a loopback connection.
+ *
+ * Everything else is passed through untouched. In particular `SameSite=Lax`
+ * needs no change: once proxied the request is same-origin, which Lax already
+ * permits — it was only ever the cross-site case that dropped the cookie.
+ */
+export function rebindCookieToDevServer(cookie: string): string {
+	return cookie
+		.split(";")
+		.filter((part) => {
+			const attribute = part.trim().toLowerCase();
+			return !attribute.startsWith("domain=") && attribute !== "secure";
+		})
+		.join(";");
+}
+
 // https://vite.dev/config/
 export default defineConfig({
 	plugins: [react(), crossOriginIsolationExceptPages()],
@@ -40,6 +75,44 @@ export default defineConfig({
 			"/feedback": {
 				target: "http://localhost:8080",
 				changeOrigin: true,
+			},
+			/**
+			 * Directus, proxied so the browser sees it as SAME-ORIGIN with the dev
+			 * server. Signing in from localhost against the real host is impossible,
+			 * and not for one reason — the deployed Directus carries all three of:
+			 *
+			 *   CORS_ORIGIN              the product domains only. A credentialed
+			 *                            request from localhost comes back with no
+			 *                            Access-Control-Allow-Origin at all, so the
+			 *                            browser discards the response before app
+			 *                            code sees it (a wildcard is illegal for
+			 *                            credentialed requests, so there is no
+			 *                            server-side value that would cover both).
+			 *   SESSION_COOKIE_DOMAIN    .911realtime.org — unstorable on localhost.
+			 *   SESSION_COOKIE_SAME_SITE lax — not sent on cross-site requests.
+			 *
+			 * Routing through the dev server's own origin sidesteps all three at
+			 * once: a same-origin request runs no CORS check, and the rewritten
+			 * cookie above binds to localhost. That is why this is a proxy and not
+			 * an allow-list entry — widening the deployed CORS/cookie config to
+			 * admit localhost would mean SameSite=None on the real session cookie,
+			 * weakening production auth for everyone to serve local development.
+			 *
+			 * Dev-server only, and inert by default: it is reached only when
+			 * VITE_DIRECTUS_URL=/directus (see .env.example). Unset, the app calls
+			 * Directus directly and nothing ever hits this route.
+			 */
+			"/directus": {
+				target: DIRECTUS_PROXY_TARGET,
+				changeOrigin: true,
+				rewrite: (requestPath) => requestPath.replace(/^\/directus/, ""),
+				configure: (proxy) => {
+					proxy.on("proxyRes", (proxyRes) => {
+						const cookies = proxyRes.headers["set-cookie"];
+						if (!cookies) return;
+						proxyRes.headers["set-cookie"] = cookies.map(rebindCookieToDevServer);
+					});
+				},
 			},
 		},
 	},

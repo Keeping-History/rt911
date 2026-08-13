@@ -3,6 +3,10 @@ node_modules/
 dist/
 .DS_Store
 .env
+# Per-developer dev-server overrides (Vite loads it in dev mode only). Kept
+# untracked because Playwright's webServer runs `vite -d`, so a committed copy
+# would silently change the required CI E2E run too.
+.env.development
 tsconfig.tsbuildinfo
 *.tsbuildinfo
 
