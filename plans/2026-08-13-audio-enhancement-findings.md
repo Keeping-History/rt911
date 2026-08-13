@@ -126,3 +126,22 @@ The storage pattern for the toggle already exists: `normalize-item` does
 archive-first in-place replacement, with originals preserved under
 `audio-original/` (711 of 789 files today). What is missing is exposing that
 archived URL on `mp3_items` so the front end can switch.
+
+## Chain decision (2026-08-13)
+
+`render-audition` produced eight AA77 clips through four chains. Chosen by
+listening: **`dsp_only`** — bandpass 200–3400 Hz plus `speechnorm`, no model.
+
+This matches what the ASR experiment measured but could not settle on its own.
+DeepFilterNet is trained on wideband speech in environmental noise; radio audio is
+already band-limited to roughly 300–3400 Hz, so the model reads the speech itself as
+noise and attenuates it. At full attenuation it destroyed `084013 aa77 zid checkin`,
+a clip that is perfectly intelligible unprocessed, into `(unintelligible radio
+chatter)`.
+
+Set as `ENHANCE_CHAIN` in the worker ConfigMap (infra `8e3bab1`). The corpus render
+refuses to start while it is unset.
+
+Worth stating plainly, because it is easy to assume otherwise: this choice has **no
+effect on transcripts**. Transcription reads `audio/` and never `audio-enhanced/`,
+enforced by a test. Enhancement is a listening feature only.
