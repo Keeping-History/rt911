@@ -12,7 +12,7 @@ import { isNotable, isObserver, isPresidential } from "./notableFlights";
 import { PROVENANCE_NOTE, isEstimated, sourceLabel } from "./flightProvenance";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
 import { type MapPoi, POI_DETAIL_FIELDS, detailTitleFor } from "./mapPois";
-import { PHASE_COLORS, DEFAULT_PHASE_COLOR, phaseLabel } from "./flightPhases";
+import { DEFAULT_PHASE_COLOR, phaseColorHex, phaseLabel, phasePaletteFor } from "./flightPhases";
 import { groundStopAt } from "./groundStops";
 
 interface FlightDetailPanelProps {
@@ -233,7 +233,9 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 							<dt>
 								<span
 									className={styles.phaseSwatch}
-									style={{ backgroundColor: PHASE_COLORS[ph] ?? DEFAULT_PHASE_COLOR }}
+									style={{
+									backgroundColor: phaseColorHex(ph, phasePaletteFor(selected.flight)),
+								}}
 								/>
 							</dt>
 							<dd>{phaseLabel(ph)}</dd>

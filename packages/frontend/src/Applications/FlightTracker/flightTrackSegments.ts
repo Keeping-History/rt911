@@ -1,3 +1,5 @@
+import { type PhasePalette, phaseColorHex } from "./flightPhases";
+
 interface PhasePoint {
 	lat: number;
 	lon: number;
@@ -13,8 +15,15 @@ interface PhasePoint {
  * last point is repeated as the next run's first) so the colored line has no
  * gap at the phase change. Each Feature carries properties.phase. Fewer than
  * two points cannot form a line → [].
+ *
+ * `palette` selects which phase vocabulary the colors come from (see
+ * flightPhases.phasePaletteFor); the resolved color is stamped on each feature
+ * so the map layer's fixed paint expression doesn't have to know the flight.
  */
-export function buildTrackSegments(points: PhasePoint[]): GeoJSON.Feature[] {
+export function buildTrackSegments(
+	points: PhasePoint[],
+	palette?: PhasePalette,
+): GeoJSON.Feature[] {
 	if (points.length < 2) return [];
 	const features: GeoJSON.Feature[] = [];
 	let start = 0;
@@ -30,6 +39,7 @@ export function buildTrackSegments(points: PhasePoint[]): GeoJSON.Feature[] {
 			properties: {
 				phase: points[start].phase ?? null,
 				source: points[start].source ?? null,
+				color: phaseColorHex(points[start].phase, palette),
 			},
 			geometry: {
 				type: "LineString",

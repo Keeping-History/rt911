@@ -18,7 +18,7 @@ import {
 	trailColor,
 	trailGradient,
 } from "./flightMapStyle";
-import { phaseLineColorExpression } from "./flightPhases";
+import { type PhasePalette, phaseLineColorExpression } from "./flightPhases";
 import { sourceDashExpression, sourceOpacityExpression } from "./flightProvenance";
 import planeSvg from "./plane.svg?raw";
 import pinSvg from "./pin.svg?raw";
@@ -313,6 +313,10 @@ interface FlightMapProps {
 	// Raw altitude profile of the selected flight: the smooth 3D track tube
 	// splines it in all three axes (see trackTube.ts).
 	trackProfile?: AltitudeSample[] | null;
+	// Which phase vocabulary the profile's phases belong to. The 2D segments
+	// arrive pre-colored in trackGeoJSON, but the 3D tube colors its own
+	// vertices, so it needs the selected flight's palette (flightPhases.ts).
+	trackPalette?: PhasePalette;
 	nowMs: number;
 	playing: boolean;
 	mapStyle: BasemapStyleId;
@@ -562,7 +566,7 @@ const REPLAY_TRAIL_STROKE_COLOR = "#ffffff";
 export const FlightMap: FC<FlightMapProps> = ({
 	ref: handleRef,
 	positions, seedPositions, basemapUrls, trackGeoJSON,
-	trackProfile = null, nowMs, playing,
+	trackProfile = null, trackPalette, nowMs, playing,
 	mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, radarSweep, trailMultiplier,
 	// Warm-stone defaults mirror flightMapSettings.ts's DEFAULT_FLIGHT_MAP_SETTINGS
 	// so call sites that predate hero landmarks (or omit the setting) still get a
@@ -725,6 +729,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const buildings3DRef = useRef<Buildings3DLayer | null>(null);
 	const trackProfileRef = useRef<AltitudeSample[] | null>(trackProfile);
 	trackProfileRef.current = trackProfile;
+	// Read inside the map-load callback, which captures values once.
+	const trackPaletteRef = useRef<PhasePalette | undefined>(trackPalette);
+	trackPaletteRef.current = trackPalette;
 	// Apply the layer-visibility matrix AND the custom layers' draw gates from
 	// one place, so the three flags can never drift apart across call sites.
 	const syncPlaneVisibility = (map: maplibregl.Map) => {
@@ -1070,7 +1077,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// elevation (the curtain staircases; it stays as the globe fallback).
 			const trackTube = new TrackTube3DLayer();
 			trackTube.setColor(TRACK_LINE_COLOR);
-			trackTube.setGeometry(buildTrackTube(trackProfileRef.current));
+			trackTube.setGeometry(
+				buildTrackTube(trackProfileRef.current, undefined, trackPaletteRef.current),
+			);
 			trackTubeRef.current = trackTube;
 			map.addLayer(trackTube);
 			// Smooth live-trail ribbons: splined breadcrumbs with per-vertex
@@ -1363,9 +1372,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 	// empty/null profile clears it. Radius comes per-frame from the rAF loop.
 	useEffect(() => {
 		if (!mapRef.current || !loadedRef.current) return;
-		trackTubeRef.current?.setGeometry(buildTrackTube(trackProfile));
+		trackTubeRef.current?.setGeometry(buildTrackTube(trackProfile, undefined, trackPalette));
 		dirtyRef.current = true;
-	}, [trackProfile]);
+	}, [trackProfile, trackPalette]);
 
 	// Re-theme / recolor live. setPaintProperty only — setStyle() would tear
 	// down the flights/trails/track sources and layers. Before "load" fires,
