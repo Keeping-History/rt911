@@ -1,8 +1,34 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthRequiredError } from "../../Providers/Auth/authApi";
 import type { EditorState } from "./editorState";
 import { useSavePlaylist } from "./useSavePlaylist";
+
+// parsePlaylist is mocked so the invalid-definition test (Gate 1) can force
+// the null-definition branch, which no realistic EditorState can trip through
+// the real parser: assembleDefinition always produces a structurally valid
+// { version: 1, mode: "restrict" | "annotate", entries: [] } shape, and that
+// shape alone is what parsePlaylist checks before returning null. Every other
+// test delegates to the real implementation (re-established in beforeEach,
+// since afterEach's vi.clearAllMocks() wipes prior mockImplementation calls)
+// so Gate 2 and Gate 3 still exercise actual validation behavior.
+const parsePlaylistMock = vi.hoisted(() => vi.fn());
+vi.mock("../../Providers/Playlist/parsePlaylist", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../Providers/Playlist/parsePlaylist")>()),
+	parsePlaylist: parsePlaylistMock,
+}));
+
+beforeEach(async () => {
+	const actual = await vi.importActual<typeof import("../../Providers/Playlist/parsePlaylist")>(
+		"../../Providers/Playlist/parsePlaylist",
+	);
+	parsePlaylistMock.mockImplementation(actual.parsePlaylist);
+});
+
+afterEach(() => {
+	cleanup();
+	vi.clearAllMocks();
+});
 
 const state = (over: Partial<EditorState> = {}): EditorState => ({
 	playlistId: "p1",
@@ -38,6 +64,28 @@ describe("useSavePlaylist", () => {
 		expect(result.current.prompt).toEqual({ kind: "none" });
 	});
 
+	// No realistic EditorState can trip the null-definition branch through the
+	// real parser (assembleDefinition always emits a structurally valid shape),
+	// so this one test forces it via the mocked parsePlaylist.
+	it("blocks the save when the definition fails to parse", async () => {
+		parsePlaylistMock.mockReturnValueOnce({
+			definition: null,
+			warnings: ["structurally invalid playlist document"],
+		});
+		const update = vi.fn();
+		const { result } = renderHook(() => useSavePlaylist(state(), vi.fn(), update));
+
+		act(() => result.current.save());
+
+		await waitFor(() =>
+			expect(result.current.prompt).toEqual({
+				kind: "message",
+				message: "This playlist is invalid and can't be saved.",
+			}),
+		);
+		expect(update).not.toHaveBeenCalled();
+	});
+
 	// An entry that validation DROPS would vanish on next open, so saving is
 	// blocked outright rather than offered as "save anyway".
 	it("blocks the save when validation would drop entries", async () => {
@@ -51,6 +99,52 @@ describe("useSavePlaylist", () => {
 
 		await waitFor(() => expect(result.current.prompt.kind).toBe("dropped"));
 		expect(update).not.toHaveBeenCalled();
+	});
+
+	// A backward jump warns but drops nothing (the real parser keeps the entry),
+	// so save() should offer Save Anyway rather than block outright; confirmSave
+	// must then actually write.
+	it("offers Save Anyway for a warning that drops nothing, and confirmSave writes", async () => {
+		const update = vi.fn().mockResolvedValue(savedRecord);
+		const onSaved = vi.fn();
+		const backwardJump = state({
+			entries: [
+				{
+					uid: "e1",
+					entry: {
+						kind: "jump",
+						at: "2001-09-11T12:50:00.000Z",
+						to: "2001-09-11T12:40:00.000Z",
+					},
+				},
+			],
+		});
+		const { result } = renderHook(() => useSavePlaylist(backwardJump, onSaved, update));
+
+		act(() => result.current.save());
+
+		await waitFor(() => expect(result.current.prompt.kind).toBe("warnings"));
+		expect(update).not.toHaveBeenCalled();
+
+		act(() => result.current.confirmSave());
+
+		await waitFor(() => expect(onSaved).toHaveBeenCalledWith(savedRecord));
+		expect(update).toHaveBeenCalledWith("p1", {
+			title: "Lesson",
+			definition: {
+				version: 1,
+				mode: "annotate",
+				entries: [
+					{
+						kind: "jump",
+						at: "2001-09-11T12:50:00.000Z",
+						to: "2001-09-11T12:40:00.000Z",
+					},
+				],
+			},
+			status: "draft",
+		});
+		expect(result.current.prompt).toEqual({ kind: "none" });
 	});
 
 	it("surfaces a sign-out as an actionable message instead of a generic failure", async () => {
