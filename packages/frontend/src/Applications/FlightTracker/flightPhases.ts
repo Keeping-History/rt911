@@ -1,4 +1,5 @@
 import type { ExpressionSpecification } from "maplibre-gl";
+import { isNotable } from "./notableFlights";
 
 // Escalation-ramp palette for the 4 hijacked flights (issue #229): calm
 // green→teal→blue for normal ops, warming to red/maroon as the crisis
@@ -16,33 +17,73 @@ export const PHASE_COLORS: Record<string, string> = {
 	ground: "#8a8a8a",
 };
 
-// Coarse altitude phases (climb/cruise/descent) and unknowns fall back to the
-// existing flat track red, so non-notable flights render exactly as before.
+// Normal-operations palette for the altitude-derived phases the resampler
+// writes (resample._assign_phases) — what a curated flight that was never
+// hijacked carries, e.g. AF1. It deliberately reuses the escalation ramp's
+// CALM colors for the equivalent flight regimes, so both kinds of track read
+// as one system: departure green, en-route blue, terminal-area teal.
+//
+// `descent` is the one slug both vocabularies use, and it means opposite
+// things: the hijacked four's curated `descent` is the final dive (crisis
+// red), while an altitude-derived `descent` is a routine approach. That
+// collision is why the palette is chosen per flight instead of globally —
+// recoloring `descent` for everyone would drain the escalation ramp.
+export const NORMAL_PHASE_COLORS: Record<string, string> = {
+	climb: "#2e7d32", // as takeoff — departure
+	cruise: "#1565c0", // as artcc — en route
+	descent: "#0097a7", // as tracon — terminal area / approach
+	ground: "#8a8a8a", // the same neutral both palettes use
+};
+
+// Unknown phases (and any flight with no phase profile at all) fall back to
+// the flat track red, so ordinary BTS flights render exactly as before.
 export const DEFAULT_PHASE_COLOR = "#b22222";
 
-export function phaseColorHex(phase?: string): string {
-	// `phase ? …` (not `phase && …`) so an empty string also falls through to
-	// the default instead of returning "" (which would parse to a NaN color).
-	return (phase ? PHASE_COLORS[phase] : undefined) ?? DEFAULT_PHASE_COLOR;
+/** Which vocabulary a flight's `phase` values belong to. */
+export type PhasePalette = "escalation" | "normal";
+
+/**
+ * The hijacked four carry the curated escalation ramp; every other curated
+ * flight (AF1 today) carries altitude-derived phases. Keyed off `isNotable`
+ * because that is exactly the set the notable loader writes curated phases for.
+ */
+export function phasePaletteFor(flight?: string): PhasePalette {
+	return flight && isNotable(flight) ? "escalation" : "normal";
 }
 
-export function phaseColorRgb01(phase?: string): [number, number, number] {
-	const n = Number.parseInt(phaseColorHex(phase).slice(1), 16);
+function colorsFor(palette: PhasePalette = "escalation"): Record<string, string> {
+	return palette === "normal" ? NORMAL_PHASE_COLORS : PHASE_COLORS;
+}
+
+export function phaseColorHex(phase?: string, palette?: PhasePalette): string {
+	// `phase ? …` (not `phase && …`) so an empty string also falls through to
+	// the default instead of returning "" (which would parse to a NaN color).
+	return (phase ? colorsFor(palette)[phase] : undefined) ?? DEFAULT_PHASE_COLOR;
+}
+
+export function phaseColorRgb01(
+	phase?: string,
+	palette?: PhasePalette,
+): [number, number, number] {
+	const n = Number.parseInt(phaseColorHex(phase, palette).slice(1), 16);
 	return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
-// Data-driven line-color for the 2D track: each per-phase segment feature
-// carries properties.phase; unknown/absent phases hit the default red.
+// Data-driven line-color for the 2D track. The layer's paint is fixed when the
+// layer is added, but the palette depends on which flight is selected — so
+// buildTrackSegments resolves each segment's color up front and stamps it as
+// properties.color, and this expression simply prefers it. Features without one
+// (a plain undecorated track geometry) still match the escalation ramp by slug,
+// then fall through to the flat red.
 export function phaseLineColorExpression(): ExpressionSpecification {
 	const cases: (string)[] = [];
 	for (const [slug, hex] of Object.entries(PHASE_COLORS)) {
 		cases.push(slug, hex);
 	}
 	return [
-		"match",
-		["get", "phase"],
-		...cases,
-		DEFAULT_PHASE_COLOR,
+		"coalesce",
+		["get", "color"],
+		["match", ["get", "phase"], ...cases, DEFAULT_PHASE_COLOR],
 	] as unknown as ExpressionSpecification;
 }
 

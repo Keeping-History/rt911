@@ -3,7 +3,7 @@ import { altitudeFtAt, exaggeratedHeightM } from "./flightAltitude";
 import type { LandingClock, MotionBuffer } from "./flightMotion";
 import { extrapolate, motionNow } from "./flightMotion";
 import { TRAIL_3D_MAX_POINTS } from "./flightAltitude";
-import { phaseColorRgb01 } from "./flightPhases";
+import { type PhasePalette, phaseColorRgb01 } from "./flightPhases";
 import { lngLatToMercator, mercatorPerMeter } from "./plane3dMesh";
 
 // Smooth 3D flight track. The fill-extrusion curtain can only staircase —
@@ -102,11 +102,12 @@ const EMPTY_TUBE: TrackTube = {
 export function buildTrackTube(
 	profile: AltitudeSample[] | null,
 	steps = DEFAULT_STEPS,
+	palette?: PhasePalette,
 ): TrackTube {
 	if (!profile || profile.length < 2) return EMPTY_TUBE;
 	const pts = splineTrack(profile, steps);
 	const n = pts.length;
-	const pointColor = pts.map((p) => phaseColorRgb01(p.phase));
+	const pointColor = pts.map((p) => phaseColorRgb01(p.phase, palette));
 
 	// Per-point center data and ring frames.
 	const cx = new Float64Array(n); // mercator x

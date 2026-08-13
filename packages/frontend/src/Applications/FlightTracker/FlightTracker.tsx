@@ -92,7 +92,7 @@ import {
 import styles from "./FlightTracker.module.scss";
 import type { FeatureCollection } from "geojson";
 import { buildTrackSegments } from "./flightTrackSegments";
-import { orderedTrackPhases } from "./flightPhases";
+import { orderedTrackPhases, phasePaletteFor } from "./flightPhases";
 import {
 	BASEMAP_URLS,
 	type BasemapStyleId,
@@ -859,7 +859,7 @@ export const FlightTracker: FC = () => {
 			selection && profile && profile.length >= 2
 			&& (isNotable(selection.flight) || hasEstimated)
 		) {
-			const features = buildTrackSegments(profile);
+			const features = buildTrackSegments(profile, phasePaletteFor(selection.flight));
 			if (features.length) return { type: "FeatureCollection", features };
 		}
 		// non-notable (or no profile yet): the decimated track as one plain feature.
@@ -1244,6 +1244,7 @@ export const FlightTracker: FC = () => {
 								basemapUrls={BASEMAP_URLS}
 								trackGeoJSON={trackGeoJSON}
 								trackProfile={profile}
+								trackPalette={phasePaletteFor(selection?.flight)}
 								nowMs={nowMs}
 								playing={!paused}
 								mapStyle={settings.mapStyle}
