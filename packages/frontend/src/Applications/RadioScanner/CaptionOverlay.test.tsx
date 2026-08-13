@@ -11,6 +11,7 @@ vi.mock("classicy", () => ({
 	useQuickTimeSubtitles: (url?: string) => ({
 		activeCueText: (t: number) => (url && t >= 1 ? "Hello world" : null),
 	}),
+	registerApp: () => {},
 }));
 
 afterEach(cleanup);

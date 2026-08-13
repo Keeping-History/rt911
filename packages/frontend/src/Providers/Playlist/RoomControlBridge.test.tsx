@@ -23,6 +23,7 @@ vi.mock("classicy", () => ({
 			<div>{message}</div>
 		</div>
 	),
+	registerApp: () => {},
 }));
 
 import { MediaStreamContext } from "../MediaStream/MediaStreamContext";

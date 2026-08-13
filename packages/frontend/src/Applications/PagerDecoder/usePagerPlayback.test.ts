@@ -9,6 +9,7 @@ import { usePagerPlayback } from "./usePagerPlayback";
 
 vi.mock("classicy", () => ({
 	registerAppEventHandler: vi.fn(),
+	registerApp: vi.fn(),
 }));
 
 let idSeq = 1;
