@@ -113,7 +113,10 @@ describe("AuthProvider", () => {
 		await waitFor(() => expect(identifyUser).toHaveBeenCalledWith(user1));
 		fireEvent.click(getByText("sign out"));
 		await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
-		expect(identifyUser).toHaveBeenLastCalledWith(null);
+		// identifyUser(null) is dispatched from a separate effect than the one that
+		// flips `status` — waiting on status alone doesn't guarantee that effect has
+		// flushed yet, so assert inside its own waitFor rather than right after.
+		await waitFor(() => expect(identifyUser).toHaveBeenLastCalledWith(null));
 	});
 
 	it("signInWithEmail calls loginEmail then re-fetches and flips to signedIn", async () => {
