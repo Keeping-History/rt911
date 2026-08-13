@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Produce AI-enhanced versions of the audio for listening, serve them as the default in RadioScanner, and let a listener switch back to the unenhanced original.
+**Goal:** Produce AI-enhanced versions of the audio for listening, serve them as the default in RadioScanner, and let a listener switch back to the original recording.
 
-**Architecture:** Enhanced renders go to a **new `audio-enhanced/` prefix**, never overwriting `audio/`. `mp3_items.url` repoints to the enhanced file and a new `unenhanced_url` field holds the current `audio/` URL, so both versions stay permanently addressable and rollback is a field update rather than a restore. Enhancement is a listening feature only — transcription continues to read `audio/`, so a bad render can never corrupt a transcript. The enhancement chain is chosen by **listening to an A/B audition set**, not by ASR metrics.
+**Architecture:** Enhanced renders go to a **new `audio-enhanced/` prefix**, never overwriting `audio/`. `mp3_items.url` **stays canonical** — it keeps pointing at `audio/` — and a new `enhanced_url` field holds the render. RadioScanner defaults to `enhanced_url` and toggles back to `url`. Enhancement is a listening feature only: transcription continues to read `audio/`, so a bad render can never corrupt a transcript. The enhancement chain is chosen by **listening to an A/B audition set**, not by ASR metrics.
+
+**Why `url` is not repointed.** `mp3_items.url` is the join key for the entire audio pipeline. `patch_mp3_subtitles`, `link_mp3_subtitles_flow` and `backfill_mp3_catalogue_flow` all match on it holding an `audio/` URL. Repointing it would make the first fail every future transcribe job, the second report every row unlinked, and the third — because it dedupes new rows against `{row["url"]}` — silently create 789 duplicate catalogue rows. Adding a field alongside `url` gives the listener exactly the same toggle while leaving every one of those joins untouched, and means future code that joins on `url` cannot reintroduce the bug.
 
 **Tech Stack:** DeepFilterNet 3 (masking model) on the Mac Studio via torch/MPS or the standalone `deep-filter` binary, ffmpeg, Prefect 3, Directus REST, React + Classicy for the front end.
 
@@ -18,7 +20,13 @@
 - `audio-enhanced/` needs a Traefik Ingress path rule in `github.com/Keeping-History/infra` before anything is publicly reachable — Kubernetes `pathType: Prefix` matches on path-element boundaries, so the existing `/audio` rule does **not** cover `/audio-enhanced`.
 - Deployment is GitOps. Land on `main`; never `kubectl set image`.
 - Every commit carries `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
-- Runs after `2026-08-13-chunked-vad-transcription-plan.md`, so enhancement renders are never confused with transcription changes.
+- **Ordering against the other two plans is soft, not hard.** Because `url` is never
+  modified, nothing here breaks the party-identification or chunked-VAD plans, and
+  this plan can run alongside them. Two caveats: (a) run Task 5 *after*
+  `backfill-mp3-catalogue` has created the 168 missing rows, or those files render
+  but log "no mp3_items row" and go unlinked — re-running Task 5 fixes it, since it
+  is idempotent; (b) do not overlap Task 5 with the chunked-VAD corpus run, as both
+  push ~296 hours of audio through the Mac Studio.
 
 ---
 
@@ -364,7 +372,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 4: The `unenhanced_url` field
+### Task 4: The `enhanced_url` field
 
 **Files:**
 - Directus schema (operational)
@@ -383,11 +391,11 @@ Wait if one is running — a queued ALTER stalls live reads.
 curl -sS -X POST "$DIRECTUS_URL/fields/mp3_items" \
   -H "Authorization: Bearer $DIRECTUS_TOKEN" -H 'Content-Type: application/json' \
   -d '{
-    "field": "unenhanced_url",
+    "field": "enhanced_url",
     "type": "text",
-    "meta": {"interface": "input", "note": "Original unenhanced audio. url points at the enhanced render; RadioScanner toggles between them."},
+    "meta": {"interface": "input", "note": "Enhanced render for listening. url remains canonical and points at the source audio/ recording; RadioScanner defaults to this field and toggles back to url."},
     "schema": {"is_nullable": true}
-  }' | tee /tmp/unenhanced-field.json
+  }' | tee /tmp/enhanced-field.json
 ```
 
 Log the response body.
@@ -395,17 +403,17 @@ Log the response body.
 - [ ] **Step 3: Grant public read**
 
 The field must be readable by the public policy or RadioScanner cannot see it.
-Add `unenhanced_url` to the public read permission for `mp3_items`, then verify
+Add `enhanced_url` to the public read permission for `mp3_items`, then verify
 unauthenticated:
 
 ```bash
-curl -sS "$DIRECTUS_URL/items/mp3_items?fields=id,url,unenhanced_url&limit=1"
+curl -sS "$DIRECTUS_URL/items/mp3_items?fields=id,url,enhanced_url&limit=1"
 ```
-Expected: `unenhanced_url` present in the response.
+Expected: `enhanced_url` present in the response.
 
 ---
 
-### Task 5: Corpus render and repoint
+### Task 5: Corpus render and link
 
 **Files:**
 - Modify: `video_grabber/enhance/flows.py`
@@ -415,11 +423,14 @@ Expected: `unenhanced_url` present in the response.
 ```python
 @flow(name="render-enhanced-corpus")
 def render_enhanced_corpus_flow(dry_run: bool = True, limit: int | None = None) -> None:
-    """Render every audio/ mp3 through the chosen chain and repoint Directus.
+    """Render every audio/ mp3 through the chosen chain and record the render.
 
-    Sets mp3_items.unenhanced_url to the current url BEFORE moving url to the
-    enhanced render, so the pair is never half-written: if the PATCH fails the row
-    still points at working audio.
+    Writes only mp3_items.enhanced_url. `url` is never touched: it is the join key
+    for patch_mp3_subtitles, link_mp3_subtitles_flow and backfill_mp3_catalogue_flow,
+    and repointing it would break all three -- the last of them by silently
+    creating a duplicate row for every file in the bucket.
+
+    Idempotent: re-running overwrites enhanced_url with the same value.
     """
     import httpx
     from video_grabber.directus.writer import _auth_headers, wasabi_public_url
@@ -458,7 +469,7 @@ def render_enhanced_corpus_flow(dry_run: bool = True, limit: int | None = None) 
             done += 1
             continue
         pr = httpx.patch(f"{cfg.directus_url}/items/mp3_items/{rows[0]['id']}",
-                         json={"unenhanced_url": src_url, "url": enh_url},
+                         json={"enhanced_url": enh_url},
                          headers=_auth_headers(cfg))
         pr.raise_for_status()
         done += 1
@@ -469,25 +480,36 @@ def render_enhanced_corpus_flow(dry_run: bool = True, limit: int | None = None) 
 - [ ] **Step 2: Dry run, then a limited real run**
 
 `dry_run=True` first. Then `dry_run=False, limit=5`; fetch both URLs for those five
-rows and confirm each plays and that `unenhanced_url` resolves to the original.
+rows and confirm each plays and that `url` still resolves to the `audio/` original.
 
 - [ ] **Step 3: Full run**
 
 `dry_run=False`, no limit.
 
-- [ ] **Step 4: Verify no row is half-written**
+- [ ] **Step 4: Verify `url` was never touched**
 
 ```sql
-SELECT count(*) FROM mp3_items
-WHERE url LIKE '%/audio-enhanced/%' AND unenhanced_url IS NULL;
+SELECT count(*) FROM mp3_items WHERE url LIKE '%/audio-enhanced/%';
 ```
-Expected: **0**. Any row here points at enhanced audio with no way back.
+Expected: **0**. Any row here means the flow wrote to the join key and the
+catalogue/linkage flows are now broken.
+
+```sql
+SELECT count(*) AS rows, count(enhanced_url) AS rendered FROM mp3_items;
+```
+Expected: `rendered` equals the number of files actually processed.
+
+- [ ] **Step 5: Confirm the pipeline still joins**
+
+Re-run `link-mp3-subtitles` with `dry_run=True` from the party-identification plan.
+Expected: 0 rows reported as missing an SRT. If that number jumped, `url` was
+modified somewhere and this task must be rolled back before going further.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add video_grabber/enhance/flows.py
-git commit -m "feat(enhance): corpus render and Directus repoint
+git commit -m "feat(enhance): corpus render and enhanced_url linkage
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
@@ -547,12 +569,12 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Test: colocated vitest file
 
 **Interfaces:**
-- Consumes: `mp3_items.unenhanced_url`
+- Consumes: `mp3_items.enhanced_url`
 
 - [ ] **Step 1: Locate the audio source resolution**
 
 ```bash
-grep -rn "mp3_items\|unenhanced\|\.url" packages/frontend/src --include=*.tsx --include=*.ts \
+grep -rn "mp3_items\|enhanced\|\.url" packages/frontend/src --include=*.tsx --include=*.ts \
   | grep -i radio | head -20
 ```
 
@@ -569,21 +591,21 @@ import { afterEach, describe, expect, it } from 'vitest'
 afterEach(cleanup)
 
 describe('audio source selection', () => {
-  it('plays the enhanced url by default', () => {
-    expect(resolveAudioUrl({ url: '/e.mp3', unenhanced_url: '/o.mp3' }, false))
+  it('plays the enhanced render by default', () => {
+    expect(resolveAudioUrl({ url: '/o.mp3', enhanced_url: '/e.mp3' }, false))
       .toBe('/e.mp3')
   })
 
   it('plays the original when the listener asks for it', () => {
-    expect(resolveAudioUrl({ url: '/e.mp3', unenhanced_url: '/o.mp3' }, true))
+    expect(resolveAudioUrl({ url: '/o.mp3', enhanced_url: '/e.mp3' }, true))
       .toBe('/o.mp3')
   })
 
-  it('falls back to url when no original is recorded', () => {
-    // Rows not yet rendered have unenhanced_url null; the toggle must not
-    // produce an undefined src and silently break playback.
-    expect(resolveAudioUrl({ url: '/e.mp3', unenhanced_url: null }, true))
-      .toBe('/e.mp3')
+  it('falls back to url when no enhanced render exists yet', () => {
+    // enhanced_url is null until Task 5 has processed that file. The default
+    // path must not produce an undefined src and silently break playback.
+    expect(resolveAudioUrl({ url: '/o.mp3', enhanced_url: null }, false))
+      .toBe('/o.mp3')
   })
 })
 ```
@@ -597,12 +619,14 @@ Expected: FAIL — `resolveAudioUrl is not defined`
 
 ```ts
 export function resolveAudioUrl(
-  item: { url: string; unenhanced_url?: string | null },
+  item: { url: string; enhanced_url?: string | null },
   preferOriginal: boolean,
 ): string {
-  // A null unenhanced_url means this item has not been rendered yet. Falling back
-  // to url keeps playback working rather than producing an undefined src.
-  return preferOriginal && item.unenhanced_url ? item.unenhanced_url : item.url
+  // url is always populated and always points at the source recording, so it is
+  // the safe fallback: a file that has not been rendered yet simply plays
+  // unenhanced rather than producing an undefined src.
+  if (preferOriginal) return item.url
+  return item.enhanced_url ?? item.url
 }
 ```
 
@@ -651,7 +675,9 @@ without a leading slash, matching `wasabi.list_keys` output and `wasabi_public_u
 input. `Chain.dfn_atten is None` is the single signal for "skip the model", used by
 both `uses_model` and `render_one`.
 
-**Risk accepted.** Task 5 repoints `mp3_items.url` for every row. Rollback is
-`UPDATE mp3_items SET url = unenhanced_url, unenhanced_url = NULL WHERE
-unenhanced_url IS NOT NULL` — which is why Task 5 Step 4 asserts that no row is ever
-left with an enhanced `url` and a null `unenhanced_url`.
+**Risk accepted.** Task 5 writes a new field on every row and never modifies `url`.
+Rollback is `UPDATE mp3_items SET enhanced_url = NULL`, after which every listener
+transparently falls back to the source recording — the front end already treats a
+null `enhanced_url` as "play `url`", so a rollback needs no front-end change and no
+Cloudflare purge. Task 5 Step 4 asserts `url` was never touched, and Step 5 re-runs
+the linkage flow to prove the pipeline's joins still resolve.
