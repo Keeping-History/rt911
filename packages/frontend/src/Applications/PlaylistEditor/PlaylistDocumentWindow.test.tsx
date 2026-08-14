@@ -42,6 +42,9 @@ vi.mock("classicy", async (importOriginal) => ({
 		</div>
 	),
 	useAppManagerDispatch: () => dispatchMock,
+	// A fixed teacher clock so "Sync Students to My Clock" is deterministic:
+	// dateTime is the canonical UTC value the window snapshots into its ref.
+	useClassicyDateTime: () => ({ dateTime: "2001-09-11T13:03:00.000Z" }),
 }));
 
 const playlistApi = vi.hoisted(() => ({
@@ -54,6 +57,20 @@ vi.mock("../../Providers/Auth/playlistApi", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	...playlistApi,
 }));
+
+// The senders are mocked, the RoomCommandError class stays real (importOriginal
+// spread) so the window's `instanceof` error mapping is exercised.
+const roomApi = vi.hoisted(() => ({
+	sendRoomJump: vi.fn().mockResolvedValue(undefined),
+	sendRoomFocus: vi.fn().mockResolvedValue(undefined),
+	sendRoomMessage: vi.fn().mockResolvedValue(undefined),
+	sendRoomReload: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../../Providers/Playlist/roomApi", async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	...roomApi,
+}));
+import { RoomCommandError } from "../../Providers/Playlist/roomApi";
 
 vi.mock("./PlaylistEditorMain", () => ({
 	PlaylistEditorMain: () => <div data-testid="body" />,
@@ -431,6 +448,114 @@ describe("PlaylistDocumentWindow", () => {
 		// The new entry is edited in the shared Settings window, so adding
 		// must also reveal it.
 		expect(openSettingsWindowMock).toHaveBeenCalled();
+	});
+
+	// The Control menu's live commands belong to THIS window, so every send
+	// must carry this window's playlist id — never the active document's.
+	describe("Control menu live commands", () => {
+		it("Sync Students to My Clock jumps the room to this desktop's time", async () => {
+			renderWindow();
+			act(() => item("control", "playlist_control_sync").onClickFunc?.());
+			await waitFor(() =>
+				expect(roomApi.sendRoomJump).toHaveBeenCalledWith("p1", "2001-09-11T13:03:00.000Z"),
+			);
+		});
+
+		it("Bring App to Front sends the chosen app id", async () => {
+			renderWindow();
+			const focus = item("control", "playlist_control_focus");
+			const radio = focus.menuChildren?.find(
+				(c) => c.id === "playlist_control_focus_RadioScanner.app",
+			);
+			if (!radio) throw new Error("no RadioScanner focus item");
+			act(() => radio.onClickFunc?.());
+			await waitFor(() =>
+				expect(roomApi.sendRoomFocus).toHaveBeenCalledWith("p1", "RadioScanner.app"),
+			);
+		});
+
+		it("Send Message… opens the dialog and sends the note", async () => {
+			renderWindow();
+			act(() => item("control", "playlist_control_message").onClickFunc?.());
+
+			fireEvent.change(screen.getByLabelText("Message"), {
+				target: { value: "Look at channel 4" },
+			});
+			fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+			await waitFor(() =>
+				expect(roomApi.sendRoomMessage).toHaveBeenCalledWith("p1", "Look at channel 4"),
+			);
+			// The dialog is one-shot: sending dismisses it.
+			expect(screen.queryByLabelText("Message")).toBeNull();
+		});
+
+		it("cancelling the message dialog sends nothing", () => {
+			renderWindow();
+			act(() => item("control", "playlist_control_message").onClickFunc?.());
+			fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+			expect(roomApi.sendRoomMessage).not.toHaveBeenCalled();
+		});
+
+		it("Push Update to Class sends a reload for a saved, published playlist", async () => {
+			renderWindow({ status: "published", dirty: false });
+			const push = item("control", "playlist_control_push");
+			expect(push.disabled).toBe(false);
+			act(() => push.onClickFunc?.());
+			await waitFor(() => expect(roomApi.sendRoomReload).toHaveBeenCalledWith("p1"));
+		});
+
+		it("disables Push Update to Class while dirty or draft", () => {
+			renderWindow({ status: "draft", dirty: false });
+			expect(item("control", "playlist_control_push").disabled).toBe(true);
+			cleanup();
+			renderWindow({ status: "published", dirty: true });
+			expect(item("control", "playlist_control_push").disabled).toBe(true);
+		});
+
+		it("surfaces a refused command in a Control alert", async () => {
+			roomApi.sendRoomJump.mockRejectedValueOnce(
+				new RoomCommandError("Only the person who created this playlist can control it."),
+			);
+			renderWindow();
+			act(() => item("control", "playlist_control_sync").onClickFunc?.());
+			await waitFor(() =>
+				expect(screen.getByTestId("alert").textContent).toContain(
+					"Only the person who created this playlist can control it.",
+				),
+			);
+			// OK dismisses it.
+			fireEvent.click(screen.getByRole("button", { name: "OK" }));
+			expect(screen.queryByTestId("alert")).toBeNull();
+		});
+	});
+
+	describe("File > Copy Student Link", () => {
+		const withClipboard = (writeText: () => Promise<void>) => {
+			Object.defineProperty(navigator, "clipboard", {
+				value: { writeText },
+				configurable: true,
+			});
+		};
+
+		it("copies the anonymous join link for a published playlist", () => {
+			const writeText = vi.fn().mockResolvedValue(undefined);
+			withClipboard(writeText);
+			renderWindow({ status: "published" });
+
+			const link = item("file", "playlist_file_copy_link");
+			expect(link.disabled).toBe(false);
+			act(() => link.onClickFunc?.());
+
+			expect(writeText).toHaveBeenCalledWith(`${location.origin}/?playlist=p1`);
+		});
+
+		it("is disabled, with the reason ballooned, for a draft", () => {
+			renderWindow({ status: "draft" });
+			const link = item("file", "playlist_file_copy_link");
+			expect(link.disabled).toBe(true);
+			expect(link.balloon?.content).toContain("Drafts aren't joinable");
+		});
 	});
 
 	// Not reachable from PlaylistEditorProvider today — it batches `openIds`

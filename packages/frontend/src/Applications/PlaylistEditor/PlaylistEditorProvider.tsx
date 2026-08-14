@@ -149,11 +149,13 @@ export function PlaylistEditorProvider({
 	}, []);
 
 	/**
-	 * Lock state is held here rather than read back from the server, because
-	 * the streamer keeps none: a room command is fire-and-forget, so there is
-	 * nothing to query. Two consequences worth knowing: the checkmark resets
-	 * when the app is reopened (students stay locked — only the menu forgets),
-	 * and two teachers driving one playlist will not see each other's state.
+	 * Lock state is held here rather than read back from the server: the
+	 * streamer remembers the last lock per room only to replay it to late
+	 * joiners (see the backend's websocket-protocol.md "Room control") and
+	 * exposes no read-back API, so there is nothing to query. Two consequences
+	 * worth knowing: the checkmark resets when the app is reopened (students
+	 * stay locked — only the menu forgets), and two teachers driving one
+	 * playlist will not see each other's state.
 	 *
 	 * `busy` in `LockState` is a display flag for consumers (disable the menu
 	 * item) — it is NOT what guards against a second invocation for the same
