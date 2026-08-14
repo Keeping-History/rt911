@@ -20,6 +20,7 @@ Two behaviours keep the pipeline self-healing:
     stale, and serve.py re-queues it. A live worker — even on a ~1h46m transcription —
     keeps it fresh, so a slow job is never mistaken for a dead one.
 """
+import os
 import sys
 import threading
 import time
@@ -28,6 +29,7 @@ import sqlalchemy as sa
 
 from video_grabber.config import Config
 from video_grabber.transcribe.flows import _sync_db_url, transcribe_item_flow
+from video_grabber.transcribe.qos import THROTTLED_MESSAGE, darwin_background_qos
 
 _CLAIM_SQL = sa.text("""
     UPDATE transcribe_jobs SET
@@ -79,7 +81,24 @@ def _heartbeat(url: str) -> None:
             _log(f"heartbeat error: {exc}")
 
 
+def assert_not_throttled() -> None:
+    """Exit rather than run under macOS background QoS.
+
+    Refusing is deliberately stricter than warning. A throttled worker does not
+    merely run slowly — whisper --vad never returns, so the worker claims a job,
+    heartbeats it forever and never completes or fails it. The supervisor cannot
+    reclaim a row whose heartbeat is live, so one throttled worker permanently
+    removes a job from the queue. Crash-looping under KeepAlive is noisy, which
+    is the point: the alternative is an 18x throughput loss that looks like
+    nothing at all.
+    """
+    if darwin_background_qos() and os.getenv("ALLOW_THROTTLED_WORKER") != "1":
+        _log(THROTTLED_MESSAGE)
+        raise SystemExit(1)
+
+
 def main() -> None:
+    assert_not_throttled()
     cfg = Config()
     url = _sync_db_url(cfg.database_url)
     threading.Thread(target=_heartbeat, args=(url,), daemon=True).start()
