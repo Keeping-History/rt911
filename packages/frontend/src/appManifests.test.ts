@@ -87,8 +87,19 @@ describe("app manifests", () => {
 		},
 	);
 
-	it("exposes no scriptable actions (parity with the empty pre-manifest allowlist)", () => {
-		expect(listScriptableActions()).toEqual([]);
+	// `scriptable: true` exposes an action to untrusted HyperCard stack scripts,
+	// so this is an allowlist, not a snapshot. It was `[]` until classicy 0.72.5
+	// shipped a built-in ScreenSaver whose Activate action is scriptable — this
+	// repo still marks nothing of its own scriptable.
+	//
+	// Compared as `appId:type` rather than whole objects so a wording change to
+	// classicy's description does not fail the build, while any NEW scriptable
+	// action still does. Widening this to "just assert it's an array" would throw
+	// away the only thing that makes the allowlist a control.
+	it("exposes only classicy's built-in ScreenSaver activate as scriptable", () => {
+		expect(listScriptableActions().map((a) => `${a.appId}:${a.type}`)).toEqual([
+			"ScreenSaver.app:ClassicyAppScreenSaverActivate",
+		]);
 	});
 
 	// classicy routes each action to exactly ONE handler — the first registered
