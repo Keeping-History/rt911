@@ -35,7 +35,7 @@ export function SettingsWindow({
 			title="Settings"
 			icon={icon}
 			windowType="utility"
-			closable={true}
+			closable={false}
 			resizable={true}
 			zoomable={false}
 			collapsable={true}
