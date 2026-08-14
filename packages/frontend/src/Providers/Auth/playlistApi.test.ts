@@ -32,6 +32,9 @@ describe("listMine", () => {
 				"/items/playlists?fields=id,title,status,date_updated,user_created&sort=-date_updated&limit=200",
 			);
 			expect((args[1] as RequestInit).credentials).toBe("include");
+			// Skips Directus's response cache so a just-saved playlist lists
+			// immediately (server honors this via CACHE_SKIP_ALLOWED).
+			expect((args[1] as RequestInit).headers).toMatchObject({ "Cache-Control": "no-store" });
 			return jsonResponse({ data: rows });
 		});
 		const result = await listMine("teacher-1", f);
@@ -96,6 +99,7 @@ describe("getPlaylist", () => {
 		const f = vi.fn(async (...args: Parameters<typeof fetch>) => {
 			expect(String(args[0])).toContain("/items/playlists/p1");
 			expect((args[1] as RequestInit).credentials).toBe("include");
+			expect((args[1] as RequestInit).headers).toMatchObject({ "Cache-Control": "no-store" });
 			return jsonResponse({ data: row({ definition: VALID_DEFINITION }) });
 		});
 		const got = await getPlaylist("p1", f);
