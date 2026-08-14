@@ -115,6 +115,17 @@ _DIGITS = re.compile(r"\d+")
 def parse_parties(raw: str) -> dict:
     """Parse the model's reply, tolerating a markdown fence."""
     text = (raw or "").strip()
+    if not text:
+        # An empty reply is not malformed JSON, and saying "did not return JSON"
+        # sent us looking at the prompt for an hour. The cause is a max_tokens
+        # budget consumed entirely by adaptive thinking, so the response carries a
+        # thinking block and no text block. Name that, so the next reader checks
+        # the budget first. See PARTIES_MAX_TOKENS in parties/flows.py.
+        raise ValueError(
+            "model returned no text. The usual cause is max_tokens being consumed "
+            "by adaptive thinking (stop_reason=max_tokens, content=['thinking']); "
+            "raise the token budget rather than changing the prompt."
+        )
     m = _FENCE.search(text)
     if m:
         text = m.group(1)

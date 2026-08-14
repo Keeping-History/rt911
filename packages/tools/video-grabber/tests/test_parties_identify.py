@@ -162,3 +162,15 @@ def test_parse_rejects_non_json():
 def test_parse_rejects_a_json_array():
     with pytest.raises(ValueError, match="not an object"):
         parse_parties("[1, 2, 3]")
+
+
+@pytest.mark.parametrize("raw", ["", "   \n ", None])
+def test_parse_blames_the_token_budget_for_an_empty_reply(raw):
+    """An empty reply means max_tokens went entirely on thinking, not a bad prompt.
+
+    claude-sonnet-5 thinks by default when `thinking` is unset, and max_tokens caps
+    thinking and text together — so the response is a lone thinking block with no
+    text. Reporting that as malformed JSON sends the next reader to the prompt.
+    """
+    with pytest.raises(ValueError, match="no text"):
+        parse_parties(raw)
