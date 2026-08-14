@@ -99,3 +99,7 @@
 	min-height: 40px;
 	font-family: var(--mono-font, monospace);
 }
+
+.playlistEditorMain, .playlistTimeline {
+	height: 100%;
+}

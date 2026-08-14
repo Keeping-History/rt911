@@ -16,6 +16,7 @@ import { PlaylistList } from "./PlaylistList";
 import { SettingsWindow } from "./SettingsWindow";
 import { ToolsPalette, TOOLS_WINDOW_ID } from "./ToolsPalette";
 import appIconPng from "./app.png";
+import "./PlaylistEditor.scss";
 
 const appId = "PlaylistEditor.app";
 const appName = "Playlists";
