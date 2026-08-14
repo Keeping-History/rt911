@@ -135,7 +135,15 @@ export function PlaylistTimeline({
 						{labels.map((l) => (
 							<span
 								key={`label-${l.leftPct}`}
-								className="playlistTimelineDayTick"
+								// The closing label is right-aligned. Left-aligned at
+								// left:100% it draws its whole width past the track,
+								// which is scrollable overflow — that is what made a
+								// fully zoomed-out timeline scroll sideways.
+								className={
+									l.leftPct >= 100
+										? "playlistTimelineDayTick playlistTimelineDayTickEnd"
+										: "playlistTimelineDayTick"
+								}
 								style={{ left: `${l.leftPct}%` }}
 							>
 								{l.text}
