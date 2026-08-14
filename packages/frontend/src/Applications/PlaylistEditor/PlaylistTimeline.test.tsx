@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { EditorEntry } from "./editorState";
@@ -8,6 +9,30 @@ vi.mock("./resolveTimelineMeta", () => ({
 
 import { barMaskImage, PlaylistTimeline } from "./PlaylistTimeline";
 import { resolveTimelineMeta } from "./resolveTimelineMeta";
+
+/**
+ * PlaylistTimeline is controlled — the document window owns zoom so the View
+ * menu and the timeline's buttons drive one value. These helpers supply the
+ * missing half: `Controlled` for tests that actually change zoom, and a fixed
+ * 1x for the tests that only care about layout.
+ */
+function Controlled({ entries, onSelect = vi.fn() }: {
+	entries: EditorEntry[];
+	onSelect?: (uid: string) => void;
+}) {
+	const [zoom, setZoom] = useState(1);
+	return (
+		<PlaylistTimeline
+			entries={entries}
+			selectedUid={null}
+			onSelect={onSelect}
+			zoom={zoom}
+			onZoomChange={setZoom}
+		/>
+	);
+}
+
+const atRest = { zoom: 1, onZoomChange: vi.fn() };
 
 afterEach(() => {
 	cleanup();
@@ -32,7 +57,7 @@ const entries: EditorEntry[] = [
 describe("PlaylistTimeline", () => {
 	it("renders one bar and one flag, and clicking each selects the right uid", () => {
 		const onSelect = vi.fn();
-		render(<PlaylistTimeline entries={entries} selectedUid={null} onSelect={onSelect} />);
+		render(<PlaylistTimeline entries={entries} selectedUid={null} onSelect={onSelect} {...atRest} />);
 
 		const bars = document.querySelectorAll(".playlistTimelineBar");
 		expect(bars).toHaveLength(1);
@@ -70,7 +95,7 @@ describe("PlaylistTimeline", () => {
 				entry: { kind: "media", app: "radio", itemId: "R1", end: "2001-09-11T13:00:00Z" },
 			},
 		];
-		render(<PlaylistTimeline entries={startOnly} selectedUid={null} onSelect={vi.fn()} />);
+		render(<PlaylistTimeline entries={startOnly} selectedUid={null} onSelect={vi.fn()} {...atRest} />);
 		const bar = document.querySelector(".playlistTimelineBar") as HTMLElement;
 		expect(bar.style.maskImage).toBe(barMaskImage(true, false));
 	});
@@ -86,7 +111,7 @@ describe("PlaylistTimeline", () => {
 				timelineMeta: { departure: "2001-09-11T11:59:00Z", arrival: null },
 			},
 		];
-		render(<PlaylistTimeline entries={zeroSpan} selectedUid={null} onSelect={vi.fn()} />);
+		render(<PlaylistTimeline entries={zeroSpan} selectedUid={null} onSelect={vi.fn()} {...atRest} />);
 		expect(document.querySelector(".playlistTimelineActualSpan")).toBeNull();
 		for (const el of document.querySelectorAll<HTMLElement>("[style]")) {
 			expect(el.getAttribute("style") ?? "").not.toContain("NaN");
@@ -99,13 +124,13 @@ describe("PlaylistTimeline", () => {
 			{ uid: "r1", entry: { kind: "media", app: "news", itemId: "1" } },
 		];
 		const { rerender } = render(
-			<PlaylistTimeline entries={entriesV1} selectedUid={null} onSelect={vi.fn()} />,
+			<PlaylistTimeline entries={entriesV1} selectedUid={null} onSelect={vi.fn()} {...atRest} />,
 		);
 		await waitFor(() => expect(mockResolve).toHaveBeenCalledTimes(1));
 		expect(mockResolve.mock.calls[0][0]).toEqual(entriesV1);
 
 		// New array identity, exact same entries: should NOT trigger another fetch.
-		rerender(<PlaylistTimeline entries={[...entriesV1]} selectedUid={null} onSelect={vi.fn()} />);
+		rerender(<PlaylistTimeline entries={[...entriesV1]} selectedUid={null} onSelect={vi.fn()} {...atRest} />);
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(mockResolve).toHaveBeenCalledTimes(1);
@@ -114,18 +139,18 @@ describe("PlaylistTimeline", () => {
 		// scoped to only the new entry.
 		const newEntry: EditorEntry = { uid: "r2", entry: { kind: "media", app: "news", itemId: "2" } };
 		const entriesV3: EditorEntry[] = [...entriesV1, newEntry];
-		rerender(<PlaylistTimeline entries={entriesV3} selectedUid={null} onSelect={vi.fn()} />);
+		rerender(<PlaylistTimeline entries={entriesV3} selectedUid={null} onSelect={vi.fn()} {...atRest} />);
 		await waitFor(() => expect(mockResolve).toHaveBeenCalledTimes(2));
 		expect(mockResolve.mock.calls[1][0]).toEqual([newEntry]);
 	});
 
 	it("renders 40 six-hour ruler ticks", () => {
-		render(<PlaylistTimeline entries={[]} selectedUid={null} onSelect={vi.fn()} />);
+		render(<Controlled entries={[]} />);
 		expect(document.querySelectorAll(".playlistTimelineHourTick")).toHaveLength(40);
 	});
 
 	it("widens the track and subdivides the ruler on zoom in, and restores it on zoom out", () => {
-		render(<PlaylistTimeline entries={[]} selectedUid={null} onSelect={vi.fn()} />);
+		render(<Controlled entries={[]} />);
 		const track = screen.getByTestId("timeline-track");
 		const level = screen.getByTestId("timeline-zoom-level");
 		expect(track.style.width).toBe("100%");
@@ -142,7 +167,7 @@ describe("PlaylistTimeline", () => {
 	});
 
 	it("disables each control at its end of the ladder", () => {
-		render(<PlaylistTimeline entries={[]} selectedUid={null} onSelect={vi.fn()} />);
+		render(<Controlled entries={[]} />);
 		// jest-dom is not installed here, so assert the DOM property directly
 		// rather than reaching for toBeDisabled().
 		const zoomIn = screen.getByRole("button", { name: "Zoom in" }) as HTMLButtonElement;
@@ -168,7 +193,7 @@ describe("PlaylistTimeline", () => {
 			{ uid: "n2", entry: { kind: "media", app: "news", itemId: "2" },
 				timelineMeta: { publishedAt: "2001-09-11T12:20:00Z" } },
 		];
-		render(<PlaylistTimeline entries={crowded} selectedUid={null} onSelect={vi.fn()} />);
+		render(<Controlled entries={crowded} />);
 
 		const topOf = (i: number) =>
 			(document.querySelectorAll<HTMLElement>(".playlistTimelineFlag")[i]).style.top;

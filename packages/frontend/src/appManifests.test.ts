@@ -17,6 +17,7 @@ import "./Applications/Feedback/FeedbackContext";
 import "./Applications/README/ReadmeContext";
 import "./Applications/News/NewsContext";
 import "./Applications/PagerDecoder/PagerDecoderContext";
+import "./Applications/PlaylistEditor/PlaylistEditorContext";
 import "./Providers/Playlist/playlistStoreActions";
 
 // [appId, expected prefixes, spot-checked action types, has a state schema]
@@ -61,7 +62,12 @@ const CASES: Array<[string, string[], string[], boolean]> = [
 		["ClassicyAppPagerDecoderInitSettings", "ClassicyAppPagerDecoderUpdateSettings"],
 		true,
 	],
-	["PlaylistEditor.app", ["ClassicyAppPlaylist"], ["ClassicyAppPlaylistMergeData"], false],
+	[
+		"PlaylistEditor.app",
+		["ClassicyAppPlaylist", "ClassicyAppTimelineZoom"],
+		["ClassicyAppPlaylistMergeData", "ClassicyAppTimelineZoomSet"],
+		true,
+	],
 ];
 
 describe("app manifests", () => {
@@ -83,5 +89,23 @@ describe("app manifests", () => {
 
 	it("exposes no scriptable actions (parity with the empty pre-manifest allowlist)", () => {
 		expect(listScriptableActions()).toEqual([]);
+	});
+
+	// classicy routes each action to exactly ONE handler — the first registered
+	// prefix the action type starts with. So if one prefix is a prefix of
+	// another, every action in the longer namespace is delivered to the shorter
+	// namespace's handler instead, which typically ignores it and returns the
+	// store unchanged. Nothing throws; the feature just silently does nothing,
+	// and which handler wins depends on module import order.
+	//
+	// "ClassicyAppPlaylist" vs a proposed "ClassicyAppPlaylistEditor" hit exactly
+	// this, which is why the timeline's actions live under
+	// "ClassicyAppTimelineZoom".
+	it("registers no prefix that is a prefix of another", () => {
+		const prefixes = [...new Set(CASES.flatMap(([, p]) => p))];
+		const overlaps = prefixes.flatMap((a) =>
+			prefixes.filter((b) => b !== a && b.startsWith(a)).map((b) => `${a} swallows ${b}`),
+		);
+		expect(overlaps).toEqual([]);
 	});
 });

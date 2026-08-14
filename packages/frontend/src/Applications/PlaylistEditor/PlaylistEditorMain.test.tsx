@@ -15,11 +15,16 @@ const state = (over: Partial<EditorState> = {}): EditorState => ({
 	entries: [], selectedUid: null, dirty: false, nextUid: 1, ...over,
 });
 
+// Zoom is owned by the document window and only passed through here, so these
+// tests pin it at 1x rather than exercising it — PlaylistTimeline.test.tsx owns
+// the zoom behaviour.
+const zoomProps = { zoom: 1, onZoomChange: vi.fn() };
+
 describe("PlaylistEditorMain", () => {
 	// The header and add bar moved to the menu bar and the Tools palette; the
 	// body must not reintroduce chrome above the timeline and entry tabs.
 	it("renders no title field, mode radios, status picker, or Add buttons", () => {
-		render(<PlaylistEditorMain state={state()} edit={vi.fn()} />);
+		render(<PlaylistEditorMain state={state()} edit={vi.fn()} {...zoomProps} />);
 
 		expect(screen.queryByLabelText("Title")).toBeNull();
 		expect(screen.queryByLabelText("Status")).toBeNull();
@@ -35,6 +40,7 @@ describe("PlaylistEditorMain", () => {
 					entries: [{ uid: "e1", entry: { kind: "browser", url: "http://example.com", at: "" } }],
 				})}
 				edit={vi.fn()}
+				{...zoomProps}
 			/>,
 		);
 
@@ -46,7 +52,7 @@ describe("PlaylistEditorMain", () => {
 	});
 
 	it("shows an empty hint on a kind with no entries", () => {
-		render(<PlaylistEditorMain state={state()} edit={vi.fn()} />);
+		render(<PlaylistEditorMain state={state()} edit={vi.fn()} {...zoomProps} />);
 		// Media is the initially active tab; with no entries its panel is a hint.
 		expect(screen.getByText(/No media entries yet/i)).not.toBeNull();
 	});
@@ -57,6 +63,7 @@ describe("PlaylistEditorMain", () => {
 			<PlaylistEditorMain
 				state={state({ entries: [{ uid: "e1", entry: { kind: "jump", at: "", to: "" } }] })}
 				edit={edit}
+				{...zoomProps}
 			/>,
 		);
 
@@ -75,6 +82,7 @@ describe("PlaylistEditorMain", () => {
 					entries: [{ uid: "e1", entry: { kind: "browser", url: "http://example.com", at: "" } }],
 				})}
 				edit={edit}
+				{...zoomProps}
 				openSettings={openSettings}
 			/>,
 		);
@@ -94,7 +102,7 @@ describe("PlaylistEditorMain", () => {
 			{ uid: "e1", entry: { kind: "browser", url: "http://example.com", at: "" } },
 		];
 
-		render(<PlaylistEditorMain state={state({ entries, selectedUid: "e1" })} edit={vi.fn()} />);
+		render(<PlaylistEditorMain state={state({ entries, selectedUid: "e1" })} edit={vi.fn()} {...zoomProps} />);
 		expect(screen.queryByLabelText("URL")).toBeNull();
 	});
 });

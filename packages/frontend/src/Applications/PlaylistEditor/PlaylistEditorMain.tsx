@@ -39,12 +39,19 @@ export function PlaylistEditorMain({
 	state,
 	edit,
 	openSettings = () => {},
+	zoom,
+	onZoomChange,
 }: {
 	state: EditorState;
 	edit: (playlistId: string, action: EditorAction) => void;
 	/** Reveal the Settings utility window; wired to the provider's
 	 * openSettingsWindow by PlaylistDocumentWindow. */
 	openSettings?: () => void;
+	/** Timeline zoom, owned by the document window so the View menu and the
+	 * timeline's own buttons drive one value. Passed straight through — this
+	 * component still holds no state of its own. */
+	zoom: number;
+	onZoomChange: (zoom: number) => void;
 }) {
 	const dispatch = (action: EditorAction) => edit(state.playlistId, action);
 
@@ -86,6 +93,8 @@ export function PlaylistEditorMain({
 					entries={state.entries}
 					selectedUid={state.selectedUid}
 					onSelect={(uid) => dispatch({ type: "select", uid })}
+					zoom={zoom}
+					onZoomChange={onZoomChange}
 				/>
 				<div className="playlistEditorEntries">
 					<ClassicyTabs tabs={tabs} />

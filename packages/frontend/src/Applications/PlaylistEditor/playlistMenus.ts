@@ -63,6 +63,51 @@ export function documentFileMenu(o: DocumentFileMenuOptions): ClassicyMenuItem {
 	};
 }
 
+export const ZOOM_BALLOON =
+	"How much of the ten-day span the timeline shows at once. Zoom in to separate " +
+	"entries that sit minutes apart; scroll sideways to move through time.";
+
+export function documentViewMenu(o: {
+	zoom: number;
+	minZoom: number;
+	maxZoom: number;
+	onZoomIn: () => void;
+	onZoomOut: () => void;
+	onActualSize: () => void;
+}): ClassicyMenuItem {
+	return {
+		id: "view",
+		title: "View",
+		menuChildren: [
+			{
+				id: "playlist_view_zoom_in",
+				title: "Zoom In",
+				keyboardShortcut: "+",
+				disabled: o.zoom >= o.maxZoom,
+				balloon: { title: "Zoom In", content: ZOOM_BALLOON },
+				onClickFunc: o.onZoomIn,
+			},
+			{
+				id: "playlist_view_zoom_out",
+				title: "Zoom Out",
+				keyboardShortcut: "-",
+				disabled: o.zoom <= o.minZoom,
+				balloon: { title: "Zoom Out", content: ZOOM_BALLOON },
+				onClickFunc: o.onZoomOut,
+			},
+			SPACER,
+			{
+				id: "playlist_view_actual_size",
+				title: "Fit All Ten Days",
+				// Already fitted is the checked state, not a disabled one: the item
+				// reports where you are, and re-picking it is harmless.
+				checked: o.zoom === o.minZoom,
+				onClickFunc: o.onActualSize,
+			},
+		],
+	};
+}
+
 export const MODE_BALLOONS = {
 	restrict:
 		"Students see only what this playlist includes. Everything else on the desktop is hidden or disabled.",
