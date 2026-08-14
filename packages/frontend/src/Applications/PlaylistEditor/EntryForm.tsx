@@ -1,4 +1,11 @@
-import { ClassicyDatePicker, ClassicyPopUpMenu, ClassicyTimePicker } from "classicy";
+import {
+	ClassicyCheckbox,
+	ClassicyControlGroup,
+	ClassicyDatePicker,
+	ClassicyInput,
+	ClassicyPopUpMenu,
+	ClassicyTimePicker,
+} from "classicy";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { AppSettingsFields } from "./AppSettingsFields";
 import {
@@ -32,19 +39,16 @@ function DateTimeField({
 	// optional fields hide the pickers while the "unbounded" checkbox is checked.
 	const showPickers = optional ? value !== undefined : true;
 	return (
-		<fieldset className="entryFormField">
-			<legend>{label}</legend>
+		<ClassicyControlGroup label={label}>
 			{optional && (
-				<label>
-					<input
-						type="checkbox"
-						checked={value === undefined}
-						onChange={(e) =>
-							onChange(e.target.checked ? undefined : displayWallClockToUtcIso(DEFAULT_WALL_CLOCK))
-						}
-					/>
-					unbounded
-				</label>
+				<ClassicyCheckbox
+					id={`${label}-unbounded`}
+					label="unbounded"
+					checked={value === undefined}
+					onClickFunc={(checked) =>
+						onChange(checked ? undefined : displayWallClockToUtcIso(DEFAULT_WALL_CLOCK))
+					}
+				/>
 			)}
 			{showPickers && (
 				<>
@@ -70,7 +74,7 @@ function DateTimeField({
 					/>
 				</>
 			)}
-		</fieldset>
+		</ClassicyControlGroup>
 	);
 }
 
@@ -90,31 +94,33 @@ export function EntryForm({
 					<p>{`${e.app.toUpperCase()} · ${e.itemId}`}</p>
 					<DateTimeField label="Start" optional value={e.start} onChange={(start) => onChange({ ...e, start })} />
 					<DateTimeField label="End" optional value={e.end} onChange={(end) => onChange({ ...e, end })} />
-					<label>
-						Focus
-						<select
-							aria-label="Focus"
-							value={e.focus ?? "none"}
-							onChange={(ev) =>
-								onChange({ ...e, focus: ev.target.value === "none" ? undefined : (ev.target.value as "once" | "locked") })
-							}
-						>
-							<option value="none">None</option>
-							<option value="once">Once</option>
-							<option value="locked">Locked</option>
-						</select>
-					</label>
+					<ClassicyPopUpMenu
+						id="entry-media-focus"
+						label="Focus"
+						labelPosition="left"
+						options={[
+							{ value: "none", label: "None" },
+							{ value: "once", label: "Once" },
+							{ value: "locked", label: "Locked" },
+						]}
+						selected={e.focus ?? "none"}
+						onChangeFunc={(ev) =>
+							onChange({ ...e, focus: ev.target.value === "none" ? undefined : (ev.target.value as "once" | "locked") })
+						}
+					/>
 				</div>
 			);
 		case "app":
 			return (
 				<div className="entryForm">
-					<label>
-						App
-						<select aria-label="App" value={e.appId} onChange={(ev) => onChange({ ...e, appId: ev.target.value })}>
-							{KNOWN_APP_IDS.map((id) => <option key={id} value={id}>{id}</option>)}
-						</select>
-					</label>
+					<ClassicyPopUpMenu
+						id="entry-app-disable"
+						label="App"
+						labelPosition="left"
+						options={KNOWN_APP_IDS.map((id) => ({ value: id, label: id }))}
+						selected={e.appId}
+						onChangeFunc={(ev) => onChange({ ...e, appId: ev.target.value })}
+					/>
 					<p>This app will be disabled for the whole session.</p>
 				</div>
 			);
@@ -141,11 +147,12 @@ export function EntryForm({
 						values={e.values}
 						onChange={(values) => onChange({ ...e, values })}
 					/>
-					<label>
-						<input type="checkbox" checked={e.locked ?? false}
-							onChange={(ev) => onChange({ ...e, locked: ev.target.checked || undefined })} />
-						Locked (revert student changes)
-					</label>
+					<ClassicyCheckbox
+						id="entry-settings-locked"
+						label="Locked (revert student changes)"
+						checked={e.locked ?? false}
+						onClickFunc={(checked) => onChange({ ...e, locked: checked || undefined })}
+					/>
 				</div>
 			);
 		case "file":
@@ -165,10 +172,13 @@ export function EntryForm({
 		case "browser":
 			return (
 				<div className="entryForm">
-					<label>
-						URL
-						<input aria-label="URL" type="text" value={e.url} onChange={(ev) => onChange({ ...e, url: ev.target.value })} />
-					</label>
+					<ClassicyInput
+						id="entry-browser-url"
+						labelTitle="URL"
+						labelPosition="left"
+						prefillValue={e.url}
+						onChangeFunc={(ev) => onChange({ ...e, url: ev.target.value })}
+					/>
 					<DateTimeField label="Open at" value={e.at || undefined} onChange={(at) => onChange({ ...e, at: at ?? "" })} />
 					<DateTimeField label="Close at" optional value={e.closeAt} onChange={(closeAt) => onChange({ ...e, closeAt })} />
 				</div>
