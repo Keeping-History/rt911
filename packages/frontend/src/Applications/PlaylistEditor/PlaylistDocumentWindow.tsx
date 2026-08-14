@@ -5,9 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deletePlaylist, duplicatePlaylist, getPlaylist, updatePlaylist } from "../../Providers/Auth/playlistApi";
 import { ADD_ACTIONS, type AddAction, runAddAction, runAddSettings } from "./addActions";
 import {
-	addMenuItems, documentControlMenu, documentEditMenu, documentFileMenu, windowMenu,
+	addMenuItems, documentControlMenu, documentEditMenu, documentFileMenu, documentViewMenu,
+	windowMenu,
 } from "./playlistMenus";
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
+import { PLAYLIST_EDITOR_APP_ID, playlistSetTimelineZoom } from "./PlaylistEditorContext";
+import { MAX_ZOOM, MIN_ZOOM, normalizeZoom, steppedZoom } from "./timelineLayout";
 import { usePlaylistEditor } from "./PlaylistEditorProvider";
 import { RenameDialog } from "./RenameDialog";
 import { useSavePlaylist } from "./useSavePlaylist";
@@ -120,6 +123,21 @@ export function PlaylistDocumentWindow({
 		if (focused) setActive(playlistId);
 	}, [focused, playlistId, setActive]);
 
+	// Timeline zoom lives in the classicy store rather than in this component or
+	// in EditorStates: it has to outlive the window, and closing a document
+	// deletes its EditorStates entry outright.
+	const zoom = useAppManager((s) =>
+		normalizeZoom(
+			(s.System.Manager.Applications.apps[PLAYLIST_EDITOR_APP_ID]?.data as
+				| { timelineZoom?: unknown }
+				| undefined)?.timelineZoom,
+		),
+	);
+	const setZoom = useCallback(
+		(next: number) => dispatch(playlistSetTimelineZoom(next)),
+		[dispatch],
+	);
+
 	const addHandlers = { playlistId, edit, setDialogMode, openSettings: openSettingsWindow };
 	const runAdd = (action: AddAction) => runAddAction(action, addHandlers);
 	const runAddSettingsFor = (settingsAppId: string) =>
@@ -162,6 +180,14 @@ export function PlaylistDocumentWindow({
 					onSetMode: (mode) => edit(playlistId, { type: "setMode", mode }),
 					addItems: addMenuItems(ADD_ACTIONS, runAdd, runAddSettingsFor),
 				}),
+				documentViewMenu({
+					zoom,
+					minZoom: MIN_ZOOM,
+					maxZoom: MAX_ZOOM,
+					onZoomIn: () => setZoom(steppedZoom(zoom, 1)),
+					onZoomOut: () => setZoom(steppedZoom(zoom, -1)),
+					onActualSize: () => setZoom(MIN_ZOOM),
+				}),
 				documentControlMenu({
 					lock: locks[playlistId] ?? { clock: false, busy: false },
 					onToggleClock: () => void toggleClockLock(playlistId),
@@ -192,9 +218,13 @@ export function PlaylistDocumentWindow({
 		// one. Listing all five would make this memo recompute on every
 		// render, which defeats the point of memoizing it.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// `zoom` and `setZoom` ARE listed: the View menu's disabled/checked flags
+		// are computed from `zoom` at build time, so leaving it out would leave
+		// "Zoom In" enabled at 64x until some other dep happened to change.
 		[
 			state, locks, openIds, states, playlistId, quitItem,
 			onOpenList, onFocusTools, onFocusList, onFocusDocument, openSettingsWindow,
+			zoom, setZoom,
 		],
 	);
 
@@ -347,7 +377,13 @@ export function PlaylistDocumentWindow({
 					setPending({ kind: "close" });
 				}}
 			>
-				<PlaylistEditorMain state={state} edit={edit} openSettings={openSettingsWindow} />
+				<PlaylistEditorMain
+					state={state}
+					edit={edit}
+					openSettings={openSettingsWindow}
+					zoom={zoom}
+					onZoomChange={setZoom}
+				/>
 			</ClassicyWindow>
 			{alert}
 			{renaming && (

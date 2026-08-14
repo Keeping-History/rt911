@@ -4,6 +4,7 @@ import {
 	layoutFlags,
 	MAX_ZOOM,
 	MIN_ZOOM,
+	normalizeZoom,
 	rulerLabels,
 	rulerTicks,
 	steppedZoom,
@@ -94,6 +95,22 @@ describe("zoom", () => {
 
 	it("snaps an off-ladder zoom to the nearest level rather than refusing to move", () => {
 		expect(steppedZoom(5, 1)).toBe(4);
+	});
+
+	it("coerces anything localStorage might hand back into a usable level", () => {
+		// The persisted value survives reloads, hand edits, and older schemas, so
+		// it can be any shape at all. A bad one must not reach `${zoom * 100}%`.
+		expect(normalizeZoom(8)).toBe(8);
+		expect(normalizeZoom(undefined)).toBe(MIN_ZOOM);
+		expect(normalizeZoom(null)).toBe(MIN_ZOOM);
+		expect(normalizeZoom("16")).toBe(MIN_ZOOM);
+		expect(normalizeZoom(Number.NaN)).toBe(MIN_ZOOM);
+		expect(normalizeZoom(Number.POSITIVE_INFINITY)).toBe(MIN_ZOOM);
+		expect(normalizeZoom(0)).toBe(MIN_ZOOM);
+		expect(normalizeZoom(-4)).toBe(MIN_ZOOM);
+		// Out of range or off-ladder still lands somewhere sensible.
+		expect(normalizeZoom(1024)).toBe(MAX_ZOOM);
+		expect(normalizeZoom(5)).toBe(4);
 	});
 
 	it("keeps on-screen tick density roughly constant as zoom grows", () => {

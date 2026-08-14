@@ -31,28 +31,35 @@ export function PlaylistTimeline({
 	entries,
 	selectedUid,
 	onSelect,
+	zoom,
+	onZoomChange,
 }: {
 	entries: EditorEntry[];
 	selectedUid: string | null;
 	onSelect: (uid: string) => void;
+	/** Controlled: the owning document window holds this in the classicy store
+	 * so the View menu can drive it and it survives closing the window. */
+	zoom: number;
+	onZoomChange: (zoom: number) => void;
 }) {
 	const [resolved, setResolved] = useState<Map<string, EditorEntry["timelineMeta"]>>(new Map());
 	const attemptedRef = useRef(new Set<string>());
-	// Annotated: ZOOM_LEVELS is `as const`, so MIN_ZOOM narrows to the literal 1
-	// and an inferred state type would reject every other level.
-	const [zoom, setZoom] = useState<number>(MIN_ZOOM);
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const anchorRef = useRef<number | null>(null);
 
 	// Zoom about the middle of what the user is currently looking at. Without
 	// this, widening the track keeps scrollLeft fixed and the view lurches
 	// towards 9 September every time you zoom in.
+	//
+	// The anchor is captured here rather than in the effect below because by
+	// then the track has already been re-laid-out at the new width, so the old
+	// scroll position no longer means what it did.
 	function changeZoom(direction: 1 | -1) {
 		const el = viewportRef.current;
 		if (el && el.scrollWidth > 0) {
 			anchorRef.current = (el.scrollLeft + el.clientWidth / 2) / el.scrollWidth;
 		}
-		setZoom((z) => steppedZoom(z, direction));
+		onZoomChange(steppedZoom(zoom, direction));
 	}
 
 	useLayoutEffect(() => {

@@ -21,6 +21,24 @@ export const ZOOM_LEVELS = [1, 2, 4, 8, 16, 32, 64] as const;
 export const MIN_ZOOM = ZOOM_LEVELS[0];
 export const MAX_ZOOM = ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
 
+/**
+ * Coerce a persisted zoom to a real ladder level.
+ *
+ * The stored value round-trips through localStorage, so it can be anything a
+ * hand-edit or a stale schema left behind — a string, NaN, 0, a level from a
+ * future ladder. Anything unusable falls back to 1× rather than propagating a
+ * bad width into `${zoom * 100}%`.
+ */
+export function normalizeZoom(value: unknown): number {
+	if (typeof value !== "number" || !Number.isFinite(value)) return MIN_ZOOM;
+	if (ZOOM_LEVELS.includes(value as (typeof ZOOM_LEVELS)[number])) return value;
+	// Off-ladder but usable: snap to the nearest level so an old stored value
+	// still lands somewhere sensible instead of resetting to fully zoomed out.
+	if (value < MIN_ZOOM) return MIN_ZOOM;
+	if (value > MAX_ZOOM) return MAX_ZOOM;
+	return ZOOM_LEVELS.reduce((a, b) => (Math.abs(b - value) < Math.abs(a - value) ? b : a));
+}
+
 /** The next level in/out, clamped at the ends so callers need no bounds check. */
 export function steppedZoom(zoom: number, direction: 1 | -1): number {
 	const i = ZOOM_LEVELS.indexOf(zoom as (typeof ZOOM_LEVELS)[number]);

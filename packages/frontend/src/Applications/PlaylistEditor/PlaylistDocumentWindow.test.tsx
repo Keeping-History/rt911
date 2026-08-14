@@ -154,9 +154,38 @@ describe("PlaylistDocumentWindow", () => {
 		expect(screen.getByTestId("win-playlist_doc_p1").dataset.title).toBe("Lesson");
 	});
 
-	it("carries File, Edit, Control, and Window menus", () => {
+	it("carries File, Edit, View, Control, and Window menus", () => {
 		renderWindow();
-		expect(menus.current.map((m) => m.id)).toEqual(["file", "edit", "control", "window"]);
+		expect(menus.current.map((m) => m.id)).toEqual([
+			"file", "edit", "view", "control", "window",
+		]);
+	});
+
+	it("drives timeline zoom from the View menu", () => {
+		// `useAppManagerDispatch` is mocked here and the real store holds no
+		// PlaylistEditor.app entry, so zoom reads 1x for the whole test. What
+		// this window owns is which action it sends; the store's response to
+		// that action is PlaylistEditorContext.test.ts's job.
+		renderWindow();
+		const item = (id: string) =>
+			menus.current.find((m) => m.id === "view")?.menuChildren?.find((c) => c.id === id);
+
+		// At 1x, Zoom Out is the disabled end and "Fit All Ten Days" is checked.
+		expect(item("playlist_view_zoom_out")?.disabled).toBe(true);
+		expect(item("playlist_view_zoom_in")?.disabled).toBe(false);
+		expect(item("playlist_view_actual_size")?.checked).toBe(true);
+
+		act(() => item("playlist_view_zoom_in")?.onClickFunc?.());
+		expect(dispatchMock).toHaveBeenLastCalledWith({
+			type: "ClassicyAppTimelineZoomSet",
+			zoom: 2,
+		});
+
+		act(() => item("playlist_view_actual_size")?.onClickFunc?.());
+		expect(dispatchMock).toHaveBeenLastCalledWith({
+			type: "ClassicyAppTimelineZoomSet",
+			zoom: 1,
+		});
 	});
 
 	// The Control menu belongs to this window, so it must act on THIS
