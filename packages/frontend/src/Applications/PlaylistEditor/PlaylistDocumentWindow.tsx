@@ -3,7 +3,7 @@ import {
 } from "classicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deletePlaylist, duplicatePlaylist, getPlaylist, updatePlaylist } from "../../Providers/Auth/playlistApi";
-import { ADD_ACTIONS, type AddAction, runAddAction } from "./addActions";
+import { ADD_ACTIONS, type AddAction, runAddAction, runAddSettings } from "./addActions";
 import {
 	addMenuItems, documentControlMenu, documentEditMenu, documentFileMenu, windowMenu,
 } from "./playlistMenus";
@@ -33,8 +33,8 @@ export function PlaylistDocumentWindow({
 }) {
 	const {
 		states, openIds, locks, lockError, openTicks, edit, setActive, closePlaylist,
-		closePlaylistWindow, openPlaylist, toggleClockLock, dismissLockError, setDialogMode,
-		refreshList,
+		closePlaylistWindow, openPlaylist, openSettingsWindow, toggleClockLock,
+		dismissLockError, setDialogMode, refreshList,
 	} = usePlaylistEditor();
 	const state = states[playlistId];
 	const windowId = `playlist_doc_${playlistId}`;
@@ -120,8 +120,10 @@ export function PlaylistDocumentWindow({
 		if (focused) setActive(playlistId);
 	}, [focused, playlistId, setActive]);
 
-	const runAdd = (action: AddAction) =>
-		runAddAction(action, { playlistId, edit, setDialogMode });
+	const addHandlers = { playlistId, edit, setDialogMode, openSettings: openSettingsWindow };
+	const runAdd = (action: AddAction) => runAddAction(action, addHandlers);
+	const runAddSettingsFor = (settingsAppId: string) =>
+		runAddSettings(settingsAppId, addHandlers);
 
 	const appMenu = useMemo<ClassicyMenuItem[]>(
 		() => {
@@ -158,7 +160,7 @@ export function PlaylistDocumentWindow({
 				documentEditMenu({
 					mode: state.mode,
 					onSetMode: (mode) => edit(playlistId, { type: "setMode", mode }),
-					addItems: addMenuItems(ADD_ACTIONS, runAdd),
+					addItems: addMenuItems(ADD_ACTIONS, runAdd, runAddSettingsFor),
 				}),
 				documentControlMenu({
 					lock: locks[playlistId] ?? { clock: false, busy: false },
@@ -166,6 +168,7 @@ export function PlaylistDocumentWindow({
 				}),
 				windowMenu({
 					onFocusTools,
+					onFocusSettings: openSettingsWindow,
 					onFocusList,
 					onFocusDocument,
 					documents: openIds.map((id) => ({ playlistId: id, title: states[id]?.title ?? "" })),
@@ -191,7 +194,7 @@ export function PlaylistDocumentWindow({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[
 			state, locks, openIds, states, playlistId, quitItem,
-			onOpenList, onFocusTools, onFocusList, onFocusDocument,
+			onOpenList, onFocusTools, onFocusList, onFocusDocument, openSettingsWindow,
 		],
 	);
 
@@ -344,7 +347,7 @@ export function PlaylistDocumentWindow({
 					setPending({ kind: "close" });
 				}}
 			>
-				<PlaylistEditorMain state={state} edit={edit} />
+				<PlaylistEditorMain state={state} edit={edit} openSettings={openSettingsWindow} />
 			</ClassicyWindow>
 			{alert}
 			{renaming && (

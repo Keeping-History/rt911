@@ -1,6 +1,16 @@
 import type { ClassicyMenuItem } from "classicy";
 import { describe, expect, it, vi } from "vitest";
-import { documentControlMenu, documentEditMenu, documentFileMenu, windowMenu } from "./playlistMenus";
+import { ADD_ACTIONS } from "./addActions";
+import {
+	addMenuItems, documentControlMenu, documentEditMenu, documentFileMenu, windowMenu,
+} from "./playlistMenus";
+
+vi.mock("./settingsRegistry", () => ({
+	listSettingsApps: () => [
+		{ appId: "TV.app", name: "TV" },
+		{ appId: "Weather.app", name: "Weather" },
+	],
+}));
 
 const child = (menu: ClassicyMenuItem, id: string): ClassicyMenuItem => {
 	const found = menu.menuChildren?.find((c) => c.id === id);
@@ -68,29 +78,67 @@ describe("documentControlMenu", () => {
 	});
 });
 
+describe("addMenuItems", () => {
+	it("renders Settings as a submenu of registered apps instead of a direct action", () => {
+		const run = vi.fn();
+		const runSettings = vi.fn();
+		const items = addMenuItems(ADD_ACTIONS, run, runSettings);
+
+		const settings = items.find((i) => i.id === "playlist_add_settings");
+		expect(settings?.onClickFunc).toBeUndefined();
+		expect(settings?.menuChildren?.map((c) => c.title)).toEqual(["TV", "Weather"]);
+
+		settings?.menuChildren?.[1].onClickFunc?.();
+		expect(runSettings).toHaveBeenCalledWith("Weather.app");
+		expect(run).not.toHaveBeenCalled();
+	});
+
+	it("keeps every other action a direct click", () => {
+		const run = vi.fn();
+		const items = addMenuItems(ADD_ACTIONS, run, vi.fn());
+
+		const jump = items.find((i) => i.id === "playlist_add_jump");
+		jump?.onClickFunc?.();
+		expect(run).toHaveBeenCalledWith(ADD_ACTIONS.find((a) => a.id === "jump"));
+	});
+});
+
 describe("windowMenu", () => {
 	it("lists every open document after the fixed items", () => {
 		const menu = windowMenu({
 			onFocusTools: vi.fn(),
+			onFocusSettings: vi.fn(),
 			onFocusList: vi.fn(),
 			onFocusDocument: vi.fn(),
 			documents: [{ playlistId: "p1", title: "Lesson One" }, { playlistId: "p2", title: "Lesson Two" }],
 		});
 
 		expect(menu.menuChildren?.map((c) => c.title)).toEqual([
-			"Tools", undefined, "My Playlists", "Lesson One", "Lesson Two",
+			"Tools", "Settings", undefined, "My Playlists", "Lesson One", "Lesson Two",
 		]);
 	});
 
 	it("focuses the document the item names", () => {
 		const onFocusDocument = vi.fn();
 		const menu = windowMenu({
-			onFocusTools: vi.fn(), onFocusList: vi.fn(), onFocusDocument,
+			onFocusTools: vi.fn(), onFocusSettings: vi.fn(), onFocusList: vi.fn(), onFocusDocument,
 			documents: [{ playlistId: "p7", title: "Lesson" }],
 		});
 
 		child(menu, "playlist_window_doc_p7").onClickFunc?.();
 
 		expect(onFocusDocument).toHaveBeenCalledWith("p7");
+	});
+
+	it("reveals the Settings window from its fixed item", () => {
+		const onFocusSettings = vi.fn();
+		const menu = windowMenu({
+			onFocusTools: vi.fn(), onFocusSettings, onFocusList: vi.fn(),
+			onFocusDocument: vi.fn(), documents: [],
+		});
+
+		child(menu, "playlist_window_settings").onClickFunc?.();
+
+		expect(onFocusSettings).toHaveBeenCalled();
 	});
 });

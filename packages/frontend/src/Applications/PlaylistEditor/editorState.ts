@@ -39,6 +39,8 @@ export type EditorAction =
 	| {
 			type: "addEntries";
 			entries: { entry: PlaylistEntry; timelineMeta?: EditorEntry["timelineMeta"] }[];
+			/** Select the last added entry, so the Settings window can edit it. */
+			select?: boolean;
 	  }
 	| { type: "updateEntry"; uid: string; entry: PlaylistEntry }
 	| { type: "removeEntry"; uid: string }
@@ -89,7 +91,16 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 				entry: e.entry,
 				timelineMeta: e.timelineMeta,
 			}));
-			return { ...state, entries: [...state.entries, ...added], nextUid: next, dirty: true };
+			return {
+				...state,
+				entries: [...state.entries, ...added],
+				nextUid: next,
+				dirty: true,
+				selectedUid:
+					action.select && added.length > 0
+						? added[added.length - 1].uid
+						: state.selectedUid,
+			};
 		}
 		case "updateEntry":
 			return {

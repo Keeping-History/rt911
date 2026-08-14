@@ -91,6 +91,7 @@ const editMock = vi.fn();
 const setDialogModeMock = vi.fn();
 const refreshListMock = vi.fn();
 const openPlaylistMock = vi.fn();
+const openSettingsWindowMock = vi.fn();
 vi.mock("./PlaylistEditorProvider", () => ({
 	usePlaylistEditor: () => ctx.current,
 }));
@@ -109,6 +110,7 @@ const renderWindow = (over: Partial<EditorState> = {}) => {
 		toggleClockLock,
 		dismissLockError: vi.fn(),
 		openPlaylist: openPlaylistMock,
+		openSettingsWindow: openSettingsWindowMock,
 		setDialogMode: setDialogModeMock,
 		dialogMode: null,
 		openTicks: {},
@@ -395,7 +397,11 @@ describe("PlaylistDocumentWindow", () => {
 		expect(editMock).toHaveBeenCalledWith("p1", {
 			type: "addEntries",
 			entries: [{ entry: { kind: "jump", at: "", to: "" } }],
+			select: true,
 		});
+		// The new entry is edited in the shared Settings window, so adding
+		// must also reveal it.
+		expect(openSettingsWindowMock).toHaveBeenCalled();
 	});
 
 	// Not reachable from PlaylistEditorProvider today — it batches `openIds`

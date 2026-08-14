@@ -73,3 +73,59 @@
 	top: 0;
 	height: 100%;
 }
+
+/* Add Settings dropdown: anchored under the palette's Settings button. */
+.playlistSettingsDropdown {
+	position: relative;
+	display: inline-block;
+}
+
+.playlistSettingsDropdownDismiss {
+	position: fixed;
+	inset: 0;
+	z-index: 900;
+}
+
+.playlistSettingsDropdownMenu {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	z-index: 901;
+	background: var(--color-system-03, #ddd);
+	border: 1px solid var(--color-system-07, #333);
+	box-shadow: 1px 1px 0 rgb(0 0 0 / 40%);
+	white-space: nowrap;
+}
+
+.playlistSettingsDropdownNav {
+	list-style: none;
+	margin: 0;
+	padding: 2px 0;
+}
+
+/* Settings window: schema-driven per-field rows. */
+.appSettingsFields {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.appSettingsField {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.appSettingsField textarea {
+	flex: 1;
+	min-height: 40px;
+	font-family: var(--mono-font, monospace);
+}
+
+button.playlistSettingsDropdownDismiss {
+	background: transparent;
+	border: none;
+	padding: 0;
+	cursor: default;
+	appearance: none;
+}

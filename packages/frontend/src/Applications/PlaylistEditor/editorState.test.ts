@@ -113,6 +113,30 @@ describe("timezone helpers", () => {
 	});
 });
 
+describe("addEntries select", () => {
+	it("selects the last added entry when asked, so the Settings window can edit it", () => {
+		const s0 = initialEditorState(record);
+		const s1 = editorReducer(s0, {
+			type: "addEntries",
+			entries: [
+				{ entry: { kind: "jump", at: "", to: "" } },
+				{ entry: { kind: "browser", url: "http://", at: "" } },
+			],
+			select: true,
+		});
+		expect(s1.selectedUid).toBe(s1.entries[s1.entries.length - 1].uid);
+	});
+
+	it("leaves the selection alone without the flag", () => {
+		const s0 = { ...initialEditorState(record), selectedUid: "e1" };
+		const s1 = editorReducer(s0, {
+			type: "addEntries",
+			entries: [{ entry: { kind: "jump", at: "", to: "" } }],
+		});
+		expect(s1.selectedUid).toBe("e1");
+	});
+});
+
 describe("selectionsToEntries", () => {
 	it("maps media meta to MediaEntry with timelineMeta", () => {
 		const out = selectionsToEntries([

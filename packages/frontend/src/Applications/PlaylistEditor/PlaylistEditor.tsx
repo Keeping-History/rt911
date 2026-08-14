@@ -13,6 +13,7 @@ import { listFileMenu, paletteFileMenu, windowMenu } from "./playlistMenus";
 import { PlaylistDocumentWindow } from "./PlaylistDocumentWindow";
 import { PlaylistEditorProvider, usePlaylistEditor } from "./PlaylistEditorProvider";
 import { PlaylistList } from "./PlaylistList";
+import { SettingsWindow } from "./SettingsWindow";
 import { ToolsPalette, TOOLS_WINDOW_ID } from "./ToolsPalette";
 import appIconPng from "./app.png";
 
@@ -32,7 +33,7 @@ function PlaylistEditorContent() {
 	const dispatch = useAppManagerDispatch();
 	const {
 		states, openIds, activeId, dialogMode, listVersion,
-		openPlaylist, edit, setDialogMode, refreshList,
+		openPlaylist, edit, setDialogMode, refreshList, openSettingsWindow,
 	} = usePlaylistEditor();
 
 	const fs = useClassicyFileSystem();
@@ -92,10 +93,10 @@ function PlaylistEditorContent() {
 	const sharedWindowMenu = useMemo(
 		() =>
 			windowMenu({
-				onFocusTools, onFocusList, onFocusDocument,
+				onFocusTools, onFocusSettings: openSettingsWindow, onFocusList, onFocusDocument,
 				documents: openIds.map((id) => ({ playlistId: id, title: states[id]?.title ?? "" })),
 			}),
-		[onFocusTools, onFocusList, onFocusDocument, openIds, states],
+		[onFocusTools, openSettingsWindow, onFocusList, onFocusDocument, openIds, states],
 	);
 
 	const listMenu = useMemo(
@@ -170,6 +171,8 @@ function PlaylistEditorContent() {
 			))}
 
 			<ToolsPalette appId={appId} icon={appIcon} appMenu={paletteMenu} />
+
+			<SettingsWindow appId={appId} icon={appIcon} appMenu={paletteMenu} />
 
 			<ClassicyFileOpenDialog
 				id="playlist_editor_open"

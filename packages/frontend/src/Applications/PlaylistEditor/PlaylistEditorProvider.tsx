@@ -11,6 +11,14 @@ export interface LockState {
 	busy: boolean;
 }
 
+/**
+ * The Settings utility window's id, owned here (not in SettingsWindow.tsx)
+ * because the provider's `openSettingsWindow` must dispatch at it and the
+ * window component already imports this module for `usePlaylistEditor` — the
+ * other direction would be a cycle.
+ */
+export const SETTINGS_WINDOW_ID = "playlist_editor_settings";
+
 export interface PlaylistEditorContextValue {
 	states: EditorStates;
 	/** Open documents, in the order they were opened; drives window cascade. */
@@ -57,6 +65,8 @@ export interface PlaylistEditorContextValue {
 	closePlaylistWindow: (playlistId: string) => void;
 	setActive: (playlistId: string) => void;
 	edit: (playlistId: string, action: EditorAction) => void;
+	/** Open-then-focus the Settings utility window (entry editing lives there). */
+	openSettingsWindow: () => void;
 	toggleClockLock: (playlistId: string) => Promise<void>;
 	dismissLockError: () => void;
 	setDialogMode: (mode: "media" | "file" | null) => void;
@@ -126,6 +136,14 @@ export function PlaylistEditorProvider({
 
 	const setActive = useCallback((playlistId: string) => setActiveId(playlistId), []);
 
+	// Open THEN focus, the same idiom as PlaylistEditor's `reveal`:
+	// ClassicyWindowFocus does not clear `closed`, so focusing alone would do
+	// nothing visible to a closed window.
+	const openSettingsWindow = useCallback(() => {
+		dispatch({ type: "ClassicyWindowOpen", app: { id: appId }, window: { id: SETTINGS_WINDOW_ID } });
+		dispatch({ type: "ClassicyWindowFocus", app: { id: appId }, window: { id: SETTINGS_WINDOW_ID } });
+	}, [dispatch, appId]);
+
 	const edit = useCallback((playlistId: string, action: EditorAction) => {
 		dispatchStates({ kind: "edit", playlistId, action });
 	}, []);
@@ -191,13 +209,13 @@ export function PlaylistEditorProvider({
 			states, openIds, activeId, locks, lockError, dialogMode, openTicks,
 			listVersion, refreshList,
 			openPlaylist, closePlaylist, closePlaylistWindow, setActive, edit,
-			toggleClockLock, dismissLockError, setDialogMode,
+			openSettingsWindow, toggleClockLock, dismissLockError, setDialogMode,
 		}),
 		[
 			states, openIds, activeId, locks, lockError, dialogMode, openTicks,
 			listVersion, refreshList,
 			openPlaylist, closePlaylist, closePlaylistWindow, setActive, edit,
-			toggleClockLock, dismissLockError,
+			openSettingsWindow, toggleClockLock, dismissLockError,
 		],
 	);
 

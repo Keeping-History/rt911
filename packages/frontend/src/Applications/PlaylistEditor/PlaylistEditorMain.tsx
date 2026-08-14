@@ -1,7 +1,6 @@
 import { ClassicyTree, type ClassicyTreeNode } from "classicy";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayWallClock } from "./editorState";
-import { EntryForm } from "./EntryForm";
 import { PlaylistTimeline } from "./PlaylistTimeline";
 
 const KIND_BRANCHES: [PlaylistEntry["kind"], string][] = [
@@ -29,18 +28,24 @@ function entrySummary(e: EditorEntry): string {
  *
  * The header (title, mode, status, Save) and the Add bar are gone: they live in
  * the File/Edit menus and the Tools palette now, so playlistEditorBody is the
- * window's first child. This component holds no state — its owning document
- * window passes the playlist's slice of the keyed store and a dispatcher.
+ * window's first child. Entry EDITING is gone too — an entry's Edit button
+ * selects it and reveals the shared Settings utility window (SettingsWindow),
+ * which renders the form for the active document's selection. This component
+ * holds no state — its owning document window passes the playlist's slice of
+ * the keyed store, a dispatcher, and the Settings-window opener.
  */
 export function PlaylistEditorMain({
 	state,
 	edit,
+	openSettings = () => {},
 }: {
 	state: EditorState;
 	edit: (playlistId: string, action: EditorAction) => void;
+	/** Reveal the Settings utility window; wired to the provider's
+	 * openSettingsWindow by PlaylistDocumentWindow. */
+	openSettings?: () => void;
 }) {
 	const dispatch = (action: EditorAction) => edit(state.playlistId, action);
-	const selected = state.entries.find((e) => e.uid === state.selectedUid) ?? null;
 
 	const nodes: ClassicyTreeNode[] = KIND_BRANCHES.map(([kind, label]) => ({
 		id: `branch-${kind}`,
@@ -52,7 +57,13 @@ export function PlaylistEditorMain({
 				id: e.uid,
 				label: entrySummary(e),
 				buttons: [
-					{ label: "Edit", onClickFunc: () => dispatch({ type: "select", uid: e.uid }) },
+					{
+						label: "Edit",
+						onClickFunc: () => {
+							dispatch({ type: "select", uid: e.uid });
+							openSettings();
+						},
+					},
 					{ label: "Remove", onClickFunc: () => dispatch({ type: "removeEntry", uid: e.uid }) },
 				],
 			})),
@@ -64,13 +75,6 @@ export function PlaylistEditorMain({
 				<div className="playlistEditorEntries">
 					<ClassicyTree nodes={nodes} />
 				</div>
-				{selected && (
-					<EntryForm
-						key={selected.uid}
-						value={selected}
-						onChange={(entry) => dispatch({ type: "updateEntry", uid: selected.uid, entry })}
-					/>
-				)}
 			</div>
 
 			<PlaylistTimeline

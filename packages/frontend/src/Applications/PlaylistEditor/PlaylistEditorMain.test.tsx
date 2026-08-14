@@ -51,33 +51,34 @@ describe("PlaylistEditorMain", () => {
 		expect(edit).toHaveBeenCalledWith("p1", { type: "removeEntry", uid: "e1" });
 	});
 
-	it("routes an entry's Edit click through the injected dispatcher as a select action", () => {
+	it("Edit selects the entry and reveals the Settings window", () => {
 		const edit = vi.fn();
+		const openSettings = vi.fn();
 		render(
 			<PlaylistEditorMain
 				state={state({
 					entries: [{ uid: "e1", entry: { kind: "browser", url: "http://example.com", at: "" } }],
 				})}
 				edit={edit}
+				openSettings={openSettings}
 			/>,
 		);
 
 		screen.getByRole("button", { name: "Edit" }).click();
 
 		expect(edit).toHaveBeenCalledWith("p1", { type: "select", uid: "e1" });
+		expect(openSettings).toHaveBeenCalled();
 	});
 
-	it("renders EntryForm for the selected entry, and renders nothing when no entry is selected", () => {
+	// Entry editing moved to the shared Settings utility window
+	// (SettingsWindow.tsx); the document body must not render a second form
+	// for the selection.
+	it("renders no inline EntryForm even when an entry is selected", () => {
 		const entries: EditorState["entries"] = [
 			{ uid: "e1", entry: { kind: "browser", url: "http://example.com", at: "" } },
 		];
 
-		const { rerender } = render(
-			<PlaylistEditorMain state={state({ entries, selectedUid: null })} edit={vi.fn()} />,
-		);
+		render(<PlaylistEditorMain state={state({ entries, selectedUid: "e1" })} edit={vi.fn()} />);
 		expect(screen.queryByLabelText("URL")).toBeNull();
-
-		rerender(<PlaylistEditorMain state={state({ entries, selectedUid: "e1" })} edit={vi.fn()} />);
-		expect(screen.getByLabelText("URL")).not.toBeNull();
 	});
 });

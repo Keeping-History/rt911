@@ -1,6 +1,7 @@
 import type { ClassicyMenuItem } from "classicy";
 import type { AddAction } from "./addActions";
 import type { LockState } from "./PlaylistEditorProvider";
+import { listSettingsApps } from "./settingsRegistry";
 
 /** `{id:"spacer"}` renders as an <hr> in classicy — the library's separator. */
 const SPACER: ClassicyMenuItem = { id: "spacer" };
@@ -98,17 +99,33 @@ export function documentEditMenu(o: {
 	};
 }
 
+/** The Add Settings app choices, shared by the Edit > Add… submenu and the
+ * palette's dropdown so the two surfaces can never disagree. */
+export function settingsAppMenuItems(
+	runSettings: (appId: string) => void,
+): ClassicyMenuItem[] {
+	return listSettingsApps().map((app) => ({
+		id: `playlist_add_settings_${app.appId}`,
+		title: app.name,
+		onClickFunc: () => runSettings(app.appId),
+	}));
+}
+
 /** Build the Edit > Add… children from the shared action list. */
 export function addMenuItems(
 	actions: AddAction[],
 	run: (action: AddAction) => void,
+	runSettings: (appId: string) => void,
 ): ClassicyMenuItem[] {
 	return actions.map((action) => ({
 		id: `playlist_add_${action.id}`,
 		title: action.menuTitle,
 		icon: action.icon,
 		balloon: { title: action.label, content: action.balloon },
-		onClickFunc: () => run(action),
+		// Settings fans out per registered app instead of running directly.
+		...(action.id === "settings"
+			? { menuChildren: settingsAppMenuItems(runSettings) }
+			: { onClickFunc: () => run(action) }),
 	}));
 }
 
@@ -149,6 +166,7 @@ export function documentControlMenu(o: {
 
 export function windowMenu(o: {
 	onFocusTools: () => void;
+	onFocusSettings: () => void;
 	onFocusList: () => void;
 	onFocusDocument: (playlistId: string) => void;
 	documents: { playlistId: string; title: string }[];
@@ -158,6 +176,7 @@ export function windowMenu(o: {
 		title: "Window",
 		menuChildren: [
 			{ id: "playlist_window_tools", title: "Tools", onClickFunc: o.onFocusTools },
+			{ id: "playlist_window_settings", title: "Settings", onClickFunc: o.onFocusSettings },
 			SPACER,
 			{ id: "playlist_window_list", title: "My Playlists", onClickFunc: o.onFocusList },
 			// Rebuilt every render from the open list — never snapshotted — so a

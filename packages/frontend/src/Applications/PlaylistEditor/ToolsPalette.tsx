@@ -3,11 +3,14 @@ import {
 	ClassicyBevelButton,
 	ClassicyButtonToolbar,
 	ClassicyButtonToolbarGroup,
+	ClassicyMenu,
 	type ClassicyMenuItem,
 	ClassicyWindow,
 } from "classicy";
-import { ADD_ACTIONS, type AddAction, runAddAction } from "./addActions";
+import { useState } from "react";
+import { ADD_ACTIONS, type AddAction, runAddAction, runAddSettings } from "./addActions";
 import { usePlaylistEditor } from "./PlaylistEditorProvider";
+import { settingsAppMenuItems } from "./playlistMenus";
 
 /**
  * The palette's window id. Exported because `PlaylistEditor` dispatches at it
@@ -52,12 +55,41 @@ export function ToolsPalette({
 	icon: string;
 	appMenu: ClassicyMenuItem[];
 }) {
-	const { activeId, edit, setDialogMode } = usePlaylistEditor();
+	const { activeId, edit, setDialogMode, openSettingsWindow } = usePlaylistEditor();
+	// Whether the Add Settings button's app dropdown is showing.
+	const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+
+	const handlers = (playlistId: string) => ({
+		playlistId,
+		edit,
+		setDialogMode,
+		openSettings: openSettingsWindow,
+	});
 
 	const run = (action: AddAction) => {
 		if (activeId === null) return;
-		runAddAction(action, { playlistId: activeId, edit, setDialogMode });
+		runAddAction(action, handlers(activeId));
 	};
+
+	const runSettings = (settingsAppId: string) => {
+		setSettingsMenuOpen(false);
+		if (activeId === null) return;
+		runAddSettings(settingsAppId, handlers(activeId));
+	};
+
+	const button = (action: AddAction) => (
+		<ClassicyBalloonHelp key={action.id} title={action.label} content={action.balloon}>
+			<ClassicyBevelButton
+				icon={action.icon}
+				iconAlt={action.label}
+				aria-label={action.label}
+				disabled={activeId === null}
+				onClickFunc={() =>
+					action.id === "settings" ? setSettingsMenuOpen((open) => !open) : run(action)
+				}
+			/>
+		</ClassicyBalloonHelp>
+	);
 
 	return (
 		<ClassicyWindow
@@ -82,20 +114,34 @@ export function ToolsPalette({
 						{group.map((id) => {
 							const action = ADD_ACTIONS.find((a) => a.id === id);
 							if (!action) return null;
+							if (action.id !== "settings") return button(action);
+							// Add Settings drops down a menu of registered apps
+							// (same items as Edit > Add… > Settings) instead of
+							// acting directly.
 							return (
-								<ClassicyBalloonHelp
-									key={action.id}
-									title={action.label}
-									content={action.balloon}
-								>
-									<ClassicyBevelButton
-										icon={action.icon}
-										iconAlt={action.label}
-										aria-label={action.label}
-										disabled={activeId === null}
-										onClickFunc={() => run(action)}
-									/>
-								</ClassicyBalloonHelp>
+								<div key={action.id} className="playlistSettingsDropdown">
+									{button(action)}
+									{settingsMenuOpen && (
+										<>
+											{/* Invisible full-screen click-away; a button so it is
+											    keyboard-dismissable, satisfying the a11y rules the
+											    bare-div version tripped. The menu sits above it. */}
+											<button
+												type="button"
+												aria-label="Close the Add Settings menu"
+												className="playlistSettingsDropdownDismiss"
+												onClick={() => setSettingsMenuOpen(false)}
+											/>
+											<div className="playlistSettingsDropdownMenu" role="presentation">
+												<ClassicyMenu
+													name="playlist_add_settings_dropdown"
+													menuItems={settingsAppMenuItems(runSettings)}
+													navClass="playlistSettingsDropdownNav"
+												/>
+											</div>
+										</>
+									)}
+								</div>
 							);
 						})}
 					</ClassicyButtonToolbarGroup>

@@ -58,7 +58,10 @@ export const ADD_ACTIONS: AddAction[] = [
 		menuTitle: "Settings",
 		icon: ClassicyIcons.system.files.preferences,
 		balloon: "Force an application's settings — for example, which TV channel it opens on.",
-		entry: { kind: "settings", appId: "TV.app", values: {} },
+		// Null like the dialog actions, but for a different reason: settings
+		// first needs an app picked. Both surfaces render it as a menu of
+		// registered apps (listSettingsApps) and call runAddSettings.
+		entry: null,
 	},
 	{
 		id: "jump",
@@ -82,18 +85,37 @@ export interface AddActionHandlers {
 	playlistId: string;
 	edit: (playlistId: string, action: EditorAction) => void;
 	setDialogMode: (mode: "media" | "file") => void;
+	/** Reveal the Settings utility window, where the new entry is edited. */
+	openSettings: () => void;
 }
 
 /** Perform one Add action against a specific playlist. */
 export function runAddAction(action: AddAction, handlers: AddActionHandlers): void {
 	if (action.entry === null) {
-		// Only media and file have a null entry, and their ids are exactly the
-		// dialog's two modes.
+		// Settings never reaches here: both surfaces render it as an app menu
+		// and call runAddSettings with the picked app instead.
+		if (action.id === "settings") return;
+		// Media and file open the file dialog — the user is picking something
+		// that already exists — and their ids are exactly the dialog's modes.
 		handlers.setDialogMode(action.id as "media" | "file");
 		return;
 	}
 	handlers.edit(handlers.playlistId, {
 		type: "addEntries",
 		entries: [{ entry: action.entry }],
+		select: true,
 	});
+	// The new entry needs immediate editing (an app rule's app, a jump's
+	// times); selecting it above is what the Settings window shows.
+	handlers.openSettings();
+}
+
+/** Add a settings entry for one registered app, picked from the Add Settings menu. */
+export function runAddSettings(appId: string, handlers: AddActionHandlers): void {
+	handlers.edit(handlers.playlistId, {
+		type: "addEntries",
+		entries: [{ entry: { kind: "settings", appId, values: {} } }],
+		select: true,
+	});
+	handlers.openSettings();
 }
