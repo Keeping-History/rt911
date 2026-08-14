@@ -206,7 +206,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 		const headers: ReactElement[] = [
 			<div
 				key="column_header_date"
-				className={epgStyles.epgHeaderTime}
+				className={epgStyles.epgHeaderDate}
 				style={{ gridColumn: "1 / span 1" }}
 			>
 				{gridStartTime.toLocaleDateString([], {
