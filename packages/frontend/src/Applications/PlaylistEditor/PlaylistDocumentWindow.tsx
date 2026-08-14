@@ -1,8 +1,12 @@
 import {
 	ClassicyAlert, type ClassicyMenuItem, ClassicyWindow, useAppManager, useAppManagerDispatch,
+	useClassicyDateTime,
 } from "classicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deletePlaylist, duplicatePlaylist, getPlaylist, updatePlaylist } from "../../Providers/Auth/playlistApi";
+import {
+	RoomCommandError, sendRoomFocus, sendRoomJump, sendRoomMessage, sendRoomReload,
+} from "../../Providers/Playlist/roomApi";
 import { ADD_ACTIONS, type AddAction, runAddAction, runAddSettings } from "./addActions";
 import {
 	addMenuItems, documentControlMenu, documentEditMenu, documentFileMenu, documentViewMenu,
@@ -13,6 +17,7 @@ import { PLAYLIST_EDITOR_APP_ID, playlistSetTimelineZoom } from "./PlaylistEdito
 import { MAX_ZOOM, MIN_ZOOM, normalizeZoom, steppedZoom } from "./timelineLayout";
 import { usePlaylistEditor } from "./PlaylistEditorProvider";
 import { RenameDialog } from "./RenameDialog";
+import { SendMessageDialog } from "./SendMessageDialog";
 import { useSavePlaylist } from "./useSavePlaylist";
 
 /** Cascade so a second window does not land exactly on the first. */
@@ -45,7 +50,41 @@ export function PlaylistDocumentWindow({
 
 	const [pending, setPending] = useState<Pending>(null);
 	const [renaming, setRenaming] = useState(false);
+	const [messaging, setMessaging] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [controlError, setControlError] = useState<string | null>(null);
+
+	// The teacher's current virtual instant, for "Sync Students to My Clock".
+	// Held in a ref because the appMenu memo below deliberately does not rebuild
+	// per clock tick — the click handler reads the ref, so the time sent is the
+	// time on the teacher's desktop at the moment of the click, not at the
+	// moment the menu was last built. `dateTime` is the canonical UTC value
+	// (frontend CLAUDE.md: state.System.Manager.DateAndTime.dateTime); tick so
+	// the ref is at 1 s resolution rather than the bare hook's minute cadence.
+	const { dateTime } = useClassicyDateTime({ tick: true });
+	const clockRef = useRef(dateTime);
+	clockRef.current = dateTime;
+
+	/**
+	 * Fire one live room command for THIS window's playlist. One at a time,
+	 * checked synchronously via a ref — the same double-fire gap
+	 * PlaylistEditorProvider's toggleClockLock closes with `inFlight` — and
+	 * failures surface in the Control error alert, mirroring Lock Clock's
+	 * accept-then-report shape (these commands hold no state to flip, so
+	 * "accept" is the whole success path).
+	 */
+	const roomCommandBusy = useRef(false);
+	const runRoomCommand = useCallback((command: () => Promise<void>) => {
+		if (roomCommandBusy.current) return;
+		roomCommandBusy.current = true;
+		command()
+			.catch((e) =>
+				setControlError(e instanceof RoomCommandError ? e.message : "Command failed."),
+			)
+			.finally(() => {
+				roomCommandBusy.current = false;
+			});
+	}, []);
 
 	// Open THEN focus, the same idiom PlaylistEditor's `reveal` uses:
 	// ClassicyWindowFocus does not clear `closed`, so focusing a window the
@@ -173,6 +212,12 @@ export function PlaylistDocumentWindow({
 					},
 					onDelete: () => setPending({ kind: "delete" }),
 					onSetStatus: (status) => edit(playlistId, { type: "setStatus", status }),
+					// Same link the list window's Copy Link produces — the
+					// anonymous student entry point (?playlist=<id>).
+					onCopyStudentLink: () =>
+						void navigator.clipboard.writeText(
+							`${location.origin}/?playlist=${playlistId}`,
+						),
 					quitItem,
 				}),
 				documentEditMenu({
@@ -190,7 +235,19 @@ export function PlaylistDocumentWindow({
 				}),
 				documentControlMenu({
 					lock: locks[playlistId] ?? { clock: false, busy: false },
+					dirty: state.dirty,
+					status: state.status,
 					onToggleClock: () => void toggleClockLock(playlistId),
+					// The ref read happens inside the click, so the jump carries
+					// the teacher's clock at click time, not menu-build time.
+					onSyncClock: () =>
+						runRoomCommand(() =>
+							sendRoomJump(playlistId, new Date(clockRef.current).toISOString()),
+						),
+					onSendMessage: () => setMessaging(true),
+					onFocusApp: (focusAppId) =>
+						runRoomCommand(() => sendRoomFocus(playlistId, focusAppId)),
+					onPushUpdate: () => runRoomCommand(() => sendRoomReload(playlistId)),
 				}),
 				windowMenu({
 					onFocusTools,
@@ -201,6 +258,10 @@ export function PlaylistDocumentWindow({
 				}),
 			];
 		},
+		// `runRoomCommand` is this component's own empty-dep useCallback (stable
+		// for its whole lifetime) and reads the clock through `clockRef` at
+		// click time, so the Control menu's live-command closures never go
+		// stale either.
 		// `edit`, `openPlaylist`, `refreshList`, and `toggleClockLock` come from
 		// PlaylistEditorProvider: `edit`/`openPlaylist`/`refreshList` are
 		// useCallbacks with an empty dep array (stable for the component's
@@ -238,6 +299,16 @@ export function PlaylistDocumentWindow({
 					title="Control" label={lockError.message}
 					buttons={[{ id: "ok", label: "OK", role: "default", onClick: dismissLockError }]}
 					onClose={dismissLockError}
+				/>
+			);
+		}
+		if (controlError) {
+			return (
+				<ClassicyAlert
+					id={`${windowId}_control_error`} appId={appId} alertType="stop"
+					title="Control" label={controlError}
+					buttons={[{ id: "ok", label: "OK", role: "default", onClick: () => setControlError(null) }]}
+					onClose={() => setControlError(null)}
 				/>
 			);
 		}
@@ -386,6 +457,18 @@ export function PlaylistDocumentWindow({
 				/>
 			</ClassicyWindow>
 			{alert}
+			{messaging && (
+				<SendMessageDialog
+					appId={appId}
+					playlistId={playlistId}
+					icon={appIcon}
+					onSend={(message) => {
+						setMessaging(false);
+						runRoomCommand(() => sendRoomMessage(playlistId, message));
+					}}
+					onCancel={() => setMessaging(false)}
+				/>
+			)}
 			{renaming && (
 				<RenameDialog
 					appId={appId}
