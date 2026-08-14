@@ -1,4 +1,4 @@
-import { ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "classicy";
+import { ClassicySplitView, ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "classicy";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayWallClock } from "./editorState";
 import { PlaylistTimeline } from "./PlaylistTimeline";
@@ -27,9 +27,9 @@ function entrySummary(e: EditorEntry): string {
  * The editing surface, and nothing else.
  *
  * The header (title, mode, status, Save) and the Add bar are gone: they live in
- * the File/Edit menus and the Tools palette now, so the timeline is the
- * window's first child, with the entries grouped by kind in a tab group below
- * it. Entry EDITING is gone too — an entry's Edit button
+ * the File/Edit menus and the Tools palette now, so a resizable vertical
+ * split view fills the window: the timeline on top, the entries grouped by
+ * kind in a tab group below. Entry EDITING is gone too — an entry's Edit button
  * selects it and reveals the shared Settings utility window (SettingsWindow),
  * which renders the form for the active document's selection. This component
  * holds no state — its owning document window passes the playlist's slice of
@@ -81,15 +81,16 @@ export function PlaylistEditorMain({
 
 	return (
 		<div className="playlistEditorMain">
-			<PlaylistTimeline
-				entries={state.entries}
-				selectedUid={state.selectedUid}
-				onSelect={(uid) => dispatch({ type: "select", uid })}
-			/>
-
-			<div className="playlistEditorEntries">
-				<ClassicyTabs tabs={tabs} />
-			</div>
+			<ClassicySplitView direction="vertical" defaultSizes={[30, 70]}>
+				<PlaylistTimeline
+					entries={state.entries}
+					selectedUid={state.selectedUid}
+					onSelect={(uid) => dispatch({ type: "select", uid })}
+				/>
+				<div className="playlistEditorEntries">
+					<ClassicyTabs tabs={tabs} />
+				</div>
+			</ClassicySplitView>
 		</div>
 	);
 }
