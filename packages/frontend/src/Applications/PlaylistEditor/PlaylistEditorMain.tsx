@@ -1,4 +1,4 @@
-import { ClassicyTree, type ClassicyTreeNode } from "classicy";
+import { ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "classicy";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayWallClock } from "./editorState";
 import { PlaylistTimeline } from "./PlaylistTimeline";
@@ -27,8 +27,9 @@ function entrySummary(e: EditorEntry): string {
  * The editing surface, and nothing else.
  *
  * The header (title, mode, status, Save) and the Add bar are gone: they live in
- * the File/Edit menus and the Tools palette now, so playlistEditorBody is the
- * window's first child. Entry EDITING is gone too — an entry's Edit button
+ * the File/Edit menus and the Tools palette now, so the timeline is the
+ * window's first child, with the entries grouped by kind in a tab group below
+ * it. Entry EDITING is gone too — an entry's Edit button
  * selects it and reveals the shared Settings utility window (SettingsWindow),
  * which renders the form for the active document's selection. This component
  * holds no state — its owning document window passes the playlist's slice of
@@ -47,11 +48,11 @@ export function PlaylistEditorMain({
 }) {
 	const dispatch = (action: EditorAction) => edit(state.playlistId, action);
 
-	const nodes: ClassicyTreeNode[] = KIND_BRANCHES.map(([kind, label]) => ({
-		id: `branch-${kind}`,
-		label,
-		defaultOpen: true,
-		children: state.entries
+	// One tab per entry kind, always all six: stable tab positions beat the old
+	// tree's hide-empty-branches behavior. Rows keep the ClassicyTree chrome
+	// (flat, branchless nodes) so Edit/Remove render the same as before.
+	const tabs = KIND_BRANCHES.map(([kind, label]) => {
+		const nodes: ClassicyTreeNode[] = state.entries
 			.filter((e) => e.entry.kind === kind)
 			.map((e) => ({
 				id: e.uid,
@@ -66,22 +67,29 @@ export function PlaylistEditorMain({
 					},
 					{ label: "Remove", onClickFunc: () => dispatch({ type: "removeEntry", uid: e.uid }) },
 				],
-			})),
-	})).filter((b) => (b.children?.length ?? 0) > 0);
+			}));
+		return {
+			title: label,
+			children:
+				nodes.length > 0 ? (
+					<ClassicyTree nodes={nodes} />
+				) : (
+					<p className="playlistEditorTabEmpty">No {label.toLowerCase()} entries yet.</p>
+				),
+		};
+	});
 
 	return (
 		<div className="playlistEditorMain">
-			<div className="playlistEditorBody">
-				<div className="playlistEditorEntries">
-					<ClassicyTree nodes={nodes} />
-				</div>
-			</div>
-
 			<PlaylistTimeline
 				entries={state.entries}
 				selectedUid={state.selectedUid}
 				onSelect={(uid) => dispatch({ type: "select", uid })}
 			/>
+
+			<div className="playlistEditorEntries">
+				<ClassicyTabs tabs={tabs} />
+			</div>
 		</div>
 	);
 }

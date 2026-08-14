@@ -1,9 +1,14 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EditorState } from "./editorState";
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
 
 afterEach(cleanup);
+
+// Entries are grouped under Classicy tabs; inactive panels render `hidden`, so
+// their controls are out of the accessibility tree until the tab is selected.
+// ClassicyTabs commits the active tab on mouseUp (not click).
+const selectTab = (name: string) => fireEvent.mouseUp(screen.getByRole("tab", { name }));
 
 const state = (over: Partial<EditorState> = {}): EditorState => ({
 	playlistId: "p1", title: "Lesson", mode: "annotate", status: "draft",
@@ -12,7 +17,7 @@ const state = (over: Partial<EditorState> = {}): EditorState => ({
 
 describe("PlaylistEditorMain", () => {
 	// The header and add bar moved to the menu bar and the Tools palette; the
-	// body must not reintroduce chrome above the entry tree.
+	// body must not reintroduce chrome above the timeline and entry tabs.
 	it("renders no title field, mode radios, status picker, or Add buttons", () => {
 		render(<PlaylistEditorMain state={state()} edit={vi.fn()} />);
 
@@ -23,7 +28,7 @@ describe("PlaylistEditorMain", () => {
 		expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
 	});
 
-	it("lists entries grouped by kind", () => {
+	it("renders one tab per entry kind and lists entries under their kind's tab", () => {
 		render(
 			<PlaylistEditorMain
 				state={state({
@@ -33,8 +38,17 @@ describe("PlaylistEditorMain", () => {
 			/>,
 		);
 
-		expect(screen.getByText("Browser")).not.toBeNull();
+		expect(screen.getAllByRole("tab").map((t) => t.textContent))
+			.toEqual(["Media", "Apps", "Settings", "Files", "Jumps", "Browser"]);
+
+		selectTab("Browser");
 		expect(screen.getByText(/example\.com/)).not.toBeNull();
+	});
+
+	it("shows an empty hint on a kind with no entries", () => {
+		render(<PlaylistEditorMain state={state()} edit={vi.fn()} />);
+		// Media is the initially active tab; with no entries its panel is a hint.
+		expect(screen.getByText(/No media entries yet/i)).not.toBeNull();
 	});
 
 	it("routes an entry removal through the injected dispatcher", async () => {
@@ -46,6 +60,7 @@ describe("PlaylistEditorMain", () => {
 			/>,
 		);
 
+		selectTab("Jumps");
 		screen.getByRole("button", { name: "Remove" }).click();
 
 		expect(edit).toHaveBeenCalledWith("p1", { type: "removeEntry", uid: "e1" });
@@ -64,6 +79,7 @@ describe("PlaylistEditorMain", () => {
 			/>,
 		);
 
+		selectTab("Browser");
 		screen.getByRole("button", { name: "Edit" }).click();
 
 		expect(edit).toHaveBeenCalledWith("p1", { type: "select", uid: "e1" });
