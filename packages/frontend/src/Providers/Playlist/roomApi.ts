@@ -68,3 +68,37 @@ export async function sendRoomReload(
 ): Promise<void> {
 	await postRoomCommand({ room, action: "reload" }, fetchFn);
 }
+
+/**
+ * Move every student's virtual clock to `timeIso` (a UTC RFC3339 instant) —
+ * the teacher's "Sync Students to My Clock". Students route it through the
+ * sanctioned clock seam, so forced clock mode still outranks it client-side.
+ */
+export async function sendRoomJump(
+	room: string,
+	timeIso: string,
+	fetchFn: typeof fetch = fetch,
+): Promise<void> {
+	await postRoomCommand({ room, action: "jump", time: timeIso }, fetchFn);
+}
+
+/**
+ * Bring one desktop app to the front on every student's desktop. `app` is a
+ * Classicy app id (e.g. "TV.app").
+ */
+export async function sendRoomFocus(
+	room: string,
+	app: string,
+	fetchFn: typeof fetch = fetch,
+): Promise<void> {
+	await postRoomCommand({ room, action: "focus", app }, fetchFn);
+}
+
+/** Show a short note on every student's desktop. */
+export async function sendRoomMessage(
+	room: string,
+	message: string,
+	fetchFn: typeof fetch = fetch,
+): Promise<void> {
+	await postRoomCommand({ room, action: "message", message }, fetchFn);
+}

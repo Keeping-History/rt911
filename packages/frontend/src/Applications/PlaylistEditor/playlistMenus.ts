@@ -15,8 +15,18 @@ export interface DocumentFileMenuOptions {
 	onDuplicate: () => void;
 	onDelete: () => void;
 	onSetStatus: (status: "draft" | "published") => void;
+	onCopyStudentLink: () => void;
 	quitItem: ClassicyMenuItem;
 }
+
+export const COPY_LINK_BALLOONS = {
+	published:
+		"Copies the address students use to join this playlist. Anyone with the " +
+		"link can follow along — no sign-in needed.",
+	draft:
+		"Drafts aren't joinable. Set Status to Published (and Save) before " +
+		"sharing a link with students.",
+} as const;
 
 export function documentFileMenu(o: DocumentFileMenuOptions): ClassicyMenuItem {
 	return {
@@ -54,6 +64,19 @@ export function documentFileMenu(o: DocumentFileMenuOptions): ClassicyMenuItem {
 						onClickFunc: () => o.onSetStatus("published"),
 					},
 				],
+			},
+			// Disabled-with-a-reason rather than hidden: a teacher looking for the
+			// share affordance should find it, and the balloon says why a draft
+			// can't be shared yet (loadPlaylist refuses unpublished playlists).
+			{
+				id: "playlist_file_copy_link",
+				title: "Copy Student Link",
+				disabled: o.status !== "published",
+				balloon: {
+					title: "Copy Student Link",
+					content: COPY_LINK_BALLOONS[o.status],
+				},
+				onClickFunc: o.onCopyStudentLink,
 			},
 			SPACER,
 			{ id: "playlist_file_delete", title: "Delete…", onClickFunc: o.onDelete },
@@ -178,15 +201,73 @@ export const CLOCK_LOCK_BALLOON =
 	"Students following this playlist cannot change the time until you unlock the clock.";
 export const CONTENTS_LOCK_BALLOON =
 	"Not yet available. This will stop students from switching channels or stations on their own.";
+export const SYNC_CLOCK_BALLOON =
+	"Moves every student's clock to the time on your desktop right now. " +
+	"One move — their clocks keep running on their own afterwards unless the clock is locked.";
+export const SEND_MESSAGE_BALLOON =
+	"Shows a short note on every student's desktop.";
+export const FOCUS_APP_BALLOON =
+	"Opens the chosen app and brings it to the front on every student's desktop.";
+export const PUSH_UPDATE_BALLOONS = {
+	ready:
+		"Students re-load this playlist's latest saved version without leaving " +
+		"the class. Use it after saving a mid-class edit.",
+	dirty: "Save first — students can only receive what has been saved.",
+	draft: "Only a published playlist can be followed by students.",
+} as const;
+
+/** The four playlist-app focus targets, in the order the submenu lists them.
+ * Ids/names mirror Providers/Playlist/playlistApps.ts (PLAYLIST_APP_IDS /
+ * APP_NAMES) — the same ids RoomControlBridge resolves on the student side. */
+export const FOCUS_APPS: { appId: string; name: string }[] = [
+	{ appId: "TV.app", name: "TV" },
+	{ appId: "RadioScanner.app", name: "Radio Scanner" },
+	{ appId: "News.app", name: "News" },
+	{ appId: "FlightTracker.app", name: "Flight Tracker" },
+];
 
 export function documentControlMenu(o: {
 	lock: LockState;
+	dirty: boolean;
+	status: "draft" | "published";
 	onToggleClock: () => void;
+	onSyncClock: () => void;
+	onSendMessage: () => void;
+	onFocusApp: (appId: string) => void;
+	onPushUpdate: () => void;
 }): ClassicyMenuItem {
+	// Push needs the students to be able to fetch what they're told to fetch:
+	// unsaved edits aren't on the server, and a draft is refused by the
+	// anonymous student loader. Dirty is the more actionable reason, so it wins
+	// the balloon when both apply.
+	const pushBlocked = o.dirty ? "dirty" : o.status !== "published" ? "draft" : null;
 	return {
 		id: "control",
 		title: "Control",
 		menuChildren: [
+			{
+				id: "playlist_control_sync",
+				title: "Sync Students to My Clock",
+				balloon: { title: "Sync Students to My Clock", content: SYNC_CLOCK_BALLOON },
+				onClickFunc: o.onSyncClock,
+			},
+			{
+				id: "playlist_control_focus",
+				title: "Bring App to Front",
+				balloon: { title: "Bring App to Front", content: FOCUS_APP_BALLOON },
+				menuChildren: FOCUS_APPS.map((app) => ({
+					id: `playlist_control_focus_${app.appId}`,
+					title: app.name,
+					onClickFunc: () => o.onFocusApp(app.appId),
+				})),
+			},
+			{
+				id: "playlist_control_message",
+				title: "Send Message…",
+				balloon: { title: "Send Message…", content: SEND_MESSAGE_BALLOON },
+				onClickFunc: o.onSendMessage,
+			},
+			SPACER,
 			{
 				id: "playlist_control_clock",
 				title: "Lock Clock",
@@ -204,6 +285,17 @@ export function documentControlMenu(o: {
 				checked: false,
 				disabled: true,
 				balloon: { title: "Lock Contents", content: CONTENTS_LOCK_BALLOON },
+			},
+			SPACER,
+			{
+				id: "playlist_control_push",
+				title: "Push Update to Class",
+				disabled: pushBlocked !== null,
+				balloon: {
+					title: "Push Update to Class",
+					content: PUSH_UPDATE_BALLOONS[pushBlocked ?? "ready"],
+				},
+				onClickFunc: o.onPushUpdate,
 			},
 		],
 	};
