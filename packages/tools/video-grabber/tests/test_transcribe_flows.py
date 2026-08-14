@@ -315,6 +315,26 @@ def test_subtitle_base_key_leaves_tv_alone():
     assert flows.subtitle_base_key("tv", "TCN_test", cfg) == "subtitles/programs/TCN_test"
 
 
+def test_read_whisper_text_tolerates_non_utf8_bytes(tmp_path):
+    """whisper.cpp writes raw decoder output and does not guarantee UTF-8.
+
+    A single 0xb5 byte mid-file failed a NORAD job outright under the default
+    strict decode, losing 6+ hours of transcription. One mojibake character beats
+    no transcript.
+    """
+    p = tmp_path / "out.srt"
+    p.write_bytes(b"1\n00:00:01,000 --> 00:00:02,000\nBravo \xb5 112\n")
+    text = flows.read_whisper_text(p)
+    assert "Bravo" in text and "112" in text
+    assert len(flows.parse_srt(text)) == 1
+
+
+def test_read_whisper_text_is_unchanged_for_clean_utf8(tmp_path):
+    p = tmp_path / "out.srt"
+    p.write_text("1\n00:00:01,000 --> 00:00:02,000\nAmerican 77\n")
+    assert flows.read_whisper_text(p) == p.read_text()
+
+
 def _mp3_job(job_id):
     return SimpleNamespace(
         id=job_id, kind="mp3",
