@@ -137,6 +137,29 @@ def probe_duration_seconds(path: Path) -> float:
     return float(r.stdout.strip())
 
 
+def slice_wav(src: Path, dest: Path, offset_ms: int, length_ms: int) -> Path:
+    """Cut one window out of a WAV as its own file.
+
+    Whisper is given the segment rather than the whole recording with -ot/-d,
+    because --vad scans the ENTIRE input regardless of the duration flag. On a
+    1-hour file that is ~11 s of wasted VAD per window; on the 6.75-hour NORAD
+    tapes it is ~74 s per window across ~41 windows, which is most of the
+    runtime. Measured on a 1-hour file: 49.8 s via -d, 38 s pre-split including
+    the cut.
+
+    -c copy on PCM is a byte-range cut, so this costs almost nothing.
+    """
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-y",
+         "-ss", f"{offset_ms / 1000:.3f}", "-t", f"{length_ms / 1000:.3f}",
+         "-i", str(src), "-c", "copy", str(dest)],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(f"ffmpeg could not slice {src} at {offset_ms}ms: {r.stderr[-400:]}")
+    return dest
+
+
 def transcribe_windows(wav: Path, scratch: Path, cfg, duration_s: float) -> list[Cue]:
     """Transcribe a recording as a sequence of bounded windows, merged onto one
     timeline.
@@ -154,9 +177,13 @@ def transcribe_windows(wav: Path, scratch: Path, cfg, duration_s: float) -> list
         windows(duration_s, cfg.chunk_seconds, cfg.chunk_overlap_seconds)
     ):
         base = scratch / f"w{i:04d}"
-        srt_path = transcribe_wav(wav, base, cfg, offset_ms=offset_ms,
-                                  duration_ms=length_ms, vad=True)
-        blocks.append(shift(parse_srt(srt_path.read_text()), offset_ms / 1000.0))
+        segment = scratch / f"w{i:04d}.wav"
+        slice_wav(wav, segment, offset_ms, length_ms)
+        try:
+            srt_path = transcribe_wav(segment, base, cfg, vad=True)
+            blocks.append(shift(parse_srt(srt_path.read_text()), offset_ms / 1000.0))
+        finally:
+            segment.unlink(missing_ok=True)
     return merge(blocks)
 
 
