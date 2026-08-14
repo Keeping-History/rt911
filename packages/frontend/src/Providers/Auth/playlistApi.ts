@@ -52,9 +52,12 @@ const LIST_FIELDS = "id,title,status,date_updated,user_created";
 
 // Directus's Redis response cache (CACHE_TTL=10m, no auto-purge) will happily
 // serve a pre-save body to these reads — a freshly created playlist stayed off
-// the list for 10 minutes. `Cache-Control: no-store` (CORS-safelisted, so no
-// preflight) makes Directus skip its cache for this request; the server only
-// honors it because the infra repo sets CACHE_SKIP_ALLOWED=true.
+// the list for 10 minutes. `Cache-Control: no-store` makes Directus skip its
+// cache for this request; the server only honors it because the infra repo
+// sets CACHE_SKIP_ALLOWED=true. Cache-Control is NOT a CORS-safelisted request
+// header (that list is response-side only), so it rides a preflight — the
+// api-cors-credentialed middleware in the infra repo must keep it allowlisted
+// or these reads fail outright.
 const FRESH_READ = { "Cache-Control": "no-store" };
 
 export async function listMine(

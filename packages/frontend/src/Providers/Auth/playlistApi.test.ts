@@ -33,7 +33,8 @@ describe("listMine", () => {
 			);
 			expect((args[1] as RequestInit).credentials).toBe("include");
 			// Skips Directus's response cache so a just-saved playlist lists
-			// immediately (server honors this via CACHE_SKIP_ALLOWED).
+			// immediately (server honors this via CACHE_SKIP_ALLOWED; the
+			// credentialed CORS middleware must allowlist Cache-Control).
 			expect((args[1] as RequestInit).headers).toMatchObject({ "Cache-Control": "no-store" });
 			return jsonResponse({ data: rows });
 		});
