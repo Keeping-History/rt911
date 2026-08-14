@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -103,6 +104,13 @@ def flow_env(monkeypatch, tmp_path):
     # The wav is never written, so ffprobe cannot read it; the chunking maths is
     # covered by test_transcribe_chunking.py and test_transcribe_windows_*.
     monkeypatch.setattr(flows, "probe_duration_seconds", lambda p: 12.0)
+    # Same reason: there is no real wav on disk for ffmpeg to cut a window from.
+    def _fake_slice(src, dest, off, length):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"")
+        return dest
+
+    monkeypatch.setattr(flows, "slice_wav", _fake_slice)
     monkeypatch.setattr(
         flows, "wasabi",
         SimpleNamespace(upload_text=lambda text, key, cfg: None, list_keys=lambda *a: []),
@@ -219,23 +227,57 @@ def test_scan_transcribe_never_enqueues_enhanced_audio(monkeypatch):
 
 
 def test_transcribe_windows_shifts_each_window_onto_the_file_timeline(monkeypatch, tmp_path):
-    calls = []
+    slices, calls = [], []
+
+    def fake_slice(src, dest, offset_ms, length_ms):
+        slices.append((offset_ms, length_ms))
+        dest.write_bytes(b"")
+        return dest
 
     def fake(wav, out_base, cfg, *, offset_ms=0, duration_ms=0, vad=False, runner=None):
-        calls.append((offset_ms, vad))
+        # Whisper must see the SEGMENT, never the full recording with -ot/-d:
+        # --vad rescans the whole input regardless of the duration flag.
+        calls.append((Path(wav).name, offset_ms, duration_ms, vad))
         out_base.parent.mkdir(parents=True, exist_ok=True)
         srt = out_base.with_suffix(".srt")
         srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nword\n")
         return srt
 
+    monkeypatch.setattr(flows, "slice_wav", fake_slice)
     monkeypatch.setattr(flows, "transcribe_wav", fake)
     cfg = SimpleNamespace(chunk_seconds=600, chunk_overlap_seconds=0)
     cues = flows.transcribe_windows(tmp_path / "a.wav", tmp_path, cfg, duration_s=1200.0)
-    assert [c[0] for c in calls] == [0, 600000]
+
+    assert slices == [(0, 600000), (600000, 600000)]
+    assert [c[0] for c in calls] == ["w0000.wav", "w0001.wav"]
+    # No offset/duration flags: the segment IS the window.
+    assert all(off == 0 and dur == 0 for _, off, dur, _ in calls)
     # VAD must be on for every window -- it is the whole point of the change.
-    assert all(vad for _, vad in calls)
+    assert all(vad for *_, vad in calls)
     # the second window's 1s cue lands at 601s on the file timeline
     assert any(abs(c.start - 601.0) < 0.01 for c in cues)
+
+
+def test_transcribe_windows_deletes_each_segment_after_use(monkeypatch, tmp_path):
+    """A 6.75h tape is ~41 windows; keeping them would add ~780 MB of scratch."""
+    seen = []
+
+    def fake_slice(src, dest, offset_ms, length_ms):
+        dest.write_bytes(b"x")
+        seen.append(dest)
+        return dest
+
+    def fake(wav, out_base, cfg, **kw):
+        out_base.parent.mkdir(parents=True, exist_ok=True)
+        srt = out_base.with_suffix(".srt")
+        srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nword\n")
+        return srt
+
+    monkeypatch.setattr(flows, "slice_wav", fake_slice)
+    monkeypatch.setattr(flows, "transcribe_wav", fake)
+    cfg = SimpleNamespace(chunk_seconds=600, chunk_overlap_seconds=0)
+    flows.transcribe_windows(tmp_path / "a.wav", tmp_path, cfg, duration_s=1200.0)
+    assert seen and not any(p.exists() for p in seen)
 
 
 def test_existing_srt_key_prefers_the_mirrored_path():
