@@ -110,7 +110,7 @@ interface WsAlertsMessage {
 // so it arrives regardless of which replica this client's socket landed on.
 interface WsRoomCommandMessage {
 	type: "room_command";
-	action: "jump" | "focus" | "message" | "lock";
+	action: "jump" | "focus" | "message" | "lock" | "reload";
 	time?: string;
 	app?: string;
 	message?: string;

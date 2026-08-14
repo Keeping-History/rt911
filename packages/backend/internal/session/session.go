@@ -525,10 +525,22 @@ func (s *Session) PushAlert(item model.AlertItem) {
 // JoinRoom puts this session in a teacher-controlled room, replacing any
 // previous membership. The room id is the playlist the student is following;
 // it is opaque here (see model.RoomCommand). An empty id leaves the room.
+//
+// Joining replays the room's last-known control state (see Hub.RoomState) as
+// ordinary room_command frames, so a student who connects — or reconnects —
+// after the teacher jumped, locked, or pushed a definition update still
+// converges with the class. The client applies commands idempotently, so a
+// re-join that replays state it already holds is harmless.
 func (s *Session) JoinRoom(room string) {
 	s.mu.Lock()
 	s.room = room
 	s.mu.Unlock()
+	if room == "" || s.hub == nil {
+		return
+	}
+	for _, cmd := range s.hub.RoomState(room) {
+		s.SendRoomCommand(cmd)
+	}
 }
 
 // LeaveRoom drops this session's room membership.
@@ -560,6 +572,9 @@ func (s *Session) SendRoomCommand(cmd model.RoomCommand) {
 		out.Target = cmd.Target
 		on := cmd.On
 		out.On = &on
+	case model.RoomActionReload:
+		// No payload: the client re-fetches the published definition from
+		// Directus itself — the definition never rides this wire.
 	}
 	s.send_(out)
 }

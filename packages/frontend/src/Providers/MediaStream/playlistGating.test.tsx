@@ -94,6 +94,7 @@ const blockValue = (blockApp: PlaylistApp, blockId: string): PlaylistContextValu
 	active: true,
 	title: "T",
 	isItemAvailable: (app, itemId) => !(app === blockApp && itemId === blockId),
+	reloadDefinition: () => {},
 });
 
 const FLIGHTS_FRAME = {

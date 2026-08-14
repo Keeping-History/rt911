@@ -130,6 +130,15 @@ func TestBuildRoomCommandAcceptsValidPayloads(t *testing.T) {
 	if err != nil || msg.Message != "Look at channel 4" {
 		t.Fatalf("message: %+v err=%v", msg, err)
 	}
+	// Reload deliberately has no payload to validate: the definition is
+	// re-fetched from Directus by each client, never relayed through here.
+	reload, err := buildRoomCommand(roomRequest{Room: "42", Action: "reload"})
+	if err != nil || reload.Action != "reload" {
+		t.Fatalf("reload: %+v err=%v", reload, err)
+	}
+	if !model.ValidRoomAction("reload") {
+		t.Fatal("reload must be a relayable action")
+	}
 }
 
 // The authorisation rule lives in one SQL predicate, so assert its shape here:

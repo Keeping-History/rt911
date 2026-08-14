@@ -5,6 +5,7 @@ import type { RoomCommand } from "../MediaStream/MediaStreamContext";
 const hooks = vi.hoisted(() => ({
 	setDateTime: undefined as unknown as ReturnType<typeof vi.fn>,
 	dispatch: undefined as unknown as ReturnType<typeof vi.fn>,
+	reload: undefined as unknown as ReturnType<typeof vi.fn>,
 	locked: false,
 }));
 
@@ -30,6 +31,7 @@ vi.mock("classicy", () => ({
 }));
 
 import { MediaStreamContext } from "../MediaStream/MediaStreamContext";
+import { PlaylistContext, type PlaylistContextValue } from "./PlaylistContext";
 import { RoomControlBridge } from "./RoomControlBridge";
 
 afterEach(() => {
@@ -40,21 +42,27 @@ afterEach(() => {
 function mount(roomCommand: RoomCommand | null, locked = false) {
 	hooks.setDateTime = vi.fn();
 	hooks.dispatch = vi.fn();
+	hooks.reload = vi.fn();
 	hooks.locked = locked;
-	const value = { roomCommand } as unknown as React.ContextType<typeof MediaStreamContext>;
-	const view = render(
-		<MediaStreamContext.Provider value={value}>
-			<RoomControlBridge />
-		</MediaStreamContext.Provider>,
-	);
-	return (next: RoomCommand | null) =>
-		view.rerender(
+	// The bridge reads reloadDefinition from the playlist context, exactly as it
+	// does mounted under PlaylistProvider in the real desktop tree.
+	const playlist: PlaylistContextValue = {
+		active: true,
+		title: null,
+		isItemAvailable: () => true,
+		reloadDefinition: hooks.reload as unknown as () => void,
+	};
+	const wrap = (cmd: RoomCommand | null) => (
+		<PlaylistContext.Provider value={playlist}>
 			<MediaStreamContext.Provider
-				value={{ roomCommand: next } as unknown as React.ContextType<typeof MediaStreamContext>}
+				value={{ roomCommand: cmd } as unknown as React.ContextType<typeof MediaStreamContext>}
 			>
 				<RoomControlBridge />
-			</MediaStreamContext.Provider>,
-		);
+			</MediaStreamContext.Provider>
+		</PlaylistContext.Provider>
+	);
+	const view = render(wrap(roomCommand));
+	return (next: RoomCommand | null) => view.rerender(wrap(next));
 }
 
 describe("RoomControlBridge", () => {
@@ -135,5 +143,30 @@ describe("RoomControlBridge lock", () => {
 	it("ignores a target it cannot act on", () => {
 		mount({ action: "lock", target: "content", on: true, seq: 1 } as never);
 		expect(hooks.dispatch).not.toHaveBeenCalled();
+	});
+});
+
+describe("RoomControlBridge reload", () => {
+	it("re-fetches the definition through the playlist context", () => {
+		mount({ action: "reload", seq: 1 });
+		expect(hooks.reload).toHaveBeenCalledTimes(1);
+	});
+
+	// A definition refresh and the room lock are independent surfaces — a
+	// reload that unlocked the clock would free a classroom the teacher locked.
+	it("leaves room lock state alone", () => {
+		mount({ action: "reload", seq: 1 });
+		expect(hooks.dispatch).not.toHaveBeenCalled();
+		expect(hooks.setDateTime).not.toHaveBeenCalled();
+	});
+
+	// Replay-on-join arrives as an ordinary frame with a fresh seq; a teacher
+	// may also push twice. Both must re-apply.
+	it("re-applies when seq advances, and only then", () => {
+		const rerender = mount({ action: "reload", seq: 1 });
+		rerender({ action: "reload", seq: 1 });
+		expect(hooks.reload).toHaveBeenCalledTimes(1);
+		rerender({ action: "reload", seq: 2 });
+		expect(hooks.reload).toHaveBeenCalledTimes(2);
 	});
 });

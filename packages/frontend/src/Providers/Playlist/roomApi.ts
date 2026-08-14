@@ -20,17 +20,10 @@ const REASONS: Record<number, string> = {
 	429: "Too many commands — wait a moment.",
 };
 
-/**
- * Lock or unlock one control surface for everyone following `room`.
- *
- * `on` is absolute, never "flip it": the streamer holds no lock state, so the
- * caller owns the toggle and sends the value it wants.
- */
-export async function sendRoomLock(
-	room: string,
-	target: RoomLockTarget,
-	on: boolean,
-	fetchFn: typeof fetch = fetch,
+/** Shared POST /room shape: every command differs only in its body. */
+async function postRoomCommand(
+	body: Record<string, unknown>,
+	fetchFn: typeof fetch,
 ): Promise<void> {
 	let res: Response;
 	try {
@@ -38,7 +31,7 @@ export async function sendRoomLock(
 			method: "POST",
 			credentials: "include",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ room, action: "lock", target, on }),
+			body: JSON.stringify(body),
 		});
 	} catch {
 		throw new RoomCommandError("Could not reach the server.");
@@ -46,4 +39,32 @@ export async function sendRoomLock(
 	if (!res.ok) {
 		throw new RoomCommandError(REASONS[res.status] ?? `Command failed (${res.status}).`);
 	}
+}
+
+/**
+ * Lock or unlock one control surface for everyone following `room`.
+ *
+ * `on` is absolute, never "flip it": the caller owns the toggle and sends the
+ * value it wants. (The streamer remembers the last lock per room only to
+ * replay it to late joiners — there is no read-back a toggle could consult.)
+ */
+export async function sendRoomLock(
+	room: string,
+	target: RoomLockTarget,
+	on: boolean,
+	fetchFn: typeof fetch = fetch,
+): Promise<void> {
+	await postRoomCommand({ room, action: "lock", target, on }, fetchFn);
+}
+
+/**
+ * Tell everyone following `room` to re-fetch the published playlist definition
+ * and re-evaluate it — the teacher's "Push Update to Class". The definition
+ * never rides the wire; students re-read it from Directus themselves.
+ */
+export async function sendRoomReload(
+	room: string,
+	fetchFn: typeof fetch = fetch,
+): Promise<void> {
+	await postRoomCommand({ room, action: "reload" }, fetchFn);
 }

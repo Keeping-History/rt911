@@ -240,13 +240,56 @@ export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 		}
 	}, [definition, snapshot, apps, dispatch]);
 
+	/**
+	 * The student end of a teacher's "Push Update to Class" (`reload` room
+	 * command, applied by RoomControlBridge): re-fetch the published definition
+	 * and swap it in live.
+	 *
+	 * The swap is treated as a fresh activation — `prevMsRef` resets so the
+	 * next tick fires the new definition's in-window focus entries (exactly
+	 * what a student joining fresh would get from `initialFocusEvents`), and
+	 * `settingsSeededRef` resets so newly pushed settings entries seed instead
+	 * of silently doing nothing. `evaluate()` is a pure function of
+	 * (definition, clock), so every state effect above reconciles on its own.
+	 * Room lock state (`dateTimeLocked`) is deliberately untouched: a
+	 * definition refresh must not unlock a locked classroom.
+	 *
+	 * Fails open the QUIET way: mid-lesson, a flaky re-fetch keeps the current
+	 * definition rather than tearing the lesson down with an error dialog —
+	 * unlike the initial load, the student already has a working playlist.
+	 * Serialized via `reloadInFlightRef`: loadPlaylist must never run
+	 * concurrently with itself (parallel same-path api-beta fetches can return
+	 * mixed bodies — see loadPlaylist.ts), and a burst of reload commands
+	 * collapses into one fetch of the same final definition anyway.
+	 */
+	const reloadInFlightRef = useRef(false);
+	const reloadDefinition = useCallback(() => {
+		const id = playlistIdFromSearch(window.location.search);
+		if (!id || reloadInFlightRef.current) return;
+		reloadInFlightRef.current = true;
+		loadPlaylist(id)
+			.then((loaded) => {
+				prevMsRef.current = null;
+				settingsSeededRef.current = false;
+				setDefinition(loaded.definition);
+				setTitle(loaded.title);
+			})
+			.catch((err) => {
+				console.warn("playlist reload failed:", err);
+			})
+			.finally(() => {
+				reloadInFlightRef.current = false;
+			});
+	}, []);
+
 	const value = useMemo<PlaylistContextValue>(
 		() => ({
 			active: definition !== null,
 			title,
 			isItemAvailable: snapshot.isItemAvailable,
+			reloadDefinition,
 		}),
-		[definition, title, snapshot],
+		[definition, title, snapshot, reloadDefinition],
 	);
 
 	return <PlaylistContext.Provider value={value}>{children}</PlaylistContext.Provider>;
