@@ -21,6 +21,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { CHANNEL_LOGOS, EPG_ICONS } from "./epgIcons";
 import { tvTuneChannel } from "./TVContext";
 import epgStyles from "./TVEPGPanel.module.scss";
 import styles from "./TV.module.scss";
@@ -190,7 +191,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 								<img
 									key={channel.name + Date.parse(gridItem.start) + Date.parse(gridItem.end) + icon}
 									className={epgStyles.epgEntryIcon}
-									src={ClassicyIcons.applications.epg[icon] as string}
+									src={EPG_ICONS[icon]}
 									alt={icon}
 								/>
 							))}
@@ -244,7 +245,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 			>
 				<img
 					className={epgStyles.epgChannelIcon}
-					src={ClassicyIcons.applications.epg.channels[channel.icon] as string}
+					src={CHANNEL_LOGOS[channel.icon]}
 					alt={`${channel.number} ${channel.callSign} - ${channel.location}`}
 				/>
 				{channel.name}

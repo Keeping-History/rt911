@@ -41,6 +41,7 @@ import {
 	tvSetVolumeLimit,
 } from "./TVContext";
 import { moveChannel, orderChannels } from "./channelOrder";
+import { EPG_ICONS } from "./epgIcons";
 import { useThumbnailReorder } from "./useThumbnailReorder";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
 import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
@@ -91,7 +92,7 @@ type ClassicyTVProps = Record<string, never>;
 export const TV: React.FC<ClassicyTVProps> = () => {
 	const appName = "TV";
 	const appId = "TV.app";
-	const appIcon = ClassicyIcons.applications.epg.app as string;
+	const appIcon = EPG_ICONS.app;
 	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const desktopEventDispatch = useAppManagerDispatch();

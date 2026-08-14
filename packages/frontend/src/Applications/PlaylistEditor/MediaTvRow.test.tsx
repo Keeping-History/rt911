@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { ClassicyIcons } from "classicy";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { CHANNEL_LOGOS, EPG_ICONS } from "../TV/epgIcons";
 import { MediaTvRow, stationLogo, type TvEditorEntry } from "./MediaTvRow";
 
 afterEach(cleanup);
@@ -11,14 +12,29 @@ const tvEntry = (uid: string, itemId: string): TvEditorEntry => ({
 });
 
 describe("stationLogo", () => {
-	it("maps a channel slug (case-insensitively) to its bundled EPG logo", () => {
-		const channels = ClassicyIcons.applications.epg.channels as Record<string, string>;
-		expect(stationLogo("CNN")).toBe(channels.cnn);
-		expect(stationLogo("cnn")).toBe(channels.cnn);
+	it("maps a channel slug (case-insensitively) to its repo-owned logo", () => {
+		expect(stationLogo("CNN")).toBe(CHANNEL_LOGOS.cnn);
+		expect(stationLogo("cnn")).toBe(CHANNEL_LOGOS.cnn);
+		expect(CHANNEL_LOGOS.cnn).toBeTruthy();
+	});
+
+	it("re-injects the logos at their old ClassicyIcons address", () => {
+		// TV/epgIcons.ts registers into the shared registry so generic
+		// consumers keep finding them where classicy used to bundle them.
+		// Reached via an index cast: classicy no longer declares `epg` in its
+		// types — the key exists at runtime only because epgIcons.ts registers it.
+		const epg = (ClassicyIcons.applications as Record<string, unknown>).epg as Record<
+			string,
+			string | Record<string, string>
+		>;
+		const channels = epg.channels as Record<string, string>;
+		expect(channels.cnn).toBe(CHANNEL_LOGOS.cnn);
+		expect(Object.keys(channels)).toHaveLength(25);
+		expect(epg.cc).toBe(EPG_ICONS.cc);
 	});
 
 	it("falls back to the generic TV glyph for a channel with no logo", () => {
-		expect(stationLogo("no-such-channel")).toBe(ClassicyIcons.applications.epg.tv);
+		expect(stationLogo("no-such-channel")).toBe(EPG_ICONS.tv);
 	});
 });
 
