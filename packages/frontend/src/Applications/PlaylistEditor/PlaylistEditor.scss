@@ -144,3 +144,81 @@
 .playlistEditorEntries {
 	padding: var(--window-padding-size);
 }
+
+/* Media tab: one disclosure per media app, stacked. */
+.playlistMediaSections {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+/* TV section: one card per entry in a single side-scrolling row. */
+.playlistMediaTvRow {
+	display: flex;
+	flex-direction: row;
+	gap: 6px;
+	overflow-x: auto;
+	padding: 4px 2px;
+}
+
+.playlistMediaTvCard {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	min-width: 72px;
+	padding: 4px;
+	border: 1px solid var(--color-system-05);
+	background-color: var(--color-system-01);
+}
+
+.playlistMediaTvCardSelected {
+	border-color: var(--color-theme-highlight, var(--color-system-07));
+	background-color: var(--color-system-02);
+}
+
+.playlistMediaTvLogo {
+	width: 48px;
+	height: 48px;
+	object-fit: contain;
+	image-rendering: pixelated;
+}
+
+.playlistMediaTvLabel {
+	font-size: calc(var(--ui-font-size) * 0.85);
+	max-width: 72px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.playlistMediaTvButtons {
+	display: flex;
+	flex-direction: row;
+	gap: 2px;
+}
+
+/* Same look as TimeMachine's bookmark-row icon buttons (its copy lives in a
+ * CSS module, so the rule repeats here rather than importing across apps). */
+.playlistIconButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+
+	&:hover {
+		background-color: var(--color-theme-highlight, var(--color-system-04));
+	}
+
+	img {
+		width: 14px;
+		height: 14px;
+		image-rendering: pixelated;
+	}
+}
