@@ -44,6 +44,7 @@ import { moveChannel, orderChannels } from "./channelOrder";
 import { ThumbnailTile } from "./ThumbnailTile";
 import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
 import type { EpgIconNamespace } from "./epgIcons";
+import multiviewIcon from "./multiview.png";
 import { useThumbnailReorder } from "./useThumbnailReorder";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
 import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
@@ -96,7 +97,8 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const appId = "TV.app";
 	// classicy no longer declares the epg namespace — epgIcons.ts registers it,
 	// so the read goes through a cast at the registered address.
-	const appIcon = (ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg.app;
+	const epgIconSet = (ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg;
+	const appIcon = epgIconSet.app;
 	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const desktopEventDispatch = useAppManagerDispatch();
@@ -1132,7 +1134,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 									}
 								>
 									<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
-										MultiView
+										{/* alt is the button's accessible name now that the label is gone —
+										    the balloon help above explains, but only on hover. */}
+										<img className={styles.tvControlIcon} src={multiviewIcon} alt="MultiView" />
 									</ClassicyButton>
 								</ClassicyBalloonHelp>
 								<ClassicyBalloonHelp
@@ -1150,7 +1154,14 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										buttonSize="small"
 										margin="sm" padding="sm"
 									>
-										{tvPaused ? "Play" : "Pause"}
+										{/* The icon shows the ACTION, not the state: paused offers Play. */}
+										<img
+											className={styles.tvControlIcon}
+											src={(tvPaused
+												? ClassicyIcons.system.quicktime.playButton
+												: ClassicyIcons.system.quicktime.pauseButton) as string}
+											alt={tvPaused ? "Play" : "Pause"}
+										/>
 									</ClassicyButton>
 								</ClassicyBalloonHelp>
 								<ClassicyBalloonHelp
@@ -1169,7 +1180,15 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										buttonSize="small"
 										margin="sm" padding="sm"
 									>
-										Mute
+										{/* Same speaker pair the per-grid-player mute button already uses,
+										    so one convention covers both mute controls in this app. */}
+										<img
+											className={styles.tvControlIcon}
+											src={(overallMuted
+												? ClassicyIcons.controlPanels.soundManager.soundMute
+												: ClassicyIcons.controlPanels.soundManager.soundOn) as string}
+											alt={overallMuted ? "Unmute" : "Mute"}
+										/>
 									</ClassicyButton>
 								</ClassicyBalloonHelp>
 								<ClassicyBalloonHelp
@@ -1185,7 +1204,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										buttonSize="small"
 										margin="sm" padding="sm"
 									>
-										{captionsOn ? "CC On" : "CC Off"}
+										{/* One artwork for both states — the pressed styling carries on/off
+										    visually, so the alt text has to carry it for everyone else. */}
+										<img
+											className={styles.tvControlIcon}
+											src={epgIconSet.cc}
+											alt={captionsOn ? "Closed captions on" : "Closed captions off"}
+										/>
 									</ClassicyButton>
 								</ClassicyBalloonHelp>
 							</div>

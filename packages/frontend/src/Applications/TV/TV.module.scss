@@ -168,6 +168,18 @@ $strip-height: calc(5em + 8px);
   flex-direction: row;
 }
 
+// Icon-only control buttons (MultiView / play-pause / mute / captions).
+// The height is explicit because these icons are not a uniform set: cc.png is
+// EPG badge artwork at 306x230 and would dwarf the control row at its natural
+// size, while multiview.png is a 16x16 glyph. `width: auto` keeps each one's
+// own aspect ratio instead of squashing the wide ones to a square.
+.tvControlIcon {
+  display: block;
+  height: calc(var(--ui-font-size) * 1.15);
+  width: auto;
+  object-fit: contain;
+}
+
 .tvChannelButtons {
   display: flex;
   flex-direction: row;
