@@ -51,10 +51,46 @@ describe("PlaylistEditorMain", () => {
 		expect(screen.getByText(/example\.com/)).not.toBeNull();
 	});
 
-	it("shows an empty hint on a kind with no entries", () => {
+	it("splits the Media tab into per-app disclosure sections with empty hints", () => {
 		render(<PlaylistEditorMain state={state()} edit={vi.fn()} {...zoomProps} />);
-		// Media is the initially active tab; with no entries its panel is a hint.
-		expect(screen.getByText(/No media entries yet/i)).not.toBeNull();
+		// Media is the initially active tab; each media app gets its own
+		// disclosure, open by default, with a per-section hint when empty.
+		for (const label of ["TV Channels", "Radio Stations", "News", "Flights"]) {
+			expect(
+				screen.getByRole("button", { name: new RegExp(label) }).getAttribute("aria-expanded"),
+			).toBe("true");
+		}
+		expect(screen.getByText(/No TV channels yet/i)).not.toBeNull();
+		expect(screen.getByText(/No radio stations yet/i)).not.toBeNull();
+	});
+
+	it("renders TV media entries as logo cards and radio entries as tree rows", () => {
+		const edit = vi.fn();
+		const openSettings = vi.fn();
+		render(
+			<PlaylistEditorMain
+				state={state({
+					entries: [
+						{ uid: "e1", entry: { kind: "media", app: "tv", itemId: "cnn" } },
+						{ uid: "e2", entry: { kind: "media", app: "radio", itemId: "wnyc" } },
+					],
+				})}
+				edit={edit}
+				openSettings={openSettings}
+				{...zoomProps}
+			/>,
+		);
+
+		// TV: a card in the side-scrolling row with pencil/trash buttons.
+		expect(screen.getByRole("list", { name: "TV channels" })).not.toBeNull();
+		screen.getByRole("button", { name: "Edit CNN" }).click();
+		expect(edit).toHaveBeenCalledWith("p1", { type: "select", uid: "e1" });
+		expect(openSettings).toHaveBeenCalled();
+		screen.getByRole("button", { name: "Remove CNN" }).click();
+		expect(edit).toHaveBeenCalledWith("p1", { type: "removeEntry", uid: "e1" });
+
+		// Radio: still the tree-row treatment for now.
+		expect(screen.getByText(/RADIO · wnyc/)).not.toBeNull();
 	});
 
 	it("routes an entry removal through the injected dispatcher", async () => {

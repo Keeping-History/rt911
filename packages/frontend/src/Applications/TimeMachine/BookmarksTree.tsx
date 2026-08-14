@@ -1,7 +1,7 @@
 import type React from "react";
 import editPng from "./edit.png";
 import trashPng from "./trash.png";
-import { BookmarkDisclosure } from "./BookmarkDisclosure";
+import { Disclosure as BookmarkDisclosure } from "../../Components/Disclosure/Disclosure";
 import { formatUtcAsLocalTime } from "./setVirtualClock";
 import type { PersonalBookmark } from "./bookmarksApi";
 import type { Bookmark } from "./useBookmarks";

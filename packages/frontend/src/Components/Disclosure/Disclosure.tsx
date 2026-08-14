@@ -5,13 +5,13 @@ import { type KeyboardEvent, useState } from "react";
 // A collapsible section whose initial open state is controllable (classicy's
 // ClassicyDisclosure always boots closed). Reuses classicy's global disclosure
 // CSS (loaded app-wide) so the triangle + layout match the system look.
-interface BookmarkDisclosureProps {
+interface DisclosureProps {
 	label: string;
 	defaultOpen?: boolean;
 	children: React.ReactNode;
 }
 
-export const BookmarkDisclosure: React.FC<BookmarkDisclosureProps> = ({
+export const Disclosure: React.FC<DisclosureProps> = ({
 	label,
 	defaultOpen = false,
 	children,

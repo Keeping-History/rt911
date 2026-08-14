@@ -1,11 +1,22 @@
 import { ClassicyControlLabel, ClassicySplitView, ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "classicy";
-import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
+import type { ReactNode } from "react";
+import { Disclosure } from "../../Components/Disclosure/Disclosure";
+import type { MediaEntry, PlaylistApp, PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayWallClock } from "./editorState";
+import { MediaTvRow, type TvEditorEntry } from "./MediaTvRow";
 import { PlaylistTimeline } from "./PlaylistTimeline";
 
 const KIND_BRANCHES: [PlaylistEntry["kind"], string][] = [
 	["media", "Media"], ["app", "Apps"], ["settings", "Settings"],
 	["file", "Files"], ["jump", "Jumps"], ["browser", "Browser"],
+];
+
+// The Media tab's per-app disclosure sections, in broadcast-dial order.
+const MEDIA_SECTIONS: [PlaylistApp, string, string][] = [
+	["tv", "TV Channels", "No TV channels yet."],
+	["radio", "Radio Stations", "No radio stations yet."],
+	["news", "News", "No news stories yet."],
+	["flights", "Flights", "No flights yet."],
 ];
 
 function entrySummary(e: EditorEntry): string {
@@ -55,26 +66,63 @@ export function PlaylistEditorMain({
 }) {
 	const dispatch = (action: EditorAction) => edit(state.playlistId, action);
 
+	const editEntry = (uid: string) => {
+		dispatch({ type: "select", uid });
+		openSettings();
+	};
+
+	// Tree rows keep the ClassicyTree chrome (flat, branchless nodes) so
+	// Edit/Remove render the same everywhere they still appear.
+	const treeNodes = (entries: EditorEntry[]): ClassicyTreeNode[] =>
+		entries.map((e) => ({
+			id: e.uid,
+			label: entrySummary(e),
+			buttons: [
+				{ label: "Edit", onClickFunc: () => editEntry(e.uid) },
+				{ label: "Remove", onClickFunc: () => dispatch({ type: "removeEntry", uid: e.uid }) },
+			],
+		}));
+
+	// The Media tab splits into one disclosure per media app. TV renders as a
+	// side-scrolling logo-card row (MediaTvRow); the other three keep tree rows
+	// for now. Sections always boot open: entries load from Directus after
+	// first render, and a closed-at-mount section would hide them on arrival.
+	const mediaEntries = state.entries.filter(
+		(e): e is EditorEntry & { entry: MediaEntry } => e.entry.kind === "media",
+	);
+	const mediaTab = (
+		<div className="playlistMediaSections">
+			{MEDIA_SECTIONS.map(([app, label, emptyHint]) => {
+				const entries = mediaEntries.filter((e) => e.entry.app === app);
+				let body: ReactNode;
+				if (entries.length === 0) {
+					body = <ClassicyControlLabel label={emptyHint} />;
+				} else if (app === "tv") {
+					body = (
+						<MediaTvRow
+							entries={entries as TvEditorEntry[]}
+							selectedUid={state.selectedUid}
+							onEdit={editEntry}
+							onRemove={(uid) => dispatch({ type: "removeEntry", uid })}
+						/>
+					);
+				} else {
+					body = <ClassicyTree nodes={treeNodes(entries)} />;
+				}
+				return (
+					<Disclosure key={app} label={label} defaultOpen>
+						{body}
+					</Disclosure>
+				);
+			})}
+		</div>
+	);
+
 	// One tab per entry kind, always all six: stable tab positions beat the old
-	// tree's hide-empty-branches behavior. Rows keep the ClassicyTree chrome
-	// (flat, branchless nodes) so Edit/Remove render the same as before.
+	// tree's hide-empty-branches behavior.
 	const tabs = KIND_BRANCHES.map(([kind, label]) => {
-		const nodes: ClassicyTreeNode[] = state.entries
-			.filter((e) => e.entry.kind === kind)
-			.map((e) => ({
-				id: e.uid,
-				label: entrySummary(e),
-				buttons: [
-					{
-						label: "Edit",
-						onClickFunc: () => {
-							dispatch({ type: "select", uid: e.uid });
-							openSettings();
-						},
-					},
-					{ label: "Remove", onClickFunc: () => dispatch({ type: "removeEntry", uid: e.uid }) },
-				],
-			}));
+		if (kind === "media") return { title: label, children: mediaTab };
+		const nodes = treeNodes(state.entries.filter((e) => e.entry.kind === kind));
 		return {
 			title: label,
 			children:
