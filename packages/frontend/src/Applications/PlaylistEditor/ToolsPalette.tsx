@@ -63,6 +63,7 @@ export function ToolsPalette({
 		<ClassicyWindow
 			id={TOOLS_WINDOW_ID}
 			appId={appId}
+			backgroundColor="var(--color-system-03)"
 			title="Tools"
 			icon={icon}
 			windowType="utility"
