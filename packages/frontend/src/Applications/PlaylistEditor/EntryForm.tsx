@@ -44,7 +44,7 @@ function DateTimeField({
 			{optional && (
 				<ClassicyCheckbox
 					id={`${label}-unbounded`}
-					label="unbounded"
+					label="Not Time Bound"
 					checked={value === undefined}
 					onClickFunc={(checked) =>
 						onChange(checked ? undefined : displayWallClockToUtcIso(DEFAULT_WALL_CLOCK))

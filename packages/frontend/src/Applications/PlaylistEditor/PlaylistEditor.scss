@@ -6,11 +6,14 @@
 	width: 100%;
 	overflow-x: auto;
 	overflow-y: hidden;
+	font-family: var(--ui-font, sans-serif);
 }
 
 .playlistTimelineRuler {
 	position: relative;
-	height: 16px;
+	height: var(--window-control-size);
+	font-size: calc(var(--ui-font-size)*.85);
+	width: calc(100% - (var(--window-control-size)*2 + var(--window-padding-size)*2));
 }
 
 .playlistTimelineDayTick {
@@ -102,4 +105,12 @@
 
 .playlistEditorMain, .playlistTimeline {
 	height: 100%;
+}
+
+.playlistEditorMain, .playlistTimeline, .playlistEditorEntries {
+	background-color: var(--color-system-03)
+}
+
+.playlistEditorEntries {
+	padding: var(--window-padding-size);
 }

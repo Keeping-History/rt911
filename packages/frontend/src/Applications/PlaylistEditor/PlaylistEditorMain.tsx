@@ -1,4 +1,4 @@
-import { ClassicySplitView, ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "classicy";
+import { ClassicyControlLabel, ClassicySplitView, ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "classicy";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayWallClock } from "./editorState";
 import { PlaylistTimeline } from "./PlaylistTimeline";
@@ -74,7 +74,7 @@ export function PlaylistEditorMain({
 				nodes.length > 0 ? (
 					<ClassicyTree nodes={nodes} />
 				) : (
-					<p className="playlistEditorTabEmpty">No {label.toLowerCase()} entries yet.</p>
+					<ClassicyControlLabel label={`No ${label.toLowerCase()} entries yet.`} />
 				),
 		};
 	});
