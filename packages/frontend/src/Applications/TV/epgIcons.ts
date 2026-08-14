@@ -41,41 +41,40 @@ import wttg from "./epgIcons/channels/wttg.png";
 import wusa from "./epgIcons/channels/wusa.png";
 
 /**
- * The EPG icon set, moved out of classicy: everything here is specific to this
- * product's TV lineup and guide data, not to the desktop chrome. Key names
- * match the guide JSON — `EPGProgram.icons[]` entries index EPG_ICONS
- * (closed-captioning, language, and ratings badges) and `EPGChannel.icon`
- * indexes CHANNEL_LOGOS (lowercase station slugs).
- */
-export const EPG_ICONS: Record<string, string> = {
-	app: tv,
-	cc, esp, mpaaG, mpaaNc17, mpaaPg, mpaaPg13, mpaaR, mpaaUnrated,
-	tv14, tvG, tvMa, tvPg, tvY, tvY7, tv,
-};
-
-/**
- * TV station logos, keyed by lowercase channel slug.
+ * Registration-only module for the EPG icon set (moved out of classicy: it is
+ * product-lineup-specific, not desktop chrome). Importing this module — for
+ * side effect only — puts the icons at ClassicyIcons.applications.epg, which
+ * is the ONE address consumers read them from; nothing here is exported, so
+ * they can't be imported around the registry. `EPGProgram.icons[]` entries in
+ * the guide JSON index the flat keys (cc/esp/ratings badges) and
+ * `EPGChannel.icon` indexes `channels` (lowercase station slugs).
+ *
+ * The shape consumers cast the namespace to lives in `EpgIconNamespace` below.
  *
  * Known data quirk: the CCTV channel's canonical slug is `cctv4` (CCTV
  * International) but the IA archive used CCTV3 identifiers, so its stream
- * path and some EPG guide data still say `cctv3` — that key stays as an
- * alias for the same CCTV-4 artwork.
+ * path and older guide data still say `cctv3` — that key stays as an alias
+ * for the same CCTV-4 artwork.
  */
-export const CHANNEL_LOGOS: Record<string, string> = {
-	ant1, azt, bbc, bet, cbs, cctv4, cctv3: cctv4, cnn, glvsn, iraq, mcm,
-	msnbc, newsw, newsworld, nhk, ntv, psc, tcn, weta, wjla, wnyw, worldnet,
-	wrc, wsbk, wttg, wusa,
+export type EpgIconNamespace = Record<string, string> & {
+	channels: Record<string, string>;
 };
 
-// Re-injected at ClassicyIcons.applications.epg so generic classicy consumers
-// keep finding the set at its historical address. registerClassicyIcons
-// assigns shallowly at the TOP level only, so the applications namespace must
-// be spread in — dropping that spread would clobber classicy's bundled app
-// icons and other apps' registrations. The epg namespace itself is replaced
-// wholesale: this module now owns every key in it.
+// registerClassicyIcons assigns shallowly at the TOP level only, so the
+// applications namespace must be spread in — dropping that spread would
+// clobber classicy's bundled app icons and other apps' registrations.
 registerClassicyIcons({
 	applications: {
 		...ClassicyIcons.applications,
-		epg: { ...EPG_ICONS, channels: CHANNEL_LOGOS },
+		epg: {
+			app: tv,
+			cc, esp, mpaaG, mpaaNc17, mpaaPg, mpaaPg13, mpaaR, mpaaUnrated,
+			tv14, tvG, tvMa, tvPg, tvY, tvY7, tv,
+			channels: {
+				ant1, azt, bbc, bet, cbs, cctv4, cctv3: cctv4, cnn, glvsn, iraq,
+				mcm, msnbc, newsw, newsworld, nhk, ntv, psc, tcn, weta, wjla,
+				wnyw, worldnet, wrc, wsbk, wttg, wusa,
+			},
+		},
 	},
 });

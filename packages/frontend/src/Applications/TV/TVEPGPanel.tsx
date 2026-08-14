@@ -21,7 +21,8 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { CHANNEL_LOGOS, EPG_ICONS } from "./epgIcons";
+import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
+import type { EpgIconNamespace } from "./epgIcons";
 import { tvTuneChannel } from "./TVContext";
 import epgStyles from "./TVEPGPanel.module.scss";
 import styles from "./TV.module.scss";
@@ -52,6 +53,12 @@ const MINUTES_PER_GRID = 5;
 const GRID_TIME_WIDTH = 30;
 const GRID_WIDTH = 180;
 const CHANNEL_HEADER_WIDTH = 5;
+
+// Read lazily so the lookup always sees the object epgIcons.ts registered,
+// never a pre-registration snapshot. The cast is needed because classicy no
+// longer declares the epg namespace — it exists at runtime by registration.
+const epgIcons = () =>
+	(ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg;
 
 const truncate = (s: string, n: number) =>
 	s.length > n ? `${s.slice(0, n).trimEnd()}…` : s;
@@ -191,7 +198,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 								<img
 									key={channel.name + Date.parse(gridItem.start) + Date.parse(gridItem.end) + icon}
 									className={epgStyles.epgEntryIcon}
-									src={EPG_ICONS[icon]}
+									src={epgIcons()[icon]}
 									alt={icon}
 								/>
 							))}
@@ -245,7 +252,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 			>
 				<img
 					className={epgStyles.epgChannelIcon}
-					src={CHANNEL_LOGOS[channel.icon]}
+					src={epgIcons().channels[channel.icon]}
 					alt={`${channel.number} ${channel.callSign} - ${channel.location}`}
 				/>
 				{channel.name}

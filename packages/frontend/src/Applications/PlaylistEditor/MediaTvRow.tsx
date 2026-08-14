@@ -1,4 +1,6 @@
-import { CHANNEL_LOGOS, EPG_ICONS } from "../TV/epgIcons";
+import { ClassicyIcons } from "classicy";
+import "../TV/epgIcons"; // side effect: registers ClassicyIcons.applications.epg
+import type { EpgIconNamespace } from "../TV/epgIcons";
 import type { MediaEntry } from "../../Providers/Playlist/playlistTypes";
 import editPng from "./edit.png";
 import trashPng from "./trash.png";
@@ -7,15 +9,19 @@ import type { EditorEntry } from "./editorState";
 /** A media entry already narrowed to a TV channel by the caller. */
 export type TvEditorEntry = EditorEntry & { entry: MediaEntry };
 
-const GENERIC_TV_ICON = EPG_ICONS.tv;
+// Read lazily so the lookup always sees the object epgIcons.ts registered.
+// The cast is needed because classicy no longer declares the epg namespace.
+const epgIcons = () =>
+	(ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg;
 
 /**
- * Station logo for a TV channel slug. The EPG panel renders these same
- * repo-owned assets (see data/channelLogos.ts); a couple of channels have no
- * logo of their own and fall back to the generic TV glyph.
+ * Station logo for a TV channel slug — the same registered icons the EPG
+ * panel renders; a couple of channels have no logo of their own and fall
+ * back to the generic TV glyph.
  */
 export function stationLogo(itemId: string): string {
-	return CHANNEL_LOGOS[itemId.toLowerCase()] ?? GENERIC_TV_ICON;
+	const epg = epgIcons();
+	return epg.channels[itemId.toLowerCase()] ?? epg.tv;
 }
 
 /**
