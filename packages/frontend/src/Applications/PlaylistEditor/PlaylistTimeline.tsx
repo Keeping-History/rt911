@@ -1,15 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { EditorEntry } from "./editorState";
 import "./PlaylistEditor.scss";
 import { resolveTimelineMeta } from "./resolveTimelineMeta";
 import {
 	layoutBars,
 	layoutFlags,
-	TIMELINE_START_MS,
+	MAX_ZOOM,
+	MIN_ZOOM,
+	rulerLabels,
+	rulerTicks,
+	steppedZoom,
 } from "./timelineLayout";
 
-const DAY_MS = 24 * 3600_000;
-const HOUR_TICK_COUNT = 40; // 10 days * 4 six-hour ticks/day
+// Flags stack into rows when they fall within this fraction of each other. It is
+// a fraction of the whole span, so it has to shrink as the track widens —
+// otherwise zooming in spreads the flags apart on screen while still stacking
+// them, which defeats the main reason to zoom into a crowded stretch.
+const FLAG_MIN_GAP_FRAC = 0.015;
 
 export function barMaskImage(fadeStart: boolean, fadeEnd: boolean): string {
 	if (fadeStart && fadeEnd) {
@@ -31,6 +38,32 @@ export function PlaylistTimeline({
 }) {
 	const [resolved, setResolved] = useState<Map<string, EditorEntry["timelineMeta"]>>(new Map());
 	const attemptedRef = useRef(new Set<string>());
+	// Annotated: ZOOM_LEVELS is `as const`, so MIN_ZOOM narrows to the literal 1
+	// and an inferred state type would reject every other level.
+	const [zoom, setZoom] = useState<number>(MIN_ZOOM);
+	const viewportRef = useRef<HTMLDivElement>(null);
+	const anchorRef = useRef<number | null>(null);
+
+	// Zoom about the middle of what the user is currently looking at. Without
+	// this, widening the track keeps scrollLeft fixed and the view lurches
+	// towards 9 September every time you zoom in.
+	function changeZoom(direction: 1 | -1) {
+		const el = viewportRef.current;
+		if (el && el.scrollWidth > 0) {
+			anchorRef.current = (el.scrollLeft + el.clientWidth / 2) / el.scrollWidth;
+		}
+		setZoom((z) => steppedZoom(z, direction));
+	}
+
+	useLayoutEffect(() => {
+		const el = viewportRef.current;
+		const anchor = anchorRef.current;
+		anchorRef.current = null;
+		// scrollWidth is 0 under jsdom, so this is a no-op in tests rather than
+		// writing NaN into scrollLeft.
+		if (!el || anchor === null || el.scrollWidth === 0) return;
+		el.scrollLeft = anchor * el.scrollWidth - el.clientWidth / 2;
+	}, [zoom]);
 
 	useEffect(() => {
 		const toResolve = entries.filter(
@@ -55,83 +88,120 @@ export function PlaylistTimeline({
 		[entries, resolved],
 	);
 	const bars = useMemo(() => layoutBars(merged), [merged]);
-	const flags = useMemo(() => layoutFlags(merged), [merged]);
+	const flags = useMemo(() => layoutFlags(merged, FLAG_MIN_GAP_FRAC / zoom), [merged, zoom]);
 	const flagRows = flags.reduce((m, f) => Math.max(m, f.row), 0) + 1;
+	const ticks = useMemo(() => rulerTicks(zoom), [zoom]);
+	const labels = useMemo(() => rulerLabels(zoom), [zoom]);
 
 	return (
-		<div className="playlistTimeline" data-testid="playlist-timeline">
-			<div className="playlistTimelineRuler">
-				{Array.from({ length: 11 }, (_, day) => (
-					<span key={day} className="playlistTimelineDayTick" style={{ left: `${day * 10}%` }}>
-						{new Date(TIMELINE_START_MS + day * DAY_MS).toISOString().slice(5, 10)}
-					</span>
-				))}
-				{Array.from({ length: HOUR_TICK_COUNT }, (_, i) => (
-					<span
-						key={`hour-${i}`}
-						className="playlistTimelineHourTick"
-						style={{ left: `${i * 2.5}%` }}
-					/>
-				))}
+		<div className="playlistTimelineWrap">
+			<div className="playlistTimelineZoom">
+				<button
+					type="button"
+					onClick={() => changeZoom(-1)}
+					disabled={zoom <= MIN_ZOOM}
+					title="Zoom out"
+					aria-label="Zoom out"
+				>
+					−
+				</button>
+				<span className="playlistTimelineZoomLevel" data-testid="timeline-zoom-level">
+					{zoom}×
+				</span>
+				<button
+					type="button"
+					onClick={() => changeZoom(1)}
+					disabled={zoom >= MAX_ZOOM}
+					title="Zoom in"
+					aria-label="Zoom in"
+				>
+					+
+				</button>
 			</div>
-			<div className="playlistTimelineFlagRow" style={{ height: `${flagRows * 18}px` }}>
-				{flags.map((f) => (
-					<button
-						key={f.uid}
-						type="button"
-						className={`playlistTimelineFlag playlistTimelineFlag-${f.kindGlyph}`}
-						style={{ left: `${f.atFrac * 100}%`, top: `${f.row * 18}px` }}
-						title={f.label}
-						onClick={() => onSelect(f.uid)}
-					>
-						⚑
-					</button>
-				))}
-				{flags.filter((f) => f.extentEndFrac !== undefined).map((f) => (
-					<span
-						key={`${f.uid}-extent`}
-						className="playlistTimelineFlagExtent"
-						style={{
-							left: `${f.atFrac * 100}%`,
-							width: `${((f.extentEndFrac ?? f.atFrac) - f.atFrac) * 100}%`,
-							top: `${f.row * 18 + 14}px`,
-						}}
-					/>
-				))}
-			</div>
-			<div className="playlistTimelineLanes">
-				{bars.map((b) => (
-					<div key={b.uid} className={`playlistTimelineLane playlistTimelineLane-${b.group}`}>
-						<button
-							type="button"
-							className={
-								b.uid === selectedUid
-									? "playlistTimelineBar playlistTimelineBarSelected"
-									: "playlistTimelineBar"
-							}
-							style={{
-								left: `${b.startFrac * 100}%`,
-								width: `${(b.endFrac - b.startFrac) * 100}%`,
-								maskImage: barMaskImage(b.fadeStart, b.fadeEnd),
-							}}
-							title={b.label}
-							onClick={() => onSelect(b.uid)}
-						>
-							{b.focus === "once" && <span aria-hidden>▸</span>}
-							{b.focus === "locked" && <span aria-hidden>🔒</span>}
-							{b.label}
-							{b.actualStartFrac !== undefined && b.endFrac - b.startFrac > 0 && (
-								<span
-									className="playlistTimelineActualSpan"
-									style={{
-										left: `${((b.actualStartFrac - b.startFrac) / (b.endFrac - b.startFrac)) * 100}%`,
-										width: `${(((b.actualEndFrac ?? b.endFrac) - b.actualStartFrac) / (b.endFrac - b.startFrac)) * 100}%`,
-									}}
-								/>
-							)}
-						</button>
+			<div className="playlistTimeline" data-testid="playlist-timeline" ref={viewportRef}>
+				<div
+					className="playlistTimelineTrack"
+					data-testid="timeline-track"
+					style={{ width: `${zoom * 100}%` }}
+				>
+					<div className="playlistTimelineRuler">
+						{labels.map((l) => (
+							<span
+								key={`label-${l.leftPct}`}
+								className="playlistTimelineDayTick"
+								style={{ left: `${l.leftPct}%` }}
+							>
+								{l.text}
+							</span>
+						))}
+						{ticks.map((leftPct) => (
+							<span
+								key={`hour-${leftPct}`}
+								className="playlistTimelineHourTick"
+								style={{ left: `${leftPct}%` }}
+							/>
+						))}
 					</div>
-				))}
+					<div className="playlistTimelineFlagRow" style={{ height: `${flagRows * 18}px` }}>
+						{flags.map((f) => (
+							<button
+								key={f.uid}
+								type="button"
+								className={`playlistTimelineFlag playlistTimelineFlag-${f.kindGlyph}`}
+								style={{ left: `${f.atFrac * 100}%`, top: `${f.row * 18}px` }}
+								title={f.label}
+								onClick={() => onSelect(f.uid)}
+							>
+								⚑
+							</button>
+						))}
+						{flags.filter((f) => f.extentEndFrac !== undefined).map((f) => (
+							<span
+								key={`${f.uid}-extent`}
+								className="playlistTimelineFlagExtent"
+								style={{
+									left: `${f.atFrac * 100}%`,
+									width: `${((f.extentEndFrac ?? f.atFrac) - f.atFrac) * 100}%`,
+									top: `${f.row * 18 + 14}px`,
+								}}
+							/>
+						))}
+					</div>
+					<div className="playlistTimelineLanes">
+						{bars.map((b) => (
+							<div key={b.uid} className={`playlistTimelineLane playlistTimelineLane-${b.group}`}>
+								<button
+									type="button"
+									className={
+										b.uid === selectedUid
+											? "playlistTimelineBar playlistTimelineBarSelected"
+											: "playlistTimelineBar"
+									}
+									style={{
+										left: `${b.startFrac * 100}%`,
+										width: `${(b.endFrac - b.startFrac) * 100}%`,
+										maskImage: barMaskImage(b.fadeStart, b.fadeEnd),
+									}}
+									title={b.label}
+									onClick={() => onSelect(b.uid)}
+								>
+									{b.focus === "once" && <span aria-hidden>▸</span>}
+									{b.focus === "locked" && <span aria-hidden>🔒</span>}
+									{b.label}
+									{b.actualStartFrac !== undefined && b.endFrac - b.startFrac > 0 && (
+										<span
+											className="playlistTimelineActualSpan"
+											style={{
+												left: `${((b.actualStartFrac - b.startFrac) / (b.endFrac - b.startFrac)) * 100}%`,
+												width: `${(((b.actualEndFrac ?? b.endFrac) - b.actualStartFrac) / (b.endFrac - b.startFrac)) * 100}%`,
+											}}
+										/>
+									)}
+								</button>
+							</div>
+						))}
+					</div>
+				</div>
 			</div>
 		</div>
 	);

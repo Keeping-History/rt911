@@ -1,11 +1,41 @@
 // Layout-essential rules only for the Playlist editor's read-only timeline
 // strip (C4). Visual polish (colors, fonts, chrome) lands in a later pass.
 
+.playlistTimelineWrap {
+	position: relative;
+	width: 100%;
+}
+
+/* The zoom controls sit outside .playlistTimeline on purpose: that element is
+ * the scrolling viewport, so controls placed inside it would scroll away from
+ * the user as soon as they panned. They are laid out in flow rather than
+ * absolutely positioned — the editor window's overflow: hidden clips absolutely
+ * positioned children (the same trap the Add Settings dropdown hit). */
+.playlistTimelineZoom {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 0;
+}
+
+.playlistTimelineZoomLevel {
+	min-width: 3em;
+	text-align: center;
+	font-variant-numeric: tabular-nums; // stops the row twitching as 1×→16× widens
+}
+
 .playlistTimeline {
 	position: relative;
 	width: 100%;
 	overflow-x: auto;
 	overflow-y: hidden;
+}
+
+/* Zoom widens this track inside the viewport above; every child stays
+ * positioned by percentage, so nothing else has to know about zoom. */
+.playlistTimelineTrack {
+	position: relative;
+	min-width: 100%;
 }
 
 .playlistTimelineRuler {

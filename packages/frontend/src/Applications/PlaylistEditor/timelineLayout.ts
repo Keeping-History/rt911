@@ -4,6 +4,87 @@ import type { EditorEntry } from "./editorState";
 export const TIMELINE_START_MS = Date.UTC(2001, 8, 9);
 export const TIMELINE_END_MS = Date.UTC(2001, 8, 19);
 const SPAN = TIMELINE_END_MS - TIMELINE_START_MS;
+const SPAN_HOURS = SPAN / 3_600_000; // 240
+
+/* ── Zoom ──────────────────────────────────────────────────────────────────
+ * Zoom widens the track rather than re-mapping time to fractions: every
+ * position stays a fraction of the full 10-day span, and the rendered track is
+ * `zoom * 100%` wide inside a horizontally scrolling viewport. Two things fall
+ * out of that choice — every existing layout calculation is untouched, and
+ * panning is just the browser's own scrolling, with no pan control to build.
+ *
+ * The cost is that the whole span is always in the DOM, which is why the tick
+ * interval has a floor (see tickIntervalHours): without one, deep zoom would
+ * emit tens of thousands of tick nodes for a viewport showing a few dozen.
+ */
+export const ZOOM_LEVELS = [1, 2, 4, 8, 16, 32, 64] as const;
+export const MIN_ZOOM = ZOOM_LEVELS[0];
+export const MAX_ZOOM = ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
+
+/** The next level in/out, clamped at the ends so callers need no bounds check. */
+export function steppedZoom(zoom: number, direction: 1 | -1): number {
+	const i = ZOOM_LEVELS.indexOf(zoom as (typeof ZOOM_LEVELS)[number]);
+	// An off-ladder value (older persisted state, say) snaps to the nearest level
+	// rather than refusing to move.
+	if (i === -1) {
+		const nearest = ZOOM_LEVELS.reduce((a, b) =>
+			Math.abs(b - zoom) < Math.abs(a - zoom) ? b : a,
+		);
+		return nearest;
+	}
+	return ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, i + direction))];
+}
+
+// Coarse→fine. Every value is a divisor of 24h and 4× each is still a round
+// interval, which is what lets the label ladder below stay readable.
+const NICE_TICK_HOURS = [6, 3, 1, 0.5, 0.25];
+const LABEL_EVERY_N_TICKS = 4;
+
+/**
+ * Tick spacing for a zoom level, in hours.
+ *
+ * Targets a constant *on-screen* density: at 1× a 6-hour tick sits 2.5% of the
+ * track apart, which is the density the ruler was designed around, so the aim
+ * is 6/zoom hours. The ladder floor (0.25h) caps the tick count at 960 for the
+ * full span no matter how far in you zoom — past that the marks are denser than
+ * the eye can use, and the DOM cost is real because the whole span is rendered.
+ */
+export function tickIntervalHours(zoom: number): number {
+	const target = 6 / Math.max(1, zoom);
+	return NICE_TICK_HOURS.find((h) => h <= target) ?? NICE_TICK_HOURS[NICE_TICK_HOURS.length - 1];
+}
+
+/** Unlabelled tick positions, as percentages of the track. */
+export function rulerTicks(zoom: number): number[] {
+	const interval = tickIntervalHours(zoom);
+	const count = Math.round(SPAN_HOURS / interval);
+	// End-exclusive: the closing boundary carries a label instead of a bare tick.
+	return Array.from({ length: count }, (_, i) => (i * interval * 100) / SPAN_HOURS);
+}
+
+export type RulerLabel = { leftPct: number; text: string };
+
+/**
+ * Labelled positions, as percentages of the track.
+ *
+ * At 1× this is exactly the eleven `MM-DD` day labels the ruler has always
+ * shown. Zoomed in, labels subdivide with the ticks and switch to clock times,
+ * because day boundaries alone can leave a zoomed viewport with no visible
+ * reference at all — at 64× a viewport spans under four hours.
+ */
+export function rulerLabels(zoom: number): RulerLabel[] {
+	const interval = tickIntervalHours(zoom) * LABEL_EVERY_N_TICKS;
+	const count = Math.round(SPAN_HOURS / interval);
+	return Array.from({ length: count + 1 }, (_, i) => {
+		const hours = i * interval;
+		const iso = new Date(TIMELINE_START_MS + hours * 3_600_000).toISOString();
+		// Keep the date visible at day boundaries even in clock-time mode, so a
+		// zoomed viewport is never ambiguous about which day it is showing.
+		const atMidnight = hours % 24 === 0;
+		const text = interval >= 24 || atMidnight ? iso.slice(5, 10) : iso.slice(11, 16);
+		return { leftPct: (hours * 100) / SPAN_HOURS, text };
+	});
+}
 
 export function timeToFraction(iso: string): number {
 	const frac = (playlistUtcMs(iso) - TIMELINE_START_MS) / SPAN;

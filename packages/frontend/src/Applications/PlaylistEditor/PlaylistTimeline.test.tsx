@@ -123,4 +123,60 @@ describe("PlaylistTimeline", () => {
 		render(<PlaylistTimeline entries={[]} selectedUid={null} onSelect={vi.fn()} />);
 		expect(document.querySelectorAll(".playlistTimelineHourTick")).toHaveLength(40);
 	});
+
+	it("widens the track and subdivides the ruler on zoom in, and restores it on zoom out", () => {
+		render(<PlaylistTimeline entries={[]} selectedUid={null} onSelect={vi.fn()} />);
+		const track = screen.getByTestId("timeline-track");
+		const level = screen.getByTestId("timeline-zoom-level");
+		expect(track.style.width).toBe("100%");
+		expect(level.textContent).toBe("1×");
+
+		fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+		expect(track.style.width).toBe("200%");
+		expect(level.textContent).toBe("2×");
+		expect(document.querySelectorAll(".playlistTimelineHourTick").length).toBeGreaterThan(40);
+
+		fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
+		expect(track.style.width).toBe("100%");
+		expect(document.querySelectorAll(".playlistTimelineHourTick")).toHaveLength(40);
+	});
+
+	it("disables each control at its end of the ladder", () => {
+		render(<PlaylistTimeline entries={[]} selectedUid={null} onSelect={vi.fn()} />);
+		// jest-dom is not installed here, so assert the DOM property directly
+		// rather than reaching for toBeDisabled().
+		const zoomIn = screen.getByRole("button", { name: "Zoom in" }) as HTMLButtonElement;
+		const zoomOut = screen.getByRole("button", { name: "Zoom out" }) as HTMLButtonElement;
+
+		expect(zoomOut.disabled).toBe(true);
+		expect(zoomIn.disabled).toBe(false);
+
+		// Walk past the top of the ladder; it must stop, not run past MAX_ZOOM.
+		for (let i = 0; i < 12; i += 1) fireEvent.click(zoomIn);
+		expect(screen.getByTestId("timeline-zoom-level").textContent).toBe("64×");
+		expect(zoomIn.disabled).toBe(true);
+		expect(zoomOut.disabled).toBe(false);
+	});
+
+	it("un-stacks flags that only collided because they were close as a fraction of ten days", () => {
+		// 20 minutes apart: under 1.5% of a ten-day span, so at 1x they stack into
+		// separate rows. Zooming in is the whole reason a user reaches for this
+		// control, so the stacking threshold has to scale with the track.
+		const crowded: EditorEntry[] = [
+			{ uid: "n1", entry: { kind: "media", app: "news", itemId: "1" },
+				timelineMeta: { publishedAt: "2001-09-11T12:00:00Z" } },
+			{ uid: "n2", entry: { kind: "media", app: "news", itemId: "2" },
+				timelineMeta: { publishedAt: "2001-09-11T12:20:00Z" } },
+		];
+		render(<PlaylistTimeline entries={crowded} selectedUid={null} onSelect={vi.fn()} />);
+
+		const topOf = (i: number) =>
+			(document.querySelectorAll<HTMLElement>(".playlistTimelineFlag")[i]).style.top;
+		expect(topOf(0)).not.toBe(topOf(1));
+
+		for (let i = 0; i < 5; i += 1) {
+			fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+		}
+		expect(topOf(0)).toBe(topOf(1));
+	});
 });
