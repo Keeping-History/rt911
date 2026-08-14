@@ -39,6 +39,7 @@ type roomRequest struct {
 //	POST /room {"room":"42","action":"jump","time":"2001-09-11T13:03:00Z"}
 //	POST /room {"room":"42","action":"focus","app":"TV.app"}
 //	POST /room {"room":"42","action":"message","message":"Look at channel 4"}
+//	POST /room {"room":"42","action":"reload"}
 //
 // A room is a playlist id, and **only the Directus user who created that
 // playlist may drive it**. Authorisation is per playlist, not a shared
@@ -149,7 +150,8 @@ func mayDriveRoom(owner, uid string) bool {
 }
 
 // buildRoomCommand validates the per-action payload and returns the command to
-// publish. The action itself is already known valid.
+// publish. The action itself is already known valid. Reload carries no payload
+// — the definition is re-read from Directus by each client, never relayed.
 func buildRoomCommand(req roomRequest) (model.RoomCommand, error) {
 	cmd := model.RoomCommand{
 		Room: req.Room, Action: req.Action, App: req.App,

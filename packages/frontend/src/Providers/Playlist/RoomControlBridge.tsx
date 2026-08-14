@@ -13,6 +13,7 @@ import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClo
 import { MediaStreamContext } from "../MediaStream/MediaStreamContext";
 import classroomIconPng from "./classroom.png";
 import { playlistAppMeta } from "./playlistApps";
+import { usePlaylist } from "./PlaylistContext";
 
 const appId = "RoomControl.app";
 const appName = "Classroom";
@@ -52,17 +53,21 @@ export function RoomControlBridge() {
 	const dateTimeLocked = useAppManager(
 		(s) => s.System.Manager.DateAndTime.dateTimeLocked,
 	);
+	// The definition-refresh seam for a teacher's "reload" push. The bridge is a
+	// desktop child, mounted inside PlaylistProvider, so the parent's context is
+	// readable here even though the command itself arrives on the WebSocket.
+	const { reloadDefinition } = usePlaylist();
 	const [note, setNote] = useState<{ seq: number; body: string } | null>(null);
 
 	// The effect below must see the latest writers without re-running when only
 	// they change — it runs on a new command, nothing else.
-	const latest = useRef({ setDateTime, dispatch, dateTimeLocked });
-	latest.current = { setDateTime, dispatch, dateTimeLocked };
+	const latest = useRef({ setDateTime, dispatch, dateTimeLocked, reloadDefinition });
+	latest.current = { setDateTime, dispatch, dateTimeLocked, reloadDefinition };
 
 	const seq = roomCommand?.seq ?? 0;
 	useEffect(() => {
 		if (!roomCommand || seq === 0) return;
-		const { setDateTime, dispatch, dateTimeLocked } = latest.current;
+		const { setDateTime, dispatch, dateTimeLocked, reloadDefinition } = latest.current;
 
 		switch (roomCommand.action) {
 			case "jump": {
@@ -101,6 +106,13 @@ export function RoomControlBridge() {
 						? "ClassicyManagerDateTimeLock"
 						: "ClassicyManagerDateTimeUnlock",
 				});
+				return;
+			}
+			case "reload": {
+				// Re-fetch the published definition and re-evaluate. Deliberately
+				// touches nothing else — in particular it must not clear room
+				// lock state, which is an independent surface.
+				reloadDefinition();
 				return;
 			}
 		}

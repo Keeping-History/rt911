@@ -723,16 +723,24 @@ command addressed to that room:
 { "type": "room_command", "action": "focus", "app": "TV.app" }
 { "type": "room_command", "action": "message", "message": "Look at channel 4" }
 { "type": "room_command", "action": "lock", "target": "clock", "on": true }
+{ "type": "room_command", "action": "reload" }
 ```
 
 | Field     | Type   | Notes                                                                    |
 | --------- | ------ | ------------------------------------------------------------------------ |
-| `action`  | string | `jump` \| `focus` \| `message`. Unknown actions are rejected at the operator endpoint and never reach a client. |
+| `action`  | string | `jump` \| `focus` \| `message` \| `lock` \| `reload`. Unknown actions are rejected at the operator endpoint and never reach a client. |
 | `time`    | string | `jump` only — the virtual instant to move every student's clock to.       |
 | `app`     | string | `focus` only — the Classicy app id to bring to front (e.g. `TV.app`).     |
 | `message` | string | `message` only — the note body to display.                                |
 | `target`  | string | `lock` only — the surface to lock. `clock` is the only one implemented.   |
 | `on`      | bool   | `lock` only — the state to move to. **Always present on a lock frame**, including `false`: it rides a pointer server-side so an unlock is not dropped by `omitempty`. A client that receives a lock frame without `on` should do nothing rather than assume `false`. |
+
+`reload` carries no payload at all: it tells every student to **re-fetch the published playlist
+definition from Directus and re-evaluate it** — the definition itself never rides this wire. It is
+how a teacher's mid-class edit ("Push Update to Class") reaches students whose page loaded the
+older definition. Applying a `reload` must not touch the client's room lock state — the two are
+independent surfaces, and a definition refresh that silently unlocked the clock would free a
+classroom the teacher had locked.
 
 A **room is a playlist id**: students following `?playlist=<id>` are its members. The streamer
 never resolves the id — playlists are authored in Directus and executed client-side; the id
@@ -740,16 +748,28 @@ travels as an opaque string.
 
 Commands originate on whichever pod served the teacher's `POST /room` call and are relayed to the
 others over Redis pub/sub (`internal/fanout`), so a class spread across replicas stays in step.
-That relay is **fire-and-forget and nothing is persisted**: a client that is disconnected when a
-command is sent does not receive it on reconnect, and a `jump` is not replayed. Room membership
-lives on the session, so a client must re-send `join_room` after every reconnect (the frontend's
-`MediaStreamProvider` does this alongside its channel re-subscribes).
+The relay itself is fire-and-forget, but each pod also **remembers the last-known control state per
+room** — the latest `jump`, the latest `lock`, and whether a `reload` has been pushed — and
+**replays it as ordinary `room_command` frames when a session sends `join_room`**, in application
+order (`jump`, then `lock`, then `reload`). A student who connects late, or reconnects after a
+drop, therefore converges with the class without any new client logic: the replayed frames are the
+same commands a live student saw, and the client applies them idempotently. The transient actions
+(`focus`, `message`) are moments rather than state and are deliberately **not** replayed.
+
+Two bounds on that memory: it is **per pod and in-memory** (fed by the fanout bus, which every pod
+subscribes to — including the publisher, via Redis's self-echo), so a pod that restarts starts
+empty and catches up on the teacher's next command; and it is keyed by playlist id with one command
+per sticky action, written only by the owner-authorised `POST /room` path, so it cannot grow under
+client control. Room membership still lives on the session, so a client must re-send `join_room`
+after every reconnect (the frontend's `MediaStreamProvider` does this alongside its channel
+re-subscribes) — the replay-on-join is what turns that re-join into a full catch-up.
 
 A `jump` is ignored by the client while [forced clock mode](#forced-clock-mode-server--client-clock-heartbeat_ackmaster_time)
 is active — the operator's master clock outranks a teacher.
 
-`lock` is **absolute, never a toggle**: the streamer holds no lock state, so the teacher's client owns
-the on/off and sends the value it wants. Two consequences: reopening the teacher's playlist document
+`lock` is **absolute, never a toggle**: the teacher's client owns the on/off and sends the value it
+wants — the per-room memory above is replay state for late joiners, not an authority a toggle could
+consult (there is no read-back API). Two consequences: reopening the teacher's playlist document
 window resets its Control menu (students stay locked — only the checkmark forgets), and two teachers driving one
 playlist will not see each other's state. `content` is a deliberate non-target — it exists as a
 disabled button in the teacher UI and the server rejects it with 400, so a dead control can never

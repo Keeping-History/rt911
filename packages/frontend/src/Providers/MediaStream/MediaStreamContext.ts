@@ -248,7 +248,7 @@ export interface WsHeartbeatAckMessage {
  * split over several replicas stays in step.
  */
 export interface RoomCommand {
-	action: "jump" | "focus" | "message" | "lock";
+	action: "jump" | "focus" | "message" | "lock" | "reload";
 	/** Virtual-clock target for "jump", as a UTC string. */
 	time?: string;
 	/** Classicy app id for "focus", e.g. "TV.app". */

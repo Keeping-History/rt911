@@ -16,9 +16,16 @@ const (
 	RoomActionMessage = "message"
 	// RoomActionLock locks or unlocks one control surface for the room: Target
 	// names the surface and On is the state to move it to. A toggle is resolved
-	// by the teacher's client, not here — the server holds no lock state, so
-	// each command carries the absolute value it wants rather than "flip it".
+	// by the teacher's client, not here — each command carries the absolute
+	// value it wants rather than "flip it". (The hub remembers the last lock
+	// command per room so a late joiner can be caught up, but that memory is
+	// replay state, not an authority a toggle could consult.)
 	RoomActionLock = "lock"
+	// RoomActionReload tells every student to re-fetch the published playlist
+	// definition and re-evaluate it. A teacher edits mid-class, saves, and
+	// pushes; the definition itself never rides the wire — clients re-read it
+	// from Directus, so the command needs no payload.
+	RoomActionReload = "reload"
 )
 
 // Lock targets. Only the clock is implemented; "content" exists in the teacher
@@ -54,7 +61,7 @@ type RoomCommand struct {
 // so a typo fails visibly instead of reaching clients that silently ignore it.
 func ValidRoomAction(action string) bool {
 	switch action {
-	case RoomActionJump, RoomActionFocus, RoomActionMessage, RoomActionLock:
+	case RoomActionJump, RoomActionFocus, RoomActionMessage, RoomActionLock, RoomActionReload:
 		return true
 	}
 	return false
