@@ -41,6 +41,7 @@ import {
 	tvSetVolumeLimit,
 } from "./TVContext";
 import { moveChannel, orderChannels } from "./channelOrder";
+import { ThumbnailTile } from "./ThumbnailTile";
 import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
 import type { EpgIconNamespace } from "./epgIcons";
 import { useThumbnailReorder } from "./useThumbnailReorder";
@@ -1256,9 +1257,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								const isSelected = selectedPlayers.includes(item.id);
 
 								return (
-									<button
+									<ThumbnailTile
 										key={item.id}
-										data-source={item.source}
+										item={item}
 										className={[
 											styles.tvPlayer,
 											isActive || isSelected ? styles.tvPlayerSelected : "",
@@ -1270,10 +1271,15 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										]
 											.filter(Boolean)
 											.join(" ")}
-										{...(item.source ? reorder.handlers(item.source) : {})}
-										onClick={() => {
-											// A drag just ended — it must not focus or select.
-											if (reorder.consumeSuppressedClick()) return;
+										multiSelectMode={multiSelectMode}
+										isActive={isActive}
+										isSelected={isSelected}
+										thumbTs={thumbTs}
+										reorderHandlers={
+											item.source ? reorder.handlers(item.source) : undefined
+										}
+										consumeSuppressedClick={reorder.consumeSuppressedClick}
+										onPress={() => {
 											if (multiSelectMode) {
 												togglePlayerSelection(item.id);
 											} else {
@@ -1281,33 +1287,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 											}
 											setHasInteracted(true);
 										}}
-										onKeyDown={(e) => {
-											if (e.key === "Enter" || e.key === " ") {
-												if (multiSelectMode) {
-													togglePlayerSelection(item.id);
-												} else {
-													setActivePlayer(item.id);
-												}
-												setHasInteracted(true);
-											}
-										}}
-										type="button"
-									>
-										<div className={styles.tvChannelTitleHolder}>
-											<p className={styles.tvChannelTitle}>{item.source}</p>
-										</div>
-										<img
-											className={styles.tvThumbnailImage}
-											src={`https://files.911realtime.org/thumbnails/${
-												item.source?.toLowerCase() ?? "offline"
-											}/${thumbTs}.jpg`}
-											onError={(e) => {
-												e.currentTarget.src =
-													"https://files.911realtime.org/thumbnails/offline.jpg";
-											}}
-											alt=""
-										/>
-									</button>
+									/>
 								);
 							})}
 							{reorder.dragOutline && (
