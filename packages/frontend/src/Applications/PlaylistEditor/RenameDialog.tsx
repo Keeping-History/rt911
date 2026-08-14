@@ -1,10 +1,13 @@
-import { ClassicyButton, ClassicyWindow } from "classicy";
+import { ClassicyButton, ClassicyInput, ClassicyWindow } from "classicy";
 import { useState } from "react";
 
 export interface RenameDialogFormProps {
 	initialTitle: string;
 	onRename: (title: string) => void;
 	onCancel: () => void;
+	/** DOM id for the title field; must be per-playlist when several document
+	 * windows can each mount a rename dialog. */
+	inputId?: string;
 }
 
 /**
@@ -16,30 +19,31 @@ export interface RenameDialogFormProps {
  * explicitly "only an icon, text, and buttons — no other controls", and this
  * needs a text field.
  */
-export function RenameDialogForm({ initialTitle, onRename, onCancel }: RenameDialogFormProps) {
+export function RenameDialogForm({
+	initialTitle,
+	onRename,
+	onCancel,
+	inputId = "playlist-rename-title",
+}: RenameDialogFormProps) {
 	const [title, setTitle] = useState(initialTitle);
 	const trimmed = title.trim();
+	// A blank title would leave the playlist unidentifiable in the list window
+	// and in the Window menu.
+	const rename = () => {
+		if (trimmed !== "") onRename(trimmed);
+	};
 
 	return (
 		<div className="playlistRenameDialog">
-			<label>
-				Title
-				<input
-					aria-label="Title"
-					type="text"
-					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-				/>
-			</label>
-			<ClassicyButton
-				isDefault={true}
-				// A blank title would leave the playlist unidentifiable in the
-				// list window and in the Window menu.
-				disabled={trimmed === ""}
-				onClickFunc={() => {
-					if (trimmed !== "") onRename(trimmed);
-				}}
-			>
+			<ClassicyInput
+				id={inputId}
+				labelTitle="Title"
+				labelPosition="left"
+				prefillValue={initialTitle}
+				onChangeFunc={(e) => setTitle(e.target.value)}
+				onEnterFunc={rename}
+			/>
+			<ClassicyButton isDefault={true} disabled={trimmed === ""} onClickFunc={rename}>
 				Rename
 			</ClassicyButton>
 			<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
@@ -73,7 +77,7 @@ export function RenameDialog({
 			initialPosition={[400, 240]}
 			onCloseFunc={formProps.onCancel}
 		>
-			<RenameDialogForm {...formProps} />
+			<RenameDialogForm {...formProps} inputId={`playlist-rename-title-${playlistId}`} />
 		</ClassicyWindow>
 	);
 }
