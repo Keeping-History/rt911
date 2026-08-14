@@ -37,8 +37,13 @@ vi.mock("classicy", async (importOriginal) => ({
 
 const mockAuth = vi.hoisted(() => ({ status: "signedIn" as string, user: { id: "u1" } as { id: string } | null }));
 vi.mock("../../Providers/Auth/AuthContext", () => ({ useAuth: () => mockAuth }));
+// Mutable so the Select All test can hand the archive volume real channel
+// lists; reset in afterEach.
+const mediaSources = vi.hoisted(() => ({
+	current: { video: [] as string[], audio: [] as string[] },
+}));
 vi.mock("../../Providers/MediaStream/useMediaStream", () => ({
-	useMediaStream: () => ({ sources: { video: [], audio: [] } }),
+	useMediaStream: () => ({ sources: mediaSources.current }),
 }));
 
 const testRecord = {
@@ -77,6 +82,7 @@ afterEach(() => {
 	fileOpenDialog.current = null;
 	mainEntries.current = {};
 	mockAuth.status = "signedIn";
+	mediaSources.current = { video: [], audio: [] };
 	vi.clearAllMocks();
 });
 
@@ -129,7 +135,7 @@ describe("PlaylistEditor", () => {
 	// else in the plan exercises the wiring, so this proves a selection is
 	// dispatched into the ACTIVE document — not the first-opened one, and not
 	// silently dropped — and that the dialog closes afterwards.
-	it("dispatches an opened selection to the active document and closes the dialog", () => {
+	it("dispatches an opened selection to the active document and closes the dialog", async () => {
 		render(<PlaylistEditor />);
 
 		act(() => screen.getByRole("button", { name: "Mock Open" }).click()); // opens p1
@@ -146,7 +152,8 @@ describe("PlaylistEditor", () => {
 				fileType: "tv-channel", meta: { app: "tv", itemId: "CNN" },
 			},
 		};
-		act(() => fileOpenDialog.current?.onOpenFunc?.([selection]));
+		// async: selection expansion (Select All support) resolves on a microtask
+		await act(async () => fileOpenDialog.current?.onOpenFunc?.([selection]));
 
 		expect(mainEntries.current.p2).toHaveLength(1);
 		expect((mainEntries.current.p2[0] as { entry: unknown }).entry).toEqual({
@@ -154,5 +161,29 @@ describe("PlaylistEditor", () => {
 		});
 		expect(mainEntries.current.p1 ?? []).toHaveLength(0);
 		expect(fileOpenDialog.current?.open).toBe(false);
+	});
+
+	it("expands a Select All selection through the archive volume into the active document", async () => {
+		mediaSources.current = { video: ["ABC", "CNN"], audio: [] };
+		render(<PlaylistEditor />);
+
+		act(() => screen.getByRole("button", { name: "Mock Open" }).click()); // opens p1
+		act(() => fireEvent.click(screen.getByRole("button", { name: "Add Media…" })));
+
+		const selectAll: ClassicyFileOpenSelection = {
+			volumeId: "rt911-archive",
+			path: ["TV Channels"],
+			entry: {
+				id: "select-all-tv", name: "Select All", kind: "file",
+				fileType: "tv-channel", meta: { selectAllPaths: [["TV Channels"]] },
+			},
+		};
+		await act(async () => fileOpenDialog.current?.onOpenFunc?.([selectAll]));
+
+		// Both channels from the live sources list, with the volume's own nested
+		// Select All entry filtered out of the expansion.
+		expect(
+			mainEntries.current.p1.map((e) => (e as { entry: { itemId: string } }).entry.itemId),
+		).toEqual(["ABC", "CNN"]);
 	});
 });

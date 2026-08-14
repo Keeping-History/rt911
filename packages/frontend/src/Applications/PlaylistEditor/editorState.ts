@@ -1,4 +1,4 @@
-import type { ClassicyFileOpenSelection } from "classicy";
+import type { ClassicyFileDialogEntry, ClassicyFileOpenSelection } from "classicy";
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import { parsePlaylist } from "../../Providers/Playlist/parsePlaylist";
 import type {
@@ -156,5 +156,58 @@ export function selectionsToEntries(
 			return [{ entry: { kind: "file", path: meta.classicyPath, at: "" } as PlaylistEntry }];
 		}
 		return [];
+	});
+}
+
+function selectAllPathsOf(entry: ClassicyFileDialogEntry): string[][] | null {
+	const paths = entry.meta?.selectAllPaths;
+	return Array.isArray(paths) ? (paths as string[][]) : null;
+}
+
+/**
+ * Resolves "Select All" pseudo-entries (meta.selectAllPaths, produced by the
+ * archive volume in directusVolume.ts) into the file entries of the folders
+ * they stand for, by re-listing those folders through the volume's own cached
+ * list(). Plain selections pass through untouched. Media entries are deduped
+ * by app+itemId within the batch, so picking "Select All" alongside one of the
+ * items it covers doesn't add it twice.
+ */
+export async function expandSelections(
+	selections: ClassicyFileOpenSelection[],
+	listFolder: (path: string[]) => Promise<ClassicyFileDialogEntry[]>,
+): Promise<{ entry: PlaylistEntry; timelineMeta?: EditorEntry["timelineMeta"] }[]> {
+	const flat: ClassicyFileOpenSelection[] = [];
+	for (const sel of selections) {
+		const paths = selectAllPathsOf(sel.entry);
+		if (!paths) {
+			flat.push(sel);
+			continue;
+		}
+		// Sequential on purpose: each list() call may hit Directus, and those
+		// must stay serialized (see directusQueue.ts).
+		for (const path of paths) {
+			try {
+				const items = await listFolder(path);
+				for (const item of items) {
+					// Folders and the folder's own Select All entry are not items.
+					if (item.kind === "file" && !selectAllPathsOf(item)) {
+						flat.push({ volumeId: sel.volumeId, path, entry: item });
+					}
+				}
+			} catch (err) {
+				console.warn(
+					`playlist-editor: Select All listing failed for ${path.join("/")}:`,
+					err,
+				);
+			}
+		}
+	}
+	const seen = new Set<string>();
+	return selectionsToEntries(flat).filter((e) => {
+		if (e.entry.kind !== "media") return true;
+		const key = `${e.entry.app} ${e.entry.itemId}`;
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
 	});
 }

@@ -8,7 +8,7 @@ import { useAuth } from "../../Providers/Auth/AuthContext";
 import { createPlaylist } from "../../Providers/Auth/playlistApi";
 import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
 import { createDirectusVolume, MEDIA_FILE_TYPES } from "./directusVolume";
-import { selectionsToEntries } from "./editorState";
+import { expandSelections } from "./editorState";
 import { listFileMenu, paletteFileMenu, windowMenu } from "./playlistMenus";
 import { PlaylistDocumentWindow } from "./PlaylistDocumentWindow";
 import { PlaylistEditorProvider, usePlaylistEditor } from "./PlaylistEditorProvider";
@@ -120,10 +120,15 @@ function PlaylistEditorContent() {
 	);
 
 	const handleDialogOpen = (selections: ClassicyFileOpenSelection[]) => {
-		if (activeId) {
-			edit(activeId, { type: "addEntries", entries: selectionsToEntries(selections) });
-		}
 		setDialogMode(null);
+		if (!activeId) return;
+		// Captured now: expansion is async (a "Select All" pseudo-entry re-lists
+		// its folders through the archive volume's cached, serialized Directus
+		// calls) and the active document must not drift while it runs.
+		const targetId = activeId;
+		void expandSelections(selections, archiveVolume.list).then((entries) => {
+			if (entries.length > 0) edit(targetId, { type: "addEntries", entries });
+		});
 	};
 
 	return (

@@ -3,6 +3,7 @@ import {
 	assembleDefinition,
 	displayWallClockToUtcIso,
 	editorReducer,
+	expandSelections,
 	initialEditorState,
 	selectionsToEntries,
 	utcIsoToDisplayWallClock,
@@ -133,5 +134,98 @@ describe("selectionsToEntries", () => {
 			},
 		]);
 		expect(out[0].entry).toEqual({ kind: "file", path: "Macintosh HD:Documents:WTC1.pdf", at: "" });
+	});
+});
+
+describe("expandSelections", () => {
+	const flightFile = (itemId: string) => ({
+		id: `flight-${itemId}`, name: itemId, kind: "file" as const, fileType: "flight",
+		meta: { app: "flights", itemId, departure: null, arrival: null },
+	});
+	const selectAll = (name: string, paths: string[][]) => ({
+		volumeId: "rt911-archive", path: paths[0],
+		entry: { id: `sa-${name}`, name, kind: "file" as const, fileType: "flight",
+			meta: { selectAllPaths: paths } },
+	});
+
+	it("expands a Select All entry into the folder's files, skipping folders and the nested Select All", async () => {
+		const listFolder = vi.fn(async () => [
+			{ id: "sa", name: "Select All", kind: "file" as const, fileType: "flight",
+				meta: { selectAllPaths: [["Flights", "American Airlines", "2001-09-11"]] } },
+			{ id: "d", name: "sub", kind: "folder" as const },
+			flightFile("AA11"),
+			flightFile("AA77"),
+		]);
+		const out = await expandSelections(
+			[selectAll("Select All", [["Flights", "American Airlines", "2001-09-11"]])],
+			listFolder,
+		);
+		expect(out.map((e) => e.entry)).toEqual([
+			{ kind: "media", app: "flights", itemId: "AA11" },
+			{ kind: "media", app: "flights", itemId: "AA77" },
+		]);
+	});
+
+	it("expands an airline-level entry across all its date folders, sequentially", async () => {
+		const order: string[] = [];
+		const listFolder = vi.fn(async (path: string[]) => {
+			order.push(path[2]);
+			return [flightFile(`AA-${path[2]}`)];
+		});
+		const paths = [
+			["Flights", "American Airlines", "2001-09-11"],
+			["Flights", "American Airlines", "2001-09-12"],
+		];
+		const out = await expandSelections([selectAll("All American Airlines Flights", paths)], listFolder);
+		expect(order).toEqual(["2001-09-11", "2001-09-12"]);
+		expect(out.map((e) => (e.entry as { itemId: string }).itemId)).toEqual([
+			"AA-2001-09-11", "AA-2001-09-12",
+		]);
+	});
+
+	it("dedupes media entries when Select All overlaps an individual selection", async () => {
+		const listFolder = vi.fn(async () => [flightFile("AA11"), flightFile("AA77")]);
+		const out = await expandSelections(
+			[
+				{ volumeId: "rt911-archive", path: ["Flights", "American Airlines", "2001-09-11"],
+					entry: flightFile("AA11") },
+				selectAll("Select All", [["Flights", "American Airlines", "2001-09-11"]]),
+			],
+			listFolder,
+		);
+		expect(out.map((e) => (e.entry as { itemId: string }).itemId)).toEqual(["AA11", "AA77"]);
+	});
+
+	it("passes plain selections through without calling the lister, preserving timelineMeta", async () => {
+		const listFolder = vi.fn();
+		const out = await expandSelections(
+			[
+				{ volumeId: "rt911-archive", path: ["News", "NYT"],
+					entry: { id: "news-101", name: "Doc", kind: "file", fileType: "news-document",
+						meta: { app: "news", itemId: "101", publishedAt: "2001-09-11T10:00:00Z" } } },
+			],
+			listFolder,
+		);
+		expect(listFolder).not.toHaveBeenCalled();
+		expect(out[0].entry).toEqual({ kind: "media", app: "news", itemId: "101" });
+		expect(out[0].timelineMeta).toEqual({ publishedAt: "2001-09-11T10:00:00Z" });
+	});
+
+	it("keeps other folders' items when one folder listing fails", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const listFolder = vi.fn(async (path: string[]) => {
+			if (path[2] === "2001-09-11") throw new Error("directus down");
+			return [flightFile(`AA-${path[2]}`)];
+		});
+		const out = await expandSelections(
+			[selectAll("All American Airlines Flights", [
+				["Flights", "American Airlines", "2001-09-11"],
+				["Flights", "American Airlines", "2001-09-12"],
+			])],
+			listFolder,
+		);
+		expect(out.map((e) => (e.entry as { itemId: string }).itemId)).toEqual(["AA-2001-09-12"]);
+		expect(warn).toHaveBeenCalled();
+		warn.mockRestore();
 	});
 });
