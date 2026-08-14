@@ -227,6 +227,7 @@ export function PlaylistEditor() {
 					initialSize={[320, 0]}
 					initialPosition={[260, 200]}
 					onCloseFunc={quit}
+					backgroundColor="var(--color-system-03)"
 				>
 					<div className="playlistEditorGate">
 						<p>{GATE_MESSAGE}</p>

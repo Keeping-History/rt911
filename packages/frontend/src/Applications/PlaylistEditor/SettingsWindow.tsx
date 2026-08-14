@@ -1,4 +1,4 @@
-import { type ClassicyMenuItem, ClassicyWindow } from "classicy";
+import { ClassicyControlLabel, type ClassicyMenuItem, ClassicyWindow } from "classicy";
 import { EntryForm } from "./EntryForm";
 import { SETTINGS_WINDOW_ID, usePlaylistEditor } from "./PlaylistEditorProvider";
 
@@ -55,9 +55,7 @@ export function SettingsWindow({
 					}
 				/>
 			) : (
-				<p className="playlistSettingsEmpty">
-					Select an entry in a playlist to edit its settings.
-				</p>
+				<ClassicyControlLabel label="Select an entry in a playlist to edit its settings." />
 			)}
 		</ClassicyWindow>
 	);
