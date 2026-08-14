@@ -107,6 +107,27 @@ def main() -> None:
             _current["id"] = None
         processed += 1
 
+        # Exit after ONE job and let the supervisor respawn us.
+        #
+        # A worker that keeps running flows in the same interpreter wedges: the
+        # process stops making progress with no whisper or ffmpeg child alive,
+        # its main thread parked in kevent inside Prefect's event loop, on jobs
+        # of under three minutes of audio. Measured against the same job in a
+        # fresh interpreter, which completes in ~14s, a wedged worker sat for
+        # 25+ minutes. Every component was timed and none is slow: extract 0.7s,
+        # probe 0.04s, slice 0.03s, whisper 4.6s, uploads 0.6s, Directus 0.3s,
+        # DB transitions 0.9s, empty Prefect flow 4.3s. Neither the heartbeat
+        # thread nor repeated flow runs reproduce it in isolation.
+        #
+        # This module already exists because "a fully isolated Python
+        # interpreter: its own event loop, connection pool, and signal
+        # handlers" was needed per slot (see the module docstring). Extending
+        # that isolation from per-slot to per-job costs one interpreter start
+        # (~3s against a ~14s job) and removes the failure mode rather than
+        # betting on having found it.
+        _log(f"exiting after {processed} job(s); supervisor will respawn")
+        return
+
 
 if __name__ == "__main__":
     main()
