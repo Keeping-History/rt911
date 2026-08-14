@@ -27,10 +27,11 @@ vi.mock("./settingsRegistry", () => ({
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<typeof import("classicy")>()),
 	ClassicyWindow: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	// The dropdown's wiring is ours; the menu chrome is classicy's. Render the
+	// The dropdown's wiring is ours; the floating-menu chrome (fixed
+	// positioning, provider, outside-click close) is classicy's. Render the
 	// items as plain buttons so clicks exercise our onClickFuncs without the
-	// desktop providers the real ClassicyMenu hooks into.
-	ClassicyMenu: ({
+	// desktop providers the real menu hooks into.
+	ClassicyContextualMenu: ({
 		menuItems,
 	}: {
 		menuItems: { id: string; title?: string; onClickFunc?: () => void }[];

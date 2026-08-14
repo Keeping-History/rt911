@@ -3,11 +3,11 @@ import {
 	ClassicyBevelButton,
 	ClassicyButtonToolbar,
 	ClassicyButtonToolbarGroup,
-	ClassicyMenu,
+	ClassicyContextualMenu,
 	type ClassicyMenuItem,
 	ClassicyWindow,
 } from "classicy";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ADD_ACTIONS, type AddAction, runAddAction, runAddSettings } from "./addActions";
 import { usePlaylistEditor } from "./PlaylistEditorProvider";
 import { settingsAppMenuItems } from "./playlistMenus";
@@ -56,8 +56,34 @@ export function ToolsPalette({
 	appMenu: ClassicyMenuItem[];
 }) {
 	const { activeId, edit, setDialogMode, openSettingsWindow } = usePlaylistEditor();
-	// Whether the Add Settings button's app dropdown is showing.
-	const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+	// Where the Add Settings app menu is showing (fixed viewport coords under
+	// the button), or null while it is not. A ClassicyContextualMenu rather
+	// than anything anchored inside this window: the palette window is
+	// scrollable={false} (overflow: hidden), so an absolutely-positioned
+	// dropdown under the toolbar is clipped into invisibility — the menu must
+	// be position:fixed to escape, which the contextual menu already is.
+	const [settingsMenuPos, setSettingsMenuPos] = useState<[number, number] | null>(null);
+	const settingsAnchorRef = useRef<HTMLDivElement>(null);
+	// The contextual menu closes itself on any outside MOUSEDOWN — including
+	// the one that starts a second click on the Settings button. Without this
+	// stamp, that click's own CLICK phase would see "closed" and immediately
+	// reopen, making the button impossible to toggle shut.
+	const suppressReopenUntil = useRef(0);
+
+	const toggleSettingsMenu = () => {
+		if (settingsMenuPos !== null) {
+			setSettingsMenuPos(null);
+			return;
+		}
+		if (Date.now() < suppressReopenUntil.current) return;
+		const rect = settingsAnchorRef.current?.getBoundingClientRect();
+		setSettingsMenuPos(rect ? [rect.left, rect.bottom + 2] : [440, 160]);
+	};
+
+	const closeSettingsMenu = () => {
+		suppressReopenUntil.current = Date.now() + 300;
+		setSettingsMenuPos(null);
+	};
 
 	const handlers = (playlistId: string) => ({
 		playlistId,
@@ -72,7 +98,7 @@ export function ToolsPalette({
 	};
 
 	const runSettings = (settingsAppId: string) => {
-		setSettingsMenuOpen(false);
+		setSettingsMenuPos(null);
 		if (activeId === null) return;
 		runAddSettings(settingsAppId, handlers(activeId));
 	};
@@ -85,7 +111,7 @@ export function ToolsPalette({
 				aria-label={action.label}
 				disabled={activeId === null}
 				onClickFunc={() =>
-					action.id === "settings" ? setSettingsMenuOpen((open) => !open) : run(action)
+					action.id === "settings" ? toggleSettingsMenu() : run(action)
 				}
 			/>
 		</ClassicyBalloonHelp>
@@ -117,29 +143,21 @@ export function ToolsPalette({
 							if (action.id !== "settings") return button(action);
 							// Add Settings drops down a menu of registered apps
 							// (same items as Edit > Add… > Settings) instead of
-							// acting directly.
+							// acting directly. The div is only the position anchor.
 							return (
-								<div key={action.id} className="playlistSettingsDropdown">
+								<div
+									key={action.id}
+									ref={settingsAnchorRef}
+									className="playlistSettingsDropdown"
+								>
 									{button(action)}
-									{settingsMenuOpen && (
-										<>
-											{/* Invisible full-screen click-away; a button so it is
-											    keyboard-dismissable, satisfying the a11y rules the
-											    bare-div version tripped. The menu sits above it. */}
-											<button
-												type="button"
-												aria-label="Close the Add Settings menu"
-												className="playlistSettingsDropdownDismiss"
-												onClick={() => setSettingsMenuOpen(false)}
-											/>
-											<div className="playlistSettingsDropdownMenu" role="presentation">
-												<ClassicyMenu
-													name="playlist_add_settings_dropdown"
-													menuItems={settingsAppMenuItems(runSettings)}
-													navClass="playlistSettingsDropdownNav"
-												/>
-											</div>
-										</>
+									{settingsMenuPos && (
+										<ClassicyContextualMenu
+											name="playlist_add_settings_dropdown"
+											position={settingsMenuPos}
+											menuItems={settingsAppMenuItems(runSettings)}
+											onClose={closeSettingsMenu}
+										/>
 									)}
 								</div>
 							);
