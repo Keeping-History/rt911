@@ -39,17 +39,31 @@
 	min-width: 100%;
 }
 
+/* Full width, so a tick at 40% lines up with a bar at 40% in the lanes below.
+ *
+ * `overflow: hidden` is the belt to the brace below: the ruler's children are
+ * absolutely positioned by percentage, and anything that renders past 100% —
+ * a long label, a future annotation — becomes scrollable overflow on
+ * .playlistTimeline and makes a fully-zoomed-out timeline scroll sideways for
+ * no visible reason. Clipping here contains that at the source. */
 .playlistTimelineRuler {
 	position: relative;
 	height: var(--window-control-size);
 	font-size: calc(var(--ui-font-size)*.85);
-	width: calc(100% - (var(--window-control-size)*2 + var(--window-padding-size)*2));
+	width: 100%;
+	overflow: hidden;
 }
 
 .playlistTimelineDayTick {
 	position: absolute;
 	top: 0;
 	white-space: nowrap;
+}
+
+/* The closing label sits at left:100%, so left-aligned it would draw its whole
+ * width beyond the track. Right-align it so it ENDS at the edge instead. */
+.playlistTimelineDayTickEnd {
+	transform: translateX(-100%);
 }
 
 .playlistTimelineHourTick {
@@ -61,9 +75,17 @@
 	opacity: 0.4;
 }
 
+/* `timeToFraction` clamps to 1, so any entry at or after 19 Sep lands at exactly
+ * left:100% and its translateX(-50%) glyph hangs half-way past the edge — enough
+ * to make the whole timeline scrollable at 1x. `clip` rather than `hidden`: it
+ * contains the horizontal overhang without creating a scroll container, and
+ * unlike `hidden` it can be paired with a visible vertical axis, which the
+ * stacked flag rows need. */
 .playlistTimelineFlagRow {
 	position: relative;
 	width: 100%;
+	overflow-x: clip;
+	overflow-y: visible;
 }
 
 .playlistTimelineFlag {

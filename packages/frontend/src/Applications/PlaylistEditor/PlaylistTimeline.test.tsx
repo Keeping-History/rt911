@@ -149,6 +149,26 @@ describe("PlaylistTimeline", () => {
 		expect(document.querySelectorAll(".playlistTimelineHourTick")).toHaveLength(40);
 	});
 
+	it("right-aligns only the closing ruler label, at every zoom level", () => {
+		// A label at left:100% that is left-aligned draws its whole width past
+		// the track. That is scrollable overflow, and it made a fully zoomed-out
+		// timeline scroll sideways — jsdom does no layout, so the guard is the
+		// class, and the CSS translateX(-100%) is what it buys.
+		render(<Controlled entries={[]} />);
+		const ends = () => document.querySelectorAll(".playlistTimelineDayTickEnd");
+		const labels = () => document.querySelectorAll(".playlistTimelineDayTick");
+
+		expect(ends()).toHaveLength(1);
+		expect(labels()[labels().length - 1].classList).toContain("playlistTimelineDayTickEnd");
+		expect(labels()[0].classList).not.toContain("playlistTimelineDayTickEnd");
+
+		// Zoomed in there are far more labels, but still exactly one at the end.
+		fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+		fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+		expect(labels().length).toBeGreaterThan(11);
+		expect(ends()).toHaveLength(1);
+	});
+
 	it("widens the track and subdivides the ruler on zoom in, and restores it on zoom out", () => {
 		render(<Controlled entries={[]} />);
 		const track = screen.getByTestId("timeline-track");
