@@ -19,7 +19,7 @@ import azt from "./epgIcons/channels/azt.png";
 import bbc from "./epgIcons/channels/bbc.png";
 import bet from "./epgIcons/channels/bet.png";
 import cbs from "./epgIcons/channels/cbs.png";
-import cctv3 from "./epgIcons/channels/cctv3.png";
+import cctv4 from "./epgIcons/channels/cctv4.png";
 import cnn from "./epgIcons/channels/cnn.png";
 import glvsn from "./epgIcons/channels/glvsn.png";
 import iraq from "./epgIcons/channels/iraq.png";
@@ -57,14 +57,14 @@ export const EPG_ICONS: Record<string, string> = {
  * TV station logos, keyed by lowercase channel slug.
  *
  * Known data quirk: the CCTV channel's canonical slug is `cctv4` (CCTV
- * International) but its stream, EPG icon key, and this artwork all still say
- * `cctv3` — the IA archive's identifier. The artwork really is CCTV-3's logo;
- * swapping in true CCTV-4 art is tracked separately.
+ * International) but the IA archive used CCTV3 identifiers, so its stream
+ * path and some EPG guide data still say `cctv3` — that key stays as an
+ * alias for the same CCTV-4 artwork.
  */
 export const CHANNEL_LOGOS: Record<string, string> = {
-	ant1, azt, bbc, bet, cbs, cctv3, cnn, glvsn, iraq, mcm, msnbc, newsw,
-	newsworld, nhk, ntv, psc, tcn, weta, wjla, wnyw, worldnet, wrc, wsbk,
-	wttg, wusa,
+	ant1, azt, bbc, bet, cbs, cctv4, cctv3: cctv4, cnn, glvsn, iraq, mcm,
+	msnbc, newsw, newsworld, nhk, ntv, psc, tcn, weta, wjla, wnyw, worldnet,
+	wrc, wsbk, wttg, wusa,
 };
 
 // Re-injected at ClassicyIcons.applications.epg so generic classicy consumers

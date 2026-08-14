@@ -29,7 +29,9 @@ describe("stationLogo", () => {
 		>;
 		const channels = epg.channels as Record<string, string>;
 		expect(channels.cnn).toBe(CHANNEL_LOGOS.cnn);
-		expect(Object.keys(channels)).toHaveLength(25);
+		// 25 stations + the cctv3 alias for the CCTV-4 artwork.
+		expect(Object.keys(channels)).toHaveLength(26);
+		expect(channels.cctv3).toBe(channels.cctv4);
 		expect(epg.cc).toBe(EPG_ICONS.cc);
 	});
 
