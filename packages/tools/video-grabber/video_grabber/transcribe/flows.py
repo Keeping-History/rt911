@@ -160,6 +160,18 @@ def slice_wav(src: Path, dest: Path, offset_ms: int, length_ms: int) -> Path:
     return dest
 
 
+def read_whisper_text(path: Path) -> str:
+    """Read a whisper output file, tolerating bytes that are not valid UTF-8.
+
+    whisper.cpp writes raw decoder output and does not guarantee UTF-8. One NORAD
+    tape emitted 0xb5 mid-file, which failed the whole job on the default strict
+    decode -- losing 6+ hours of transcription over one byte. Replacing the
+    offending bytes keeps the rest, which is the right trade for an archive: one
+    mojibake character beats no transcript at all.
+    """
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
 def transcribe_windows(wav: Path, scratch: Path, cfg, duration_s: float) -> list[Cue]:
     """Transcribe a recording as a sequence of bounded windows, merged onto one
     timeline.
@@ -181,7 +193,7 @@ def transcribe_windows(wav: Path, scratch: Path, cfg, duration_s: float) -> list
         slice_wav(wav, segment, offset_ms, length_ms)
         try:
             srt_path = transcribe_wav(segment, base, cfg, vad=True)
-            blocks.append(shift(parse_srt(srt_path.read_text()), offset_ms / 1000.0))
+            blocks.append(shift(parse_srt(read_whisper_text(srt_path)), offset_ms / 1000.0))
         finally:
             segment.unlink(missing_ok=True)
     return merge(blocks)
@@ -327,8 +339,8 @@ def transcribe_item_flow(job_id: str) -> None:
 
         base_key = subtitle_base_key(job.kind, job.source_key, cfg)
         srt_key = f"{base_key}.srt"
-        wasabi.upload_text(srt_path.read_text(), srt_key, cfg)
-        wasabi.upload_text(vtt_path.read_text(), f"{base_key}.vtt", cfg)
+        wasabi.upload_text(read_whisper_text(srt_path), srt_key, cfg)
+        wasabi.upload_text(read_whisper_text(vtt_path), f"{base_key}.vtt", cfg)
 
         if job.kind == "mp3":
             matched = patch_mp3_subtitles(job.source_url, wasabi_public_url(srt_key), cfg)
