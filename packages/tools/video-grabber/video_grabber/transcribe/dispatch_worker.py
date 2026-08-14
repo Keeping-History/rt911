@@ -30,12 +30,14 @@ import sqlalchemy as sa
 from video_grabber.config import Config
 from video_grabber.transcribe.flows import _sync_db_url, transcribe_item_flow
 from video_grabber.transcribe.qos import THROTTLED_MESSAGE, darwin_background_qos
+from video_grabber.version import code_version, version_mismatch
 
 _CLAIM_SQL = sa.text("""
     UPDATE transcribe_jobs SET
         stage = CAST('transcribing' AS transcribe_stage),
         retry_count = retry_count + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
-        last_transition_at = now()
+        last_transition_at = now(),
+        code_version = :code_version
     WHERE id = (
         SELECT id FROM transcribe_jobs
         WHERE stage = 'pending'
@@ -99,7 +101,16 @@ def assert_not_throttled() -> None:
 
 def main() -> None:
     assert_not_throttled()
+    # Refuse to start rather than to claim: a worker that fails the pin has
+    # nothing useful to do, and exiting makes launchd's log say so once instead
+    # of every poll. Unpinned (the default) this is a no-op. See issue #379.
+    mismatch = version_mismatch()
+    if mismatch:
+        raise RuntimeError(mismatch)
+
     cfg = Config()
+    version = code_version()
+    _log(f"running code_version={version}")
     url = _sync_db_url(cfg.database_url)
     threading.Thread(target=_heartbeat, args=(url,), daemon=True).start()
     processed = 0
@@ -107,7 +118,7 @@ def main() -> None:
     while True:
         engine = sa.create_engine(url)
         with engine.connect() as db:
-            row = db.execute(_CLAIM_SQL).first()
+            row = db.execute(_CLAIM_SQL, {"code_version": version}).first()
             db.commit()
         engine.dispose()
 

@@ -46,6 +46,7 @@ from video_grabber.transcribe.srt import (
     strip_nonspeech_cues,
 )
 from video_grabber.transcribe.whisper import transcribe_wav
+from video_grabber.version import code_version
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
 _ASYNCPG_PREFIX = "postgresql+asyncpg://"
@@ -426,11 +427,17 @@ def dispatch_transcribe_flow(max_runs: int = 1000, max_retries: int = 3) -> None
     processed = 0
     with get_db() as db:
         while processed < max_runs:
+            # `code_version` records the commit of whoever CLAIMS. This path
+            # dispatches to `transcribe-item`, which may execute on the cluster
+            # pod or on the Mac, so the stamp is a claim-side fact, not proof of
+            # what ran. The per-worker claim in dispatch_worker.py — where claim
+            # and execution are the same process — is the authoritative one.
             row = db.execute(sa.text("""
                 UPDATE transcribe_jobs SET
                     stage = 'transcribing',
                     retry_count = retry_count + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
-                    last_transition_at = now()
+                    last_transition_at = now(),
+                    code_version = :code_version
                 WHERE id = (
                     SELECT id FROM transcribe_jobs
                     WHERE stage = 'pending'
@@ -440,7 +447,7 @@ def dispatch_transcribe_flow(max_runs: int = 1000, max_retries: int = 3) -> None
                     LIMIT 1
                 )
                 RETURNING id
-            """), {"max_retries": max_retries}).first()
+            """), {"max_retries": max_retries, "code_version": code_version()}).first()
             db.commit()
             if row is None:
                 logger.info("dispatch-transcribe: queue empty after %d runs", processed)

@@ -113,7 +113,13 @@ COPY alembic.ini .
 # this build context before `docker build`. Installed with its dateutil dep.
 COPY mbox_parser.py /usr/local/bin/mbox_parser.py
 RUN pip install --no-cache-dir . python-dateutil
-ENV USENETARCHIVE_BIN=/usr/local/bin \
+# The commit this image was built from. There is no git in the container, so an
+# executor running this image cannot otherwise say what code it is on — which is
+# exactly how issue #379 stayed invisible. Set by build-video-grabber.yml; the
+# default keeps a local `docker build` honest rather than claiming a version.
+ARG CODE_VERSION=unknown
+ENV CODE_VERSION=${CODE_VERSION} \
+    USENETARCHIVE_BIN=/usr/local/bin \
     MBOX_PARSER=/usr/local/bin/mbox_parser.py \
     WHISPER_BIN=/usr/local/bin/whisper-cli \
     WHISPER_MODEL=/opt/models/ggml-medium.en.bin
