@@ -1,6 +1,7 @@
 import {
 	ClassicyCheckbox,
 	ClassicyControlGroup,
+	ClassicyControlLabel,
 	ClassicyDatePicker,
 	ClassicyInput,
 	ClassicyPopUpMenu,
@@ -91,7 +92,7 @@ export function EntryForm({
 		case "media":
 			return (
 				<div className="entryForm">
-					<p>{`${e.app.toUpperCase()} · ${e.itemId}`}</p>
+					<ClassicyControlLabel label={`${e.app.toUpperCase()} · ${e.itemId}`} />
 					<DateTimeField label="Start" optional value={e.start} onChange={(start) => onChange({ ...e, start })} />
 					<DateTimeField label="End" optional value={e.end} onChange={(end) => onChange({ ...e, end })} />
 					<ClassicyPopUpMenu
@@ -158,7 +159,7 @@ export function EntryForm({
 		case "file":
 			return (
 				<div className="entryForm">
-					<p>{e.path}</p>
+					<ClassicyControlLabel label={e.path} />
 					<DateTimeField label="Open at" value={e.at || undefined} onChange={(at) => onChange({ ...e, at: at ?? "" })} />
 				</div>
 			);
