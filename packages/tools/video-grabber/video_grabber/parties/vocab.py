@@ -71,6 +71,15 @@ AGENCY_BY_FACILITY: dict[str, str] = {
     "continental": "airline", "us airways": "airline",
 }
 
+# Airframe models, which the audio names constantly ("we have a 757 inbound").
+# They are not callsigns, and `aircraft:757` in the tag index is worse than no
+# tag: it collides every Boeing on the morning into one bucket.
+AIRCRAFT_TYPES: frozenset[str] = frozenset({
+    "727", "737", "747", "757", "767", "777",
+    "310", "319", "320", "321", "330", "340",
+    "md80", "md11", "dc9", "dc10",
+})
+
 ROLES: frozenset[str] = frozenset({
     "atc", "military", "airline", "emergency", "aircraft", "unknown",
 })

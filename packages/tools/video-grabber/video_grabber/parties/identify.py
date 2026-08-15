@@ -109,7 +109,12 @@ anything you know about September 11 from any other source.
 correct answer, not a failure.
 - `evidence` must be an exact quote copied character-for-character from a \
 document.
-- `subject` must be written using words that appear in the documents.
+- `subject` is one short phrase saying what the recording is about. Write it in \
+lower case, capitalising ONLY proper names — facilities, people, callsigns. \
+Every name and number you put in it must appear in the documents; the ordinary \
+words are yours to choose. Example: "Boston Center tells New York Center that \
+American 11 is not responding" — every capitalised word there is a name that \
+must be in the documents, and the rest is ordinary prose.
 
 `participants` lists everyone taking part in the communication — one entry per \
 party, however many there are. Do not force a conversation into two sides. Each \
@@ -185,6 +190,21 @@ def build_messages(
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
 _DIGITS = re.compile(r"\d+")
 
+# Controllers read numbers out digit by digit, and the transcriber writes what it
+# hears: "Quit 2-5", "contact Washington Center 1-3-4-0-0". A callsign normalised
+# to "Quit 25" then looks absent from a transcript that says it plainly. Join runs
+# of digits that are separated only by hyphens or spaces — a comma still separates,
+# so "190, 230" does not silently become the number 190230.
+_SPOKEN_DIGITS = re.compile(r"(?<=\d)[-‑\s]+(?=\d)")
+
+# Capitalised inside the phrase, or carrying a digit: the tokens in a subject that
+# could name something the model was never shown.
+_IDENTITY_TOKEN = re.compile(r"\b(?:[A-Z][\w'-]*|[\w'-]*\d[\w'-]*)\b")
+
+
+def _join_spoken_digits(text: str) -> str:
+    return _SPOKEN_DIGITS.sub("", text or "")
+
 
 def parse_parties(raw: str) -> dict:
     """Parse the model's reply, tolerating a markdown fence."""
@@ -232,7 +252,29 @@ def _callsign_supported(callsign: str, source: str) -> bool:
     digits = _DIGITS.findall(callsign or "")
     if not digits:
         return False
-    return all(d in source for d in digits)
+    joined = _join_spoken_digits(source)
+    return all(d in source or d in joined for d in digits)
+
+
+def unsupported_identities(subject: str, source: str) -> list[str]:
+    """Names and numbers in a subject line that the source does not contain.
+
+    A subject is a paraphrase, so the whole-phrase containment rule that governs
+    minute summaries is the wrong instrument: it rejected every subject in the
+    first dry run because ordinary summary words ("reports", "routine",
+    "shortly") are not in a two-sentence transcript.
+
+    What actually needs policing is narrower — the model naming a facility,
+    person or flight it was never shown. Those tokens are capitalised or carry a
+    digit, and the prompt asks for the rest in lower case so the signal is
+    reliable rather than incidental.
+    """
+    joined = _join_spoken_digits(source)
+    missing = []
+    for token in _IDENTITY_TOKEN.findall(subject or ""):
+        if unsupported_words(token, source) and unsupported_words(token, joined):
+            missing.append(token)
+    return sorted(set(missing))
 
 
 def validate_parties(
@@ -329,11 +371,11 @@ def validate_parties(
     if not subject or subject_source is None:
         cleaned["subject"] = None
     else:
-        missing = unsupported_words(subject, texts[subject_source])
+        missing = unsupported_identities(subject, texts[subject_source])
         if missing:
             reasons.append(
-                f"subject introduced words absent from the {subject_source}: "
-                f"{', '.join(missing[:6])}"
+                f"subject names {missing[:6]} which the {subject_source} "
+                f"never contains"
             )
             cleaned["subject"] = None
         else:
