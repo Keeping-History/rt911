@@ -74,6 +74,29 @@ def test_an_invented_flight_number_is_still_rejected():
     assert not _callsign_supported("Delta Eighty Nine", "delta eighty eight is with you")
 
 
+def test_a_short_number_does_not_match_a_longer_one_containing_it():
+    """Found on the NEADS floor tape, and it predates the spoken-number work.
+
+    That transcript never says 93 — it says "US 9-37". Substring matching
+    accepted "United 93" against it. Numbers are matched whole.
+    """
+    assert not _callsign_supported("United 93", "we have US 9-37 inbound")
+    assert not _callsign_supported("American 11", "flight 1180 is climbing")
+    assert _callsign_supported("US 937", "we have US 9-37 inbound")
+
+
+def test_a_long_spoken_readout_does_not_match_every_short_callsign():
+    # "twelve hours thirty minutes twenty five seconds" concatenates to a long
+    # digit string; it must not vouch for an arbitrary flight number inside it.
+    readout = "12 hours, 30 minutes, 25 seconds, 30 minutes, 30 seconds"
+    assert not _callsign_supported("Delta 53", readout)
+
+
+def test_leading_zeros_are_a_spelling_not_a_difference():
+    assert _callsign_supported("Gofer 06", "gofer 6, say position")
+    assert _callsign_supported("Gofer 6", "gofer zero six, say position")
+
+
 def test_a_callsign_with_no_number_at_all_is_still_rejected():
     # "a Delta out of Boston" names an airline, not an aircraft.
     assert not _callsign_supported("Delta", "we have a Delta out of Boston")

@@ -222,6 +222,19 @@ def digit_haystack(source: str) -> str:
     ))
 
 
+def source_numbers(source: str) -> set[str]:
+    """Every whole number the source states, under any of its spellings.
+
+    Whole numbers, not substrings. Checking `"93" in text` accepts a transcript
+    whose only number is 937 — a real false positive found on the NEADS floor
+    tape, where "United 93" scored as supported by audio that mentions US 9-37
+    and never says 93 at all. Synthesised readings make it worse, because a
+    concatenated run of a time readout is a 21-digit string containing almost
+    every short number as a substring.
+    """
+    return set(_DIGITS.findall(digit_haystack(source)))
+
+
 def parse_parties(raw: str) -> dict:
     """Parse the model's reply, tolerating a markdown fence."""
     text = (raw or "").strip()
@@ -271,8 +284,9 @@ def _callsign_supported(callsign: str, source: str) -> bool:
     digits = _DIGITS.findall(spoken_to_digits(callsign or ""))
     if not digits:
         return False
-    haystack = digit_haystack(source)
-    return all(d in haystack for d in digits)
+    stated = source_numbers(source)
+    # Leading zeros are a spelling ("Gofer 06" / "Gofer 6"), not a difference.
+    return all(d in stated or d.lstrip("0") in stated for d in digits)
 
 
 def unsupported_identities(subject: str, source: str) -> list[str]:
