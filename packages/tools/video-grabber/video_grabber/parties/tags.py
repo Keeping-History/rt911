@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 
+from video_grabber.parties.spoken import spoken_to_digits
 from video_grabber.parties.vocab import AIRCRAFT_TYPES, TOPICS, agency_for
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -49,7 +50,8 @@ def normalize_callsign(callsign: str) -> str:
     collapse the ways one aircraft is written, not to force everything into an
     airline scheme. Leading zeros go so `Quit 2-5` and `QUIT25` agree.
     """
-    compact = _NON_ALNUM.sub("", (callsign or "").lower())
+    # "Delta Eighty Nine" has to reach the same tag as "DAL89".
+    compact = _NON_ALNUM.sub("", spoken_to_digits(callsign or "").lower())
     m = _CALLSIGN.match(compact)
     if not m:
         return compact
