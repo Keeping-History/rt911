@@ -27,6 +27,14 @@ Also stitches per-channel continuous HLS streams + EPG guide JSON.
   manually-triggered `dispatch-normalize` only — normalize files in place
   (dynaudnorm + two-pass EBU R128 loudnorm), archiving originals to
   `audio-original/` first (first-write-wins). See [`docs/normalization.md`](docs/normalization.md).
+- `video_grabber/parties/` — a **fifth pipeline**: identify who each `audio/*.mp3`
+  recording's traffic is between and tag it for searching, writing `mp3_items.parties`
+  and `mp3_items.tags`. No state table — `parties.schema_version` is the idempotency
+  marker. Every name the model returns must appear in a document it was shown; where
+  the 9/11 Commission catalogued the same clip (`commission_clips.json`) their
+  narrative is admitted as a second source, with per-field provenance. See
+  [`docs/party-identification.md`](docs/party-identification.md) — read it before
+  changing the prompt or the gate, and do not weaken the gate to raise yield.
 - `k8s/` — deployment manifests (see Deploy below).
 - `tests/` — pytest. `test_migrations.py` needs a live Postgres; it **errors** (not
   fails) when none is reachable — that's an environment gap, not a regression.

@@ -1,4 +1,4 @@
-"""Decide who a recording's traffic is between. Pure logic only.
+"""Decide who a recording's traffic is between, and what it is about. Pure logic.
 
 The network call is injected, so every rule here is unit-testable without a key —
 same split as transcript/summarize.py, and for the same reason: the judgments that
@@ -8,13 +8,36 @@ The containment gate is the point of this module. The model knows how September 
 turned out. Asked who is speaking on a garbled tape it will confidently supply
 "NEADS" or "Colin Scoggins" from background knowledge rather than from the audio.
 Identification has to be a reading task, not a recall task, so every name the model
-returns must already be in the transcript and its evidence quote must be verbatim.
+returns must already be in a document it was shown, and its evidence quote must be
+verbatim.
+
+Schema 2 widens what a recording can say about itself without widening what the
+model is allowed to invent:
+
+- **`participants` replaces `side_a`/`side_b`.** Two sides could not describe a
+  conference call or a position tape, and 179 tapes were reduced to the
+  placeholder `side_b.facility = "various"` for exactly that reason.
+- **`mentions` separates who is talked about from who is talking**, which was
+  previously discarded entirely.
+- **`subject` and `topics`** say what the call is about. `topics` comes from a
+  closed vocabulary (`vocab.TOPICS`) because free text does not survive contact
+  with a search box.
+- **Confidence is per participant**, not per blob. Under schema 1 a single
+  rejected field dragged the whole answer to "low", which made 189 partly-good
+  rows indistinguishable from ones the model genuinely could not read.
+
+Provenance is carried two ways for one reason: participants are objects, so their
+`source` and `confidence` live inline where they cannot be knocked out of
+alignment by a dropped entry, while the flat fields use a path-keyed `sources`
+map. Array indices in a path map would shift whenever the gate drops a
+participant, silently re-labelling the survivors.
 """
 from __future__ import annotations
 
 import json
 import re
 
+from video_grabber.parties.vocab import LINKS, ROLES, TOPICS
 from video_grabber.transcript.summarize import unsupported_words
 
 CONVERSATION = "conversation"
@@ -23,6 +46,13 @@ BROADCAST = "broadcast"
 TIER_CLIP = "clip"
 TIER_TAPE = "tape"
 CLIP_MAX_SECONDS = 300
+
+SCHEMA_VERSION = 2
+
+SOURCE_TRANSCRIPT = "transcript"
+SOURCE_COMMISSION = "commission_monograph"
+
+CONFIDENCE_ORDER = {"low": 0, "medium": 1, "high": 2}
 
 # Keyed on the first path segment under audio/. A module constant rather than an
 # env var: this is a property of the corpus, not the deployment, and an env var is
@@ -69,43 +99,87 @@ def tier_for(duration_seconds: int | None) -> str:
 
 
 _SYSTEM = """\
-You identify who is speaking in a transcript of September 11, 2001 air traffic \
-control, military, and emergency audio.
+You identify who is speaking in a recording of September 11, 2001 air traffic \
+control, military, and emergency audio, and say what the recording is about.
 
 Rules you must follow:
-- Use ONLY what the transcript says. Do not use anything you know about the events \
-of September 11 from any other source.
-- If the transcript does not name a facility, position, or person, return null for \
-that field. Do not infer it.
-- The `evidence` field must be an exact quote copied character-for-character from \
-the transcript.
-- If you cannot tell who is speaking, say so with confidence "low" and null sides. \
-That is a correct answer, not a failure.
+- Every value you return must come from a document you were given. Do not use \
+anything you know about September 11 from any other source.
+- If the documents do not tell you, return null or an empty list. That is a \
+correct answer, not a failure.
+- `evidence` must be an exact quote copied character-for-character from a \
+document.
+- `subject` must be written using words that appear in the documents.
+
+`participants` lists everyone taking part in the communication — one entry per \
+party, however many there are. Do not force a conversation into two sides. Each \
+participant carries its own `confidence`, because you will often be sure of one \
+party and unsure of another.
+
+`mentions` is for facilities, aircraft and people that are TALKED ABOUT but are \
+not taking part. Keep them out of `participants`.
+
+`topics` must be chosen from this list, and nothing else:
+%s
 
 Return ONLY a JSON object:
-{"tier":"clip",
- "side_a":{"facility":str|null,"position":str|null,"person":str|null,"role":str|null},
- "side_b":{"facility":str|null,"position":str|null,"person":str|null,"role":str|null},
- "link":"air-ground"|"landline"|"internal"|"unknown",
+{"tier":"clip"|"tape",
+ "participants":[{"facility":str|null,"position":str|null,"person":str|null,
+                  "role":"atc"|"military"|"airline"|"emergency"|"aircraft"|"unknown",
+                  "confidence":"high"|"medium"|"low"}],
+ "link":"air-ground"|"landline"|"internal"|"conference"|"unknown",
  "aircraft":[str],
+ "mentions":{"facilities":[str],"aircraft":[str],"people":[str]},
+ "subject":str|null,
+ "topics":[str],
  "confidence":"high"|"medium"|"low",
- "evidence":str}
-
-`role` is one of: atc, military, airline, emergency, aircraft, unknown."""
+ "evidence":str}"""
 
 
-def build_clip_messages(transcript: str) -> tuple[str, str]:
-    return _SYSTEM, f"Transcript:\n\n{transcript}"
+_TAPE_NOTE = """
+
+This is a long continuous recording of ONE position, and you are seeing sampled \
+excerpts rather than the whole thing. List that position as the first \
+participant. Add the counterparties you can actually identify in the excerpts as \
+further participants — do not invent a placeholder for the ones you cannot."""
+
+_TWO_DOC_NOTE = """
+
+You are given TWO documents. TRANSCRIPT is an automatic transcript of the \
+recording, and is imperfect: callsigns and names are often garbled or missing. \
+COMMISSION is how the 9/11 Commission catalogued this same recording — their \
+title for it, and where available the passage of the Team 8 audio monograph that \
+discusses it.
+
+For every value you fill in, record which document it came from: on a \
+participant use its `source` field, and for the flat fields use the `sources` \
+map keyed by field name ("subject", "evidence", "aircraft", "mentions.people", \
+"mentions.facilities", "mentions.aircraft"). Use "transcript" or \
+"commission_monograph".
+
+Prefer the transcript where both support a value. Use the Commission to fill in \
+what the transcript leaves unknown or garbled. The Commission passage also gives \
+narrative about the wider morning — do not pull in people or facilities it does \
+not connect to THIS recording."""
 
 
-def build_tape_messages(filename: str, samples: list[str]) -> tuple[str, str]:
-    system = _SYSTEM.replace('"tier":"clip"', '"tier":"tape"') + (
-        "\n\nThis is a long continuous recording of ONE position. side_a is that "
-        "position. side_b represents the many counterparties, so set its facility "
-        'to "various". Identify the position from the filename and the samples.'
-    )
-    joined = "\n\n---\n\n".join(samples)
-    return system, f"Filename: {filename}\n\nSampled excerpts:\n\n{joined}"
+def build_messages(
+    transcript: str, tier: str, commission_text: str = ""
+) -> tuple[str, str]:
+    """The one prompt builder: clip or tape, with or without a second document.
+
+    Schema 1 had three near-identical builders that drifted apart. The tier and
+    the presence of Commission text are just two flags on one task.
+    """
+    system = _SYSTEM % "\n".join(f"  {t}" for t in sorted(TOPICS))
+    if tier == TIER_TAPE:
+        system += _TAPE_NOTE
+    if commission_text:
+        system += _TWO_DOC_NOTE
+        user = f"COMMISSION:\n\n{commission_text}\n\n=====\n\nTRANSCRIPT:\n\n{transcript}"
+    else:
+        user = f"Transcript:\n\n{transcript}"
+    return system, user
 
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
@@ -138,77 +212,18 @@ def parse_parties(raw: str) -> dict:
     return parsed
 
 
-SOURCE_TRANSCRIPT = "transcript"
-SOURCE_COMMISSION = "commission_monograph"
-
-_ENRICH_SYSTEM = """\
-You identify who is speaking in a recording of September 11, 2001 air traffic \
-control, military, and emergency audio.
-
-You are given TWO documents:
-1. TRANSCRIPT — an automatic transcript of the recording itself. Imperfect: \
-callsigns and names are often garbled or missing.
-2. COMMISSION — how the 9/11 Commission catalogued this same recording: their \
-title for it, and where available the passage of the Team 8 audio monograph that \
-discusses it. This names people, positions and facilities the transcript may not.
-
-Rules you must follow:
-- Every value you return must come from one of those two documents. Do not use \
-anything you know about September 11 from any other source.
-- For every field you fill in, record which document it came from in `sources`, \
-using the exact key path (e.g. "side_a.facility") and the value "transcript" or \
-"commission_monograph".
-- Prefer the transcript when both documents support a field. Use the Commission \
-only to fill in what the transcript leaves unknown or garbled.
-- The COMMISSION document describes this recording, so what it says about who is \
-on the call applies. But it also gives surrounding narrative about the wider \
-morning — do not pull in people or facilities it does not connect to THIS call.
-- If neither document tells you, return null. That is a correct answer.
-- `evidence` must be an exact quote copied character-for-character from whichever \
-document you cite in sources["evidence"].
-
-Return ONLY a JSON object:
-{"tier":"clip"|"tape",
- "side_a":{"facility":str|null,"position":str|null,"person":str|null,"role":str|null},
- "side_b":{"facility":str|null,"position":str|null,"person":str|null,"role":str|null},
- "link":"air-ground"|"landline"|"internal"|"unknown",
- "aircraft":[str],
- "confidence":"high"|"medium"|"low",
- "evidence":str,
- "sources":{"<field path>":"transcript"|"commission_monograph"}}
-
-`role` is one of: atc, military, airline, emergency, aircraft, unknown."""
-
-
-def build_enrichment_messages(
-    transcript: str, commission_text: str, tier: str
-) -> tuple[str, str]:
-    """Prompt for identifying a recording the Commission also catalogued."""
-    system = _ENRICH_SYSTEM
-    if tier == TIER_TAPE:
-        system += (
-            "\n\nThis is a long continuous recording of ONE position. side_a is "
-            'that position; set side_b.facility to "various".'
-        )
-    user = (
-        f"COMMISSION:\n\n{commission_text}\n\n"
-        f"=====\n\nTRANSCRIPT:\n\n{transcript}"
-    )
-    return system, user
-
-
 def _normalise(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip().lower()
 
 
-def evidence_is_verbatim(evidence: str, transcript: str) -> bool:
+def evidence_is_verbatim(evidence: str, source: str) -> bool:
     if not (evidence or "").strip():
         return False
-    return _normalise(evidence) in _normalise(transcript)
+    return _normalise(evidence) in _normalise(source)
 
 
-def _callsign_supported(callsign: str, transcript: str) -> bool:
-    """A callsign is supported when its flight number appears in the transcript.
+def _callsign_supported(callsign: str, source: str) -> bool:
+    """A callsign is supported when its flight number appears in the source.
 
     'AAL77' is a normalisation of the spoken 'American 77', not a quotation, so
     requiring the literal token would reject every correct answer. The flight
@@ -217,67 +232,28 @@ def _callsign_supported(callsign: str, transcript: str) -> bool:
     digits = _DIGITS.findall(callsign or "")
     if not digits:
         return False
-    return all(d in transcript for d in digits)
+    return all(d in source for d in digits)
 
 
-def validate_parties(parsed: dict, transcript: str) -> tuple[dict, list[str]]:
-    """Drop every name the transcript does not support; return (cleaned, reasons).
-
-    Any rejection forces confidence to 'low' rather than discarding the whole
-    answer: a partly-supported identification is still worth keeping, but it must
-    not claim to be certain.
-    """
-    cleaned = json.loads(json.dumps(parsed))
-    reasons: list[str] = []
-
-    if not evidence_is_verbatim(cleaned.get("evidence", ""), transcript):
-        reasons.append("evidence is not a verbatim quote from the transcript")
-        cleaned["evidence"] = None
-
-    for side in ("side_a", "side_b"):
-        block = cleaned.get(side) or {}
-        for field in ("facility", "position", "person"):
-            value = block.get(field)
-            # 'various' is the tape tier's deliberate placeholder for "many
-            # counterparties", not a claim about the transcript.
-            if not value or value == "various":
-                continue
-            missing = unsupported_words(value, transcript)
-            if missing:
-                reasons.append(
-                    f"{side}.{field}={value!r} names {missing} which the transcript "
-                    f"never contains"
-                )
-                block[field] = None
-        cleaned[side] = block
-
-    aircraft = cleaned.get("aircraft") or []
-    kept = []
-    for name in aircraft:
-        if _callsign_supported(str(name), transcript):
-            kept.append(name)
-        else:
-            reasons.append(f"aircraft {name!r} not present in transcript")
-    cleaned["aircraft"] = kept
-
-    if reasons:
-        cleaned["confidence"] = "low"
-    return cleaned, reasons
-
-
-def validate_enriched_parties(
-    parsed: dict, transcript: str, commission_text: str
+def validate_parties(
+    parsed: dict, transcript: str, commission_text: str = ""
 ) -> tuple[dict, list[str]]:
-    """The containment gate, parameterised by which document a field claims.
+    """Drop everything the cited document does not support; return (cleaned, reasons).
 
-    `validate_parties` asks one question of every value: is it in the transcript?
-    Here there are two admissible documents, so the question becomes: is it in the
-    one it says it came from? The guarantee is unchanged — nothing survives that
-    isn't written down somewhere we can point at — and it stays checkable after the
-    fact, because the surviving `sources` map says where to look.
+    The gate asks one question of every value: is it in the document it claims to
+    have come from? With no Commission text this reduces to the original rule —
+    everything is held to the transcript — so a single-document run is the
+    degenerate case rather than a separate code path.
 
-    A field that declares no source is held to the transcript. Silence must not be
-    a way to reach the looser document.
+    Two rules keep provenance from becoming decorative: an **undeclared** source
+    is held to the transcript, so silence cannot reach the looser document, and an
+    **unrecognised** source name is rejected outright rather than trusted.
+
+    Unlike schema 1 this no longer crushes the whole answer to "low" on any
+    rejection. Fields carry their own confidence, and a blanket downgrade made
+    partly-good rows indistinguishable from unreadable ones. A gate hit caps the
+    overall figure at "medium" instead — something was wrong, so it may not claim
+    certainty, but what survived is still worth grading.
     """
     texts = {SOURCE_TRANSCRIPT: transcript, SOURCE_COMMISSION: commission_text}
     cleaned = json.loads(json.dumps(parsed))
@@ -287,8 +263,9 @@ def validate_enriched_parties(
     reasons: list[str] = []
     kept_sources: dict[str, str] = {}
 
-    def resolve(path: str) -> str | None:
-        claimed = declared.get(path)
+    def resolve(path: str, claimed: str | None = None) -> str | None:
+        if claimed is None:
+            claimed = declared.get(path)
         if claimed is None:
             return SOURCE_TRANSCRIPT
         if claimed not in texts:
@@ -296,6 +273,46 @@ def validate_enriched_parties(
             return None
         return claimed
 
+    def check_name(value: str, source: str, path: str) -> bool:
+        missing = unsupported_words(value, texts[source])
+        if missing:
+            reasons.append(
+                f"{path}={value!r} names {missing} which the {source} never contains"
+            )
+            return False
+        return True
+
+    # --- participants ---------------------------------------------------
+    participants = []
+    for i, raw in enumerate(cleaned.get("participants") or []):
+        if not isinstance(raw, dict):
+            continue
+        source = resolve(f"participants[{i}]", raw.get("source"))
+        if source is None:
+            continue
+        entry = {}
+        for field in ("facility", "position", "person"):
+            value = raw.get(field)
+            # 'various' was schema 1's placeholder for "many counterparties".
+            # Schema 2 has participants, so it is no longer a legitimate answer.
+            if not value or str(value).lower() == "various":
+                entry[field] = None
+                continue
+            entry[field] = value if check_name(
+                str(value), source, f"participants[{i}].{field}"
+            ) else None
+        role = raw.get("role")
+        entry["role"] = role if role in ROLES else "unknown"
+        confidence = raw.get("confidence")
+        entry["confidence"] = confidence if confidence in CONFIDENCE_ORDER else "low"
+        entry["source"] = source
+        # An entry naming nobody says only "somebody with this role spoke", which
+        # every recording already implies. Drop it rather than pad the list.
+        if any(entry[f] for f in ("facility", "position", "person")):
+            participants.append(entry)
+    cleaned["participants"] = participants
+
+    # --- evidence ---------------------------------------------------------
     evidence_source = resolve("evidence")
     if evidence_source is None or not evidence_is_verbatim(
         cleaned.get("evidence", ""), texts[evidence_source]
@@ -306,39 +323,79 @@ def validate_enriched_parties(
     else:
         kept_sources["evidence"] = evidence_source
 
-    for side in ("side_a", "side_b"):
-        block = cleaned.get(side) or {}
-        for field in ("facility", "position", "person"):
-            path = f"{side}.{field}"
-            value = block.get(field)
-            if not value or value == "various":
-                continue
-            source = resolve(path)
-            if source is None:
-                block[field] = None
-                continue
-            missing = unsupported_words(value, texts[source])
-            if missing:
-                reasons.append(
-                    f"{path}={value!r} names {missing} which the {source} never contains"
-                )
-                block[field] = None
-            else:
-                kept_sources[path] = source
-        cleaned[side] = block
+    # --- subject ----------------------------------------------------------
+    subject = (cleaned.get("subject") or "").strip()
+    subject_source = resolve("subject")
+    if not subject or subject_source is None:
+        cleaned["subject"] = None
+    else:
+        missing = unsupported_words(subject, texts[subject_source])
+        if missing:
+            reasons.append(
+                f"subject introduced words absent from the {subject_source}: "
+                f"{', '.join(missing[:6])}"
+            )
+            cleaned["subject"] = None
+        else:
+            cleaned["subject"] = subject
+            kept_sources["subject"] = subject_source
 
+    # --- aircraft ---------------------------------------------------------
     aircraft_source = resolve("aircraft")
-    kept = []
+    kept_aircraft = []
     for name in cleaned.get("aircraft") or []:
         if aircraft_source and _callsign_supported(str(name), texts[aircraft_source]):
-            kept.append(name)
+            kept_aircraft.append(name)
         else:
             reasons.append(f"aircraft {name!r} not present in the {aircraft_source}")
-    cleaned["aircraft"] = kept
-    if kept and aircraft_source:
+    cleaned["aircraft"] = kept_aircraft
+    if kept_aircraft and aircraft_source:
         kept_sources["aircraft"] = aircraft_source
 
+    # --- mentions ---------------------------------------------------------
+    mentions_in = cleaned.get("mentions") or {}
+    mentions_out: dict[str, list] = {"facilities": [], "aircraft": [], "people": []}
+    for kind in ("facilities", "people"):
+        path = f"mentions.{kind}"
+        source = resolve(path)
+        if source is None:
+            continue
+        for value in mentions_in.get(kind) or []:
+            if check_name(str(value), source, path):
+                mentions_out[kind].append(value)
+        if mentions_out[kind]:
+            kept_sources[path] = source
+    source = resolve("mentions.aircraft")
+    if source:
+        for value in mentions_in.get("aircraft") or []:
+            if _callsign_supported(str(value), texts[source]):
+                mentions_out["aircraft"].append(value)
+            else:
+                reasons.append(f"mentioned aircraft {value!r} not present in the {source}")
+        if mentions_out["aircraft"]:
+            kept_sources["mentions.aircraft"] = source
+    cleaned["mentions"] = mentions_out
+
+    # --- closed vocabularies ----------------------------------------------
+    topics = []
+    for topic in cleaned.get("topics") or []:
+        if topic in TOPICS:
+            topics.append(topic)
+        else:
+            reasons.append(f"topic {topic!r} is not in the controlled vocabulary")
+    cleaned["topics"] = sorted(set(topics))
+
+    if cleaned.get("link") not in LINKS:
+        cleaned["link"] = "unknown"
+
+    # --- overall confidence -------------------------------------------------
+    overall = cleaned.get("confidence")
+    if overall not in CONFIDENCE_ORDER:
+        overall = "low"
+    if reasons and CONFIDENCE_ORDER[overall] > CONFIDENCE_ORDER["medium"]:
+        overall = "medium"
+    cleaned["confidence"] = overall
+
     cleaned["sources"] = kept_sources
-    if reasons:
-        cleaned["confidence"] = "low"
+    cleaned["schema_version"] = SCHEMA_VERSION
     return cleaned, reasons

@@ -10,7 +10,7 @@ from video_grabber.parties.commission import (
 from video_grabber.parties.identify import (
     SOURCE_COMMISSION,
     SOURCE_TRANSCRIPT,
-    validate_enriched_parties,
+    validate_parties,
 )
 
 # Two clips a minute apart on the real morning, catalogued by the Commission with
@@ -91,9 +91,13 @@ def test_agreeing_title_matches_and_reports_its_source():
 def _parties(**over):
     """A well-formed answer, so each test's own defect is the only one in play."""
     base = {
-        "side_a": {"facility": None, "position": None, "person": None, "role": "atc"},
-        "side_b": {"facility": None, "position": None, "person": None, "role": "military"},
+        "tier": "clip",
+        "participants": [],
+        "link": "landline",
         "aircraft": [],
+        "mentions": {"facilities": [], "aircraft": [], "people": []},
+        "subject": None,
+        "topics": [],
         "confidence": "high",
         "evidence": "Gofer zero six, this is Washington Center",
         "sources": {"evidence": SOURCE_TRANSCRIPT},
@@ -109,92 +113,85 @@ def _reason(reasons, needle):
 
 
 def test_commission_sourced_name_survives_though_absent_from_transcript():
-    """The whole point of the second pass.
+    """The whole point of consulting a second document.
 
-    'Colin Scoggins' is nowhere in the audio. Under the single-document gate it
-    was correctly destroyed; here it is admissible because the Commission names
-    him and the answer says so.
+    'Colin Scoggins' is nowhere in the audio. Held to the transcript alone he is
+    correctly destroyed; here he is admissible because the Commission names him
+    and the answer says that is where he came from.
     """
-    cleaned, reasons = validate_enriched_parties(
-        _parties(
-            side_b={"facility": "NEADS", "position": None,
-                    "person": "Colin Scoggins", "role": "military"},
-            sources={"side_b.facility": SOURCE_COMMISSION,
-                     "side_b.person": SOURCE_COMMISSION},
-        ),
+    cleaned, reasons = validate_parties(
+        _parties(participants=[{
+            "facility": "NEADS", "position": None, "person": "Colin Scoggins",
+            "role": "military", "confidence": "high", "source": SOURCE_COMMISSION,
+        }]),
         TRANSCRIPT,
         COMMISSION,
     )
-    assert cleaned["side_b"]["person"] == "Colin Scoggins"
-    assert cleaned["sources"]["side_b.person"] == SOURCE_COMMISSION
+    assert cleaned["participants"][0]["person"] == "Colin Scoggins"
+    assert cleaned["participants"][0]["source"] == SOURCE_COMMISSION
     assert reasons == []
 
 
 def test_a_name_in_neither_document_is_still_destroyed():
-    cleaned, reasons = validate_enriched_parties(
-        _parties(
-            side_a={"facility": "Cleveland Center", "position": None,
-                    "person": None, "role": "atc"},
-            sources={"side_a.facility": SOURCE_COMMISSION},
-        ),
+    cleaned, reasons = validate_parties(
+        _parties(participants=[{
+            "facility": "Cleveland Center", "position": None, "person": None,
+            "role": "atc", "confidence": "high", "source": SOURCE_COMMISSION,
+        }]),
         TRANSCRIPT,
         COMMISSION,
     )
-    assert cleaned["side_a"]["facility"] is None
-    assert cleaned["confidence"] == "low"
-    assert "commission_monograph never contains" in reasons[0]
+    assert cleaned["participants"] == []
+    _reason(reasons, "commission_monograph never contains")
 
 
 def test_claiming_the_transcript_for_a_commission_only_name_fails():
-    """Provenance is checked, not just recorded.
+    """Provenance is checked, not merely recorded.
 
     A model that mislabels where a value came from must not get it through — the
     label decides which document the value is held against.
     """
-    cleaned, _ = validate_enriched_parties(
-        _parties(
-            side_b={"facility": None, "position": None,
-                    "person": "Colin Scoggins", "role": "military"},
-            sources={"side_b.person": SOURCE_TRANSCRIPT},
-        ),
+    cleaned, _ = validate_parties(
+        _parties(participants=[{
+            "facility": None, "position": None, "person": "Colin Scoggins",
+            "role": "military", "confidence": "high", "source": SOURCE_TRANSCRIPT,
+        }]),
         TRANSCRIPT,
         COMMISSION,
     )
-    assert cleaned["side_b"]["person"] is None
+    assert cleaned["participants"] == []
 
 
 def test_undeclared_source_is_held_to_the_transcript():
     """Fail-closed. Saying nothing must not reach the looser document."""
-    cleaned, reasons = validate_enriched_parties(
-        _parties(
-            side_b={"facility": "NEADS", "position": None, "person": None,
-                    "role": "military"},
-            sources={},
-        ),
+    cleaned, reasons = validate_parties(
+        _parties(participants=[{
+            "facility": "NEADS", "position": None, "person": None,
+            "role": "military", "confidence": "high",
+        }]),
         TRANSCRIPT,
         COMMISSION,
     )
-    assert cleaned["side_b"]["facility"] is None
-    assert "transcript never contains" in reasons[0]
+    assert cleaned["participants"] == []
+    _reason(reasons, "transcript never contains")
 
 
 def test_unknown_source_name_is_rejected_not_trusted():
-    cleaned, reasons = validate_enriched_parties(
-        _parties(
-            side_a={"facility": "NEADS", "position": None, "person": None,
-                    "role": "military"},
-            sources={"side_a.facility": "my_own_knowledge"},
-        ),
+    cleaned, reasons = validate_parties(
+        _parties(participants=[{
+            "facility": "NEADS", "position": None, "person": None,
+            "role": "military", "confidence": "high", "source": "my_own_knowledge",
+        }]),
         TRANSCRIPT,
         COMMISSION,
     )
-    assert cleaned["side_a"]["facility"] is None
-    assert "unknown source" in reasons[0]
+    assert cleaned["participants"] == []
+    _reason(reasons, "unknown source")
 
 
 def test_evidence_may_quote_the_commission_when_it_says_so():
     quote = "Colin Scoggins at Boston Center relayed the report to NEADS."
-    cleaned, reasons = validate_enriched_parties(
+    cleaned, reasons = validate_parties(
         _parties(evidence=quote, sources={"evidence": SOURCE_COMMISSION}),
         TRANSCRIPT,
         COMMISSION,
@@ -204,25 +201,26 @@ def test_evidence_may_quote_the_commission_when_it_says_so():
 
 
 def test_surviving_sources_map_is_rebuilt_from_what_passed():
-    """The stored map must describe the stored values, not the model's claims.
-
-    A consumer reading `parties.sources` is entitled to assume every path in it
-    names a field that is actually present and actually verified.
-    """
-    cleaned, _ = validate_enriched_parties(
-        _parties(
-            side_a={"facility": "Washington Center", "position": None,
-                    "person": None, "role": "atc"},
-            side_b={"facility": "Cleveland Center", "position": None,
-                    "person": None, "role": "atc"},
-            sources={"side_a.facility": SOURCE_TRANSCRIPT,
-                     "side_b.facility": SOURCE_COMMISSION},
-        ),
+    """The stored map must describe the stored values, not the model's claims."""
+    cleaned, _ = validate_parties(
+        _parties(aircraft=["Gofer 06"], sources={"aircraft": SOURCE_COMMISSION}),
         TRANSCRIPT,
         COMMISSION,
     )
     assert cleaned["sources"] == {
         "evidence": SOURCE_TRANSCRIPT,
-        "side_a.facility": SOURCE_TRANSCRIPT,
+        "aircraft": SOURCE_COMMISSION,
     }
-    assert cleaned["side_b"]["facility"] is None
+
+
+def test_with_no_commission_text_the_gate_reduces_to_transcript_only():
+    """The single-document case is the degenerate case, not a separate path."""
+    cleaned, reasons = validate_parties(
+        _parties(participants=[{
+            "facility": "NEADS", "position": None, "person": None,
+            "role": "military", "confidence": "high", "source": SOURCE_COMMISSION,
+        }]),
+        TRANSCRIPT,
+    )
+    assert cleaned["participants"] == []
+    assert reasons
