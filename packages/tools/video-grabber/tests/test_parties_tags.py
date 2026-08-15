@@ -53,6 +53,16 @@ def test_various_never_becomes_a_facility():
     assert "facility:various" not in tags
 
 
+def test_airframe_models_do_not_become_callsign_tags():
+    """'we have a 757 inbound' is a type, not a flight.
+
+    `aircraft:757` is worse than no tag — it collides every Boeing on the
+    morning into one bucket.
+    """
+    tags = build_tags({"aircraft": ["757"], "mentions": {"aircraft": ["767"]}})
+    assert not any(t.startswith("aircraft:7") for t in tags)
+
+
 def test_empty_block_yields_no_tags():
     assert build_tags({}) == []
 

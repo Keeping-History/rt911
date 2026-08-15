@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 
-from video_grabber.parties.vocab import TOPICS, agency_for
+from video_grabber.parties.vocab import AIRCRAFT_TYPES, TOPICS, agency_for
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _CALLSIGN = re.compile(r"^([a-z]*)0*(\d+)$")
@@ -92,7 +92,7 @@ def build_tags(parties: dict) -> list[str]:
     aircraft = list(parties.get("aircraft") or []) + list(mentions.get("aircraft") or [])
     for callsign in aircraft:
         slug = normalize_callsign(str(callsign))
-        if slug:
+        if slug and slug not in AIRCRAFT_TYPES:
             tags.add(f"aircraft:{slug}")
 
     for topic in parties.get("topics") or []:

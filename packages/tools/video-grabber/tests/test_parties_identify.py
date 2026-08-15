@@ -210,11 +210,24 @@ def test_various_is_no_longer_an_accepted_answer():
 
 # --- the new fields -------------------------------------------------------
 
-def test_subject_must_use_words_from_the_source():
+def test_subject_may_not_name_a_facility_the_source_never_had():
     bad = {**GOOD, "subject": "Cleveland Center reports a hijacking in progress"}
     cleaned, reasons = validate_parties(bad, TRANSCRIPT)
     assert cleaned["subject"] is None
-    assert any("subject introduced words" in r for r in reasons)
+    assert any("subject names" in r for r in reasons)
+
+
+def test_subject_may_use_ordinary_words_the_source_lacks():
+    """The rule that shipped first rejected every subject in the corpus.
+
+    Whole-phrase containment works for a minute summary drawn from a long
+    source; against a two-sentence transcript it flags "reports" and "routine"
+    as inventions. Only names and numbers are policed now.
+    """
+    ok = {**GOOD, "subject": "Indianapolis Center is trying to reach American 77"}
+    cleaned, reasons = validate_parties(ok, TRANSCRIPT)
+    assert cleaned["subject"] == ok["subject"]
+    assert reasons == []
 
 
 def test_subject_survives_when_built_from_source_words():
@@ -222,6 +235,40 @@ def test_subject_survives_when_built_from_source_words():
     assert cleaned["subject"] == GOOD["subject"]
     assert cleaned["sources"]["subject"] == SOURCE_TRANSCRIPT
     assert reasons == []
+
+
+def test_subject_may_not_invent_a_flight_number():
+    bad = {**GOOD, "subject": "Indianapolis Center is trying to reach American 93"}
+    cleaned, reasons = validate_parties(bad, TRANSCRIPT)
+    assert cleaned["subject"] is None
+    assert any("93" in r for r in reasons)
+
+
+# --- spoken digits --------------------------------------------------------
+
+SPOKEN = "Quit 2-5, contact Washington Center 1-3-4-0-0."
+
+
+def test_callsign_matches_a_transcript_that_spells_the_number_out():
+    """Controllers read numbers digit by digit and the transcriber follows.
+
+    'Quit 2-5' is right there in the audio, but a callsign normalised to
+    'Quit 25' looked absent — which is why `aircraft` sat at 54% fill.
+    """
+    ok = {**GOOD, "aircraft": ["Quit 25"], "evidence": "Quit 2-5, contact Washington Center",
+          "subject": None, "participants": []}
+    cleaned, reasons = validate_parties(ok, SPOKEN)
+    assert cleaned["aircraft"] == ["Quit 25"]
+    assert reasons == []
+
+
+def test_spoken_digit_joining_does_not_merge_separate_numbers():
+    """'190, 230' are two altitudes, not the number 190230."""
+    bad = {**GOOD, "aircraft": ["Flight 190230"], "evidence": "passing through 190, 230",
+           "subject": None, "participants": []}
+    cleaned, reasons = validate_parties(bad, "Philadelphia passing through 190, 230.")
+    assert cleaned["aircraft"] == []
+    assert reasons
 
 
 def test_topic_outside_the_vocabulary_is_dropped():
