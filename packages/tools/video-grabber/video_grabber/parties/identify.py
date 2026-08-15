@@ -37,6 +37,7 @@ from __future__ import annotations
 import json
 import re
 
+from video_grabber.parties.spoken import digit_candidates, spoken_to_digits
 from video_grabber.parties.vocab import LINKS, ROLES, TOPICS
 from video_grabber.transcript.summarize import unsupported_words
 
@@ -206,6 +207,21 @@ def _join_spoken_digits(text: str) -> str:
     return _SPOKEN_DIGITS.sub("", text or "")
 
 
+def digit_haystack(source: str) -> str:
+    """The source, plus every other way its numbers could have been written.
+
+    Three spellings of one number all appear in this corpus — "2-5" (spoken
+    digits, hyphenated by the transcriber), "twenty five" and "two five" — and a
+    callsign written any of those ways has to match a source written any other.
+    Rather than guess which is canonical, search them all.
+    """
+    return " ".join((
+        source or "",
+        _join_spoken_digits(source),
+        digit_candidates(source or ""),
+    ))
+
+
 def parse_parties(raw: str) -> dict:
     """Parse the model's reply, tolerating a markdown fence."""
     text = (raw or "").strip()
@@ -249,11 +265,14 @@ def _callsign_supported(callsign: str, source: str) -> bool:
     requiring the literal token would reject every correct answer. The flight
     number is the part that cannot be invented without inventing an aircraft.
     """
-    digits = _DIGITS.findall(callsign or "")
+    # The model echoes the audio's own phrasing back, so the callsign itself
+    # arrives spelled out as often as the transcript does: 'Delta Eighty Nine'
+    # carries no digits at all until it is read as a number.
+    digits = _DIGITS.findall(spoken_to_digits(callsign or ""))
     if not digits:
         return False
-    joined = _join_spoken_digits(source)
-    return all(d in source or d in joined for d in digits)
+    haystack = digit_haystack(source)
+    return all(d in haystack for d in digits)
 
 
 def unsupported_identities(subject: str, source: str) -> list[str]:
@@ -269,10 +288,10 @@ def unsupported_identities(subject: str, source: str) -> list[str]:
     digit, and the prompt asks for the rest in lower case so the signal is
     reliable rather than incidental.
     """
-    joined = _join_spoken_digits(source)
+    haystack = digit_haystack(source)
     missing = []
     for token in _IDENTITY_TOKEN.findall(subject or ""):
-        if unsupported_words(token, source) and unsupported_words(token, joined):
+        if unsupported_words(token, haystack):
             missing.append(token)
     return sorted(set(missing))
 
