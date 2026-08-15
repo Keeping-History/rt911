@@ -1,0 +1,105 @@
+"""Turn an identified `parties` block into flat, searchable tags.
+
+Tags are **derived**, never separately generated. Asking the model for tags as
+well as parties would give you two accounts of the same recording that quietly
+disagree — a `facility:zob` tag on a row whose parties block says Cleveland.
+Everything here is a pure function of the block, so the only way a tag can be
+wrong is if the block is, and the containment gate already governs that.
+
+The one exception is `topic:`, which has no equivalent in the block and comes
+from the model's pick out of `vocab.TOPICS`.
+
+Tags are namespaced (`facility:zob`, not `zob`) for two reasons: a bare tag list
+cannot be filtered by kind, and names collide across kinds — "Boston" is a
+facility, and Boston is also a surname.
+
+Participating and merely-mentioned entities both get tagged. Someone searching
+for Cleveland Center wants the calls that discuss it, not only the ones it spoke
+on; the parties block keeps the distinction for anyone who needs it.
+"""
+from __future__ import annotations
+
+import re
+
+from video_grabber.parties.vocab import TOPICS, agency_for
+
+_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+_CALLSIGN = re.compile(r"^([a-z]*)0*(\d+)$")
+
+# Spoken airline names and their ICAO-ish prefixes, so "American 11", "AAL11"
+# and "AA11" all land on one tag instead of three.
+_AIRLINE_PREFIX: dict[str, str] = {
+    "american": "aal", "aa": "aal", "aal": "aal",
+    "united": "ual", "ua": "ual", "ual": "ual",
+    "delta": "dal", "dl": "dal", "dal": "dal",
+    "continental": "coa", "coa": "coa",
+    "usair": "usa", "usairways": "usa",
+    "midwest": "mep", "northwest": "nwa", "nwa": "nwa",
+}
+
+
+def slugify(value: str) -> str:
+    return _NON_ALNUM.sub("-", (value or "").lower()).strip("-")
+
+
+def normalize_callsign(callsign: str) -> str:
+    """`American 11` / `AAL11` / `AA 11` -> `aal11`; `Gofer 06` -> `gofer06`.
+
+    Military and unmatched callsigns keep their own prefix — the point is to
+    collapse the ways one aircraft is written, not to force everything into an
+    airline scheme. Leading zeros go so `Quit 2-5` and `QUIT25` agree.
+    """
+    compact = _NON_ALNUM.sub("", (callsign or "").lower())
+    m = _CALLSIGN.match(compact)
+    if not m:
+        return compact
+    prefix, digits = m.group(1), m.group(2)
+    return f"{_AIRLINE_PREFIX.get(prefix, prefix)}{digits}"
+
+
+def build_tags(parties: dict) -> list[str]:
+    """Every tag implied by an identified parties block, sorted and deduped."""
+    tags: set[str] = set()
+
+    if parties.get("tier"):
+        tags.add(f"tier:{slugify(parties['tier'])}")
+    if parties.get("link"):
+        tags.add(f"link:{slugify(parties['link'])}")
+
+    facilities: list[str] = []
+    for p in parties.get("participants") or []:
+        if p.get("role"):
+            tags.add(f"role:{slugify(p['role'])}")
+        if p.get("facility"):
+            facilities.append(p["facility"])
+        if p.get("person"):
+            tags.add(f"person:{slugify(p['person'])}")
+
+    mentions = parties.get("mentions") or {}
+    facilities += list(mentions.get("facilities") or [])
+    for person in mentions.get("people") or []:
+        tags.add(f"person:{slugify(person)}")
+
+    for facility in facilities:
+        slug = slugify(facility)
+        if not slug:
+            continue
+        tags.add(f"facility:{slug}")
+        agency = agency_for(facility)
+        if agency:
+            tags.add(f"agency:{agency}")
+
+    aircraft = list(parties.get("aircraft") or []) + list(mentions.get("aircraft") or [])
+    for callsign in aircraft:
+        slug = normalize_callsign(str(callsign))
+        if slug:
+            tags.add(f"aircraft:{slug}")
+
+    for topic in parties.get("topics") or []:
+        if topic in TOPICS:
+            tags.add(f"topic:{topic}")
+
+    # 'various' is the tape tier's placeholder for "many counterparties"; it is
+    # not a facility and must never become one.
+    tags.discard("facility:various")
+    return sorted(tags)
