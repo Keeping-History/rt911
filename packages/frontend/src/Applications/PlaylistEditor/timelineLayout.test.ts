@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	FULL_BOUNDS,
 	layoutBars,
 	layoutFlags,
 	MAX_ZOOM,
@@ -9,6 +10,9 @@ import {
 	rulerTicks,
 	steppedZoom,
 	tickIntervalHours,
+	timelineBounds,
+	TIMELINE_END_MS,
+	TIMELINE_START_MS,
 	timeToFraction,
 } from "./timelineLayout";
 
@@ -137,9 +141,9 @@ describe("zoom", () => {
 
 		const labels = rulerLabels(1);
 		expect(labels).toHaveLength(11);
-		expect(labels[0]).toEqual({ leftPct: 0, text: "09-09" });
+		expect(labels[0]).toEqual({ leftPct: 0, text: "9/9" });
 		expect(labels[2].leftPct).toBeCloseTo(20);
-		expect(labels[10].text).toBe("09-19");
+		expect(labels[10].text).toBe("9/19");
 	});
 
 	it("subdivides ticks and switches labels to clock times when zoomed in", () => {
@@ -148,9 +152,83 @@ describe("zoom", () => {
 		const labels = rulerLabels(8);
 		// Midnight keeps its date so a zoomed viewport is never ambiguous about
 		// which day it is showing; the labels between read as clock times.
-		expect(labels[0].text).toBe("09-09");
+		expect(labels[0].text).toBe("9/9");
 		const between = labels.slice(1, 12).map((l) => l.text);
 		expect(between.some((t) => /^\d\d:\d\d$/.test(t))).toBe(true);
 		expect(labels.every((l) => l.leftPct >= 0 && l.leftPct <= 100)).toBe(true);
+	});
+});
+
+describe("timelineBounds", () => {
+	it("defaults each missing bound to the full span's edge", () => {
+		expect(timelineBounds(undefined, undefined)).toEqual(FULL_BOUNDS);
+		expect(timelineBounds("2001-09-11T12:00:00Z", undefined)).toEqual({
+			startMs: Date.UTC(2001, 8, 11, 12),
+			endMs: TIMELINE_END_MS,
+		});
+	});
+	it("rounds outward to whole hours so ruler ticks stay round", () => {
+		const b = timelineBounds("2001-09-11T12:40:00Z", "2001-09-11T14:05:00Z");
+		expect(b).toEqual({
+			startMs: Date.UTC(2001, 8, 11, 12),
+			endMs: Date.UTC(2001, 8, 11, 15),
+		});
+	});
+	it("clamps to the ten-day span and falls back whole on a degenerate window", () => {
+		expect(timelineBounds("1999-01-01T00:00:00Z", undefined).startMs).toBe(TIMELINE_START_MS);
+		// Inverted (untrusted stored data): full span rather than a zero/negative span.
+		expect(timelineBounds("2001-09-11T14:00:00Z", "2001-09-11T12:00:00Z")).toEqual(FULL_BOUNDS);
+	});
+});
+
+describe("bounded ruler and layout", () => {
+	// A two-hour class: 12:00–14:00 on the 11th.
+	const b = timelineBounds("2001-09-11T12:00:00Z", "2001-09-11T14:00:00Z");
+
+	it("timeToFraction maps the window edges to 0 and 1", () => {
+		expect(timeToFraction("2001-09-11T12:00:00Z", b)).toBe(0);
+		expect(timeToFraction("2001-09-11T13:00:00Z", b)).toBe(0.5);
+		expect(timeToFraction("2001-09-11T14:00:00Z", b)).toBe(1);
+		// Outside the window clamps to the edges, same as the full-span rule.
+		expect(timeToFraction("2001-09-10T00:00:00Z", b)).toBe(0);
+	});
+
+	it("ticks rescale to the window and stay bounded in count", () => {
+		const ticks = rulerTicks(1, b);
+		// 2h span at 1×: the 0.25h ladder floor gives 8 end-exclusive ticks.
+		expect(ticks).toHaveLength(8);
+		expect(ticks[0]).toBe(0);
+		expect(ticks[1]).toBeCloseTo(12.5);
+		expect(ticks.every((t) => t >= 0 && t < 100)).toBe(true);
+	});
+
+	it("labels read as clock times and always close at the end bound", () => {
+		const labels = rulerLabels(1, b);
+		expect(labels[0].text).toBe("12:00");
+		expect(labels[labels.length - 1]).toEqual({ leftPct: 100, text: "14:00" });
+	});
+
+	it("gives the closing bound its own label even when the interval does not divide the span", () => {
+		// 25h span: 0.5h ticks at 1× → labels every 2h; 25 is not divisible by 2.
+		const odd = timelineBounds("2001-09-11T12:00:00Z", "2001-09-12T13:00:00Z");
+		const labels = rulerLabels(1, odd);
+		expect(labels[labels.length - 1].leftPct).toBe(100);
+		// No label past the end, and the second-to-last is strictly before it.
+		expect(labels[labels.length - 2].leftPct).toBeLessThan(100);
+	});
+
+	it("layoutBars positions media windows as fractions of the bounds", () => {
+		const bars = layoutBars(
+			[{
+				uid: "e1",
+				entry: {
+					kind: "media", app: "tv", itemId: "CNN",
+					start: "2001-09-11T12:30:00Z", end: "2001-09-11T13:30:00Z",
+				},
+			}],
+			b,
+		);
+		expect(bars[0].startFrac).toBe(0.25);
+		expect(bars[0].endFrac).toBe(0.75);
 	});
 });

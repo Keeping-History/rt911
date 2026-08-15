@@ -1,7 +1,7 @@
 import {
 	ClassicyApp, ClassicyButton, ClassicyFileOpenDialog, type ClassicyFileOpenSelection,
-	ClassicyIcons, ClassicyWindow, desktopVolume, fileSystemVolume, quitAppHelper,
-	quitMenuItemHelper, registerClassicyIcons, useAppManagerDispatch, useClassicyFileSystem,
+	ClassicyWindow, desktopVolume, fileSystemVolume, quitAppHelper,
+	quitMenuItemHelper, useAppManagerDispatch, useClassicyFileSystem,
 } from "classicy";
 import { useCallback, useMemo, useRef } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
@@ -15,17 +15,14 @@ import { PlaylistEditorProvider, usePlaylistEditor } from "./PlaylistEditorProvi
 import { PlaylistList } from "./PlaylistList";
 import { SettingsWindow } from "./SettingsWindow";
 import { ToolsPalette, TOOLS_WINDOW_ID } from "./ToolsPalette";
-import appIconPng from "./app.png";
+import { playlistEditorIcons } from "./playlistIcons";
 import "./PlaylistEditor.scss";
 
 const appId = "PlaylistEditor.app";
 const appName = "Playlists";
 export const GATE_MESSAGE = "You must be signed in to create playlists.";
 
-const ICONS = registerClassicyIcons({
-	applications: { ...ClassicyIcons.applications, playlistEditor: { app: appIconPng } },
-});
-const appIcon = ICONS.applications.playlistEditor.app;
+const appIcon = playlistEditorIcons.app;
 
 const LIST_WINDOW = "playlist_editor_list";
 

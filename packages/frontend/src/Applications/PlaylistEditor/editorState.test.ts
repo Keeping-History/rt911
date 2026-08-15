@@ -103,6 +103,44 @@ describe("assembleDefinition", () => {
 	});
 });
 
+describe("playlist-level window", () => {
+	const windowed = {
+		...record,
+		definition: {
+			...record.definition,
+			start: "2001-09-11T12:00:00",
+			end: "2001-09-11T14:00:00",
+		},
+	};
+
+	it("loads the window from the definition", () => {
+		const s = initialEditorState(windowed);
+		expect(s.start).toBe("2001-09-11T12:00:00");
+		expect(s.end).toBe("2001-09-11T14:00:00");
+	});
+
+	it("setWindow replaces both bounds and marks dirty", () => {
+		const s = editorReducer(initialEditorState(windowed), {
+			type: "setWindow", start: "2001-09-11T13:00:00", end: undefined,
+		});
+		expect(s.start).toBe("2001-09-11T13:00:00");
+		expect(s.end).toBeUndefined();
+		expect(s.dirty).toBe(true);
+	});
+
+	it("round-trips through assembleDefinition, omitting absent bounds", () => {
+		const def = assembleDefinition(initialEditorState(windowed));
+		expect(def.start).toBe("2001-09-11T12:00:00");
+		expect(def.end).toBe("2001-09-11T14:00:00");
+
+		const cleared = assembleDefinition(
+			editorReducer(initialEditorState(windowed), { type: "setWindow" }),
+		);
+		expect("start" in cleared).toBe(false);
+		expect("end" in cleared).toBe(false);
+	});
+});
+
 describe("timezone helpers", () => {
 	it("round-trips a display wall clock through UTC ISO", () => {
 		const iso = "2001-09-11T12:40:00.000Z"; // 08:40 EDT

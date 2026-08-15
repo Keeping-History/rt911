@@ -143,6 +143,8 @@ export function PlaylistEditorMain({
 					onSelect={(uid) => dispatch({ type: "select", uid })}
 					zoom={zoom}
 					onZoomChange={onZoomChange}
+					start={state.start}
+					end={state.end}
 				/>
 				<div className="playlistEditorEntries">
 					<ClassicyTabs tabs={tabs} />

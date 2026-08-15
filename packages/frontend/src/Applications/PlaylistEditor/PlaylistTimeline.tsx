@@ -1,3 +1,4 @@
+import { ClassicyButton } from "classicy";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { EditorEntry } from "./editorState";
 import "./PlaylistEditor.scss";
@@ -10,6 +11,7 @@ import {
 	rulerLabels,
 	rulerTicks,
 	steppedZoom,
+	timelineBounds,
 } from "./timelineLayout";
 
 // Flags stack into rows when they fall within this fraction of each other. It is
@@ -33,6 +35,8 @@ export function PlaylistTimeline({
 	onSelect,
 	zoom,
 	onZoomChange,
+	start,
+	end,
 }: {
 	entries: EditorEntry[];
 	selectedUid: string | null;
@@ -41,6 +45,10 @@ export function PlaylistTimeline({
 	 * so the View menu can drive it and it survives closing the window. */
 	zoom: number;
 	onZoomChange: (zoom: number) => void;
+	/** Playlist-level window: when set, the timeline rescales to show just the
+	 * bounded stretch (rounded outward to whole hours) instead of all ten days. */
+	start?: string;
+	end?: string;
 }) {
 	const [resolved, setResolved] = useState<Map<string, EditorEntry["timelineMeta"]>>(new Map());
 	const attemptedRef = useRef(new Set<string>());
@@ -94,127 +102,141 @@ export function PlaylistTimeline({
 		() => entries.map((e) => (resolved.has(e.uid) ? { ...e, timelineMeta: resolved.get(e.uid) } : e)),
 		[entries, resolved],
 	);
-	const bars = useMemo(() => layoutBars(merged), [merged]);
-	const flags = useMemo(() => layoutFlags(merged, FLAG_MIN_GAP_FRAC / zoom), [merged, zoom]);
+	const bounds = useMemo(() => timelineBounds(start, end), [start, end]);
+	const bars = useMemo(() => layoutBars(merged, bounds), [merged, bounds]);
+	const flags = useMemo(
+		() => layoutFlags(merged, FLAG_MIN_GAP_FRAC / zoom, bounds),
+		[merged, zoom, bounds],
+	);
 	const flagRows = flags.reduce((m, f) => Math.max(m, f.row), 0) + 1;
-	const ticks = useMemo(() => rulerTicks(zoom), [zoom]);
-	const labels = useMemo(() => rulerLabels(zoom), [zoom]);
+	const ticks = useMemo(() => rulerTicks(zoom, bounds), [zoom, bounds]);
+	const labels = useMemo(() => rulerLabels(zoom, bounds), [zoom, bounds]);
 
 	return (
-		<div className="playlistTimelineWrap">
-			<div className="playlistTimelineZoom">
-				<button
-					type="button"
-					onClick={() => changeZoom(-1)}
+		<div className="playlistTimelineContainer">
+			<div className="playlistTimelineZoom classicyWindowHeader">
+				<ClassicyButton
+					buttonShape="square"
+					buttonSize="small"
+					padding="sm"
+					margin="sm"
+					onClickFunc={() => changeZoom(-1)}
 					disabled={zoom <= MIN_ZOOM}
 					title="Zoom out"
 					aria-label="Zoom out"
 				>
 					−
-				</button>
-				<span className="playlistTimelineZoomLevel" data-testid="timeline-zoom-level">
-					{zoom}×
-				</span>
-				<button
-					type="button"
-					onClick={() => changeZoom(1)}
+				</ClassicyButton>
+				{/* ClassicyControlLabel forwards no data-* attributes, so the testid
+				  * the zoom tests read lives on this wrapper. */}
+				{/* <span className="playlistTimelineZoomLevel" data-testid="timeline-zoom-level">
+					<ClassicyControlLabel label={`${zoom}×`} />
+				</span> */}
+				<ClassicyButton
+					buttonShape="square"
+					padding="sm"
+					margin="sm"
+					buttonSize="small"
+					onClickFunc={() => changeZoom(1)}
 					disabled={zoom >= MAX_ZOOM}
 					title="Zoom in"
 					aria-label="Zoom in"
 				>
 					+
-				</button>
+				</ClassicyButton>
 			</div>
-			<div className="playlistTimeline" data-testid="playlist-timeline" ref={viewportRef}>
-				<div
-					className="playlistTimelineTrack"
-					data-testid="timeline-track"
-					style={{ width: `${zoom * 100}%` }}
-				>
-					<div className="playlistTimelineRuler">
-						{labels.map((l) => (
-							<span
-								key={`label-${l.leftPct}`}
-								// The closing label is right-aligned. Left-aligned at
-								// left:100% it draws its whole width past the track,
-								// which is scrollable overflow — that is what made a
-								// fully zoomed-out timeline scroll sideways.
-								className={
-									l.leftPct >= 100
-										? "playlistTimelineDayTick playlistTimelineDayTickEnd"
-										: "playlistTimelineDayTick"
-								}
-								style={{ left: `${l.leftPct}%` }}
-							>
-								{l.text}
-							</span>
-						))}
-						{ticks.map((leftPct) => (
-							<span
-								key={`hour-${leftPct}`}
-								className="playlistTimelineHourTick"
-								style={{ left: `${leftPct}%` }}
-							/>
-						))}
-					</div>
-					<div className="playlistTimelineFlagRow" style={{ height: `${flagRows * 18}px` }}>
-						{flags.map((f) => (
-							<button
-								key={f.uid}
-								type="button"
-								className={`playlistTimelineFlag playlistTimelineFlag-${f.kindGlyph}`}
-								style={{ left: `${f.atFrac * 100}%`, top: `${f.row * 18}px` }}
-								title={f.label}
-								onClick={() => onSelect(f.uid)}
-							>
-								⚑
-							</button>
-						))}
-						{flags.filter((f) => f.extentEndFrac !== undefined).map((f) => (
-							<span
-								key={`${f.uid}-extent`}
-								className="playlistTimelineFlagExtent"
-								style={{
-									left: `${f.atFrac * 100}%`,
-									width: `${((f.extentEndFrac ?? f.atFrac) - f.atFrac) * 100}%`,
-									top: `${f.row * 18 + 14}px`,
-								}}
-							/>
-						))}
-					</div>
-					<div className="playlistTimelineLanes">
-						{bars.map((b) => (
-							<div key={b.uid} className={`playlistTimelineLane playlistTimelineLane-${b.group}`}>
-								<button
-									type="button"
+			<div className="playlistTimelineWrap">
+				<div className="playlistTimeline" data-testid="playlist-timeline" ref={viewportRef}>
+					<div
+						className="playlistTimelineTrack"
+						data-testid="timeline-track"
+						style={{ width: `${zoom * 100}%` }}
+					>
+						<div className="playlistTimelineRuler">
+							{labels.map((l) => (
+								<span
+									key={`label-${l.leftPct}`}
+									// The closing label is right-aligned. Left-aligned at
+									// left:100% it draws its whole width past the track,
+									// which is scrollable overflow — that is what made a
+									// fully zoomed-out timeline scroll sideways.
 									className={
-										b.uid === selectedUid
-											? "playlistTimelineBar playlistTimelineBarSelected"
-											: "playlistTimelineBar"
+										l.leftPct >= 100
+											? "playlistTimelineDayTick playlistTimelineDayTickEnd"
+											: "playlistTimelineDayTick"
 									}
-									style={{
-										left: `${b.startFrac * 100}%`,
-										width: `${(b.endFrac - b.startFrac) * 100}%`,
-										maskImage: barMaskImage(b.fadeStart, b.fadeEnd),
-									}}
-									title={b.label}
-									onClick={() => onSelect(b.uid)}
+									style={{ left: `${l.leftPct}%` }}
 								>
-									{b.focus === "once" && <span aria-hidden>▸</span>}
-									{b.focus === "locked" && <span aria-hidden>🔒</span>}
-									{b.label}
-									{b.actualStartFrac !== undefined && b.endFrac - b.startFrac > 0 && (
-										<span
-											className="playlistTimelineActualSpan"
-											style={{
-												left: `${((b.actualStartFrac - b.startFrac) / (b.endFrac - b.startFrac)) * 100}%`,
-												width: `${(((b.actualEndFrac ?? b.endFrac) - b.actualStartFrac) / (b.endFrac - b.startFrac)) * 100}%`,
-											}}
-										/>
-									)}
+									{l.text}
+								</span>
+							))}
+							{ticks.map((leftPct) => (
+								<span
+									key={`hour-${leftPct}`}
+									className="playlistTimelineHourTick"
+									style={{ left: `${leftPct}%` }}
+								/>
+							))}
+						</div>
+						<div className="playlistTimelineFlagRow" style={{ height: `${flagRows * 18}px` }}>
+							{flags.map((f) => (
+								<button
+									key={f.uid}
+									type="button"
+									className={`playlistTimelineFlag playlistTimelineFlag-${f.kindGlyph}`}
+									style={{ left: `${f.atFrac * 100}%`, top: `${f.row * 18}px` }}
+									title={f.label}
+									onClick={() => onSelect(f.uid)}
+								>
+									⚑
 								</button>
-							</div>
-						))}
+							))}
+							{flags.filter((f) => f.extentEndFrac !== undefined).map((f) => (
+								<span
+									key={`${f.uid}-extent`}
+									className="playlistTimelineFlagExtent"
+									style={{
+										left: `${f.atFrac * 100}%`,
+										width: `${((f.extentEndFrac ?? f.atFrac) - f.atFrac) * 100}%`,
+										top: `${f.row * 18 + 14}px`,
+									}}
+								/>
+							))}
+						</div>
+						<div className="playlistTimelineLanes">
+							{bars.map((b) => (
+								<div key={b.uid} className={`playlistTimelineLane playlistTimelineLane-${b.group}`}>
+									<button
+										type="button"
+										className={
+											b.uid === selectedUid
+												? "playlistTimelineBar playlistTimelineBarSelected"
+												: "playlistTimelineBar"
+										}
+										style={{
+											left: `${b.startFrac * 100}%`,
+											width: `${(b.endFrac - b.startFrac) * 100}%`,
+											maskImage: barMaskImage(b.fadeStart, b.fadeEnd),
+										}}
+										title={b.label}
+										onClick={() => onSelect(b.uid)}
+									>
+										{b.focus === "once" && <span aria-hidden>▸</span>}
+										{b.focus === "locked" && <span aria-hidden>🔒</span>}
+										{b.label}
+										{b.actualStartFrac !== undefined && b.endFrac - b.startFrac > 0 && (
+											<span
+												className="playlistTimelineActualSpan"
+												style={{
+													left: `${((b.actualStartFrac - b.startFrac) / (b.endFrac - b.startFrac)) * 100}%`,
+													width: `${(((b.actualEndFrac ?? b.endFrac) - b.actualStartFrac) / (b.endFrac - b.startFrac)) * 100}%`,
+												}}
+											/>
+										)}
+									</button>
+								</div>
+							))}
+						</div>
 					</div>
 				</div>
 			</div>

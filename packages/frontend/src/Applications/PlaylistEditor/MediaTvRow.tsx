@@ -2,9 +2,8 @@ import { ClassicyIcons } from "classicy";
 import "../TV/epgIcons"; // side effect: registers ClassicyIcons.applications.epg
 import type { EpgIconNamespace } from "../TV/epgIcons";
 import type { MediaEntry } from "../../Providers/Playlist/playlistTypes";
-import editPng from "./edit.png";
-import trashPng from "./trash.png";
 import type { EditorEntry } from "./editorState";
+import { playlistEditorIcons } from "./playlistIcons";
 
 /** A media entry already narrowed to a TV channel by the caller. */
 export type TvEditorEntry = EditorEntry & { entry: MediaEntry };
@@ -57,7 +56,7 @@ export function MediaTvRow({
 							aria-label={`Edit ${e.entry.itemId.toUpperCase()}`}
 							onClick={() => onEdit(e.uid)}
 						>
-							<img src={editPng} alt="" />
+							<img src={playlistEditorIcons.edit} alt="" />
 						</button>
 						<button
 							type="button"
@@ -65,7 +64,7 @@ export function MediaTvRow({
 							aria-label={`Remove ${e.entry.itemId.toUpperCase()}`}
 							onClick={() => onRemove(e.uid)}
 						>
-							<img src={trashPng} alt="" />
+							<img src={playlistEditorIcons.trash} alt="" />
 						</button>
 					</div>
 				</div>

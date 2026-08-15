@@ -149,6 +149,34 @@ describe("PlaylistTimeline", () => {
 		expect(document.querySelectorAll(".playlistTimelineHourTick")).toHaveLength(40);
 	});
 
+	it("rescales the ruler and bars to a playlist-level window", () => {
+		// A two-hour class: the ruler reads as clock times spanning just the
+		// window, and an entry filling half the window draws at 50% width.
+		render(
+			<PlaylistTimeline
+				entries={[{
+					uid: "e1",
+					entry: {
+						kind: "media", app: "tv", itemId: "CNN",
+						start: "2001-09-11T12:00:00Z", end: "2001-09-11T13:00:00Z",
+					},
+				}]}
+				selectedUid={null}
+				onSelect={vi.fn()}
+				start="2001-09-11T12:00:00Z"
+				end="2001-09-11T14:00:00Z"
+				{...atRest}
+			/>,
+		);
+		const labels = Array.from(document.querySelectorAll(".playlistTimelineDayTick"));
+		expect(labels[0].textContent).toBe("12:00");
+		expect(labels[labels.length - 1].textContent).toBe("14:00");
+
+		const bar = document.querySelector(".playlistTimelineBar") as HTMLElement;
+		expect(bar.style.left).toBe("0%");
+		expect(bar.style.width).toBe("50%");
+	});
+
 	it("right-aligns only the closing ruler label, at every zoom level", () => {
 		// A label at left:100% that is left-aligned draws its whole width past
 		// the track. That is scrollable overflow, and it made a fully zoomed-out
@@ -171,14 +199,13 @@ describe("PlaylistTimeline", () => {
 
 	it("widens the track and subdivides the ruler on zoom in, and restores it on zoom out", () => {
 		render(<Controlled entries={[]} />);
+		// The track width is the zoom's observable effect; the readout element is
+		// a UI detail that has come and gone, so assertions pin the width instead.
 		const track = screen.getByTestId("timeline-track");
-		const level = screen.getByTestId("timeline-zoom-level");
 		expect(track.style.width).toBe("100%");
-		expect(level.textContent).toBe("1×");
 
 		fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
 		expect(track.style.width).toBe("200%");
-		expect(level.textContent).toBe("2×");
 		expect(document.querySelectorAll(".playlistTimelineHourTick").length).toBeGreaterThan(40);
 
 		fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
@@ -198,7 +225,7 @@ describe("PlaylistTimeline", () => {
 
 		// Walk past the top of the ladder; it must stop, not run past MAX_ZOOM.
 		for (let i = 0; i < 12; i += 1) fireEvent.click(zoomIn);
-		expect(screen.getByTestId("timeline-zoom-level").textContent).toBe("64×");
+		expect(screen.getByTestId("timeline-track").style.width).toBe("6400%");
 		expect(zoomIn.disabled).toBe(true);
 		expect(zoomOut.disabled).toBe(false);
 	});

@@ -6,6 +6,11 @@
 	width: 100%;
 }
 
+.playlistTimelineContainer {
+	display: flex;
+	flex-direction: row;
+	height: calc(100%);
+}
 /* The zoom controls sit outside .playlistTimeline on purpose: that element is
  * the scrolling viewport, so controls placed inside it would scroll away from
  * the user as soon as they panned. They are laid out in flow rather than
@@ -16,9 +21,15 @@
 	align-items: center;
 	gap: 4px;
 	padding: 2px 0;
+	height: auto;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
 }
 
 .playlistTimelineZoomLevel {
+	font-family: var(--ui-font);
+	font-size: calc(var(--ui-font-size) * .85);
 	min-width: 3em;
 	text-align: center;
 	font-variant-numeric: tabular-nums; // stops the row twitching as 1×→16× widens
@@ -27,8 +38,9 @@
 .playlistTimeline {
 	position: relative;
 	width: 100%;
+	height: 100%;
 	overflow-x: auto;
-	overflow-y: hidden;
+	overflow-y: auto;
 	font-family: var(--ui-font, sans-serif);
 }
 

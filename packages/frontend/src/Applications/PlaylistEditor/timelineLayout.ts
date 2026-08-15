@@ -5,6 +5,37 @@ export const TIMELINE_START_MS = Date.UTC(2001, 8, 9);
 export const TIMELINE_END_MS = Date.UTC(2001, 8, 19);
 const SPAN = TIMELINE_END_MS - TIMELINE_START_MS;
 const SPAN_HOURS = SPAN / 3_600_000; // 240
+const HOUR_MS = 3_600_000;
+
+/** What the timeline maps to 0%…100%. Defaults to the full ten-day span. */
+export type TimelineBounds = { startMs: number; endMs: number };
+
+export const FULL_BOUNDS: TimelineBounds = {
+	startMs: TIMELINE_START_MS,
+	endMs: TIMELINE_END_MS,
+};
+
+/**
+ * Bounds for a playlist-level window: the timeline rescales to show just the
+ * window, rounded OUTWARD to whole hours so ruler ticks stay on round times.
+ * A missing bound keeps the full span's edge; a degenerate result (window
+ * outside the span, or inverted — the editor prevents both, but stored data
+ * is untrusted) falls back to the full span rather than dividing by zero.
+ */
+export function timelineBounds(start?: string, end?: string): TimelineBounds {
+	const startMs =
+		start === undefined
+			? TIMELINE_START_MS
+			: Math.max(TIMELINE_START_MS, Math.floor(playlistUtcMs(start) / HOUR_MS) * HOUR_MS);
+	const endMs =
+		end === undefined
+			? TIMELINE_END_MS
+			: Math.min(TIMELINE_END_MS, Math.ceil(playlistUtcMs(end) / HOUR_MS) * HOUR_MS);
+	if (endMs <= startMs) return FULL_BOUNDS;
+	return { startMs, endMs };
+}
+
+const boundsSpanHours = (b: TimelineBounds): number => (b.endMs - b.startMs) / HOUR_MS;
 
 /* ── Zoom ──────────────────────────────────────────────────────────────────
  * Zoom widens the track rather than re-mapping time to fractions: every
@@ -61,23 +92,30 @@ const LABEL_EVERY_N_TICKS = 4;
 /**
  * Tick spacing for a zoom level, in hours.
  *
- * Targets a constant *on-screen* density: at 1× a 6-hour tick sits 2.5% of the
- * track apart, which is the density the ruler was designed around, so the aim
- * is 6/zoom hours. The ladder floor (0.25h) caps the tick count at 960 for the
- * full span no matter how far in you zoom — past that the marks are denser than
- * the eye can use, and the DOM cost is real because the whole span is rendered.
+ * Targets a constant *on-screen* density: ~40 ticks across the track at 1×
+ * (for the full span that is a 6-hour tick every 2.5%, the density the ruler
+ * was designed around), so the aim is span/40/zoom hours. The ladder floor
+ * (0.25h) caps the tick count at 960 for the full span no matter how far in
+ * you zoom — past that the marks are denser than the eye can use, and the DOM
+ * cost is real because the whole span is rendered.
  */
-export function tickIntervalHours(zoom: number): number {
-	const target = 6 / Math.max(1, zoom);
+export function tickIntervalHours(zoom: number, spanHours = SPAN_HOURS): number {
+	const target = spanHours / 40 / Math.max(1, zoom);
 	return NICE_TICK_HOURS.find((h) => h <= target) ?? NICE_TICK_HOURS[NICE_TICK_HOURS.length - 1];
 }
 
+// A bounds span is whole hours but not necessarily divisible by the interval;
+// epsilon keeps `i * interval < spanHours` honest against float accumulation.
+const stepsBefore = (spanHours: number, interval: number): number =>
+	Math.ceil(spanHours / interval - 1e-9);
+
 /** Unlabelled tick positions, as percentages of the track. */
-export function rulerTicks(zoom: number): number[] {
-	const interval = tickIntervalHours(zoom);
-	const count = Math.round(SPAN_HOURS / interval);
+export function rulerTicks(zoom: number, bounds: TimelineBounds = FULL_BOUNDS): number[] {
+	const spanHours = boundsSpanHours(bounds);
+	const interval = tickIntervalHours(zoom, spanHours);
 	// End-exclusive: the closing boundary carries a label instead of a bare tick.
-	return Array.from({ length: count }, (_, i) => (i * interval * 100) / SPAN_HOURS);
+	const count = stepsBefore(spanHours, interval);
+	return Array.from({ length: count }, (_, i) => (i * interval * 100) / spanHours);
 }
 
 export type RulerLabel = { leftPct: number; text: string };
@@ -85,27 +123,36 @@ export type RulerLabel = { leftPct: number; text: string };
 /**
  * Labelled positions, as percentages of the track.
  *
- * At 1× this is exactly the eleven `MM-DD` day labels the ruler has always
- * shown. Zoomed in, labels subdivide with the ticks and switch to clock times,
- * because day boundaries alone can leave a zoomed viewport with no visible
- * reference at all — at 64× a viewport spans under four hours.
+ * At 1× on the full span this is exactly eleven `M/D` day labels (`9/9` …
+ * `9/19` — no leading zeros, to keep the crowded ruler as narrow as
+ * possible). Zoomed in — or on a playlist-window span too short for day
+ * boundaries — labels subdivide with the ticks and switch to clock times,
+ * because day boundaries alone can leave a viewport with no visible
+ * reference at all. The closing bound always gets a label of its own, even
+ * when the label interval does not divide the span.
  */
-export function rulerLabels(zoom: number): RulerLabel[] {
-	const interval = tickIntervalHours(zoom) * LABEL_EVERY_N_TICKS;
-	const count = Math.round(SPAN_HOURS / interval);
-	return Array.from({ length: count + 1 }, (_, i) => {
-		const hours = i * interval;
-		const iso = new Date(TIMELINE_START_MS + hours * 3_600_000).toISOString();
+export function rulerLabels(zoom: number, bounds: TimelineBounds = FULL_BOUNDS): RulerLabel[] {
+	const spanHours = boundsSpanHours(bounds);
+	const interval = tickIntervalHours(zoom, spanHours) * LABEL_EVERY_N_TICKS;
+	const count = stepsBefore(spanHours, interval);
+	const hourMarks = Array.from({ length: count }, (_, i) => i * interval);
+	return [...hourMarks, spanHours].map((hours) => {
+		const d = new Date(bounds.startMs + hours * 3_600_000);
 		// Keep the date visible at day boundaries even in clock-time mode, so a
-		// zoomed viewport is never ambiguous about which day it is showing.
-		const atMidnight = hours % 24 === 0;
-		const text = interval >= 24 || atMidnight ? iso.slice(5, 10) : iso.slice(11, 16);
-		return { leftPct: (hours * 100) / SPAN_HOURS, text };
+		// zoomed viewport is never ambiguous about which day it is showing. The
+		// check is against absolute midnight, not offset-from-start: a playlist
+		// window can start mid-day.
+		const atMidnight = (bounds.startMs + hours * 3_600_000) % 86_400_000 === 0;
+		const text =
+			interval >= 24 || atMidnight
+				? `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
+				: d.toISOString().slice(11, 16);
+		return { leftPct: (hours * 100) / spanHours, text };
 	});
 }
 
-export function timeToFraction(iso: string): number {
-	const frac = (playlistUtcMs(iso) - TIMELINE_START_MS) / SPAN;
+export function timeToFraction(iso: string, bounds: TimelineBounds = FULL_BOUNDS): number {
+	const frac = (playlistUtcMs(iso) - bounds.startMs) / (bounds.endMs - bounds.startMs);
 	return Math.min(1, Math.max(0, frac));
 }
 
@@ -122,7 +169,10 @@ export type TimelineFlag = {
 
 const BAR_GROUPS = ["tv", "radio", "flights"] as const;
 
-export function layoutBars(entries: EditorEntry[]): TimelineBar[] {
+export function layoutBars(
+	entries: EditorEntry[],
+	bounds: TimelineBounds = FULL_BOUNDS,
+): TimelineBar[] {
 	const bars: TimelineBar[] = [];
 	for (const group of BAR_GROUPS) {
 		for (const e of entries) {
@@ -131,15 +181,15 @@ export function layoutBars(entries: EditorEntry[]): TimelineBar[] {
 				uid: e.uid,
 				label: e.entry.itemId,
 				group,
-				startFrac: e.entry.start ? timeToFraction(e.entry.start) : 0,
-				endFrac: e.entry.end ? timeToFraction(e.entry.end) : 1,
+				startFrac: e.entry.start ? timeToFraction(e.entry.start, bounds) : 0,
+				endFrac: e.entry.end ? timeToFraction(e.entry.end, bounds) : 1,
 				fadeStart: !e.entry.start,
 				fadeEnd: !e.entry.end,
 				focus: e.entry.focus,
 			};
 			if (group === "flights") {
-				if (e.timelineMeta?.departure) bar.actualStartFrac = timeToFraction(e.timelineMeta.departure);
-				if (e.timelineMeta?.arrival) bar.actualEndFrac = timeToFraction(e.timelineMeta.arrival);
+				if (e.timelineMeta?.departure) bar.actualStartFrac = timeToFraction(e.timelineMeta.departure, bounds);
+				if (e.timelineMeta?.arrival) bar.actualEndFrac = timeToFraction(e.timelineMeta.arrival, bounds);
 			}
 			bars.push(bar);
 		}
@@ -147,7 +197,11 @@ export function layoutBars(entries: EditorEntry[]): TimelineBar[] {
 	return bars;
 }
 
-export function layoutFlags(entries: EditorEntry[], minGapFrac = 0.015): TimelineFlag[] {
+export function layoutFlags(
+	entries: EditorEntry[],
+	minGapFrac = 0.015,
+	bounds: TimelineBounds = FULL_BOUNDS,
+): TimelineFlag[] {
 	const raw: Omit<TimelineFlag, "row">[] = [];
 	for (const e of entries) {
 		if (e.entry.kind === "media" && e.entry.app === "news") {
@@ -157,15 +211,15 @@ export function layoutFlags(entries: EditorEntry[], minGapFrac = 0.015): Timelin
 				uid: e.uid,
 				label: e.entry.itemId,
 				kindGlyph: "news",
-				atFrac: at ? timeToFraction(at) : 0,
-				extentEndFrac: hasWindow && e.entry.end ? timeToFraction(e.entry.end) : undefined,
+				atFrac: at ? timeToFraction(at, bounds) : 0,
+				extentEndFrac: hasWindow && e.entry.end ? timeToFraction(e.entry.end, bounds) : undefined,
 			});
 		} else if (e.entry.kind === "jump" && e.entry.at) {
-			raw.push({ uid: e.uid, label: "Jump", kindGlyph: "jump", atFrac: timeToFraction(e.entry.at) });
+			raw.push({ uid: e.uid, label: "Jump", kindGlyph: "jump", atFrac: timeToFraction(e.entry.at, bounds) });
 		} else if (e.entry.kind === "file" && e.entry.at) {
-			raw.push({ uid: e.uid, label: e.entry.path.split(":").pop() ?? e.entry.path, kindGlyph: "file", atFrac: timeToFraction(e.entry.at) });
+			raw.push({ uid: e.uid, label: e.entry.path.split(":").pop() ?? e.entry.path, kindGlyph: "file", atFrac: timeToFraction(e.entry.at, bounds) });
 		} else if (e.entry.kind === "browser" && e.entry.at) {
-			raw.push({ uid: e.uid, label: e.entry.url, kindGlyph: "browser", atFrac: timeToFraction(e.entry.at) });
+			raw.push({ uid: e.uid, label: e.entry.url, kindGlyph: "browser", atFrac: timeToFraction(e.entry.at, bounds) });
 		}
 	}
 	raw.sort((a, b) => a.atFrac - b.atFrac);

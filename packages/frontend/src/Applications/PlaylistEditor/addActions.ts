@@ -1,6 +1,7 @@
 import { ClassicyIcons } from "classicy";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import type { EditorAction } from "./editorState";
+import { playlistEditorIcons } from "./playlistIcons";
 
 export type AddActionId = "media" | "file" | "app" | "settings" | "jump" | "browser";
 
@@ -67,7 +68,7 @@ export const ADD_ACTIONS: AddAction[] = [
 		id: "jump",
 		label: "Add Jump",
 		menuTitle: "Jump",
-		icon: ClassicyIcons.system.extensions.dateAndTime,
+		icon: playlistEditorIcons.editJump,
 		balloon: "Move every student's clock to a new time when the playlist reaches this point.",
 		entry: { kind: "jump", at: "", to: "" },
 	},

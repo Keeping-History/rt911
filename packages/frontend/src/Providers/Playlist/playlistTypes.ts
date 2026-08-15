@@ -57,6 +57,14 @@ export type PlaylistEntry =
 export interface PlaylistDefinition {
 	version: 1;
 	mode: "restrict" | "annotate";
+	/**
+	 * Playlist-level window (virtual-clock UTC ISO, half-open [start, end) like
+	 * entry windows; a missing bound is unbounded). Outside the window the
+	 * playlist is locked out in restrict mode — no media available, rules and
+	 * scheduled events inert — and entirely inactive in annotate mode.
+	 */
+	start?: string;
+	end?: string;
 	entries: PlaylistEntry[];
 }
 
