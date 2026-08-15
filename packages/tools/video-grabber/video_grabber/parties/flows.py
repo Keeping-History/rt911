@@ -8,13 +8,16 @@ from prefect import flow, get_run_logger
 from video_grabber.catalogue.flows import _page_mp3_items, key_from_url
 from video_grabber.config import Config
 from video_grabber.directus.writer import _auth_headers
+from video_grabber.parties.commission import match_commission_clip
 from video_grabber.parties.identify import (
     TIER_TAPE,
     build_clip_messages,
+    build_enrichment_messages,
     build_tape_messages,
     parse_parties,
     should_identify,
     tier_for,
+    validate_enriched_parties,
     validate_parties,
 )
 from video_grabber.storage import wasabi
@@ -118,4 +121,95 @@ def identify_parties_flow(limit: int | None = None, force: bool = False,
     logger.info(
         "identify-parties: %d identified, %d skipped, %d broadcast (excluded), %d failed",
         done, skipped, broadcast, failed,
+    )
+
+
+@flow(name="enrich-parties-from-commission")
+def enrich_parties_from_commission_flow(
+    limit: int | None = None, force: bool = False, dry_run: bool = True
+) -> None:
+    """Re-identify the recordings the 9/11 Commission also catalogued.
+
+    `identify-parties` can only report what the audio says, and on a garbled
+    landline that is often nothing. For the subset of our corpus the Commission
+    indexed, their title and the Team 8 monograph narrative name the parties
+    outright — so those rows get a second pass with both documents in the prompt.
+
+    Every field the result keeps carries a `sources` entry saying which document
+    it came from, so a transcript-derived name stays as checkable as it was
+    before. Rows with no Commission match are left exactly as they are.
+
+    Idempotency marker is a `commission` block on the existing parties object;
+    pass force=True to redo them.
+    """
+    logger = get_run_logger()
+    cfg = Config()
+    if not cfg.anthropic_api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+    complete = anthropic_completer(cfg, model=cfg.parties_model, max_tokens=PARTIES_MAX_TOKENS)
+
+    done = skipped = failed = unmatched = 0
+    for row in _page_mp3_items(cfg, "id,url,subtitles,calc_duration,parties"):
+        if limit is not None and done >= limit:
+            break
+        key = key_from_url(row["url"])
+
+        if not should_identify(key):
+            continue
+        clip = match_commission_clip(key)
+        if clip is None:
+            unmatched += 1
+            continue
+        existing = row.get("parties") or {}
+        if existing.get("commission") and not force:
+            skipped += 1
+            continue
+
+        # Unlike identify-parties, a missing transcript is not disqualifying: the
+        # Commission text alone can carry an identification, and the gate will
+        # reject anything that claims the empty transcript as its source.
+        transcript = ""
+        if row.get("subtitles"):
+            transcript = srt_text_to_plain(
+                wasabi.read_text(key_from_url(row["subtitles"]), cfg)
+            )
+
+        tier = tier_for(row.get("calc_duration"))
+        excerpt = transcript
+        if tier == TIER_TAPE:
+            excerpt = "\n\n---\n\n".join(sample_windows(transcript))
+        system, user = build_enrichment_messages(excerpt, clip.text, tier)
+
+        try:
+            parsed = parse_parties(complete(system, user))
+        except ValueError as exc:
+            logger.warning("enrich-parties: %s unparseable: %s", key, exc)
+            failed += 1
+            continue
+
+        cleaned, reasons = validate_enriched_parties(parsed, excerpt, clip.text)
+        cleaned["tier"] = tier
+        cleaned["model"] = cfg.parties_model
+        cleaned["generated_at"] = datetime.now(timezone.utc).isoformat()
+        cleaned["commission"] = {
+            "title": clip.title,
+            "source": clip.source,
+            "stamp": clip.stamp,
+            "slug_overlap": clip.overlap,
+        }
+        if reasons:
+            cleaned["gate_reasons"] = reasons
+            logger.info("enrich-parties: %s downgraded: %s", key, reasons)
+
+        if dry_run:
+            logger.info("DRY RUN %s -> %s", key, cleaned)
+        else:
+            pr = httpx.patch(f"{cfg.directus_url}/items/mp3_items/{row['id']}",
+                             json={"parties": cleaned}, headers=_auth_headers(cfg))
+            pr.raise_for_status()
+        done += 1
+
+    logger.info(
+        "enrich-parties: %d enriched, %d already done, %d no Commission clip, %d failed",
+        done, skipped, unmatched, failed,
     )

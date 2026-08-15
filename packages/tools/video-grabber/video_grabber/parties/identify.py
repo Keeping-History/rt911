@@ -138,6 +138,65 @@ def parse_parties(raw: str) -> dict:
     return parsed
 
 
+SOURCE_TRANSCRIPT = "transcript"
+SOURCE_COMMISSION = "commission_monograph"
+
+_ENRICH_SYSTEM = """\
+You identify who is speaking in a recording of September 11, 2001 air traffic \
+control, military, and emergency audio.
+
+You are given TWO documents:
+1. TRANSCRIPT — an automatic transcript of the recording itself. Imperfect: \
+callsigns and names are often garbled or missing.
+2. COMMISSION — how the 9/11 Commission catalogued this same recording: their \
+title for it, and where available the passage of the Team 8 audio monograph that \
+discusses it. This names people, positions and facilities the transcript may not.
+
+Rules you must follow:
+- Every value you return must come from one of those two documents. Do not use \
+anything you know about September 11 from any other source.
+- For every field you fill in, record which document it came from in `sources`, \
+using the exact key path (e.g. "side_a.facility") and the value "transcript" or \
+"commission_monograph".
+- Prefer the transcript when both documents support a field. Use the Commission \
+only to fill in what the transcript leaves unknown or garbled.
+- The COMMISSION document describes this recording, so what it says about who is \
+on the call applies. But it also gives surrounding narrative about the wider \
+morning — do not pull in people or facilities it does not connect to THIS call.
+- If neither document tells you, return null. That is a correct answer.
+- `evidence` must be an exact quote copied character-for-character from whichever \
+document you cite in sources["evidence"].
+
+Return ONLY a JSON object:
+{"tier":"clip"|"tape",
+ "side_a":{"facility":str|null,"position":str|null,"person":str|null,"role":str|null},
+ "side_b":{"facility":str|null,"position":str|null,"person":str|null,"role":str|null},
+ "link":"air-ground"|"landline"|"internal"|"unknown",
+ "aircraft":[str],
+ "confidence":"high"|"medium"|"low",
+ "evidence":str,
+ "sources":{"<field path>":"transcript"|"commission_monograph"}}
+
+`role` is one of: atc, military, airline, emergency, aircraft, unknown."""
+
+
+def build_enrichment_messages(
+    transcript: str, commission_text: str, tier: str
+) -> tuple[str, str]:
+    """Prompt for identifying a recording the Commission also catalogued."""
+    system = _ENRICH_SYSTEM
+    if tier == TIER_TAPE:
+        system += (
+            "\n\nThis is a long continuous recording of ONE position. side_a is "
+            'that position; set side_b.facility to "various".'
+        )
+    user = (
+        f"COMMISSION:\n\n{commission_text}\n\n"
+        f"=====\n\nTRANSCRIPT:\n\n{transcript}"
+    )
+    return system, user
+
+
 def _normalise(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip().lower()
 
@@ -201,6 +260,85 @@ def validate_parties(parsed: dict, transcript: str) -> tuple[dict, list[str]]:
             reasons.append(f"aircraft {name!r} not present in transcript")
     cleaned["aircraft"] = kept
 
+    if reasons:
+        cleaned["confidence"] = "low"
+    return cleaned, reasons
+
+
+def validate_enriched_parties(
+    parsed: dict, transcript: str, commission_text: str
+) -> tuple[dict, list[str]]:
+    """The containment gate, parameterised by which document a field claims.
+
+    `validate_parties` asks one question of every value: is it in the transcript?
+    Here there are two admissible documents, so the question becomes: is it in the
+    one it says it came from? The guarantee is unchanged — nothing survives that
+    isn't written down somewhere we can point at — and it stays checkable after the
+    fact, because the surviving `sources` map says where to look.
+
+    A field that declares no source is held to the transcript. Silence must not be
+    a way to reach the looser document.
+    """
+    texts = {SOURCE_TRANSCRIPT: transcript, SOURCE_COMMISSION: commission_text}
+    cleaned = json.loads(json.dumps(parsed))
+    declared = cleaned.get("sources")
+    if not isinstance(declared, dict):
+        declared = {}
+    reasons: list[str] = []
+    kept_sources: dict[str, str] = {}
+
+    def resolve(path: str) -> str | None:
+        claimed = declared.get(path)
+        if claimed is None:
+            return SOURCE_TRANSCRIPT
+        if claimed not in texts:
+            reasons.append(f"{path} claims unknown source {claimed!r}")
+            return None
+        return claimed
+
+    evidence_source = resolve("evidence")
+    if evidence_source is None or not evidence_is_verbatim(
+        cleaned.get("evidence", ""), texts[evidence_source]
+    ):
+        if evidence_source is not None:
+            reasons.append(f"evidence is not a verbatim quote from the {evidence_source}")
+        cleaned["evidence"] = None
+    else:
+        kept_sources["evidence"] = evidence_source
+
+    for side in ("side_a", "side_b"):
+        block = cleaned.get(side) or {}
+        for field in ("facility", "position", "person"):
+            path = f"{side}.{field}"
+            value = block.get(field)
+            if not value or value == "various":
+                continue
+            source = resolve(path)
+            if source is None:
+                block[field] = None
+                continue
+            missing = unsupported_words(value, texts[source])
+            if missing:
+                reasons.append(
+                    f"{path}={value!r} names {missing} which the {source} never contains"
+                )
+                block[field] = None
+            else:
+                kept_sources[path] = source
+        cleaned[side] = block
+
+    aircraft_source = resolve("aircraft")
+    kept = []
+    for name in cleaned.get("aircraft") or []:
+        if aircraft_source and _callsign_supported(str(name), texts[aircraft_source]):
+            kept.append(name)
+        else:
+            reasons.append(f"aircraft {name!r} not present in the {aircraft_source}")
+    cleaned["aircraft"] = kept
+    if kept and aircraft_source:
+        kept_sources["aircraft"] = aircraft_source
+
+    cleaned["sources"] = kept_sources
     if reasons:
         cleaned["confidence"] = "low"
     return cleaned, reasons
