@@ -1,8 +1,8 @@
 import type React from "react";
-import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 
-interface NowPlayingListProps {
-}
+// Deliberately empty while the Tuner's list is reworked — the scanner's
+// segments/mute/solo contract went away with the old rendering.
+type NowPlayingListProps = Record<string, never>;
 
 /**
  * Lists the files currently playing for one station (its in-window segments),
@@ -12,7 +12,7 @@ interface NowPlayingListProps {
  * Forked from RadioScanner's NowPlayingList so the Tuner's list can diverge
  * independently; the marquee, overflow hook, and SCSS module stay shared.
  */
-export const NowPlayingList: React.FC<NowPlayingListProps> = ({}) => {
+export const NowPlayingList: React.FC<NowPlayingListProps> = () => {
 	return (
 		<></>
 		// The marquee mounts only while the list is wider than the wrapper

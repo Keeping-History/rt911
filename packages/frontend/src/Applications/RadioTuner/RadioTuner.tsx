@@ -155,7 +155,9 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
     const [activeStation, setActiveStation] = useState<string>(
         sanitizeActiveStation(appState?.activeStation),
     );
-    const [mutedItems, setMutedItems] = useState<number[]>(
+    // Read-only while the per-item mute controls are gone with NowPlayingList;
+    // the persisted ids still feed effectiveMutedIds so old mutes keep working.
+    const [mutedItems] = useState<number[]>(
         sanitizeItemIds(appState?.mutedItems),
     );
     const [showWaveform, setShowWaveform] = useState<boolean>(
@@ -256,15 +258,8 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
         setActiveStation(match.key);
     }, [command, stations]);
 
-    const toggleItemMute = (id: number) => {
-        setMutedItems((prev) =>
-            prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
-        );
-    };
-
-    const toggleSoloItem = useCallback((id: number) => {
-        setSoloItemId((prev) => (prev === id ? null : id));
-    }, []);
+    // The mute/solo toggle handlers lived here while NowPlayingList rendered
+    // the per-item controls; they return with the reworked list.
 
     // Solo is scoped to the station it was started on.
     // biome-ignore lint/correctness/useExhaustiveDependencies: reset-on-change effect
