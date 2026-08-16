@@ -266,6 +266,21 @@ def parse_parties(raw: str) -> dict:
     return parsed
 
 
+def _member(value: object, allowed) -> bool:
+    """Membership test that survives the model returning the wrong JSON type.
+
+    `value in allowed` raises TypeError when `value` is a list or dict, and the
+    reply is arbitrary JSON from a language model — a run over 758 recordings
+    died two hours in because one of them answered
+    `"source": ["transcript"]` instead of `"source": "transcript"`.
+
+    This validator is the one thing standing between arbitrary model output and
+    the database, so no input shape may crash it. A wrong-typed value is simply
+    not a member, and the caller rejects it like any other bad value.
+    """
+    return isinstance(value, str) and value in allowed
+
+
 def _normalise(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip().lower()
 
@@ -348,7 +363,7 @@ def validate_parties(
             claimed = declared.get(path)
         if claimed is None:
             return SOURCE_TRANSCRIPT
-        if claimed not in texts:
+        if not _member(claimed, texts):
             reasons.append(f"{path} claims unknown source {claimed!r}")
             return None
         return claimed
@@ -382,9 +397,11 @@ def validate_parties(
                 str(value), source, f"participants[{i}].{field}"
             ) else None
         role = raw.get("role")
-        entry["role"] = role if role in ROLES else "unknown"
+        entry["role"] = role if _member(role, ROLES) else "unknown"
         confidence = raw.get("confidence")
-        entry["confidence"] = confidence if confidence in CONFIDENCE_ORDER else "low"
+        entry["confidence"] = (
+            confidence if _member(confidence, CONFIDENCE_ORDER) else "low"
+        )
         entry["source"] = source
         # An entry naming nobody says only "somebody with this role spoke", which
         # every recording already implies. Drop it rather than pad the list.
@@ -459,18 +476,18 @@ def validate_parties(
     # --- closed vocabularies ----------------------------------------------
     topics = []
     for topic in cleaned.get("topics") or []:
-        if topic in TOPICS:
+        if _member(topic, TOPICS):
             topics.append(topic)
         else:
             reasons.append(f"topic {topic!r} is not in the controlled vocabulary")
     cleaned["topics"] = sorted(set(topics))
 
-    if cleaned.get("link") not in LINKS:
+    if not _member(cleaned.get("link"), LINKS):
         cleaned["link"] = "unknown"
 
     # --- overall confidence -------------------------------------------------
     overall = cleaned.get("confidence")
-    if overall not in CONFIDENCE_ORDER:
+    if not _member(overall, CONFIDENCE_ORDER):
         overall = "low"
     if reasons and CONFIDENCE_ORDER[overall] > CONFIDENCE_ORDER["medium"]:
         overall = "medium"

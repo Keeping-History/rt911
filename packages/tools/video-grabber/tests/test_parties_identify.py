@@ -349,3 +349,45 @@ def test_parse_blames_the_token_budget_for_an_empty_reply(raw):
     """
     with pytest.raises(ValueError, match="no text"):
         parse_parties(raw)
+
+
+# --- the validator must survive arbitrary model output --------------------
+
+@pytest.mark.parametrize("junk", [["transcript"], {"a": 1}, 7, None, True])
+def test_a_wrong_typed_source_is_rejected_not_fatal(junk):
+    """A run over 758 recordings died two hours in on `source: ["transcript"]`.
+
+    `value in dict` raises TypeError for a list or dict key, and the reply is
+    arbitrary JSON from a model. This validator is the only thing between that
+    output and the database, so no input shape may crash it.
+    """
+    bad = {**GOOD, "participants": [
+        {**GOOD["participants"][0], "source": junk},
+    ]}
+    cleaned, _ = validate_parties(bad, TRANSCRIPT)
+    assert isinstance(cleaned["participants"], list)
+
+
+@pytest.mark.parametrize("field,junk", [
+    ("role", ["atc"]),
+    ("confidence", {"level": "high"}),
+])
+def test_a_wrong_typed_participant_field_falls_back(field, junk):
+    bad = {**GOOD, "participants": [{**GOOD["participants"][0], field: junk}]}
+    cleaned, _ = validate_parties(bad, TRANSCRIPT)
+    assert cleaned["participants"][0]["role"] in {"atc", "unknown"}
+    assert cleaned["participants"][0]["confidence"] in {"high", "medium", "low"}
+
+
+@pytest.mark.parametrize("key,junk", [
+    ("topics", [["hijack-report"]]),
+    ("link", ["landline"]),
+    ("confidence", ["high"]),
+    ("sources", ["transcript"]),
+])
+def test_wrong_typed_top_level_fields_do_not_crash(key, junk):
+    cleaned, _ = validate_parties({**GOOD, key: junk}, TRANSCRIPT)
+    assert cleaned["schema_version"] == SCHEMA_VERSION
+    assert cleaned["confidence"] in {"high", "medium", "low"}
+    assert cleaned["link"] in {"air-ground", "landline", "internal",
+                               "conference", "unknown"}
