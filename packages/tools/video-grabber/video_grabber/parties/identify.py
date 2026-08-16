@@ -108,6 +108,11 @@ Rules you must follow:
 anything you know about September 11 from any other source.
 - If the documents do not tell you, return null or an empty list. That is a \
 correct answer, not a failure.
+- Word every name EXACTLY as the document words it. Do not expand it, complete \
+it, or add words to it. If the document says "Boston", write "Boston" — not \
+"Boston Center", even when you are confident that is the facility meant. If it \
+never says what someone's position is, leave `position` null rather than \
+writing a generic one like "controller".
 - `evidence` must be an exact quote copied character-for-character from a \
 document.
 - `subject` is one short phrase saying what the recording is about. Write it in \
