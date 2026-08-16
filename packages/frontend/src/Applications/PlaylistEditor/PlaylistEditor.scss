@@ -10,6 +10,7 @@
 	display: flex;
 	flex-direction: row;
 	height: calc(100%);
+	overflow: hidden;
 }
 /* The zoom controls sit outside .playlistTimeline on purpose: that element is
  * the scrolling viewport, so controls placed inside it would scroll away from
@@ -133,6 +134,27 @@
 	white-space: nowrap;
 	text-align: left;
 	cursor: pointer;
+}
+
+/* Edge-drag handles: a slim grab strip pinned to each end of the bar. The
+ * resize cursor itself is set inline from ClassicyIcons — the published
+ * classicy package inlines its cursor PNGs as data URIs in its own CSS, so
+ * there is no asset file this stylesheet could url() reference. */
+.playlistTimelineBarHandle {
+	position: absolute;
+	top: 0;
+	width: 6px;
+	height: 100%;
+	touch-action: none;
+	user-select: none;
+}
+
+.playlistTimelineBarHandle-start {
+	left: 0;
+}
+
+.playlistTimelineBarHandle-end {
+	right: 0;
 }
 
 .playlistTimelineActualSpan {

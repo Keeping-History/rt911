@@ -7,7 +7,7 @@ vi.mock("./resolveTimelineMeta", () => ({
 	resolveTimelineMeta: vi.fn(async () => new Map()),
 }));
 
-import { barMaskImage, PlaylistTimeline } from "./PlaylistTimeline";
+import { barMaskImage, edgeCursor, PlaylistTimeline } from "./PlaylistTimeline";
 import { resolveTimelineMeta } from "./resolveTimelineMeta";
 
 /**
@@ -228,6 +228,88 @@ describe("PlaylistTimeline", () => {
 		expect(screen.getByTestId("timeline-track").style.width).toBe("6400%");
 		expect(zoomIn.disabled).toBe(true);
 		expect(zoomOut.disabled).toBe(false);
+	});
+
+	describe("edge drag", () => {
+		// ABC runs 12:00–13:00 on 11 Sep: startFrac 0.25 of the ten-day span.
+		const dragEntries: EditorEntry[] = [
+			{
+				uid: "e1",
+				entry: {
+					kind: "media", app: "tv", itemId: "ABC",
+					start: "2001-09-11T12:00:00Z", end: "2001-09-11T13:00:00Z",
+				},
+			},
+		];
+
+		// jsdom does no layout, so the track measures 0×0 and every drag would
+		// no-op; a mocked 1000px rect makes clientX read directly as frac ‰.
+		function renderWithTrack(onSetEntryBound = vi.fn()) {
+			render(
+				<PlaylistTimeline
+					entries={dragEntries}
+					selectedUid={null}
+					onSelect={vi.fn()}
+					onSetEntryBound={onSetEntryBound}
+					{...atRest}
+				/>,
+			);
+			vi.spyOn(screen.getByTestId("timeline-track"), "getBoundingClientRect").mockReturnValue({
+				left: 0, width: 1000, top: 0, right: 1000, bottom: 20, height: 20,
+				x: 0, y: 0, toJSON: () => ({}),
+			} as DOMRect);
+			return onSetEntryBound;
+		}
+
+		it("renders no handles when onSetEntryBound is not wired (read-only host)", () => {
+			render(
+				<PlaylistTimeline entries={dragEntries} selectedUid={null} onSelect={vi.fn()} {...atRest} />,
+			);
+			expect(document.querySelector(".playlistTimelineBarHandle")).toBeNull();
+		});
+
+		it("previews the dragged end edge live and commits the snapped ISO only on release", () => {
+			const onSetEntryBound = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-end-e1");
+
+			// 600/1000 of ten days from 9 Sep = 15 Sep 00:00 exactly.
+			fireEvent.pointerDown(handle, { clientX: 600, pointerId: 1 });
+			fireEvent.pointerMove(handle, { clientX: 600, pointerId: 1 });
+
+			const bar = document.querySelector(".playlistTimelineBar") as HTMLElement;
+			expect(parseFloat(bar.style.left)).toBeCloseTo(25);
+			expect(parseFloat(bar.style.width)).toBeCloseTo(35);
+			expect(onSetEntryBound).not.toHaveBeenCalled();
+
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			expect(onSetEntryBound).toHaveBeenCalledWith("e1", "end", "2001-09-15T00:00:00.000Z");
+		});
+
+		it("clamps a start-edge drag one minute short of the entry's end bound", () => {
+			const onSetEntryBound = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-start-e1");
+			fireEvent.pointerDown(handle, { clientX: 990, pointerId: 1 });
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			expect(onSetEntryBound).toHaveBeenCalledWith("e1", "start", "2001-09-11T12:59:00.000Z");
+		});
+
+		it("abandons the drag without committing on pointercancel", () => {
+			const onSetEntryBound = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-start-e1");
+			fireEvent.pointerDown(handle, { clientX: 100, pointerId: 1 });
+			fireEvent.pointerCancel(handle, { pointerId: 1 });
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			expect(onSetEntryBound).not.toHaveBeenCalled();
+		});
+
+		it("uses the View Pane resize cursors: double-arrow idle, travel arrow mid-drag", () => {
+			// jsdom's CSS parser drops url(...) N N cursor values from inline
+			// styles (same class of loss as the maskImage calc() case above), so
+			// the cursor strings are pinned via the helper the handles render with.
+			expect(edgeCursor("lr")).toMatch(/^url\(.+\) 8 8, col-resize$/);
+			expect(edgeCursor("l")).toMatch(/^url\(.+\) 8 8, w-resize$/);
+			expect(edgeCursor("r")).toMatch(/^url\(.+\) 8 8, e-resize$/);
+		});
 	});
 
 	it("un-stacks flags that only collided because they were close as a fraction of ten days", () => {

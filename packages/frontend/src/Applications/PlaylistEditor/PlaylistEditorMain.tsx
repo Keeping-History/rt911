@@ -141,6 +141,11 @@ export function PlaylistEditorMain({
 					entries={state.entries}
 					selectedUid={state.selectedUid}
 					onSelect={(uid) => dispatch({ type: "select", uid })}
+					onSetEntryBound={(uid, edge, iso) => {
+						const e = state.entries.find((x) => x.uid === uid);
+						if (!e || e.entry.kind !== "media") return;
+						dispatch({ type: "updateEntry", uid, entry: { ...e.entry, [edge]: iso } });
+					}}
 					zoom={zoom}
 					onZoomChange={onZoomChange}
 					start={state.start}

@@ -156,6 +156,36 @@ export function timeToFraction(iso: string, bounds: TimelineBounds = FULL_BOUNDS
 	return Math.min(1, Math.max(0, frac));
 }
 
+// Edge drags snap to whole minutes: finer precision is invisible at any zoom
+// level, and it keeps the committed ISO strings as round as hand-entered ones.
+const DRAG_SNAP_MS = 60_000;
+
+/**
+ * Where an edge drag at track-fraction `frac` lands, as a virtual-clock UTC
+ * ISO string: snapped to the minute, kept inside the timeline bounds, and held
+ * at least one snap step away from the entry's opposite bound so a drag can
+ * never invert the window. `opposite` may be absent (unbounded edge), in which
+ * case the timeline bound stands in for it.
+ */
+export function dragEdgeIso(
+	edge: "start" | "end",
+	frac: number,
+	bounds: TimelineBounds = FULL_BOUNDS,
+	opposite?: string,
+): string {
+	const raw = bounds.startMs + Math.min(1, Math.max(0, frac)) * (bounds.endMs - bounds.startMs);
+	let ms = Math.round(raw / DRAG_SNAP_MS) * DRAG_SNAP_MS;
+	const oppMs = opposite === undefined ? undefined : playlistUtcMs(opposite);
+	if (edge === "start") {
+		ms = Math.min(ms, (oppMs ?? bounds.endMs) - DRAG_SNAP_MS);
+		ms = Math.max(ms, bounds.startMs);
+	} else {
+		ms = Math.max(ms, (oppMs ?? bounds.startMs) + DRAG_SNAP_MS);
+		ms = Math.min(ms, bounds.endMs);
+	}
+	return new Date(ms).toISOString();
+}
+
 export type TimelineBar = {
 	uid: string; label: string; group: "tv" | "radio" | "flights";
 	startFrac: number; endFrac: number; fadeStart: boolean; fadeEnd: boolean;

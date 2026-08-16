@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	dragEdgeIso,
 	FULL_BOUNDS,
 	layoutBars,
 	layoutFlags,
@@ -25,6 +26,39 @@ describe("timeToFraction", () => {
 		expect(timeToFraction("2001-09-19T00:00:00.000Z")).toBe(1);
 		expect(timeToFraction("2001-08-01T00:00:00.000Z")).toBe(0);
 		expect(timeToFraction("2001-09-14T00:00:00.000Z")).toBeCloseTo(0.5);
+	});
+});
+
+describe("dragEdgeIso", () => {
+	it("snaps a mid-track fraction to the minute", () => {
+		expect(dragEdgeIso("end", 0.5)).toBe("2001-09-14T00:00:00.000Z");
+	});
+
+	it("clamps overshoot to the timeline bounds", () => {
+		expect(dragEdgeIso("start", -0.3)).toBe(new Date(TIMELINE_START_MS).toISOString());
+		expect(dragEdgeIso("end", 1.3)).toBe(new Date(TIMELINE_END_MS).toISOString());
+	});
+
+	it("holds an edge one minute short of the opposite bound, so a drag can never invert the window", () => {
+		expect(dragEdgeIso("start", 1, FULL_BOUNDS, "2001-09-11T13:00:00Z")).toBe(
+			"2001-09-11T12:59:00.000Z",
+		);
+		expect(dragEdgeIso("end", 0, FULL_BOUNDS, "2001-09-11T13:00:00Z")).toBe(
+			"2001-09-11T13:01:00.000Z",
+		);
+	});
+
+	it("maps fractions against a playlist-window's rescaled bounds", () => {
+		const b = timelineBounds("2001-09-11T12:00:00Z", "2001-09-11T14:00:00Z");
+		expect(dragEdgeIso("start", 0.5, b)).toBe("2001-09-11T13:00:00.000Z");
+	});
+
+	it("stands the timeline bound in for a missing opposite bound", () => {
+		// An unbounded end reads as the track's end: dragging start all the way
+		// right stops one minute short of 19 Sep, not at some undefined place.
+		expect(dragEdgeIso("start", 1, FULL_BOUNDS, undefined)).toBe(
+			new Date(TIMELINE_END_MS - 60_000).toISOString(),
+		);
 	});
 });
 

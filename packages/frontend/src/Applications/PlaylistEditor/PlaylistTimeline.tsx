@@ -1,9 +1,17 @@
-import { ClassicyButton } from "classicy";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ClassicyButton, ClassicyIcons } from "classicy";
+import {
+	type PointerEvent as ReactPointerEvent,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import type { EditorEntry } from "./editorState";
 import "./PlaylistEditor.scss";
 import { resolveTimelineMeta } from "./resolveTimelineMeta";
 import {
+	dragEdgeIso,
 	layoutBars,
 	layoutFlags,
 	MAX_ZOOM,
@@ -12,6 +20,7 @@ import {
 	rulerTicks,
 	steppedZoom,
 	timelineBounds,
+	timeToFraction,
 } from "./timelineLayout";
 
 // Flags stack into rows when they fall within this fraction of each other. It is
@@ -19,6 +28,32 @@ import {
 // otherwise zooming in spreads the flags apart on screen while still stacking
 // them, which defeats the main reason to zoom into a crowded stretch.
 const FLAG_MIN_GAP_FRAC = 0.015;
+
+/**
+ * The Platinum resize cursors the Classicy View Pane dividers use, verbatim:
+ * the double-arrow on an idle handle, and the single direction-of-travel arrow
+ * mid-drag (Mac OS 8 window-edge idiom — the bar is the edge, the arrow is
+ * where it's headed). They come from ClassicyIcons because the published
+ * package inlines cursor PNGs as data URIs in its own CSS — there is no asset
+ * file a stylesheet here could reference — so the cursor is set inline.
+ * Hotspot 8 8 = the center of the 16px cursor, where the bar meets the arrow.
+ */
+export function edgeCursor(dir: "l" | "r" | "lr"): string {
+	const { resizeL, resizeR, resizeLr } = ClassicyIcons.ui.cursors;
+	const [img, fallback] =
+		dir === "l" ? [resizeL, "w-resize"] : dir === "r" ? [resizeR, "e-resize"] : [resizeLr, "col-resize"];
+	return `url(${img}) 8 8, ${fallback}`;
+}
+
+type EdgeDrag = {
+	uid: string;
+	edge: "start" | "end";
+	/** The minute-snapped value the drag currently points at — what the bar
+	 * previews, and what commits on release. */
+	iso: string;
+	/** Direction of travel, for the mid-drag cursor; null until first movement. */
+	dir: "l" | "r" | null;
+};
 
 export function barMaskImage(fadeStart: boolean, fadeEnd: boolean): string {
 	if (fadeStart && fadeEnd) {
@@ -33,6 +68,7 @@ export function PlaylistTimeline({
 	entries,
 	selectedUid,
 	onSelect,
+	onSetEntryBound,
 	zoom,
 	onZoomChange,
 	start,
@@ -41,6 +77,9 @@ export function PlaylistTimeline({
 	entries: EditorEntry[];
 	selectedUid: string | null;
 	onSelect: (uid: string) => void;
+	/** Commit an edge drag: set one bound of a media entry's window. Handles
+	 * only render when this is wired, so a read-only host shows plain bars. */
+	onSetEntryBound?: (uid: string, edge: "start" | "end", iso: string) => void;
 	/** Controlled: the owning document window holds this in the classicy store
 	 * so the View menu can drive it and it survives closing the window. */
 	zoom: number;
@@ -53,7 +92,10 @@ export function PlaylistTimeline({
 	const [resolved, setResolved] = useState<Map<string, EditorEntry["timelineMeta"]>>(new Map());
 	const attemptedRef = useRef(new Set<string>());
 	const viewportRef = useRef<HTMLDivElement>(null);
+	const trackRef = useRef<HTMLDivElement>(null);
 	const anchorRef = useRef<number | null>(null);
+	const [drag, setDrag] = useState<EdgeDrag | null>(null);
+	const lastDragXRef = useRef(0);
 
 	// Zoom about the middle of what the user is currently looking at. Without
 	// this, widening the track keeps scrollLeft fixed and the view lurches
@@ -112,6 +154,61 @@ export function PlaylistTimeline({
 	const ticks = useMemo(() => rulerTicks(zoom, bounds), [zoom, bounds]);
 	const labels = useMemo(() => rulerLabels(zoom, bounds), [zoom, bounds]);
 
+	// Pointer-X → the minute-snapped ISO the dragged edge points at. Null when
+	// the track has no measurable width (jsdom, or a not-yet-laid-out mount).
+	function edgeIsoAt(clientX: number, uid: string, edge: "start" | "end"): string | null {
+		const rect = trackRef.current?.getBoundingClientRect();
+		if (!rect || rect.width === 0) return null;
+		const entry = entries.find((e) => e.uid === uid)?.entry;
+		if (entry?.kind !== "media") return null;
+		const opposite = edge === "start" ? entry.end : entry.start;
+		return dragEdgeIso(edge, (clientX - rect.left) / rect.width, bounds, opposite);
+	}
+
+	function beginEdgeDrag(e: ReactPointerEvent, uid: string, edge: "start" | "end") {
+		// The handle lives inside the bar's <button>; without this the drag would
+		// also press the button and steal focus mid-gesture.
+		e.preventDefault();
+		e.stopPropagation();
+		const iso = edgeIsoAt(e.clientX, uid, edge);
+		if (!iso) return;
+		// Optional-called: jsdom has no pointer capture. In browsers, capture is
+		// what keeps move/up flowing to the handle once the pointer leaves it.
+		(e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+		lastDragXRef.current = e.clientX;
+		setDrag({ uid, edge, iso, dir: null });
+	}
+
+	function moveEdgeDrag(e: ReactPointerEvent) {
+		if (!drag) return;
+		const dx = e.clientX - lastDragXRef.current;
+		lastDragXRef.current = e.clientX;
+		// The 1px dead zone keeps sub-pixel jitter from flapping the arrow.
+		const dir = dx > 1 ? "r" : dx < -1 ? "l" : drag.dir;
+		const iso = edgeIsoAt(e.clientX, drag.uid, drag.edge) ?? drag.iso;
+		if (iso !== drag.iso || dir !== drag.dir) setDrag({ ...drag, iso, dir });
+	}
+
+	function endEdgeDrag() {
+		if (!drag) return;
+		onSetEntryBound?.(drag.uid, drag.edge, drag.iso);
+		setDrag(null);
+	}
+
+	// While a drag is live the pointer can outrun the 6px handle even under
+	// capture (capture keeps the EVENTS coming, but not every browser keeps the
+	// captured element's cursor), so the direction cursor is mirrored onto the
+	// body the same way classicy's own useClassicyCursor does. Keyed on the
+	// direction, not the drag object — the object changes every snapped minute.
+	const dragCursorDir = drag ? (drag.dir ?? "lr") : null;
+	useEffect(() => {
+		if (!dragCursorDir) return;
+		document.body.style.cursor = edgeCursor(dragCursorDir);
+		return () => {
+			document.body.style.cursor = "";
+		};
+	}, [dragCursorDir]);
+
 	return (
 		<div className="playlistTimelineContainer">
 			<div className="playlistTimelineZoom classicyWindowHeader">
@@ -150,6 +247,7 @@ export function PlaylistTimeline({
 					<div
 						className="playlistTimelineTrack"
 						data-testid="timeline-track"
+						ref={trackRef}
 						style={{ width: `${zoom * 100}%` }}
 					>
 						<div className="playlistTimelineRuler">
@@ -204,38 +302,66 @@ export function PlaylistTimeline({
 							))}
 						</div>
 						<div className="playlistTimelineLanes">
-							{bars.map((b) => (
-								<div key={b.uid} className={`playlistTimelineLane playlistTimelineLane-${b.group}`}>
-									<button
-										type="button"
-										className={
-											b.uid === selectedUid
-												? "playlistTimelineBar playlistTimelineBarSelected"
-												: "playlistTimelineBar"
-										}
-										style={{
-											left: `${b.startFrac * 100}%`,
-											width: `${(b.endFrac - b.startFrac) * 100}%`,
-											maskImage: barMaskImage(b.fadeStart, b.fadeEnd),
-										}}
-										title={b.label}
-										onClick={() => onSelect(b.uid)}
-									>
-										{b.focus === "once" && <span aria-hidden>▸</span>}
-										{b.focus === "locked" && <span aria-hidden>🔒</span>}
-										{b.label}
-										{b.actualStartFrac !== undefined && b.endFrac - b.startFrac > 0 && (
-											<span
-												className="playlistTimelineActualSpan"
-												style={{
-													left: `${((b.actualStartFrac - b.startFrac) / (b.endFrac - b.startFrac)) * 100}%`,
-													width: `${(((b.actualEndFrac ?? b.endFrac) - b.actualStartFrac) / (b.endFrac - b.startFrac)) * 100}%`,
-												}}
-											/>
-										)}
-									</button>
-								</div>
-							))}
+							{bars.map((b) => {
+								// A live drag previews on the bar itself: the dragged edge
+								// tracks the snapped value, and its fade lifts because the
+								// edge is now bound. Everything below reads these instead of
+								// b.* so the actual-span overlay stays proportioned.
+								const dragging = drag?.uid === b.uid ? drag : null;
+								const previewFrac = dragging ? timeToFraction(dragging.iso, bounds) : null;
+								const startFrac = dragging?.edge === "start" ? (previewFrac ?? b.startFrac) : b.startFrac;
+								const endFrac = dragging?.edge === "end" ? (previewFrac ?? b.endFrac) : b.endFrac;
+								const fadeStart = b.fadeStart && dragging?.edge !== "start";
+								const fadeEnd = b.fadeEnd && dragging?.edge !== "end";
+								const handleCursor = (edge: "start" | "end") =>
+									edgeCursor(dragging?.edge === edge ? (dragging.dir ?? "lr") : "lr");
+								return (
+									<div key={b.uid} className={`playlistTimelineLane playlistTimelineLane-${b.group}`}>
+										<button
+											type="button"
+											className={
+												b.uid === selectedUid
+													? "playlistTimelineBar playlistTimelineBarSelected"
+													: "playlistTimelineBar"
+											}
+											style={{
+												left: `${startFrac * 100}%`,
+												width: `${(endFrac - startFrac) * 100}%`,
+												maskImage: barMaskImage(fadeStart, fadeEnd),
+											}}
+											title={b.label}
+											onClick={() => onSelect(b.uid)}
+										>
+											{b.focus === "once" && <span aria-hidden>▸</span>}
+											{b.focus === "locked" && <span aria-hidden>🔒</span>}
+											{b.label}
+											{b.actualStartFrac !== undefined && endFrac - startFrac > 0 && (
+												<span
+													className="playlistTimelineActualSpan"
+													style={{
+														left: `${((b.actualStartFrac - startFrac) / (endFrac - startFrac)) * 100}%`,
+														width: `${(((b.actualEndFrac ?? endFrac) - b.actualStartFrac) / (endFrac - startFrac)) * 100}%`,
+													}}
+												/>
+											)}
+											{onSetEntryBound &&
+												(["start", "end"] as const).map((edge) => (
+													<span
+														key={edge}
+														aria-hidden
+														className={`playlistTimelineBarHandle playlistTimelineBarHandle-${edge}`}
+														data-testid={`bar-handle-${edge}-${b.uid}`}
+														style={{ cursor: handleCursor(edge) }}
+														onPointerDown={(e) => beginEdgeDrag(e, b.uid, edge)}
+														onPointerMove={moveEdgeDrag}
+														onPointerUp={endEdgeDrag}
+														onPointerCancel={() => setDrag(null)}
+													/>
+												))}
+										</button>
+									</div>
+								);
+							})}
 						</div>
 					</div>
 				</div>
