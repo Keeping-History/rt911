@@ -150,3 +150,48 @@ def test_resolution_is_index_only_and_does_not_touch_the_record():
     parties = {"participants": [{"facility": "Boston"}]}
     build_tags(parties)
     assert parties["participants"][0]["facility"] == "Boston"
+
+
+# --- curated merge --------------------------------------------------------
+
+def test_curated_tags_are_preserved_alongside_derived_ones():
+    tags = build_tags(FULL, curated=["collection:team-8", "note:check-timestamp"])
+    assert "collection:team-8" in tags and "note:check-timestamp" in tags
+    assert "facility:indianapolis-center" in tags   # derived ones still there
+
+
+def test_a_retracted_derived_tag_does_not_survive_a_rerun():
+    """Why curated tags need their own column rather than merging into `tags`.
+
+    Merging the new derived set into whatever `tags` already held would let
+    derived tags only ever accumulate: a facility the model stops identifying,
+    or one the gate now rejects, would linger forever with nothing able to
+    retract it. Re-running would entrench old mistakes instead of fixing them.
+    """
+    before = build_tags({"participants": [{"facility": "NEADS", "role": "military"}]})
+    assert "facility:neads" in before
+    # Next run: the gate rejected NEADS, so it is simply absent from the input.
+    after = build_tags({"participants": [{"facility": None, "role": "military"}]},
+                       curated=["note:keep-me"])
+    assert "facility:neads" not in after
+    assert "note:keep-me" in after
+
+
+def test_curated_tags_need_not_use_a_known_namespace():
+    # A curator may need vocabulary this module has never heard of.
+    assert "anything at all" in build_tags({}, curated=["anything at all"])
+
+
+def test_blank_curated_entries_are_dropped():
+    assert build_tags({}, curated=["", "   ", None]) == []
+
+
+def test_curated_and_derived_duplicates_collapse():
+    tags = build_tags(FULL, curated=["facility:neads"])
+    assert tags.count("facility:neads") == 1
+
+
+def test_a_curator_may_assert_various_even_though_derivation_may_not():
+    assert "facility:various" in build_tags({}, curated=["facility:various"])
+    assert "facility:various" not in build_tags(
+        {"participants": [{"facility": "various", "role": "atc"}]})

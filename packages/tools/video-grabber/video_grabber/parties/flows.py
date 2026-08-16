@@ -78,7 +78,9 @@ def identify_parties_flow(limit: int | None = None, force: bool = False,
     complete = anthropic_completer(cfg, model=cfg.parties_model, max_tokens=PARTIES_MAX_TOKENS)
 
     done = skipped = failed = broadcast = enriched = 0
-    for row in _page_mp3_items(cfg, "id,url,subtitles,calc_duration,parties"):
+    for row in _page_mp3_items(
+        cfg, "id,url,subtitles,calc_duration,parties,tags_curated"
+    ):
         if limit is not None and done >= limit:
             break
         key = key_from_url(row["url"])
@@ -141,7 +143,10 @@ def identify_parties_flow(limit: int | None = None, force: bool = False,
             cleaned["gate_reasons"] = reasons
             logger.info("identify-parties: %s gated: %s", key, reasons)
 
-        tags = build_tags(cleaned)
+        # `tags` is rebuilt from scratch every run so the model can retract a
+        # tag it no longer supports; `tags_curated` is the human column the
+        # flow reads and never writes, so hand-added tags survive regardless.
+        tags = build_tags(cleaned, row.get("tags_curated") or [])
 
         if dry_run:
             logger.info("DRY RUN %s -> %s | tags=%s", key, cleaned, tags)
