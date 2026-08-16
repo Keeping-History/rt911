@@ -1,6 +1,6 @@
 """Tag derivation: what a searcher can actually filter on."""
 from video_grabber.parties.tags import build_tags, normalize_callsign, slugify
-from video_grabber.parties.vocab import agency_for
+from video_grabber.parties.vocab import agency_for, canonical_facility
 
 FULL = {
     "tier": "clip",
@@ -105,3 +105,48 @@ def test_agency_prefers_the_longest_matching_key():
 
 def test_unknown_facility_has_no_agency():
     assert agency_for("Somewhere Nobody Listed") is None
+
+
+# --- facility aliasing ----------------------------------------------------
+
+def test_the_three_names_for_one_center_reach_one_tag():
+    """The reason this table exists.
+
+    One clip's transcript says "Boston", another says "Boston Center", a third
+    says "ZBW". The record stores whichever was said — so without resolution the
+    index splits one facility three ways and a search for any misses the others.
+    """
+    def facility_tags(name):
+        return [t for t in build_tags({"participants": [{"facility": name}]})
+                if t.startswith("facility:")]
+
+    assert facility_tags("Boston") == facility_tags("Boston Center") \
+        == facility_tags("ZBW") == ["facility:boston-center"]
+
+
+def test_the_longest_alias_wins_so_an_airport_is_not_read_as_its_center():
+    # "Washington National" contains "washington", which alone means the Center.
+    assert canonical_facility("Washington National") == "washington-national"
+    assert canonical_facility("Washington Center") == "washington-center"
+
+
+def test_a_callsign_for_a_unit_resolves_to_the_unit():
+    # "Huntress" is NEADS's own callsign, not a separate facility.
+    assert canonical_facility("Huntress") == "neads"
+
+
+def test_an_unlisted_facility_keeps_its_own_slug_rather_than_vanishing():
+    tags = build_tags({"participants": [{"facility": "Somewhere Nobody Listed"}]})
+    assert "facility:somewhere-nobody-listed" in tags
+
+
+def test_agency_still_resolves_through_the_canonical_name():
+    tags = build_tags({"participants": [{"facility": "ZBW"}]})
+    assert "agency:faa" in tags
+
+
+def test_resolution_is_index_only_and_does_not_touch_the_record():
+    """The licence for inferring at all: `parties` still says what was said."""
+    parties = {"participants": [{"facility": "Boston"}]}
+    build_tags(parties)
+    assert parties["participants"][0]["facility"] == "Boston"
