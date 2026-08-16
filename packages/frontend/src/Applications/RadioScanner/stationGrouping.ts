@@ -202,7 +202,18 @@ export function combinedPrevious(
  * and belongs to the Radio Scanner. Both apps partition the shared mp3 stream
  * with this one set so a station can never appear in both.
  */
-export const BROADCAST_STATIONS = new Set(["WCBS", "WINS"]);
+export const BROADCAST_STATIONS = new Set([
+	"WCBS",
+	"WINS",
+	"WABC",
+	"WTOP",
+	"WKXW",
+	"KFI",
+	"WRIF",
+	"WIBX",
+	"WBAP",
+	"KQRS",
+]);
 
 /** Stations pinned to the front of the strip regardless of online state. */
 export const PINNED_STATIONS = ["WINS", "WCBS"];
