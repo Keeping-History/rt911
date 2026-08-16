@@ -405,6 +405,27 @@ describe("stationLogo", () => {
 		const s = station("WABC", [item({ id: 1, source: "WABC", image: "" })]);
 		expect(stationLogo(s, [])).toBeUndefined();
 	});
+
+	it("falls back to the station map for a dark station with no items at all", () => {
+		const s = station("WRIF", []);
+		expect(
+			stationLogo(s, [], { WRIF: "https://cdn.test/wrif.png" }),
+		).toBe("https://cdn.test/wrif.png");
+	});
+
+	it("prefers a streamed item's image over the station map", () => {
+		const s = station("KFI", [
+			item({ id: 1, source: "KFI", image: "https://cdn.test/clip.png" }),
+		]);
+		expect(stationLogo(s, [], { KFI: "https://cdn.test/kfi.png" })).toBe(
+			"https://cdn.test/clip.png",
+		);
+	});
+
+	it("is undefined when the station map has no entry for the station", () => {
+		const s = station("KOH", []);
+		expect(stationLogo(s, [], { WRIF: "https://cdn.test/wrif.png" })).toBeUndefined();
+	});
 });
 
 describe("sortStationsByStatusAndLabel", () => {
