@@ -6,6 +6,7 @@ import {
 import {newspaperEntries} from "./NewspaperFiles";
 import {pageShortcutEntries} from "./pageShortcuts";
 import {photoEntries} from "./PhotoFiles"
+import {voicesOf911Entries} from "./VideoFiles";
 
 // HyperCard stack documents ship in public/stacks/ and are served by the
 // frontend itself (not Wasabi). Their URLs must respect Vite's configured base:
@@ -73,6 +74,15 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 				_type: ClassicyFileSystemEntryFileType.Directory,
 				_icon: ClassicyIcons.system.folders.directory,
 				...photoEntries,
+			},
+		},
+		Videos: {
+			_type: ClassicyFileSystemEntryFileType.Directory,
+			_icon: ClassicyIcons.system.folders.directory,
+			"Voices of 9.11": {
+				_type: ClassicyFileSystemEntryFileType.Directory,
+				_icon: ClassicyIcons.system.folders.directory,
+				...voicesOf911Entries,
 			},
 		},
 	},
