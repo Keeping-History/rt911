@@ -213,6 +213,10 @@ export const BROADCAST_STATIONS = new Set([
 	"WIBX",
 	"WBAP",
 	"KQRS",
+	"WOR",
+	"KOH",
+	"WAMU",
+	"BBC-R4",
 ]);
 
 /** Stations pinned to the front of the strip regardless of online state. */
