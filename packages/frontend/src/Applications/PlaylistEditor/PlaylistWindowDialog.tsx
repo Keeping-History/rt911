@@ -1,4 +1,10 @@
-import { ClassicyButton, ClassicyControlLabel, ClassicyWindow } from "classicy";
+import {
+	ClassicyButton,
+	ClassicyControlLabel,
+	ClassicyForm,
+	ClassicyFormButtonRow,
+	ClassicyWindow,
+} from "classicy";
 import { useState } from "react";
 import { playlistUtcMs } from "../../Providers/Playlist/playlistTypes";
 import { DateTimeField } from "./DateTimeField";
@@ -29,7 +35,13 @@ export function PlaylistWindowDialogForm({
 		start !== undefined && end !== undefined && playlistUtcMs(end) <= playlistUtcMs(start);
 
 	return (
-		<div className="playlistWindowDialog">
+		<ClassicyForm
+			className="playlistWindowDialog"
+			layout="dialog"
+			onSubmitFunc={() => {
+				if (!inverted) onSave({ start, end });
+			}}
+		>
 			<ClassicyControlLabel label="Limit this playlist to a time window. Outside it, no playlist content is available to students." />
 			<DateTimeField
 				label="Start"
@@ -46,15 +58,13 @@ export function PlaylistWindowDialogForm({
 				idPrefix="playlist-window-end"
 			/>
 			{inverted && <ClassicyControlLabel label="The end must be after the start." />}
-			<ClassicyButton
-				isDefault={true}
-				disabled={inverted}
-				onClickFunc={() => onSave({ start, end })}
-			>
-				OK
-			</ClassicyButton>
-			<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
-		</div>
+			<ClassicyFormButtonRow>
+				<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
+				<ClassicyButton isDefault={true} buttonType="submit" disabled={inverted}>
+					OK
+				</ClassicyButton>
+			</ClassicyFormButtonRow>
+		</ClassicyForm>
 	);
 }
 

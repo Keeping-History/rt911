@@ -17,6 +17,19 @@ vi.mock("classicy", () => ({
 	ClassicyButton: (props: { children?: React.ReactNode; onClickFunc?: () => void }) => (
 		<button type="button" onClick={props.onClickFunc}>{props.children}</button>
 	),
+	// FeedbackSuccess's issue link. The stub keeps the anchor semantics the
+	// tests assert (href/target/rel pass through) without the desktop opener.
+	ClassicyLink: (props: {
+		children?: React.ReactNode;
+		href?: string;
+		target?: string;
+		rel?: string;
+		className?: string;
+	}) => (
+		<a href={props.href} target={props.target} rel={props.rel} className={props.className}>
+			{props.children}
+		</a>
+	),
 	ClassicyIcons: { applications: {} },
 	registerClassicyIcons: (icons: Record<string, unknown>) => icons,
 	registerAppEventHandler: () => {},

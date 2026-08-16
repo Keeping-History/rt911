@@ -1,4 +1,10 @@
-import { ClassicyButton, ClassicyInput, ClassicyWindow } from "classicy";
+import {
+	ClassicyButton,
+	ClassicyForm,
+	ClassicyFormButtonRow,
+	ClassicyInput,
+	ClassicyWindow,
+} from "classicy";
 import { useState } from "react";
 
 export interface SendMessageDialogFormProps {
@@ -31,20 +37,25 @@ export function SendMessageDialogForm({
 	};
 
 	return (
-		<div className="playlistSendMessageDialog">
+		<ClassicyForm
+			className="playlistSendMessageDialog"
+			layout="dialog"
+			onSubmitFunc={send}
+		>
 			<ClassicyInput
 				id={inputId}
 				labelTitle="Message"
 				labelPosition="left"
 				prefillValue=""
 				onChangeFunc={(e) => setMessage(e.target.value)}
-				onEnterFunc={send}
 			/>
-			<ClassicyButton isDefault={true} disabled={trimmed === ""} onClickFunc={send}>
-				Send
-			</ClassicyButton>
-			<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
-		</div>
+			<ClassicyFormButtonRow>
+				<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
+				<ClassicyButton isDefault={true} buttonType="submit" disabled={trimmed === ""}>
+					Send
+				</ClassicyButton>
+			</ClassicyFormButtonRow>
+		</ClassicyForm>
 	);
 }
 
