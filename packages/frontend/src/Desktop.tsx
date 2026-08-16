@@ -32,6 +32,7 @@ import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
 import { PlaylistEditor } from "./Applications/PlaylistEditor/PlaylistEditor";
 import { Readme } from "./Applications/README/README";
 import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
+import { RadioTuner } from "./Applications/RadioTuner/RadioTuner";
 import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
 import { TV } from "./Applications/TV/TV";
 import { Weather } from "./Applications/Weather/Weather";
@@ -142,6 +143,7 @@ export default function Desktop() {
 			<PagerDecoder />
 			<Readme />
 			<RadioScanner />
+			<RadioTuner />
 			<TV />
 			<Weather />
 		</ClassicyDesktop>
