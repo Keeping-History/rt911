@@ -49,6 +49,7 @@ import {
     stationLogo,
     stationStatus,
 } from "../RadioScanner/stationGrouping";
+import { useStationLogos } from "../RadioScanner/stationLogos";
 import "./RadioTunerContext";
 import type { RadioTunerRemoteCommand } from "./RadioTunerContext";
 import { radioTunerSetSettings } from "./RadioTunerContext";
@@ -295,12 +296,27 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
 
     const activeStationObj = stations.find((s) => s.key === activeStation);
 
-    // Station artwork from the streamed mp3_items rows' `image` field — the
-    // text call sign stays as the fallback (and the image's alt) for stations
-    // whose rows carry no artwork.
+    // Station artwork: from the streamed items' `image` when the station is
+    // live, otherwise from the time-independent slug → logo map, so a dark
+    // station still shows whose frequency this is. The text call sign remains
+    // the fallback (and the image's alt) when no artwork exists at all.
+    const stationLogos = useStationLogos();
     const activeLogo = activeStationObj
-        ? stationLogo(activeStationObj, upcomingItems)
+        ? stationLogo(activeStationObj, upcomingItems, stationLogos)
         : undefined;
+
+    // A dark station's logo is shown drained of color and dimmed, so "nothing
+    // is playing here" reads at a glance without losing the station identity —
+    // the same distinction the strip's indicator lights draw.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: nowMs is the clock dep
+    const activeIsOffline = useMemo(
+        () =>
+            activeStationObj
+                ? stationStatus(activeStationObj, upcomingItems, nowMs) ===
+                  "offline"
+                : false,
+        [activeStationObj, upcomingItems, nowMs],
+    );
 
     // The active station's in-window segments — shared by the now-playing
     // list, the solo lifecycle, and the effective-mute derivation.
@@ -396,7 +412,11 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
                                 <div className={styles.rsDisplay}>
                                     {activeLogo ? (
                                         <img
-                                            className={styles.rsDisplayLogo}
+                                            className={`${styles.rsDisplayLogo}${
+                                                activeIsOffline
+                                                    ? ` ${styles.rsDisplayLogoOffline}`
+                                                    : ""
+                                            }`}
                                             src={activeLogo}
                                             alt={activeStationObj.label}
                                         />

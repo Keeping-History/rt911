@@ -181,11 +181,15 @@ const APPROVED_FILTER = { approved: { _eq: 1 } };
 // with the frontend readers each field list is derived from.
 const PUBLIC_GRANTS = [
   {
-    // HyperCard audio embeds (DIRECTUS_COLLECTIONS.audio) — the only
-    // anonymous REST reader of mp3_items.
+    // Union of HyperCard audio embeds (DIRECTUS_COLLECTIONS.audio) and the
+    // Radio Tuner's station-logo lookup (`image`, read via source.slug — see
+    // packages/frontend/src/Applications/RadioScanner/stationLogos.ts). The
+    // tuner needs a station's artwork even when that station has nothing
+    // streaming, which is most of the day for the one-recording stations, so
+    // it cannot rely on the WebSocket items alone.
     collection: "mp3_items",
     action: "read",
-    fields: ["id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles"],
+    fields: ["id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles", "image"],
     permissions: APPROVED_FILTER,
   },
   {

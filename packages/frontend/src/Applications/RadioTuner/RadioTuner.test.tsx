@@ -34,6 +34,14 @@ vi.mock("./NowPlayingList", () => ({
 vi.mock("../../openreplay", () => ({
 	trackAppToggle: () => {},
 }));
+// The station-logo map is a Directus read; stub it so the suite never touches
+// the network and each test can state exactly which stations have artwork.
+const mockStationLogos = vi.hoisted(
+	() => ({ current: {} as Record<string, string> }),
+);
+vi.mock("../RadioScanner/stationLogos", () => ({
+	useStationLogos: () => mockStationLogos.current,
+}));
 
 const mockAppData = vi.hoisted(
 	() => ({ current: {} as Record<string, unknown> }),
@@ -309,6 +317,7 @@ describe("RadioTuner station logo", () => {
 	afterEach(() => {
 		mockDispatch.mockClear();
 		stationPlayerProps.current = null;
+		mockStationLogos.current = {};
 		cleanup();
 	});
 
@@ -333,6 +342,35 @@ describe("RadioTuner station logo", () => {
 		expect(screen.queryByAltText("WINS")).toBeNull();
 		// Display header + strip button.
 		expect(screen.getAllByText("WINS").length).toBeGreaterThan(1);
+	});
+
+	// A station holding a single recording is dark for most of the virtual day,
+	// so the streamed items carry no artwork — the identity has to come from
+	// the station map or the display falls back to bare text.
+	it("shows a dark station's logo from the station map, dimmed and desaturated", () => {
+		mockStationLogos.current = {
+			WINS: "https://files.911realtime.org/images/radio/wins.png",
+		};
+		renderTuner({}, [item(3, "ATC", "2001-09-11T12:30:00.000Z")]);
+		const logo = screen.getByAltText("WINS") as HTMLImageElement;
+		expect(logo.src).toBe(
+			"https://files.911realtime.org/images/radio/wins.png",
+		);
+		expect(logo.className).toContain("rsDisplayLogoOffline");
+	});
+
+	it("leaves an on-air station's logo at full color", () => {
+		mockStationLogos.current = {
+			WINS: "https://files.911realtime.org/images/radio/wins.png",
+		};
+		renderTuner({}, [
+			item(1, "WINS", "2001-09-11T12:30:00.000Z", {
+				image: "https://files.911realtime.org/images/radio/wins.png",
+			}),
+		]);
+		const logo = screen.getByAltText("WINS") as HTMLImageElement;
+		expect(logo.className).toContain("rsDisplayLogo");
+		expect(logo.className).not.toContain("rsDisplayLogoOffline");
 	});
 });
 

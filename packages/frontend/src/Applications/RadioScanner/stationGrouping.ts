@@ -120,15 +120,17 @@ export function upcomingSegments(
 }
 
 /**
- * The station's logo artwork URL, carried on its mp3_items rows' `image`
- * field: the first image among the station's grouped items, else the first
- * among `upcoming` reveal-buffer items belonging to the station (so the logo
- * is up while the station is between clips). Undefined when no row carries
+ * The station's logo artwork URL, in falling order of specificity: the first
+ * image among the station's grouped items, then the first among `upcoming`
+ * reveal-buffer items belonging to the station (so the logo is up while the
+ * station is between clips), then the time-independent `stationLogos` map for
+ * a station with nothing streaming at all. Undefined only when no source has
  * artwork — callers fall back to the text label.
  */
 export function stationLogo(
 	station: Station,
 	upcoming: MediaItem[] = [],
+	stationLogos: Record<string, string> = {},
 ): string | undefined {
 	for (const item of station.items) {
 		if (item.image) return item.image;
@@ -136,7 +138,11 @@ export function stationLogo(
 	for (const item of upcoming) {
 		if (stationKey(item) === station.key && item.image) return item.image;
 	}
-	return undefined;
+	// Nothing streaming: fall back to the station's own artwork, which is
+	// time-independent (see stationLogos.ts). A dark station still has an
+	// identity — most broadcast stations hold one recording and so are dark
+	// for most of the virtual day.
+	return stationLogos[station.key];
 }
 
 export type StationStatus = "on-air" | "upcoming" | "offline";

@@ -84,6 +84,14 @@
   padding: var(--window-control-size);
 }
 
+// A station with nothing on air: the identity stays legible, but drained of
+// color and dimmed so "this frequency is dark right now" reads at a glance —
+// the same distinction the station strip's unlit indicator light draws.
+.rsDisplayLogoOffline {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
 .rsDisplayTitle {
   font-family: var(--ui-font);
   font-size: calc(var(--ui-font-size) * 1.5);
