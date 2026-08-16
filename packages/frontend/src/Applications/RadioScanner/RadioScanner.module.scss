@@ -79,6 +79,9 @@
   object-fit: contain;
   object-position: left center;
   flex-shrink: 0;
+
+  background-color: var(--color-theme-01);
+  padding: var(--window-control-size);
 }
 
 .rsDisplayTitle {
