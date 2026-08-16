@@ -136,9 +136,18 @@ identify-parties  dry_run=false
 identify-parties  dry_run=false  force=true
 ```
 
-WINS and WCBS are excluded by an **affirmative allow-list** (`MEDIA_KIND`), never
-a deny-list: a deny-list that fails to load silently re-admits news radio and
-produces confident nonsense about a broadcast that has no counterparty.
+Radio broadcasts are excluded by an **affirmative allow-list** (`MEDIA_KIND`),
+never a deny-list: a deny-list that fails to load silently re-admits news radio
+and produces confident nonsense about a broadcast that has no counterparty.
+That covers `wins1010`, `wcbs`, and `radio` — the last standing for every AM/FM
+station under `audio/radio/`, since `media_kind` keys on the first segment below
+`audio/` rather than the station.
+
+**List a folder even when the answer is "skip it."** An unlisted folder is also
+skipped, so a deliberate exclusion and an unexamined one behave identically and
+report nothing. 31 station recordings sat outside the pipeline unnoticed for
+exactly that reason — they never appeared in a failure count because they were
+never counted at all.
 
 `PARTIES_MAX_TOKENS` is 5000 and the headroom is deliberate — `max_tokens` caps
 thinking and text together, and a budget consumed entirely by thinking returns an
