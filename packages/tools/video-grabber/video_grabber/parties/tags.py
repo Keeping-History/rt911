@@ -22,7 +22,12 @@ from __future__ import annotations
 import re
 
 from video_grabber.parties.spoken import spoken_to_digits
-from video_grabber.parties.vocab import AIRCRAFT_TYPES, TOPICS, agency_for
+from video_grabber.parties.vocab import (
+    AIRCRAFT_TYPES,
+    TOPICS,
+    agency_for,
+    canonical_facility,
+)
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _CALLSIGN = re.compile(r"^([a-z]*)0*(\d+)$")
@@ -83,11 +88,14 @@ def build_tags(parties: dict) -> list[str]:
         tags.add(f"person:{slugify(person)}")
 
     for facility in facilities:
-        slug = slugify(facility)
+        # Resolve to the index's name for the place, so "Boston", "Boston Center"
+        # and "ZBW" are one tag instead of three. Unlisted facilities keep their
+        # own slug rather than being dropped.
+        slug = canonical_facility(facility) or slugify(facility)
         if not slug:
             continue
         tags.add(f"facility:{slug}")
-        agency = agency_for(facility)
+        agency = agency_for(facility) or agency_for(slug)
         if agency:
             tags.add(f"agency:{agency}")
 

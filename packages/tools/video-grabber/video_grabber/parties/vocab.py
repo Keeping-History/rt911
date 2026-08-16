@@ -80,6 +80,53 @@ AIRCRAFT_TYPES: frozenset[str] = frozenset({
     "md80", "md11", "dc9", "dc10",
 })
 
+# One facility, one tag. The transcript calls Boston Center "Boston", "Boston
+# Center" and "ZBW" in different clips, and the record faithfully stores whichever
+# was said — so without this the index splits one facility across three tags and
+# a search for any of them misses the other two.
+#
+# This is the same normalisation `tags._AIRLINE_PREFIX` already does for
+# callsigns, and it carries the same licence: the *record* stays literal, so
+# `parties` still says exactly what the audio said. Only the index resolves it.
+#
+# Some of these are inferences, deliberately. Bare "Boston" on an ATC landline is
+# nearly always the Center, but it could be the tower — mapping it is a judgment,
+# made here in a short reviewable table rather than by the model, and made where
+# being wrong costs a search hit rather than a false claim about the recording.
+#
+# Matched case-insensitively as substrings, longest key first, so "Washington
+# National" resolves to the airport and not to Washington Center.
+FACILITY_ALIASES: dict[str, str] = {
+    # FAA en-route centres
+    "boston center": "boston-center", "zbw": "boston-center", "boston": "boston-center",
+    "new york center": "new-york-center", "zny": "new-york-center", "new york": "new-york-center",
+    "cleveland center": "cleveland-center", "zob": "cleveland-center",
+    "cleveland": "cleveland-center",
+    "washington center": "washington-center", "zdc": "washington-center",
+    "indianapolis center": "indianapolis-center", "zid": "indianapolis-center",
+    "indianapolis": "indianapolis-center",
+    "chicago center": "chicago-center", "zau": "chicago-center",
+    "memphis center": "memphis-center", "zme": "memphis-center",
+    # The command centre, which the tapes call three different things
+    "air traffic control system command center": "atcscc",
+    "command center": "atcscc", "atcscc": "atcscc", "herndon": "atcscc",
+    # Air defence. "Huntress" is NEADS's own callsign, not a separate unit.
+    "neads": "neads", "huntress": "neads",
+    "norad": "norad", "conr": "conr", "nmcc": "nmcc",
+    "otis": "otis-angb", "langley": "langley-afb",
+    "andrews": "andrews-afb", "adw": "andrews-afb",
+    # Airports and terminal facilities. Listed after the centres above only for
+    # readability — resolution is by key length, not by order.
+    "washington national": "washington-national", "dca": "washington-national",
+    "dulles": "dulles", "iad": "dulles",
+    "logan": "logan", "bos": "logan",
+    "newark": "newark", "ewr": "newark",
+    "pittsburgh": "pittsburgh", "pit": "pittsburgh",
+    "boston departure": "boston-tracon",
+    # Civil emergency services
+    "fdny": "fdny", "nypd": "nypd", "port authority": "panynj",
+}
+
 ROLES: frozenset[str] = frozenset({
     "atc", "military", "airline", "emergency", "aircraft", "unknown",
 })
@@ -87,6 +134,19 @@ ROLES: frozenset[str] = frozenset({
 LINKS: frozenset[str] = frozenset({
     "air-ground", "landline", "internal", "conference", "unknown",
 })
+
+
+def canonical_facility(facility: str) -> str | None:
+    """The index's name for a facility, or None if nobody has listed it.
+
+    Longest key first, so "Washington National" resolves to the airport rather
+    than being caught by the shorter "washington" that means the Center.
+    """
+    haystack = (facility or "").lower()
+    for key in sorted(FACILITY_ALIASES, key=len, reverse=True):
+        if key in haystack:
+            return FACILITY_ALIASES[key]
+    return None
 
 
 def agency_for(facility: str | None) -> str | None:
