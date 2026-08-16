@@ -55,13 +55,14 @@ describe("PlaylistEditorMain", () => {
 		render(<PlaylistEditorMain state={state()} edit={vi.fn()} {...zoomProps} />);
 		// Media is the initially active tab; each media app gets its own
 		// disclosure, open by default, with a per-section hint when empty.
-		for (const label of ["TV Channels", "Radio Stations", "News", "Flights"]) {
+		for (const label of ["TV Channels", "Radio Stations", "Radio Traffic", "News", "Flights"]) {
 			expect(
 				screen.getByRole("button", { name: new RegExp(label) }).getAttribute("aria-expanded"),
 			).toBe("true");
 		}
 		expect(screen.getByText(/No TV channels yet/i)).not.toBeNull();
 		expect(screen.getByText(/No radio stations yet/i)).not.toBeNull();
+		expect(screen.getByText(/No radio traffic yet/i)).not.toBeNull();
 	});
 
 	it("renders TV media entries as logo cards and radio entries as tree rows", () => {
@@ -73,6 +74,7 @@ describe("PlaylistEditorMain", () => {
 					entries: [
 						{ uid: "e1", entry: { kind: "media", app: "tv", itemId: "cnn" } },
 						{ uid: "e2", entry: { kind: "media", app: "radio", itemId: "wnyc" } },
+						{ uid: "e3", entry: { kind: "media", app: "radio", itemId: "WINS" } },
 					],
 				})}
 				edit={edit}
@@ -89,8 +91,16 @@ describe("PlaylistEditorMain", () => {
 		screen.getByRole("button", { name: "Remove CNN" }).click();
 		expect(edit).toHaveBeenCalledWith("p1", { type: "removeEntry", uid: "e1" });
 
-		// Radio: still the tree-row treatment for now.
+		// Radio: still the tree-row treatment for now — and split by station
+		// kind: WINS (a BROADCAST_STATIONS member) sits under Radio Stations,
+		// wnyc (traffic) under Radio Traffic.
 		expect(screen.getByText(/RADIO · wnyc/)).not.toBeNull();
+		expect(screen.getByText(/RADIO · WINS/)).not.toBeNull();
+		const stationsSection = screen
+			.getByRole("button", { name: /Radio Stations/ })
+			.closest(".classicyDisclosure");
+		expect(stationsSection?.textContent).toContain("WINS");
+		expect(stationsSection?.textContent).not.toContain("wnyc");
 	});
 
 	it("routes an entry removal through the injected dispatcher", async () => {
