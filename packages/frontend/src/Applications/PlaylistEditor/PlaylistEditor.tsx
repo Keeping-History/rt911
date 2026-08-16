@@ -186,6 +186,7 @@ function PlaylistEditorContent() {
 								{ label: "All Media", types: Object.values(MEDIA_FILE_TYPES) },
 								{ label: "TV Channels", types: [MEDIA_FILE_TYPES.tv] },
 								{ label: "Radio Stations", types: [MEDIA_FILE_TYPES.radio] },
+							{ label: "Radio Traffic", types: [MEDIA_FILE_TYPES.radioTraffic] },
 								{ label: "News", types: [MEDIA_FILE_TYPES.news] },
 								{ label: "Flights", types: [MEDIA_FILE_TYPES.flight] },
 							]

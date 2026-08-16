@@ -2,6 +2,7 @@ import { ClassicyControlLabel, ClassicySplitView, ClassicyTabs, ClassicyTree, ty
 import type { ReactNode } from "react";
 import { Disclosure } from "../../Components/Disclosure/Disclosure";
 import type { MediaEntry, PlaylistApp, PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
+import { BROADCAST_STATIONS } from "../RadioScanner/stationGrouping";
 import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayWallClock } from "./editorState";
 import { MediaTvRow, type TvEditorEntry } from "./MediaTvRow";
 import { PlaylistTimeline } from "./PlaylistTimeline";
@@ -11,12 +12,44 @@ const KIND_BRANCHES: [PlaylistEntry["kind"], string][] = [
 	["file", "Files"], ["jump", "Jumps"], ["browser", "Browser"],
 ];
 
-// The Media tab's per-app disclosure sections, in broadcast-dial order.
-const MEDIA_SECTIONS: [PlaylistApp, string, string][] = [
-	["tv", "TV Channels", "No TV channels yet."],
-	["radio", "Radio Stations", "No radio stations yet."],
-	["news", "News", "No news stories yet."],
-	["flights", "Flights", "No flights yet."],
+// The Media tab's disclosure sections, in broadcast-dial order. Radio is one
+// playlist app but two product apps, split by BROADCAST_STATIONS the same way
+// the Radio Tuner and Radio Scanner partition the shared mp3 stream — so it
+// gets two sections here, keyed by the entry's station rather than app alone.
+type MediaSection = {
+	key: string;
+	app: PlaylistApp;
+	label: string;
+	emptyHint: string;
+	match: (e: EditorEntry & { entry: MediaEntry }) => boolean;
+};
+
+const isBroadcastStation = (e: { entry: MediaEntry }) =>
+	BROADCAST_STATIONS.has(e.entry.itemId.toUpperCase());
+
+const MEDIA_SECTIONS: MediaSection[] = [
+	{
+		key: "tv", app: "tv", label: "TV Channels", emptyHint: "No TV channels yet.",
+		match: (e) => e.entry.app === "tv",
+	},
+	{
+		key: "radio", app: "radio", label: "Radio Stations",
+		emptyHint: "No radio stations yet.",
+		match: (e) => e.entry.app === "radio" && isBroadcastStation(e),
+	},
+	{
+		key: "radio-traffic", app: "radio", label: "Radio Traffic",
+		emptyHint: "No radio traffic yet.",
+		match: (e) => e.entry.app === "radio" && !isBroadcastStation(e),
+	},
+	{
+		key: "news", app: "news", label: "News", emptyHint: "No news stories yet.",
+		match: (e) => e.entry.app === "news",
+	},
+	{
+		key: "flights", app: "flights", label: "Flights", emptyHint: "No flights yet.",
+		match: (e) => e.entry.app === "flights",
+	},
 ];
 
 function entrySummary(e: EditorEntry): string {
@@ -92,8 +125,8 @@ export function PlaylistEditorMain({
 	);
 	const mediaTab = (
 		<div className="playlistMediaSections">
-			{MEDIA_SECTIONS.map(([app, label, emptyHint]) => {
-				const entries = mediaEntries.filter((e) => e.entry.app === app);
+			{MEDIA_SECTIONS.map(({ key, app, label, emptyHint, match }) => {
+				const entries = mediaEntries.filter(match);
 				let body: ReactNode;
 				if (entries.length === 0) {
 					body = <ClassicyControlLabel label={emptyHint} />;
@@ -110,7 +143,7 @@ export function PlaylistEditorMain({
 					body = <ClassicyTree nodes={treeNodes(entries)} />;
 				}
 				return (
-					<Disclosure key={app} label={label} defaultOpen>
+					<Disclosure key={key} label={label} defaultOpen>
 						{body}
 					</Disclosure>
 				);
