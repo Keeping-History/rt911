@@ -181,6 +181,7 @@ vi.mock("classicy", () => ({
 	quitMenuItemHelper: () => ({}),
 	registerAppEventHandler: () => {},
 	registerApp: () => {},
+	registerClassicyIcons: <T,>(icons: T) => icons,
 	useClassicyHelpMenu: () => {},
 	intToHex: (c: number) => `#${c.toString(16).padStart(6, "0")}`,
 	useAppManager: (sel: (s: unknown) => unknown) =>

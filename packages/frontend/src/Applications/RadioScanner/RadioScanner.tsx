@@ -6,10 +6,12 @@ import {
     ClassicyWindow,
     intToHex,
     quitMenuItemHelper,
+    registerClassicyIcons,
     useAppManager,
     useAppManagerDispatch,
     useClassicyDateTime,
 } from "classicy";
+import appIconPng from "./app.png";
 import type React from "react";
 import {
     useCallback,
@@ -70,10 +72,22 @@ type RadioScannerProps = Record<string, never>;
 const ALL_TRAFFIC_KEY = "__all_traffic__";
 const ALL_TRAFFIC_LABEL = "All Traffic";
 
+// This app's own icon, registered into the shared registry at
+// ClassicyIcons.applications.radioScanner.app. registerClassicyIcons assigns
+// shallowly, so the existing applications namespace is spread in to keep
+// classicy's bundled app icons intact (same gotcha as FlightTracker.tsx).
+// classicy's bundled `radio` icon stays untouched — the Radio Tuner uses it.
+const ICONS = registerClassicyIcons({
+    applications: {
+        ...ClassicyIcons.applications,
+        radioScanner: { app: appIconPng },
+    },
+});
+
 export const RadioScanner: React.FC<RadioScannerProps> = () => {
     const appName = "Radio Scanner";
     const appId = "RadioScanner.app";
-    const appIcon = ClassicyIcons.applications.radio.app as string;
+    const appIcon = ICONS.applications.radioScanner.app as string;
     const aboutWindow = useAboutApp(appId, appIcon);
 
     const desktopEventDispatch = useAppManagerDispatch();

@@ -44,7 +44,7 @@ const APP_NAMES: Record<string, string> = {
 // depending on import order.
 const APP_ICON_KEYS: Record<string, string> = {
 	"TV.app": "epg",
-	"RadioScanner.app": "radio",
+	"RadioScanner.app": "radioScanner",
 	"RadioTuner.app": "radio",
 	"News.app": "news",
 	"FlightTracker.app": "flightTracker",
