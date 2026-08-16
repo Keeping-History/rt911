@@ -96,7 +96,7 @@ def ensure_item(entry, source_id):
         "start_date": entry["start_date"],
         "end_date": entry["end_date"],
         "calc_duration": entry["calc_duration"],
-        "timezone": TZ_LABEL.get(entry["source_slug"], "EDT"),
+        "timezone": entry.get("timezone") or TZ_LABEL.get(entry["source_slug"], "EDT"),
         "url": url,
         "format": "mp3",
         "approved": 1,
