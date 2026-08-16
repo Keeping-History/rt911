@@ -28,7 +28,7 @@ vi.mock("../RadioScanner/StationPlayer", () => ({
 		return <div data-testid="station-player" />;
 	},
 }));
-vi.mock("../RadioScanner/NowPlayingList", () => ({
+vi.mock("./NowPlayingList", () => ({
 	NowPlayingList: () => <div data-testid="now-playing" />,
 }));
 vi.mock("../../openreplay", () => ({
@@ -230,14 +230,17 @@ function item(
 	};
 }
 
-function renderTuner(data: Record<string, unknown> = {}): void {
+function renderTuner(
+	data: Record<string, unknown> = {},
+	mp3Items: MediaItem[] = [
+		item(1, "WINS", "2001-09-11T12:30:00.000Z"),
+		item(2, "WCBS", "2001-09-11T12:30:00.000Z"),
+		item(3, "ATC", "2001-09-11T12:30:00.000Z"),
+	],
+): void {
 	mockAppData.current = data;
 	const ctx: Partial<MediaStreamContextValue> = {
-		mp3Items: [
-			item(1, "WINS", "2001-09-11T12:30:00.000Z"),
-			item(2, "WCBS", "2001-09-11T12:30:00.000Z"),
-			item(3, "ATC", "2001-09-11T12:30:00.000Z"),
-		],
+		mp3Items,
 		mp3History: [],
 		sources: {
 			video: [],
@@ -299,6 +302,37 @@ describe("RadioTuner station partition", () => {
 		renderTuner({ command: { seq: 1, kind: "tune", station: "wcbs" } });
 		const station = stationPlayerProps.current?.station as { key: string };
 		expect(station.key).toBe("WCBS");
+	});
+});
+
+describe("RadioTuner station logo", () => {
+	afterEach(() => {
+		mockDispatch.mockClear();
+		stationPlayerProps.current = null;
+		cleanup();
+	});
+
+	it("shows the tuned station's artwork (mp3_items.image) instead of the text call sign", () => {
+		renderTuner({}, [
+			item(1, "WINS", "2001-09-11T12:30:00.000Z", {
+				image: "https://files.911realtime.org/images/radio/wins.png",
+			}),
+			item(2, "WCBS", "2001-09-11T12:30:00.000Z"),
+		]);
+		const logo = screen.getByAltText("WINS") as HTMLImageElement;
+		expect(logo.src).toBe(
+			"https://files.911realtime.org/images/radio/wins.png",
+		);
+		// The call sign still labels the strip button, but the display header
+		// text is replaced by the artwork.
+		expect(screen.getAllByText("WINS")).toHaveLength(1);
+	});
+
+	it("falls back to the text call sign when no row carries artwork", () => {
+		renderTuner();
+		expect(screen.queryByAltText("WINS")).toBeNull();
+		// Display header + strip button.
+		expect(screen.getAllByText("WINS").length).toBeGreaterThan(1);
 	});
 });
 

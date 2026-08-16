@@ -119,6 +119,26 @@ export function upcomingSegments(
 		.slice(0, count);
 }
 
+/**
+ * The station's logo artwork URL, carried on its mp3_items rows' `image`
+ * field: the first image among the station's grouped items, else the first
+ * among `upcoming` reveal-buffer items belonging to the station (so the logo
+ * is up while the station is between clips). Undefined when no row carries
+ * artwork — callers fall back to the text label.
+ */
+export function stationLogo(
+	station: Station,
+	upcoming: MediaItem[] = [],
+): string | undefined {
+	for (const item of station.items) {
+		if (item.image) return item.image;
+	}
+	for (const item of upcoming) {
+		if (stationKey(item) === station.key && item.image) return item.image;
+	}
+	return undefined;
+}
+
 export type StationStatus = "on-air" | "upcoming" | "offline";
 
 /**
@@ -261,6 +281,23 @@ export function sortStations(
 			.sort((a, b) => a.rank - b.rank || a.i - b.i)
 			.map(({ s }) => s),
 	];
+}
+
+/**
+ * Display order for the Radio Tuner's station strip: on-air first, then
+ * upcoming, then offline, and alphabetical by label (call sign) within each
+ * status tier. Unlike sortStations (the scanner's order), nothing is pinned
+ * and ties are broken by name rather than incoming order.
+ */
+export function sortStationsByStatusAndLabel(
+	stations: Station[],
+	upcoming: MediaItem[],
+	nowMs: number,
+): Station[] {
+	return stations
+		.map((s) => ({ s, rank: STATUS_RANK[stationStatus(s, upcoming, nowMs)] }))
+		.sort((a, b) => a.rank - b.rank || a.s.label.localeCompare(b.s.label))
+		.map(({ s }) => s);
 }
 
 /**

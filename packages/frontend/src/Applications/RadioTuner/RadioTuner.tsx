@@ -25,7 +25,7 @@ import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamConte
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { trackAppToggle } from "../../openreplay";
 import { isAudioBlocked, subscribeAudioBlocked } from "../RadioScanner/audioBlocked";
-import { NowPlayingList } from "../RadioScanner/NowPlayingList";
+// import { NowPlayingList } from "./NowPlayingList";
 import {
     effectiveMutedIds,
     sanitizeActiveStation,
@@ -45,6 +45,8 @@ import {
     activeSegments,
     BROADCAST_STATIONS,
     mergeWithSources,
+    sortStationsByStatusAndLabel,
+    stationLogo,
     stationStatus,
 } from "../RadioScanner/stationGrouping";
 import "./RadioTunerContext";
@@ -209,6 +211,15 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
         [tick, getUpcomingMp3Items], // eslint-disable-line react-hooks/exhaustive-deps
     );
 
+    // Strip display order: on-air, then upcoming, then offline, alphabetical
+    // by call sign within each tier. Recomputed each tick (nowMs/upcomingItems)
+    // so buttons re-bucket as stations sign on and off.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: nowMs is the clock dep
+    const stripStations = useMemo(
+        () => sortStationsByStatusAndLabel(stations, upcomingItems, nowMs),
+        [stations, upcomingItems, nowMs],
+    );
+
     // Select the first station once stations arrive.
     useEffect(() => {
         if (activeStation === "" && stations.length > 0) {
@@ -288,6 +299,13 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
     ];
 
     const activeStationObj = stations.find((s) => s.key === activeStation);
+
+    // Station artwork from the streamed mp3_items rows' `image` field — the
+    // text call sign stays as the fallback (and the image's alt) for stations
+    // whose rows carry no artwork.
+    const activeLogo = activeStationObj
+        ? stationLogo(activeStationObj, upcomingItems)
+        : undefined;
 
     // The active station's in-window segments — shared by the now-playing
     // list, the solo lifecycle, and the effective-mute derivation.
@@ -381,16 +399,25 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
                         {activeStationObj && (
                             <>
                                 <div className={styles.rsDisplay}>
-                                    <p className={styles.rsDisplaySource}>
-                                        {activeStationObj.label}
-                                    </p>
-                                    <NowPlayingList
+                                    {activeLogo ? (
+                                        <img
+                                            className={styles.rsDisplayLogo}
+                                            src={activeLogo}
+                                            alt={activeStationObj.label}
+                                        />
+                                    ) : (
+                                        <p className={styles.rsDisplaySource}>
+                                            {activeStationObj.label}
+                                        </p>
+                                    )}
+                                    {/* <NowPlayingList
                                         segments={playingSegments}
                                         mutedItems={mutedItems}
                                         onToggleMute={toggleItemMute}
                                         soloItemId={soloItemId}
                                         onToggleSolo={toggleSoloItem}
-                                    />
+                                    /> */}
+
                                 </div>
                                 <StationPlayer
                                     station={activeStationObj}
@@ -424,7 +451,7 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
                             </ClassicyButton>
                         </div>
                         <div className={styles.rsStationStrip}>
-                            {stations.map((station) => {
+                            {stripStations.map((station) => {
                                 const isActive = station.key === activeStation;
                                 return (
                                     <ClassicyButton

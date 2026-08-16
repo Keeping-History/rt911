@@ -70,6 +70,17 @@
   letter-spacing: 0.1em;
 }
 
+// Station logo artwork (mp3_items.image), shown in place of the text call
+// sign when the tuned station's rows carry one. Capped so tall uploads can't
+// crowd the now-playing list out of the display.
+.rsDisplayLogo {
+  max-height: calc(var(--ui-font-size) * 5);
+  max-width: min(16em, 60%);
+  object-fit: contain;
+  object-position: left center;
+  flex-shrink: 0;
+}
+
 .rsDisplayTitle {
   font-family: var(--ui-font);
   font-size: calc(var(--ui-font-size) * 1.5);

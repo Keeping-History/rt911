@@ -11,8 +11,10 @@ import {
 	previousSegments,
 	primarySegment,
 	sortStations,
+	sortStationsByStatusAndLabel,
 	startTimeLabel,
 	type Station,
+	stationLogo,
 	stationStatus,
 	upcomingSegments,
 } from "./stationGrouping";
@@ -371,6 +373,78 @@ describe("sortStations", () => {
 	it("omits pinned stations that are absent from the list", () => {
 		const stations = [station("WCBS"), station("ATC", [active])];
 		expect(sortStations(stations, [], nowMs).map((s) => s.key)).toEqual(["WCBS", "ATC"]);
+	});
+});
+
+describe("stationLogo", () => {
+	const station = (key: string, items: MediaItem[]): Station => ({
+		key,
+		label: key,
+		items,
+	});
+
+	it("returns the first item image, skipping imageless rows", () => {
+		const s = station("WCBS", [
+			item({ id: 1, source: "WCBS" }),
+			item({ id: 2, source: "WCBS", image: "https://cdn.test/wcbs.png" }),
+			item({ id: 3, source: "WCBS", image: "https://cdn.test/other.png" }),
+		]);
+		expect(stationLogo(s)).toBe("https://cdn.test/wcbs.png");
+	});
+
+	it("falls back to the station's upcoming items when no grouped item has one", () => {
+		const s = station("WINS", [item({ id: 1, source: "WINS" })]);
+		const upcoming = [
+			item({ id: 2, source: "WCBS", image: "https://cdn.test/wcbs.png" }),
+			item({ id: 3, source: "WINS", image: "https://cdn.test/wins.png" }),
+		];
+		expect(stationLogo(s, upcoming)).toBe("https://cdn.test/wins.png");
+	});
+
+	it("is undefined when no row carries artwork (empty string included)", () => {
+		const s = station("WABC", [item({ id: 1, source: "WABC", image: "" })]);
+		expect(stationLogo(s, [])).toBeUndefined();
+	});
+});
+
+describe("sortStationsByStatusAndLabel", () => {
+	const nowMs = new Date("2001-09-11T12:45:00Z").getTime();
+	const active = item({ start_date: "2001-09-11T12:40:00Z", end_date: "2001-09-11T12:50:00Z" });
+	const station = (key: string, items: MediaItem[] = []): Station => ({ key, label: key, items });
+
+	it("tiers on-air, then upcoming, then offline", () => {
+		const upcomingItem = item({ source: "WTOP", start_date: "2001-09-11T13:00:00Z" });
+		const stations = [
+			station("WABC"), // quiet, nothing queued → offline
+			station("WTOP"), // quiet, but has a future item → upcoming
+			station("WCBS", [active]), // playing now → on-air
+		];
+		expect(
+			sortStationsByStatusAndLabel(stations, [upcomingItem], nowMs).map((s) => s.key),
+		).toEqual(["WCBS", "WTOP", "WABC"]);
+	});
+
+	it("sorts alphabetically by label within a status tier", () => {
+		const stations = [
+			station("WINS", [active]),
+			station("KFI", [active]),
+			station("WTOP"),
+			station("BBC-R4"),
+		];
+		expect(sortStationsByStatusAndLabel(stations, [], nowMs).map((s) => s.key)).toEqual([
+			"KFI",
+			"WINS",
+			"BBC-R4",
+			"WTOP",
+		]);
+	});
+
+	it("does not pin any station — an offline WINS sorts with the offline tier", () => {
+		const stations = [station("WINS"), station("KQRS", [active])];
+		expect(sortStationsByStatusAndLabel(stations, [], nowMs).map((s) => s.key)).toEqual([
+			"KQRS",
+			"WINS",
+		]);
 	});
 });
 

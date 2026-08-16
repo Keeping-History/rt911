@@ -227,7 +227,7 @@ export function createDirectusVolume(
 
 	return {
 		id: "rt911-archive",
-		label: "911 Realtime Archive",
+		label: "9/11 Realtime Archive",
 		icon: ClassicyIcons.system.drives.networkDrive,
 		list,
 	};

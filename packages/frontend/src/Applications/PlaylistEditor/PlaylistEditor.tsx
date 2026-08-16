@@ -178,7 +178,7 @@ function PlaylistEditorContent() {
 				appId={appId}
 				open={dialogMode !== null}
 				title={dialogMode === "media" ? "Add Media" : "Add File"}
-				volumes={dialogMode === "media" ? [...localVolumes, archiveVolume] : localVolumes}
+				volumes={dialogMode === "media" ? [archiveVolume] : localVolumes}
 				selectionMode={dialogMode === "media" ? "multi" : "single"}
 				fileTypeFilters={
 					dialogMode === "media"
