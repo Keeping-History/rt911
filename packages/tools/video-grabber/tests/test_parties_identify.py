@@ -85,6 +85,18 @@ def test_second_document_only_described_when_supplied():
     assert "COMMISSION" in with_doc and "COMMISSION" in user2
 
 
+def test_prompt_forbids_expanding_a_name_the_document_abbreviates():
+    """The commonest gate hit in the first live batch, and a prompt problem.
+
+    The model expanded a transcript's "Boston" to "Boston Center" — correct as
+    fact, but added knowledge, so the gate dropped the whole facility when
+    "Boston" would have survived.
+    """
+    system, _ = build_messages("x", TIER_CLIP)
+    assert "EXACTLY as the document words it" in system
+    assert "Boston Center" in system
+
+
 def test_tape_tier_is_told_not_to_invent_a_placeholder():
     system, _ = build_messages("x", TIER_TAPE)
     assert "do not invent a placeholder" in system
