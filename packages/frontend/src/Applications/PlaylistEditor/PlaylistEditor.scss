@@ -208,8 +208,9 @@
 	gap: 4px;
 }
 
-/* TV section: one card per entry in a single side-scrolling row. */
-.playlistMediaTvRow {
+/* Station sections (TV Channels, Radio Stations): one card per entry in a
+   single side-scrolling row. */
+.playlistMediaCardRow {
 	display: flex;
 	flex-direction: row;
 	gap: 6px;
@@ -217,7 +218,7 @@
 	padding: 4px 2px;
 }
 
-.playlistMediaTvCard {
+.playlistMediaCard {
 	flex: 0 0 auto;
 	display: flex;
 	flex-direction: column;
@@ -229,19 +230,31 @@
 	background-color: var(--color-system-01);
 }
 
-.playlistMediaTvCardSelected {
+.playlistMediaCardSelected {
 	border-color: var(--color-theme-highlight, var(--color-system-07));
 	background-color: var(--color-system-02);
 }
 
-.playlistMediaTvLogo {
+.playlistMediaCardLogo {
 	width: 48px;
 	height: 48px;
 	object-fit: contain;
+}
+
+/* TV's bundled EPG glyphs are pixel art and want crisp upscaling. */
+.playlistMediaCardLogoPixel {
 	image-rendering: pixelated;
 }
 
-.playlistMediaTvLabel {
+/* Radio station artwork is photographic and mostly light-on-transparent, so
+ * it gets the same dark plate the Radio Tuner's display paints behind it. */
+.playlistMediaCardLogoPlate {
+	background-color: var(--color-theme-01);
+	padding: 2px;
+	box-sizing: border-box;
+}
+
+.playlistMediaCardLabel {
 	font-size: calc(var(--ui-font-size) * 0.85);
 	max-width: 72px;
 	overflow: hidden;
@@ -249,7 +262,7 @@
 	white-space: nowrap;
 }
 
-.playlistMediaTvButtons {
+.playlistMediaCardButtons {
 	display: flex;
 	flex-direction: row;
 	gap: 2px;

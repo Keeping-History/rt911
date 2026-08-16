@@ -1,9 +1,10 @@
 import { ClassicyControlLabel, ClassicySplitView, ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "classicy";
 import type { ReactNode } from "react";
 import { Disclosure } from "../../Components/Disclosure/Disclosure";
-import type { MediaEntry, PlaylistApp, PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
+import type { MediaEntry, PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { BROADCAST_STATIONS } from "../RadioScanner/stationGrouping";
 import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayWallClock } from "./editorState";
+import { MediaRadioRow } from "./MediaRadioRow";
 import { MediaTvRow, type TvEditorEntry } from "./MediaTvRow";
 import { PlaylistTimeline } from "./PlaylistTimeline";
 
@@ -17,8 +18,8 @@ const KIND_BRANCHES: [PlaylistEntry["kind"], string][] = [
 // the Radio Tuner and Radio Scanner partition the shared mp3 stream — so it
 // gets two sections here, keyed by the entry's station rather than app alone.
 type MediaSection = {
+	/** Also selects the section's body renderer — see mediaTab below. */
 	key: string;
-	app: PlaylistApp;
 	label: string;
 	emptyHint: string;
 	match: (e: EditorEntry & { entry: MediaEntry }) => boolean;
@@ -29,25 +30,25 @@ const isBroadcastStation = (e: { entry: MediaEntry }) =>
 
 const MEDIA_SECTIONS: MediaSection[] = [
 	{
-		key: "tv", app: "tv", label: "TV Channels", emptyHint: "No TV channels yet.",
+		key: "tv", label: "TV Channels", emptyHint: "No TV channels yet.",
 		match: (e) => e.entry.app === "tv",
 	},
 	{
-		key: "radio", app: "radio", label: "Radio Stations",
+		key: "radio", label: "Radio Stations",
 		emptyHint: "No radio stations yet.",
 		match: (e) => e.entry.app === "radio" && isBroadcastStation(e),
 	},
 	{
-		key: "radio-traffic", app: "radio", label: "Radio Traffic",
+		key: "radio-traffic", label: "Radio Traffic",
 		emptyHint: "No radio traffic yet.",
 		match: (e) => e.entry.app === "radio" && !isBroadcastStation(e),
 	},
 	{
-		key: "news", app: "news", label: "News", emptyHint: "No news stories yet.",
+		key: "news", label: "News", emptyHint: "No news stories yet.",
 		match: (e) => e.entry.app === "news",
 	},
 	{
-		key: "flights", app: "flights", label: "Flights", emptyHint: "No flights yet.",
+		key: "flights", label: "Flights", emptyHint: "No flights yet.",
 		match: (e) => e.entry.app === "flights",
 	},
 ];
@@ -116,24 +117,36 @@ export function PlaylistEditorMain({
 			],
 		}));
 
-	// The Media tab splits into one disclosure per media app. TV renders as a
-	// side-scrolling logo-card row (MediaTvRow); the other three keep tree rows
-	// for now. Sections always boot open: entries load from Directus after
-	// first render, and a closed-at-mount section would hide them on arrival.
+	// The Media tab splits into one disclosure per media app. The two sections
+	// whose entries name a whole station render as side-scrolling logo-card rows
+	// — TV from the bundled EPG icons, Radio Stations from the Directus artwork
+	// map — while Radio Traffic, News and Flights keep tree rows: their entries
+	// are individual clips/stories, not stations, and have no logo of their own.
+	// Sections always boot open: entries load from Directus after first render,
+	// and a closed-at-mount section would hide them on arrival.
 	const mediaEntries = state.entries.filter(
 		(e): e is EditorEntry & { entry: MediaEntry } => e.entry.kind === "media",
 	);
 	const mediaTab = (
 		<div className="playlistMediaSections">
-			{MEDIA_SECTIONS.map(({ key, app, label, emptyHint, match }) => {
+			{MEDIA_SECTIONS.map(({ key, label, emptyHint, match }) => {
 				const entries = mediaEntries.filter(match);
 				let body: ReactNode;
 				if (entries.length === 0) {
 					body = <ClassicyControlLabel label={emptyHint} />;
-				} else if (app === "tv") {
+				} else if (key === "tv") {
 					body = (
 						<MediaTvRow
 							entries={entries as TvEditorEntry[]}
+							selectedUid={state.selectedUid}
+							onEdit={editEntry}
+							onRemove={(uid) => dispatch({ type: "removeEntry", uid })}
+						/>
+					);
+				} else if (key === "radio") {
+					body = (
+						<MediaRadioRow
+							entries={entries}
 							selectedUid={state.selectedUid}
 							onEdit={editEntry}
 							onRemove={(uid) => dispatch({ type: "removeEntry", uid })}
