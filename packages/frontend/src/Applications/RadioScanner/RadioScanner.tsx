@@ -11,6 +11,7 @@ import {
     useAppManagerDispatch,
     useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import type React from "react";
 import {
@@ -465,6 +466,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
             name={appName}
             icon={appIcon}
             defaultWindow={`${appId}_main`}
+            desktopIconBalloonHelp={manifestDescription(appId)}
         >
             {showSettings && (
                 <RadioSettingsWindow

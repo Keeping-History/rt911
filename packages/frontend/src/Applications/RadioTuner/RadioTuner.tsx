@@ -9,6 +9,7 @@ import {
     useAppManagerDispatch,
     useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import {
     useCallback,
@@ -332,6 +333,7 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
             name={appName}
             icon={appIcon}
             defaultWindow={`${appId}_main`}
+            desktopIconBalloonHelp={manifestDescription(appId)}
         >
             {showSettings && (
                 <RadioSettingsWindow

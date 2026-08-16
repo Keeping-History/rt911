@@ -17,6 +17,7 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import {
 	type ChangeEvent,
@@ -895,7 +896,13 @@ export const FlightTracker: FC = () => {
 	const tone = effectiveTone(settings.mapStyle, settings.darkMap);
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="flight-map">
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={appIcon}
+			defaultWindow="flight-map"
+			desktopIconBalloonHelp={manifestDescription(appId)}
+		>
 			{showSettings && (
 				<ClassicyWindow
 					id="flight-settings"

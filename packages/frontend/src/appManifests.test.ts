@@ -20,6 +20,12 @@ import "./Applications/News/NewsContext";
 import "./Applications/PagerDecoder/PagerDecoderContext";
 import "./Applications/PlaylistEditor/PlaylistEditorContext";
 import "./Providers/Playlist/playlistStoreActions";
+// Description-only manifests (apps without custom reducers):
+import "./Applications/Account/AccountContext";
+import "./Applications/Alerts/AlertsContext";
+import "./Applications/IMBuddies/IMBuddiesContext";
+import "./Applications/MarketWatch/MarketWatchContext";
+import "./Applications/Newsgroups/NewsgroupsContext";
 
 // [appId, expected prefixes, spot-checked action types, has a state schema]
 const CASES: Array<[string, string[], string[], boolean]> = [
@@ -77,7 +83,28 @@ const CASES: Array<[string, string[], string[], boolean]> = [
 	],
 ];
 
+// Every app this repo renders on the desktop. Registering a description is
+// REQUIRED for all of them — it is the balloon-help copy for the app's desktop
+// shortcut (Components/manifestDescription.ts), so a missing or blank
+// description means a shortcut with no balloon. Apps without a custom reducer
+// register a description-only manifest from a `<Name>Context.ts` module.
+const DESKTOP_APP_IDS = [
+	...CASES.map(([id]) => id),
+	"Account.app",
+	"Alerts.app", // background extension: no desktop icon, description still required
+	"AlertsManager.app",
+	"IMBuddies.app",
+	"MarketWatch.app",
+	"Newsgroups.app",
+];
+
 describe("app manifests", () => {
+	it.each(DESKTOP_APP_IDS)("%s registers a non-empty description", (appId) => {
+		const m = getAppManifest(appId);
+		expect(m, `${appId} has no manifest — registerApp not called?`).toBeDefined();
+		expect(m!.description.trim().length).toBeGreaterThan(0);
+	});
+
 	it.each(CASES)(
 		"%s registers prefixes, described actions, and state",
 		(appId, prefixes, actionTypes, hasState) => {

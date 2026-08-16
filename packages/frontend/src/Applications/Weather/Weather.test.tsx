@@ -102,6 +102,7 @@ vi.mock("classicy", () => ({
 	),
 	registerAppEventHandler: () => {},
 	registerApp: () => {},
+	getAppManifest: () => undefined,
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({
 			System: {

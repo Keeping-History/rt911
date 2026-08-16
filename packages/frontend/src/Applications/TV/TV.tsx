@@ -16,6 +16,7 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAboutApp } from "../../Components/AboutApp/AboutApp";
@@ -829,6 +830,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			name={appName}
 			icon={appIcon}
 			defaultWindow={`${appId}_main`}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{showSettings && (
 				<ClassicyWindow

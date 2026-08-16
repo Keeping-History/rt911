@@ -8,6 +8,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import classNames from "classnames";
 import type React from "react";
 import {
@@ -226,6 +227,7 @@ export const News: React.FC = () => {
 			icon={appIcon}
 			defaultWindow={"latest_news"}
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			<ClassicyWindow
 				id={"latest_news"}

@@ -21,6 +21,7 @@ vi.mock("classicy", () => ({
 	registerClassicyIcons: (icons: Record<string, unknown>) => icons,
 	registerAppEventHandler: () => {},
 	registerApp: () => {},
+	getAppManifest: () => undefined,
 	quitMenuItemHelper: () => ({ id: "quit" }),
 	useAppManager: (selector: (s: unknown) => unknown) =>
 		selector({

@@ -198,6 +198,7 @@ vi.mock("classicy", () => ({
 	quitMenuItemHelper: () => ({}),
 	registerAppEventHandler: () => {},
 	registerApp: () => {},
+	getAppManifest: () => undefined,
 	useClassicyHelpMenu: () => {},
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({

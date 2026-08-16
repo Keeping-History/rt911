@@ -3,6 +3,7 @@ import {
 	ClassicyWindow, desktopVolume, fileSystemVolume, quitAppHelper,
 	quitMenuItemHelper, useAppManagerDispatch, useClassicyFileSystem,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import { useCallback, useMemo, useRef } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { createPlaylist } from "../../Providers/Auth/playlistApi";
@@ -209,6 +210,7 @@ export function PlaylistEditor() {
 			icon={appIcon}
 			defaultWindow={LIST_WINDOW}
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{status === "anonymous" && (
 				<ClassicyWindow
