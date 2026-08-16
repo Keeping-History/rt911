@@ -40,12 +40,25 @@ def probe_duration(url: str) -> int | None:
 
 
 def _page_mp3_items(cfg: Config, fields: str, *, client=httpx):
-    """Yield every mp3_items row, following offsets until a short page."""
+    """Yield every mp3_items row, following offsets until a short page.
+
+    `sort` is not optional. LIMIT/OFFSET without an ORDER BY has no defined row
+    order, and callers of this walk the corpus *while updating the rows they
+    walk* — in Postgres an update writes a new tuple, moving the row's physical
+    position, which reshuffles what the next page returns. Rows drift backwards
+    past the offset and are read twice; others drift forwards and are never read
+    at all.
+
+    That is not hypothetical: identify-parties reported 755 rows processed and
+    left 119 of them untouched, having done ~119 others twice, because the
+    counter counts iterations rather than distinct rows. A read-only pass cannot
+    reproduce it — the scan has to be the writer.
+    """
     offset = 0
     while True:
         r = client.get(
             f"{cfg.directus_url}/items/mp3_items",
-            params={"fields": fields, "limit": _PAGE, "offset": offset},
+            params={"fields": fields, "limit": _PAGE, "offset": offset, "sort": "id"},
             headers=_auth_headers(cfg),
         )
         r.raise_for_status()
