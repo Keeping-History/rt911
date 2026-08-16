@@ -38,6 +38,23 @@ def test_atc_folders_are_conversation():
     assert should_identify("audio/AA77/0812 aa77 taxi.mp3") is True
 
 
+@pytest.mark.parametrize("station", [
+    "BBC-R4", "KFI", "KOH", "KQRS", "WABC", "WAMU",
+    "WBAP", "WCBS", "WIBX", "WINS", "WKXW", "WOR",
+])
+def test_every_station_under_radio_is_classified_broadcast(station):
+    """AM/FM station broadcasts, and the classification must be recorded.
+
+    These 31 rows were skipped for two months by falling through as
+    unclassified, which looks identical to a decision. Asserting BROADCAST
+    rather than `should_identify is False` is the point: the weaker assertion
+    would pass again if someone removed the entry.
+    """
+    key = f"audio/radio/{station}/{station}-AM_2001-09-11_ET0900.mp3"
+    assert media_kind(key) == BROADCAST
+    assert should_identify(key) is False
+
+
 def test_unknown_folder_is_skipped_not_identified():
     # Fail-closed: a folder nobody classified must not be identified by default.
     assert media_kind("audio/brand_new_collection/x.mp3") is None

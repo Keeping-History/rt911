@@ -67,7 +67,13 @@ MEDIA_KIND: dict[str, str] = {
     "ZOB": CONVERSATION, "faa_atc": CONVERSATION, "fdny_dispatch": CONVERSATION,
     "rutgers_audiograph": CONVERSATION,
     # News radio: a broadcast has no counterparty. Excluded by decision.
-    "wins1010": BROADCAST, "wcbs": BROADCAST,
+    # `radio` covers every station under audio/radio/ (BBC-R4, KFI, KOH, KQRS,
+    # WABC, WAMU, WBAP, WCBS, WIBX, WINS, WKXW, WOR) because media_kind keys on
+    # the first segment under audio/, not the station. It is listed explicitly
+    # rather than left to fall through: an unlisted folder is also skipped, so
+    # "we decided these are broadcasts" and "nobody has looked at this folder"
+    # would otherwise be indistinguishable — which is how 31 rows sat unnoticed.
+    "wins1010": BROADCAST, "wcbs": BROADCAST, "radio": BROADCAST,
 }
 
 
