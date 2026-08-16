@@ -55,9 +55,30 @@ const APPLY = process.argv.includes("--apply");
 
 // source slug (mp3_items.source / BROADCAST_STATIONS key) → logo URL.
 // Add a row here when a new broadcast station gets artwork.
+// Era research (2026-08-16): each logo was verified against Logopedia
+// (logos.fandom.com) year ranges and, where possible, Wayback Machine captures
+// of the station's own site, to be the mark actually in use on 2001-09-11.
+// Notables: BBC Radio 4's 3D-"4" (2001–2007) is confirmed by the bbc.co.uk
+// homepage archived on 9/11 itself; KOH's mark changed between May and Sept
+// 2001 (nearest capture, 2001-09-23, shows this one); WIBX is bracketed
+// 2000→2011 by its own site + CNYRadio, no exact-2001 capture exists. The
+// untouched source art (original formats) is archived under
+// images/radio/original/.
 const STATION_LOGOS = {
   WCBS: "https://files.911realtime.org/images/radio/wcbs.png",
   WINS: "https://files.911realtime.org/images/radio/wins.png",
+  WABC: "https://files.911realtime.org/images/radio/wabc.png",
+  WTOP: "https://files.911realtime.org/images/radio/wtop.png",
+  WKXW: "https://files.911realtime.org/images/radio/wkxw.png",
+  KFI: "https://files.911realtime.org/images/radio/kfi.png",
+  WRIF: "https://files.911realtime.org/images/radio/wrif.png",
+  WIBX: "https://files.911realtime.org/images/radio/wibx.png",
+  WBAP: "https://files.911realtime.org/images/radio/wbap.png",
+  KQRS: "https://files.911realtime.org/images/radio/kqrs.png",
+  WOR: "https://files.911realtime.org/images/radio/wor.png",
+  KOH: "https://files.911realtime.org/images/radio/koh.png",
+  WAMU: "https://files.911realtime.org/images/radio/wamu.png",
+  "BBC-R4": "https://files.911realtime.org/images/radio/bbc-r4.png",
 };
 
 function requireEnv(name) {
