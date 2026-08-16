@@ -196,6 +196,14 @@ export function combinedPrevious(
 		.sort((a, b) => toMs(b.start_date) - toMs(a.start_date));
 }
 
+/**
+ * Continuous, long-form live broadcasts (full-run commercial radio). These are
+ * the Radio Tuner's catalogue; every other audio source is short comm traffic
+ * and belongs to the Radio Scanner. Both apps partition the shared mp3 stream
+ * with this one set so a station can never appear in both.
+ */
+export const BROADCAST_STATIONS = new Set(["WCBS", "WINS"]);
+
 /** Stations pinned to the front of the strip regardless of online state. */
 export const PINNED_STATIONS = ["WINS", "WCBS"];
 

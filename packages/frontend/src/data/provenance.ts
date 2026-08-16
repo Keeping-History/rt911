@@ -56,13 +56,32 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 	"RadioScanner.app": {
 		appName: "Radio Scanner",
 		blurb:
-			"Air-traffic control, military and commercial radio from the morning of September 11, 2001.",
+			"Air-traffic control and military radio traffic from the morning of September 11, 2001.",
 		sources: [
 			{
 				name: "Rutgers Law Review — “A New Type of War”",
 				url: "https://www.rutgerslawreview.com/a-new-type-of-war/",
 				feeds: "The Rutgers channel — FAA and NORAD audio published with the monograph.",
 			},
+			{
+				name: "Internet Archive",
+				url: "https://archive.org/details/911datasets",
+				feeds:
+					"The remaining clips — the ATC and NORAD channels (atc, NEADS/NORAD, Langley, FAA, ATCSCC, ZNY, ZBW, ZOB, ZDC) and the per-flight channels (AA11, UA175, AA77, UA93, DL1989, GOFER06).",
+				note: "From a NIST release or uploaded directly to the Archive.",
+			},
+		],
+		method: [
+			"Captions are machine transcriptions (whisper.cpp), not official transcripts — treat wording as approximate.",
+			"Audio is loudness-normalized from the archived originals; the originals are retained unmodified.",
+		],
+	},
+
+	"RadioTuner.app": {
+		appName: "Radio Tuner",
+		blurb:
+			"Full-run live broadcast radio from September 11, 2001, replayed continuously in step with the virtual clock.",
+		sources: [
 			{
 				name: "Audacy",
 				url: "https://www.audacy.com/1010wins",
@@ -72,13 +91,6 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 				name: "WCBS Audio Archives",
 				url: "https://www.audacy.com/wcbs880",
 				feeds: "WCBS Newsradio 880 coverage.",
-			},
-			{
-				name: "Internet Archive",
-				url: "https://archive.org/details/911datasets",
-				feeds:
-					"The remaining clips — the ATC and NORAD channels (atc, NEADS/NORAD, Langley, FAA, ATCSCC, ZNY, ZBW, ZOB, ZDC) and the per-flight channels (AA11, UA175, AA77, UA93, DL1989, GOFER06).",
-				note: "From a NIST release or uploaded directly to the Archive.",
 			},
 		],
 		method: [

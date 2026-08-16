@@ -283,21 +283,30 @@ describe("RadioScanner schedule visibility", () => {
 		expect(screen.getByText("Coming Up")).toBeTruthy();
 	});
 
-	it("hides Coming Up on WINS (continuous broadcast)", () => {
-		renderScanner("WINS");
-		expect(screen.queryByText("Coming Up")).toBeNull();
-	});
-
-	it("hides Coming Up on WCBS (continuous broadcast)", () => {
-		renderScanner("WCBS");
-		expect(screen.queryByText("Coming Up")).toBeNull();
-	});
-
 	it("labels each Previous item with its start time in the display timezone", () => {
 		renderScanner("ATC");
 		expect(screen.getByText("Previous")).toBeTruthy();
 		// 12:00 UTC shifted by the -4 display offset.
 		expect(screen.getByText("9/11, 8:00 AM")).toBeTruthy();
+	});
+});
+
+describe("RadioScanner broadcast-station split", () => {
+	afterEach(cleanup);
+
+	it("excludes the Radio Tuner's broadcast stations from the strip", () => {
+		renderScanner("ATC");
+		// ATC renders in both the display and its strip button — presence is the point.
+		expect(screen.getAllByText("ATC").length).toBeGreaterThan(0);
+		expect(screen.queryByText("WINS")).toBeNull();
+		expect(screen.queryByText("WCBS")).toBeNull();
+	});
+
+	it("falls back to the first station when the persisted station is a broadcast", () => {
+		// A pre-split persisted activeStation of WCBS no longer exists here.
+		renderScanner("WCBS");
+		const station = stationPlayerProps.current?.station as { key: string };
+		expect(station.key).toBe("ATC");
 	});
 });
 
@@ -310,7 +319,7 @@ describe("RadioScanner All Traffic view", () => {
 		expect(screen.getByText("All Traffic")).toBeTruthy();
 	});
 
-	it("aggregates every non-live station's audio and lists per-channel checkboxes", () => {
+	it("aggregates every station's audio and lists per-channel checkboxes", () => {
 		renderScanner("__all_traffic__");
 		// The player is fed the synthetic aggregate station...
 		const station = stationPlayerProps.current?.station as {
@@ -318,12 +327,13 @@ describe("RadioScanner All Traffic view", () => {
 			items: MediaItem[];
 		};
 		expect(station.key).toBe("__all_traffic__");
-		// ...carrying the live ATC clip (id 3) but NOT the continuous WINS/WCBS.
+		// ...carrying the live ATC clip (id 3) but NOT the Radio Tuner's
+		// broadcast stations WINS/WCBS.
 		expect(station.items.map((i) => i.id)).toContain(3);
 		expect(station.items.some((i) => i.source === "WINS")).toBe(false);
 		expect(station.items.some((i) => i.source === "WCBS")).toBe(false);
 
-		// A checkbox exists for the non-live channel, but not the live ones.
+		// A checkbox exists for the scanner channel, but not the broadcasts.
 		expect(screen.getByLabelText("ATC")).toBeTruthy();
 		expect(screen.queryByLabelText("WINS")).toBeNull();
 		expect(screen.queryByLabelText("WCBS")).toBeNull();
@@ -334,7 +344,7 @@ describe("RadioScanner All Traffic view", () => {
 		const before = stationPlayerProps.current?.station as { items: MediaItem[] };
 		expect(before.items.length).toBeGreaterThan(0);
 
-		// Untick ATC (the only non-live channel) — the aggregate empties out.
+		// Untick ATC (the only channel) — the aggregate empties out.
 		act(() => {
 			fireEvent.click(screen.getByLabelText("ATC"));
 		});
@@ -360,7 +370,7 @@ describe("RadioScanner audio-unlock overlay", () => {
 
 	it("is already visible on mount when audio was blocked before render", () => {
 		markAudioBlocked("test-gate");
-		renderScanner("WINS");
+		renderScanner("ATC");
 		expect(screen.getByText(/click anywhere to start audio/i)).toBeTruthy();
 	});
 });

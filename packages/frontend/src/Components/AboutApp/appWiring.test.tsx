@@ -11,6 +11,7 @@ const APP_FILES: Record<string, string> = {
 	"News.app": "News/News.tsx",
 	"Newsgroups.app": "Newsgroups/Newsgroups.tsx",
 	"RadioScanner.app": "RadioScanner/RadioScanner.tsx",
+	"RadioTuner.app": "RadioTuner/RadioTuner.tsx",
 	"TV.app": "TV/TV.tsx",
 	"Weather.app": "Weather/Weather.tsx",
 };

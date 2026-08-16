@@ -2,15 +2,9 @@ import {
     ClassicyApp,
     ClassicyButton,
     ClassicyCheckbox,
-    ClassicyColorPicker,
-    ClassicyControlGroup,
-    ClassicyControlLabel,
     ClassicyIcons,
-    ClassicyRadioInput,
-    ClassicySlider,
     ClassicyWindow,
     intToHex,
-    MAC_OS_8_CRAYONS,
     quitMenuItemHelper,
     useAppManager,
     useAppManagerDispatch,
@@ -18,7 +12,6 @@ import {
 } from "classicy";
 import type React from "react";
 import {
-    type ChangeEvent,
     useCallback,
     useContext,
     useEffect,
@@ -43,18 +36,17 @@ import {
     sanitizeItemIds,
 } from "./radioPlayback";
 import {
-    CAPTION_FONT_VARS,
     DEFAULT_RADIO_SCANNER_SETTINGS,
-    isVizMode,
     nextVizMode,
     radioScannerSetSettings,
     type RadioScannerSettings,
     readRadioScannerSettings,
-    VIZ_MODES,
 } from "./radioScannerSettings";
+import { RadioSettingsWindow } from "./RadioSettingsWindow";
 import { StationPlayer } from "./StationPlayer";
 import {
     activeSegments,
+    BROADCAST_STATIONS,
     combinedPrevious,
     combinedUpcoming,
     countdownLabel,
@@ -70,12 +62,10 @@ import { StationButtonContent } from "./StationButtonContent";
 
 type RadioScannerProps = Record<string, never>;
 
-// These stations are continuous broadcasts — no Coming Up / Previous schedule.
-const CONTINUOUS_STATIONS = new Set(["WCBS", "WINS"]);
-
 // The "All Traffic" pseudo-station: a synthetic station, appended to the end of
-// the strip, that aggregates every non-live (non-continuous) station into one
-// view and mixes their audio together — a scanner "monitor everything" mode.
+// the strip, that aggregates every station into one view and mixes their audio
+// together — a scanner "monitor everything" mode. (The continuous broadcast
+// stations live in the Radio Tuner app, not here — see BROADCAST_STATIONS.)
 // The key is a sentinel that can never collide with a real source name.
 const ALL_TRAFFIC_KEY = "__all_traffic__";
 const ALL_TRAFFIC_LABEL = "All Traffic";
@@ -223,19 +213,17 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         return () => clearInterval(id);
     }, []);
 
+    // The scanner's stations are the comm-traffic sources only — the continuous
+    // broadcast stations (WCBS/WINS) belong to the Radio Tuner app.
     const stations = useMemo(
-        () => mergeWithSources(sources.audio, items),
+        () =>
+            mergeWithSources(sources.audio, items).filter(
+                (s) => !BROADCAST_STATIONS.has(s.key),
+            ),
         [sources.audio, items],
     );
 
-    // Non-live stations = everything except the continuous broadcasts. These are
-    // what "All Traffic" aggregates and what its channel checkboxes control.
-    const nonLiveStations = useMemo(
-        () => stations.filter((s) => !CONTINUOUS_STATIONS.has(s.key)),
-        [stations],
-    );
-
-    // All Traffic view: which non-live channels the user has switched OFF. Stored
+    // All Traffic view: which channels the user has switched OFF. Stored
     // as the disabled set (ephemeral, not persisted) so channels that appear
     // later default to ON. Toggling a checkbox flips membership.
     const [disabledTrafficChannels, setDisabledTrafficChannels] = useState<
@@ -252,8 +240,8 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         [],
     );
     const enabledTrafficStations = useMemo(
-        () => nonLiveStations.filter((s) => !disabledTrafficChannels.has(s.key)),
-        [nonLiveStations, disabledTrafficChannels],
+        () => stations.filter((s) => !disabledTrafficChannels.has(s.key)),
+        [stations, disabledTrafficChannels],
     );
     const isAllTraffic = activeStation === ALL_TRAFFIC_KEY;
 
@@ -264,9 +252,14 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         [tick, getUpcomingMp3Items], // eslint-disable-line react-hooks/exhaustive-deps
     );
 
-    // Select the first station once stations arrive.
+    // Select the first station once stations arrive. A persisted activeStation
+    // may be a broadcast station from before the Radio Tuner split — those no
+    // longer exist here, so fall back to the first station too.
     useEffect(() => {
-        if (activeStation === "" && stations.length > 0) {
+        if (
+            (activeStation === "" || BROADCAST_STATIONS.has(activeStation)) &&
+            stations.length > 0
+        ) {
             setActiveStation(stations[0].key);
         }
     }, [stations, activeStation]);
@@ -345,7 +338,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
     ];
 
     // The "All Traffic" aggregate: a synthetic station whose items are every
-    // ENABLED non-live station's items combined. activeSegments/StationPlayer
+    // ENABLED station's items combined. activeSegments/StationPlayer
     // then treat it exactly like a real station — mixing all of their audio and
     // listing every in-window clip. Memoized so its identity is stable for the
     // playingSegments memo and StationPlayer's volume effect.
@@ -395,8 +388,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         [mutedItems, soloItemId, playingSegments],
     );
 
-    const showSchedule =
-        activeStation !== "" && !CONTINUOUS_STATIONS.has(activeStation);
+    const showSchedule = activeStation !== "";
 
     // True while the browser's autoplay policy is holding audio back (Safari
     // refuses gesture-less sound on page load). The document-level unlock
@@ -441,15 +433,15 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
         [stations, upcomingItems, nowMs],
     );
 
-    // Indicator light for the All Traffic button: on-air if ANY non-live station
-    // is playing now, upcoming if any has a queued item, else offline. Uses all
-    // non-live stations (not just enabled ones) so the light reflects available
+    // Indicator light for the All Traffic button: on-air if ANY station is
+    // playing now, upcoming if any has a queued item, else offline. Uses all
+    // stations (not just enabled ones) so the light reflects available
     // traffic regardless of the user's channel filter.
-    const allTrafficStatus = nonLiveStations.some(
+    const allTrafficStatus = stations.some(
         (s) => activeSegments(s, nowMs).length > 0,
     )
         ? ("on-air" as const)
-        : combinedUpcoming(nonLiveStations, upcomingItems, nowMs).length > 0
+        : combinedUpcoming(stations, upcomingItems, nowMs).length > 0
             ? ("upcoming" as const)
             : ("offline" as const);
 
@@ -461,246 +453,16 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
             defaultWindow={`${appId}_main`}
         >
             {showSettings && (
-                <ClassicyWindow
-                    id={`${appId}_settings`}
-                    title="Settings"
-                    icon={appIcon}
+                <RadioSettingsWindow
                     appId={appId}
-                    closable={true}
-                    resizable={false}
-                    zoomable={false}
-                    scrollable={false}
-                    collapsable={false}
-                    initialSize={[370, 0]}
-                    initialPosition={[250, 150]}
-                    modal={true}
+                    appIcon={appIcon}
                     appMenu={appMenu}
-                    onCloseFunc={() => setShowSettings(false)}
-                >
-                    <div className={styles.rsSettings}>
-                        <ClassicyControlGroup label="Waveform Style">
-                            <ClassicyRadioInput
-                                name="radioscanner_settings_viz_mode"
-                                inputs={VIZ_MODES.map((m) => ({
-                                    id: m,
-                                    label: m,
-                                    checked: settingsForm.vizMode === m,
-                                }))}
-                                onClickFunc={(id: string) =>
-                                    setSettingsForm((f) =>
-                                        isVizMode(id) ? { ...f, vizMode: id } : f,
-                                    )
-                                }
-                            />
-                        </ClassicyControlGroup>
-                        <ClassicyControlGroup label="Audio">
-                            <ClassicyCheckbox
-                                id="radioscanner_settings_play_original"
-                                label="Play original recording (more noise)"
-                                checked={settingsForm.playOriginalAudio}
-                                onClickFunc={(checked: boolean) =>
-                                    setSettingsForm((f) => ({
-                                        ...f,
-                                        playOriginalAudio: checked,
-                                    }))
-                                }
-                            />
-                        </ClassicyControlGroup>
-                        <ClassicyControlGroup label="Waveform Colors">
-                            <ClassicyCheckbox
-                                id="radioscanner_settings_use_theme"
-                                label="Use theme colors"
-                                checked={settingsForm.useThemeColors}
-                                onClickFunc={(checked: boolean) =>
-                                    setSettingsForm((f) => ({
-                                        ...f,
-                                        useThemeColors: checked,
-                                    }))
-                                }
-                            />
-                            {!settingsForm.useThemeColors && (
-                                <>
-                                    <ClassicyColorPicker
-                                        id="radioscanner_settings_color_bright"
-                                        labelTitle="Bright"
-                                        value={settingsForm.colorBright}
-                                        crayons={MAC_OS_8_CRAYONS}
-                                        onChangeFunc={(color: number) =>
-                                            setSettingsForm((f) => ({
-                                                ...f,
-                                                colorBright: color,
-                                            }))
-                                        }
-                                    />
-                                    <ClassicyColorPicker
-                                        id="radioscanner_settings_color_dim"
-                                        labelTitle="Dim"
-                                        value={settingsForm.colorDim}
-                                        crayons={MAC_OS_8_CRAYONS}
-                                        onChangeFunc={(color: number) =>
-                                            setSettingsForm((f) => ({
-                                                ...f,
-                                                colorDim: color,
-                                            }))
-                                        }
-                                    />
-                                </>
-                            )}
-                        </ClassicyControlGroup>
-                        <ClassicyControlGroup label="Volume">
-                            <ClassicySlider
-                                id="radioscanner_settings_max_volume"
-                                labelTitle="Max volume:"
-                                labelPosition="left"
-                                value={settingsForm.maxVolume}
-                                min={0}
-                                max={100}
-                                step={1}
-                                tickInterval={10}
-                                valueLabel={`${settingsForm.maxVolume}%`}
-                                onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-                                    setSettingsForm((f) => ({
-                                        ...f,
-                                        maxVolume: parseInt(e.target.value, 10),
-                                    }))
-                                }
-                            />
-                        </ClassicyControlGroup>
-                        <ClassicyControlGroup label="Captions">
-                            <ClassicyControlLabel label="Font" />
-                            <div className={styles.rsCaptionFontRow}>
-                                {CAPTION_FONT_VARS.map(([varName, label]) => (
-                                    <ClassicyButton
-                                        key={varName}
-                                        buttonSize="small"
-                                        margin="sm"
-                                        padding="sm"
-                                        depressed={
-                                            settingsForm.captionStyle.font ===
-                                            varName
-                                        }
-                                        onClickFunc={() =>
-                                            setSettingsForm((f) => ({
-                                                ...f,
-                                                captionStyle: {
-                                                    ...f.captionStyle,
-                                                    font: varName,
-                                                },
-                                            }))
-                                        }
-                                    >
-                                        {label}
-                                    </ClassicyButton>
-                                ))}
-                            </div>
-                            <ClassicyColorPicker
-                                id="radioscanner_settings_cc_text_color"
-                                labelTitle="Text Color"
-                                value={settingsForm.captionStyle.color}
-                                crayons={MAC_OS_8_CRAYONS}
-                                onChangeFunc={(color: number) =>
-                                    setSettingsForm((f) => ({
-                                        ...f,
-                                        captionStyle: {
-                                            ...f.captionStyle,
-                                            color,
-                                        },
-                                    }))
-                                }
-                            />
-                            <ClassicySlider
-                                id="radioscanner_settings_cc_text_opacity"
-                                labelTitle="Text Opacity"
-                                labelPosition="left"
-                                value={settingsForm.captionStyle.colorOpacity}
-                                min={0}
-                                max={1}
-                                step={0.05}
-                                valueLabel={`${Math.round(
-                                    settingsForm.captionStyle.colorOpacity * 100,
-                                )}%`}
-                                onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-                                    setSettingsForm((f) => ({
-                                        ...f,
-                                        captionStyle: {
-                                            ...f.captionStyle,
-                                            colorOpacity: parseFloat(
-                                                e.target.value,
-                                            ),
-                                        },
-                                    }))
-                                }
-                            />
-                            <ClassicyColorPicker
-                                id="radioscanner_settings_cc_bg_color"
-                                labelTitle="Background Color"
-                                value={settingsForm.captionStyle.bgColor}
-                                crayons={MAC_OS_8_CRAYONS}
-                                onChangeFunc={(color: number) =>
-                                    setSettingsForm((f) => ({
-                                        ...f,
-                                        captionStyle: {
-                                            ...f.captionStyle,
-                                            bgColor: color,
-                                        },
-                                    }))
-                                }
-                            />
-                            <ClassicySlider
-                                id="radioscanner_settings_cc_bg_opacity"
-                                labelTitle="Background Opacity"
-                                labelPosition="left"
-                                value={settingsForm.captionStyle.bgOpacity}
-                                min={0}
-                                max={1}
-                                step={0.05}
-                                valueLabel={`${Math.round(
-                                    settingsForm.captionStyle.bgOpacity * 100,
-                                )}%`}
-                                onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-                                    setSettingsForm((f) => ({
-                                        ...f,
-                                        captionStyle: {
-                                            ...f.captionStyle,
-                                            bgOpacity: parseFloat(e.target.value),
-                                        },
-                                    }))
-                                }
-                            />
-                            <ClassicySlider
-                                id="radioscanner_settings_cc_size"
-                                labelTitle="Size"
-                                labelPosition="left"
-                                value={settingsForm.captionStyle.size}
-                                min={50}
-                                max={200}
-                                step={10}
-                                tickInterval={10}
-                                valueLabel={`${settingsForm.captionStyle.size}%`}
-                                onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-                                    setSettingsForm((f) => ({
-                                        ...f,
-                                        captionStyle: {
-                                            ...f.captionStyle,
-                                            size: parseInt(e.target.value, 10),
-                                        },
-                                    }))
-                                }
-                            />
-                        </ClassicyControlGroup>
-                        <div className={styles.rsSettingsButtons}>
-                            <ClassicyButton onClickFunc={() => setShowSettings(false)}>
-                                Cancel
-                            </ClassicyButton>
-                            <ClassicyButton
-                                isDefault={true}
-                                onClickFunc={saveSettingsForm}
-                            >
-                                Save
-                            </ClassicyButton>
-                        </div>
-                    </div>
-                </ClassicyWindow>
+                    idPrefix="radioscanner_settings"
+                    form={settingsForm}
+                    setForm={setSettingsForm}
+                    onCancel={() => setShowSettings(false)}
+                    onSave={saveSettingsForm}
+                />
             )}
             <ClassicyWindow
                 id={`${appId}_main`}
@@ -763,7 +525,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                                         styles.rsTrafficChannelList
                                                     }
                                                 >
-                                                    {nonLiveStations.length === 0 ? (
+                                                    {stations.length === 0 ? (
                                                         <span
                                                             className={
                                                                 styles.rsScheduleItem
@@ -772,7 +534,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                                             No traffic channels
                                                         </span>
                                                     ) : (
-                                                        nonLiveStations.map((s) => (
+                                                        stations.map((s) => (
                                                             <ClassicyCheckbox
                                                                 key={s.key}
                                                                 id={`rs_traffic_${s.key}`}
@@ -968,7 +730,7 @@ export const RadioScanner: React.FC<RadioScannerProps> = () => {
                                     </ClassicyButton>
                                 );
                             })}
-                            {/* All Traffic: always last, aggregates every non-live station. */}
+                            {/* All Traffic: always last, aggregates every station. */}
                             <ClassicyButton
                                 key={ALL_TRAFFIC_KEY}
                                 depressed={isAllTraffic}
