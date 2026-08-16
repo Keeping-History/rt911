@@ -114,14 +114,18 @@ def identify_parties_flow(limit: int | None = None, force: bool = False,
         commission_text = clip.text if clip else ""
         system, user = build_messages(excerpt, tier, commission_text)
 
+        # One recording must not be able to end a run over hundreds of them. The
+        # reply is arbitrary JSON from a model, so the ways it can be wrong are
+        # open-ended; a bad row is counted and named, and the walk continues.
         try:
             parsed = parse_parties(complete(system, user))
-        except ValueError as exc:
-            logger.warning("identify-parties: %s unparseable: %s", key, exc)
+            cleaned, reasons = validate_parties(parsed, excerpt, commission_text)
+        except Exception as exc:
+            logger.warning(
+                "identify-parties: %s failed: %s: %s", key, type(exc).__name__, exc
+            )
             failed += 1
             continue
-
-        cleaned, reasons = validate_parties(parsed, excerpt, commission_text)
         cleaned["tier"] = tier
         cleaned["model"] = cfg.parties_model
         cleaned["generated_at"] = datetime.now(timezone.utc).isoformat()
