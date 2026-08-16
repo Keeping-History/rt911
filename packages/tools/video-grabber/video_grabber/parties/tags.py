@@ -20,6 +20,7 @@ on; the parties block keeps the distinction for anyone who needs it.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 
 from video_grabber.parties.spoken import spoken_to_digits
 from video_grabber.parties.vocab import (
@@ -64,9 +65,25 @@ def normalize_callsign(callsign: str) -> str:
     return f"{_AIRLINE_PREFIX.get(prefix, prefix)}{digits}"
 
 
-def build_tags(parties: dict) -> list[str]:
-    """Every tag implied by an identified parties block, sorted and deduped."""
-    tags: set[str] = set()
+def build_tags(parties: dict, curated: Iterable[str] = ()) -> list[str]:
+    """Every tag implied by an identified parties block, sorted and deduped.
+
+    `curated` is merged in verbatim. It exists because the obvious way to
+    preserve hand-added tags — merging the new derived set into whatever `tags`
+    already held — is wrong: derived tags could then only ever accumulate. A
+    facility the model stops identifying, or one removed because the gate now
+    rejects it, would linger in the index forever with nothing able to retract
+    it. Re-running would silently entrench old mistakes.
+
+    So the derived set is always rebuilt from scratch and is authoritative for
+    itself, and human additions live in their own column (`tags_curated`) that
+    the flow reads but never writes. Nothing a curator types can be clobbered,
+    and nothing the model retracts can survive.
+
+    Curated values are taken as given — not slugged, not namespaced — since a
+    curator may need vocabulary this module has never heard of.
+    """
+    tags: set[str] = {t.strip() for t in curated if t and t.strip()}
 
     if parties.get("tier"):
         tags.add(f"tier:{slugify(parties['tier'])}")
@@ -110,6 +127,8 @@ def build_tags(parties: dict) -> list[str]:
             tags.add(f"topic:{topic}")
 
     # 'various' is the tape tier's placeholder for "many counterparties"; it is
-    # not a facility and must never become one.
-    tags.discard("facility:various")
+    # not a facility and must never become one. A curator who types it anyway
+    # means it, so this only removes what derivation produced.
+    if "facility:various" not in curated:
+        tags.discard("facility:various")
     return sorted(tags)

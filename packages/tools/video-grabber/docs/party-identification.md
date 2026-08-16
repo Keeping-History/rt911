@@ -89,6 +89,39 @@ on. The parties block keeps the distinction.
 Callsigns are normalised so `American 11`, `AAL11` and `AA 11` collapse to
 `aircraft:aal11`. Military callsigns keep their own prefix (`gofer6`) — the goal
 is collapsing spellings, not forcing everything into an airline scheme.
+Facilities resolve the same way through `vocab.FACILITY_ALIASES`, so `Boston`,
+`Boston Center` and `ZBW` are one tag.
+
+### Curated tags
+
+`mp3_items.tags` is **derived and readonly in the admin UI**; it is rebuilt from
+scratch on every run. Hand-added tags go in **`tags_curated`**, which the flow
+reads and never writes, and merges into `tags`.
+
+Two columns rather than one, because the obvious single-column merge is wrong:
+folding each new derived set into whatever `tags` already held would let derived
+tags only ever accumulate. A facility the model stops identifying — or one the
+gate starts rejecting — would linger in the index forever with nothing able to
+retract it, so re-running would entrench old mistakes instead of correcting them.
+Rebuilding `tags` wholesale keeps derivation authoritative for itself; keeping
+human input in its own column keeps it safe from that rebuild.
+
+Curated values are stored verbatim — not slugged, not namespaced — since a
+curator may need vocabulary this module has never heard of.
+
+### Indexes
+
+`tags` carries two GIN indexes, because two query shapes reach it and indexing
+for one does nothing for the other:
+
+| Query | Index |
+|---|---|
+| Directus `filter[tags][_contains]=…` → `LIKE '%…%'` | `idx_mp3_items_tags_trgm` (pg_trgm) |
+| `@> '["facility:zbw"]'` from SQL | `idx_mp3_items_tags_jsonb` (jsonb_path_ops) |
+
+Both are declared in `packages/backend/seed.mjs`'s `TAG_INDEX_SQL`. At the
+corpus's present size the planner picks a sequential scan anyway; they matter if
+the tag index ever backs a user-facing search.
 
 ## Operating it
 
