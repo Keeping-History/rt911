@@ -231,28 +231,11 @@
 	display: flex;
 	flex-direction: row;
 	gap: 2px;
-}
 
-/* Same look as TimeMachine's bookmark-row icon buttons (its copy lives in a
- * CSS module, so the rule repeats here rather than importing across apps). */
-.playlistIconButton {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
-	padding: 0;
-	border: none;
-	background: transparent;
-	cursor: pointer;
-
-	&:hover {
-		background-color: var(--color-theme-highlight, var(--color-system-04));
-	}
-
+	/* The square/small ClassicyButtons size their own img (90% width); the
+	 * pixel-art edit/trash glyphs just need crisp upscaling. ClassicyButton
+	 * drops a passed className, so the scoping has to live here. */
 	img {
-		width: 14px;
-		height: 14px;
 		image-rendering: pixelated;
 	}
 }

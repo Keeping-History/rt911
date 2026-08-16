@@ -1,4 +1,4 @@
-import { ClassicyIcons } from "classicy";
+import { ClassicyButton, ClassicyIcons } from "classicy";
 import "../TV/epgIcons"; // side effect: registers ClassicyIcons.applications.epg
 import type { EpgIconNamespace } from "../TV/epgIcons";
 import type { MediaEntry } from "../../Providers/Playlist/playlistTypes";
@@ -50,22 +50,24 @@ export function MediaTvRow({
 					<img className="playlistMediaTvLogo" src={stationLogo(e.entry.itemId)} alt="" />
 					<span className="playlistMediaTvLabel">{e.entry.itemId.toUpperCase()}</span>
 					<div className="playlistMediaTvButtons">
-						<button
-							type="button"
-							className="playlistIconButton"
+						<ClassicyButton
+							buttonShape="square"
+							buttonSize="small"
+							margin="sm"
 							aria-label={`Edit ${e.entry.itemId.toUpperCase()}`}
-							onClick={() => onEdit(e.uid)}
+							onClickFunc={() => onEdit(e.uid)}
 						>
 							<img src={playlistEditorIcons.edit} alt="" />
-						</button>
-						<button
-							type="button"
-							className="playlistIconButton"
+						</ClassicyButton>
+						<ClassicyButton
+							buttonShape="square"
+							buttonSize="small"
+							margin="sm"
 							aria-label={`Remove ${e.entry.itemId.toUpperCase()}`}
-							onClick={() => onRemove(e.uid)}
+							onClickFunc={() => onRemove(e.uid)}
 						>
 							<img src={playlistEditorIcons.trash} alt="" />
-						</button>
+						</ClassicyButton>
 					</div>
 				</div>
 			))}
