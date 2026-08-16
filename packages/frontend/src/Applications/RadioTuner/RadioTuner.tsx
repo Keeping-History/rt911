@@ -56,7 +56,7 @@ import { radioTunerSetSettings } from "./RadioTunerContext";
 type RadioTunerProps = Record<string, never>;
 
 /**
- * The Radio Tuner: full-run live radio broadcasts (WCBS, 1010 WINS — see
+ * The Radio Tuner: full-run live radio broadcasts (the fourteen stations in
  * BROADCAST_STATIONS) played continuously against the virtual clock. Visually
  * the Radio Scanner's sibling — same strip/display/player chrome — but with
  * none of the scanner's short-clip machinery: continuous stations have no
