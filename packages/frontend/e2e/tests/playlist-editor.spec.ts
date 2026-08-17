@@ -77,3 +77,86 @@ test("signed-in teacher creates and saves a playlist", async ({ page }) => {
 	await expect(listHeading).toBeVisible();
 	expect(createdBody).toMatchObject({ title: "Untitled Playlist", status: "draft" });
 });
+
+/**
+ * Opens the Playlists app, signed in, onto ONE existing playlist ("Lane
+ * Label Test") whose definition already has a media entry — a radio bar with
+ * no start/end, so it fades across the whole ten-day span and stays under
+ * the pointer at any scroll position. All Directus calls are intercepted;
+ * there is no shared helper for this in the spec yet, so this one is local
+ * to this file rather than duplicated across tests.
+ */
+async function openPlaylistWithEntries(page: import("@playwright/test").Page) {
+	await page.route("**/users/me**", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ data: ME }),
+		}),
+	);
+	await page.route("**/items/playlists?*", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				data: [
+					{
+						id: "p1",
+						title: "Lane Label Test",
+						status: "draft",
+						date_updated: null,
+						user_created: "u1",
+					},
+				],
+			}),
+		}),
+	);
+	await page.route("**/items/playlists/p1", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				data: {
+					id: "p1",
+					title: "Lane Label Test",
+					status: "draft",
+					date_updated: null,
+					user_created: "u1",
+					definition: {
+						version: 1,
+						mode: "annotate",
+						entries: [{ kind: "media", app: "radio", itemId: "wcbs" }],
+					},
+				},
+			}),
+		}),
+	);
+
+	await page.goto("/");
+	await page.getByRole("button", { name: "Playlists" }).dblclick();
+	const row = page.getByText("Lane Label Test", { exact: true });
+	await expect(row).toBeVisible();
+	await row.dblclick();
+	await expect(page.getByRole("application", { name: "Lane Label Test" })).toBeVisible();
+}
+
+test("lane label stays visible when the timeline is scrolled", async ({ page }) => {
+	await openPlaylistWithEntries(page);
+	await page.getByRole("button", { name: "Zoom in" }).click();
+	await page.getByRole("button", { name: "Zoom in" }).click();
+
+	const label = page.locator(".playlistTimelineLabel").first();
+	const timeline = page.locator(".playlistTimeline");
+	await expect(label).toBeVisible();
+
+	await timeline.evaluate((el) => {
+		el.scrollLeft = el.scrollWidth / 3;
+	});
+
+	// The label must still be inside the viewport, not scrolled off to the left.
+	const box = await label.boundingBox();
+	const view = await timeline.boundingBox();
+	expect(box).not.toBeNull();
+	expect(view).not.toBeNull();
+	expect(box!.x).toBeGreaterThanOrEqual(view!.x - 1);
+});

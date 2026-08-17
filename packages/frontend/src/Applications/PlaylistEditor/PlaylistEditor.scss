@@ -136,6 +136,30 @@
 	cursor: pointer;
 }
 
+/* The label rides above the bar rather than inside it. `position: sticky`
+ * resolves against the nearest ancestor with a scrolling box, and
+ * `overflow: hidden` counts as one — so a label inside .playlistTimelineBar
+ * would stick to the bar, which never scrolls, and nothing would happen.
+ *
+ * Clipping is therefore done with clip-path, which bounds the label to its
+ * item's span without creating a scroll container the way overflow would. */
+.playlistTimelineLabelTrack {
+	position: absolute;
+	top: 0;
+	height: 100%;
+	clip-path: inset(0);
+	pointer-events: none;
+	display: flex;
+	align-items: center;
+}
+
+.playlistTimelineLabel {
+	position: sticky;
+	left: 0;
+	white-space: nowrap;
+	padding-inline: 2px;
+}
+
 /* Edge-drag handles: a slim grab strip pinned to each end of the bar. The
  * resize cursor itself is set inline from ClassicyIcons — the published
  * classicy package inlines its cursor PNGs as data URIs in its own CSS, so

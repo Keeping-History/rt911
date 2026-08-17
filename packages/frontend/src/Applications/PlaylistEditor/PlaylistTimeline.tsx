@@ -334,7 +334,6 @@ export function PlaylistTimeline({
 										>
 											{b.focus === "once" && <span aria-hidden>▸</span>}
 											{b.focus === "locked" && <span aria-hidden>🔒</span>}
-											{b.label}
 											{b.actualStartFrac !== undefined && endFrac - startFrac > 0 && (
 												<span
 													className="playlistTimelineActualSpan"
@@ -359,6 +358,16 @@ export function PlaylistTimeline({
 													/>
 												))}
 										</button>
+										<div
+											className="playlistTimelineLabelTrack"
+											style={{
+												left: `${startFrac * 100}%`,
+												width: `${(endFrac - startFrac) * 100}%`,
+											}}
+											aria-hidden
+										>
+											<span className="playlistTimelineLabel">{b.label}</span>
+										</div>
 									</div>
 								);
 							})}
