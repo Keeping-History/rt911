@@ -33,3 +33,25 @@ def test_a_file_shorter_than_the_bucket_count_still_fills_every_bucket():
 
 def test_empty_input_yields_flat_peaks():
     assert peaks_from_pcm(b"", buckets=5) == [[0, 0]] * 5
+
+
+def test_non_divisible_bucket_count_partitions_correctly():
+    """7 samples into 3 buckets doesn't divide evenly, and a ramp (rather
+    than a flat value) means a shifted window boundary changes the numbers
+    instead of silently passing.
+
+    Partition (lo_idx = i*7//3, hi_idx = max((i+1)*7//3, lo_idx+1)):
+      bucket 0: samples[0:2] = [0, 500]              -> >>8 = [0, 1]
+      bucket 1: samples[2:4] = [1000, 1500]          -> >>8 = [3, 5]
+      bucket 2: samples[4:7] = [2000, 2500, 3000]    -> >>8 = [7, 11]
+    """
+    out = peaks_from_pcm(pcm([0, 500, 1000, 1500, 2000, 2500, 3000]), buckets=3)
+    assert out == [[0, 1], [3, 5], [7, 11]]
+
+
+def test_odd_length_input_ignores_the_trailing_byte():
+    """A truncated final sample (odd total byte count) must not raise and
+    must not be read as a spurious extra sample."""
+    truncated = pcm([1000, -2000, 3000]) + b"\xff"
+    out = peaks_from_pcm(truncated, buckets=3)
+    assert out == [[3, 3], [-8, -8], [11, 11]]

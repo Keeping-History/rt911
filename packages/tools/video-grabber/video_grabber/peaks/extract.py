@@ -8,7 +8,8 @@ across whatever width it has.
 """
 from __future__ import annotations
 
-import struct
+import sys
+from array import array
 
 PEAK_BUCKETS = 480
 
@@ -21,12 +22,23 @@ def peaks_from_pcm(samples: bytes, buckets: int = PEAK_BUCKETS) -> list[list[int
     floor-toward-negative-infinity shift in Python, so -32768 >> 8 == -128 and
     32767 >> 8 == 127 — the full signed 16-bit range maps onto -128..127
     without a separate branch for negative values.
+
+    The corpus's longest tape is 6.75 hours (~194 MB of 8 kHz mono PCM,
+    ~97M samples). `struct.unpack` would box every sample as a Python int in
+    a tuple — ~16x the raw byte size, multi-GB peak RSS on that one file.
+    `array("h", ...)` stores samples as packed machine shorts (~2x the raw
+    bytes) while still supporting the slicing the bucket loop below relies on.
+    `array` uses native byte order, unlike `struct`'s explicit `<h`, so a
+    big-endian host needs an explicit byteswap to preserve the little-endian
+    contract ffmpeg is asked for.
     """
     count = len(samples) // 2
     if count == 0:
         return [[0, 0] for _ in range(buckets)]
 
-    values = struct.unpack(f"<{count}h", samples[: count * 2])
+    values = array("h", samples[: count * 2])
+    if sys.byteorder == "big":
+        values.byteswap()
     out: list[list[int]] = []
     for i in range(buckets):
         lo_idx = (i * count) // buckets
