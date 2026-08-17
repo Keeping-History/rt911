@@ -1,9 +1,12 @@
 # Party identification and tagging
 
 Populates `mp3_items.parties` (who a recording's traffic is between, and what it
-is about) and `mp3_items.tags` (a flat, namespaced index for searching).
+is about) and the `mp3_tags` / `mp3_items_tags` many-to-many (a namespaced index
+for searching).
 
-One Prefect flow, `identify-parties`, manual-only and `dry_run=True` by default.
+Two Prefect flows, both manual-only and `dry_run=True` by default:
+`identify-parties` (calls the model) and `rebuild-tags` (re-derives tags from
+stored `parties`, no inference).
 
 ## The containment gate is the whole design
 
@@ -92,36 +95,65 @@ is collapsing spellings, not forcing everything into an airline scheme.
 Facilities resolve the same way through `vocab.FACILITY_ALIASES`, so `Boston`,
 `Boston Center` and `ZBW` are one tag.
 
+### How tags are stored
+
+A many-to-many, the same three-part shape `readme_articles` uses:
+
+| Collection | Rows | What it holds |
+|---|---|---|
+| `mp3_tags` | ~1,100 | The vocabulary: `tag`, `namespace`, `value`, `color`, `sort`. `tag` is unique. |
+| `mp3_items_tags` | ~8,200 | The junction: `mp3_items_id`, `mp3_tags_id`. |
+| `mp3_items.tags` | — | An **alias** (`list-m2m`) over the junction. |
+
+`mp3_items.tags` was previously a json array of strings, and before that the
+junction itself carried the tag text on every row — 8,192 rows repeating 1,131
+distinct tags, with the parent's `start_date` copied onto each. The text is now
+stored once and referenced.
+
+Two consequences worth knowing before touching the writer:
+
+- **You cannot set tags by PATCHing the item.** `tags` is an alias, not a
+  column; `PATCH /items/mp3_items/{id} {"tags": [...]}` does not do what it did
+  when `tags` was json. Persistence goes through `tag_store.py`.
+- **Time filtering goes through `mp3_items.start_date`.** The junction no longer
+  carries a copy, because it was identical to the parent's value on all 8,192
+  rows and the index belongs on the item.
+
+Vocabulary rows are created but never deleted. A retracted tag loses its
+junction rows and vanishes from every search, but the row is cheap and may be
+referenced again — and deleting it would discard any `color`/`sort` a curator
+set on it.
+
 ### Curated tags
 
-`mp3_items.tags` is **derived and readonly in the admin UI**; it is rebuilt from
-scratch on every run. Hand-added tags go in **`tags_curated`**, which the flow
-reads and never writes, and merges into `tags`.
+Derived tags are **rebuilt from scratch on every run**. Hand-added tags go in
+**`tags_curated`**, a json column on the item that the flow reads and never
+writes, and merges into the derived set.
 
-Two columns rather than one, because the obvious single-column merge is wrong:
-folding each new derived set into whatever `tags` already held would let derived
+Two places rather than one, because the obvious single-store merge is wrong:
+folding each new derived set into whatever was already there would let derived
 tags only ever accumulate. A facility the model stops identifying — or one the
 gate starts rejecting — would linger in the index forever with nothing able to
 retract it, so re-running would entrench old mistakes instead of correcting them.
-Rebuilding `tags` wholesale keeps derivation authoritative for itself; keeping
-human input in its own column keeps it safe from that rebuild.
+Rebuilding wholesale keeps derivation authoritative for itself; keeping human
+input in its own column keeps it safe from that rebuild.
 
 Curated values are stored verbatim — not slugged, not namespaced — since a
-curator may need vocabulary this module has never heard of.
+curator may need vocabulary this module has never heard of. `split_tag()`
+therefore has to cope with an un-namespaced tag, and records it as
+`namespace = NULL`.
 
-### Indexes
+### Re-deriving without inference
 
-`tags` carries two GIN indexes, because two query shapes reach it and indexing
-for one does nothing for the other:
+Tags are a pure function of `parties` plus `tags_curated`, so changing
+`tags.py` or `vocab.py` — a new facility alias, a topic added to the
+vocabulary, a callsign that normalises differently — makes every stored tag
+stale without making a single `parties` block wrong.
 
-| Query | Index |
-|---|---|
-| Directus `filter[tags][_contains]=…` → `LIKE '%…%'` | `idx_mp3_items_tags_trgm` (pg_trgm) |
-| `@> '["facility:zbw"]'` from SQL | `idx_mp3_items_tags_jsonb` (jsonb_path_ops) |
-
-Both are declared in `packages/backend/seed.mjs`'s `TAG_INDEX_SQL`. At the
-corpus's present size the planner picks a sequential scan anyway; they matter if
-the tag index ever backs a user-facing search.
+The **`rebuild-tags`** flow re-derives the whole corpus from stored `parties`.
+It reads no transcripts and calls no model, so correcting derivation costs
+nothing but the writes. `identify-parties` is only needed when the *parties*
+themselves must change.
 
 ## Operating it
 
