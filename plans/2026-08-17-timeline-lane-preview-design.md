@@ -85,6 +85,17 @@ computing them in the browser: 576 clips are under 5 minutes, but 179 position
 tapes run up to 6.75 hours, and decoding one of those client-side would download
 hundreds of megabytes and freeze the tab.
 
+**A radio entry names a station, not a file.** `MediaEntry.itemId` is a station
+slug (`Providers/Playlist/playlistTypes.ts`), so an entry is a station plus a
+window, and that window may contain several recordings or none. The preview is
+therefore assembled from whatever aired in the window, each recording drawn at
+its own time position — the same time-positioned shape as the thumbnail strip.
+
+One consequence for the sticky rule above: the radio preview is **not** sticky.
+A thumbnail strip is a summary, so it should stay in view; a waveform laid out
+by time is a positioned overlay, and pinning it would slide it out of alignment
+with the timeline it describes.
+
 So peaks are precomputed offline and stored on the row:
 
 - **`video_grabber/peaks/extract.py`** — pure. ffprobe for duration, ffmpeg to
@@ -102,13 +113,21 @@ benefit at preview size.
 ## Components
 
 ```
-PlaylistTimeline.tsx      existing — tracks expandedUid, renders <LanePreview>
-  LanePreview.tsx         new — dispatches on entry.app; owns the sticky wrapper
-    ThumbnailStrip.tsx    new — renders the derived bucket list
-    PeaksWaveform.tsx     new — draws 480 peaks to a canvas
-  mediaSections.ts        new — MEDIA_SECTIONS lifted out of PlaylistEditorMain
+PlaylistTimeline.tsx      existing — renders <LanePreview> for the selected bar
+  LanePreview.tsx         new — dispatches on the bar's `group`
+    (TV branch)           sticky thumbnail strip, derived bucket list
+    RadioLanePreview      time-positioned waveform slots (NOT sticky)
+      PeaksWaveform.tsx   new — draws 480 peaks to a canvas
+      usePeaksForSpan.ts  new — recordings overlapping the entry's window
   thumbnailBuckets.ts     new — pure: (span, width, tileWidth) → timestamps[]
+  timelineLayout.ts       existing — gains fractionToMs, the inverse of
+                          timeToFraction, so a bar's fracs become a time span
 ```
+
+Type discrimination needs no new module: the bar object already carries
+`group: "tv" | "radio" | "flights"`, derived in `timelineLayout.ts` from
+`entry.app` — the same source `MEDIA_SECTIONS` reads. Extracting shared
+predicates would buy no anti-drift guarantee the bar does not already have.
 
 `PeaksWaveform` deliberately does not extend `WaveformVisualizer`. That
 component's substance is Web Audio capture and animation-frame scheduling, none
