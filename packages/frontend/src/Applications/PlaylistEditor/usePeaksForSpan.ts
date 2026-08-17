@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { directusGet } from "./directusQueue";
 
-export type SpanPeaks = { startMs: number; endMs: number; peaks: number[][] };
+export type SpanPeaks = { id: number; startMs: number; endMs: number; peaks: number[][] };
 
 interface Mp3ItemRow {
+	id?: number;
 	start_date?: string;
 	calc_duration?: number;
 	peaks?: number[][];
@@ -20,7 +21,7 @@ interface Mp3ItemRow {
  * `start_date + calc_duration`. That can only be done client-side, which means
  * the server-side half of the predicate has to be a lookback wide enough that
  * no overlapping row is excluded before we see it. The longest recording in the
- * corpus is ~8h20m (`aggregate[max]=calc_duration` = 29 880 s, same date), so
+ * corpus is 8h18m (`aggregate[max]=calc_duration` = 29 880 s, same date), so
  * twelve hours clears it with room to spare; {@link overlappingSpans} then
  * applies the exact test to what comes back.
  */
@@ -28,12 +29,13 @@ const LOOKBACK_MS = 12 * 3_600_000;
 
 /**
  * Row cap. Chosen to be unreachable rather than to truncate: the busiest
- * station in the corpus has 82 rows and the whole `mp3_items` table has 588
- * (production, 2026-08-17), so 200 cannot be hit by one station even over the
- * full ten-day span — while still bounding the payload, which carries a peaks
- * array per row (~340 KB for all 82 `atc` rows). A silent truncation would be
- * indistinguishable from "nothing else aired", which is why the cap is set out
- * of reach instead of being surfaced.
+ * station in the corpus is `AA11` with 98 rows, and the whole `mp3_items` table
+ * has 814 — 588 of which are approved, i.e. visible to this anonymous read
+ * (production, 2026-08-17). So 200 cannot be hit by one station even over the
+ * full ten-day span, while still bounding the payload, which carries a peaks
+ * array per row (~4.1 KB of compact JSON each, ~400 KB for all 98 `AA11`
+ * rows). A silent truncation would be indistinguishable from "nothing else
+ * aired", which is why the cap is set out of reach instead of being surfaced.
  */
 const ROW_LIMIT = 200;
 
@@ -52,6 +54,17 @@ function toMs(value: string): number {
  * `end_date` available there is nothing to reconstruct an extent from, and a
  * zero-length span would render as a `width: 0%` slot: an invisible canvas that
  * looks identical to having drawn nothing, but costs a DOM node and a draw.
+ *
+ * Rows without a numeric `id` are dropped for a third reason: the id is the
+ * slot's React key, and it is the ONLY unique thing about a row here.
+ * `(source, start_date)` is not unique in production — 20 collision groups
+ * across the corpus, 17 of them with differing durations (`UA93 @ 13:34:00` is
+ * three recordings of 26 s, 86 s and 52 s) — so keying on the start instant
+ * hands the reconciler indistinguishable siblings, and the next refetch that
+ * changes the row set duplicates or omits them. `id` is projected explicitly
+ * below and is anonymously readable, so this guard should never fire; it is
+ * here so the uniqueness invariant is enforced where the span is built rather
+ * than assumed where it is drawn.
  */
 export function overlappingSpans(
 	rows: Mp3ItemRow[],
@@ -60,6 +73,7 @@ export function overlappingSpans(
 ): SpanPeaks[] {
 	const out: SpanPeaks[] = [];
 	for (const d of rows) {
+		if (typeof d.id !== "number") continue;
 		if (typeof d.start_date !== "string") continue;
 		if (!Array.isArray(d.peaks) || d.peaks.length === 0) continue;
 		const duration = d.calc_duration;
@@ -67,7 +81,7 @@ export function overlappingSpans(
 		const startMs = toMs(d.start_date);
 		const endMs = startMs + duration * 1000;
 		if (endMs < windowStartMs || startMs > windowEndMs) continue;
-		out.push({ startMs, endMs, peaks: d.peaks });
+		out.push({ id: d.id, startMs, endMs, peaks: d.peaks });
 	}
 	return out;
 }
@@ -117,7 +131,9 @@ export function usePeaksForSpan(
 			// URLSearchParams, never concatenation: a slug can contain a slash
 			// (`NEADS/NORAD`) or other URL-significant characters.
 			"filter[start_date][_between]": `${new Date(startMs - LOOKBACK_MS).toISOString()},${new Date(endMs).toISOString()}`,
-			fields: "start_date,calc_duration,peaks",
+			// `id` is not decoration: it is the only unique identity a row has
+			// here, and the slots' React key. See {@link overlappingSpans}.
+			fields: "id,start_date,calc_duration,peaks",
 			limit: String(ROW_LIMIT),
 			sort: "start_date",
 		});

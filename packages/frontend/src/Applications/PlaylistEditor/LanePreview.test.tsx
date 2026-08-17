@@ -85,9 +85,9 @@ describe("LanePreview", () => {
 
 	it("positions each waveform slot against the timeline bounds, not the visible span", async () => {
 		stubFetchJson([
-			{ start_date: "2001-09-11T12:05:00", calc_duration: 60, peaks: [[-5, 5]] },
+			{ id: 11, start_date: "2001-09-11T12:05:00", calc_duration: 60, peaks: [[-5, 5]] },
 			// no peaks yet — compute-peaks hasn't reached this row — dropped
-			{ start_date: "2001-09-11T12:10:00", calc_duration: 60, peaks: [] },
+			{ id: 12, start_date: "2001-09-11T12:10:00", calc_duration: 60, peaks: [] },
 		]);
 		const { container } = render(<LanePreview group="radio" channel="WCBS" {...props} />);
 
@@ -120,9 +120,55 @@ describe("LanePreview", () => {
 		expect(slot.querySelector("canvas")).not.toBeNull();
 	});
 
+	it("draws every recording that shares a start time, once each, across a refetch", async () => {
+		// `(station, start_date)` is NOT unique in production: 20 collision groups
+		// across the corpus, 17 of them with differing durations. `UA93 @
+		// 2001-09-11T13:34:00` is three rows (451/452/453) of 26 s, 86 s and 52 s.
+		// Keyed on the start instant, the three slots are indistinguishable to
+		// React's reconciler.
+		const rows = [
+			// Ends at 12:01, so it drops out of the window in the second pass
+			// below — an edge drag that moves the entry's start past it.
+			{ id: 300, start_date: "2001-09-11T12:00:00", calc_duration: 60, peaks: [[-1, 1]] },
+			{ id: 451, start_date: "2001-09-11T12:05:00", calc_duration: 26, peaks: [[-5, 5]] },
+			{ id: 452, start_date: "2001-09-11T12:05:00", calc_duration: 86, peaks: [[-6, 6]] },
+			{ id: 453, start_date: "2001-09-11T12:05:00", calc_duration: 52, peaks: [[-7, 7]] },
+		];
+		stubFetchJson(rows);
+		const { container, rerender } = render(<LanePreview group="radio" channel="UA93" {...props} />);
+
+		// Each slot's width IS its recording's duration (as a fraction of the
+		// ten-day track), so distinct durations make a lost or duplicated slot
+		// legible rather than hiding behind three identical boxes.
+		const slotDurationsSec = () =>
+			[...container.querySelectorAll<HTMLElement>(".playlistTimelineWaveformSlot")].map(
+				(s) => Math.round((parseFloat(s.style.width) / 100) * TRACK_MS) / 1000,
+			);
+
+		await waitFor(() => expect(slotDurationsSec()).toEqual([60, 26, 86, 52]));
+
+		// Commit an edge drag that starts the entry after the 12:00 recording. The
+		// refetch returns the same rows; overlappingSpans drops the first. That
+		// breaks the reconciler's lockstep at index 0, which is exactly where a
+		// non-unique key stops being a warning and starts producing wrong DOM:
+		// React cannot match the surviving duplicates to their previous fibers, so
+		// the stale ones are neither reused nor deleted and the list ends up
+		// [26, 86, 26, 86, 52] — the same audio painted twice.
+		rerender(
+			<LanePreview
+				group="radio"
+				channel="UA93"
+				{...props}
+				entryStartMs={Date.UTC(2001, 8, 11, 12, 3)}
+			/>,
+		);
+		await drainDirectusQueue();
+		expect(slotDurationsSec()).toEqual([26, 86, 52]);
+	});
+
 	it("does not refetch when the visible span moves under an unchanged entry", async () => {
 		const spy = stubFetchJson([
-			{ start_date: "2001-09-11T12:05:00", calc_duration: 60, peaks: [[-5, 5]] },
+			{ id: 11, start_date: "2001-09-11T12:05:00", calc_duration: 60, peaks: [[-5, 5]] },
 		]);
 		const { container, rerender } = render(<LanePreview group="radio" channel="WCBS" {...props} />);
 		await waitFor(() =>

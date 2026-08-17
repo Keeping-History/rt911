@@ -14,13 +14,9 @@ describe("usePeaksForSpan", () => {
 		const fetchFn = vi.fn(async () =>
 			jsonResponse({
 				data: [
-					{
-						start_date: "2001-09-11T12:00:00",
-						calc_duration: 30,
-						peaks: [[-10, 10]],
-					},
+					{ id: 901, start_date: "2001-09-11T12:00:00", calc_duration: 30, peaks: [[-10, 10]] },
 					// no peaks yet (compute-peaks hasn't reached this row) — dropped
-					{ start_date: "2001-09-11T12:01:00", calc_duration: 20, peaks: [] },
+					{ id: 902, start_date: "2001-09-11T12:01:00", calc_duration: 20, peaks: [] },
 				],
 			}),
 		);
@@ -31,10 +27,16 @@ describe("usePeaksForSpan", () => {
 
 		await waitFor(() => expect(result.current).toHaveLength(1));
 		expect(result.current[0]).toEqual({
+			id: 901,
 			startMs: WINDOW_START,
 			endMs: WINDOW_START + 30_000,
 			peaks: [[-10, 10]],
 		});
+		// The row id is what keys the rendered slot, so the query has to ask for
+		// it — without the projection every span would arrive id-less.
+		expect(decodeURIComponent(String((fetchFn.mock.calls[0] as unknown[])[0]))).toContain(
+			"fields=id,start_date,calc_duration,peaks",
+		);
 	});
 
 	it("includes a recording that started before the window and runs into it", async () => {
@@ -45,9 +47,9 @@ describe("usePeaksForSpan", () => {
 		const fetchFn = vi.fn(async () =>
 			jsonResponse({
 				data: [
-					{ start_date: "2001-09-11T11:50:00", calc_duration: 1800, peaks: [[-3, 3]] },
+					{ id: 903, start_date: "2001-09-11T11:50:00", calc_duration: 1800, peaks: [[-3, 3]] },
 					// Ends five minutes before the window opens: no overlap, dropped.
-					{ start_date: "2001-09-11T11:50:00", calc_duration: 300, peaks: [[-9, 9]] },
+					{ id: 904, start_date: "2001-09-11T11:50:00", calc_duration: 300, peaks: [[-9, 9]] },
 				],
 			}),
 		);
@@ -112,24 +114,32 @@ describe("overlappingSpans", () => {
 	it("keeps a row that straddles either edge and drops one that misses entirely", () => {
 		const rows = [
 			// straddles the start
-			{ start_date: "2001-09-11T11:50:00", calc_duration: 1800, peaks: [[-1, 1]] },
+			{ id: 905, start_date: "2001-09-11T11:50:00", calc_duration: 1800, peaks: [[-1, 1]] },
 			// straddles the end
-			{ start_date: "2001-09-11T12:25:00", calc_duration: 1800, peaks: [[-2, 2]] },
+			{ id: 906, start_date: "2001-09-11T12:25:00", calc_duration: 1800, peaks: [[-2, 2]] },
 			// wholly before
-			{ start_date: "2001-09-11T11:00:00", calc_duration: 60, peaks: [[-3, 3]] },
+			{ id: 907, start_date: "2001-09-11T11:00:00", calc_duration: 60, peaks: [[-3, 3]] },
 			// wholly after
-			{ start_date: "2001-09-11T13:00:00", calc_duration: 60, peaks: [[-4, 4]] },
+			{ id: 908, start_date: "2001-09-11T13:00:00", calc_duration: 60, peaks: [[-4, 4]] },
 		];
 		expect(overlappingSpans(rows, WINDOW_START, WINDOW_END).map((s) => s.peaks[0][1])).toEqual([
 			1, 2,
 		]);
 	});
 
+	it("drops a row with no id, since the id is the slot's only unique key", () => {
+		const rows = [
+			{ start_date: "2001-09-11T12:05:00", calc_duration: 10, peaks: [[-1, 1]] },
+			{ id: 920, start_date: "2001-09-11T12:05:00", calc_duration: 20, peaks: [[-2, 2]] },
+		];
+		expect(overlappingSpans(rows, WINDOW_START, WINDOW_END).map((s) => s.id)).toEqual([920]);
+	});
+
 	it("drops rows with no usable duration rather than emitting a zero-width slot", () => {
 		const rows = [
-			{ start_date: "2001-09-11T12:05:00", peaks: [[-1, 1]] },
-			{ start_date: "2001-09-11T12:06:00", calc_duration: 0, peaks: [[-2, 2]] },
-			{ start_date: "2001-09-11T12:07:00", calc_duration: 10, peaks: [[-3, 3]] },
+			{ id: 909, start_date: "2001-09-11T12:05:00", peaks: [[-1, 1]] },
+			{ id: 910, start_date: "2001-09-11T12:06:00", calc_duration: 0, peaks: [[-2, 2]] },
+			{ id: 911, start_date: "2001-09-11T12:07:00", calc_duration: 10, peaks: [[-3, 3]] },
 		];
 		const spans = overlappingSpans(rows, WINDOW_START, WINDOW_END);
 		expect(spans).toHaveLength(1);

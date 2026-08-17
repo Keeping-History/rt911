@@ -237,6 +237,12 @@ $lane-bar-height: 20px;
 	// the canvas has an explicit pixel height, and stretching it to a
 	// differently-sized CSS box would distort the drawn envelope.
 	height: 40px;
+	// Undoes .playlistTimelinePreview's `padding: 2px 0`. There is no global
+	// `box-sizing: border-box` in this app, so that padding is ADDED to the
+	// 40px: the padding box becomes 44px, the slot's `height: 100%` resolves
+	// against it, and the 40px canvas bitmap gets upscaled ~10% vertically —
+	// exactly the distortion the height above exists to prevent.
+	padding: 0;
 	margin-top: $lane-bar-height;
 	// The slots are positioned in TRACK time, and a recording can overrun the
 	// timeline bounds at either end (it is drawn at its true extent so the

@@ -133,7 +133,11 @@ function RadioLanePreview({
 				const rightFrac = msToFraction(s.endMs, bounds);
 				return (
 					<div
-						key={s.startMs}
+						// The row id, never the start instant: `(station,
+						// start_date)` is not unique in production, and two
+						// recordings sharing a key make the reconciler duplicate or
+						// omit slots the next time the row set changes.
+						key={s.id}
 						className="playlistTimelineWaveformSlot"
 						style={{
 							left: `${leftFrac * 100}%`,
