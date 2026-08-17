@@ -8,10 +8,12 @@ import {
 	useState,
 } from "react";
 import type { EditorEntry } from "./editorState";
+import { LanePreview } from "./LanePreview";
 import "./PlaylistEditor.scss";
 import { resolveTimelineMeta } from "./resolveTimelineMeta";
 import {
 	dragEdgeIso,
+	fractionToMs,
 	layoutBars,
 	layoutFlags,
 	MAX_ZOOM,
@@ -96,6 +98,22 @@ export function PlaylistTimeline({
 	const anchorRef = useRef<number | null>(null);
 	const [drag, setDrag] = useState<EdgeDrag | null>(null);
 	const lastDragXRef = useRef(0);
+	const [viewportPx, setViewportPx] = useState(0);
+
+	// The lane preview needs to know how many thumbnails fit on screen. Reuses
+	// viewportRef (already held for zoom anchoring) rather than a second ref;
+	// clientWidth stays 0 under jsdom (no layout), same as elsewhere in this
+	// file, so the preview simply renders nothing in tests unless a test
+	// supplies its own width.
+	useEffect(() => {
+		const el = viewportRef.current;
+		if (!el) return;
+		setViewportPx(el.clientWidth);
+		if (typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(() => setViewportPx(el.clientWidth));
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, []);
 
 	// Zoom about the middle of what the user is currently looking at. Without
 	// this, widening the track keeps scrollLeft fixed and the view lurches
@@ -368,6 +386,15 @@ export function PlaylistTimeline({
 										>
 											<span className="playlistTimelineLabel">{b.label}</span>
 										</div>
+										{b.uid === selectedUid && (
+											<LanePreview
+												group={b.group}
+												channel={b.label}
+												startMs={fractionToMs(startFrac, bounds)}
+												endMs={fractionToMs(endFrac, bounds)}
+												viewportPx={viewportPx}
+											/>
+										)}
 									</div>
 								);
 							})}

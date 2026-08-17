@@ -123,7 +123,7 @@
 
 .playlistTimelineLane {
 	position: relative;
-	height: 20px;
+	min-height: 20px;
 }
 
 .playlistTimelineBar {
@@ -185,6 +185,22 @@
 	position: absolute;
 	top: 0;
 	height: 100%;
+}
+
+/* Sticky for the same reason .playlistTimelineLabel is — see the note there.
+ * The lane is zoom*100% wide, so anything anchored to its left edge sits
+ * off-screen the moment the user scrolls. */
+.playlistTimelinePreview {
+	position: sticky;
+	left: 0;
+	display: flex;
+	gap: 2px;
+	padding: 2px 0;
+}
+
+.playlistTimelinePreviewThumb {
+	height: 54px;
+	width: auto;
 }
 
 /* Add Settings dropdown: the div only anchors position measurement; the menu
