@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { directusGet } from "./directusQueue";
 
 export type SpanPeaks = { startMs: number; endMs: number; peaks: number[][] };
@@ -9,10 +9,67 @@ interface Mp3ItemRow {
 	peaks?: number[][];
 }
 
+/**
+ * How far back of the window the query reaches to catch a recording that was
+ * already playing when the window opened.
+ *
+ * The overlap predicate we actually want is `start_date <= windowEnd AND
+ * end_date >= windowStart`, but `mp3_items.end_date` is not in the anonymous
+ * read policy (verified against production 2026-08-17: both projecting and
+ * filtering on it return FORBIDDEN), so the end has to be reconstructed from
+ * `start_date + calc_duration`. That can only be done client-side, which means
+ * the server-side half of the predicate has to be a lookback wide enough that
+ * no overlapping row is excluded before we see it. The longest recording in the
+ * corpus is ~8h20m (`aggregate[max]=calc_duration` = 29 880 s, same date), so
+ * twelve hours clears it with room to spare; {@link overlappingSpans} then
+ * applies the exact test to what comes back.
+ */
+const LOOKBACK_MS = 12 * 3_600_000;
+
+/**
+ * Row cap. Chosen to be unreachable rather than to truncate: the busiest
+ * station in the corpus has 82 rows and the whole `mp3_items` table has 588
+ * (production, 2026-08-17), so 200 cannot be hit by one station even over the
+ * full ten-day span — while still bounding the payload, which carries a peaks
+ * array per row (~340 KB for all 82 `atc` rows). A silent truncation would be
+ * indistinguishable from "nothing else aired", which is why the cap is set out
+ * of reach instead of being surfaced.
+ */
+const ROW_LIMIT = 200;
+
 /** Parse a Directus/UTC datetime string to epoch ms (append Z when tz-less). */
 function toMs(value: string): number {
 	const s = /Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`;
 	return new Date(s).getTime();
+}
+
+/**
+ * The rows that actually overlap `[windowStartMs, windowEndMs]`, as spans.
+ *
+ * Rows without an envelope are dropped: `peaks` is nullable and the backfill is
+ * still running, and a missing preview is meant to be quiet. Rows without a
+ * positive `calc_duration` are dropped for a different reason — with no
+ * `end_date` available there is nothing to reconstruct an extent from, and a
+ * zero-length span would render as a `width: 0%` slot: an invisible canvas that
+ * looks identical to having drawn nothing, but costs a DOM node and a draw.
+ */
+export function overlappingSpans(
+	rows: Mp3ItemRow[],
+	windowStartMs: number,
+	windowEndMs: number,
+): SpanPeaks[] {
+	const out: SpanPeaks[] = [];
+	for (const d of rows) {
+		if (typeof d.start_date !== "string") continue;
+		if (!Array.isArray(d.peaks) || d.peaks.length === 0) continue;
+		const duration = d.calc_duration;
+		if (typeof duration !== "number" || !(duration > 0)) continue;
+		const startMs = toMs(d.start_date);
+		const endMs = startMs + duration * 1000;
+		if (endMs < windowStartMs || startMs > windowEndMs) continue;
+		out.push({ startMs, endMs, peaks: d.peaks });
+	}
+	return out;
 }
 
 /**
@@ -24,6 +81,13 @@ function toMs(value: string): number {
  * is assembled from whatever aired in the window — zero, one, or several
  * recordings, each drawn at its own time position — the same shape as the TV
  * thumbnail strip, which is also time-positioned rather than item-positioned.
+ *
+ * The span is the entry's own COMMITTED window, never the scroll viewport's.
+ * Keying it on what is visible fired a fresh request per scroll frame, and
+ * `directusGet` has no abort — the queue is a module-global FIFO, so a pan
+ * parked ~60 unabortable requests in front of every other editor REST call.
+ * The entry's window changes on selection and on an edge-drag commit, which is
+ * exactly how often this should refetch.
  *
  * `mp3_items.source` is a relation to the station; filtering on
  * `source.slug` (not `source` itself) is required for the same reason
@@ -37,32 +101,30 @@ export function usePeaksForSpan(
 ): SpanPeaks[] {
 	const [rows, setRows] = useState<SpanPeaks[]>([]);
 
+	// Held in a ref, and deliberately NOT an effect dependency: callers pass an
+	// injected fetch for tests, and an inline lambda (or a stubbed global) is a
+	// new identity every render, which would refetch on every render forever.
+	// The effect below only ever reads it at fire time.
+	const fetchRef = useRef(fetchFn);
+	useEffect(() => {
+		fetchRef.current = fetchFn;
+	}, [fetchFn]);
+
 	useEffect(() => {
 		let alive = true;
 		const qs = new URLSearchParams({
 			"filter[source][slug][_eq]": station,
-			"filter[start_date][_between]": `${new Date(startMs).toISOString()},${new Date(endMs).toISOString()}`,
+			// URLSearchParams, never concatenation: a slug can contain a slash
+			// (`NEADS/NORAD`) or other URL-significant characters.
+			"filter[start_date][_between]": `${new Date(startMs - LOOKBACK_MS).toISOString()},${new Date(endMs).toISOString()}`,
 			fields: "start_date,calc_duration,peaks",
-			limit: "20",
+			limit: String(ROW_LIMIT),
 			sort: "start_date",
 		});
-		directusGet(`/items/mp3_items?${qs.toString()}`, fetchFn)
+		directusGet(`/items/mp3_items?${qs.toString()}`, fetchRef.current)
 			.then((data) => {
 				if (!alive) return;
-				setRows(
-					(data as Mp3ItemRow[])
-						.filter((d): d is Mp3ItemRow & { start_date: string; peaks: number[][] } =>
-							typeof d.start_date === "string" && Array.isArray(d.peaks) && d.peaks.length > 0,
-						)
-						.map((d) => {
-							const start = toMs(d.start_date);
-							return {
-								startMs: start,
-								endMs: start + (d.calc_duration ?? 0) * 1000,
-								peaks: d.peaks,
-							};
-						}),
-				);
+				setRows(overlappingSpans(data as Mp3ItemRow[], startMs, endMs));
 			})
 			.catch(() => {
 				// A failed preview stays quiet rather than surfacing an error state.
@@ -71,7 +133,7 @@ export function usePeaksForSpan(
 		return () => {
 			alive = false;
 		};
-	}, [station, startMs, endMs, fetchFn]);
+	}, [station, startMs, endMs]);
 
 	return rows;
 }

@@ -238,6 +238,11 @@ $lane-bar-height: 20px;
 	// differently-sized CSS box would distort the drawn envelope.
 	height: 40px;
 	margin-top: $lane-bar-height;
+	// The slots are positioned in TRACK time, and a recording can overrun the
+	// timeline bounds at either end (it is drawn at its true extent so the
+	// envelope stays aligned with the audio it depicts). Clip at the track edge
+	// rather than letting a slot paint into the scroll overflow.
+	overflow: hidden;
 }
 
 .playlistTimelineWaveformSlot {
@@ -251,8 +256,12 @@ $lane-bar-height: 20px;
 	display: block;
 	width: 100%;
 	height: 100%;
-	/* fillStyle: "currentColor" in PeaksWaveform picks up whatever text color
-	 * this inherits from the lane — no override needed here. */
+	/* PeaksWaveform resolves the drawing color with getComputedStyle().color,
+	 * so the envelope follows whatever `color` this element inherits from the
+	 * lane — set one here if the waveform ever needs its own. It cannot be done
+	 * by assigning "currentColor" to the canvas fillStyle: that is a CSS
+	 * keyword, not a color a canvas context parses, and the assignment is
+	 * dropped silently, leaving everything painted #000. */
 }
 
 /* Add Settings dropdown: the div only anchors position measurement; the menu
