@@ -6,6 +6,7 @@ import {
 import {newspaperEntries} from "./NewspaperFiles";
 import {pageShortcutEntries} from "./pageShortcuts";
 import {photoEntries} from "./PhotoFiles"
+import {GETTING_STARTED_FILE} from "./stackShortcuts";
 import {voicesOf911Entries} from "./VideoFiles";
 
 // HyperCard stack documents ship in public/stacks/ and are served by the
@@ -33,7 +34,12 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 		// The interactive user-guide tour, served from public/stacks/. Finder
 		// routes Stack-type files to HyperCard via its handlesFileTypes
 		// registration — double-clicking this opens the guide in HyperCard.
-		"Getting Started.stack": {
+		//
+		// Keyed off the shared constant because the desktop shortcut addresses
+		// this same file by path (see stackShortcuts.ts): renaming the entry
+		// here without updating that path would leave the icon pointing at
+		// nothing, and a shortcut that resolves to nothing fails silently.
+		[GETTING_STARTED_FILE]: {
 			_type: ClassicyFileSystemEntryFileType.Stack,
 			_mimeType: "application/json",
 			_icon: ClassicyIcons.system.files.document,
