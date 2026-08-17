@@ -215,3 +215,52 @@ test("selected TV lane's thumbnail strip stays visible when the timeline is scro
 		})
 		.toEqual({ insideLeft: true, insideRight: true, narrowerThanView: true });
 });
+
+/**
+ * Regression test for the zoom effect's re-measure being gated behind the
+ * anchor === null early return in PlaylistTimeline.tsx's zoom useLayoutEffect.
+ * The +/- toolbar buttons go through changeZoom, which always sets anchorRef
+ * and therefore always reached measureView() — this test deliberately drives
+ * the OTHER path instead: View ▸ Zoom In dispatches setZoom directly
+ * (PlaylistDocumentWindow.tsx's documentViewMenu wiring) and never touches
+ * anchorRef, so it used to return before measureView() ran. That left `view`
+ * (and therefore visibleFrac, and therefore the strip's sampled window) stuck
+ * at the pre-zoom scrollWidth, so the thumbnail strip would have been mounted
+ * with an identical startMs/endMs before and after this zoom — this asserts
+ * the srcs actually change instead.
+ */
+test("View ▸ Zoom In narrows the selected TV lane's sampled preview window", async ({ page }) => {
+	// A 1x1 GIF for every thumbnail, same as the geometry test above — an e2e
+	// run must not depend on Wasabi being reachable.
+	await page.route("**/thumbnails/**", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "image/gif",
+			body: Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"),
+		}),
+	);
+	await openPlaylistWithEntries(page, [{ kind: "media", app: "tv", itemId: "cnn" }]);
+
+	await page.locator(".playlistTimelineBar").first().click({ position: { x: 20, y: 8 } });
+	const strip = page.locator(".playlistTimelinePreview");
+	await expect(strip).toBeVisible();
+
+	const thumbSrcs = () =>
+		strip
+			.locator(".playlistTimelinePreviewThumb")
+			.evaluateAll((imgs) => imgs.map((img) => img.getAttribute("src")));
+
+	const before = await thumbSrcs();
+	expect(before.length).toBeGreaterThan(0);
+
+	// Deliberately the View menu, not the "Zoom in" toolbar button: that button
+	// calls changeZoom, which always sets anchorRef and so always reached the
+	// re-measure even before the fix. Only the menu path (setZoom dispatched
+	// directly) exercises the bug.
+	await page.getByRole("menuitem", { name: "View" }).click();
+	await page.getByRole("menuitem", { name: "Zoom In", exact: true }).click();
+
+	// Polled: the strip's inputs come from a useLayoutEffect-driven measure, not
+	// an immediate synchronous update the first read is guaranteed to see.
+	await expect.poll(thumbSrcs).not.toEqual(before);
+});

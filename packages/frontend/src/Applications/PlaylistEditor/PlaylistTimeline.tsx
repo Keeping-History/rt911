@@ -192,11 +192,16 @@ export function PlaylistTimeline({
 		const el = viewportRef.current;
 		const anchor = anchorRef.current;
 		anchorRef.current = null;
+		// Every zoom change needs a re-measure, not just the anchor-driven ones:
+		// the ± buttons set anchorRef via changeZoom, but View ▸ Zoom In/Out and
+		// Actual Size dispatch setZoom directly and never touch it, so this has
+		// to run before the anchor === null early return below or the lane
+		// preview keeps sampling the pre-zoom scrollWidth.
+		measureView();
 		// scrollWidth is 0 under jsdom, so this is a no-op in tests rather than
 		// writing NaN into scrollLeft.
 		if (!el || anchor === null || el.scrollWidth === 0) return;
 		el.scrollLeft = anchor * el.scrollWidth - el.clientWidth / 2;
-		measureView();
 	}, [zoom, measureView]);
 
 	// The window onto the track, as track fractions — the same 0…1 space bars
