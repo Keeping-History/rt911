@@ -254,8 +254,19 @@
 	box-sizing: border-box;
 }
 
-.playlistMediaCardLabel {
-	font-size: calc(var(--ui-font-size) * 0.85);
+/* The call sign is a ClassicyControlLabel, which renders its own holder +
+ * <label> and takes no className — so the card's treatment is scoped onto
+ * those instead. Two library defaults are deliberately undone here: the
+ * holder's narrow-viewport `display: none` (the call sign is the only thing
+ * identifying a card, so it must never disappear) and the label's side
+ * margin, which would push the text off-centre under the logo. */
+.playlistMediaCard .classicyControlLabelHolder {
+	display: flex;
+	max-width: 72px;
+}
+
+.playlistMediaCard .classicyControlLabel {
+	margin: 0;
 	max-width: 72px;
 	overflow: hidden;
 	text-overflow: ellipsis;

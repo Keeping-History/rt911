@@ -1,4 +1,4 @@
-import { ClassicyButton } from "classicy";
+import { ClassicyButton, ClassicyControlLabel } from "classicy";
 import type { MediaEntry } from "../../Providers/Playlist/playlistTypes";
 import type { EditorEntry } from "./editorState";
 import { playlistEditorIcons } from "./playlistIcons";
@@ -55,7 +55,7 @@ export function MediaCardRow({
 						) : (
 							<div className="playlistMediaCardLogo" />
 						)}
-						<span className="playlistMediaCardLabel">{label}</span>
+						<ClassicyControlLabel label={label} labelSize="small" />
 						<div className="playlistMediaCardButtons">
 							<ClassicyButton
 								buttonShape="square"
