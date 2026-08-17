@@ -38,8 +38,11 @@ vi.mock("./PlaylistEditorProvider", () => ({
 
 import { PlaylistList } from "./PlaylistList";
 
+// Midday UTC on purpose: the Modified column renders a real local timestamp,
+// so a midnight fixture would land on the previous day in any negative-offset
+// zone and make the assertions below timezone-dependent.
 const rows = [
-	{ id: "p1", title: "Lesson One", status: "draft", date_updated: "2026-07-16T00:00:00Z", user_created: "u1" },
+	{ id: "p1", title: "Lesson One", status: "draft", date_updated: "2026-07-16T12:00:00Z", user_created: "u1" },
 	{ id: "p2", title: "Lesson Two", status: "published", date_updated: null, user_created: "u1" },
 ];
 
@@ -156,6 +159,64 @@ describe("PlaylistList", () => {
 		expect(screen.queryByRole("button", { name: "Copy Link" })).toBeNull();
 		fireEvent.click(screen.getByText("Lesson Two"));
 		expect(screen.getByRole("button", { name: "Copy Link" })).not.toBeNull();
+	});
+
+	// The list is a Platinum table (the Drive Setup control panel's list view),
+	// not a bare row of buttons: name, status and last-modified are columns.
+	it("renders the playlists as a table with name, status and modified columns", async () => {
+		render(<PlaylistList meId="u1" onOpen={() => {}} />);
+		await screen.findByText("Lesson One");
+		// Matched loosely: the sorted column's header also carries a sort-arrow
+		// image whose alt text joins its accessible name.
+		for (const header of [/^Name/, /^Status/, /^Date Modified/]) {
+			expect(screen.getByRole("columnheader", { name: header })).not.toBeNull();
+		}
+		expect(
+			screen.getByRole("columnheader", { name: /^Date Modified/ }).getAttribute("aria-sort"),
+		).toBe("descending");
+		expect(screen.getAllByRole("row").length).toBeGreaterThan(rows.length);
+	});
+
+	it("shows the status readably and the modified date as a real local timestamp", async () => {
+		render(<PlaylistList meId="u1" onOpen={() => {}} />);
+		expect(await screen.findByText("Draft")).not.toBeNull();
+		expect(screen.getByText("Published")).not.toBeNull();
+		// Whatever the runner's zone, a midday-UTC instant stays on its own day.
+		expect(screen.getByText(/2026/)).not.toBeNull();
+		expect(screen.queryByText("2026-07-16T12:00:00Z")).toBeNull();
+		// A playlist that has never been saved has no date to show.
+		expect(screen.getByText("—")).not.toBeNull();
+	});
+
+	// The headline gesture of this window: double-click opens, exactly as the
+	// Open button does, so the two can never drift apart.
+	it("opens a playlist on double-click", async () => {
+		const record = { ...rows[0], definition: { version: 1, mode: "restrict", entries: [] } };
+		api.getPlaylist.mockResolvedValue(record);
+		const onOpen = vi.fn();
+		render(<PlaylistList meId="u1" onOpen={onOpen} />);
+		fireEvent.doubleClick(await screen.findByText("Lesson One"));
+		await waitFor(() => expect(onOpen).toHaveBeenCalledWith(record));
+		expect(api.getPlaylist).toHaveBeenCalledWith("p1");
+	});
+
+	it("reports a failed open from a double-click instead of failing silently", async () => {
+		api.getPlaylist.mockRejectedValue(new Error("nope"));
+		const onOpen = vi.fn();
+		render(<PlaylistList meId="u1" onOpen={onOpen} />);
+		fireEvent.doubleClick(await screen.findByText("Lesson One"));
+		await waitFor(() =>
+			expect(document.querySelector(".playlistListError")).not.toBeNull(),
+		);
+		expect(onOpen).not.toHaveBeenCalled();
+	});
+
+	it("tells a teacher with no playlists that the list is empty", async () => {
+		api.listMine.mockResolvedValue([]);
+		render(<PlaylistList meId="u1" onOpen={() => {}} />);
+		expect(await screen.findByText("No playlists yet.")).not.toBeNull();
+		// The table chrome stays put so the window does not collapse to nothing.
+		expect(screen.getByRole("columnheader", { name: "Name" })).not.toBeNull();
 	});
 
 	it("calls auth refresh when listMine rejects with AuthRequiredError", async () => {

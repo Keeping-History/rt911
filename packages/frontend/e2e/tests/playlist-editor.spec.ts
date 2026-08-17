@@ -60,10 +60,11 @@ test("signed-in teacher creates and saves a playlist", async ({ page }) => {
 
 	await page.goto("/");
 	await page.getByRole("button", { name: "Playlists" }).dblclick();
-	// The list window's heading, specifically: "My Playlists" is also the text
+	// Scoped to the list window's own content: "My Playlists" is also the text
 	// of the Window menu's item for that window, so a bare getByText is
-	// ambiguous now that the app has a Window menu.
-	const listHeading = page.getByRole("heading", { name: "My Playlists" });
+	// ambiguous now that the app has a Window menu. (It is a control label
+	// beside the playlists table now, not a heading.)
+	const listHeading = page.locator(".playlistList").getByText("My Playlists");
 	await expect(listHeading).toBeVisible();
 
 	await page.getByRole("button", { name: "New", exact: true }).click();
