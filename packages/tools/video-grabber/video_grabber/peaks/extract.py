@@ -23,20 +23,28 @@ def peaks_from_pcm(samples: bytes, buckets: int = PEAK_BUCKETS) -> list[list[int
     32767 >> 8 == 127 — the full signed 16-bit range maps onto -128..127
     without a separate branch for negative values.
 
-    The corpus's longest tape is 6.75 hours (~194 MB of 8 kHz mono PCM,
-    ~97M samples). `struct.unpack` would box every sample as a Python int in
-    a tuple — ~16x the raw byte size, multi-GB peak RSS on that one file.
-    `array("h", ...)` stores samples as packed machine shorts (~2x the raw
-    bytes) while still supporting the slicing the bucket loop below relies on.
-    `array` uses native byte order, unlike `struct`'s explicit `<h`, so a
-    big-endian host needs an explicit byteswap to preserve the little-endian
-    contract ffmpeg is asked for.
+    The corpus's longest tape is 6.75 hours: at 8 kHz mono that's ~194M
+    samples, ~389 MB of 16-bit PCM (2 bytes/sample — samples and bytes are
+    not the same number). `struct.unpack` would box every sample as a Python
+    int in a tuple — ~16x the raw byte size, multi-GB peak RSS on that one
+    file. `array("h")` stores samples as packed machine shorts (same 2
+    bytes/sample as the source) while still supporting the slicing the
+    bucket loop below relies on. Building it via `frombytes` off a
+    `memoryview` slice, rather than slicing the `bytes` object first, avoids
+    one full-size copy: a `bytes` slice copies, a `memoryview` slice does
+    not. The caller's PCM buffer (~389 MB for the largest tape) is still
+    live alongside the array's own copy while this runs, so the honest peak
+    is ~780 MB, not the "under 200 MB" an earlier version of this comment
+    claimed. `array` uses native byte order, unlike `struct`'s explicit
+    `<h`, so a big-endian host needs an explicit byteswap to preserve the
+    little-endian contract ffmpeg is asked for.
     """
     count = len(samples) // 2
     if count == 0:
         return [[0, 0] for _ in range(buckets)]
 
-    values = array("h", samples[: count * 2])
+    values = array("h")
+    values.frombytes(memoryview(samples)[: count * 2])
     if sys.byteorder == "big":
         values.byteswap()
     out: list[list[int]] = []

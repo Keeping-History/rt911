@@ -22,20 +22,33 @@ def should_compute(row: dict, *, force: bool) -> bool:
     return force or not row.get("peaks")
 
 
+# 20 minutes. The longest tape is 6.75h, and ffmpeg decodes audio far faster
+# than realtime (minutes, not hours, even for the longest source) — this
+# leaves generous headroom over any real decode while still bounding a hang
+# on a corrupt/truncated file. `subprocess.TimeoutExpired` is a subclass of
+# `Exception`, so it's caught by compute_peaks_flow's per-row `except
+# Exception`: a timed-out row is counted as failed and the run continues,
+# rather than the whole unattended run wedging on one bad file forever.
+_FFMPEG_TIMEOUT_S = 20 * 60
+
+
 def pcm_for(path: Path) -> bytes:
     """Decode to 8 kHz signed 16-bit little-endian mono.
 
     Plenty for an envelope drawn at preview size, and it keeps a 6.75-hour
-    tape's intermediate buffer under 200 MB rather than several GB at source
-    rate. `capture_output=True` uses `Popen.communicate()` internally, so
-    stdout is read incrementally alongside the process rather than after it
-    exits — the pipe can't fill and deadlock the way a naive
-    `stdout=PIPE` + `.wait()` would on a large decode.
+    tape's PCM buffer to ~389 MB rather than several GB at source rate (e.g.
+    44.1 kHz stereo would be well over 4 GB for the same tape).
+    `capture_output=True` uses `Popen.communicate()` internally, so stdout is
+    read incrementally alongside the process rather than after it exits — the
+    pipe can't fill and deadlock the way a naive `stdout=PIPE` + `.wait()`
+    would on a large decode. `timeout=` guards a different failure mode: a
+    hung or stalled decode on a corrupt/truncated file would otherwise sit
+    forever with nothing raised and the per-row try/except never firing.
     """
     result = subprocess.run(
         ["ffmpeg", "-v", "error", "-i", str(path),
          "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
-        capture_output=True, check=True,
+        capture_output=True, check=True, timeout=_FFMPEG_TIMEOUT_S,
     )
     return result.stdout
 
