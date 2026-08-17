@@ -2,6 +2,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import {
 	ClassicyButton,
 	ClassicyDesktop,
+	ClassicyIcons,
 	ClassicyWindowFrame,
 	useAppManagerDispatch,
 } from "classicy";
@@ -18,6 +19,13 @@ import {
 	PAGE_SHORTCUT_DISPOSITION,
 	pageShortcutIcon,
 } from "./data/pageShortcuts";
+import {
+	GETTING_STARTED_ICON_ID,
+	GETTING_STARTED_NAME,
+	GETTING_STARTED_PATH,
+	HYPERCARD_APP_ID,
+	HYPERCARD_OPEN_FILE_EVENT,
+} from "./data/stackShortcuts";
 import { RoomControlBridge } from "./Providers/Playlist/RoomControlBridge";
 import { Alerts } from "./Applications/Alerts/Alerts";
 import { AlertsManager } from "./Applications/Alerts/AlertsManager";
@@ -118,6 +126,42 @@ function PageShortcutIcons() {
 	return null;
 }
 
+/**
+ * The Getting Started guide, as a desktop shortcut to the stack living at the
+ * Macintosh HD root. Registered here as well as in DefaultFileSystem for the
+ * same reason as the page shortcuts above: a synced filesystem may never
+ * receive a new default-tree entry, while icon registration re-runs on mount.
+ *
+ * Opening it takes the same route Finder does — the kernel's generic
+ * `*OpenFile` handler appends the path to HyperCard.app's `data.openFiles` and
+ * launches it, and HyperCard fetches and validates the document from there. So
+ * double-clicking the desktop icon and double-clicking the file in Finder are
+ * the same operation, not two implementations of it.
+ */
+function GettingStartedIcon() {
+	const dispatch = useAppManagerDispatch();
+	useEffect(() => {
+		dispatch({
+			type: "ClassicyDesktopIconAdd",
+			app: {
+				id: GETTING_STARTED_ICON_ID,
+				name: GETTING_STARTED_NAME,
+				icon: ClassicyIcons.system.files.document,
+			},
+			kind: "shortcut",
+			// The icon id is not a registered app; without this the double-click
+			// would also dispatch ClassicyDesktopIconOpen and conjure one.
+			noLaunch: true,
+			event: HYPERCARD_OPEN_FILE_EVENT,
+			eventData: {
+				app: { id: HYPERCARD_APP_ID },
+				path: GETTING_STARTED_PATH,
+			},
+		});
+	}, [dispatch]);
+	return null;
+}
+
 /** The desktop branch: the Mac OS 8 desktop and every desktop app. */
 export default function Desktop() {
 	return (
@@ -125,6 +169,7 @@ export default function Desktop() {
 			preBootScreen={(powerOn) => <PreBootAbout powerOn={powerOn} />}
 		>
 			<PageShortcutIcons />
+			<GettingStartedIcon />
 			<Alerts />
 			<AlertsManager />
 			<HyperCardClockBridge />
