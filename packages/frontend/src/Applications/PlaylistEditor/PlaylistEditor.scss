@@ -274,3 +274,45 @@
 		image-rendering: pixelated;
 	}
 }
+/* ── Main window: the playlists list ──────────────────────────────────────
+   A Platinum list box (the Drive Setup control panel's shape) over the shared
+   ClassicyTable, with the control buttons in a row beneath it. */
+.playlistList {
+	display: flex;
+	flex-direction: column;
+	gap: var(--window-padding-size);
+	padding: var(--window-padding-size);
+	font-family: var(--ui-font, sans-serif);
+	font-size: var(--ui-font-size, 12px);
+}
+
+/* ClassicyTable supplies the list-view chrome and its own scroll container;
+   this frame adds the inset border and the height that makes the table scroll
+   internally instead of growing the window. */
+.playlistListTable {
+	display: flex;
+	flex-direction: column;
+	border: var(--box-border-size, 2px) inset var(--color-black, #000);
+	background: var(--color-system-01);
+	min-height: calc(var(--window-control-size) * 8);
+	max-height: 320px;
+
+	.classicyTableContainer {
+		flex: 1;
+		min-height: 0;
+	}
+}
+
+.playlistListActions,
+.playlistDeleteConfirm {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--window-padding-size);
+}
+
+.playlistListError {
+	margin: 0;
+	color: var(--color-error);
+}
