@@ -1,6 +1,13 @@
 /**
  * Which thumbnails to show for an entry's visible span.
  *
+ * "Visible span" is literal: `startMs`/`endMs` are the intersection of the
+ * entry's window with the timeline's scroll viewport, computed by the caller
+ * (`PlaylistTimeline.tsx`). That is what makes zoom mean something here — the
+ * tile budget is fixed by the viewport width, so a narrower visible window
+ * spends it on a denser, closer-spaced run of images instead of six stills
+ * forty hours apart.
+ *
  * Thumbnails exist only on a 30-second grid (see TV/ThumbnailTile.tsx), so the
  * count is bounded twice: by how many tiles fit, and by how many distinct
  * images the span actually contains. The second bound is the important one — a
