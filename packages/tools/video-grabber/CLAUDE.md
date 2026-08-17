@@ -35,6 +35,15 @@ Also stitches per-channel continuous HLS streams + EPG guide JSON.
   narrative is admitted as a second source, with per-field provenance. See
   [`docs/party-identification.md`](docs/party-identification.md) — read it before
   changing the prompt or the gate, and do not weaken the gate to raise yield.
+- `video_grabber/peaks/` — a **sixth pipeline**: reduce every `audio/*.mp3` to a
+  fixed 480-bucket `[min, max]` amplitude envelope for the Playlist Editor's
+  timeline waveform, writing `mp3_items.peaks`. No state table — `peaks IS NOT
+  NULL` is the idempotency marker. One manual-only flow, `compute-peaks`
+  (`dry_run=True` by default). See [`docs/peaks.md`](docs/peaks.md) — read it
+  before touching the decode path: ffmpeg exits **0** on a truncated MP3, so
+  `check=True` alone does not make a stored envelope trustworthy and the
+  decoded-length guard is what keeps a partial decode from being written
+  permanently.
 - `k8s/` — deployment manifests (see Deploy below).
 - `tests/` — pytest. `test_migrations.py` needs a live Postgres; it **errors** (not
   fails) when none is reachable — that's an environment gap, not a regression.
