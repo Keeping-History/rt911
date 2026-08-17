@@ -1,6 +1,7 @@
 import { ClassicyButton, ClassicyIcons } from "classicy";
 import {
 	type PointerEvent as ReactPointerEvent,
+	useCallback,
 	useEffect,
 	useLayoutEffect,
 	useMemo,
@@ -8,10 +9,12 @@ import {
 	useState,
 } from "react";
 import type { EditorEntry } from "./editorState";
+import { LanePreview } from "./LanePreview";
 import "./PlaylistEditor.scss";
 import { resolveTimelineMeta } from "./resolveTimelineMeta";
 import {
 	dragEdgeIso,
+	fractionToMs,
 	layoutBars,
 	layoutFlags,
 	MAX_ZOOM,
@@ -28,6 +31,12 @@ import {
 // otherwise zooming in spreads the flags apart on screen while still stacking
 // them, which defeats the main reason to zoom into a crowded stretch.
 const FLAG_MIN_GAP_FRAC = 0.015;
+
+// How long a burst of scroll events is collapsed into one re-measure. Long
+// enough that a flick across a 64× track is a couple of dozen renders rather
+// than hundreds; short enough that the lane preview visibly keeps up with the
+// pan rather than snapping into place after it.
+const SCROLL_THROTTLE_MS = 50;
 
 /**
  * The Platinum resize cursors the Classicy View Pane dividers use, verbatim:
@@ -96,6 +105,73 @@ export function PlaylistTimeline({
 	const anchorRef = useRef<number | null>(null);
 	const [drag, setDrag] = useState<EdgeDrag | null>(null);
 	const lastDragXRef = useRef(0);
+	// Everything the lane preview needs to know about what is currently on
+	// screen: how wide the window onto the track is, and where in the track it
+	// sits. All three are read off the same element in one pass so they can
+	// never disagree by a frame. Zero under jsdom (no layout), same as elsewhere
+	// in this file, so the preview simply renders nothing in tests.
+	const [view, setView] = useState({ scrollLeft: 0, clientWidth: 0, scrollWidth: 0 });
+
+	// Reuses viewportRef (already held for zoom anchoring) rather than a second
+	// ref. Bails out of the state write when nothing moved, so a scroll that
+	// lands back on the same pixel — or a ResizeObserver notification for a
+	// resize in the other axis — costs no render.
+	const measureView = useCallback(() => {
+		const el = viewportRef.current;
+		if (!el) return;
+		setView((prev) =>
+			prev.scrollLeft === el.scrollLeft &&
+			prev.clientWidth === el.clientWidth &&
+			prev.scrollWidth === el.scrollWidth
+				? prev
+				: {
+						scrollLeft: el.scrollLeft,
+						clientWidth: el.clientWidth,
+						scrollWidth: el.scrollWidth,
+					},
+		);
+	}, []);
+
+	useEffect(() => {
+		const el = viewportRef.current;
+		if (!el) return;
+		measureView();
+		if (typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(measureView);
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, [measureView]);
+
+	// Panning has to re-render, because the preview's thumbnails are sampled
+	// across the part of the entry that is *visible* — but only while a preview
+	// is actually mounted, which is only ever for the selected bar. With nothing
+	// selected the listener is not attached at all, so ordinary panning of a
+	// large timeline stays a pure browser scroll with no React work.
+	//
+	// A trailing timer, not requestAnimationFrame: rAF is only guaranteed to run
+	// when the page is being painted, and a compositor that decides it has
+	// nothing to draw can leave a queued callback sitting there — which shows up
+	// as a strip still previewing the stretch you scrolled away from. A timeout
+	// is delivered by the task queue regardless, and caps the work at ~20
+	// measures a second either way.
+	useEffect(() => {
+		const el = viewportRef.current;
+		if (!el || selectedUid === null) return;
+		measureView();
+		let timer = 0;
+		const onScroll = () => {
+			if (timer !== 0) return;
+			timer = window.setTimeout(() => {
+				timer = 0;
+				measureView();
+			}, SCROLL_THROTTLE_MS);
+		};
+		el.addEventListener("scroll", onScroll, { passive: true });
+		return () => {
+			el.removeEventListener("scroll", onScroll);
+			if (timer !== 0) window.clearTimeout(timer);
+		};
+	}, [selectedUid, measureView]);
 
 	// Zoom about the middle of what the user is currently looking at. Without
 	// this, widening the track keeps scrollLeft fixed and the view lurches
@@ -116,11 +192,28 @@ export function PlaylistTimeline({
 		const el = viewportRef.current;
 		const anchor = anchorRef.current;
 		anchorRef.current = null;
+		// Every zoom change needs a re-measure, not just the anchor-driven ones:
+		// the ± buttons set anchorRef via changeZoom, but View ▸ Zoom In/Out and
+		// Actual Size dispatch setZoom directly and never touch it, so this has
+		// to run before the anchor === null early return below or the lane
+		// preview keeps sampling the pre-zoom scrollWidth.
+		measureView();
 		// scrollWidth is 0 under jsdom, so this is a no-op in tests rather than
 		// writing NaN into scrollLeft.
 		if (!el || anchor === null || el.scrollWidth === 0) return;
 		el.scrollLeft = anchor * el.scrollWidth - el.clientWidth / 2;
-	}, [zoom]);
+	}, [zoom, measureView]);
+
+	// The window onto the track, as track fractions — the same 0…1 space bars
+	// are laid out in, so intersecting the two needs no unit conversion. Null
+	// until the element has been laid out (jsdom, first paint).
+	const visibleFrac = useMemo(() => {
+		if (view.scrollWidth <= 0 || view.clientWidth <= 0) return null;
+		return {
+			start: view.scrollLeft / view.scrollWidth,
+			end: (view.scrollLeft + view.clientWidth) / view.scrollWidth,
+		};
+	}, [view]);
 
 	useEffect(() => {
 		const toResolve = entries.filter(
@@ -315,6 +408,20 @@ export function PlaylistTimeline({
 								const fadeEnd = b.fadeEnd && dragging?.edge !== "end";
 								const handleCursor = (edge: "start" | "end") =>
 									edgeCursor(dragging?.edge === edge ? (dragging.dir ?? "lr") : "lr");
+								// The preview samples the part of the entry that is ON SCREEN,
+								// not its whole span — an entry with no bounds covers all ten
+								// days, and six thumbnails forty hours apart preview nothing.
+								// Intersecting with the scroll window is what makes zooming and
+								// panning walk the strip through the footage.
+								//
+								// It reads b.startFrac/b.endFrac rather than the drag-preview
+								// fractions above deliberately: following a live edge drag would
+								// re-derive the bucket set on every snapped minute and issue a
+								// fresh row of <img src>es each time — 193 image requests, measured,
+								// for one hour of dragging. The committed bounds hold the strip
+								// still until the drag lands.
+								const previewStart = Math.max(b.startFrac, visibleFrac?.start ?? 0);
+								const previewEnd = Math.min(b.endFrac, visibleFrac?.end ?? 0);
 								return (
 									<div key={b.uid} className={`playlistTimelineLane playlistTimelineLane-${b.group}`}>
 										<button
@@ -334,7 +441,6 @@ export function PlaylistTimeline({
 										>
 											{b.focus === "once" && <span aria-hidden>▸</span>}
 											{b.focus === "locked" && <span aria-hidden>🔒</span>}
-											{b.label}
 											{b.actualStartFrac !== undefined && endFrac - startFrac > 0 && (
 												<span
 													className="playlistTimelineActualSpan"
@@ -359,6 +465,25 @@ export function PlaylistTimeline({
 													/>
 												))}
 										</button>
+										<div
+											className="playlistTimelineLabelTrack"
+											style={{
+												left: `${startFrac * 100}%`,
+												width: `${(endFrac - startFrac) * 100}%`,
+											}}
+											aria-hidden
+										>
+											<span className="playlistTimelineLabel">{b.label}</span>
+										</div>
+										{b.uid === selectedUid && previewEnd > previewStart && (
+											<LanePreview
+												group={b.group}
+												channel={b.label}
+												startMs={fractionToMs(previewStart, bounds)}
+												endMs={fractionToMs(previewEnd, bounds)}
+												viewportPx={view.clientWidth}
+											/>
+										)}
 									</div>
 								);
 							})}

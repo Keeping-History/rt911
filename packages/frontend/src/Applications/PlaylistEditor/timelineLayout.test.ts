@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	dragEdgeIso,
+	fractionToMs,
 	FULL_BOUNDS,
 	layoutBars,
 	layoutFlags,
@@ -26,6 +27,31 @@ describe("timeToFraction", () => {
 		expect(timeToFraction("2001-09-19T00:00:00.000Z")).toBe(1);
 		expect(timeToFraction("2001-08-01T00:00:00.000Z")).toBe(0);
 		expect(timeToFraction("2001-09-14T00:00:00.000Z")).toBeCloseTo(0.5);
+	});
+});
+
+describe("fractionToMs", () => {
+	it("round-trips with timeToFraction on the full span", () => {
+		for (const iso of [
+			"2001-09-09T00:00:00.000Z",
+			"2001-09-14T06:30:00.000Z",
+			"2001-09-19T00:00:00.000Z",
+		]) {
+			const ms = new Date(iso).getTime();
+			expect(fractionToMs(timeToFraction(iso))).toBeCloseTo(ms, -1);
+		}
+	});
+
+	it("round-trips against rescaled bounds, not just the full span", () => {
+		const b = timelineBounds("2001-09-11T12:00:00Z", "2001-09-11T14:00:00Z");
+		const iso = "2001-09-11T13:15:00.000Z";
+		const ms = new Date(iso).getTime();
+		expect(fractionToMs(timeToFraction(iso, b), b)).toBeCloseTo(ms, -1);
+	});
+
+	it("maps the bounds edges to 0 and 1, inverse of timeToFraction", () => {
+		expect(fractionToMs(0)).toBe(TIMELINE_START_MS);
+		expect(fractionToMs(1)).toBe(TIMELINE_END_MS);
 	});
 });
 

@@ -156,6 +156,11 @@ export function timeToFraction(iso: string, bounds: TimelineBounds = FULL_BOUNDS
 	return Math.min(1, Math.max(0, frac));
 }
 
+/** The inverse of {@link timeToFraction}: a track fraction back to a UTC ms instant. */
+export function fractionToMs(frac: number, bounds: TimelineBounds = FULL_BOUNDS): number {
+	return bounds.startMs + frac * (bounds.endMs - bounds.startMs);
+}
+
 // Edge drags snap to whole minutes: finer precision is invisible at any zoom
 // level, and it keeps the committed ISO strings as round as hand-entered ones.
 const DRAG_SNAP_MS = 60_000;
