@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	BASEMAP_URLS,
 	TERRAIN_SOURCE,
@@ -50,11 +50,41 @@ describe("normalizeBasemapStyle", () => {
 });
 
 describe("BASEMAP_URLS", () => {
-	it("defaults to the files.911realtime.org maps/ prefix", () => {
-		expect(BASEMAP_URLS.vector).toContain("/maps/world-basemap.pmtiles");
-		expect(BASEMAP_URLS.satelliteDay).toContain("/maps/na-satellite-day.pmtiles");
-		expect(BASEMAP_URLS.satelliteNight).toContain("/maps/na-satellite-night.pmtiles");
-		expect(BASEMAP_URLS.terrainDem).toContain("/maps/terrain-dem.pmtiles");
+	// Every URL is env-overridable, and the module reads import.meta.env once at
+	// import time — so asserting the ambient BASEMAP_URLS tests whatever the
+	// developer's .env happens to say, not the shipped default. Clear the
+	// overrides and re-import to get at the real defaults.
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		vi.resetModules();
+	});
+
+	it("defaults to the files.911realtime.org maps/ prefix", async () => {
+		for (const key of [
+			"VITE_FLIGHT_BASEMAP_URL",
+			"VITE_SATELLITE_DAY_BASEMAP_URL",
+			"VITE_SATELLITE_NIGHT_BASEMAP_URL",
+			"VITE_TERRAIN_DEM_URL",
+		]) {
+			vi.stubEnv(key, undefined);
+		}
+		vi.resetModules();
+		const { BASEMAP_URLS: defaults } = await import("./basemapStyles");
+
+		expect(defaults.vector).toContain("/maps/world-basemap.pmtiles");
+		expect(defaults.satelliteDay).toContain("/maps/na-satellite-day.pmtiles");
+		expect(defaults.satelliteNight).toContain("/maps/na-satellite-night.pmtiles");
+		expect(defaults.terrainDem).toContain("/maps/terrain-dem.pmtiles");
+	});
+
+	it("lets the environment override a default", async () => {
+		vi.stubEnv("VITE_FLIGHT_BASEMAP_URL", "https://x.example/rollback.pmtiles");
+		vi.resetModules();
+		const { BASEMAP_URLS: overridden } = await import("./basemapStyles");
+
+		expect(overridden.vector).toBe("https://x.example/rollback.pmtiles");
+		// Unrelated keys keep their defaults rather than collapsing together.
+		expect(overridden.terrainDem).toContain("/maps/terrain-dem.pmtiles");
 	});
 });
 
