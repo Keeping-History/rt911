@@ -191,6 +191,10 @@ type Session struct {
 	// so there is no window/lead tuning, just the half-open bound itself.
 	chatHorizon time.Time
 
+	// mp3MetaSent records that this session has already had its one mp3_meta
+	// frame. Guarded by mu. See SendMp3Meta for why it is one-shot.
+	mp3MetaSent bool
+
 	// usenetGroups is the set of newsgroups the client is currently viewing. The
 	// usenet channel is delivered only for these groups — a group can hold millions
 	// of messages, so nothing is sent until the client selects one. Guarded by mu.
@@ -395,6 +399,65 @@ func (s *Session) SendMp3(t time.Time, items []model.MediaItem) {
 // an empty frame is what clears out entries from the abandoned timeline.
 func (s *Session) SendMp3History(t time.Time, items []model.MediaItem) {
 	s.send_(outMsg{Type: "mp3_history", Time: t.Format(time.RFC3339), Items: items})
+}
+
+// Mp3MetaMessage is the one-shot mp3_meta frame: the Radio Traffic metadata for
+// every approved recording, keyed by item id.
+//
+// Per-item metadata only. The tag vocabulary is byte-identical for every session
+// on the server, so pushing a copy of it down each socket is pure waste; it is
+// served by GET /mp3/tags instead and cached by the browser. There is
+// deliberately no vocabulary field here.
+//
+// It rides its own envelope rather than outMsg because Items is an id-keyed map,
+// not the ordered []MediaItem every other channel's frame carries — the client
+// joins it onto items it already holds, so order means nothing.
+type Mp3MetaMessage struct {
+	Type string `json:"type"`
+	// Generation is the cache build this metadata came from, and GET /mp3/tags
+	// returns the same value for the same build. Without it a client can end up
+	// holding a vocabulary from build N and item tags from build N+1, and render
+	// a chip on a card that its own filter tree has no checkbox for. With it the
+	// mismatch is visible and the client refetches.
+	Generation string                 `json:"generation"`
+	Items      map[int]model.ItemMeta `json:"items"`
+}
+
+// SendMp3Meta delivers the mp3_meta frame — once per session, never again.
+//
+// The one-shot is the entire point of the frame's existence. mp3_history carries
+// the whole ~755-item back catalogue and is re-sent wholesale on every subscribe,
+// init and seek; at ~2 KB of metadata per item, folding this into it would put
+// ~1.5 MB of msgpack on every Time Machine scrub. The metadata is immutable
+// historical reference data with no time dimension at all, so a seek cannot
+// change any of it and re-sending it could only ever cost bandwidth.
+//
+// Unsubscribe deliberately does not clear the flag. A client that unsubscribes
+// still holds the metadata it was sent, and resubscribing is a UI toggle — it
+// must not cost 1.5 MB.
+func (s *Session) SendMp3Meta(generation string, items map[int]model.ItemMeta) {
+	s.mu.Lock()
+	if s.mp3MetaSent {
+		s.mu.Unlock()
+		return
+	}
+	s.mp3MetaSent = true
+	s.mu.Unlock()
+
+	s.sendFrame("mp3_meta", Mp3MetaMessage{
+		Type:       "mp3_meta",
+		Generation: generation,
+		Items:      items,
+	})
+}
+
+// Mp3MetaSent reports whether the mp3_meta frame has already gone out. Lets the
+// handler skip the Redis read and the ~1.5 MB decode behind it on every seek,
+// rather than relying on SendMp3Meta to drop the result afterwards.
+func (s *Session) Mp3MetaSent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.mp3MetaSent
 }
 
 // SendNews delivers a batch of news items at time t on the news channel. Like
@@ -1710,17 +1773,27 @@ func (s *Session) dueBeats(t time.Time) []chat.Schedule {
 // field names, so the wire keys (and the frontend TS interfaces) stay identical.
 // time.Time fields encode as the msgpack timestamp extension; the client decodes
 // them back to ISO strings.
-func encodeMsg(m outMsg) ([]byte, error) {
+// encodeFrame msgpack-encodes any outbound frame, with SetCustomStructTag("json")
+// so the json tags are the wire field names (hard rule #8).
+func encodeFrame(frame any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
 	enc.SetCustomStructTag("json")
-	if err := enc.Encode(m); err != nil {
+	if err := enc.Encode(frame); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-func (s *Session) send_(m outMsg) {
+func encodeMsg(m outMsg) ([]byte, error) { return encodeFrame(m) }
+
+func (s *Session) send_(m outMsg) { s.sendFrame(m.Type, m) }
+
+// sendFrame is the single outbound path. Nearly every frame is an outMsg and
+// goes through send_; mp3_meta has its own envelope (an id-keyed map, not the
+// []MediaItem outMsg carries) and comes here directly. typ is passed separately
+// only so the drop warning can name what was dropped.
+func (s *Session) sendFrame(typ string, frame any) {
 	// Don't write to a closed session.
 	select {
 	case <-s.done:
@@ -1728,7 +1801,7 @@ func (s *Session) send_(m outMsg) {
 	default:
 	}
 
-	data, err := encodeMsg(m)
+	data, err := encodeFrame(frame)
 	if err != nil {
 		return
 	}
@@ -1737,7 +1810,7 @@ func (s *Session) send_(m outMsg) {
 	case s.send <- data:
 	case <-s.done:
 	default:
-		s.logger.Warn("send buffer full, dropping message", "type", m.Type)
+		s.logger.Warn("send buffer full, dropping message", "type", typ)
 	}
 }
 

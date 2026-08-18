@@ -77,6 +77,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) + a forward **window** (default 600 s) per refill while subscribed. Client reveal-gate preserves forward-only pacing. |
 | `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) + a forward **window** (default 300 s) per refill while subscribed. Reuses the `items` field. |
 | `mp3_history`     | `time`, `items[]`             | The **complete** mp3 back-catalogue up to `t` (every approved item with `start_date ≤ t`), sent with each mp3 snapshot (subscribe/init/seek). Backs the Radio app's "Previous" list. Replace client state wholesale — the frame is sent even when empty so a backward seek clears it. Not reveal-gated or retention-pruned. |
+| `mp3_meta`        | `generation`, `items{}`       | **One-shot per session.** The Radio Traffic metadata for every approved mp3 item, keyed by item id (not a list — the client joins it onto items it already holds). Sent once, on the first mp3 snapshot; **never resent on seek**. Carries no `time`: the metadata has no time dimension. Carries no vocabulary — that comes from `GET /mp3/tags`. See [`mp3_meta`](#mp3_meta) below. |
 | `news`            | `time`, `items[]`             | News back catalogue (every approved article from the start of 2001-09-09 up to `t`, **headline-only** — no `content`) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `flights`         | `time`, `flights[]`           | Flights snapshot (airborne picture covering `[t−90s, t]`) on subscribe/init/seek, plus a forward **window** (default 300 s) per refill while subscribed. |
@@ -314,6 +315,62 @@ schedule backing the Radio app's "Previous" list, which the live stream (active-
 forward-only windows) never covers. The client replaces its history state wholesale per frame
 (sent even when empty), and it is exempt from the reveal gate and retention pruning: history is
 by definition already in the past.
+
+### `mp3_meta`
+
+The first mp3 snapshot of a session is preceded by exactly one `mp3_meta` frame — the Radio
+Traffic card metadata for the whole corpus, keyed by item id:
+
+```jsonc
+{
+  "type": "mp3_meta",
+  "generation": "9f2c…",          // cache-build stamp; see below
+  "items": {
+    "5821": {
+      "subject": "Boston Center coordinates with NEADS",
+      "link": "…", "tier": "primary", "confidence": "high", "evidence": "…",
+      "participants": [ { "person": "…", "facility": "ZBW", "position": "…", "role": "…", "confidence": "…" } ],
+      "mentions": { "facilities": [], "aircraft": [], "people": [] },
+      "provenance": { "generated_at": "…", "sources": {}, "commission": {} },
+      "tags":  [ { "tag": "facility:zbw", "namespace": "facility", "value": "ZBW", "color": null } ],
+      "peaks": [ [-3, 3], [-12, 10], … ]   // 480 [min,max] buckets, -128..127
+    }
+  }
+}
+```
+
+**It is sent once per session and is never resent — not on seek, not on resubscribe.** That is
+the frame's entire reason for existing. `mp3_history` carries the whole ~755-item back catalogue
+and is re-sent wholesale on every subscribe/init/seek; at ~2 KB of metadata per item, hanging any
+of this off `MediaItem` would put ~1.5 MB of msgpack on every Time Machine scrub. The metadata is
+immutable historical reference data with no time dimension, so it travels once, on its own frame,
+and the `mp3`/`mp3_history` frames stay exactly what they were. It is exempt from the reveal gate
+and from retention pruning for the same reason — there is nothing time-scoped to gate.
+
+An item with no derived metadata is still present with an empty `tags` list; `tags` is the one
+field always sent, so a client can tell "nothing is tagged" from "no metadata for this id". An id
+absent from `items` altogether has no metadata at all (59 of 814 recordings have no `parties`
+blob to derive from) and the card degrades to title plus transcript.
+
+There is deliberately **no `vocabulary` field.** The tag vocabulary is byte-identical for every
+session, so pushing a copy down each socket is waste; it is served by `GET /mp3/tags` and cached
+by the browser, which also lets the filter sidebar paint without waiting on the socket.
+
+`generation` is the stamp of the cache build this metadata came from, and `GET /mp3/tags` returns
+the same value for the same build. Without it a client can end up holding a vocabulary from build
+N and item tags from build N+1, and render a chip on a card that its own filter tree has no
+checkbox for; on a mismatch the client refetches the vocabulary. The value is a content hash, not
+a per-process id, precisely because the streamer runs N replicas — a client that takes its
+vocabulary from one pod's HTTP route and its item tags from another pod's socket must see the same
+stamp for the same data.
+
+The snapshot behind this frame is built once per cache warm and rebuilt when Postgres says the
+corpus changed — including on writes to `mp3_tags` and `mp3_items_tags`, which the tag pipeline
+rewrites without ever touching `mp3_items`.
+
+If no snapshot has been built yet (a subscribe racing the first warm, or a database without the
+derived metadata columns), **no frame is sent at all** rather than an empty one: the frame is
+one-shot, so an empty corpus would be held as the truth for the life of the connection.
 
 The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Its
 snapshot is not a window: it is the complete back catalogue from **the start of
