@@ -145,6 +145,25 @@ func LoadMp3Meta(ctx context.Context, rdb *goredis.Client) (*Mp3Meta, error) {
 	}, nil
 }
 
+// Mp3MetaGeneration returns the stamp of the current build, or "" when none has
+// been stored yet.
+//
+// It exists so a reader can ask "is what I already hold still current?" for the
+// cost of one small GET. LoadMp3Meta drags ~1.5 MB across the wire, which is the
+// right price to pay once per build and the wrong price to pay per HTTP request:
+// the metadata routes hold their composed response bytes in process and only
+// reload when this stamp moves.
+func Mp3MetaGeneration(ctx context.Context, rdb *goredis.Client) (string, error) {
+	gen, err := rdb.Get(ctx, keyMp3Etag).Result()
+	if err == goredis.Nil {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read mp3 metadata generation: %w", err)
+	}
+	return gen, nil
+}
+
 // BuildMp3Meta reads the metadata and the vocabulary from Postgres, assembles a
 // build and stores it. Two queries and a whole-corpus rewrite every time: the
 // snapshot is corpus-wide, so there is no such thing as updating one item's

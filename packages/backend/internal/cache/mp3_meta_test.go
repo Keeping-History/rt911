@@ -148,6 +148,65 @@ func TestStoreAndLoadMp3MetaRoundTrip(t *testing.T) {
 	}
 }
 
+// The generation probe is what lets the HTTP metadata routes hold their composed
+// response bytes in process: it answers "is what I hold still current?" without
+// dragging the ~1.5 MB payload across the wire to find out.
+func TestMp3MetaGenerationMatchesTheStoredBuild(t *testing.T) {
+	rdb, done := newTestRedis(t)
+	defer done()
+	ctx := context.Background()
+
+	items, vocab := sampleMeta()
+	built, err := AssembleMp3Meta(items, vocab)
+	if err != nil {
+		t.Fatalf("AssembleMp3Meta: %v", err)
+	}
+	if err := StoreMp3Meta(ctx, rdb, built); err != nil {
+		t.Fatalf("StoreMp3Meta: %v", err)
+	}
+
+	got, err := Mp3MetaGeneration(ctx, rdb)
+	if err != nil {
+		t.Fatalf("Mp3MetaGeneration: %v", err)
+	}
+	if got != built.Generation {
+		t.Fatalf("generation = %q, want %q", got, built.Generation)
+	}
+
+	// A rebuild must move it, or a reader holding the previous build never
+	// learns to drop it.
+	items[5823] = model.ItemMeta{Subject: "a later recording", Tags: []model.Tag{}}
+	rebuilt, err := AssembleMp3Meta(items, vocab)
+	if err != nil {
+		t.Fatalf("AssembleMp3Meta: %v", err)
+	}
+	if err := StoreMp3Meta(ctx, rdb, rebuilt); err != nil {
+		t.Fatalf("StoreMp3Meta: %v", err)
+	}
+	got, err = Mp3MetaGeneration(ctx, rdb)
+	if err != nil {
+		t.Fatalf("Mp3MetaGeneration: %v", err)
+	}
+	if got != rebuilt.Generation || got == built.Generation {
+		t.Fatalf("generation = %q, want the rebuilt %q", got, rebuilt.Generation)
+	}
+}
+
+// Empty string and no error, mirroring LoadMp3Meta's nil: "nothing has been
+// built yet" is a state to report, not a failure to propagate.
+func TestMp3MetaGenerationIsEmptyBeforeAnyBuild(t *testing.T) {
+	rdb, done := newTestRedis(t)
+	defer done()
+
+	got, err := Mp3MetaGeneration(context.Background(), rdb)
+	if err != nil {
+		t.Fatalf("Mp3MetaGeneration: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("generation = %q, want empty before any build", got)
+	}
+}
+
 // Nil, not an empty build: the mp3_meta frame is one-shot, so a session handed
 // an empty corpus would hold it as the truth until it reconnects.
 func TestLoadMp3MetaReturnsNilBeforeAnyBuild(t *testing.T) {

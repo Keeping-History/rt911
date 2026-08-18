@@ -329,6 +329,17 @@ func main() {
 	// zero rows for every name and would report "available" for taken ones.
 	// Authenticated, so it is not an open oracle for who holds which name.
 	mux.HandleFunc("/chat/username-available", handler.NewUsernameAvailableHandler(pool, trustedOrigins, logger))
+	// Radio Traffic reference metadata, served from the warm Redis mp3 cache.
+	// Deliberately open — no auth, no origin gate, no cookie: this is the same
+	// public corpus the anonymous mp3 channel already streams, and
+	// OriginAllowlist gates identity rather than access. A rate limiter inside
+	// the handlers is the only gate. /mp3/tags is what the sidebar filter tree
+	// reads; /mp3/meta is the one-shot convenience route for external consumers.
+	// These three use Go's method+wildcard patterns because {id} requires them;
+	// the bare-path routes around them predate that and are left alone.
+	mux.HandleFunc("GET /mp3/tags", handler.NewMp3TagsHandler(rdb, logger))
+	mux.HandleFunc("GET /mp3/meta", handler.NewMp3MetaHandler(rdb, logger))
+	mux.HandleFunc("GET /mp3/meta/{id}", handler.NewMp3MetaItemHandler(rdb, logger))
 	mux.HandleFunc("/feedback", handler.NewFeedbackHandler(
 		env("GITHUB_API_URL", "https://api.github.com"),
 		env("S3_ENDPOINT", "https://s3.wasabisys.com"),
