@@ -21,6 +21,7 @@ import {
 	positionMs,
 	release,
 	releaseAll,
+	setLevel,
 	subscribe,
 } from "./audioCoordinator";
 
@@ -184,6 +185,79 @@ describe("audioCoordinator registry", () => {
 			connect();
 			ensure(1, "a.mp3");
 			expect(playSpy).not.toHaveBeenCalled();
+		});
+	});
+
+	// The mix seam. Who is audible is decided by toolMode's solo/mute model; the
+	// coordinator only applies the answer. It has to be a coordinator function
+	// rather than `el.muted = …` at the call site because `muted` is already load
+	// bearing here: an element starts muted so the autoplay policy permits a
+	// gesture-less play(), and a card writing to it directly would either unmute
+	// before the gate opens (the play() is then refused) or have its choice
+	// overwritten the moment tryPlay resolves.
+	describe("setLevel", () => {
+		it("silences a playing element without pausing it", async () => {
+			connect();
+			const el = ensure(1, "a.mp3");
+			await settlePlay();
+			pauseSpy.mockClear();
+
+			setLevel(1, false);
+
+			expect(el.muted).toBe(true);
+			// Silent, not stopped: the clip keeps its clock position, so unmuting it
+			// later drops the listener back into the live mix, not to a stale offset.
+			expect(pauseSpy).not.toHaveBeenCalled();
+		});
+
+		it("brings a silenced element back", async () => {
+			connect();
+			const el = ensure(1, "a.mp3");
+			await settlePlay();
+			setLevel(1, false);
+
+			setLevel(1, true);
+
+			expect(el.muted).toBe(false);
+		});
+
+		it("never unmutes before the autoplay gate has opened", () => {
+			connect();
+			const el = ensure(1, "a.mp3");
+
+			setLevel(1, false);
+			setLevel(1, true);
+
+			// play() has not resolved yet. Unmuting now is exactly what gets the
+			// gesture-less play() refused, which is the bug this seam exists to avoid.
+			expect(el.muted).toBe(true);
+		});
+
+		it("holds a level set before play() resolved", async () => {
+			connect();
+			const el = ensure(1, "a.mp3");
+			setLevel(1, false);
+
+			await settlePlay();
+
+			// tryPlay unmutes on success — but only up to the requested level.
+			expect(el.muted).toBe(true);
+		});
+
+		it("tells the card its level changed", async () => {
+			connect();
+			ensure(1, "a.mp3");
+			await settlePlay();
+			const cb = vi.fn();
+			subscribe(1, cb);
+
+			setLevel(1, false);
+
+			expect(cb).toHaveBeenCalled();
+		});
+
+		it("is a no-op for an id that is not registered", () => {
+			expect(() => setLevel(99, false)).not.toThrow();
 		});
 	});
 

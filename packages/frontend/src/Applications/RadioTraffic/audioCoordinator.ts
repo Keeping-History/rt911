@@ -60,6 +60,10 @@ interface Entry {
 	url: string;
 	/** Fires on a pause the coordinator did not initiate. Removed by release(). */
 	onPause: () => void;
+	/** What the mix wants to hear — see setLevel. */
+	audible: boolean;
+	/** A play() has resolved, so the autoplay gate is open and `audible` can apply. */
+	unlocked: boolean;
 }
 
 const registry = new Map<number, Entry>();
@@ -89,8 +93,11 @@ function tryPlay(itemId: number, entry: Entry): void {
 			clearAudioBlocked(entry.el);
 			// Past the autoplay gate: an element starts muted because that is what
 			// lets the browser permit a gesture-less play(), and only a resolved
-			// play() makes it safe to unmute.
-			entry.el.muted = false;
+			// play() makes it safe to unmute. What it unmutes *to* is the mix's
+			// answer, not an unconditional false — otherwise a card the listener
+			// silenced would shout the moment a retry succeeded.
+			entry.unlocked = true;
+			entry.el.muted = !entry.audible;
 			notify(itemId);
 		})
 		.catch((err: unknown) => {
@@ -150,7 +157,7 @@ export function ensure(itemId: number, url: string): HTMLAudioElement {
 		notify(itemId);
 	};
 
-	const entry: Entry = { el, url, onPause };
+	const entry: Entry = { el, url, onPause, audible: true, unlocked: false };
 	el.addEventListener("pause", onPause);
 	el.addEventListener("loadedmetadata", () => {
 		seekToClock(itemId, entry);
@@ -188,6 +195,31 @@ export function release(itemId: number): void {
 /** Stop and forget everything — the app unmounting, or a test resetting. */
 export function releaseAll(): void {
 	for (const itemId of [...registry.keys()]) release(itemId);
+}
+
+/**
+ * Silence or restore one element without stopping it.
+ *
+ * The seam between the mix model and the audio hardware: toolMode decides who
+ * is audible, this applies the answer. It has to be a coordinator function
+ * rather than `el.muted = …` at the call site, because `muted` is already load
+ * bearing here — an element starts muted so the autoplay policy permits a
+ * gesture-less play(), and tryPlay writes it again on every success. A card
+ * setting it directly would either unmute before the gate opens (getting the
+ * play() refused) or have its choice overwritten by the next retry.
+ *
+ * Silence rather than pause, deliberately: a paused element stops advancing and
+ * drifts away from the virtual clock, so unmuting it later would drop the
+ * listener into a stale offset instead of back into the live mix.
+ */
+export function setLevel(itemId: number, audible: boolean): void {
+	const entry = registry.get(itemId);
+	if (!entry || entry.audible === audible) return;
+	entry.audible = audible;
+	// Before the gate opens the element must stay muted whatever the mix says;
+	// tryPlay applies the level the moment play() resolves.
+	if (entry.unlocked) entry.el.muted = !audible;
+	notify(itemId);
 }
 
 /** Where the element for `itemId` actually is, or undefined if not registered. */
