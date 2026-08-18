@@ -1,5 +1,16 @@
 packages:
   - "packages/*"
+# Repo-local package store, so a checkout is self-contained and `rm -rf` on it
+# takes the store with it. Lived in .pnpmrc until pnpm 11 moved settings here
+# alongside overrides/onlyBuiltDependencies; keeping one config home means no
+# rc-file precedence to reason about. Relative to this file, i.e. the workspace
+# root, whatever directory pnpm is invoked from.
+storeDir: .pnpm-store
+# Installs resolve fresh rather than trusting the lockfile — the husky
+# pre-commit hook bumps `classicy` on every commit, so the lockfile is
+# routinely one step behind package.json by design. CI passes
+# --frozen-lockfile explicitly and is unaffected.
+preferFrozenLockfile: false
 onlyBuiltDependencies:
   - es5-ext
   - esbuild
