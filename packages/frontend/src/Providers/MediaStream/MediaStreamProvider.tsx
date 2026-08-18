@@ -480,6 +480,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	// long-lived socket closure, which needs the current value synchronously
 	// (state updates are not visible until the next render).
 	const [clockForced, setClockForced] = useState(false);
+	// Raised when a clock seek is dispatched, lowered by the mp3 frame that
+	// answers it — see seekInFlight on MediaStreamContextValue for why the clear
+	// listens to mp3_history as well.
+	const [seekInFlight, setSeekInFlight] = useState(false);
 	// Latest live teacher command for the joined room; see RoomCommand.
 	const [roomCommand, setRoomCommand] = useState<RoomCommand | null>(null);
 	const clockForcedRef = useRef(false);
@@ -1140,6 +1144,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// any in-flight pre-seek reply via the id-echo guard.
 			setWeatherForecastByZone({});
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
+			// Every clock-following consumer is now holding stale positions until
+			// the fresh window lands. Raised here rather than in the on-connect
+			// seek below: that one has nothing on screen to invalidate.
+			setSeekInFlight(true);
 			// The old timeline's loop history is meaningless at the new instant.
 			sendFlightsHistoryRequest();
 			// The motion buffer rebuilds from single samples after a seek, so the
@@ -1309,6 +1317,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 
 			if (msg.type === "mp3") {
+				// Before the empty-list guard: an mp3 frame carrying nothing still
+				// answers the seek, and returning early would strand the flag.
+				setSeekInFlight(false);
 				const incomingMp3 = (msg as WsMp3Message).items;
 				if (!incomingMp3 || incomingMp3.length === 0) return;
 				const { due, future } = partitionByDue(incomingMp3, now);
@@ -1323,6 +1334,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 
 			if (msg.type === "mp3_history") {
+				// Sent on every seek even when empty, unlike `mp3` — so this is the
+				// clear that fires when the new instant lands in a silent stretch.
+				setSeekInFlight(false);
 				// The full back-catalogue up to the snapshot instant. Replace wholesale
 				// (each frame is complete, and an empty one clears after a backward
 				// seek); skip the reveal buffer and retention — history is already past.
@@ -1699,6 +1713,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			seekInFlight,
 			roomCommand,
 			chatBuddies,
 			chatEnabled,
@@ -1758,6 +1773,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			seekInFlight,
 			roomCommand,
 			chatBuddies,
 			chatEnabled,

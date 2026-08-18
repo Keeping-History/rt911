@@ -375,6 +375,20 @@ export interface MediaStreamContextValue {
 	requestWeatherForecast: (zone: string) => void;
 	/** True while the server is forcing the clock (Time Machine locked). */
 	clockForced: boolean;
+	/**
+	 * True between dispatching a `{type:"seek"}` and the first mp3 frame that
+	 * answers it. One connection-level flag, not one per item: a seek drops
+	 * every buffer at once, so nothing that follows the virtual clock has valid
+	 * data until the fresh window lands. The Radio Traffic card reads it for its
+	 * SEEKING badge, which appears on one card at a time only because one card
+	 * is following the clock.
+	 *
+	 * Cleared by `mp3` OR `mp3_history` — whichever arrives first. `mp3_history`
+	 * is the load-bearing one: it is sent on every seek even when empty, whereas
+	 * seeking into a stretch with no audio produces no `mp3` frame at all, which
+	 * would strand the flag raised.
+	 */
+	seekInFlight: boolean;
 
 	/**
 	 * The most recent live teacher command for the room this client joined
@@ -477,6 +491,7 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	unsubscribeWeather: () => {},
 	requestWeatherForecast: () => {},
 	clockForced: false,
+	seekInFlight: false,
 	roomCommand: null,
 	alertItems: [],
 	subscribeAlerts: () => {},

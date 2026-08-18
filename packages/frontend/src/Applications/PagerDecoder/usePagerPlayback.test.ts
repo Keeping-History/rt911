@@ -93,6 +93,7 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					requestWeatherForecast: vi.fn(),
 					sources: { video: [], audio: [], pager: [], usenet: [] },
 					clockForced: false,
+					seekInFlight: false,
 					roomCommand: null,
 					chatBuddies: [],
 					chatEnabled: false,
