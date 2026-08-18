@@ -6,7 +6,7 @@ import {
 	ClassicyWindowFrame,
 	useAppManagerDispatch,
 } from "classicy";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 // Side effect: register the Directus-collection HyperCard extension parts and
 // stacks with classicy's HyperCard plugin registries. The HyperCard app itself
 // is bundled in classicy and auto-mounted by ClassicyDesktop.
@@ -40,6 +40,7 @@ import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
 import { PlaylistEditor } from "./Applications/PlaylistEditor/PlaylistEditor";
 import { Readme } from "./Applications/README/README";
 import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
+import { RadioTraffic } from "./Applications/RadioTraffic/RadioTraffic";
 import { RadioTuner } from "./Applications/RadioTuner/RadioTuner";
 import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
 import { TV } from "./Applications/TV/TV";
@@ -53,6 +54,13 @@ import { Weather } from "./Applications/Weather/Weather";
  * dismisses it and starts the boot chime + startup parade.
  */
 function PreBootAbout({ powerOn }: { powerOn: () => void }) {
+	const powerOnButton = useRef<HTMLButtonElement>(null);
+	// POWER ON is the only control on the overlay and the first thing every
+	// visitor has to get past, so focus it on mount — Enter then dismisses the
+	// screen without reaching for the mouse.
+	useEffect(() => {
+		powerOnButton.current?.focus();
+	}, []);
 	return (
 		<ClassicyWindowFrame title="9/11 in Realtime" width={560}>
 			<h1>About 9/11 in Realtime</h1>
@@ -81,7 +89,7 @@ function PreBootAbout({ powerOn }: { powerOn: () => void }) {
 				<a href="mailto:robbiebyrd@keepinghistory.org">email Robbie Byrd</a>.
 			</p>
 			<div style={{ textAlign: "center" }}>
-				<ClassicyButton isDefault onClickFunc={powerOn}>
+				<ClassicyButton ref={powerOnButton} isDefault onClickFunc={powerOn}>
 					POWER ON
 				</ClassicyButton>
 			</div>
@@ -188,6 +196,7 @@ export default function Desktop() {
 			<PagerDecoder />
 			<Readme />
 			<RadioScanner />
+			<RadioTraffic />
 			<RadioTuner />
 			<TV />
 			<Weather />
