@@ -28,8 +28,8 @@ func main() {
 
 	dbURL := env("DATABASE_URL", "postgres://directus:directus@localhost:5432/directus")
 	pool, err := db.Connect(dbURL, db.PoolConfig{
-		MaxConns:          int32(envInt("DB_MAX_CONNS", 20)),
-		MinConns:          int32(envInt("DB_MIN_CONNS", 2)),
+		MaxConns:          envInt32("DB_MAX_CONNS", 20),
+		MinConns:          envInt32("DB_MIN_CONNS", 2),
 		MaxConnLifetime:   envDur("DB_MAX_CONN_LIFETIME", time.Hour),
 		MaxConnIdleTime:   envDur("DB_MAX_CONN_IDLE_TIME", 30*time.Minute),
 		HealthCheckPeriod: envDur("DB_HEALTH_CHECK_PERIOD", time.Minute),
@@ -424,6 +424,18 @@ func envInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+// envInt32 reads key as an int32, falling back on an unset/empty/unparseable/
+// out-of-range value. ParseInt's bitSize=32 rejects anything that would
+// overflow int32 instead of silently truncating it, unlike int32(envInt(...)).
+func envInt32(key string, fallback int32) int32 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
+			return int32(n)
 		}
 	}
 	return fallback

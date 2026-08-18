@@ -5,7 +5,7 @@ import {
 	radioTunerSetSettings,
 	radioTunerTuneStation,
 } from "./RadioTunerContext";
-import type { RadioScannerSettings } from "../RadioScanner/radioScannerSettings";
+import type { RadioScannerSettings } from "../radio-core/radioScannerSettings";
 
 function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 	return {
