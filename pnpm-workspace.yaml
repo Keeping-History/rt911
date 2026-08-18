@@ -1,2 +1,27 @@
 packages:
   - "packages/*"
+onlyBuiltDependencies:
+  - es5-ext
+  - esbuild
+overrides:
+  brace-expansion: '>=5.0.9'
+  immutable: '>=5.1.8'
+  undici: '>=7.28.0 <8'
+  js-yaml: '>=4.2.0 <5'
+  esbuild: '>=0.28.1'
+  '@babel/core': '>=7.29.6 <8'
+# pnpm 11 refuses any package published within minimumReleaseAge (24h by
+# default) — a supply-chain delay that is worth keeping. Two exemptions:
+#
+# classicy is pinned to "latest" and .husky/pre-commit bumps it on EVERY
+# commit, so a same-day publish would fail the hook for everyone until it
+# aged out. Excluding it is the difference between the gate protecting the
+# tree and the gate blocking it.
+#
+# oxlint is exempt because it publishes 20 per-platform binding packages in
+# lockstep; without this, a lint upgrade lands as 20 hand-maintained
+# version-pinned exclusions that go stale the moment the version moves.
+minimumReleaseAgeExclude:
+  - classicy
+  - oxlint
+  - '@oxlint/*'
