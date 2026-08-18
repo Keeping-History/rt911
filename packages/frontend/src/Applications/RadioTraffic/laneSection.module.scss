@@ -1,0 +1,121 @@
+// The three stacked lanes and their vertical label strips.
+//
+// Figma's frames, all at x=144 (the sidebar's width, so the three lanes share a
+// left edge):
+//
+//   LIVE      747 x 281
+//   UPCOMING  747 x 150
+//   PREVIOUS  678 x 124
+//
+// Heights are min-heights, not fixed: the card area wraps 210px cards, and a
+// lane that overflowed its Figma height would clip cards rather than show them.
+// The numbers are what an empty lane reserves, which is what the design is
+// actually specifying — LIVE keeps room for two rows of cards even when only
+// one is playing, so the lane below it does not walk up and down the window as
+// clips start and end.
+//
+// Colours are placeholders pending Robbie's pass, matching the convention in
+// trafficCard.module.scss — the structure and the geometry are what this file
+// pins.
+
+.rtLane {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.rtLane[data-lane="live"] {
+  min-height: 281px;
+}
+
+.rtLane[data-lane="upcoming"] {
+  min-height: 150px;
+}
+
+.rtLane[data-lane="previous"] {
+  min-height: 124px;
+  // The one lane the design narrows: 678 of the 747 the other two get.
+  max-width: 678px;
+}
+
+// A collapsed lane is its label strip and nothing else, so it must not keep
+// reserving the height of the cards it is no longer showing.
+.rtLane[data-collapsed="true"] {
+  min-height: 0;
+}
+
+// Label strip ---------------------------------------------------------------
+
+// 18px, mid-way through the 15-22px the design uses across the three lanes.
+.rtLaneStrip {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 0;
+  background: var(--color-system-03);
+  border: 1px solid var(--color-system-05);
+}
+
+.rtLaneLabel {
+  flex: 1 1 auto;
+  // The strip reads bottom-to-top, which is what makes an 18px column legible.
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.75);
+  letter-spacing: 1px;
+  color: var(--color-system-06);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.rtLaneToggle {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.7);
+  color: var(--color-system-06);
+  background: var(--color-system-02);
+  border: 1px solid var(--color-system-05);
+  cursor: pointer;
+}
+
+// Cards ---------------------------------------------------------------------
+
+.rtLaneCards {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.rtLaneSlot {
+  flex: 0 0 auto;
+}
+
+// The drag affordance is on the slot rather than the card so it follows the
+// active tool: the lane only attaches drag handlers under `hand`, and this is
+// the same condition expressed to the cursor.
+.rtLane[data-tool="hand"] .rtLaneSlot {
+  cursor: grab;
+}
+
+.rtLaneSlot[data-dragging] {
+  cursor: grabbing;
+  opacity: 0.5;
+}
