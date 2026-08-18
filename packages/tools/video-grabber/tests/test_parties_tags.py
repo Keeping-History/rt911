@@ -1,5 +1,11 @@
 """Tag derivation: what a searcher can actually filter on."""
-from video_grabber.parties.tags import build_tags, normalize_callsign, slugify
+from video_grabber.parties.tags import (
+    build_tag_records,
+    build_tags,
+    normalize_callsign,
+    slugify,
+    split_tag,
+)
 from video_grabber.parties.vocab import agency_for, canonical_facility
 
 FULL = {
@@ -195,3 +201,25 @@ def test_a_curator_may_assert_various_even_though_derivation_may_not():
     assert "facility:various" in build_tags({}, curated=["facility:various"])
     assert "facility:various" not in build_tags(
         {"participants": [{"facility": "various", "role": "atc"}]})
+
+
+def test_split_tag_separates_namespace_from_value():
+    assert split_tag("topic:hijack-report") == ("topic", "hijack-report")
+
+
+def test_split_tag_keeps_a_value_containing_a_colon_intact():
+    """Splitting on every colon would truncate the value silently."""
+    assert split_tag("person:smith:jr") == ("person", "smith:jr")
+
+
+def test_split_tag_returns_no_namespace_for_a_bare_tag():
+    """Curated tags are taken verbatim, so an un-namespaced one must survive."""
+    assert split_tag("interesting") == (None, "interesting")
+
+
+def test_build_tag_records_reshapes_without_changing_the_derived_set():
+    """The vocabulary and the search index must not be able to disagree."""
+    records = build_tag_records(FULL)
+    assert [r["tag"] for r in records] == build_tags(FULL)
+    assert {"tag": "topic:hijack-report", "namespace": "topic",
+            "value": "hijack-report"} in records

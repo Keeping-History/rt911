@@ -132,3 +132,28 @@ def build_tags(parties: dict, curated: Iterable[str] = ()) -> list[str]:
     if "facility:various" not in curated:
         tags.discard("facility:various")
     return sorted(tags)
+
+
+def split_tag(tag: str) -> tuple[str | None, str]:
+    """`topic:hijack-report` -> `("topic", "hijack-report")`.
+
+    A tag with no namespace returns `(None, tag)`. Derivation always namespaces,
+    but `curated` values are taken verbatim precisely so a curator can use
+    vocabulary this module has never heard of — including an un-namespaced one.
+    Splitting on the FIRST colon only, so a value containing one survives.
+    """
+    ns, sep, value = tag.partition(":")
+    return (ns, value) if sep else (None, tag)
+
+
+def build_tag_records(parties: dict, curated: Iterable[str] = ()) -> list[dict]:
+    """`build_tags` output as `{tag, namespace, value}` rows for the vocabulary.
+
+    Derivation stays in `build_tags` and this only reshapes it, so the tag a
+    search hits and the tag stored in the vocabulary cannot drift apart.
+    """
+    records = []
+    for tag in build_tags(parties, curated):
+        namespace, value = split_tag(tag)
+        records.append({"tag": tag, "namespace": namespace, "value": value})
+    return records

@@ -23,7 +23,8 @@ from video_grabber.parties.identify import (
     tier_for,
     validate_parties,
 )
-from video_grabber.parties.tags import build_tags
+from video_grabber.parties.tag_store import load_vocabulary, sync_item_tags
+from video_grabber.parties.tags import build_tag_records
 from video_grabber.storage import wasabi
 from video_grabber.transcript.summarize_flows import anthropic_completer
 
@@ -76,6 +77,9 @@ def identify_parties_flow(limit: int | None = None, force: bool = False,
     if not cfg.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
     complete = anthropic_completer(cfg, model=cfg.parties_model, max_tokens=PARTIES_MAX_TOKENS)
+    # Read once for the whole run and updated in place as new tags appear; a
+    # per-row read would spend most of its requests re-fetching the same table.
+    vocab = {} if dry_run else load_vocabulary(cfg)
 
     done = skipped = failed = broadcast = enriched = 0
     for row in _page_mp3_items(
@@ -143,22 +147,69 @@ def identify_parties_flow(limit: int | None = None, force: bool = False,
             cleaned["gate_reasons"] = reasons
             logger.info("identify-parties: %s gated: %s", key, reasons)
 
-        # `tags` is rebuilt from scratch every run so the model can retract a
+        # Tags are rebuilt from scratch every run so the model can retract a
         # tag it no longer supports; `tags_curated` is the human column the
         # flow reads and never writes, so hand-added tags survive regardless.
-        tags = build_tags(cleaned, row.get("tags_curated") or [])
+        records = build_tag_records(cleaned, row.get("tags_curated") or [])
 
         if dry_run:
-            logger.info("DRY RUN %s -> %s | tags=%s", key, cleaned, tags)
+            logger.info("DRY RUN %s -> %s | tags=%s",
+                        key, cleaned, [r["tag"] for r in records])
         else:
+            # `parties` is a column on the item; the tags are a many-to-many and
+            # cannot ride along in this PATCH — `mp3_items.tags` is an alias over
+            # the junction, not a field that holds values.
             pr = httpx.patch(f"{cfg.directus_url}/items/mp3_items/{row['id']}",
-                             json={"parties": cleaned, "tags": tags},
+                             json={"parties": cleaned},
                              headers=_auth_headers(cfg))
             pr.raise_for_status()
+            sync_item_tags(cfg, row["id"], records, vocab)
         done += 1
 
     logger.info(
         "identify-parties: %d identified (%d with Commission sources), "
         "%d skipped, %d broadcast (excluded), %d failed",
         done, enriched, skipped, broadcast, failed,
+    )
+
+
+@flow(name="rebuild-tags")
+def rebuild_tags_flow(limit: int | None = None, dry_run: bool = True) -> None:
+    """Re-derive every row's tags from the `parties` it already carries.
+
+    Tags are a pure function of `parties` plus `tags_curated`, so a change to
+    the derivation — a new facility alias, a topic added to the vocabulary, a
+    callsign that now normalises differently — makes every stored tag stale
+    without making a single `parties` block wrong. Re-running `identify-parties`
+    would fix them, but only by paying for inference over the whole corpus to
+    reproduce answers already on disk.
+
+    This reads no transcripts and calls no model. It is also how the corpus was
+    moved onto the m2m shape: the junction is rebuilt from scratch, so a tag the
+    derivation no longer produces loses its rows rather than lingering.
+    """
+    logger = get_run_logger()
+    cfg = Config()
+    vocab = {} if dry_run else load_vocabulary(cfg)
+
+    done = skipped = tagged = 0
+    for row in _page_mp3_items(cfg, "id,parties,tags_curated"):
+        if limit is not None and done >= limit:
+            break
+        parties = row.get("parties")
+        if not parties:
+            skipped += 1
+            continue
+
+        records = build_tag_records(parties, row.get("tags_curated") or [])
+        if dry_run:
+            logger.info("DRY RUN %s -> %s", row["id"], [r["tag"] for r in records])
+        else:
+            tagged += sync_item_tags(cfg, row["id"], records, vocab)
+        done += 1
+
+    logger.info(
+        "rebuild-tags: %d rows re-derived, %d taggings written, %d without parties, "
+        "%d distinct tags in vocabulary",
+        done, tagged, skipped, len(vocab),
     )
