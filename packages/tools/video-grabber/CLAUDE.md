@@ -38,6 +38,8 @@ Also stitches per-channel continuous HLS streams + EPG guide JSON.
   `tags.py`/`vocab.py` derivation changes). See
   [`docs/party-identification.md`](docs/party-identification.md) — read it before
   changing the prompt or the gate, and do not weaken the gate to raise yield.
+  **`mp3_items.tags` is an m2m alias, not a column** — it cannot be set by PATCHing the
+  item, which is what the writer used to do when `tags` was a json array.
 - `video_grabber/peaks/` — a **sixth pipeline**: reduce every `audio/*.mp3` to a
   fixed 480-bucket `[min, max]` amplitude envelope for the Playlist Editor's
   timeline waveform, writing `mp3_items.peaks`. No state table — `peaks IS NOT
@@ -47,8 +49,6 @@ Also stitches per-channel continuous HLS streams + EPG guide JSON.
   `check=True` alone does not make a stored envelope trustworthy and the
   decoded-length guard is what keeps a partial decode from being written
   permanently.
-  **`mp3_items.tags` is an m2m alias, not a column** — it cannot be set by PATCHing the
-  item, which is what the writer used to do when `tags` was a json array.
 - `k8s/` — deployment manifests (see Deploy below).
 - `tests/` — pytest. `test_migrations.py` needs a live Postgres; it **errors** (not
   fails) when none is reachable — that's an environment gap, not a regression.
