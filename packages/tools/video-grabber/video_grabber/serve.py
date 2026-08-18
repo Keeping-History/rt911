@@ -58,8 +58,8 @@ from video_grabber.catalogue.flows import (
     backfill_mp3_catalogue_flow,
     link_mp3_subtitles_flow,
 )
-from video_grabber.parties.flows import identify_parties_flow
 from video_grabber.peaks.flows import compute_peaks_flow
+from video_grabber.parties.flows import identify_parties_flow, rebuild_tags_flow
 from video_grabber.enhance.flows import (
     render_audition_flow,
     render_enhanced_corpus_flow,
@@ -329,6 +329,7 @@ def main() -> None:
         link_mp3_subtitles_flow.to_deployment(name="link-mp3-subtitles"),
         identify_parties_flow.to_deployment(name="identify-parties"),
         compute_peaks_flow.to_deployment(name="compute-peaks"),
+        rebuild_tags_flow.to_deployment(name="rebuild-tags"),
         render_audition_flow.to_deployment(name="render-audition"),
         render_enhanced_corpus_flow.to_deployment(name="render-enhanced-corpus"),
     )
