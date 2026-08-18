@@ -43,6 +43,16 @@ function crossOriginIsolationExceptPages(): Plugin {
 const DIRECTUS_PROXY_TARGET = process.env.DIRECTUS_PROXY_TARGET ?? "https://api.911realtime.org";
 
 /**
+ * Where the dev-server streamer proxy forwards to. Defaults to a locally-run
+ * streamer, unlike the Directus proxy above: the mp3 metadata routes are new
+ * on this branch and are not on the deployed image, so pointing at production
+ * would proxy a 404. Override from the shell to aim elsewhere.
+ *
+ * Deliberately NOT `VITE_`-prefixed — read here, in Node, at config time only.
+ */
+const STREAMER_PROXY_TARGET = process.env.STREAMER_PROXY_TARGET ?? "http://localhost:8080";
+
+/**
  * Re-bind an upstream `Set-Cookie` so a localhost server can hold it.
  *
  * Directus issues its session cookie with `Domain=.911realtime.org; Secure`.
@@ -105,6 +115,26 @@ export function rebindCookieToLocalhost(cookie: string): string {
 const localProxy: Record<string, ProxyOptions> = {
 	"/feedback": {
 		target: "http://localhost:8080",
+		changeOrigin: true,
+	},
+	/**
+	 * The streamer's mp3 metadata routes, for the same reason `/feedback` is
+	 * here: the deployed CORS allow-list is `911realtime.org` and the GitHub
+	 * Pages preview only, so a browser on `localhost:5173` gets no
+	 * `Access-Control-Allow-Origin` back and discards the response. Widening
+	 * that list to admit localhost is not the fix — see the note above on why
+	 * proxying beats an allow-list entry.
+	 *
+	 * Points at a locally-run streamer rather than production, because these
+	 * routes ship with this branch and do not exist on the deployed image yet;
+	 * against production they 404 regardless of CORS.
+	 *
+	 * Inert by default: reached only when VITE_STREAM_HTTP_BASE is empty, which
+	 * makes the app build relative `/mp3/...` URLs. Unset, it calls the streamer
+	 * directly and nothing hits this route.
+	 */
+	"/mp3": {
+		target: STREAMER_PROXY_TARGET,
 		changeOrigin: true,
 	},
 	"/directus": {

@@ -63,10 +63,28 @@ export const CHAT_BASE: string = chatHttpBase(STREAM_URL);
 export const ROOM_BASE: string = CHAT_BASE;
 
 /**
- * Base for the streamer's public mp3 metadata routes (`GET /mp3/tags`). Derived
- * from the same WebSocket URL rather than declared as its own VITE_ variable:
- * every one of those needs a Dockerfile ARG *and* ENV line *and* a workflow
- * build-arg, and a missing declaration surfaces only as production quietly
- * using the default at the top of this file.
+ * Base for the streamer's public mp3 metadata routes (`GET /mp3/tags`).
+ *
+ * Derived from the same WebSocket URL rather than getting its own required
+ * VITE_ variable: every one of those needs a Dockerfile ARG *and* ENV line
+ * *and* a workflow build-arg, and a missing declaration surfaces only as
+ * production quietly using the default at the top of this file. Deriving it
+ * means production cannot be misconfigured by omission.
+ *
+ * The override exists for local development only. The deployed CORS allow-list
+ * covers `911realtime.org` and the GitHub Pages preview, so a browser on
+ * `localhost:5173` gets no `Access-Control-Allow-Origin` and discards the
+ * response. Setting `VITE_STREAM_HTTP_BASE=` (empty) in `.env.development`
+ * makes these calls relative, routing them through the dev server's own origin
+ * via the `/mp3` proxy in vite.config.ts — the same trick `VITE_DIRECTUS_URL`
+ * uses, and for the same reason.
+ *
+ * `fromEnv` treats an empty value as absent, so the empty case is read here
+ * rather than through it: empty is the meaningful signal, not a missing build
+ * arg.
  */
-export const STREAM_HTTP_BASE: string = CHAT_BASE;
+const streamHttpOverride = import.meta.env.VITE_STREAM_HTTP_BASE as
+	| string
+	| undefined;
+export const STREAM_HTTP_BASE: string =
+	typeof streamHttpOverride === "string" ? streamHttpOverride : CHAT_BASE;
