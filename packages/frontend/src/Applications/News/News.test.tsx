@@ -115,6 +115,7 @@ function makeCtxValue(
 		unsubscribeWeather: () => {},
 		requestWeatherForecast: () => {},
 		clockForced: false,
+		seekInFlight: false,
 		roomCommand: null,
 		chatBuddies: [],
 		chatEnabled: false,

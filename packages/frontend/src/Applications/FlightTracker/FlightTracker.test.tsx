@@ -295,6 +295,7 @@ function makeCtxValue(
 		unsubscribeWeather: vi.fn(),
 		requestWeatherForecast: vi.fn(),
 		clockForced: false,
+		seekInFlight: false,
 		roomCommand: null,
 		chatBuddies: [],
 		chatEnabled: false,
