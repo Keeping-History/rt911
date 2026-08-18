@@ -11,6 +11,7 @@ import "./Applications/FlightTracker/flightMapSettings";
 import "./Applications/FlightTracker/flightTrackerCommands";
 import "./Applications/Browser/BrowserContext";
 import "./Applications/RadioScanner/RadioScannerContext";
+import "./Applications/RadioTraffic/RadioTrafficContext";
 import "./Applications/RadioTuner/RadioTunerContext";
 import "./Applications/Weather/weatherSettings";
 import "./Applications/TimeMachine/timeMachineSettings";
@@ -51,6 +52,12 @@ const CASES: Array<[string, string[], string[], boolean]> = [
 		"RadioScanner.app",
 		["ClassicyAppRadioScanner"],
 		["ClassicyAppRadioScannerTuneStation", "ClassicyAppRadioScannerSetSettings"],
+		true,
+	],
+	[
+		"RadioTraffic.app",
+		["ClassicyAppRadioTraffic"],
+		["ClassicyAppRadioTrafficSetState"],
 		true,
 	],
 	[

@@ -1,0 +1,568 @@
+// The Radio Traffic app shell: the one place every other module in this folder
+// is wired together, and the only one that holds state.
+//
+// Everything below it is a view over props — the palette, the filter tree, the
+// lanes and the cards all report and never decide — so this file answers the
+// three questions the app is made of:
+//
+//   which lane is a card in?   laneFor, over one merged catalogue (partitionLanes)
+//   is it on screen?           matchesFilter, against the checked tag set
+//   can it be heard?           isAudible, over the FILTER-VISIBLE live mix
+//
+// The third is deliberately not the second. A tag filter unmounts a card, but
+// audioCoordinator owns the <audio>, and element lifetime follows LANE
+// membership, not visibility: a clip hidden by a filter keeps playing on the
+// clock, so re-checking that filter shows a card at the position the clip
+// actually reached rather than one restarting from zero. What the filter does
+// change is the MIX — a hidden card is not audible, and a solo pointing at one
+// is reconciled away, because effectiveMutedIds mutes everything except the
+// solo target and an absent target means silence with nothing left on screen to
+// click.
+
+import {
+	ClassicyApp,
+	ClassicyIcons,
+	ClassicyWindow,
+	quitMenuItemHelper,
+	registerClassicyIcons,
+	useAppManager,
+	useAppManagerDispatch,
+	useClassicyDateTime,
+} from "classicy";
+import type React from "react";
+import {
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
+import { manifestDescription } from "../../Components/manifestDescription";
+import {
+	MediaStreamContext,
+	type MediaItem,
+} from "../../Providers/MediaStream/MediaStreamContext";
+import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
+import { isAudioBlocked, subscribeAudioBlocked } from "../radio-core/audioBlocked";
+import { resolveAudioUrl } from "../radio-core/audioSource";
+import { startMs } from "../radio-core/stationGrouping";
+import appIconPng from "./app.png";
+import { connectClock, clockMoved, ensure, release, releaseAll, setLevel } from "./audioCoordinator";
+import { historyPool, type Lane, laneFor, rememberItems } from "./cardStatus";
+import { FilterTree } from "./FilterTree";
+import { LANES, type LaneOrder, reconcileLaneOrder, reorderLane } from "./laneOrder";
+import { LaneSection } from "./LaneSection";
+import styles from "./radioTraffic.module.scss";
+import { radioTrafficSetState, sanitizeRadioTrafficState } from "./RadioTrafficContext";
+import { groupVocabulary, matchesFilter } from "./tagFilter";
+import { TagPickerWindow } from "./TagPickerWindow";
+import { reconcileTagVocabulary, type VocabularyState } from "./tagVocabulary";
+import { applyToolClick, type AudioState, isAudible, reconcileSolo, type Tool } from "./toolMode";
+import { ToolPalette } from "./ToolPalette";
+import { TrafficCard } from "./TrafficCard";
+
+const appId = "RadioTraffic.app";
+const appName = "Radio Traffic";
+
+/**
+ * How many cards the two scrolling lanes show.
+ *
+ * The back catalogue is ~755 items and every one of them is PREVIOUS by the end
+ * of a session; the grid is designed for roughly ten cards on screen (see the
+ * plan's Performance Considerations), and a lane rendering all 755 would mount
+ * 755 canvases for waveforms nobody has scrolled to. Newest-first ordering makes
+ * the cap the right ten: the clip that just ended is the one a listener reaches
+ * for.
+ */
+const UPCOMING_LANE_LIMIT = 12;
+const PREVIOUS_LANE_LIMIT = 12;
+
+// This app's own icon, registered into the shared registry at
+// ClassicyIcons.applications.radioTraffic.app. registerClassicyIcons assigns
+// shallowly, so the existing applications namespace is spread in to keep
+// classicy's bundled app icons intact (same gotcha as FlightTracker.tsx).
+const ICONS = registerClassicyIcons({
+	applications: {
+		...ClassicyIcons.applications,
+		radioTraffic: { app: appIconPng },
+	},
+});
+
+const byStartAscending = (a: MediaItem, b: MediaItem) =>
+	startMs(a) - startMs(b) || a.id - b.id;
+
+/**
+ * One catalogue, keyed by id with the LAST copy winning.
+ *
+ * The three sources overlap and disagree: `mp3_history` is a snapshot, the live
+ * `mp3` set is fresher (a row can gain an `end_date` after the snapshot), and
+ * the reveal buffer holds rows that have not started yet. Caller order is
+ * therefore load bearing — history first, live over it.
+ */
+function mergeById(...lists: readonly (readonly MediaItem[])[]): MediaItem[] {
+	const byId = new Map<number, MediaItem>();
+	for (const list of lists) for (const item of list) byId.set(item.id, item);
+	return [...byId.values()];
+}
+
+/** Every card, in its lane, in the order that lane renders before manual pins. */
+function partitionLanes(pool: readonly MediaItem[], nowMs: number): Record<Lane, MediaItem[]> {
+	const out: Record<Lane, MediaItem[]> = { live: [], upcoming: [], previous: [] };
+	for (const item of pool) out[laneFor(item, nowMs)].push(item);
+	out.live.sort(byStartAscending);
+	out.upcoming.sort(byStartAscending);
+	out.previous.sort((a, b) => byStartAscending(b, a));
+	return {
+		live: out.live,
+		upcoming: out.upcoming.slice(0, UPCOMING_LANE_LIMIT),
+		previous: out.previous.slice(0, PREVIOUS_LANE_LIMIT),
+	};
+}
+
+/**
+ * `set` with `id` added or removed, or `set` itself when nothing moved — these
+ * feed React state directly, and a fresh Set per no-op click would re-render the
+ * whole grid for nothing.
+ */
+function toggleId(set: ReadonlySet<number>, id: number): ReadonlySet<number> {
+	const next = new Set(set);
+	if (!next.delete(id)) next.add(id);
+	return next;
+}
+
+/** `set` minus everything `keep` rejects; the same object when nothing was dropped. */
+function retainIds(
+	set: ReadonlySet<number>,
+	keep: (id: number) => boolean,
+): ReadonlySet<number> {
+	const next = new Set([...set].filter(keep));
+	return next.size === set.size ? set : next;
+}
+
+export const RadioTraffic: React.FC = () => {
+	const appIcon = ICONS.applications.radioTraffic.app as string;
+	const aboutWindow = useAboutApp(appId, appIcon);
+
+	const dispatch = useAppManagerDispatch();
+	const appState = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.data as
+				| Record<string, unknown>
+				| undefined,
+	);
+
+	// Persisted state is read ONCE, through the sanitizer, and owned as React
+	// state from there on. Re-reading it would fight the dispatch below, which
+	// writes the same keys back on every change.
+	const [restored] = useState(() => sanitizeRadioTrafficState(appState));
+	const [checked, setChecked] = useState<ReadonlySet<string>>(
+		() => new Set(restored.checked),
+	);
+	const [tool, setTool] = useState<Tool>(restored.tool);
+	const [collapsed, setCollapsed] = useState<Record<Lane, boolean>>(restored.collapsed);
+	const [laneOrder, setLaneOrder] = useState<LaneOrder>(restored.laneOrder);
+	// Solo is not restored — see RadioTrafficContext's mutedItems note.
+	const [audio, setAudio] = useState<AudioState>(() => ({
+		soloId: null,
+		muted: new Set(restored.mutedItems),
+	}));
+
+	const [pickerNamespace, setPickerNamespace] = useState<string | null>(null);
+	/** LIVE cards the listener stopped by hand. */
+	const [stopped, setStopped] = useState<ReadonlySet<number>>(() => new Set());
+	/** PREVIOUS clips the listener started by hand — these do NOT follow the clock. */
+	const [userStarted, setUserStarted] = useState<ReadonlySet<number>>(() => new Set());
+
+	const {
+		mp3Items,
+		mp3History,
+		mp3Meta,
+		mp3MetaGeneration,
+		seekInFlight,
+		subscribeMp3,
+		unsubscribeMp3,
+		getUpcomingMp3Items,
+	} = useContext(MediaStreamContext);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-only
+	useEffect(() => {
+		subscribeMp3(appId);
+		return () => unsubscribeMp3(appId);
+	}, [subscribeMp3, unsubscribeMp3]);
+
+	// ── The clock ────────────────────────────────────────────────────────────
+	// Read-only: every clock WRITE in this repo goes through
+	// TimeMachine/setVirtualClock, and this app is a reader. `localDate` is a
+	// DISPLAY value (UTC shifted by tzOffset for the menu-bar clock) and
+	// virtualUtcMs strips the offset back off — comparing it directly against an
+	// item's start_date is the tz bug virtualClock.test.ts pins.
+	const { localDate, tzOffset, paused: clockPaused } = useClassicyDateTime({ tick: true });
+	const tz = Number(tzOffset);
+	const anchorMs = virtualUtcMs(localDate, tz);
+
+	// Sub-minute correction, ported from RadioScanner/StationPlayer: the store
+	// only updates on minute boundaries and the hook's tick republishes once a
+	// second, so between publications the last known instant plus the REAL time
+	// elapsed since it was stamped is the honest answer — and a paused clock
+	// contributes no elapsed time at all. calcSeekSeconds (radio-core,
+	// unchanged) turns that instant into an element position.
+	//
+	// The stamp is taken during render rather than in an effect: an effect runs
+	// after this render has already called getNowMs(), so the first read after
+	// every tick would add the *previous* second's elapsed time on top of the
+	// new anchor and report the clock up to a second ahead of itself — inside
+	// the badge's 1s in-sync tolerance, which is exactly where it would show.
+	const anchorRef = useRef(anchorMs);
+	const anchorAtRef = useRef(Date.now());
+	if (anchorRef.current !== anchorMs) {
+		anchorRef.current = anchorMs;
+		anchorAtRef.current = Date.now();
+	}
+	const clockPausedRef = useRef(clockPaused);
+	clockPausedRef.current = clockPaused;
+
+	const getNowMs = useCallback(() => {
+		const elapsed = clockPausedRef.current ? 0 : Date.now() - anchorAtRef.current;
+		return anchorRef.current + elapsed;
+	}, []);
+	const nowMs = getNowMs();
+
+	// ── The catalogue ────────────────────────────────────────────────────────
+	// Everything ever seen live, so a clip that ends BETWEEN two history
+	// snapshots still lands in PREVIOUS instead of disappearing (see
+	// rememberItems). This map is also the coordinator's item source, so the
+	// audio and the cards can never disagree about what an item is.
+	const seenRef = useRef<Map<number, MediaItem>>(new Map());
+	useEffect(() => {
+		rememberItems(seenRef.current, mp3Items);
+	}, [mp3Items]);
+
+	// The reveal buffer is mutable and not React state; re-read it once a second.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: anchorMs is the 1 Hz clock dep
+	const upcomingItems = useMemo(
+		() => getUpcomingMp3Items(),
+		[anchorMs, getUpcomingMp3Items], // eslint-disable-line react-hooks/exhaustive-deps
+	);
+
+	// anchorMs, not nowMs: lane membership is a once-a-second question, and
+	// keying it on the ms-precise reading would repartition the whole catalogue
+	// on every render for an answer that cannot have changed.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: anchorMs is the 1 Hz clock dep
+	const lanes = useMemo(
+		() =>
+			partitionLanes(
+				mergeById(historyPool(mp3History, seenRef.current), mp3Items, upcomingItems),
+				getNowMs(),
+			),
+		[mp3History, mp3Items, upcomingItems, anchorMs, getNowMs], // eslint-disable-line react-hooks/exhaustive-deps
+	);
+
+	/** Which lane each rendered card is in — the pin reconciler's whole input. */
+	const membership = useMemo(() => {
+		const map = new Map<number, Lane>();
+		for (const lane of LANES) for (const item of lanes[lane]) map.set(item.id, lane);
+		return map;
+	}, [lanes]);
+	const membershipRef = useRef(membership);
+	membershipRef.current = membership;
+
+	// A pin means "this slot among these siblings", and the siblings are the
+	// lane — so a pin dies when its item changes lane, and with it the map's
+	// unbounded growth over a long session of seeks.
+	useEffect(() => {
+		setLaneOrder((order) => reconcileLaneOrder(order, membership));
+	}, [membership]);
+
+	// Both hand-set lists are scoped to a lane the item may have left. Pruning
+	// them here is what stops a stop/start from a previous hour reapplying
+	// itself when a backward seek brings the clip round again.
+	useEffect(() => {
+		setStopped((ids) => retainIds(ids, (id) => membership.get(id) === "live"));
+		setUserStarted((ids) => retainIds(ids, (id) => membership.has(id)));
+	}, [membership]);
+
+	// ── The filter ───────────────────────────────────────────────────────────
+	const [vocabulary, setVocabulary] = useState<VocabularyState>(() => ({
+		vocabulary: [],
+		generation: null,
+		stale: false,
+	}));
+	useEffect(() => {
+		let alive = true;
+		// Never rejects — a failure resolves to the last-known-good copy flagged
+		// stale, because tag filtering IS this app's navigation (Decision 5).
+		reconcileTagVocabulary(mp3MetaGeneration).then((next) => {
+			if (alive) setVocabulary(next);
+		});
+		return () => {
+			alive = false;
+		};
+	}, [mp3MetaGeneration]);
+
+	const groups = useMemo(() => groupVocabulary(vocabulary.vocabulary), [vocabulary]);
+
+	const visible = useMemo(() => {
+		const keep = (item: MediaItem) => matchesFilter(mp3Meta[item.id]?.tags, checked);
+		return {
+			live: lanes.live.filter(keep),
+			upcoming: lanes.upcoming.filter(keep),
+			previous: lanes.previous.filter(keep),
+		};
+	}, [lanes, mp3Meta, checked]);
+
+	// ── Audio ────────────────────────────────────────────────────────────────
+	// The mix is the FILTER-VISIBLE live cards, so hiding the solo target hands
+	// the solo on rather than silencing the grid. Called on every visible-mix
+	// change; reconcileSolo returns the same object when the target is still
+	// there, so React bails out of the no-op renders.
+	useEffect(() => {
+		setAudio((state) => reconcileSolo(state, visible.live));
+	}, [visible.live]);
+
+	const userStartedRef = useRef(userStarted);
+	userStartedRef.current = userStarted;
+
+	// The coordinator's view of this app, installed once. `itemFor` reads the
+	// same map rememberItems maintains — one source of item truth — and returns
+	// undefined for a listener-started clip, which is how such a clip opts out of
+	// the reseek, the health check and the gesture retry: it plays from its own
+	// start, not from the virtual clock's position.
+	useEffect(
+		() =>
+			connectClock({
+				nowMs: getNowMs,
+				clockPaused: () => clockPausedRef.current,
+				itemFor: (itemId) =>
+					userStartedRef.current.has(itemId) ? undefined : seenRef.current.get(itemId),
+			}),
+		[getNowMs],
+	);
+
+	// A jump larger than the coordinator's threshold is a scrub and reseeks every
+	// registered element, mounted or not; ordinary per-second advance is ignored.
+	useEffect(() => {
+		clockMoved();
+	}, [anchorMs]);
+
+	// Which elements should exist. LANE membership, NOT filter visibility: the
+	// element outlives the card so a re-checked filter resumes at the clock's
+	// offset instead of restarting. Tracked here because the registry is
+	// module-level and release() is an explicit act, never a render side effect.
+	const registeredRef = useRef<Set<number>>(new Set());
+	useEffect(() => {
+		const desired = new Map<number, string>();
+		for (const item of lanes.live) {
+			if (!stopped.has(item.id)) desired.set(item.id, resolveAudioUrl(item, false));
+		}
+		for (const item of lanes.previous) {
+			if (userStarted.has(item.id)) desired.set(item.id, resolveAudioUrl(item, false));
+		}
+		for (const itemId of [...registeredRef.current]) {
+			if (desired.has(itemId)) continue;
+			release(itemId);
+			registeredRef.current.delete(itemId);
+		}
+		for (const [itemId, url] of desired) {
+			ensure(itemId, url);
+			registeredRef.current.add(itemId);
+		}
+	}, [lanes.live, lanes.previous, stopped, userStarted]);
+
+	// The app unmounting is the one moment nothing else can stop the sound:
+	// these elements are never in the DOM, so a dropped registry is a leak that
+	// keeps playing.
+	useEffect(
+		() => () => {
+			releaseAll();
+			registeredRef.current.clear();
+		},
+		[],
+	);
+
+	// Silence, not pause: a paused element stops advancing and drifts off the
+	// clock, so unmuting it later would drop the listener into a stale offset.
+	useEffect(() => {
+		const audibleIds = new Set(
+			visible.live.filter((item) => isAudible(audio, item.id, "live")).map((i) => i.id),
+		);
+		for (const itemId of registeredRef.current) {
+			// A clip the listener started themselves is audible by definition —
+			// they pressed play, and it is not part of the solo/mute mix at all.
+			setLevel(itemId, audibleIds.has(itemId) || userStarted.has(itemId));
+		}
+	}, [visible.live, audio, userStarted]);
+
+	const audioBlocked = useSyncExternalStore(subscribeAudioBlocked, isAudioBlocked);
+
+	// ── Persistence ──────────────────────────────────────────────────────────
+	useEffect(() => {
+		dispatch(
+			radioTrafficSetState({
+				checked: [...checked],
+				tool,
+				collapsed,
+				laneOrder,
+				mutedItems: [...audio.muted],
+			}),
+		);
+	}, [checked, tool, collapsed, laneOrder, audio.muted, dispatch]);
+
+	// ── Handlers ─────────────────────────────────────────────────────────────
+	const toggleTag = useCallback((tag: string) => {
+		setChecked((prev) => {
+			const next = new Set(prev);
+			if (!next.delete(tag)) next.add(tag);
+			return next;
+		});
+	}, []);
+
+	const onCardClick = useCallback(
+		(itemId: number) => setAudio((state) => applyToolClick(state, tool, itemId)),
+		[tool],
+	);
+
+	const onTogglePause = useCallback((itemId: number, lane: Lane) => {
+		if (lane === "live") setStopped((ids) => toggleId(ids, itemId));
+		// An UPCOMING clip has no audio yet; there is nothing to start.
+		else if (lane === "previous") setUserStarted((ids) => toggleId(ids, itemId));
+	}, []);
+
+	const onReorder = useCallback(
+		(lane: Lane, fromId: number, toIndex: number) =>
+			setLaneOrder((order) =>
+				reorderLane(order, lane, fromId, toIndex, membershipRef.current),
+			),
+		[],
+	);
+
+	const renderCard = useCallback(
+		(lane: Lane) => (item: MediaItem) => (
+			// A plain div with a pointer handler, exactly like the lane slot it
+			// sits in: making it focusable would put a tab stop in front of every
+			// card's own tab bar and transport button. Under the `hand` tool the
+			// slot's drag handlers run too, and applyToolClick("hand") is a no-op,
+			// so a drag cannot also mute something.
+			<div
+				className={styles.rtCardSlot}
+				data-card-slot={item.id}
+				onPointerUp={() => onCardClick(item.id)}
+			>
+				<TrafficCard
+					item={item}
+					meta={mp3Meta[item.id]}
+					lane={lane}
+					tzOffsetHours={tz}
+					nowMs={nowMs}
+					seeking={seekInFlight}
+					userPlaying={userStarted.has(item.id)}
+					muted={!isAudible(audio, item.id, lane) && !userStarted.has(item.id)}
+					paused={
+						lane === "live" ? stopped.has(item.id) : !userStarted.has(item.id)
+					}
+					onTogglePause={() => onTogglePause(item.id, lane)}
+				/>
+			</div>
+		),
+		[mp3Meta, tz, nowMs, seekInFlight, userStarted, audio, stopped, onCardClick, onTogglePause],
+	);
+
+	const appMenu = [
+		{
+			id: "file",
+			title: "File",
+			menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
+		},
+	];
+
+	const pickerGroup = groups.find((group) => group.namespace === pickerNamespace);
+
+	return (
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={appIcon}
+			defaultWindow={`${appId}_main`}
+			desktopIconBalloonHelp={manifestDescription(appId)}
+		>
+			{pickerGroup && (
+				<TagPickerWindow
+					appId={appId}
+					icon={appIcon}
+					namespace={pickerGroup.namespace}
+					label={pickerGroup.label}
+					values={pickerGroup.values}
+					checked={checked}
+					// The picker is handed the WHOLE checked set and hands back the
+					// whole set, so there is no merge here to get wrong.
+					onConfirm={(next) => {
+						setChecked(next);
+						setPickerNamespace(null);
+					}}
+					onCancel={() => setPickerNamespace(null)}
+				/>
+			)}
+			<ClassicyWindow
+				id={`${appId}_main`}
+				title={appName}
+				appId={appId}
+				icon={appIcon}
+				closable={true}
+				resizable={true}
+				zoomable={true}
+				scrollable={false}
+				collapsable={true}
+				initialSize={[892, 601]}
+				initialPosition={["left", "top"]}
+				minimumSize={[520, 320]}
+				modal={false}
+				appMenu={appMenu}
+			>
+				<div className={styles.rtShell}>
+					{audioBlocked && (
+						<div className={styles.rtUnlockOverlay}>
+							<div className={styles.rtUnlockOverlayBox}>
+								<p className={styles.rtUnlockOverlayTitle}>
+									Click anywhere to start audio
+								</p>
+								<p className={styles.rtUnlockOverlayHint}>
+									Your browser paused sound until you interact with the page
+								</p>
+							</div>
+						</div>
+					)}
+					<aside className={styles.rtSidebar}>
+						<ToolPalette tool={tool} onSelect={setTool} />
+						<FilterTree
+							groups={groups}
+							checked={checked}
+							onToggle={toggleTag}
+							onOpenPicker={setPickerNamespace}
+							stale={vocabulary.stale}
+						/>
+					</aside>
+					<main className={styles.rtLanes}>
+						{LANES.map((lane) => (
+							<LaneSection
+								key={lane}
+								lane={lane}
+								items={visible[lane]}
+								order={laneOrder[lane]}
+								collapsed={collapsed[lane]}
+								onToggleCollapse={(next) =>
+									setCollapsed((prev) => ({ ...prev, [lane]: next }))
+								}
+								tool={tool}
+								onReorder={(fromId, toIndex) => onReorder(lane, fromId, toIndex)}
+								renderCard={renderCard(lane)}
+							/>
+						))}
+					</main>
+				</div>
+			</ClassicyWindow>
+			{aboutWindow}
+		</ClassicyApp>
+	);
+};
