@@ -12,6 +12,19 @@ function toMs(value: string): number {
 	return new Date(s).getTime();
 }
 
+/**
+ * Epoch ms of an item's start.
+ *
+ * Exported because ordering items by start time is not this module's business
+ * alone, and every caller that reimplements it re-introduces the same bug: a
+ * Directus datetime arrives tz-less ("2001-09-11 13:00:00") and a bare
+ * `new Date()` reads it as browser-local, shifting every comparison by the
+ * reader's offset.
+ */
+export function startMs(item: MediaItem): number {
+	return toMs(item.start_date);
+}
+
 /** The station a MediaItem belongs to: its source, or its title when blank. */
 function stationKey(item: MediaItem): string {
 	const src = item.source?.trim();
