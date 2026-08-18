@@ -147,9 +147,15 @@ const FakeMercatorCoordinate = vi.hoisted(() => ({
 	}),
 }));
 vi.mock("maplibre-gl", () => ({
-	default: { Map: FakeMap, addProtocol: vi.fn(), MercatorCoordinate: FakeMercatorCoordinate },
+	default: {
+		Map: FakeMap,
+		addProtocol: vi.fn(),
+		setWorkerUrl: vi.fn(),
+		MercatorCoordinate: FakeMercatorCoordinate,
+	},
 	Map: FakeMap,
 	addProtocol: vi.fn(),
+	setWorkerUrl: vi.fn(),
 	MercatorCoordinate: FakeMercatorCoordinate,
 }));
 vi.mock("pmtiles", () => ({ Protocol: class { tile = vi.fn(); } }));

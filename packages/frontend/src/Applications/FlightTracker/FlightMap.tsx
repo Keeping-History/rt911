@@ -1,4 +1,5 @@
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Protocol } from "pmtiles";
 import { type FC, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { MapCompass } from "./MapCompass";
@@ -97,6 +98,15 @@ import {
 	cameraPose,
 	MAX_FOLLOW_PITCH,
 } from "./flightCamera";
+
+// maplibre-gl 6.x is ESM-only and locates its worker script relative to its
+// own import.meta.url at runtime. Vite's dev-server dep optimizer pre-bundles
+// maplibre-gl.mjs into node_modules/.vite/deps/, which drags that self-located
+// URL along with it — the worker file never actually lives there, so the
+// default resolution 404s and the map falls back to (slower, unsupported)
+// main-thread tile parsing. Feeding it Vite's own resolved worker URL sidesteps
+// the mismatch in both dev and prod. See maplibre-gl's Vite integration guide.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 // Register the pmtiles:// protocol once per page (adding it twice throws).
 let protocolRegistered = false;
