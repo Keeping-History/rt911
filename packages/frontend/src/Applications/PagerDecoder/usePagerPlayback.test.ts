@@ -50,6 +50,8 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					pagerItems,
 					mp3Items: [],
 					mp3History: [],
+					mp3Meta: {},
+					mp3MetaGeneration: null,
 					connected: true,
 					addItems: vi.fn(),
 					subscribeFormats: vi.fn(),
