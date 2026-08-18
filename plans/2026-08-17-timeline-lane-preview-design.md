@@ -82,7 +82,7 @@ rendering what is *playing*. A timeline entry is not playing.
 
 A static waveform needs amplitude peaks from the file. The corpus rules out
 computing them in the browser: 576 clips are under 5 minutes, but 179 position
-tapes run up to 6.75 hours, and decoding one of those client-side would download
+tapes run up to 8h18m, and decoding one of those client-side would download
 hundreds of megabytes and freeze the tab.
 
 **A radio entry names a station, not a file.** `MediaEntry.itemId` is a station
@@ -105,10 +105,10 @@ So peaks are precomputed offline and stored on the row:
 - **`compute-peaks`** — Prefect flow, manual-only, `dry_run=True` by default,
   idempotent on `peaks IS NOT NULL`.
 
-A fixed bucket count is deliberate: the stored blob is ~2 KB whether the file is
-40 seconds or 6.75 hours, and the renderer always draws 480 values across
-whatever width it has. Per-file resolution would make both sides variable for no
-benefit at preview size.
+A fixed bucket count is deliberate: the stored blob is ~4.1 KB (4 110 bytes of
+compact JSON, measured) whether the file is two seconds or 8h18m, and the
+renderer always draws 480 values across whatever width it has. Per-file
+resolution would make both sides variable for no benefit at preview size.
 
 ## Components
 

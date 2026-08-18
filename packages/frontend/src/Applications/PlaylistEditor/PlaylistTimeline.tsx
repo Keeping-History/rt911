@@ -408,13 +408,16 @@ export function PlaylistTimeline({
 								const fadeEnd = b.fadeEnd && dragging?.edge !== "end";
 								const handleCursor = (edge: "start" | "end") =>
 									edgeCursor(dragging?.edge === edge ? (dragging.dir ?? "lr") : "lr");
-								// The preview samples the part of the entry that is ON SCREEN,
+								// The TV strip samples the part of the entry that is ON SCREEN,
 								// not its whole span — an entry with no bounds covers all ten
 								// days, and six thumbnails forty hours apart preview nothing.
 								// Intersecting with the scroll window is what makes zooming and
-								// panning walk the strip through the footage.
+								// panning walk the strip through the footage. The radio waveform
+								// wants the opposite (see LanePreview): it is positioned in track
+								// space, so it takes the entry's committed window and `bounds`
+								// below and ignores these two entirely.
 								//
-								// It reads b.startFrac/b.endFrac rather than the drag-preview
+								// Both read b.startFrac/b.endFrac rather than the drag-preview
 								// fractions above deliberately: following a live edge drag would
 								// re-derive the bucket set on every snapped minute and issue a
 								// fresh row of <img src>es each time — 193 image requests, measured,
@@ -475,13 +478,16 @@ export function PlaylistTimeline({
 										>
 											<span className="playlistTimelineLabel">{b.label}</span>
 										</div>
-										{b.uid === selectedUid && previewEnd > previewStart && (
+										{b.uid === selectedUid && (
 											<LanePreview
 												group={b.group}
 												channel={b.label}
-												startMs={fractionToMs(previewStart, bounds)}
-												endMs={fractionToMs(previewEnd, bounds)}
+												visibleStartMs={fractionToMs(previewStart, bounds)}
+												visibleEndMs={fractionToMs(previewEnd, bounds)}
 												viewportPx={view.clientWidth}
+												entryStartMs={fractionToMs(b.startFrac, bounds)}
+												entryEndMs={fractionToMs(b.endFrac, bounds)}
+												bounds={bounds}
 											/>
 										)}
 									</div>

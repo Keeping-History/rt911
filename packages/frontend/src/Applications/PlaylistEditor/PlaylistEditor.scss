@@ -224,6 +224,52 @@ $lane-bar-height: 20px;
 	width: auto;
 }
 
+/* The radio preview is a time-positioned overlay, not a summary strip: each
+ * recording sits at its own moment within the entry's window, so — unlike
+ * .playlistTimelinePreview above — this one is `position: relative` and must
+ * NOT be sticky. Sticky would decouple the slots from the timeline positions
+ * they are meant to align with as the user scrolls. */
+.playlistTimelinePreviewRadio {
+	position: relative;
+	left: 0;
+	width: 100%;
+	// Matches the `height={40}` passed to PeaksWaveform (RadioLanePreview):
+	// the canvas has an explicit pixel height, and stretching it to a
+	// differently-sized CSS box would distort the drawn envelope.
+	height: 40px;
+	// Undoes .playlistTimelinePreview's `padding: 2px 0`. There is no global
+	// `box-sizing: border-box` in this app, so that padding is ADDED to the
+	// 40px: the padding box becomes 44px, the slot's `height: 100%` resolves
+	// against it, and the 40px canvas bitmap gets upscaled ~10% vertically —
+	// exactly the distortion the height above exists to prevent.
+	padding: 0;
+	margin-top: $lane-bar-height;
+	// The slots are positioned in TRACK time, and a recording can overrun the
+	// timeline bounds at either end (it is drawn at its true extent so the
+	// envelope stays aligned with the audio it depicts). Clip at the track edge
+	// rather than letting a slot paint into the scroll overflow.
+	overflow: hidden;
+}
+
+.playlistTimelineWaveformSlot {
+	position: absolute;
+	top: 0;
+	height: 100%;
+	overflow: hidden;
+}
+
+.playlistTimelineWaveform {
+	display: block;
+	width: 100%;
+	height: 100%;
+	/* PeaksWaveform resolves the drawing color with getComputedStyle().color,
+	 * so the envelope follows whatever `color` this element inherits from the
+	 * lane — set one here if the waveform ever needs its own. It cannot be done
+	 * by assigning "currentColor" to the canvas fillStyle: that is a CSS
+	 * keyword, not a color a canvas context parses, and the assignment is
+	 * dropped silently, leaving everything painted #000. */
+}
+
 /* Add Settings dropdown: the div only anchors position measurement; the menu
  * itself is a ClassicyContextualMenu (position: fixed), because the palette
  * window's overflow: hidden clips anything absolutely positioned inside it. */
