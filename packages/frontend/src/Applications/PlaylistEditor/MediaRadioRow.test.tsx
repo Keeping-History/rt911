@@ -10,7 +10,7 @@ afterEach(cleanup);
 const mockStationLogos = vi.hoisted(
 	() => ({ current: {} as Record<string, string> }),
 );
-vi.mock("../RadioScanner/stationLogos", () => ({
+vi.mock("../radio-core/stationLogos", () => ({
 	useStationLogos: () => mockStationLogos.current,
 }));
 

@@ -24,23 +24,23 @@ import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { trackAppToggle } from "../../openreplay";
-import { isAudioBlocked, subscribeAudioBlocked } from "../RadioScanner/audioBlocked";
+import { isAudioBlocked, subscribeAudioBlocked } from "../radio-core/audioBlocked";
 // import { NowPlayingList } from "./NowPlayingList";
 import {
     effectiveMutedIds,
     sanitizeActiveStation,
     sanitizeItemIds,
-} from "../RadioScanner/radioPlayback";
-import styles from "../RadioScanner/RadioScanner.module.scss";
+} from "../radio-core/radioPlayback";
+import styles from "../radio-core/radio.module.scss";
 import {
     DEFAULT_RADIO_SCANNER_SETTINGS,
     nextVizMode,
     type RadioScannerSettings,
     readRadioScannerSettings,
-} from "../RadioScanner/radioScannerSettings";
-import { RadioSettingsWindow } from "../RadioScanner/RadioSettingsWindow";
-import { StationButtonContent } from "../RadioScanner/StationButtonContent";
-import { StationPlayer } from "../RadioScanner/StationPlayer";
+} from "../radio-core/radioScannerSettings";
+import { RadioSettingsWindow } from "../radio-core/RadioSettingsWindow";
+import { StationButtonContent } from "../radio-core/StationButtonContent";
+import { StationPlayer } from "../radio-core/StationPlayer";
 import {
     activeSegments,
     BROADCAST_STATIONS,
@@ -48,8 +48,8 @@ import {
     sortStationsByStatusAndLabel,
     stationLogo,
     stationStatus,
-} from "../RadioScanner/stationGrouping";
-import { useStationLogos } from "../RadioScanner/stationLogos";
+} from "../radio-core/stationGrouping";
+import { useStationLogos } from "../radio-core/stationLogos";
 import "./RadioTunerContext";
 import type { RadioTunerRemoteCommand } from "./RadioTunerContext";
 import { radioTunerSetSettings } from "./RadioTunerContext";

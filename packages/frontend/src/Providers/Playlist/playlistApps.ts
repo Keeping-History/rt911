@@ -1,7 +1,7 @@
 // Mapping between playlist media catalogs and the desktop apps that own them,
 // plus name/icon metadata for programmatic open/close dispatches.
 import { ClassicyIcons } from "classicy";
-import { BROADCAST_STATIONS } from "../../Applications/RadioScanner/stationGrouping";
+import { BROADCAST_STATIONS } from "../../Applications/radio-core/stationGrouping";
 import type { PlaylistApp } from "./playlistTypes";
 
 export const PLAYLIST_APP_IDS: Record<PlaylistApp, string> = {

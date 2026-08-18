@@ -1,7 +1,7 @@
 import type React from "react";
 import { useQuickTimeSubtitles } from "classicy";
 import { useEffect, useState } from "react";
-import styles from "./RadioScanner.module.scss";
+import styles from "./radio.module.scss";
 import { type CaptionStyle, captionTextStyle } from "./radioScannerSettings";
 
 interface CaptionOverlayProps {

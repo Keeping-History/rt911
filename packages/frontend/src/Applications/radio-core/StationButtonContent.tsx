@@ -2,7 +2,7 @@ import type React from "react";
 import lightOffPng from "./light-off.png";
 import lightOnPng from "./light-on.png";
 import lightUpcomingPng from "./light-upcoming.png";
-import styles from "./RadioScanner.module.scss";
+import styles from "./radio.module.scss";
 import type { StationStatus } from "./stationGrouping";
 
 interface StationButtonContentProps {

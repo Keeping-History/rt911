@@ -26,27 +26,27 @@ import {
 import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
-import { FocusedItemPlayer } from "./FocusedItemPlayer";
+import { FocusedItemPlayer } from "../radio-core/FocusedItemPlayer";
 import { NowPlayingList } from "./NowPlayingList";
-import styles from "./RadioScanner.module.scss";
+import styles from "../radio-core/radio.module.scss";
 import "./RadioScannerContext";
 import type { RadioRemoteCommand } from "./RadioScannerContext";
 import { trackAppToggle } from "../../openreplay";
-import { isAudioBlocked, subscribeAudioBlocked } from "./audioBlocked";
+import { isAudioBlocked, subscribeAudioBlocked } from "../radio-core/audioBlocked";
 import {
     effectiveMutedIds,
     sanitizeActiveStation,
     sanitizeItemIds,
-} from "./radioPlayback";
+} from "../radio-core/radioPlayback";
 import {
     DEFAULT_RADIO_SCANNER_SETTINGS,
     nextVizMode,
     radioScannerSetSettings,
     type RadioScannerSettings,
     readRadioScannerSettings,
-} from "./radioScannerSettings";
-import { RadioSettingsWindow } from "./RadioSettingsWindow";
-import { StationPlayer } from "./StationPlayer";
+} from "../radio-core/radioScannerSettings";
+import { RadioSettingsWindow } from "../radio-core/RadioSettingsWindow";
+import { StationPlayer } from "../radio-core/StationPlayer";
 import {
     activeSegments,
     BROADCAST_STATIONS,
@@ -60,8 +60,8 @@ import {
     startTimeLabel,
     stationStatus,
     upcomingSegments,
-} from "./stationGrouping";
-import { StationButtonContent } from "./StationButtonContent";
+} from "../radio-core/stationGrouping";
+import { StationButtonContent } from "../radio-core/StationButtonContent";
 
 type RadioScannerProps = Record<string, never>;
 

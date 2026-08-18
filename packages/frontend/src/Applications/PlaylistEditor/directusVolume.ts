@@ -5,7 +5,7 @@ import {
 	OBSERVER_FLIGHTS,
 	PRESIDENTIAL_FLIGHTS,
 } from "../FlightTracker/notableFlights";
-import { BROADCAST_STATIONS } from "../RadioScanner/stationGrouping";
+import { BROADCAST_STATIONS } from "../radio-core/stationGrouping";
 import { directusGet } from "./directusQueue";
 
 export const MEDIA_FILE_TYPES = {

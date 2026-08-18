@@ -8,7 +8,7 @@ afterEach(cleanup);
 // react-fast-marquee measures via ResizeObserver, which jsdom doesn't
 // implement. The marquee is purely presentational here, so render children
 // directly — recording the play prop so tests can assert pause-on-solo.
-vi.mock("./marquee", () => ({
+vi.mock("../radio-core/marquee", () => ({
 	default: ({ children, play }: { children?: React.ReactNode; play?: boolean }) => (
 		<div data-testid="marquee" data-play={String(play ?? true)}>
 			{children}
@@ -19,7 +19,7 @@ vi.mock("./marquee", () => ({
 // jsdom has no layout, so drive the fits/overflows decision from the tests
 // instead of from real measurement (the hook has its own unit tests).
 const overflow = vi.hoisted(() => ({ value: false }));
-vi.mock("./useHorizontalOverflow", () => ({
+vi.mock("../radio-core/useHorizontalOverflow", () => ({
 	useHorizontalOverflow: () => ({
 		containerRef: () => {},
 		contentRef: () => {},

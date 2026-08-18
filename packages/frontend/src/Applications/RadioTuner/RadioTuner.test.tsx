@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	clearAudioBlocked,
 	markAudioBlocked,
-} from "../RadioScanner/audioBlocked";
+} from "../radio-core/audioBlocked";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	MediaStreamContext,
@@ -22,7 +22,7 @@ import {
 const stationPlayerProps = vi.hoisted(
 	() => ({ current: null as Record<string, unknown> | null }),
 );
-vi.mock("../RadioScanner/StationPlayer", () => ({
+vi.mock("../radio-core/StationPlayer", () => ({
 	StationPlayer: (props: Record<string, unknown>) => {
 		stationPlayerProps.current = props;
 		return <div data-testid="station-player" />;
@@ -39,7 +39,7 @@ vi.mock("../../openreplay", () => ({
 const mockStationLogos = vi.hoisted(
 	() => ({ current: {} as Record<string, string> }),
 );
-vi.mock("../RadioScanner/stationLogos", () => ({
+vi.mock("../radio-core/stationLogos", () => ({
 	useStationLogos: () => mockStationLogos.current,
 }));
 

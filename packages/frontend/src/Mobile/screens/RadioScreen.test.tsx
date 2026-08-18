@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Station } from "../../Applications/RadioScanner/stationGrouping";
+import type { Station } from "../../Applications/radio-core/stationGrouping";
 import { ScreenNavContext } from "../WheelContext";
 import { RadioScreen } from "./RadioScreen";
 
