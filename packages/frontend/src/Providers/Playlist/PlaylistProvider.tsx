@@ -272,7 +272,7 @@ export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 	 * definition rather than tearing the lesson down with an error dialog —
 	 * unlike the initial load, the student already has a working playlist.
 	 * Serialized via `reloadInFlightRef`: loadPlaylist must never run
-	 * concurrently with itself (parallel same-path api-beta fetches can return
+	 * concurrently with itself (parallel same-path Directus fetches can return
 	 * mixed bodies — see loadPlaylist.ts), and a burst of reload commands
 	 * collapses into one fetch of the same final definition anyway.
 	 */
