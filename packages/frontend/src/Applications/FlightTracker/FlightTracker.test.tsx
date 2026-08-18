@@ -252,6 +252,8 @@ function makeCtxValue(
 		pagerItems: [],
 		mp3Items: [],
 		mp3History: [],
+		mp3Meta: {},
+		mp3MetaGeneration: null,
 		newsItems: [],
 		alertItems: [],
 		subscribeAlerts: () => {},

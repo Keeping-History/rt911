@@ -61,3 +61,12 @@ export const CHAT_BASE: string = chatHttpBase(STREAM_URL);
  * teacher's room command does not read as a chat call at the call site.
  */
 export const ROOM_BASE: string = CHAT_BASE;
+
+/**
+ * Base for the streamer's public mp3 metadata routes (`GET /mp3/tags`). Derived
+ * from the same WebSocket URL rather than declared as its own VITE_ variable:
+ * every one of those needs a Dockerfile ARG *and* ENV line *and* a workflow
+ * build-arg, and a missing declaration surfaces only as production quietly
+ * using the default at the top of this file.
+ */
+export const STREAM_HTTP_BASE: string = CHAT_BASE;

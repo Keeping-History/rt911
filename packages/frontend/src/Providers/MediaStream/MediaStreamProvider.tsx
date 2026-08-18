@@ -15,6 +15,7 @@ import {
 	type ChatMessage,
 	type ChatStateReason,
 	type FlightPosition,
+	type ItemMeta,
 	MediaStreamContext,
 	type MediaItem,
 	type PagerItem,
@@ -91,6 +92,18 @@ interface WsMp3Message {
 interface WsMp3HistoryMessage {
 	type: "mp3_history";
 	items?: MediaItem[];
+}
+
+// The one-shot Radio Traffic metadata for the whole mp3 corpus, keyed by item
+// id. Sent once per session, before the first mp3 snapshot, and never resent —
+// not on seek, not on resubscribe. `items` is an id-keyed map rather than the
+// ordered list every other channel carries (the client joins it onto items it
+// already holds, so order means nothing) and rides INTEGER keys on the wire,
+// which msgpack decoding turns into the numeric properties of a plain object.
+interface WsMp3MetaMessage {
+	type: "mp3_meta";
+	generation?: string;
+	items?: Record<number, ItemMeta>;
 }
 
 interface WsNewsMessage {
@@ -256,6 +269,7 @@ type WsIncomingMessage =
 	| WsPagerMessage
 	| WsMp3Message
 	| WsMp3HistoryMessage
+	| WsMp3MetaMessage
 	| WsNewsMessage
 	| WsAlertsMessage
 	| WsUsenetMessage
@@ -305,6 +319,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
 	const [mp3History, setMp3History] = useState<MediaItem[]>([]);
+	// Corpus-wide mp3 metadata from the one-shot mp3_meta frame. Deliberately
+	// absent from every buffer, tick and seek path below: it has no time
+	// dimension, so there is nothing for the reveal gate or retention to decide.
+	const [mp3Meta, setMp3Meta] = useState<Record<number, ItemMeta>>({});
+	const [mp3MetaGeneration, setMp3MetaGeneration] = useState<string | null>(null);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
 	const [alertItems, setAlertItems] = useState<AlertItem[]>([]);
 	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
@@ -1344,6 +1363,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "mp3_meta") {
+				// One frame per session, replaced wholesale — a reconnect is a new
+				// session and sends its own. No reveal buffer and no retention pass:
+				// this is reference data about 2001, not a window on the clock, so a
+				// finished clip still needs the entry that describes it.
+				const meta = msg as WsMp3MetaMessage;
+				setMp3Meta(meta.items ?? {});
+				setMp3MetaGeneration(meta.generation ?? null);
+				return;
+			}
+
 			if (msg.type === "news") {
 				const incomingNews = (msg as WsNewsMessage).items;
 				if (!incomingNews || incomingNews.length === 0) return;
@@ -1670,6 +1700,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerItems,
 			mp3Items,
 			mp3History: gatedMp3History,
+			mp3Meta,
+			mp3MetaGeneration,
 			newsItems,
 			alertItems,
 			usenetItems,
@@ -1732,6 +1764,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerItems,
 			mp3Items,
 			gatedMp3History,
+			mp3Meta,
+			mp3MetaGeneration,
 			newsItems,
 			alertItems,
 			usenetItems,
