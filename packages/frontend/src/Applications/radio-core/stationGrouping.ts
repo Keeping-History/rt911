@@ -31,8 +31,15 @@ function stationKey(item: MediaItem): string {
 	return src && src.length > 0 ? src : item.title;
 }
 
-/** Effective end ms, or null when neither end_date nor calc_duration is known. */
-function effectiveEndMs(item: MediaItem): number | null {
+/**
+ * Effective end ms, or null when neither end_date nor calc_duration is known.
+ *
+ * Exported for the same reason as startMs: every caller that reimplements it
+ * has to pick end_date-over-calc_duration the same way this module's lane
+ * predicates do, and one that picks differently puts a card in a lane whose
+ * own panel disagrees about when the clip finished.
+ */
+export function effectiveEndMs(item: MediaItem): number | null {
 	if (item.end_date) return toMs(item.end_date);
 	if (typeof item.calc_duration === "number") {
 		return toMs(item.start_date) + item.calc_duration * 1000;

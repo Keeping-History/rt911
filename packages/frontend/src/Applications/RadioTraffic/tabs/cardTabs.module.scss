@@ -1,0 +1,165 @@
+// The five card tab panels.
+//
+// Every one of these sits in a 206x39 box inside a 210x124 card, so the whole
+// file is written for density: 4 lanes of type at most, no decorative padding,
+// and each panel scrolls rather than growing the card it lives in.
+//
+// Colours here are placeholders pending Robbie's pass — the structure is what
+// this file pins, not the palette.
+
+.rtTabPanel {
+  // Chip fills, keyed by tag namespace. mp3_tags.color is NULL on all 1131 rows
+  // today, so this is the only palette a chip ever gets; tagPalette.ts names
+  // these and honours a curator's `color` over them if one is ever set.
+  --rt-tag-topic: #b8c8e8;
+  --rt-tag-facility: #bcd8bc;
+  --rt-tag-link: #e8d8b0;
+  --rt-tag-tier: #d8c0d8;
+  --rt-tag-aircraft: #b0d8d8;
+  --rt-tag-agency: #e0c0b0;
+  --rt-tag-role: #d0d0b8;
+  --rt-tag-person: #d8c8c8;
+  --rt-tag-default: var(--color-system-03);
+
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1px 2px;
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.85);
+  line-height: 1.25;
+  color: var(--color-system-06);
+  background: var(--color-system-01);
+}
+
+// Label/value rows — Details' timings, Source's provenance.
+.rtDetailRows {
+  margin: 0;
+  padding: 0;
+}
+
+.rtDetailRow {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+}
+
+.rtDetailLabel {
+  flex: 0 0 auto;
+  margin: 0;
+  font-weight: bold;
+}
+
+.rtDetailValue {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rtSubject {
+  margin: 2px 0 0;
+}
+
+// Tag chips. `background` is set inline from tagPalette.chipColor.
+.rtChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rtChip {
+  padding: 0 3px;
+  border: 1px solid var(--color-system-05);
+  white-space: nowrap;
+}
+
+// The Mentions grid and the Parties row are the same shape: N columns that
+// share the width and scroll their own contents.
+.rtColumns {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.rtColumn {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.rtColumnLabel {
+  margin: 0;
+  font-size: inherit;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rtColumnList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rtColumnValue,
+.rtPartyField {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Confidence badges. The three graded levels must stay visually distinct — the
+// badge is how a reader knows whether to trust the attribution.
+.rtConfBadge {
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 0 3px;
+  border: 1px solid var(--color-system-05);
+  white-space: nowrap;
+}
+
+.rtConfHigh {
+  background: #a8d8a8;
+}
+
+.rtConfMedium {
+  background: #e8dca0;
+}
+
+.rtConfLow {
+  background: #e8b8b0;
+}
+
+.rtConfOther {
+  background: var(--color-system-03);
+}
+
+// Transcript.
+.rtCue {
+  margin: 0;
+}
+
+.rtCueSilent {
+  margin: 0;
+  text-align: center;
+  color: var(--color-system-04);
+}
+
+// Every panel's "there is nothing here" line. A card tab that renders an empty
+// box reads as broken; 7% of the corpus has no metadata at all, so this is a
+// routine state rather than an error one.
+.rtEmpty {
+  margin: 0;
+  color: var(--color-system-04);
+}
