@@ -1,7 +1,7 @@
 import type { ActionMessage, ClassicyStore } from "classicy";
 import { registerApp } from "classicy";
 import { z } from "zod";
-import type { RadioScannerSettings } from "../RadioScanner/radioScannerSettings";
+import type { RadioScannerSettings } from "../radio-core/radioScannerSettings";
 
 const appId = "RadioTuner.app";
 

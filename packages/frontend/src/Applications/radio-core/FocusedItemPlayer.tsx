@@ -11,7 +11,7 @@ import {
 	DEFAULT_CAPTION_STYLE,
 	type VizMode,
 } from "./radioScannerSettings";
-import styles from "./RadioScanner.module.scss";
+import styles from "./radio.module.scss";
 import { WaveformVisualizer } from "./WaveformVisualizer";
 import { RadioProgressBar } from "./RadioProgressBar";
 import { setAudioLevel } from "./audioCapture";

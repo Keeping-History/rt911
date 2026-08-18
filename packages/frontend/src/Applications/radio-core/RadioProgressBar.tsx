@@ -1,6 +1,6 @@
 import { timeFriendly } from "classicy";
 import type React from "react";
-import styles from "./RadioScanner.module.scss";
+import styles from "./radio.module.scss";
 
 interface RadioProgressBarProps {
 	currentTime: number;

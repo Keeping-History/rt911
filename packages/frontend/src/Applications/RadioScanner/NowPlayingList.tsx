@@ -1,9 +1,9 @@
 import { ClassicyIcons } from "classicy";
 import type React from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
-import styles from "./RadioScanner.module.scss";
-import Marquee from "./marquee";
-import { useHorizontalOverflow } from "./useHorizontalOverflow";
+import styles from "../radio-core/radio.module.scss";
+import Marquee from "../radio-core/marquee";
+import { useHorizontalOverflow } from "../radio-core/useHorizontalOverflow";
 
 interface NowPlayingListProps {
 	segments: MediaItem[];

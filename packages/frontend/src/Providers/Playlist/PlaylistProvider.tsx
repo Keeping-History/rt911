@@ -26,7 +26,7 @@ import { browserNavigate } from "../../Applications/Browser/BrowserContext";
 import { flightTrackerFocusFlight } from "../../Applications/FlightTracker/flightTrackerCommands";
 import { newsFocusItem } from "../../Applications/News/NewsContext";
 import { radioTuneStation } from "../../Applications/RadioScanner/RadioScannerContext";
-import { BROADCAST_STATIONS } from "../../Applications/RadioScanner/stationGrouping";
+import { BROADCAST_STATIONS } from "../../Applications/radio-core/stationGrouping";
 import { radioTunerTuneStation } from "../../Applications/RadioTuner/RadioTunerContext";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { tvTuneChannel } from "../../Applications/TV/TVContext";

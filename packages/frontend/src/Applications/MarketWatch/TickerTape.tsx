@@ -1,7 +1,7 @@
 // CNBC-2001-style crawl. The marquee animates continuously even when the
 // prints are frozen — real crawls kept scrolling through the closure week.
 
-import Marquee from '../RadioScanner/marquee'
+import Marquee from '../radio-core/marquee'
 import { formatQuote } from './format'
 import styles from './MarketWatch.module.scss'
 import type { Quote } from './quoteBoard'

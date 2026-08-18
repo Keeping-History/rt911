@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
+import { clearAudioBlocked, markAudioBlocked } from "../radio-core/audioBlocked";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	MediaStreamContext,
@@ -19,7 +19,7 @@ import {
 const stationPlayerProps = vi.hoisted(
 	() => ({ current: null as Record<string, unknown> | null }),
 );
-vi.mock("./StationPlayer", () => ({
+vi.mock("../radio-core/StationPlayer", () => ({
 	StationPlayer: (props: Record<string, unknown>) => {
 		stationPlayerProps.current = props;
 		return <div data-testid="station-player" />;
@@ -28,7 +28,7 @@ vi.mock("./StationPlayer", () => ({
 vi.mock("./NowPlayingList", () => ({
 	NowPlayingList: () => <div data-testid="now-playing" />,
 }));
-vi.mock("./FocusedItemPlayer", () => ({
+vi.mock("../radio-core/FocusedItemPlayer", () => ({
 	FocusedItemPlayer: () => <div data-testid="focused-player" />,
 }));
 vi.mock("../../openreplay", () => ({

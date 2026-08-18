@@ -11,7 +11,7 @@ import {
 } from "classicy";
 import type React from "react";
 import type { ChangeEvent, ComponentProps, Dispatch, SetStateAction } from "react";
-import styles from "./RadioScanner.module.scss";
+import styles from "./radio.module.scss";
 import {
     CAPTION_FONT_VARS,
     isVizMode,
