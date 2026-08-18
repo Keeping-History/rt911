@@ -1,5 +1,5 @@
 import type { ExpressionSpecification } from "maplibre-gl";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import { type FC, useEffect, useRef } from "react";
 import type { WeatherObservation } from "../../Providers/MediaStream/MediaStreamContext";

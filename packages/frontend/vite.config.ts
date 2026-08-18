@@ -135,16 +135,18 @@ export default defineConfig({
 		rollupOptions: {
 			output: {
 				// Isolate maplibre-gl (+ its pmtiles protocol) into its own chunk.
-				// This is CORRECTNESS, not just code-splitting: maplibre-gl 5.x ships
+				// Originally CORRECTNESS, not just code-splitting: maplibre-gl 5.x shipped
 				// only a prebuilt UMD bundle (no ESM entry), and when Rolldown (Vite 8)
-				// scope-hoists it into the shared app chunk it mangles an internal
-				// variable declaration — the reference survives (renamed T4/f) but its
-				// binding is dropped, so maplibre throws "T4 is not defined" the moment
-				// its source-error path runs (e.g. the Flight Tracker basemap 404s).
-				// That ReferenceError aborts map load and no aircraft ever render — a
+				// scope-hoisted it into the shared app chunk it mangled an internal
+				// variable declaration — the reference survived (renamed T4/f) but its
+				// binding was dropped, so maplibre threw "T4 is not defined" the moment
+				// its source-error path ran (e.g. the Flight Tracker basemap 404s).
+				// That ReferenceError aborted map load and no aircraft ever rendered — a
 				// production-only break invisible in the dev server (unbundled maplibre).
-				// Keeping maplibre in its own chunk preserves its IIFE scope and avoids
-				// the mis-hoist. Do not fold this back into the main chunk.
+				// maplibre-gl 6.x is ESM-only (no more UMD/IIFE build), so the specific
+				// mis-hoist this worked around may no longer apply — untested, so the
+				// isolation stays as cheap insurance. Do not fold this back into the main
+				// chunk without confirming the v5 failure mode is actually gone.
 				manualChunks(id) {
 					if (id.includes("maplibre-gl") || id.includes("pmtiles")) return "maplibre";
 				},
