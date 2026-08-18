@@ -454,6 +454,9 @@ const PUBLIC_READ_GRANTS = [
     collection: "mp3_items",
     fields: [
       "id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles", "image", "peaks",
+      // Kept in step with apply-hypercard-public-perms.mjs — see the note there
+      // on why `tags` stays granted.
+      "tags",
       "subject", "link", "tier", "confidence", "evidence", "participants", "mentions", "provenance",
     ],
     permissions: APPROVED_FILTER,
