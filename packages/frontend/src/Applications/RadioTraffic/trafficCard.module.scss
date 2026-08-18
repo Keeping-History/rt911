@@ -1,0 +1,247 @@
+// The 210x124 traffic card.
+//
+// Every number below is Figma's, and they are absolute rather than flowed on
+// purpose: the card is a fixed frame whose four regions are specified by
+// position, so a human comparing this against the design compares numbers
+// rather than reverse-engineering a flex chain. The regions are
+//
+//   Header       196x19 (7px inset, centred in the 29px above the waveform)
+//   Waveform     206x27 @ y=29
+//   Control bar  206x14 @ y=56
+//   Tabs         207x53 @ y=70   (bar 11px, gap 3px, panel 206x39)
+//
+// Colours are placeholders pending Robbie's pass, matching the convention in
+// tabs/cardTabs.module.scss — the structure is what this file pins.
+
+.rtCard {
+  position: relative;
+  box-sizing: border-box;
+  width: 210px;
+  height: 124px;
+  font-family: var(--ui-font);
+  color: var(--color-system-06);
+  background: var(--color-system-02);
+  border: 1px solid var(--color-system-05);
+}
+
+// Header -------------------------------------------------------------------
+
+.rtCardHeader {
+  position: absolute;
+  left: 7px;
+  top: 5px;
+  width: 196px;
+  height: 19px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+}
+
+.rtCardTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: calc(var(--ui-font-size) * 0.85);
+  font-weight: bold;
+  line-height: 19px;
+  // One line, always: the header's height is part of the card's geometry, and a
+  // wrapping subject would push the waveform off its y.
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Terse by necessity — the badge shares 196px with the subject, so drift reads
+// "-6s" rather than "-6 seconds".
+.rtCardBadge {
+  flex: 0 0 auto;
+  padding: 0 3px;
+  font-size: calc(var(--ui-font-size) * 0.7);
+  line-height: 13px;
+  white-space: nowrap;
+  border: 1px solid var(--color-system-05);
+  background: var(--color-system-03);
+}
+
+// The four badge states must be tellable apart at a glance: they are the only
+// thing on the card that says whether what you are hearing is the truth.
+.rtCardBadge[data-badge="in-sync"] {
+  background: #a8d8a8;
+}
+
+.rtCardBadge[data-badge="drift"] {
+  background: #e8b8b0;
+}
+
+.rtCardBadge[data-badge="seeking"] {
+  background: #e8dca0;
+}
+
+.rtCardBadge[data-badge="countdown"] {
+  background: var(--color-system-03);
+}
+
+.rtCardBadge[data-badge="playing"] {
+  background: #b8c8e8;
+}
+
+// Waveform -----------------------------------------------------------------
+
+// Positioned, and that is the load-bearing part: PeaksWaveform renders a bare
+// fragment and its scrubbers are `position: absolute`, so this element is their
+// containing block. Without it the markers resolve against the card frame and
+// sit at the wrong instant by the header's height.
+.rtCardWaveform {
+  position: absolute;
+  left: 2px;
+  top: 29px;
+  width: 206px;
+  height: 27px;
+  overflow: hidden;
+  color: var(--color-system-06);
+  background: var(--color-system-01);
+  border: 1px solid var(--color-system-04);
+  box-sizing: border-box;
+}
+
+// PeaksWaveform's canvas carries the global `.playlistTimelineWaveform` class,
+// whose only rules live in PlaylistEditor.scss — a stylesheet that reaches the
+// bundle only because PlaylistEditor happens to be imported. The card states
+// its own box rather than inheriting another app's by luck.
+.rtCardWaveform :global(.playlistTimelineWaveform) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+// Control bar --------------------------------------------------------------
+
+.rtCardControls {
+  position: absolute;
+  left: 2px;
+  top: 56px;
+  width: 206px;
+  height: 14px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  font-size: calc(var(--ui-font-size) * 0.7);
+}
+
+.rtCardTransport {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1;
+  color: var(--color-system-06);
+  background: var(--color-system-02);
+  border: 1px solid var(--color-system-05);
+  cursor: pointer;
+}
+
+// An indicator, not a control: muting is the tool palette's job (toolMode.ts).
+.rtCardLevel {
+  flex: 0 0 auto;
+  padding: 0 2px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.rtCardLevel[data-muted="true"] {
+  color: var(--color-system-04);
+}
+
+// Tabs ---------------------------------------------------------------------
+
+.rtCardTabs {
+  position: absolute;
+  left: 2px;
+  top: 70px;
+  width: 207px;
+  height: 53px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rtCardTabBar {
+  flex: 0 0 auto;
+  height: 11px;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  font-size: calc(var(--ui-font-size) * 0.7);
+}
+
+// The measured box. The strip inside it is `width: max-content`, so this is the
+// element whose clientWidth decides whether the arrows are needed.
+.rtCardTabViewport {
+  flex: 1 1 0;
+  min-width: 0;
+  // Hidden, not auto: the arrows are the paging affordance at this size, and a
+  // scrollbar would eat most of the 11px the bar has. Programmatic
+  // scrollIntoView still works on a hidden overflow.
+  overflow: hidden;
+}
+
+.rtCardTabStrip {
+  display: flex;
+  flex-direction: row;
+  // Must not shrink to fit, or scrollWidth never exceeds the viewport and
+  // useHorizontalOverflow can never report an overflow — see its own docs.
+  width: max-content;
+  height: 100%;
+}
+
+.rtCardTab {
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 11px;
+  white-space: nowrap;
+  color: var(--color-system-06);
+  background: var(--color-system-03);
+  border: 1px solid var(--color-system-05);
+  border-bottom: none;
+  cursor: pointer;
+}
+
+// The selected tab joins the panel below it, the way a Platinum tab control
+// does — the seam is what says which panel you are looking at.
+.rtCardTabSelected {
+  background: var(--color-system-01);
+  font-weight: bold;
+}
+
+.rtCardTabArrow {
+  flex: 0 0 auto;
+  width: 11px;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 11px;
+  color: var(--color-system-06);
+  background: var(--color-system-02);
+  border: 1px solid var(--color-system-05);
+  cursor: pointer;
+}
+
+.rtCardTabArrow:disabled {
+  color: var(--color-system-04);
+  cursor: default;
+}
+
+.rtCardPanel {
+  flex: 0 0 auto;
+  width: 206px;
+  height: 39px;
+  border: 1px solid var(--color-system-05);
+  box-sizing: border-box;
+}
