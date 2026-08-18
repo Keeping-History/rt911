@@ -23,6 +23,7 @@ from video_grabber.parties.identify import (
     tier_for,
     validate_parties,
 )
+from video_grabber.parties.public_meta import build_public_meta
 from video_grabber.parties.tag_store import load_vocabulary, sync_item_tags
 from video_grabber.parties.tags import build_tag_records
 from video_grabber.storage import wasabi
@@ -30,6 +31,12 @@ from video_grabber.transcript.summarize_flows import anthropic_completer
 
 SAMPLE_WINDOWS = 6
 SAMPLE_CHARS = 2000
+
+# Bump whenever `build_public_meta` or the tag derivation changes what a row
+# should hold. It is stamped into `derived_at` ahead of the timestamp, so a row
+# a half-finished pass never reached can be selected — `derived_at NOT LIKE
+# 'v2 %'` — rather than inferred from how old it looks.
+DERIVATION_VERSION = 1
 
 # max_tokens caps thinking AND response text together, and claude-sonnet-5 runs
 # adaptive thinking whenever `thinking` is unset (unlike sonnet-4.6, where omitting
@@ -187,6 +194,11 @@ def rebuild_tags_flow(limit: int | None = None, dry_run: bool = True) -> None:
     This reads no transcripts and calls no model. It is also how the corpus was
     moved onto the m2m shape: the junction is rebuilt from scratch, so a tag the
     derivation no longer produces loses its rows rather than lingering.
+
+    Superseded by `rederive-mp3-metadata`, which does this and the public
+    projection in one pass. Reach for that one: the tags and the public columns
+    are derived from the same `parties`, and re-deriving only half of them lets
+    the card's Parties tab and the tag filters disagree about one recording.
     """
     logger = get_run_logger()
     cfg = Config()
@@ -212,4 +224,73 @@ def rebuild_tags_flow(limit: int | None = None, dry_run: bool = True) -> None:
         "rebuild-tags: %d rows re-derived, %d taggings written, %d without parties, "
         "%d distinct tags in vocabulary",
         done, tagged, skipped, len(vocab),
+    )
+
+
+@flow(name="rederive-mp3-metadata")
+def rederive_mp3_metadata_flow(limit: int | None = None, dry_run: bool = True) -> None:
+    """Re-derive the public columns and the tags from the stored `parties`.
+
+    `parties` is private — it carries the QA signals that say how far to trust a
+    row — so everything the Radio Traffic card shows has to be materialised into
+    public columns first. `public_meta.build_public_meta` is the single place
+    that redaction happens; see its module docstring.
+
+    Both halves are pure functions of the same `parties`, which is why they are
+    re-derived together rather than by two flows. Run only one of them and the
+    card's Parties tab and the tag filters end up describing the same recording
+    differently, with nothing to say which is current.
+
+    Reads no transcripts and calls no model, so it costs nothing to run over the
+    whole corpus whenever either derivation changes. `dry_run=True` by default:
+    this rewrites every public column on all 814 rows, and asking what it would
+    do must not be the same gesture as doing it.
+
+    Rows with no `parties` are written too, unlike `rebuild-tags`, which skipped
+    them. An empty projection is the answer for a recording nobody has
+    identified, and leaving the columns untouched would let a projection the
+    blob no longer supports survive a re-derivation.
+    """
+    logger = get_run_logger()
+    cfg = Config()
+    vocab = {} if dry_run else load_vocabulary(cfg)
+    # One stamp for the whole pass, so "which run wrote this row" is answerable
+    # rather than merely "roughly when".
+    derived_at = f"v{DERIVATION_VERSION} {datetime.now(timezone.utc).isoformat()}"
+
+    done = empty = tagged = 0
+    for row in _page_mp3_items(cfg, "id,parties,tags_curated"):
+        if limit is not None and done >= limit:
+            break
+        parties = row.get("parties")
+        if not parties:
+            empty += 1
+
+        meta = build_public_meta(parties)
+        meta["derived_at"] = derived_at
+        # `tags_curated` is the human column: read, never written, so nothing a
+        # curator added is lost when the derived set is rebuilt from scratch.
+        records = build_tag_records(parties or {}, row.get("tags_curated") or [])
+
+        if dry_run:
+            logger.info("DRY RUN %s -> %s | tags=%s",
+                        row["id"], meta, [r["tag"] for r in records])
+        else:
+            # Columns first, tags second. The streamer's cache is reloaded by
+            # `rt911_mp3_items_changed`, an AFTER-UPDATE trigger on `mp3_items`
+            # (backend/internal/cache/mp3_listen.go) — the junction writes fire
+            # nothing at all. So this PATCH is the invalidation, and doing it
+            # first keeps the cache from ever reloading a row whose projection
+            # this pass has not written yet. Anything that later caches the
+            # tags needs its own invalidation; it cannot ride on this one.
+            pr = httpx.patch(f"{cfg.directus_url}/items/mp3_items/{row['id']}",
+                             json=meta, headers=_auth_headers(cfg))
+            pr.raise_for_status()
+            tagged += sync_item_tags(cfg, row["id"], records, vocab)
+        done += 1
+
+    logger.info(
+        "rederive-mp3-metadata: %d rows re-derived at %s (%d with no parties), "
+        "%d taggings written, %d distinct tags in vocabulary",
+        done, derived_at, empty, tagged, len(vocab),
     )
