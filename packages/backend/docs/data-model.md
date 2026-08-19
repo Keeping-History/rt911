@@ -129,7 +129,7 @@ trigger re-fetches and `UpsertPager`/`ForgetPager`s the row in the pager cache.
 ## `mp3_items`
 
 Same columns as `media_items` (mp3 reuses the MediaItem shape) but in its own table, delivered on
-the opt-in `mp3` channel for the Radio app:
+the opt-in `mp3` channel for the Radio Traffic app:
 
 ```sql
 CREATE TABLE mp3_items (LIKE media_items INCLUDING ALL);  -- same shape; format is always 'mp3'
@@ -139,8 +139,74 @@ CREATE INDEX mp3_items_start_date_idx ON mp3_items (start_date);
 mp3 items are **durational** audio (a `start_date`/`end_date` interval, often hours long, with a
 `jump` offset into the file). Unlike pager, the streamer keeps them in their own Redis keyspace
 (`mp3:items` / `mp3:by_start`) and the subscribe/init/seek snapshot uses the **overlap** window
-(`start_date ≤ t ≤ end_date`) so the Radio app gets the recording playing at `t` and resumes it
-mid-file. The tick path then delivers items starting at each forward second.
+(`start_date ≤ t ≤ end_date`) so the Radio Traffic app gets the recording playing at `t` and resumes
+it mid-file. The tick path then delivers items starting at each forward second.
+
+### Radio Traffic metadata columns
+
+`mp3_items` carries a second group of columns beyond the `media_items` shape above: who a
+recording's traffic is between, what it's about, and how far to trust that. They're populated by
+video-grabber's `identify-parties` pipeline (see
+[`../../tools/video-grabber/docs/party-identification.md`](../../tools/video-grabber/docs/party-identification.md))
+and served to the frontend as the one-shot `mp3_meta` WebSocket frame and the `/mp3/*` HTTP routes
+(see [`websocket-protocol.md`](./websocket-protocol.md) and [`http-api.md`](./http-api.md)) — never
+as extra fields on the streamed `MediaItem`, and never queried by the streamer's tick path.
+
+| Column | Type | Public? | Notes |
+|---|---|---|---|
+| `parties` | jsonb | **no** | The private, model-produced source of everything below. Carries `gate_reasons` and `model` — internal QA signals about the pipeline's own confidence, not facts about the recording — which must never reach an anonymous reader. |
+| `tags_curated` | jsonb | no | Hand-added tags a curator entered directly; read by the derivation, never written by it. |
+| `derived_at` | text | no | Stamp recording which `rederive-mp3-metadata` run last wrote the row. An internal marker with no reader. |
+| `subject` | text | yes | One line, in the source's own words. |
+| `link` | text | yes | Call type: `air-ground`, `landline`, `internal`, `conference`, `unknown`. |
+| `tier` | text | yes | `primary` \| `clip` \| … — how central this recording is to the event. |
+| `confidence` | text | yes | Overall confidence, capped at `medium` if the containment gate rejected anything. |
+| `evidence` | text | yes | Verbatim transcript quote backing `subject`. |
+| `participants` | jsonb | yes | Array of `{person, facility, position, role, confidence}` — one entry per party to the call. |
+| `mentions` | jsonb | yes | `{facilities[], aircraft[], people[]}` — entities named but not on the call. |
+| `provenance` | jsonb | yes | `{generated_at, sources, commission}` — where the published values came from, path by path. |
+| `peaks` | jsonb | yes | 480 `[min, max]` amplitude-envelope buckets scaled to -128..127, computed by video-grabber's peaks pipeline. |
+| `tags` | list-m2m | yes | **Alias**, not a column — see below. |
+
+`subject`/`link`/`tier`/`confidence`/`evidence`/`participants`/`mentions`/`provenance` are a
+**redacted projection** of `parties`, materialised by video-grabber's `public_meta.build_public_meta`
+— the single place that redaction happens. `gate_reasons` and `model` are absent from the
+projection by construction, so nothing downstream (this table's public columns, the Go types, the
+TypeScript types) has anywhere to put them even if a caller tried. `mp3_items.parties` itself keeps
+returning `403` to anonymous Directus readers; only the projected columns are public-read.
+
+### `mp3_tags` / `mp3_items_tags`
+
+The tag vocabulary and its junction — the namespaced index (`facility:zbw`, `aircraft:aal11`,
+`topic:loss-of-contact`, …) the Radio Traffic sidebar filters by, and what `GET /mp3/tags` serves:
+
+```sql
+CREATE TABLE mp3_tags (
+  id         serial PRIMARY KEY,
+  tag        text NOT NULL UNIQUE,   -- "facility:zbw" — namespace:value, or a bare curated tag
+  namespace  text,                    -- NULL for an un-namespaced curated tag
+  value      text,
+  color      text,
+  sort       integer
+);
+
+CREATE TABLE mp3_items_tags (
+  mp3_items_id integer REFERENCES mp3_items(id),
+  mp3_tags_id  integer REFERENCES mp3_tags(id)
+);
+```
+
+`mp3_items.tags` is a Directus **`list-m2m` alias** over `mp3_items_tags`, not a real column —
+it cannot be set by `PATCH /items/mp3_items/{id} {"tags": [...]}`; the pipeline writes it through
+`tag_store.py` instead. Both tables are rebuilt wholesale by video-grabber's `rederive-mp3-metadata`
+flow (see `party-identification.md`) — `mp3_tags` rows are created but never deleted (a retracted
+tag loses its junction rows and vanishes from search, but the row itself is cheap and may be
+referenced again), while `mp3_items_tags` is rebuilt per item on every derivation pass so a tag the
+current derivation no longer produces loses its rows rather than lingering.
+
+The streamer's `mp3MetaSelectFrom` query (`internal/db/postgres.go`) reads the junction directly via
+a `LATERAL json_agg`, not through the Directus alias — one row per item, tags pre-aggregated as
+JSON, `COALESCE`d to `[]` for an item with none.
 
 ---
 
