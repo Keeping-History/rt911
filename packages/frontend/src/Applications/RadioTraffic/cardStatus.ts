@@ -23,13 +23,11 @@ export type Badge =
 	| { kind: "seeking" }
 	| { kind: "drift"; seconds: number }
 	| { kind: "countdown"; label: string }
-	| { kind: "playing" };
-// NOT YET a `| { kind: "silence" }` — story 041's derivation is complete and
-// tested in silence.ts, but the variant cannot land here on its own. badgeLabel
-// in TrafficCard.tsx switches exhaustively over this union with no default arm,
-// so adding a sixth kind fails the build there (TS2366) until that switch gains
-// a `case "silence"`. See silence.ts's header for the precedence the badge takes
-// once the two land together: drift outranks silence, seeking outranks both.
+	| { kind: "playing" }
+	// Story 041. Ranked below drift and seeking — see silence.ts's header, and
+	// the `silent` flag on BadgeArgs. It is what is LEFT once a card is on the
+	// clock and playing, so it only ever replaces in-sync.
+	| { kind: "silence" };
 
 /**
  * The two edges of the in-sync deadband, in ms of absolute drift.
@@ -137,6 +135,16 @@ export interface BadgeArgs {
 	 * carrying one string across those renders costs it a ref and nothing else.
 	 */
 	previousKind?: Badge["kind"];
+	/**
+	 * The tape is carrying nothing under the playhead — `isSilentAt` from
+	 * silence.ts, which reads the peaks envelope the card already draws.
+	 *
+	 * A flag rather than a badge because it can be outranked: a card that is off
+	 * the clock has to report that even when the tape happens to be quiet. So the
+	 * predicate has no business knowing where it sits in the order, and this
+	 * function does.
+	 */
+	silent?: boolean;
 }
 
 /**
@@ -164,7 +172,11 @@ export function badgeFor(args: BadgeArgs): Badge | null {
 	if (args.lane === "previous") {
 		// A back-catalogue clip plays from its own start, so comparing its
 		// position against the virtual clock would report a meaningless gap.
-		return args.userPlaying ? { kind: "playing" } : null;
+		if (!args.userPlaying) return null;
+		// Silence outranks "Playing" here: the listener pressed play, so they
+		// already know it is playing — what they cannot see is that the tape has
+		// gone quiet under them.
+		return args.silent ? { kind: "silence" } : { kind: "playing" };
 	}
 	if (args.seeking) return { kind: "seeking" };
 
@@ -174,7 +186,12 @@ export function badgeFor(args: BadgeArgs): Badge | null {
 	// card that has just started) has to clear the wide edge to become one.
 	const tolerance =
 		args.previousKind === "drift" ? DRIFT_EXIT_MS : DRIFT_ENTER_MS;
-	if (Math.abs(driftMs) <= tolerance) return { kind: "in-sync" };
+	// Silence is what is left: on the clock, playing, carrying nothing. Placed
+	// after the drift test on purpose — drift outranks it, so a card that has
+	// wandered says so even over a quiet stretch.
+	if (Math.abs(driftMs) <= tolerance) {
+		return args.silent ? { kind: "silence" } : { kind: "in-sync" };
+	}
 	// Sign is kept: the header reads "-6 seconds" when the audio lags.
 	return { kind: "drift", seconds: Math.round(driftMs / 1000) };
 }

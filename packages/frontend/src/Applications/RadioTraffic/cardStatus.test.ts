@@ -167,6 +167,56 @@ describe("badgeFor", () => {
 		expect(badgeFor(live)).toEqual({ kind: "in-sync" });
 	});
 
+	// Story 041. The precedence silence.ts documents, asserted from the badge's
+	// side: silence is what is LEFT once the card is on the clock and playing,
+	// so it can only ever replace in-sync — never drift, and never seeking.
+	describe("silence", () => {
+		it("reads silence instead of in-sync when the tape is quiet", () => {
+			expect(badgeFor({ ...live, silent: true })).toEqual({ kind: "silence" });
+		});
+
+		it("still reads in-sync when the tape is carrying traffic", () => {
+			expect(badgeFor({ ...live, silent: false })).toEqual({ kind: "in-sync" });
+		});
+
+		// The important one. A card off the clock has to say so even over a quiet
+		// stretch, or the listener loses the more important signal behind the
+		// less important one.
+		it("lets drift outrank silence", () => {
+			expect(badgeFor({ ...live, currentMs: 24_000, silent: true })).toEqual({
+				kind: "drift",
+				seconds: -6,
+			});
+		});
+
+		it("lets seeking outrank silence", () => {
+			expect(badgeFor({ ...live, seeking: true, silent: true })).toEqual({
+				kind: "seeking",
+			});
+		});
+
+		// UPCOMING has no audio to be quiet — the clip has not started.
+		it("never reads silence on an upcoming card", () => {
+			expect(
+				badgeFor({ ...live, lane: "upcoming", countdown: "4s", silent: true }),
+			).toEqual({ kind: "countdown", label: "4s" });
+		});
+
+		// A listener playing a back-catalogue clip through a quiet stretch is
+		// better served by "Silence" than by "Playing", which they already know.
+		it("reads silence over playing on a manually played previous clip", () => {
+			expect(
+				badgeFor({ ...live, lane: "previous", userPlaying: true, silent: true }),
+			).toEqual({ kind: "silence" });
+		});
+
+		it("still reads nothing on an idle previous card", () => {
+			expect(
+				badgeFor({ ...live, lane: "previous", userPlaying: false, silent: true }),
+			).toBeNull();
+		});
+	});
+
 	it("is in-sync while absolute drift is at most one second", () => {
 		// Sub-second wander is normal for an <audio> element being polled once a
 		// second; showing a drift badge for it would flicker constantly.

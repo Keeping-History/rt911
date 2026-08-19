@@ -44,6 +44,7 @@ import {
 	unfollowClock,
 } from "./audioCoordinator";
 import { type Badge, badgeFor, countdownFor, type Lane } from "./cardStatus";
+import { isSilentAt } from "./silence";
 import { CARD_TABS, CardTabBar, visibleCardTabs } from "./CardTabBar";
 import { itemTiming } from "./tabs/itemTiming";
 import styles from "./trafficCard.module.scss";
@@ -122,6 +123,8 @@ function badgeLabel(badge: Badge): string {
 			return badge.label;
 		case "playing":
 			return "Playing";
+		case "silence":
+			return "Silence";
 	}
 }
 
@@ -166,9 +169,24 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	const durationMs = (itemTiming(item).durationSec ?? 0) * 1000;
 	const liveMs = calcSeekSeconds(item, nowMs) * 1000;
 
+	// One tick of history, held here rather than in cardStatus so badgeFor stays
+	// a pure function of its arguments — see BadgeArgs.previousKind.
+	const previousKind = useRef<Badge["kind"] | undefined>(undefined);
+
+	// Read from the peaks envelope this card already draws: no fetch, no
+	// analyser. Undefined peaks mean "unknown", which isSilentAt reports as not
+	// silent — a card with no envelope never claims the tape is quiet.
+	const silent = isSilentAt({
+		peaks: meta?.peaks,
+		durationMs,
+		positionMs: currentMs,
+	});
+
 	const badge = badgeFor({
 		lane,
 		liveMs,
+		silent,
+		previousKind: previousKind.current,
 		// No registered element means no sound, and zero is where such a card
 		// stands as far as the listener is concerned. On a LIVE card that reads as
 		// a large negative drift for the moment before `loadedmetadata` fires and
@@ -179,6 +197,13 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 		userPlaying,
 		countdown: lane === "upcoming" ? countdownFor(item, nowMs) : undefined,
 	});
+
+	// Recorded after render so the NEXT tick can widen or tighten the deadband.
+	// An effect rather than a write during render: badgeFor must see the value
+	// from the previous committed render, not one this render already moved.
+	useEffect(() => {
+		previousKind.current = badge?.kind;
+	}, [badge?.kind]);
 
 	// FRACTIONS, 0..1 — PeaksWaveform's units, not percentages. A 0..100 value
 	// clamps to 1 and parks both markers against the right edge.
@@ -274,6 +299,8 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 			// The stylesheet's key for the brightness/saturation lift. An attribute
 			// rather than a class so the CSS reads as one table of lane x audible.
 			data-audible={audible}
+			// Story 041's dimmed chrome keys off this alongside data-audible.
+			data-silent={silent}
 		>
 			{/* The lane is repeated here so the header's colour has a selector of its
 			    own to hang off. It is the same prop the card frame carries, not a
