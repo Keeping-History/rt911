@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { directusGet, enqueue } from "../../lib/directusQueue";
+import { directusGet, enqueue } from "./directusQueue";
 
 afterEach(() => vi.clearAllMocks());
 
