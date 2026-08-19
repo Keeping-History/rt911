@@ -14,6 +14,9 @@
   padding: calc(var(--window-border-size) * 4);
   font-family: var(--ui-font);
   font-size: var(--ui-font-size);
+  * {
+    flex-grow: 0;
+  }
 }
 
 // A large namespace's row sits at the same indent as a disclosure header so the
