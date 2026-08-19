@@ -25,8 +25,8 @@ export function startMs(item: MediaItem): number {
 	return toMs(item.start_date);
 }
 
-/** The station a MediaItem belongs to: its source, or its title when blank. */
-function stationKey(item: MediaItem): string {
+/** The station an item belongs to: its source, or its title when blank. */
+export function stationKey(item: Pick<MediaItem, "source" | "title">): string {
 	const src = item.source?.trim();
 	return src && src.length > 0 ? src : item.title;
 }
