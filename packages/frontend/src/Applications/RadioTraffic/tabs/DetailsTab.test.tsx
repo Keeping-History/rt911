@@ -17,19 +17,19 @@ const column = (root: HTMLElement, name: string) =>
 	root.querySelector(`[data-column="${name}"]`);
 
 describe("DetailsTab layout", () => {
-	it("renders Figma's three columns: Call Details, Tags and Summary", () => {
+	it("renders Figma's three columns: Details, Tags and Summary", () => {
 		const { container, getByText } = render(
 			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
 		);
 		expect(column(container, "call-details")).not.toBeNull();
 		expect(column(container, "tags")).not.toBeNull();
 		expect(column(container, "summary")).not.toBeNull();
-		for (const heading of ["Call Details", "Tags", "Summary"]) {
+		for (const heading of ["Details", "Tags", "Summary"]) {
 			expect(getByText(heading)).toBeTruthy();
 		}
 	});
 
-	it("keeps the timings in Call Details and the subject in Summary", () => {
+	it("keeps the timings in Details and the subject in Summary", () => {
 		// Which column a fact lands in is the whole point of the redesign — a
 		// panel that renders all three headings but files the subject under Tags
 		// would pass a heading-only check.
