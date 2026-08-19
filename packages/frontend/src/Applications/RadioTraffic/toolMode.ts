@@ -153,6 +153,47 @@ export function applyToolClick(state: AudioState, tool: Tool, itemId: number): A
 }
 
 /**
+ * The per-card mutes a LANE mute becomes when the listener picks one card to
+ * hear again (story 040).
+ *
+ * The lane flag and the per-card set answer different questions — "silence this
+ * lane, including whatever arrives next" against "silence these clips" — and
+ * clicking a card is the moment the first turns into the second: the listener
+ * has just named the one thing they want to hear, so every OTHER clip in the
+ * lane becomes an explicit mute and the flag has nothing left to say. Written
+ * this way round rather than as "clear the flag, unmute one" because the flag
+ * is not a mute of its own: dropping it without materialising it would bring
+ * the whole lane back at once.
+ *
+ * `lane` is the lane's MEMBERSHIP, not the cards a filter happens to be showing
+ * — a clip hidden by a tag filter is still playing on the clock, and leaving it
+ * out here would let it be the one thing still audible.
+ */
+export function releaseLaneMute(
+	state: AudioState,
+	lane: readonly MediaItem[],
+	itemId: number,
+): AudioState {
+	const muted = new Set(state.muted);
+	for (const item of lane) {
+		if (item.id === itemId) muted.delete(item.id);
+		else muted.add(item.id);
+	}
+	// The solo goes with it. The listener has just said which card they want,
+	// and a solo left pointing at a different one would contradict them —
+	// effectiveMutedIds keeps a solo target audible in spite of its mute, so the
+	// card they clicked would stay silent and another would not.
+	//
+	// The hand-over is ARMED, which is the opposite of what the mute tool does
+	// with the same field (story 039): naming a card to hear is a request for a
+	// focus, so reconcileSolo is meant to answer it by pointing the solo at the
+	// one card this just left unmuted. Disarming here would leave soloId null
+	// against a lane of mutes — audible, but only until the clicked clip ends,
+	// at which point nothing would take over.
+	return { soloId: null, muted, soloReleasedByMute: false };
+}
+
+/**
  * The card that plays when the listener has not chosen one.
  *
  * "Exactly one LIVE player audible by default" is not free: with no solo and

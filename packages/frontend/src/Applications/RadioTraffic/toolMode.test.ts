@@ -9,6 +9,7 @@ import {
 	INITIAL_AUDIO_STATE,
 	isAudible,
 	reconcileSolo,
+	releaseLaneMute,
 } from "./toolMode";
 
 const t = (iso: string) => new Date(iso).getTime();
@@ -225,6 +226,89 @@ describe("applyToolClick", () => {
 		// And un-soloing restores exactly the mutes the listener set.
 		const released = reconcileSolo({ ...s, soloId: null }, []);
 		expect([...released.muted].sort()).toEqual([10, 12]);
+	});
+});
+
+describe("releaseLaneMute", () => {
+	// Story 040's third rule: clicking a player while the LIVE lane is muted
+	// clears the lane mute and unmutes ONLY that player. The lane flag is not a
+	// mute of its own, so it has to be materialised into per-card mutes on the
+	// way out — dropping it without doing so would bring the lane back at once.
+
+	it("leaves the clicked card audible", () => {
+		const next = releaseLaneMute(INITIAL_AUDIO_STATE, ALL, 11);
+		expect(isAudible(next, 11, "live")).toBe(true);
+	});
+
+	it("keeps every other card in the lane silent", () => {
+		const next = releaseLaneMute(INITIAL_AUDIO_STATE, ALL, 11);
+		expect(isAudible(next, 10, "live")).toBe(false);
+		expect(isAudible(next, 12, "live")).toBe(false);
+		expect([...next.muted].sort()).toEqual([10, 12]);
+	});
+
+	it("silences exactly one card in the mix, not zero and not all of them", () => {
+		const next = releaseLaneMute(INITIAL_AUDIO_STATE, ALL, 12);
+		expect(ALL.filter((i) => isAudible(next, i.id, "live")).map((i) => i.id)).toEqual([12]);
+	});
+
+	it("unmutes a card that was already muted before the lane was", () => {
+		// The listener clicked THIS card; a mute from ten minutes ago is not a
+		// reason to hand them back silence.
+		const next = releaseLaneMute(state(null, [11]), ALL, 11);
+		expect(isAudible(next, 11, "live")).toBe(true);
+	});
+
+	it("releases the solo along with the lane mute", () => {
+		// effectiveMutedIds keeps a solo target audible in spite of its own mute,
+		// so a solo left pointing elsewhere would mean the card the listener
+		// clicked stayed silent and a different one did not.
+		const next = releaseLaneMute(state(10), ALL, 11);
+		expect(next.soloId).toBeNull();
+		expect(isAudible(next, 10, "live")).toBe(false);
+	});
+
+	it("keeps mutes for cards outside the lane it was handed", () => {
+		// The shell hands it LANE membership, and a clip in another lane is not
+		// this instruction's business.
+		const next = releaseLaneMute(state(null, [99]), ALL, 10);
+		expect(next.muted.has(99)).toBe(true);
+	});
+
+	it("mutes the whole lane when the clicked card is not in it", () => {
+		// Not a case the shell produces, but the honest reading: nothing was
+		// named, so nothing is excepted — silence, rather than a lane that
+		// quietly came back.
+		const next = releaseLaneMute(INITIAL_AUDIO_STATE, ALL, 404);
+		expect(ALL.some((i) => isAudible(next, i.id, "live"))).toBe(false);
+	});
+
+	it("arms the auto-solo hand-over, unlike the mute tool", () => {
+		// Story 039 lets a mute DISARM auto-solo, so the Live lane can be
+		// silenced without the next card being promoted into the gap. This is the
+		// other case: the listener named a card to hear, so reconcileSolo is meant
+		// to answer by pointing the solo at it.
+		const next = releaseLaneMute(state(null, [10, 11, 12]), ALL, 11);
+		expect(next.soloReleasedByMute).toBe(false);
+		expect(reconcileSolo(next, ALL).soloId).toBe(11);
+	});
+
+	it("leaves the lane quiet once the card it was handed has gone", () => {
+		// Everything else is an explicit mute now, and autoSoloTarget skips those
+		// — so the clip ending is silence rather than a sibling the listener
+		// already silenced coming back.
+		const next = releaseLaneMute(INITIAL_AUDIO_STATE, ALL, 11);
+		const afterItEnds = reconcileSolo({ ...next, soloId: 11 }, [A, C]);
+		expect(afterItEnds.soloId).toBeNull();
+	});
+
+	it("does not mutate the state it was given", () => {
+		// The shell feeds this straight into React state; editing the old Set in
+		// place would make the two indistinguishable and skip the render.
+		const before = state(10, [12]);
+		releaseLaneMute(before, ALL, 11);
+		expect(before.soloId).toBe(10);
+		expect([...before.muted]).toEqual([12]);
 	});
 });
 

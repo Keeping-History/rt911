@@ -56,6 +56,7 @@ import { historyPool, type Lane, laneFor, rememberItems } from "./cardStatus";
 import { FilterTree } from "./FilterTree";
 import { LANES, type LaneOrder, reconcileLaneOrder, reorderLane } from "./laneOrder";
 import { LaneSection } from "./LaneSection";
+import { LaneSmallPlayer } from "./LaneSmallPlayer";
 import styles from "./radioTraffic.module.scss";
 import {
 	radioTrafficSetState,
@@ -66,7 +67,14 @@ import { RadioTrafficSettingsWindow } from "./RadioTrafficSettingsWindow";
 import { groupVocabulary, matchesFilter } from "./tagFilter";
 import { TagPickerWindow } from "./TagPickerWindow";
 import { reconcileTagVocabulary, type VocabularyState } from "./tagVocabulary";
-import { applyToolClick, type AudioState, isAudible, reconcileSolo, type Tool } from "./toolMode";
+import {
+	applyToolClick,
+	type AudioState,
+	isAudible,
+	reconcileSolo,
+	releaseLaneMute,
+	type Tool,
+} from "./toolMode";
 import { ToolPalette } from "./ToolPalette";
 import { TrafficCard } from "./TrafficCard";
 
@@ -198,6 +206,16 @@ export const RadioTraffic: React.FC = () => {
 		soloId: null,
 		muted: new Set(restored.mutedItems),
 	}));
+	/**
+	 * The LIVE lane silenced as a whole (story 040).
+	 *
+	 * Held apart from `audio.muted` rather than folded into it because it is a
+	 * different KIND of instruction: the per-card set names clips, and this names
+	 * the lane, so it keeps silencing whatever the clock brings in next. Folding
+	 * it in at mute time would go quiet and then start talking again a minute
+	 * later, which is precisely the complaint the story is about.
+	 */
+	const [liveLaneMuted, setLiveLaneMuted] = useState(restored.liveLaneMuted);
 	const [settings, setSettings] = useState<RadioTrafficSettings>(() => ({
 		useThemeWaveformColor: restored.useThemeWaveformColor,
 		waveformColor: restored.waveformColor,
@@ -455,15 +473,20 @@ export const RadioTraffic: React.FC = () => {
 	// Silence, not pause: a paused element stops advancing and drifts off the
 	// clock, so unmuting it later would drop the listener into a stale offset.
 	useEffect(() => {
+		// A muted lane is silent outright, whatever the per-card mix says — which
+		// is what makes the flag cover clips that arrive after the button was
+		// pressed, since they are simply never added to this set.
 		const audibleIds = new Set(
-			visible.live.filter((item) => isAudible(audio, item.id, "live")).map((i) => i.id),
+			liveLaneMuted
+				? []
+				: visible.live.filter((item) => isAudible(audio, item.id, "live")).map((i) => i.id),
 		);
 		for (const itemId of registeredRef.current) {
 			// A clip the listener started themselves is audible by definition —
 			// they pressed play, and it is not part of the solo/mute mix at all.
 			setLevel(itemId, audibleIds.has(itemId) || userStarted.has(itemId));
 		}
-	}, [visible.live, audio, userStarted]);
+	}, [visible.live, audio, userStarted, liveLaneMuted]);
 
 	const audioBlocked = useSyncExternalStore(subscribeAudioBlocked, isAudioBlocked);
 
@@ -476,12 +499,22 @@ export const RadioTraffic: React.FC = () => {
 				collapsed,
 				laneOrder,
 				mutedItems: [...audio.muted],
+				liveLaneMuted,
 				useThemeWaveformColor: settings.useThemeWaveformColor,
 				waveformColor: settings.waveformColor,
 				playOriginalAudio: settings.playOriginalAudio,
 			}),
 		);
-	}, [checked, tool, collapsed, laneOrder, audio.muted, settings, dispatch]);
+	}, [
+		checked,
+		tool,
+		collapsed,
+		laneOrder,
+		audio.muted,
+		liveLaneMuted,
+		settings,
+		dispatch,
+	]);
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	const toggleTag = useCallback((tag: string) => {
@@ -493,8 +526,20 @@ export const RadioTraffic: React.FC = () => {
 	}, []);
 
 	const onCardClick = useCallback(
-		(itemId: number) => setAudio((state) => applyToolClick(state, tool, itemId)),
-		[tool],
+		(itemId: number, lane: Lane) => {
+			// Clicking a live card while the lane is muted is the listener naming
+			// the one clip they want back, so the lane flag hands over to per-card
+			// mutes on everything else and clears. It comes BEFORE the tool because
+			// it is not a tool action: whichever tool is up, the click a listener
+			// makes on a silenced lane means "let me hear this one".
+			if (liveLaneMuted && lane === "live") {
+				setLiveLaneMuted(false);
+				setAudio((state) => releaseLaneMute(state, lanes.live, itemId));
+				return;
+			}
+			setAudio((state) => applyToolClick(state, tool, itemId));
+		},
+		[liveLaneMuted, lanes.live, tool],
 	);
 
 	const onTogglePause = useCallback((itemId: number, lane: Lane) => {
@@ -521,7 +566,7 @@ export const RadioTraffic: React.FC = () => {
 			<div
 				className={styles.rtCardSlot}
 				data-card-slot={item.id}
-				onPointerUp={() => onCardClick(item.id)}
+				onPointerUp={() => onCardClick(item.id, lane)}
 			>
 				<TrafficCard
 					item={item}
@@ -531,7 +576,13 @@ export const RadioTraffic: React.FC = () => {
 					nowMs={nowMs}
 					seeking={seekInFlight}
 					userPlaying={userStarted.has(item.id)}
-					muted={!isAudible(audio, item.id, lane) && !userStarted.has(item.id)}
+					// A muted lane overrides the per-card mix outright, so the
+					// speaker on every live card shows the silence the listener can
+					// actually hear rather than the mix underneath it.
+					muted={
+						(lane === "live" && liveLaneMuted) ||
+						(!isAudible(audio, item.id, lane) && !userStarted.has(item.id))
+					}
 					paused={
 						lane === "live" ? stopped.has(item.id) : !userStarted.has(item.id)
 					}
@@ -547,11 +598,22 @@ export const RadioTraffic: React.FC = () => {
 			seekInFlight,
 			userStarted,
 			audio,
+			liveLaneMuted,
 			stopped,
 			onCardClick,
 			onTogglePause,
 			waveformColor,
 		],
+	);
+
+	// The folded lanes' players (story 027). One renderer for all three lanes,
+	// because a small player carries no lane-dependent state — no badge, no
+	// transport, no mute — which is exactly what makes it small.
+	const renderCollapsedCard = useCallback(
+		(item: MediaItem) => (
+			<LaneSmallPlayer item={item} meta={mp3Meta[item.id]} tzOffsetHours={tz} />
+		),
+		[mp3Meta, tz],
 	);
 
 	const appMenu = [
@@ -653,9 +715,16 @@ export const RadioTraffic: React.FC = () => {
 								onToggleCollapse={(next) =>
 									setCollapsed((prev) => ({ ...prev, [lane]: next }))
 								}
+								// LIVE alone gets the mute-all control, because LIVE alone
+								// has a mix: UPCOMING has no audio yet, and PREVIOUS plays
+								// only the clips the listener started by hand, which are not
+								// part of the solo/mute model at all.
+								muted={lane === "live" && liveLaneMuted}
+								onToggleMute={lane === "live" ? setLiveLaneMuted : undefined}
 								tool={tool}
 								onReorder={(fromId, toIndex) => onReorder(lane, fromId, toIndex)}
 								renderCard={renderCard(lane)}
+								renderCollapsedCard={renderCollapsedCard}
 							/>
 						))}
 					</main>

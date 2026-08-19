@@ -14,17 +14,23 @@
 // #737373 under UPCOMING, #6c6c6c under PREVIOUS).
 //
 // HEIGHTS ARE PROPORTIONS, NOT PIXELS. The window does not scroll, so the three
-// lanes divide whatever height it has 3:2:1 (LIVE:UPCOMING:PREVIOUS) and a lane
-// with more cards than fit scrolls its own card area. This is the only reading
-// of the brief's "3/5, 2/5, 1/5" that fits: those three fractions sum to 6/5, so
-// taken literally they overflow the window by 20% and reintroduce exactly the
-// scrolling the design forbids. The ratio is what was meant, and the ratio holds
-// at every window size.
+// lanes divide whatever height it has 3:2:1 (LIVE:UPCOMING:PREVIOUS). This is
+// the only reading of the brief's "3/5, 2/5, 1/5" that fits: those three
+// fractions sum to 6/5, so taken literally they overflow the window by 20% and
+// reintroduce exactly the scrolling the design forbids. The ratio is what was
+// meant, and the ratio holds at every window size — which is also the ratio the
+// row model (LIVE three players deep, UPCOMING two, PREVIOUS one, six rows in
+// all) works out to, so the two compose rather than compete.
+//
+// OVERFLOW GOES SIDEWAYS, NOT DOWN (story 036). A lane is one row of players
+// that runs off to the right, and reaching the rest of them is a horizontal
+// scroll inside the lane. Nothing scrolls vertically anywhere in this app.
 //
 // Consequence worth knowing: PREVIOUS gets 1/6 of the column — about 95px in the
-// design's 601px window — while a card is `124px * 1.25` = 155px tall. PREVIOUS
-// therefore ALWAYS scrolls internally at the current --rt-card-scale. That is a
-// real tension between the lane ratio and the card scale, not an accident here.
+// design's 601px window — while a card is `124px * 1.25` = 155px tall, so at the
+// current --rt-card-scale its cards are CLIPPED rather than scrolled to. That is
+// the real tension between the lane ratio and the card scale that the row-height
+// story exists to resolve, by sizing the card off the row instead of off Figma.
 
 // Sizes compose from classicy's window metrics (border 1px, padding 6px,
 // control 12px) rather than from fresh px literals — house pattern.
@@ -95,22 +101,76 @@
   flex: 1 1 0;
 }
 
-// A collapsed lane is its label strip and nothing else, so it must stop
-// claiming its share of the column and hand the height back to the lanes still
-// showing cards.
+// A collapsed lane stops claiming its share of the column and takes only the
+// height its small players need, handing the rest back to the lanes still
+// showing full cards. `auto` rather than a length is the whole point: the small
+// player is content-sized, so the fold is worth exactly as much window as the
+// compact card actually costs, at any font size or card scale.
 .rtLane[data-collapsed="true"] {
   flex: 0 0 auto;
 }
 
+// Two small players to a visible lane width, gap included — the pairing in the
+// Figma "Upcoming Row Players Collapsed" frame, expressed as a SHARE of the
+// lane rather than a width so it survives a resize and the row-height rework.
+// A third clip is reached by scrolling the lane sideways, exactly as an
+// expanded lane's are.
+.rtLane[data-collapsed="true"] .rtLaneSlot {
+  flex: 0 0 calc(50% - var(--rt-lane-gap) / 2);
+  min-width: 0;
+}
+
 // Lane colours -------------------------------------------------------------
+
+// LIVE's stripe DRIFTS, and the other two lanes' chrome does not (story 043).
+// One period per --rt-stripe-drift-duration, which at the 44px tile works out
+// to a few pixels a second: enough that the lane is never quite still, not
+// enough to pull an eye off the card someone is reading.
+//
+// Seamless because the travel is EXACTLY one tile: at the end of the cycle the
+// mask has advanced by its own period, so the frame is pixel-identical to the
+// first and the loop has no seam to hide. Any other distance would jump.
+//
+// The animation is a transform on the overlay, which the compositor can run on
+// its own — no JS frame loop, and no per-frame repaint of the masked area the
+// way animating mask-position would cost.
+@keyframes rtStripeDrift {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(var(--rt-lane-stripe-size));
+  }
+}
 
 .rtLane[data-lane="live"] {
   --rt-lane-fill: #ac3c3c;
   --rt-lane-edge: #6c0d0d;
   --rt-stripe-light: #cd8a8a;
+  --rt-stripe-drift-duration: 8s;
+
+  // Clips the overlay's one-tile overhang (below) back to the lane. Safe here
+  // because nothing is meant to escape a lane: the cards scroll in their own
+  // box, which is its own scroll container.
+  overflow: hidden;
 
   &::before {
     @include rt-stripe-overlay;
+
+    // Start one tile to the LEFT of the lane, so that translating a full tile
+    // to the right never uncovers the trailing edge. `inset` sets left and
+    // right, so the box is a tile wider than the lane and needs no width.
+    inset: 0 0 0 calc(var(--rt-lane-stripe-size) * -1);
+    animation: rtStripeDrift var(--rt-stripe-drift-duration) linear infinite;
+  }
+}
+
+// Ambience is exactly the kind of motion this setting is for: the lane keeps
+// its stripe, and loses only the drift.
+@media (prefers-reduced-motion: reduce) {
+  .rtLane[data-lane="live"]::before {
+    animation: none;
   }
 }
 
@@ -176,6 +236,32 @@
   color: var(--color-white, #fff);
 }
 
+// The lane mute control (LIVE only, story 040), sitting directly above the
+// expand/collapse control's place on the strip.
+//
+// ClassicyBevelButton builds its own className and drops the one it is handed,
+// so the sizing hangs off the `data-lane-mute` attribute instead — which is the
+// same hook the tests find the control by, and does not couple this stylesheet
+// to a class name inside the component library.
+.rtLaneStrip [data-lane-mute] {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  // The strip is ONE control wide by design (story 022) and the bevel button's
+  // own square is two, so it is brought back to the strip's width here rather
+  // than widening the chrome around it.
+  width: var(--window-control-size);
+  min-width: 0;
+  height: var(--window-control-size);
+  padding: 0;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
 .rtLaneToggle {
   position: relative;
   z-index: 1;
@@ -196,6 +282,15 @@
 
 // Cards ---------------------------------------------------------------------
 
+// A lane is ONE ROW of players that runs off to the right, not a grid that
+// grows downward (story 036). `nowrap` is the whole change: with it the row
+// simply gets longer as cards accumulate, and the overflow it produces is
+// horizontal, which is what `overflow-x` below then scrolls.
+//
+// This is also what lets the lane compose with the row-height model: a lane's
+// height is its share of the window and nothing here asks for more, so whether
+// that share works out to one row of cards or three, the cards fill it and the
+// surplus goes sideways.
 .rtLaneCards {
   position: relative;
   // Above the lane's stripe overlay.
@@ -203,8 +298,10 @@
   flex: 1 1 auto;
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  align-content: flex-start;
+  flex-wrap: nowrap;
+  // Every card is as tall as the lane gives it, whatever that works out to —
+  // this is the stretch TrafficCard's own `height: 100%` is measured against.
+  align-items: stretch;
   gap: var(--rt-lane-gap);
   // Both zeroes are load bearing: without them this box takes its content's
   // size and pushes the lane — and then the whole column — past the window.
@@ -212,11 +309,19 @@
   // keeps every lane's label strip on screen at all times.
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  // Sideways only. A vertical scrollbar here would mean the lane had been given
+  // less height than one card is tall, which is a layout fault to fix rather
+  // than something to hide behind a scrollbar — so the axis is closed outright.
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .rtLaneSlot {
+  // The card sets its own width; the slot only has to not shrink it. Height
+  // comes from the row's stretch, so nothing here names a size.
   flex: 0 0 auto;
+  display: flex;
+  min-width: 0;
 }
 
 // The drag affordance is on the slot rather than the card so it follows the

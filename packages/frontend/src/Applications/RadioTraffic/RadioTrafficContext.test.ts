@@ -31,6 +31,7 @@ describe("sanitizeRadioTrafficState", () => {
 			collapsed: { live: false, upcoming: false, previous: false },
 			laneOrder: { live: [], upcoming: [], previous: [] },
 			mutedItems: [],
+			liveLaneMuted: false,
 			useThemeWaveformColor: true,
 			waveformColor: DEFAULT_WAVEFORM_COLOR,
 			playOriginalAudio: false,
@@ -44,11 +45,30 @@ describe("sanitizeRadioTrafficState", () => {
 			collapsed: { live: false, upcoming: true, previous: false },
 			laneOrder: { live: [7, 0], upcoming: [], previous: [3, 1] },
 			mutedItems: [11, 12],
+			liveLaneMuted: true,
 			useThemeWaveformColor: false,
 			waveformColor: 0x0000ff,
 			playOriginalAudio: true,
 		};
 		expect(sanitizeRadioTrafficState(stored)).toEqual(stored);
+	});
+
+	describe("the Live lane mute", () => {
+		it("carries a stored mute back, so a silenced app opens silent", () => {
+			// Unlike solo it names no clip, so there is nothing about it that a
+			// reload can make stale — see RadioTrafficContext's note.
+			expect(sanitizeRadioTrafficState({ liveLaneMuted: true }).liveLaneMuted).toBe(true);
+		});
+
+		// Only an explicit `true` silences the lane. Anything else opening the app
+		// to silence would be a fault with no explanation on screen, and the mute
+		// control is one 12px button in a lane strip to find it with.
+		it.each([[false], ["true"], [1], [null], [{}], [undefined], [[]]])(
+			"treats a non-boolean stored value (%s) as unmuted",
+			(liveLaneMuted) => {
+				expect(sanitizeRadioTrafficState({ liveLaneMuted }).liveLaneMuted).toBe(false);
+			},
+		);
 	});
 
 	// The whole reason this function exists: applyToolClick switches on exactly
@@ -188,6 +208,7 @@ describe("classicyRadioTrafficEventHandler", () => {
 				collapsed: { live: false, upcoming: true, previous: false },
 				laneOrder: { live: [1, 0], upcoming: [], previous: [] },
 				mutedItems: [4],
+				liveLaneMuted: true,
 				useThemeWaveformColor: false,
 				waveformColor: 0xff6600,
 				playOriginalAudio: true,
@@ -200,6 +221,7 @@ describe("classicyRadioTrafficEventHandler", () => {
 			collapsed: { live: false, upcoming: true, previous: false },
 			laneOrder: { live: [1, 0], upcoming: [], previous: [] },
 			mutedItems: [4],
+			liveLaneMuted: true,
 			useThemeWaveformColor: false,
 			waveformColor: 0xff6600,
 			playOriginalAudio: true,
@@ -226,6 +248,7 @@ describe("classicyRadioTrafficEventHandler", () => {
 				collapsed: { live: false, upcoming: false, previous: false },
 				laneOrder: { live: [], upcoming: [], previous: [] },
 				mutedItems: [],
+				liveLaneMuted: false,
 				useThemeWaveformColor: true,
 				waveformColor: DEFAULT_WAVEFORM_COLOR,
 				playOriginalAudio: false,
