@@ -20,11 +20,20 @@
 // reintroduce exactly the scrolling the design forbids. The ratio is what was
 // meant, and the ratio holds at every window size — which is also the ratio the
 // row model (LIVE three players deep, UPCOMING two, PREVIOUS one, six rows in
-// all) works out to, so the two compose rather than compete.
+// all) works out to, so the two compose rather than compete. What "three
+// players deep" cashes out to WITHIN a lane's own share is a separate
+// question the row model never answered — see the LIVE-only grid rule under
+// "Cards" below (story 048): UPCOMING and PREVIOUS still hand each card the
+// whole of their one/two-row share, but LIVE splits its 3/6 into two stacked
+// half-height players per column rather than one card stretched the full
+// 3-row height, so the height RATIO between lanes is unchanged even though
+// no single LIVE card is 3 rows tall any more.
 //
-// OVERFLOW GOES SIDEWAYS, NOT DOWN (story 036). A lane is one row of players
-// that runs off to the right, and reaching the rest of them is a horizontal
-// scroll inside the lane. Nothing scrolls vertically anywhere in this app.
+// OVERFLOW GOES SIDEWAYS, NOT DOWN (story 036). A lane is a row of players —
+// literally one row for UPCOMING/PREVIOUS, two-per-column for LIVE (story
+// 048) — that runs off to the right, and reaching the rest of them is a
+// horizontal scroll inside the lane. Nothing scrolls vertically anywhere in
+// this app.
 //
 // PREVIOUS gets 1/6 of the column — about 95px in the design's 601px window —
 // which used to be shorter than a card's own fixed `124px * 1.25` = 155px
@@ -33,7 +42,9 @@
 // is `height: 100%` of the row .rtLaneCards hands it (below), with no
 // competing min-height, and derives its own width from that height via a
 // fixed aspect ratio (trafficCard.module.scss) — so a row is tall enough for
-// its card by construction, not by coincidence.
+// its card by construction, not by coincidence. LIVE's grid rows are the same
+// idea one level deeper: `1fr` of the LIVE row, not the LIVE row itself, is
+// what a LIVE card's `height: 100%` now resolves against.
 
 // Sizes compose from classicy's window metrics (border 1px, padding 6px,
 // control 12px) rather than from fresh px literals — house pattern.
@@ -302,7 +313,11 @@
 // A lane is ONE ROW of players that runs off to the right, not a grid that
 // grows downward (story 036). `nowrap` is the whole change: with it the row
 // simply gets longer as cards accumulate, and the overflow it produces is
-// horizontal, which is what `overflow-x` below then scrolls.
+// horizontal, which is what `overflow-x` below then scrolls. LIVE overrides
+// `display` to a two-row grid further down (story 048) but keeps every other
+// property here — the gap, the two zeroed minimums and the closed vertical
+// axis all still apply, since a grid container reads `overflow`/`gap` the
+// same way a flex one does.
 //
 // This is also what lets the lane compose with the row-height model: a lane's
 // height is its share of the window and nothing here asks for more, so whether
@@ -339,6 +354,49 @@
   flex: 0 0 auto;
   display: flex;
   min-width: 0;
+}
+
+// LIVE shows two players PER COLUMN, stacked vertically, with overflow beyond
+// that going sideways (story 048) — not one card stretched the full height of
+// LIVE's 3-row share the way story 034 originally left it.
+//
+// This does NOT touch --rt-lane-rows or the 3:2:1 split above: that ratio is
+// still what divides the WINDOW between the three lanes, and LIVE keeping its
+// 3/6 share is what stops UPCOMING/PREVIOUS's own layout moving as a side
+// effect of this rule (the brief for this story is explicit that they should
+// not change). What story 034's row model does NOT also pin down is how many
+// players stand shoulder to shoulder within a lane's own share — that was
+// only ever "one card per horizontal slot" because nothing said otherwise.
+// This is the same JS-free trick story 036 used for horizontal-only overflow:
+// `grid-auto-flow: column` fills a track top-to-bottom before starting the
+// next one, so the identical flat list of `.rtLaneSlot`s LaneSection.tsx
+// already renders (unchanged — see that file) regroups into pairs by CSS
+// alone, and a fifth item spills into a third column rather than a third row.
+// `grid-template-rows: repeat(2, 1fr)` is what caps a player at HALF of
+// LIVE's row share instead of the whole thing, satisfying "players do not
+// stretch to fill the full lane height" — each of the pair gets exactly
+// half, with the same `--rt-lane-gap` this file already uses for the seam
+// between them as it does between columns.
+.rtLane[data-lane="live"] .rtLaneCards {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, 1fr);
+  // Content-sized columns, same as the flex case's `flex: 0 0 auto` slots —
+  // a column is exactly as wide as the (aspect-ratio-derived) card inside it,
+  // never stretched to fill spare width.
+  grid-auto-columns: max-content;
+  justify-items: start;
+}
+
+// Grid's default item sizing would let a slot's implicit min-height (its
+// content's min-content size) outgrow the `1fr` row it was handed — the same
+// hazard `.rtLaneCards`'s own `min-height: 0` above exists to close off for
+// the lane column itself. Left open here, a card that even briefly wanted
+// more room would grow its row past half the lane, reintroducing the
+// vertical overflow story 036 closed off (`overflow-y: hidden` above would
+// then just clip it instead of the two rows sharing the space evenly).
+.rtLane[data-lane="live"] .rtLaneSlot {
+  min-height: 0;
 }
 
 // The drag affordance is on the slot rather than the card so it follows the
