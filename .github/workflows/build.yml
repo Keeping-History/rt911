@@ -158,9 +158,18 @@ jobs:
   # a broken desktop can't be built into an image or pushed to GHCR for Argo CD
   # to roll out. Keep `e2e` in main's required status checks so it blocks merges
   # too; the workflow alone can't enforce that half.
+  # Runs inside the official Playwright image (browsers + system deps
+  # preinstalled) instead of `playwright install --with-deps`, which calls
+  # apt-get against the runner's azure.archive.ubuntu.com mirror — a
+  # long-standing, still-open flake (actions/runner-images#11347) that can
+  # hang the step for tens of minutes with no output. Keep this tag's
+  # version in lockstep with @playwright/test in packages/frontend/package.json.
   e2e:
     name: e2e
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: write
@@ -171,8 +180,6 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Type-check E2E
         run: pnpm --filter @rt911/frontend exec tsc --project tsconfig.e2e.json --noEmit
-      - name: Install Playwright browsers
-        run: pnpm --filter @rt911/frontend exec playwright install --with-deps chromium
       - name: Run E2E tests
         run: pnpm --filter @rt911/frontend exec playwright test
       - name: Upload report artifact
