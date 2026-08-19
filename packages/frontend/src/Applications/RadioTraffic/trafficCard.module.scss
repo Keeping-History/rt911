@@ -54,6 +54,7 @@
   position: relative;
   box-sizing: border-box;
   display: flex;
+  flex-grow: 1;
   flex-direction: column;
   // The row's height is the one true size; everything else, including this
   // card's own width, is derived from it.

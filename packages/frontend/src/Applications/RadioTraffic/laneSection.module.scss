@@ -139,7 +139,7 @@
 // A third clip is reached by scrolling the lane sideways, exactly as an
 // expanded lane's are.
 .rtLane[data-collapsed="true"] .rtLaneSlot {
-  flex: 0 0 calc(50% - var(--rt-lane-gap) / 2);
+  flex: 0 0 calc(20% - var(--rt-lane-gap) / 2);
   min-width: 0;
 }
 
