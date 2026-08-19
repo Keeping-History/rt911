@@ -1112,7 +1112,10 @@ describe("FlightMap", () => {
 		const onSelect = vi.fn();
 		const onClear = vi.fn();
 		// Two airborne planes; stub project() maps lon/lat→x/y (no transform on
-		// the stub, so projectAtAltitude falls back to ground projection).
+		// the stub, so projectAtAltitude falls back to ground projection). That
+		// fallback is the shape of the maplibre-6 regression, so it must be loud —
+		// capture the warning here rather than letting it leak as test noise.
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		render(
 			<FlightMap
 				positions={[
@@ -1134,6 +1137,8 @@ describe("FlightMap", () => {
 		// A click far from every plane clears.
 		map.fire("click", { point: { x: 500, y: 500 } });
 		expect(onClear).toHaveBeenCalled();
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("No MapLibre transform"));
+		warn.mockRestore();
 	});
 
 	it("mercator pitched clicks compensate for the terrain camera-elevation offset", () => {
@@ -1166,6 +1171,59 @@ describe("FlightMap", () => {
 		map.fire("click", { point: { x: 41, y: 31 } });
 		expect(onSelect).toHaveBeenCalledWith("DL404");
 		expect(seenElevations[0]).toBeCloseTo(exaggeratedHeightM(30_000) - 5000);
+	});
+
+	// MapLibre 6 stopped having Map extend Camera: the transform moved from
+	// `map.transform` to `map._camera.transform`. Reading only the old spot made
+	// projectAtAltitude fall through to the GROUND projection, so every pitched
+	// click missed the aircraft drawn at cruise altitude and cleared instead of
+	// selecting — 3D became unclickable while 2D (queryRenderedFeatures) stayed
+	// fine. These two pin the v6 shape so the next major bump fails loudly here.
+	it("mercator pitched clicks find the transform under maplibre 6's _camera", () => {
+		const onSelect = vi.fn();
+		const onClear = vi.fn();
+		render(
+			<FlightMap
+				positions={[pos({ id: 1, flight: "DL404", lon: -40, lat: 30, alt_ft: 30_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={onSelect} onClearSelection={onClear}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a" observerPinColor="#0f766e" anonPinColor="#8b7d6b"
+				radarSweep={false} trailMultiplier={1} threeD={true} />,
+		);
+		const map = FakeMap.last!;
+		// No `map.transform` at all — exactly how a real v6 Map is shaped. The
+		// plane draws at (41, 31); the ground fallback would put it at (-40, 30).
+		(map as unknown as { _camera: unknown })._camera = {
+			transform: { coordinatePoint: () => ({ x: 41, y: 31 }) },
+		};
+		map.fire("load");
+		map.queryResult = [];
+		map.fire("click", { point: { x: 41, y: 31 } });
+		expect(onSelect).toHaveBeenCalledWith("DL404");
+		expect(onClear).not.toHaveBeenCalled();
+	});
+
+	it("globe pitched clicks find the transform under maplibre 6's _camera", () => {
+		const onSelect = vi.fn();
+		render(
+			<FlightMap
+				positions={[pos({ id: 1, flight: "DL404", lon: -40, lat: 30, alt_ft: 30_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={onSelect} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a" observerPinColor="#0f766e" anonPinColor="#8b7d6b"
+				radarSweep={false} trailMultiplier={1} threeD={true} globe={true} />,
+		);
+		const map = FakeMap.last!;
+		(map as unknown as { _camera: unknown })._camera = {
+			transform: {
+				width: 100, height: 100,
+				projectTileCoordinates: () => ({ point: { x: 0.2, y: -0.4 }, isOccluded: false }),
+			},
+		};
+		map.fire("load");
+		map.queryResult = [];
+		map.fire("click", { point: { x: 61, y: 71 } });
+		expect(onSelect).toHaveBeenCalledWith("DL404");
 	});
 
 	it("globe pitched clicks hit-test via projectTileCoordinates (elevated, not ground)", () => {

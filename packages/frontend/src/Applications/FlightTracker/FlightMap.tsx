@@ -444,7 +444,7 @@ function featureAnchor(f: { geometry: GeoJSON.Geometry }): [number, number] | nu
 // the planet. queryRenderedFeatures hit-tests ground footprints, not the
 // visually elevated pixels — so 3D hit tests project the elevated point
 // themselves, via per-projection INTERNAL transform methods (absent from the
-// public types, present in every 5.x build; verified live):
+// public types, present in every 5.x and 6.x build; verified live):
 //  - mercator: transform.coordinatePoint(mercCoord, elevationMeters)
 //  - globe: transform.projectTileCoordinates(x, y, tileID, getElevation) —
 //    the CPU twin of the shaders' projectTileFor3D. A synthetic zoom-0 tile
@@ -455,32 +455,69 @@ function featureAnchor(f: { geometry: GeoJSON.Geometry }): [number, number] | nu
 // worse than the pre-fix behavior.
 const TILE_EXTENT = 8192;
 const WORLD_TILE = { wrap: 0, canonical: { x: 0, y: 0, z: 0 } };
+
+// The transform's own internal shape is stable across 5.x/6.x; only where it
+// HANGS OFF the map moved.
+type AltitudeTransform = {
+	coordinatePoint?: (
+		coord: maplibregl.MercatorCoordinate,
+		elevation: number,
+	) => { x: number; y: number };
+	// Exaggerated terrain height at the camera center; 0 without terrain.
+	elevation?: number;
+	projectTileCoordinates?: (
+		x: number,
+		y: number,
+		tileID: typeof WORLD_TILE,
+		getElevation: () => number,
+	) => { point: { x: number; y: number }; isOccluded?: boolean };
+	width?: number;
+	height?: number;
+};
+
+/**
+ * Locate the active transform on a Map, across MapLibre's two layouts.
+ *
+ * MapLibre 6 stopped having `Map` extend `Camera` and composes it instead, so
+ * the transform moved from `map.transform` (5.x) to `map._camera.transform`.
+ * Reading only the 5.x spot silently degraded every pitched hit test to the
+ * ground projection, which put the hit target thousands of feet below the
+ * aircraft actually drawn — 3D clicks stopped selecting anything at all while
+ * flat 2D (queryRenderedFeatures on real style layers) kept working.
+ *
+ * Neither spot is public API, so this can break again on a major bump. It
+ * returns undefined rather than guessing, and the one caller reports that
+ * loudly instead of quietly falling back.
+ */
+function altitudeTransform(map: maplibregl.Map): AltitudeTransform | undefined {
+	const m = map as unknown as {
+		_camera?: { transform?: AltitudeTransform };
+		transform?: AltitudeTransform;
+	};
+	return m._camera?.transform ?? m.transform;
+}
+
+// One warning per map, not per call: a missing transform means every 3D click
+// silently mis-targets — invisible in logs and easy to mistake for bad data —
+// but this runs once per plane per frame, so unlatched it would flood.
+const warnedMissingTransform = new WeakSet<maplibregl.Map>();
+
 function projectAtAltitude(
 	map: maplibregl.Map,
 	lon: number,
 	lat: number,
 	altM: number,
 ): { x: number; y: number } | null {
-	const transform = (
-		map as unknown as {
-			transform?: {
-				coordinatePoint?: (
-					coord: maplibregl.MercatorCoordinate,
-					elevation: number,
-				) => { x: number; y: number };
-				// Exaggerated terrain height at the camera center; 0 without terrain.
-				elevation?: number;
-				projectTileCoordinates?: (
-					x: number,
-					y: number,
-					tileID: typeof WORLD_TILE,
-					getElevation: () => number,
-				) => { point: { x: number; y: number }; isOccluded?: boolean };
-				width?: number;
-				height?: number;
-			};
-		}
-	).transform;
+	const transform = altitudeTransform(map);
+	if (!transform && !warnedMissingTransform.has(map)) {
+		warnedMissingTransform.add(map);
+		console.warn(
+			"[FlightMap] No MapLibre transform found at map._camera.transform or " +
+				"map.transform — 3D hit-testing is falling back to ground positions " +
+				"and clicking aircraft in 3D will not select them. MapLibre likely " +
+				"moved the transform again; update altitudeTransform().",
+		);
+	}
 	try {
 		if (transform?.coordinatePoint) {
 			// coordinatePoint's pixel matrix is built BEFORE MapLibre's terrain
