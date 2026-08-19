@@ -26,8 +26,32 @@ const mockDispatch = vi.hoisted(() => vi.fn());
 
 vi.mock("classicy", () => ({
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ClassicyWindow: ({ children, title }: { children?: React.ReactNode; title?: string }) => (
-		<div data-window-title={title}>{children}</div>
+	// The app menu is rendered flat as buttons. The real window puts these behind
+	// a menu bar, which is chrome this suite is not about — but "File ▸ Settings…
+	// opens the Settings window" is app behaviour, and a mock that swallowed
+	// `appMenu` would leave the only route to that window untestable.
+	ClassicyWindow: ({
+		children,
+		title,
+		appMenu,
+		onCloseFunc,
+	}: {
+		children?: React.ReactNode;
+		title?: string;
+		appMenu?: { menuChildren?: { id: string; title: string; onClickFunc?: () => void }[] }[];
+		onCloseFunc?: () => void;
+	}) => (
+		<div data-window-title={title}>
+			{onCloseFunc && <button type="button" aria-label="Close" onClick={onCloseFunc} />}
+			{(appMenu ?? []).flatMap((menu) =>
+				(menu.menuChildren ?? []).map((entry) => (
+					<button key={entry.id} type="button" onClick={entry.onClickFunc}>
+						{entry.title}
+					</button>
+				)),
+			)}
+			{children}
+		</div>
 	),
 	ClassicyButton: ({
 		children,
@@ -64,6 +88,28 @@ vi.mock("classicy", () => ({
 	ClassicyInput: ({ id, labelTitle }: { id?: string; labelTitle?: string }) => (
 		<input id={id} aria-label={labelTitle} />
 	),
+	ClassicyBalloonHelp: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+	ClassicyControlGroup: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	ClassicyColorPicker: ({
+		labelTitle,
+		value,
+		onChangeFunc,
+	}: {
+		labelTitle?: string;
+		value?: number;
+		onChangeFunc?: (color: number) => void;
+	}) => (
+		<button
+			type="button"
+			aria-label={labelTitle}
+			data-color={value}
+			onClick={() => onChangeFunc?.(0xff0000)}
+		/>
+	),
+	MAC_OS_8_CRAYONS: [],
+	// The real packing, not a stand-in: the shell hands this straight to a CSS
+	// `color`, so a fake would let a broken conversion pass.
+	intToHex: (color: number) => `#${color.toString(16).padStart(6, "0")}`,
 	ClassicyLink: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 	ClassicyTriangle: () => <span />,
 	ClassicyIcons: { applications: {} },
@@ -568,5 +614,109 @@ describe("RadioTraffic — the tools", () => {
 
 		expect(audio.elements.get(1)?.muted).toBe(false);
 		expect(audio.elements.get(3)?.muted).toBe(true);
+	});
+});
+
+describe("RadioTraffic — the station split", () => {
+	/** Same shape as `item`, on a continuous broadcaster instead of ATC. */
+	function broadcast(id: number, source: string): MediaItem {
+		return { ...item(id, "2001-09-11T12:46:00.000Z", "2001-09-11T12:50:00.000Z"), source };
+	}
+
+	// The mp3 stream carries both kinds of audio and BROADCAST_STATIONS is the
+	// line between them: the Tuner filters TO it, so anything this app does not
+	// filter OUT is a station the listener is already hearing in another window,
+	// duplicated here as a traffic card.
+	it("keeps the tuner's broadcast stations out of every lane", async () => {
+		await renderSettled({
+			mp3Items: [...LIVE, broadcast(100, "WCBS"), broadcast(101, "WINS")],
+		});
+		expect(laneIds("live")).toEqual([1, 2, 3]);
+		expect(cardOf(100)).toBeNull();
+		expect(cardOf(101)).toBeNull();
+	});
+
+	// Excluded from the app means excluded from the mix — a card that never
+	// renders but whose element the coordinator still registers would be a
+	// station playing with nothing on screen to stop it.
+	it("never registers audio for a broadcast station", async () => {
+		await renderSettled({ mp3Items: [...LIVE, broadcast(100, "WCBS")] });
+		expect([...audio.elements.keys()]).not.toContain(100);
+	});
+
+	it("filters the history and reveal buffers too, not just the live set", async () => {
+		await renderSettled({
+			mp3History: [...HISTORY, broadcast(102, "WABC")],
+			getUpcomingMp3Items: () => [...UPCOMING, broadcast(103, "WTOP")],
+		});
+		expect(cardOf(102)).toBeNull();
+		expect(cardOf(103)).toBeNull();
+	});
+
+	// The comm traffic this app exists for must survive the filter — a test that
+	// only checked the exclusions would pass on an empty grid.
+	it("keeps comm traffic whose source is not a broadcaster", async () => {
+		await renderSettled({ mp3Items: [...LIVE, broadcast(104, "ZBW")] });
+		expect(laneIds("live")).toContain(104);
+	});
+});
+
+describe("RadioTraffic — the waveform color", () => {
+	const waveformSlots = () =>
+		Array.from(document.querySelectorAll("[data-card-waveform]")) as HTMLElement[];
+
+	it("leaves the waveform on the theme until the listener changes it", async () => {
+		await renderSettled();
+		// No inline color at all, so `.rtCardWaveform`'s --color-system-06 stands
+		// and the app keeps re-theming live.
+		expect(waveformSlots().every((el) => el.style.color === "")).toBe(true);
+	});
+
+	it("applies a saved color to every card", async () => {
+		mockAppData.current = { useThemeWaveformColor: false, waveformColor: 0x00d25a };
+		await renderSettled();
+		const slots = waveformSlots();
+		expect(slots.length).toBeGreaterThan(1);
+		expect(slots.every((el) => el.style.color === "rgb(0, 210, 90)")).toBe(true);
+	});
+
+	it("re-colors every card when the listener saves a new color", async () => {
+		await renderSettled();
+		fireEvent.click(screen.getByText("Settings…"));
+		fireEvent.click(screen.getByLabelText("Use theme colors"));
+		fireEvent.click(screen.getByLabelText("Waveform"));
+		fireEvent.click(screen.getByText("Save"));
+		await act(async () => {});
+
+		const slots = waveformSlots();
+		expect(slots.length).toBeGreaterThan(1);
+		expect(slots.every((el) => el.style.color === "rgb(255, 0, 0)")).toBe(true);
+	});
+
+	// Persistence is what makes it a setting rather than a session preference.
+	it("persists the color through the app's own state", async () => {
+		await renderSettled();
+		fireEvent.click(screen.getByText("Settings…"));
+		fireEvent.click(screen.getByLabelText("Use theme colors"));
+		fireEvent.click(screen.getByLabelText("Waveform"));
+		fireEvent.click(screen.getByText("Save"));
+		await act(async () => {});
+
+		expect(lastPersisted()).toMatchObject({
+			useThemeWaveformColor: false,
+			waveformColor: 0xff0000,
+		});
+	});
+
+	it("leaves the cards alone when the listener cancels", async () => {
+		await renderSettled();
+		fireEvent.click(screen.getByText("Settings…"));
+		fireEvent.click(screen.getByLabelText("Use theme colors"));
+		fireEvent.click(screen.getByLabelText("Waveform"));
+		fireEvent.click(screen.getByText("Cancel"));
+		await act(async () => {});
+
+		expect(waveformSlots().every((el) => el.style.color === "")).toBe(true);
+		expect(lastPersisted()).toMatchObject({ useThemeWaveformColor: true });
 	});
 });

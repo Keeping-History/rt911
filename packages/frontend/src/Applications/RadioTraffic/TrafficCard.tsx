@@ -50,6 +50,17 @@ export interface TrafficCardProps {
 	muted?: boolean;
 	paused?: boolean;
 	onTogglePause: () => void;
+	/**
+	 * The waveform's ink as a CSS color, or undefined to follow the theme.
+	 *
+	 * A `color` on the waveform slot rather than a prop passed into
+	 * PeaksWaveform, because that is the seam PeaksWaveform already reads: it
+	 * resolves `getComputedStyle(canvas).color` at draw time, which is why the
+	 * envelope has always taken `.rtCardWaveform`'s `--color-system-06`. So the
+	 * setting overrides an inherited value instead of introducing a second way
+	 * to colour the same canvas.
+	 */
+	waveformColor?: string;
 }
 
 /** The badge, in the few characters the 196px header can spare beside a subject. */
@@ -80,6 +91,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	muted = false,
 	paused = false,
 	onTogglePause,
+	waveformColor,
 }) => {
 	const [active, setActive] = useState(CARD_TABS[0].id);
 
@@ -138,8 +150,20 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 
 			{/* The positioned containing block PeaksWaveform's absolute scrubbers
 			    need — it renders a bare fragment and establishes none of its own. */}
-			<div className={styles.rtCardWaveform} data-card-waveform>
+			<div
+				className={styles.rtCardWaveform}
+				data-card-waveform
+				style={waveformColor ? { color: waveformColor } : undefined}
+			>
 				<PeaksWaveform
+					// PeaksWaveform samples its ink once per draw, and it redraws
+					// only when its peaks, its height or its layout width change — a
+					// colour change is none of those, so without this the canvas
+					// keeps the old ink until something else happens to resize it.
+					// Keying it on the colour remounts the canvas, and a remount IS
+					// the redraw. It costs one repaint per card, only at the moment
+					// the listener picks a new colour.
+					key={waveformColor ?? "theme"}
 					peaks={meta?.peaks}
 					height={WAVEFORM_HEIGHT}
 					livePct={livePct}
