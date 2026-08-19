@@ -11,10 +11,14 @@ import styles from "./cardTabs.module.scss";
  * made a shared, fixed panel height unworkable while it lived there (story 033
  * fixes every panel to one height; this is what lets it).
  *
- * The card only offers this tab for an item that has a summary — see
- * `visibleCardTabs` in CardTabBar.tsx — so the empty line below is the panel
- * keeping the house rule that no tab ever paints an empty box, not a state the
- * listener is routinely shown.
+ * The card offers this tab on every item, whether or not it has a summary —
+ * see `visibleCardTabs` in CardTabBar.tsx. It briefly hid itself instead
+ * (story 035), which turned out to be indistinguishable from a bug once
+ * `rederive-mp3-metadata` (the backfill that writes `subject`) had never
+ * actually run: every one of the 814 rows was null, so the tab vanished on
+ * every single card (story 049). The empty line below is what a listener sees
+ * for an item with no summary now — the same "nothing here" convention every
+ * other tab already follows, not a state they are shielded from.
  */
 
 /**
