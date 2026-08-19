@@ -1,44 +1,52 @@
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-// Stand in for classicy's subtitle hook so the panel's cue lookup is exercised
-// without fetching or parsing a real VTT — the same substitution
-// radio-core/CaptionOverlay.test.tsx makes. `seen` records the URL the panel
-// asked for, which is what pins that it reuses vttUrl() rather than handing the
-// parser the .srt (or re-parsing cues itself).
-const { seen, CUES } = vi.hoisted(() => ({
-	seen: { url: undefined as string | undefined, calls: 0 },
-	CUES: [
-		{ from: 0, to: 4, text: "Boston Center, American 11" },
-		{ from: 6, to: 9, text: "American 11, Boston Center, go ahead" },
-	],
-}));
-
-vi.mock("classicy", () => ({
-	useQuickTimeSubtitles: (url?: string) => {
-		seen.url = url;
-		seen.calls += 1;
-		return {
-			activeCueText: (t: number) =>
-				url ? (CUES.find((c) => c.from <= t && t < c.to)?.text ?? null) : null,
-		};
-	},
-	registerApp: () => {},
-}));
-
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeItem, makeMeta } from "./cardTabFixtures";
 import { TranscriptTab } from "./TranscriptTab";
 
+// rt911 has no global test setup, so testing-library does not auto-clean the
+// DOM between tests; do it explicitly to keep document-level queries isolated.
 afterEach(() => {
 	cleanup();
-	seen.url = undefined;
-	seen.calls = 0;
+	vi.unstubAllGlobals();
 });
 
 const TZ = -4;
 
+/** The shape the CDN really serves — first cue at 0.800, not at zero. */
+const VTT = `WEBVTT
+
+00:00:00.800 --> 00:00:04.000
+Boston Center, American 11.
+
+00:00:06.000 --> 00:00:09.000
+American 11, Boston Center, go ahead.
+`;
+
+/**
+ * Stub `fetch` rather than classicy's hook.
+ *
+ * The panel parses the VTT itself now, because classicy exposes only
+ * `activeCueText(seconds)` and never its cue list — so there is no hook seam
+ * left to substitute, and mocking one would test nothing. This stub is the
+ * network boundary; everything above it is the real parser.
+ */
+function stubFetch(body: string, init: { ok?: boolean; status?: number } = {}) {
+	const fetchMock = vi.fn(async (_url: string) => ({
+		ok: init.ok ?? true,
+		status: init.status ?? 200,
+		text: async () => body,
+	}));
+	vi.stubGlobal("fetch", fetchMock);
+	return fetchMock;
+}
+
 describe("TranscriptTab", () => {
-	it("hands classicy's parser the .vtt sibling, not the .srt on the wire", () => {
+	beforeEach(() => {
+		stubFetch(VTT);
+	});
+
+	it("fetches the .vtt sibling, not the .srt the wire carries", async () => {
+		const fetchMock = stubFetch(VTT);
 		render(
 			<TranscriptTab
 				item={makeItem({ subtitles: "https://files.example/clip.srt" })}
@@ -46,37 +54,64 @@ describe("TranscriptTab", () => {
 				tzOffsetHours={TZ}
 			/>,
 		);
-		expect(seen.url).toBe("https://files.example/clip.vtt");
+		await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+		expect(fetchMock.mock.calls[0][0]).toBe("https://files.example/clip.vtt");
 	});
 
-	it("renders the cue covering the playback position", () => {
-		const { getByText } = render(
-			<TranscriptTab item={makeItem()} tzOffsetHours={TZ} currentTimeSec={1} />,
-		);
-		expect(getByText("Boston Center, American 11")).toBeTruthy();
+	it("shows the whole transcript for a card that is not playing", async () => {
+		// The case that was broken: no currentTimeSec at all, which is every
+		// UPCOMING card, every unstarted PREVIOUS card, and every LIVE card until
+		// its audio element loads.
+		render(<TranscriptTab item={makeItem()} tzOffsetHours={TZ} />);
+		expect(await screen.findByText("Boston Center, American 11.")).toBeTruthy();
+		expect(screen.getByText("American 11, Boston Center, go ahead.")).toBeTruthy();
 	});
 
-	it("renders a different cue as playback advances", () => {
-		const { getByText } = render(
+	it("shows the whole transcript while playing, not only the active cue", async () => {
+		render(<TranscriptTab item={makeItem()} tzOffsetHours={TZ} currentTimeSec={7} />);
+		expect(await screen.findByText("Boston Center, American 11.")).toBeTruthy();
+		expect(screen.getByText("American 11, Boston Center, go ahead.")).toBeTruthy();
+	});
+
+	it("marks the cue under the playhead, and only that one", async () => {
+		const { container } = render(
 			<TranscriptTab item={makeItem()} tzOffsetHours={TZ} currentTimeSec={7} />,
 		);
-		expect(getByText("American 11, Boston Center, go ahead")).toBeTruthy();
+		await screen.findByText("American 11, Boston Center, go ahead.");
+		const active = container.querySelectorAll('[data-active="true"]');
+		expect(active).toHaveLength(1);
+		expect(active[0].textContent).toBe("American 11, Boston Center, go ahead.");
 	});
 
-	it("reads from the top of the clip when no position is supplied", () => {
-		const { getByText } = render(<TranscriptTab item={makeItem()} tzOffsetHours={TZ} />);
-		expect(getByText("Boston Center, American 11")).toBeTruthy();
+	it("moves the mark as playback advances", async () => {
+		const { container } = render(
+			<TranscriptTab item={makeItem()} tzOffsetHours={TZ} currentTimeSec={1} />,
+		);
+		await screen.findByText("Boston Center, American 11.");
+		expect(container.querySelector('[data-active="true"]')?.textContent).toBe(
+			"Boston Center, American 11.",
+		);
 	});
 
-	it("marks the gaps between cues rather than collapsing the panel", () => {
+	it("marks nothing between cues, but still shows the transcript", async () => {
+		// 5s is in the gap between the two cues. The old panel collapsed to an em
+		// dash here; the words are what the reader came for.
 		const { container } = render(
 			<TranscriptTab item={makeItem()} tzOffsetHours={TZ} currentTimeSec={5} />,
 		);
-		expect(container.querySelector('[data-state="silent"]')).not.toBeNull();
+		await screen.findByText("Boston Center, American 11.");
+		expect(container.querySelector('[data-active="true"]')).toBeNull();
 	});
 
-	it("shows a placeholder when the clip has no subtitles", () => {
-		const { container, getByText } = render(
+	it("marks nothing when the card has no playhead", async () => {
+		const { container } = render(<TranscriptTab item={makeItem()} tzOffsetHours={TZ} />);
+		await screen.findByText("Boston Center, American 11.");
+		expect(container.querySelector('[data-active="true"]')).toBeNull();
+	});
+
+	it("shows a placeholder, and never fetches, when the clip has no subtitles", async () => {
+		const fetchMock = stubFetch(VTT);
+		const { container } = render(
 			<TranscriptTab
 				item={makeItem({ subtitles: undefined })}
 				meta={makeMeta()}
@@ -85,25 +120,32 @@ describe("TranscriptTab", () => {
 			/>,
 		);
 		expect(container.querySelector('[data-state="none"]')).not.toBeNull();
-		expect(getByText(/no transcript/i)).toBeTruthy();
+		expect(screen.getByText(/no transcript/i)).toBeTruthy();
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
-	it("still calls the hook when there are no subtitles, so the order is stable", () => {
-		// React forbids a conditional hook; passing undefined through is the
-		// only way the panel can flip between having and not having a .vtt
-		// without remounting.
-		render(
-			<TranscriptTab item={makeItem({ subtitles: undefined })} tzOffsetHours={TZ} />,
+	it("says so when the transcript cannot be fetched", async () => {
+		// A 404 on the .vtt must read as a failure, not as a clip that said
+		// nothing — the two are very different facts about the archive.
+		stubFetch("Not Found", { ok: false, status: 404 });
+		const { container } = render(<TranscriptTab item={makeItem()} tzOffsetHours={TZ} />);
+		await waitFor(() =>
+			expect(container.querySelector('[data-state="error"]')).not.toBeNull(),
 		);
-		expect(seen.calls).toBeGreaterThan(0);
-		expect(seen.url).toBeUndefined();
+		expect(screen.getByText(/unavailable/i)).toBeTruthy();
 	});
 
-	it("renders for an item with no metadata, the transcript being on the item", () => {
+	it("says so when the file parses to no cues at all", async () => {
+		stubFetch("WEBVTT\n\n");
+		const { container } = render(<TranscriptTab item={makeItem()} tzOffsetHours={TZ} />);
+		await waitFor(() =>
+			expect(container.querySelector('[data-state="empty"]')).not.toBeNull(),
+		);
+	});
+
+	it("renders for an item with no metadata, the transcript being on the item", async () => {
 		// All 814 rows have subtitles; the 59 without `parties` still transcribe.
-		const { getByText } = render(
-			<TranscriptTab item={makeItem()} tzOffsetHours={TZ} currentTimeSec={1} />,
-		);
-		expect(getByText("Boston Center, American 11")).toBeTruthy();
+		render(<TranscriptTab item={makeItem()} tzOffsetHours={TZ} currentTimeSec={1} />);
+		expect(await screen.findByText("Boston Center, American 11.")).toBeTruthy();
 	});
 });

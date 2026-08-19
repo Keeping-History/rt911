@@ -8,7 +8,13 @@
 //   Header       196x19 (7px inset, centred in the 29px above the waveform)
 //   Waveform     206x27 @ y=29
 //   Control bar  206x14 @ y=56
-//   Tabs         207x53 @ y=70   (bar 11px, gap 3px, panel 206x39)
+//   Tabs         207x53 @ y=70   (bar 11px, gap 3px, panel 206x39 minimum)
+//
+// The first three are absolute and fixed. The tabs block is NOT: 124px is the
+// card's floor, not its height, because a tab panel sizes to its content and
+// the card has to grow with it (Transcript is a whole transcript). So the tabs
+// block sits in flow — it is the card's only flow child, the other three being
+// positioned — and its 70px margin reproduces what its `top` used to.
 //
 // Colours are placeholders pending Robbie's pass, matching the convention in
 // tabs/cardTabs.module.scss — the structure is what this file pins.
@@ -16,8 +22,14 @@
 .rtCard {
   position: relative;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: 210px;
-  height: 124px;
+  min-height: 124px;
+  // Fills the flex line, which is what makes every card in one wrapped lane row
+  // the height of the tallest card in it: .rtLaneCards stretches its slots by
+  // default, and this is the card taking the height that stretch grants.
+  height: 100%;
   font-family: var(--ui-font);
   color: var(--color-system-06);
   background: var(--color-system-02);
@@ -161,11 +173,13 @@
 // Tabs ---------------------------------------------------------------------
 
 .rtCardTabs {
-  position: absolute;
-  left: 2px;
-  top: 70px;
+  // In flow, so the panel's height reaches the card. `margin-top` stands in for
+  // the `top: 70px` this used to carry: the header, waveform and control bar
+  // above are absolutely positioned and out of flow, so there is nothing for
+  // this margin to collapse against or stack below.
+  flex: 1 1 auto;
+  margin: 70px 0 0 2px;
   width: 207px;
-  height: 53px;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -239,9 +253,13 @@
 }
 
 .rtCardPanel {
-  flex: 0 0 auto;
+  // Grow into a card the row has made taller; never shrink below the panel's
+  // own content. `flex-basis: auto` is the whole trick — the basis is what the
+  // panel's content measures, so the card is sized by the tab that is open.
+  flex: 1 0 auto;
   width: 206px;
-  height: 39px;
+  // Figma's 39px, as a floor rather than a cap.
+  min-height: 39px;
   border: 1px solid var(--color-system-05);
   box-sizing: border-box;
 }

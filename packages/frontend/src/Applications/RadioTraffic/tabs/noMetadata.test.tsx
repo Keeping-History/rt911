@@ -2,12 +2,18 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ItemMeta } from "../../../Providers/MediaStream/MediaStreamContext";
 
-// The transcript panel is the only one that reaches classicy; stub the parser
-// so this suite is about the metadata gap, not about fetching a VTT.
-vi.mock("classicy", () => ({
-	useQuickTimeSubtitles: () => ({ activeCueText: () => null }),
-	registerApp: () => {},
-}));
+// The transcript panel is the only one that goes to the network; stub it so
+// this suite is about the metadata gap, not about fetching a VTT. It answers
+// with a real transcript because the point being made is that a clip with no
+// metadata still has one — the transcript lives on the item, not in mp3_meta.
+vi.stubGlobal(
+	"fetch",
+	vi.fn(async () => ({
+		ok: true,
+		status: 200,
+		text: async () => "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nBoston Center.\n",
+	})),
+);
 
 import { makeItem } from "./cardTabFixtures";
 import { DetailsTab } from "./DetailsTab";

@@ -40,6 +40,32 @@ export const NS_COLOR: Record<string, string | undefined> = {
 /** Fill for a namespace the palette has no colour for. */
 export const DEFAULT_TAG_COLOR = "var(--rt-tag-default)";
 
+/**
+ * The row label a namespace's chips sit against in the Details panel's Tags
+ * column. Plural, because the row holds a set — and written here beside the
+ * colours rather than in the panel so the two halves of a namespace's
+ * presentation cannot drift apart.
+ *
+ * The filter sidebar does NOT read this: its labels come down the wire with the
+ * vocabulary, which is the curator's own naming. This table exists only for the
+ * card, which never receives that frame.
+ */
+export const NS_LABEL: Record<string, string | undefined> = {
+	topic: "Topics",
+	facility: "Facilities",
+	link: "Links",
+	tier: "Tier",
+	aircraft: "Aircraft",
+	agency: "Agencies",
+	role: "Roles",
+	person: "People",
+};
+
+/** A namespace's row label, falling back to the namespace itself. */
+export function namespaceLabel(namespace: string): string {
+	return NS_LABEL[namespace] ?? namespace;
+}
+
 /** The chip's fill: a curator's colour if there is one, else the namespace. */
 export function chipColor(tag: TagDef): string {
 	if (tag.color) return tag.color;
