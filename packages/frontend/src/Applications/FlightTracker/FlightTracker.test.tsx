@@ -6,6 +6,7 @@ import {
 	type MediaStreamContextValue,
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { DEFAULT_FLIGHT_MAP_SETTINGS } from "./flightMapSettings";
+import { SECONDARY_TRACK_COLOR } from "./flightMapStyle";
 
 // Mock the map (WebGL) — assert wiring, not rendering.
 const mapProps: Array<Record<string, unknown>> = [];
@@ -886,6 +887,60 @@ describe("FlightTracker", () => {
 			});
 			// The tool disarms after a selection.
 			expect(mapProps[mapProps.length - 1].selectMode).toBe("off");
+		});
+
+		it("a multi-selection (shift-click or area-select) draws every OTHER flight's track too, not just the active one (issue #326)", async () => {
+			const UA175_GEOMETRY = {
+				type: "LineString" as const,
+				coordinates: [[-73, 41], [-72, 42]] as [number, number][],
+			};
+			const UA175_PROFILE = [
+				{ lat: 41, lon: -73, alt_ft: 30000, utc: "2001-09-11T13:00:00.000Z" },
+				{ lat: 42, lon: -72, alt_ft: 31000, utc: "2001-09-11T13:05:00.000Z" },
+			];
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async (url: string) => {
+					const u = String(url);
+					if (u.includes("/items/flight_tracks")) {
+						const flight = new URL(u).searchParams.get("filter[flight][_eq]");
+						if (flight !== "UA175") return { ok: true, json: async () => ({ data: [] }) };
+						return {
+							ok: true,
+							json: async () => ({
+								data: [{
+									flight: "UA175", flight_date: "2001-09-11", origin: null,
+									scheduled_dest: null, landed_at: null, diverted: false,
+									geometry: UA175_GEOMETRY, tail_number: null, aircraft_type: null,
+									details: null, wheels_off_utc: null, wheels_on_utc: null,
+								}],
+							}),
+						};
+					}
+					// flight_positions (altitude profile): only UA175 has data here.
+					const flight = new URL(u).searchParams.get("filter[flight][_eq]");
+					return {
+						ok: true,
+						json: async () => ({ data: flight === "UA175" ? UA175_PROFILE : [] }),
+					};
+				}),
+			);
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			const onAreaSelect = mapProps[mapProps.length - 1].onAreaSelect as (f: string[]) => void;
+			// AA11 becomes active (index 0, no track data stubbed → no active
+			// feature); UA175 is the OTHER selected flight.
+			act(() => onAreaSelect(["AA11", "UA175"]));
+
+			await waitFor(() => {
+				const secondary = mapProps[mapProps.length - 1].secondaryTrackProfiles as
+					{ flight: string; profile: unknown[] }[];
+				expect(secondary).toEqual([{ flight: "UA175", profile: UA175_PROFILE }]);
+			});
+			const geoJSON = mapProps[mapProps.length - 1].trackGeoJSON as GeoJSON.FeatureCollection;
+			const secondaryFeature = geoJSON.features.find(
+				(f) => f.properties?.color === SECONDARY_TRACK_COLOR,
+			);
+			expect(secondaryFeature?.geometry).toEqual(UA175_GEOMETRY);
 		});
 
 		it("a persisted flight-list filter hides everything else", () => {

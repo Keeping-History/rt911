@@ -49,6 +49,7 @@ const FakeMap = vi.hoisted(() => {
 			this.layers.push({ ...def, beforeId, __raw: def });
 		}
 		getLayer(id: string) { return this.layers.find((l) => l.id === id); }
+		removeLayer(id: string) { this.layers = this.layers.filter((l) => l.id !== id); }
 		repaints = 0;
 		triggerRepaint() { this.repaints++; }
 		setPaintProperty(layerId: string, name: string, value: unknown) {
@@ -1087,6 +1088,44 @@ describe("FlightMap", () => {
 		expect(tube.vertexCount).toBe(0);
 	});
 
+
+	it("adds/removes one plain 3D tube per OTHER multi-selected flight (issue #326)", () => {
+		const profile = [
+			{ lon: -74, lat: 40, alt_ft: 1_000, utc: "2001-09-11T12:00:00Z" },
+			{ lon: -73.5, lat: 40.5, alt_ft: 12_000, utc: "2001-09-11T12:01:00Z" },
+		];
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", observerPinColor: "#0f766e", anonPinColor: "#8b7d6b",
+			radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender } = render(<FlightMap {...common} secondaryTrackProfiles={[]} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-UA175")).toBeUndefined();
+
+		rerender(<FlightMap {...common} secondaryTrackProfiles={[{ flight: "UA175", profile }]} />);
+		const tube = map.layers.find((l) => l.id === "track-tube-3d-secondary-UA175")!
+			.__raw as import("./trackTubeLayer").TrackTube3DLayer;
+		expect(tube.vertexCount).toBeGreaterThan(0);
+
+		// A second flight joins the selection: its own tube is added, the first survives.
+		rerender(
+			<FlightMap {...common} secondaryTrackProfiles={[
+				{ flight: "UA175", profile },
+				{ flight: "AA77", profile },
+			]} />,
+		);
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-UA175")).toBeDefined();
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-AA77")).toBeDefined();
+
+		// Deselecting UA175 removes only its tube.
+		rerender(<FlightMap {...common} secondaryTrackProfiles={[{ flight: "AA77", profile }]} />);
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-UA175")).toBeUndefined();
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-AA77")).toBeDefined();
+	});
 
 	it("reports pitch-threshold crossings so the 3D toggle can follow the camera", () => {
 		const onPitchedChange = vi.fn();
