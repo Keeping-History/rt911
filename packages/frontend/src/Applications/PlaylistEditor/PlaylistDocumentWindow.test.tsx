@@ -465,12 +465,12 @@ describe("PlaylistDocumentWindow", () => {
 			renderWindow();
 			const focus = item("control", "playlist_control_focus");
 			const radio = focus.menuChildren?.find(
-				(c) => c.id === "playlist_control_focus_RadioScanner.app",
+				(c) => c.id === "playlist_control_focus_RadioTraffic.app",
 			);
-			if (!radio) throw new Error("no RadioScanner focus item");
+			if (!radio) throw new Error("no RadioTraffic focus item");
 			act(() => radio.onClickFunc?.());
 			await waitFor(() =>
-				expect(roomApi.sendRoomFocus).toHaveBeenCalledWith("p1", "RadioScanner.app"),
+				expect(roomApi.sendRoomFocus).toHaveBeenCalledWith("p1", "RadioTraffic.app"),
 			);
 		});
 

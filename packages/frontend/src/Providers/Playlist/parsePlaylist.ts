@@ -118,7 +118,7 @@ function parseEntry(raw: unknown, warn: (msg: string) => void): PlaylistEntry | 
 // PlaylistApp → owning desktop app id, needed for the disable-wins cross-check.
 const APP_IDS: Record<PlaylistApp, string> = {
 	tv: "TV.app",
-	radio: "RadioScanner.app",
+	radio: "RadioTraffic.app",
 	news: "News.app",
 	flights: "FlightTracker.app",
 };
