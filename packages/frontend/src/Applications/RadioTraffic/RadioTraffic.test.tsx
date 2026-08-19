@@ -435,7 +435,9 @@ describe("RadioTraffic — the default mix", () => {
 		expect(audio.elements.get(1)?.muted).toBe(true);
 		// Auto-solo never overrides an explicit mute — it moves to the next card.
 		expect(audio.elements.get(2)?.muted).toBe(false);
-		expect(cardOf(1)?.textContent).toContain("Muted");
+		// The card says so on its mute button, which is the control the listener
+		// uses to undo it — story 023 replaced the word "Muted" with that button.
+		expect(cardOf(1)?.querySelector("[data-muted]")?.getAttribute("data-muted")).toBe("true");
 	});
 
 	it("registers no element for an UPCOMING card", async () => {

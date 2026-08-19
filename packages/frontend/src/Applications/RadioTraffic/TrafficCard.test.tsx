@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The Transcript panel fetches and parses the clip's VTT itself (classicy
@@ -43,6 +44,7 @@ function renderCard(
 		muted?: boolean;
 		paused?: boolean;
 		onTogglePause?: () => void;
+		onToggleMute?: () => void;
 	} = {},
 ) {
 	return render(
@@ -57,6 +59,7 @@ function renderCard(
 			muted={props.muted}
 			paused={props.paused}
 			onTogglePause={props.onTogglePause ?? (() => {})}
+			onToggleMute={props.onToggleMute}
 		/>,
 	);
 }
@@ -236,6 +239,155 @@ describe("TrafficCard control bar", () => {
 		cleanup();
 		const silent = renderCard({ muted: true });
 		expect(silent.container.querySelector("[data-muted]")?.getAttribute("data-muted")).toBe("true");
+	});
+});
+
+// The three lane colours, the grayed-out UPCOMING treatment and the brightness
+// lift on an audible card are all CSS, keyed off these attributes. The hexes
+// live in trafficCard.module.scss and are Robbie's to check against Figma; what
+// these tests pin is that the card hands the stylesheet the right key — which is
+// the half that can silently rot.
+describe("TrafficCard lane chrome", () => {
+	it("marks the header with the lane the card was put in", () => {
+		for (const lane of ["live", "upcoming", "previous"] as const) {
+			const { container } = renderCard({ lane, nowMs: START_MS });
+			expect(container.querySelector("[data-card-header]")?.getAttribute("data-lane")).toBe(lane);
+			cleanup();
+		}
+	});
+
+	it("takes the header's lane from the prop, never from a second opinion", () => {
+		// The card also computes a badge from `lane`; if the header ever derived
+		// its own lane the two could disagree and the chrome would contradict the
+		// container the card is sitting in.
+		const { container } = renderCard({ lane: "previous", nowMs: START_MS });
+		expect(container.querySelector("[data-lane]")?.getAttribute("data-lane")).toBe("previous");
+		expect(container.querySelector("[data-card-header]")?.getAttribute("data-lane")).toBe(
+			"previous",
+		);
+	});
+});
+
+describe("TrafficCard audible state", () => {
+	const audibleAttr = (container: HTMLElement) =>
+		container.querySelector("[data-audible]")?.getAttribute("data-audible");
+
+	it("marks a card that is playing and unmuted", () => {
+		const { container } = renderCard({ lane: "live", muted: false, paused: false });
+		expect(audibleAttr(container)).toBe("true");
+	});
+
+	it("does not mark a muted card, however much it is playing", () => {
+		// This is the distinction the design draws with brightness: "in the mix"
+		// means audible, not merely running.
+		const { container } = renderCard({ lane: "live", muted: true, paused: false });
+		expect(audibleAttr(container)).toBe("false");
+	});
+
+	it("does not mark a paused card, however unmuted it is", () => {
+		const { container } = renderCard({ lane: "live", muted: false, paused: true });
+		expect(audibleAttr(container)).toBe("false");
+	});
+
+	it("marks a PREVIOUS card the listener started", () => {
+		// Both LIVE and PREVIOUS can be playing; only UPCOMING never can.
+		const { container } = renderCard({
+			lane: "previous",
+			nowMs: START_MS + DURATION_MS + 5_000,
+			userPlaying: true,
+			muted: false,
+			paused: false,
+		});
+		expect(audibleAttr(container)).toBe("true");
+	});
+
+	it("never marks an UPCOMING card, whatever it is handed", () => {
+		// An UPCOMING clip has no audio yet — the same rule toolMode.isAudible
+		// states. A bright UPCOMING card would claim the listener is hearing a
+		// clip that has not started.
+		const { container } = renderCard({
+			lane: "upcoming",
+			nowMs: START_MS - 30_000,
+			muted: false,
+			paused: false,
+		});
+		expect(audibleAttr(container)).toBe("false");
+	});
+});
+
+describe("TrafficCard mute button", () => {
+	it("offers a mute control rather than the word MUTED", () => {
+		const { getByRole, container } = renderCard({ muted: true });
+		expect(getByRole("button", { name: "Unmute" })).not.toBeNull();
+		expect(container.textContent).not.toMatch(/muted/i);
+	});
+
+	it("names itself for the action it performs, not the state it is in", () => {
+		const { getByRole } = renderCard({ muted: false });
+		expect(getByRole("button", { name: "Mute" })).not.toBeNull();
+	});
+
+	it("reports the card's own mute state to assistive tech", () => {
+		const { getByRole } = renderCard({ muted: true });
+		expect(getByRole("button", { name: "Unmute" }).getAttribute("aria-pressed")).toBe("true");
+		cleanup();
+		const unmuted = renderCard({ muted: false });
+		expect(unmuted.getByRole("button", { name: "Mute" }).getAttribute("aria-pressed")).toBe(
+			"false",
+		);
+	});
+
+	it("toggles this card's mute state and reflects the result", () => {
+		// The card is a view over props, so the state lives in a caller — the same
+		// contract onTogglePause already has. Driving it through one here is what
+		// proves the round trip, rather than only that a callback fired.
+		function Harness() {
+			const [muted, setMuted] = useState(false);
+			return (
+				<TrafficCard
+					item={makeItem()}
+					lane="live"
+					tzOffsetHours={-4}
+					nowMs={START_MS}
+					muted={muted}
+					paused={false}
+					onTogglePause={() => {}}
+					onToggleMute={() => setMuted((m) => !m)}
+				/>
+			);
+		}
+		const { getByRole, container } = render(<Harness />);
+
+		fireEvent.click(getByRole("button", { name: "Mute" }));
+		expect(container.querySelector("[data-muted]")?.getAttribute("data-muted")).toBe("true");
+		expect(container.querySelector("[data-audible]")?.getAttribute("data-audible")).toBe("false");
+
+		fireEvent.click(getByRole("button", { name: "Unmute" }));
+		expect(container.querySelector("[data-muted]")?.getAttribute("data-muted")).toBe("false");
+		expect(container.querySelector("[data-audible]")?.getAttribute("data-audible")).toBe("true");
+	});
+
+	it("keeps its click to itself, so the active tool does not also fire", () => {
+		// The card sits in a slot whose pointerup applies the tool palette's
+		// current tool (RadioTraffic's renderCard). Without this, one press on the
+		// mute button under the mute tool would both toggle and mute — two edits
+		// from one click, and the toggle would appear not to work.
+		const onSlotPointerUp = vi.fn();
+		const onToggleMute = vi.fn();
+		const { getByRole } = render(
+			<div onPointerUp={onSlotPointerUp}>
+				<TrafficCard
+					item={makeItem()}
+					lane="live"
+					tzOffsetHours={-4}
+					nowMs={START_MS}
+					onTogglePause={() => {}}
+					onToggleMute={onToggleMute}
+				/>
+			</div>,
+		);
+		fireEvent.pointerUp(getByRole("button", { name: "Mute" }));
+		expect(onSlotPointerUp).not.toHaveBeenCalled();
 	});
 });
 
