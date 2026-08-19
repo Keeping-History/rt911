@@ -54,7 +54,7 @@ export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
 		<article className={styles.rtSmallPlayer} data-small-player={item.id}>
 			{/* `title` gives the untruncated subject on hover — the line ellipsises. */}
 			<h3 className={styles.rtSmallSubject} data-field="subject" title={subject}>
-				{`“${subject}”`}
+				{`${subject}`}
 			</h3>
 
 			{tags.length > 0 && (
