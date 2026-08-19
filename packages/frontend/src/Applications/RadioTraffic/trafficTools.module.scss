@@ -6,7 +6,7 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 2px;
+  gap: calc(var(--window-border-size) * 2);
 }
 
 // Story 030: ClassicyBevelButton builds its own className and drops the one
@@ -19,7 +19,7 @@
   font-size: var(--ui-font-size);
   color: var(--color-system-06);
   background: var(--color-system-02);
-  border: 1px solid var(--color-system-05);
+  border: var(--window-border-size) solid var(--color-system-05);
   cursor: pointer;
 }
 

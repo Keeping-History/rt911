@@ -43,9 +43,9 @@
 .rtSidebar {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(var(--window-border-size) * 4);
   flex: 0 0 auto;
-  padding: 4px 0 4px 4px;
+  padding: calc(var(--window-border-size) * 4) 0 calc(var(--window-border-size) * 4) calc(var(--window-border-size) * 4);
   border-right: var(--window-border-size) solid var(--color-system-04);
   overflow: hidden;
 }
@@ -104,5 +104,5 @@
 }
 
 .rtUnlockOverlayHint {
-  margin: 4px 0 0;
+  margin: calc(var(--window-border-size) * 4) 0 0;
 }
