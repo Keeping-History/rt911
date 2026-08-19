@@ -124,7 +124,7 @@ export async function deletePlaylist(id: string, fetchFn: typeof fetch = fetch):
 }
 
 // getPlaylist then createPlaylist — two SEQUENTIAL awaits, never
-// Promise.all: parallel same-path requests to api-beta can return mixed
+// Promise.all: parallel same-path requests to Directus can return mixed
 // response bodies (see loadPlaylist.ts / useRouteIndex.ts).
 export async function duplicatePlaylist(
 	id: string,

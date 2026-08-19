@@ -151,7 +151,7 @@ export function useReadmeArticles(enabled: boolean): ReadmeArticlesState {
 			});
 		};
 
-		// Probe → (maybe) fetch, strictly sequential: api-beta mixes response
+		// Probe → (maybe) fetch, strictly sequential: Directus mixes response
 		// bodies under concurrent requests, and a slow cycle must finish before
 		// the next tick starts. The signature is committed only after a
 		// successful list fetch so a failed fetch retries on the next tick.

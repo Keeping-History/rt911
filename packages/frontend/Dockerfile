@@ -8,7 +8,9 @@
 # VITE_-prefixed vars from the environment), so the image is environment-specific.
 FROM node:26-bookworm AS build
 WORKDIR /repo
-RUN npm install -g pnpm@10.17.0
+# Keep in step with mise.toml's pnpm pin: the lockfile format is version-bound,
+# so a mismatch fails `--frozen-lockfile` below and breaks the image build.
+RUN npm install -g pnpm@11.9.0
 
 # Manifests first for dependency-layer caching (backend is Go-only, no manifest).
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./

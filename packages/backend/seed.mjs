@@ -454,6 +454,9 @@ const PUBLIC_READ_GRANTS = [
     collection: "mp3_items",
     fields: [
       "id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles", "image", "peaks",
+      // Kept in step with apply-hypercard-public-perms.mjs — see the note there
+      // on why `tags` stays granted.
+      "tags",
       "subject", "link", "tier", "confidence", "evidence", "participants", "mentions", "provenance",
     ],
     permissions: APPROVED_FILTER,
@@ -503,24 +506,6 @@ async function ensurePublicReadAccess(token) {
   }
 }
 
-// mp3_items.tags is a namespaced search index built by video-grabber's
-// identify-parties flow (see packages/tools/video-grabber/docs/party-identification.md).
-// Two query shapes reach it and they need different indexes — indexing for one
-// does nothing for the other:
-//   * Directus REST `filter[tags][_contains]=facility:zbw` compiles to a
-//     LIKE '%…%' over the serialized json, which only a trigram index helps.
-//   * `@> '["facility:zbw"]'` containment from SQL needs a jsonb GIN index.
-// At the corpus's present size (~780 rows) the planner will pick a sequential
-// scan regardless; these matter if the tag index ever backs a user-facing
-// search, and cost nothing to carry until then.
-const TAG_INDEX_SQL = `
-  CREATE EXTENSION IF NOT EXISTS pg_trgm;
-  CREATE INDEX IF NOT EXISTS idx_mp3_items_tags_trgm
-    ON mp3_items USING gin ((tags::text) gin_trgm_ops);
-  CREATE INDEX IF NOT EXISTS idx_mp3_items_tags_jsonb
-    ON mp3_items USING gin ((tags::jsonb) jsonb_path_ops);
-`;
-
 // createStreamerIndexes indexes the per-table time lookups the streamer's init/seek
 // queries run. usenet already has its own (source, start_date) index (see
 // createCollections); the video/news/mp3/pager tables are filtered by
@@ -539,7 +524,6 @@ function createStreamerIndexes() {
     CREATE INDEX IF NOT EXISTS idx_pager_items_approved_start ON pager_items (approved, start_date);
   `);
   psql(CHAT_INDEX_SQL);
-  psql(TAG_INDEX_SQL);
 }
 
 async function createRelations(token) {

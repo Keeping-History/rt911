@@ -13,8 +13,8 @@
 | Tier | Today | Event-day target |
 |---|---|---|
 | Frontend SPA (`beta`) | 1 nginx pod, no CDN | Cloudflare-proxied (origin near-idle), keep 2 pods |
-| Streamer WSS (`stream-beta`) | 1 pod, `1 CPU / 2Gi` | **~12 pods**, `2 CPU / 2Gi` each, on burst nodes, Cloudflare-proxied |
-| Directus/API (`api-beta`) | 1 pod, `1 CPU / 1Gi` | 1–2 pods; content **frozen** during event |
+| Streamer WSS (`stream`) | 1 pod, `1 CPU / 2Gi` | **~12 pods**, `2 CPU / 2Gi` each, on burst nodes, Cloudflare-proxied |
+| Directus/API (`api`) | 1 pod, `1 CPU / 1Gi` | 1–2 pods; content **frozen** during event |
 | Postgres | 1 pod, `1 CPU / 1Gi`, 10Gi | Primary `4 CPU / 8Gi` + **1 read replica** + **pgbouncer** |
 | Redis | 1 pod, `500m / 1Gi` | `2 CPU / 2Gi`, pinned to primary node; replica optional (see [§5](#5-redis)) |
 | Media (`files`) | Cloudflare → file-proxy → Wasabi | **No change** — already built to absorb load |
@@ -32,8 +32,8 @@
    files.911…  ──►│  (media: already proxied + cached)  │──► file-proxy(nginx-s3-gateway) ──► Wasabi
                   └─────────────────────────────────────┘
    beta.911…    ──►  Traefik ──► rt911-frontend (nginx, static SPA)     [NOT CDN-fronted today]
-   stream-beta… ──►  Traefik ──► rt911-streamer (WSS, per-client clock)  [NOT CDN-fronted today]
-   api-beta…    ──►  Traefik ──► rt911-api (Directus)
+   stream… ──►  Traefik ──► rt911-streamer (WSS, per-client clock)  [NOT CDN-fronted today]
+   api…    ──►  Traefik ──► rt911-api (Directus)
 
    rt911-streamer ──(read-only)──► rt911-db (Postgres 16)   ◄── Directus (read-write), video-grabber (writes)
    rt911-streamer ──(hot path)───► rt911-cache (Redis 7)    ◄── warmed ~460K rows at boot
@@ -100,11 +100,11 @@ The SPA is hashed, immutable assets served by an in-cluster nginx pod (`frontend
 - **Cache:** add a cache rule "Cache Everything" for `beta.911realtime.org/*` (hashed asset filenames make this safe; `index.html` should use a short edge TTL or "bypass" so deploys are picked up — the existing `cloudflare-purge` PostSync hook already purges on deploy).
 - Keep 2 origin pods for resilience, but origin traffic will be negligible.
 
-> **Verify first:** a `cloudflare-purge` PostSync hook exists in `apps/rt911/purge-hook.yaml` and a CF API token/zone is already wired. That implies at least one rt911 host may already be proxied. **Before the event, confirm the actual proxy status of `beta`, `api-beta`, and `stream-beta` in the Cloudflare dashboard** — don't assume.
+> **Verify first:** a `cloudflare-purge` PostSync hook exists in `apps/rt911/purge-hook.yaml` and a CF API token/zone is already wired. That implies at least one rt911 host may already be proxied. **Before the event, confirm the actual proxy status of `beta`, `api`, and `stream` in the Cloudflare dashboard** — don't assume.
 
-### 3.2 WSS streamer (`stream-beta.911realtime.org`)
+### 3.2 WSS streamer (`stream.911realtime.org`)
 
-Cloudflare proxies WebSockets (orange cloud; "WebSockets" is on by default under **Network**). Set the `stream-beta` DNS record to **Proxied**.
+Cloudflare proxies WebSockets (orange cloud; "WebSockets" is on by default under **Network**). Set the `stream` DNS record to **Proxied**.
 
 **What Cloudflare gives you here — and what it does *not*:**
 
@@ -221,7 +221,7 @@ All edits land in `github.com/Keeping-History/infra` via PR to `main`; ArgoCD sy
 | `apps/rt911/frontend.yaml` | `replicas: 2` (Cloudflare carries the load); no CDN config here |
 | `apps/rt911/kustomization.yaml` | add the new resource files above |
 | k3s Traefik `HelmChartConfig` (**outside** `apps/rt911/`, in k3s base config) | bump replicas 2–3 + resources + anti-affinity ([§6.3](#63-traefikingress)) |
-| **Cloudflare** (dashboard/API/Terraform, **not** k8s) | set `beta`, `stream-beta` to **Proxied**; SPA cache rule; verify WebSockets enabled + plan limits ([§3](#3-frontend--wss-through-cloudflare)) |
+| **Cloudflare** (dashboard/API/Terraform, **not** k8s) | set `beta`, `stream` to **Proxied**; SPA cache rule; verify WebSockets enabled + plan limits ([§3](#3-frontend--wss-through-cloudflare)) |
 
 **On HPA — deliberately NOT used:** (a) new pods each run a ~460K-row warm gated by a 300s startupProbe, so scale-up is minutes-slow — far too slow for a 1-hour spike; (b) CPU/mem metrics don't track *WebSocket connection count*, the real load signal, so an HPA would scale on the wrong dimension. For a **scheduled, short, known** spike, **manual pre-scale** (`replicas: 12`, set the day before) is correct. Revisit HPA only if this becomes a recurring, unpredictable pattern.
 
@@ -234,7 +234,7 @@ All edits land in `github.com/Keeping-History/infra` via PR to `main`; ArgoCD sy
 - **T-14 days** — Load test a **single** streamer pod to failure ([§9](#9-manual-load-test-approach)); lock in the real per-pod ceiling and recompute replica count. Provision the 3–4 burst node VMs.
 - **T-7 days** — Land the **prerequisite `nodeAffinity`** PRs (pin stateful pods to primary). Join burst nodes via Tailscale + `workload=burst` taint. Verify pods still schedule correctly.
 - **T-5 days** — Land pgbouncer + read-replica PRs; verify streamer connects through pgbouncer and reads from the replica; verify `LISTEN/NOTIFY` still works on primary. Land Redis resource bump (+ replica).
-- **T-3 days** — Put `beta` + `stream-beta` behind Cloudflare (Proxied); verify SPA loads and a WSS session connects/streams end-to-end through CF. Confirm CF plan WebSocket limits.
+- **T-3 days** — Put `beta` + `stream` behind Cloudflare (Proxied); verify SPA loads and a WSS session connects/streams end-to-end through CF. Confirm CF plan WebSocket limits.
 - **T-2 days** — Full-scale rehearsal load test through the real edge (Cloudflare → Traefik → 12 pods) ramped to 30K with a synchronized seek. Fix whatever it surfaces.
 - **T-1 day** — Scale streamer `replicas: 12` (staggered warm completes against idle DB). **Freeze content** in Directus; **pause video-grabber ingest.** Confirm all pods `Ready` and Redis warm.
 

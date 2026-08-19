@@ -1,0 +1,412 @@
+// The three stacked lanes, their chrome and their vertical label strips.
+//
+// Every colour and every distance below was SAMPLED off the design frame
+// (892x601, rendered 1:1) rather than read off the node tree, because the two
+// disagree in places and the pixels are what a human will compare against:
+//
+//   LIVE      45 degree stripe, #cd8a8a / #ac3c3c, 50/50, running "/"
+//   UPCOMING  #a5a3a3 flat
+//   PREVIOUS  #cccccc flat
+//
+// The lanes are flush — LIVE's bottom border and UPCOMING's top border are
+// adjacent scanlines in the frame, with no gutter between them — and each lane
+// carries a 1px border in a darkened shade of its own fill (#6c0d0d under LIVE,
+// #737373 under UPCOMING, #6c6c6c under PREVIOUS).
+//
+// HEIGHTS ARE PROPORTIONS, NOT PIXELS. The window does not scroll, so the three
+// lanes divide whatever height it has 3:2:1 (LIVE:UPCOMING:PREVIOUS). This is
+// the only reading of the brief's "3/5, 2/5, 1/5" that fits: those three
+// fractions sum to 6/5, so taken literally they overflow the window by 20% and
+// reintroduce exactly the scrolling the design forbids. The ratio is what was
+// meant, and the ratio holds at every window size — which is also the ratio the
+// row model (LIVE three players deep, UPCOMING two, PREVIOUS one, six rows in
+// all) works out to, so the two compose rather than compete. What "three
+// players deep" cashes out to WITHIN a lane's own share is a separate
+// question the row model never answered — see the LIVE-only grid rule under
+// "Cards" below (story 048): UPCOMING and PREVIOUS still hand each card the
+// whole of their one/two-row share, but LIVE splits its 3/6 into two stacked
+// half-height players per column rather than one card stretched the full
+// 3-row height, so the height RATIO between lanes is unchanged even though
+// no single LIVE card is 3 rows tall any more.
+//
+// OVERFLOW GOES SIDEWAYS, NOT DOWN (story 036). A lane is a row of players —
+// literally one row for UPCOMING/PREVIOUS, two-per-column for LIVE (story
+// 048) — that runs off to the right, and reaching the rest of them is a
+// horizontal scroll inside the lane. Nothing scrolls vertically anywhere in
+// this app.
+//
+// PREVIOUS gets 1/6 of the column — about 95px in the design's 601px window —
+// which used to be shorter than a card's own fixed `124px * 1.25` = 155px
+// floor, clipping every PREVIOUS card instead of showing it whole. Story 034
+// resolved that by sizing the card OFF the row rather than off Figma: a card
+// is `height: 100%` of the row .rtLaneCards hands it (below), with no
+// competing min-height, and derives its own width from that height via a
+// fixed aspect ratio (trafficCard.module.scss) — so a row is tall enough for
+// its card by construction, not by coincidence. LIVE's grid rows are the same
+// idea one level deeper: `1fr` of the LIVE row, not the LIVE row itself, is
+// what a LIVE card's `height: 100%` now resolves against.
+
+// Sizes compose from classicy's window metrics (border 1px, padding 6px,
+// control 12px) rather than from fresh px literals — house pattern.
+
+// One stripe tile per lane surface. `stripe.svg` is black polygons on a white
+// ground carrying exactly one light/dark period, so the tile size IS the stripe
+// period, and `mask-mode: luminance` is what separates the two halves: the
+// element's own background-color paints the dark half and this overlay paints
+// `--rt-stripe-light` wherever the tile is white. One asset, two CSS colours —
+// which is why the LIVE label strip can reuse it at a brighter pair below
+// without a second file.
+@mixin rt-stripe-overlay {
+  content: "";
+  position: absolute;
+  inset: 0;
+  // Behind the strip and the cards, above this element's own background.
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--rt-stripe-light);
+  mask-image: url("./stripe.svg");
+  mask-repeat: repeat;
+  mask-size: var(--rt-lane-stripe-size) var(--rt-lane-stripe-size);
+  // The tile has no alpha variation at all — it is opaque edge to edge — so the
+  // default alpha mask would show a flat colour. Luminance is the whole trick.
+  mask-mode: luminance;
+}
+
+.rtLane {
+  // 44px: measured stripe period down a vertical scan of the LIVE lane (bands
+  // alternate every 22px, so a full light+dark period is 44).
+  --rt-lane-stripe-size: calc(var(--window-control-size) * 4 - var(--window-border-size) * 4);
+  // 14px: measured gutter between adjacent cards in the design (210px cards at
+  // x=168..377 and x=392..601). This is the "cards are crowded" fix.
+  --rt-lane-gap: calc(var(--window-control-size) + var(--window-border-size) * 2);
+  --rt-lane-fill: transparent;
+  --rt-lane-edge: transparent;
+  // The column is SIX PLAYER ROWS — LIVE 3, UPCOMING 2, PREVIOUS 1 — and this
+  // is a lane's own share of them, overridden per `data-lane` below. flex-grow
+  // taking its value from a literal row count (rather than a pre-reduced
+  // ratio) is what makes "six rows" a fact the stylesheet states once, instead
+  // of something a reader has to reconstruct from 3:2:1.
+  --rt-lane-rows: 1;
+
+  position: relative;
+  // Contains the stripe overlay's z-index so it can never paint behind the
+  // lane column's own background.
+  isolation: isolate;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  // The strip sits closer to the cards than the cards sit to each other —
+  // 7px in the design, against 14px between cards.
+  gap: var(--window-padding-size);
+  // A flex child will not shrink below its content without this, which is what
+  // would let a tall lane push the column past the window and start scrolling.
+  min-height: 0;
+  padding: var(--window-padding-size);
+  background-color: var(--rt-lane-fill);
+  border: var(--window-border-size) solid var(--rt-lane-edge);
+  // Lane share of the column, as ROWS of six rather than a pixel height:
+  // flex-basis 0 (not auto) is what makes this a pure ratio rather than
+  // "content size, then share the remainder", and it is what a card's own
+  // `height: 100%` (trafficCard.module.scss) ultimately measures against.
+  flex: var(--rt-lane-rows) 1 0;
+}
+
+.rtLane[data-lane="live"] {
+  --rt-lane-rows: 3;
+}
+
+.rtLane[data-lane="upcoming"] {
+  --rt-lane-rows: 2;
+}
+
+.rtLane[data-lane="previous"] {
+  --rt-lane-rows: 1;
+}
+
+// A collapsed lane stops claiming its share of the column and takes only the
+// height its small players need, handing the rest back to the lanes still
+// showing full cards. `auto` rather than a length is the whole point: the small
+// player is content-sized, so the fold is worth exactly as much window as the
+// compact card actually costs, at any font size or card scale.
+.rtLane[data-collapsed="true"] {
+  flex: 0 0 auto;
+}
+
+// Two small players to a visible lane width, gap included — the pairing in the
+// Figma "Upcoming Row Players Collapsed" frame, expressed as a SHARE of the
+// lane rather than a width so it survives a resize and the row-height rework.
+// A third clip is reached by scrolling the lane sideways, exactly as an
+// expanded lane's are.
+.rtLane[data-collapsed="true"] .rtLaneSlot {
+  flex: 0 0 calc(50% - var(--rt-lane-gap) / 2);
+  min-width: 0;
+}
+
+// Lane colours -------------------------------------------------------------
+
+// LIVE's stripe DRIFTS, and the other two lanes' chrome does not (story 043).
+// One period per --rt-stripe-drift-duration, which at the 44px tile works out
+// to a few pixels a second: enough that the lane is never quite still, not
+// enough to pull an eye off the card someone is reading.
+//
+// Seamless because the travel is EXACTLY one tile: at the end of the cycle the
+// mask has advanced by its own period, so the frame is pixel-identical to the
+// first and the loop has no seam to hide. Any other distance would jump.
+//
+// The animation is a transform on the overlay, which the compositor can run on
+// its own — no JS frame loop, and no per-frame repaint of the masked area the
+// way animating mask-position would cost.
+@keyframes rtStripeDrift {
+  from {
+    transform: translateX(var(--rt-lane-stripe-size));
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+.rtLane[data-lane="live"] {
+  --rt-lane-fill: #ac3c3c;
+  --rt-lane-edge: #6c0d0d;
+  --rt-stripe-light: #cd8a8a;
+  --rt-stripe-drift-duration: 5s;
+
+  // Clips the overlay's one-tile overhang (below) back to the lane. Safe here
+  // because nothing is meant to escape a lane: the cards scroll in their own
+  // box, which is its own scroll container.
+  overflow: hidden;
+
+  &::before {
+    @include rt-stripe-overlay;
+
+    // Start one tile to the LEFT of the lane, so that translating a full tile
+    // to the right never uncovers the trailing edge. `inset` sets left and
+    // right, so the box is a tile wider than the lane and needs no width.
+    inset: 0 0 0 calc(var(--rt-lane-stripe-size) * -1);
+    animation: rtStripeDrift var(--rt-stripe-drift-duration) linear infinite;
+  }
+}
+
+// Ambience is exactly the kind of motion this setting is for: the lane keeps
+// its stripe, and loses only the drift.
+@media (prefers-reduced-motion: reduce) {
+  .rtLane[data-lane="live"]::before {
+    animation: none;
+  }
+}
+
+.rtLane[data-lane="upcoming"] {
+  --rt-lane-fill: #a5a3a3;
+  --rt-lane-edge: #737373;
+}
+
+.rtLane[data-lane="previous"] {
+  --rt-lane-fill: #cccccc;
+  --rt-lane-edge: #6c6c6c;
+}
+
+// Label strip ---------------------------------------------------------------
+
+// 14px, measured: the strip occupies x=148..161 with the lane's own padding to
+// its left. It carries no background of its own on the grey lanes — in the
+// design those strips are simply lane-coloured with a label on them.
+.rtLaneStrip {
+  position: relative;
+  // Above the lane's stripe overlay.
+  z-index: 1;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: calc(var(--window-control-size) + var(--window-border-size) * 2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--window-border-size);
+  padding: var(--window-border-size) 0;
+}
+
+// LIVE's strip is its own, BRIGHTER stripe in the design (#ee3030 / #e21515
+// against the lane's #cd8a8a / #ac3c3c) with white lettering — the one piece of
+// chrome that tells you at a glance which lane is the live one. Same asset and
+// same mixin; only the two colours change.
+.rtLane[data-lane="live"] .rtLaneStrip {
+  --rt-stripe-light: #ee3030;
+
+  background-color: #e21515;
+
+  &::before {
+    @include rt-stripe-overlay;
+  }
+}
+
+.rtLaneLabel {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  // The strip reads bottom-to-top, which is what makes a 14px column legible.
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.75);
+  letter-spacing: 1px;
+  color: var(--color-system-06);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.rtLane[data-lane="live"] .rtLaneLabel {
+  color: var(--color-white, #fff);
+}
+
+// The lane mute control (LIVE only, story 040), sitting directly above the
+// expand/collapse control's place on the strip.
+//
+// ClassicyBevelButton builds its own className and drops the one it is handed,
+// so the sizing hangs off the `data-lane-mute` attribute instead — which is the
+// same hook the tests find the control by, and does not couple this stylesheet
+// to a class name inside the component library.
+.rtLaneStrip [data-lane-mute] {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  // The strip is ONE control wide by design (story 022) and the bevel button's
+  // own square is two, so it is brought back to the strip's width here rather
+  // than widening the chrome around it.
+  width: var(--window-control-size);
+  min-width: 0;
+  height: var(--window-control-size);
+  padding: 0;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+// The expand/collapse control, sitting below the mute control on the strip.
+//
+// ClassicyBevelButton builds its own className and drops the one it is
+// handed, so — same as the mute control above — the sizing hangs off the
+// `data-lane-toggle` attribute the component library forwards untouched.
+.rtLaneStrip [data-lane-toggle] {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: var(--window-control-size);
+  height: var(--window-control-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.7);
+  color: var(--color-system-06);
+  background: var(--color-system-02);
+  border: var(--window-border-size) solid var(--color-system-05);
+  cursor: pointer;
+}
+
+// Cards ---------------------------------------------------------------------
+
+// A lane is ONE ROW of players that runs off to the right, not a grid that
+// grows downward (story 036). `nowrap` is the whole change: with it the row
+// simply gets longer as cards accumulate, and the overflow it produces is
+// horizontal, which is what `overflow-x` below then scrolls. LIVE overrides
+// `display` to a two-row grid further down (story 048) but keeps every other
+// property here — the gap, the two zeroed minimums and the closed vertical
+// axis all still apply, since a grid container reads `overflow`/`gap` the
+// same way a flex one does.
+//
+// This is also what lets the lane compose with the row-height model: a lane's
+// height is its share of the window and nothing here asks for more, so whether
+// that share works out to one row of cards or three, the cards fill it and the
+// surplus goes sideways.
+.rtLaneCards {
+  position: relative;
+  // Above the lane's stripe overlay.
+  z-index: 1;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  // Every card is as tall as the lane gives it, whatever that works out to —
+  // this is the stretch TrafficCard's own `height: 100%` is measured against.
+  align-items: stretch;
+  gap: var(--rt-lane-gap);
+  // Both zeroes are load bearing: without them this box takes its content's
+  // size and pushes the lane — and then the whole column — past the window.
+  // The lane's height is the design's; the overflow scrolls HERE, which is what
+  // keeps every lane's label strip on screen at all times.
+  min-width: 0;
+  min-height: 0;
+  // Sideways only. A vertical scrollbar here would mean the lane had been given
+  // less height than one card is tall, which is a layout fault to fix rather
+  // than something to hide behind a scrollbar — so the axis is closed outright.
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.rtLaneSlot {
+  // The card sets its own width; the slot only has to not shrink it. Height
+  // comes from the row's stretch, so nothing here names a size.
+  flex: 0 0 auto;
+  display: flex;
+  min-width: 0;
+}
+
+// LIVE shows two players PER COLUMN, stacked vertically, with overflow beyond
+// that going sideways (story 048) — not one card stretched the full height of
+// LIVE's 3-row share the way story 034 originally left it.
+//
+// This does NOT touch --rt-lane-rows or the 3:2:1 split above: that ratio is
+// still what divides the WINDOW between the three lanes, and LIVE keeping its
+// 3/6 share is what stops UPCOMING/PREVIOUS's own layout moving as a side
+// effect of this rule (the brief for this story is explicit that they should
+// not change). What story 034's row model does NOT also pin down is how many
+// players stand shoulder to shoulder within a lane's own share — that was
+// only ever "one card per horizontal slot" because nothing said otherwise.
+// This is the same JS-free trick story 036 used for horizontal-only overflow:
+// `grid-auto-flow: column` fills a track top-to-bottom before starting the
+// next one, so the identical flat list of `.rtLaneSlot`s LaneSection.tsx
+// already renders (unchanged — see that file) regroups into pairs by CSS
+// alone, and a fifth item spills into a third column rather than a third row.
+// `grid-template-rows: repeat(2, 1fr)` is what caps a player at HALF of
+// LIVE's row share instead of the whole thing, satisfying "players do not
+// stretch to fill the full lane height" — each of the pair gets exactly
+// half, with the same `--rt-lane-gap` this file already uses for the seam
+// between them as it does between columns.
+.rtLane[data-lane="live"] .rtLaneCards {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, 1fr);
+  // Content-sized columns, same as the flex case's `flex: 0 0 auto` slots —
+  // a column is exactly as wide as the (aspect-ratio-derived) card inside it,
+  // never stretched to fill spare width.
+  grid-auto-columns: max-content;
+  justify-items: start;
+}
+
+// Grid's default item sizing would let a slot's implicit min-height (its
+// content's min-content size) outgrow the `1fr` row it was handed — the same
+// hazard `.rtLaneCards`'s own `min-height: 0` above exists to close off for
+// the lane column itself. Left open here, a card that even briefly wanted
+// more room would grow its row past half the lane, reintroducing the
+// vertical overflow story 036 closed off (`overflow-y: hidden` above would
+// then just clip it instead of the two rows sharing the space evenly).
+.rtLane[data-lane="live"] .rtLaneSlot {
+  min-height: 0;
+}
+
+// The drag affordance is on the slot rather than the card so it follows the
+// active tool: the lane only attaches drag handlers under `hand`, and this is
+// the same condition expressed to the cursor.
+.rtLane[data-tool="hand"] .rtLaneSlot {
+  cursor: grab;
+}
+
+.rtLaneSlot[data-dragging] {
+  cursor: grabbing;
+  opacity: 0.5;
+}

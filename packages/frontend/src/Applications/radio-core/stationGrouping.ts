@@ -12,14 +12,34 @@ function toMs(value: string): number {
 	return new Date(s).getTime();
 }
 
+/**
+ * Epoch ms of an item's start.
+ *
+ * Exported because ordering items by start time is not this module's business
+ * alone, and every caller that reimplements it re-introduces the same bug: a
+ * Directus datetime arrives tz-less ("2001-09-11 13:00:00") and a bare
+ * `new Date()` reads it as browser-local, shifting every comparison by the
+ * reader's offset.
+ */
+export function startMs(item: MediaItem): number {
+	return toMs(item.start_date);
+}
+
 /** The station a MediaItem belongs to: its source, or its title when blank. */
 function stationKey(item: MediaItem): string {
 	const src = item.source?.trim();
 	return src && src.length > 0 ? src : item.title;
 }
 
-/** Effective end ms, or null when neither end_date nor calc_duration is known. */
-function effectiveEndMs(item: MediaItem): number | null {
+/**
+ * Effective end ms, or null when neither end_date nor calc_duration is known.
+ *
+ * Exported for the same reason as startMs: every caller that reimplements it
+ * has to pick end_date-over-calc_duration the same way this module's lane
+ * predicates do, and one that picks differently puts a card in a lane whose
+ * own panel disagrees about when the clip finished.
+ */
+export function effectiveEndMs(item: MediaItem): number | null {
 	if (item.end_date) return toMs(item.end_date);
 	if (typeof item.calc_duration === "number") {
 		return toMs(item.start_date) + item.calc_duration * 1000;

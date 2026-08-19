@@ -205,6 +205,12 @@ const PUBLIC_GRANTS = [
     action: "read",
     fields: [
       "id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles", "image", "peaks",
+      // `tags` predates the Radio Traffic work and stays granted. Nothing in
+      // this repo reads it anonymously — the app takes tags from the streamer,
+      // not Directus — but dropping a field that is already public is a
+      // one-way regression for any reader we cannot see, and costs nothing to
+      // keep.
+      "tags",
       "subject", "link", "tier", "confidence", "evidence", "participants", "mentions", "provenance",
     ],
     permissions: APPROVED_FILTER,

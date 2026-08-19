@@ -492,3 +492,38 @@
 	gap: calc(var(--window-padding-size) * 0.5);
 	padding-top: calc(var(--window-padding-size) * 0.5);
 }
+
+/* PeaksWaveform scrubbers.
+ *
+ * Absolutely-positioned DIVS, never drawn into the canvas: they follow the
+ * virtual clock and the audio element, so they move on every tick, and
+ * repainting a 480-bucket envelope at tick rate to shift a 2px line is exactly
+ * the cost this avoids. The bitmap is only rewritten when the layout width
+ * changes; these move with a style update.
+ *
+ * They position against the nearest positioned ancestor the CALLER supplies —
+ * PeaksWaveform renders a fragment and establishes no containing block of its
+ * own, because inserting a wrapper would change the box the playlist
+ * timeline's canvas has always sat in. The timeline passes no scrubbers at
+ * all, so only the Radio Traffic card has to provide one. */
+.peaksScrubber {
+	position: absolute;
+	top: 0;
+	width: 2px;
+	/* `left` is the marker's own left edge, so pull it back half its width to
+	 * centre it on the instant it reports. */
+	margin-left: -1px;
+	/* It marks a moment; it must never swallow a click aimed at the card. */
+	pointer-events: none;
+}
+
+/* Where the virtual clock says we should be. */
+.peaksScrubberLive {
+	background-color: var(--color-theme-01);
+}
+
+/* Where the <audio> element actually is. The gap between the two is the card's
+ * drift badge, so the two markers must be told apart at a glance. */
+.peaksScrubberCurrent {
+	background-color: var(--color-theme-07);
+}

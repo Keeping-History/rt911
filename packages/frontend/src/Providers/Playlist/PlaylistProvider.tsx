@@ -25,8 +25,8 @@ import {
 import { browserNavigate } from "../../Applications/Browser/BrowserContext";
 import { flightTrackerFocusFlight } from "../../Applications/FlightTracker/flightTrackerCommands";
 import { newsFocusItem } from "../../Applications/News/NewsContext";
-import { radioTuneStation } from "../../Applications/RadioScanner/RadioScannerContext";
 import { BROADCAST_STATIONS } from "../../Applications/radio-core/stationGrouping";
+import { radioTuneStation } from "../../Applications/radio-core/radioTuneStation";
 import { radioTunerTuneStation } from "../../Applications/RadioTuner/RadioTunerContext";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { tvTuneChannel } from "../../Applications/TV/TVContext";
@@ -272,7 +272,7 @@ export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 	 * definition rather than tearing the lesson down with an error dialog —
 	 * unlike the initial load, the student already has a working playlist.
 	 * Serialized via `reloadInFlightRef`: loadPlaylist must never run
-	 * concurrently with itself (parallel same-path api-beta fetches can return
+	 * concurrently with itself (parallel same-path Directus fetches can return
 	 * mixed bodies — see loadPlaylist.ts), and a burst of reload commands
 	 * collapses into one fetch of the same final definition anyway.
 	 */
