@@ -30,16 +30,24 @@
   overflow: hidden;
 }
 
-// The lanes stack and the whole column scrolls — a lane that scrolled
-// internally would hide the PREVIOUS strip's own label behind LIVE's overflow.
+// The lanes stack and NOTHING here scrolls. The column hands each lane a fixed
+// share of the window (3:2:1, see laneSection.module.scss) and each lane scrolls
+// its own cards, which is what keeps all three label strips on screen — the
+// arrangement this file previously rejected only failed because the lanes were
+// min-height'd tall enough to push each other off the bottom.
+//
+// Flush and edge to edge, both from the design: the lanes' own borders are the
+// only thing between them, and PREVIOUS is as wide as LIVE and UPCOMING.
 .rtLanes {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 4px;
-  gap: 4px;
-  overflow-y: auto;
+  // Lets the lanes be constrained by the window rather than by their content.
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
 }
 
 // Wraps each card so a tool click has a target. Contents-only display so the

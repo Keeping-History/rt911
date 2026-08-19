@@ -314,3 +314,54 @@ describe("LaneSection labelling", () => {
 		expect(container.querySelector("[data-lane]")?.getAttribute("data-lane")).toBe("previous");
 	});
 });
+
+describe("LaneSection chrome hooks", () => {
+	// The lane's whole appearance — stripe, fill, border and its share of the
+	// window's height — is selected off these two attributes. They are the
+	// contract between this component and laneSection.module.scss, so a refactor
+	// that renamed or dropped one would silently un-style the app rather than
+	// fail a test somewhere. These pin them.
+
+	it("gives every lane its own data-lane, so each can be styled apart", () => {
+		// LIVE is striped, UPCOMING and PREVIOUS are flat greys, and all three
+		// take different shares of the column. One shared value would collapse
+		// all of that into one appearance.
+		for (const lane of ["live", "upcoming", "previous"] as const) {
+			cleanup();
+			const { container } = renderLane({ lane });
+			expect(container.querySelector("[data-lane]")?.getAttribute("data-lane")).toBe(lane);
+		}
+	});
+
+	it("reports a collapsed lane in the attribute the height rule reads", () => {
+		// A collapsed lane stops claiming its share of the column and shrinks to
+		// its strip. That rule keys off data-collapsed, so the flag has to reach
+		// the DOM and not merely hide the cards.
+		const { container } = renderLane({ lane: "upcoming", collapsed: true });
+		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("true");
+	});
+
+	it("reports an expanded lane as not collapsed", () => {
+		const { container } = renderLane({ lane: "upcoming", collapsed: false });
+		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("false");
+	});
+
+	it("never reports LIVE as collapsed, whatever it is told", () => {
+		// Same reasoning as the collapse suite's stale-flag test, but for the
+		// height rule: honouring a persisted `true` here would hand LIVE's 3/6 of
+		// the window away with no control on screen to claim it back.
+		const { container } = renderLane({ lane: "live", collapsed: true });
+		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("false");
+	});
+
+	it("keeps the cards in their own box, separate from the label strip", () => {
+		// The lane's height is fixed by the design, so the overflow has to scroll
+		// somewhere that is NOT the strip — otherwise a full lane scrolls its own
+		// label out of view.
+		const { container } = renderLane({ lane: "previous" });
+		const cards = container.querySelector("[data-lane-cards]");
+		expect(cards).not.toBeNull();
+		expect(cards?.querySelector("[data-lane-label]")).toBeNull();
+		expect(shownIds(cards as ParentNode)).toEqual([1, 2, 3]);
+	});
+});
