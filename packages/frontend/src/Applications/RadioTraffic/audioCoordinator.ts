@@ -12,10 +12,19 @@
 //
 // So the elements live here, in a module-level registry keyed by item id, and
 // are never in the DOM at all. A card asks for its element with ensure(), reads
-// its position with positionMs(), and re-renders through subscribe(); it never
-// creates or destroys one. Removing an entry is release() — an explicit,
-// deliberate act by whoever decides an item has left the app, not a side effect
-// of rendering.
+// its position with positionMs(), moves it with seekTo(), and re-renders through
+// subscribe(); it never creates or destroys one. Removing an entry is release()
+// — an explicit, deliberate act by whoever decides an item has left the app, not
+// a side effect of rendering.
+//
+// The second thing this module owns is the PLAYHEAD, which is not the same as an
+// element's position and is the reason positionMs answers for items with no
+// element at all. Most cards on screen have none — an UPCOMING clip has not
+// started, a PREVIOUS one is over, a LIVE one the listener stopped has been
+// released — and a card is showing "where is this clip right now", which the
+// virtual clock can answer whether or not anything is playing. So a card follows
+// the clock until the listener says otherwise, by scrubbing it or by stopping
+// it; `followsClock` is that one question and every consumer asks it.
 //
 // The clock-sync effects that used to iterate StationPlayer's refs (the 15s
 // drift health check and the >5s jump reseek) iterate the registry instead, so
@@ -47,10 +56,13 @@ export interface ClockSource {
 	 * and `jump`.
 	 *
 	 * Returning `undefined` is meaningful: it says "this element does not follow
-	 * the clock", so the reseek, the health check and the gesture retry leave it
-	 * where it is. That is how a listener-started back-catalogue clip — which
-	 * plays from its own start, not from the virtual clock's position — opts out
-	 * without a second registry or a flag on ensure().
+	 * the clock", so the reseek, the health check, the gesture retry and the
+	 * clock-following playhead all leave it where it is. That is how a
+	 * listener-started back-catalogue clip — which plays from its own start, not
+	 * from the virtual clock's position — opts out without a second registry or a
+	 * flag on ensure(). It is one of the two inputs to `followsClock`; the other
+	 * is the listener scrubbing or pausing a card, which this app cannot answer
+	 * for because the coordinator performed it.
 	 *
 	 * It is NOT a way to opt out of the autoplay unlock: an element the browser
 	 * refused is retried on a gesture whatever this returns, because the token it
@@ -79,37 +91,95 @@ interface Entry {
 	 * block()/unblock(), which are the only callers of mark/clearAudioBlocked.
 	 */
 	blocked: boolean;
-	/**
-	 * The element's position, sampled at the last notify.
-	 *
-	 * Cached rather than read live, because `positionMs` is a
-	 * `useSyncExternalStore` getSnapshot and that contract requires the same
-	 * value between notifications. Reading `el.currentTime` fresh on each call
-	 * breaks it: the clock advances in real time, so two calls in one render
-	 * pass return different numbers, React concludes the store changed again,
-	 * and re-renders — forever. That is the "getSnapshot should be cached to
-	 * avoid an infinite loop" warning, followed by "Maximum update depth
-	 * exceeded" once a card is on screen.
-	 *
-	 * Sampling here instead means the value changes only when we say it does,
-	 * which is exactly the set of moments we already notify on.
-	 */
-	positionMs: number;
 }
 
 const registry = new Map<number, Entry>();
 const listeners = new Map<number, Set<() => void>>();
 
+/**
+ * Each watched item's playhead, sampled at the last notify.
+ *
+ * Cached rather than computed live, because `positionMs` is a
+ * `useSyncExternalStore` getSnapshot and that contract requires the same value
+ * between notifications. Reading `el.currentTime` — or the clock — fresh on
+ * each call breaks it: both advance in real time, so two calls in one render
+ * pass return different numbers, React concludes the store changed again, and
+ * re-renders — forever. That is the "getSnapshot should be cached to avoid an
+ * infinite loop" warning, followed by "Maximum update depth exceeded" once a
+ * card is on screen.
+ *
+ * Sampling on notify instead means the value changes only when we say it does,
+ * which is exactly the set of moments we already announce.
+ *
+ * Keyed by item id rather than held on Entry, because most cards have no
+ * element: an UPCOMING clip has not started, a PREVIOUS one is over, a LIVE one
+ * the listener stopped has been released. Those cards still have a playhead —
+ * it is where the clock says the clip is — and it used to read zero forever.
+ */
+const positions = new Map<number, number>();
+
+/**
+ * Items the listener has positioned by hand, and which therefore no longer
+ * track the virtual clock.
+ *
+ * This is the coordinator's half of one predicate, not a second one — see
+ * {@link followsClock}. `ClockSource.itemFor` already says "the app does not
+ * want this element following the clock", but the app cannot answer for a scrub
+ * the coordinator itself performed without the coordinator calling back into
+ * React state on every drag frame. So the app contributes `itemFor` and this
+ * module contributes this set, and every caller asks the same question once.
+ */
+const unfollowed = new Set<number>();
+
 let clock: ClockSource | null = null;
 let prevNowMs = 0;
 let healthCheckTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Does `itemId` still take its position from the virtual clock?
+ *
+ * The single predicate behind the reseek, the drift health check, the gesture
+ * retry and the clock-following playhead. Two sources say no: the app (a
+ * listener-started back-catalogue clip plays from its own start, so its
+ * `itemFor` returns undefined) and this module (the listener scrubbed or paused
+ * this card). They mean the same thing, so they are asked together.
+ */
+function followsClock(itemId: number): boolean {
+	if (unfollowed.has(itemId)) return false;
+	return clock?.itemFor(itemId) !== undefined;
+}
+
+/**
+ * Where `itemId`'s playhead is, right now. Three answers, in order:
+ *
+ *   a registered element   where the element actually is. A playing clip drifts
+ *                          from the clock, and that gap IS the drift badge, so
+ *                          the element wins wherever there is one to ask.
+ *   a watched, following   where the clock says the clip is. This is the answer
+ *   card                   for every card with no element of its own.
+ *   anything else          whatever was last recorded — a playhead the listener
+ *                          parked — or nothing at all.
+ *
+ * "Watched" (something subscribed) rather than "known" is what bounds the
+ * cache: the coordinator keeps a playhead for the cards on screen and the
+ * elements it owns, not for all 814 items in the catalogue.
+ */
+function samplePosition(itemId: number): number | undefined {
+	const entry = registry.get(itemId);
+	if (entry) return entry.el.currentTime * 1000;
+	if (!listeners.has(itemId)) return undefined;
+	const item = followsClock(itemId) ? clock?.itemFor(itemId) : undefined;
+	if (!clock || !item) return positions.get(itemId);
+	return calcSeekSeconds(item, clock.nowMs()) * 1000;
+}
 
 function notify(itemId: number): void {
 	// Sample the position as part of notifying, so the snapshot and the
 	// notification can never disagree: every path that tells React "this item
 	// changed" refreshes the value React is about to read.
-	const entry = registry.get(itemId);
-	if (entry) entry.positionMs = entry.el.currentTime * 1000;
+	const next = samplePosition(itemId);
+	if (next === undefined) positions.delete(itemId);
+	else positions.set(itemId, next);
 	const subscribers = listeners.get(itemId);
 	if (!subscribers) return;
 	for (const cb of subscribers) cb();
@@ -158,9 +228,12 @@ function tryPlay(itemId: number, entry: Entry): void {
 		});
 }
 
-/** Put an element where the virtual clock says it should be. */
+/**
+ * Put an element where the virtual clock says it should be — unless it has
+ * stopped following the clock, in which case where it is IS where it should be.
+ */
 function seekToClock(itemId: number, entry: Entry): void {
-	const item = clock?.itemFor(itemId);
+	const item = followsClock(itemId) ? clock?.itemFor(itemId) : undefined;
 	if (!clock || !item) return;
 	entry.el.currentTime = calcSeekSeconds(item, clock.nowMs());
 	// Notify here rather than leaving it to each caller. A seek moves the
@@ -223,8 +296,13 @@ export function ensure(itemId: number, url: string): HTMLAudioElement {
 		audible: true,
 		unlocked: false,
 		blocked: false,
-		positionMs: 0,
 	};
+	// Creating an element is the listener handing the clip back to the clock —
+	// pressing play on a card they had stopped, or the shell bringing a new LIVE
+	// item in. Deliberately in the creation path only: `ensure` is called for
+	// every LIVE item on every lane change, so clearing the opt-out on the
+	// idempotent path would let a scrub survive about a second.
+	unfollowed.delete(itemId);
 	el.addEventListener("pause", onPause);
 	el.addEventListener("loadedmetadata", () => {
 		seekToClock(itemId, entry);
@@ -262,6 +340,9 @@ export function release(itemId: number): void {
 /** Stop and forget everything — the app unmounting, or a test resetting. */
 export function releaseAll(): void {
 	for (const itemId of [...registry.keys()]) release(itemId);
+	// The cards are going with the app, so the playheads they parked go too.
+	positions.clear();
+	unfollowed.clear();
 }
 
 /**
@@ -289,16 +370,56 @@ export function setLevel(itemId: number, audible: boolean): void {
 	notify(itemId);
 }
 
-/** Where the element for `itemId` actually is, or undefined if not registered. */
+/**
+ * Where `itemId`'s playhead is: its element's position if it has one, the
+ * clock's if it is following, whatever it was parked at if it is not — and
+ * undefined for an item nothing owns and nothing is watching.
+ */
 export function positionMs(itemId: number): number | undefined {
-	// The cached sample, NOT a live read of el.currentTime — see Entry.positionMs.
-	// This is a useSyncExternalStore getSnapshot; returning a fresh reading each
-	// call makes React re-render without end.
-	return registry.get(itemId)?.positionMs;
+	// The cached sample, NOT a live read of el.currentTime or of the clock — see
+	// `positions`. This is a useSyncExternalStore getSnapshot; returning a fresh
+	// reading each call makes React re-render without end.
+	return positions.get(itemId);
 }
 
 /**
- * Watch one item's element. Shaped for `useSyncExternalStore` alongside
+ * Move `itemId`'s playhead to `ms` and take it off clock-follow.
+ *
+ * The only way a card is allowed to seek. Writing `el.currentTime` from a card
+ * would move the audio and leave the cached snapshot — which is what every
+ * reader, including that card's own badge and transcript, is looking at —
+ * showing a position the clip has already left. Going through here moves both
+ * in the same step.
+ *
+ * A card with no element is seekable too: it has a playhead precisely because
+ * the clock gives it one, and the listener dragging it is the moment they take
+ * it back.
+ */
+export function seekTo(itemId: number, ms: number): void {
+	// The element ignores a negative currentTime; the parked value would keep it.
+	const at = Math.max(0, ms);
+	unfollowed.add(itemId);
+	const entry = registry.get(itemId);
+	if (entry) entry.el.currentTime = at / 1000;
+	else if (listeners.has(itemId)) positions.set(itemId, at);
+	notify(itemId);
+}
+
+/**
+ * Take `itemId` off clock-follow without moving it — the listener stopped this
+ * card, and a stopped card's playhead stays where they stopped it rather than
+ * running on ahead of the silence.
+ *
+ * Called BEFORE the shell releases the element, so the position being frozen is
+ * the one the element had reached.
+ */
+export function unfollowClock(itemId: number): void {
+	unfollowed.add(itemId);
+	notify(itemId);
+}
+
+/**
+ * Watch one item's playhead. Shaped for `useSyncExternalStore` alongside
  * `positionMs`, whose number snapshot is stable by value.
  */
 export function subscribe(itemId: number, cb: () => void): () => void {
@@ -308,9 +429,29 @@ export function subscribe(itemId: number, cb: () => void): () => void {
 		listeners.set(itemId, subscribers);
 	}
 	subscribers.add(cb);
+	// Prime the snapshot rather than leaving it undefined until something
+	// happens: React reads getSnapshot immediately after subscribing, and a
+	// clock-following card with no element has no media event to sample on — its
+	// first reading would otherwise be "no position" for up to a second.
+	const primed = samplePosition(itemId);
+	if (primed === undefined) positions.delete(itemId);
+	else positions.set(itemId, primed);
 	return () => {
 		subscribers.delete(cb);
-		if (subscribers.size === 0) listeners.delete(itemId);
+		if (subscribers.size > 0) return;
+		listeners.delete(itemId);
+		// Nothing is watching and nothing owns it, so the cached playhead left
+		// with the card that was reading it — it costs nothing to re-derive from
+		// the clock when a card comes back.
+		//
+		// Two things deliberately survive. A registered element keeps its
+		// position, because that position outlives the card that rendered it,
+		// which is the whole reason the registry exists. And a card the listener
+		// scrubbed or paused keeps BOTH its parked position and its opt-out, for
+		// the same reason: a tag filter toggling is not the listener changing
+		// their mind, and re-checking that filter must not hand the card back to
+		// the clock they took it off.
+		if (!registry.has(itemId) && !unfollowed.has(itemId)) positions.delete(itemId);
 	};
 }
 
@@ -324,7 +465,7 @@ function healthCheck(): void {
 	if (!clock || clock.clockPaused()) return;
 	const now = clock.nowMs();
 	for (const [itemId, entry] of registry) {
-		const item = clock.itemFor(itemId);
+		const item = followsClock(itemId) ? clock.itemFor(itemId) : undefined;
 		if (!item) continue;
 		if (entry.el.paused || entry.el.ended) {
 			// A late unlock (initial autoplay was blocked; a user gesture has since
@@ -360,20 +501,29 @@ export function connectClock(source: ClockSource): () => void {
 }
 
 /**
- * Report that the virtual clock moved. A jump larger than JUMP_THRESHOLD_MS is
- * a scrub and reseeks every registered element; ordinary per-second advance is
- * left alone so it never fights an element's own playback.
+ * Report that the virtual clock moved — the app's once-a-second tick.
+ *
+ * Two different jobs, and only one of them used to happen. A jump larger than
+ * JUMP_THRESHOLD_MS is a scrub and reseeks every registered element; ordinary
+ * per-second advance leaves those elements alone so it never fights their own
+ * playback. But an advance of any size is the ONLY thing that moves the
+ * playhead of a card with no element — an UPCOMING clip, a PREVIOUS one, a LIVE
+ * one the listener stopped — so those are resampled on every tick. Returning
+ * early on a small delta is what used to leave them frozen at zero.
  */
 export function clockMoved(): void {
 	if (!clock) return;
 	const now = clock.nowMs();
 	const delta = now - prevNowMs;
 	prevNowMs = now;
-	if (Math.abs(delta) <= JUMP_THRESHOLD_MS) return;
-	for (const [itemId, entry] of registry) {
-		if (!clock.itemFor(itemId)) continue;
-		seekToClock(itemId, entry);
-		notify(itemId);
+	const jumped = Math.abs(delta) > JUMP_THRESHOLD_MS;
+	// Registered elements plus rendered cards: the union is exactly the set of
+	// items something is showing or something is playing.
+	for (const itemId of new Set([...registry.keys(), ...listeners.keys()])) {
+		if (!followsClock(itemId)) continue;
+		const entry = registry.get(itemId);
+		if (!entry) notify(itemId);
+		else if (jumped) seekToClock(itemId, entry);
 	}
 }
 
@@ -393,16 +543,17 @@ export function clockMoved(): void {
  *                 beside the point, because the listener is being told to click
  *                 and the click has to mean something.
  *   MERELY PAUSED nothing is waiting on a gesture; the element is stopped. Here
- *                 the clock's claim is the right test, and it is the health
- *                 check's test too: a listener who paused a back-catalogue clip
- *                 must not have it restarted by their next click anywhere on
- *                 the desktop.
+ *                 clock-follow is the right test, and it is the health check's
+ *                 test too: a listener who paused a back-catalogue clip, or
+ *                 scrubbed a card to where they wanted it, must not have that
+ *                 undone by their next click anywhere on the desktop.
  *
- * The elements the clock does not claim are exactly the ones the old test threw
- * away: a listener-started PREVIOUS clip (`itemFor` returns undefined for it by
- * design), and a LIVE card whose item reached the lane through the history
- * snapshot or the reveal buffer rather than through the live mp3 set. Either
- * one could take a token to the grave, and no amount of clicking would clear it.
+ * The elements that do not follow the clock are exactly the ones the old test
+ * threw away: a listener-started PREVIOUS clip (`itemFor` returns undefined for
+ * it by design), a card the listener has scrubbed, and a LIVE card whose item
+ * reached the lane through the history snapshot or the reveal buffer rather than
+ * through the live mp3 set. Any of them could take a token to the grave, and no
+ * amount of clicking would clear it.
  */
 function retryBlockedPlayback(): void {
 	if (!clock || clock.clockPaused()) return;
@@ -411,7 +562,7 @@ function retryBlockedPlayback(): void {
 			tryPlay(itemId, entry);
 			continue;
 		}
-		if (!clock.itemFor(itemId)) continue;
+		if (!followsClock(itemId)) continue;
 		if (entry.el.paused || entry.el.ended) tryPlay(itemId, entry);
 	}
 }

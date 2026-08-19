@@ -1,13 +1,16 @@
 // One traffic card — header, waveform, control bar, tabs — at 1.25x Figma's
-// 210x124 frame (see CARD_SCALE below and trafficCard.module.scss).
+// 210x124 frame (see --rt-card-scale in trafficCard.module.scss).
 //
 // A view over props, not a reader of app state. Everything it needs — which
 // lane it is in, what the clock reads, whether it is in the mix — arrives from
 // the shell, so the lane containers (Step 18) and the audio orchestration
 // (Step 19) can wire it without this file learning about either. The one thing
-// it reaches for directly is audioCoordinator, and only to READ: the elements
-// live there precisely because a card mounting and unmounting must not decide
-// whether a clip is playing.
+// it reaches for directly is audioCoordinator: the elements live there precisely
+// because a card mounting and unmounting must not decide whether a clip is
+// playing. It READS its playhead from there, and makes exactly two writes —
+// seekTo when the listener scrubs the waveform, and unfollowClock when they stop
+// the card — both of which are statements about ONE item, which is the thing a
+// card is and the shell is not.
 //
 // What it derives rather than takes:
 //
@@ -17,31 +20,19 @@
 //                recomputed it would be a second answer free to disagree with
 //                the container it is sitting in.
 //   livePct      the clock's position over the clip's duration, 0..1.
-//   currentPct   the element's position over the same, 0..1.
+//   currentPct   the playhead over the same, 0..1 — the element's position when
+//                there is an element, the clock's when there is not (story 028).
 
 import type React from "react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { PeaksWaveform } from "../radio-core/PeaksWaveform";
 import { calcSeekSeconds } from "../radio-core/stationGrouping";
-import { positionMs, subscribe } from "./audioCoordinator";
+import { positionMs, seekTo, subscribe, unfollowClock } from "./audioCoordinator";
 import { type Badge, badgeFor, countdownFor, type Lane } from "./cardStatus";
 import { CARD_TABS, CardTabBar } from "./CardTabBar";
 import { itemTiming } from "./tabs/itemTiming";
 import styles from "./trafficCard.module.scss";
-
-/**
- * The card is drawn at 1.25x Figma's own numbers, per story 023.
- *
- * MUST match `--rt-card-scale` in trafficCard.module.scss. It is duplicated here
- * rather than read back out of the stylesheet because PeaksWaveform sizes a
- * canvas BITMAP from a number, and a bitmap authored at the unscaled height and
- * then stretched by CSS is a blurred waveform.
- */
-const CARD_SCALE = 1.25;
-
-/** Figma's waveform slot is 27px tall; PeaksWaveform sizes its bitmap from it. */
-const WAVEFORM_HEIGHT = Math.round(27 * CARD_SCALE);
 
 export interface TrafficCardProps {
 	item: MediaItem;
@@ -172,6 +163,25 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	const livePct = lane === "live" ? fractionOf(liveMs) : undefined;
 	const currentPct = fractionOf(currentMs);
 
+	// Only offered when the clip's length is known: without one there is no map
+	// from a fraction of the envelope to an instant in the recording, and a click
+	// would have to invent the instant it seeks to.
+	const onSeekPct = useCallback(
+		(pct: number) => {
+			seekTo(item.id, pct * durationMs);
+		},
+		[item.id, durationMs],
+	);
+
+	// Pressing pause is the listener taking this card off the clock — a stopped
+	// card's playhead stays where they stopped it rather than running on ahead of
+	// the silence. Pressing play is the opposite, and needs nothing here: the
+	// shell registers a fresh element, which is what puts the card back on.
+	const onTransport = useCallback(() => {
+		if (!paused) unfollowClock(item.id);
+		onTogglePause();
+	}, [paused, item.id, onTogglePause]);
+
 	const title = meta?.subject?.trim() || item.full_title;
 	const panel = CARD_TABS.find((tab) => tab.id === active) ?? CARD_TABS[0];
 
@@ -208,11 +218,18 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 			</header>
 
 			{/* The positioned containing block PeaksWaveform's absolute scrubbers
-			    need — it renders a bare fragment and establishes none of its own. */}
+			    need — it renders a bare fragment and establishes none of its own.
+			    The slot's own height is the stylesheet's, as a proportion of the
+			    card, so no number here sizes the canvas. */}
 			<div
 				className={styles.rtCardWaveform}
 				data-card-waveform
 				style={waveformColor ? { color: waveformColor } : undefined}
+				// The lane slot and the card slot above apply the active tool on
+				// pointerup. Left to bubble, letting go of a scrub under the mute
+				// tool would seek AND mute — the same collision the mute button
+				// already guards against.
+				onPointerUp={(e) => e.stopPropagation()}
 			>
 				<PeaksWaveform
 					// PeaksWaveform samples its ink once per draw, and it redraws
@@ -224,9 +241,9 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 					// the listener picks a new colour.
 					key={waveformColor ?? "theme"}
 					peaks={meta?.peaks}
-					height={WAVEFORM_HEIGHT}
 					livePct={livePct}
 					currentPct={currentPct}
+					onSeekPct={durationMs > 0 ? onSeekPct : undefined}
 				/>
 			</div>
 
@@ -236,7 +253,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 					className={styles.rtCardTransport}
 					aria-label={paused ? "Play" : "Pause"}
 					title={paused ? "Play" : "Pause"}
-					onClick={onTogglePause}
+					onClick={onTransport}
 				>
 					<span aria-hidden="true">{paused ? "▶" : "❚❚"}</span>
 				</button>
