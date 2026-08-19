@@ -1,14 +1,15 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The Transcript panel is the only one that reaches classicy; stub the parser
-// so this suite is about the card, not about fetching a VTT. The stub echoes
-// the second it was asked about, which is what lets a test below see which
-// position the card handed the panel.
-vi.mock("classicy", () => ({
-	useQuickTimeSubtitles: () => ({ activeCueText: (seconds: number) => `cue@${seconds}` }),
-	registerApp: () => {},
-}));
+// The Transcript panel fetches and parses the clip's VTT itself (classicy
+// exposes no cue list to reuse — see tabs/transcriptCues.ts), so the seam this
+// suite stubs is the network, not a hook. The cue below spans 40-45s, which is
+// what lets a test read back which position the card handed the panel.
+const VTT = "WEBVTT\n\n00:00:40.000 --> 00:00:45.000\nForty-second cue.\n\n00:01:00.000 --> 00:01:05.000\nMinute cue.\n";
+vi.stubGlobal(
+	"fetch",
+	vi.fn(async () => ({ ok: true, status: 200, text: async () => VTT })),
+);
 
 // The <audio> elements live in the coordinator, not in the card, and Step 16
 // deliberately made positionMs answer for items that are not rendered. Stubbing
@@ -192,13 +193,17 @@ describe("TrafficCard tabs", () => {
 		expect(container.querySelector('[data-tab="details"]')).toBeNull();
 	});
 
-	it("hands the transcript panel the element's own position", () => {
-		// The cue shown must follow the <audio> element, not the virtual clock:
-		// a drifting card would otherwise caption words it is not saying.
+	it("hands the transcript panel the element's own position", async () => {
+		// The cue marked must follow the <audio> element, not the virtual clock:
+		// a drifting card would otherwise highlight words it is not saying. 42s
+		// falls inside the first fixture cue and outside the second.
 		audio.positionMs = 42_000;
-		const { getByRole, container } = renderCard({ meta: makeMeta() });
+		const { getByRole, container, findByText } = renderCard({ meta: makeMeta() });
 		fireEvent.click(getByRole("tab", { name: "Transcript" }));
-		expect(container.querySelector('[data-tab="transcript"]')?.textContent).toContain("cue@42");
+		await findByText("Forty-second cue.");
+		expect(container.querySelector('[data-active="true"]')?.textContent).toBe(
+			"Forty-second cue.",
+		);
 	});
 });
 

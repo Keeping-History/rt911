@@ -13,6 +13,81 @@ const TZ = -4;
 const field = (root: HTMLElement, name: string) =>
 	root.querySelector(`[data-field="${name}"] dd`)?.textContent ?? null;
 
+const column = (root: HTMLElement, name: string) =>
+	root.querySelector(`[data-column="${name}"]`);
+
+describe("DetailsTab layout", () => {
+	it("renders Figma's three columns: Call Details, Tags and Summary", () => {
+		const { container, getByText } = render(
+			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
+		);
+		expect(column(container, "call-details")).not.toBeNull();
+		expect(column(container, "tags")).not.toBeNull();
+		expect(column(container, "summary")).not.toBeNull();
+		for (const heading of ["Call Details", "Tags", "Summary"]) {
+			expect(getByText(heading)).toBeTruthy();
+		}
+	});
+
+	it("keeps the timings in Call Details and the subject in Summary", () => {
+		// Which column a fact lands in is the whole point of the redesign — a
+		// panel that renders all three headings but files the subject under Tags
+		// would pass a heading-only check.
+		const { container } = render(
+			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
+		);
+		expect(column(container, "call-details")?.querySelector('[data-field="start"]')).not.toBeNull();
+		expect(column(container, "summary")?.querySelector('[data-field="subject"]')).not.toBeNull();
+		expect(column(container, "tags")?.querySelectorAll("li").length).toBe(3);
+	});
+
+	it("groups chips into a labelled row per namespace, in vocabulary order", () => {
+		const { container } = render(
+			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
+		);
+		const groups = [...container.querySelectorAll("[data-tag-group]")];
+		expect(groups.map((g) => g.getAttribute("data-tag-group"))).toEqual([
+			"topic",
+			"facility",
+			"aircraft",
+		]);
+		expect(groups.map((g) => g.querySelector("dt")?.textContent)).toEqual([
+			"Topics",
+			"Facilities",
+			"Aircraft",
+		]);
+	});
+
+	it("files a tag from an unknown namespace under Other rather than dropping it", () => {
+		// mp3_tags.namespace is NOT NULL, so a ninth namespace means a curator
+		// added one. Hiding their tag would look exactly like the tag not existing.
+		const { container, getByText } = render(
+			<DetailsTab
+				item={makeItem()}
+				meta={makeMeta({
+					tags: [{ tag: "weather:vfr", namespace: "weather", value: "VFR" }],
+				})}
+				tzOffsetHours={TZ}
+			/>,
+		);
+		expect(container.querySelector('[data-tag-group="other"]')).not.toBeNull();
+		expect(getByText("VFR")).toBeTruthy();
+	});
+
+	it("keeps all three columns, each saying so, for an item with no metadata", () => {
+		// Columns that collapsed would leave cards in a lane misaligned with each
+		// other, and an empty box reads as a broken tab rather than an untagged clip.
+		const { container, getByText } = render(
+			<DetailsTab item={makeItem()} tzOffsetHours={TZ} />,
+		);
+		expect(column(container, "call-details")).not.toBeNull();
+		expect(column(container, "tags")).not.toBeNull();
+		expect(column(container, "summary")).not.toBeNull();
+		expect(getByText("No tags.")).toBeTruthy();
+		expect(getByText("No summary.")).toBeTruthy();
+	});
+});
+
 describe("DetailsTab", () => {
 	it("renders the clip's start, end, duration and link", () => {
 		const { container } = render(
