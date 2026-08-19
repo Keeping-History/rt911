@@ -78,7 +78,7 @@
   --rt-lane-stripe-size: calc(var(--window-control-size) * 4 - var(--window-border-size) * 4);
   // 14px: measured gutter between adjacent cards in the design (210px cards at
   // x=168..377 and x=392..601). This is the "cards are crowded" fix.
-  --rt-lane-gap: calc(var(--window-control-size) + var(--window-border-size) * 2);
+  --rt-lane-gap: calc(var(--window-control-size) + var(--window-border-size) * 1);
   --rt-lane-fill: transparent;
   --rt-lane-edge: transparent;
   // The column is SIX PLAYER ROWS — LIVE 3, UPCOMING 2, PREVIOUS 1 — and this
@@ -352,7 +352,7 @@
 .rtLaneSlot {
   // The card sets its own width; the slot only has to not shrink it. Height
   // comes from the row's stretch, so nothing here names a size.
-  flex: 0 0 auto;
+  flex: 1 0 auto;
   display: flex;
   min-width: 0;
 }
