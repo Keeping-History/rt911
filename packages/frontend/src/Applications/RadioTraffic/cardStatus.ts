@@ -24,12 +24,40 @@ export type Badge =
 	| { kind: "drift"; seconds: number }
 	| { kind: "countdown"; label: string }
 	| { kind: "playing" };
+// NOT YET a `| { kind: "silence" }` — story 041's derivation is complete and
+// tested in silence.ts, but the variant cannot land here on its own. badgeLabel
+// in TrafficCard.tsx switches exhaustively over this union with no default arm,
+// so adding a sixth kind fails the build there (TS2366) until that switch gains
+// a `case "silence"`. See silence.ts's header for the precedence the badge takes
+// once the two land together: drift outranks silence, seeking outranks both.
 
-/** Drift the header treats as "on the clock" — see badgeFor. */
-const IN_SYNC_TOLERANCE_MS = 1_000;
+/**
+ * The two edges of the in-sync deadband, in ms of absolute drift.
+ *
+ * ENTER is what an in-sync card is allowed to wander by before the header stops
+ * calling it in sync; EXIT is the tighter figure a drifting card has to come
+ * back inside before the header says so again. One threshold — this was a single
+ * 1s tolerance — flickers by construction: the element's position is polled ~4
+ * times a second and wanders either side of any single number, so a clip parked
+ * on the boundary repaints "In sync"/"-1s"/"In sync" several times a second.
+ * Two thresholds mean the badge has to *travel* 2 seconds to change its mind,
+ * which no amount of polling noise does.
+ *
+ * EXIT keeps the old 1s figure deliberately: it is the drift the app has always
+ * called on the clock, so a card that settles back reports in sync at exactly
+ * the same point it used to, and the badge's meaning has not changed — only how
+ * hard it is to dislodge.
+ */
+const DRIFT_ENTER_MS = 3_000;
+const DRIFT_EXIT_MS = 1_000;
 
 /** Below a minute the countdown drops the MM: prefix ("4s", not "00:04"). */
 const COUNTDOWN_SHORT_FORM_SECONDS = 60;
+
+/** From an hour out the countdown grows an HH field, so 90 minutes is not "90:00". */
+const SECONDS_PER_HOUR = 3_600;
+
+const pad2 = (value: number): string => String(value).padStart(2, "0");
 
 /**
  * The lane `item` belongs to at `nowMs`.
@@ -59,15 +87,31 @@ export function laneFor(item: MediaItem, nowMs: number): Lane {
 
 /**
  * Countdown text for an UPCOMING card: "4s" inside the last minute, "03:13"
- * beyond it. The MM:SS form is radio-core's countdownLabel unchanged, so the
- * card and the scanner's Coming Up list round identically (up to the whole
- * second, hitting zero exactly at the start instant and never a tick early).
+ * beyond it, "01:30:00" from an hour out.
+ *
+ * The *rounding* is radio-core's countdownLabel unchanged — the card and the
+ * scanner's Coming Up list agree up to the whole second, hitting zero exactly at
+ * the start instant and never a tick early — but the *rendering* is this
+ * module's. countdownLabel is unbounded in its minutes field, so an item two
+ * hours out reads "120:00" there: correct arithmetic, but a card badge that
+ * makes a listener divide by 60 in their head, and one that reads as a
+ * plausible-but-wrong "1:20" at a glance. Hours are split off here rather than
+ * in radio-core because ten other consumers already agree on that MM:SS form
+ * and none of them asked for this.
  */
 export function countdownFor(item: MediaItem, nowMs: number): string {
-	const label = countdownLabel(item, nowMs);
-	const [minutes, seconds] = label.split(":").map(Number);
+	const [minutes, seconds] = countdownLabel(item, nowMs).split(":").map(Number);
 	const total = minutes * 60 + seconds;
-	return total < COUNTDOWN_SHORT_FORM_SECONDS ? `${total}s` : label;
+
+	if (total < COUNTDOWN_SHORT_FORM_SECONDS) return `${total}s`;
+	if (total < SECONDS_PER_HOUR) {
+		return `${pad2(Math.floor(total / 60))}:${pad2(total % 60)}`;
+	}
+	// Every field is two digits, so the badge's width never moves as the clock
+	// runs down and the header's subject never reflows a character at a time.
+	const hours = Math.floor(total / SECONDS_PER_HOUR);
+	const rest = total % SECONDS_PER_HOUR;
+	return `${pad2(hours)}:${pad2(Math.floor(rest / 60))}:${pad2(rest % 60)}`;
 }
 
 export interface BadgeArgs {
@@ -82,6 +126,17 @@ export interface BadgeArgs {
 	userPlaying: boolean;
 	/** UPCOMING only: the text from countdownFor(). */
 	countdown?: string;
+	/**
+	 * What this same card's badge read last tick, or undefined on the first one.
+	 *
+	 * The one piece of history badgeFor needs, and it is an ARGUMENT rather than
+	 * something the module remembers so that the function stays pure: a badge
+	 * decided from state hidden in this module would be untestable in isolation,
+	 * would leak an entry per card, and would make two cards' test cases
+	 * order-dependent on each other. The caller already re-renders every tick, so
+	 * carrying one string across those renders costs it a ref and nothing else.
+	 */
+	previousKind?: Badge["kind"];
 }
 
 /**
@@ -96,6 +151,11 @@ export interface BadgeArgs {
  * UPCOMING countdown is computed from the clock, which is already at the new
  * instant, and a user-started PREVIOUS clip was never following the clock at
  * all. That is why SEEKING shows on one card at a time.
+ *
+ * Still a pure function, but no longer a memoryless one: the in-sync/drift
+ * decision reads `args.previousKind` so the deadband can be asymmetric. Same
+ * arguments in, same badge out — the history is data the caller hands over, not
+ * state this module keeps.
  */
 export function badgeFor(args: BadgeArgs): Badge | null {
 	if (args.lane === "upcoming") {
@@ -109,7 +169,12 @@ export function badgeFor(args: BadgeArgs): Badge | null {
 	if (args.seeking) return { kind: "seeking" };
 
 	const driftMs = args.currentMs - args.liveMs;
-	if (Math.abs(driftMs) <= IN_SYNC_TOLERANCE_MS) return { kind: "in-sync" };
+	// Asymmetric by design — see DRIFT_ENTER_MS. Anything that is not already a
+	// drift badge (including the first tick, a card coming out of SEEKING, and a
+	// card that has just started) has to clear the wide edge to become one.
+	const tolerance =
+		args.previousKind === "drift" ? DRIFT_EXIT_MS : DRIFT_ENTER_MS;
+	if (Math.abs(driftMs) <= tolerance) return { kind: "in-sync" };
 	// Sign is kept: the header reads "-6 seconds" when the audio lags.
 	return { kind: "drift", seconds: Math.round(driftMs / 1000) };
 }

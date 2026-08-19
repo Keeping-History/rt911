@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { groupStations, previousSegments } from "../radio-core/stationGrouping";
 import {
+	type Badge,
 	badgeFor,
 	countdownFor,
 	historyPool,
@@ -125,6 +126,32 @@ describe("countdownFor", () => {
 	it("clamps at zero once the start has passed", () => {
 		expect(countdownFor(clip, t("2001-09-11T13:04:00.000Z"))).toBe("0s");
 	});
+
+	it("stays MM:SS right up to the last second under an hour", () => {
+		// 59:59 is the widest the two-field form ever gets. One second later the
+		// form has to change, so this is the assertion that pins where.
+		expect(countdownFor(clip, t("2001-09-11T12:00:01.000Z"))).toBe("59:59");
+	});
+
+	it("grows an hours field at exactly 60 minutes", () => {
+		// The bug: countdownLabel's minutes field is unbounded, so this read
+		// "60:00" — indistinguishable at a glance from a minute past the hour.
+		expect(countdownFor(clip, t("2001-09-11T12:00:00.000Z"))).toBe("01:00:00");
+	});
+
+	it("reads as HH:MM:SS for multi-hour waits", () => {
+		expect(countdownFor(clip, t("2001-09-11T11:30:00.000Z"))).toBe("01:30:00");
+		expect(countdownFor(clip, t("2001-09-11T10:59:47.000Z"))).toBe("02:00:13");
+		// The 8h18m tape in the corpus is the longest wait the app can show.
+		expect(countdownFor(clip, t("2001-09-11T04:42:00.000Z"))).toBe("08:18:00");
+	});
+
+	it("zero-pads minutes and seconds in both forms", () => {
+		// Field widths that move as the clock runs down would reflow the header's
+		// subject a character at a time, once a second.
+		expect(countdownFor(clip, t("2001-09-11T12:57:05.000Z"))).toBe("02:55");
+		expect(countdownFor(clip, t("2001-09-11T11:57:05.000Z"))).toBe("01:02:55");
+	});
 });
 
 describe("badgeFor", () => {
@@ -164,21 +191,119 @@ describe("badgeFor", () => {
 		});
 	});
 
-	it("leaves in-sync continuously — the first drift shown is one second", () => {
-		// The band ends at exactly 1s, so the badge just past it must read -1, not
-		// jump to -2. A gap here would make the header flick between "•" and a
-		// number that never showed the value in between.
-		expect(badgeFor({ ...live, currentMs: 30_000 - 1_000 })).toEqual({
+	it("leaves in-sync continuously — the first drift shown is three seconds", () => {
+		// REWRITTEN for the hysteresis deadband (story 042). This used to pin the
+		// handoff at 1s, because 1s was the whole band. Widening the ENTER edge to
+		// 3s necessarily makes the first number shown larger — that is the cost of
+		// not flickering, not a regression — so the assertion moves to the new edge
+		// rather than being dropped. What it pins is unchanged and is the point:
+		// the badge must not GAP. The value just past the edge has to be the value
+		// the edge sits on, or the header flicks from "In sync" straight to a
+		// number it never counted up through.
+		expect(badgeFor({ ...live, currentMs: 30_000 - 3_000 })).toEqual({
 			kind: "in-sync",
 		});
-		expect(badgeFor({ ...live, currentMs: 30_000 - 1_001 })).toEqual({
+		expect(badgeFor({ ...live, currentMs: 30_000 - 3_001 })).toEqual({
 			kind: "drift",
-			seconds: -1,
+			seconds: -3,
 		});
-		expect(badgeFor({ ...live, currentMs: 30_000 - 1_500 })).toEqual({
+		expect(badgeFor({ ...live, currentMs: 30_000 - 3_400 })).toEqual({
 			kind: "drift",
-			seconds: -1,
+			seconds: -3,
 		});
+	});
+
+	it("holds in-sync out to the wider enter threshold", () => {
+		// Between the old 1s tolerance and the new 3s one: a card here used to
+		// repaint a drift number several times a second and now says nothing.
+		for (const ms of [1_001, 2_000, 2_999, 3_000]) {
+			expect(badgeFor({ ...live, currentMs: 30_000 + ms })).toEqual({
+				kind: "in-sync",
+			});
+			expect(badgeFor({ ...live, currentMs: 30_000 - ms })).toEqual({
+				kind: "in-sync",
+			});
+		}
+	});
+
+	it("switches to drift once past the enter threshold, in either direction", () => {
+		expect(
+			badgeFor({ ...live, currentMs: 30_000 + 3_001, previousKind: "in-sync" }),
+		).toEqual({ kind: "drift", seconds: 3 });
+		expect(
+			badgeFor({ ...live, currentMs: 30_000 - 3_001, previousKind: "in-sync" }),
+		).toEqual({ kind: "drift", seconds: -3 });
+	});
+
+	it("keeps showing drift inside the deadband until it clears the exit threshold", () => {
+		// The asymmetry itself. Every one of these is BELOW the 3s enter edge, so a
+		// memoryless badgeFor would call them all in sync; a card that is already
+		// reporting drift must keep reporting it until it is properly back.
+		for (const [ms, seconds] of [
+			[2_999, -3],
+			[2_000, -2],
+			[1_500, -1],
+			[1_001, -1],
+		] as const) {
+			expect(
+				badgeFor({ ...live, currentMs: 30_000 - ms, previousKind: "drift" }),
+			).toEqual({ kind: "drift", seconds });
+		}
+		expect(
+			badgeFor({ ...live, currentMs: 30_000 - 1_000, previousKind: "drift" }),
+		).toEqual({ kind: "in-sync" });
+	});
+
+	it("returns to in-sync continuously too — the last drift shown is one second", () => {
+		// The exit edge needs the same no-gap property the enter edge has: -1s then
+		// "In sync", never -2s then "In sync".
+		expect(
+			badgeFor({ ...live, currentMs: 30_000 - 1_001, previousKind: "drift" }),
+		).toEqual({ kind: "drift", seconds: -1 });
+		expect(
+			badgeFor({ ...live, currentMs: 30_000 - 1_000, previousKind: "drift" }),
+		).toEqual({ kind: "in-sync" });
+	});
+
+	it("does not flicker while drift oscillates between the two thresholds", () => {
+		// The bug, reproduced: the element is polled ~4x/sec and wanders either
+		// side of a boundary. Feed the badge back into itself the way the card
+		// does and walk the drift up through the deadband and back down; it must
+		// change its mind exactly TWICE across the whole sweep.
+		const walk = (drifts: number[]) => {
+			let kind: Badge["kind"] | undefined;
+			const labels: string[] = [];
+			for (const driftMs of drifts) {
+				const badge = badgeFor({
+					...live,
+					currentMs: 30_000 + driftMs,
+					previousKind: kind,
+				});
+				if (badge === null) throw new Error("a live card always has a badge");
+				if (badge.kind !== kind) labels.push(badge.kind);
+				kind = badge.kind;
+			}
+			return labels;
+		};
+
+		// Up through the deadband and back down: one flip out, one flip back.
+		expect(walk([0, 1_200, 2_400, 2_900, 3_200, 2_900, 2_400, 1_200, 800, 0])).toEqual([
+			"in-sync",
+			"drift",
+			"in-sync",
+		]);
+		// The same sweep on the lagging side.
+		expect(
+			walk([0, -1_200, -2_400, -2_900, -3_200, -2_900, -2_400, -1_200, -800, 0]),
+		).toEqual(["in-sync", "drift", "in-sync"]);
+		// Noise that never leaves the deadband never flips anything at all.
+		expect(walk([0, 1_100, -1_400, 2_800, -2_950, 1_050, -2_999])).toEqual([
+			"in-sync",
+		]);
+		// And noise straddling the EXIT edge while already drifting stays drifting.
+		expect(
+			walk([0, 3_500, 1_400, 2_600, 1_050, 2_900, 1_200]).slice(1),
+		).toEqual(["drift"]);
 	});
 
 	it("is seeking while a seek is in flight, outranking any drift", () => {
