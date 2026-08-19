@@ -19,6 +19,16 @@ const rows = [
 		],
 	},
 	{
+		// Introduces the "facility" namespace after "aircraft" and "topic" are
+		// already in the tree, so insertion order (aircraft, topic, facility) is
+		// NOT alphabetical — a real regression test for the sort, not one that
+		// happens to pass by accident.
+		id: 503, title: "ZBW Center handoff", full_title: "ZBW Center handoff to ZNY",
+		source: { slug: "zbw" }, tags: [
+			{ mp3_tags_id: { tag: "facility:zbw-center", namespace: "facility", value: "zbw-center" } },
+		],
+	},
+	{
 		// A broadcast station's own item — must never appear in the tree.
 		id: 900, title: "WCBS hourly news", full_title: "WCBS hourly news",
 		source: { slug: "wcbs" }, tags: [
@@ -41,16 +51,20 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("buildRadioTrafficVolume", () => {
-	it("lists namespace folders at the root", async () => {
+	it("lists namespace folders at the root, sorted alphabetically by name", async () => {
 		const entries = await buildRadioTrafficVolume(fetchFn as unknown as typeof fetch).list([]);
-		expect(entries.map((e) => e.name)).toEqual(["Aircraft", "Topic"]);
+		// Insertion order is [Aircraft, Topic, Facility] (see the row-503 comment
+		// in the fixture above) — asserting the sorted order actually exercises
+		// the sort instead of passing by accident.
+		expect(entries.map((e) => e.name)).toEqual(["Aircraft", "Facility", "Topic"]);
 		expect(entries.every((e) => e.kind === "folder")).toBe(true);
 	});
 
-	it("lists tag values within a namespace", async () => {
+	it("lists tag values within a namespace, sorted alphabetically by name", async () => {
 		const volume = buildRadioTrafficVolume(fetchFn as unknown as typeof fetch);
 		const values = await volume.list(["Topic"]);
-		expect(values.map((e) => e.name)).toEqual(["loss-of-contact", "ground-stop"]);
+		// Insertion order is [loss-of-contact, ground-stop] — sorted flips it.
+		expect(values.map((e) => e.name)).toEqual(["ground-stop", "loss-of-contact"]);
 	});
 
 	it("lists clips carrying a specific tag value, excluding broadcast-station items", async () => {
@@ -75,6 +89,21 @@ describe("buildRadioTrafficVolume", () => {
 		await buildRadioTrafficVolume(fetchFn as unknown as typeof fetch).list([]);
 		await buildRadioTrafficVolume(fetchFn as unknown as typeof fetch).list(["Topic"]);
 		await buildRadioTrafficVolume(fetchFn as unknown as typeof fetch).list(["Aircraft", "aal11"]);
+		expect(calls).toBe(1);
+	});
+
+	it("clears the cache on a rejected fetch, so a later retry can succeed", async () => {
+		const failingFetch = vi.fn(async () => {
+			throw new Error("network error");
+		});
+		await expect(
+			buildRadioTrafficVolume(failingFetch as unknown as typeof fetch).list([]),
+		).rejects.toThrow("network error");
+
+		// A naive cache would keep the rejected promise forever; prove it was
+		// actually cleared by retrying with a fetchFn that now succeeds.
+		const entries = await buildRadioTrafficVolume(fetchFn as unknown as typeof fetch).list([]);
+		expect(entries.map((e) => e.name)).toEqual(["Aircraft", "Facility", "Topic"]);
 		expect(calls).toBe(1);
 	});
 });

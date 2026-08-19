@@ -79,24 +79,33 @@ export function __clearRadioTrafficVolumeCache(): void {
 
 export function buildRadioTrafficVolume(fetchFn: typeof fetch = fetch): ClassicyFileDialogVolume {
 	const list = async (path: string[]): Promise<ClassicyFileDialogEntry[]> => {
-		if (!cached) cached = loadTree(fetchFn);
+		if (!cached) {
+			cached = loadTree(fetchFn).catch((e) => {
+				cached = null;
+				throw e;
+			});
+		}
 		const tree = await cached;
 		if (path.length === 0) {
-			return [...tree.keys()].map((namespace) => ({
-				id: `radio-traffic-ns-${namespace}`,
-				name: labelFor(namespace),
-				kind: "folder",
-			}));
+			return [...tree.keys()]
+				.map((namespace) => ({
+					id: `radio-traffic-ns-${namespace}`,
+					name: labelFor(namespace),
+					kind: "folder" as const,
+				}))
+				.sort((a, b) => a.name.localeCompare(b.name));
 		}
 		const namespace = path[0].toLowerCase();
 		const byValue = tree.get(namespace);
 		if (!byValue) return [];
 		if (path.length === 1) {
-			return [...byValue.keys()].map((value) => ({
-				id: `radio-traffic-ns-${namespace}-${value}`,
-				name: value,
-				kind: "folder",
-			}));
+			return [...byValue.keys()]
+				.map((value) => ({
+					id: `radio-traffic-ns-${namespace}-${value}`,
+					name: value,
+					kind: "folder" as const,
+				}))
+				.sort((a, b) => a.name.localeCompare(b.name));
 		}
 		return byValue.get(path[1]) ?? [];
 	};
