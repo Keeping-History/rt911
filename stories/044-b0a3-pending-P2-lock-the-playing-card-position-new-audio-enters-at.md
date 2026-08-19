@@ -1,11 +1,11 @@
 ---
 id: "044-b0a3"
 title: "Lock the playing card position; new audio enters at the left of the lane"
-status: pending
+status: in_progress
 priority: P2
 type: fix
 created: 2026-08-19T02:06:04.104Z
-updated: 2026-08-19T02:06:04.104Z
+updated: 2026-08-19T03:33:13.000Z
 dependencies: []
 ---
 

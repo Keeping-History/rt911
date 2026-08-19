@@ -1,11 +1,11 @@
 ---
 id: "046-d305"
 title: "Stretch rtPanelColumn divs to full container height"
-status: pending
+status: in_progress
 priority: P3
 type: fix
 created: 2026-08-19T02:49:58.109Z
-updated: 2026-08-19T02:49:58.109Z
+updated: 2026-08-19T03:33:13.000Z
 dependencies: []
 ---
 

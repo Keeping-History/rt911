@@ -1,11 +1,11 @@
 ---
 id: 034-15b2
 title: Size lanes and cards by rows with flex and percentages, not fixed px
-status: pending
+status: in_progress
 priority: P1
 type: refactor
 created: "2026-08-19T01:24:25.088Z"
-updated: "2026-08-19T01:24:42.058Z"
+updated: "2026-08-19T03:33:13.000Z"
 dependencies: ["024", "027"]
 plan: plans/radio-traffic-redesign.md
 plan_step: Design parity

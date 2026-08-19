@@ -1,11 +1,11 @@
 ---
 id: 029-1caa
 title: Replace px literals in Radio Traffic styles with CSS variables
-status: pending
+status: in_progress
 priority: P2
 type: refactor
 created: "2026-08-19T00:05:01.158Z"
-updated: "2026-08-19T01:24:42.123Z"
+updated: "2026-08-19T03:33:13.000Z"
 dependencies: ["022", "023", "024", "025", "026", "027", "028", "030", "034"]
 plan: plans/radio-traffic-redesign.md
 plan_step: Design parity

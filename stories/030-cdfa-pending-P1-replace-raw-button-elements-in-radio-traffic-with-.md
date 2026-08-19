@@ -1,11 +1,11 @@
 ---
 id: 030-cdfa
 title: Replace raw button elements in Radio Traffic with Classicy components
-status: pending
+status: in_progress
 priority: P1
 type: refactor
 created: "2026-08-19T00:53:03.216Z"
-updated: "2026-08-19T00:53:03.598Z"
+updated: "2026-08-19T03:33:13.000Z"
 dependencies: ["022", "024", "027"]
 plan: plans/radio-traffic-redesign.md
 plan_step: Design parity

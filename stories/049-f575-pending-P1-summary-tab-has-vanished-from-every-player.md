@@ -1,11 +1,11 @@
 ---
 id: "049-f575"
 title: "Summary tab has vanished from every player"
-status: pending
+status: in_progress
 priority: P1
 type: fix
 created: 2026-08-19T03:04:37.481Z
-updated: 2026-08-19T03:04:37.481Z
+updated: 2026-08-19T03:33:13.000Z
 dependencies: []
 plan: "plans/radio-traffic-redesign.md"
 plan_step: "Design parity"

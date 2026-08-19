@@ -1,11 +1,11 @@
 ---
 id: "045-636a"
 title: "Keep an audible LIVE player in the Live lane until muted or unselected"
-status: pending
+status: in_progress
 priority: P2
 type: fix
 created: 2026-08-19T02:48:20.224Z
-updated: 2026-08-19T02:48:20.224Z
+updated: 2026-08-19T03:33:13.000Z
 dependencies: []
 ---
 

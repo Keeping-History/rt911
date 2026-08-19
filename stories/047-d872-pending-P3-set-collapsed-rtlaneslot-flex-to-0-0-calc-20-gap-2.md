@@ -1,11 +1,11 @@
 ---
 id: "047-d872"
 title: "Set collapsed rtLaneSlot flex to 0 0 calc(20% - gap/2)"
-status: pending
+status: in_progress
 priority: P3
 type: fix
 created: 2026-08-19T02:51:53.382Z
-updated: 2026-08-19T02:51:53.382Z
+updated: 2026-08-19T03:33:13.000Z
 dependencies: []
 ---
 

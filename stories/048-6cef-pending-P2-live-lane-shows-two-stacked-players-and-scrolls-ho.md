@@ -1,11 +1,11 @@
 ---
 id: "048-6cef"
 title: "Live lane shows two stacked players and scrolls horizontally"
-status: pending
+status: in_progress
 priority: P2
 type: feature
 created: 2026-08-19T02:55:02.814Z
-updated: 2026-08-19T02:55:02.814Z
+updated: 2026-08-19T03:33:13.000Z
 dependencies: []
 ---
 

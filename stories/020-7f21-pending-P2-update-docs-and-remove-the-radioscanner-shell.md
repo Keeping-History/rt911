@@ -1,11 +1,11 @@
 ---
 id: 020-7f21
 title: Update docs and remove the RadioScanner shell
-status: pending
+status: in_progress
 priority: P2
 type: chore
 created: "2026-08-18T17:24:01.148Z"
-updated: "2026-08-18T17:36:48.438Z"
+updated: "2026-08-19T03:33:13.000Z"
 dependencies: ["019"]
 plan: plans/radio-traffic-redesign.md
 plan_step: Step 20
