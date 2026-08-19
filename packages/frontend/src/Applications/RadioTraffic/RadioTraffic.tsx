@@ -753,6 +753,18 @@ export const RadioTraffic: React.FC = () => {
 								lane={lane}
 								items={visible[lane]}
 								order={laneOrder[lane]}
+								// Story 044: the one card that must not appear to move when
+								// the lane reflows. LIVE's active card is whichever one is
+								// soloed (or, with no solo, still the mix — soloId is the
+								// only single-card signal LIVE has); PREVIOUS has no solo
+								// concept, so it's the most recently hand-started clip.
+								activeId={
+									lane === "live"
+										? audio.soloId
+										: lane === "previous"
+											? ([...userStarted].at(-1) ?? null)
+											: null
+								}
 								collapsed={collapsed[lane]}
 								onToggleCollapse={(next) =>
 									setCollapsed((prev) => ({ ...prev, [lane]: next }))
