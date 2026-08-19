@@ -1,5 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import styles from "./radio.module.scss";
+
+/** 0..1, whatever came in. */
+const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1);
 
 /**
  * A static amplitude envelope drawn from precomputed peaks.
@@ -26,6 +29,7 @@ export function PeaksWaveform({
 	height,
 	livePct,
 	currentPct,
+	onSeekPct,
 }: {
 	/**
 	 * Optional because `mp3_items.peaks` is nullable and the compute-peaks
@@ -33,7 +37,17 @@ export function PeaksWaveform({
 	 * envelope yet. Absent or empty draws the flat skeleton below.
 	 */
 	peaks?: number[][];
-	height: number;
+	/**
+	 * The bitmap height, when the caller knows it. The playlist timeline does —
+	 * its lane fixes the slot at a constant — so it passes one.
+	 *
+	 * Omit it and the canvas measures itself instead, which is what a Radio
+	 * Traffic card needs: the card sizes its waveform as a proportion of the
+	 * card, so the height is CSS's answer and no number in the component tree
+	 * can know it. A bitmap authored at a constant and then stretched by CSS is
+	 * a blurred waveform, which is the trap this avoids.
+	 */
+	height?: number;
 	/**
 	 * Where the virtual clock says playback should be, as a FRACTION of the
 	 * recording — 0..1, the same units as radio-core's `onSeekPct`/`seekToPct`,
@@ -41,10 +55,21 @@ export function PeaksWaveform({
 	 */
 	livePct?: number;
 	/**
-	 * Where the `<audio>` element actually is, in the same units. The gap
-	 * between this and {@link livePct} is what the card's drift badge reports.
+	 * Where the playhead actually is, in the same units. The gap between this
+	 * and {@link livePct} is what the card's drift badge reports.
 	 */
 	currentPct?: number;
+	/**
+	 * Makes the envelope a scrub surface: called with the 0..1 fraction under
+	 * the pointer, on press and throughout a drag.
+	 *
+	 * Absent — which is what the playlist timeline passes — the component
+	 * registers no handlers at all and renders exactly the bare canvas it always
+	 * has. In particular it never listens for the wheel, in either mode: a card
+	 * sits inside a lane that scrolls, and being a seek surface must not cost the
+	 * listener the ability to scroll past it.
+	 */
+	onSeekPct?: (pct: number) => void;
 }) {
 	const ref = useRef<HTMLCanvasElement>(null);
 
@@ -63,17 +88,22 @@ export function PeaksWaveform({
 			// squashing or upscaling one fixed drawing into whatever box it got.
 			const width = Math.round(canvas.clientWidth);
 			if (width < 1) return;
+			// And the height too, when the caller left it to CSS. Same reasoning,
+			// same measurement — the ResizeObserver below already redraws on
+			// either axis, so a card that grows redraws at its new resolution.
+			const drawHeight = height ?? Math.round(canvas.clientHeight);
+			if (drawHeight < 1) return;
 			// Assigning either dimension resets the bitmap (and its context
 			// state), so both are set before anything is drawn.
 			if (canvas.width !== width) canvas.width = width;
-			if (canvas.height !== height) canvas.height = height;
-			ctx.clearRect(0, 0, width, height);
+			if (canvas.height !== drawHeight) canvas.height = drawHeight;
+			ctx.clearRect(0, 0, width, drawHeight);
 			// NOT "currentColor": that is a CSS keyword, not a color a canvas
 			// context can parse, so per spec the assignment is dropped silently
 			// and fillStyle stays #000000 — invisible on a dark lane. Resolve the
 			// inherited color to a real value first.
 			ctx.fillStyle = getComputedStyle(canvas).color || "#000000";
-			const mid = height / 2;
+			const mid = drawHeight / 2;
 			if (!peaks || peaks.length === 0) {
 				// Flat skeleton rather than an early `return null`, because the
 				// card reserves a fixed slot for the waveform: collapsing it
@@ -104,19 +134,71 @@ export function PeaksWaveform({
 		return () => ro.disconnect();
 	}, [peaks, height]);
 
+	// The pointer maths, and the drag that survives leaving the canvas.
+	//
+	// The move/up pair is on the window rather than on the canvas so a scrub
+	// that runs off the end of the envelope keeps tracking — a card is ~260px
+	// wide and a listener aiming at the last few seconds routinely overshoots it.
+	// Pointer capture would do the same job, but it is per-pointer-id state the
+	// element has to still be alive to release, and a card unmounts for reasons
+	// that have nothing to do with the pointer (a tag filter, a lane migration).
+	const seekRef = useRef(onSeekPct);
+	seekRef.current = onSeekPct;
+	const endDragRef = useRef<(() => void) | null>(null);
+
+	const seekAt = useCallback((clientX: number) => {
+		const canvas = ref.current;
+		const seek = seekRef.current;
+		if (!canvas || !seek) return;
+		const rect = canvas.getBoundingClientRect();
+		// A zero-width box has no fraction to land in, and dividing by it would
+		// hand the caller Infinity or NaN.
+		if (rect.width <= 0) return;
+		seek(clamp01((clientX - rect.left) / rect.width));
+	}, []);
+
+	const startDrag = useCallback(
+		(e: React.PointerEvent<HTMLCanvasElement>) => {
+			endDragRef.current?.();
+			seekAt(e.clientX);
+			const move = (ev: PointerEvent) => seekAt(ev.clientX);
+			const end = () => {
+				window.removeEventListener("pointermove", move);
+				window.removeEventListener("pointerup", end);
+				window.removeEventListener("pointercancel", end);
+				endDragRef.current = null;
+			};
+			endDragRef.current = end;
+			window.addEventListener("pointermove", move);
+			window.addEventListener("pointerup", end);
+			window.addEventListener("pointercancel", end);
+		},
+		[seekAt],
+	);
+
+	// Unmounting mid-drag must take the window listeners with it.
+	useEffect(() => () => endDragRef.current?.(), []);
+
 	// A fragment, not a wrapper element. The scrubbers are absolutely
 	// positioned against whatever containing block the caller already
-	// establishes (`.playlistTimelineWaveformSlot` on the timeline, the card
-	// frame in Radio Traffic); introducing a wrapper here would change the box
+	// establishes (`.playlistTimelineWaveformSlot` on the timeline, the waveform
+	// slot in Radio Traffic); introducing a wrapper here would change the box
 	// the timeline's canvas sits in, and this app has no global
 	// `box-sizing: border-box`, so an extra box is not free. With neither
-	// scrubber passed the output is exactly the bare canvas it has always been.
+	// scrubber nor onSeekPct passed the output is exactly the bare canvas, with
+	// no handlers on it, that it has always been.
 	return (
 		<>
 			{/* The height attribute is set here as well as in the effect so the
 			    element has a sane intrinsic aspect before it has ever been laid
-			    out. The class is global, from PlaylistEditor.scss. */}
-			<canvas ref={ref} height={height} className="playlistTimelineWaveform" />
+			    out — when the caller named one. The class is global, from
+			    PlaylistEditor.scss. */}
+			<canvas
+				ref={ref}
+				height={height}
+				className="playlistTimelineWaveform"
+				onPointerDown={onSeekPct ? startDrag : undefined}
+			/>
 			<Scrubber kind="live" pct={livePct} height={height} />
 			<Scrubber kind="current" pct={currentPct} height={height} />
 		</>
@@ -138,24 +220,28 @@ function Scrubber({
 }: {
 	kind: "live" | "current";
 	pct?: number;
-	height: number;
+	height?: number;
 }) {
-	// Covers undefined, NaN and Infinity in one test: a card with no audio
-	// element yet has no position, and `position / duration` is NaN before
+	// Covers undefined, NaN and Infinity in one test: an item with no known
+	// duration has no fraction, and `position / duration` is NaN before that
 	// duration is known.
 	if (!Number.isFinite(pct)) return null;
 	// Clamped rather than trusted. An out-of-range value parks the marker at an
 	// edge, which is visibly wrong — better than a line drawn outside the card.
-	const clamped = Math.min(Math.max(pct as number, 0), 1);
+	const clamped = clamp01(pct as number);
 	return (
 		<div
 			className={`${styles.peaksScrubber} ${kind === "live" ? styles.peaksScrubberLive : styles.peaksScrubberCurrent}`}
 			data-scrubber={kind}
 			data-pct={clamped}
-			// Height tracks the canvas's own pixel height rather than stretching
-			// to the containing block, which is taller than the waveform on a
-			// card.
-			style={{ left: `${clamped * 100}%`, height: `${height}px` }}
+			// Pinned to the bitmap height the caller named, because a caller that
+			// names one is telling us the box is exactly that tall. Where CSS
+			// decides the height there is no such number, and stretching to the
+			// containing block is the only answer that cannot be stale — a marker
+			// pinned to a stale pixel height overflows its `overflow: hidden`
+			// slot, and a slot with a scrollable overflow it cannot show is
+			// exactly what swallows a wheel event before the lane can scroll.
+			style={{ left: `${clamped * 100}%`, height: height === undefined ? "100%" : `${height}px` }}
 		/>
 	);
 }

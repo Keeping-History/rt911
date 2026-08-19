@@ -14,11 +14,19 @@ vi.stubGlobal(
 
 // The <audio> elements live in the coordinator, not in the card, and Step 16
 // deliberately made positionMs answer for items that are not rendered. Stubbing
-// it is how this suite pins what the card DOES with that number.
-const audio = vi.hoisted(() => ({ positionMs: undefined as number | undefined }));
+// it is how this suite pins what the card DOES with that number — and, for the
+// two writes the card makes, that it goes through the coordinator at all rather
+// than reaching for an element it does not own.
+const audio = vi.hoisted(() => ({
+	positionMs: undefined as number | undefined,
+	seekTo: vi.fn(),
+	unfollowClock: vi.fn(),
+}));
 vi.mock("./audioCoordinator", () => ({
 	positionMs: () => audio.positionMs,
 	subscribe: () => () => {},
+	seekTo: (itemId: number, ms: number) => audio.seekTo(itemId, ms),
+	unfollowClock: (itemId: number) => audio.unfollowClock(itemId),
 }));
 
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
@@ -72,8 +80,29 @@ function badgeText(container: HTMLElement): string | null {
 	return container.querySelector("[data-badge]")?.textContent ?? null;
 }
 
+/**
+ * jsdom lays nothing out, so the waveform's box is all zeroes and there is no
+ * fraction for a click to land in. 200px wide at the origin makes clientX read
+ * straight off as a percentage.
+ */
+function stubWaveformBox() {
+	vi.spyOn(HTMLCanvasElement.prototype, "getBoundingClientRect").mockReturnValue({
+		left: 0,
+		width: 200,
+		top: 0,
+		height: 40,
+		right: 200,
+		bottom: 40,
+		x: 0,
+		y: 0,
+		toJSON: () => ({}),
+	} as DOMRect);
+}
+
 beforeEach(() => {
 	audio.positionMs = undefined;
+	audio.seekTo.mockClear();
+	audio.unfollowClock.mockClear();
 	// PeaksWaveform's effect calls getContext on the way to bailing out (jsdom
 	// lays nothing out, so there is no width to draw into), and jsdom's
 	// unimplemented one writes a "Not implemented" line to stderr every time.
@@ -179,6 +208,109 @@ describe("TrafficCard waveform", () => {
 		// Nothing has played yet, and a marker pinned at 0 would claim otherwise.
 		const { container } = renderCard({ lane: "upcoming", nowMs: START_MS - 30_000 });
 		expect(container.querySelector('[data-scrubber="live"]')).toBeNull();
+	});
+
+	it("lets the waveform take its size from the card, not from a number", () => {
+		// Story 034 replaces the card's fixed sizing with a flex/row model. A
+		// bitmap authored from a constant in this file would be the one thing
+		// that could not follow it, so the height is CSS's to decide and the
+		// canvas measures itself — which is also why the markers stretch rather
+		// than carrying a pixel height of their own.
+		audio.positionMs = 1_000;
+		const { container } = renderCard({ lane: "live", nowMs: START_MS + 1_000 });
+		expect(container.querySelector("canvas")?.getAttribute("height")).toBeNull();
+		expect(
+			container.querySelector<HTMLElement>('[data-scrubber="live"]')?.style.height,
+		).toBe("100%");
+	});
+});
+
+describe("TrafficCard seeking", () => {
+	it("seeks through the coordinator when the waveform is clicked", () => {
+		// NOT `el.currentTime = …` from here. The coordinator caches the position
+		// its subscribers read, so a card writing to the element directly would
+		// move the audio and leave every reader — this card's own badge included
+		// — looking at the position the clip had already left.
+		stubWaveformBox();
+		const { container } = renderCard({ lane: "live" });
+
+		fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 50 });
+
+		expect(audio.seekTo).toHaveBeenCalledWith(makeItem().id, DURATION_MS / 4);
+	});
+
+	it("follows a drag across the waveform", () => {
+		stubWaveformBox();
+		const { container } = renderCard({ lane: "live" });
+
+		fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 100 });
+		fireEvent.pointerMove(window, { clientX: 150 });
+
+		expect(audio.seekTo.mock.calls.map(([, ms]) => ms)).toEqual([
+			DURATION_MS / 2,
+			(DURATION_MS * 3) / 4,
+		]);
+	});
+
+	it("keeps a scrub from also firing the lane's active tool", () => {
+		// The card sits in a slot whose pointerup applies the tool palette's
+		// current tool. Without this, letting go of a scrub under the mute tool
+		// would also mute the card.
+		stubWaveformBox();
+		const onSlotPointerUp = vi.fn();
+		const { container } = render(
+			<div onPointerUp={onSlotPointerUp}>
+				<TrafficCard
+					item={makeItem()}
+					lane="live"
+					tzOffsetHours={-4}
+					nowMs={START_MS}
+					onTogglePause={() => {}}
+				/>
+			</div>,
+		);
+
+		fireEvent.pointerUp(container.querySelector("canvas")!);
+
+		expect(onSlotPointerUp).not.toHaveBeenCalled();
+	});
+
+	it("offers no seek at all for a clip of unknown length", () => {
+		// Without a duration there is no map from a fraction of the envelope to
+		// an instant in the recording, so a click would have to invent one.
+		stubWaveformBox();
+		const endless = { ...makeItem(), end_date: undefined, calc_duration: undefined };
+		const { container } = renderCard({ item: endless, lane: "live" });
+
+		fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 50 });
+
+		expect(audio.seekTo).not.toHaveBeenCalled();
+	});
+});
+
+// Story 028. A card follows the virtual clock until the listener says
+// otherwise; the transport button is one of the two ways they say it.
+describe("TrafficCard clock-follow", () => {
+	it("takes the card off clock-follow when the transport pauses it", () => {
+		const { getByRole } = renderCard({ paused: false });
+		fireEvent.click(getByRole("button", { name: "Pause" }));
+		expect(audio.unfollowClock).toHaveBeenCalledWith(makeItem().id);
+	});
+
+	it("leaves clock-follow alone when the transport resumes it", () => {
+		// Pressing play hands the clip back to the clock — the shell registers a
+		// fresh element, which is what puts it back on. Unfollowing here would
+		// park the playhead of the very card that just started running.
+		const { getByRole } = renderCard({ paused: true });
+		fireEvent.click(getByRole("button", { name: "Play" }));
+		expect(audio.unfollowClock).not.toHaveBeenCalled();
+	});
+
+	it("names its own item, so one card's pause cannot park another's", () => {
+		const other = { ...makeItem(), id: 4_242 };
+		const { getByRole } = renderCard({ item: other, paused: false });
+		fireEvent.click(getByRole("button", { name: "Pause" }));
+		expect(audio.unfollowClock).toHaveBeenCalledWith(4_242);
 	});
 });
 

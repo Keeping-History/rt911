@@ -11,15 +11,24 @@
 // The regions, in Figma's units:
 //
 //   Header       full-bleed 29 band, text inset 7 x 5 (so a 196x19 text box)
-//   Waveform     206x27 @ y=29
-//   Control bar  206x14 @ y=56
-//   Tabs         207x53 @ y=70   (bar 11, gap 3, panel 206x39 minimum)
+//   Waveform     206 wide @ y=29, drawn at Figma's own 206x27 PROPORTION
+//   Control bar  206x14
+//   Tabs         207x53           (bar 11, gap 3, panel 206x39 minimum)
 //
-// The first three are absolute and fixed. The tabs block is NOT: 124 is the
-// card's floor, not its height, because a tab panel sizes to its content and
-// the card has to grow with it (Transcript is a whole transcript). So the tabs
-// block sits in flow — it is the card's only flow child, the other three being
-// positioned — and its 70 margin reproduces what its `top` used to.
+// All four sit IN FLOW, stacked by the card's own column. They used to be three
+// absolutely-positioned bands with the tabs block in flow beneath them, its `70`
+// top margin standing in for the y the other three added up to — which meant the
+// waveform could not change height without three other numbers being edited to
+// match, and story 024 needed exactly that. Flow reproduces the design's
+// geometry with no y coordinates at all: each band's height IS its offset for
+// the next one. It also leaves the tabs block free to grow, which is what 124
+// being the card's floor rather than its height has always required (a tab panel
+// sizes to its content, and Transcript is a whole transcript).
+//
+// The waveform's height is therefore the one number that is NOT Figma's: it is
+// an aspect-ratio, so the envelope grows with the card instead of staying at a
+// constant while everything around it moves. Story 034 widens these cards; a
+// pixel height here is precisely what would not follow.
 //
 // Hairlines are the exception to the scale: a 1px border is a 1px border at any
 // card size, and 1.25px is a blurred one.
@@ -95,14 +104,12 @@
 // Header -------------------------------------------------------------------
 
 .rtCardHeader {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
+  flex: 0 0 auto;
   box-sizing: border-box;
   // Full-bleed band, with Figma's 7 x 5 inset as padding rather than an offset:
   // the coloured strip runs edge to edge in the design, and the 196x19 text box
-  // is what is left inside it.
+  // is what is left inside it. In flow it is full-bleed for free — the card's
+  // column stretches it to the content box, i.e. edge to edge inside the border.
   height: calc(29px * var(--rt-card-scale));
   padding: calc(5px * var(--rt-card-scale)) calc(7px * var(--rt-card-scale));
   display: flex;
@@ -164,17 +171,29 @@
 
 // Waveform -----------------------------------------------------------------
 
-// Positioned, and that is the load-bearing part: PeaksWaveform renders a bare
+// `position: relative` is the load-bearing part: PeaksWaveform renders a bare
 // fragment and its scrubbers are `position: absolute`, so this element is their
 // containing block. Without it the markers resolve against the card frame and
 // sit at the wrong instant by the header's height.
+//
+// The height is an ASPECT RATIO, not a length. The envelope is the card's
+// primary display and it was drawn at Figma's 27 — a fifth of the card, and too
+// small to read a clip's shape off, let alone aim a scrub at. Twice that is
+// legible; expressing it as 206:54 rather than as a number is what makes it stay
+// legible when story 034 sizes cards by the row instead of by a constant.
 .rtCardWaveform {
-  position: absolute;
-  left: calc(2px * var(--rt-card-scale));
-  top: calc(29px * var(--rt-card-scale));
-  width: calc(206px * var(--rt-card-scale));
-  height: calc(27px * var(--rt-card-scale));
-  overflow: hidden;
+  position: relative;
+  flex: 0 0 auto;
+  // Figma's 2 side inset, as a margin now that the box is in flow. 210 - 2*2 =
+  // the 206 the design gives the waveform.
+  margin: 0 calc(2px * var(--rt-card-scale));
+  aspect-ratio: 206 / 54;
+  // Not `hidden`: an `overflow: hidden` box with a scrollable overflow region is
+  // a scroll container the wheel latches onto, and a card sits inside a lane
+  // that scrolls. Nothing here overflows any more — the scrubbers stretch to
+  // this box rather than carrying a height of their own — so there is nothing
+  // to clip and nothing to trap.
+  overflow: clip;
   color: var(--color-system-06);
   background: var(--color-system-01);
   border: 1px solid var(--color-system-04);
@@ -190,15 +209,18 @@
   display: block;
   width: 100%;
   height: 100%;
+  // The envelope is the card's scrub surface, so it says so.
+  cursor: ew-resize;
+  // Horizontal drags are scrubs; vertical ones are the lane scrolling past.
+  // `none` would take the lane's touch scroll away from every card in it.
+  touch-action: pan-y;
 }
 
 // Control bar --------------------------------------------------------------
 
 .rtCardControls {
-  position: absolute;
-  left: calc(2px * var(--rt-card-scale));
-  top: calc(56px * var(--rt-card-scale));
-  width: calc(206px * var(--rt-card-scale));
+  flex: 0 0 auto;
+  margin: 0 calc(2px * var(--rt-card-scale));
   height: calc(14px * var(--rt-card-scale));
   display: flex;
   flex-direction: row;
@@ -245,12 +267,12 @@
 // Tabs ---------------------------------------------------------------------
 
 .rtCardTabs {
-  // In flow, so the panel's height reaches the card. `margin-top` stands in for
-  // the `top: 70` this used to carry: the header, waveform and control bar
-  // above are absolutely positioned and out of flow, so there is nothing for
-  // this margin to collapse against or stack below.
+  // Takes whatever height the row's tallest card grants, so the panel's own
+  // content can push the card taller. The `70` top margin this used to carry
+  // stood in for the three absolutely-positioned bands above it; they are in
+  // flow now and stack it themselves.
   flex: 1 1 auto;
-  margin: calc(70px * var(--rt-card-scale)) 0 0 calc(2px * var(--rt-card-scale));
+  margin: 0 0 0 calc(2px * var(--rt-card-scale));
   width: calc(207px * var(--rt-card-scale));
   display: flex;
   flex-direction: column;

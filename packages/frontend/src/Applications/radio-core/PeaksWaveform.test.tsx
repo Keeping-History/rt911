@@ -1,4 +1,4 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,10 +8,11 @@ afterEach(() => {
 	cleanup();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
-	// `clientWidth` lives on Element.prototype; the stub below shadows it with
-	// an own property on HTMLCanvasElement.prototype, which has to come back off
-	// or it leaks into every other file in the run.
+	// `clientWidth`/`clientHeight` live on Element.prototype; the stubs below
+	// shadow them with own properties on HTMLCanvasElement.prototype, which have
+	// to come back off or they leak into every other file in the run.
 	Reflect.deleteProperty(HTMLCanvasElement.prototype, "clientWidth");
+	Reflect.deleteProperty(HTMLCanvasElement.prototype, "clientHeight");
 });
 
 type Rect = [number, number, number, number];
@@ -42,6 +43,32 @@ function stubClientWidth(width: () => number) {
 		configurable: true,
 		get: width,
 	});
+}
+
+/** The other half of the same fiction, for the CSS-sized (card) path. */
+function stubClientHeight(height: () => number) {
+	Object.defineProperty(HTMLCanvasElement.prototype, "clientHeight", {
+		configurable: true,
+		get: height,
+	});
+}
+
+/**
+ * jsdom's getBoundingClientRect is all zeroes, and a zero-width box has no
+ * fraction to seek to. This is the box the pointer maths reads.
+ */
+function stubBox(left: number, width: number) {
+	vi.spyOn(HTMLCanvasElement.prototype, "getBoundingClientRect").mockReturnValue({
+		left,
+		width,
+		top: 0,
+		height: 40,
+		right: left + width,
+		bottom: 40,
+		x: left,
+		y: 0,
+		toJSON: () => ({}),
+	} as DOMRect);
 }
 
 /** A ResizeObserver whose callback the test can fire on demand. */
@@ -192,9 +219,26 @@ describe("PeaksWaveform", () => {
 			// onSeekPct, not a 0..100 percentage.
 			expect(live.style.left).toBe("25%");
 			expect(current.style.left).toBe("50%");
-			// Tied to the canvas's own pixel height, not to the containing
-			// block, which is taller than the waveform on a card.
+			// Pinned to the bitmap height the caller asked for, because that
+			// caller has told us the box is exactly that tall.
 			expect(live.style.height).toBe("40px");
+		});
+
+		it("stretches to the slot when the height is CSS's to decide", () => {
+			// A card sizes its waveform from the card, not from a number, so
+			// there is no pixel height to pin the marker to — and pinning it to
+			// a stale one is what left the scrubbers overflowing their
+			// `overflow: hidden` slot, giving it a scrollable area that swallowed
+			// the wheel before the lane could scroll.
+			const { container } = render(
+				<PeaksWaveform peaks={peaks} livePct={0.25} currentPct={0.5} />,
+			);
+			expect(
+				container.querySelector<HTMLElement>('[data-scrubber="live"]')!.style.height,
+			).toBe("100%");
+			expect(
+				container.querySelector<HTMLElement>('[data-scrubber="current"]')!.style.height,
+			).toBe("100%");
 		});
 
 		it("renders one scrubber when only one position is known", () => {
@@ -242,6 +286,185 @@ describe("PeaksWaveform", () => {
 			expect(container.querySelector<HTMLElement>('[data-scrubber="live"]')!.style.left).toBe(
 				"90%",
 			);
+		});
+	});
+
+	// The card's waveform is sized by the card, so its height is CSS's answer and
+	// not a number the caller can supply. The timeline's is the opposite — the
+	// slot is a time span whose height the lane fixes — so both have to work.
+	describe("height", () => {
+		it("takes the bitmap height from layout when the caller names none", () => {
+			fakeContext();
+			stubClientWidth(() => 120);
+			stubClientHeight(() => 64);
+			const { container } = render(<PeaksWaveform peaks={peaks} />);
+			expect(container.querySelector("canvas")!.height).toBe(64);
+		});
+
+		it("draws the envelope across the measured height, not a default one", () => {
+			const { rects } = fakeContext();
+			stubClientWidth(() => 120);
+			stubClientHeight(() => 64);
+			render(<PeaksWaveform peaks={peaks} />);
+			// The tallest pair is the last, at ±64/128 of the half-height: a
+			// full-height column centred on the middle of a 64px bitmap.
+			const [, top, , boxHeight] = rects[rects.length - 1];
+			expect(top).toBeCloseTo(16, 6);
+			expect(boxHeight).toBeCloseTo(32, 6);
+		});
+
+		it("still obeys an explicit height, which is the timeline's contract", () => {
+			fakeContext();
+			stubClientWidth(() => 120);
+			// Layout would say something else entirely; the number wins.
+			stubClientHeight(() => 999);
+			const { container } = render(<PeaksWaveform peaks={peaks} height={40} />);
+			expect(container.querySelector("canvas")!.height).toBe(40);
+		});
+
+		it("draws nothing while the slot has no measurable height", () => {
+			const { rects } = fakeContext();
+			stubClientWidth(() => 120);
+			stubClientHeight(() => 0);
+			render(<PeaksWaveform peaks={peaks} />);
+			expect(rects).toHaveLength(0);
+		});
+	});
+
+	// Story 024: the card's waveform is the seek surface. The timeline's is not —
+	// it passes no onSeekPct and must keep rendering exactly the bare canvas it
+	// always has.
+	describe("seeking", () => {
+		beforeEach(() => {
+			fakeContext();
+			stubClientWidth(() => 200);
+		});
+
+		it("reports the fraction of the envelope that was clicked", () => {
+			const onSeekPct = vi.fn();
+			stubBox(0, 200);
+			const { container } = render(
+				<PeaksWaveform peaks={peaks} height={40} onSeekPct={onSeekPct} />,
+			);
+
+			fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 50 });
+
+			expect(onSeekPct).toHaveBeenCalledWith(0.25);
+		});
+
+		it("measures from the canvas's own left edge, not the viewport's", () => {
+			const onSeekPct = vi.fn();
+			stubBox(120, 200);
+			const { container } = render(
+				<PeaksWaveform peaks={peaks} height={40} onSeekPct={onSeekPct} />,
+			);
+
+			fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 170 });
+
+			expect(onSeekPct).toHaveBeenCalledWith(0.25);
+		});
+
+		it("keeps reporting while the pointer drags", () => {
+			const onSeekPct = vi.fn();
+			stubBox(0, 200);
+			const { container } = render(
+				<PeaksWaveform peaks={peaks} height={40} onSeekPct={onSeekPct} />,
+			);
+			const canvas = container.querySelector("canvas")!;
+
+			fireEvent.pointerDown(canvas, { clientX: 20 });
+			fireEvent.pointerMove(window, { clientX: 100 });
+			fireEvent.pointerMove(window, { clientX: 180 });
+
+			expect(onSeekPct.mock.calls.map(([pct]) => pct)).toEqual([0.1, 0.5, 0.9]);
+		});
+
+		it("stops reporting once the pointer is released", () => {
+			const onSeekPct = vi.fn();
+			stubBox(0, 200);
+			const { container } = render(
+				<PeaksWaveform peaks={peaks} height={40} onSeekPct={onSeekPct} />,
+			);
+			const canvas = container.querySelector("canvas")!;
+
+			fireEvent.pointerDown(canvas, { clientX: 20 });
+			fireEvent.pointerUp(window);
+			onSeekPct.mockClear();
+			fireEvent.pointerMove(window, { clientX: 100 });
+
+			expect(onSeekPct).not.toHaveBeenCalled();
+		});
+
+		it("clamps a drag that leaves the envelope at either end", () => {
+			// The drag is tracked on the window so it survives leaving the canvas
+			// — which means the maths has to survive it too.
+			const onSeekPct = vi.fn();
+			stubBox(0, 200);
+			const { container } = render(
+				<PeaksWaveform peaks={peaks} height={40} onSeekPct={onSeekPct} />,
+			);
+
+			fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 100 });
+			fireEvent.pointerMove(window, { clientX: -400 });
+			fireEvent.pointerMove(window, { clientX: 4_000 });
+
+			expect(onSeekPct.mock.calls.map(([pct]) => pct)).toEqual([0.5, 0, 1]);
+		});
+
+		it("drops the drag when the waveform unmounts mid-gesture", () => {
+			// A card can unmount for reasons that have nothing to do with the
+			// pointer — a tag filter, a lane migration. The window listeners must
+			// not outlive it.
+			const onSeekPct = vi.fn();
+			stubBox(0, 200);
+			const { container, unmount } = render(
+				<PeaksWaveform peaks={peaks} height={40} onSeekPct={onSeekPct} />,
+			);
+
+			fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 20 });
+			unmount();
+			onSeekPct.mockClear();
+			fireEvent.pointerMove(window, { clientX: 100 });
+
+			expect(onSeekPct).not.toHaveBeenCalled();
+		});
+
+		it("lets the wheel through to whatever is scrolling behind it", () => {
+			// A lane scrolls; a card sits in it. Nothing about being a seek
+			// surface may cost the listener the ability to scroll past the card
+			// their pointer happens to be over.
+			const onWheel = vi.fn();
+			stubBox(0, 200);
+			const { container } = render(
+				<div onWheel={onWheel}>
+					<PeaksWaveform peaks={peaks} height={40} onSeekPct={() => {}} />
+				</div>,
+			);
+
+			fireEvent.wheel(container.querySelector("canvas")!, { deltaY: 120 });
+
+			expect(onWheel).toHaveBeenCalledTimes(1);
+			expect(onWheel.mock.calls[0][0].defaultPrevented).toBe(false);
+		});
+
+		it("is inert, and renders nothing extra, without an onSeekPct", () => {
+			// The playlist timeline's call, unchanged: a bare canvas, no
+			// handlers, no drag state.
+			const onPointerDown = vi.fn();
+			stubBox(0, 200);
+			const { container } = render(
+				<div onPointerDown={onPointerDown}>
+					<PeaksWaveform peaks={peaks} height={40} />
+				</div>,
+			);
+			const canvas = container.querySelector("canvas")!;
+
+			fireEvent.pointerDown(canvas, { clientX: 50 });
+			fireEvent.pointerMove(window, { clientX: 100 });
+
+			// The event still bubbles — the component simply does nothing with it.
+			expect(onPointerDown).toHaveBeenCalledTimes(1);
+			expect(container.firstChild!.childNodes).toHaveLength(1);
 		});
 	});
 

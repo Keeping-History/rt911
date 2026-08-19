@@ -21,9 +21,12 @@ import {
 	positionMs,
 	release,
 	releaseAll,
+	seekTo,
 	setLevel,
 	subscribe,
+	unfollowClock,
 } from "./audioCoordinator";
+import { laneFor } from "./cardStatus";
 
 // rt911 has no global test setup, so testing-library does not auto-clean the
 // DOM between tests; do it explicitly to keep renders isolated.
@@ -281,11 +284,16 @@ describe("audioCoordinator registry", () => {
 			ensure(1, "a.mp3");
 			await settlePlay();
 			const cb = vi.fn();
-			subscribe(1, cb);
+			// Unsubscribed on the way out: a subscription IS a card on screen as
+			// far as the coordinator is concerned — it is what says an item still
+			// needs a clock-following playhead — so one left behind here shows up
+			// as a stray position in a later test.
+			const unsubscribe = subscribe(1, cb);
 
 			setLevel(1, false);
 
 			expect(cb).toHaveBeenCalled();
+			unsubscribe();
 		});
 
 		it("is a no-op for an id that is not registered", () => {
@@ -757,6 +765,258 @@ describe("audioCoordinator autoplay handling", () => {
 			document.dispatchEvent(new Event("click"));
 			await settlePlay();
 			expect(isAudioBlocked()).toBe(true);
+		});
+	});
+});
+
+// A card's playhead is not "where the <audio> element is" — it is "where this
+// clip is right now", and most cards have no element at all: an UPCOMING clip
+// has not started, a PREVIOUS one is over, and a LIVE one the listener stopped
+// has been released. Those cards used to read zero and stay there. Clock-follow
+// is what makes them read the truth, and the two ways a listener takes a card
+// off it — scrubbing and pausing — are what makes the number theirs again.
+describe("audioCoordinator clock-follow", () => {
+	/** A rendered card: the coordinator keeps a playhead for what is watched. */
+	function watch(itemId: number): () => void {
+		return subscribe(itemId, () => {});
+	}
+
+	const clockMsInto = (subject: MediaItem) => calcSeekSeconds(subject, nowMs) * 1000;
+
+	it("answers with the clock's position for a card that has no element", () => {
+		// The frozen-at-zero bug: positionMs used to speak only for registered
+		// elements, so every UPCOMING and PREVIOUS card drew its playhead at 0.
+		connect();
+		const unwatch = watch(1);
+		expect(positionMs(1)).toBe(clockMsInto(ITEMS[0]));
+		unwatch();
+	});
+
+	it("advances that playhead on an ordinary tick, not only on a jump", () => {
+		// A per-second advance is below the reseek threshold and deliberately
+		// leaves playing elements alone — but it is the ONLY thing that moves a
+		// card with no element of its own.
+		connect();
+		const unwatch = watch(1);
+		nowMs = t("2001-09-11T12:47:02Z");
+		clockMoved();
+		expect(positionMs(1)).toBe(422_000);
+		unwatch();
+	});
+
+	it("keeps an untouched item advancing past the end of its clip", () => {
+		// ITEMS[0] runs 12:40 → 12:50. Left alone, the card must both keep
+		// counting and land in PREVIOUS: the lane and the playhead read the same
+		// clock, so they cannot disagree about when a clip is over.
+		connect();
+		const unwatch = watch(1);
+		nowMs = t("2001-09-11T12:51:00Z");
+		clockMoved();
+		expect(positionMs(1)).toBe(660_000);
+		expect(laneFor(ITEMS[0], nowMs)).toBe("previous");
+		unwatch();
+	});
+
+	it("reports no position for a card nothing is watching", () => {
+		// Bounds the cache: the coordinator keeps a clock playhead for the cards
+		// on screen and the elements it owns, not for all 814 items.
+		connect();
+		expect(positionMs(1)).toBeUndefined();
+	});
+
+	it("prefers the element's own position once there is one", () => {
+		// A playing clip drifts from the clock — that gap IS the drift badge — so
+		// the element must win wherever there is one to ask.
+		connect();
+		const unwatch = watch(1);
+		const el = ensure(1, "a.mp3");
+		el.currentTime = 3;
+		el.dispatchEvent(new Event("timeupdate"));
+		expect(positionMs(1)).toBe(3_000);
+		unwatch();
+	});
+
+	describe("seekTo", () => {
+		it("moves the element and refreshes the snapshot in one step", () => {
+			// The whole reason cards do not write el.currentTime themselves: the
+			// snapshot is cached, so a write that skips the coordinator leaves
+			// every reader looking at a position the clip has already left.
+			connect();
+			const el = ensure(1, "a.mp3");
+			const cb = vi.fn();
+			const unwatch = subscribe(1, cb);
+			cb.mockClear();
+
+			seekTo(1, 90_000);
+
+			expect(el.currentTime).toBe(90);
+			expect(positionMs(1)).toBe(90_000);
+			expect(cb).toHaveBeenCalled();
+			unwatch();
+		});
+
+		it("positions a card that has no element at all", () => {
+			connect();
+			const unwatch = watch(1);
+			seekTo(1, 5_000);
+			expect(positionMs(1)).toBe(5_000);
+			unwatch();
+		});
+
+		it("clamps a negative position to the start of the clip", () => {
+			connect();
+			const el = ensure(1, "a.mp3");
+			seekTo(1, -4_000);
+			expect(el.currentTime).toBe(0);
+		});
+
+		it("ignores a card nothing is watching and nothing owns", () => {
+			connect();
+			expect(() => seekTo(99, 1_000)).not.toThrow();
+			expect(positionMs(99)).toBeUndefined();
+		});
+	});
+
+	describe("taking a card off clock-follow", () => {
+		it("parks a scrubbed card instead of advancing it", () => {
+			connect();
+			const unwatch = watch(1);
+
+			seekTo(1, 5_000);
+			nowMs = t("2001-09-11T12:47:02Z");
+			clockMoved();
+
+			expect(positionMs(1)).toBe(5_000);
+			unwatch();
+		});
+
+		it("freezes a paused card where its element left it", () => {
+			connect();
+			const unwatch = watch(1);
+			const el = ensure(1, "a.mp3");
+			el.currentTime = 12;
+			el.dispatchEvent(new Event("timeupdate"));
+
+			// What the transport button does, in the order the shell does it: the
+			// card declares the pause, then the shell drops the element.
+			unfollowClock(1);
+			release(1);
+
+			nowMs = t("2001-09-11T12:47:30Z");
+			clockMoved();
+
+			expect(positionMs(1)).toBe(12_000);
+			unwatch();
+		});
+
+		it("is per card — a sibling keeps following the clock", () => {
+			connect();
+			const unwatchOne = watch(1);
+			const unwatchTwo = watch(2);
+
+			seekTo(1, 5_000);
+			nowMs = t("2001-09-11T12:47:02Z");
+			clockMoved();
+
+			expect(positionMs(1)).toBe(5_000);
+			expect(positionMs(2)).toBe(clockMsInto(ITEMS[1]));
+			unwatchOne();
+			unwatchTwo();
+		});
+
+		it("leaves a scrubbed element where the listener put it on a clock jump", () => {
+			// The Time Machine scrub reseeks the whole registry. A card the
+			// listener has positioned by hand is exactly the one it must not touch.
+			connect();
+			const el = ensure(1, "a.mp3");
+			seekTo(1, 30_000);
+
+			nowMs = t("2001-09-11T12:57:00Z");
+			clockMoved();
+
+			expect(el.currentTime).toBe(30);
+		});
+
+		it("does not restart a scrubbed element on a stray gesture", () => {
+			// A click anywhere on the desktop retries playback the clock claims.
+			// It must not undo a listener's own scrub, for the same reason it must
+			// not restart a back-catalogue clip they paused.
+			connect();
+			ensure(1, "a.mp3");
+			seekTo(1, 30_000);
+			playSpy.mockClear();
+
+			document.dispatchEvent(new Event("click"));
+
+			expect(playSpy).not.toHaveBeenCalled();
+		});
+
+		it("puts a card back on clock-follow when its element is registered afresh", () => {
+			// Pressing play again is the listener handing the clip back to the
+			// clock; ensure() creating an element is that moment.
+			connect();
+			const unwatch = watch(1);
+			seekTo(1, 5_000);
+
+			ensure(1, "a.mp3");
+			nowMs = t("2001-09-11T12:57:00Z");
+			clockMoved();
+
+			expect(positionMs(1)).toBe(clockMsInto(ITEMS[0]));
+			unwatch();
+		});
+
+		it("survives the card unmounting and coming back", () => {
+			// A tag filter unmounts a card and re-checking it mounts a new one.
+			// That is not the listener changing their mind about where they put
+			// the playhead — and the element behind a card survives exactly the
+			// same round trip, for exactly the same reason.
+			connect();
+			const unwatch = watch(1);
+			seekTo(1, 5_000);
+
+			unwatch();
+			const rewatch = watch(1);
+			nowMs = t("2001-09-11T12:47:02Z");
+			clockMoved();
+
+			expect(positionMs(1)).toBe(5_000);
+			rewatch();
+		});
+
+		it("does not re-follow merely because ensure() was called again", () => {
+			// The shell calls ensure() for every LIVE item on every lane change.
+			// If that cleared the opt-out, a scrub would survive about a second.
+			connect();
+			const el = ensure(1, "a.mp3");
+			seekTo(1, 30_000);
+
+			ensure(1, "a.mp3");
+			nowMs = t("2001-09-11T12:57:00Z");
+			clockMoved();
+
+			expect(el.currentTime).toBe(30);
+		});
+	});
+
+	describe("the drift health check", () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("does not drag a scrubbed element back into sync", () => {
+			// 30s of tolerance, and a scrub is usually further than that — without
+			// the opt-out the listener's position would survive at most 15s.
+			connect();
+			const el = ensure(1, "a.mp3");
+			seekTo(1, 10_000);
+
+			vi.advanceTimersByTime(15_000);
+
+			expect(el.currentTime).toBe(10);
 		});
 	});
 });
