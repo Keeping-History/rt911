@@ -400,11 +400,19 @@ interface FlightMapProps {
 // Enable/disable every user camera handler in one place (the follow lock owns
 // the camera while active). Defensive against handlers a given build/mock may
 // not expose — only dragPan is guaranteed in the test harness.
+//
+// boxZoom is deliberately absent: MapLibre's default Shift+drag box-zoom
+// competes directly with shift-click multi-select (issue #310) — a click is
+// just a near-zero-distance drag, so boxZoom's handler can swallow the
+// gesture before the app's own click handler ever sees a clean shiftKey
+// click. It's disabled permanently at construction (`boxZoom: false`) and
+// must stay out of this list, or re-enabling camera interactivity here
+// (follow-unlock) would silently turn it back on.
 type MapHandler = { enable?: () => void; disable?: () => void };
 function setCameraInteractive(map: maplibregl.Map, on: boolean) {
 	const m = map as unknown as Record<string, MapHandler | undefined>;
 	for (const key of [
-		"dragPan", "dragRotate", "scrollZoom", "boxZoom",
+		"dragPan", "dragRotate", "scrollZoom",
 		"doubleClickZoom", "keyboard", "touchZoomRotate", "touchPitch",
 	]) {
 		const h = m[key];
@@ -830,6 +838,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			center: NA_CENTER,
 			zoom: NA_ZOOM,
 			attributionControl: false,
+			// MapLibre's default Shift+drag box-zoom would otherwise intercept
+			// shift-click multi-select (see setCameraInteractive's comment above).
+			boxZoom: false,
 			// Pitch is exclusively the 3D toggle's domain: with 3D off the map is
 			// hard-locked flat (right-drag still rotates bearing, never the z
 			// axis); with 3D on right-drag tilts freely across

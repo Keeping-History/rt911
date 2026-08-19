@@ -943,6 +943,27 @@ describe("FlightTracker", () => {
 			expect(secondaryFeature?.geometry).toEqual(UA175_GEOMETRY);
 		});
 
+		it("shift-click (onToggleFlight) after a plain click builds a real 2-flight multi-selection (issue #310 integration)", () => {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async () => ({ ok: true, json: async () => ({ data: [] }) })),
+			);
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+
+			const onSelectFlight = mapProps.at(-1)!.onSelectFlight as (f: string) => void;
+			act(() => onSelectFlight("AA11"));
+			// A single selection: the multi-select dropdown is not shown at all.
+			expect(screen.queryByTestId("flight_detail_selection")).toBeNull();
+
+			const onToggleFlight = mapProps.at(-1)!.onToggleFlight as (f: string) => void;
+			act(() => onToggleFlight("UA175"));
+
+			const dd = screen.queryByTestId("flight_detail_selection") as HTMLSelectElement | null;
+			expect(dd).not.toBeNull();
+			const values = [...dd!.options].map((o) => o.value);
+			expect(values).toEqual(["AA11", "UA175"]);
+		});
+
 		it("a persisted flight-list filter hides everything else", () => {
 			mockAppData.current = { filterSettings: { flights: ["UA175"] } };
 			renderWithContext({ flightPositions: [aa11, ua175], connected: true });

@@ -114,6 +114,14 @@ const FakeMap = vi.hoisted(() => {
 			disable: () => { this.dragPanDisabled = true; },
 			enable: () => { this.dragPanDisabled = false; },
 		};
+		// boxZoom is constructor-disabled only (issue #326) — stubbed with a
+		// spy, not wired into setCameraInteractive's toggle list, so a test can
+		// assert it's never re-enabled by a follow-lock cycle.
+		boxZoomEnableCalls = 0;
+		boxZoom = {
+			disable: () => {},
+			enable: () => { this.boxZoomEnableCalls++; },
+		};
 		canvasStyle: Record<string, string> = {};
 		getCanvas() { return { style: this.canvasStyle } as unknown as HTMLCanvasElement; }
 		easeToCalls: Record<string, unknown>[] = [];
@@ -1382,6 +1390,15 @@ describe("FlightMap", () => {
 					followFlight={null} cameraMode="track" />,
 			);
 			expect(map.dragPanDisabled).toBe(false);
+			// ...but never boxZoom (issue #326): it's disabled permanently at
+			// construction because it competes with shift-click multi-select, and
+			// re-enabling camera interactivity here must not undo that.
+			expect(map.boxZoomEnableCalls).toBe(0);
+		});
+
+		it("constructs the map with boxZoom disabled, so Shift+drag can't hijack shift-click multi-select (issue #326)", () => {
+			render(<FlightMap {...common} positions={[]} followFlight={null} cameraMode="track" />);
+			expect(FakeMap.last!.ctorOpts.boxZoom).toBe(false);
 		});
 
 		it("cockpit mode opens the pitch band and drives a steep heading-aligned view", () => {
