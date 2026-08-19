@@ -9,14 +9,14 @@ import {
 import type React from "react";
 import type { ComponentProps, Dispatch, SetStateAction } from "react";
 import styles from "../radio-core/radio.module.scss";
-import type { WaveformColorSettings } from "./RadioTrafficContext";
+import type { RadioTrafficSettings } from "./RadioTrafficContext";
 
 interface RadioTrafficSettingsWindowProps {
 	appId: string;
 	appIcon: string;
 	appMenu: ComponentProps<typeof ClassicyWindow>["appMenu"];
-	form: WaveformColorSettings;
-	setForm: Dispatch<SetStateAction<WaveformColorSettings>>;
+	form: RadioTrafficSettings;
+	setForm: Dispatch<SetStateAction<RadioTrafficSettings>>;
 	onCancel: () => void;
 	onSave: () => void;
 }
@@ -26,11 +26,15 @@ interface RadioTrafficSettingsWindowProps {
  *
  * A sibling of radio-core's RadioSettingsWindow rather than a reuse of it, and
  * deliberately so. That window is typed to `RadioScannerSettings` and renders
- * all of it — viz mode, original-vs-enhanced audio, max volume, five caption
- * controls — none of which Radio Traffic has or wants. Making it serve both
- * would mean a union settings type plus a which-sections-to-show prop threaded
- * through a window the *live* Radio Tuner renders, to gain one colour picker.
- * The Tuner is untouched by this file existing.
+ * all of it — viz mode, max volume, five caption controls — none of which Radio
+ * Traffic has or wants. Making it serve both would mean a union settings type
+ * plus a which-sections-to-show prop threaded through a window the *live* Radio
+ * Tuner renders, to gain a colour picker and a checkbox.
+ *
+ * The one control that crossed the other way is "Play original recording": it
+ * describes the noise-reduced render of comm traffic, which is this app's
+ * subject and not the Tuner's fourteen continuous broadcasters, so it now lives
+ * here and no longer there.
  *
  * What is shared is the shape, control for control: the same modal
  * ClassicyWindow, the same ClassicyControlGroup sections, the same
@@ -66,6 +70,16 @@ export const RadioTrafficSettingsWindow: React.FC<RadioTrafficSettingsWindowProp
 		onCloseFunc={onCancel}
 	>
 		<div className={styles.rsSettings}>
+			<ClassicyControlGroup label="Audio">
+				<ClassicyCheckbox
+					id="radiotraffic_settings_play_original"
+					label="Play original recording (more noise)"
+					checked={form.playOriginalAudio}
+					onClickFunc={(checked: boolean) =>
+						setForm((f) => ({ ...f, playOriginalAudio: checked }))
+					}
+				/>
+			</ClassicyControlGroup>
 			<ClassicyControlGroup label="Waveform Color">
 				<ClassicyCheckbox
 					id="radiotraffic_settings_use_theme"

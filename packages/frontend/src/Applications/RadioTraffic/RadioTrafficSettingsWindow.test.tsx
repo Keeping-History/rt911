@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // DOM between tests; do it explicitly to keep document-level queries isolated.
 afterEach(cleanup);
 
-// The window is chrome around four classicy controls, so the controls are the
-// seams and the chrome is not: stand-ins render the props the window passes,
+// The window is chrome around a handful of classicy controls, so the controls
+// are the seams and the chrome is not: stand-ins render the props it passes,
 // which is exactly what this suite is about. Nothing here is asserted THROUGH a
 // double — the draft behaviour under test is the window's own.
 vi.mock("classicy", () => ({
@@ -94,7 +94,7 @@ vi.mock("classicy", () => ({
 	registerApp: () => {},
 }));
 
-import { DEFAULT_WAVEFORM_COLOR_SETTINGS, type WaveformColorSettings } from "./RadioTrafficContext";
+import { DEFAULT_RADIO_TRAFFIC_SETTINGS, type RadioTrafficSettings } from "./RadioTrafficContext";
 import { RadioTrafficSettingsWindow } from "./RadioTrafficSettingsWindow";
 
 /**
@@ -103,15 +103,15 @@ import { RadioTrafficSettingsWindow } from "./RadioTrafficSettingsWindow";
  * harness has to model it rather than pass a controlled value straight through.
  */
 function Harness({
-	initial = DEFAULT_WAVEFORM_COLOR_SETTINGS,
+	initial = DEFAULT_RADIO_TRAFFIC_SETTINGS,
 	onSave,
 	onCancel = () => {},
 }: {
-	initial?: WaveformColorSettings;
-	onSave: (settings: WaveformColorSettings) => void;
+	initial?: RadioTrafficSettings;
+	onSave: (settings: RadioTrafficSettings) => void;
 	onCancel?: () => void;
 }) {
-	const [form, setForm] = useState<WaveformColorSettings>(initial);
+	const [form, setForm] = useState<RadioTrafficSettings>(initial);
 	return (
 		<RadioTrafficSettingsWindow
 			appId="RadioTraffic.app"
@@ -127,6 +127,8 @@ function Harness({
 
 const themeCheckbox = () => screen.getByLabelText("Use theme colors") as HTMLInputElement;
 const picker = () => screen.queryByLabelText("Waveform");
+const originalCheckbox = () =>
+	screen.getByLabelText("Play original recording (more noise)") as HTMLInputElement;
 
 describe("RadioTrafficSettingsWindow", () => {
 	it("opens on the Settings window, following the theme by default", () => {
@@ -142,7 +144,7 @@ describe("RadioTrafficSettingsWindow", () => {
 		fireEvent.click(themeCheckbox());
 		expect(themeCheckbox().checked).toBe(false);
 		expect(picker()?.getAttribute("data-color")).toBe(
-			String(DEFAULT_WAVEFORM_COLOR_SETTINGS.waveformColor),
+			String(DEFAULT_RADIO_TRAFFIC_SETTINGS.waveformColor),
 		);
 	});
 
@@ -155,6 +157,7 @@ describe("RadioTrafficSettingsWindow", () => {
 		expect(onSave).toHaveBeenCalledWith({
 			useThemeWaveformColor: false,
 			waveformColor: 0xff0000,
+			playOriginalAudio: false,
 		});
 	});
 
@@ -186,11 +189,59 @@ describe("RadioTrafficSettingsWindow", () => {
 	it("opens showing the color a previous session saved", () => {
 		render(
 			<Harness
-				initial={{ useThemeWaveformColor: false, waveformColor: 0x123456 }}
+				initial={{
+					useThemeWaveformColor: false,
+					waveformColor: 0x123456,
+					playOriginalAudio: false,
+				}}
 				onSave={() => {}}
 			/>,
 		);
 		expect(themeCheckbox().checked).toBe(false);
 		expect(picker()?.getAttribute("data-color")).toBe(String(0x123456));
+	});
+
+	// The control this app took over from radio-core's shared window, where it
+	// sat in front of the Tuner's broadcast stations. It is about the enhancement
+	// pass, which runs over comm traffic — this app's entire subject.
+	describe("the original-recording choice", () => {
+		it("offers the choice, defaulting to the noise-reduced render", () => {
+			render(<Harness onSave={() => {}} />);
+			expect(screen.getByText("Audio")).toBeTruthy();
+			expect(originalCheckbox().checked).toBe(false);
+		});
+
+		it("hands the choice back on Save, leaving the color alone", () => {
+			const onSave = vi.fn();
+			render(<Harness onSave={onSave} />);
+			fireEvent.click(originalCheckbox());
+			fireEvent.click(screen.getByText("Save"));
+			expect(onSave).toHaveBeenCalledWith({
+				...DEFAULT_RADIO_TRAFFIC_SETTINGS,
+				playOriginalAudio: true,
+			});
+		});
+
+		// Same draft contract as the colour: ticking and then cancelling must
+		// leave the listener on the copy they were already hearing.
+		it("dispatches nothing when the listener ticks it and cancels", () => {
+			const onSave = vi.fn();
+			const onCancel = vi.fn();
+			render(<Harness onSave={onSave} onCancel={onCancel} />);
+			fireEvent.click(originalCheckbox());
+			fireEvent.click(screen.getByText("Cancel"));
+			expect(onCancel).toHaveBeenCalled();
+			expect(onSave).not.toHaveBeenCalled();
+		});
+
+		it("opens showing the choice a previous session saved", () => {
+			render(
+				<Harness
+					initial={{ ...DEFAULT_RADIO_TRAFFIC_SETTINGS, playOriginalAudio: true }}
+					onSave={() => {}}
+				/>,
+			);
+			expect(originalCheckbox().checked).toBe(true);
+		});
 	});
 });

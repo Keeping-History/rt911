@@ -33,6 +33,7 @@ describe("sanitizeRadioTrafficState", () => {
 			mutedItems: [],
 			useThemeWaveformColor: true,
 			waveformColor: DEFAULT_WAVEFORM_COLOR,
+			playOriginalAudio: false,
 		});
 	});
 
@@ -45,6 +46,7 @@ describe("sanitizeRadioTrafficState", () => {
 			mutedItems: [11, 12],
 			useThemeWaveformColor: false,
 			waveformColor: 0x0000ff,
+			playOriginalAudio: true,
 		};
 		expect(sanitizeRadioTrafficState(stored)).toEqual(stored);
 	});
@@ -153,6 +155,26 @@ describe("sanitizeRadioTrafficState", () => {
 			}
 		});
 	});
+
+	describe("the original-recording choice", () => {
+		// It arrived with this app rather than with the first session, so every
+		// state stored before it existed has to mean "the enhanced render" — which
+		// is what those sessions were already hearing.
+		it("treats a state saved before the setting existed as the enhanced render", () => {
+			expect(sanitizeRadioTrafficState({ tool: "mute" }).playOriginalAudio).toBe(false);
+		});
+
+		it("reaches for the source recording only on an explicit true", () => {
+			expect(
+				sanitizeRadioTrafficState({ playOriginalAudio: true }).playOriginalAudio,
+			).toBe(true);
+			for (const junk of [undefined, null, 1, "true", "yes", {}]) {
+				expect(
+					sanitizeRadioTrafficState({ playOriginalAudio: junk }).playOriginalAudio,
+				).toBe(false);
+			}
+		});
+	});
 });
 
 describe("classicyRadioTrafficEventHandler", () => {
@@ -168,6 +190,7 @@ describe("classicyRadioTrafficEventHandler", () => {
 				mutedItems: [4],
 				useThemeWaveformColor: false,
 				waveformColor: 0xff6600,
+				playOriginalAudio: true,
 			}),
 		);
 		expect(appData(next)).toEqual({
@@ -179,6 +202,7 @@ describe("classicyRadioTrafficEventHandler", () => {
 			mutedItems: [4],
 			useThemeWaveformColor: false,
 			waveformColor: 0xff6600,
+			playOriginalAudio: true,
 		});
 	});
 
@@ -204,6 +228,7 @@ describe("classicyRadioTrafficEventHandler", () => {
 				mutedItems: [],
 				useThemeWaveformColor: true,
 				waveformColor: DEFAULT_WAVEFORM_COLOR,
+				playOriginalAudio: false,
 			})),
 		).toBe(ds);
 	});

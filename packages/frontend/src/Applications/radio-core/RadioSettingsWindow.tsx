@@ -33,9 +33,16 @@ interface RadioSettingsWindowProps {
 
 /**
  * The Settings window shared by Radio Scanner and Radio Tuner — both apps
- * persist the same RadioScannerSettings shape (waveform, audio, captions,
- * volume), each under its own appId. Draft-style: the parent seeds `form`
- * from persisted settings on open and dispatches only on Save.
+ * persist the same RadioScannerSettings shape (waveform, captions, volume),
+ * each under its own appId. Draft-style: the parent seeds `form` from persisted
+ * settings on open and dispatches only on Save.
+ *
+ * `playOriginalAudio` is part of that shape but is deliberately NOT rendered
+ * here any more. It chooses the source recording over the noise-reduced render,
+ * which is a question about comm traffic — Radio Traffic's subject, not the
+ * Tuner's fourteen continuous broadcasters — so the control moved to that app's
+ * own Settings window. Both players still honour a value a previous session
+ * saved; nothing in this window can change one.
  */
 export const RadioSettingsWindow: React.FC<RadioSettingsWindowProps> = ({
     appId,
@@ -76,19 +83,6 @@ export const RadioSettingsWindow: React.FC<RadioSettingsWindowProps> = ({
                         setForm((f) =>
                             isVizMode(id) ? { ...f, vizMode: id } : f,
                         )
-                    }
-                />
-            </ClassicyControlGroup>
-            <ClassicyControlGroup label="Audio">
-                <ClassicyCheckbox
-                    id={`${idPrefix}_play_original`}
-                    label="Play original recording (more noise)"
-                    checked={form.playOriginalAudio}
-                    onClickFunc={(checked: boolean) =>
-                        setForm((f) => ({
-                            ...f,
-                            playOriginalAudio: checked,
-                        }))
                     }
                 />
             </ClassicyControlGroup>
