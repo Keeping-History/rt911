@@ -549,6 +549,133 @@ describe("RadioTraffic — the clock", () => {
 	});
 });
 
+describe("RadioTraffic — the audible hold (story 045)", () => {
+	// A LIVE player that is playing and unmuted must not vanish out of the Live
+	// lane the instant the clock says its window is over — only muting or
+	// stopping (unselecting) it may hand it to PREVIOUS. One item, alone in the
+	// mix, so it is the auto-solo target with nothing else to entangle the
+	// assertions with.
+	const HOLD_ITEM = item(10, "2001-09-11T12:46:00.000Z", "2001-09-11T12:47:30.000Z");
+	const PAST_END = "2001-09-11T12:48:00.000Z"; // 30s after HOLD_ITEM's end_date
+
+	async function rerenderAt(
+		rerender: (ui: React.ReactElement) => void,
+		iso: string,
+		over: Partial<MediaStreamContextValue> = {},
+	) {
+		clock.utcMs = Date.parse(iso);
+		await act(async () => {
+			rerender(
+				<MediaStreamContext.Provider
+					value={
+						{
+							mp3Items: [HOLD_ITEM],
+							mp3History: [],
+							mp3Meta: {},
+							mp3MetaGeneration: "g1",
+							seekInFlight: false,
+							subscribeMp3: () => {},
+							unsubscribeMp3: () => {},
+							getUpcomingMp3Items: () => [],
+							...over,
+						} as unknown as MediaStreamContextValue
+					}
+				>
+					<RadioTraffic />
+				</MediaStreamContext.Provider>,
+			);
+		});
+	}
+
+	async function renderHold() {
+		return renderSettled({
+			mp3Items: [HOLD_ITEM],
+			mp3History: [],
+			mp3Meta: {},
+			getUpcomingMp3Items: () => [],
+		});
+	}
+
+	it("keeps a playing, unmuted LIVE player in the Live lane once its clock window ends", async () => {
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+		// The default mix: nothing muted, nothing stopped — this is the "playing
+		// and unmuted" state the criterion is about.
+		expect(audio.elements.get(10)?.muted).toBe(false);
+
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+		// Still actually making sound, not just still on screen — a card held in
+		// LIVE with its element released would be a silent lie.
+		expect(audio.released).not.toContain(10);
+		expect(audio.elements.get(10)?.muted).toBe(false);
+	});
+
+	it("releases the hold once the listener mutes the card, and it moves to PREVIOUS", async () => {
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+
+		fireEvent.click(screen.getByRole("radio", { name: "Mute" }));
+		fireEvent.pointerUp(document.querySelector("[data-card-slot='10']") as Element);
+		await act(async () => {});
+		expect(audio.elements.get(10)?.muted).toBe(true);
+		// Muting alone, before the clock window ends, does not evict it — only
+		// the clock moving past the window does, same as an ordinary LIVE card.
+		expect(laneIds("live")).toEqual([10]);
+
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([]);
+		expect(laneIds("previous")).toEqual([10]);
+	});
+
+	it("releases the hold once the listener unselects (stops) the card, and it moves to PREVIOUS", async () => {
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+
+		const transport = cardOf(10)?.querySelector("button[aria-label='Pause']");
+		expect(transport).not.toBeNull();
+		fireEvent.click(transport as Element);
+		await act(async () => {});
+		// Stopping before the window ends does not evict it either — same rule.
+		expect(laneIds("live")).toEqual([10]);
+
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([]);
+		expect(laneIds("previous")).toEqual([10]);
+	});
+
+	it("moves an already-muted LIVE player to PREVIOUS once its window ends, same as today", async () => {
+		mockAppData.current = { mutedItems: [10] };
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+		expect(audio.elements.get(10)?.muted).toBe(true);
+
+		await rerenderAt(rerender, PAST_END, { mp3Items: [HOLD_ITEM] });
+
+		expect(laneIds("live")).toEqual([]);
+		expect(laneIds("previous")).toEqual([10]);
+	});
+
+	it("silencing the whole LIVE lane releases the hold too", async () => {
+		const { rerender } = await renderHold();
+		const laneMute = document.querySelector(
+			`section[data-lane="live"] [data-lane-mute]`,
+		);
+		fireEvent.click(laneMute as Element);
+		await act(async () => {});
+		expect(laneIds("live")).toEqual([10]);
+
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([]);
+		expect(laneIds("previous")).toEqual([10]);
+	});
+});
+
 describe("RadioTraffic — persisted state", () => {
 	// Criterion 7.
 	it("persists checked tags, the tool, lane collapse and laneOrder", async () => {
