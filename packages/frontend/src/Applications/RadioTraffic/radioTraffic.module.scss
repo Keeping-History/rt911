@@ -6,6 +6,26 @@
 // from here would give two files an opinion about the same box.
 
 .rtShell {
+  // Chip fills, keyed by tag namespace, declared HERE because two different
+  // things paint chips now — the card's Details panel and the collapsed small
+  // player — and a palette scoped to either one would leave the other's chips
+  // grey. tagPalette.ts names these; mp3_tags.color is NULL on all 1131 rows
+  // today, so this is the only colour a chip ever actually gets.
+  //
+  // cardTabs.module.scss still repeats the same seven values on .rtTabPanel.
+  // That copy is now redundant and should be deleted, but tabs/ belongs to
+  // another story in flight — the values are identical, so until then the
+  // duplicate simply re-declares what it inherits.
+  --rt-tag-topic: #b8c8e8;
+  --rt-tag-facility: #bcd8bc;
+  --rt-tag-link: #e8d8b0;
+  --rt-tag-tier: #d8c0d8;
+  --rt-tag-aircraft: #b0d8d8;
+  --rt-tag-agency: #e0c0b0;
+  --rt-tag-role: #d0d0b8;
+  --rt-tag-person: #d8c8c8;
+  --rt-tag-default: var(--color-system-03);
+
   position: relative;
   box-sizing: border-box;
   display: flex;

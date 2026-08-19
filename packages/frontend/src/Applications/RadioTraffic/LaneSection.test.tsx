@@ -15,6 +15,11 @@ const ITEMS = [1, 2, 3].map((id) => makeItem({ id, full_title: `clip ${id}` }));
 /** The card stub. LaneSection owns the slot; the shell owns what goes in it. */
 const renderCard = (item: MediaItem) => <div data-card={item.id}>{item.full_title}</div>;
 
+/** The small-player stub — the shell's other renderer, for a folded lane. */
+const renderCollapsedCard = (item: MediaItem) => (
+	<div data-small-card={item.id}>{item.full_title}</div>
+);
+
 function renderLane(
 	props: {
 		lane?: Lane;
@@ -22,6 +27,8 @@ function renderLane(
 		order?: readonly number[];
 		collapsed?: boolean;
 		onToggleCollapse?: (collapsed: boolean) => void;
+		muted?: boolean;
+		onToggleMute?: (muted: boolean) => void;
 		tool?: Tool;
 		onReorder?: (fromId: number, toIndex: number) => void;
 	} = {},
@@ -33,10 +40,27 @@ function renderLane(
 			order={props.order}
 			collapsed={props.collapsed}
 			onToggleCollapse={props.onToggleCollapse}
+			muted={props.muted}
+			onToggleMute={props.onToggleMute}
 			tool={props.tool ?? "hand"}
 			onReorder={props.onReorder}
 			renderCard={renderCard}
+			renderCollapsedCard={renderCollapsedCard}
 		/>,
+	);
+}
+
+/** The ids of the cards rendered in their FULL form. */
+function fullIds(root: ParentNode): number[] {
+	return Array.from(root.querySelectorAll("[data-card]")).map((el) =>
+		Number(el.getAttribute("data-card")),
+	);
+}
+
+/** The ids of the cards rendered as small players. */
+function smallIds(root: ParentNode): number[] {
+	return Array.from(root.querySelectorAll("[data-small-card]")).map((el) =>
+		Number(el.getAttribute("data-small-card")),
 	);
 }
 
@@ -105,10 +129,18 @@ describe("LaneSection collapse", () => {
 		}
 	});
 
-	it("hides the cards but keeps the label when collapsed", () => {
+	it("switches to the small player when collapsed, rather than hiding the clips", () => {
+		// Story 027: collapsing used to empty the lane, which threw away the one
+		// thing a listener collapses a lane to keep. Every clip is still here, in
+		// the same slots, in the compact form instead.
 		const { container } = renderLane({ lane: "upcoming", collapsed: true });
-		expect(container.querySelector("[data-lane-cards]")).toBeNull();
-		expect(shownIds(container)).toEqual([]);
+		expect(shownIds(container)).toEqual([1, 2, 3]);
+		expect(smallIds(container)).toEqual([1, 2, 3]);
+		expect(fullIds(container)).toEqual([]);
+	});
+
+	it("keeps the label and the control while collapsed", () => {
+		const { container } = renderLane({ lane: "upcoming", collapsed: true });
 		// The strip is the only thing left to click to get the lane back, so it
 		// has to survive the collapse.
 		expect(container.querySelector("[data-lane-label]")?.textContent).toBe(
@@ -117,9 +149,18 @@ describe("LaneSection collapse", () => {
 		expect(container.querySelector("[data-lane-toggle]")).not.toBeNull();
 	});
 
-	it("shows the cards again when expanded", () => {
+	it("shows the full players again when expanded", () => {
 		const { container } = renderLane({ lane: "upcoming", collapsed: false });
 		expect(shownIds(container)).toEqual([1, 2, 3]);
+		expect(fullIds(container)).toEqual([1, 2, 3]);
+		expect(smallIds(container)).toEqual([]);
+	});
+
+	it("keeps the manual order across the fold", () => {
+		// The slots are the same slots — collapse decides what goes IN them and
+		// nothing else, so a lane the listener has rearranged stays rearranged.
+		const { container } = renderLane({ lane: "upcoming", collapsed: true, order: [3, 0] });
+		expect(smallIds(container)).toEqual([3, 1, 2]);
 	});
 
 	it("reports the state the listener asked for", () => {
@@ -140,10 +181,62 @@ describe("LaneSection collapse", () => {
 
 	it("ignores a collapsed flag on LIVE rather than dead-ending it", () => {
 		// Persisted state is untrusted, and LIVE has no control to undo a collapse
-		// with — honouring a stale `true` here would hide the main lane with no way
-		// back short of clearing app state.
+		// with — honouring a stale `true` here would shrink the main lane to small
+		// players with no way back short of clearing app state.
 		const { container } = renderLane({ lane: "live", collapsed: true });
 		expect(shownIds(container)).toEqual([1, 2, 3]);
+		expect(fullIds(container)).toEqual([1, 2, 3]);
+		expect(smallIds(container)).toEqual([]);
+	});
+});
+
+describe("LaneSection lane mute", () => {
+	// Story 040. The control is offered by the SHELL, per lane, by handing this
+	// component a callback — LIVE is the only lane with a mix to silence, and a
+	// lane the shell said nothing about must not grow a button that edits state
+	// nobody is holding.
+
+	it("shows no mute control on a lane the shell gave no mute callback", () => {
+		const { container } = renderLane({ lane: "upcoming" });
+		expect(container.querySelector("[data-lane-mute]")).toBeNull();
+	});
+
+	it("puts the mute control on the strip, beside the collapse control", () => {
+		const { container } = renderLane({ lane: "previous", onToggleMute: vi.fn() });
+		const strip = container.querySelector("[data-lane-label]")?.parentElement;
+		expect(strip?.querySelector("[data-lane-mute]")).not.toBeNull();
+		expect(strip?.querySelector("[data-lane-toggle]")).not.toBeNull();
+	});
+
+	it("asks the shell to mute a lane that is not muted", () => {
+		const onToggleMute = vi.fn();
+		const { getByRole } = renderLane({ lane: "live", muted: false, onToggleMute });
+		fireEvent.click(getByRole("button", { name: `Mute ${LANE_LABELS.live}` }));
+		expect(onToggleMute).toHaveBeenCalledWith(true);
+	});
+
+	it("asks the shell to unmute a lane that is muted", () => {
+		const onToggleMute = vi.fn();
+		const { getByRole } = renderLane({ lane: "live", muted: true, onToggleMute });
+		fireEvent.click(getByRole("button", { name: `Unmute ${LANE_LABELS.live}` }));
+		expect(onToggleMute).toHaveBeenCalledWith(false);
+	});
+
+	it("reflects the lane's state rather than its own idea of it", () => {
+		// The control is the shell's state drawn, not a second copy of it: a
+		// button that tracked its own presses would drift the moment the shell
+		// cleared the lane mute for it — which is exactly what a card click does.
+		const { container } = renderLane({ lane: "live", muted: true, onToggleMute: vi.fn() });
+		expect(container.querySelector("[data-lane-mute]")?.getAttribute("aria-pressed")).toBe(
+			"true",
+		);
+	});
+
+	it("reports an unmuted lane as unpressed", () => {
+		const { container } = renderLane({ lane: "live", muted: false, onToggleMute: vi.fn() });
+		expect(container.querySelector("[data-lane-mute]")?.getAttribute("aria-pressed")).toBe(
+			"false",
+		);
 	});
 });
 
@@ -245,6 +338,7 @@ describe("LaneSection drag across lanes", () => {
 					tool="hand"
 					onReorder={onLiveReorder}
 					renderCard={renderCard}
+					renderCollapsedCard={renderCollapsedCard}
 				/>
 				<LaneSection
 					lane="upcoming"
@@ -252,6 +346,7 @@ describe("LaneSection drag across lanes", () => {
 					tool="hand"
 					onReorder={onUpcomingReorder}
 					renderCard={renderCard}
+					renderCollapsedCard={renderCollapsedCard}
 				/>
 			</>,
 		);

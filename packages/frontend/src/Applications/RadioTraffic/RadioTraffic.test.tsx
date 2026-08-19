@@ -64,6 +64,29 @@ vi.mock("classicy", () => ({
 			{children}
 		</button>
 	),
+	// The lane strip's mute-all toggle (story 040). Reproduced rather than
+	// omitted because this suite asserts on the LIVE lane going silent, and the
+	// only way in is this control: `on` and `onChangeFunc` are the whole of the
+	// contract LaneSection uses, and aria-pressed is how a test finds its state.
+	ClassicyBevelButton: ({
+		children,
+		on,
+		onChangeFunc,
+		...rest
+	}: {
+		children?: React.ReactNode;
+		on?: boolean;
+		onChangeFunc?: (on: boolean) => void;
+	} & Record<string, unknown>) => (
+		<button
+			{...rest}
+			type="button"
+			aria-pressed={on ?? false}
+			onClick={() => onChangeFunc?.(!on)}
+		>
+			{children}
+		</button>
+	),
 	ClassicyCheckbox: ({
 		id,
 		label,
@@ -620,6 +643,184 @@ describe("RadioTraffic — the tools", () => {
 
 		expect(audio.elements.get(1)?.muted).toBe(false);
 		expect(audio.elements.get(3)?.muted).toBe(true);
+	});
+});
+
+describe("RadioTraffic — the LIVE lane mute", () => {
+	// Story 040. The lane flag and the per-card mutes answer different questions
+	// — "silence this lane, including whatever arrives next" against "silence
+	// these clips" — and these tests are about the seam between them.
+
+	const laneMute = (lane: string) =>
+		document.querySelector(`section[data-lane="${lane}"] [data-lane-mute]`);
+
+	/** Which LIVE elements the listener can actually hear. */
+	const audibleLive = () =>
+		[1, 2, 3].filter((id) => audio.elements.get(id)?.muted === false);
+
+	it("offers the control on LIVE and on no other lane", async () => {
+		// UPCOMING has no audio yet and PREVIOUS plays only what the listener
+		// started by hand — neither has a mix a lane mute could silence.
+		await renderSettled();
+		expect(laneMute("live")).not.toBeNull();
+		expect(laneMute("upcoming")).toBeNull();
+		expect(laneMute("previous")).toBeNull();
+	});
+
+	it("silences every player in the lane on one press", async () => {
+		await renderSettled();
+		expect(audibleLive()).toEqual([1]);
+
+		fireEvent.click(laneMute("live") as Element);
+		await act(async () => {});
+
+		expect(audibleLive()).toEqual([]);
+	});
+
+	it("mutes the lane WITHOUT writing every card into the per-card mutes", async () => {
+		// This is what makes it a flag and not a bulk action. A "mute everything
+		// here now" implementation would be indistinguishable on this screen and
+		// wrong on the next one, and the per-card set is where the difference
+		// shows: it stays exactly as the listener left it.
+		mockAppData.current = { mutedItems: [2] };
+		await renderSettled();
+		fireEvent.click(laneMute("live") as Element);
+		await act(async () => {});
+
+		expect(lastPersisted()?.liveLaneMuted).toBe(true);
+		expect(lastPersisted()?.mutedItems).toEqual([2]);
+	});
+
+	it("silences a clip that only reaches the lane AFTER the press", async () => {
+		// The complaint the story is about: the lane refills itself as the clock
+		// runs, so a one-shot mute goes quiet and then starts talking again a
+		// minute later.
+		//
+		// The setup makes the arrival the clip that WOULD be playing — the three
+		// cards already there are individually muted, so with no lane mute the
+		// auto-solo would hand the mix straight to the newcomer. Only the lane
+		// flag keeps it quiet.
+		mockAppData.current = { mutedItems: [1, 2, 3], liveLaneMuted: true };
+		const arrival = item(8, "2001-09-11T12:46:50.000Z", "2001-09-11T12:52:00.000Z");
+		await renderSettled({ mp3Items: [...LIVE, arrival] });
+
+		expect(laneIds("live")).toContain(8);
+		expect(audio.elements.get(8)?.muted).toBe(true);
+	});
+
+	it("clears the lane mute and unmutes only the clicked player", async () => {
+		await renderSettled();
+		fireEvent.click(laneMute("live") as Element);
+		await act(async () => {});
+
+		fireEvent.pointerUp(document.querySelector("[data-card-slot='3']") as Element);
+		await act(async () => {});
+
+		expect(audibleLive()).toEqual([3]);
+		// The flag is gone, materialised into the mutes on the other two — so the
+		// control is offering to mute again rather than to unmute.
+		expect(laneMute("live")?.getAttribute("aria-pressed")).toBe("false");
+		expect(lastPersisted()?.liveLaneMuted).toBe(false);
+		expect(lastPersisted()?.mutedItems).toEqual([1, 2]);
+	});
+
+	it("brings the whole lane back when the control is pressed again", async () => {
+		// Unmuting is not the same handover: nobody named a card, so the mix
+		// underneath is simply uncovered.
+		await renderSettled();
+		fireEvent.click(laneMute("live") as Element);
+		await act(async () => {});
+		fireEvent.click(laneMute("live") as Element);
+		await act(async () => {});
+
+		expect(audibleLive()).toEqual([1]);
+	});
+
+	it("shows the silence on every live card, not just on the strip", async () => {
+		await renderSettled();
+		fireEvent.click(laneMute("live") as Element);
+		await act(async () => {});
+
+		for (const id of [1, 2, 3]) {
+			expect(cardOf(id)?.querySelector("[data-muted]")?.getAttribute("data-muted")).toBe(
+				"true",
+			);
+		}
+	});
+
+	it("reflects the lane's state on the control itself", async () => {
+		await renderSettled();
+		expect(laneMute("live")?.getAttribute("aria-pressed")).toBe("false");
+
+		fireEvent.click(laneMute("live") as Element);
+		await act(async () => {});
+
+		expect(laneMute("live")?.getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("persists the lane mute", async () => {
+		await renderSettled();
+		fireEvent.click(laneMute("live") as Element);
+		await act(async () => {});
+		expect(lastPersisted()?.liveLaneMuted).toBe(true);
+	});
+
+	it("opens silent when the last session left the lane muted", async () => {
+		// Unlike solo this names no clip, so a reload cannot make it stale — and
+		// a listener who silenced the app and came back to it talking would
+		// reasonably call that a bug.
+		mockAppData.current = { liveLaneMuted: true };
+		await renderSettled();
+		expect(audibleLive()).toEqual([]);
+		expect(laneMute("live")?.getAttribute("aria-pressed")).toBe("true");
+	});
+});
+
+describe("RadioTraffic — a collapsed lane", () => {
+	// Story 027. Collapsing used to empty the lane; it now swaps the full
+	// players for the small ones, which is the thing a listener folds a lane to
+	// keep.
+
+	const smallPlayersIn = (lane: string) =>
+		Array.from(
+			document.querySelectorAll(
+				`section[data-lane="${lane}"] [data-small-player]`,
+			),
+		).map((el) => Number(el.getAttribute("data-small-player")));
+
+	it("swaps UPCOMING's full players for small ones", async () => {
+		mockAppData.current = { collapsed: { upcoming: true } };
+		await renderSettled();
+		expect(smallPlayersIn("upcoming")).toEqual([4, 6]);
+		expect(laneIds("upcoming")).toEqual([]);
+	});
+
+	it("keeps the clips' metadata readable while folded", async () => {
+		mockAppData.current = { collapsed: { upcoming: true } };
+		await renderSettled();
+		const small = document.querySelector('[data-small-player="4"]');
+		// The tier tag META gives every item, coloured by its namespace.
+		expect(small?.querySelector("li")?.textContent).toBe("secondary");
+		expect(small?.querySelector('[data-field="start"]')?.textContent).toBe(
+			"9/11/2001 8:55 AM ET",
+		);
+		expect(small?.querySelector('[data-field="duration"]')?.textContent).toBe("60 seconds");
+	});
+
+	it("leaves the other lanes on their full players", async () => {
+		mockAppData.current = { collapsed: { upcoming: true } };
+		await renderSettled();
+		expect(laneIds("live")).toEqual([1, 2, 3]);
+		expect(smallPlayersIn("live")).toEqual([]);
+	});
+
+	it("keeps LIVE on its full players whatever the stored flag says", async () => {
+		// LIVE has no control to undo a collapse with, so a stale `true` must not
+		// shrink the lane the app exists to show.
+		mockAppData.current = { collapsed: { live: true } };
+		await renderSettled();
+		expect(laneIds("live")).toEqual([1, 2, 3]);
+		expect(smallPlayersIn("live")).toEqual([]);
 	});
 });
 

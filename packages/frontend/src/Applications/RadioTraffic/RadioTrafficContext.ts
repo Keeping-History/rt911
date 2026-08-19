@@ -2,12 +2,13 @@
 // sanitizer every read of that state goes through.
 //
 // Four things survive a reload — the checked tag filters, the active tool, the
-// two collapsible lanes' fold state, and the manual lane order — plus per-item
-// mute (see mutedItems below). All five come back out of localStorage via
-// Classicy's store, which makes them UNTRUSTED input: a hand-edited or stale
-// value could be anything. This module is the only place they are read, and
-// sanitizeRadioTrafficState is the only way to read them, so there is exactly
-// one place a bad value can be turned into a good one.
+// two collapsible lanes' fold state, and the manual lane order — plus the two
+// kinds of mute, per-item and whole-lane (see mutedItems and liveLaneMuted
+// below). All of them come back out of localStorage via Classicy's store, which
+// makes them UNTRUSTED input: a hand-edited or stale value could be anything.
+// This module is the only place they are read, and sanitizeRadioTrafficState is
+// the only way to read them, so there is exactly one place a bad value can be
+// turned into a good one.
 //
 // The `tool` field is the sharp one. Radio Traffic is modal — a card click
 // means whatever the active tool says it means — and applyToolClick switches on
@@ -91,6 +92,17 @@ export interface RadioTrafficState extends RadioTrafficSettings {
 	 * boot, and a restored one would point at a clip from another hour.
 	 */
 	mutedItems: number[];
+	/**
+	 * The LIVE lane is silenced as a whole (story 040).
+	 *
+	 * Persisted, unlike solo, and for the opposite reason: solo names a clip
+	 * from one particular hour and would come back pointing at nothing, while
+	 * this names no clip at all. It is the standing instruction "do not play the
+	 * live mix", which is as true after a reload as before one — and a listener
+	 * who silenced the app and came back to it talking would reasonably call
+	 * that a bug.
+	 */
+	liveLaneMuted: boolean;
 }
 
 /** Keep only string entries — a checked tag is always `namespace:value`. */
@@ -182,6 +194,9 @@ export function sanitizeRadioTrafficState(stored: unknown): RadioTrafficState {
 		collapsed: sanitizeCollapsed(data.collapsed),
 		laneOrder: sanitizeLaneOrder(data.laneOrder),
 		mutedItems: sanitizeItemIds(data.mutedItems),
+		// Only an explicit `true` silences the lane — an unreadable value must
+		// not open the app to silence with no explanation on screen.
+		liveLaneMuted: data.liveLaneMuted === true,
 		useThemeWaveformColor: sanitizeUseThemeWaveformColor(data.useThemeWaveformColor),
 		waveformColor: sanitizeWaveformColor(data.waveformColor),
 		playOriginalAudio: sanitizePlayOriginalAudio(data.playOriginalAudio),
@@ -196,6 +211,7 @@ export const radioTrafficSetState = (state: RadioTrafficState): ActionMessage =>
 	collapsed: state.collapsed,
 	laneOrder: state.laneOrder,
 	mutedItems: state.mutedItems,
+	liveLaneMuted: state.liveLaneMuted,
 	useThemeWaveformColor: state.useThemeWaveformColor,
 	waveformColor: state.waveformColor,
 	playOriginalAudio: state.playOriginalAudio,
@@ -218,6 +234,7 @@ export const classicyRadioTrafficEventHandler = (
 				collapsed: action.collapsed,
 				laneOrder: action.laneOrder,
 				mutedItems: action.mutedItems,
+				liveLaneMuted: action.liveLaneMuted,
 				useThemeWaveformColor: action.useThemeWaveformColor,
 				waveformColor: action.waveformColor,
 				playOriginalAudio: action.playOriginalAudio,
@@ -263,6 +280,12 @@ export const RadioTrafficDataSchema = z.looseObject({
 		.array(z.number())
 		.optional()
 		.describe("Cards you have silenced. Each card keeps its own mute setting."),
+	liveLaneMuted: z
+		.boolean()
+		.optional()
+		.describe(
+			"Whether the whole Live lane is silenced, including clips that have not started yet.",
+		),
 	useThemeWaveformColor: z
 		.boolean()
 		.optional()
@@ -290,13 +313,14 @@ registerApp({
 	actions: {
 		ClassicyAppRadioTrafficSetState: {
 			description:
-				"Persist the tag filters, the selected tool, the folded lanes, the manual card order, the per-card mutes, the waveform color and the original-recording choice.",
+				"Persist the tag filters, the selected tool, the folded lanes, the manual card order, the per-card mutes, the Live lane mute, the waveform color and the original-recording choice.",
 			params: z.object({
 				checked: z.array(z.string()).describe("Ticked tag filters."),
 				tool: z.string().describe("Selected tool: arrow, mute, unmute or hand."),
 				collapsed: z.record(z.string(), z.unknown()).describe("Full lane-collapse object."),
 				laneOrder: z.record(z.string(), z.unknown()).describe("Full lane-order object."),
 				mutedItems: z.array(z.number()).describe("Silenced cards' ids."),
+				liveLaneMuted: z.boolean().describe("Whether the whole Live lane is silenced."),
 				useThemeWaveformColor: z
 					.boolean()
 					.describe("Whether the waveforms follow the theme."),
