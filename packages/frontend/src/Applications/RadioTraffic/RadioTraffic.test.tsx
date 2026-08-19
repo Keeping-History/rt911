@@ -316,11 +316,16 @@ async function renderSettled(over: Partial<MediaStreamContextValue> = {}) {
 	return result;
 }
 
-/** The card ids showing in one lane, top to bottom. */
+/**
+ * The card ids showing in one lane, top to bottom — whichever player form
+ * they're rendered in. UPCOMING is permanently minimized, so its cards carry
+ * `data-small-player` rather than the full card's `data-item`; a lane the
+ * listener folded by hand can be in either form.
+ */
 function laneIds(lane: string): number[] {
 	const section = document.querySelector(`section[data-lane="${lane}"]`);
-	return Array.from(section?.querySelectorAll("article[data-item]") ?? []).map((el) =>
-		Number(el.getAttribute("data-item")),
+	return Array.from(section?.querySelectorAll("[data-item], [data-small-player]") ?? []).map(
+		(el) => Number(el.getAttribute("data-item") ?? el.getAttribute("data-small-player")),
 	);
 }
 
@@ -843,15 +848,17 @@ describe("RadioTraffic — persisted state", () => {
 
 		fireEvent.click(screen.getByLabelText("Primary"));
 		fireEvent.click(screen.getByRole("radio", { name: "Move" }));
-		const upcoming = document.querySelector(
-			"section[data-lane='upcoming'] [data-lane-toggle]",
+		// PREVIOUS is the only lane left with a collapse control — UPCOMING is
+		// permanently minimized and LIVE never folds.
+		const previous = document.querySelector(
+			"section[data-lane='previous'] [data-lane-toggle]",
 		);
-		fireEvent.click(upcoming as Element);
+		fireEvent.click(previous as Element);
 
 		const persisted = lastPersisted();
 		expect(persisted?.checked).toEqual(["tier:primary"]);
 		expect(persisted?.tool).toBe("hand");
-		expect(persisted?.collapsed).toMatchObject({ upcoming: true, previous: false });
+		expect(persisted?.collapsed).toMatchObject({ previous: true });
 		expect(persisted?.laneOrder).toEqual({ live: [], upcoming: [], previous: [] });
 	});
 
@@ -870,7 +877,7 @@ describe("RadioTraffic — persisted state", () => {
 		mockAppData.current = {
 			checked: ["tier:primary"],
 			tool: "unmute",
-			collapsed: { upcoming: true },
+			collapsed: { previous: true },
 			laneOrder: { live: [], upcoming: [], previous: [] },
 			mutedItems: [],
 		};
@@ -884,7 +891,7 @@ describe("RadioTraffic — persisted state", () => {
 		// observable through aria-expanded.
 		expect(
 			document
-				.querySelector("section[data-lane='upcoming'] [data-lane-toggle]")
+				.querySelector("section[data-lane='previous'] [data-lane-toggle]")
 				?.getAttribute("aria-expanded"),
 		).toBe("false");
 	});
@@ -1075,11 +1082,19 @@ describe("RadioTraffic — a collapsed lane", () => {
 			),
 		).map((el) => Number(el.getAttribute("data-small-player")));
 
+	/** Full-card ids only, unlike laneIds — the negative half of the swap below. */
+	const fullPlayersIn = (lane: string) =>
+		Array.from(document.querySelectorAll(`section[data-lane="${lane}"] [data-item]`)).map(
+			(el) => Number(el.getAttribute("data-item")),
+		);
+
 	it("swaps UPCOMING's full players for small ones", async () => {
+		// UPCOMING is permanently minimized (no stored flag needed to fold it),
+		// but the fixture sets one anyway to show it changes nothing.
 		mockAppData.current = { collapsed: { upcoming: true } };
 		await renderSettled();
 		expect(smallPlayersIn("upcoming")).toEqual([4, 6]);
-		expect(laneIds("upcoming")).toEqual([]);
+		expect(fullPlayersIn("upcoming")).toEqual([]);
 	});
 
 	it("keeps the clips' metadata readable while folded", async () => {

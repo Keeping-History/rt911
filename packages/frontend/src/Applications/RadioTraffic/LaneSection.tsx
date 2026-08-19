@@ -8,7 +8,8 @@
 //   what order they render in  applyManualOrder for the listener's drags,
 //                               then stabilizeLaneOrder (story 044) for what
 //                               a new arrival or the active card does to it
-//   whether it is folded away  `collapsed`, except on LIVE (see below)
+//   whether it is folded away  `collapsed`, except LIVE (forced open) and
+//                               UPCOMING (forced closed) — see below
 //   whether a drag does anything  only under the `hand` tool
 //
 //   whether the whole lane is silenced  `muted`, LIVE's mute-all (story 040)
@@ -42,15 +43,23 @@ export const LANE_LABELS: Record<Lane, string> = {
 };
 
 /**
- * LIVE has no expand/collapse control in the design, and this is why it also
- * ignores the flag: it is the lane the app exists to show, and with no control
- * on the strip there would be nothing to click to bring it back. A stale
- * persisted `true` would otherwise hide it for good.
+ * Lanes with no expand/collapse control on the strip, and the fold state each
+ * is fixed at instead of reading `collapsed`.
+ *
+ * LIVE is forced OPEN: it is the lane the app exists to show, and with no
+ * control on the strip there would be nothing to click to bring it back. A
+ * stale persisted `true` would otherwise hide it for good.
+ *
+ * UPCOMING is forced CLOSED — always the small player, never the full card —
+ * per the design. Same reasoning in the other direction: with no button on
+ * the strip, a stale persisted `false` would otherwise leave it stuck open.
+ *
+ * PREVIOUS is absent from this map: its fold state is exactly whatever
+ * `collapsed` says, and its strip is the only one that carries the button.
  */
-export const LANE_COLLAPSIBLE: Record<Lane, boolean> = {
+export const LANE_FIXED_COLLAPSE: Partial<Record<Lane, boolean>> = {
 	live: false,
 	upcoming: true,
-	previous: true,
 };
 
 /**
@@ -192,8 +201,9 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	const scrollWidthRef = useRef(0);
 
 	const label = LANE_LABELS[lane];
-	const collapsible = LANE_COLLAPSIBLE[lane];
-	const isCollapsed = collapsible && collapsed;
+	const fixedCollapse = LANE_FIXED_COLLAPSE[lane];
+	const collapsible = fixedCollapse === undefined;
+	const isCollapsed = collapsible ? collapsed : fixedCollapse;
 	// applyManualOrder answers "where did the listener drag this lane's own
 	// siblings"; stabilizeLaneOrder answers what a NEW sibling arriving, or an
 	// old one leaving, does to that arrangement — new cards enter at the left,

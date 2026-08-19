@@ -115,42 +115,46 @@ const slot = (root: ParentNode, id: number) =>
 
 describe("LaneSection collapse", () => {
 	it("gives LIVE no collapse control", () => {
-		// The design has expand/collapse on UPCOMING and PREVIOUS only. LIVE is
-		// what the app is for; it does not fold away.
+		// The design has expand/collapse on PREVIOUS only. LIVE is what the app is
+		// for; it does not fold away.
 		const { container } = renderLane({ lane: "live" });
 		expect(container.querySelector("[data-lane-toggle]")).toBeNull();
 	});
 
-	it("gives UPCOMING and PREVIOUS a collapse control", () => {
-		for (const lane of ["upcoming", "previous"] as const) {
-			cleanup();
-			const { container } = renderLane({ lane });
-			expect(container.querySelector("[data-lane-toggle]")).not.toBeNull();
-		}
+	it("gives UPCOMING no collapse control either", () => {
+		// UPCOMING is permanently minimized (see below) — with no way back to the
+		// full card, a button offering to expand it would do nothing.
+		const { container } = renderLane({ lane: "upcoming" });
+		expect(container.querySelector("[data-lane-toggle]")).toBeNull();
+	});
+
+	it("gives PREVIOUS a collapse control", () => {
+		const { container } = renderLane({ lane: "previous" });
+		expect(container.querySelector("[data-lane-toggle]")).not.toBeNull();
 	});
 
 	it("switches to the small player when collapsed, rather than hiding the clips", () => {
 		// Story 027: collapsing used to empty the lane, which threw away the one
 		// thing a listener collapses a lane to keep. Every clip is still here, in
 		// the same slots, in the compact form instead.
-		const { container } = renderLane({ lane: "upcoming", collapsed: true });
+		const { container } = renderLane({ lane: "previous", collapsed: true });
 		expect(shownIds(container)).toEqual([1, 2, 3]);
 		expect(smallIds(container)).toEqual([1, 2, 3]);
 		expect(fullIds(container)).toEqual([]);
 	});
 
 	it("keeps the label and the control while collapsed", () => {
-		const { container } = renderLane({ lane: "upcoming", collapsed: true });
+		const { container } = renderLane({ lane: "previous", collapsed: true });
 		// The strip is the only thing left to click to get the lane back, so it
 		// has to survive the collapse.
 		expect(container.querySelector("[data-lane-label]")?.textContent).toBe(
-			LANE_LABELS.upcoming,
+			LANE_LABELS.previous,
 		);
 		expect(container.querySelector("[data-lane-toggle]")).not.toBeNull();
 	});
 
 	it("shows the full players again when expanded", () => {
-		const { container } = renderLane({ lane: "upcoming", collapsed: false });
+		const { container } = renderLane({ lane: "previous", collapsed: false });
 		expect(shownIds(container)).toEqual([1, 2, 3]);
 		expect(fullIds(container)).toEqual([1, 2, 3]);
 		expect(smallIds(container)).toEqual([]);
@@ -159,7 +163,7 @@ describe("LaneSection collapse", () => {
 	it("keeps the manual order across the fold", () => {
 		// The slots are the same slots — collapse decides what goes IN them and
 		// nothing else, so a lane the listener has rearranged stays rearranged.
-		const { container } = renderLane({ lane: "upcoming", collapsed: true, order: [3, 0] });
+		const { container } = renderLane({ lane: "previous", collapsed: true, order: [3, 0] });
 		expect(smallIds(container)).toEqual([3, 1, 2]);
 	});
 
@@ -187,6 +191,16 @@ describe("LaneSection collapse", () => {
 		expect(shownIds(container)).toEqual([1, 2, 3]);
 		expect(fullIds(container)).toEqual([1, 2, 3]);
 		expect(smallIds(container)).toEqual([]);
+	});
+
+	it("stays minimized on UPCOMING even when a stale collapsed flag says false", () => {
+		// Same reasoning as LIVE above, mirrored: UPCOMING has no control to undo
+		// a fold with, so a persisted `false` must not be honoured either — the
+		// lane always renders as the small player.
+		const { container } = renderLane({ lane: "upcoming", collapsed: false });
+		expect(shownIds(container)).toEqual([1, 2, 3]);
+		expect(smallIds(container)).toEqual([1, 2, 3]);
+		expect(fullIds(container)).toEqual([]);
 	});
 });
 
@@ -565,12 +579,12 @@ describe("LaneSection chrome hooks", () => {
 		// A collapsed lane stops claiming its share of the column and shrinks to
 		// its strip. That rule keys off data-collapsed, so the flag has to reach
 		// the DOM and not merely hide the cards.
-		const { container } = renderLane({ lane: "upcoming", collapsed: true });
+		const { container } = renderLane({ lane: "previous", collapsed: true });
 		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("true");
 	});
 
 	it("reports an expanded lane as not collapsed", () => {
-		const { container } = renderLane({ lane: "upcoming", collapsed: false });
+		const { container } = renderLane({ lane: "previous", collapsed: false });
 		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("false");
 	});
 
@@ -580,6 +594,13 @@ describe("LaneSection chrome hooks", () => {
 		// the window away with no control on screen to claim it back.
 		const { container } = renderLane({ lane: "live", collapsed: true });
 		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("false");
+	});
+
+	it("always reports UPCOMING as collapsed, whatever it is told", () => {
+		// Mirror of the LIVE case above: UPCOMING has no control on screen to
+		// claim its row back either, so a persisted `false` must not be honoured.
+		const { container } = renderLane({ lane: "upcoming", collapsed: false });
+		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("true");
 	});
 
 	it("keeps the cards in their own box, separate from the label strip", () => {
