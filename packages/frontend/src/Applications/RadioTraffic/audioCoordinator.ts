@@ -79,6 +79,22 @@ interface Entry {
 	 * block()/unblock(), which are the only callers of mark/clearAudioBlocked.
 	 */
 	blocked: boolean;
+	/**
+	 * The element's position, sampled at the last notify.
+	 *
+	 * Cached rather than read live, because `positionMs` is a
+	 * `useSyncExternalStore` getSnapshot and that contract requires the same
+	 * value between notifications. Reading `el.currentTime` fresh on each call
+	 * breaks it: the clock advances in real time, so two calls in one render
+	 * pass return different numbers, React concludes the store changed again,
+	 * and re-renders — forever. That is the "getSnapshot should be cached to
+	 * avoid an infinite loop" warning, followed by "Maximum update depth
+	 * exceeded" once a card is on screen.
+	 *
+	 * Sampling here instead means the value changes only when we say it does,
+	 * which is exactly the set of moments we already notify on.
+	 */
+	positionMs: number;
 }
 
 const registry = new Map<number, Entry>();
@@ -89,6 +105,11 @@ let prevNowMs = 0;
 let healthCheckTimer: ReturnType<typeof setInterval> | null = null;
 
 function notify(itemId: number): void {
+	// Sample the position as part of notifying, so the snapshot and the
+	// notification can never disagree: every path that tells React "this item
+	// changed" refreshes the value React is about to read.
+	const entry = registry.get(itemId);
+	if (entry) entry.positionMs = entry.el.currentTime * 1000;
 	const subscribers = listeners.get(itemId);
 	if (!subscribers) return;
 	for (const cb of subscribers) cb();
@@ -142,6 +163,13 @@ function seekToClock(itemId: number, entry: Entry): void {
 	const item = clock?.itemFor(itemId);
 	if (!clock || !item) return;
 	entry.el.currentTime = calcSeekSeconds(item, clock.nowMs());
+	// Notify here rather than leaving it to each caller. A seek moves the
+	// position, and the cached snapshot must move with it — the browser will
+	// send timeupdate eventually, but "eventually" is up to a quarter second of
+	// a card reading a position it has already left. One caller already
+	// notified; the jump reseek did not, so a Time Machine scrub left the badge
+	// showing the pre-seek position until playback happened to tick.
+	notify(itemId);
 }
 
 /**
@@ -188,7 +216,15 @@ export function ensure(itemId: number, url: string): HTMLAudioElement {
 		notify(itemId);
 	};
 
-	const entry: Entry = { el, url, onPause, audible: true, unlocked: false, blocked: false };
+	const entry: Entry = {
+		el,
+		url,
+		onPause,
+		audible: true,
+		unlocked: false,
+		blocked: false,
+		positionMs: 0,
+	};
 	el.addEventListener("pause", onPause);
 	el.addEventListener("loadedmetadata", () => {
 		seekToClock(itemId, entry);
@@ -255,8 +291,10 @@ export function setLevel(itemId: number, audible: boolean): void {
 
 /** Where the element for `itemId` actually is, or undefined if not registered. */
 export function positionMs(itemId: number): number | undefined {
-	const entry = registry.get(itemId);
-	return entry ? entry.el.currentTime * 1000 : undefined;
+	// The cached sample, NOT a live read of el.currentTime — see Entry.positionMs.
+	// This is a useSyncExternalStore getSnapshot; returning a fresh reading each
+	// call makes React re-render without end.
+	return registry.get(itemId)?.positionMs;
 }
 
 /**

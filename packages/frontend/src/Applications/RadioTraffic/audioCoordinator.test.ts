@@ -119,7 +119,11 @@ describe("audioCoordinator registry", () => {
 			connect();
 			const view = render(createElement(Card, { id: 1, url: "a.mp3" }));
 			const el = ensure(1, "a.mp3");
+			// timeupdate is what a real browser fires as the position moves; the
+			// coordinator samples on that, so the test has to move the clock the
+			// same way rather than writing currentTime and hoping.
 			el.currentTime = 12;
+			el.dispatchEvent(new Event("timeupdate"));
 			expect(positionMs(1)).toBe(12_000);
 
 			view.unmount();
@@ -128,7 +132,35 @@ describe("audioCoordinator registry", () => {
 			// detached element kept advancing while nothing rendered it.
 			expect(positionMs(1)).toBe(12_000);
 			el.currentTime = 30;
+			el.dispatchEvent(new Event("timeupdate"));
 			expect(positionMs(1)).toBe(30_000);
+		});
+
+		it("returns the same snapshot between notifications even as the element advances", () => {
+			// The useSyncExternalStore contract: getSnapshot must be stable
+			// between notifications. Reading el.currentTime live breaks it —
+			// the position advances in real time, so two reads inside one render
+			// pass differ, React concludes the store changed again, and
+			// re-renders without end. That surfaced as "getSnapshot should be
+			// cached to avoid an infinite loop" and then "Maximum update depth
+			// exceeded" in TrafficCard, but only once a click caused the first
+			// render: with nothing re-rendering, the loop had no way to start.
+			connect();
+			const el = ensure(1, "a.mp3");
+			el.currentTime = 5;
+			el.dispatchEvent(new Event("timeupdate"));
+
+			const first = positionMs(1);
+			// The element keeps moving, as it does during playback...
+			el.currentTime = 5.25;
+			el.currentTime = 5.5;
+			// ...but with no notification, every reader must still see one value.
+			expect(positionMs(1)).toBe(first);
+			expect(positionMs(1)).toBe(first);
+
+			// And it does move, once the element says so.
+			el.dispatchEvent(new Event("timeupdate"));
+			expect(positionMs(1)).toBe(5_500);
 		});
 
 		it("keeps playing an unmounted card's element rather than pausing it", () => {
@@ -347,6 +379,11 @@ describe("audioCoordinator registry", () => {
 			connect();
 			const el = ensure(1, "a.mp3");
 			el.currentTime = 5;
+			// A browser fires timeupdate whenever the position moves, including
+			// on a write. jsdom does not, so the test supplies it — otherwise it
+			// is asserting that the snapshot tracks a change nothing announced,
+			// which is the opposite of the contract this test exists to pin.
+			el.dispatchEvent(new Event("timeupdate"));
 
 			function Badge() {
 				const ms = useSyncExternalStore(

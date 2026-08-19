@@ -382,6 +382,10 @@ describe("RadioTraffic — tag filtering", () => {
 		const el = audio.elements.get(2);
 		expect(el).toBeDefined();
 		(el as HTMLAudioElement).currentTime = onTheClock;
+		// In a browser the element announces its own position as it advances;
+		// jsdom does not, so the test says it. Without this the assertion below
+		// would be that a card reports a position nothing ever published.
+		(el as HTMLAudioElement).dispatchEvent(new Event("timeupdate"));
 
 		// Hide it: only tier:primary survives, and clip 2 is secondary.
 		fireEvent.click(screen.getByLabelText("Primary"));
