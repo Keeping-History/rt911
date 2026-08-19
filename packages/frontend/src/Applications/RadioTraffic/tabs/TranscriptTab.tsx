@@ -19,10 +19,11 @@ import { activeCueIndex, parseTranscriptCues, type TranscriptCue } from "./trans
  * cue at second 0 and got nothing, because that hook matches cues with two
  * strict comparisons and the first cue of a real clip starts at 0.8s.
  *
- * The trade this makes is height: a long clip is a long panel, and the card
- * grows to fit it (see .rtCardPanel). That is the specified behaviour — panels
- * size to content and a row levels up to its tallest — but it does mean the
- * Transcript tab is the one that decides how tall its row is.
+ * The trade this makes is length, and the panel scrolls rather than the card
+ * growing to absorb it: every tab panel is one fixed height (see
+ * cardTabs.module.scss) and this is the only one with a scrollbar, so a
+ * three-minute transcript no longer decides how tall its card — and, in a
+ * wrapped lane row, every card beside it — ends up.
  */
 
 /** What the panel knows about its transcript at any moment. */

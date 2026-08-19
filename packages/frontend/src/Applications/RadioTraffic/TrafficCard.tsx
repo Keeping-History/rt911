@@ -24,13 +24,13 @@
 //                there is an element, the clock's when there is not (story 028).
 
 import type React from "react";
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { PeaksWaveform } from "../radio-core/PeaksWaveform";
 import { calcSeekSeconds } from "../radio-core/stationGrouping";
 import { positionMs, seekTo, subscribe, unfollowClock } from "./audioCoordinator";
 import { type Badge, badgeFor, countdownFor, type Lane } from "./cardStatus";
-import { CARD_TABS, CardTabBar } from "./CardTabBar";
+import { CARD_TABS, CardTabBar, visibleCardTabs } from "./CardTabBar";
 import { itemTiming } from "./tabs/itemTiming";
 import styles from "./trafficCard.module.scss";
 
@@ -183,7 +183,13 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	}, [paused, item.id, onTogglePause]);
 
 	const title = meta?.subject?.trim() || item.full_title;
-	const panel = CARD_TABS.find((tab) => tab.id === active) ?? CARD_TABS[0];
+	// Summary is only offered when there is one, so the tab list is a fact about
+	// THIS item rather than a constant. The panel is looked up in the same list
+	// the bar draws, and the bar is told which tab that lookup landed on: an item
+	// whose summary goes away while its Summary tab is open then falls back to
+	// Details with Details highlighted, rather than showing one and marking none.
+	const tabs = useMemo(() => visibleCardTabs(meta), [meta]);
+	const panel = tabs.find((tab) => tab.id === active) ?? tabs[0];
 
 	// The one thing the design signals with brightness: not "is this card
 	// running" but "is this one of the clips you are hearing". Both halves are
@@ -280,7 +286,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 			</div>
 
 			<div className={styles.rtCardTabs}>
-				<CardTabBar tabs={CARD_TABS} active={active} onSelect={setActive} />
+				<CardTabBar tabs={tabs} active={panel.id} onSelect={setActive} />
 				<div className={styles.rtCardPanel}>
 					<panel.Panel
 						item={item}

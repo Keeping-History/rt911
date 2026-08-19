@@ -17,27 +17,32 @@ const column = (root: HTMLElement, name: string) =>
 	root.querySelector(`[data-column="${name}"]`);
 
 describe("DetailsTab layout", () => {
-	it("renders Figma's three columns: Details, Tags and Summary", () => {
-		const { container, getByText } = render(
+	it("renders two columns, Details and Tags, and no Summary", () => {
+		// Summary is a tab of its own (story 035). It is the panel's longest
+		// content and the reason every tab can now share one fixed height, so a
+		// Details panel that still drew it would put the height back.
+		const { container, getByText, queryByText } = render(
 			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
 		);
 		expect(column(container, "call-details")).not.toBeNull();
 		expect(column(container, "tags")).not.toBeNull();
-		expect(column(container, "summary")).not.toBeNull();
-		for (const heading of ["Details", "Tags", "Summary"]) {
+		expect(column(container, "summary")).toBeNull();
+		for (const heading of ["Details", "Tags"]) {
 			expect(getByText(heading)).toBeTruthy();
 		}
+		expect(queryByText("Summary")).toBeNull();
 	});
 
-	it("keeps the timings in Details and the subject in Summary", () => {
+	it("keeps the timings in Details and never prints the subject", () => {
 		// Which column a fact lands in is the whole point of the redesign — a
-		// panel that renders all three headings but files the subject under Tags
-		// would pass a heading-only check.
-		const { container } = render(
+		// panel that renders both headings but files the subject under Tags would
+		// pass a heading-only check.
+		const { container, queryByText } = render(
 			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
 		);
 		expect(column(container, "call-details")?.querySelector('[data-field="start"]')).not.toBeNull();
-		expect(column(container, "summary")?.querySelector('[data-field="subject"]')).not.toBeNull();
+		expect(container.querySelector('[data-field="subject"]')).toBeNull();
+		expect(queryByText(makeMeta().subject as string)).toBeNull();
 		expect(column(container, "tags")?.querySelectorAll("li").length).toBe(3);
 	});
 
@@ -74,7 +79,7 @@ describe("DetailsTab layout", () => {
 		expect(getByText("VFR")).toBeTruthy();
 	});
 
-	it("keeps all three columns, each saying so, for an item with no metadata", () => {
+	it("keeps both columns, each saying so, for an item with no metadata", () => {
 		// Columns that collapsed would leave cards in a lane misaligned with each
 		// other, and an empty box reads as a broken tab rather than an untagged clip.
 		const { container, getByText } = render(
@@ -82,9 +87,7 @@ describe("DetailsTab layout", () => {
 		);
 		expect(column(container, "call-details")).not.toBeNull();
 		expect(column(container, "tags")).not.toBeNull();
-		expect(column(container, "summary")).not.toBeNull();
 		expect(getByText("No tags.")).toBeTruthy();
-		expect(getByText("No summary.")).toBeTruthy();
 	});
 });
 
@@ -97,15 +100,6 @@ describe("DetailsTab", () => {
 		expect(field(container, "end")).toMatch(/^8:49:44\sAM$/);
 		expect(field(container, "duration")).toBe("03:13");
 		expect(field(container, "link")).toBe("ZBW ↔ AAL11");
-	});
-
-	it("renders the subject", () => {
-		const { getByText } = render(
-			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
-		);
-		expect(
-			getByText("Boston Center loses contact with American 11"),
-		).toBeTruthy();
 	});
 
 	it("renders one chip per tag, labelled by its vocabulary value", () => {
@@ -166,12 +160,11 @@ describe("DetailsTab", () => {
 		expect(container.querySelector('[data-field="duration"]')).toBeNull();
 	});
 
-	it("omits the link, subject and chips for an item with no metadata", () => {
+	it("omits the link and chips for an item with no metadata", () => {
 		const { container, queryAllByRole } = render(
 			<DetailsTab item={makeItem()} tzOffsetHours={TZ} />,
 		);
 		expect(container.querySelector('[data-field="link"]')).toBeNull();
-		expect(container.querySelector('[data-field="subject"]')).toBeNull();
 		expect(queryAllByRole("listitem")).toHaveLength(0);
 		// The times come off the item itself, so they survive the metadata gap.
 		expect(field(container, "start")).toMatch(/^8:46:31\sAM$/);

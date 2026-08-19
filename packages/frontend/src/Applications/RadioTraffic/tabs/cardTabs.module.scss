@@ -1,10 +1,19 @@
-// The five card tab panels.
+// The card tab panels.
 //
-// These size to their content: a panel never scrolls, it grows, and the card
-// around it grows with it (see .rtCardPanel in trafficCard.module.scss). That
-// is a change from the original fixed 206x39 box — a clipped panel with a
-// hidden scrollbar reads as an empty tab, which is how the Transcript panel
-// managed to look broken while working exactly as written.
+// Every panel is the SAME height, and only Transcript scrolls.
+//
+// The height is shared because switching tabs must not resize the card: a panel
+// that sizes to its content makes the card's height a function of which tab the
+// listener happens to have open, and in a wrapped lane row that resizes every
+// card beside it too. Transcript is why it must be a cap and not a floor — a
+// transcript is arbitrarily long, so "the panel grows to fit" means one clip
+// with three minutes of talk sets the height of its whole row.
+//
+// So Transcript gets the scrollbar and the others do not. That is the trade the
+// earlier content-sized panels were avoiding (a clipped panel reads as an empty
+// tab) and it is only payable because Summary moved out of Details into a tab of
+// its own: what is left on the other panels is short, structured and bounded —
+// four timing rows, a few tag groups, a handful of names.
 //
 // Density still matters, because the card is only 210px wide: no decorative
 // padding, single-line cells ellipsise, and every column earns its width.
@@ -26,12 +35,25 @@
   --rt-tag-person: #d8c8c8;
   --rt-tag-default: var(--color-system-03);
 
+  // The one height every panel is, and therefore the height the card's tabs
+  // region is whichever tab is open. Six of the theme's own control boxes, at
+  // the card's scale, so it tracks a theme with bigger chrome and a card that is
+  // resized (story 034) instead of pinning a pixel that only suits today's
+  // 1.25x: at the default theme that is the design's 39pt panel with room for
+  // the Details panel's five rows.
+  --rt-tab-panel-height: calc(var(--window-control-size) * 6 * var(--rt-card-scale, 1));
+
   box-sizing: border-box;
   width: 100%;
-  // Fills the panel when the row levels up to a taller card, and grows past it
-  // when its own content is taller. Deliberately NOT `overflow: auto` — the
-  // panel has no scrollbar to hide content behind.
+  // Definite, so the panel's content cannot set it — that is what stops the
+  // Transcript panel from deciding how tall its card, and its whole lane row,
+  // ends up. min-height still fills a card the row has levelled up taller;
+  // it can only ever exceed the fixed height, never fall short of it.
+  height: var(--rt-tab-panel-height);
   min-height: 100%;
+  // Clipped rather than scrolled: see .rtTabPanel[data-tab="transcript"], the
+  // one panel that overrides this.
+  overflow: hidden;
   padding: 1px 2px;
   font-family: var(--ui-font);
   font-size: calc(var(--ui-font-size) * 0.85);
@@ -206,6 +228,17 @@
 // The whole cue list, not just the cue at the playhead: a card is almost never
 // playing, so a playhead-keyed panel is blank on nearly every card. See
 // TranscriptTab.tsx.
+
+// The one scrolling panel. A transcript is the only tab whose content is
+// genuinely unbounded, so it is the only one where clipping would hide
+// something a listener came looking for — and the only one that has to be
+// stopped from setting its card's height. `auto`, so a short transcript that
+// fits still shows no scrollbar. Vertical only: the cue lines wrap, so a
+// horizontal bar would only ever be a rounding error's worth of overflow.
+.rtTabPanel[data-tab="transcript"] {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 
 .rtCueList {
   margin: 0;
