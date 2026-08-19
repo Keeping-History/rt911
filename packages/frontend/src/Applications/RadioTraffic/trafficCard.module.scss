@@ -102,6 +102,7 @@
 
 .rtCard[data-lane="previous"] {
   --rt-card-accent: #000088;
+  min-width: calc(var(--window-control-size)*25);
 }
 
 .rtCard[data-lane="previous"][data-audible="true"] {
