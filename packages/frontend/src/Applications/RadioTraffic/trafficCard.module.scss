@@ -1,31 +1,38 @@
-// The 210x124 traffic card.
+// The traffic card, drawn at 1.25x Figma's own numbers.
 //
-// Every number below is Figma's, and they are absolute rather than flowed on
-// purpose: the card is a fixed frame whose four regions are specified by
-// position, so a human comparing this against the design compares numbers
-// rather than reverse-engineering a flex chain. The regions are
+// Every number below is Figma's, multiplied by --rt-card-scale. Keeping the raw
+// Figma value visible in each calc() is the point: a human comparing this file
+// against the design compares Figma's numbers directly and reads the scale off
+// one line, rather than dividing 262.5 by 1.25 in their head. Changing the card's
+// size is editing --rt-card-scale and nothing else. (The scale is also stated in
+// TrafficCard.tsx, which has to size a canvas bitmap from a number — see the
+// comment on CARD_SCALE there.)
 //
-//   Header       196x19 (7px inset, centred in the 29px above the waveform)
+// The regions, in Figma's units:
+//
+//   Header       full-bleed 29 band, text inset 7 x 5 (so a 196x19 text box)
 //   Waveform     206x27 @ y=29
 //   Control bar  206x14 @ y=56
-//   Tabs         207x53 @ y=70   (bar 11px, gap 3px, panel 206x39 minimum)
+//   Tabs         207x53 @ y=70   (bar 11, gap 3, panel 206x39 minimum)
 //
-// The first three are absolute and fixed. The tabs block is NOT: 124px is the
+// The first three are absolute and fixed. The tabs block is NOT: 124 is the
 // card's floor, not its height, because a tab panel sizes to its content and
 // the card has to grow with it (Transcript is a whole transcript). So the tabs
 // block sits in flow — it is the card's only flow child, the other three being
-// positioned — and its 70px margin reproduces what its `top` used to.
+// positioned — and its 70 margin reproduces what its `top` used to.
 //
-// Colours are placeholders pending Robbie's pass, matching the convention in
-// tabs/cardTabs.module.scss — the structure is what this file pins.
+// Hairlines are the exception to the scale: a 1px border is a 1px border at any
+// card size, and 1.25px is a blurred one.
 
 .rtCard {
+  --rt-card-scale: 1.25;
+
   position: relative;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  width: 210px;
-  min-height: 124px;
+  width: calc(210px * var(--rt-card-scale));
+  min-height: calc(124px * var(--rt-card-scale));
   // Fills the flex line, which is what makes every card in one wrapped lane row
   // the height of the tallest card in it: .rtLaneCards stretches its slots by
   // default, and this is the card taking the height that stretch grants.
@@ -36,27 +43,83 @@
   border: 1px solid var(--color-system-05);
 }
 
+// Lane chrome ---------------------------------------------------------------
+//
+// One table of lane x audible, sampled from the design frame. The lane is what
+// the card is; `audible` is whether the listener is actually hearing it, and the
+// design says so by lifting the same hue into a brighter, more saturated one —
+// crimson to pink on LIVE, navy to blue on PREVIOUS. UPCOMING has no lift
+// because an UPCOMING clip has no audio yet; it gets the opposite treatment, a
+// near-black header and dimmed player chrome, so it reads as not yet live.
+//
+// --rt-card-chrome-filter reaches the waveform and the control bar and stops
+// there: in the design the tab panels below are identical across all three
+// lanes, and dimming them would say the card's DATA is inactive rather than its
+// player.
+
+.rtCard {
+  --rt-card-accent: var(--color-system-05);
+  --rt-card-accent-text: #ffffff;
+  --rt-card-chrome-filter: none;
+}
+
+.rtCard[data-audible="true"] {
+  --rt-card-chrome-filter: brightness(1.06) saturate(1.25);
+}
+
+.rtCard[data-lane="live"] {
+  --rt-card-accent: #ad001d;
+}
+
+.rtCard[data-lane="live"][data-audible="true"] {
+  --rt-card-accent: #ff4f6d;
+}
+
+.rtCard[data-lane="previous"] {
+  --rt-card-accent: #000088;
+}
+
+.rtCard[data-lane="previous"][data-audible="true"] {
+  --rt-card-accent: #0000ff;
+}
+
+// Last of the lane rules on purpose: it must win the specificity tie with the
+// audible lift above even if a caller ever contradicts TrafficCard and marks an
+// UPCOMING card audible.
+.rtCard[data-lane="upcoming"] {
+  --rt-card-accent: #2b2b2b;
+  --rt-card-accent-text: #a6a6a6;
+  --rt-card-chrome-filter: brightness(0.61) saturate(0.7);
+}
+
 // Header -------------------------------------------------------------------
 
 .rtCardHeader {
   position: absolute;
-  left: 7px;
-  top: 5px;
-  width: 196px;
-  height: 19px;
+  left: 0;
+  right: 0;
+  top: 0;
+  box-sizing: border-box;
+  // Full-bleed band, with Figma's 7 x 5 inset as padding rather than an offset:
+  // the coloured strip runs edge to edge in the design, and the 196x19 text box
+  // is what is left inside it.
+  height: calc(29px * var(--rt-card-scale));
+  padding: calc(5px * var(--rt-card-scale)) calc(7px * var(--rt-card-scale));
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 3px;
+  gap: calc(3px * var(--rt-card-scale));
+  color: var(--rt-card-accent-text);
+  background: var(--rt-card-accent);
 }
 
 .rtCardTitle {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
-  font-size: calc(var(--ui-font-size) * 0.85);
+  font-size: calc(var(--ui-font-size) * 0.85 * var(--rt-card-scale));
   font-weight: bold;
-  line-height: 19px;
+  line-height: calc(19px * var(--rt-card-scale));
   // One line, always: the header's height is part of the card's geometry, and a
   // wrapping subject would push the waveform off its y.
   white-space: nowrap;
@@ -64,14 +127,15 @@
   text-overflow: ellipsis;
 }
 
-// Terse by necessity — the badge shares 196px with the subject, so drift reads
-// "-6s" rather than "-6 seconds".
+// Terse by necessity — the badge shares the header with the subject, so drift
+// reads "-6s" rather than "-6 seconds".
 .rtCardBadge {
   flex: 0 0 auto;
-  padding: 0 3px;
-  font-size: calc(var(--ui-font-size) * 0.7);
-  line-height: 13px;
+  padding: 0 calc(3px * var(--rt-card-scale));
+  font-size: calc(var(--ui-font-size) * 0.7 * var(--rt-card-scale));
+  line-height: calc(13px * var(--rt-card-scale));
   white-space: nowrap;
+  color: var(--color-system-06);
   border: 1px solid var(--color-system-05);
   background: var(--color-system-03);
 }
@@ -106,15 +170,16 @@
 // sit at the wrong instant by the header's height.
 .rtCardWaveform {
   position: absolute;
-  left: 2px;
-  top: 29px;
-  width: 206px;
-  height: 27px;
+  left: calc(2px * var(--rt-card-scale));
+  top: calc(29px * var(--rt-card-scale));
+  width: calc(206px * var(--rt-card-scale));
+  height: calc(27px * var(--rt-card-scale));
   overflow: hidden;
   color: var(--color-system-06);
   background: var(--color-system-01);
   border: 1px solid var(--color-system-04);
   box-sizing: border-box;
+  filter: var(--rt-card-chrome-filter);
 }
 
 // PeaksWaveform's canvas carries the global `.playlistTimelineWaveform` class,
@@ -131,20 +196,24 @@
 
 .rtCardControls {
   position: absolute;
-  left: 2px;
-  top: 56px;
-  width: 206px;
-  height: 14px;
+  left: calc(2px * var(--rt-card-scale));
+  top: calc(56px * var(--rt-card-scale));
+  width: calc(206px * var(--rt-card-scale));
+  height: calc(14px * var(--rt-card-scale));
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 3px;
-  font-size: calc(var(--ui-font-size) * 0.7);
+  gap: calc(3px * var(--rt-card-scale));
+  font-size: calc(var(--ui-font-size) * 0.7 * var(--rt-card-scale));
+  filter: var(--rt-card-chrome-filter);
 }
 
-.rtCardTransport {
-  width: 14px;
-  height: 14px;
+.rtCardTransport,
+.rtCardMute {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: calc(14px * var(--rt-card-scale));
+  height: calc(14px * var(--rt-card-scale));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,15 +227,18 @@
   cursor: pointer;
 }
 
-// An indicator, not a control: muting is the tool palette's job (toolMode.ts).
-.rtCardLevel {
-  flex: 0 0 auto;
-  padding: 0 2px;
-  line-height: 14px;
-  white-space: nowrap;
+// The speaker takes the button's ink, so one asset serves a bright LIVE card and
+// a dimmed UPCOMING one. It fills the button rather than carrying a size of its
+// own, which is what keeps it on the card's scale for free.
+.rtCardMute svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-.rtCardLevel[data-muted="true"] {
+// Muted is the state worth spotting across a grid of cards, so it is the one
+// that departs from the button's default ink.
+.rtCardMute[data-muted="true"] {
   color: var(--color-system-04);
 }
 
@@ -174,24 +246,24 @@
 
 .rtCardTabs {
   // In flow, so the panel's height reaches the card. `margin-top` stands in for
-  // the `top: 70px` this used to carry: the header, waveform and control bar
+  // the `top: 70` this used to carry: the header, waveform and control bar
   // above are absolutely positioned and out of flow, so there is nothing for
   // this margin to collapse against or stack below.
   flex: 1 1 auto;
-  margin: 70px 0 0 2px;
-  width: 207px;
+  margin: calc(70px * var(--rt-card-scale)) 0 0 calc(2px * var(--rt-card-scale));
+  width: calc(207px * var(--rt-card-scale));
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: calc(3px * var(--rt-card-scale));
 }
 
 .rtCardTabBar {
   flex: 0 0 auto;
-  height: 11px;
+  height: calc(11px * var(--rt-card-scale));
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  font-size: calc(var(--ui-font-size) * 0.7);
+  font-size: calc(var(--ui-font-size) * 0.7 * var(--rt-card-scale));
 }
 
 // The measured box. The strip inside it is `width: max-content`, so this is the
@@ -200,7 +272,7 @@
   flex: 1 1 0;
   min-width: 0;
   // Hidden, not auto: the arrows are the paging affordance at this size, and a
-  // scrollbar would eat most of the 11px the bar has. Programmatic
+  // scrollbar would eat most of the height the bar has. Programmatic
   // scrollIntoView still works on a hidden overflow.
   overflow: hidden;
 }
@@ -215,10 +287,10 @@
 }
 
 .rtCardTab {
-  padding: 0 4px;
+  padding: 0 calc(4px * var(--rt-card-scale));
   font-family: inherit;
   font-size: inherit;
-  line-height: 11px;
+  line-height: calc(11px * var(--rt-card-scale));
   white-space: nowrap;
   color: var(--color-system-06);
   background: var(--color-system-03);
@@ -236,11 +308,11 @@
 
 .rtCardTabArrow {
   flex: 0 0 auto;
-  width: 11px;
+  width: calc(11px * var(--rt-card-scale));
   padding: 0;
   font-family: inherit;
   font-size: inherit;
-  line-height: 11px;
+  line-height: calc(11px * var(--rt-card-scale));
   color: var(--color-system-06);
   background: var(--color-system-02);
   border: 1px solid var(--color-system-05);
@@ -257,9 +329,9 @@
   // own content. `flex-basis: auto` is the whole trick — the basis is what the
   // panel's content measures, so the card is sized by the tab that is open.
   flex: 1 0 auto;
-  width: 206px;
-  // Figma's 39px, as a floor rather than a cap.
-  min-height: 39px;
+  width: calc(206px * var(--rt-card-scale));
+  // Figma's 39, as a floor rather than a cap.
+  min-height: calc(39px * var(--rt-card-scale));
   border: 1px solid var(--color-system-05);
   box-sizing: border-box;
 }

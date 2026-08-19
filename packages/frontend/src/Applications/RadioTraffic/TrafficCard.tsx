@@ -1,4 +1,5 @@
-// One 210x124 traffic card: header, waveform, control bar, tabs.
+// One traffic card — header, waveform, control bar, tabs — at 1.25x Figma's
+// 210x124 frame (see CARD_SCALE below and trafficCard.module.scss).
 //
 // A view over props, not a reader of app state. Everything it needs — which
 // lane it is in, what the clock reads, whether it is in the mix — arrives from
@@ -29,8 +30,18 @@ import { CARD_TABS, CardTabBar } from "./CardTabBar";
 import { itemTiming } from "./tabs/itemTiming";
 import styles from "./trafficCard.module.scss";
 
+/**
+ * The card is drawn at 1.25x Figma's own numbers, per story 023.
+ *
+ * MUST match `--rt-card-scale` in trafficCard.module.scss. It is duplicated here
+ * rather than read back out of the stylesheet because PeaksWaveform sizes a
+ * canvas BITMAP from a number, and a bitmap authored at the unscaled height and
+ * then stretched by CSS is a blurred waveform.
+ */
+const CARD_SCALE = 1.25;
+
 /** Figma's waveform slot is 27px tall; PeaksWaveform sizes its bitmap from it. */
-const WAVEFORM_HEIGHT = 27;
+const WAVEFORM_HEIGHT = Math.round(27 * CARD_SCALE);
 
 export interface TrafficCardProps {
 	item: MediaItem;
@@ -46,11 +57,40 @@ export interface TrafficCardProps {
 	seeking?: boolean;
 	/** PREVIOUS only: the listener started this clip themselves. */
 	userPlaying?: boolean;
-	/** Whether the mix has this card silenced. An indicator; the tools do the muting. */
+	/** Whether the mix has this card silenced. Drives the mute button's own state. */
 	muted?: boolean;
 	paused?: boolean;
 	onTogglePause: () => void;
+	/**
+	 * Flip THIS card's mute. Optional only because the shell that owns the mix
+	 * (RadioTraffic's AudioState) has yet to hand it down; the button is rendered
+	 * either way so the control and its state never disagree about existing.
+	 */
+	onToggleMute?: () => void;
 }
+
+/**
+ * The mute button's artwork, in the two states it has.
+ *
+ * Inline rather than an <img> because it has to take its colour from the card it
+ * is sitting on — an audible LIVE card and a grayed-out UPCOMING one paint the
+ * same speaker in different inks, and `currentColor` is how one asset does that.
+ */
+const SpeakerIcon: React.FC<{ muted: boolean }> = ({ muted }) => (
+	<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" role="presentation">
+		<path d="M2 6h3l4-3.5v11L5 10H2z" fill="currentColor" />
+		{muted ? (
+			<path d="M11 6l4 4M15 6l-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" />
+		) : (
+			<path
+				d="M11 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.5 6.5 0 0 1 0 9"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				fill="none"
+			/>
+		)}
+	</svg>
+);
 
 /** The badge, in the few characters the 196px header can spare beside a subject. */
 function badgeLabel(badge: Badge): string {
@@ -80,6 +120,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	muted = false,
 	paused = false,
 	onTogglePause,
+	onToggleMute,
 }) => {
 	const [active, setActive] = useState(CARD_TABS[0].id);
 
@@ -122,9 +163,27 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	const title = meta?.subject?.trim() || item.full_title;
 	const panel = CARD_TABS.find((tab) => tab.id === active) ?? CARD_TABS[0];
 
+	// The one thing the design signals with brightness: not "is this card
+	// running" but "is this one of the clips you are hearing". Both halves are
+	// needed — a muted clip still advances (audioCoordinator silences rather than
+	// pauses, so it stays in sync) and a paused one is not making a sound at all.
+	// UPCOMING is excluded outright because it has no audio yet, which is the same
+	// rule toolMode.isAudible states for the mix.
+	const audible = lane !== "upcoming" && !paused && !muted;
+
 	return (
-		<article className={styles.rtCard} data-lane={lane} data-item={item.id}>
-			<header className={styles.rtCardHeader}>
+		<article
+			className={styles.rtCard}
+			data-lane={lane}
+			data-item={item.id}
+			// The stylesheet's key for the brightness/saturation lift. An attribute
+			// rather than a class so the CSS reads as one table of lane x audible.
+			data-audible={audible}
+		>
+			{/* The lane is repeated here so the header's colour has a selector of its
+			    own to hang off. It is the same prop the card frame carries, not a
+			    second derivation, so the two cannot come to disagree. */}
+			<header className={styles.rtCardHeader} data-card-header data-lane={lane}>
 				{/* `title` gives the full subject on hover — the header ellipsises. */}
 				<h3 className={styles.rtCardTitle} data-card-title title={title}>
 					{title}
@@ -157,9 +216,26 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 				>
 					<span aria-hidden="true">{paused ? "▶" : "❚❚"}</span>
 				</button>
-				<span className={styles.rtCardLevel} data-muted={muted}>
-					{muted ? "Muted" : "Audible"}
-				</span>
+				<button
+					type="button"
+					className={styles.rtCardMute}
+					data-muted={muted}
+					// Named for what the press does, not for the state it is in: a
+					// button called "Muted" reads to a screen reader as an instruction
+					// to mute. aria-pressed carries the state.
+					aria-label={muted ? "Unmute" : "Mute"}
+					aria-pressed={muted}
+					title={muted ? "Unmute" : "Mute"}
+					onClick={onToggleMute}
+					// The lane slot and the card slot above both apply the active tool
+					// on pointerup (LaneSection, RadioTraffic's renderCard). Left to
+					// bubble, one press on this button under the mute tool would mute
+					// via the tool AND toggle via the button — two edits from one click,
+					// which reads as the button not working.
+					onPointerUp={(e) => e.stopPropagation()}
+				>
+					<SpeakerIcon muted={muted} />
+				</button>
 			</div>
 
 			<div className={styles.rtCardTabs}>
