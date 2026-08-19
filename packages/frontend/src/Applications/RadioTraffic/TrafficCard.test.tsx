@@ -31,7 +31,7 @@ vi.mock("./audioCoordinator", () => ({
 
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import type { Lane } from "./cardStatus";
-import { CARD_TABS } from "./CardTabBar";
+import { visibleCardTabs } from "./CardTabBar";
 import { makeItem, makeMeta } from "./tabs/cardTabFixtures";
 import { TrafficCard } from "./TrafficCard";
 
@@ -315,10 +315,28 @@ describe("TrafficCard clock-follow", () => {
 });
 
 describe("TrafficCard tabs", () => {
-	it("exposes five tabs and opens Details first", () => {
+	it("exposes six tabs and opens Details first", () => {
 		const { getAllByRole, container } = renderCard({ meta: makeMeta() });
-		expect(getAllByRole("tab")).toHaveLength(5);
+		expect(getAllByRole("tab")).toHaveLength(6);
 		expect(container.querySelector('[data-tab="details"]')).not.toBeNull();
+	});
+
+	it("offers Summary as a tab of its own, not as part of Details", () => {
+		const { getByRole, container } = renderCard({ meta: makeMeta() });
+		expect(container.querySelector('[data-field="subject"]')).toBeNull();
+		fireEvent.click(getByRole("tab", { name: "Summary" }));
+		expect(container.querySelector('[data-tab="summary"]')).not.toBeNull();
+		expect(container.querySelector('[data-field="subject"]')?.textContent).toBe(
+			makeMeta().subject,
+		);
+	});
+
+	it("does not offer a Summary tab to an item with no summary", () => {
+		// A tab that opens onto "No summary." is furniture in a 207px strip that
+		// already pages with arrows to reach its last tabs.
+		const { queryByRole } = renderCard({ meta: makeMeta({ subject: undefined }) });
+		expect(queryByRole("tab", { name: "Summary" })).toBeNull();
+		expect(queryByRole("tab", { name: "Details" })).not.toBeNull();
 	});
 
 	it("swaps the panel when another tab is picked", () => {
@@ -527,7 +545,9 @@ describe("TrafficCard, for an item with no metadata", () => {
 	it("renders as a real card on every tab", () => {
 		const { container, getByRole } = renderCard({ meta: undefined });
 		expect(container.querySelector("[data-lane]")).not.toBeNull();
-		for (const tab of CARD_TABS) {
+		// The tabs such an item HAS: with no metadata there is no summary, so the
+		// card does not offer that one at all (visibleCardTabs).
+		for (const tab of visibleCardTabs(undefined)) {
 			fireEvent.click(getByRole("tab", { name: tab.label }));
 			// Not merely "did not throw": a card whose panel paints an empty box
 			// is a dead tab, and 7% of the corpus lands here.

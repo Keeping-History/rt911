@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // isolated.
 afterEach(cleanup);
 
-import { CARD_TABS, CardTabBar } from "./CardTabBar";
+import { CARD_TABS, CardTabBar, visibleCardTabs } from "./CardTabBar";
+import { makeMeta } from "./tabs/cardTabFixtures";
 
 /**
  * vitest.setup.ts installs an INERT global ResizeObserver, so
@@ -44,7 +45,7 @@ function setOverflow(container: HTMLElement, overflowing: boolean) {
 function renderBar(overrides: Partial<Parameters<typeof CardTabBar>[0]> = {}) {
 	return render(
 		<CardTabBar
-			tabs={CARD_TABS}
+			tabs={overrides.tabs ?? CARD_TABS}
 			active={overrides.active ?? CARD_TABS[0].id}
 			onSelect={overrides.onSelect ?? (() => {})}
 		/>,
@@ -60,12 +61,20 @@ describe("CardTabBar", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("exposes five tabs", () => {
-		// Five is the card's contract, not an incidental count: the five panels
-		// Step 13 built are the five things a listener can ask a clip about.
-		expect(CARD_TABS).toHaveLength(5);
+	it("exposes six tabs", () => {
+		// Six is the card's contract, not an incidental count: the panels Step 13
+		// built plus Summary (story 035) are the things a listener can ask a clip
+		// about.
+		expect(CARD_TABS.map((tab) => tab.id)).toEqual([
+			"details",
+			"summary",
+			"transcript",
+			"parties",
+			"mentions",
+			"source",
+		]);
 		const { getAllByRole } = renderBar();
-		expect(getAllByRole("tab")).toHaveLength(5);
+		expect(getAllByRole("tab")).toHaveLength(6);
 	});
 
 	it("marks exactly the active tab selected", () => {
@@ -132,5 +141,36 @@ describe("CardTabBar", () => {
 		setOverflow(last.container, true);
 		expect(last.getByRole("button", { name: "Previous tab" })).toHaveProperty("disabled", false);
 		expect(last.getByRole("button", { name: "Next tab" })).toHaveProperty("disabled", true);
+	});
+});
+
+describe("visibleCardTabs", () => {
+	it("offers Summary to an item that has one", () => {
+		expect(visibleCardTabs(makeMeta()).map((tab) => tab.id)).toEqual(
+			CARD_TABS.map((tab) => tab.id),
+		);
+	});
+
+	it("drops Summary, and only Summary, when there is no summary", () => {
+		// Hidden rather than disabled: the strip is 207px and pages with arrows,
+		// so a permanently dead label would cost a live tab its place on screen.
+		for (const meta of [undefined, makeMeta({ subject: undefined }), makeMeta({ subject: " " })]) {
+			expect(visibleCardTabs(meta).map((tab) => tab.id)).toEqual([
+				"details",
+				"transcript",
+				"parties",
+				"mentions",
+				"source",
+			]);
+		}
+	});
+
+	it("renders exactly the tabs it hands the bar", () => {
+		// The bar takes the list rather than reading CARD_TABS itself, which is
+		// what lets one card show a tab another card does not.
+		const tabs = visibleCardTabs(undefined);
+		const { getAllByRole, queryByRole } = renderBar({ tabs, active: tabs[0].id });
+		expect(getAllByRole("tab")).toHaveLength(5);
+		expect(queryByRole("tab", { name: "Summary" })).toBeNull();
 	});
 });

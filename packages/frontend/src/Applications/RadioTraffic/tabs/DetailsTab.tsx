@@ -6,15 +6,17 @@ import { durationLabel, itemTiming, wallClockLabel } from "./itemTiming";
 import { chipColor, namespaceLabel, tagLabel, TAG_NAMESPACES } from "./tagPalette";
 
 /**
- * When the clip ran, how it is tagged, and what it was about — the three
- * columns of Figma's Details tab: Call Details, Tags, Summary.
+ * When the clip ran and how it is tagged — two of the three columns Figma drew
+ * on the Details tab. The third, Summary, is a tab of its own (SummaryTab.tsx):
+ * `subject` is prose of no fixed length and it was what made this panel's height
+ * unpredictable, which a shared fixed panel height cannot afford.
  *
- * The timings come off the MediaItem and the other two columns off ItemMeta,
- * which is why this panel still says something useful for the 59 items that
- * have no metadata: a clip always has a start, whether or not anything
- * transcribed it. Each column keeps its heading and prints its own "nothing
- * here" line rather than collapsing, so the three columns stay aligned across
- * cards and a reader can tell an untagged clip from a misrendered one.
+ * The timings come off the MediaItem and the tags off ItemMeta, which is why
+ * this panel still says something useful for the 59 items that have no
+ * metadata: a clip always has a start, whether or not anything transcribed it.
+ * Each column keeps its heading and prints its own "nothing here" line rather
+ * than collapsing, so the columns stay aligned across cards and a reader can
+ * tell an untagged clip from a misrendered one.
  *
  * Rows whose value is unknown are still dropped inside a column — an absent End
  * is not a fact about the recording, it is a fact about the row.
@@ -59,7 +61,6 @@ export const DetailsTab: React.FC<CardTabProps> = ({ item, meta, tzOffsetHours }
 	].filter((row) => row.value !== null);
 
 	const groups = tagGroups(meta?.tags);
-	const subject = meta?.subject?.trim();
 
 	return (
 		<div className={styles.rtTabPanel} data-tab="details">
@@ -118,17 +119,6 @@ export const DetailsTab: React.FC<CardTabProps> = ({ item, meta, tzOffsetHours }
 								</div>
 							))}
 						</dl>
-					)}
-				</section>
-
-				<section className={styles.rtPanelColumn} data-column="summary">
-					<h4 className={styles.rtPanelColumnHead}>Summary</h4>
-					{subject ? (
-						<p className={styles.rtSubject} data-field="subject">
-							{subject}
-						</p>
-					) : (
-						<p className={styles.rtEmpty}>No summary.</p>
 					)}
 				</section>
 			</div>
