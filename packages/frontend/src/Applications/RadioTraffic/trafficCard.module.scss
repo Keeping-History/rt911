@@ -246,7 +246,7 @@
   // this box is 206:54 at any card size without ever naming that ratio to
   // the layout engine.
   width: calc(206 / 210 * 100cqw);
-  height: calc(54 / 210 * 100cqw);
+  height: calc(32 / 210 * 100cqw);
   margin: 0 calc(2 / 210 * 100cqw);
   // Not `hidden`: an `overflow: hidden` box with a scrollable overflow region is
   // a scroll container the wheel latches onto, and a card sits inside a lane
