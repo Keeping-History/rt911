@@ -22,6 +22,7 @@
 // slot 2".
 
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
+import { startMs } from "../radio-core/stationGrouping";
 import { type Lane, laneFor } from "./cardStatus";
 
 /** Every lane, in the order they stack down the window. */
@@ -178,4 +179,71 @@ export function reorderLane(
 ): LaneOrder {
 	const moved: LaneOrder = { ...order, [lane]: moveWithinLane(order[lane], fromId, toIndex) };
 	return reconcileLaneOrder(moved, membership);
+}
+
+/**
+ * The render order after two AUTOMATIC rules layered on top of
+ * {@link applyManualOrder} — not a replacement for it. A drag pin still names
+ * where a card sits among its lane's own siblings; what this function decides
+ * is what happens to that arrangement from one tick to the next as the SET of
+ * siblings changes, which a pin says nothing about.
+ *
+ *   1. NEW ARRIVAL. Any id in `items` that `previousIds` has never rendered is
+ *      genuinely new this tick — a clip that just went live, just ended into
+ *      PREVIOUS, or just entered the UPCOMING window — and moves to the very
+ *      front, newest `start_date` first, ahead of everything the lane already
+ *      had. Every id `previousIds` already knows about keeps whatever
+ *      relative order `items` gave it, untouched — so a manual pin (or plain
+ *      chronological order) among already-seen cards survives.
+ *
+ *   2. ACTIVE LOCK. `activeId` is the one card that must not appear to move —
+ *      the shell's notion of "highlighted or playing" (see LaneSection's
+ *      `activeId` prop). If it rendered last tick, rule 1 may have pushed it
+ *      right by however many new arrivals just landed ahead of it; this
+ *      splices it back to the exact index it held before, so the listener's
+ *      eye finds it in the same place no matter how much else changed. Only
+ *      that one id is touched — every OTHER card still reflows normally.
+ *
+ * `previousIds` being `undefined` means this is the lane's first-ever render,
+ * or the caller simply has nothing to compare against — there is no "before"
+ * to hold anything stable relative to, and calling every item "new" would
+ * reorder a lane that has not actually changed. So this is a passthrough: the
+ * order `items` already has is returned exactly as given.
+ */
+export function stabilizeLaneOrder(
+	items: readonly MediaItem[],
+	previousIds: readonly number[] | undefined,
+	activeId: number | null,
+): MediaItem[] {
+	if (previousIds === undefined) return [...items];
+
+	const previousIndex = new Map(previousIds.map((id, i) => [id, i] as const));
+	const seen: MediaItem[] = [];
+	const fresh: MediaItem[] = [];
+	for (const item of items) {
+		(previousIndex.has(item.id) ? seen : fresh).push(item);
+	}
+	// Newest first among the arrivals themselves, whichever direction the
+	// caller's own chronological order happens to run — several clips can go
+	// live in the same tick, and the criterion is the clock, not the caller's
+	// sort.
+	fresh.sort((a, b) => startMs(b) - startMs(a));
+
+	const result = [...fresh, ...seen];
+	if (activeId === null) return result;
+
+	const activeWas = previousIndex.get(activeId);
+	// Not rendered last tick — nothing to hold it stable relative to. A card
+	// that only became active this same tick has no "before" position for a
+	// jump to be measured against.
+	if (activeWas === undefined) return result;
+
+	const activeNow = result.findIndex((item) => item.id === activeId);
+	// Left the lane entirely, or never moved — either way there is nothing to
+	// splice back.
+	if (activeNow === -1 || activeNow === activeWas) return result;
+
+	const [active] = result.splice(activeNow, 1);
+	result.splice(Math.min(activeWas, result.length), 0, active);
+	return result;
 }
