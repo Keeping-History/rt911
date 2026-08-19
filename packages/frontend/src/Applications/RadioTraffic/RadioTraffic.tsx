@@ -205,6 +205,16 @@ export const RadioTraffic: React.FC = () => {
 				| Record<string, unknown>
 				| undefined,
 	);
+	/**
+	 * Story 050: `RadioTraffic` renders unconditionally in `Desktop.tsx` — this
+	 * is the only signal that separates "the window is open" from "the desktop
+	 * booted". `RadioTuner.tsx` and `TV.tsx` already read the same selector
+	 * (currently only for an analytics toggle); this app is the first to gate
+	 * real work on it.
+	 */
+	const isOpen = useAppManager(
+		(state) => state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
 
 	// Persisted state is read ONCE, through the sanitizer, and owned as React
 	// state from there on. Re-reading it would fight the dispatch below, which
@@ -284,11 +294,17 @@ export const RadioTraffic: React.FC = () => {
 		getUpcomingMp3Items,
 	} = useContext(MediaStreamContext);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-only
+	// Story 050: gated on isOpen, not mount-only. subscribeMp3/unsubscribeMp3
+	// are already ref-counted per appId (MediaStreamProvider.tsx), so this is
+	// the sanctioned way to opt in and out — closing the window must stop
+	// pulling mp3 data from the streamer on this app's behalf, not just stop
+	// showing what already arrived. Reopening re-subscribes and picks the
+	// stream back up from wherever it is, same as a fresh mount would.
 	useEffect(() => {
+		if (!isOpen) return;
 		subscribeMp3(appId);
 		return () => unsubscribeMp3(appId);
-	}, [subscribeMp3, unsubscribeMp3]);
+	}, [isOpen, subscribeMp3, unsubscribeMp3]);
 
 	// ── The clock ────────────────────────────────────────────────────────────
 	// Read-only: every clock WRITE in this repo goes through
@@ -480,7 +496,13 @@ export const RadioTraffic: React.FC = () => {
 	// the swap needs no reload and costs no playback position the coordinator's
 	// clock reseek does not immediately restore.
 	const registeredRef = useRef<Set<number>>(new Set());
+	// Story 050: gated on isOpen, so a closed window registers nothing new — no
+	// <audio> element, no fetch, for a listener who has never opened the app.
+	// Skipping the body while closed is only half of it, though: it does
+	// nothing about elements this effect already registered before the close,
+	// which is what the close-transition effect right below is for.
 	useEffect(() => {
+		if (!isOpen) return;
 		const desired = new Map<number, string>();
 		for (const item of lanes.live) {
 			if (!stopped.has(item.id))
@@ -499,11 +521,27 @@ export const RadioTraffic: React.FC = () => {
 			ensure(itemId, url);
 			registeredRef.current.add(itemId);
 		}
-	}, [lanes.live, lanes.previous, stopped, userStarted, settings.playOriginalAudio]);
+	}, [isOpen, lanes.live, lanes.previous, stopped, userStarted, settings.playOriginalAudio]);
+
+	// Story 050: the window closing is not an unmount — this component stays
+	// mounted for the desktop's whole lifetime — so nothing else stops the
+	// sound. This is the explicit close-transition act: it releases whatever
+	// the registration effect above registered before the close, including a
+	// PREVIOUS clip the listener started by hand, which is exactly as audible
+	// and exactly as much a leak as a LIVE one if left behind. Runs on mount
+	// too when the window starts closed, which is a harmless no-op — nothing
+	// is registered yet.
+	useEffect(() => {
+		if (isOpen) return;
+		releaseAll();
+		registeredRef.current.clear();
+	}, [isOpen]);
 
 	// The app unmounting is the one moment nothing else can stop the sound:
 	// these elements are never in the DOM, so a dropped registry is a leak that
-	// keeps playing.
+	// keeps playing. Kept alongside the close-transition effect above as a
+	// second, unconditional line of defense — this fires even if the desktop
+	// ever stops rendering RadioTraffic outright.
 	useEffect(
 		() => () => {
 			releaseAll();

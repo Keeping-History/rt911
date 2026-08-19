@@ -23,6 +23,12 @@ const clock = vi.hoisted(() => ({
 
 const mockAppData = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 const mockDispatch = vi.hoisted(() => vi.fn());
+// Story 050: whether the window is open — the gate under test. A plain
+// mutable ref, not React state, because the mock's useAppManager isn't a real
+// store; a test flips this and calls `rerender` to make it take effect, the
+// same technique "the clock" describe block already uses to move the virtual
+// clock.
+const mockAppOpen = vi.hoisted(() => ({ current: true }));
 
 vi.mock("classicy", () => ({
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -147,7 +153,9 @@ vi.mock("classicy", () => ({
 			System: {
 				Manager: {
 					Applications: {
-						apps: { "RadioTraffic.app": { open: true, data: mockAppData.current } },
+						apps: {
+							"RadioTraffic.app": { open: mockAppOpen.current, data: mockAppData.current },
+						},
 					},
 				},
 			},
@@ -339,6 +347,7 @@ beforeEach(() => {
 	clock.tzOffset = -4;
 	clock.paused = false;
 	mockAppData.current = {};
+	mockAppOpen.current = true;
 	mockDispatch.mockClear();
 	audio.elements.clear();
 	audio.released.length = 0;
@@ -360,6 +369,135 @@ describe("RadioTraffic — the mp3 subscription", () => {
 		expect(streamCalls.unsubscribe).toEqual([]);
 		unmount();
 		expect(streamCalls.unsubscribe).toEqual(["RadioTraffic.app"]);
+	});
+});
+
+// Story 050. `RadioTraffic` renders unconditionally in Desktop.tsx — closing
+// the window is a `state.System.Manager.Applications.apps[appId].open` flip,
+// never an unmount — so these are the transitions that have to do the work
+// the old mount-only effects used to do for free.
+describe("RadioTraffic — the window lifecycle (story 050)", () => {
+	/**
+	 * Re-renders with the same shape of context so a `mockAppOpen` flip takes
+	 * effect — the same technique the "the clock" describe block above uses to
+	 * move the virtual clock via `rerender`, since the mocked `useAppManager`
+	 * is a plain function over a mutable ref, not a real reactive store.
+	 */
+	async function toggleOpen(
+		rerender: (ui: React.ReactElement) => void,
+		open: boolean,
+		over: Partial<MediaStreamContextValue> = {},
+	) {
+		mockAppOpen.current = open;
+		const ctx: Partial<MediaStreamContextValue> = {
+			mp3Items: LIVE,
+			mp3History: HISTORY,
+			mp3Meta: META,
+			mp3MetaGeneration: "g1",
+			seekInFlight: false,
+			subscribeMp3: (id: string) => streamCalls.subscribe.push(id),
+			unsubscribeMp3: (id: string) => streamCalls.unsubscribe.push(id),
+			getUpcomingMp3Items: () => UPCOMING,
+			...over,
+		};
+		await act(async () => {
+			rerender(
+				<MediaStreamContext.Provider value={ctx as MediaStreamContextValue}>
+					<RadioTraffic />
+				</MediaStreamContext.Provider>,
+			);
+		});
+	}
+
+	// Criterion 1 and 2, from a cold start: a listener who never opens the app
+	// must cost nothing at all.
+	it("subscribes nothing and registers no audio while the window starts closed", async () => {
+		mockAppOpen.current = false;
+		await renderSettled();
+		expect(streamCalls.subscribe).toEqual([]);
+		expect(audio.elements.size).toBe(0);
+	});
+
+	// Criterion 1 and 2, mid-session: an item arriving while the window is
+	// closed must not trigger a fetch either — the registration effect has to
+	// stay gated on every re-render, not just the one at close time.
+	it("registers no new element for a LIVE item that arrives while the window is closed", async () => {
+		const { rerender } = await renderSettled();
+		await toggleOpen(rerender, false);
+		// A sentinel: if the gate ever failed, ensure() would put "1" straight
+		// back into this map on the very next render.
+		audio.elements.delete(1);
+
+		const arrival = item(9, "2001-09-11T12:46:55.000Z", "2001-09-11T12:52:00.000Z");
+		await toggleOpen(rerender, false, { mp3Items: [...LIVE, arrival] });
+
+		expect(audio.elements.has(9)).toBe(false);
+		expect(audio.elements.has(1)).toBe(false);
+	});
+
+	// Criteria 3, 4 and 5: closing releases every registered element — LIVE
+	// and a PREVIOUS clip the listener started by hand alike — and reopening
+	// puts the mix back exactly as if the app had stayed open, with the
+	// position/badge pipe still live.
+	it("closing then reopening releases and re-registers every element, resuming LIVE playback at the clock position", async () => {
+		const { rerender } = await renderSettled();
+		const before: Record<number, HTMLAudioElement | undefined> = {
+			1: audio.elements.get(1),
+			2: audio.elements.get(2),
+			3: audio.elements.get(3),
+		};
+		expect(Object.values(before).every(Boolean)).toBe(true);
+
+		// A PREVIOUS clip the listener started by hand before closing — this
+		// must not be left playing invisibly either.
+		const transport = cardOf(5)?.querySelector("button[aria-label='Play']");
+		fireEvent.click(transport as Element);
+		await act(async () => {});
+		const previousBefore = audio.elements.get(5);
+		expect(previousBefore).toBeDefined();
+
+		await toggleOpen(rerender, false);
+		expect(streamCalls.unsubscribe).toEqual(["RadioTraffic.app"]);
+
+		await toggleOpen(rerender, true);
+		expect(streamCalls.subscribe).toEqual(["RadioTraffic.app", "RadioTraffic.app"]);
+
+		// Every element is a fresh registration, not the one left running
+		// through the close — proof the close actually released it rather than
+		// leaving it playing invisibly, LIVE and PREVIOUS alike.
+		expect(audio.elements.get(1)).not.toBe(before[1]);
+		expect(audio.elements.get(2)).not.toBe(before[2]);
+		expect(audio.elements.get(3)).not.toBe(before[3]);
+		expect(audio.elements.get(5)).not.toBe(previousBefore);
+
+		// The reopened element still reports its position off the same live
+		// pipe as before the close — the same "In sync" reading the
+		// filter-toggle test above gets for the identical clock offset, so
+		// reopening did not leave the badge stuck on a stale or blank reading.
+		const onTheClock = calcSeekSeconds(LIVE[1], NOW_MS);
+		const el2 = audio.elements.get(2) as HTMLAudioElement;
+		el2.currentTime = onTheClock;
+		// A raw dispatchEvent, unlike fireEvent, is not itself act()-wrapped —
+		// wrap the flush explicitly so the resulting position update commits
+		// before the badge is read, the same way a browser's real timeupdate
+		// would land inside React's own event handling.
+		await act(async () => {
+			el2.dispatchEvent(new Event("timeupdate"));
+		});
+		expect(badgeOf(2)).toBe("In sync");
+	});
+
+	// Criterion 6: open/close is a lifecycle change, not a state reset — the
+	// persisted filters/tool/lane order/mutes must be untouched by the cycle.
+	it("does not touch persisted settings across a close/reopen cycle", async () => {
+		const { rerender } = await renderSettled();
+		fireEvent.click(screen.getByLabelText("Primary"));
+		const beforeClose = lastPersisted();
+
+		await toggleOpen(rerender, false);
+		await toggleOpen(rerender, true);
+
+		expect(lastPersisted()).toEqual(beforeClose);
 	});
 });
 
