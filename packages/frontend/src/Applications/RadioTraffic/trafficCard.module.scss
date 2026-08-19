@@ -92,6 +92,23 @@
   --rt-card-accent: #0000ff;
 }
 
+// Silence is a THIRD step on the same hue, not a new colour: a card running but
+// carrying no traffic sits half way between the lane's idle accent and its
+// audible one, so it reads as "playing, nothing to hear" rather than as a
+// stopped card.
+//
+// [data-audible="true"] is load-bearing, not decoration. A muted or paused card
+// already takes the idle accent, and dimming that further would say nothing —
+// the listener is not hearing it either way, so quiet is not news about it.
+// Silence is only worth reporting about a card you are actually listening to.
+.rtCard[data-lane="live"][data-audible="true"][data-silent="true"] {
+  --rt-card-accent: #d62845; // midpoint of #ad001d and #ff4f6d
+}
+
+.rtCard[data-lane="previous"][data-audible="true"][data-silent="true"] {
+  --rt-card-accent: #0000c3; // midpoint of #000088 and #0000ff
+}
+
 // Last of the lane rules on purpose: it must win the specificity tie with the
 // audible lift above even if a caller ever contradicts TrafficCard and marks an
 // UPCOMING card audible.
@@ -147,8 +164,10 @@
   background: var(--color-system-03);
 }
 
-// The four badge states must be tellable apart at a glance: they are the only
-// thing on the card that says whether what you are hearing is the truth.
+// The five badge states must be tellable apart at a glance: they are the only
+// thing on the card that says whether what you are hearing is the truth. Every
+// kind needs a rule of its own here — one without falls back to the block above
+// and reads as a countdown, which is the wrong answer told confidently.
 .rtCardBadge[data-badge="in-sync"] {
   background: #a8d8a8;
 }
@@ -167,6 +186,13 @@
 
 .rtCardBadge[data-badge="playing"] {
   background: #b8c8e8;
+}
+
+// Neutral, where the other four are tinted: silence is the ABSENCE of something
+// to report, not a condition to react to. A tint here would make a quiet stretch
+// compete for attention with a card that has actually come off the clock.
+.rtCardBadge[data-badge="silence"] {
+  background: #d0d0d0;
 }
 
 // Waveform -----------------------------------------------------------------
