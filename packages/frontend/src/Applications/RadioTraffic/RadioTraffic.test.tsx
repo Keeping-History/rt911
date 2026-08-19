@@ -59,36 +59,58 @@ vi.mock("classicy", () => ({
 			{children}
 		</div>
 	),
+	// Rest props pass through (role, aria-selected, ref …) rather than being
+	// dropped, because story 030 put CardTabBar's own tabs on this component
+	// specifically for that pass-through — the real ClassicyButton sets no role
+	// of its own, unlike ClassicyBevelButton above.
 	ClassicyButton: ({
 		children,
 		onClickFunc,
+		...rest
 	}: {
 		children?: React.ReactNode;
-		onClickFunc?: () => void;
-	}) => (
-		<button type="button" onClick={onClickFunc}>
+		onClickFunc?: React.MouseEventHandler<HTMLButtonElement>;
+	} & Record<string, unknown>) => (
+		<button {...rest} type="button" onClick={onClickFunc}>
 			{children}
 		</button>
 	),
-	// The lane strip's mute-all toggle (story 040). Reproduced rather than
-	// omitted because this suite asserts on the LIVE lane going silent, and the
-	// only way in is this control: `on` and `onChangeFunc` are the whole of the
-	// contract LaneSection uses, and aria-pressed is how a test finds its state.
+	// Reproduced rather than omitted because this suite drives several of the
+	// controls story 030 moved onto this component — the lane strip's mute-all
+	// toggle (story 040) and the tool palette's radio group among them — through
+	// the real DOM. `mode` decides the role the same way the real component
+	// does (hardcoded, not merely passed through): "radio" gets role="radio" and
+	// aria-checked, "toggle"/"push" (the default) get role="button" and
+	// aria-pressed, which is how a test finds either kind of control's state or
+	// selects it by ARIA role at all.
 	ClassicyBevelButton: ({
 		children,
+		mode = "push",
 		on,
+		onClickFunc,
 		onChangeFunc,
 		...rest
 	}: {
 		children?: React.ReactNode;
+		mode?: "push" | "toggle" | "radio" | "popup";
 		on?: boolean;
+		onClickFunc?: React.MouseEventHandler<HTMLButtonElement>;
 		onChangeFunc?: (on: boolean) => void;
 	} & Record<string, unknown>) => (
 		<button
 			{...rest}
 			type="button"
-			aria-pressed={on ?? false}
-			onClick={() => onChangeFunc?.(!on)}
+			role={mode === "radio" ? "radio" : "button"}
+			aria-checked={mode === "radio" ? (on ?? false) : undefined}
+			aria-pressed={mode === "toggle" || mode === "push" ? (on ?? false) : undefined}
+			onClick={(e) => {
+				// A radio only fires a change when the click actually turns it on —
+				// clicking the already-active tool reports through onClickFunc alone,
+				// same as the real component.
+				if (mode === "toggle") onChangeFunc?.(!(on ?? false));
+				else if (mode === "radio" && !(on ?? false)) onChangeFunc?.(true);
+				onClickFunc?.(e);
+			}}
 		>
 			{children}
 		</button>

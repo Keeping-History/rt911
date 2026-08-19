@@ -306,17 +306,23 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 					</ClassicyBevelButton>
 				)}
 				{collapsible && (
-					<button
-						type="button"
-						className={styles.rtLaneToggle}
+					// A Classicy bevel button rather than a bare <button>, like the mute
+					// control above — plain `push` mode (its default) because this is a
+					// disclosure trigger, not a control that holds a state: aria-expanded
+					// already says which way it currently opens, and adding
+					// ClassicyBevelButton's own aria-pressed on top (mode="toggle") would
+					// be a second, redundant state for the same fact.
+					<ClassicyBevelButton
+						square
+						bevelWidth="small"
 						data-lane-toggle
 						aria-expanded={!isCollapsed}
 						aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${label}`}
 						title={`${isCollapsed ? "Expand" : "Collapse"} ${label}`}
-						onClick={() => onToggleCollapse?.(!isCollapsed)}
+						onClickFunc={() => onToggleCollapse?.(!isCollapsed)}
 					>
 						<span aria-hidden="true">{isCollapsed ? "▸" : "▾"}</span>
-					</button>
+					</ClassicyBevelButton>
 				)}
 			</div>
 

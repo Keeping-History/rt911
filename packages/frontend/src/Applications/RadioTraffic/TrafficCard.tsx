@@ -23,6 +23,7 @@
 //   currentPct   the playhead over the same, 0..1 — the element's position when
 //                there is an element, the clock's when there is not (story 028).
 
+import { ClassicyBevelButton } from "classicy";
 import type React from "react";
 import {
 	useCallback,
@@ -348,26 +349,31 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 			</div>
 
 			<div className={styles.rtCardControls}>
-				<button
-					type="button"
-					className={styles.rtCardTransport}
+				<ClassicyBevelButton
+					square
+					bevelWidth="small"
 					aria-label={paused ? "Play" : "Pause"}
 					title={paused ? "Play" : "Pause"}
-					onClick={onTransport}
+					onClickFunc={onTransport}
 				>
 					<span aria-hidden="true">{paused ? "▶" : "❚❚"}</span>
-				</button>
-				<button
-					type="button"
-					className={styles.rtCardMute}
+				</ClassicyBevelButton>
+				<ClassicyBevelButton
+					mode="toggle"
+					square
+					bevelWidth="small"
+					// Controlled: the mix's own mute is the single source of truth (the
+					// card is a view over props, not a second copy of it), and toggle
+					// mode is what gives this its own aria-pressed for free.
+					on={muted}
 					data-muted={muted}
 					// Named for what the press does, not for the state it is in: a
 					// button called "Muted" reads to a screen reader as an instruction
-					// to mute. aria-pressed carries the state.
+					// to mute. aria-pressed is ClassicyBevelButton's own, computed from
+					// `on` — the same fact `muted` carries.
 					aria-label={muted ? "Unmute" : "Mute"}
-					aria-pressed={muted}
 					title={muted ? "Unmute" : "Mute"}
-					onClick={onToggleMute}
+					onChangeFunc={onToggleMute}
 					// The lane slot and the card slot above both apply the active tool
 					// on pointerup (LaneSection, RadioTraffic's renderCard). Left to
 					// bubble, one press on this button under the mute tool would mute
@@ -376,7 +382,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 					onPointerUp={(e) => e.stopPropagation()}
 				>
 					<SpeakerIcon muted={muted} />
-				</button>
+				</ClassicyBevelButton>
 			</div>
 
 			<div className={styles.rtCardTabs}>

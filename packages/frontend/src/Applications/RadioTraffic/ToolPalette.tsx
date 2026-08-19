@@ -1,4 +1,4 @@
-import { ClassicyBalloonHelp } from "classicy";
+import { ClassicyBalloonHelp, ClassicyBevelButton } from "classicy";
 import type React from "react";
 import styles from "./trafficTools.module.scss";
 import { type Tool, TOOL_BALLOONS, TOOL_GLYPHS, TOOL_LABELS, TOOLS } from "./toolMode";
@@ -26,24 +26,32 @@ interface ToolPaletteProps {
  * row and every `role="radio"` query are indifferent to — the reason
  * TV/ThumbnailTile.tsx needs the hook (drop targets resolved by walking direct
  * children) has no counterpart here.
+ *
+ * Each tool is a `ClassicyBevelButton` in `radio` mode rather than a bare
+ * `<button role="radio">`: the mode is what gives it `role="radio"` and
+ * `aria-checked` for free (both hardcoded off `mode`, so nothing here has to
+ * compute them), and `square` is the icon-only sizing instead of the hand-rolled
+ * width/height trafficTools.module.scss used to carry.
  */
 export const ToolPalette: React.FC<ToolPaletteProps> = ({ tool, onSelect }) => (
 	<div className={styles.rtToolPalette} role="radiogroup" aria-label="Tools">
 		{TOOLS.map((t) => (
 			<ClassicyBalloonHelp key={t} title={TOOL_LABELS[t]} content={TOOL_BALLOONS[t]}>
-				<button
-					type="button"
-					role="radio"
-					aria-checked={t === tool}
+				<ClassicyBevelButton
+					mode="radio"
+					square
+					bevelWidth="small"
 					aria-label={TOOL_LABELS[t]}
 					title={TOOL_LABELS[t]}
-					className={
-						t === tool ? `${styles.rtTool} ${styles.rtToolActive}` : styles.rtTool
-					}
-					onClick={() => onSelect(t)}
+					on={t === tool}
+					// Fired on every click, including the already-active tool's own —
+					// `onChangeFunc` would stay silent there (radio mode no-ops a
+					// click that does not change the on-state), and the palette
+					// reports every pick regardless.
+					onClickFunc={() => onSelect(t)}
 				>
 					<span aria-hidden="true">{TOOL_GLYPHS[t]}</span>
-				</button>
+				</ClassicyBevelButton>
 			</ClassicyBalloonHelp>
 		))}
 	</div>

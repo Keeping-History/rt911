@@ -17,17 +17,18 @@
 
 // A large namespace's row sits at the same indent as a disclosure header so the
 // eight namespaces read as one list, despite behaving differently.
-.rtFilterLargeRow {
+//
+// Story 030: ClassicyBevelButton builds its own className and drops the one it
+// is handed, so the row hangs its look off `[data-filter-large-row]` instead —
+// the same pattern laneSection.module.scss uses for `[data-lane-mute]`.
+.rtFilterTree [data-filter-large-row] {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 4px;
-  padding: 0;
   font-family: inherit;
   font-size: inherit;
   color: var(--color-system-06);
-  background: none;
-  border: none;
   text-align: left;
   cursor: pointer;
 }
