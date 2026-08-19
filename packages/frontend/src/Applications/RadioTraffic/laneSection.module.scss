@@ -136,11 +136,11 @@
 // way animating mask-position would cost.
 @keyframes rtStripeDrift {
   from {
-    transform: translateX(0);
+    transform: translateX(var(--rt-lane-stripe-size));
   }
 
   to {
-    transform: translateX(var(--rt-lane-stripe-size));
+    transform: translateX(0);
   }
 }
 
@@ -148,7 +148,7 @@
   --rt-lane-fill: #ac3c3c;
   --rt-lane-edge: #6c0d0d;
   --rt-stripe-light: #cd8a8a;
-  --rt-stripe-drift-duration: 8s;
+  --rt-stripe-drift-duration: 5s;
 
   // Clips the overlay's one-tile overhang (below) back to the lane. Safe here
   // because nothing is meant to escape a lane: the cards scroll in their own
