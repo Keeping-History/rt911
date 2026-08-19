@@ -1,11 +1,11 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // rt911 has no global test setup, so testing-library does not auto-clean the
 // DOM between tests; do it explicitly to keep document-level queries isolated.
 afterEach(cleanup);
 
-import { TOOL_LABELS, TOOLS } from "./toolMode";
+import { TOOL_BALLOONS, TOOL_LABELS, TOOLS } from "./toolMode";
 import { ToolPalette } from "./ToolPalette";
 
 const labels = TOOLS.map((tool) => TOOL_LABELS[tool]);
@@ -59,5 +59,50 @@ describe("ToolPalette", () => {
 	it("groups the tools so a screen reader reads them as one choice", () => {
 		const { getByRole } = render(<ToolPalette tool="arrow" onSelect={() => {}} />);
 		expect(getByRole("radiogroup", { name: "Tools" })).not.toBeNull();
+	});
+
+	describe("balloon help", () => {
+		it("gives every tool its own balloon anchor", () => {
+			const { getAllByRole } = render(<ToolPalette tool="arrow" onSelect={() => {}} />);
+			// ClassicyBalloonHelp's anchor is role="tooltip" — one per tool, and no
+			// button left without one, which is the whole of the requirement.
+			expect(getAllByRole("tooltip")).toHaveLength(TOOLS.length);
+			for (const tool of TOOLS) {
+				const button = document.querySelector(
+					`[aria-label="${TOOL_LABELS[tool]}"]`,
+				) as HTMLElement | null;
+				expect(button?.closest('[role="tooltip"]')).not.toBeNull();
+			}
+		});
+
+		it("shows each tool's own copy on hover", () => {
+			// The glyphs are placeholders, so the balloon is the only thing that
+			// says what a tool does; a shared or empty string would leave the modal
+			// palette exactly as unreadable as it was.
+			vi.useFakeTimers();
+			try {
+				for (const tool of TOOLS) {
+					cleanup();
+					render(<ToolPalette tool="arrow" onSelect={() => {}} />);
+					const anchor = document
+						.querySelector(`[aria-label="${TOOL_LABELS[tool]}"]`)
+						?.closest('[role="tooltip"]') as HTMLElement;
+					fireEvent.mouseEnter(anchor);
+					act(() => {
+						vi.advanceTimersByTime(600);
+					});
+					expect(screen.getByText(TOOL_BALLOONS[tool])).toBeTruthy();
+				}
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("says something different about every tool", () => {
+			// Four tools that all claim the same thing would pass the test above
+			// and still tell the listener nothing.
+			expect(new Set(Object.values(TOOL_BALLOONS)).size).toBe(TOOLS.length);
+			expect(Object.values(TOOL_BALLOONS).every((t) => t.length > 0)).toBe(true);
+		});
 	});
 });

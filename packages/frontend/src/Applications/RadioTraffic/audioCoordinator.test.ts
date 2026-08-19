@@ -644,5 +644,82 @@ describe("audioCoordinator autoplay handling", () => {
 			document.dispatchEvent(new Event("click"));
 			expect(playSpy).not.toHaveBeenCalled();
 		});
+
+		// The overlay bug. "The clock does not claim this element" is a reason not
+		// to RESTART it; it is not a reason to leave it holding the token that is
+		// keeping "click anywhere to start audio" on screen, because nothing else
+		// will ever clear that token and the listener has no other move to make.
+		//
+		// Two ordinary elements land here: a listener-started PREVIOUS clip, for
+		// which the shell's itemFor returns undefined on purpose, and a LIVE card
+		// whose item arrived via the history snapshot or the reveal buffer instead
+		// of the live mp3 set.
+		it("retries a BLOCKED element the clock source does not claim", async () => {
+			catalogue = [];
+			connect();
+			playSpy.mockRejectedValue(
+				new DOMException("autoplay blocked", "NotAllowedError"),
+			);
+			ensure(1, "a.mp3");
+			await settlePlay();
+			expect(isAudioBlocked()).toBe(true);
+
+			playSpy.mockResolvedValue(undefined);
+			document.dispatchEvent(new Event("click"));
+			await settlePlay();
+			expect(isAudioBlocked()).toBe(false);
+		});
+
+		// The Safari shape of the same thing: the muted play() resolved, so the
+		// element was never "refused", and then the gesture-less unmute got it
+		// paused. The token is real either way.
+		it("retries after a pause it did not initiate, even unclaimed", async () => {
+			catalogue = [];
+			connect();
+			const el = ensure(1, "a.mp3");
+			await settlePlay();
+			el.dispatchEvent(new Event("pause"));
+			expect(isAudioBlocked()).toBe(true);
+
+			playSpy.mockClear();
+			document.dispatchEvent(new Event("click"));
+			await settlePlay();
+			expect(playSpy).toHaveBeenCalled();
+			expect(isAudioBlocked()).toBe(false);
+		});
+
+		// Every blocked element has to clear, not just the first: the overlay is
+		// "any token present", so one card left behind keeps it on screen over a
+		// grid that is otherwise playing.
+		it("clears every blocked element's token on one gesture", async () => {
+			connect();
+			playSpy.mockRejectedValue(
+				new DOMException("autoplay blocked", "NotAllowedError"),
+			);
+			ensure(1, "a.mp3");
+			ensure(2, "b.mp3");
+			await settlePlay();
+			expect(isAudioBlocked()).toBe(true);
+
+			playSpy.mockResolvedValue(undefined);
+			document.dispatchEvent(new Event("click"));
+			await settlePlay();
+			expect(isAudioBlocked()).toBe(false);
+		});
+
+		// A refusal that survives the gesture must leave the overlay up rather
+		// than flickering it away — the listener's click genuinely did not work.
+		it("keeps the overlay up when the retry is refused again", async () => {
+			connect();
+			playSpy.mockRejectedValue(
+				new DOMException("autoplay blocked", "NotAllowedError"),
+			);
+			ensure(1, "a.mp3");
+			await settlePlay();
+
+			document.dispatchEvent(new Event("click"));
+			await settlePlay();
+			expect(isAudioBlocked()).toBe(true);
+		});
 	});
 });

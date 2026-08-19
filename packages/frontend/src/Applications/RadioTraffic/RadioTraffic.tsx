@@ -23,6 +23,7 @@ import {
 	ClassicyApp,
 	ClassicyIcons,
 	ClassicyWindow,
+	intToHex,
 	quitMenuItemHelper,
 	registerClassicyIcons,
 	useAppManager,
@@ -48,7 +49,7 @@ import {
 import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { isAudioBlocked, subscribeAudioBlocked } from "../radio-core/audioBlocked";
 import { resolveAudioUrl } from "../radio-core/audioSource";
-import { startMs } from "../radio-core/stationGrouping";
+import { BROADCAST_STATIONS, groupStations, startMs } from "../radio-core/stationGrouping";
 import appIconPng from "./app.png";
 import { connectClock, clockMoved, ensure, release, releaseAll, setLevel } from "./audioCoordinator";
 import { historyPool, type Lane, laneFor, rememberItems } from "./cardStatus";
@@ -56,7 +57,12 @@ import { FilterTree } from "./FilterTree";
 import { LANES, type LaneOrder, reconcileLaneOrder, reorderLane } from "./laneOrder";
 import { LaneSection } from "./LaneSection";
 import styles from "./radioTraffic.module.scss";
-import { radioTrafficSetState, sanitizeRadioTrafficState } from "./RadioTrafficContext";
+import {
+	radioTrafficSetState,
+	sanitizeRadioTrafficState,
+	type WaveformColorSettings,
+} from "./RadioTrafficContext";
+import { RadioTrafficSettingsWindow } from "./RadioTrafficSettingsWindow";
 import { groupVocabulary, matchesFilter } from "./tagFilter";
 import { TagPickerWindow } from "./TagPickerWindow";
 import { reconcileTagVocabulary, type VocabularyState } from "./tagVocabulary";
@@ -106,6 +112,29 @@ function mergeById(...lists: readonly (readonly MediaItem[])[]): MediaItem[] {
 	const byId = new Map<number, MediaItem>();
 	for (const list of lists) for (const item of list) byId.set(item.id, item);
 	return [...byId.values()];
+}
+
+/**
+ * Everything that is comm traffic — i.e. everything the Radio Tuner does not own.
+ *
+ * The mp3 stream carries both kinds of audio, and BROADCAST_STATIONS is the one
+ * set that splits them: the Tuner filters TO it (RadioTuner.tsx), the Scanner
+ * filters AWAY from it (RadioScanner.tsx), and this app was doing neither — so
+ * WCBS, WINS, WABC and the rest of the fourteen continuous broadcasters were
+ * arriving as traffic cards. This is the Scanner's `!BROADCAST_STATIONS.has(key)`
+ * test, unchanged.
+ *
+ * Station membership is asked via groupStations because the source→key rule
+ * (`source`, falling back to `title`) is stationGrouping's and is not exported
+ * on its own. Reimplementing it here would be a second answer free to disagree
+ * with the ten consumers that already share the first; cardStatus.laneFor takes
+ * the same one-item-station route for the same reason. The regrouping reorders
+ * the pool, which is harmless — partitionLanes sorts every lane afterwards.
+ */
+function excludeBroadcastStations(pool: readonly MediaItem[]): MediaItem[] {
+	return groupStations([...pool])
+		.filter((station) => !BROADCAST_STATIONS.has(station.key))
+		.flatMap((station) => station.items);
 }
 
 /** Every card, in its lane, in the order that lane renders before manual pins. */
@@ -169,6 +198,32 @@ export const RadioTraffic: React.FC = () => {
 		soloId: null,
 		muted: new Set(restored.mutedItems),
 	}));
+	const [waveform, setWaveform] = useState<WaveformColorSettings>(() => ({
+		useThemeWaveformColor: restored.useThemeWaveformColor,
+		waveformColor: restored.waveformColor,
+	}));
+
+	// The Settings draft (the Tuner's pattern, and TimeMachine's before it):
+	// seeded from the live setting when the window opens and dispatched only on
+	// Save, so Cancel — and the window's close box, which is Cancel — leaves
+	// nothing behind. `showSettings` is ephemeral and deliberately not persisted.
+	const [showSettings, setShowSettings] = useState(false);
+	const [settingsForm, setSettingsForm] = useState<WaveformColorSettings>(waveform);
+	const openSettings = useCallback(() => {
+		setSettingsForm(waveform);
+		setShowSettings(true);
+	}, [waveform]);
+	const saveSettingsForm = useCallback(() => {
+		setWaveform(settingsForm);
+		setShowSettings(false);
+	}, [settingsForm]);
+
+	// undefined = follow the theme, which is what `.rtCardWaveform`'s
+	// --color-system-06 already does; the card only overrides `color` when the
+	// listener has actually chosen one.
+	const waveformColor = waveform.useThemeWaveformColor
+		? undefined
+		: intToHex(waveform.waveformColor);
 
 	const [pickerNamespace, setPickerNamespace] = useState<string | null>(null);
 	/** LIVE cards the listener stopped by hand. */
@@ -254,7 +309,9 @@ export const RadioTraffic: React.FC = () => {
 	const lanes = useMemo(
 		() =>
 			partitionLanes(
-				mergeById(historyPool(mp3History, seenRef.current), mp3Items, upcomingItems),
+				excludeBroadcastStations(
+					mergeById(historyPool(mp3History, seenRef.current), mp3Items, upcomingItems),
+				),
 				getNowMs(),
 			),
 		[mp3History, mp3Items, upcomingItems, anchorMs, getNowMs], // eslint-disable-line react-hooks/exhaustive-deps
@@ -406,9 +463,11 @@ export const RadioTraffic: React.FC = () => {
 				collapsed,
 				laneOrder,
 				mutedItems: [...audio.muted],
+				useThemeWaveformColor: waveform.useThemeWaveformColor,
+				waveformColor: waveform.waveformColor,
 			}),
 		);
-	}, [checked, tool, collapsed, laneOrder, audio.muted, dispatch]);
+	}, [checked, tool, collapsed, laneOrder, audio.muted, waveform, dispatch]);
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	const toggleTag = useCallback((tag: string) => {
@@ -463,17 +522,32 @@ export const RadioTraffic: React.FC = () => {
 						lane === "live" ? stopped.has(item.id) : !userStarted.has(item.id)
 					}
 					onTogglePause={() => onTogglePause(item.id, lane)}
+					waveformColor={waveformColor}
 				/>
 			</div>
 		),
-		[mp3Meta, tz, nowMs, seekInFlight, userStarted, audio, stopped, onCardClick, onTogglePause],
+		[
+			mp3Meta,
+			tz,
+			nowMs,
+			seekInFlight,
+			userStarted,
+			audio,
+			stopped,
+			onCardClick,
+			onTogglePause,
+			waveformColor,
+		],
 	);
 
 	const appMenu = [
 		{
 			id: "file",
 			title: "File",
-			menuChildren: [quitMenuItemHelper(appId, appName, appIcon)],
+			menuChildren: [
+				{ id: "settings", title: "Settings…", onClickFunc: openSettings },
+				quitMenuItemHelper(appId, appName, appIcon),
+			],
 		},
 	];
 
@@ -487,6 +561,17 @@ export const RadioTraffic: React.FC = () => {
 			defaultWindow={`${appId}_main`}
 			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
+			{showSettings && (
+				<RadioTrafficSettingsWindow
+					appId={appId}
+					appIcon={appIcon}
+					appMenu={appMenu}
+					form={settingsForm}
+					setForm={setSettingsForm}
+					onCancel={() => setShowSettings(false)}
+					onSave={saveSettingsForm}
+				/>
+			)}
 			{pickerGroup && (
 				<TagPickerWindow
 					appId={appId}

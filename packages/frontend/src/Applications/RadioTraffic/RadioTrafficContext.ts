@@ -28,8 +28,41 @@ const appId = "RadioTraffic.app";
 /** Solo. The tool the app boots in and the fallback for an unreadable one. */
 export const DEFAULT_TOOL: Tool = "arrow";
 
+/**
+ * The waveform's ink, when the listener has taken it off the theme.
+ *
+ * The tuner's `colorBright` — the pre-theme hardcoded green every radio
+ * waveform in this repo used to be drawn in. A custom colour that opened on
+ * something arbitrary would read as a bug the first time anyone unticked the
+ * box.
+ */
+export const DEFAULT_WAVEFORM_COLOR = 0x00d25a;
+
+/**
+ * The slice of persisted state the Settings window edits.
+ *
+ * Split out so the window is typed to exactly what it changes: it can neither
+ * read nor write a tag filter, a lane order or a mute by mistake, and adding a
+ * field to {@link RadioTrafficState} does not silently widen its reach.
+ */
+export interface WaveformColorSettings {
+	/**
+	 * true = the waveform follows the theme's ink (`--color-system-06`, set on
+	 * `.rtCardWaveform`), so a theme change re-colours every card live. This is
+	 * the default, and it is what the app did before the setting existed.
+	 */
+	useThemeWaveformColor: boolean;
+	/** Custom waveform ink, packed 0xRRGGBB — ClassicyColorPicker native. */
+	waveformColor: number;
+}
+
+export const DEFAULT_WAVEFORM_COLOR_SETTINGS: WaveformColorSettings = {
+	useThemeWaveformColor: true,
+	waveformColor: DEFAULT_WAVEFORM_COLOR,
+};
+
 /** Everything Radio Traffic persists, after sanitizing. */
-export interface RadioTrafficState {
+export interface RadioTrafficState extends WaveformColorSettings {
 	/** Checked tag strings, e.g. `facility:zbw`. */
 	checked: string[];
 	tool: Tool;
@@ -82,6 +115,28 @@ function sanitizePins(value: unknown): number[] {
 	return pins.length === value.length ? pins : [];
 }
 
+/**
+ * Only an explicit `false` takes the waveform off the theme.
+ *
+ * Absent, `undefined` and garbage all mean "follow the theme", which is both the
+ * default and what every session persisted before this setting existed — so the
+ * upgrade needs no migration and an unreadable value cannot leave a listener
+ * staring at a colour they never picked.
+ */
+function sanitizeUseThemeWaveformColor(value: unknown): boolean {
+	return value !== false;
+}
+
+/** A packed 0xRRGGBB integer; anything else is the default green. */
+function sanitizeWaveformColor(value: unknown): number {
+	return typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= 0 &&
+		value <= 0xffffff
+		? value
+		: DEFAULT_WAVEFORM_COLOR;
+}
+
 function sanitizeLaneOrder(value: unknown): LaneOrder {
 	const stored = (value ?? {}) as Record<string, unknown>;
 	const out = {} as Record<Lane, readonly number[]>;
@@ -104,6 +159,8 @@ export function sanitizeRadioTrafficState(stored: unknown): RadioTrafficState {
 		collapsed: sanitizeCollapsed(data.collapsed),
 		laneOrder: sanitizeLaneOrder(data.laneOrder),
 		mutedItems: sanitizeItemIds(data.mutedItems),
+		useThemeWaveformColor: sanitizeUseThemeWaveformColor(data.useThemeWaveformColor),
+		waveformColor: sanitizeWaveformColor(data.waveformColor),
 	};
 }
 
@@ -115,6 +172,8 @@ export const radioTrafficSetState = (state: RadioTrafficState): ActionMessage =>
 	collapsed: state.collapsed,
 	laneOrder: state.laneOrder,
 	mutedItems: state.mutedItems,
+	useThemeWaveformColor: state.useThemeWaveformColor,
+	waveformColor: state.waveformColor,
 });
 
 export const classicyRadioTrafficEventHandler = (
@@ -134,6 +193,8 @@ export const classicyRadioTrafficEventHandler = (
 				collapsed: action.collapsed,
 				laneOrder: action.laneOrder,
 				mutedItems: action.mutedItems,
+				useThemeWaveformColor: action.useThemeWaveformColor,
+				waveformColor: action.waveformColor,
 			};
 			return ds;
 		default:
@@ -176,6 +237,14 @@ export const RadioTrafficDataSchema = z.looseObject({
 		.array(z.number())
 		.optional()
 		.describe("Cards you have silenced. Each card keeps its own mute setting."),
+	useThemeWaveformColor: z
+		.boolean()
+		.optional()
+		.describe("Whether the card waveforms follow the desktop theme's colors."),
+	waveformColor: z
+		.number()
+		.optional()
+		.describe("The color the card waveforms are drawn in when not following the theme."),
 });
 
 export type RadioTrafficData = z.infer<typeof RadioTrafficDataSchema>;
@@ -189,13 +258,17 @@ registerApp({
 	actions: {
 		ClassicyAppRadioTrafficSetState: {
 			description:
-				"Persist the tag filters, the selected tool, the folded lanes, the manual card order and the per-card mutes.",
+				"Persist the tag filters, the selected tool, the folded lanes, the manual card order, the per-card mutes and the waveform color.",
 			params: z.object({
 				checked: z.array(z.string()).describe("Ticked tag filters."),
 				tool: z.string().describe("Selected tool: arrow, mute, unmute or hand."),
 				collapsed: z.record(z.string(), z.unknown()).describe("Full lane-collapse object."),
 				laneOrder: z.record(z.string(), z.unknown()).describe("Full lane-order object."),
 				mutedItems: z.array(z.number()).describe("Silenced cards' ids."),
+				useThemeWaveformColor: z
+					.boolean()
+					.describe("Whether the waveforms follow the theme."),
+				waveformColor: z.number().describe("Custom waveform color, packed 0xRRGGBB."),
 			}),
 		},
 	},

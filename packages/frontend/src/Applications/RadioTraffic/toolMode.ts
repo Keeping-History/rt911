@@ -29,6 +29,23 @@ export const TOOL_LABELS: Record<Tool, string> = {
 };
 
 /**
+ * Balloon help, one line per tool.
+ *
+ * Written as an instruction rather than a description: Radio Traffic is modal,
+ * so the only thing worth telling a listener hovering the palette is what their
+ * NEXT card click will do. The palette is not a manifest-described state field —
+ * `describeAppState` documents `tool` as one persisted value, which is the wrong
+ * granularity for four buttons that each mean a different action — so the copy
+ * lives beside the labels and the glyphs it belongs with.
+ */
+export const TOOL_BALLOONS: Record<Tool, string> = {
+	arrow: "Click a card to hear only that one. The rest of the live mix goes quiet until you pick another.",
+	mute: "Click a card to silence it. It keeps playing on the clock, so unmuting it later picks up live rather than starting over.",
+	unmute: "Click a silenced card to bring it back into the mix.",
+	hand: "Drag cards to reorder them within their lane. Clicking changes nothing about what you hear.",
+};
+
+/**
  * Placeholder artwork. Deliberately one map of one character each so replacing
  * the glyphs is a single edit here — swap the strings for <img> imports the way
  * StationButtonContent does with its indicator lights, and nothing else moves.

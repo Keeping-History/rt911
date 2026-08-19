@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	classicyRadioTrafficEventHandler,
 	DEFAULT_TOOL,
+	DEFAULT_WAVEFORM_COLOR,
 	radioTrafficSetState,
 	sanitizeRadioTrafficState,
 } from "./RadioTrafficContext";
@@ -30,6 +31,8 @@ describe("sanitizeRadioTrafficState", () => {
 			collapsed: { live: false, upcoming: false, previous: false },
 			laneOrder: { live: [], upcoming: [], previous: [] },
 			mutedItems: [],
+			useThemeWaveformColor: true,
+			waveformColor: DEFAULT_WAVEFORM_COLOR,
 		});
 	});
 
@@ -40,6 +43,8 @@ describe("sanitizeRadioTrafficState", () => {
 			collapsed: { live: false, upcoming: true, previous: false },
 			laneOrder: { live: [7, 0], upcoming: [], previous: [3, 1] },
 			mutedItems: [11, 12],
+			useThemeWaveformColor: false,
+			waveformColor: 0x0000ff,
 		};
 		expect(sanitizeRadioTrafficState(stored)).toEqual(stored);
 	});
@@ -103,10 +108,55 @@ describe("sanitizeRadioTrafficState", () => {
 		expect(state.mutedItems).toEqual([9]);
 		expect(state.tool).toBe(DEFAULT_TOOL);
 	});
+
+	describe("the waveform color", () => {
+		// Every session persisted before this setting existed stored neither
+		// field. Those sessions must come back on the theme — which is what they
+		// were already showing — rather than on some stored colour they never
+		// picked, so there is nothing to migrate.
+		it("treats a state saved before the setting existed as following the theme", () => {
+			const state = sanitizeRadioTrafficState({ tool: "mute" });
+			expect(state.useThemeWaveformColor).toBe(true);
+			expect(state.waveformColor).toBe(DEFAULT_WAVEFORM_COLOR);
+		});
+
+		it("takes the waveform off the theme only on an explicit false", () => {
+			expect(
+				sanitizeRadioTrafficState({ useThemeWaveformColor: false })
+					.useThemeWaveformColor,
+			).toBe(false);
+			for (const junk of [undefined, null, 0, "false", "no"]) {
+				expect(
+					sanitizeRadioTrafficState({ useThemeWaveformColor: junk })
+						.useThemeWaveformColor,
+				).toBe(true);
+			}
+		});
+
+		it("keeps a packed 0xRRGGBB color, including the two ends of the range", () => {
+			for (const color of [0x000000, 0x00d25a, 0xffffff]) {
+				expect(sanitizeRadioTrafficState({ waveformColor: color }).waveformColor).toBe(
+					color,
+				);
+			}
+		});
+
+		// localStorage is untrusted input, and this value is handed to intToHex
+		// and then straight into a CSS `color` — a NaN or an out-of-range number
+		// would draw every card's envelope in whatever the browser makes of the
+		// resulting garbage string.
+		it("falls back for anything that is not a color", () => {
+			for (const junk of [-1, 0x1000000, 1.5, NaN, "#ff0000", null, {}]) {
+				expect(sanitizeRadioTrafficState({ waveformColor: junk }).waveformColor).toBe(
+					DEFAULT_WAVEFORM_COLOR,
+				);
+			}
+		});
+	});
 });
 
 describe("classicyRadioTrafficEventHandler", () => {
-	it("persists all five fields and leaves unrelated data alone", () => {
+	it("persists every field and leaves unrelated data alone", () => {
 		const ds = store({ somethingElse: 1 });
 		const next = classicyRadioTrafficEventHandler(
 			ds,
@@ -116,6 +166,8 @@ describe("classicyRadioTrafficEventHandler", () => {
 				collapsed: { live: false, upcoming: true, previous: false },
 				laneOrder: { live: [1, 0], upcoming: [], previous: [] },
 				mutedItems: [4],
+				useThemeWaveformColor: false,
+				waveformColor: 0xff6600,
 			}),
 		);
 		expect(appData(next)).toEqual({
@@ -125,6 +177,8 @@ describe("classicyRadioTrafficEventHandler", () => {
 			collapsed: { live: false, upcoming: true, previous: false },
 			laneOrder: { live: [1, 0], upcoming: [], previous: [] },
 			mutedItems: [4],
+			useThemeWaveformColor: false,
+			waveformColor: 0xff6600,
 		});
 	});
 
@@ -148,6 +202,8 @@ describe("classicyRadioTrafficEventHandler", () => {
 				collapsed: { live: false, upcoming: false, previous: false },
 				laneOrder: { live: [], upcoming: [], previous: [] },
 				mutedItems: [],
+				useThemeWaveformColor: true,
+				waveformColor: DEFAULT_WAVEFORM_COLOR,
 			})),
 		).toBe(ds);
 	});

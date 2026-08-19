@@ -47,10 +47,15 @@ export interface ClockSource {
 	 * and `jump`.
 	 *
 	 * Returning `undefined` is meaningful: it says "this element does not follow
-	 * the clock", and the reseek, the health check and the gesture retry all skip
-	 * it. That is how a listener-started back-catalogue clip — which plays from
-	 * its own start, not from the virtual clock's position — opts out without a
-	 * second registry or a flag on ensure().
+	 * the clock", so the reseek, the health check and the gesture retry leave it
+	 * where it is. That is how a listener-started back-catalogue clip — which
+	 * plays from its own start, not from the virtual clock's position — opts out
+	 * without a second registry or a flag on ensure().
+	 *
+	 * It is NOT a way to opt out of the autoplay unlock: an element the browser
+	 * refused is retried on a gesture whatever this returns, because the token it
+	 * holds is what the "click anywhere to start audio" overlay is showing. See
+	 * retryBlockedPlayback.
 	 */
 	itemFor(itemId: number): MediaItem | undefined;
 }
@@ -64,6 +69,16 @@ interface Entry {
 	audible: boolean;
 	/** A play() has resolved, so the autoplay gate is open and `audible` can apply. */
 	unlocked: boolean;
+	/**
+	 * This element is holding an audioBlocked token.
+	 *
+	 * The shared store answers "is ANYTHING waiting for a gesture?", which is all
+	 * the overlay needs; the gesture retry needs the other half of the question —
+	 * WHICH elements are waiting — and an element being `paused` is not that
+	 * answer (the listener pauses elements too). Kept in step with the store by
+	 * block()/unblock(), which are the only callers of mark/clearAudioBlocked.
+	 */
+	blocked: boolean;
 }
 
 const registry = new Map<number, Entry>();
@@ -80,17 +95,32 @@ function notify(itemId: number): void {
 }
 
 /**
+ * Mark this element as waiting for a user gesture, in both places that have to
+ * agree about it. The element itself is the token — unique per element and
+ * impossible to collide with another module's.
+ */
+function block(entry: Entry): void {
+	entry.blocked = true;
+	markAudioBlocked(entry.el);
+}
+
+/** The inverse of {@link block}; safe to call on an element that was never blocked. */
+function unblock(entry: Entry): void {
+	entry.blocked = false;
+	clearAudioBlocked(entry.el);
+}
+
+/**
  * Every play() goes through here so the shared audioBlocked signal tracks which
  * elements the autoplay policy is holding back: a NotAllowedError means a user
  * gesture will fix it (the overlay tells the user to click); any success clears
- * the element's token. The element itself is the token — unique per element and
- * impossible to collide with another module's.
+ * the element's token.
  */
 function tryPlay(itemId: number, entry: Entry): void {
 	entry.el
 		.play()
 		.then(() => {
-			clearAudioBlocked(entry.el);
+			unblock(entry);
 			// Past the autoplay gate: an element starts muted because that is what
 			// lets the browser permit a gesture-less play(), and only a resolved
 			// play() makes it safe to unmute. What it unmutes *to* is the mix's
@@ -102,7 +132,7 @@ function tryPlay(itemId: number, entry: Entry): void {
 		})
 		.catch((err: unknown) => {
 			if ((err as DOMException | null)?.name === "NotAllowedError") {
-				markAudioBlocked(entry.el);
+				block(entry);
 			}
 		});
 }
@@ -151,13 +181,14 @@ export function ensure(itemId: number, url: string): HTMLAudioElement {
 		// a silent pause (no rejection anywhere). Our own pauses are excluded:
 		// clock pause (guarded here), natural end (el.ended), and release, which
 		// removes this listener before pausing.
-		if (registry.get(itemId)?.el !== el) return;
+		const current = registry.get(itemId);
+		if (current?.el !== el) return;
 		if (clock?.clockPaused() || el.ended) return;
-		markAudioBlocked(el);
+		block(current);
 		notify(itemId);
 	};
 
-	const entry: Entry = { el, url, onPause, audible: true, unlocked: false };
+	const entry: Entry = { el, url, onPause, audible: true, unlocked: false, blocked: false };
 	el.addEventListener("pause", onPause);
 	el.addEventListener("loadedmetadata", () => {
 		seekToClock(itemId, entry);
@@ -188,7 +219,7 @@ export function release(itemId: number): void {
 	entry.el.pause();
 	registry.delete(itemId);
 	// A gone element no longer needs a gesture.
-	clearAudioBlocked(entry.el);
+	unblock(entry);
 	notify(itemId);
 }
 
@@ -313,13 +344,35 @@ export function clockMoved(): void {
  * gesture-less play() on page load, so a restored session autoplays into a
  * blocked state, and nothing in the card grid necessarily changes React state
  * to retry it. Any click or keypress retries immediately.
+ *
+ * Two different questions are asked here, and conflating them is what used to
+ * leave the "click anywhere to start audio" overlay stuck forever:
+ *
+ *   BLOCKED       the element is holding a token, so the overlay is up because
+ *                 of it, only a resolved play() can clear that token, and only
+ *                 a gesture can make that play() resolve. Retried
+ *                 unconditionally — whether the clock claims the element is
+ *                 beside the point, because the listener is being told to click
+ *                 and the click has to mean something.
+ *   MERELY PAUSED nothing is waiting on a gesture; the element is stopped. Here
+ *                 the clock's claim is the right test, and it is the health
+ *                 check's test too: a listener who paused a back-catalogue clip
+ *                 must not have it restarted by their next click anywhere on
+ *                 the desktop.
+ *
+ * The elements the clock does not claim are exactly the ones the old test threw
+ * away: a listener-started PREVIOUS clip (`itemFor` returns undefined for it by
+ * design), and a LIVE card whose item reached the lane through the history
+ * snapshot or the reveal buffer rather than through the live mp3 set. Either
+ * one could take a token to the grave, and no amount of clicking would clear it.
  */
 function retryBlockedPlayback(): void {
 	if (!clock || clock.clockPaused()) return;
 	for (const [itemId, entry] of registry) {
-		// Same "does this follow the clock?" test the health check makes: a
-		// listener who paused a back-catalogue clip must not have it restarted by
-		// their next click anywhere on the desktop.
+		if (entry.blocked) {
+			tryPlay(itemId, entry);
+			continue;
+		}
 		if (!clock.itemFor(itemId)) continue;
 		if (entry.el.paused || entry.el.ended) tryPlay(itemId, entry);
 	}
