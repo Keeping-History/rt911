@@ -38,7 +38,7 @@
 .rtSmallSubject {
   margin: 0;
   min-width: 0;
-  font-size: calc(var(--ui-font-size) * 1.15);
+  font-size: var(--ui-font-size);
   font-weight: normal;
   line-height: 1.25;
   color: var(--color-white, #fff);
