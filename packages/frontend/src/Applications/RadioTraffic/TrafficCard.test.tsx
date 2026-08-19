@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,14 +19,32 @@ vi.stubGlobal(
 // than reaching for an element it does not own.
 const audio = vi.hoisted(() => ({
 	positionMs: undefined as number | undefined,
+	ended: false,
+	/** The real subscribe's callbacks, so a test can announce a media event. */
+	listeners: new Set<() => void>(),
 	seekTo: vi.fn(),
 	unfollowClock: vi.fn(),
+	resetPlayback: vi.fn(),
 }));
 vi.mock("./audioCoordinator", () => ({
 	positionMs: () => audio.positionMs,
-	subscribe: () => () => {},
+	hasEnded: () => audio.ended,
+	subscribe: (_itemId: number, cb: () => void) => {
+		audio.listeners.add(cb);
+		return () => {
+			audio.listeners.delete(cb);
+		};
+	},
 	seekTo: (itemId: number, ms: number) => audio.seekTo(itemId, ms),
 	unfollowClock: (itemId: number) => audio.unfollowClock(itemId),
+	resetPlayback: (itemId: number) => {
+		audio.resetPlayback(itemId);
+		// The real one releases the element, which is what makes both of these
+		// true again — modelled here so the card is not tested against a
+		// coordinator that behaves differently from the one it ships with.
+		audio.ended = false;
+		audio.positionMs = undefined;
+	},
 }));
 
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
@@ -101,8 +119,11 @@ function stubWaveformBox() {
 
 beforeEach(() => {
 	audio.positionMs = undefined;
+	audio.ended = false;
+	audio.listeners.clear();
 	audio.seekTo.mockClear();
 	audio.unfollowClock.mockClear();
+	audio.resetPlayback.mockClear();
 	// PeaksWaveform's effect calls getContext on the way to bailing out (jsdom
 	// lays nothing out, so there is no width to draw into), and jsdom's
 	// unimplemented one writes a "Not implemented" line to stderr every time.
@@ -311,6 +332,161 @@ describe("TrafficCard clock-follow", () => {
 		const { getByRole } = renderCard({ item: other, paused: false });
 		fireEvent.click(getByRole("button", { name: "Pause" }));
 		expect(audio.unfollowClock).toHaveBeenCalledWith(4_242);
+	});
+
+	it("resets a PREVIOUS clip instead of parking it", () => {
+		// The two lanes stop for opposite reasons. A LIVE card the listener
+		// stopped is still running on the clock, so its playhead stays where they
+		// left it (story 028). A PREVIOUS clip is a replay they are finished with:
+		// parking it would leave the card showing progress it is no longer making,
+		// and the next press of play would start from the top anyway.
+		const { getByRole } = renderCard({ lane: "previous", userPlaying: true, paused: false });
+
+		fireEvent.click(getByRole("button", { name: "Pause" }));
+
+		expect(audio.resetPlayback).toHaveBeenCalledWith(makeItem().id);
+		expect(audio.unfollowClock).not.toHaveBeenCalled();
+	});
+});
+
+// Story 038. A PREVIOUS clip plays only because the listener pressed play, so
+// only they — or the end of the recording — can stop it. Reaching the end used
+// to be neither: the element finished, nothing was listening, and the card kept
+// its Playing badge and its pause affordance indefinitely.
+describe("TrafficCard, a PREVIOUS clip that finishes", () => {
+	/** Past the fixture clip's end, which is where a PREVIOUS card lives. */
+	const PREVIOUS_NOW = START_MS + DURATION_MS + 5_000;
+
+	/**
+	 * The shell's half of the contract, as one card's worth of state: RadioTraffic
+	 * keeps a `userStarted` set and derives both `userPlaying` and `paused` from
+	 * it, so driving a real toggle here is what proves the round trip rather than
+	 * only that a callback fired.
+	 */
+	function Harness({
+		lane = "previous" as Lane,
+		onToggle,
+	}: {
+		lane?: Lane;
+		onToggle?: () => void;
+	}) {
+		const [playing, setPlaying] = useState(true);
+		return (
+			<TrafficCard
+				item={makeItem()}
+				lane={lane}
+				tzOffsetHours={-4}
+				nowMs={PREVIOUS_NOW}
+				userPlaying={playing}
+				paused={!playing}
+				onTogglePause={() => {
+					onToggle?.();
+					setPlaying((p) => !p);
+				}}
+			/>
+		);
+	}
+
+	/** What the coordinator announces when the recording runs out. */
+	function endTheClip() {
+		act(() => {
+			audio.ended = true;
+			for (const cb of [...audio.listeners]) cb();
+		});
+	}
+
+	it("returns the card to idle", () => {
+		const { container } = render(<Harness />);
+		expect(container.querySelector("[data-badge]")?.getAttribute("data-badge")).toBe(
+			"playing",
+		);
+
+		endTheClip();
+
+		// badgeFor gives an idle PREVIOUS card no badge at all — every variant
+		// would assert something untrue about a clip that is not playing.
+		expect(container.querySelector("[data-badge]")).toBeNull();
+		expect(container.querySelector("[data-audible]")?.getAttribute("data-audible")).toBe(
+			"false",
+		);
+	});
+
+	it("reverts the transport to the play affordance", () => {
+		const { getByRole, queryByRole } = render(<Harness />);
+		expect(queryByRole("button", { name: "Pause" })).not.toBeNull();
+
+		endTheClip();
+
+		expect(getByRole("button", { name: "Play" })).not.toBeNull();
+		expect(queryByRole("button", { name: "Pause" })).toBeNull();
+	});
+
+	it("resets the playhead through the coordinator rather than by hand", () => {
+		render(<Harness />);
+
+		endTheClip();
+
+		expect(audio.resetPlayback).toHaveBeenCalledWith(makeItem().id);
+	});
+
+	it("hands the clip back exactly once, so it cannot restart itself", () => {
+		// The hand-back is a TOGGLE — the shell has one `userStarted` set and one
+		// way to change it — so a second call would stop the clip and immediately
+		// start it playing again, which reads as the card refusing to stop.
+		const onToggle = vi.fn();
+		render(<Harness onToggle={onToggle} />);
+
+		endTheClip();
+		// Whatever else re-renders the card afterwards: the clock ticks once a
+		// second and the shell rebuilds every card's props with it.
+		act(() => {
+			for (const cb of [...audio.listeners]) cb();
+		});
+
+		expect(onToggle).toHaveBeenCalledTimes(1);
+	});
+
+	it("plays the same clip again immediately afterwards", () => {
+		const onToggle = vi.fn();
+		const { getByRole } = render(<Harness onToggle={onToggle} />);
+		endTheClip();
+
+		fireEvent.click(getByRole("button", { name: "Play" }));
+
+		expect(onToggle).toHaveBeenCalledTimes(2);
+		expect(getByRole("button", { name: "Pause" })).not.toBeNull();
+	});
+
+	it("leaves a card the listener never started alone", () => {
+		// An idle PREVIOUS card reads `ended` false in practice, but nothing about
+		// the reset may depend on that: the card that did not start playback is
+		// not the card that gets to stop it.
+		const onTogglePause = vi.fn();
+		audio.ended = true;
+		renderCard({
+			lane: "previous",
+			nowMs: PREVIOUS_NOW,
+			userPlaying: false,
+			paused: true,
+			onTogglePause,
+		});
+
+		expect(onTogglePause).not.toHaveBeenCalled();
+	});
+
+	it("leaves a LIVE card alone, even one still carrying the started flag", () => {
+		// Reachable: a backward seek can move a clip the listener started from
+		// PREVIOUS back into LIVE, and the shell keeps the flag while the item is
+		// still on screen. There, `onTogglePause` means "stop the live card", so
+		// firing it on an ended element would silence a clip the clock says is
+		// still running.
+		const onToggle = vi.fn();
+		render(<Harness lane="live" onToggle={onToggle} />);
+
+		endTheClip();
+
+		expect(onToggle).not.toHaveBeenCalled();
+		expect(audio.resetPlayback).not.toHaveBeenCalled();
 	});
 });
 

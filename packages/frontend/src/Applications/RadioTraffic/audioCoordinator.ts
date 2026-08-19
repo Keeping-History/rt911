@@ -15,7 +15,10 @@
 // its position with positionMs(), moves it with seekTo(), and re-renders through
 // subscribe(); it never creates or destroys one. Removing an entry is release()
 // — an explicit, deliberate act by whoever decides an item has left the app, not
-// a side effect of rendering.
+// a side effect of rendering. resetPlayback() is that same deliberate act said
+// about a listener's own playback of a back-catalogue clip: it stops the element
+// AND discards everything the listener did to the item, which is what leaves the
+// card indistinguishable from one they never pressed play on.
 //
 // The second thing this module owns is the PLAYHEAD, which is not the same as an
 // element's position and is the reason positionMs answers for items with no
@@ -380,6 +383,50 @@ export function positionMs(itemId: number): number | undefined {
 	// `positions`. This is a useSyncExternalStore getSnapshot; returning a fresh
 	// reading each call makes React re-render without end.
 	return positions.get(itemId);
+}
+
+/**
+ * Has `itemId`'s recording run out?
+ *
+ * Only an element can answer this, so an item that has none — an UPCOMING clip,
+ * an idle PREVIOUS one, a LIVE one the listener stopped — has not ended; it
+ * simply is not playing, which is a different thing and one the caller already
+ * knows.
+ *
+ * Read live rather than cached, unlike the playhead. `positionMs` has to be
+ * sampled because `currentTime` advances in real time and a `getSnapshot` that
+ * moves between calls re-renders forever; `ended` is discrete and flips exactly
+ * when the `ended` event fires, which is one of the moments this module already
+ * notifies on. So it is stable between notifications for free.
+ */
+export function hasEnded(itemId: number): boolean {
+	return registry.get(itemId)?.el.ended ?? false;
+}
+
+/**
+ * Put `itemId` back the way it was before the listener ever pressed play.
+ *
+ * The counterpart to a listener STARTING a back-catalogue clip, and the only
+ * caller is the card that offered them the button. Three things have to go, and
+ * leaving any one behind is a card that looks played:
+ *
+ *   the element      or the clip keeps making sound, and `hasEnded` keeps
+ *                    reporting the finish that has already been handled
+ *   the opt-out      a listener who scrubbed took the card off clock-follow, and
+ *                    that survives both the element and the card on purpose —
+ *                    left set, the card is frozen on their playhead for good
+ *   the parked ms    the fallback `samplePosition` reads for a card that follows
+ *                    nothing; left behind it is the position they stopped at,
+ *                    which is precisely the "progress" being reset
+ *
+ * Order is load bearing: the element must go before the playhead is resampled,
+ * or the resample reads the element's own position straight back in.
+ */
+export function resetPlayback(itemId: number): void {
+	release(itemId);
+	unfollowed.delete(itemId);
+	positions.delete(itemId);
+	notify(itemId);
 }
 
 /**
