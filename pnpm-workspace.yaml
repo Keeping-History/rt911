@@ -11,9 +11,6 @@ storeDir: .pnpm-store
 # routinely one step behind package.json by design. CI passes
 # --frozen-lockfile explicitly and is unaffected.
 preferFrozenLockfile: false
-onlyBuiltDependencies:
-  - es5-ext
-  - esbuild
 overrides:
   brace-expansion: '>=5.0.9'
   immutable: '>=5.1.8'
@@ -36,3 +33,12 @@ minimumReleaseAgeExclude:
   - classicy
   - oxlint
   - '@oxlint/*'
+# pnpm 11 replaced onlyBuiltDependencies with this per-package map; the
+# original pnpm-11 migration (see mise.toml/pnpm-workspace.yaml history)
+# moved overrides here but missed this rename, so es5-ext and esbuild's
+# build scripts silently stopped running. @parcel/watcher (sass-embedded's
+# native file watcher, pulled in via vite) needs the same approval.
+allowBuilds:
+  "@parcel/watcher": true
+  es5-ext: true
+  esbuild: true
