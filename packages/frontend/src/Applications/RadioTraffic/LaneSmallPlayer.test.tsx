@@ -35,7 +35,7 @@ describe("LaneSmallPlayer content", () => {
 		const container = renderPlayer({
 			meta: makeMeta({ subject: "Planes, as in plural." }),
 		});
-		expect(field(container, "subject")?.textContent).toBe("“Planes, as in plural.”");
+		expect(field(container, "subject")?.textContent).toBe("Planes, as in plural.");
 	});
 
 	it("shows every tag as a chip", () => {
@@ -93,7 +93,7 @@ describe("LaneSmallPlayer with incomplete metadata", () => {
 			item: makeItem({ full_title: "Boston Center — sector 20" }),
 			meta: undefined,
 		});
-		expect(field(container, "subject")?.textContent).toBe("“Boston Center — sector 20”");
+		expect(field(container, "subject")?.textContent).toBe("Boston Center — sector 20");
 	});
 
 	it("ignores a whitespace-only subject rather than quoting nothing", () => {
@@ -101,7 +101,7 @@ describe("LaneSmallPlayer with incomplete metadata", () => {
 			item: makeItem({ full_title: "Boston Center — sector 20" }),
 			meta: makeMeta({ subject: "   " }),
 		});
-		expect(field(container, "subject")?.textContent).toBe("“Boston Center — sector 20”");
+		expect(field(container, "subject")?.textContent).toBe("Boston Center — sector 20");
 	});
 
 	it("still prints the timings for an item with no metadata", () => {
