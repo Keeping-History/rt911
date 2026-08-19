@@ -8,6 +8,7 @@ import {
 	moveWithinLane,
 	reconcileLaneOrder,
 	reorderLane,
+	stabilizeLaneOrder,
 } from "./laneOrder";
 import { makeItem } from "./tabs/cardTabFixtures";
 
@@ -323,5 +324,91 @@ describe("a manually-reordered card crossing a lane boundary", () => {
 			const total = order.live.length + order.upcoming.length + order.previous.length;
 			expect(total).toBe(2);
 		}
+	});
+});
+
+describe("stabilizeLaneOrder", () => {
+	// One clip later than D, for scenarios where something new arrives on top
+	// of the four-clip lane every other case in this file starts from.
+	const E = clip(5, "2001-09-11T12:50:31");
+	const PREVIOUS_IDS = [1, 2, 3, 4];
+
+	it("passes the order straight through on the lane's first render", () => {
+		// previousIds undefined means there is no "before" to compare against —
+		// calling every item "new" would reorder a lane that has not actually
+		// changed. This is the "reorder while nothing is playing" baseline: no
+		// active card, no history, no change.
+		expect(ids(stabilizeLaneOrder(LANE_ITEMS, undefined, null))).toEqual([1, 2, 3, 4]);
+	});
+
+	it("inserts a genuinely new arrival at the left of the lane", () => {
+		const withArrival = [...LANE_ITEMS, E];
+		expect(ids(stabilizeLaneOrder(withArrival, PREVIOUS_IDS, null))).toEqual([5, 1, 2, 3, 4]);
+	});
+
+	it("orders several same-tick arrivals newest first, regardless of the caller's own order", () => {
+		const F = clip(6, "2001-09-11T12:51:31");
+		// The caller (chronological, oldest first) hands them over as [.., E, F];
+		// F started after E, so newest-first is F ahead of E.
+		const withArrivals = [...LANE_ITEMS, E, F];
+		expect(ids(stabilizeLaneOrder(withArrivals, PREVIOUS_IDS, null))).toEqual([
+			6, 5, 1, 2, 3, 4,
+		]);
+	});
+
+	it("leaves already-seen cards in whatever relative order the caller gave them", () => {
+		// applyManualOrder (a pin) already decided this before stabilizeLaneOrder
+		// ever runs — card 4 pinned to the top, say — and this must not
+		// second-guess it, only decide where the new arrival goes.
+		const pinnedThenArrived = [D, A, B, C, E];
+		expect(ids(stabilizeLaneOrder(pinnedThenArrived, PREVIOUS_IDS, null))).toEqual([
+			5, 4, 1, 2, 3,
+		]);
+	});
+
+	it("reorders every card normally when nothing is active", () => {
+		// The lock is per-card, not a freeze on the whole lane: with no activeId
+		// a new arrival still enters at the left and nothing is spliced back
+		// afterwards to hold any other card in place.
+		const withArrival = [...LANE_ITEMS, E];
+		expect(ids(stabilizeLaneOrder(withArrival, PREVIOUS_IDS, null))).toEqual([5, 1, 2, 3, 4]);
+	});
+
+	it("locks the active card to the index it held on the previous render", () => {
+		// Card 3 was at index 2 last render. Left unlocked, E's arrival at the
+		// front would push it to index 3 — the exact "yanked mid-listen" bug the
+		// story is about. Locked, it comes straight back to index 2; only the
+		// other, non-active cards reflow around it.
+		const withArrival = [...LANE_ITEMS, E];
+		expect(ids(stabilizeLaneOrder(withArrival, PREVIOUS_IDS, 3))).toEqual([5, 1, 3, 2, 4]);
+	});
+
+	it("does not move the active card when nothing new arrived either", () => {
+		expect(ids(stabilizeLaneOrder(LANE_ITEMS, PREVIOUS_IDS, 3))).toEqual([1, 2, 3, 4]);
+	});
+
+	it("does not lock a card that only became active on this same tick", () => {
+		// E was never rendered before, so there is no "before" index to hold it
+		// to — a card can only be pinned relative to a position it actually had.
+		const withArrival = [...LANE_ITEMS, E];
+		expect(ids(stabilizeLaneOrder(withArrival, PREVIOUS_IDS, 5))).toEqual([5, 1, 2, 3, 4]);
+	});
+
+	it("does not crash when the active card has left the lane entirely", () => {
+		// Card 3 aged out — a backward seek, a lane crossing, a filter — and is
+		// simply not among `items` any more. Nothing is left to lock.
+		const withoutThree = [A, B, D, E];
+		expect(ids(stabilizeLaneOrder(withoutThree, PREVIOUS_IDS, 3))).toEqual([5, 1, 2, 4]);
+	});
+
+	it("returns an empty lane unchanged, first render or not", () => {
+		expect(stabilizeLaneOrder([], undefined, null)).toEqual([]);
+		expect(stabilizeLaneOrder([], PREVIOUS_IDS, null)).toEqual([]);
+	});
+
+	it("does not mutate the items it was given", () => {
+		const items = [...LANE_ITEMS, E];
+		stabilizeLaneOrder(items, PREVIOUS_IDS, 3);
+		expect(ids(items)).toEqual([1, 2, 3, 4, 5]);
 	});
 });

@@ -253,6 +253,139 @@ describe("LaneSection ordering", () => {
 	});
 });
 
+describe("LaneSection automatic ordering (story 044)", () => {
+	// Story 044: a new item entering a lane must not be free to shove the card
+	// the listener is actually looking at around, and its arrival must not
+	// leave the lane scrolled to a spot that no longer shows what it did a
+	// moment ago. Both are stabilizeLaneOrder's job (laneOrder.test.ts covers
+	// it exhaustively); these confirm LaneSection actually wires it in.
+
+	it("renders a new arrival at the left of the lane", () => {
+		const { container, rerender } = render(
+			<LaneSection
+				lane="live"
+				items={ITEMS}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		expect(shownIds(container)).toEqual([1, 2, 3]);
+
+		const FOUR = makeItem({ id: 4, full_title: "clip 4" });
+		rerender(
+			<LaneSection
+				lane="live"
+				items={[...ITEMS, FOUR]}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		expect(shownIds(container)).toEqual([4, 1, 2, 3]);
+	});
+
+	it("locks the active card's index across a new arrival, letting the rest reflow", () => {
+		const { container, rerender } = render(
+			<LaneSection
+				lane="live"
+				items={ITEMS}
+				activeId={2}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		expect(shownIds(container)).toEqual([1, 2, 3]);
+
+		const FOUR = makeItem({ id: 4, full_title: "clip 4" });
+		rerender(
+			<LaneSection
+				lane="live"
+				items={[...ITEMS, FOUR]}
+				activeId={2}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		// Card 2 held index 1 before the arrival; it holds index 1 after, too —
+		// the new card and the other two reflow around it instead of it moving.
+		expect(shownIds(container)).toEqual([4, 2, 1, 3]);
+	});
+
+	it("compensates the lane's scroll offset when a new card is inserted at the left", () => {
+		const { container, rerender } = render(
+			<LaneSection
+				lane="live"
+				items={ITEMS}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		const cards = container.querySelector("[data-lane-cards]") as HTMLElement;
+		// jsdom performs no layout, so scrollWidth/scrollLeft are inert without
+		// this — the same stubbing trick stubSlotBoxes uses for
+		// getBoundingClientRect, just for the two properties the compensation
+		// effect reads instead.
+		Object.defineProperty(cards, "scrollWidth", { value: 300, configurable: true });
+		Object.defineProperty(cards, "scrollLeft", {
+			value: 50,
+			writable: true,
+			configurable: true,
+		});
+
+		const FOUR = makeItem({ id: 4, full_title: "clip 4" });
+		rerender(
+			<LaneSection
+				lane="live"
+				items={[...ITEMS, FOUR]}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		// The card row grew by the new card's width; the scroll position moves by
+		// the same amount so the cards already on screen stay on screen.
+		expect(cards.scrollLeft).toBe(350);
+	});
+
+	it("leaves scrollLeft alone on a render that inserted nothing new", () => {
+		const { container, rerender } = render(
+			<LaneSection
+				lane="live"
+				items={ITEMS}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		const cards = container.querySelector("[data-lane-cards]") as HTMLElement;
+		Object.defineProperty(cards, "scrollWidth", { value: 300, configurable: true });
+		Object.defineProperty(cards, "scrollLeft", {
+			value: 50,
+			writable: true,
+			configurable: true,
+		});
+
+		// Same items; only the lane's own mute state changed. Nothing arrived,
+		// so nudging scrollLeft here would be a jump with no cause.
+		rerender(
+			<LaneSection
+				lane="live"
+				items={ITEMS}
+				muted
+				onToggleMute={() => {}}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		expect(cards.scrollLeft).toBe(50);
+	});
+});
+
 describe("LaneSection drag, with the hand tool", () => {
 	it("reorders a card within its lane", () => {
 		const onReorder = vi.fn();

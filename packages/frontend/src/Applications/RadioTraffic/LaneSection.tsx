@@ -5,7 +5,9 @@
 // this is that author. Everything a lane needs to decide is decided here:
 //
 //   which cards are in it     the shell passes an already-partitioned list
-//   what order they render in  applyManualOrder, from this lane's pins
+//   what order they render in  applyManualOrder for the listener's drags,
+//                               then stabilizeLaneOrder (story 044) for what
+//                               a new arrival or the active card does to it
 //   whether it is folded away  `collapsed`, except on LIVE (see below)
 //   whether a drag does anything  only under the `hand` tool
 //
@@ -26,10 +28,10 @@
 
 import { ClassicyBevelButton } from "classicy";
 import type React from "react";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import type { Lane } from "./cardStatus";
-import { applyManualOrder, type LanePins } from "./laneOrder";
+import { applyManualOrder, type LanePins, stabilizeLaneOrder } from "./laneOrder";
 import styles from "./laneSection.module.scss";
 import type { Tool } from "./toolMode";
 
@@ -123,6 +125,15 @@ export interface LaneSectionProps {
 	items: readonly MediaItem[];
 	/** This lane's pins — see laneOrder. Absent means nothing was ever dragged. */
 	order?: LanePins;
+	/**
+	 * The id of the card that must not appear to move because OTHER cards
+	 * arrived or left — the shell's notion of "highlighted or playing" (a
+	 * soloed LIVE card, a listener-started PREVIOUS clip). Undefined or null
+	 * means nothing is pinned and the lane reorders freely; see
+	 * {@link stabilizeLaneOrder}, which this lane's render order is threaded
+	 * through on every change.
+	 */
+	activeId?: number | null;
 	collapsed?: boolean;
 	onToggleCollapse?: (collapsed: boolean) => void;
 	/**
@@ -158,6 +169,7 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	lane,
 	items,
 	order = [],
+	activeId = null,
 	collapsed = false,
 	onToggleCollapse,
 	muted = false,
@@ -172,14 +184,50 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	// Only the id being dragged is state; the rest of the gesture lives in a ref
 	// because nothing renders from it and a pointermove per frame should not.
 	const [draggingId, setDraggingId] = useState<number | null>(null);
+	// The ids this lane rendered last tick, and the scroll width that went with
+	// them — stabilizeLaneOrder's "before" and the scroll-jump compensation's
+	// baseline. Undefined until the first commit: there is nothing to compare
+	// the very first render against, for either.
+	const previousIdsRef = useRef<readonly number[] | undefined>(undefined);
+	const scrollWidthRef = useRef(0);
 
 	const label = LANE_LABELS[lane];
 	const collapsible = LANE_COLLAPSIBLE[lane];
 	const isCollapsed = collapsible && collapsed;
-	const ordered = applyManualOrder(items, order);
+	// applyManualOrder answers "where did the listener drag this lane's own
+	// siblings"; stabilizeLaneOrder answers what a NEW sibling arriving, or an
+	// old one leaving, does to that arrangement — new cards enter at the left,
+	// and the active card (if it rendered last tick) holds the index it had.
+	const ordered = stabilizeLaneOrder(
+		applyManualOrder(items, order),
+		previousIdsRef.current,
+		activeId,
+	);
 	// Dragging is a mode, not a capability: under the other three tools a press
 	// on a card means solo, mute or unmute, and reordering must not also happen.
 	const canDrag = tool === "hand";
+
+	// Runs after the DOM reflects `ordered`, before the browser paints — a
+	// plain useEffect would let the jump flash on screen for one frame first.
+	//
+	// Compensation is scoped to ticks that actually inserted a new card: a
+	// collapse toggle or a manual pin swap also changes `cardsRef`'s content
+	// width, and nudging scrollLeft for either of those would introduce the
+	// very jump this exists to prevent, on a gesture that never asked for one.
+	useLayoutEffect(() => {
+		const cards = cardsRef.current;
+		const previous = previousIdsRef.current;
+		if (cards) {
+			const insertedAtLeft =
+				previous !== undefined && ordered.some((item) => !previous.includes(item.id));
+			if (insertedAtLeft) {
+				const grew = cards.scrollWidth - scrollWidthRef.current;
+				if (grew > 0) cards.scrollLeft += grew;
+			}
+			scrollWidthRef.current = cards.scrollWidth;
+		}
+		previousIdsRef.current = ordered.map((item) => item.id);
+	}, [ordered]);
 
 	const endDrag = (target: HTMLElement, pointerId: number) => {
 		dragRef.current = null;
