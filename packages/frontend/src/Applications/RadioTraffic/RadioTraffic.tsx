@@ -57,6 +57,7 @@ import { FilterTree } from "./FilterTree";
 import { LANES, type LaneOrder, reconcileLaneOrder, reorderLane } from "./laneOrder";
 import { LaneSection } from "./LaneSection";
 import { LaneSmallPlayer } from "./LaneSmallPlayer";
+import { nextHeldLiveIds, sameIdSet, withAudibleHold } from "./liveHold";
 import styles from "./radioTraffic.module.scss";
 import {
 	radioTrafficSetState,
@@ -145,10 +146,24 @@ function excludeBroadcastStations(pool: readonly MediaItem[]): MediaItem[] {
 		.flatMap((station) => station.items);
 }
 
-/** Every card, in its lane, in the order that lane renders before manual pins. */
-function partitionLanes(pool: readonly MediaItem[], nowMs: number): Record<Lane, MediaItem[]> {
+/**
+ * Every card, in its lane, in the order that lane renders before manual pins.
+ *
+ * `heldLiveIds` is Story 045's audible hold (see liveHold.ts): an id in it
+ * overrides an otherwise-PREVIOUS verdict back to LIVE, so a player the
+ * listener can still hear does not vanish out from under them the instant its
+ * clock window ends. `laneFor` itself stays exactly as clock-only as its own
+ * header promises — this is the reconciliation, not a rewrite of the rule.
+ */
+function partitionLanes(
+	pool: readonly MediaItem[],
+	nowMs: number,
+	heldLiveIds: ReadonlySet<number>,
+): Record<Lane, MediaItem[]> {
 	const out: Record<Lane, MediaItem[]> = { live: [], upcoming: [], previous: [] };
-	for (const item of pool) out[laneFor(item, nowMs)].push(item);
+	for (const item of pool) {
+		out[withAudibleHold(laneFor(item, nowMs), item.id, heldLiveIds)].push(item);
+	}
 	out.live.sort(byStartAscending);
 	out.upcoming.sort(byStartAscending);
 	out.previous.sort((a, b) => byStartAscending(b, a));
@@ -249,6 +264,14 @@ export const RadioTraffic: React.FC = () => {
 	const [stopped, setStopped] = useState<ReadonlySet<number>>(() => new Set());
 	/** PREVIOUS clips the listener started by hand — these do NOT follow the clock. */
 	const [userStarted, setUserStarted] = useState<ReadonlySet<number>>(() => new Set());
+	/**
+	 * Story 045: LIVE ids `partitionLanes` holds past their clock window because
+	 * the listener can still hear them — see liveHold.ts. Read one render behind
+	 * on purpose: it names ids that were already in `lanes.live`, so it can only
+	 * ever widen LIVE with something that was already there, never manufacture a
+	 * membership `laneFor` never granted.
+	 */
+	const [heldLiveIds, setHeldLiveIds] = useState<ReadonlySet<number>>(() => new Set());
 
 	const {
 		mp3Items,
@@ -332,9 +355,28 @@ export const RadioTraffic: React.FC = () => {
 					mergeById(historyPool(mp3History, seenRef.current), mp3Items, upcomingItems),
 				),
 				getNowMs(),
+				heldLiveIds,
 			),
-		[mp3History, mp3Items, upcomingItems, anchorMs, getNowMs], // eslint-disable-line react-hooks/exhaustive-deps
+		[mp3History, mp3Items, upcomingItems, anchorMs, getNowMs, heldLiveIds], // eslint-disable-line react-hooks/exhaustive-deps
 	);
+
+	// Story 045: what to hold NEXT render, derived from what LIVE actually holds
+	// THIS render — see liveHold.ts's header for why the memory lives out here
+	// rather than in that module. `stopped` and lane/per-card mute are read
+	// straight off React state rather than through the `visible.live`/isAudible
+	// pipeline built below, because a filter-hidden card is still part of the
+	// mix (the same rule the audio-registration effect follows) and must not
+	// lose its hold just because a tag filter hid it.
+	//
+	// biome-ignore lint/correctness/useExhaustiveDependencies: sameIdSet keeps this from looping — see the setHeldLiveIds call
+	useEffect(() => {
+		const isHeldAudible = (itemId: number) =>
+			!liveLaneMuted && !stopped.has(itemId) && isAudible(audio, itemId, "live");
+		setHeldLiveIds((prev) => {
+			const next = nextHeldLiveIds(lanes.live, isHeldAudible);
+			return sameIdSet(prev, next) ? prev : next;
+		});
+	}, [lanes.live, audio, liveLaneMuted, stopped]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	/** Which lane each rendered card is in — the pin reconciler's whole input. */
 	const membership = useMemo(() => {
