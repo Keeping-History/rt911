@@ -65,7 +65,7 @@ export const DetailsTab: React.FC<CardTabProps> = ({ item, meta, tzOffsetHours }
 		<div className={styles.rtTabPanel} data-tab="details">
 			<div className={styles.rtPanelColumns}>
 				<section className={styles.rtPanelColumn} data-column="call-details">
-					<h4 className={styles.rtPanelColumnHead}>Call Details</h4>
+					<h4 className={styles.rtPanelColumnHead}>Details</h4>
 					{rows.length === 0 ? (
 						<p className={styles.rtEmpty}>No timings.</p>
 					) : (
