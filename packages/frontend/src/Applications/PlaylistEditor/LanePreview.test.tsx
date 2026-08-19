@@ -1,6 +1,6 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { enqueue } from "./directusQueue";
+import { enqueue } from "../../lib/directusQueue";
 import { LanePreview } from "./LanePreview";
 import { FULL_BOUNDS } from "./timelineLayout";
 
