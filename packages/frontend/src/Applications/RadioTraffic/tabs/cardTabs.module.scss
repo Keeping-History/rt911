@@ -72,6 +72,10 @@
   flex-direction: row;
   align-items: stretch;
   gap: 3px;
+  // Otherwise this auto-sizes to its tallest column's content instead of
+  // .rtTabPanel's fixed height, leaving dead space below short columns that
+  // align-items: stretch has nothing to stretch against.
+  height: 100%;
 }
 
 .rtPanelColumn {
