@@ -17,11 +17,22 @@ const badge = (party: HTMLElement) =>
 	party.querySelector<HTMLElement>("[data-confidence]");
 
 describe("PartiesTab", () => {
-	it("renders one column per participant", () => {
+	it("renders one row per participant", () => {
 		const { container } = render(
 			<PartiesTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
 		);
 		expect(parties(container)).toHaveLength(2);
+	});
+
+	it("puts the three headers above the rows", () => {
+		const { getByRole } = render(
+			<PartiesTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
+		);
+		expect(
+			["Speaker/Facility", "Role", "Confidence"].every(
+				(name) => getByRole("columnheader", { name }) !== null,
+			),
+		).toBe(true);
 	});
 
 	it("renders each participant's person, facility and role", () => {
@@ -123,7 +134,10 @@ describe("PartiesTab", () => {
 		const party = parties(container)[0];
 		expect(field(party, "facility")).toBe("ZBW");
 		expect(party.querySelector('[data-field="person"]')).toBeNull();
-		expect(party.querySelector('[data-field="role"]')).toBeNull();
+		// The Role cell itself always exists — a table needs every row to carry
+		// all three cells to stay aligned under the header — but it renders
+		// nothing when the participant has no role.
+		expect(field(party, "role")).toBe("");
 	});
 
 	it("says nobody was identified rather than showing an empty grid", () => {
