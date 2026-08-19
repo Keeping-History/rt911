@@ -148,6 +148,8 @@ export const CardTabBar: React.FC<CardTabBarProps> = ({ tabs, active, onSelect }
 								buttonSize="small"
 								depressed={selected}
 								data-tab-id={tab.id}
+								padding="sm"
+								margin="sm"
 								ref={selected ? activeRef : undefined}
 								onClickFunc={() => onSelect(tab.id)}
 							>
