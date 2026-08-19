@@ -26,11 +26,14 @@
 // that runs off to the right, and reaching the rest of them is a horizontal
 // scroll inside the lane. Nothing scrolls vertically anywhere in this app.
 //
-// Consequence worth knowing: PREVIOUS gets 1/6 of the column — about 95px in the
-// design's 601px window — while a card is `124px * 1.25` = 155px tall, so at the
-// current --rt-card-scale its cards are CLIPPED rather than scrolled to. That is
-// the real tension between the lane ratio and the card scale that the row-height
-// story exists to resolve, by sizing the card off the row instead of off Figma.
+// PREVIOUS gets 1/6 of the column — about 95px in the design's 601px window —
+// which used to be shorter than a card's own fixed `124px * 1.25` = 155px
+// floor, clipping every PREVIOUS card instead of showing it whole. Story 034
+// resolved that by sizing the card OFF the row rather than off Figma: a card
+// is `height: 100%` of the row .rtLaneCards hands it (below), with no
+// competing min-height, and derives its own width from that height via a
+// fixed aspect ratio (trafficCard.module.scss) — so a row is tall enough for
+// its card by construction, not by coincidence.
 
 // Sizes compose from classicy's window metrics (border 1px, padding 6px,
 // control 12px) rather than from fresh px literals — house pattern.
@@ -67,6 +70,12 @@
   --rt-lane-gap: calc(var(--window-control-size) + var(--window-border-size) * 2);
   --rt-lane-fill: transparent;
   --rt-lane-edge: transparent;
+  // The column is SIX PLAYER ROWS — LIVE 3, UPCOMING 2, PREVIOUS 1 — and this
+  // is a lane's own share of them, overridden per `data-lane` below. flex-grow
+  // taking its value from a literal row count (rather than a pre-reduced
+  // ratio) is what makes "six rows" a fact the stylesheet states once, instead
+  // of something a reader has to reconstruct from 3:2:1.
+  --rt-lane-rows: 1;
 
   position: relative;
   // Contains the stripe overlay's z-index so it can never paint behind the
@@ -85,20 +94,23 @@
   padding: var(--window-padding-size);
   background-color: var(--rt-lane-fill);
   border: var(--window-border-size) solid var(--rt-lane-edge);
+  // Lane share of the column, as ROWS of six rather than a pixel height:
+  // flex-basis 0 (not auto) is what makes this a pure ratio rather than
+  // "content size, then share the remainder", and it is what a card's own
+  // `height: 100%` (trafficCard.module.scss) ultimately measures against.
+  flex: var(--rt-lane-rows) 1 0;
 }
 
-// Lane share of the column. flex-basis 0 (not auto) is what makes these pure
-// ratios rather than "content size, then share the remainder".
 .rtLane[data-lane="live"] {
-  flex: 3 1 0;
+  --rt-lane-rows: 3;
 }
 
 .rtLane[data-lane="upcoming"] {
-  flex: 2 1 0;
+  --rt-lane-rows: 2;
 }
 
 .rtLane[data-lane="previous"] {
-  flex: 1 1 0;
+  --rt-lane-rows: 1;
 }
 
 // A collapsed lane stops claiming its share of the column and takes only the
