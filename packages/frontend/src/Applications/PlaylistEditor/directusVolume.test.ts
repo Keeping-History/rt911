@@ -5,6 +5,20 @@ import {
 	MEDIA_FILE_TYPES,
 } from "./directusVolume";
 
+vi.mock("../radio-core/radioTrafficVolume", () => ({
+	buildRadioTrafficVolume: () => ({
+		id: "radio-traffic-tags", label: "Radio Traffic",
+		list: async (path: string[]) =>
+			path.length === 0
+				? [{ id: "ns-topic", name: "Topic", kind: "folder" as const }]
+				: [{
+						id: "radio-traffic-501", name: "American 11 loses contact",
+						kind: "file" as const, fileType: "radio-traffic",
+						meta: { app: "radio", itemId: 501 },
+					}],
+	}),
+}));
+
 const sourcesRows = [
 	{ id: 7, slug: "nyt", name: "New York Times" },
 	{ id: 9, slug: "wapo", name: "Washington Post" },
@@ -70,19 +84,16 @@ describe("createDirectusVolume", () => {
 		expect(stations[1]).toMatchObject({
 			fileType: MEDIA_FILE_TYPES.radio, meta: { app: "radio", itemId: "WINS" },
 		});
+	});
 
-		const traffic = await volume().list(["Radio Traffic"]);
-		expect(traffic.map((e: typeof traffic[number]) => e.name)).toEqual([
-			"Select All", "FDNY-Manhattan",
-		]);
-		expect(traffic[0]).toMatchObject({
-			name: "Select All", fileType: MEDIA_FILE_TYPES.radioTraffic,
-			meta: { selectAllPaths: [["Radio Traffic"]] },
-		});
-		expect(traffic[1]).toMatchObject({
-			fileType: MEDIA_FILE_TYPES.radioTraffic,
-			meta: { app: "radio", itemId: "FDNY-Manhattan" },
-		});
+	it("delegates the Radio Traffic folder to buildRadioTrafficVolume, one path segment in", async () => {
+		const root = await volume().list(["Radio Traffic"]);
+		expect(root).toEqual([{ id: "ns-topic", name: "Topic", kind: "folder" }]);
+		const clips = await volume().list(["Radio Traffic", "Topic", "loss-of-contact"]);
+		expect(clips).toEqual([{
+			id: "radio-traffic-501", name: "American 11 loses contact",
+			kind: "file", fileType: "radio-traffic", meta: { app: "radio", itemId: 501 },
+		}]);
 	});
 
 	it("lists TV channels from the injected slugs with playlist meta", async () => {
