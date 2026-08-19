@@ -395,9 +395,10 @@ describe("PeaksWaveform", () => {
 			expect(onSeekPct).not.toHaveBeenCalled();
 		});
 
-		it("clamps a drag that leaves the envelope at either end", () => {
-			// The drag is tracked on the window so it survives leaving the canvas
-			// — which means the maths has to survive it too.
+		it("stops scrubbing the instant the pointer leaves the waveform box horizontally", () => {
+			// The drag is tracked on the window (not the canvas) so it can detect
+			// this itself instead of never hearing about it — a scrub is only live
+			// while the pointer is down AND over the box.
 			const onSeekPct = vi.fn();
 			stubBox(0, 200);
 			const { container } = render(
@@ -405,10 +406,28 @@ describe("PeaksWaveform", () => {
 			);
 
 			fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 100 });
+			onSeekPct.mockClear();
 			fireEvent.pointerMove(window, { clientX: -400 });
-			fireEvent.pointerMove(window, { clientX: 4_000 });
+			expect(onSeekPct).not.toHaveBeenCalled();
 
-			expect(onSeekPct.mock.calls.map(([pct]) => pct)).toEqual([0.5, 0, 1]);
+			// The drag ended, not paused — moving back over the box does not
+			// resume it without a fresh pointerdown.
+			fireEvent.pointerMove(window, { clientX: 100 });
+			expect(onSeekPct).not.toHaveBeenCalled();
+		});
+
+		it("stops scrubbing the instant the pointer leaves the waveform box vertically", () => {
+			const onSeekPct = vi.fn();
+			stubBox(0, 200); // top: 0, bottom: 40
+			const { container } = render(
+				<PeaksWaveform peaks={peaks} height={40} onSeekPct={onSeekPct} />,
+			);
+
+			fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 100, clientY: 20 });
+			onSeekPct.mockClear();
+			fireEvent.pointerMove(window, { clientX: 100, clientY: 400 });
+
+			expect(onSeekPct).not.toHaveBeenCalled();
 		});
 
 		it("drops the drag when the waveform unmounts mid-gesture", () => {
