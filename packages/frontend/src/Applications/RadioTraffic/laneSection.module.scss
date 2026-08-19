@@ -218,7 +218,7 @@
   z-index: 1;
   flex: 0 0 auto;
   box-sizing: border-box;
-  width: calc(var(--window-control-size) + var(--window-border-size) * 2);
+  width: calc(var(--window-control-size) * 2 + var(--window-border-size) * 2);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -248,7 +248,7 @@
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   font-family: var(--ui-font);
-  font-size: calc(var(--ui-font-size) * 0.75);
+  font-size: calc(var(--ui-font-size) * 1);
   letter-spacing: 1px;
   color: var(--color-system-06);
   white-space: nowrap;
@@ -274,9 +274,9 @@
   // The strip is ONE control wide by design (story 022) and the bevel button's
   // own square is two, so it is brought back to the strip's width here rather
   // than widening the chrome around it.
-  width: var(--window-control-size);
+  width: calc(var(--window-control-size) * 2);
   min-width: 0;
-  height: var(--window-control-size);
+  height: calc(var(--window-control-size) * 2);
   padding: 0;
 
   svg {

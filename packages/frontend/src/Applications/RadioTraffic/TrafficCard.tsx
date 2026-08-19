@@ -69,6 +69,13 @@ export interface TrafficCardProps {
 	paused?: boolean;
 	onTogglePause: () => void;
 	/**
+	 * The listener scrubbed the waveform — LIVE only (see RadioTraffic.tsx's
+	 * renderCard). Fired in addition to the seek itself, not instead of it: this
+	 * is purely a signal for Story 045's manual hold, and carries no position of
+	 * its own for the shell to act on.
+	 */
+	onManualSeek?: () => void;
+	/**
 	 * The waveform's ink as a CSS color, or undefined to follow the theme.
 	 *
 	 * A `color` on the waveform slot rather than a prop passed into
@@ -140,6 +147,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	muted = false,
 	paused = false,
 	onTogglePause,
+	onManualSeek,
 	waveformColor,
 	onToggleMute,
 }) => {
@@ -221,8 +229,9 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	const onSeekPct = useCallback(
 		(pct: number) => {
 			seekTo(item.id, pct * durationMs);
+			onManualSeek?.();
 		},
-		[item.id, durationMs],
+		[item.id, durationMs, onManualSeek],
 	);
 
 	// Stopping means opposite things in the two lanes that can be playing.

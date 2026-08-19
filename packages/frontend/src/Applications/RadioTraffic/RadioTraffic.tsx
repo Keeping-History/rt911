@@ -57,7 +57,7 @@ import { FilterTree } from "./FilterTree";
 import { LANES, type LaneOrder, reconcileLaneOrder, reorderLane } from "./laneOrder";
 import { LaneSection } from "./LaneSection";
 import { LaneSmallPlayer } from "./LaneSmallPlayer";
-import { nextHeldLiveIds, sameIdSet, withAudibleHold } from "./liveHold";
+import { nextHeldLiveIds, sameIdSet, withManualHold } from "./liveHold";
 import styles from "./radioTraffic.module.scss";
 import {
 	radioTrafficSetState,
@@ -149,10 +149,11 @@ function excludeBroadcastStations(pool: readonly MediaItem[]): MediaItem[] {
 /**
  * Every card, in its lane, in the order that lane renders before manual pins.
  *
- * `heldLiveIds` is Story 045's audible hold (see liveHold.ts): an id in it
+ * `heldLiveIds` is Story 045's manual hold (see liveHold.ts): an id in it
  * overrides an otherwise-PREVIOUS verdict back to LIVE, so a player the
- * listener can still hear does not vanish out from under them the instant its
- * clock window ends. `laneFor` itself stays exactly as clock-only as its own
+ * listener has touched — paused, played, or scrubbed — does not vanish out
+ * from under them the instant its clock window ends. An untouched player gets
+ * no such reprieve. `laneFor` itself stays exactly as clock-only as its own
  * header promises — this is the reconciliation, not a rewrite of the rule.
  */
 function partitionLanes(
@@ -162,7 +163,7 @@ function partitionLanes(
 ): Record<Lane, MediaItem[]> {
 	const out: Record<Lane, MediaItem[]> = { live: [], upcoming: [], previous: [] };
 	for (const item of pool) {
-		out[withAudibleHold(laneFor(item, nowMs), item.id, heldLiveIds)].push(item);
+		out[withManualHold(laneFor(item, nowMs), item.id, heldLiveIds)].push(item);
 	}
 	out.live.sort(byStartAscending);
 	out.upcoming.sort(byStartAscending);
@@ -183,6 +184,18 @@ function toggleId(set: ReadonlySet<number>, id: number): ReadonlySet<number> {
 	const next = new Set(set);
 	if (!next.delete(id)) next.add(id);
 	return next;
+}
+
+/**
+ * `set` with `id` added, or `set` itself when it was already there.
+ *
+ * Unlike toggleId, this never removes — a touch is a one-way latch (see
+ * touchedLiveIds below), so a second play/pause or a second scrub on the same
+ * card must not undo the first one's hold.
+ */
+function addId(set: ReadonlySet<number>, id: number): ReadonlySet<number> {
+	if (set.has(id)) return set;
+	return new Set(set).add(id);
 }
 
 /** `set` minus everything `keep` rejects; the same object when nothing was dropped. */
@@ -275,9 +288,17 @@ export const RadioTraffic: React.FC = () => {
 	/** PREVIOUS clips the listener started by hand — these do NOT follow the clock. */
 	const [userStarted, setUserStarted] = useState<ReadonlySet<number>>(() => new Set());
 	/**
+	 * LIVE cards the listener has manually touched — paused/played, or scrubbed
+	 * the waveform. This is the whole criterion for Story 045's hold below: an
+	 * untouched card simply disappears once its clock window ends, and a touched
+	 * one stays no matter what they do to it afterward (mute it, pause it again),
+	 * which is why this is add-only (addId) rather than a toggle like `stopped`.
+	 */
+	const [touchedLiveIds, setTouchedLiveIds] = useState<ReadonlySet<number>>(() => new Set());
+	/**
 	 * Story 045: LIVE ids `partitionLanes` holds past their clock window because
-	 * the listener can still hear them — see liveHold.ts. Read one render behind
-	 * on purpose: it names ids that were already in `lanes.live`, so it can only
+	 * the listener has touched them — see liveHold.ts. Read one render behind on
+	 * purpose: it names ids that were already in `lanes.live`, so it can only
 	 * ever widen LIVE with something that was already there, never manufacture a
 	 * membership `laneFor` never granted.
 	 */
@@ -378,21 +399,18 @@ export const RadioTraffic: React.FC = () => {
 
 	// Story 045: what to hold NEXT render, derived from what LIVE actually holds
 	// THIS render — see liveHold.ts's header for why the memory lives out here
-	// rather than in that module. `stopped` and lane/per-card mute are read
-	// straight off React state rather than through the `visible.live`/isAudible
-	// pipeline built below, because a filter-hidden card is still part of the
-	// mix (the same rule the audio-registration effect follows) and must not
-	// lose its hold just because a tag filter hid it.
+	// rather than in that module. `touchedLiveIds` is read straight off React
+	// state rather than through the `visible.live` pipeline built below, because
+	// a filter-hidden card can still be the one the listener touched, and a tag
+	// filter must not be what decides whether it survives its clock window.
 	//
 	// biome-ignore lint/correctness/useExhaustiveDependencies: sameIdSet keeps this from looping — see the setHeldLiveIds call
 	useEffect(() => {
-		const isHeldAudible = (itemId: number) =>
-			!liveLaneMuted && !stopped.has(itemId) && isAudible(audio, itemId, "live");
 		setHeldLiveIds((prev) => {
-			const next = nextHeldLiveIds(lanes.live, isHeldAudible);
+			const next = nextHeldLiveIds(lanes.live, (itemId) => touchedLiveIds.has(itemId));
 			return sameIdSet(prev, next) ? prev : next;
 		});
-	}, [lanes.live, audio, liveLaneMuted, stopped]); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [lanes.live, touchedLiveIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	/** Which lane each rendered card is in — the pin reconciler's whole input. */
 	const membership = useMemo(() => {
@@ -410,12 +428,18 @@ export const RadioTraffic: React.FC = () => {
 		setLaneOrder((order) => reconcileLaneOrder(order, membership));
 	}, [membership]);
 
-	// Both hand-set lists are scoped to a lane the item may have left. Pruning
-	// them here is what stops a stop/start from a previous hour reapplying
-	// itself when a backward seek brings the clip round again.
+	// All three hand-set lists are scoped to a lane the item may have left.
+	// Pruning them here is what stops a stop/start/touch from a previous hour
+	// reapplying itself when a backward seek brings the clip round again.
+	// touchedLiveIds keying off the same `=== "live"` test as `stopped` is what
+	// makes the hold self-sustaining rather than one-shot: as long as a touched
+	// id keeps reporting "live" (because withManualHold is holding it there),
+	// its touch survives; only once it genuinely leaves LIVE for good does the
+	// touch — and with it, the hold — get dropped.
 	useEffect(() => {
 		setStopped((ids) => retainIds(ids, (id) => membership.get(id) === "live"));
 		setUserStarted((ids) => retainIds(ids, (id) => membership.has(id)));
+		setTouchedLiveIds((ids) => retainIds(ids, (id) => membership.get(id) === "live"));
 	}, [membership]);
 
 	// ── The filter ───────────────────────────────────────────────────────────
@@ -623,9 +647,20 @@ export const RadioTraffic: React.FC = () => {
 	);
 
 	const onTogglePause = useCallback((itemId: number, lane: Lane) => {
-		if (lane === "live") setStopped((ids) => toggleId(ids, itemId));
+		if (lane === "live") {
+			setStopped((ids) => toggleId(ids, itemId));
+			// A play/pause press is a touch — see touchedLiveIds above — whichever
+			// direction it toggled `stopped`, so this is add-only, never undone by
+			// pressing the button again.
+			setTouchedLiveIds((ids) => addId(ids, itemId));
+		}
 		// An UPCOMING clip has no audio yet; there is nothing to start.
 		else if (lane === "previous") setUserStarted((ids) => toggleId(ids, itemId));
+	}, []);
+
+	/** A LIVE card's waveform was scrubbed — the other half of a touch. */
+	const onManualSeek = useCallback((itemId: number) => {
+		setTouchedLiveIds((ids) => addId(ids, itemId));
 	}, []);
 
 	const onReorder = useCallback(
@@ -667,6 +702,11 @@ export const RadioTraffic: React.FC = () => {
 						lane === "live" ? stopped.has(item.id) : !userStarted.has(item.id)
 					}
 					onTogglePause={() => onTogglePause(item.id, lane)}
+					// Only a LIVE scrub is a touch that keeps the card from vanishing —
+					// UPCOMING has no audio to scrub, and PREVIOUS already plays back
+					// from wherever the listener starts it, following no clock a scrub
+					// would need to override.
+					onManualSeek={lane === "live" ? () => onManualSeek(item.id) : undefined}
 					waveformColor={waveformColor}
 				/>
 			</div>
@@ -682,6 +722,7 @@ export const RadioTraffic: React.FC = () => {
 			stopped,
 			onCardClick,
 			onTogglePause,
+			onManualSeek,
 			waveformColor,
 		],
 	);
