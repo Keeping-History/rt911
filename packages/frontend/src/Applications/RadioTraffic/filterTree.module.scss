@@ -7,7 +7,6 @@
   flex-direction: column;
   width: calc(100% - var(--window-control-size));
   flex: 0 0 141px;
-  flex-grow: 1;
   // The tree is the tallest thing in the sidebar and the only part that grows
   // with the vocabulary, so it is what scrolls.
   overflow-y: auto;
@@ -15,7 +14,7 @@
   font-family: var(--ui-font);
   font-size: var(--ui-font-size);
   * {
-    flex-grow: 0;
+    flex-grow: 0 !important;
   }
 }
 
@@ -36,6 +35,7 @@
   color: var(--color-system-06);
   text-align: left;
   cursor: pointer;
+  flex-grow: 1;
 }
 
 .rtFilterCount {
