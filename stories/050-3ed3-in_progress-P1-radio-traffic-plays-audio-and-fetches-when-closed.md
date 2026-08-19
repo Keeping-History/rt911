@@ -1,11 +1,11 @@
 ---
 id: "050-3ed3"
 title: "Radio Traffic plays audio and fetches data when its window is closed"
-status: pending
+status: in_progress
 priority: P1
 type: fix
 created: 2026-08-19T03:42:50.000Z
-updated: 2026-08-19T03:42:50.000Z
+updated: 2026-08-19T03:50:20.000Z
 dependencies: []
 plan: "plans/radio-traffic-redesign.md"
 plan_step: "App shell and audio orchestration"
