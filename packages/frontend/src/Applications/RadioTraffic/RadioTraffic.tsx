@@ -59,8 +59,8 @@ import { LaneSection } from "./LaneSection";
 import styles from "./radioTraffic.module.scss";
 import {
 	radioTrafficSetState,
+	type RadioTrafficSettings,
 	sanitizeRadioTrafficState,
-	type WaveformColorSettings,
 } from "./RadioTrafficContext";
 import { RadioTrafficSettingsWindow } from "./RadioTrafficSettingsWindow";
 import { groupVocabulary, matchesFilter } from "./tagFilter";
@@ -198,9 +198,10 @@ export const RadioTraffic: React.FC = () => {
 		soloId: null,
 		muted: new Set(restored.mutedItems),
 	}));
-	const [waveform, setWaveform] = useState<WaveformColorSettings>(() => ({
+	const [settings, setSettings] = useState<RadioTrafficSettings>(() => ({
 		useThemeWaveformColor: restored.useThemeWaveformColor,
 		waveformColor: restored.waveformColor,
+		playOriginalAudio: restored.playOriginalAudio,
 	}));
 
 	// The Settings draft (the Tuner's pattern, and TimeMachine's before it):
@@ -208,22 +209,22 @@ export const RadioTraffic: React.FC = () => {
 	// Save, so Cancel — and the window's close box, which is Cancel — leaves
 	// nothing behind. `showSettings` is ephemeral and deliberately not persisted.
 	const [showSettings, setShowSettings] = useState(false);
-	const [settingsForm, setSettingsForm] = useState<WaveformColorSettings>(waveform);
+	const [settingsForm, setSettingsForm] = useState<RadioTrafficSettings>(settings);
 	const openSettings = useCallback(() => {
-		setSettingsForm(waveform);
+		setSettingsForm(settings);
 		setShowSettings(true);
-	}, [waveform]);
+	}, [settings]);
 	const saveSettingsForm = useCallback(() => {
-		setWaveform(settingsForm);
+		setSettings(settingsForm);
 		setShowSettings(false);
 	}, [settingsForm]);
 
 	// undefined = follow the theme, which is what `.rtCardWaveform`'s
 	// --color-system-06 already does; the card only overrides `color` when the
 	// listener has actually chosen one.
-	const waveformColor = waveform.useThemeWaveformColor
+	const waveformColor = settings.useThemeWaveformColor
 		? undefined
-		: intToHex(waveform.waveformColor);
+		: intToHex(settings.waveformColor);
 
 	const [pickerNamespace, setPickerNamespace] = useState<string | null>(null);
 	/** LIVE cards the listener stopped by hand. */
@@ -404,18 +405,30 @@ export const RadioTraffic: React.FC = () => {
 		clockMoved();
 	}, [anchorMs]);
 
-	// Which elements should exist. LANE membership, NOT filter visibility: the
-	// element outlives the card so a re-checked filter resumes at the clock's
-	// offset instead of restarting. Tracked here because the registry is
-	// module-level and release() is an explicit act, never a render side effect.
+	// Which elements should exist, and WHICH COPY of each recording they play.
+	// LANE membership, NOT filter visibility: the element outlives the card so a
+	// re-checked filter resumes at the clock's offset instead of restarting.
+	// Tracked here because the registry is module-level and release() is an
+	// explicit act, never a render side effect.
+	//
+	// resolveAudioUrl, never `item.url`: the mp3 rows carry both the source
+	// recording and the noise-reduced render, and which one a listener hears is
+	// the "Play original recording" setting. Re-running on that setting is the
+	// whole of switching copies mid-session — `ensure` re-points the SAME element
+	// at the new src (audioCapture's graph is bound to the element for life, so
+	// tearing it down would silently orphan every card's waveform), which is why
+	// the swap needs no reload and costs no playback position the coordinator's
+	// clock reseek does not immediately restore.
 	const registeredRef = useRef<Set<number>>(new Set());
 	useEffect(() => {
 		const desired = new Map<number, string>();
 		for (const item of lanes.live) {
-			if (!stopped.has(item.id)) desired.set(item.id, resolveAudioUrl(item, false));
+			if (!stopped.has(item.id))
+				desired.set(item.id, resolveAudioUrl(item, settings.playOriginalAudio));
 		}
 		for (const item of lanes.previous) {
-			if (userStarted.has(item.id)) desired.set(item.id, resolveAudioUrl(item, false));
+			if (userStarted.has(item.id))
+				desired.set(item.id, resolveAudioUrl(item, settings.playOriginalAudio));
 		}
 		for (const itemId of [...registeredRef.current]) {
 			if (desired.has(itemId)) continue;
@@ -426,7 +439,7 @@ export const RadioTraffic: React.FC = () => {
 			ensure(itemId, url);
 			registeredRef.current.add(itemId);
 		}
-	}, [lanes.live, lanes.previous, stopped, userStarted]);
+	}, [lanes.live, lanes.previous, stopped, userStarted, settings.playOriginalAudio]);
 
 	// The app unmounting is the one moment nothing else can stop the sound:
 	// these elements are never in the DOM, so a dropped registry is a leak that
@@ -463,11 +476,12 @@ export const RadioTraffic: React.FC = () => {
 				collapsed,
 				laneOrder,
 				mutedItems: [...audio.muted],
-				useThemeWaveformColor: waveform.useThemeWaveformColor,
-				waveformColor: waveform.waveformColor,
+				useThemeWaveformColor: settings.useThemeWaveformColor,
+				waveformColor: settings.waveformColor,
+				playOriginalAudio: settings.playOriginalAudio,
 			}),
 		);
-	}, [checked, tool, collapsed, laneOrder, audio.muted, waveform, dispatch]);
+	}, [checked, tool, collapsed, laneOrder, audio.muted, settings, dispatch]);
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	const toggleTag = useCallback((tag: string) => {

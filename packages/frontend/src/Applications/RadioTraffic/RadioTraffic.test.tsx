@@ -726,3 +726,105 @@ describe("RadioTraffic — the waveform color", () => {
 		expect(lastPersisted()).toMatchObject({ useThemeWaveformColor: true });
 	});
 });
+
+// Which COPY of a recording the coordinator is handed. Every mp3 row carries the
+// source recording; a row the enhancement pass has reached also carries a
+// noise-reduced render, and this setting is which of the two a card plays.
+describe("RadioTraffic — the original-recording choice", () => {
+	const ORIGINAL = "https://files.example/1.mp3";
+	const ENHANCED = "https://files.example/1.enhanced.mp3";
+
+	/** One LIVE clip that exists in both copies, so the choice is observable. */
+	const both: MediaItem = {
+		...item(1, "2001-09-11T12:46:00.000Z", "2001-09-11T12:50:00.000Z"),
+		enhanced_url: ENHANCED,
+	};
+
+	const oneLiveClip = {
+		mp3Items: [both],
+		mp3History: [],
+		getUpcomingMp3Items: () => [],
+	};
+
+	const srcOf = (id: number) => audio.elements.get(id)?.src;
+
+	const tickOriginal = () => {
+		fireEvent.click(screen.getByText("Settings…"));
+		fireEvent.click(screen.getByLabelText("Play original recording (more noise)"));
+	};
+
+	it("plays the noise-reduced render until the listener says otherwise", async () => {
+		await renderSettled(oneLiveClip);
+		expect(srcOf(1)).toBe(ENHANCED);
+	});
+
+	it("plays the source recording when a previous session chose it", async () => {
+		mockAppData.current = { playOriginalAudio: true };
+		await renderSettled(oneLiveClip);
+		expect(srcOf(1)).toBe(ORIGINAL);
+	});
+
+	// The point of the whole setting: it has to take effect on the cards already
+	// playing, and it has to do so by re-pointing the element rather than
+	// replacing it. audioCapture's createMediaElementSource may be called only
+	// once per element and the capture is permanent, so a swap that released and
+	// re-created would leave the waveform reading a dead audio graph — silently,
+	// and only for listeners who touch this setting.
+	it("re-points the SAME element, without a reload or a release", async () => {
+		await renderSettled(oneLiveClip);
+		const element = audio.elements.get(1);
+		expect(element?.src).toBe(ENHANCED);
+
+		tickOriginal();
+		fireEvent.click(screen.getByText("Save"));
+		await act(async () => {});
+
+		expect(audio.elements.get(1)).toBe(element);
+		expect(element?.src).toBe(ORIGINAL);
+		expect(audio.released).not.toContain(1);
+	});
+
+	it("switches back to the enhanced render just as live", async () => {
+		mockAppData.current = { playOriginalAudio: true };
+		await renderSettled(oneLiveClip);
+		const element = audio.elements.get(1);
+
+		fireEvent.click(screen.getByText("Settings…"));
+		fireEvent.click(screen.getByLabelText("Play original recording (more noise)"));
+		fireEvent.click(screen.getByText("Save"));
+		await act(async () => {});
+
+		expect(audio.elements.get(1)).toBe(element);
+		expect(element?.src).toBe(ENHANCED);
+	});
+
+	// The draft contract: Cancel is genuinely free, here too.
+	it("leaves the audio alone when the listener cancels", async () => {
+		await renderSettled(oneLiveClip);
+		tickOriginal();
+		fireEvent.click(screen.getByText("Cancel"));
+		await act(async () => {});
+
+		expect(srcOf(1)).toBe(ENHANCED);
+		expect(lastPersisted()).toMatchObject({ playOriginalAudio: false });
+	});
+
+	// Persistence is what makes it a setting rather than a session preference.
+	it("persists the choice through the app's own state", async () => {
+		await renderSettled(oneLiveClip);
+		tickOriginal();
+		fireEvent.click(screen.getByText("Save"));
+		await act(async () => {});
+
+		expect(lastPersisted()).toMatchObject({ playOriginalAudio: true });
+	});
+
+	// A row the enhancement pass has not reached has no second copy, and `url` is
+	// the safe fallback — the alternative is an undefined src, which fails as a
+	// broken element with nothing on screen to say why.
+	it("falls back to the source recording for a clip with no enhanced copy", async () => {
+		mockAppData.current = { playOriginalAudio: false };
+		await renderSettled({ ...oneLiveClip, mp3Items: [{ ...both, enhanced_url: null }] });
+		expect(srcOf(1)).toBe(ORIGINAL);
+	});
+});

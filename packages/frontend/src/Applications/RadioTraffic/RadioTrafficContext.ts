@@ -45,7 +45,7 @@ export const DEFAULT_WAVEFORM_COLOR = 0x00d25a;
  * read nor write a tag filter, a lane order or a mute by mistake, and adding a
  * field to {@link RadioTrafficState} does not silently widen its reach.
  */
-export interface WaveformColorSettings {
+export interface RadioTrafficSettings {
 	/**
 	 * true = the waveform follows the theme's ink (`--color-system-06`, set on
 	 * `.rtCardWaveform`), so a theme change re-colours every card live. This is
@@ -54,15 +54,26 @@ export interface WaveformColorSettings {
 	useThemeWaveformColor: boolean;
 	/** Custom waveform ink, packed 0xRRGGBB — ClassicyColorPicker native. */
 	waveformColor: number;
+	/**
+	 * true = play the source recording instead of the noise-reduced render.
+	 *
+	 * Defaults false: the enhanced copy is easier to listen to, but the original
+	 * stays one tick away because this is a primary-source archive. This app is
+	 * where the choice belongs — comm traffic is what the enhancement pass runs
+	 * over — so it moved here from the radio-core settings window the Tuner
+	 * renders, where it sat in front of broadcast stations it does not describe.
+	 */
+	playOriginalAudio: boolean;
 }
 
-export const DEFAULT_WAVEFORM_COLOR_SETTINGS: WaveformColorSettings = {
+export const DEFAULT_RADIO_TRAFFIC_SETTINGS: RadioTrafficSettings = {
 	useThemeWaveformColor: true,
 	waveformColor: DEFAULT_WAVEFORM_COLOR,
+	playOriginalAudio: false,
 };
 
 /** Everything Radio Traffic persists, after sanitizing. */
-export interface RadioTrafficState extends WaveformColorSettings {
+export interface RadioTrafficState extends RadioTrafficSettings {
 	/** Checked tag strings, e.g. `facility:zbw`. */
 	checked: string[];
 	tool: Tool;
@@ -137,6 +148,18 @@ function sanitizeWaveformColor(value: unknown): number {
 		: DEFAULT_WAVEFORM_COLOR;
 }
 
+/**
+ * Only an explicit `true` reaches past the noise-reduced render.
+ *
+ * The mirror of sanitizeUseThemeWaveformColor: absent, `undefined` and garbage
+ * all mean the enhanced copy, which is both the default and what every session
+ * played before the setting arrived here — so nothing needs migrating, and an
+ * unreadable value cannot leave a listener wondering why the tape got noisier.
+ */
+function sanitizePlayOriginalAudio(value: unknown): boolean {
+	return value === true;
+}
+
 function sanitizeLaneOrder(value: unknown): LaneOrder {
 	const stored = (value ?? {}) as Record<string, unknown>;
 	const out = {} as Record<Lane, readonly number[]>;
@@ -161,6 +184,7 @@ export function sanitizeRadioTrafficState(stored: unknown): RadioTrafficState {
 		mutedItems: sanitizeItemIds(data.mutedItems),
 		useThemeWaveformColor: sanitizeUseThemeWaveformColor(data.useThemeWaveformColor),
 		waveformColor: sanitizeWaveformColor(data.waveformColor),
+		playOriginalAudio: sanitizePlayOriginalAudio(data.playOriginalAudio),
 	};
 }
 
@@ -174,6 +198,7 @@ export const radioTrafficSetState = (state: RadioTrafficState): ActionMessage =>
 	mutedItems: state.mutedItems,
 	useThemeWaveformColor: state.useThemeWaveformColor,
 	waveformColor: state.waveformColor,
+	playOriginalAudio: state.playOriginalAudio,
 });
 
 export const classicyRadioTrafficEventHandler = (
@@ -195,6 +220,7 @@ export const classicyRadioTrafficEventHandler = (
 				mutedItems: action.mutedItems,
 				useThemeWaveformColor: action.useThemeWaveformColor,
 				waveformColor: action.waveformColor,
+				playOriginalAudio: action.playOriginalAudio,
 			};
 			return ds;
 		default:
@@ -245,6 +271,12 @@ export const RadioTrafficDataSchema = z.looseObject({
 		.number()
 		.optional()
 		.describe("The color the card waveforms are drawn in when not following the theme."),
+	playOriginalAudio: z
+		.boolean()
+		.optional()
+		.describe(
+			"Whether cards play the original recording instead of the cleaned-up, noise-reduced one.",
+		),
 });
 
 export type RadioTrafficData = z.infer<typeof RadioTrafficDataSchema>;
@@ -258,7 +290,7 @@ registerApp({
 	actions: {
 		ClassicyAppRadioTrafficSetState: {
 			description:
-				"Persist the tag filters, the selected tool, the folded lanes, the manual card order, the per-card mutes and the waveform color.",
+				"Persist the tag filters, the selected tool, the folded lanes, the manual card order, the per-card mutes, the waveform color and the original-recording choice.",
 			params: z.object({
 				checked: z.array(z.string()).describe("Ticked tag filters."),
 				tool: z.string().describe("Selected tool: arrow, mute, unmute or hand."),
@@ -269,6 +301,9 @@ registerApp({
 					.boolean()
 					.describe("Whether the waveforms follow the theme."),
 				waveformColor: z.number().describe("Custom waveform color, packed 0xRRGGBB."),
+				playOriginalAudio: z
+					.boolean()
+					.describe("Whether to play the original recording rather than the enhanced one."),
 			}),
 		},
 	},
