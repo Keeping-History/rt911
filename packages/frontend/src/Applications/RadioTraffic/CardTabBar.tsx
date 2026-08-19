@@ -10,6 +10,7 @@
 // tabs region as a whole (bar above panel) instead of nesting one fixed box
 // inside another.
 
+import { ClassicyBevelButton, ClassicyButton } from "classicy";
 import type React from "react";
 import { useEffect, useRef } from "react";
 import type { ItemMeta } from "../../Providers/MediaStream/MediaStreamContext";
@@ -112,16 +113,16 @@ export const CardTabBar: React.FC<CardTabBarProps> = ({ tabs, active, onSelect }
 	return (
 		<div className={styles.rtCardTabBar}>
 			{overflowing && (
-				<button
-					type="button"
-					className={styles.rtCardTabArrow}
+				<ClassicyBevelButton
+					square
+					bevelWidth="small"
 					aria-label="Previous tab"
 					title="Previous tab"
 					disabled={index <= 0}
-					onClick={() => page(-1)}
+					onClickFunc={() => page(-1)}
 				>
 					<span aria-hidden="true">‹</span>
-				</button>
+				</ClassicyBevelButton>
 			)}
 			<div className={styles.rtCardTabViewport} data-tab-viewport ref={containerRef}>
 				<div
@@ -133,34 +134,39 @@ export const CardTabBar: React.FC<CardTabBarProps> = ({ tabs, active, onSelect }
 					{tabs.map((tab) => {
 						const selected = tab.id === active;
 						return (
-							<button
+							// ClassicyButton rather than ClassicyBevelButton: BevelButton
+							// hardcodes its own `role` off `mode` (only ever "radio" or
+							// "button"), which would silently overwrite role="tab" — the
+							// thing this whole strip's tablist semantics depend on.
+							// ClassicyButton sets no role of its own, so role/aria-selected
+							// pass through untouched, and it forwards a real ref.
+							<ClassicyButton
 								key={tab.id}
-								type="button"
 								role="tab"
 								aria-selected={selected}
-								className={
-									selected ? `${styles.rtCardTab} ${styles.rtCardTabSelected}` : styles.rtCardTab
-								}
+								buttonSize="small"
+								depressed={selected}
+								data-tab-id={tab.id}
 								ref={selected ? activeRef : undefined}
-								onClick={() => onSelect(tab.id)}
+								onClickFunc={() => onSelect(tab.id)}
 							>
 								{tab.label}
-							</button>
+							</ClassicyButton>
 						);
 					})}
 				</div>
 			</div>
 			{overflowing && (
-				<button
-					type="button"
-					className={styles.rtCardTabArrow}
+				<ClassicyBevelButton
+					square
+					bevelWidth="small"
 					aria-label="Next tab"
 					title="Next tab"
 					disabled={index >= tabs.length - 1}
-					onClick={() => page(1)}
+					onClickFunc={() => page(1)}
 				>
 					<span aria-hidden="true">›</span>
-				</button>
+				</ClassicyBevelButton>
 			)}
 		</div>
 	);
