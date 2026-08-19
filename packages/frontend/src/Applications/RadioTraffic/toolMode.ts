@@ -61,9 +61,28 @@ export const TOOL_GLYPHS: Record<Tool, string> = {
 export interface AudioState {
 	soloId: number | null;
 	muted: ReadonlySet<number>;
+	/**
+	 * The listener released the solo themselves, by muting the card it was
+	 * pointing at — as opposed to the solo target leaving the mix on its own.
+	 *
+	 * The two arrive at reconcileSolo looking identical (no target), and telling
+	 * them apart is the whole of story 039: auto-solo replacing a clip that ENDED
+	 * is the lane carrying on, and auto-solo replacing a clip the listener just
+	 * SILENCED is the lane refusing to be quietened. Written only by
+	 * applyToolClick, read only by reconcileSolo.
+	 *
+	 * Optional because absent is the startup answer, which is what every state
+	 * object built outside this module (the shell's initialiser, restoring the
+	 * persisted mutes) means.
+	 */
+	soloReleasedByMute?: boolean;
 }
 
-export const INITIAL_AUDIO_STATE: AudioState = { soloId: null, muted: new Set() };
+export const INITIAL_AUDIO_STATE: AudioState = {
+	soloId: null,
+	muted: new Set(),
+	soloReleasedByMute: false,
+};
 
 /**
  * Can this card be heard right now?
@@ -93,23 +112,39 @@ export function applyToolClick(state: AudioState, tool: Tool, itemId: number): A
 			if (state.soloId === itemId) return state;
 			// Mutes are left exactly as they are: solo is a temporary override, and
 			// releasing it must hand the listener back the mix they built.
-			return { soloId: itemId, muted: state.muted };
+			//
+			// Naming a focus is also the listener asking for one, so it re-arms the
+			// hand-over a mute had disarmed — otherwise a single mute would switch
+			// auto-solo off for the rest of the session, and this card ending would
+			// leave the lane with nothing in it.
+			return { soloId: itemId, muted: state.muted, soloReleasedByMute: false };
 		}
 		case "mute": {
 			if (state.muted.has(itemId)) return state;
 			const muted = new Set(state.muted);
 			muted.add(itemId);
+			// Muting a card that is not the solo target changes nothing about the
+			// focus — under a solo it was already inaudible, and with no solo it is
+			// an ordinary per-card mute.
+			if (state.soloId !== itemId) return { ...state, muted };
 			// Muting the solo target releases the solo. Without this the click is a
 			// silent no-op — effectiveMutedIds keeps the solo target audible in spite
 			// of its manual mute, so the one card the listener is actually hearing
-			// would be the one card they could not silence.
-			return { soloId: state.soloId === itemId ? null : state.soloId, muted };
+			// would be the one card they could not silence. And the release is
+			// RECORDED, because it is the listener quietening the lane rather than a
+			// clip running out: reconcileSolo must not answer it by promoting the
+			// next card, which is what made the Live lane impossible to silence.
+			return { soloId: null, muted, soloReleasedByMute: true };
 		}
 		case "unmute": {
 			if (!state.muted.has(itemId)) return state;
 			const muted = new Set(state.muted);
 			muted.delete(itemId);
-			return { soloId: state.soloId, muted };
+			// The hand-over stays disarmed. Unmuting is not a request for a focus —
+			// with no solo the card is audible on its own — and re-arming here would
+			// let the next reconcile solo some OTHER card, silencing the very one
+			// the listener just brought back.
+			return { ...state, muted };
 		}
 		case "hand":
 			// The drag-reorder tool. It moves cards, not audio.
@@ -165,10 +200,19 @@ export function autoSoloTarget(
  * rather than clearing to null keeps the "exactly one audible" invariant across
  * the handover, and returning `state` untouched when the target is still there
  * keeps this safe to call on every clock tick.
+ *
+ * Which makes auto-solo a HAND-OVER rule and not a "something must always be
+ * playing" one, and the distinction is load bearing. There is a fourth way to
+ * arrive here with no target — the listener MUTED it — and answering that one
+ * the same way is why the Live lane could not be silenced: every press of mute
+ * promoted the next card, so the listener was chasing a focus that kept moving.
+ * A muted release is recorded on the state (see `soloReleasedByMute`) precisely
+ * so this function can decline it, and the stale-target clear below still runs
+ * either way, because a solo pointing at a ghost silences everything.
  */
 export function reconcileSolo(state: AudioState, mix: readonly MediaItem[]): AudioState {
 	if (state.soloId !== null && mix.some((i) => i.id === state.soloId)) return state;
-	const soloId = autoSoloTarget(mix, state.muted);
+	const soloId = state.soloReleasedByMute ? null : autoSoloTarget(mix, state.muted);
 	if (soloId === state.soloId) return state;
-	return { soloId, muted: state.muted };
+	return { ...state, soloId };
 }

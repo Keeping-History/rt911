@@ -18,9 +18,11 @@ import {
 	clockMoved,
 	connectClock,
 	ensure,
+	hasEnded,
 	positionMs,
 	release,
 	releaseAll,
+	resetPlayback,
 	seekTo,
 	setLevel,
 	subscribe,
@@ -996,6 +998,160 @@ describe("audioCoordinator clock-follow", () => {
 			clockMoved();
 
 			expect(el.currentTime).toBe(30);
+		});
+	});
+
+	// Story 038. A back-catalogue clip the listener started is the one kind of
+	// playback that ENDS while its card stays on screen — a LIVE card's clip is
+	// over when the clock says so, and the lane takes the card with it. Nothing
+	// was watching for that, so the card kept its playing chrome for good.
+	//
+	// The reset is the inverse of starting: whatever the listener did to this
+	// item — start it, scrub it, run it to the end — the card afterwards has to
+	// be indistinguishable from one that was never touched, or the next press of
+	// play inherits the last one's leftovers.
+	describe("hasEnded", () => {
+		/** jsdom never reaches the end of a clip, so say so on this element only. */
+		function markEnded(el: HTMLAudioElement): void {
+			Object.defineProperty(el, "ended", { get: () => true, configurable: true });
+		}
+
+		it("reports a finished element", () => {
+			connect();
+			const el = ensure(1, "a.mp3");
+			expect(hasEnded(1)).toBe(false);
+
+			markEnded(el);
+
+			expect(hasEnded(1)).toBe(true);
+		});
+
+		it("is false for an item with no element of its own", () => {
+			// Most cards on screen are in exactly this state — UPCOMING, PREVIOUS,
+			// or LIVE and stopped — and none of them has finished anything.
+			connect();
+			const unwatch = watch(1);
+			expect(hasEnded(1)).toBe(false);
+			expect(hasEnded(99)).toBe(false);
+			unwatch();
+		});
+
+		it("tells the card the moment the clip ends", () => {
+			// The card learns through the same subscription it reads its playhead
+			// from; without a notification on `ended` it would find out on the next
+			// timeupdate, and a finished element sends none.
+			connect();
+			const cb = vi.fn();
+			const unwatch = subscribe(1, cb);
+			const el = ensure(1, "a.mp3");
+			cb.mockClear();
+
+			markEnded(el);
+			el.dispatchEvent(new Event("ended"));
+
+			expect(cb).toHaveBeenCalled();
+			unwatch();
+		});
+	});
+
+	describe("resetPlayback", () => {
+		function markEnded(el: HTMLAudioElement): void {
+			Object.defineProperty(el, "ended", { get: () => true, configurable: true });
+		}
+
+		it("leaves a finished clip exactly where an untouched one sits", () => {
+			connect();
+			const unwatch = watch(1);
+			// What the card reads before the listener ever presses play.
+			const untouched = positionMs(1);
+			const el = ensure(1, "a.mp3");
+			el.currentTime = 42;
+			el.dispatchEvent(new Event("timeupdate"));
+			markEnded(el);
+
+			resetPlayback(1);
+
+			expect(positionMs(1)).toBe(untouched);
+			expect(hasEnded(1)).toBe(false);
+			unwatch();
+		});
+
+		it("stops the sound rather than leaving a finished element registered", () => {
+			connect();
+			ensure(1, "a.mp3");
+			pauseSpy.mockClear();
+
+			resetPlayback(1);
+
+			expect(pauseSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("hands a scrubbed card back to the clock", () => {
+			// The case that makes this more than "release it". A listener who
+			// scrubbed the clip took it off clock-follow, and that opt-out outlives
+			// both the element and the card on purpose — so a reset that cleared
+			// only the element would leave the card frozen on the playhead they
+			// parked, for the rest of the session.
+			connect();
+			const unwatch = watch(1);
+			ensure(1, "a.mp3");
+			seekTo(1, 5_000);
+			expect(positionMs(1)).toBe(5_000);
+
+			resetPlayback(1);
+			nowMs = t("2001-09-11T12:47:02Z");
+			clockMoved();
+
+			expect(positionMs(1)).toBe(clockMsInto(ITEMS[0]));
+			unwatch();
+		});
+
+		it("parks nothing at all for a clip the clock does not claim", () => {
+			// A back-catalogue item the shell declines to name — it plays from its
+			// own start, not the clock's — has no clock position to fall back to.
+			// Idle for that card is "no playhead", not "the one it stopped at".
+			catalogue = [];
+			connect();
+			const unwatch = watch(1);
+			const el = ensure(1, "a.mp3");
+			el.currentTime = 42;
+			el.dispatchEvent(new Event("timeupdate"));
+
+			resetPlayback(1);
+
+			expect(positionMs(1)).toBeUndefined();
+			unwatch();
+		});
+
+		it("lets the same clip be played again, from the top", () => {
+			connect();
+			const first = ensure(1, "a.mp3");
+			first.currentTime = 42;
+
+			resetPlayback(1);
+			const second = ensure(1, "a.mp3");
+
+			expect(second).not.toBe(first);
+			expect(second.currentTime).toBe(0);
+		});
+
+		it("tells the card its state changed", () => {
+			connect();
+			ensure(1, "a.mp3");
+			const cb = vi.fn();
+			const unwatch = subscribe(1, cb);
+			cb.mockClear();
+
+			resetPlayback(1);
+
+			expect(cb).toHaveBeenCalled();
+			unwatch();
+		});
+
+		it("ignores an item that was never played", () => {
+			connect();
+			expect(() => resetPlayback(99)).not.toThrow();
+			expect(pauseSpy).not.toHaveBeenCalled();
 		});
 	});
 

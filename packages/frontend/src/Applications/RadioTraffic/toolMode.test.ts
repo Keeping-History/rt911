@@ -362,11 +362,114 @@ describe("reconcileSolo", () => {
 	});
 
 	it("does not resurrect a solo the listener muted away", () => {
-		// mute-on-the-solo-target releases the solo; the next reconcile must move
-		// on to another card rather than re-soloing the one just silenced.
+		// mute-on-the-solo-target releases the solo, and the next reconcile must
+		// never point it back at the card just silenced.
 		const muted = applyToolClick(state(10), "mute", 10);
 		const next = reconcileSolo(muted, mixAt(nowMs));
-		expect(next.soloId).toBe(11);
+		expect(next.soloId).not.toBe(10);
 		expect(isAudible(next, 10, "live")).toBe(false);
+	});
+});
+
+// Story 039. Auto-solo is a HAND-OVER rule, not a "something must always be
+// playing" rule: the plan states it as "re-run it whenever the current target
+// leaves LIVE", plus the startup case where there is no focus yet. Firing it on
+// a MUTE as well is what made the Live lane impossible to quieten — every press
+// of mute promoted the next card, so there was always something audible.
+//
+// Both paths arrive at reconcileSolo with no solo target, so telling them apart
+// is the whole of the fix: an ENDED target is one that left `mix`, a MUTED one
+// is one the listener silenced on purpose. applyToolClick records the second,
+// and reconcileSolo is the only reader.
+describe("muting the focus, as against the focus ending", () => {
+	const nowMs = t("2001-09-11T13:03:00.000Z");
+
+	/** Every live card muted in turn, reconciling between clicks as the shell does. */
+	function silenceEveryCard(): AudioState {
+		let s = reconcileSolo(INITIAL_AUDIO_STATE, mixAt(nowMs));
+		for (const card of mixAt(nowMs)) {
+			s = reconcileSolo(applyToolClick(s, "mute", card.id), mixAt(nowMs));
+		}
+		return s;
+	}
+
+	it("does not promote another card when the listener mutes the focused one", () => {
+		const muted = applyToolClick(state(10), "mute", 10);
+
+		const next = reconcileSolo(muted, mixAt(nowMs));
+
+		expect(next.soloId).toBeNull();
+		expect(isAudible(next, 10, "live")).toBe(false);
+	});
+
+	it("still promotes another card when the focused clip ENDS", () => {
+		// The mutation check for the assertion above. The two paths shared one
+		// mechanism, so a fix that suppressed the hand-over outright would strand
+		// the lane on a clip with no audio left — silence with nothing on screen
+		// to explain it, which is the hazard reconcileSolo exists for.
+		const mix = mixAt(nowMs, { ended: new Set([10]) });
+
+		const next = reconcileSolo(state(10), mix);
+
+		expect(next.soloId).toBe(11);
+		expect(somethingAudible(next, mix)).toBe(true);
+	});
+
+	it("leaves the whole lane silent once every card is muted", () => {
+		const silenced = silenceEveryCard();
+
+		expect(somethingAudible(silenced, mixAt(nowMs))).toBe(false);
+		// And it stays silent: reconcile runs on every visible-mix change, once a
+		// second, and used to pick a fresh target on each pass.
+		expect(somethingAudible(reconcileSolo(silenced, mixAt(nowMs)), mixAt(nowMs))).toBe(
+			false,
+		);
+	});
+
+	it("keeps every per-card mute when a new clip arrives in the lane", () => {
+		const silenced = silenceEveryCard();
+		const arriving = item({
+			id: 13,
+			source: "PAPD",
+			start_date: "2001-09-11T13:02:30.000Z",
+			end_date: "2001-09-11T13:10:00.000Z",
+		});
+
+		const next = reconcileSolo(silenced, [...mixAt(nowMs), arriving]);
+
+		// No focus is invented for it. Soloing the arrival would silence the
+		// three cards a second time — by solo rather than by their own mute —
+		// and unmuting one would then leave it inaudible with its own button
+		// reporting it as unmuted.
+		expect(next.soloId).toBeNull();
+		expect([...next.muted].sort((a, b) => a - b)).toEqual([10, 11, 12]);
+		for (const id of [10, 11, 12]) expect(isAudible(next, id, "live")).toBe(false);
+		// The new transmission is audible, because it is not one the listener
+		// muted — mute is per card, and story 040's lane-level control is the
+		// answer to "and everything that arrives from now on".
+		expect(isAudible(next, 13, "live")).toBe(true);
+	});
+
+	it("resumes automatic hand-over as soon as the listener picks a focus again", () => {
+		// Muting the focus says "stop choosing for me"; soloing a card says the
+		// opposite, so the hand-over has to come back with it rather than staying
+		// off for the rest of the session.
+		const refocused = applyToolClick(applyToolClick(state(10), "mute", 10), "arrow", 11);
+
+		const next = reconcileSolo(refocused, mixAt(nowMs, { ended: new Set([11]) }));
+
+		expect(next.soloId).toBe(12);
+	});
+
+	it("does not disarm the hand-over when the muted card was not the focus", () => {
+		// Muting a card that is already silent under someone else's solo is not
+		// the listener releasing the focus, so 12 ending must still hand on.
+		const muted = applyToolClick(state(12), "mute", 10);
+		expect(muted.soloId).toBe(12);
+
+		const next = reconcileSolo(muted, mixAt(nowMs, { ended: new Set([12]) }));
+
+		// 10 is muted, so the hand-over skips it exactly as autoSoloTarget says.
+		expect(next.soloId).toBe(11);
 	});
 });

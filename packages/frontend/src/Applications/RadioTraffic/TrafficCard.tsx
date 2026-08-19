@@ -24,11 +24,25 @@
 //                there is an element, the clock's when there is not (story 028).
 
 import type React from "react";
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { PeaksWaveform } from "../radio-core/PeaksWaveform";
 import { calcSeekSeconds } from "../radio-core/stationGrouping";
-import { positionMs, seekTo, subscribe, unfollowClock } from "./audioCoordinator";
+import {
+	hasEnded,
+	positionMs,
+	resetPlayback,
+	seekTo,
+	subscribe,
+	unfollowClock,
+} from "./audioCoordinator";
 import { type Badge, badgeFor, countdownFor, type Lane } from "./cardStatus";
 import { CARD_TABS, CardTabBar, visibleCardTabs } from "./CardTabBar";
 import { itemTiming } from "./tabs/itemTiming";
@@ -132,9 +146,21 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	// than mirrored into React state by an effect. positionMs returns a number
 	// (or undefined), which is a snapshot stable by value — exactly what
 	// useSyncExternalStore needs.
+	const watchItem = useCallback(
+		(onChange: () => void) => subscribe(item.id, onChange),
+		[item.id],
+	);
 	const currentMs = useSyncExternalStore(
-		useCallback((onChange: () => void) => subscribe(item.id, onChange), [item.id]),
+		watchItem,
 		useCallback(() => positionMs(item.id), [item.id]),
+	);
+	// The other thing the element knows and nothing else does: the recording ran
+	// out. Same subscription, because the coordinator notifies on `ended` as it
+	// does on every other media event; a separate snapshot because it is a
+	// separate fact, and a boolean is stable by value exactly as the position is.
+	const ended = useSyncExternalStore(
+		watchItem,
+		useCallback(() => hasEnded(item.id), [item.id]),
 	);
 
 	const durationMs = (itemTiming(item).durationSec ?? 0) * 1000;
@@ -173,14 +199,55 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 		[item.id, durationMs],
 	);
 
-	// Pressing pause is the listener taking this card off the clock — a stopped
-	// card's playhead stays where they stopped it rather than running on ahead of
-	// the silence. Pressing play is the opposite, and needs nothing here: the
-	// shell registers a fresh element, which is what puts the card back on.
+	// Stopping means opposite things in the two lanes that can be playing.
+	//
+	// A LIVE card is running on the virtual clock, so the listener stopping it is
+	// them taking it OFF the clock: its playhead stays where they stopped it
+	// rather than running on ahead of the silence (story 028).
+	//
+	// A PREVIOUS clip is a replay they started by hand and are now finished with,
+	// so stopping it is a reset (story 038): parking it would leave the card
+	// showing progress it is no longer making, and the next press of play starts
+	// the recording from the top regardless.
+	//
+	// Pressing play needs neither: the shell registers a fresh element, which is
+	// what hands the card back to the clock.
+	const stopPlayback = useCallback(() => {
+		if (lane === "previous") resetPlayback(item.id);
+		else unfollowClock(item.id);
+	}, [lane, item.id]);
+
 	const onTransport = useCallback(() => {
-		if (!paused) unfollowClock(item.id);
+		if (!paused) stopPlayback();
 		onTogglePause();
-	}, [paused, item.id, onTogglePause]);
+	}, [paused, stopPlayback, onTogglePause]);
+
+	// Story 038: the end of a listener-started PREVIOUS clip.
+	//
+	// It is the one playback in the app that finishes while its card stays put —
+	// a LIVE clip is over when the CLOCK says so and the lane moves the card with
+	// it — so nothing else was watching, and the card kept its Playing badge and
+	// its pause affordance indefinitely. Reaching the end is the listener's stop
+	// happening without them, so it does exactly what their stop does.
+	//
+	// Latched, because the hand-back is a TOGGLE: the shell owns one `userStarted`
+	// set and one way to change it, so a second call would stop the clip and
+	// immediately start it playing again. `resetPlayback` releases the element, so
+	// `ended` goes false and the latch re-arms for the next play.
+	const handedBack = useRef(false);
+	useEffect(() => {
+		if (!ended) {
+			handedBack.current = false;
+			return;
+		}
+		// `userPlaying` is the listener's own playback and nothing else; the lane
+		// is checked too because a backward seek can carry a started clip back
+		// into LIVE, where `onTogglePause` means "stop the live card" instead.
+		if (lane !== "previous" || !userPlaying || handedBack.current) return;
+		handedBack.current = true;
+		stopPlayback();
+		onTogglePause();
+	}, [ended, lane, userPlaying, stopPlayback, onTogglePause]);
 
 	const title = meta?.subject?.trim() || item.full_title;
 	// Summary is only offered when there is one, so the tab list is a fact about
