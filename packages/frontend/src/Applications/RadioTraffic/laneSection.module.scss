@@ -345,7 +345,7 @@
   // Sideways only. A vertical scrollbar here would mean the lane had been given
   // less height than one card is tall, which is a layout fault to fix rather
   // than something to hide behind a scrollbar — so the axis is closed outright.
-  overflow-x: auto;
+  overflow-x: scroll;
   overflow-y: hidden;
 }
 
