@@ -373,6 +373,7 @@
   // useHorizontalOverflow can never report an overflow — see its own docs.
   width: max-content;
   height: 100%;
+  font-size: calc(var(--ui-font-size)*.65) !important;
 }
 
 // ClassicyButton (the tab strip's own control) and ClassicyBevelButton (the
