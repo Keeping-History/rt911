@@ -714,14 +714,36 @@ describe("RadioTraffic — the clock", () => {
 	});
 });
 
-describe("RadioTraffic — the audible hold (story 045)", () => {
-	// A LIVE player that is playing and unmuted must not vanish out of the Live
-	// lane the instant the clock says its window is over — only muting or
-	// stopping (unselecting) it may hand it to PREVIOUS. One item, alone in the
-	// mix, so it is the auto-solo target with nothing else to entangle the
-	// assertions with.
+describe("RadioTraffic — the manual hold (story 045)", () => {
+	// A LIVE player the listener has TOUCHED — paused/played it, or scrubbed its
+	// waveform — must not vanish out of the Live lane the instant the clock says
+	// its window is over. An UNTOUCHED player gets no such reprieve, whatever its
+	// mute state — muting and pausing are no longer what this criterion is about
+	// (compare the original story 045, which held anything still audible). One
+	// item, alone in the mix, so it is the auto-solo target with nothing else to
+	// entangle the assertions with.
 	const HOLD_ITEM = item(10, "2001-09-11T12:46:00.000Z", "2001-09-11T12:47:30.000Z");
 	const PAST_END = "2001-09-11T12:48:00.000Z"; // 30s after HOLD_ITEM's end_date
+
+	/**
+	 * jsdom lays nothing out, so the waveform's box is all zeroes and there is
+	 * no fraction for a click to land in. 200px wide at the origin makes
+	 * clientX read straight off as a percentage — same stub TrafficCard.test.tsx
+	 * uses for the same reason.
+	 */
+	function stubWaveformBox() {
+		return vi.spyOn(HTMLCanvasElement.prototype, "getBoundingClientRect").mockReturnValue({
+			left: 0,
+			width: 200,
+			top: 0,
+			height: 40,
+			right: 200,
+			bottom: 40,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+	}
 
 	async function rerenderAt(
 		rerender: (ui: React.ReactElement) => void,
@@ -761,34 +783,12 @@ describe("RadioTraffic — the audible hold (story 045)", () => {
 		});
 	}
 
-	it("keeps a playing, unmuted LIVE player in the Live lane once its clock window ends", async () => {
+	it("moves an untouched LIVE player to PREVIOUS once its clock window ends", async () => {
 		const { rerender } = await renderHold();
 		expect(laneIds("live")).toEqual([10]);
-		// The default mix: nothing muted, nothing stopped — this is the "playing
-		// and unmuted" state the criterion is about.
+		// The default mix: nothing muted, nothing paused, nothing scrubbed — the
+		// listener has done nothing to this card at all.
 		expect(audio.elements.get(10)?.muted).toBe(false);
-
-		await rerenderAt(rerender, PAST_END);
-
-		expect(laneIds("live")).toEqual([10]);
-		expect(laneIds("previous")).toEqual([]);
-		// Still actually making sound, not just still on screen — a card held in
-		// LIVE with its element released would be a silent lie.
-		expect(audio.released).not.toContain(10);
-		expect(audio.elements.get(10)?.muted).toBe(false);
-	});
-
-	it("releases the hold once the listener mutes the card, and it moves to PREVIOUS", async () => {
-		const { rerender } = await renderHold();
-		expect(laneIds("live")).toEqual([10]);
-
-		fireEvent.click(screen.getByRole("radio", { name: "Mute" }));
-		fireEvent.pointerUp(document.querySelector("[data-card-slot='10']") as Element);
-		await act(async () => {});
-		expect(audio.elements.get(10)?.muted).toBe(true);
-		// Muting alone, before the clock window ends, does not evict it — only
-		// the clock moving past the window does, same as an ordinary LIVE card.
-		expect(laneIds("live")).toEqual([10]);
 
 		await rerenderAt(rerender, PAST_END);
 
@@ -796,7 +796,7 @@ describe("RadioTraffic — the audible hold (story 045)", () => {
 		expect(laneIds("previous")).toEqual([10]);
 	});
 
-	it("releases the hold once the listener unselects (stops) the card, and it moves to PREVIOUS", async () => {
+	it("holds a card the listener paused, past its clock window", async () => {
 		const { rerender } = await renderHold();
 		expect(laneIds("live")).toEqual([10]);
 
@@ -804,16 +804,62 @@ describe("RadioTraffic — the audible hold (story 045)", () => {
 		expect(transport).not.toBeNull();
 		fireEvent.click(transport as Element);
 		await act(async () => {});
-		// Stopping before the window ends does not evict it either — same rule.
+		// Pausing before the window ends does not evict it either — same rule an
+		// ordinary LIVE card follows before its window ends.
 		expect(laneIds("live")).toEqual([10]);
 
 		await rerenderAt(rerender, PAST_END);
 
-		expect(laneIds("live")).toEqual([]);
-		expect(laneIds("previous")).toEqual([10]);
+		// Still held, paused, past the window — a pause IS the touch, not a
+		// reason to release it.
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
 	});
 
-	it("moves an already-muted LIVE player to PREVIOUS once its window ends, same as today", async () => {
+	it("holds a card the listener scrubbed, past its clock window", async () => {
+		const restoreBox = stubWaveformBox();
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+
+		const canvas = cardOf(10)?.querySelector("canvas");
+		expect(canvas).not.toBeNull();
+		fireEvent.pointerDown(canvas as Element, { clientX: 50 });
+		await act(async () => {});
+
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+		restoreBox.mockRestore();
+	});
+
+	it("does not release a touched card's hold by muting it afterward", async () => {
+		// Touched by scrub rather than by pause: pausing releases the element
+		// (the shell only registers audio for LIVE ids not in `stopped`), and a
+		// released element cannot show a mute applied — this test wants the mute
+		// itself to visibly take, so it needs the card still playing.
+		const restoreBox = stubWaveformBox();
+		const { rerender } = await renderHold();
+		const canvas = cardOf(10)?.querySelector("canvas");
+		fireEvent.pointerDown(canvas as Element, { clientX: 50 });
+		await act(async () => {});
+
+		fireEvent.click(screen.getByRole("radio", { name: "Mute" }));
+		fireEvent.pointerUp(document.querySelector("[data-card-slot='10']") as Element);
+		await act(async () => {});
+		expect(audio.elements.get(10)?.muted).toBe(true);
+
+		await rerenderAt(rerender, PAST_END);
+
+		// Touching came first — the mute afterward does not undo it.
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+		restoreBox.mockRestore();
+	});
+
+	it("moves an already-muted, untouched LIVE player to PREVIOUS once its window ends", async () => {
+		// Muted from the moment it appeared, never paused, played or scrubbed —
+		// mute alone was never the criterion here, only a touch is.
 		mockAppData.current = { mutedItems: [10] };
 		const { rerender } = await renderHold();
 		expect(laneIds("live")).toEqual([10]);
@@ -825,8 +871,12 @@ describe("RadioTraffic — the audible hold (story 045)", () => {
 		expect(laneIds("previous")).toEqual([10]);
 	});
 
-	it("silencing the whole LIVE lane releases the hold too", async () => {
+	it("does not release a touched card's hold by silencing the whole LIVE lane", async () => {
 		const { rerender } = await renderHold();
+		const transport = cardOf(10)?.querySelector("button[aria-label='Pause']");
+		fireEvent.click(transport as Element);
+		await act(async () => {});
+
 		const laneMute = document.querySelector(
 			`section[data-lane="live"] [data-lane-mute]`,
 		);
@@ -836,8 +886,8 @@ describe("RadioTraffic — the audible hold (story 045)", () => {
 
 		await rerenderAt(rerender, PAST_END);
 
-		expect(laneIds("live")).toEqual([]);
-		expect(laneIds("previous")).toEqual([10]);
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
 	});
 });
 

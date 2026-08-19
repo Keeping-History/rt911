@@ -70,6 +70,7 @@ function renderCard(
 		muted?: boolean;
 		paused?: boolean;
 		onTogglePause?: () => void;
+		onManualSeek?: () => void;
 		onToggleMute?: () => void;
 	} = {},
 ) {
@@ -85,6 +86,7 @@ function renderCard(
 			muted={props.muted}
 			paused={props.paused}
 			onTogglePause={props.onTogglePause ?? (() => {})}
+			onManualSeek={props.onManualSeek}
 			onToggleMute={props.onToggleMute}
 		/>,
 	);
@@ -306,6 +308,33 @@ describe("TrafficCard seeking", () => {
 		fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 50 });
 
 		expect(audio.seekTo).not.toHaveBeenCalled();
+	});
+
+	it("reports a scrub to the shell in addition to seeking through the coordinator", () => {
+		// RadioTraffic.tsx's Story 045 hold reads this signal, not seekTo — the
+		// card has no idea a hold exists, it only reports the touch.
+		stubWaveformBox();
+		const onManualSeek = vi.fn();
+		const { container } = renderCard({ lane: "live", onManualSeek });
+
+		fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 50 });
+
+		expect(audio.seekTo).toHaveBeenCalled();
+		expect(onManualSeek).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not report a scrub when the clip has no duration to seek within", () => {
+		// Same guard as the seek itself above — no seek happened, so nothing was
+		// actually scrubbed for the shell to hold onto.
+		stubWaveformBox();
+		const onManualSeek = vi.fn();
+		const endless = { ...makeItem(), end_date: undefined, calc_duration: undefined };
+		renderCard({ item: endless, lane: "live", onManualSeek });
+		// PeaksWaveform is never given onSeekPct at all for a durationless clip
+		// (TrafficCard.tsx: `durationMs > 0 ? onSeekPct : undefined`), so there is
+		// no canvas listener to fire in the first place — nothing to assert beyond
+		// onManualSeek staying untouched through render.
+		expect(onManualSeek).not.toHaveBeenCalled();
 	});
 });
 
