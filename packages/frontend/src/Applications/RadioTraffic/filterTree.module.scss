@@ -9,7 +9,7 @@
   flex: 0 0 141px;
   // The tree is the tallest thing in the sidebar and the only part that grows
   // with the vocabulary, so it is what scrolls.
-  overflow-y: auto;
+  overflow-y: scroll;
   padding: calc(var(--window-border-size) * 4);
   font-family: var(--ui-font);
   font-size: var(--ui-font-size);
