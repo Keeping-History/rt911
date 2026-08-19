@@ -20,7 +20,7 @@ interface Mp3ItemRow {
 	id: number;
 	title: string;
 	full_title: string | null;
-	source?: string | null;
+	source?: { slug: string | null } | null;
 	tags?: Mp3TagJoin[];
 }
 
@@ -28,7 +28,7 @@ interface Mp3ItemRow {
 type RadioTrafficTree = Map<string, Map<string, ClassicyFileDialogEntry[]>>;
 
 const FIELDS =
-	"id,title,full_title,source,tags.mp3_tags_id.tag,tags.mp3_tags_id.namespace,tags.mp3_tags_id.value";
+	"id,title,full_title,source.slug,tags.mp3_tags_id.tag,tags.mp3_tags_id.namespace,tags.mp3_tags_id.value";
 const QUERY = `/items/mp3_items?fields=${FIELDS}&filter[tags][mp3_tags_id][namespace][_nnull]=true&limit=-1`;
 
 let cached: Promise<RadioTrafficTree> | null = null;
@@ -43,8 +43,9 @@ async function loadTree(fetchFn: typeof fetch): Promise<RadioTrafficTree> {
 	const tree: RadioTrafficTree = new Map();
 	for (const row of rows) {
 		// stationKey wants {source, title} with source as string|undefined; raw
-		// Directus JSON sends null for an empty nullable column, not undefined.
-		const key = stationKey({ source: row.source ?? undefined, title: row.title });
+		// Directus JSON sends null for an empty nullable column (not undefined), and
+		// source is a relation object {slug: string|null}, not a bare string — extract .slug.
+		const key = stationKey({ source: row.source?.slug ?? undefined, title: row.title });
 		if (BROADCAST_STATIONS.has(key.toUpperCase())) continue;
 		const entry: ClassicyFileDialogEntry = {
 			id: `radio-traffic-${row.id}`,

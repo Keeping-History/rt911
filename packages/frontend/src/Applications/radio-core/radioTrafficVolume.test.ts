@@ -7,21 +7,21 @@ import {
 const rows = [
 	{
 		id: 501, title: "AAL11 loses contact", full_title: "American 11 loses contact with ATC",
-		source: "ZBW", tags: [
+		source: { slug: "zbw" }, tags: [
 			{ mp3_tags_id: { tag: "aircraft:aal11", namespace: "aircraft", value: "aal11" } },
 			{ mp3_tags_id: { tag: "topic:loss-of-contact", namespace: "topic", value: "loss-of-contact" } },
 		],
 	},
 	{
 		id: 502, title: "Ground stop issued", full_title: "FAA ground stop, NY Center",
-		source: "ZNY", tags: [
+		source: { slug: "zny" }, tags: [
 			{ mp3_tags_id: { tag: "topic:ground-stop", namespace: "topic", value: "ground-stop" } },
 		],
 	},
 	{
 		// A broadcast station's own item — must never appear in the tree.
 		id: 900, title: "WCBS hourly news", full_title: "WCBS hourly news",
-		source: "WCBS", tags: [
+		source: { slug: "wcbs" }, tags: [
 			{ mp3_tags_id: { tag: "topic:news", namespace: "topic", value: "news" } },
 		],
 	},
