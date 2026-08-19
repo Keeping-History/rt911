@@ -352,6 +352,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 				<ClassicyBevelButton
 					square
 					bevelWidth="small"
+					data-card-transport
 					aria-label={paused ? "Play" : "Pause"}
 					title={paused ? "Play" : "Pause"}
 					onClickFunc={onTransport}
@@ -366,6 +367,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 					// card is a view over props, not a second copy of it), and toggle
 					// mode is what gives this its own aria-pressed for free.
 					on={muted}
+					data-card-mute
 					data-muted={muted}
 					// Named for what the press does, not for the state it is in: a
 					// button called "Muted" reads to a screen reader as an instruction

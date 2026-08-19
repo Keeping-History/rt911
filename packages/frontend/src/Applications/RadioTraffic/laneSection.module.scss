@@ -274,7 +274,12 @@
   }
 }
 
-.rtLaneToggle {
+// The expand/collapse control, sitting below the mute control on the strip.
+//
+// ClassicyBevelButton builds its own className and drops the one it is
+// handed, so — same as the mute control above — the sizing hangs off the
+// `data-lane-toggle` attribute the component library forwards untouched.
+.rtLaneStrip [data-lane-toggle] {
   position: relative;
   z-index: 1;
   flex: 0 0 auto;

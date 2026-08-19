@@ -116,6 +116,7 @@ export const CardTabBar: React.FC<CardTabBarProps> = ({ tabs, active, onSelect }
 				<ClassicyBevelButton
 					square
 					bevelWidth="small"
+					data-tab-arrow
 					aria-label="Previous tab"
 					title="Previous tab"
 					disabled={index <= 0}
@@ -160,6 +161,7 @@ export const CardTabBar: React.FC<CardTabBarProps> = ({ tabs, active, onSelect }
 				<ClassicyBevelButton
 					square
 					bevelWidth="small"
+					data-tab-arrow
 					aria-label="Next tab"
 					title="Next tab"
 					disabled={index >= tabs.length - 1}

@@ -289,8 +289,12 @@
   filter: var(--rt-card-chrome-filter);
 }
 
-.rtCardTransport,
-.rtCardMute {
+// ClassicyBevelButton builds its own className and drops the one it is
+// handed, so — same as the lane strip's mute/toggle controls — the sizing
+// hangs off the `data-card-transport`/`data-card-mute` attributes the
+// component library forwards untouched.
+.rtCardControls [data-card-transport],
+.rtCardControls [data-card-mute] {
   flex: 0 0 auto;
   box-sizing: border-box;
   // Square, so both dimensions come off the same (height) basis rather than
@@ -313,7 +317,7 @@
 // The speaker takes the button's ink, so one asset serves a bright LIVE card and
 // a dimmed UPCOMING one. It fills the button rather than carrying a size of its
 // own, which is what keeps it on the card's scale for free.
-.rtCardMute svg {
+.rtCardControls [data-card-mute] svg {
   display: block;
   width: 100%;
   height: 100%;
@@ -321,7 +325,7 @@
 
 // Muted is the state worth spotting across a grid of cards, so it is the one
 // that departs from the button's default ink.
-.rtCardMute[data-muted="true"] {
+.rtCardControls [data-card-mute][data-muted="true"] {
   color: var(--color-system-04);
 }
 
@@ -370,7 +374,12 @@
   height: 100%;
 }
 
-.rtCardTab {
+// ClassicyButton (the tab strip's own control) and ClassicyBevelButton (the
+// paging arrows) both drop the className they're handed, so these hang off
+// the tablist's own ARIA contract and the `data-tab-arrow` identity hook
+// instead — see trafficCard.module.scss's card-controls block above for the
+// same pattern.
+.rtCardTabBar [role="tab"] {
   padding: 0 calc(4 / 210 * 100cqw);
   font-family: inherit;
   font-size: inherit;
@@ -385,12 +394,12 @@
 
 // The selected tab joins the panel below it, the way a Platinum tab control
 // does — the seam is what says which panel you are looking at.
-.rtCardTabSelected {
+.rtCardTabBar [role="tab"][aria-selected="true"] {
   background: var(--color-system-01);
   font-weight: bold;
 }
 
-.rtCardTabArrow {
+.rtCardTabBar [data-tab-arrow] {
   flex: 0 0 auto;
   // Matched to the tab bar's own (cqh) height rather than a width fraction, so
   // the arrow stays roughly square with the bar it sits in at any card size.
@@ -405,7 +414,7 @@
   cursor: pointer;
 }
 
-.rtCardTabArrow:disabled {
+.rtCardTabBar [data-tab-arrow]:disabled {
   color: var(--color-system-04);
   cursor: default;
 }
