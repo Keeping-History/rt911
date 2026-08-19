@@ -13,6 +13,7 @@
   padding: calc(var(--window-border-size) * 4);
   font-family: var(--ui-font);
   font-size: var(--ui-font-size);
+  flex-grow: 1;
   * {
     flex-grow: 0 !important;
   }
