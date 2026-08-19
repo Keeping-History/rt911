@@ -19,7 +19,7 @@ import { DetailsTab } from "./tabs/DetailsTab";
 import { MentionsTab } from "./tabs/MentionsTab";
 import { PartiesTab } from "./tabs/PartiesTab";
 import { SourceTab } from "./tabs/SourceTab";
-import { SummaryTab, summaryText } from "./tabs/SummaryTab";
+import { SummaryTab } from "./tabs/SummaryTab";
 import { TranscriptTab } from "./tabs/TranscriptTab";
 import styles from "./trafficCard.module.scss";
 
@@ -30,10 +30,13 @@ export interface CardTab {
 	Panel: React.FC<CardTabProps>;
 	/**
 	 * Whether this item has anything for the tab to show. Absent means "always",
-	 * which is every tab but Summary: the other five all print a "nothing here"
-	 * line that is itself worth reading (an untagged clip still has timings, a
-	 * clip with no transcript still says so). A Summary tab with no summary is
-	 * the one that would be pure furniture, so it is not offered at all.
+	 * which is every tab today: each one prints its own "nothing here" line
+	 * rather than disappearing (an untagged clip still has timings, a clip with
+	 * no summary still says so — story 049). A tab that removed itself was
+	 * indistinguishable from a bug when `subject` came back null for all 814
+	 * rows because the backfill that populates it had never run; the fix keeps
+	 * this predicate available for a tab that genuinely needs to be gated, but
+	 * nothing currently sets it.
 	 */
 	available?: (meta: ItemMeta | undefined) => boolean;
 }
@@ -46,12 +49,7 @@ export interface CardTab {
  */
 export const CARD_TABS: readonly CardTab[] = [
 	{ id: "details", label: "Details", Panel: DetailsTab },
-	{
-		id: "summary",
-		label: "Summary",
-		Panel: SummaryTab,
-		available: (meta) => summaryText(meta) !== undefined,
-	},
+	{ id: "summary", label: "Summary", Panel: SummaryTab },
 	{ id: "transcript", label: "Transcript", Panel: TranscriptTab },
 	{ id: "parties", label: "Parties", Panel: PartiesTab },
 	{ id: "mentions", label: "Mentions", Panel: MentionsTab },
@@ -61,10 +59,14 @@ export const CARD_TABS: readonly CardTab[] = [
 /**
  * The tabs one item actually has.
  *
- * Hidden rather than disabled: the strip is 207px and already pages with arrows
- * to reach its last tabs, so a permanently dead label would cost a real tab a
- * place on screen to say nothing. Dropping it also keeps the arrows' own
- * measurement honest — a card with no summary needs one label less of width.
+ * Every tab is available on every card today (story 049) — a tab that hides
+ * itself when its data is empty is indistinguishable from a bug, which is
+ * exactly what happened to Summary while `subject` sat null on all 814 rows.
+ * The filter stays rather than being inlined as `CARD_TABS` directly: a tab
+ * that genuinely depends on the item (not merely on data an empty state can
+ * speak to) still has a seam to gate through via `available`, and the bar's
+ * own overflow measurement (`useHorizontalOverflow`) measures the rendered
+ * strip's actual width, not the tab count, so it stays correct either way.
  */
 export function visibleCardTabs(meta: ItemMeta | undefined): readonly CardTab[] {
 	return CARD_TABS.filter((tab) => tab.available?.(meta) ?? true);
@@ -84,9 +86,8 @@ interface CardTabBarProps {
  * The labels do not all fit in 207px, so the arrows are not decoration — they
  * are how the last tabs are reachable at all. Whether they are *needed* is
  * measured, not assumed: radio-core's useHorizontalOverflow already answers
- * exactly this question for the tuner's segment list, a card in a wide lane
- * (Step 18 resizes them) may well fit the lot, and an item with no summary is
- * handed one tab fewer to fit.
+ * exactly this question for the tuner's segment list, and a card in a wide
+ * lane (Step 18 resizes them) may well fit all six.
  */
 export const CardTabBar: React.FC<CardTabBarProps> = ({ tabs, active, onSelect }) => {
 	const { containerRef, contentRef, overflowing } = useHorizontalOverflow();

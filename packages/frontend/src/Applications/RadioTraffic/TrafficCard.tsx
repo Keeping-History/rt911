@@ -275,11 +275,11 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	}, [ended, lane, userPlaying, stopPlayback, onTogglePause]);
 
 	const title = meta?.subject?.trim() || item.full_title;
-	// Summary is only offered when there is one, so the tab list is a fact about
-	// THIS item rather than a constant. The panel is looked up in the same list
-	// the bar draws, and the bar is told which tab that lookup landed on: an item
-	// whose summary goes away while its Summary tab is open then falls back to
-	// Details with Details highlighted, rather than showing one and marking none.
+	// visibleCardTabs offers every tab today (story 049) — the seam stays
+	// because the panel is looked up in the same list the bar draws, and the
+	// bar is told which tab that lookup landed on, which is what lets a tab
+	// that genuinely does depend on the item fall back to Details with Details
+	// highlighted instead of showing a panel with nothing selected.
 	const tabs = useMemo(() => visibleCardTabs(meta), [meta]);
 	const panel = tabs.find((tab) => tab.id === active) ?? tabs[0];
 

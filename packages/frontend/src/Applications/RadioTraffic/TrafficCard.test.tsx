@@ -507,12 +507,18 @@ describe("TrafficCard tabs", () => {
 		);
 	});
 
-	it("does not offer a Summary tab to an item with no summary", () => {
-		// A tab that opens onto "No summary." is furniture in a 207px strip that
-		// already pages with arrows to reach its last tabs.
-		const { queryByRole } = renderCard({ meta: makeMeta({ subject: undefined }) });
-		expect(queryByRole("tab", { name: "Summary" })).toBeNull();
+	it("still offers a Summary tab to an item with no summary, with an explicit empty state", () => {
+		// Story 049: hiding the tab when data is empty was indistinguishable from
+		// a bug once `subject` came back null on every one of the 814 rows.
+		const { getByRole, queryByRole, container } = renderCard({
+			meta: makeMeta({ subject: undefined }),
+		});
+		expect(queryByRole("tab", { name: "Summary" })).not.toBeNull();
 		expect(queryByRole("tab", { name: "Details" })).not.toBeNull();
+		fireEvent.click(getByRole("tab", { name: "Summary" }));
+		expect(container.querySelector('[data-tab="summary"]')?.textContent).toContain(
+			"No summary.",
+		);
 	});
 
 	it("swaps the panel when another tab is picked", () => {
@@ -721,8 +727,9 @@ describe("TrafficCard, for an item with no metadata", () => {
 	it("renders as a real card on every tab", () => {
 		const { container, getByRole } = renderCard({ meta: undefined });
 		expect(container.querySelector("[data-lane]")).not.toBeNull();
-		// The tabs such an item HAS: with no metadata there is no summary, so the
-		// card does not offer that one at all (visibleCardTabs).
+		// Every tab (visibleCardTabs), including Summary: with no metadata at all
+		// there is no summary either, and the panel says so rather than the tab
+		// disappearing (story 049).
 		for (const tab of visibleCardTabs(undefined)) {
 			fireEvent.click(getByRole("tab", { name: tab.label }));
 			// Not merely "did not throw": a card whose panel paints an empty box
