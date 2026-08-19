@@ -6,7 +6,6 @@ import {
 	PRESIDENTIAL_FLIGHTS,
 } from "../FlightTracker/notableFlights";
 import { BROADCAST_STATIONS } from "../radio-core/stationGrouping";
-import { buildRadioTrafficVolume } from "../radio-core/radioTrafficVolume";
 import { directusGet } from "../../lib/directusQueue";
 
 export const MEDIA_FILE_TYPES = {
@@ -145,7 +144,15 @@ export function createDirectusVolume(
 		}
 
 		if (path[0] === "Radio Traffic") {
-			return buildRadioTrafficVolume(fetchFn).list(path.slice(1));
+			const items = radioSlugs()
+				.filter((slug) => !BROADCAST_STATIONS.has(slug.toUpperCase()))
+				.map((slug) => ({
+					id: `radio-${slug}`, name: slug, kind: "file" as const,
+					fileType: MEDIA_FILE_TYPES.radioTraffic, meta: { app: "radio", itemId: slug },
+				}));
+			return withSelectAll(
+				items, "select-all-radio-traffic", MEDIA_FILE_TYPES.radioTraffic, path,
+			);
 		}
 
 		if (path[0] === "News" && path.length === 1) {
