@@ -253,6 +253,7 @@
   color: var(--color-system-06);
   white-space: nowrap;
   overflow: hidden;
+  padding: var(--window-padding-size);
 }
 
 .rtLane[data-lane="live"] .rtLaneLabel {
