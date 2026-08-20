@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: radio-station-ingest
+  namespace: video-grabber
+  labels:
+    app: radio-station-ingest
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: radio-station-ingest
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ingest
+          image: ghcr.io/keeping-history/video-grabber:latest
+          command: ["python", "/ingest/ingest_job.py"]
+          envFrom:
+            - configMapRef:
+                name: video-grabber-config
+            - secretRef:
+                name: video-grabber-secrets
+          volumeMounts:
+            - name: ingest
+              mountPath: /ingest
+              readOnly: true
+            - name: staging
+              mountPath: /staging
+              readOnly: true
+      volumes:
+        - name: ingest
+          configMap:
+            name: radio-station-ingest
+        - name: staging
+          hostPath:
+            path: /tmp/claude-1001/-home-robbiebyrd-rt911/46ef8386-8975-4c62-b17e-dfce6165b44a/scratchpad/staging
+            type: Directory

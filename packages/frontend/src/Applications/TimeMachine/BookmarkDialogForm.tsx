@@ -1,4 +1,10 @@
-import { ClassicyButton, ClassicyInput, ClassicyPopUpMenu, ClassicySpinner } from "classicy";
+import {
+	ClassicyButton,
+	ClassicyForm,
+	ClassicyInput,
+	ClassicyPopUpMenu,
+	ClassicySpinner,
+} from "classicy";
 import type React from "react";
 import { useMemo, useState } from "react";
 import type { PersonalBookmarkInput } from "./bookmarksApi";
@@ -45,7 +51,9 @@ export const BookmarkDialogForm: React.FC<BookmarkDialogFormProps> = ({
 	};
 
 	return (
-		<div className={styles.dialog}>
+		// The module's .dialog class keeps its layout; the form wrapper adds
+		// submit semantics so Enter in the title field saves.
+		<ClassicyForm className={styles.dialog} onSubmitFunc={handleSave}>
 			<div className={styles.dialogField}>
 				<ClassicyInput
 					id="bookmark-dialog-title"
@@ -110,10 +118,10 @@ export const BookmarkDialogForm: React.FC<BookmarkDialogFormProps> = ({
 			</div>
 			<div className={styles.settingsButtons}>
 				<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
-				<ClassicyButton isDefault={true} disabled={!canSave} onClickFunc={handleSave}>
+				<ClassicyButton isDefault={true} buttonType="submit" disabled={!canSave}>
 					Save
 				</ClassicyButton>
 			</div>
-		</div>
+		</ClassicyForm>
 	);
 };

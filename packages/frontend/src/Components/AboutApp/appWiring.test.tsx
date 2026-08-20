@@ -10,7 +10,8 @@ const APP_FILES: Record<string, string> = {
 	"MarketWatch.app": "MarketWatch/MarketWatch.tsx",
 	"News.app": "News/News.tsx",
 	"Newsgroups.app": "Newsgroups/Newsgroups.tsx",
-	"RadioScanner.app": "RadioScanner/RadioScanner.tsx",
+	"RadioTraffic.app": "RadioTraffic/RadioTraffic.tsx",
+	"RadioTuner.app": "RadioTuner/RadioTuner.tsx",
 	"TV.app": "TV/TV.tsx",
 	"Weather.app": "Weather/Weather.tsx",
 };

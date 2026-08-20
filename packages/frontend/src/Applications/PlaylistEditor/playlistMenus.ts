@@ -221,7 +221,7 @@ export const PUSH_UPDATE_BALLOONS = {
  * APP_NAMES) — the same ids RoomControlBridge resolves on the student side. */
 export const FOCUS_APPS: { appId: string; name: string }[] = [
 	{ appId: "TV.app", name: "TV" },
-	{ appId: "RadioScanner.app", name: "Radio Scanner" },
+	{ appId: "RadioTraffic.app", name: "Radio Traffic" },
 	{ appId: "News.app", name: "News" },
 	{ appId: "FlightTracker.app", name: "Flight Tracker" },
 ];

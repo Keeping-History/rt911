@@ -23,6 +23,7 @@ import {
 } from "react";
 import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
 import type { EpgIconNamespace } from "./epgIcons";
+import { visibleEpgChannels } from "./epgVisibility";
 import { tvTuneChannel } from "./TVContext";
 import epgStyles from "./TVEPGPanel.module.scss";
 import styles from "./TV.module.scss";
@@ -91,6 +92,22 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 	);
 
 	const [gridData, setGridData] = useState<EPGChannel[]>([]);
+
+	// Read straight from the store rather than taking a prop: the panel already
+	// sources the clock this way, and TV.tsx holds the same blacklist for the
+	// player grid, so a prop would be a second copy of one setting.
+	const disabledChannels = useAppManager(
+		(s) => s.System.Manager.Applications.apps["TV.app"]?.data?.disabledChannels as
+			| string[]
+			| undefined,
+	);
+
+	// The guide lists every channel that ever broadcast; Settings decides which of
+	// them this viewer wants to see.
+	const visibleChannels = useMemo(
+		() => visibleEpgChannels(gridData, disabledChannels),
+		[gridData, disabledChannels],
+	);
 
 	useEffect(() => {
 		const controller = new AbortController();
@@ -239,7 +256,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 		return headers;
 	}, [gridStartTime]);
 
-	const epgData = useMemo(() => gridData.map((channel, idx) => (
+	const epgData = useMemo(() => visibleChannels.map((channel, idx) => (
 		<Fragment key={`${channel.name}_${channel.number}`}>
 			<div
 				className={epgStyles.epgChannel}
@@ -259,7 +276,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 			</div>
 			{getProgramData(channel, idx)}
 		</Fragment>
-	)), [getProgramData, gridData, tuneToChannel]);
+	)), [getProgramData, visibleChannels, tuneToChannel]);
 
 	const gridTemplateColumns = `${CHANNEL_HEADER_WIDTH}fr repeat(${GRID_WIDTH / MINUTES_PER_GRID}, 1fr)`;
 

@@ -99,7 +99,7 @@ export function avatarUrl(fileId: string): string {
 }
 
 // Sequential by design: uploading the new file and patching the user must
-// resolve in order (api-beta mixes concurrent Directus REST responses — see
+// resolve in order (Directus mixes concurrent REST responses — see
 // the useNotableCrashSites/useRouteIndex fix), and the old file can't be
 // deleted until the new one is confirmed as the user's avatar. The trailing
 // delete is best-effort orphan cleanup, not part of the success contract.

@@ -24,6 +24,9 @@ export type EditorState = {
 	title: string;
 	mode: "restrict" | "annotate";
 	status: "draft" | "published";
+	/** Playlist-level window (virtual-clock UTC ISO); see PlaylistDefinition. */
+	start?: string;
+	end?: string;
 	entries: EditorEntry[];
 	selectedUid: string | null;
 	dirty: boolean;
@@ -35,6 +38,7 @@ export type EditorAction =
 	| { type: "setTitle"; title: string }
 	| { type: "renamed"; title: string }
 	| { type: "setMode"; mode: "restrict" | "annotate" }
+	| { type: "setWindow"; start?: string; end?: string }
 	| { type: "setStatus"; status: "draft" | "published" }
 	| {
 			type: "addEntries";
@@ -61,6 +65,8 @@ export function initialEditorState(record: PlaylistRecord): EditorState {
 		title: record.title,
 		mode: parsed.definition?.mode ?? "annotate",
 		status: record.status === "published" ? "published" : "draft",
+		start: parsed.definition?.start,
+		end: parsed.definition?.end,
 		entries,
 		selectedUid: null,
 		dirty: false,
@@ -82,6 +88,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 			return { ...state, title: action.title };
 		case "setMode":
 			return { ...state, mode: action.mode, dirty: true };
+		case "setWindow":
+			// Both bounds together: the dialog edits them as one schedule, and a
+			// partial update could not distinguish "leave alone" from "clear".
+			return { ...state, start: action.start, end: action.end, dirty: true };
 		case "setStatus":
 			return { ...state, status: action.status, dirty: true };
 		case "addEntries": {
@@ -125,7 +135,13 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 }
 
 export function assembleDefinition(state: EditorState): PlaylistDefinition {
-	return { version: 1, mode: state.mode, entries: state.entries.map((e) => e.entry) };
+	return {
+		version: 1,
+		mode: state.mode,
+		...(state.start !== undefined ? { start: state.start } : {}),
+		...(state.end !== undefined ? { end: state.end } : {}),
+		entries: state.entries.map((e) => e.entry),
+	};
 }
 
 export function displayWallClockToUtcIso(d: Date): string {

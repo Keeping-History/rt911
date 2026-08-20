@@ -7,6 +7,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
@@ -92,6 +93,7 @@ export const Feedback: React.FC = () => {
 			icon={appIcon}
 			defaultWindow="feedback_main"
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			<ClassicyWindow
 				id="feedback_main"

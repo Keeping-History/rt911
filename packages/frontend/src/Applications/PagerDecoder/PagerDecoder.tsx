@@ -12,6 +12,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import { useContext, useEffect, useRef, useState } from "react";
 import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
@@ -239,6 +240,7 @@ export const PagerDecoder = () => {
 			name={appName}
 			icon={appIcon}
 			defaultWindow="pager-terminal"
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			<ClassicyWindow
 				id="pager-terminal"

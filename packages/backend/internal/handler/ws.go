@@ -685,10 +685,15 @@ func sendPagerSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Poo
 // session if it is subscribed to the mp3 channel. Unlike pager, mp3 is durational
 // audio, so the snapshot returns the recording playing at t (start ≤ t ≤ end) and
 // the Radio app resumes it mid-file via the jump offset.
-func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
 	if !sess.Subscribed(session.ChannelMp3) {
 		return
 	}
+
+	// First, and only ever once — see sendMp3Meta. Ahead of the item frames so
+	// the client has the metadata for anything it is about to be handed.
+	sendMp3Meta(r, sess, rdb, logger)
+
 	items, err := db.CurrentMp3Items(r.Context(), pool, t)
 	if err != nil {
 		logger.Warn("current mp3 items query failed", "error", err)
@@ -706,6 +711,40 @@ func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool,
 		return
 	}
 	sess.SendMp3History(t, history)
+}
+
+// sendMp3Meta delivers the one-shot mp3_meta frame. Called from the same
+// init/seek/subscribe path as the item frames above, but sends on the first of
+// those only: the metadata is corpus-wide, immutable and has no time dimension,
+// so a seek cannot change any of it, while re-sending would cost ~1.5 MB per
+// scrub. Session.SendMp3Meta is what enforces the once; the Mp3MetaSent check
+// here is what keeps a seek from paying for the Redis read and the decode to
+// produce a frame that would then be dropped.
+//
+// Served from the warm Redis snapshot, never Postgres — this runs on every seek
+// of every session, and the underlying query joins the whole tag graph.
+func sendMp3Meta(r *http.Request, sess *session.Session, rdb *goredis.Client, logger *slog.Logger) {
+	if sess.Mp3MetaSent() {
+		return
+	}
+	meta, err := cache.LoadMp3Meta(r.Context(), rdb)
+	if err != nil {
+		logger.Warn("mp3 metadata load failed", "error", err)
+		return
+	}
+	// No snapshot built yet (a subscribe that raced the first warm, or a schema
+	// without the metadata columns). Send nothing rather than an empty corpus:
+	// the frame is one-shot, so an empty one would be cached as the truth for the
+	// life of the connection.
+	if meta == nil {
+		return
+	}
+	items, err := meta.Items()
+	if err != nil {
+		logger.Warn("mp3 metadata decode failed", "error", err)
+		return
+	}
+	sess.SendMp3Meta(meta.Generation, items)
 }
 
 // sendNewsSnapshot delivers the complete news back catalogue — every article
@@ -945,7 +984,7 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 	case session.ChannelPager:
 		sendPagerSnapshot(r, sess, pool, t, logger)
 	case session.ChannelMp3:
-		sendMp3Snapshot(r, sess, pool, t, logger)
+		sendMp3Snapshot(r, sess, pool, rdb, t, logger)
 	case session.ChannelNews:
 		sendNewsSnapshot(r, sess, pool, t, logger)
 	case session.ChannelUsenet:
@@ -963,7 +1002,7 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 // subscribed to. Called from init and seek; each helper no-ops if unsubscribed.
 func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpool.Pool, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
 	sendPagerSnapshot(r, sess, pool, t, logger)
-	sendMp3Snapshot(r, sess, pool, t, logger)
+	sendMp3Snapshot(r, sess, pool, rdb, t, logger)
 	sendNewsSnapshot(r, sess, pool, t, logger)
 	sendUsenetSnapshot(r, sess, pool, t, logger)
 	sendFlightsSnapshot(r, sess, rdb, t, logger)

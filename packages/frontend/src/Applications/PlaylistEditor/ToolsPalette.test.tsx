@@ -6,10 +6,16 @@ import { ToolsPalette } from "./ToolsPalette";
 const editMock = vi.fn();
 const setDialogModeMock = vi.fn();
 const openSettingsWindowMock = vi.fn();
-const ctx = vi.hoisted(() => ({ current: { activeId: null as string | null } }));
+const ctx = vi.hoisted(() => ({
+	current: {
+		activeId: null as string | null,
+		states: {} as Record<string, unknown>,
+	},
+}));
 
 vi.mock("./PlaylistEditorProvider", () => ({
 	usePlaylistEditor: () => ({
+		states: ctx.current.states,
 		activeId: ctx.current.activeId,
 		edit: editMock,
 		setDialogMode: setDialogModeMock,
@@ -165,6 +171,44 @@ describe("ToolsPalette", () => {
 					expect(setDialogModeMock).not.toHaveBeenCalled();
 				}
 			});
+		});
+	});
+
+	describe("Playlist Schedule", () => {
+		it("opens the schedule dialog seeded from the active playlist's window", () => {
+			ctx.current.activeId = "p1";
+			ctx.current.states = {
+				p1: { start: "2001-09-11T12:00:00.000Z", end: "2001-09-11T14:00:00.000Z" },
+			};
+			render(<ToolsPalette appId="PlaylistEditor.app" icon="i.png" appMenu={[]} />);
+
+			expect(screen.queryByRole("button", { name: "OK" })).toBeNull();
+			fireEvent.click(screen.getByRole("button", { name: "Playlist Schedule" }));
+
+			// The dialog is up with both bounds set (neither checkbox checked).
+			const unbounded = screen.getAllByLabelText("Not Time Bound") as HTMLInputElement[];
+			expect(unbounded.some((c) => c.checked)).toBe(false);
+
+			fireEvent.click(screen.getByRole("button", { name: "OK" }));
+			expect(editMock).toHaveBeenCalledWith("p1", {
+				type: "setWindow",
+				start: "2001-09-11T12:00:00.000Z",
+				end: "2001-09-11T14:00:00.000Z",
+			});
+			// Saved and closed.
+			expect(screen.queryByRole("button", { name: "OK" })).toBeNull();
+		});
+
+		it("cancel closes without editing", () => {
+			ctx.current.activeId = "p1";
+			ctx.current.states = { p1: {} };
+			render(<ToolsPalette appId="PlaylistEditor.app" icon="i.png" appMenu={[]} />);
+
+			fireEvent.click(screen.getByRole("button", { name: "Playlist Schedule" }));
+			fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+			expect(editMock).not.toHaveBeenCalled();
+			expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
 		});
 	});
 });
