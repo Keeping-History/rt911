@@ -15,6 +15,7 @@ vi.mock("classicy", () => ({
 			{children}
 		</div>
 	),
+	registerApp: () => {},
 }));
 
 import { DirectusWeatherPart } from "./DirectusWeatherPart";

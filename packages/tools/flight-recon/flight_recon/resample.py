@@ -164,3 +164,58 @@ def _assign_phases(samples):
             s["phase"] = "descent"
         else:
             s["phase"] = "cruise"
+
+
+def assign_curated_phases(samples, phases):
+    """Override each sample's ``phase`` from curated ``{phase, utc}`` boundaries.
+
+    A sample takes the last boundary whose ``utc`` is <= the sample's ``utc``
+    (boundary-inclusive: the boundary sample gets the NEW phase). Boundaries are
+    sorted by time here, so they may be authored in real chronological order
+    even when that differs from any nominal phase list (UA93's atc_alert before
+    course_change). Samples before the first boundary take the first phase."""
+    bounds = sorted(
+        ((b["utc"] if isinstance(b["utc"], datetime) else parse_utc(b["utc"]), b["phase"])
+         for b in phases),
+        key=lambda bp: bp[0],
+    )
+    if not bounds:
+        return
+    for s in samples:
+        t = s["utc"]
+        label = bounds[0][1]
+        for bt, ph in bounds:
+            if bt <= t:
+                label = ph
+            else:
+                break
+        s["phase"] = label
+
+
+def assign_sources(samples, waypoints):
+    """Per-sample provenance from optional waypoint ``source`` marks.
+
+    A sample exactly on a waypoint takes that waypoint's own mark; an interior
+    sample is ``"radar"`` only when both bracketing waypoints are marked
+    ``"radar"``. Anything else in a marked file is ``"estimated"``. Files whose
+    waypoints carry no marks (the original five notables) are left untouched
+    so their positions keep loading with source NULL (wholly-historical)."""
+    if not any("source" in w for w in waypoints):
+        return
+    wps = []
+    for w in waypoints:
+        utc = w["utc"] if isinstance(w["utc"], datetime) else parse_utc(w["utc"])
+        wps.append((utc, w.get("source", "estimated")))
+    for s in samples:
+        t = s["utc"]
+        label = "estimated"
+        for i, (t0, s0) in enumerate(wps):
+            if t == t0:
+                label = s0  # exact hit: the waypoint's own provenance
+                break
+            if i + 1 < len(wps):
+                t1, s1 = wps[i + 1]
+                if t0 < t < t1:
+                    label = "radar" if (s0 == "radar" and s1 == "radar") else "estimated"
+                    break
+        s["source"] = label

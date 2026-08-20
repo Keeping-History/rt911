@@ -3,7 +3,6 @@ import {
 	ClassicyButton,
 	ClassicyCheckbox,
 	ClassicyControlGroup,
-	ClassicyIcons,
 	ClassicyWindow,
 	closeWindowMenuItemHelper,
 	quitAppHelper,
@@ -12,14 +11,17 @@ import {
 	useClassicyAboutMenu,
 	useClassicyWindowClose,
 } from "classicy";
+// Side effect: registers this app's manifest (registerApp) at import time.
+import "./AlertsContext";
+import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import { setAlertsEnabled, useAlertsEnabled } from "./alertsSettings";
+import alertPng from "./app.png";
 
 const APP_ID = "AlertsManager.app";
 const APP_NAME = "Alerts Manager";
 const WINDOW_ID = "AlertsManager_1";
-const appIcon = ClassicyIcons.applications.internetExplorer
-	.documentWarning as string;
+const appIcon = alertPng;
 
 /**
  * Control panel for the Alerts extension: an Apple-menu app (no desktop icon)
@@ -75,6 +77,7 @@ export const AlertsManager: React.FC = () => {
 			defaultWindow={WINDOW_ID}
 			noDesktopIcon={true}
 			addSystemMenu={true}
+			desktopIconBalloonHelp={manifestDescription(APP_ID)}
 		>
 			<ClassicyWindow
 				id={WINDOW_ID}
@@ -90,15 +93,19 @@ export const AlertsManager: React.FC = () => {
 				initialPosition={[320, 80]}
 				modal={false}
 				appMenu={appMenu}
+				backgroundColor="var(--color-system-03)"
 			>
-				<ClassicyControlGroup label={"Alerts"}>
-					<ClassicyCheckbox
-						id={"show_alerts"}
-						label={"Show Alerts"}
-						checked={enabled}
-						onClickFunc={(checked: boolean) => setAlertsEnabled(checked)}
-					/>
-				</ClassicyControlGroup>
+					<ClassicyControlGroup
+						label="Alerts"
+						backgroundColor="var(--color-system-03)"
+					>
+						<ClassicyCheckbox
+							id={"show_alerts"}
+							label={"Show Alerts"}
+							checked={enabled}
+							onClickFunc={(checked: boolean) => setAlertsEnabled(checked)}
+						/>
+					</ClassicyControlGroup>
 				<ClassicyButton isDefault={false} onClickFunc={quitApp}>
 					Quit
 				</ClassicyButton>

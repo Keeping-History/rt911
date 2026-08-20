@@ -10,7 +10,11 @@ import {
 	quitMenuItemHelper,
 	useAppManager,
 } from "classicy";
+// Side effect: registers this app's manifest (registerApp) at import time.
+import "./NewsgroupsContext";
+import { manifestDescription } from "../../Components/manifestDescription";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { trackAppToggle } from "../../openreplay";
 import { DisclosureTriangle } from "./DisclosureTriangle";
@@ -32,6 +36,7 @@ export const Newsgroups = () => {
 	const appId = "Newsgroups.app";
 	const appName = "Newsgroups";
 	const appIcon = ClassicyIcons.applications.usenet.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	// Select only a boolean — the full app-state object changes reference on every
 	// classicy window interaction (focus, z-order), which would re-render this
@@ -103,7 +108,13 @@ export const Newsgroups = () => {
 	);
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="newsgroups-main">
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={appIcon}
+			defaultWindow="newsgroups-main"
+			desktopIconBalloonHelp={manifestDescription(appId)}
+		>
 			<ClassicyWindow
 				id="newsgroups-main"
 				title="Newsgroups"
@@ -329,6 +340,7 @@ export const Newsgroups = () => {
 					</div>
 				</ClassicyWindow>
 			))}
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

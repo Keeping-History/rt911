@@ -4,6 +4,8 @@ const mockEvent = vi.fn();
 const mockStart = vi.fn();
 const mockGetSessionURL = vi.fn();
 const mockGetSessionID = vi.fn();
+const mockSetUserID = vi.fn();
+const mockSetMetadata = vi.fn();
 
 vi.mock("@openreplay/tracker", () => ({
 	default: vi.fn(function () {
@@ -12,6 +14,8 @@ vi.mock("@openreplay/tracker", () => ({
 			start: mockStart,
 			getSessionURL: mockGetSessionURL,
 			getSessionID:  mockGetSessionID,
+			setUserID: mockSetUserID,
+			setMetadata: mockSetMetadata,
 		};
 	}),
 }));
@@ -19,6 +23,7 @@ vi.mock("@openreplay/tracker", () => ({
 import {
 	getSessionID,
 	getSessionURL,
+	identifyUser,
 	initTracker,
 	trackAppToggle,
 	trackChannelChange,
@@ -45,6 +50,13 @@ describe("openreplay", () => {
 
 		it("getSessionID returns undefined when tracker is uninitialised", () => {
 			expect(getSessionID()).toBeUndefined();
+		});
+
+		it("identifyUser does not throw when tracker is uninitialised", () => {
+			expect(() =>
+				identifyUser({ id: "u-1", email: "jane@example.com" }),
+			).not.toThrow();
+			expect(mockSetUserID).not.toHaveBeenCalled();
 		});
 	});
 
@@ -122,6 +134,43 @@ describe("openreplay", () => {
 		it("getSessionID returns the session id string", () => {
 			mockGetSessionID.mockReturnValue("session-xyz");
 			expect(getSessionID()).toBe("session-xyz");
+		});
+
+		describe("identifyUser", () => {
+			beforeEach(() => {
+				mockSetUserID.mockClear();
+				mockSetMetadata.mockClear();
+				identifyUser(null); // reset any identity left by a previous test
+				mockSetUserID.mockClear();
+			});
+
+			it("sets userID to email and userId metadata on sign-in", () => {
+				identifyUser({ id: "u-1", email: "jane@example.com" });
+				expect(mockSetUserID).toHaveBeenCalledWith("jane@example.com");
+				expect(mockSetMetadata).toHaveBeenCalledWith("userId", "u-1");
+			});
+
+			it("falls back to the user id when email is null", () => {
+				identifyUser({ id: "u-2", email: null });
+				expect(mockSetUserID).toHaveBeenCalledWith("u-2");
+			});
+
+			it("does not re-identify the same user twice", () => {
+				identifyUser({ id: "u-1", email: "jane@example.com" });
+				identifyUser({ id: "u-1", email: "jane@example.com" });
+				expect(mockSetUserID).toHaveBeenCalledTimes(1);
+			});
+
+			it("blanks the userID on sign-out after an identification", () => {
+				identifyUser({ id: "u-1", email: "jane@example.com" });
+				identifyUser(null);
+				expect(mockSetUserID).toHaveBeenLastCalledWith("");
+			});
+
+			it("does nothing for a null user when nobody was identified", () => {
+				identifyUser(null);
+				expect(mockSetUserID).not.toHaveBeenCalled();
+			});
 		});
 	});
 

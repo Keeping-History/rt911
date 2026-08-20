@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import { type FC, Fragment } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightTrack } from "./useFlightTrack";
 import styles from "./FlightTracker.module.scss";
@@ -8,8 +8,12 @@ import {
 	ClassicyControlLabel,
 	ClassicyPopUpMenu,
 } from "classicy";
-import { isNotable, isObserver } from "./notableFlights";
+import { isNotable, isObserver, isPresidential } from "./notableFlights";
+import { PROVENANCE_NOTE, isEstimated, sourceLabel } from "./flightProvenance";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";
+import { type MapPoi, POI_DETAIL_FIELDS, detailTitleFor } from "./mapPois";
+import { DEFAULT_PHASE_COLOR, phaseColorHex, phaseLabel, phasePaletteFor } from "./flightPhases";
+import { groundStopAt } from "./groundStops";
 
 interface FlightDetailPanelProps {
 	selected: FlightPosition | null;
@@ -35,6 +39,14 @@ interface FlightDetailPanelProps {
 	selectionOptions?: FlightPosition[];
 	onPickFlight?: (flight: string) => void;
 	onSaveAsFilter?: () => void;
+	// When set, the pane renders this POI (airport) instead of a flight, and the
+	// group header switches to the POI's detail title ("Airport Details").
+	poi?: MapPoi | null;
+	// Ordered-unique phase slugs for the selected flight's track (issue #310).
+	// Non-empty only for notable flights with a per-phase profile; drives the
+	// color legend under the fields.
+	phases?: string[];
+	sources?: string[];
 }
 
 // "8:14 AM"-style display time for a UTC instant in the app's display tz.
@@ -49,8 +61,33 @@ function formatDisplayTime(iso: string, tzOffset: number): string {
 export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 	selected, track, loading, error, nowMs, headingDeg = null, tzOffset = -4,
 	livePos = null, estimates = null,
-	selectionOptions = [], onPickFlight, onSaveAsFilter,
+	selectionOptions = [], onPickFlight, onSaveAsFilter, poi = null, phases = [], sources = [],
 }) => {
+	if (poi) {
+		const locale = [poi.city, poi.region].filter(Boolean).join(", ");
+		const codes = [poi.iata, poi.icao].filter(Boolean).join(" / ");
+		const subline = [locale, codes].filter(Boolean).join(" · ");
+		const details = poi.details ?? {};
+		const rows = POI_DETAIL_FIELDS.filter((f) => details[f.key] != null);
+		return (
+			<div className={styles.detailWrapper}>
+				<ClassicyControlGroup label={detailTitleFor(poi)}>
+					<div className={styles.detailHeader}>
+						<span className={styles.detailFlight}>{poi.name}</span>
+					</div>
+					{subline && <p className={styles.detailNote}>{subline}</p>}
+					<dl className={styles.detailFields}>
+						{rows.map((f) => (
+							<Fragment key={f.key}>
+								<dt>{f.label}</dt>
+								<dd>{f.format(details[f.key])}</dd>
+							</Fragment>
+						))}
+					</dl>
+				</ClassicyControlGroup>
+			</div>
+		);
+	}
 	if (!selected) {
 		return (
 			<div className={styles.detailWrapper}>
@@ -88,7 +125,17 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				<span className={styles.detailFlight}>{selected.flight}</span>
 				{isNotable(selected.flight) && <span className={styles.detailBadge}>ACTIVE TRACK</span>}
 				{isObserver(selected.flight) && <span className={styles.detailBadge}>OBSERVER</span>}
+				{isPresidential(selected.flight) && (
+					<span className={styles.detailBadge}>PRESIDENTIAL</span>
+				)}
+				{selected.flight.startsWith("RDR-") && (
+					<span className={styles.detailBadge}>UNIDENTIFIED</span>
+				)}
 			</div>
+			{/* The route slot states the route, or that there isn't one — an
+			    unidentified radar target filed no flight plan. Provenance is
+			    disclosed once, in the note below the fields. */}
+			<ClassicyControlLabel labelSize={"small"} label={route ?? "Route unknown"} />
 			{selectionOptions.length > 1 && (
 				<div className={styles.detailSelection}>
 					<ClassicyPopUpMenu
@@ -103,10 +150,19 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 					</ClassicyButton>
 				</div>
 			)}
+			<div className={styles.detailScroll}>
 			<dl className={styles.detailFields}>
 				{selected.carrier && (<><dt>Carrier</dt><dd>{selected.carrier}</dd></>)}
 				<dt>Altitude</dt><dd>{selected.alt_ft.toLocaleString()} ft</dd>
 				{selected.phase && (<><dt>Phase</dt><dd>{selected.phase}</dd></>)}
+				{(livePos ?? selected).phase === "ground" && (
+					<><dt>Status</dt><dd>
+						{(() => {
+							const stop = groundStopAt(details, nowMs);
+							return stop ? `On the ground at ${stop.name}` : "On the ground";
+						})()}
+					</dd></>
+				)}
 				{headingDeg != null && (<><dt>Heading</dt><dd>{`${Math.round(headingDeg) % 360}°`}</dd></>)}
 				{livePos && (<><dt>Position</dt><dd>{formatCoords(livePos.lat, livePos.lon)}</dd></>)}
 				{estimates?.fromOrigin && (
@@ -144,6 +200,49 @@ export const FlightDetailPanel: FC<FlightDetailPanelProps> = ({
 				{details?.hijackers?.length ? (<><dt>Hijackers</dt><dd>{details.hijackers.join(", ")}</dd></>) : null}
 				{fateText && (<><dt>Fate</dt><dd>{fateText}</dd></>)}
 			</dl>
+			</div>
+			{sources.length > 0 && (
+				<dl className={styles.phaseLegend} aria-label="Track provenance">
+					{sources.map((src) => (
+						<div key={src} className={styles.phaseLegendItem}>
+							<dt>
+								<span
+									className={styles.phaseSwatch}
+									style={{
+										backgroundColor: DEFAULT_PHASE_COLOR,
+										opacity: isEstimated(src) ? 0.55 : 1,
+										// mirror the map: estimated stretches read as dashes
+										backgroundImage: isEstimated(src)
+											? "repeating-linear-gradient(90deg, transparent 0 2px, rgba(255,255,255,0.9) 2px 4px)"
+											: undefined,
+									}}
+								/>
+							</dt>
+							<dd>{sourceLabel(src)}</dd>
+						</div>
+					))}
+				</dl>
+			)}
+			{/* Unconditional: every flight on the map is a reconstruction, so the
+			    disclosure can't depend on whether a track happens to be loaded. */}
+			<p className={styles.detailNote}>{PROVENANCE_NOTE}</p>
+			{phases.length > 0 && (
+				<dl className={styles.phaseLegend} aria-label="Phase colors">
+					{phases.map((ph) => (
+						<div key={ph} className={styles.phaseLegendItem}>
+							<dt>
+								<span
+									className={styles.phaseSwatch}
+									style={{
+									backgroundColor: phaseColorHex(ph, phasePaletteFor(selected.flight)),
+								}}
+								/>
+							</dt>
+							<dd>{phaseLabel(ph)}</dd>
+						</div>
+					))}
+				</dl>
+			)}
 			{loading && <p className={styles.detailNote}>Loading track…</p>}
 			{error && <p className={styles.detailNote}>{error}</p>}
 		</ClassicyControlGroup>

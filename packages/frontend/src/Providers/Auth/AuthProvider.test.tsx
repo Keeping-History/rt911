@@ -11,11 +11,21 @@ const providerLoginUrl = vi.fn(
 	(provider: string, redirectTo: string) =>
 		`https://api.example/auth/login/${provider}?redirect=${encodeURIComponent(redirectTo)}`,
 );
-vi.mock("./authApi", () => ({
+// Spread the real module rather than listing exports: a factory that enumerates
+// them makes any newly-imported helper `undefined` at runtime instead of failing
+// loudly, so only the network-touching functions are stubbed here. Pure helpers
+// (secureOrigin, …) stay real and are genuinely exercised by these tests.
+vi.mock("./authApi", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./authApi")>()),
 	fetchMe: () => fetchMe(),
 	loginEmail: (email: string, password: string) => loginEmail(email, password),
 	logout: () => logout(),
 	providerLoginUrl: (provider: string, redirectTo: string) => providerLoginUrl(provider, redirectTo),
+}));
+
+const identifyUser = vi.fn();
+vi.mock("../../openreplay", () => ({
+	identifyUser: (user: unknown) => identifyUser(user),
 }));
 
 import { AuthProvider } from "./AuthProvider";
@@ -90,6 +100,23 @@ describe("AuthProvider", () => {
 		await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
 		expect(getByTestId("email").textContent).toBe("");
 		expect(logout).toHaveBeenCalledTimes(1);
+	});
+
+	it("identifies the user to OpenReplay on boot and clears it on sign-out", async () => {
+		fetchMe.mockResolvedValue(user1);
+		logout.mockResolvedValue(undefined);
+		const { getByTestId, getByText } = render(
+			<AuthProvider>
+				<Probe />
+			</AuthProvider>,
+		);
+		await waitFor(() => expect(identifyUser).toHaveBeenCalledWith(user1));
+		fireEvent.click(getByText("sign out"));
+		await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
+		// identifyUser(null) is dispatched from a separate effect than the one that
+		// flips `status` — waiting on status alone doesn't guarantee that effect has
+		// flushed yet, so assert inside its own waitFor rather than right after.
+		await waitFor(() => expect(identifyUser).toHaveBeenLastCalledWith(null));
 	});
 
 	it("signInWithEmail calls loginEmail then re-fetches and flips to signedIn", async () => {
@@ -189,6 +216,38 @@ describe("AuthProvider", () => {
 		} finally {
 			// Restore the real window.location so later tests (and test-order
 			// changes) can't be poisoned by this replacement.
+			if (originalLocation) Object.defineProperty(window, "location", originalLocation);
+		}
+	});
+
+	// Regression: the edge serves the app over plain http as well as https, and
+	// Directus's AUTH_*_REDIRECT_ALLOW_LIST holds https entries only, so an http
+	// visitor got INVALID_PAYLOAD from both Google and Apple sign-in.
+	it("signInWithProvider upgrades a plaintext product-domain origin to https", async () => {
+		fetchMe.mockResolvedValue(null);
+		const assignSpy = vi.fn();
+		const originalLocation = Object.getOwnPropertyDescriptor(window, "location");
+		Object.defineProperty(window, "location", {
+			value: {
+				...window.location,
+				assign: assignSpy,
+				hostname: "911realtime.org",
+				href: "http://911realtime.org/",
+				origin: "http://911realtime.org",
+			},
+			writable: true,
+			configurable: true,
+		});
+		try {
+			const { getByTestId, getByText } = render(
+				<AuthProvider>
+					<Probe />
+				</AuthProvider>,
+			);
+			await waitFor(() => expect(getByTestId("status").textContent).toBe("anonymous"));
+			fireEvent.click(getByText("sign in google"));
+			expect(providerLoginUrl).toHaveBeenCalledWith("google", "https://911realtime.org/");
+		} finally {
 			if (originalLocation) Object.defineProperty(window, "location", originalLocation);
 		}
 	});

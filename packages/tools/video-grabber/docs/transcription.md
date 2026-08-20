@@ -368,3 +368,26 @@ blocks it and captions do not appear, even though the VTT file exists in Wasabi.
   `.srt` → `application/x-subrip`, so Wasabi object metadata will carry the
   correct content type from the first upload. nginx-s3-gateway proxies the stored
   `Content-Type` verbatim, so no further configuration is needed on that side.
+
+## Where transcription actually runs
+
+Both the cluster pod and the Mac Studio poll `transcribe_jobs` directly
+(`FOR UPDATE SKIP LOCKED`), so whichever claims a row first runs it — there is no
+scheduling by fitness. The Mac is several times faster, so the cluster is configured
+not to claim at all: `TRANSCRIBE_DISPATCH_LIMIT=0` in the worker ConfigMap. At 0 the
+pod still serves every Prefect deployment and still supervises orphaned rows; it just
+stops competing for the work.
+
+The Mac's provisioning lives in [`../mac/README.md`](../mac/README.md) — plist template,
+install and update steps. Two of its settings are load-bearing and non-obvious:
+
+- **`ProcessType` must be `Standard`.** Under `Background`, macOS throttles CPU/IO/GPU
+  and `whisper --vad` hangs outright: the worker stays alive, heartbeats its claim, and
+  never finishes, so the supervisor cannot reclaim the row either. 6 files/hour vs 108.
+  `dispatch_worker` asserts this at startup (`video_grabber/transcribe/qos.py`).
+- **Two workers, not five.** Concurrent whisper on that machine collapses — 1.87
+  windows/min at 2, and at 5 it never finishes.
+
+Because each executor resolves the flow entrypoint from its own working directory
+(`path: "."`, no work pool), the two can silently run different code. That happened:
+the Mac ran a five-week-stale copy against production. See issue #379.

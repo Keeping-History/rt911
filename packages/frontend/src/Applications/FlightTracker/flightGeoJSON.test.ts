@@ -20,6 +20,11 @@ describe("flightsToGeoJSON", () => {
 		expect(fc.features[0].properties.notable).toBe(true);
 		expect(fc.features[1].properties.notable).toBe(false);
 	});
+	it("flags Air Force One as observer-styled, not notable (pins the isObserverStyled wiring)", () => {
+		const fc = flightsToGeoJSON([pos({ flight: "AF1" })]);
+		expect(fc.features[0].properties.observer).toBe(true);
+		expect(fc.features[0].properties.notable).toBe(false);
+	});
 	it("defaults optional fields", () => {
 		const fc = flightsToGeoJSON([pos({ carrier: undefined, phase: undefined })]);
 		expect(fc.features[0].properties.carrier).toBe("");

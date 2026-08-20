@@ -24,9 +24,29 @@ class Config:
     ia_rate_per_sec: int = field(default_factory=lambda: _int("IA_RATE_PER_SEC", 2))
     min_duration_seconds: int = field(default_factory=lambda: _int("MIN_DURATION_SECONDS", 720))
 
+    # --- Transcript minute summarisation ---
+    # Tier defaults to llm-extract: the model only chooses which source lines to
+    # keep and the output is rebuilt verbatim, so it cannot fabricate. llm-abstract
+    # compresses harder but its output has to clear the containment gate.
+    anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
+    summarize_model: str = field(default_factory=lambda: os.getenv("SUMMARIZE_MODEL", "claude-haiku-4-5"))
+    summarize_tier: str = field(default_factory=lambda: os.getenv("SUMMARIZE_TIER", "llm-extract"))
+    # Party identification is judgment-heavy; the summarizer's haiku default is
+    # too light for deciding who is speaking on a garbled tape.
+    parties_model: str = field(default_factory=lambda: os.getenv("PARTIES_MODEL", "claude-sonnet-5"))
+    enhance_chain: str = field(default_factory=lambda: os.getenv("ENHANCE_CHAIN", ""))
+    deep_filter_bin: str = field(
+        default_factory=lambda: os.getenv("DEEP_FILTER_BIN", "/usr/local/bin/deep-filter")
+    )
+    summarize_max_units: int = field(default_factory=lambda: _int("SUMMARIZE_MAX_UNITS", 3))
+    summarize_concurrency: int = field(default_factory=lambda: _int("SUMMARIZE_CONCURRENCY", 8))
+
     # --- Audio transcription (whisper.cpp) ---
     whisper_bin: str = field(default_factory=lambda: os.getenv("WHISPER_BIN", "whisper-cli"))
     whisper_model: str = field(default_factory=lambda: os.getenv("WHISPER_MODEL", "/opt/models/ggml-medium.en.bin"))
+    vad_model: str = field(default_factory=lambda: os.getenv("VAD_MODEL", "/opt/models/ggml-silero-v5.1.2.bin"))
+    chunk_seconds: int = field(default_factory=lambda: _int("TRANSCRIBE_CHUNK_SECONDS", 600))
+    chunk_overlap_seconds: int = field(default_factory=lambda: _int("TRANSCRIBE_CHUNK_OVERLAP_SECONDS", 5))
     whisper_threads: int = field(default_factory=lambda: _int("WHISPER_THREADS", 4))
     subtitles_prefix: str = field(default_factory=lambda: os.getenv("SUBTITLES_PREFIX", "subtitles"))
 
@@ -61,6 +81,20 @@ class Config:
     # Cloudflare purge (best-effort) after in-place overwrite of audio/ objects.
     cf_api_token: str = field(default_factory=lambda: os.getenv("CF_API_TOKEN", ""))
     cf_zone_id: str = field(default_factory=lambda: os.getenv("CF_ZONE_ID", ""))
+
+    # --- Transcript segments (transcript/ pipeline) ---
+    # Which radio sources count as *broadcast* for chat_transcript_segments.
+    # mp3_items also holds NEADS/NORAD air-defense tapes: operational military
+    # comms no civilian could hear on 9/11, so feeding them to a buddy would
+    # hand it knowledge the tier design exists to withhold. They are also
+    # walkie-talkie audio and transcribe badly. What they contain belongs in
+    # curated tier-1 entries, written by a person.
+    transcript_radio_sources: str = field(
+        default_factory=lambda: os.getenv("TRANSCRIPT_RADIO_SOURCES", "WINS,WCBS")
+    )
+
+    def transcript_radio_source_list(self) -> list[str]:
+        return [s.strip() for s in self.transcript_radio_sources.split(",") if s.strip()]
 
     def usenet_collection_list(self) -> list[str]:
         return [c.strip() for c in self.usenet_collections.split(",") if c.strip()]

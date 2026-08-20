@@ -14,7 +14,7 @@
         "statusBar.background": "#dd0531",
         "statusBar.foreground": "#e7e7e7",
         "statusBarItem.hoverBackground": "#fa1b49",
-        "statusBarItem.remoteBackground": "#dd0531",
+        "statusBarItem.remoteBackground": "#0e3e01",
         "statusBarItem.remoteForeground": "#e7e7e7",
         "tab.activeBorder": "#fa1b49",
         "titleBar.activeBackground": "#dd0531",
@@ -23,7 +23,18 @@
         "titleBar.inactiveForeground": "#e7e7e799",
         "editorGroup.border": "#fa1b49",
         "statusBar.border": "#dd0531",
-        "titleBar.border": "#dd0531"
+        "titleBar.border": "#dd0531",
+        "activityBarTop.activeBackground": "#fa1b49",
+        "activityBarTop.background": "#fa1b49",
+        "activityBarTop.foreground": "#e7e7e7",
+        "activityBarTop.inactiveForeground": "#e7e7e799",
+        "commandCenter.foreground": "#e7e7e7",
+        "statusBar.debuggingBackground": "#dd0531",
+        "statusBar.debuggingForeground": "#e7e7e7"
     },
-    "peacock.color": "#dd0531"
+    "peacock.color": "#dd0531",
+    "debug.javascript.defaultRuntimeExecutable": {
+        "pwa-node": "~/.local/share/mise/shims/node"
+    },
+    "python.defaultInterpreterPath": "~/.local/share/mise/installs/python/3.12/bin/python"
 }

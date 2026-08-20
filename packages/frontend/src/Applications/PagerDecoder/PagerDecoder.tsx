@@ -12,7 +12,9 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import { useContext, useEffect, useRef, useState } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import { trackAppToggle } from "../../openreplay";
 import styles from "./PagerDecoder.module.scss";
@@ -31,6 +33,7 @@ export const PagerDecoder = () => {
 	const appId = "PagerDecoder.app";
 	const appName = "Pager Decoder";
 	const appIcon = ClassicyIcons.applications.pager.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const dispatch = useAppManagerDispatch();
 	const appState = useAppManager(
@@ -237,6 +240,7 @@ export const PagerDecoder = () => {
 			name={appName}
 			icon={appIcon}
 			defaultWindow="pager-terminal"
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			<ClassicyWindow
 				id="pager-terminal"
@@ -356,6 +360,7 @@ export const PagerDecoder = () => {
 					</div>
 				</ClassicyWindow>
 			))}
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

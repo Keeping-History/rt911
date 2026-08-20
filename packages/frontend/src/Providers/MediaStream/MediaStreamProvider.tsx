@@ -11,30 +11,39 @@ import {
 import {
 	type AlertItem,
 	type AvailableSources,
+	type ChatBuddy,
+	type ChatMessage,
+	type ChatStateReason,
 	type FlightPosition,
+	type ItemMeta,
 	MediaStreamContext,
 	type MediaItem,
 	type PagerItem,
+	type RoomCommand,
 	type UsenetItem,
 	type WeatherForecast,
 	type WeatherObservation,
 	type WsClockMessage,
 	type WsHeartbeatAckMessage,
 } from "./MediaStreamContext";
+import { STREAM_URL } from "../../lib/endpoints";
 import { trackAck } from "./ackTracking";
 import { decodeWireMessage } from "./wireCodec";
 import { drainDue, partitionByDue } from "./revealBuffer";
 import { keepInstantItem, keepMediaItem } from "./retention";
+import { shouldSeek } from "./seekDetection";
 import { virtualUtcMs } from "./virtualClock";
+import { playlistIdFromSearch } from "../Playlist/loadPlaylist";
 import { usePlaylist } from "../Playlist/PlaylistContext";
 import { playlistAppMeta } from "../Playlist/playlistApps";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { mergeLatestPerStation } from "./weatherMerge";
+import { reconnectDelayMs } from "./reconnectBackoff";
 import {
-	applyUsenetBodyFrame,
-	emptyUsenetBodyState,
-	type UsenetBodyFrame,
-} from "./usenetBodyCache";
+	applyBodyFrame,
+	emptyBodyState,
+	type BodyFrame,
+} from "./bodyCache";
 
 // Merge incoming items into a prior list, de-duplicating by id (last write wins).
 function mergeById<T extends { id: number }>(prev: T[], incoming: T[]): T[] {
@@ -43,14 +52,7 @@ function mergeById<T extends { id: number }>(prev: T[], incoming: T[]): T[] {
 	return Array.from(byId.values());
 }
 
-const WS_URL: string =
-	(import.meta.env.VITE_MEDIA_STREAM_URL as string | undefined) ??
-	"ws://localhost:8080/stream";
-
 const HEARTBEAT_INTERVAL_MS = 30_000;
-
-// Jumps larger than this are treated as manual seeks rather than clock ticks
-const SEEK_THRESHOLD_MS = 90_000;
 
 // Forced clock mode: corrections smaller than this are ignored (the local
 // clock is close enough); larger ones snap to master via the sanctioned
@@ -92,6 +94,18 @@ interface WsMp3HistoryMessage {
 	items?: MediaItem[];
 }
 
+// The one-shot Radio Traffic metadata for the whole mp3 corpus, keyed by item
+// id. Sent once per session, before the first mp3 snapshot, and never resent —
+// not on seek, not on resubscribe. `items` is an id-keyed map rather than the
+// ordered list every other channel carries (the client joins it onto items it
+// already holds, so order means nothing) and rides INTEGER keys on the wire,
+// which msgpack decoding turns into the numeric properties of a plain object.
+interface WsMp3MetaMessage {
+	type: "mp3_meta";
+	generation?: string;
+	items?: Record<number, ItemMeta>;
+}
+
 interface WsNewsMessage {
 	type: "news";
 	items: MediaItem[];
@@ -105,6 +119,18 @@ interface WsAlertsMessage {
 	alerts: AlertItem[];
 }
 
+// A live teacher command for the joined room. Relayed cross-pod by the streamer,
+// so it arrives regardless of which replica this client's socket landed on.
+interface WsRoomCommandMessage {
+	type: "room_command";
+	action: "jump" | "focus" | "message" | "lock" | "reload";
+	time?: string;
+	app?: string;
+	message?: string;
+	target?: "clock";
+	on?: boolean;
+}
+
 // usenet messages ride their own field (not items) and carry per-message newsgroup.
 interface WsUsenetMessage {
 	type: "usenet";
@@ -113,6 +139,13 @@ interface WsUsenetMessage {
 
 interface WsUsenetBodyMessage {
 	type: "usenet_body";
+	id: number;
+	body?: string;
+	message?: string;
+}
+
+interface WsNewsBodyMessage {
+	type: "news_body";
 	id: number;
 	body?: string;
 	message?: string;
@@ -158,20 +191,101 @@ interface WsWeatherForecastMessage {
 	weather_forecasts?: WeatherForecast[];
 }
 
+// The buddy roster, sent wholesale on subscribe/reconnect and whenever it
+// changes. buddies rides omitempty on a struct shared with the 1 Hz items hot
+// path, so an empty roster arrives with the field absent, not `[]`.
+interface WsChatRosterMessage {
+	type: "chat_roster";
+	buddies?: WireBuddy[];
+}
+
+/**
+ * A roster entry EXACTLY as the wire sends it.
+ *
+ * `chat_roster` is the one chat frame that names this value `id` — it carries
+ * `model.Buddy`, whose json tag is `id` (websocket-protocol.md's chat_roster
+ * table) — while `chat_presence`, `chat_typing` and `chat_message` all call the
+ * same value `profile`. Declaring the frame as `ChatBuddy[]` and passing it
+ * straight through therefore produced a roster whose every entry had
+ * `profile: undefined`, and `buddies.find((b) => b.profile === selected)`
+ * matched the FIRST buddy for every selection: clicking any buddy opened
+ * Danny, Get Info always showed Danny, and chat_presence never matched anyone
+ * so nobody ever went offline.
+ *
+ * Kept as a distinct type rather than widening ChatBuddy, so the wire's shape
+ * and the app's shape cannot drift into each other again unnoticed.
+ */
+interface WireBuddy {
+	id: number;
+	screen_name: string;
+	display_name?: string;
+	avatar?: string;
+	online?: boolean;
+	profile_text?: string;
+}
+
+// Whether/why chat is usable right now for this client.
+interface WsChatStateMessage {
+	type: "chat_state";
+	enabled?: boolean;
+	reason?: ChatStateReason;
+}
+
+// A buddy's online flag flipped; applied to the existing roster entry.
+interface WsChatPresenceMessage {
+	type: "chat_presence";
+	profile: number;
+	online?: boolean;
+}
+
+// The server accepted a generation job for this buddy — the typing indicator
+// stays up until the matching chat_message lands (no client-side timer).
+interface WsChatTypingMessage {
+	type: "chat_typing";
+	profile: number;
+}
+
+// One chat line, in or out. Its arrival is also what clears chatTypingProfile.
+interface WsChatMessageFrame {
+	type: "chat_message";
+	profile: number;
+	direction: "in" | "out";
+	body: string;
+	time?: string;
+	kind?: string;
+	message_id?: number;
+}
+
+// The server confirming a chat_clear landed. `cleared` is the row count and is
+// informational only — arrival alone empties the transcript, so a zero (an
+// already-empty history, which msgpack omits) is still a success.
+interface WsChatClearedMessage {
+	type: "chat_cleared";
+	cleared?: number;
+}
+
 type WsIncomingMessage =
 	| WsItemsMessage
 	| WsPagerMessage
 	| WsMp3Message
 	| WsMp3HistoryMessage
+	| WsMp3MetaMessage
 	| WsNewsMessage
 	| WsAlertsMessage
 	| WsUsenetMessage
 	| WsUsenetBodyMessage
+	| WsNewsBodyMessage
 	| WsSourcesMessage
 	| WsFlightsMessage
 	| WsFlightsHistoryMessage
 	| WsWeatherMessage
 	| WsWeatherForecastMessage
+	| WsChatRosterMessage
+	| WsChatStateMessage
+	| WsChatPresenceMessage
+	| WsChatTypingMessage
+	| WsChatMessageFrame
+	| WsChatClearedMessage
 	| WsClockMessage
 	| WsHeartbeatAckMessage
 	| { type: string };
@@ -183,7 +297,7 @@ interface MediaStreamProviderProps {
 export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	children,
 }) => {
-	const { localDate, dateTime, tzOffset, setDateTime } = useClassicyDateTime({ tick: true });
+	const { localDate, dateTime, tzOffset, setDateTime, paused } = useClassicyDateTime({ tick: true });
 	// setDateTime is a fresh closure every render; the long-lived WebSocket
 	// onmessage handler (below) must always call the latest one, so it reads
 	// through a ref rather than closing over the destructured value directly.
@@ -205,6 +319,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
 	const [mp3History, setMp3History] = useState<MediaItem[]>([]);
+	// Corpus-wide mp3 metadata from the one-shot mp3_meta frame. Deliberately
+	// absent from every buffer, tick and seek path below: it has no time
+	// dimension, so there is nothing for the reveal gate or retention to decide.
+	const [mp3Meta, setMp3Meta] = useState<Record<number, ItemMeta>>({});
+	const [mp3MetaGeneration, setMp3MetaGeneration] = useState<string | null>(null);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
 	const [alertItems, setAlertItems] = useState<AlertItem[]>([]);
 	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
@@ -226,10 +345,21 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [weatherForecastByZone, setWeatherForecastByZone] = useState<
 		Record<string, WeatherForecast | null>
 	>({});
-	const [usenetBodyState, setUsenetBodyState] = useState(emptyUsenetBodyState);
+	const [chatBuddies, setChatBuddies] = useState<ChatBuddy[]>([]);
+	const [chatEnabled, setChatEnabled] = useState(false);
+	// not_signed_in until the server says otherwise: assuming a working chat before
+	// the first chat_state would flash an enabled UI at someone who cannot use it.
+	const [chatReason, setChatReason] = useState<ChatStateReason>("not_signed_in");
+	const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+	const [chatTypingProfile, setChatTypingProfile] = useState<number | null>(null);
+	const [usenetBodyState, setUsenetBodyState] = useState(emptyBodyState);
 	// Ids with a usenet_body request sent but not yet answered — prevents duplicate
 	// fetches when a window re-renders before its body arrives.
 	const usenetBodyInflight = useRef(new Set<number>());
+	const [newsBodyState, setNewsBodyState] = useState(emptyBodyState);
+	// Ids with a news_body request sent but not yet answered — prevents duplicate
+	// requests when a detail window re-renders before its reply lands.
+	const newsBodyInflight = useRef(new Set<number>());
 	const [sources, setSources] = useState<AvailableSources>({ video: [], audio: [], pager: [], usenet: [] });
 	const [connected, setConnected] = useState(false);
 
@@ -244,7 +374,13 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const alertSubscribers = useRef(new Set<string>());
 	const usenetSubscribers = useRef(new Set<string>());
 	const flightsSubscribers = useRef(new Set<string>());
+	// Anonymous radar traffic (RDR-… ids, #263): its own opt-in channel so the
+	// dense extra payload is paid only while the map's "Other traffic" toggle
+	// is on. Frames merge into the same position pipeline — the id prefix is
+	// the discriminator everywhere downstream.
+	const flightsAnonSubscribers = useRef(new Set<string>());
 	const weatherSubscribers = useRef(new Set<string>());
+	const chatSubscribers = useRef(new Set<string>());
 	// Active loop-history request: window wanted (null = loop off). Loop-history
 	// and heading-seed requests share the flights_history wire type, so they draw
 	// ids from ONE counter (flightsReqGen) and each remembers its own active id
@@ -254,6 +390,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const flightsHistoryMinutes = useRef<30 | 90 | null>(null);
 	const flightsReqGen = useRef(0);
 	const flightsLoopReqId = useRef(0);
+	const flightsAnonLoopReqId = useRef(0);
+	const flightsAnonSeedReqId = useRef(0);
 	const flightsSeedReqId = useRef(0);
 	// The single active forecast request (null = none pending) and a generation
 	// id echoed by the server, mirroring flightsHistoryGen: a reply whose id
@@ -295,6 +433,55 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	}, []);
 
 	const wsRef = useRef<WebSocket | null>(null);
+
+	// Bumping this re-runs the WebSocket effect, which is what actually performs a
+	// reconnect: the cleanup closes the dead socket and the fresh pass builds a new
+	// one, so `onopen`'s subscription replay is reached by exactly one code path
+	// whether the connection is the first or the fifth.
+	//
+	// The streamer is redeployed on every merge to main and each rollout drops
+	// every socket. Until this existed, `onclose` only flipped `connected` to
+	// false: nothing constructed a second socket, so that replay could only ever
+	// run at mount, and every later send() silently no-oped against a CLOSED
+	// socket (see `send`). That is why a Flight Tracker that had gone empty could
+	// not be recovered by seeking — the `seek` frame was swallowed too — and only
+	// a page reload brought flights back.
+	const [connectGen, setConnectGen] = useState(0);
+	// Consecutive failed attempts, reset by a successful open. Drives the backoff.
+	const reconnectAttempt = useRef(0);
+	const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Live mirror of the clock's paused state for the WebSocket effect's onopen,
+	// which must assert pause on a connection opened while already paused.
+	// Reading `paused` there directly would go stale, and adding it to that
+	// effect's dependency array would tear down and rebuild the socket on every
+	// pause — a reconnect storm from a button press.
+	const pausedRef = useRef(paused);
+	pausedRef.current = paused;
+
+	// What the server was last told on THIS connection. null means nothing has
+	// been sent yet, which is also the correct state for a fresh socket: `init`
+	// resets Session.paused to false, so onopen re-establishes the truth.
+	const pauseSentRef = useRef<boolean | null>(null);
+
+	// Forward pause/resume to the streamer. Without this the server never learns
+	// the clock stopped: Session.paused stays false, chat.Available never returns
+	// "paused", and the IM Buddies composer stays open against a frozen clock.
+	useEffect(() => {
+		const ws = wsRef.current;
+		if (!ws || ws.readyState !== WebSocket.OPEN) return;
+		if (pauseSentRef.current === paused) return;
+		// Say nothing about the default unpaused state: a `resume` for a session
+		// that was never paused is meaningless traffic. onopen owns the initial
+		// assertion.
+		if (pauseSentRef.current === null && !paused) {
+			pauseSentRef.current = false;
+			return;
+		}
+		ws.send(JSON.stringify({ type: paused ? "pause" : "resume" }));
+		pauseSentRef.current = paused;
+	}, [paused]);
+
 	// Always-current virtual *UTC* instant (ms) for use inside WS callbacks and
 	// intervals. localDate is the tz-shifted display clock; the stream lives in
 	// UTC (item start_dates, the backend, seek, calcSeekSeconds), so we strip the
@@ -312,6 +499,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	// long-lived socket closure, which needs the current value synchronously
 	// (state updates are not visible until the next render).
 	const [clockForced, setClockForced] = useState(false);
+	// Raised when a clock seek is dispatched, lowered by the mp3 frame that
+	// answers it — see seekInFlight on MediaStreamContextValue for why the clear
+	// listens to mp3_history as well.
+	const [seekInFlight, setSeekInFlight] = useState(false);
+	// Latest live teacher command for the joined room; see RoomCommand.
+	const [roomCommand, setRoomCommand] = useState<RoomCommand | null>(null);
 	const clockForcedRef = useRef(false);
 
 	// Snap the local clock to `iso` via the sanctioned setDateTimeFromUtc seam,
@@ -525,6 +718,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			minutes: FLIGHTS_SEED_LOOKBACK_MINUTES,
 			id: flightsSeedReqId.current,
 		});
+		if (flightsAnonSubscribers.current.size > 0) {
+			flightsReqGen.current += 1;
+			flightsAnonSeedReqId.current = flightsReqGen.current;
+			send({
+				type: "flights_history",
+				channel: "flights-anon",
+				minutes: FLIGHTS_SEED_LOOKBACK_MINUTES,
+				id: flightsAnonSeedReqId.current,
+			});
+		}
 	}, [send]);
 
 	const subscribeFlights = useCallback(
@@ -561,6 +764,55 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 
 	// (Re-)issue the active history request: fresh id, reset the accumulated
 	// window, ask again. No-op while loop mode is off.
+	const subscribeFlightsAnon = useCallback(
+		(appId: string) => {
+			const wasEmpty = flightsAnonSubscribers.current.size === 0;
+			flightsAnonSubscribers.current.add(appId);
+			if (wasEmpty) {
+				send({ type: "subscribe", channel: "flights-anon" });
+				// Join any active loop window / heading seed mid-flight.
+				if (flightsHistoryMinutes.current !== null) {
+					flightsReqGen.current += 1;
+					flightsAnonLoopReqId.current = flightsReqGen.current;
+					send({
+						type: "flights_history",
+						channel: "flights-anon",
+						minutes: flightsHistoryMinutes.current,
+						id: flightsAnonLoopReqId.current,
+					});
+				}
+				flightsReqGen.current += 1;
+				flightsAnonSeedReqId.current = flightsReqGen.current;
+				send({
+					type: "flights_history",
+					channel: "flights-anon",
+					minutes: FLIGHTS_SEED_LOOKBACK_MINUTES,
+					id: flightsAnonSeedReqId.current,
+				});
+			}
+		},
+		[send],
+	);
+
+	const unsubscribeFlightsAnon = useCallback(
+		(appId: string) => {
+			flightsAnonSubscribers.current.delete(appId);
+			if (flightsAnonSubscribers.current.size === 0) {
+				send({ type: "unsubscribe", channel: "flights-anon" });
+				// Purge only the anonymous corpus — named flights stay live.
+				setFlightPositions((prev) => prev.filter((p) => !p.flight.startsWith("RDR-")));
+				for (const [id, p] of flightsBuffer.current) {
+					if (p.flight.startsWith("RDR-")) flightsBuffer.current.delete(id);
+				}
+				setFlightsHistory((prev) => prev.filter((p) => !p.flight.startsWith("RDR-")));
+				setFlightsSeed((prev) => prev.filter((p) => !p.flight.startsWith("RDR-")));
+				flightsAnonLoopReqId.current = 0;
+				flightsAnonSeedReqId.current = 0;
+			}
+		},
+		[send],
+	);
+
 	const sendFlightsHistoryRequest = useCallback(() => {
 		const minutes = flightsHistoryMinutes.current;
 		if (minutes === null) return;
@@ -569,6 +821,16 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		setFlightsHistory([]);
 		setFlightsHistoryDone(false);
 		send({ type: "flights_history", minutes, id: flightsLoopReqId.current });
+		if (flightsAnonSubscribers.current.size > 0) {
+			flightsReqGen.current += 1;
+			flightsAnonLoopReqId.current = flightsReqGen.current;
+			send({
+				type: "flights_history",
+				channel: "flights-anon",
+				minutes,
+				id: flightsAnonLoopReqId.current,
+			});
+		}
 	}, [send]);
 
 	const requestFlightsHistory = useCallback(
@@ -632,6 +894,90 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[sendWeatherForecastRequest],
 	);
 
+	const subscribeChat = useCallback(
+		(appId: string) => {
+			const wasEmpty = chatSubscribers.current.size === 0;
+			chatSubscribers.current.add(appId);
+			if (wasEmpty) send({ type: "subscribe", channel: "chat" });
+		},
+		[send],
+	);
+
+	const unsubscribeChat = useCallback(
+		(appId: string) => {
+			chatSubscribers.current.delete(appId);
+			if (chatSubscribers.current.size === 0) send({ type: "unsubscribe", channel: "chat" });
+		},
+		[send],
+	);
+
+	const sendChat = useCallback(
+		(profile: number, body: string) => {
+			send({ type: "chat_send", profile, body });
+		},
+		[send],
+	);
+
+	// Ask the server to soft-delete this user's whole chat history. Deliberately
+	// does NOT touch chatMessages here — the transcript is emptied when the
+	// server's chat_cleared frame arrives (see the handler), so an unauthorized
+	// or failed clear leaves what is on screen exactly where it was.
+	//
+	// No arguments: the server scopes the clear to the session's authenticated
+	// user, so there is nothing here that could aim it at anyone else.
+	const clearChatData = useCallback(() => {
+		send({ type: "chat_clear" });
+	}, [send]);
+
+	// Requesting history for a profile also DROPS that profile's local echoes,
+	// in the same call, deliberately: a replay is authoritative for the
+	// conversation it covers, and it carries the persisted copies of the very
+	// lines the echoes stand in for.
+	//
+	// chat.HistoryDetailed (internal/chat/store.go) has no direction filter, so
+	// the student's own direction:"in" turns come back with real message_ids —
+	// while an echo's message_id 0 is exempt from dedupe by design (it is the
+	// server's "not persisted" marker, not an identity). Echo and persisted
+	// copy therefore cannot dedupe against each other, and every history path
+	// that does not clear the transcript first would render the line twice.
+	// Only the backward-seek path clears; a forward seek with a window open and
+	// an ordinary open/reopen do not.
+	//
+	// The drop lives INSIDE the request rather than in a separate exported
+	// helper so a future call site cannot forget it: "history requested" and
+	// "echoes for that profile dropped" are one operation.
+	//
+	// The tradeoff, taken knowingly: the line is briefly absent until the
+	// replay lands (one round trip), and permanently absent if the replay never
+	// arrives. Dropping when the replay LANDS instead would close that gap but
+	// opens a worse hole — an echo created between the request and the reply
+	// has no persisted copy in that reply, so it would be dropped and lost for
+	// good. A visible gap beats silently eating a line the student just typed,
+	// and this matches how the backward-seek clear already behaves.
+	const requestChatHistory = useCallback(
+		(profile: number, before: string, limit: number) => {
+			setChatMessages((prev) =>
+				prev.filter((m) => !(m.message_id === 0 && m.profile === profile)),
+			);
+			send({ type: "chat_history", profile, before, limit });
+		},
+		[send],
+	);
+
+	// The student's own turn, rendered locally. The server never echoes it: it
+	// persists the inbound line (internal/session/session.go persistInbound)
+	// and every live chat_message frame is direction "out" — a direction "in"
+	// line only ever comes back through a chat_history replay. Without this the
+	// student types, the field clears, and their words vanish.
+	//
+	// It goes into the SAME chatMessages array the server frames land in, so
+	// insertion order alone keeps the transcript right and there is no second
+	// list to merge. The caller stamps message_id 0 ("not persisted"), which
+	// the chat app's dedupe already treats as a non-identity.
+	const appendLocalChatMessage = useCallback((message: ChatMessage) => {
+		setChatMessages((prev) => [...prev, message]);
+	}, []);
+
 	// Set the newsgroup(s) being viewed. The server resends a backlog for the new
 	// group(s), so the current items + buffer are cleared to avoid mixing groups.
 	const setUsenetGroups = useCallback(
@@ -670,6 +1016,25 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		[send, usenetBodyState],
 	);
 
+	// Fetch one article's body on demand. Snapshot rows carry no content (the
+	// backlog would be ~7.7 MB with bodies), so the detail window asks for it when
+	// it opens. Cached bodies, cached errors, and in-flight ids are all skipped, so
+	// callers can fire this on every render.
+	const requestNewsBody = useCallback(
+		(id: number) => {
+			if (
+				id in newsBodyState.bodies ||
+				id in newsBodyState.errors ||
+				newsBodyInflight.current.has(id)
+			) {
+				return;
+			}
+			newsBodyInflight.current.add(id);
+			send({ type: "news_body", id });
+		},
+		[send, newsBodyState],
+	);
+
 	// On every second tick: reveal buffered items the clock has now reached, then
 	// prune expired ones. drainDue mutates the buffer (removing promoted entries);
 	// the merged-then-filtered state both surfaces newly-due items and drops
@@ -701,11 +1066,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				(item) => keepMediaItem(item, now) && isItemAvailable("radio", item.source ?? ""),
 			),
 		);
-		// news items reuse the same retention rules (mostly instant headlines).
+		// News is NOT time-pruned: the News app shows the full back catalogue from
+		// the 9/9 epoch onward, so an article stays once revealed. The playlist
+		// availability gate stays — that is availability, not date gating. A
+		// backward seek clears the list wholesale instead (see the seek effect).
 		setNewsItems((prev) =>
-			mergeById(prev, dueNews).filter(
-				(item) => keepMediaItem(item, now) && isItemAvailable("news", String(item.id)),
-			),
+			mergeById(prev, dueNews).filter((item) => isItemAvailable("news", String(item.id))),
 		);
 		// Alerts are not time-pruned: a modal persists until the extension
 		// dismisses it (Task 8), so there is no keepMediaItem/isItemAvailable
@@ -730,24 +1096,56 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			setWeatherObservations((prev) => mergeLatestPerStation(prev, dueWeather));
 	}, [localDate, tzOffset, isItemAvailable]);
 
-	// Detect manual time changes and send seek; ignore tick-driven minute boundaries
+	// Detect manual time changes and send seek; ignore tick-driven minute
+	// boundaries. Forward and backward use different thresholds (see
+	// shouldSeek): a forward jump must clear a tick's worth to count, but any
+	// real backward move is a seek — the clock never rewinds on its own, and a
+	// small rewind that isn't re-fetched leaves already-revealed items dropped
+	// with nothing to re-surface them.
 	useEffect(() => {
 		const prevMs = new Date(prevDateTimeRef.current).getTime();
 		const nowMs = new Date(dateTime).getTime();
 
-		if (Math.abs(nowMs - prevMs) > SEEK_THRESHOLD_MS) {
+		if (shouldSeek(prevMs, nowMs)) {
 			// The server sends a fresh window for the new instant; drop buffered
 			// items from the old timeline so they never surface.
 			mediaBuffer.current.clear();
 			pagerBuffer.current.clear();
 			mp3Buffer.current.clear();
 			newsBuffer.current.clear();
+			// News is no longer time-pruned, so nothing else would drop articles
+			// dated after a backward-seek target. The snapshot for the new instant
+			// repopulates the full back catalogue up to it.
+			setNewsItems([]);
+			// A cached body must not survive past its own article. If it did, a
+			// detail window left open across a backward seek would show article
+			// text from an instant BEFORE that article was published — the
+			// newsItems clear above only blanks the title/date, not the body
+			// cache, so this reset is load-bearing, not a redundant flush. The
+			// body simply re-fetches (via requestNewsBody) if the article is
+			// still valid at the new instant. Also drop in-flight markers so a
+			// news_body reply from the old timeline can't land as a stale body.
+			setNewsBodyState(emptyBodyState);
+			newsBodyInflight.current.clear();
 			alertBuffer.current.clear();
 			setAlertItems([]);
 			// The server resends a fresh usenet backlog for the active group(s) at the
 			// new instant; drop the old-timeline messages so they don't linger.
 			usenetBuffer.current.clear();
 			setUsenetItems([]);
+			// Chat, unlike everything else here, is cleared on a BACKWARD seek
+			// only. Chat history turns arrive as ordinary chat_message frames
+			// appended to the same flat array, so after a rewind the student
+			// would otherwise still see every post-seek line with the refetched
+			// older lines below them — a character remembering what has not
+			// happened yet, the exact anachronism the backend's tier system
+			// exists to prevent. A forward seek has no such problem (nothing on
+			// screen postdates the new instant) and clearing there would blank
+			// a conversation mid-sentence. This also drops the student's own
+			// local echoes, which live in the same array by design. The chat
+			// app re-requests a page per open conversation (and on reopening
+			// one) to refill.
+			if (nowMs < prevMs) setChatMessages([]);
 			flightsBuffer.current.clear();
 			// Per-station weather state is intentionally NOT cleared here — the
 			// post-seek "weather" snapshot frame (covering every station at the
@@ -765,6 +1163,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// any in-flight pre-seek reply via the id-echo guard.
 			setWeatherForecastByZone({});
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
+			// Every clock-following consumer is now holding stale positions until
+			// the fresh window lands. Raised here rather than in the on-connect
+			// seek below: that one has nothing on screen to invalidate.
+			setSeekInFlight(true);
 			// The old timeline's loop history is meaningless at the new instant.
 			sendFlightsHistoryRequest();
 			// The motion buffer rebuilds from single samples after a seek, so the
@@ -799,7 +1201,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	useEffect(() => {
 		let active = true;
 		let heartbeatId: ReturnType<typeof setInterval>;
-		const ws = new WebSocket(WS_URL);
+		const ws = new WebSocket(STREAM_URL);
 		// Must be set synchronously at construction (not in onopen) so the first
 		// binary frame arrives as an ArrayBuffer, not a Blob.
 		ws.binaryType = "arraybuffer";
@@ -812,12 +1214,20 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 			setConnected(true);
+			// A connection that opened is a connection that worked; the next outage
+			// starts its backoff from scratch rather than inheriting this one's.
+			reconnectAttempt.current = 0;
 			ws.send(
 				JSON.stringify({
 					type: "init",
 					time: new Date(utcMsRef.current).toISOString(),
 				}),
 			);
+			// Rejoin the teacher-controlled room. Same reason as the
+			// subscriptions below: room membership lives on the session, so a
+			// reconnect (or a failover onto another pod) starts with none.
+			const room = playlistIdFromSearch(window.location.search);
+			if (room) ws.send(JSON.stringify({ type: "join_room", room }));
 			// Re-establish channel subscriptions after a reconnect — the server
 			// does not remember subscriptions across connections.
 			if (pagerSubscribers.current.size > 0) {
@@ -841,6 +1251,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			if (flightsSubscribers.current.size > 0) {
 				ws.send(JSON.stringify({ type: "subscribe", channel: "flights" }));
+				if (flightsAnonSubscribers.current.size > 0) {
+					ws.send(JSON.stringify({ type: "subscribe", channel: "flights-anon" }));
+				}
 				// Loop mode survives a reconnect: re-seed its window at the fresh clock.
 				sendFlightsHistoryRequest();
 				// The subscribe-time heading seed was lost with the old connection.
@@ -853,9 +1266,23 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				// answer isn't silently lost to the dropped connection.
 				sendWeatherForecastRequest();
 			}
+			if (chatSubscribers.current.size > 0) {
+				ws.send(JSON.stringify({ type: "subscribe", channel: "chat" }));
+			}
+			// `init` above resets Session.paused to false (protocol doc, §init), so
+			// a connection opened while the clock is paused would hand the server a
+			// running clock and re-enable the chat composer. This is not just
+			// reconnect hardening: `paused` is persisted in classicyDesktopState, so
+			// pausing and reloading the page lands here every time. Same reason the
+			// subscriptions above are replayed.
+			if (pausedRef.current) {
+				ws.send(JSON.stringify({ type: "pause" }));
+			}
+			pauseSentRef.current = pausedRef.current;
 			// Body requests do not survive a reconnect; clear in-flight markers so
 			// any open message window re-requests on its next render.
 			usenetBodyInflight.current.clear();
+			newsBodyInflight.current.clear();
 			heartbeatId = setInterval(() => {
 				if (ws.readyState === WebSocket.OPEN) {
 					ws.send(
@@ -909,6 +1336,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 
 			if (msg.type === "mp3") {
+				// Before the empty-list guard: an mp3 frame carrying nothing still
+				// answers the seek, and returning early would strand the flag.
+				setSeekInFlight(false);
 				const incomingMp3 = (msg as WsMp3Message).items;
 				if (!incomingMp3 || incomingMp3.length === 0) return;
 				const { due, future } = partitionByDue(incomingMp3, now);
@@ -923,10 +1353,24 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 
 			if (msg.type === "mp3_history") {
+				// Sent on every seek even when empty, unlike `mp3` — so this is the
+				// clear that fires when the new instant lands in a silent stretch.
+				setSeekInFlight(false);
 				// The full back-catalogue up to the snapshot instant. Replace wholesale
 				// (each frame is complete, and an empty one clears after a backward
 				// seek); skip the reveal buffer and retention — history is already past.
 				setMp3History((msg as WsMp3HistoryMessage).items ?? []);
+				return;
+			}
+
+			if (msg.type === "mp3_meta") {
+				// One frame per session, replaced wholesale — a reconnect is a new
+				// session and sends its own. No reveal buffer and no retention pass:
+				// this is reference data about 2001, not a window on the clock, so a
+				// finished clip still needs the entry that describes it.
+				const meta = msg as WsMp3MetaMessage;
+				setMp3Meta(meta.items ?? {});
+				setMp3MetaGeneration(meta.generation ?? null);
 				return;
 			}
 
@@ -935,10 +1379,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				if (!incomingNews || incomingNews.length === 0) return;
 				const { due, future } = partitionByDue(incomingNews, now);
 				for (const item of future) newsBuffer.current.set(item.id, item);
-				const fresh = due.filter(
-					(item) =>
-						keepMediaItem(item, now) &&
-						isItemAvailableRef.current("news", String(item.id)),
+				// No retention filter here: a backlog frame is almost entirely
+				// articles older than any retention window, and dropping them on
+				// arrival is exactly what kept the News app to a 10-minute memory.
+				const fresh = due.filter((item) =>
+					isItemAvailableRef.current("news", String(item.id)),
 				);
 				if (fresh.length > 0) setNewsItems((prev) => mergeById(prev, fresh));
 				return;
@@ -969,8 +1414,15 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				const frame = msg as WsUsenetBodyMessage;
 				usenetBodyInflight.current.delete(frame.id);
 				setUsenetBodyState((prev) =>
-					applyUsenetBodyFrame(prev, frame as UsenetBodyFrame),
+					applyBodyFrame(prev, frame as BodyFrame),
 				);
+				return;
+			}
+
+			if (msg.type === "news_body") {
+				const frame = msg as WsNewsBodyMessage;
+				newsBodyInflight.current.delete(frame.id);
+				setNewsBodyState((prev) => applyBodyFrame(prev, frame as BodyFrame));
 				return;
 			}
 
@@ -980,21 +1432,27 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				// echoed request id says which consumer (if either) each chunk is
 				// for. An active id is never 0 (the counter starts at 1), so the
 				// 0-means-inactive sentinel can't match a real frame.
-				if (hist.id !== 0 && hist.id === flightsSeedReqId.current) {
+				if (hist.id !== 0
+					&& (hist.id === flightsSeedReqId.current
+						|| hist.id === flightsAnonSeedReqId.current)) {
 					const incoming = hist.flights ?? [];
 					if (incoming.length > 0)
 						setFlightsSeed((prev) => [...prev, ...incoming]);
 					return;
 				}
-				if (hist.id === 0 || hist.id !== flightsLoopReqId.current) return; // superseded
+				if (hist.id === 0
+					|| (hist.id !== flightsLoopReqId.current
+						&& hist.id !== flightsAnonLoopReqId.current)) return; // superseded
 				const incoming = hist.flights ?? [];
 				if (incoming.length > 0)
 					setFlightsHistory((prev) => [...prev, ...incoming]);
-				if (hist.done) setFlightsHistoryDone(true);
+				// The named-corpus request drives the loop's ready flag; the anon
+				// chunks enrich the window as they arrive.
+				if (hist.done && hist.id === flightsLoopReqId.current) setFlightsHistoryDone(true);
 				return;
 			}
 
-			if (msg.type === "flights") {
+			if (msg.type === "flights" || msg.type === "flights_anon") {
 				const incomingFlights = (msg as WsFlightsMessage).flights;
 				if (!incomingFlights || incomingFlights.length === 0) return;
 				const { due, future } = partitionByDue(incomingFlights, now);
@@ -1006,6 +1464,77 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				);
 				if (fresh.length > 0)
 					setFlightPositions((prev) => mergeById(prev, fresh));
+				return;
+			}
+
+			if (msg.type === "chat_roster") {
+				// buddies rides omitempty on a struct shared with the 1 Hz items path, so an
+				// empty roster arrives as an absent field rather than [].
+				//
+				// `id` -> `profile` is the load-bearing part: see WireBuddy. Every
+				// other chat frame keys this value `profile`, and the rest of the
+				// app does too, so the rename happens once, here at the boundary.
+				setChatBuddies(
+					((msg as WsChatRosterMessage).buddies ?? []).map((b) => ({
+						profile: b.id,
+						screen_name: b.screen_name,
+						display_name: b.display_name ?? "",
+						avatar: b.avatar ?? "",
+						online: b.online === true,
+						profile_text: b.profile_text,
+					})),
+				);
+				return;
+			}
+
+			if (msg.type === "chat_state") {
+				const m = msg as WsChatStateMessage;
+				setChatEnabled(m.enabled === true);
+				setChatReason(m.reason ?? "not_signed_in");
+				return;
+			}
+
+			if (msg.type === "chat_presence") {
+				const m = msg as WsChatPresenceMessage;
+				setChatBuddies((prev) =>
+					prev.map((b) => (b.profile === m.profile ? { ...b, online: m.online === true } : b)));
+				return;
+			}
+
+			if (msg.type === "chat_typing") {
+				setChatTypingProfile((msg as WsChatTypingMessage).profile);
+				return;
+			}
+
+			if (msg.type === "chat_message") {
+				const m = msg as WsChatMessageFrame;
+				// The reply is what ends the typing indicator — not a timer. The backend
+				// sends chat_typing on accepting the job and the message when it lands.
+				setChatTypingProfile(null);
+				setChatMessages((prev) => [
+					...prev,
+					{
+						message_id: m.message_id ?? 0,
+						profile: m.profile,
+						direction: m.direction,
+						body: m.body,
+						time: m.time ?? "",
+						kind: m.kind ?? "generated",
+					},
+				]);
+				return;
+			}
+
+			// Emptying the transcript is driven by the server's confirmation, never
+			// optimistically by the click: the rows are only hidden once the write
+			// lands, and a failed clear replies with an `error` instead — so the
+			// student never sees a blank conversation that a reconnect refills.
+			//
+			// Clearing every profile at once (rather than filtering by one) matches
+			// what the server did: chat_clear has no profile field.
+			if (msg.type === "chat_cleared") {
+				setChatMessages([]);
+				setChatTypingProfile(null);
 				return;
 			}
 
@@ -1042,6 +1571,22 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 					...prev,
 					// Explicit-empty reply → confirmed "no product", not "still pending".
 					[zone]: forecasts.length > 0 ? forecasts[0] : null,
+				}));
+				return;
+			}
+
+			if (msg.type === "room_command") {
+				const m = msg as WsRoomCommandMessage;
+				// seq is what makes a repeated identical command observable —
+				// a teacher may focus the same app twice on purpose.
+				setRoomCommand((prev) => ({
+					action: m.action,
+					time: m.time,
+					app: m.app,
+					message: m.message,
+					target: m.target,
+					on: m.on,
+					seq: (prev?.seq ?? 0) + 1,
 				}));
 				return;
 			}
@@ -1083,6 +1628,15 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (!active) return;
 			setConnected(false);
 			clearInterval(heartbeatId);
+			// Schedule the rebuild rather than doing it here: bumping connectGen
+			// re-runs this effect, whose cleanup closes this socket properly before
+			// the new one is made.
+			const delay = reconnectDelayMs(reconnectAttempt.current);
+			reconnectAttempt.current += 1;
+			reconnectTimer.current = setTimeout(() => {
+				reconnectTimer.current = null;
+				setConnectGen((g) => g + 1);
+			}, delay);
 		};
 
 		ws.onerror = () => {
@@ -1092,6 +1646,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		return () => {
 			active = false;
 			clearInterval(heartbeatId);
+			// A pending retry must not outlive the provider, or it bumps state on an
+			// unmounted tree and resurrects the socket after teardown.
+			if (reconnectTimer.current !== null) {
+				clearTimeout(reconnectTimer.current);
+				reconnectTimer.current = null;
+			}
 			ws.onclose = null;
 			// Calling close() on a CONNECTING socket logs a browser error.
 			// Defer to onopen so it can close cleanly once the handshake finishes.
@@ -1102,11 +1662,13 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			wsRef.current = null;
 		};
-		// Intentionally runs once on mount; utcMsRef carries the live value.
-		// sendFlightsHistoryRequest/sendFlightsSeedRequest/sendWeatherForecastRequest/
-		// setForced/applyForcedTime are all stable (empty or `send`-only deps), so
-		// listing them satisfies the lint without re-running the effect.
+		// Re-runs only when connectGen changes (a scheduled reconnect); utcMsRef
+		// carries the live value. sendFlightsHistoryRequest/sendFlightsSeedRequest/
+		// sendWeatherForecastRequest/setForced/applyForcedTime are all stable (empty
+		// or `send`-only deps), so listing them satisfies the lint without
+		// re-running the effect.
 	}, [
+		connectGen,
 		sendFlightsHistoryRequest,
 		sendFlightsSeedRequest,
 		sendWeatherForecastRequest,
@@ -1138,12 +1700,17 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerItems,
 			mp3Items,
 			mp3History: gatedMp3History,
+			mp3Meta,
+			mp3MetaGeneration,
 			newsItems,
 			alertItems,
 			usenetItems,
 			usenetBodies: usenetBodyState.bodies,
 			usenetBodyErrors: usenetBodyState.errors,
 			requestUsenetBody,
+			newsBodies: newsBodyState.bodies,
+			newsBodyErrors: newsBodyState.errors,
+			requestNewsBody,
 			sources: gatedSources,
 			connected,
 			addItems,
@@ -1165,6 +1732,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			flightPositions,
 			subscribeFlights,
 			unsubscribeFlights,
+			subscribeFlightsAnon,
+			unsubscribeFlightsAnon,
 			flightsHistory,
 			flightsHistoryDone,
 			flightsSeed,
@@ -1176,17 +1745,34 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			seekInFlight,
+			roomCommand,
+			chatBuddies,
+			chatEnabled,
+			chatReason,
+			chatMessages,
+			chatTypingProfile,
+			subscribeChat,
+			unsubscribeChat,
+			sendChat,
+			requestChatHistory,
+			appendLocalChatMessage,
+			clearChatData,
 		}),
 		[
 			items,
 			pagerItems,
 			mp3Items,
 			gatedMp3History,
+			mp3Meta,
+			mp3MetaGeneration,
 			newsItems,
 			alertItems,
 			usenetItems,
 			usenetBodyState,
 			requestUsenetBody,
+			newsBodyState,
+			requestNewsBody,
 			gatedSources,
 			connected,
 			addItems,
@@ -1208,6 +1794,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			flightPositions,
 			subscribeFlights,
 			unsubscribeFlights,
+			subscribeFlightsAnon,
+			unsubscribeFlightsAnon,
 			flightsHistory,
 			flightsHistoryDone,
 			flightsSeed,
@@ -1219,6 +1807,19 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			seekInFlight,
+			roomCommand,
+			chatBuddies,
+			chatEnabled,
+			chatReason,
+			chatMessages,
+			chatTypingProfile,
+			subscribeChat,
+			unsubscribeChat,
+			sendChat,
+			requestChatHistory,
+			appendLocalChatMessage,
+			clearChatData,
 		],
 	);
 

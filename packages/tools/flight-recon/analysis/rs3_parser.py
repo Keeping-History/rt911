@@ -70,6 +70,7 @@ AIRCRAFT_TYPES = {"Sch", "Reinf", "Bcn"}
 # positions (see module docstring). alt_site_ft absorbs site elevation and
 # systematic slant/refraction bias; range_bias_nm absorbs bin-center offset.
 SITE_CAL = {
+    "BAR": {"lat": 43.455848, "lon": -65.471774, "range_bias_nm": 0.0248, "alt_site_ft": -1760.6},   # Barrington NS (Canada)
     "BUC": {"lat": 44.629523, "lon": -67.395544, "range_bias_nm": -0.0657, "alt_site_ft": 653.7},
     "CAR": {"lat": 46.886121, "lon": -67.971448, "range_bias_nm": -0.0684, "alt_site_ft": 919.8},
     "DAN": {"lat": 42.638565, "lon": -77.652982, "range_bias_nm": -0.0820, "alt_site_ft": 3334.3},
@@ -94,13 +95,16 @@ SITE_CAL = {
 # southward in two rounds (see #263). Two independent sanity anchors: byte 10
 # fits Fort Fisher NC (= QFF) and byte 16 fits Oceana VA (= OCA) within ~2 nm
 # of their NEADS-config fits. Bytes without a converged fit decode without
-# positions.
+# positions. SEA00/SEA17 and NEADS WSD never converged across the full
+# corpus (idle/test channels with no matchable beacon data) — they decode
+# without positions by design.
 SEADS_SITE_IDS = {0: "SEA00", 3: "SEA03", 4: "SEA04", 5: "SEA05", 6: "SEA06",
                   7: "SEA07", 8: "SEA08", 9: "SEA09", 10: "SEA10", 11: "SEA11",
                   12: "SEA12", 13: "SEA13", 14: "SEA14", 15: "SEA15",
                   16: "SEA16", 17: "SEA17"}
 SEADS_SITE_CAL = {
     "SEA03": {"lat": 29.7986, "lon": -82.9794, "range_bias_nm": -0.542, "alt_site_ft": -8512},   # Cross City FL
+    "SEA04": {"lat": 30.407197, "lon": -93.464147, "range_bias_nm": -0.5028, "alt_site_ft": 22104.9},  # Lake Charles LA
     "SEA05": {"lat": 28.1546, "lon": -80.7837, "range_bias_nm": -0.611, "alt_site_ft": 18477},   # Patrick AFB FL
     "SEA06": {"lat": 30.4056, "lon": -81.8547, "range_bias_nm": -0.996, "alt_site_ft": -22360},  # Jacksonville FL
     "SEA07": {"lat": 30.3957, "lon": -89.7431, "range_bias_nm": -0.359, "alt_site_ft": -38650},  # Slidell/Stennis MS
@@ -109,6 +113,7 @@ SEADS_SITE_CAL = {
     "SEA10": {"lat": 33.9530, "lon": -77.9385, "range_bias_nm": 0.510, "alt_site_ft": 150},      # Fort Fisher NC (QFF)
     "SEA11": {"lat": 27.7678, "lon": -81.9866, "range_bias_nm": -0.866, "alt_site_ft": 6908},    # Avon Park FL
     "SEA12": {"lat": 25.7380, "lon": -80.4952, "range_bias_nm": -1.662, "alt_site_ft": 65912},   # Miami FL
+    "SEA13": {"lat": 29.391049, "lon": -96.819518, "range_bias_nm": -0.6567, "alt_site_ft": 4751.8},   # Hallettsville TX
     "SEA14": {"lat": 31.0830, "lon": -88.2012, "range_bias_nm": -0.349, "alt_site_ft": -1589},   # SW Alabama
     "SEA15": {"lat": 33.0950, "lon": -80.2116, "range_bias_nm": -0.772, "alt_site_ft": 11406},   # Charleston SC
     "SEA16": {"lat": 36.8053, "lon": -76.0413, "range_bias_nm": 0.508, "alt_site_ft": -24552},   # Oceana VA (OCA)
@@ -386,6 +391,126 @@ def cmd_calibrate(args):
               f'  # p95 {np.percentile(err, 95):.4f} nm, n={len(g)}')
 
 
+def cmd_solve_sites(args):
+    """Solve uncalibrated site positions from joint observations.
+
+    Aircraft whose positions are known from calibrated sites (same squawk,
+    same moment, tight cluster) provide ground truth; each uncalibrated
+    site's location + biases are fitted by RANSAC over its (range, azimuth)
+    returns matched to that truth. This is how the 12 SEADS radars were
+    recovered (#263); sanity anchors: SEA10=Fort Fisher(QFF), SEA16=Oceana(OCA)
+    within ~2 nm of their independent NEADS fits."""
+    import glob as globmod
+    import numpy as np
+    import pandas as pd
+    from scipy.optimize import least_squares
+    geod = _geod()
+    targets = set(args.sites.split(","))
+
+    frames = []
+    for path in sorted(globmod.glob(os.path.join(args.decoded_dir, "*.csv.gz"))):
+        df = pd.read_csv(path, usecols=["Id", "epoch_s", "M3", "M3V", "Range", "AzDegs",
+                                        "MC", "MCV", "DecLat", "DecLon"], low_memory=False)
+        df = df[df.M3V == 1]
+        if not (set(df.Id.unique()) & targets):
+            # keep a slice anyway: truth can come from any file, but skip
+            # whole files with no target rows unless we are short on truth
+            pass
+        frames.append(df)
+    b = pd.concat(frames, ignore_index=True)
+    b["bucket"] = (b.epoch_s // 6).astype(int)
+    b["mc"] = pd.to_numeric(b.MC, errors="coerce").where(b.MCV == 1)
+
+    ref = b[b.DecLat.notna() & b.mc.notna()]
+    grp = ref.groupby(["M3", "bucket"]).agg(
+        lat=("DecLat", "mean"), lon=("DecLon", "mean"),
+        la0=("DecLat", "min"), la1=("DecLat", "max"),
+        lo0=("DecLon", "min"), lo1=("DecLon", "max"), alt=("mc", "mean"))
+    tight = grp[((grp.la1 - grp.la0) * 60 < 4) & ((grp.lo1 - grp.lo0) * 50 < 4)]
+    truth = {idx: (r.lat, r.lon, r.alt) for idx, r in tight.iterrows()}
+    print(f"truth buckets: {len(truth):,} from {len(frames)} decodes")
+
+    rng_state = np.random.RandomState(7)
+
+    def dist(a1, o1, a2, o2):
+        return math.hypot((a1 - a2) * 60, (o1 - o2) * 60 * math.cos(math.radians((a1 + a2) / 2)))
+
+    for site in sorted(targets):
+        g = b[(b.Id == site) & b.DecLat.isna()]
+        if g.empty:
+            g = b[b.Id == site]
+        samples = []
+        for row in g.itertuples(index=False):
+            t = (truth.get((row.M3, row.bucket)) or truth.get((row.M3, row.bucket - 1))
+                 or truth.get((row.M3, row.bucket + 1)))
+            if t:
+                samples.append((row.Range, row.AzDegs, *t))
+        if len(samples) < 200:
+            print(f"{site}: only {len(samples)} joint samples — cannot solve")
+            continue
+        sarr = np.array(samples[:12000])
+        rngs, az, la, lo, alt = sarr.T
+
+        def pred(p):
+            alt_nm = np.maximum(alt - p[3], 0.0) / FT_PER_NM
+            r = np.maximum(rngs + p[2], 0.05)
+            ground = np.sqrt(np.maximum(r ** 2 - alt_nm ** 2, 1e-4))
+            plo, pla, _ = geod.fwd(np.full(len(r), p[1]), np.full(len(r), p[0]),
+                                   az, ground * M_PER_NM)
+            return pla, plo
+
+        def err_of(p):
+            pla, plo = pred(p)
+            return np.hypot((pla - la) * 60, (plo - lo) * 60 * np.cos(np.radians(la)))
+
+        best = None
+        for _ in range(400):
+            pick = rng_state.choice(len(sarr), 3, replace=False)
+
+            def r3(p):
+                g_ = np.sqrt(np.maximum(rngs[pick] ** 2
+                                        - (np.maximum(alt[pick], 0) / FT_PER_NM) ** 2, 1e-4))
+                plo, pla, _ = geod.fwd(np.full(3, p[1]), np.full(3, p[0]),
+                                       az[pick], g_ * M_PER_NM)
+                return np.concatenate([(pla - la[pick]) * 60, (plo - lo[pick]) * 60])
+            try:
+                f = least_squares(r3, x0=[la[pick].mean(), lo[pick].mean()],
+                                  method="lm", max_nfev=60)
+            except Exception:
+                continue
+            e = err_of([f.x[0], f.x[1], 0.0, 0.0])
+            inl = e < 2.5
+            if best is None or inl.sum() > best[0]:
+                best = (int(inl.sum()), f.x, inl)
+        if best is None or best[0] < 100:
+            print(f"{site}: RANSAC failed ({0 if best is None else best[0]} inliers of {len(sarr)})")
+            continue
+        m = best[2]
+
+        def rf(p):
+            pla, plo = pred(p)
+            return np.concatenate([((pla - la) * 60)[m],
+                                   ((plo - lo) * 60 * np.cos(np.radians(la)))[m]])
+        fit = least_squares(rf, x0=[best[1][0], best[1][1], 0.0, 0.0], method="lm")
+        e = err_of(fit.x)
+        m2 = e < 0.5
+        if m2.sum() > 50:
+            def rf2(p):
+                pla, plo = pred(p)
+                return np.concatenate([((pla - la) * 60)[m2],
+                                       ((plo - lo) * 60 * np.cos(np.radians(la)))[m2]])
+            fit = least_squares(rf2, x0=fit.x, method="lm")
+            e = err_of(fit.x)
+        inl = int((e < 0.5).sum())
+        ok = inl >= 300 and abs(fit.x[2]) < 3
+        print(f'{site}: n={len(sarr):,} inliers={inl:,} ({inl/len(sarr):.0%}) '
+              f'fit {fit.x[0]:.6f},{fit.x[1]:.6f} rbias={fit.x[2]:.4f} alt={fit.x[3]:.1f} '
+              f'{"ACCEPT" if ok else "REJECT (weak/degenerate)"}')
+        if ok:
+            print(f'    "{site}": {{"lat": {fit.x[0]:.6f}, "lon": {fit.x[1]:.6f}, '
+                  f'"range_bias_nm": {fit.x[2]:.4f}, "alt_site_ft": {fit.x[3]:.1f}}},')
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -401,6 +526,11 @@ def main(argv=None):
     c.add_argument("rs3")
     c.add_argument("csv")
     c.set_defaults(fn=cmd_calibrate)
+    ss = sub.add_parser("solve-sites",
+                        help="fit uncalibrated sites from joint observations over decoded csvs")
+    ss.add_argument("decoded_dir")
+    ss.add_argument("--sites", default="BAR,WSD,SEA00,SEA04,SEA13,SEA17")
+    ss.set_defaults(fn=cmd_solve_sites)
     args = p.parse_args(argv)
     args.fn(args)
 

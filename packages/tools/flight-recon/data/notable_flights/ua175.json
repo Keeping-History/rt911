@@ -47,6 +47,16 @@
   "RADAR-SURVEYED TRACK: 231 of 233 waypoints are 84 RADES radar returns (sites RIV; ~12 s antenna sweep), extracted by analysis/extract_rades_notables.py. Cross-site registration bias is corrected toward the primary site; garbled plots are speed-filtered. The remaining 2 waypoints are documented anchors (takeoff runway, coverage-gap positions, impact point).",
   "ALTITUDE: alt_src='modec' waypoints carry the transponder's Mode C pressure altitude (100 ft quanta); alt_src='interp' waypoints (transponder off) interpolate through the documented NTSB profile anchors; alt_src='anchor' are the documented anchors themselves."
  ],
+ "phases": [
+  { "phase": "takeoff",       "utc": "2001-09-11T12:14:00Z" },
+  { "phase": "tracon",        "utc": "2001-09-11T12:15:00Z" },
+  { "phase": "artcc",         "utc": "2001-09-11T12:19:00Z" },
+  { "phase": "hijack",        "utc": "2001-09-11T12:44:00Z" },
+  { "phase": "course_change", "utc": "2001-09-11T12:47:00Z" },
+  { "phase": "atc_alert",     "utc": "2001-09-11T12:53:00Z" },
+  { "phase": "descent",       "utc": "2001-09-11T13:02:00Z" },
+  { "phase": "down",          "utc": "2001-09-11T13:03:00Z" }
+ ],
  "waypoints": [
   {
    "utc": "2001-09-11T12:14:00Z",

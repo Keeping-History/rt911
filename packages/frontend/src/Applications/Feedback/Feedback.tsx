@@ -4,11 +4,17 @@ import {
 	ClassicyWindow,
 	quitMenuItemHelper,
 	registerClassicyIcons,
+	useAppManager,
+	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
+import { useAuth } from "../../Providers/Auth/AuthContext";
 import { FeedbackForm } from "./FeedbackForm";
+import "./FeedbackContext";
+import { feedbackDefaults, feedbackSetGithub, readStoredGithub } from "./feedbackSettings";
 import { FeedbackSuccess } from "./FeedbackSuccess";
 import { FEEDBACK_APP_ID, useFeedback } from "./useFeedback";
 import type { FeedbackFields } from "./useFeedback";
@@ -34,6 +40,23 @@ export const Feedback: React.FC = () => {
 
 	const { state, captureScreenshot, submit } = useFeedback();
 
+	// Identity is read live rather than snapshotted: `user` is null until
+	// AuthProvider's session check returns, which happens well after this app
+	// mounts (Desktop.tsx renders it at boot, not on window-open).
+	const { user } = useAuth();
+	const appData = useAppManager(
+		(s) =>
+			s.System.Manager.Applications.apps[appId]?.data as
+				| Record<string, unknown>
+				| undefined,
+	);
+	const desktopEventDispatch = useAppManagerDispatch();
+
+	const defaults = useMemo(
+		() => feedbackDefaults(user, readStoredGithub(appData)),
+		[user, appData],
+	);
+
 	const appMenu = useMemo(
 		() => [
 			{
@@ -48,10 +71,14 @@ export const Feedback: React.FC = () => {
 	const handleSubmit = useCallback(
 		async (fields: FeedbackFields, attachments: File[]) => {
 			const url = await submit(fields, attachments);
+			// Remember the handle the report actually went out under — including
+			// an empty one, so clearing the field sticks instead of falling back
+			// to the previously remembered handle on the next report.
+			desktopEventDispatch(feedbackSetGithub(fields.github));
 			setIssueUrl(url);
 			setView("success");
 		},
-		[submit],
+		[submit, desktopEventDispatch],
 	);
 
 	const handleReset = useCallback(() => {
@@ -66,6 +93,7 @@ export const Feedback: React.FC = () => {
 			icon={appIcon}
 			defaultWindow="feedback_main"
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			<ClassicyWindow
 				id="feedback_main"
@@ -88,6 +116,7 @@ export const Feedback: React.FC = () => {
 						submitting={state.submitting}
 						error={state.error}
 						onCaptureScreenshot={captureScreenshot}
+						defaults={defaults}
 					/>
 				) : (
 					<FeedbackSuccess issueUrl={issueUrl} onReset={handleReset} />

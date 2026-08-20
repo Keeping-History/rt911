@@ -8,6 +8,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import classNames from "classnames";
 import type React from "react";
 import {
@@ -19,6 +20,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import {
 	MediaStreamContext,
 	type MediaItem,
@@ -31,6 +33,7 @@ export const News: React.FC = () => {
 	const appName = "News";
 	const appId = "News.app";
 	const appIcon = ClassicyIcons.applications.news.app as string;
+	const aboutWindow = useAboutApp(appId, appIcon);
 	const appMenu = useMemo(
 		() => [
 			{
@@ -74,7 +77,14 @@ export const News: React.FC = () => {
 	const [openDocuments, setOpenDocuments] = useState<number[]>([]);
 
 	// News is delivered on its own opt-in channel; subscribe only while the app is open.
-	const { newsItems: items, subscribeNews, unsubscribeNews } = useContext(MediaStreamContext);
+	const {
+		newsItems: items,
+		subscribeNews,
+		unsubscribeNews,
+		newsBodies,
+		newsBodyErrors,
+		requestNewsBody,
+	} = useContext(MediaStreamContext);
 	useEffect(() => {
 		if (!isRunning) return;
 		subscribeNews(appId);
@@ -105,6 +115,11 @@ export const News: React.FC = () => {
 		[filteredEntries, offset, limit],
 	);
 
+	const getDoc = useCallback(
+		(docId: number) => entries.find((entry: MediaItem) => entry.id === docId),
+		[entries],
+	);
+
 	const openDocumentDetails = useCallback((docId: number) => {
 		setOpenDocuments((prev) => Array.from(new Set([...prev, docId])));
 		const ws = (appWindows ?? []).find(
@@ -120,6 +135,29 @@ export const News: React.FC = () => {
 	useEffect(() => {
 		desktopEventDispatch(newsSetOpenDocuments(openDocuments));
 	}, [openDocuments, desktopEventDispatch]);
+
+	// Backlog articles arrive without content (the snapshot is headline-only), so
+	// each open detail window fetches its body — but only when the item itself
+	// doesn't already carry one. Articles that arrive on the live forward window
+	// DO carry content, so fetching unconditionally would fire a pointless
+	// round-trip for those, and a failure on that redundant fetch would render
+	// "article unavailable" directly above the content that was already there.
+	// requestNewsBody de-dupes against cached and in-flight ids, so re-running
+	// on any change is still safe.
+	//
+	// getDoc(docId) undefined means the article isn't in the *current* (clock-
+	// bounded) catalogue — either the window opened before its item arrived, or
+	// (after a backward seek) the item was evicted from newsItems. The server
+	// applies no time gating to news_body, so a request for an evicted id would
+	// happily re-fetch a future article's text into the cache; gating on doc
+	// presence here (and on the render below) is what keeps that text from
+	// coming back after a rewind.
+	useEffect(() => {
+		for (const docId of openDocuments) {
+			const doc = getDoc(docId);
+			if (doc && !doc.content) requestNewsBody(docId);
+		}
+	}, [openDocuments, requestNewsBody, getDoc]);
 
 	// Apply each remote focus command exactly once, tracked by its monotonic
 	// seq (TV.tsx's pattern). Consume only when the article exists in the
@@ -177,11 +215,6 @@ export const News: React.FC = () => {
 		[],
 	);
 
-	const getDoc = useCallback(
-		(docId: number) => entries.find((entry: MediaItem) => entry.id === docId),
-		[entries],
-	);
-
 	const getWindowOpenOffset = useCallback(
 		() => ((appWindows ?? []).filter((w: { closed: boolean }) => !w.closed).length ?? 0) * paddingSize,
 		[appWindows, paddingSize],
@@ -194,6 +227,7 @@ export const News: React.FC = () => {
 			icon={appIcon}
 			defaultWindow={"latest_news"}
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			<ClassicyWindow
 				id={"latest_news"}
@@ -331,67 +365,88 @@ export const News: React.FC = () => {
 					</ul>
 				</div>
 			</ClassicyWindow>
-			{openDocuments.map((docId: number) => (
-				<ClassicyWindow
-					onCloseFunc={() => {
-						setOpenDocuments((prev) => prev.filter((d) => d !== docId));
-					}}
-					id={`${appId}_newsitem_${docId}`}
-					key={`${appId}_newsitem_${docId}`}
-					icon={appIcon}
-					title={getDoc(docId)?.title}
-					appId={appId}
-					closable={true}
-					resizable={true}
-					zoomable={true}
-					scrollable={true}
-					collapsable={true}
-					initialSize={[400, 400]}
-					initialPosition={[
-						10 + getWindowOpenOffset(),
-						20 + getWindowOpenOffset(),
-					]}
-					modal={false}
-					appMenu={appMenu}
-				>
-					<div className={styles.newsBody}>
-						<h1 className={styles.newsDetailTitle}>
-							{getDoc(docId)?.title}
-						</h1>
-						<h6 className={styles.newsDetailMeta}>
-							{formatDate(getDoc(docId)?.start_date, { month: "numeric", day: "numeric", year: "numeric" })}{" "}
-							{formatDate(getDoc(docId)?.start_date, { hour: "numeric", minute: "numeric", second: "numeric" })} -{" "}
-							{getDoc(docId)?.source}
-						</h6>
+			{openDocuments.map((docId: number) => {
+				// doc absent means the article isn't in the current (clock-bounded)
+				// catalogue — most commonly a backward seek evicted it after this
+				// window was opened. newsBodies may still hold a cached body fetched
+				// before the eviction (the server applies no time gating to
+				// news_body), so that cache must never be rendered once its article
+				// has fallen out of newsItems.
+				const doc = getDoc(docId);
+				return (
+					<ClassicyWindow
+						onCloseFunc={() => {
+							setOpenDocuments((prev) => prev.filter((d) => d !== docId));
+						}}
+						id={`${appId}_newsitem_${docId}`}
+						key={`${appId}_newsitem_${docId}`}
+						icon={appIcon}
+						title={doc?.title}
+						appId={appId}
+						closable={true}
+						resizable={true}
+						zoomable={true}
+						scrollable={true}
+						collapsable={true}
+						initialSize={[400, 400]}
+						initialPosition={[
+							10 + getWindowOpenOffset(),
+							20 + getWindowOpenOffset(),
+						]}
+						modal={false}
+						appMenu={appMenu}
+					>
+						<div className={styles.newsBody}>
+							<h1 className={styles.newsDetailTitle}>
+								{doc?.title}
+							</h1>
+							<h6 className={styles.newsDetailMeta}>
+								{formatDate(doc?.start_date, { month: "numeric", day: "numeric", year: "numeric" })}{" "}
+								{formatDate(doc?.start_date, { hour: "numeric", minute: "numeric", second: "numeric" })} -{" "}
+								{doc?.source}
+							</h6>
 
-						<hr className={styles.newsDetailDivider} />
-						{getDoc(docId)?.image && (
-							<figure>
-								<img
-									src={getDoc(docId)?.image}
-									className={styles.newsDetailImage}
-									alt=""
-								/>
-								<figcaption className={styles.newsCaption}>
-									{getDoc(docId)?.image_caption}
-								</figcaption>
-							</figure>
-						)}
-						<div className={styles.newsDetailContentRow}>
-							<p className={styles.newsDetailBullet}>
-								•••
-							</p>
-							<div
-								className={styles.newsDetailBody}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus media_items table via the MediaStream provider.
-								dangerouslySetInnerHTML={{
-									__html: getDoc(docId)?.content || "",
-								}}
-							></div>
+							<hr className={styles.newsDetailDivider} />
+							{doc?.image && (
+								<figure>
+									<img
+										src={doc?.image}
+										className={styles.newsDetailImage}
+										alt=""
+									/>
+									<figcaption className={styles.newsCaption}>
+										{doc?.image_caption}
+									</figcaption>
+								</figure>
+							)}
+							<div className={styles.newsDetailContentRow}>
+								<p className={styles.newsDetailBullet}>
+									•••
+								</p>
+								{!doc ? (
+									<p className={styles.newsDetailBody}>
+										This article is not available at the current date and time.
+									</p>
+								) : newsBodyErrors[docId] ? (
+									<p className={styles.newsDetailBody}>{newsBodyErrors[docId]}</p>
+								) : !(docId in newsBodies) && !doc.content ? (
+									<p className={styles.newsDetailBody}>Loading…</p>
+								) : null}
+								{doc && (
+									<div
+										className={styles.newsDetailBody}
+										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus news_items table via the MediaStream provider.
+										dangerouslySetInnerHTML={{
+											__html: newsBodies[docId] ?? doc.content ?? "",
+										}}
+									></div>
+								)}
+							</div>
 						</div>
-					</div>
-				</ClassicyWindow>
-			))}
+					</ClassicyWindow>
+				);
+			})}
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

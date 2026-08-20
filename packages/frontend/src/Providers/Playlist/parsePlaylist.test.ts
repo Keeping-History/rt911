@@ -96,4 +96,39 @@ describe("parsePlaylist", () => {
 		expect(definition?.entries).toHaveLength(1);
 		expect(warnings).toHaveLength(1);
 	});
+
+	describe("playlist-level window", () => {
+		it("keeps a valid window", () => {
+			const { definition, warnings } = parsePlaylist({
+				version: 1, mode: "restrict", entries: [],
+				start: "2001-09-11T12:00:00", end: "2001-09-11T14:00:00",
+			});
+			expect(definition?.start).toBe("2001-09-11T12:00:00");
+			expect(definition?.end).toBe("2001-09-11T14:00:00");
+			expect(warnings).toEqual([]);
+		});
+		it("omits the fields entirely when absent", () => {
+			const { definition } = parsePlaylist({ version: 1, mode: "restrict", entries: [] });
+			expect(definition && "start" in definition).toBe(false);
+			expect(definition && "end" in definition).toBe(false);
+		});
+		it("drops a bad bound alone, with a warning, keeping the other", () => {
+			const { definition, warnings } = parsePlaylist({
+				version: 1, mode: "restrict", entries: [],
+				start: "garbage", end: "2001-09-11T14:00:00",
+			});
+			expect(definition?.start).toBeUndefined();
+			expect(definition?.end).toBe("2001-09-11T14:00:00");
+			expect(warnings).toEqual([expect.stringMatching(/bad start/)]);
+		});
+		it("drops an inverted window whole — it would lock students out forever", () => {
+			const { definition, warnings } = parsePlaylist({
+				version: 1, mode: "restrict", entries: [],
+				start: "2001-09-11T14:00:00", end: "2001-09-11T12:00:00",
+			});
+			expect(definition?.start).toBeUndefined();
+			expect(definition?.end).toBeUndefined();
+			expect(warnings).toEqual([expect.stringMatching(/window ignored/)]);
+		});
+	});
 });

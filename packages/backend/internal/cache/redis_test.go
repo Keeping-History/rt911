@@ -165,3 +165,39 @@ func TestItemsAtEmptySecondReturnsNothing(t *testing.T) {
 		t.Fatalf("expected empty result, got %+v", got)
 	}
 }
+
+// The flight warm flushes whole minute-buckets (each up to ~100 KB of msgpack)
+// in pipelineChunk-sized Execs — a single flush can be hundreds of MB, which
+// the go-redis default ~3s write timeout can't cover, so the warm aborts with
+// an i/o timeout (hit in prod). Connect must raise the write timeout unless the
+// URL sets one explicitly.
+func TestConnectRaisesWriteTimeoutForBulkWarm(t *testing.T) {
+	c := Connect("redis://localhost:6379")
+	defer c.Close()
+	if got := c.Options().WriteTimeout; got != bulkWarmWriteTimeout {
+		t.Fatalf("expected WriteTimeout %v for bulk warm, got %v", bulkWarmWriteTimeout, got)
+	}
+}
+
+func TestConnectHonorsExplicitURLWriteTimeout(t *testing.T) {
+	c := Connect("redis://localhost:6379?write_timeout=5s")
+	defer c.Close()
+	if got := c.Options().WriteTimeout; got != 5*time.Second {
+		t.Fatalf("expected explicit URL write_timeout to win (5s), got %v", got)
+	}
+}
+
+// ResolveRedisURLs backs the REDIS_WRITE_URL seam: an edge pod reads a local
+// replica but must write cache warms and the master clock through the
+// primary. An empty write URL means single-instance mode (reads and writes
+// share one URL) — the default path must stay byte-for-byte the old behavior.
+func TestResolveRedisURLs(t *testing.T) {
+	read, write := ResolveRedisURLs("redis://replica:6379", "")
+	if read != "redis://replica:6379" || write != "redis://replica:6379" {
+		t.Fatalf("empty write should default to read, got %q %q", read, write)
+	}
+	read, write = ResolveRedisURLs("redis://replica:6379", "redis://primary:6379")
+	if read != "redis://replica:6379" || write != "redis://primary:6379" {
+		t.Fatalf("explicit write must be preserved, got %q %q", read, write)
+	}
+}

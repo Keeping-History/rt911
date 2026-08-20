@@ -1,0 +1,182 @@
+import { act, cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { RoomCommandError } from "../../Providers/Playlist/roomApi";
+import { PlaylistEditorProvider, usePlaylistEditor } from "./PlaylistEditorProvider";
+import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
+
+const dispatchMock = vi.fn();
+vi.mock("classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("classicy")>()),
+	useAppManagerDispatch: () => dispatchMock,
+}));
+
+const APP = "PlaylistEditor.app";
+
+afterEach(() => {
+	cleanup();
+	vi.clearAllMocks();
+});
+
+const rec = (id: string, title = "Lesson"): PlaylistRecord => ({
+	id, title, status: "draft", date_updated: null, user_created: "u1",
+	definition: { version: 1, mode: "annotate", entries: [] },
+});
+
+let api: ReturnType<typeof usePlaylistEditor>;
+function Probe() {
+	api = usePlaylistEditor();
+	return <div data-testid="ids">{api.openIds.join(",")}</div>;
+}
+const renderProvider = (sendLock = vi.fn().mockResolvedValue(undefined)) =>
+	render(
+		<PlaylistEditorProvider appId={APP} sendLock={sendLock}>
+			<Probe />
+		</PlaylistEditorProvider>,
+	);
+
+describe("PlaylistEditorProvider", () => {
+	it("tracks open documents in open order and makes the newest active", () => {
+		renderProvider();
+
+		act(() => api.openPlaylist(rec("p1")));
+		act(() => api.openPlaylist(rec("p2")));
+
+		expect(screen.getByTestId("ids").textContent).toBe("p1,p2");
+		expect(api.activeId).toBe("p2");
+	});
+
+	it("closing the active document clears activeId", () => {
+		renderProvider();
+		act(() => api.openPlaylist(rec("p1")));
+
+		act(() => api.closePlaylist("p1"));
+
+		expect(api.openIds).toEqual([]);
+		expect(api.activeId).toBeNull();
+	});
+
+	// Closing a document the APP decided to close owes classicy a window close as
+	// well as the state drop: classicy self-destroys only modal windows on
+	// unmount, so an ordinary document would linger as an open, focused entry
+	// whose File/Edit/Control menus stay on the menu bar and keep acting on it.
+	it("closePlaylistWindow drops the document AND closes its window in the store", () => {
+		renderProvider();
+		act(() => api.openPlaylist(rec("p1")));
+		act(() => api.openPlaylist(rec("p2")));
+
+		act(() => api.closePlaylistWindow("p2"));
+
+		expect(api.openIds).toEqual(["p1"]);
+		expect(api.activeId).toBeNull();
+		expect(dispatchMock).toHaveBeenCalledWith({
+			type: "ClassicyWindowClose",
+			app: { id: APP },
+			window: { id: "playlist_doc_p2" },
+		});
+	});
+
+	// The close box has already set `closed: true` by the time onCloseFunc runs,
+	// so that path must NOT dispatch again — closePlaylist is the state-only half.
+	it("closePlaylist touches only the editor state", () => {
+		renderProvider();
+		act(() => api.openPlaylist(rec("p1")));
+
+		act(() => api.closePlaylist("p1"));
+
+		expect(api.openIds).toEqual([]);
+		expect(dispatchMock).not.toHaveBeenCalledWith(
+			expect.objectContaining({ type: "ClassicyWindowClose" }),
+		);
+	});
+
+	// Both existing lock tests await toggleClockLock to completion before
+	// asserting, so an incorrect "flip optimistically, revert on catch"
+	// implementation would produce the same final-state assertions and pass.
+	// This test inspects state WHILE the command is still in flight, which is
+	// the only way to tell the two implementations apart.
+	it("does not flip the lock until the server accepts — only busy flips first", async () => {
+		let resolveLock!: () => void;
+		const sendLock = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveLock = resolve;
+				}),
+		);
+		renderProvider(sendLock);
+		act(() => api.openPlaylist(rec("p1")));
+
+		let pending!: Promise<void>;
+		act(() => {
+			pending = api.toggleClockLock("p1");
+		});
+
+		expect(api.locks.p1?.clock ?? false).toBe(false);
+		expect(api.locks.p1?.busy).toBe(true);
+
+		await act(async () => {
+			resolveLock();
+			await pending;
+		});
+
+		expect(api.locks.p1?.clock).toBe(true);
+		expect(api.locks.p1?.busy).toBe(false);
+	});
+
+	// The palette targets the last-focused document; focusing the palette
+	// itself must not retarget it.
+	it("setActive retargets to the focused document", () => {
+		renderProvider();
+		act(() => api.openPlaylist(rec("p1")));
+		act(() => api.openPlaylist(rec("p2")));
+
+		act(() => api.setActive("p1"));
+
+		expect(api.activeId).toBe("p1");
+	});
+
+	it("locks the clock only after the server accepts, and per playlist", async () => {
+		const sendLock = vi.fn().mockResolvedValue(undefined);
+		renderProvider(sendLock);
+		act(() => api.openPlaylist(rec("p1")));
+		act(() => api.openPlaylist(rec("p2")));
+
+		await act(async () => {
+			await api.toggleClockLock("p1");
+		});
+
+		expect(sendLock).toHaveBeenCalledWith("p1", "clock", true);
+		expect(api.locks.p1?.clock).toBe(true);
+		// Locking one classroom must not mark another as locked.
+		expect(api.locks.p2?.clock ?? false).toBe(false);
+	});
+
+	it("leaves the lock off and reports why when the command is refused", async () => {
+		const sendLock = vi
+			.fn()
+			.mockRejectedValue(new RoomCommandError("Only the person who created this playlist can control it."));
+		renderProvider(sendLock);
+		act(() => api.openPlaylist(rec("p1")));
+
+		await act(async () => {
+			await api.toggleClockLock("p1");
+		});
+
+		expect(api.locks.p1?.clock ?? false).toBe(false);
+		expect(api.lockError).toEqual({
+			playlistId: "p1",
+			message: "Only the person who created this playlist can control it.",
+		});
+	});
+
+	it("reports a generic failure for a non-RoomCommandError", async () => {
+		const sendLock = vi.fn().mockRejectedValue(new Error("socket died"));
+		renderProvider(sendLock);
+		act(() => api.openPlaylist(rec("p1")));
+
+		await act(async () => {
+			await api.toggleClockLock("p1");
+		});
+
+		expect(api.lockError?.message).toBe("Command failed.");
+	});
+});

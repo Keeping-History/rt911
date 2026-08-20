@@ -1,0 +1,369 @@
+import {
+	ClassicyAlert,
+	ClassicyApp,
+	ClassicyIcons,
+	ClassicyMenuBarExtension,
+	type ClassicyMenuItem,
+	quitMenuItemHelper,
+	registerClassicyIcons,
+	useAppManager,
+	useAppManagerDispatch,
+} from "classicy";
+// Side effect: registers this app's manifest (registerApp) at import time.
+import "./IMBuddiesContext";
+import { manifestDescription } from "../../Components/manifestDescription";
+import type React from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useAuth } from "../../Providers/Auth/AuthContext";
+import appIconPng from "./app.png";
+import { BuddyListWindow, isMessageable } from "./BuddyListWindow";
+import { ChatWindow } from "./ChatWindow";
+import styles from "./IMBuddies.module.scss";
+import { IMBuddiesProvider, useIMBuddies } from "./IMBuddiesProvider";
+import { InfoWindow } from "./InfoWindow";
+import { SignOnWindow } from "./SignOnWindow";
+
+const APP_ID = "IMBuddies.app";
+const APP_NAME = "Instant Messenger";
+
+// This app's own icon, registered into the shared registry (same pattern as
+// TimeMachine.tsx). Art is a placeholder — see the brief.
+const ICONS = registerClassicyIcons({
+	applications: {
+		...ClassicyIcons.applications,
+		imBuddies: { app: appIconPng },
+	},
+});
+const appIcon = ICONS.applications.imBuddies.app;
+
+const BUDDY_LIST_WINDOW_ID = "im_buddylist";
+
+/**
+ * The menus every non-utility IM Buddies window carries: File, so Quit is where
+ * a Mac user reaches for it, and Edit → Settings → Delete Chat Data…
+ *
+ * A factory rather than the module-level constant this was, because the Edit
+ * item has to reach component state — it opens a confirmation rather than
+ * acting. `canClear` greys the item out while signed out or disconnected: the
+ * streamer would reject the clear anyway, and a disabled item says so before
+ * the click instead of after it.
+ *
+ * Quit also remains in the menu-bar extension below. That duplication is
+ * deliberate — the tray item shipped first and users may already know it.
+ *
+ * Deliberately NOT passed to InfoWindow: it is a utility window, and
+ * classicy's focus reducer only assigns Desktop.appMenu when the focused
+ * window supplies one, so a menu-less Get Info leaves this File menu on
+ * screen rather than blanking the menu bar.
+ */
+function appMenuFor(onDeleteChatData: () => void, canClear: boolean): ClassicyMenuItem[] {
+	return [
+		{
+			id: "file",
+			title: "File",
+			menuChildren: [quitMenuItemHelper(APP_ID, APP_NAME, appIcon)],
+		},
+		{
+			id: "edit",
+			title: "Edit",
+			menuChildren: [
+				{
+					id: "im_edit_settings",
+					title: "Settings",
+					menuChildren: [
+						{
+							id: "im_settings_delete_chat_data",
+							title: "Delete Chat Data…",
+							// Ellipsis per Mac OS convention: the item opens a
+							// dialog rather than acting immediately.
+							disabled: !canClear,
+							onClickFunc: onDeleteChatData,
+						},
+					],
+				},
+			],
+		},
+	];
+}
+// The one app that handles real credentials — the same id SignOnWindow hands
+// off to when there is no Directus session.
+const ACCOUNT_APP_ID = "Account.app";
+
+/**
+ * People and Window menus, plus Quit. `ClassicyMenuBarExtension` portal-
+ * renders its button into the desktop's menu-bar-extensions tray rather than
+ * the File/Edit-style `appMenu` every other app passes to `ClassicyWindow` —
+ * unlike that, nothing about the component itself hides it when another app
+ * is frontmost, so this component is only ever MOUNTED while IM Buddies is
+ * the focused app (see IMBuddiesContent below); an app's own menus belong to
+ * the frontmost app, exactly like Mac OS 8's File/Edit menus, and only
+ * status extras are meant to be permanent.
+ *
+ * Lives inside IMBuddiesProvider (unlike the ClassicyApp wrapper further up
+ * the tree) because it reads useIMBuddies() for the Window list and the
+ * current Buddy List selection.
+ */
+const IMBuddiesMenus: React.FC = () => {
+	const { connected, buddies, openChats, openChat, openInfoFor, selectedBuddy, signOff } =
+		useIMBuddies();
+	const desktopEventDispatch = useAppManagerDispatch();
+
+	// Open THEN focus. ClassicyWindowClose sets closed:true and
+	// ClassicyWindowFocus does NOT clear it -- Focus only sets focus and the
+	// menu bar -- so focusing a closed window does nothing visible. On a window
+	// that already exists in state ClassicyWindowOpen just sets closed:false,
+	// which makes this safe for windows that were never closed. Without it,
+	// closing the Buddy List would leave no way back except quitting.
+	const revealWindow = useCallback(
+		(windowId: string) => {
+			desktopEventDispatch({
+				type: "ClassicyWindowOpen",
+				app: { id: APP_ID },
+				window: { id: windowId },
+			});
+			desktopEventDispatch({
+				type: "ClassicyWindowFocus",
+				app: { id: APP_ID },
+				window: { id: windowId },
+			});
+		},
+		[desktopEventDispatch],
+	);
+
+	// The buddy highlighted in the Buddy List, if any -- looked up fresh each
+	// render (not cached) since `selectedBuddy` is just a profile id.
+	const selectedBuddyObj = useMemo(
+		() => buddies.find((b) => b.profile === selectedBuddy) ?? null,
+		[buddies, selectedBuddy],
+	);
+
+	// ONE menu, not two (#323). People and Window were separate extensions with
+	// text titles, which put two words of chrome in the menu bar for a single
+	// app -- and a menu-bar extension is the icon-sized slot on the right, where
+	// words read as the wrong kind of thing. Merged with a separator between the
+	// people actions and the window list, the way a Mac OS 8 menu groups.
+	//
+	// Rebuilt fresh every render from openChats/buddies -- never snapshotted --
+	// so a chat window opening or closing is reflected in the very same render
+	// that adds/removes its <ChatWindow> below, not a stale copy from whenever
+	// this menu last happened to re-run.
+	const menuItems = useMemo<ClassicyMenuItem[]>(() => {
+		const items: ClassicyMenuItem[] = [
+			{
+				id: "im_menu_new_message",
+				title: "New Message",
+				// Same rule the Buddy List's own IM button enforces (isMessageable):
+				// an offline buddy can't be messaged, so there's nothing to open.
+				disabled: !connected || !isMessageable(selectedBuddyObj),
+				onClickFunc: () => {
+					if (isMessageable(selectedBuddyObj)) openChat(selectedBuddyObj.profile);
+				},
+			},
+			{
+				id: "im_menu_get_info",
+				title: "Get Info",
+				// Unlike New Message, an offline buddy's profile is still readable --
+				// only "nothing selected" disables this one.
+				disabled: !connected || selectedBuddyObj === null,
+				onClickFunc: () => {
+					if (selectedBuddyObj) openInfoFor(selectedBuddyObj.profile);
+				},
+			},
+			{
+				id: "im_menu_sign_off",
+				title: "Sign Off",
+				disabled: !connected,
+				onClickFunc: signOff,
+			},
+			quitMenuItemHelper(APP_ID, APP_NAME, appIcon),
+			// classicy renders an item whose id is "spacer" as an <hr> rather
+			// than a row — that is the library's separator convention, not a
+			// placeholder id.
+			{ id: "spacer" },
+			{
+				id: "im_menu_buddylist",
+				title: "Buddy List",
+				disabled: !connected,
+				onClickFunc: () => revealWindow(BUDDY_LIST_WINDOW_ID),
+			},
+		];
+		for (const profile of openChats) {
+			const buddy = buddies.find((b) => b.profile === profile);
+			const name = buddy?.display_name || buddy?.screen_name || `Buddy ${profile}`;
+			items.push({
+				id: `im_menu_window_${profile}`,
+				title: name,
+				onClickFunc: () => revealWindow(`im_chat_${profile}`),
+			});
+		}
+		return items;
+	}, [connected, selectedBuddyObj, openChat, openInfoFor, signOff, openChats, buddies, revealWindow]);
+
+	return (
+		<ClassicyMenuBarExtension id="im_menu" order={1} title={APP_NAME} menuItems={menuItems}>
+			{/* Icon only — the title above is what names it to a screen reader. */}
+			<img src={appIcon} alt={APP_NAME} className={styles.menuBarIcon} />
+		</ClassicyMenuBarExtension>
+	);
+};
+
+/**
+ * Sign On while disconnected, Buddy List once connected, one Chat window per
+ * entry in openChats, and a single retargeting Info window -- all mapped live
+ * off provider state, never a fixed "all buddies" list, so a closed
+ * conversation's window actually disappears instead of just losing focus.
+ */
+const IMBuddiesContent: React.FC = () => {
+	const { connected, openChats, infoProfile, clearChatData } = useIMBuddies();
+	const { user } = useAuth();
+	const desktopEventDispatch = useAppManagerDispatch();
+	// Same selector idiom as PlaylistProvider.tsx: read app-manager state
+	// directly rather than plumbing a prop. IMBuddiesMenus is only ever
+	// mounted while this app is the frontmost one -- see the comment on that
+	// component for why that matters.
+	const isFrontmost = useAppManager(
+		(s) => s.System.Manager.Applications.focusedAppId === APP_ID,
+	);
+
+	// Shown once per app open while signed out, then dismissed. ClassicyApp
+	// renders its children only while the app is open, so this component
+	// mounting IS the app opening and the state resets on the next open -- no
+	// separate "have I shown this yet" bookkeeping to go stale.
+	const [signInAlertDismissed, setSignInAlertDismissed] = useState(false);
+
+	// Confirmation for Edit → Settings → Delete Chat Data…. The menu only opens
+	// this; the clear itself is dispatched by the Confirm button below.
+	const [confirmingClear, setConfirmingClear] = useState(false);
+	const appMenu = useMemo(
+		() => appMenuFor(() => setConfirmingClear(true), Boolean(user) && connected),
+		[user, connected],
+	);
+
+	return (
+		<>
+			{isFrontmost && <IMBuddiesMenus />}
+			{/*
+			  Signed out, this app cannot do anything at all: chat identity is the
+			  Directus session cookie, so the streamer refuses every send no
+			  matter what the student does here. Say so up front rather than
+			  letting them press Sign On and quietly land in a different app.
+			  Quit and Sign In are the only two real options, so they are the
+			  only two buttons.
+			*/}
+			{!user && !signInAlertDismissed && (
+				<ClassicyAlert
+					id="im_signin_required"
+					appId={APP_ID}
+					alertType="stop"
+					title={APP_NAME}
+					label="You must be signed in to use Instant Messenger."
+					message="Your buddies need to know who they are talking to. Sign in with the Account app, then come back."
+					buttons={[
+						{
+							id: "im_signin_required_quit",
+							label: "Quit",
+							role: "cancel",
+							onClick: () =>
+								desktopEventDispatch({
+									type: "ClassicyAppClose",
+									app: { id: APP_ID, name: APP_NAME, icon: appIcon },
+								}),
+						},
+						{
+							id: "im_signin_required_signin",
+							label: "Sign In",
+							role: "default",
+							onClick: () =>
+								desktopEventDispatch({
+									type: "ClassicyAppOpen",
+									app: { id: ACCOUNT_APP_ID, name: "Account", icon: "" },
+								}),
+						},
+					]}
+					onClose={() => setSignInAlertDismissed(true)}
+				/>
+			)}
+			{/*
+			  Confirming Delete Chat Data. The transcript is NOT emptied here —
+			  Confirm only sends the request, and the provider empties it when the
+			  server confirms the write landed (see MediaStreamProvider's
+			  chat_cleared handler). A failed clear therefore leaves the
+			  conversation on screen rather than faking success.
+			*/}
+			{confirmingClear && (
+				<ClassicyAlert
+					id="im_delete_chat_data"
+					appId={APP_ID}
+					alertType="stop"
+					title={APP_NAME}
+					label="This cannot be undone."
+					message="Your conversations with every buddy will be cleared from Instant Messenger, and your buddies will not remember them."
+					// HIG, and the same choice Account → Special makes: on an action
+					// that risks data loss the SAFE button is the default, so Return
+					// dismisses rather than destroys.
+					defaultButtonId="im_delete_chat_data_cancel"
+					buttons={[
+						{
+							id: "im_delete_chat_data_cancel",
+							label: "Cancel",
+							role: "cancel",
+							onClick: () => setConfirmingClear(false),
+						},
+						{
+							id: "im_delete_chat_data_confirm",
+							label: "Confirm",
+							role: "normal",
+							onClick: () => {
+								clearChatData();
+								setConfirmingClear(false);
+							},
+						},
+					]}
+					onClose={() => setConfirmingClear(false)}
+				/>
+			)}
+			{!connected && <SignOnWindow appMenu={appMenu} />}
+			{/*
+			  Every window below the Sign On window is gated on `connected` too,
+			  not just the Buddy List. A dropped socket flips `connected` false
+			  (that is what CRITICAL 1's derivation bought) while openChats /
+			  infoProfile are cleared only by signOff — so without this gate a
+			  student would be left looking at chat windows sitting beside the
+			  Sign On window, on top of a conversation they can no longer
+			  continue. The lists themselves are kept, so a recovered socket
+			  restores the same windows rather than dumping the session.
+			*/}
+			{connected && (
+				<>
+					<BuddyListWindow appMenu={appMenu} />
+					{openChats.map((profile, i) => (
+						// `i` drives the cascade offset (#318). Windows used to
+						// open centred, one exactly on top of the last, which
+						// read as a single window being reused for every buddy.
+						<ChatWindow key={profile} profile={profile} index={i} appMenu={appMenu} />
+					))}
+					{/*
+					  ONE Get Info window, retargeted to the buddy Get Info was
+					  last used on rather than one window per buddy (#325) — see
+					  IMBuddiesProvider.openInfoFor.
+					*/}
+					{infoProfile !== null && <InfoWindow profile={infoProfile} />}
+				</>
+			)}
+		</>
+	);
+};
+
+export const IMBuddies: React.FC = () => (
+	<ClassicyApp
+		id={APP_ID}
+		name={APP_NAME}
+		icon={appIcon}
+		defaultWindow="im_signon"
+		desktopIconBalloonHelp={manifestDescription(APP_ID)}
+	>
+		<IMBuddiesProvider>
+			<IMBuddiesContent />
+		</IMBuddiesProvider>
+	</ClassicyApp>
+);

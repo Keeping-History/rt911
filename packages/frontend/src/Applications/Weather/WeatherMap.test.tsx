@@ -77,9 +77,10 @@ const FakeMap = vi.hoisted(() => {
 	return FakeMap;
 });
 vi.mock("maplibre-gl", () => ({
-	default: { Map: FakeMap, addProtocol: vi.fn() },
+	default: { Map: FakeMap, addProtocol: vi.fn(), setWorkerUrl: vi.fn() },
 	Map: FakeMap,
 	addProtocol: vi.fn(),
+	setWorkerUrl: vi.fn(),
 }));
 vi.mock("pmtiles", () => ({ Protocol: class { tile = vi.fn(); } }));
 
@@ -107,6 +108,8 @@ const TEST_URLS = {
 	satelliteDay: "day.pmtiles",
 	satelliteNight: "night.pmtiles",
 	terrainDem: "https://x.example/dem.pmtiles",
+	coast: "coast.pmtiles",
+	borders: "borders.pmtiles",
 };
 
 const commonProps = {
@@ -276,13 +279,13 @@ describe("WeatherMap", () => {
 		);
 		const map = FakeMap.last!;
 		map.fire("load");
-		expect(map.paint["background"]?.["background-color"]).toBe("#efe9dd");
+		expect(map.paint["background"]?.["background-color"]).toBe("#aeb9bf");
 		rerender(
 			<WeatherMap {...commonProps} stations={[]} observations={{}} selectedStation={null}
 				radarIndex={null} utcMs={0} mapStyle="classic" darkMap={true} />,
 		);
 		expect(FakeMap.last).toBe(map); // no map re-creation
-		expect(map.paint["background"]?.["background-color"]).toBe("#1c1c22");
+		expect(map.paint["background"]?.["background-color"]).toBe("#12151c");
 	});
 
 	it("re-styling to satellite flips ground visibility on the live map", () => {

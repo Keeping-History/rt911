@@ -2,7 +2,9 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightTrack } from "./useFlightTrack";
+import type { MapPoi } from "./mapPois";
 import { FlightDetailPanel } from "./FlightDetailPanel";
+import { PROVENANCE_NOTE } from "./flightProvenance";
 
 afterEach(cleanup);
 
@@ -12,7 +14,8 @@ const sel: FlightPosition = {
 };
 
 const baseTrack: FlightTrack = {
-	flight: "AA11", origin: "BOS", scheduled_dest: "LAX", landed_at: null,
+	flight: "AA11", flight_date: "2001-09-11", origin: "BOS", scheduled_dest: "LAX",
+	landed_at: null,
 	diverted: false, geometry: null,
 	tail_number: null, aircraft_type: null, details: null,
 	wheels_off_utc: null, wheels_on_utc: null,
@@ -42,8 +45,11 @@ describe("FlightDetailPanel", () => {
 		render(<FlightDetailPanel selected={sel} loading={false} error={null} track={baseTrack} nowMs={PRE_IMPACT} />);
 		expect(screen.getByText("AA11")).toBeTruthy();
 		expect(screen.getByText(/29,?000/)).toBeTruthy();
-		expect(screen.getByText(/BOS/)).toBeTruthy();
-		expect(screen.getByText(/LAX/)).toBeTruthy();
+		// The route also renders in the pane's header label (ClassicyControlLabel),
+		// so a bare getByText(/BOS/) now matches two nodes. Scope to the Route
+		// field's <dd> and assert the full origin → dest string there.
+		const routeValue = screen.getByText("Route").nextElementSibling;
+		expect(routeValue?.textContent).toBe("BOS → LAX");
 	});
 	it("shows a track-unavailable note on error", () => {
 		render(<FlightDetailPanel selected={sel} track={null} loading={false} error="Track unavailable" nowMs={PRE_IMPACT} />);
@@ -175,6 +181,90 @@ describe("FlightDetailPanel", () => {
 			expect(onPickFlight).toHaveBeenCalledWith("DL404");
 			fireEvent.click(screen.getByText("Save as Filter"));
 			expect(onSaveAsFilter).toHaveBeenCalledOnce();
+		});
+	});
+
+	describe("FlightDetailPanel POI mode", () => {
+		const ATL: MapPoi = {
+			id: 1, name: "Hartsfield–Jackson Atlanta International Airport",
+			layer: "Major Airports", category: "airport", detailTitle: "Airport Details",
+			lat: 33.6, lon: -84.4, iata: "ATL", icao: "KATL", city: "Atlanta", region: "GA",
+			details: { hub_class: "Large", enplanements_2000: 19833823, runway_count: 4 },
+		};
+
+		it("shows the Airport Details header and the airport name", () => {
+			render(<FlightDetailPanel selected={null} track={null} loading={false} error={null} nowMs={0} poi={ATL} />);
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(screen.getByText(/Hartsfield/)).toBeTruthy();
+		});
+		it("renders present detail fields and omits absent ones", () => {
+			render(<FlightDetailPanel selected={null} track={null} loading={false} error={null} nowMs={0} poi={ATL} />);
+			expect(screen.getByText("Enplanements (2000)")).toBeTruthy();
+			expect(screen.getByText("19,833,823")).toBeTruthy();
+			expect(screen.queryByText("Operator")).toBeNull(); // not in details
+		});
+		it("falls back to Flight Details when no poi and no selection", () => {
+			render(<FlightDetailPanel selected={null} track={null} loading={false} error={null} nowMs={0} />);
+			expect(screen.getByText("Flight Details")).toBeTruthy();
+		});
+	});
+
+	it("renders a phase legend under the fields when phases are supplied (#310)", () => {
+		render(
+			<FlightDetailPanel selected={sel} loading={false} error={null} track={notableTrack}
+				nowMs={PRE_IMPACT} phases={["takeoff", "hijack", "down"]} />,
+		);
+		const legend = screen.getByLabelText("Phase colors");
+		expect(within(legend).getByText("Takeoff")).toBeTruthy();
+		expect(within(legend).getByText("Hijack")).toBeTruthy();
+		expect(within(legend).getByText("Down")).toBeTruthy();
+	});
+	it("omits the legend when no phases are supplied", () => {
+		render(
+			<FlightDetailPanel selected={sel} loading={false} error={null} track={baseTrack}
+				nowMs={PRE_IMPACT} />,
+		);
+		expect(screen.queryByLabelText("Phase colors")).toBeNull();
+	});
+
+	it("shows the PRESIDENTIAL badge and ground status for a parked AF1", () => {
+		const selected: FlightPosition = {
+			id: 1, flight: "AF1", start_date: "2001-09-11T16:00:00Z", lat: 32.5, lon: -93.66, alt_ft: 166, phase: "ground",
+		};
+		const track: FlightTrack = {
+			...baseTrack,
+			flight: "AF1", origin: "SRQ", scheduled_dest: "ADW",
+			wheels_off_utc: "2001-09-11T13:54:00Z", wheels_on_utc: "2001-09-11T22:54:00Z",
+			aircraft_type: "Boeing VC-25A", tail_number: "SAM 28000",
+			details: { ground_stops: [{ code: "BAD", name: "Barksdale Air Force Base", start: "2001-09-11T15:45:00Z", end: "2001-09-11T17:37:00Z" }] },
+		};
+		render(<FlightDetailPanel selected={selected} track={track} loading={false} error={null}
+			nowMs={Date.parse("2001-09-11T16:00:00Z")} />);
+		expect(screen.getByText("PRESIDENTIAL")).toBeDefined();
+		expect(screen.getByText("On the ground at Barksdale Air Force Base")).toBeDefined();
+	});
+
+	describe("provenance disclosure (#263)", () => {
+		// Two near-miss phrasings once coexisted here — one gated on a missing
+		// route, the other on loaded source tags — so an unidentified track with
+		// a loaded track showed both. These pin it to exactly one sentence.
+		it("states provenance exactly once, in the canonical wording", () => {
+			render(<FlightDetailPanel selected={sel} loading={false} error={null}
+				track={baseTrack} nowMs={PRE_IMPACT} sources={["radar", "estimated"]} />);
+			expect(screen.getAllByText(PROVENANCE_NOTE)).toHaveLength(1);
+			// any second provenance sentence, however worded, fails this
+			expect(screen.queryAllByText(/reconstructed|synthesized/i)).toHaveLength(1);
+		});
+		it("discloses provenance even when no track has loaded", () => {
+			render(<FlightDetailPanel selected={{ ...sel, flight: "RDR-26155", carrier: undefined }}
+				loading={false} error={null} track={null} nowMs={PRE_IMPACT} />);
+			expect(screen.getAllByText(PROVENANCE_NOTE)).toHaveLength(1);
+		});
+		it("says the route is unknown rather than restating provenance", () => {
+			render(<FlightDetailPanel selected={{ ...sel, flight: "RDR-26155", carrier: undefined }}
+				loading={false} error={null} track={null} nowMs={PRE_IMPACT} />);
+			expect(screen.getByText("Route unknown")).toBeTruthy();
+			expect(screen.queryByText(/synthesized/i)).toBeNull();
 		});
 	});
 });

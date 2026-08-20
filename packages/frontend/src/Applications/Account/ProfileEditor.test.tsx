@@ -4,10 +4,25 @@ import type { AuthUser } from "../../Providers/Auth/authApi";
 
 const mockUpdateProfile = vi.hoisted(() => vi.fn());
 const mockRequestEmailChange = vi.hoisted(() => vi.fn());
+// Re-declared rather than imported, because the module is fully mocked and the
+// component checks with instanceof. Hoisted because vi.mock's factory runs
+// before ordinary top-level declarations.
+const MockUsernameTakenError = vi.hoisted(
+	() =>
+		class extends Error {
+			readonly username: string;
+			constructor(username: string) {
+				super(`The screen name "${username}" is already taken.`);
+				this.username = username;
+			}
+		},
+);
+
 vi.mock("../../Providers/Auth/profileApi", () => ({
 	updateProfile: mockUpdateProfile,
 	requestEmailChange: mockRequestEmailChange,
 	confirmEmailChange: vi.fn(),
+	UsernameTakenError: MockUsernameTakenError,
 }));
 
 const mockAuth = vi.hoisted(() => ({
@@ -30,7 +45,7 @@ import { ProfileEditor } from "./ProfileEditor";
 const selectTab = (name: string) => fireEvent.mouseUp(screen.getByRole("tab", { name }));
 
 const makeUser = (over: Partial<AuthUser>): AuthUser => ({
-	id: "1", email: "t@x.org", first_name: null, last_name: null, avatar: null,
+	id: "1", email: "t@x.org", username: null, first_name: null, last_name: null, avatar: null,
 	provider: "google", city: null, state: null, country: null,
 	school_name: null, educator_role: null, grade_levels: null, subjects: null,
 	...over,
@@ -54,7 +69,7 @@ describe("ProfileEditor — names", () => {
 		fireEvent.change(screen.getByLabelText("Last Name"), { target: { value: "Lovelace" } });
 		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
 		await waitFor(() =>
-			expect(mockUpdateProfile).toHaveBeenCalledWith({ first_name: "Ada", last_name: "Lovelace" }),
+			expect(mockUpdateProfile).toHaveBeenCalledWith({ first_name: "Ada", last_name: "Lovelace", username: null }),
 		);
 		expect(mockAuth.refresh).toHaveBeenCalled();
 	});
@@ -64,7 +79,11 @@ describe("ProfileEditor — names", () => {
 		fireEvent.change(screen.getByLabelText("First Name"), { target: { value: "" } });
 		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
 		await waitFor(() =>
-			expect(mockUpdateProfile).toHaveBeenCalledWith({ first_name: null, last_name: null }),
+			expect(mockUpdateProfile).toHaveBeenCalledWith({
+				first_name: null,
+				last_name: null,
+				username: null,
+			}),
 		);
 	});
 });
@@ -156,5 +175,58 @@ describe("ProfileEditor — password", () => {
 		selectTab("Password");
 		expect(screen.getByLabelText("New Password").getAttribute("type")).toBe("password");
 		expect(screen.getByLabelText("Confirm Password").getAttribute("type")).toBe("password");
+	});
+});
+
+describe("ProfileEditor — screen name", () => {
+	it("rejects a too-short name before calling the server", async () => {
+		mockAuth.user = makeUser({});
+		render(<ProfileEditor />);
+		fireEvent.change(screen.getByLabelText("Screen Name"), { target: { value: "a" } });
+		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
+		await screen.findByText(/at least 2 characters/);
+		expect(mockUpdateProfile).not.toHaveBeenCalled();
+	});
+
+	it("normalises what it sends, so the stored name matches what is shown", async () => {
+		mockAuth.user = makeUser({});
+		render(<ProfileEditor />);
+		fireEvent.change(screen.getByLabelText("Screen Name"), { target: { value: "Skater Boi!!" } });
+		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
+		await waitFor(() =>
+			expect(mockUpdateProfile).toHaveBeenCalledWith(
+				expect.objectContaining({ username: "skaterboi" }),
+			),
+		);
+	});
+
+	it("offers an alternative when the name is already taken", async () => {
+		// Availability cannot be checked before saving — a user can only read
+		// their own row — so the conflict comes back from the server and the UI
+		// turns it into something actionable rather than a dead end.
+		mockAuth.user = makeUser({});
+		mockUpdateProfile.mockRejectedValueOnce(new MockUsernameTakenError("danny"));
+		render(<ProfileEditor />);
+		fireEvent.change(screen.getByLabelText("Screen Name"), { target: { value: "danny" } });
+		fireEvent.click(screen.getByRole("button", { name: "Save Names" }));
+		await screen.findByText(/"danny" is taken\. Try danny\d\d/);
+	});
+});
+
+describe("ProfileEditor — Special tab", () => {
+	it("offers both destructive actions", () => {
+		render(<ProfileEditor />);
+		selectTab("Special");
+		expect(screen.getByRole("button", { name: "Delete My Data" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Delete My Account" })).toBeTruthy();
+	});
+
+	it("is the last tab, after Password", () => {
+		// Order is deliberate: the destructive actions sit furthest from the
+		// tabs someone uses routinely.
+		mockAuth.user = makeUser({ provider: "default" });
+		render(<ProfileEditor />);
+		const titles = screen.getAllByRole("tab").map((t) => t.textContent);
+		expect(titles[titles.length - 1]).toBe("Special");
 	});
 });

@@ -3,6 +3,7 @@ import {
 	assembleDefinition,
 	displayWallClockToUtcIso,
 	editorReducer,
+	expandSelections,
 	initialEditorState,
 	selectionsToEntries,
 	utcIsoToDisplayWallClock,
@@ -79,6 +80,17 @@ describe("editorReducer", () => {
 		expect(dirty.dirty).toBe(true);
 		expect(editorReducer(dirty, { type: "markSaved" }).dirty).toBe(false);
 	});
+	it("renamed adopts the title without marking the document dirty", () => {
+		const clean = initialEditorState({
+			id: "p1", title: "Lesson", status: "draft", date_updated: null, user_created: "u1",
+			definition: { version: 1, mode: "annotate", entries: [] },
+		});
+
+		const after = editorReducer(clean, { type: "renamed", title: "Lesson Two" });
+
+		expect(after.title).toBe("Lesson Two");
+		expect(after.dirty).toBe(false);
+	});
 });
 
 describe("assembleDefinition", () => {
@@ -91,6 +103,44 @@ describe("assembleDefinition", () => {
 	});
 });
 
+describe("playlist-level window", () => {
+	const windowed = {
+		...record,
+		definition: {
+			...record.definition,
+			start: "2001-09-11T12:00:00",
+			end: "2001-09-11T14:00:00",
+		},
+	};
+
+	it("loads the window from the definition", () => {
+		const s = initialEditorState(windowed);
+		expect(s.start).toBe("2001-09-11T12:00:00");
+		expect(s.end).toBe("2001-09-11T14:00:00");
+	});
+
+	it("setWindow replaces both bounds and marks dirty", () => {
+		const s = editorReducer(initialEditorState(windowed), {
+			type: "setWindow", start: "2001-09-11T13:00:00", end: undefined,
+		});
+		expect(s.start).toBe("2001-09-11T13:00:00");
+		expect(s.end).toBeUndefined();
+		expect(s.dirty).toBe(true);
+	});
+
+	it("round-trips through assembleDefinition, omitting absent bounds", () => {
+		const def = assembleDefinition(initialEditorState(windowed));
+		expect(def.start).toBe("2001-09-11T12:00:00");
+		expect(def.end).toBe("2001-09-11T14:00:00");
+
+		const cleared = assembleDefinition(
+			editorReducer(initialEditorState(windowed), { type: "setWindow" }),
+		);
+		expect("start" in cleared).toBe(false);
+		expect("end" in cleared).toBe(false);
+	});
+});
+
 describe("timezone helpers", () => {
 	it("round-trips a display wall clock through UTC ISO", () => {
 		const iso = "2001-09-11T12:40:00.000Z"; // 08:40 EDT
@@ -98,6 +148,30 @@ describe("timezone helpers", () => {
 		expect(wall.getHours()).toBe(8);
 		expect(wall.getMinutes()).toBe(40);
 		expect(displayWallClockToUtcIso(wall)).toBe(iso);
+	});
+});
+
+describe("addEntries select", () => {
+	it("selects the last added entry when asked, so the Settings window can edit it", () => {
+		const s0 = initialEditorState(record);
+		const s1 = editorReducer(s0, {
+			type: "addEntries",
+			entries: [
+				{ entry: { kind: "jump", at: "", to: "" } },
+				{ entry: { kind: "browser", url: "http://", at: "" } },
+			],
+			select: true,
+		});
+		expect(s1.selectedUid).toBe(s1.entries[s1.entries.length - 1].uid);
+	});
+
+	it("leaves the selection alone without the flag", () => {
+		const s0 = { ...initialEditorState(record), selectedUid: "e1" };
+		const s1 = editorReducer(s0, {
+			type: "addEntries",
+			entries: [{ entry: { kind: "jump", at: "", to: "" } }],
+		});
+		expect(s1.selectedUid).toBe("e1");
 	});
 });
 
@@ -122,5 +196,98 @@ describe("selectionsToEntries", () => {
 			},
 		]);
 		expect(out[0].entry).toEqual({ kind: "file", path: "Macintosh HD:Documents:WTC1.pdf", at: "" });
+	});
+});
+
+describe("expandSelections", () => {
+	const flightFile = (itemId: string) => ({
+		id: `flight-${itemId}`, name: itemId, kind: "file" as const, fileType: "flight",
+		meta: { app: "flights", itemId, departure: null, arrival: null },
+	});
+	const selectAll = (name: string, paths: string[][]) => ({
+		volumeId: "rt911-archive", path: paths[0],
+		entry: { id: `sa-${name}`, name, kind: "file" as const, fileType: "flight",
+			meta: { selectAllPaths: paths } },
+	});
+
+	it("expands a Select All entry into the folder's files, skipping folders and the nested Select All", async () => {
+		const listFolder = vi.fn(async () => [
+			{ id: "sa", name: "Select All", kind: "file" as const, fileType: "flight",
+				meta: { selectAllPaths: [["Flights", "American Airlines", "2001-09-11"]] } },
+			{ id: "d", name: "sub", kind: "folder" as const },
+			flightFile("AA11"),
+			flightFile("AA77"),
+		]);
+		const out = await expandSelections(
+			[selectAll("Select All", [["Flights", "American Airlines", "2001-09-11"]])],
+			listFolder,
+		);
+		expect(out.map((e) => e.entry)).toEqual([
+			{ kind: "media", app: "flights", itemId: "AA11" },
+			{ kind: "media", app: "flights", itemId: "AA77" },
+		]);
+	});
+
+	it("expands an airline-level entry across all its date folders, sequentially", async () => {
+		const order: string[] = [];
+		const listFolder = vi.fn(async (path: string[]) => {
+			order.push(path[2]);
+			return [flightFile(`AA-${path[2]}`)];
+		});
+		const paths = [
+			["Flights", "American Airlines", "2001-09-11"],
+			["Flights", "American Airlines", "2001-09-12"],
+		];
+		const out = await expandSelections([selectAll("All American Airlines Flights", paths)], listFolder);
+		expect(order).toEqual(["2001-09-11", "2001-09-12"]);
+		expect(out.map((e) => (e.entry as { itemId: string }).itemId)).toEqual([
+			"AA-2001-09-11", "AA-2001-09-12",
+		]);
+	});
+
+	it("dedupes media entries when Select All overlaps an individual selection", async () => {
+		const listFolder = vi.fn(async () => [flightFile("AA11"), flightFile("AA77")]);
+		const out = await expandSelections(
+			[
+				{ volumeId: "rt911-archive", path: ["Flights", "American Airlines", "2001-09-11"],
+					entry: flightFile("AA11") },
+				selectAll("Select All", [["Flights", "American Airlines", "2001-09-11"]]),
+			],
+			listFolder,
+		);
+		expect(out.map((e) => (e.entry as { itemId: string }).itemId)).toEqual(["AA11", "AA77"]);
+	});
+
+	it("passes plain selections through without calling the lister, preserving timelineMeta", async () => {
+		const listFolder = vi.fn();
+		const out = await expandSelections(
+			[
+				{ volumeId: "rt911-archive", path: ["News", "NYT"],
+					entry: { id: "news-101", name: "Doc", kind: "file", fileType: "news-document",
+						meta: { app: "news", itemId: "101", publishedAt: "2001-09-11T10:00:00Z" } } },
+			],
+			listFolder,
+		);
+		expect(listFolder).not.toHaveBeenCalled();
+		expect(out[0].entry).toEqual({ kind: "media", app: "news", itemId: "101" });
+		expect(out[0].timelineMeta).toEqual({ publishedAt: "2001-09-11T10:00:00Z" });
+	});
+
+	it("keeps other folders' items when one folder listing fails", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const listFolder = vi.fn(async (path: string[]) => {
+			if (path[2] === "2001-09-11") throw new Error("directus down");
+			return [flightFile(`AA-${path[2]}`)];
+		});
+		const out = await expandSelections(
+			[selectAll("All American Airlines Flights", [
+				["Flights", "American Airlines", "2001-09-11"],
+				["Flights", "American Airlines", "2001-09-12"],
+			])],
+			listFolder,
+		);
+		expect(out.map((e) => (e.entry as { itemId: string }).itemId)).toEqual(["AA-2001-09-12"]);
+		expect(warn).toHaveBeenCalled();
+		warn.mockRestore();
 	});
 });

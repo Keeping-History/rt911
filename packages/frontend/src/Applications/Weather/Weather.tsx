@@ -11,8 +11,10 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import { type FC, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import appIconPng from "./app.png";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
 import { BASEMAP_URLS, type BasemapStyleId } from "../../lib/basemap/basemapStyles";
 import { ALMANAC_DAYS, useAlmanac } from "./useAlmanac";
@@ -56,6 +58,7 @@ export const Weather: FC = () => {
 	const appId = "Weather.app";
 	const appName = "Weather";
 	const appIcon = ICONS.applications.weather.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const {
 		weatherObservations,
@@ -279,7 +282,13 @@ export const Weather: FC = () => {
 	const almanacDay = almanac?.days[currentMMDD] ?? null;
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="weather-main">
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={appIcon}
+			defaultWindow="weather-main"
+			desktopIconBalloonHelp={manifestDescription(appId)}
+		>
 			<ClassicyWindow
 				id="weather-main"
 				title="Weather"
@@ -384,6 +393,7 @@ export const Weather: FC = () => {
 					)}
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

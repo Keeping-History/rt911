@@ -17,7 +17,9 @@ dependencies = [
     "prefect>=3.0",
     # fastapi<0.137 was required for Prefect 3.7.4 (PrefectRouter compat bug).
     # Prefect 3.7.6 fixed it; <0.139 verified green via dependabot PR #132.
-    "fastapi<0.140",
+    "fastapi<0.142",
+    # Transcript minute summarisation (video_grabber/transcript/summarize.py).
+    "anthropic>=0.60",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +38,19 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+# Pin the rule set explicitly. Ruff's *default* selection grows between
+# releases, and the dev extra floors ruff at >=0.4 with no ceiling, so CI
+# installs whatever is newest — 0.16.0 expanded the defaults and lit up 252
+# pre-existing style findings in files nobody had touched, failing a build for
+# reasons unrelated to the change that triggered it.
+#
+# These four are what this project has effectively linted against all along.
+# Adopting the newer rules (UP017 datetime.UTC, I001 import sorting, UP007/UP045
+# annotation syntax) is a worthwhile cleanup, but it is a ~250-line sweep that
+# belongs in its own change, not riding along in whatever lands next.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.black]
 line-length = 100

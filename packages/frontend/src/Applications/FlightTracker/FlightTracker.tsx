@@ -17,6 +17,7 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import {
 	type ChangeEvent,
@@ -28,6 +29,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import {
 	MediaStreamContext,
 	type FlightPosition,
@@ -35,7 +37,10 @@ import {
 import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";
 import { FlightDetailPanel } from "./FlightDetailPanel";
 import { FlightMap, type FlightMapHandle } from "./FlightMap";
+import { FlightLayersPanel } from "./FlightLayersPanel";
 import { MapControls, type SelectMode } from "./MapControls";
+import { useMapPois } from "./useMapPois";
+import { visiblePois, type MapPoi, poiLayerConfigs, splitPoisForRender } from "./mapPois";
 import { type TrackSelection, useFlightTrack } from "./useFlightTrack";
 import { useAltitudeProfile } from "./useAltitudeProfile";
 import { legEstimates } from "./flightEta";
@@ -43,13 +48,18 @@ import { familyForAircraftType } from "./aircraftModels";
 // Importing this module also registers the ClassicyAppFlightTracker reducer.
 import {
 	type FlightMapSettings,
+	type FlightPoiSettings,
 	flightTrackerSetFilterSettings,
 	flightTrackerSetLoopSettings,
 	flightTrackerSetMapSettings,
+	flightTrackerSetPoiSettings,
+	ANON_DESATURATION,
+	desaturate,
 	intToHex,
 	readFlightFilterSettings,
 	readFlightLoopSettings,
 	readFlightMapSettings,
+	readFlightPoiSettings,
 } from "./flightMapSettings";
 import {
 	EMPTY_FLIGHT_FILTER,
@@ -64,7 +74,8 @@ import {
 	flightTrackerSetFocusedFlight,
 } from "./flightTrackerCommands";
 import { useNotableCrashSites } from "./useNotableCrashSites";
-import { isNotable, isObserver } from "./notableFlights";
+import { isNotable, isObserverStyled, isPresidential } from "./notableFlights";
+import { isEstimated, orderedTrackSources } from "./flightProvenance";
 import type { CameraMode } from "./flightCamera";
 import { useRouteIndex } from "./useRouteIndex";
 import { groundStopStatus } from "./groundStop";
@@ -80,13 +91,18 @@ import {
 	SPEED_LABELS,
 } from "./loopClock";
 import styles from "./FlightTracker.module.scss";
-import type { Feature } from "geojson";
+import type { FeatureCollection } from "geojson";
+import { buildTrackSegments } from "./flightTrackSegments";
+import { orderedTrackPhases, phasePaletteFor } from "./flightPhases";
 import {
 	BASEMAP_URLS,
 	type BasemapStyleId,
 	effectiveTone,
 	normalizeBasemapStyle,
+	SECONDARY_TRACK_COLOR,
 } from "./flightMapStyle";
+import { type SecondaryTrack, useMultiFlightTracks } from "./useMultiFlightTracks";
+import { toggleFlightSelection } from "./selectionToggle";
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.flightTracker.app. registerClassicyIcons assigns
@@ -103,6 +119,7 @@ export const FlightTracker: FC = () => {
 	const appId = "FlightTracker.app";
 	const appName = "Flight Tracker";
 	const appIcon = ICONS.applications.flightTracker.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const isRunning = useAppManager(
 		(s) => appId in (s.System.Manager.Applications.apps ?? {}),
@@ -118,6 +135,19 @@ export const FlightTracker: FC = () => {
 	const settings = useMemo(() => readFlightMapSettings(appData), [appData]);
 	const loopSettings = useMemo(() => readFlightLoopSettings(appData), [appData]);
 	const filterSettings = useMemo(() => readFlightFilterSettings(appData), [appData]);
+
+	// POI markers (airports, etc.) — loaded once per page (useMapPois), filtered
+	// by the persisted layer preferences (a separate slice: flightMapSettings.ts).
+	const allPois = useMapPois();
+	const poiSettings = useMemo(() => readFlightPoiSettings(appData), [appData]);
+	const enabledPois = useMemo(
+		() => visiblePois(allPois, poiSettings.enabled, poiSettings.disabledLayers),
+		[allPois, poiSettings.enabled, poiSettings.disabledLayers],
+	);
+	const poiLayers = useMemo(
+		() => poiLayerConfigs(allPois, poiSettings),
+		[allPois, poiSettings],
+	);
 
 	const [showSettings, setShowSettings] = useState(false);
 	// Settings form: local working copy, committed on Save (TV pattern).
@@ -164,6 +194,23 @@ export const FlightTracker: FC = () => {
 		[desktopEventDispatch],
 	);
 
+	const [showLayers, setShowLayers] = useState(false);
+	// Layers window (POI layer toggles): non-modal, live-apply — mirrors
+	// Filter Flights above (each change dispatches immediately).
+	const openLayers = useCallback(() => {
+		setShowLayers(true);
+		desktopEventDispatch({
+			type: "ClassicyWindowFocus",
+			app: { id: appId },
+			window: { id: "flight-layers" },
+		});
+	}, [desktopEventDispatch]);
+
+	const setPoiSettings = useCallback(
+		(next: FlightPoiSettings) => desktopEventDispatch(flightTrackerSetPoiSettings(next)),
+		[desktopEventDispatch],
+	);
+
 	const toggleDarkMap = useCallback(() => {
 		desktopEventDispatch(
 			flightTrackerSetMapSettings({ ...settings, darkMap: !settings.darkMap }),
@@ -204,6 +251,11 @@ export const FlightTracker: FC = () => {
 			return !on;
 		});
 	}, []);
+	const toggleAnonTraffic = useCallback(() => {
+		desktopEventDispatch(
+			flightTrackerSetMapSettings({ ...settings, anonTraffic: !settings.anonTraffic }),
+		);
+	}, [settings, desktopEventDispatch]);
 	const toggleGlobe = useCallback(() => {
 		desktopEventDispatch(
 			flightTrackerSetMapSettings({ ...settings, globe: !settings.globe }),
@@ -244,6 +296,8 @@ export const FlightTracker: FC = () => {
 		flightPositions,
 		subscribeFlights,
 		unsubscribeFlights,
+		subscribeFlightsAnon,
+		unsubscribeFlightsAnon,
 		connected,
 		flightsHistory,
 		flightsSeed,
@@ -301,6 +355,24 @@ export const FlightTracker: FC = () => {
 			: allPositions;
 		return dropLandedPositions(visible, routeIndex, nowMs);
 	}, [allPositions, visibleFlights, routeIndex, nowMs]);
+	// Anonymous radar traffic is counted separately in the status bar; its
+	// RDR- prefix is the corpus discriminator everywhere.
+	const anonAloft = useMemo(
+		() => flightPositions.filter((p) => p.flight.startsWith("RDR-")).length,
+		[flightPositions],
+	);
+	// Parked aircraft (AF1 during its ground stops) are on the map but not
+	// "aloft" — the status bar subtracts them like it subtracts anon traffic.
+	const groundedCount = useMemo(
+		() => flightPositions.filter((p) => p.phase === "ground").length,
+		[flightPositions],
+	);
+	// Status-bar numerator. Must share the denominator's semantics: filtering to
+	// a parked aircraft otherwise reads "1 of 0 aircraft aloft".
+	const filteredAloft = useMemo(
+		() => filteredPositions.filter((p) => p.phase !== "ground").length,
+		[filteredPositions],
+	);
 	// Wheels-down/crash instants for the airborne set: the map's dead-reckoning
 	// clamp (a landed flight freezes at its track end instead of overshooting).
 	const landingClock = useMemo(
@@ -346,18 +418,39 @@ export const FlightTracker: FC = () => {
 		return () => unsubscribeFlights(appId);
 	}, [isRunning, subscribeFlights, unsubscribeFlights, appId]);
 
+	// The anonymous-traffic corpus rides its own channel, paid for only while
+	// the "Other" toggle is on (#263).
+	useEffect(() => {
+		if (!isRunning || !settings.anonTraffic) return;
+		subscribeFlightsAnon(appId);
+		return () => unsubscribeFlightsAnon(appId);
+	}, [isRunning, settings.anonTraffic, subscribeFlightsAnon, unsubscribeFlightsAnon, appId]);
+
 	// Selection is a LIST (issue #225): a plain click yields one entry; an
 	// area-select drag yields many, toggled via the detail pane's dropdown.
 	const [multiSelected, setMultiSelected] = useState<FlightPosition[]>([]);
 	const [activeFlightIdx, setActiveFlightIdx] = useState(0);
 	const selected = multiSelected[Math.min(activeFlightIdx, multiSelected.length - 1)] ?? null;
 
-	// Camera follow targets the five tracked flights (the notables + observer).
-	// canFollow gates the toggle; followFlight (null unless armed AND a tracked
-	// flight is selected) is what FlightMap locks onto. Keeping cameraFollow in
-	// lockstep with canFollow means "following" never lingers with nothing to
-	// follow — so cameraFollow alone drives the toolbar's locked-out controls.
-	const canFollow = !!selected && (isNotable(selected.flight) || isObserver(selected.flight));
+	// POI selection is a UNION with the flight selection above: at most one side
+	// is ever populated. Selecting a POI clears any flight selection; every
+	// flight-selection path (below, and the map's onClearSelection) clears the
+	// POI in turn.
+	const [selectedPoi, setSelectedPoi] = useState<MapPoi | null>(null);
+	const onSelectPoi = useCallback((poi: MapPoi) => {
+		setMultiSelected([]);
+		setActiveFlightIdx(0);
+		setSelectedPoi(poi);
+	}, []);
+
+	// Camera follow targets the curated highlight flights — notables, observer,
+	// Air Force One. canFollow gates the toggle; followFlight (null unless armed
+	// AND a tracked flight is selected) is what FlightMap locks onto. Keeping
+	// cameraFollow in lockstep with canFollow means "following" never lingers
+	// with nothing to follow — so cameraFollow alone drives the toolbar's
+	// locked-out controls. Follow is a viewport convenience, not a crash-
+	// semantics behavior, so it uses the observer-styled union (not isNotable-only).
+	const canFollow = !!selected && (isNotable(selected.flight) || isObserverStyled(selected.flight));
 	useEffect(() => {
 		if (cameraFollow && !canFollow) setCameraFollow(false);
 	}, [cameraFollow, canFollow]);
@@ -365,6 +458,7 @@ export const FlightTracker: FC = () => {
 
 	const onAreaSelect = useCallback(
 		(flights: string[]) => {
+			setSelectedPoi(null);
 			const hits = flights
 				.map((fl) => flightPositions.find((p) => p.flight === fl))
 				.filter((p): p is FlightPosition => !!p);
@@ -477,66 +571,84 @@ export const FlightTracker: FC = () => {
 	const appMenu = useMemo(
 		() => [
 			{
-				id: "file",
+				id: appId + "_file",
 				title: "File",
 				menuChildren: [
-					{
-						id: "flight-settings-menu",
-						title: "Settings…",
-						onClickFunc: openSettings,
-					},
-					{
-						id: "flight-filter-menu",
-						title: "Filter Flights…",
-						onClickFunc: openFilter,
-					},
 					quitMenuItemHelper(appId, appName, appIcon),
 				],
 			},
 			{
-				id: "view",
+				id: appId + "_edit",
+				title: "Edit",
+				menuChildren: [
+					{
+						id: appId + "_flight-settings-menu",
+						title: "Settings…",
+						onClickFunc: openSettings,
+					},
+				],
+			},
+			{
+				id: appId + "_filter",
+				title: "Filter",
+				menuChildren: [
+					{
+						id: appId + "_flight-filter-menu",
+						title: "Filter Flights…",
+						onClickFunc: openFilter,
+					},
+				],
+			},
+			{
+				id: appId + "_view",
 				title: "View",
-				menuChildren: [{
-					id: "map_style",
-					title: "Map Style",
-					menuChildren: [
-						{
-							id: "flight-style-classic-menu",
-							title: `${settings.mapStyle === "classic" ? "✓ " : ""}Classic Map`,
-							onClickFunc: () => setMapStyle("classic"),
-						},
-						{
-							id: "flight-style-radar-menu",
-							title: `${settings.mapStyle === "radar" ? "✓ " : ""}Radar`,
-							onClickFunc: () => setMapStyle("radar"),
-						},
-						{
-							id: "flight-style-satellite-menu",
-							title: `${settings.mapStyle === "satellite" ? "✓ " : ""}Satellite`,
-							onClickFunc: () => setMapStyle("satellite"),
-						},
-					],
-				},
-				{
-					// ClassicyMenuItem has no checked prop — the ✓ lives in the title.
-					id: "flight-darkmap-menu",
-					title: `${settings.darkMap ? "✓ " : ""}Dark Map`,
-					onClickFunc: toggleDarkMap,
-				},
-				{
-					id: "flight-radar-menu",
-					title: `${settings.radarSweep ? "✓ " : ""}Radar Sweep`,
-					onClickFunc: toggleRadarSweep,
-				},
-				{
-					id: "flight-loop-menu",
-					title: `${loopEnabled ? "✓ " : ""}Loop Playback`,
-					onClickFunc: toggleLoop,
-				},
+				menuChildren: [
+					{
+						id: appId + "_flight-layers-menu",
+						title: "Layers…",
+						onClickFunc: openLayers,
+					},
+					{
+						id: appId + "_map_style",
+						title: "Map Style",
+						menuChildren: [
+							{
+								id: appId + "_flight-style-classic-menu",
+								title: `${settings.mapStyle === "classic" ? "✓ " : ""}Classic Map`,
+								onClickFunc: () => setMapStyle("classic"),
+							},
+							{
+								id: appId + "_flight-style-radar-menu",
+								title: `${settings.mapStyle === "radar" ? "✓ " : ""}Radar`,
+								onClickFunc: () => setMapStyle("radar"),
+							},
+							{
+								id: appId + "_flight-style-satellite-menu",
+								title: `${settings.mapStyle === "satellite" ? "✓ " : ""}Satellite`,
+								onClickFunc: () => setMapStyle("satellite"),
+							},
+						],
+					},
+					{
+						// ClassicyMenuItem has no checked prop — the ✓ lives in the title.
+						id: appId + "_flight-darkmap-menu",
+						title: `${settings.darkMap ? "✓ " : ""}Dark Map`,
+						onClickFunc: toggleDarkMap,
+					},
+					{
+						id: appId + "_flight-radar-menu",
+						title: `${settings.radarSweep ? "✓ " : ""}Radar Sweep`,
+						onClickFunc: toggleRadarSweep,
+					},
+					{
+						id: appId + "_flight-loop-menu",
+						title: `${loopEnabled ? "✓ " : ""}Loop Playback`,
+						onClickFunc: toggleLoop,
+					},
 				],
 			},
 		],
-		[appIcon, settings.mapStyle, settings.darkMap, settings.radarSweep, openSettings, openFilter, setMapStyle, toggleDarkMap, toggleRadarSweep, loopEnabled, toggleLoop],
+		[appIcon, settings.mapStyle, settings.darkMap, settings.radarSweep, openSettings, openFilter, openLayers, setMapStyle, toggleDarkMap, toggleRadarSweep, loopEnabled, toggleLoop],
 	);
 
 	// Loop on/off ↔ provider history request. The provider re-issues on
@@ -602,8 +714,26 @@ export const FlightTracker: FC = () => {
 		[selected],
 	);
 	const { track, loading, error } = useFlightTrack(selection);
-	// Altitude profile → smooth 3D track tube for the selected flight.
-	const { profile } = useAltitudeProfile(selection);
+	// Altitude profile → smooth 3D track tube for the selected flight, and (for
+	// notable/estimated flights) the drawn track itself. Keyed to the SELECTED
+	// leg's flight_date so a two-row flight (AF1: 9/10 and 9/11) can't be served
+	// the other day's route — see useAltitudeProfile's doc comment.
+	const { profile } = useAltitudeProfile(selection, track?.flight_date ?? null);
+
+	// Every OTHER multi-selected flight (issue #326): the active one above
+	// keeps its richer phase-colored/profile-driven track, these get a plain
+	// track each so a shift-click or area-select multi-selection shows every
+	// flight's path, not just the one shown in the detail pane's dropdown.
+	// Memoized the same way `selection` is — multiSelected/activeFlightIdx
+	// only get fresh references on a genuine selection change.
+	const secondarySelections: TrackSelection[] = useMemo(
+		() =>
+			multiSelected
+				.filter((_, i) => i !== activeFlightIdx)
+				.map((p) => ({ flight: p.flight, startDate: p.start_date })),
+		[multiSelected, activeFlightIdx],
+	);
+	const secondaryTracks = useMultiFlightTracks(secondarySelections);
 
 	// Live fix for the selected flight (`selected` is a click-time snapshot; the
 	// streamed set updates each minute-bucket). Heading is the bearing of the
@@ -675,15 +805,36 @@ export const FlightTracker: FC = () => {
 		setActiveFlightIdx((i) => Math.max(0, Math.min(i, multiSelected.length - 1)));
 	}, [multiSelected]);
 
+	// Clear a selected POI once its layer is toggled off (mirrors the flight-prune
+	// effect): the pin vanishes from the map, so the detail pane must not keep
+	// showing a now-hidden airport.
+	useEffect(() => {
+		const { clustered, plain } = splitPoisForRender(enabledPois, poiLayers);
+		const rendered = new Set([...clustered, ...plain].map((p) => p.id));
+		setSelectedPoi((cur) => (cur && !rendered.has(cur.id) ? null : cur));
+	}, [enabledPois, poiLayers]);
+
 	// Selects the clicked flight if it's currently in the airborne set; does not
 	// clear on seek itself — the effect above handles that.
 	const onSelectFlight = (flight: string) => {
+		setSelectedPoi(null);
 		const hit = flightPositions.find((p) => p.flight === flight) ?? null;
 		if (hit) {
 			setMultiSelected([hit]);
 			setActiveFlightIdx(0);
 		}
 	};
+
+	// Shift-click toggles the clicked flight in/out of the multi-selection
+	// (issue #310), reusing the same list the marquee tools populate.
+	const onToggleFlight = useCallback((flight: string) => {
+		const hit = flightPositions.find((p) => p.flight === flight);
+		if (!hit) return;
+		setSelectedPoi(null);
+		const { list, activeIdx } = toggleFlightSelection(multiSelected, hit, activeFlightIdx);
+		setMultiSelected(list);
+		setActiveFlightIdx(activeIdx);
+	}, [flightPositions, multiSelected, activeFlightIdx]);
 
 	// Publish the selected callsign (playlist locked-focus reconciliation reads it).
 	const publishedFocused = appData?.focusedFlight as string | null | undefined;
@@ -709,18 +860,104 @@ export const FlightTracker: FC = () => {
 		lastCommandSeqRef.current = command.seq;
 		setMultiSelected([hit]);
 		setActiveFlightIdx(0);
+		setSelectedPoi(null);
 	}, [command, flightPositions]);
 
-	const trackGeoJSON: Feature | null = track?.geometry
-		? { type: "Feature", geometry: track.geometry, properties: {} }
-		: null;
+	// Per-minute segments are used when the track needs to say something the
+	// single decimated line can't: phase colors (notables) or a provenance
+	// change (a spliced radar/estimated flight, #263).
+	const hasEstimated = useMemo(
+		() => !!profile?.some((p) => isEstimated(p.source)),
+		[profile],
+	);
+
+	// 3D counterpart of secondaryFeatures below: every OTHER multi-selected
+	// flight with a loaded altitude profile, for FlightMap's secondary tubes.
+	const secondaryTrackProfiles = useMemo(
+		() =>
+			[...secondaryTracks.values()]
+				.filter((t): t is SecondaryTrack & { profile: NonNullable<SecondaryTrack["profile"]> } =>
+					!!t.profile,
+				)
+				.map((t) => ({ flight: t.flight, profile: t.profile })),
+		[secondaryTracks],
+	);
+
+	// One plain feature per OTHER multi-selected flight, colored distinctly
+	// from the active track (issue #326) — appended to whichever branch below
+	// produces the active flight's own feature(s).
+	const secondaryFeatures = useMemo<GeoJSON.Feature[]>(
+		() =>
+			[...secondaryTracks.values()]
+				.filter((t): t is SecondaryTrack & { geometry: NonNullable<SecondaryTrack["geometry"]> } =>
+					!!t.geometry,
+				)
+				.map((t) => ({
+					type: "Feature" as const,
+					geometry: t.geometry,
+					properties: { color: SECONDARY_TRACK_COLOR },
+				})),
+		[secondaryTracks],
+	);
+
+	const trackGeoJSON: FeatureCollection | null = useMemo(() => {
+		if (!track?.geometry) {
+			return secondaryFeatures.length
+				? { type: "FeatureCollection", features: secondaryFeatures }
+				: null;
+		}
+		if (
+			selection && profile && profile.length >= 2
+			&& (isNotable(selection.flight) || hasEstimated)
+		) {
+			const features = buildTrackSegments(profile, phasePaletteFor(selection.flight));
+			if (features.length) {
+				return { type: "FeatureCollection", features: [...features, ...secondaryFeatures] };
+			}
+		}
+		// non-notable (or no profile yet): the decimated track as one plain feature.
+		return {
+			type: "FeatureCollection",
+			features: [
+				{ type: "Feature", geometry: track.geometry, properties: {} },
+				...secondaryFeatures,
+			],
+		};
+	}, [track?.geometry, selection, profile, hasEstimated, secondaryFeatures]);
+
+	// Provenance legend: only meaningful once a track actually mixes radar and
+	// estimated stretches.
+	const trackSources = useMemo<string[]>(
+		() => (hasEstimated && profile ? orderedTrackSources(profile) : []),
+		[hasEstimated, profile],
+	);
+
+	// Phase legend (issue #310): notable flights and AF1 get colored phase
+	// segments (AF1's include the parked-gray "ground" phase), so both get a
+	// legend. Deliberately NOT every hasEstimated flight: those are segmented by
+	// provenance, which the trackSources legend above already explains.
+	// Ordered-unique so it mirrors the drawn segments.
+	const trackPhases = useMemo<string[]>(() => {
+		const phaseColored = !!selection
+			&& (isNotable(selection.flight) || isPresidential(selection.flight));
+		if (!(track?.geometry && phaseColored && profile && profile.length >= 2)) {
+			return [];
+		}
+		return orderedTrackPhases(profile);
+	}, [track?.geometry, selection, profile]);
 
 	// A radar-scope style is inherently dark regardless of the Dark Map toggle
 	// (see effectiveTone) — pin-color buckets follow this, not settings.darkMap.
 	const tone = effectiveTone(settings.mapStyle, settings.darkMap);
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="flight-map">
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={appIcon}
+			defaultWindow="flight-map"
+			desktopIconBalloonHelp={manifestDescription(appId)}
+		>
 			{showSettings && (
 				<ClassicyWindow
 					id="flight-settings"
@@ -822,6 +1059,24 @@ export const FlightTracker: FC = () => {
 							crayons={MAC_OS_8_CRAYONS}
 							onChangeFunc={(color: number) =>
 								setForm((f) => ({ ...f, observerPinColorDark: color }))
+							}
+						/>
+						<ClassicyColorPicker
+							id="flight_settings_hero_color_light"
+							labelTitle="Landmark buildings (light map)"
+							value={form.buildingHeroColorLight}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, buildingHeroColorLight: color }))
+							}
+						/>
+						<ClassicyColorPicker
+							id="flight_settings_hero_color_dark"
+							labelTitle="Landmark buildings (dark map)"
+							value={form.buildingHeroColorDark}
+							crayons={MAC_OS_8_CRAYONS}
+							onChangeFunc={(color: number) =>
+								setForm((f) => ({ ...f, buildingHeroColorDark: color }))
 							}
 						/>
 						<ClassicySlider
@@ -978,6 +1233,25 @@ export const FlightTracker: FC = () => {
 					</div>
 				</ClassicyWindow>
 			)}
+			{showLayers && (
+				<ClassicyWindow
+					id="flight-layers"
+					title="Layers"
+					icon={appIcon}
+					appId={appId}
+					closable={true}
+					resizable={false}
+					zoomable={false}
+					scrollable={true}
+					collapsable={false}
+					initialSize={[280, 0]}
+					initialPosition={[200, 160]}
+					appMenu={appMenu}
+					onCloseFunc={() => setShowLayers(false)}
+				>
+					<FlightLayersPanel pois={allPois} settings={poiSettings} onChange={setPoiSettings} />
+				</ClassicyWindow>
+			)}
 			<ClassicyWindow
 				id="flight-map"
 				title="Flight Tracker"
@@ -992,33 +1266,36 @@ export const FlightTracker: FC = () => {
 				dimContents={false}
 			>
 				<div className={styles.root}>
-					<MapControls
-						globe={settings.globe}
-						threeD={settings.threeD}
-						terrain={settings.terrain}
-						cluster={settings.cluster}
-						selectMode={selectMode}
-						onZoomIn={() => mapApi.current?.zoomIn()}
-						onZoomOut={() => mapApi.current?.zoomOut()}
-						onToggleGlobe={toggleGlobe}
-						onToggleThreeD={toggleThreeD}
-						onToggleTerrain={toggleTerrain}
-						onToggleCluster={toggleCluster}
-						onSetSelectMode={setSelectMode}
-						mapStyle={settings.mapStyle}
-						darkMap={settings.darkMap}
-						onPinpoint={(center, zoom) => mapApi.current?.flyTo(center, zoom)}
-						onSetMapStyle={setMapStyle}
-						onToggleDarkMap={toggleDarkMap}
-						filterOn={!!visibleFlights}
-						onOpenFilter={openFilter}
-						cameraMode={settings.cameraMode}
-						cameraFollow={cameraFollow}
-						canFollow={canFollow}
-						onSetCameraMode={setCameraMode}
-						onToggleCameraFollow={toggleCameraFollow}
-					/>
-					<div className={styles.body}>
+					<div className={styles.mainColumn}>
+						<MapControls
+							globe={settings.globe}
+							threeD={settings.threeD}
+							terrain={settings.terrain}
+							cluster={settings.cluster}
+							selectMode={selectMode}
+							onZoomIn={() => mapApi.current?.zoomIn()}
+							onZoomOut={() => mapApi.current?.zoomOut()}
+							onToggleGlobe={toggleGlobe}
+							onToggleThreeD={toggleThreeD}
+							onToggleTerrain={toggleTerrain}
+							onToggleCluster={toggleCluster}
+							anonTraffic={settings.anonTraffic}
+							onToggleAnonTraffic={toggleAnonTraffic}
+							onSetSelectMode={setSelectMode}
+							mapStyle={settings.mapStyle}
+							darkMap={settings.darkMap}
+							onPinpoint={(center, zoom) => mapApi.current?.flyTo(center, zoom)}
+							onSetMapStyle={setMapStyle}
+							onToggleDarkMap={toggleDarkMap}
+							filterOn={!!visibleFlights}
+							onOpenFilter={openFilter}
+							onClearFilter={clearFilter}
+							cameraMode={settings.cameraMode}
+							cameraFollow={cameraFollow}
+							canFollow={canFollow}
+							onSetCameraMode={setCameraMode}
+							onToggleCameraFollow={toggleCameraFollow}
+						/>
 						<div className={styles.map}>
 							<FlightMap
 								ref={mapApi}
@@ -1029,6 +1306,8 @@ export const FlightTracker: FC = () => {
 								basemapUrls={BASEMAP_URLS}
 								trackGeoJSON={trackGeoJSON}
 								trackProfile={profile}
+								trackPalette={phasePaletteFor(selection?.flight)}
+								secondaryTrackProfiles={secondaryTrackProfiles}
 								nowMs={nowMs}
 								playing={!paused}
 								mapStyle={settings.mapStyle}
@@ -1046,6 +1325,14 @@ export const FlightTracker: FC = () => {
 										? settings.observerPinColorDark
 										: settings.observerPinColorLight,
 								)}
+								anonPinColor={intToHex(
+									desaturate(
+										tone === "dark" ? settings.pinColorDark : settings.pinColorLight,
+										ANON_DESATURATION,
+									),
+								)}
+								buildingHeroColorLight={settings.buildingHeroColorLight}
+								buildingHeroColorDark={settings.buildingHeroColorDark}
 								radarSweep={settings.radarSweep}
 								trailMultiplier={settings.trailMultiplier}
 								globe={settings.globe}
@@ -1057,139 +1344,148 @@ export const FlightTracker: FC = () => {
 								loopClock={loopClock}
 								replayBuffer={replayBufferRef.current}
 								onSelectFlight={onSelectFlight}
+								onToggleFlight={onToggleFlight}
 								selectMode={selectMode}
 								onAreaSelect={onAreaSelect}
 								onPitchedChange={onPitchedChange}
 								aircraftFamilyOf={aircraftFamilyOf}
 								followFlight={followFlight}
 								cameraMode={settings.cameraMode}
-								onClearSelection={() => setMultiSelected([])}
+								onClearSelection={() => { setMultiSelected([]); setSelectedPoi(null); }}
+								pois={enabledPois}
+								poiLayers={poiLayers}
+								selectedPoiId={selectedPoi?.id ?? null}
+								onSelectPoi={onSelectPoi}
 							/>
 						</div>
-						<div className={styles.filterPanel}>
-							<FlightDetailPanel
-								selected={selected}
-								track={track}
-								loading={loading}
-								error={error}
-								nowMs={nowMs}
-								headingDeg={headingDeg}
-								tzOffset={tzOffset}
-								livePos={livePos}
-								estimates={estimates}
-								selectionOptions={multiSelected}
-								onPickFlight={(flight) => {
-									const i = multiSelected.findIndex((p) => p.flight === flight);
-									if (i >= 0) setActiveFlightIdx(i);
-								}}
-								onSaveAsFilter={saveSelectionAsFilter}
-							/>
+						{loopEnabled && (
+							<div className={styles.loopStrip}>
+								<ClassicyButton
+									onClickFunc={togglePause}
+									aria-label={loopClock.paused ? "Play loop" : "Pause loop"}
+								>
+									{loopClock.paused ? "▶" : "⏸"}
+								</ClassicyButton>
+								<ClassicyPopUpMenu
+									id="flight_loop_window"
+									label="Time"
+									labelPosition="left"
+									labelSize="small"
+									size="small"
+									options={[
+										{ value: "30", label: "30 min" },
+										{ value: "90", label: "90 min" },
+									]}
+									selected={String(loopMinutes)}
+									onChangeFunc={(e) =>
+										desktopEventDispatch(
+											flightTrackerSetLoopSettings({
+												...loopSettings,
+												windowMinutes: Number(e.target.value) as LoopWindowMinutes,
+											}),
+										)
+									}
+								/>
+								<ClassicyPopUpMenu
+									id="flight_loop_speed"
+									label="Speed"
+									labelPosition="left"
+									labelSize="small"
+									size="small"
+
+									options={LOOP_SPEEDS.map((s) => ({
+										value: String(s),
+										label: SPEED_LABELS[s],
+									}))}
+									selected={String(loopClock.speed)}
+									onChangeFunc={(e) =>
+										setLoopSpeed(Number(e.target.value) as LoopSpeed)
+									}
+								/>
+								<div className={styles.loopSlider}>
+									<ClassicySlider
+										id="flight_loop_scrub"
+										value={Math.round(
+											Math.min(
+												Math.max((playheadMs - (nowMs - windowMs)) / 1000, 0),
+												windowMs / 1000,
+											),
+										)}
+										valueLabel={formatPlayhead(playheadMs, tzOffset)}
+										min={0}
+										max={windowMs / 1000}
+										step={1}
+										ariaLabel="Loop playhead"
+										onChangeFunc={(e) => scrubTo(Number(e.target.value), true)}
+										onCommitFunc={(v: number) => scrubTo(v, false)}
+									/>
+								</div>
+							</div>
+						)}
+						<div
+							className={`${styles.statusBar}${groundStop === "active" ? ` ${styles.statusBarRed}` : ""
+								}`}
+						>
+							<span className={styles.statusBarCell}>
+								{/* On the red bar the usual green/red dot would vanish; use
+								    white-on-red equivalents instead. */}
+								<span
+									style={{
+										color:
+											groundStop === "active"
+												? connected
+													? "#7fff7f"
+													: "#fff"
+												: connected
+													? "green"
+													: "red",
+									}}
+								>
+									&bull;
+								</span>{" "}
+								{connected ? (loopEnabled ? "Live (Loop)" : "Live") : "Disconnected"}
+							</span>
+							<span className={`${styles.statusBarCell} ${styles.statusBarCenter}`}>
+								{groundStop !== "none" && (
+									<span role="alert">
+										{groundStop === "active"
+											? "FAA GROUND STOP IN EFFECT"
+											: "FAA ground stop lifted — airspace reopened"}
+									</span>
+								)}
+							</span>
+							<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
+								{visibleFlights
+									? `${filteredAloft} of ${flightPositions.length - anonAloft - groundedCount} aircraft aloft · filtered${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`
+									: `${flightPositions.length - anonAloft - groundedCount} aircraft aloft${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`}
+							</span>
 						</div>
 					</div>
-					{loopEnabled && (
-						<div className={styles.loopStrip}>
-							<ClassicyButton
-								onClickFunc={togglePause}
-								aria-label={loopClock.paused ? "Play loop" : "Pause loop"}
-							>
-								{loopClock.paused ? "▶" : "⏸"}
-							</ClassicyButton>
-							<ClassicyPopUpMenu
-								id="flight_loop_window"
-								label="Time"
-								labelPosition="left"
-								labelSize="small"
-								size="small"
-								options={[
-									{ value: "30", label: "30 min" },
-									{ value: "90", label: "90 min" },
-								]}
-								selected={String(loopMinutes)}
-								onChangeFunc={(e) =>
-									desktopEventDispatch(
-										flightTrackerSetLoopSettings({
-											...loopSettings,
-											windowMinutes: Number(e.target.value) as LoopWindowMinutes,
-										}),
-									)
-								}
-							/>
-							<ClassicyPopUpMenu
-								id="flight_loop_speed"
-								label="Speed"
-								labelPosition="left"
-								labelSize="small"
-								size="small"
-
-								options={LOOP_SPEEDS.map((s) => ({
-									value: String(s),
-									label: SPEED_LABELS[s],
-								}))}
-								selected={String(loopClock.speed)}
-								onChangeFunc={(e) =>
-									setLoopSpeed(Number(e.target.value) as LoopSpeed)
-								}
-							/>
-							<div className={styles.loopSlider}>
-								<ClassicySlider
-									id="flight_loop_scrub"
-									value={Math.round(
-										Math.min(
-											Math.max((playheadMs - (nowMs - windowMs)) / 1000, 0),
-											windowMs / 1000,
-										),
-									)}
-									valueLabel={formatPlayhead(playheadMs, tzOffset)}
-									min={0}
-									max={windowMs / 1000}
-									step={1}
-									ariaLabel="Loop playhead"
-									onChangeFunc={(e) => scrubTo(Number(e.target.value), true)}
-									onCommitFunc={(v: number) => scrubTo(v, false)}
-								/>
-							</div>
-						</div>
-					)}
-					<div
-						className={`${styles.statusBar}${groundStop === "active" ? ` ${styles.statusBarRed}` : ""
-							}`}
-					>
-						<span className={styles.statusBarCell}>
-							{/* On the red bar the usual green/red dot would vanish; use
-							    white-on-red equivalents instead. */}
-							<span
-								style={{
-									color:
-										groundStop === "active"
-											? connected
-												? "#7fff7f"
-												: "#fff"
-											: connected
-												? "green"
-												: "red",
-								}}
-							>
-								&bull;
-							</span>{" "}
-							{connected ? (loopEnabled ? "Live (Loop)" : "Live") : "Disconnected"}
-						</span>
-						<span className={`${styles.statusBarCell} ${styles.statusBarCenter}`}>
-							{groundStop !== "none" && (
-								<span role="alert">
-									{groundStop === "active"
-										? "FAA GROUND STOP IN EFFECT"
-										: "FAA ground stop lifted — airspace reopened"}
-								</span>
-							)}
-						</span>
-						<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
-							{visibleFlights
-								? `${filteredPositions.length} of ${flightPositions.length} aircraft aloft · filtered`
-								: `${flightPositions.length} aircraft aloft`}
-						</span>
+					<div className={styles.filterPanel}>
+						<FlightDetailPanel
+							selected={selected}
+							track={track}
+							loading={loading}
+							error={error}
+							nowMs={nowMs}
+							headingDeg={headingDeg}
+							tzOffset={tzOffset}
+							livePos={livePos}
+							estimates={estimates}
+							selectionOptions={multiSelected}
+							poi={selectedPoi}
+							phases={trackPhases}
+							sources={trackSources}
+							onPickFlight={(flight) => {
+								const i = multiSelected.findIndex((p) => p.flight === flight);
+								if (i >= 0) setActiveFlightIdx(i);
+							}}
+							onSaveAsFilter={saveSelectionAsFilter}
+						/>
 					</div>
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

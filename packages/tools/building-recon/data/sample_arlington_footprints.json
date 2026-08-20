@@ -1,0 +1,18 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "Est_Building_Height_ft": "77.4",
+        "Est_Ground_Elevation_ft": "32.9",
+        "ELEVATION_ft": "110.3",
+        "TYPE": "Building"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-77.0563, 38.8705], [-77.0563, 38.8715], [-77.0553, 38.8715], [-77.0553, 38.8705], [-77.0563, 38.8705]]]
+      }
+    }
+  ]
+}

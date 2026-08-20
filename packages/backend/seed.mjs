@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { CHAT_COLLECTIONS, CHAT_INDEX_SQL } from "./chat-collections.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -295,8 +296,8 @@ async function createCollections(token) {
   // tm_bookmarks — Time Machine "jump to a moment" bookmarks. Same media_items
   // shape as alert_items (a title/full_title + a start_date the desktop clock
   // seeks to). Read directly over Directus REST by the frontend Time Machine app
-  // — not streamed — so createCollections also grants the public policy read
-  // access to it (ensurePublicBookmarkAccess). Ships empty; rows are authored in
+  // — not streamed — so the public policy is granted read access to it
+  // (ensurePublicReadAccess). Ships empty; rows are authored in
   // the Directus admin UI.
   if (!names.includes("tm_bookmarks")) {
     console.log("Creating collection: tm_bookmarks");
@@ -313,6 +314,18 @@ async function createCollections(token) {
     console.log("Collection tm_bookmarks already exists, skipping.");
   }
   await ensureNumericFields("tm_bookmarks");
+
+  // ---- IM Buddies (see plans/2026-07-24-im-buddies-chatbot-design.md) ----
+  // Definitions live in chat-collections.mjs (shared with apply-chat-schema.mjs)
+  // so the two never drift apart.
+  for (const spec of CHAT_COLLECTIONS) {
+    if (!names.includes(spec.collection)) {
+      console.log(`Creating collection: ${spec.collection}`);
+      await api(token, "POST", "/collections", spec);
+    } else {
+      console.log(`Collection ${spec.collection} already exists, skipping.`);
+    }
+  }
 
   // pager_items — pager traffic lives in its own table (not media_items). Every
   // pager item is "instant": a start_date with no duration/end_date. provider is
@@ -408,34 +421,89 @@ async function createCollections(token) {
   }
 }
 
-// The frontend Time Machine app fetches tm_bookmarks anonymously (no token), so
-// the Directus public policy needs read access to it. Directus Community only
-// supports full (all-or-nothing) access rules — no field/filter restrictions —
-// so this grants read on all fields, which is fine for non-sensitive event
-// bookmarks. Idempotent: skips if the grant already exists.
-async function ensurePublicBookmarkAccess(token) {
+// Collections the frontend reads anonymously (no token) over Directus REST, so
+// the Directus public policy needs read access to them:
+//
+//   tm_bookmarks  — the Time Machine app's jump-to bookmarks. All fields
+//                   (non-sensitive event bookmarks), no filter.
+//   mp3_items / news_items / pager_items / tv_channels — the HyperCard stack
+//                   embeds (packages/frontend/src/Applications/HyperCard/
+//                   extensions/directusCollections.ts) fetch one row per embed;
+//                   the Playlist Editor's News browsing also reads news_items
+//                   (directusVolume.ts filters/groups by `source`, which is why
+//                   `source` is in that field list — a filter field must be
+//                   readable or the query 403s). Fields are explicit, never
+//                   ["*"] (the PAGES_PUBLIC_FIELDS precedent in
+//                   pages-collections.mjs), and each grant is filtered to
+//                   approved = 1 so unapproved rows stay invisible over REST
+//                   just as over the streamer.
+//
+// Kept in sync by hand with apply-hypercard-public-perms.mjs — the standalone,
+// drift-detecting version of these grants for already-seeded installs
+// (Dockerfile.seed bakes only seed.mjs, so the list can't live in a shared
+// module). Idempotent: skips any grant that already exists; converging a
+// wrong/narrowed grant is that script's job, not this one's.
+const APPROVED_FILTER = { approved: { _eq: 1 } };
+
+const PUBLIC_READ_GRANTS = [
+  { collection: "tm_bookmarks", fields: ["*"], permissions: null },
+  {
+    // Character-for-character the same list as apply-hypercard-public-perms.mjs's
+    // mp3_items grant — see the comment there for what each group of fields is
+    // for, and for why `parties`, `tags_curated` and `derived_at` are absent.
+    collection: "mp3_items",
+    fields: [
+      "id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles", "image", "peaks",
+      // Kept in step with apply-hypercard-public-perms.mjs — see the note there
+      // on why `tags` stays granted.
+      "tags",
+      "subject", "link", "tier", "confidence", "evidence", "participants", "mentions", "provenance",
+    ],
+    permissions: APPROVED_FILTER,
+  },
+  {
+    collection: "news_items",
+    fields: ["id", "title", "full_title", "content", "start_date", "image", "image_caption", "url", "format", "source"],
+    permissions: APPROVED_FILTER,
+  },
+  {
+    collection: "pager_items",
+    fields: ["id", "start_date", "provider", "recipient_id", "id_type", "channel", "mode", "message"],
+    permissions: APPROVED_FILTER,
+  },
+  {
+    collection: "tv_channels",
+    fields: ["id", "title", "full_title", "url", "source", "start_date", "end_date", "calc_duration", "timezone", "subtitles"],
+    permissions: APPROVED_FILTER,
+  },
+];
+
+async function ensurePublicReadAccess(token) {
   const policies = await api(token, "GET", "/policies?fields=id,name&limit=-1");
   const publicPolicy = policies.data.find((p) => p.name === "$t:public_label");
   if (!publicPolicy) {
-    console.warn("Public policy not found — skipping tm_bookmarks public read grant.");
+    console.warn("Public policy not found — skipping public read grants.");
     return;
   }
   const existing = await api(
     token,
     "GET",
-    `/permissions?filter[policy][_eq]=${publicPolicy.id}&filter[collection][_eq]=tm_bookmarks&filter[action][_eq]=read`,
+    `/permissions?filter[policy][_eq]=${publicPolicy.id}&filter[action][_eq]=read&limit=-1`,
   );
-  if (existing.data.length > 0) {
-    console.log("Public read on tm_bookmarks already granted, skipping.");
-    return;
+  for (const grant of PUBLIC_READ_GRANTS) {
+    if (existing.data.some((p) => p.collection === grant.collection)) {
+      console.log(`Public read on ${grant.collection} already granted, skipping.`);
+      continue;
+    }
+    console.log(`Granting public read on ${grant.collection}`);
+    await api(token, "POST", "/permissions", {
+      policy: publicPolicy.id,
+      collection: grant.collection,
+      action: "read",
+      fields: grant.fields,
+      permissions: grant.permissions,
+    });
   }
-  console.log("Granting public read on tm_bookmarks");
-  await api(token, "POST", "/permissions", {
-    policy: publicPolicy.id,
-    collection: "tm_bookmarks",
-    action: "read",
-    fields: ["*"],
-  });
 }
 
 // createStreamerIndexes indexes the per-table time lookups the streamer's init/seek
@@ -455,6 +523,7 @@ function createStreamerIndexes() {
     CREATE INDEX IF NOT EXISTS idx_mp3_items_approved_start   ON mp3_items   (approved, start_date);
     CREATE INDEX IF NOT EXISTS idx_pager_items_approved_start ON pager_items (approved, start_date);
   `);
+  psql(CHAT_INDEX_SQL);
 }
 
 async function createRelations(token) {
@@ -943,7 +1012,7 @@ console.log("Authenticated.");
 
 await createCollections(token);
 await createRelations(token);
-await ensurePublicBookmarkAccess(token);
+await ensurePublicReadAccess(token);
 createStreamerIndexes();
 
 console.log("\n--- TV media items (entries_media.json) ---");

@@ -1,4 +1,5 @@
 from video_grabber.transcribe.srt import (
+    collapse_repetition_loops,
     Cue,
     dedupe_consecutive,
     parse_srt,
@@ -99,3 +100,119 @@ def test_dedupe_consecutive_handles_whitespace_variants():
 
 def test_dedupe_consecutive_empty():
     assert dedupe_consecutive([]) == []
+
+
+def test_parses_hours_beyond_two_digits():
+    """A stitched 9-day channel runs past hour 99, and the hour field grows.
+
+    This was a live data-corruption bug, not a theoretical one. _TIME required
+    exactly two digits and used .search(), so "100:00:05,000" quietly matched the
+    SUBSTRING "00:00:05,000" -- hour 100 read as hour 0. Every cue past hour 99
+    landed exactly 100 hours early, which put 09-13 coverage at 09-09 and fed
+    buddies post-attack content as "what you have just heard on TV" on the
+    morning of 9/11. CNN alone had 114,038 affected timestamps.
+    """
+    cues = parse_srt("1\n100:00:05,000 --> 100:00:09,000\nlater-day line\n")
+    assert len(cues) == 1
+    assert cues[0].start == 360005.0, "hour 100 must not be read as hour 0"
+    assert cues[0].end == 360009.0
+
+
+def test_parses_three_digit_hours_at_the_end_of_a_nine_day_stream():
+    # 9 days is 216 hours; the last cues of a full stitched channel look like this.
+    cues = parse_srt("1\n215:59:58,500 --> 215:59:59,900\nfinal line\n")
+    assert cues[0].start == 777598.5
+    assert cues[0].end == 777599.9
+
+
+def test_round_trips_a_three_digit_hour_through_render():
+    # The writer was never broken -- _fmt's {h:02d} is a MINIMUM width, so it
+    # already emits "100:00:05,000". Only the reader was. Pin both directions so
+    # they cannot drift apart again.
+    original = [Cue(360005.0, 360009.0, "later-day line")]
+    assert parse_srt(render_srt(original)) == original
+
+
+def test_a_cue_never_parses_to_an_end_before_its_start():
+    # The observable symptom in production: a cue spanning the 99->100 hour
+    # boundary parsed as start=359985, end=4, because only the end had three
+    # digits. An end before a start is impossible and must never parse silently.
+    cues = parse_srt("1\n99:59:45,000 --> 100:00:04,000\nspans the boundary\n")
+    assert cues[0].end > cues[0].start
+
+
+def test_strips_music_and_blank_audio_markers():
+    from video_grabber.transcribe.srt import strip_nonspeech_cues
+    cues = [Cue(0, 1, "[Music]"), Cue(1, 2, "Bravo 112"),
+            Cue(2, 3, "[BLANK_AUDIO]"), Cue(3, 4, "♪♪")]
+    assert [c.text for c in strip_nonspeech_cues(cues)] == ["Bravo 112"]
+
+
+def test_keeps_inaudible_markers_because_they_mark_real_speech():
+    # '[unintelligible]' means someone spoke and whisper could not resolve it.
+    # That is information; '[Music]' over an open mic is not.
+    from video_grabber.transcribe.srt import strip_nonspeech_cues
+    cues = [Cue(0, 1, "[unintelligible]"), Cue(1, 2, "Bravo 112")]
+    assert len(strip_nonspeech_cues(cues)) == 2
+
+
+def test_strip_leaves_ordinary_speech_untouched():
+    from video_grabber.transcribe.srt import strip_nonspeech_cues
+    cues = [Cue(0, 1, "American 77, Indy Center")]
+    assert strip_nonspeech_cues(cues) == cues
+
+
+# ---- alternating hallucination loops ----------------------------------------
+#
+# dedupe_consecutive only collapses runs of IDENTICAL neighbours. The NEADS MCC
+# tape produced an A/B/A/B loop 447 cues long — every cue differed from the one
+# before it, so every one survived and inflated the transcript from ~2,177 real
+# words to 4,738.
+
+def _cues(texts):
+    return [Cue(float(i), float(i) + 1, t) for i, t in enumerate(texts)]
+
+
+def test_collapses_an_alternating_two_phrase_loop():
+    cues = _cues(["start"] + ["A", "B"] * 8 + ["end"])
+    got = [c.text for c in collapse_repetition_loops(cues)]
+    assert got == ["start", "A", "B", "end"]
+
+
+def test_collapses_a_single_phrase_loop():
+    cues = _cues(["start"] + ["A"] * 10 + ["end"])
+    assert [c.text for c in collapse_repetition_loops(cues)] == ["start", "A", "end"]
+
+
+def test_collapses_a_three_phrase_cycle():
+    cues = _cues(["A", "B", "C"] * 5)
+    assert [c.text for c in collapse_repetition_loops(cues)] == ["A", "B", "C"]
+
+
+def test_keeps_scattered_repeats_that_are_not_a_loop():
+    # "Okay" recurs all over real ATC audio between genuine content. Only
+    # cycles are artifacts; scattered repetition is speech.
+    texts = ["Okay", "turn left", "Okay", "descend", "Okay", "contact center"]
+    assert [c.text for c in collapse_repetition_loops(_cues(texts))] == texts
+
+
+def test_keeps_a_short_repeat_that_is_not_yet_a_loop():
+    # A readback repeats a phrase twice. Two is not a hallucination loop.
+    texts = ["3743", "3743", "American 77"]
+    assert [c.text for c in collapse_repetition_loops(_cues(texts))] == texts
+
+
+def test_preserves_timing_of_the_surviving_cycle():
+    cues = _cues(["A", "B"] * 6)
+    got = collapse_repetition_loops(cues)
+    assert (got[0].start, got[0].text) == (0.0, "A")
+    assert (got[1].start, got[1].text) == (1.0, "B")
+
+
+def test_empty_input():
+    assert collapse_repetition_loops([]) == []
+
+
+def test_loops_leave_ordinary_speech_untouched():
+    texts = ["American 77, Indy Center", "Roger, 3743", "Contact departure"]
+    assert [c.text for c in collapse_repetition_loops(_cues(texts))] == texts

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { AuthRequiredError, ForbiddenError } from "./authApi";
 import {
+	UsernameTakenError,
 	confirmEmailChange,
 	requestEmailChange,
 	updateProfile,
@@ -80,5 +81,62 @@ describe("confirmEmailChange", () => {
 	it("maps 403 (wrong account) to ForbiddenError", async () => {
 		const f = mockFetch(jsonResponse({ errors: [{ message: "wrong account" }] }, 403));
 		await expect(confirmEmailChange("tok", f)).rejects.toBeInstanceOf(ForbiddenError);
+	});
+});
+
+describe("updateProfile — username conflicts", () => {
+	it("turns a Directus uniqueness error into a UsernameTakenError", async () => {
+		// Directus reports the conflict with a structured code, so the message
+		// can name the field and value rather than showing the raw
+		// 'Value "me" for field "username" in collection "directus_users"...'.
+		const fetchFn = vi.fn(async () =>
+			new Response(
+				JSON.stringify({
+					errors: [
+						{
+							message: 'Value "me" for field "username" in collection "directus_users" has to be unique.',
+							extensions: { code: "RECORD_NOT_UNIQUE", field: "username", value: "me" },
+						},
+					],
+				}),
+				{ status: 400, headers: { "Content-Type": "application/json" } },
+			),
+		);
+
+		await expect(updateProfile({ username: "me" }, fetchFn as unknown as typeof fetch)).rejects.toBeInstanceOf(
+			UsernameTakenError,
+		);
+	});
+
+	it("carries the rejected name so the UI can suggest an alternative", async () => {
+		const fetchFn = vi.fn(async () =>
+			new Response(
+				JSON.stringify({
+					errors: [{ message: "nope", extensions: { code: "RECORD_NOT_UNIQUE", field: "username", value: "me" } }],
+				}),
+				{ status: 400, headers: { "Content-Type": "application/json" } },
+			),
+		);
+
+		await updateProfile({ username: "me" }, fetchFn as unknown as typeof fetch).catch((err: unknown) => {
+			expect((err as UsernameTakenError).username).toBe("me");
+		});
+	});
+
+	it("leaves a uniqueness error on some other field alone", async () => {
+		// Only username conflicts get the friendly treatment; anything else
+		// should surface as its own error rather than being mislabelled.
+		const fetchFn = vi.fn(async () =>
+			new Response(
+				JSON.stringify({
+					errors: [{ message: "email taken", extensions: { code: "RECORD_NOT_UNIQUE", field: "email" } }],
+				}),
+				{ status: 400, headers: { "Content-Type": "application/json" } },
+			),
+		);
+
+		await expect(updateProfile({ first_name: "A" }, fetchFn as unknown as typeof fetch)).rejects.not.toBeInstanceOf(
+			UsernameTakenError,
+		);
 	});
 });

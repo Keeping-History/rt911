@@ -36,15 +36,6 @@
 	white-space: nowrap;
 }
 
-.timeInput {
-	width: 2.5em;
-	font-family: var(--ui-font);
-	font-size: var(--ui-font-size);
-	text-align: center;
-	border: 1px solid var(--color-system-07);
-	padding: 2px 4px;
-}
-
 .ampmSelect {
 	font-family: var(--ui-font);
 	font-size: var(--ui-font-size);
@@ -115,4 +106,77 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.personalRow {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	width: 100%;
+}
+
+.rowActions {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: row;
+	gap: 2px;
+	padding-right: var(--window-padding-size);
+}
+
+.iconButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+
+	&:hover {
+		background-color: var(--color-theme-highlight, var(--color-system-04));
+	}
+
+	img {
+		width: 14px;
+		height: 14px;
+		image-rendering: pixelated;
+	}
+}
+
+.dialog {
+	display: flex;
+	flex-direction: column;
+	padding: var(--window-padding-size);
+	gap: calc(var(--window-padding-size) * 0.75);
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+	background-color: var(--color-system-02);
+}
+
+.dialogField {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.dialogTime {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: calc(var(--window-padding-size) * 0.5);
+}
+
+// The Capture control is a ClassicyBevelButton (bevel chrome comes from
+// classicy); this only sizes the book icon it wraps. `display: block` drops
+// the inline baseline strut, and 19px == one 14px UI text line, so the bevel
+// button ends up exactly as tall as the neighboring "GO" ClassicyButton
+// (whose height is driven by its single text line) — no row-height shift.
+.captureIcon {
+	display: block;
+	width: 19px;
+	height: 19px;
+	image-rendering: pixelated;
+	padding: calc(var(--window-padding-size) *1.5);
 }

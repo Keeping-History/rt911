@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -6,6 +6,7 @@ import {
 	type MediaStreamContextValue,
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { DEFAULT_FLIGHT_MAP_SETTINGS } from "./flightMapSettings";
+import { SECONDARY_TRACK_COLOR } from "./flightMapStyle";
 
 // Mock the map (WebGL) — assert wiring, not rendering.
 const mapProps: Array<Record<string, unknown>> = [];
@@ -14,6 +15,20 @@ vi.mock("./FlightMap", () => ({
 		mapProps.push(props);
 		return <div data-testid="flightmap" />;
 	},
+}));
+
+// One airport POI, matching the shape useMapPois resolves to (see mapPois.ts).
+// Master-on/nothing-disabled is the default FlightPoiSettings, so this single
+// POI should reach FlightMap unfiltered on a default render.
+const AIRPORT_POI = {
+	id: 1, name: "Atlanta", layer: "Major Airports", category: "airport",
+	detailTitle: "Airport Details", lat: 33.6, lon: -84.4,
+	iata: "ATL", icao: "KATL", city: "Atlanta", region: "GA", details: null,
+};
+vi.mock("./useMapPois", () => ({
+	useMapPois: () => [AIRPORT_POI],
+	mapPoisUrl: () => "",
+	resetMapPoisCache: () => {},
 }));
 
 const dispatchMock = vi.hoisted(() => vi.fn());
@@ -59,6 +74,10 @@ vi.mock("classicy", () => ({
 		children?: React.ReactNode;
 		onClickFunc?: () => void;
 	}) => <button onClick={onClickFunc}>{children}</button>,
+	// Tooltip wrapper (MapControls wraps every control in one) → passthrough.
+	ClassicyBalloonHelp: ({ children }: { children?: React.ReactNode }) => (
+		<>{children}</>
+	),
 	ClassicyCheckbox: ({
 		id,
 		label,
@@ -179,6 +198,9 @@ vi.mock("classicy", () => ({
 	registerClassicyIcons: <T,>(icons: T) => icons,
 	quitMenuItemHelper: () => ({}),
 	registerAppEventHandler: () => {},
+	registerApp: () => {},
+	getAppManifest: () => undefined,
+	useClassicyHelpMenu: () => {},
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({
 			System: {
@@ -220,6 +242,8 @@ import { FlightTracker } from "./FlightTracker";
 // the same context plumbing every other app relies on.
 const subscribeFlights = vi.fn();
 const unsubscribeFlights = vi.fn();
+const subscribeFlightsAnon = vi.fn();
+const unsubscribeFlightsAnon = vi.fn();
 
 function makeCtxValue(
 	overrides: Partial<MediaStreamContextValue>,
@@ -229,6 +253,8 @@ function makeCtxValue(
 		pagerItems: [],
 		mp3Items: [],
 		mp3History: [],
+		mp3Meta: {},
+		mp3MetaGeneration: null,
 		newsItems: [],
 		alertItems: [],
 		subscribeAlerts: () => {},
@@ -237,6 +263,9 @@ function makeCtxValue(
 		usenetBodies: {},
 		usenetBodyErrors: {},
 		requestUsenetBody: () => {},
+		newsBodies: {},
+		newsBodyErrors: {},
+		requestNewsBody: () => {},
 		sources: { video: [], audio: [], pager: [], usenet: [] },
 		connected: false,
 		addItems: () => {},
@@ -256,6 +285,8 @@ function makeCtxValue(
 		flightPositions: [],
 		subscribeFlights,
 		unsubscribeFlights,
+		subscribeFlightsAnon,
+		unsubscribeFlightsAnon,
 		flightsHistory: [],
 		flightsHistoryDone: false,
 		flightsSeed: [],
@@ -267,6 +298,19 @@ function makeCtxValue(
 		unsubscribeWeather: vi.fn(),
 		requestWeatherForecast: vi.fn(),
 		clockForced: false,
+		seekInFlight: false,
+		roomCommand: null,
+		chatBuddies: [],
+		chatEnabled: false,
+		chatReason: "not_signed_in",
+		chatMessages: [],
+		chatTypingProfile: null,
+		subscribeChat: vi.fn(),
+		unsubscribeChat: vi.fn(),
+		sendChat: vi.fn(),
+		requestChatHistory: vi.fn(),
+		appendLocalChatMessage: vi.fn(),
+		clearChatData: vi.fn(),
 		...overrides,
 	};
 }
@@ -346,6 +390,18 @@ describe("FlightTracker", () => {
 		for (const w of windowProps) {
 			expect(String(w.icon)).toMatch(/app\.png/);
 		}
+	});
+
+	it("keeps toolbar, status bar, and detail prompt mounted after layout restructure (#310)", () => {
+		renderWithContext({});
+		// Toolbar Filter button, status-bar aircraft count, and the empty detail
+		// prompt must all coexist — proving mainColumn + filterPanel both mounted.
+		// (The ClassicyButton mock in this file drops aria-label, so the
+		// toolbar button's accessible name is its visible text — see the
+		// "Filter…" queries used by the filter-panel tests below.)
+		expect(screen.getByText("Filter…")).toBeTruthy();
+		expect(screen.getByText(/aircraft aloft/i)).toBeTruthy();
+		expect(screen.getByText(/select a flight/i)).toBeTruthy();
 	});
 
 	it("clears the selection when the selected flight leaves the airborne set (e.g. after a seek)", () => {
@@ -489,7 +545,7 @@ describe("FlightTracker", () => {
 
 	it("commits Settings edits on Save as a single dispatch", () => {
 		renderWithContext({});
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.click(screen.getByTestId("flight_settings_darkmap"));
 		fireEvent.click(screen.getByTestId("flight_settings_pin_color_light")); // mock → 0x0000ff
 		fireEvent.click(screen.getByTestId("flight_settings_pin_color_dark")); // mock → 0x0000ff
@@ -511,7 +567,7 @@ describe("FlightTracker", () => {
 
 	it("Settings window map-style radio round-trips through Save", () => {
 		renderWithContext({});
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.click(screen.getByLabelText("Radar"));
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
@@ -534,7 +590,7 @@ describe("FlightTracker", () => {
 	it("passes radarSweep to the map and commits the Settings checkbox on Save", () => {
 		renderWithContext({});
 		expect(mapProps[mapProps.length - 1].radarSweep).toBe(true);
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.click(screen.getByTestId("flight_settings_radar")); // on → off
 		fireEvent.click(screen.getByText("Save"));
 		expect(dispatchMock).toHaveBeenCalledWith({
@@ -545,7 +601,7 @@ describe("FlightTracker", () => {
 
 	it("commits the trail-length slider on Save", () => {
 		renderWithContext({});
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.change(screen.getByTestId("flight_settings_trail_multiplier"), {
 			target: { value: "3.5" },
 		});
@@ -558,7 +614,7 @@ describe("FlightTracker", () => {
 
 	it("discards Settings edits on Cancel", () => {
 		renderWithContext({});
-		act(() => menuItem("File", (t) => t.startsWith("Settings"))!.onClickFunc?.());
+		act(() => menuItem("Edit", (t) => t.startsWith("Settings"))!.onClickFunc?.());
 		fireEvent.click(screen.getByTestId("flight_settings_darkmap"));
 		fireEvent.click(screen.getByText("Cancel"));
 		const settingsDispatches = dispatchMock.mock.calls.filter(
@@ -718,9 +774,9 @@ describe("FlightTracker", () => {
 			expect(screen.getByText("Clear")).toBeTruthy();
 		});
 
-		it("File ▸ Filter Flights… opens the filter window", () => {
+		it("Filter ▸ Filter Flights… opens the filter window", () => {
 			renderWithContext({ connected: true });
-			act(() => menuItem("File", (t) => t.startsWith("Filter Flights"))!.onClickFunc?.());
+			act(() => menuItem("Filter", (t) => t.startsWith("Filter Flights"))!.onClickFunc?.());
 			expect(screen.getByTestId("flight_filter_carrier")).toBeTruthy();
 		});
 
@@ -772,6 +828,22 @@ describe("FlightTracker", () => {
 			expect(screen.getByText("Filter…")).toBeTruthy();
 		});
 
+		it("never counts a parked aircraft as filtered-aloft (no '1 of 0')", () => {
+			// AF1 parked at Barksdale: on the map, excluded from the denominator.
+			// Filtering to it alone must read "0 of 1", not "1 of 1" — the
+			// numerator has to share the denominator's aloft semantics.
+			const af1 = {
+				id: 3, flight: "AF1", carrier: "USAF",
+				start_date: "2001-09-11T13:00:00Z", lat: 32.5, lon: -93.66, alt_ft: 166,
+				phase: "ground",
+			};
+			mockAppData.current = { filterSettings: { carrier: "USAF" } };
+			renderWithContext({ flightPositions: [aa11, af1], connected: true });
+			const last = mapProps[mapProps.length - 1];
+			expect((last.positions as { flight: string }[]).map((p) => p.flight)).toEqual(["AF1"]);
+			expect(screen.getByText("0 of 1 aircraft aloft · filtered")).toBeTruthy();
+		});
+
 		it("a manual camera flatten un-persists the 3D toggle (issue #223)", () => {
 			mockAppData.current = { mapSettings: { threeD: true } };
 			renderWithContext({ connected: true });
@@ -815,6 +887,81 @@ describe("FlightTracker", () => {
 			});
 			// The tool disarms after a selection.
 			expect(mapProps[mapProps.length - 1].selectMode).toBe("off");
+		});
+
+		it("a multi-selection (shift-click or area-select) draws every OTHER flight's track too, not just the active one (issue #326)", async () => {
+			const UA175_GEOMETRY = {
+				type: "LineString" as const,
+				coordinates: [[-73, 41], [-72, 42]] as [number, number][],
+			};
+			const UA175_PROFILE = [
+				{ lat: 41, lon: -73, alt_ft: 30000, utc: "2001-09-11T13:00:00.000Z" },
+				{ lat: 42, lon: -72, alt_ft: 31000, utc: "2001-09-11T13:05:00.000Z" },
+			];
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async (url: string) => {
+					const u = String(url);
+					if (u.includes("/items/flight_tracks")) {
+						const flight = new URL(u).searchParams.get("filter[flight][_eq]");
+						if (flight !== "UA175") return { ok: true, json: async () => ({ data: [] }) };
+						return {
+							ok: true,
+							json: async () => ({
+								data: [{
+									flight: "UA175", flight_date: "2001-09-11", origin: null,
+									scheduled_dest: null, landed_at: null, diverted: false,
+									geometry: UA175_GEOMETRY, tail_number: null, aircraft_type: null,
+									details: null, wheels_off_utc: null, wheels_on_utc: null,
+								}],
+							}),
+						};
+					}
+					// flight_positions (altitude profile): only UA175 has data here.
+					const flight = new URL(u).searchParams.get("filter[flight][_eq]");
+					return {
+						ok: true,
+						json: async () => ({ data: flight === "UA175" ? UA175_PROFILE : [] }),
+					};
+				}),
+			);
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+			const onAreaSelect = mapProps[mapProps.length - 1].onAreaSelect as (f: string[]) => void;
+			// AA11 becomes active (index 0, no track data stubbed → no active
+			// feature); UA175 is the OTHER selected flight.
+			act(() => onAreaSelect(["AA11", "UA175"]));
+
+			await waitFor(() => {
+				const secondary = mapProps[mapProps.length - 1].secondaryTrackProfiles as
+					{ flight: string; profile: unknown[] }[];
+				expect(secondary).toEqual([{ flight: "UA175", profile: UA175_PROFILE }]);
+			});
+			const geoJSON = mapProps[mapProps.length - 1].trackGeoJSON as GeoJSON.FeatureCollection;
+			const secondaryFeature = geoJSON.features.find(
+				(f) => f.properties?.color === SECONDARY_TRACK_COLOR,
+			);
+			expect(secondaryFeature?.geometry).toEqual(UA175_GEOMETRY);
+		});
+
+		it("shift-click (onToggleFlight) after a plain click builds a real 2-flight multi-selection (issue #310 integration)", () => {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async () => ({ ok: true, json: async () => ({ data: [] }) })),
+			);
+			renderWithContext({ flightPositions: [aa11, ua175], connected: true });
+
+			const onSelectFlight = mapProps.at(-1)!.onSelectFlight as (f: string) => void;
+			act(() => onSelectFlight("AA11"));
+			// A single selection: the multi-select dropdown is not shown at all.
+			expect(screen.queryByTestId("flight_detail_selection")).toBeNull();
+
+			const onToggleFlight = mapProps.at(-1)!.onToggleFlight as (f: string) => void;
+			act(() => onToggleFlight("UA175"));
+
+			const dd = screen.queryByTestId("flight_detail_selection") as HTMLSelectElement | null;
+			expect(dd).not.toBeNull();
+			const values = [...dd!.options].map((o) => o.value);
+			expect(values).toEqual(["AA11", "UA175"]);
 		});
 
 		it("a persisted flight-list filter hides everything else", () => {
@@ -905,9 +1052,10 @@ describe("FlightTracker", () => {
 			renderWithContext({ flightPositions: [aa11], connected: true });
 			expect(mapProps.at(-1)!.followFlight).toBeNull(); // idle until armed
 			act(() => (mapProps.at(-1)!.onSelectFlight as (f: string) => void)("AA11"));
-			fireEvent.click(screen.getByText("Follow"));
+			fireEvent.click(screen.getByTestId("flight_camera_follow"));
 			expect(mapProps.at(-1)!.followFlight).toBe("AA11");
-			expect(screen.getByText("Following")).toBeTruthy();
+			// The (icon-only) toggle reflects the armed state via its checked flag.
+			expect((screen.getByTestId("flight_camera_follow") as HTMLInputElement).checked).toBe(true);
 			vi.unstubAllGlobals();
 		});
 
@@ -929,9 +1077,253 @@ describe("FlightTracker", () => {
 			renderWithContext({ flightPositions: [dl404], connected: true });
 			act(() => (mapProps.at(-1)!.onSelectFlight as (f: string) => void)("DL404"));
 			// A regular flight isn't one of the five tracked flights: arming stays inert.
-			act(() => fireEvent.click(screen.getByText("Follow")));
+			act(() => fireEvent.click(screen.getByTestId("flight_camera_follow")));
 			expect(mapProps.at(-1)!.followFlight).toBeNull();
 			vi.unstubAllGlobals();
+		});
+
+		it("arms the follow lock onto Air Force One (observer-styled, not notable)", () => {
+			stubFetch();
+			const af1 = {
+				id: 3, flight: "AF1", carrier: "",
+				start_date: "2001-09-11T13:00:00Z", lat: 39, lon: -77, alt_ft: 0,
+			};
+			renderWithContext({ flightPositions: [af1], connected: true });
+			act(() => (mapProps.at(-1)!.onSelectFlight as (f: string) => void)("AF1"));
+			fireEvent.click(screen.getByTestId("flight_camera_follow"));
+			expect(mapProps.at(-1)!.followFlight).toBe("AF1");
+			vi.unstubAllGlobals();
+		});
+	});
+
+	describe("POI wiring (Task 8)", () => {
+		it("passes the enabled POIs to FlightMap by default (master on, nothing disabled)", () => {
+			renderWithContext({});
+			expect((mapProps.at(-1)!.pois as unknown[]).length).toBe(1);
+		});
+
+		it("selecting a POI shows Airport Details, clears flight selection, and reaches FlightMap as selectedPoiId", () => {
+			const aa11 = {
+				id: 1, flight: "AA11", carrier: "AA",
+				start_date: "2001-09-11T13:00:00Z", lat: 40, lon: -74, alt_ft: 30000,
+			};
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
+			);
+			renderWithContext({ flightPositions: [aa11], connected: true });
+
+			// First select a flight, so we can prove the POI selection clears it.
+			const onSelectFlight = mapProps.at(-1)!.onSelectFlight as (flight: string) => void;
+			act(() => onSelectFlight("AA11"));
+			expect(screen.getByText("AA11")).toBeTruthy();
+
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(screen.queryByText("AA11")).toBeNull();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			vi.unstubAllGlobals();
+		});
+
+		it("selecting a flight clears any POI selection", () => {
+			const aa11 = {
+				id: 1, flight: "AA11", carrier: "AA",
+				start_date: "2001-09-11T13:00:00Z", lat: 40, lon: -74, alt_ft: 30000,
+			};
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
+			);
+			renderWithContext({ flightPositions: [aa11], connected: true });
+
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			const onSelectFlight = mapProps.at(-1)!.onSelectFlight as (flight: string) => void;
+			act(() => onSelectFlight("AA11"));
+			expect(screen.getByText("AA11")).toBeTruthy();
+			expect(screen.queryByText("Airport Details")).toBeNull();
+			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
+
+			vi.unstubAllGlobals();
+		});
+
+		it("applying a remote focus command clears any POI selection", () => {
+			const aa11 = {
+				id: 1, flight: "AA11", carrier: "AA",
+				start_date: "2001-09-11T13:00:00Z", lat: 40, lon: -74, alt_ft: 30000,
+			};
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
+			);
+			const { rerender } = renderWithContext({
+				flightPositions: [aa11], connected: true,
+			});
+
+			// Select the airport POI first, as a student browsing the map would.
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			// A teacher pushes a remote focus command for AA11 (playlist-driven,
+			// via classicyFlightRemoteEventHandler in flightTrackerCommands.ts).
+			mockAppData.current = {
+				command: { seq: 1, kind: "focus", callsign: "AA11" },
+			};
+			rerender(
+				<MediaStreamContext.Provider
+					value={makeCtxValue({ flightPositions: [aa11], connected: true })}
+				>
+					<FlightTracker />
+				</MediaStreamContext.Provider>,
+			);
+
+			expect(screen.queryByText("Airport Details")).toBeNull();
+			expect(screen.getByText("AA11")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
+
+			vi.unstubAllGlobals();
+		});
+
+		it("View ▸ Layers… opens the Layers window with FlightLayersPanel's controls", () => {
+			renderWithContext({});
+			const item = menuItem("View", (t) => t.startsWith("Layers"));
+			expect(item).toBeTruthy();
+			act(() => item!.onClickFunc?.());
+			expect(windowProps.some((w) => w.id === "flight-layers")).toBe(true);
+			// FlightLayersPanel renders the master toggle + each distinct layer.
+			expect(screen.getByText("Show POI layers")).toBeTruthy();
+			expect(screen.getByText("Major Airports")).toBeTruthy();
+		});
+
+		it("toggling a layer off in the Layers window dispatches the POI-settings slice (separate from mapSettings)", () => {
+			renderWithContext({});
+			act(() => menuItem("View", (t) => t.startsWith("Layers"))!.onClickFunc?.());
+			fireEvent.click(screen.getByLabelText("Major Airports"));
+			expect(dispatchMock).toHaveBeenCalledWith({
+				type: "ClassicyAppFlightTrackerSetPoiSettings",
+				poiSettings: { enabled: true, disabledLayers: ["Major Airports"], unclusteredLayers: [] },
+			});
+		});
+
+		it("clears a selected POI once its layer is toggled off (phantom-selection fix)", () => {
+			const { rerender } = renderWithContext({});
+
+			// Select the airport POI, as a student browsing the map would.
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			// Master POI switch (or the layer itself) gets disabled in the Layers
+			// window: the pin vanishes from the map, so the stale selection must
+			// clear rather than leaving the detail pane pointed at a hidden airport.
+			mockAppData.current = { poiSettings: { enabled: false, disabledLayers: [] } };
+			act(() => {
+				rerender(
+					<MediaStreamContext.Provider value={makeCtxValue({})}>
+						<FlightTracker />
+					</MediaStreamContext.Provider>,
+				);
+			});
+
+			expect(screen.queryByText("Airport Details")).toBeNull();
+			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
+		});
+
+		it("clears a selected POI when its layer is unclustered and it isn't a Large hub (largest-only filter)", () => {
+			const { rerender } = renderWithContext({});
+
+			// Select the airport POI, as a student browsing the map would. AIRPORT_POI
+			// has details: null (not a Large hub), so it renders fine while its layer
+			// is clustered but is filtered out by unclusteredAirportFilter once that
+			// layer is switched to unclustered.
+			const onSelectPoi = mapProps.at(-1)!.onSelectPoi as (poi: typeof AIRPORT_POI) => void;
+			act(() => onSelectPoi(AIRPORT_POI));
+			expect(screen.getByText("Airport Details")).toBeTruthy();
+			expect(mapProps.at(-1)!.selectedPoiId).toBe(1);
+
+			// Turn clustering off for "Major Airports" in the Layers window. The base
+			// map now applies the unclustered "largest hub only" filter and hides this
+			// non-Large airport — the always-on-top selected overlay must not keep
+			// rendering it, so the stale selection has to clear too. (enabledPois is
+			// unchanged here — only unclusteredLayers moved — so this only clears if
+			// the prune checks the actually-rendered set, not raw enabledPois.)
+			mockAppData.current = {
+				poiSettings: { enabled: true, disabledLayers: [], unclusteredLayers: ["Major Airports"] },
+			};
+			act(() => {
+				rerender(
+					<MediaStreamContext.Provider value={makeCtxValue({})}>
+						<FlightTracker />
+					</MediaStreamContext.Provider>,
+				);
+			});
+
+			expect(screen.queryByText("Airport Details")).toBeNull();
+			expect(mapProps.at(-1)!.selectedPoiId).toBeNull();
+		});
+
+		it("passes poiLayers to FlightMap (one config for the airports layer, clustered by default)", () => {
+			// useMapPois is already mocked to one airport POI (layer "Major Airports").
+			renderWithContext({});
+			const layers = mapProps.at(-1)!.poiLayers as Array<{ layer: string; clustered: boolean }>;
+			expect(layers).toHaveLength(1);
+			expect(layers[0]).toMatchObject({ layer: "Major Airports", clustered: true });
+		});
+	});
+
+	describe("Air Force One (presidential category)", () => {
+		const af1Pos = {
+			id: 7, flight: "AF1", carrier: "USAF",
+			start_date: "2001-09-11T13:00:00Z", lat: 27.4, lon: -82.55, alt_ft: 30,
+			phase: "ground",
+		};
+		const af1Track = {
+			flight: "AF1", flight_date: "2001-09-11", origin: "SRQ",
+			scheduled_dest: "ADW", landed_at: "ADW", diverted: false,
+			geometry: { type: "LineString", coordinates: [[-82.55, 27.4], [-93.66, 32.5]] },
+			tail_number: "SAM 28000", aircraft_type: "Boeing VC-25A", details: null,
+			wheels_off_utc: "2001-09-11T13:54:00Z", wheels_on_utc: "2001-09-11T22:34:00Z",
+		};
+		const af1Profile = [
+			{ lat: 27.4, lon: -82.55, alt_ft: 30, utc: "2001-09-11T13:00:00Z", phase: "ground", source: "estimated" },
+			{ lat: 29.0, lon: -85.0, alt_ft: 39000, utc: "2001-09-11T14:30:00Z", phase: "cruise", source: "radar" },
+		];
+
+		it("renders the phase legend for AF1 — presidential flights get colored phases too", async () => {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async (url: string) => ({
+					ok: true,
+					json: async () => ({
+						data: String(url).includes("flight_tracks")
+							? [af1Track]
+							: String(url).includes("flight_positions")
+								? af1Profile
+								: [],
+					}),
+				})),
+			);
+			renderWithContext({ flightPositions: [af1Pos], connected: true });
+			const onSelectFlight = mapProps.at(-1)!.onSelectFlight as (f: string) => void;
+			act(() => onSelectFlight("AF1"));
+
+			// "On Ground" is the phase legend's label for AF1's parked stretches —
+			// it only renders when trackPhases is non-empty, which was gated on
+			// isNotable (the crashed four) and so excluded AF1 entirely.
+			await waitFor(() => {
+				expect(screen.getByLabelText("Phase colors")).toBeTruthy();
+			});
+			const legend = screen.getByLabelText("Phase colors");
+			expect(legend.textContent).toContain("On Ground");
 		});
 	});
 });

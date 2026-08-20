@@ -26,6 +26,7 @@ $strip-height: calc(5em + 8px);
   inset: 0;
   z-index: 20;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--color-system-03);
   display: flex;
   flex-direction: column;
@@ -167,11 +168,37 @@ $strip-height: calc(5em + 8px);
   flex-direction: row;
 }
 
+// Icon-only control buttons (MultiView / play-pause / mute / captions).
+// The height is explicit because these icons are not a uniform set: cc.png is
+// EPG badge artwork at 306x230 and would dwarf the control row at its natural
+// size, while multiview.png is a 16x16 glyph. `width: auto` keeps each one's
+// own aspect ratio instead of squashing the wide ones to a square.
+.tvControlIcon {
+  display: block;
+  height: calc(var(--ui-font-size) * 1.15);
+  width: auto;
+  object-fit: contain;
+}
+
 .tvChannelButtons {
   display: flex;
   flex-direction: row;
   justify-content: center;
   margin-top: calc(var(--window-padding-size) * 0.5);
+}
+
+// Each control button is wrapped in a balloon-help anchor, which ships as
+// display:inline-block — as a flex child that sits on the text baseline and
+// stretches, knocking the buttons out of alignment in these rows. Same fix as
+// FlightTracker.module.scss: size the wrapper to its content so it's
+// layout-neutral and the buttons lay out exactly as they did unwrapped.
+.tvControlButtons,
+.tvChannelButtons {
+  :global(.classicyBalloonHelpAnchor) {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+  }
 }
 
 .tvThumbnailStrip {
@@ -237,8 +264,8 @@ $strip-height: calc(5em + 8px);
 
 .tvChannelTitleHolder {
   position: absolute;
-  top: var(--window-control-size);
-  left: var(--window-control-size);
+  top: var(--window-padding-size);
+  left: var(--window-padding-size);
   z-index: 1;
   background-color: var(--color-theme-06);
 }

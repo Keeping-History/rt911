@@ -155,7 +155,7 @@ describe("TV thumbnail reorder", () => {
 			dispatched.some(
 				(a) =>
 					a.type === "ClassicyAppTVSetGridState" &&
-					(a.selectedPlayers as number[] | undefined)?.includes(8),
+					(a.selectedChannels as string[] | undefined)?.includes("WNBC"),
 			),
 		).toBe(true);
 	});

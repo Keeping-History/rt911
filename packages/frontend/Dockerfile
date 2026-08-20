@@ -8,7 +8,9 @@
 # VITE_-prefixed vars from the environment), so the image is environment-specific.
 FROM node:26-bookworm AS build
 WORKDIR /repo
-RUN npm install -g pnpm@10.17.0
+# Keep in step with mise.toml's pnpm pin: the lockfile format is version-bound,
+# so a mismatch fails `--frozen-lockfile` below and breaks the image build.
+RUN npm install -g pnpm@11.9.0
 
 # Manifests first for dependency-layer caching (backend is Go-only, no manifest).
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
@@ -25,13 +27,19 @@ ARG VITE_MEDIA_STREAM_URL
 ARG VITE_OPENREPLAY_PROJECT_KEY
 ARG VITE_OPENREPLAY_INGEST_URL
 ARG VITE_FEEDBACK_URL
+ARG VITE_DIRECTUS_URL
+# An ARG with no --build-arg becomes an EMPTY STRING here, not an unset
+# variable. src/lib/endpoints.ts treats empty as absent for exactly this
+# reason; without that, a forgotten build-arg would compile a relative URL
+# into the bundle rather than falling back to the production host.
 ENV VITE_PROXY_PROTOCOL=$VITE_PROXY_PROTOCOL \
     VITE_PROXY_HOST=$VITE_PROXY_HOST \
     VITE_PROXY_PORT=$VITE_PROXY_PORT \
     VITE_MEDIA_STREAM_URL=$VITE_MEDIA_STREAM_URL \
     VITE_OPENREPLAY_PROJECT_KEY=$VITE_OPENREPLAY_PROJECT_KEY \
     VITE_OPENREPLAY_INGEST_URL=$VITE_OPENREPLAY_INGEST_URL \
-    VITE_FEEDBACK_URL=$VITE_FEEDBACK_URL
+    VITE_FEEDBACK_URL=$VITE_FEEDBACK_URL \
+    VITE_DIRECTUS_URL=$VITE_DIRECTUS_URL
 # Transpile-only production build. We run `vite build` directly rather than the
 # package's `tsc -b && vite build` script: Vite/esbuild strips types and emits a
 # correct bundle, so the deployable image isn't gated on the branch's in-progress

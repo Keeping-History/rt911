@@ -1,0 +1,1090 @@
+{
+ "flight": "AF1",
+ "carrier": "USAF",
+ "flight_date": "2001-09-11",
+ "origin": "SRQ",
+ "scheduled_dest": "ADW",
+ "landed_at": "ADW",
+ "aircraft": "Boeing VC-25A",
+ "registration": "SAM 28000",
+ "wheels_off_utc": "2001-09-11T13:54:00Z",
+ "wheels_on_utc": "2001-09-11T22:34:00Z",
+ "details": {
+  "crew": {
+   "captain": "Col. Mark Tillman"
+  },
+  "ground_stops": [
+   {
+    "code": "SRQ",
+    "name": "Sarasota-Bradenton International Airport",
+    "start": "2001-09-11T04:00:00Z",
+    "end": "2001-09-11T13:54:00Z"
+   },
+   {
+    "code": "BAD",
+    "name": "Barksdale Air Force Base",
+    "start": "2001-09-11T15:45:00Z",
+    "end": "2001-09-11T17:44:00Z"
+   },
+   {
+    "code": "OFF",
+    "name": "Offutt Air Force Base",
+    "start": "2001-09-11T18:50:00Z",
+    "end": "2001-09-11T20:33:00Z"
+   }
+  ],
+  "fate": {
+   "text": "Returned to Andrews AFB; the President addressed the nation from the White House that evening",
+   "utc": "2001-09-11T22:34:00Z"
+  }
+ },
+ "ground_spans": [
+  {
+   "start": "2001-09-11T04:00:00Z",
+   "end": "2001-09-11T13:53:11Z",
+   "base": "SRQ"
+  },
+  {
+   "start": "2001-09-11T15:45:00Z",
+   "end": "2001-09-11T17:44:00Z",
+   "base": "BAD"
+  },
+  {
+   "start": "2001-09-11T18:50:00Z",
+   "end": "2001-09-11T20:33:00Z",
+   "base": "OFF"
+  }
+ ],
+ "sources": [
+  "84th Radar Evaluation Squadron (RADES) radar data provided to the 9/11 Commission (FOIA release) - per-sweep returns with computed lat/lon and Mode C altitude; the leg-1 track (beacon 3755, 2,010 returns from nine SEADS sensors, 13:54:41Z-15:32:02Z) was located by analysis/find_af1_leg1.py and exported to data/rades/af1_leg1_waypoints.json",
+  "9/11 Commission Report, Chapter 10 (\"Wartime\"), via Wikisource - airborne from Sarasota at 09:55 ET, the westward turn ~10:10 ET, Barksdale chosen ~10:20 ET, wheels-on Barksdale \"about 11:45\", wheels-on Offutt 14:50 ET, and the ~15:15 ET STRATCOM secure video teleconference",
+  "The Aviationist, \"'Air Force One, you have fast movers your 7 o'clock': The Presidential VC-25's Journey Across The U.S. On 9/11\" (2011) - citing 84 RADES radar files (Commission File RDoD04021430) and pilot Col. Mark Tillman's USA Today interview (Aug 25, 2011); source of the FL390 leg-1 cruise, the per-leg fighter-escort composition, and the 18:34 ET Andrews landing used here",
+  "911research.wtc7.net/planes/airforceone.html (citing Washington Post / New York Times reporting) - source of the 13:44 ET Barksdale departure used here",
+  "History.com, \"September 11: Six Ways Uncertainty Reigned Aboard Air Force One\" and SimpleFlying, \"Tense Flights: Air Force One During America's Biggest Crises\" - Col. Tillman's account of flying at 45,000 ft, applied here to the Offutt-Andrews leg",
+  "FAA / AirNav / SkyVector / Wikipedia airport pages - airport reference-point coordinates and verified field elevations: KSRQ 30 ft, KBAD 165 ft, KOFF 1048 ft, KADW 280 ft"
+ ],
+ "provenance_notes": [
+  "MIXED PROVENANCE - read the per-waypoint \"source\" mark. Leg 1 (Sarasota to Barksdale) is RADAR-SURVEYED: 97 of this file's waypoints are real 84 RADES Mode C returns carried verbatim from data/rades/af1_leg1_waypoints.json, source=\"radar\". Every other waypoint in the file - the Sarasota parked span, the last 13 minutes into Barksdale, and the whole of legs 2 and 3 - is source=\"estimated\": published timeline anchors plus great-circle interpolation. No radar was found for legs 2 or 3.",
+  "LEG-1 IDENTIFICATION. The radar chain is beacon code 3755, seen in relay by nine SEADS sensors. Of 2,774 chains in the Florida-to-Louisiana corridor between 13:30 and 16:10Z, 53 touch a 0.4-degree box around Sarasota in the 13:40-14:30Z window and exactly one of those starts low and near the field: this one, at 800 ft, 5.55 nm out, at 13:54:41Z. It flies 607 nm and terminates descending through 7,100 ft 45 nm from Barksdale at 15:32Z, implying wheels-on ~15:45Z - the Commission Report's \"about 11:45\", and an independent corroboration, since Barksdale was never an input to the search. The chain is unbroken with no beacon change, and code 3755 is worn by no other aircraft in the window. The identification rests on origin, time, destination and continuity - never on the beacon code, which is reused across the airspace.",
+  "SARASOTA DEPARTURE ANCHOR IS A GEOMETRIC DEVICE, NOT A ROTATION FIX. The first radar return is already 5.55 nm from the field at 800 ft; SEADS does not resolve low targets near Sarasota at all (across the whole window, 131 sub-2,000 ft returns within 12 nm of the field span 8 squawks and not one is ever surveyed closer than 2.58 nm to the airport). The apron-point departure anchor is therefore placed at 13:53:11Z, 90 s before the first fix - at the Sarasota airport reference point, the same coordinates as the parked rows, so the implied ground speed over that gap is ~220 kt rather than the 480-1800 kt any later anchor would force. That is 49 s before the sourced 09:54 ET wheels-off recorded in wheels_off_utc and in the Sarasota ground_stops entry; the difference is an artifact of the sensor's near-field blindness, not a claim that the aircraft rotated at 13:53:11Z. Do not derive a rotation time or a runway heading from either the anchor or the first fix.",
+  "SARASOTA WHEELS-OFF. Sources give 09:54 (Your Observer), 09:55 (9/11 Commission Report) and 09:57 ET (The Aviationist, radar-derived). 09:54 ET / 13:54:00Z is used here because it is the only one of the three compatible with the radar, which already has the aircraft at 800 ft and 5.55 nm out at 13:54:41Z. Your Observer's \"about 50 minutes earlier than scheduled\" is reported without a scheduled clock time, and the commonly-repeated \"10:30 a.m. scheduled\" figure does not reconcile with it; no scheduled time is asserted here.",
+  "LEG-1 ALTITUDE IS RADAR-CONFIRMED AT FL390, AND THE 45,000 FT CLAIM IS REFUTED FOR THIS LEG. The aircraft climbs continuously from 800 ft to exactly 39,000 ft by 14:12:53Z and holds it for 62 minutes; of 2,010 returns exactly one reads higher (43,800 ft) and it is a garbled plot whose neighbours on both sides read 39,000. The radar also shows NO HOLDING PATTERN - a single continuous climb-cruise-descent with one course change - and shows the route running predominantly OVERLAND up the Florida peninsula to 29.3 N and then west along the panhandle, not out over the open Gulf of Mexico as several secondary accounts imply. The commonly-repeated \"initial low-altitude northwest phase\" is likewise refuted: the climb-out is a left turn off the runway followed by 12 minutes tracking north.",
+  "LAST 13 MINUTES INTO BARKSDALE ARE INTERPOLATED. The radar ends at 15:32:02Z, 7,100 ft, 44.7 nm east-southeast of Barksdale, because SEADS coverage runs out - not because the flight ended. Three estimated anchors continue the descent to the field at the researched ~15:45Z wheels-on, decelerating 231 -> 213 -> 151 kt on to final. The implied 207 kt average over that great-circle gap is low for a jet; the real closure was faster, because the aircraft was tracking 283 degrees at the last fix while the direct bearing to Barksdale was 294 degrees, so the flown path was longer than the straight line modelled here.",
+  "BARKSDALE DEPARTURE IS THE WEAKEST TIME IN THIS FILE, AND IT STRAINS THE LEG-2 PROFILE. Sources split across 13:30 ET (The Aviationist), 13:44 ET (911research.wtc7.net, citing Washington Post / New York Times) and 13:48 ET; the commonly-cited 13:37 was not found in any source consulted. 13:44 ET / 17:44:00Z is used here. It leaves 66 minutes for the 528 nm Barksdale-to-Offutt great circle, a ~480 kt block average that sits at the top of what a VC-25A can do and forces a fast climb, an FL390 cruise near the aircraft's maximum cruise speed, and a high-speed descent. If a stronger source establishes the 13:30 ET departure the profile relaxes to a comfortable ~400 kt; the anchors here should be regenerated if that happens.",
+  "LEG-2 ALTITUDE IS AN ESTIMATE WITH AN EXPLICIT SOURCE GAP. No source found gives a cruise altitude for Barksdale to Offutt specifically. FL390 is used for continuity with the radar-confirmed leg-1 cruise; the defensible range is FL390-FL450 given the continuous fighter escort and the day's high-altitude posture.",
+  "LEG-3 ALTITUDE 45,000 FT is the one altitude in legs 2-3 with reasonable source support: Col. Tillman describes flying \"up to the unusually high altitude of 45,000 feet\" and the heaviest escort of the day - eleven fighters per The Aviationist - was on this leg. It is not radar-sourced the way leg 1's FL390 is. The 360-degree orbit The Aviationist describes AF1 flying to let the trailing Texas ANG F-16s rejoin is NOT modelled here: no source gives its position or duration, so the time it consumed is absorbed into a 439 kt block average over the 886 nm leg rather than drawn as a loop.",
+  "OFFUTT DEPARTURE AND ANDREWS ARRIVAL. Offutt wheels-off is 16:33 ET / 20:33:00Z - sources split across 16:30, 16:36 and 16:44 ET and none has clearly stronger authority, so the commonly-cited mid-range value is used. Andrews wheels-on is 18:34 ET / 22:34:00Z, The Aviationist's radar-derived figure; other accounts give 18:30 (a rounding), 18:44 and 18:54 (probably conflating the landing with the Marine One departure or the White House arrival). Marine One to the White House is a separate aircraft and is out of scope for this file.",
+  "GROUND ROWS AND APRON COORDINATES. The three ground spans hold the aircraft stationary at its field's reference-point coordinates and published elevation (Sarasota 30 ft, Barksdale 165 ft, Offutt 1048 ft). These are airport reference points, not surveyed 2001 VIP-ramp spots - no source documents where AF1 actually parked at any of these fields, except that Sarasota Magazine places it \"close to the terminal building\" at Sarasota. The Sarasota span begins at 04:00:00Z, ET midnight, picking up exactly where af1_0910.json's overnight span ends at 03:59:00Z.",
+  "MODE C IS PRESSURE ALTITUDE in 100 ft quanta, not AGL or GPS. Radar positions are the RS3-computed per-sensor lat/lon; a cross-site registration bias of roughly 0.5-2.4 nm applies at the SEA11/05/09/06/14/04 handoffs and is visible as small course wobbles around 14:10, 14:52 and 15:24. No bias correction was applied to the exported track."
+ ],
+ "waypoints": [
+  {
+   "utc": "2001-09-11T04:00:00Z",
+   "lat": 27.3954,
+   "lon": -82.5544,
+   "alt_ft": 30,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T13:53:11Z",
+   "lat": 27.3954,
+   "lon": -82.5544,
+   "alt_ft": 30,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T13:54:41Z",
+   "lat": 27.4868,
+   "lon": -82.5386,
+   "alt_ft": 800,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T13:55:41Z",
+   "lat": 27.5285,
+   "lon": -82.5888,
+   "alt_ft": 3500,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T13:56:42Z",
+   "lat": 27.5824,
+   "lon": -82.6346,
+   "alt_ft": 6800,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T13:57:42Z",
+   "lat": 27.6581,
+   "lon": -82.6443,
+   "alt_ft": 9900,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T13:58:42Z",
+   "lat": 27.7426,
+   "lon": -82.6505,
+   "alt_ft": 12800,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T13:59:43Z",
+   "lat": 27.8379,
+   "lon": -82.6582,
+   "alt_ft": 15400,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:00:43Z",
+   "lat": 27.9345,
+   "lon": -82.6142,
+   "alt_ft": 17900,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:01:43Z",
+   "lat": 28.0391,
+   "lon": -82.5633,
+   "alt_ft": 20400,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:02:44Z",
+   "lat": 28.1502,
+   "lon": -82.5137,
+   "alt_ft": 22700,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:03:44Z",
+   "lat": 28.2666,
+   "lon": -82.4599,
+   "alt_ft": 25100,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:04:44Z",
+   "lat": 28.3865,
+   "lon": -82.4034,
+   "alt_ft": 27400,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:05:45Z",
+   "lat": 28.5078,
+   "lon": -82.3474,
+   "alt_ft": 29700,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:06:45Z",
+   "lat": 28.6319,
+   "lon": -82.2871,
+   "alt_ft": 31600,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:07:45Z",
+   "lat": 28.7571,
+   "lon": -82.2315,
+   "alt_ft": 33300,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:08:45Z",
+   "lat": 28.8836,
+   "lon": -82.1707,
+   "alt_ft": 35000,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:09:45Z",
+   "lat": 29.0096,
+   "lon": -82.1104,
+   "alt_ft": 36800,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:10:50Z",
+   "lat": 29.1564,
+   "lon": -82.111,
+   "alt_ft": 37800,
+   "site": "SEA05",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:11:50Z",
+   "lat": 29.2581,
+   "lon": -82.2029,
+   "alt_ft": 38300,
+   "site": "SEA05",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:12:53Z",
+   "lat": 29.3075,
+   "lon": -82.3389,
+   "alt_ft": 39000,
+   "site": "SEA09",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:13:53Z",
+   "lat": 29.3612,
+   "lon": -82.4723,
+   "alt_ft": 39000,
+   "site": "SEA09",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:14:54Z",
+   "lat": 29.4352,
+   "lon": -82.5963,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:15:54Z",
+   "lat": 29.4834,
+   "lon": -82.7279,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:16:54Z",
+   "lat": 29.5307,
+   "lon": -82.8599,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:17:54Z",
+   "lat": 29.5806,
+   "lon": -82.9942,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:18:54Z",
+   "lat": 29.6299,
+   "lon": -83.126,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:19:54Z",
+   "lat": 29.6779,
+   "lon": -83.2599,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:20:55Z",
+   "lat": 29.726,
+   "lon": -83.3927,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:21:55Z",
+   "lat": 29.7706,
+   "lon": -83.5241,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:22:55Z",
+   "lat": 29.8248,
+   "lon": -83.659,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:23:55Z",
+   "lat": 29.8705,
+   "lon": -83.7924,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:24:55Z",
+   "lat": 29.9225,
+   "lon": -83.9261,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:25:55Z",
+   "lat": 29.966,
+   "lon": -84.0558,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:26:55Z",
+   "lat": 30.0161,
+   "lon": -84.1894,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:27:55Z",
+   "lat": 30.064,
+   "lon": -84.3221,
+   "alt_ft": 39000,
+   "site": "SEA06",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:28:56Z",
+   "lat": 30.1121,
+   "lon": -84.4681,
+   "alt_ft": 39000,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:29:56Z",
+   "lat": 30.1549,
+   "lon": -84.6038,
+   "alt_ft": 39000,
+   "site": "SEA11",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:30:56Z",
+   "lat": 30.1966,
+   "lon": -84.7285,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:31:56Z",
+   "lat": 30.2553,
+   "lon": -84.8563,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:32:57Z",
+   "lat": 30.2867,
+   "lon": -84.9938,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:33:57Z",
+   "lat": 30.3467,
+   "lon": -85.1215,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:34:57Z",
+   "lat": 30.385,
+   "lon": -85.2567,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:35:57Z",
+   "lat": 30.4408,
+   "lon": -85.3839,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:36:57Z",
+   "lat": 30.4737,
+   "lon": -85.5211,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:37:57Z",
+   "lat": 30.5266,
+   "lon": -85.6521,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:38:58Z",
+   "lat": 30.5805,
+   "lon": -85.7832,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:39:58Z",
+   "lat": 30.5925,
+   "lon": -85.9269,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:40:58Z",
+   "lat": 30.6095,
+   "lon": -86.0692,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:41:58Z",
+   "lat": 30.6256,
+   "lon": -86.2121,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:42:58Z",
+   "lat": 30.6413,
+   "lon": -86.3553,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:43:58Z",
+   "lat": 30.6466,
+   "lon": -86.505,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:44:59Z",
+   "lat": 30.6724,
+   "lon": -86.6453,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:45:59Z",
+   "lat": 30.71,
+   "lon": -86.7842,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:46:59Z",
+   "lat": 30.7484,
+   "lon": -86.9203,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:47:59Z",
+   "lat": 30.791,
+   "lon": -87.0552,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:48:59Z",
+   "lat": 30.8341,
+   "lon": -87.1877,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:49:59Z",
+   "lat": 30.8733,
+   "lon": -87.3246,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:51:00Z",
+   "lat": 30.9138,
+   "lon": -87.4615,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:52:00Z",
+   "lat": 30.9503,
+   "lon": -87.5828,
+   "alt_ft": 39000,
+   "site": "SEA09",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:53:00Z",
+   "lat": 30.99,
+   "lon": -87.7382,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:54:00Z",
+   "lat": 31.0293,
+   "lon": -87.8744,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:55:01Z",
+   "lat": 31.0676,
+   "lon": -88.0243,
+   "alt_ft": 39000,
+   "site": "SEA07",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:56:01Z",
+   "lat": 31.1054,
+   "lon": -88.1618,
+   "alt_ft": 39000,
+   "site": "SEA07",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:57:12Z",
+   "lat": 31.1581,
+   "lon": -88.2957,
+   "alt_ft": 39000,
+   "site": "SEA09",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:58:12Z",
+   "lat": 31.1985,
+   "lon": -88.4314,
+   "alt_ft": 39000,
+   "site": "SEA09",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T14:59:13Z",
+   "lat": 31.227,
+   "lon": -88.5972,
+   "alt_ft": 39000,
+   "site": "SEA07",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:00:16Z",
+   "lat": 31.2725,
+   "lon": -88.7255,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:01:17Z",
+   "lat": 31.3096,
+   "lon": -88.8632,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:02:24Z",
+   "lat": 31.3607,
+   "lon": -89.0055,
+   "alt_ft": 39000,
+   "site": "SEA09",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:03:24Z",
+   "lat": 31.3928,
+   "lon": -89.1478,
+   "alt_ft": 39000,
+   "site": "SEA09",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:04:27Z",
+   "lat": 31.4291,
+   "lon": -89.3019,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:05:27Z",
+   "lat": 31.4694,
+   "lon": -89.4385,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:06:27Z",
+   "lat": 31.5055,
+   "lon": -89.5768,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:07:27Z",
+   "lat": 31.5411,
+   "lon": -89.7177,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:08:28Z",
+   "lat": 31.5703,
+   "lon": -89.8585,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:09:28Z",
+   "lat": 31.5998,
+   "lon": -89.999,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:10:28Z",
+   "lat": 31.6399,
+   "lon": -90.129,
+   "alt_ft": 39000,
+   "site": "SEA04",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:11:28Z",
+   "lat": 31.664,
+   "lon": -90.2603,
+   "alt_ft": 39000,
+   "site": "SEA04",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:12:28Z",
+   "lat": 31.6933,
+   "lon": -90.4057,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:13:28Z",
+   "lat": 31.7194,
+   "lon": -90.5421,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:14:29Z",
+   "lat": 31.7449,
+   "lon": -90.6813,
+   "alt_ft": 39000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:15:29Z",
+   "lat": 31.7853,
+   "lon": -90.8103,
+   "alt_ft": 38000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:16:29Z",
+   "lat": 31.8081,
+   "lon": -90.9455,
+   "alt_ft": 36900,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:17:29Z",
+   "lat": 31.8362,
+   "lon": -91.0737,
+   "alt_ft": 35900,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:18:29Z",
+   "lat": 31.8592,
+   "lon": -91.2011,
+   "alt_ft": 34600,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:19:29Z",
+   "lat": 31.8815,
+   "lon": -91.3288,
+   "alt_ft": 33200,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:20:30Z",
+   "lat": 31.9158,
+   "lon": -91.4524,
+   "alt_ft": 31900,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:21:30Z",
+   "lat": 31.9421,
+   "lon": -91.5814,
+   "alt_ft": 29800,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:22:30Z",
+   "lat": 31.9632,
+   "lon": -91.712,
+   "alt_ft": 27400,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:23:30Z",
+   "lat": 31.9925,
+   "lon": -91.8374,
+   "alt_ft": 25000,
+   "site": "SEA14",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:24:33Z",
+   "lat": 32.027,
+   "lon": -91.9605,
+   "alt_ft": 22600,
+   "site": "SEA07",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:25:39Z",
+   "lat": 32.0508,
+   "lon": -92.0994,
+   "alt_ft": 20000,
+   "site": "SEA04",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:26:39Z",
+   "lat": 32.0752,
+   "lon": -92.2238,
+   "alt_ft": 17500,
+   "site": "SEA04",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:27:39Z",
+   "lat": 32.0996,
+   "lon": -92.3511,
+   "alt_ft": 15200,
+   "site": "SEA04",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:28:51Z",
+   "lat": 32.1268,
+   "lon": -92.4952,
+   "alt_ft": 12500,
+   "site": "SEA04",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:30:02Z",
+   "lat": 32.1582,
+   "lon": -92.6437,
+   "alt_ft": 11000,
+   "site": "SEA04",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:31:03Z",
+   "lat": 32.1791,
+   "lon": -92.7504,
+   "alt_ft": 9200,
+   "site": "SEA04",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:32:02Z",
+   "lat": 32.1993,
+   "lon": -92.8561,
+   "alt_ft": 7100,
+   "site": "SEA04",
+   "alt_src": "modec",
+   "source": "radar"
+  },
+  {
+   "utc": "2001-09-11T15:38:00Z",
+   "lat": 32.3555,
+   "lon": -93.2701,
+   "alt_ft": 4000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T15:42:00Z",
+   "lat": 32.4513,
+   "lon": -93.5265,
+   "alt_ft": 2000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T15:45:00Z",
+   "lat": 32.5019,
+   "lon": -93.6628,
+   "alt_ft": 165,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T17:44:00Z",
+   "lat": 32.5019,
+   "lon": -93.6628,
+   "alt_ft": 165,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T17:57:00Z",
+   "lat": 33.9192,
+   "lon": -93.9992,
+   "alt_ft": 39000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T18:34:00Z",
+   "lat": 39.1529,
+   "lon": -95.3509,
+   "alt_ft": 39000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T18:44:00Z",
+   "lat": 40.565,
+   "lon": -95.7505,
+   "alt_ft": 14000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T18:50:00Z",
+   "lat": 41.1194,
+   "lon": -95.9122,
+   "alt_ft": 1048,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T20:33:00Z",
+   "lat": 41.1194,
+   "lon": -95.9122,
+   "alt_ft": 1048,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T20:51:00Z",
+   "lat": 41.0007,
+   "lon": -93.3972,
+   "alt_ft": 45000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T22:12:00Z",
+   "lat": 39.3666,
+   "lon": -79.7064,
+   "alt_ft": 45000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T22:26:00Z",
+   "lat": 38.9935,
+   "lon": -77.759,
+   "alt_ft": 15000,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  },
+  {
+   "utc": "2001-09-11T22:34:00Z",
+   "lat": 38.8106,
+   "lon": -76.8681,
+   "alt_ft": 280,
+   "site": "anchor",
+   "alt_src": "anchor",
+   "source": "estimated"
+  }
+ ]
+}

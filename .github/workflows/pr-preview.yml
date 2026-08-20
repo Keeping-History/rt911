@@ -7,7 +7,7 @@ name: Deploy PR preview
 #
 # The preview is compiled against the PRODUCTION backends (same FE_* values as
 # build.yml bakes into the deployed image), so a preview is a real client of
-# stream-beta / api-beta / files.911realtime.org. Two deliberate differences
+# stream / api / files.911realtime.org. Two deliberate differences
 # from the prod image build:
 #   - OpenReplay vars are left unset so preview sessions don't pollute prod
 #     session recordings (the tracker is disabled when the key is absent).
@@ -37,9 +37,9 @@ env:
   VITE_PROXY_PROTOCOL: "https:"
   VITE_PROXY_HOST: "timemachine.911realtime.org"
   VITE_PROXY_PORT: "443"
-  VITE_MEDIA_STREAM_URL: "wss://stream-beta.911realtime.org/stream"
-  VITE_FEEDBACK_URL: "https://stream-beta.911realtime.org"
-  VITE_DIRECTUS_URL: "https://api-beta.911realtime.org"
+  VITE_MEDIA_STREAM_URL: "wss://stream.911realtime.org/stream"
+  VITE_FEEDBACK_URL: "https://stream.911realtime.org"
+  VITE_DIRECTUS_URL: "https://api.911realtime.org"
 
 jobs:
   deploy-preview:

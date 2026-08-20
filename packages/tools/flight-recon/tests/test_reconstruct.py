@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from reconstruct import altitude, gc_interp, phase, reconstruct
+from reconstruct import CLIMB_FRAC, altitude, gc_interp, phase, reconstruct
 
 DATA = Path(__file__).parent.parent / "data"
 FLIGHTS = DATA / "sample_bts_2001-09-09_2001-09-12.csv"
@@ -31,6 +31,7 @@ def test_gc_interp_endpoints_and_midpoint():
 
 
 def test_altitude_profile_and_phase_agree():
+    # Default endpoints (0) reproduce the original sea-level trapezoid.
     assert altitude(0.0) == 0
     assert altitude(0.5) == 35000
     assert altitude(1.0) == 0
@@ -39,6 +40,17 @@ def test_altitude_profile_and_phase_agree():
         assert phase(f) == expect
         if expect == "cruise":
             assert altitude(f) == 35000
+
+
+def test_altitude_anchors_to_endpoint_elevations():
+    # Takeoff sits at the origin field elevation, touchdown at the destination's.
+    assert altitude(0.0, origin_ft=5431, dest_ft=13) == 5431   # DEN departure
+    assert altitude(1.0, origin_ft=20, dest_ft=5431) == 5431   # DEN arrival
+    # Cruise is unaffected by endpoint elevations.
+    assert altitude(0.5, origin_ft=5431, dest_ft=5431) == 35000
+    # Descent ramp is monotonic down to the field, never below it.
+    lo = altitude(1 - CLIMB_FRAC / 2, origin_ft=0, dest_ft=5431)
+    assert 5431 < lo < 35000
 
 
 # ---------------------------------------------------------------- acceptance invariant
@@ -91,6 +103,25 @@ def test_window_filtering():
     # clock_seconds now anchors at 9/11 ET midnight, so it equals et_seconds
     at_ground_stop = {p["flight"] for p in positions if p["clock_seconds"] == 35100}
     assert at_ground_stop == ACCEPTANCE_FLIGHTS
+
+
+def test_descent_lands_at_destination_field_elevation(full_window):
+    """UA50 is diverted to DEN (field 5431 ft) on 9/11; its descent must end
+    near field elevation, not at 0."""
+    positions = full_window[0]
+    den_arrivals = [p for p in positions
+                    if p["flight"] == "UA50" and p["flight_date"] == "2001-09-11"
+                    and p["phase"] == "descent"]
+    assert den_arrivals, "expected UA50 9/11 DEN-diversion descent samples"
+    final = max(den_arrivals, key=lambda p: p["utc"])
+    # DEN elevation is 5431 ft; the last descent sample must be near it, far from 0.
+    assert final["alt_ft"] > 5000
+
+
+def test_load_airports_includes_elevation():
+    ap = __import__("reconstruct").load_airports(AIRPORTS)
+    assert ap["DEN"][3] == 5431   # (lat, lon, utc_offset, elevation_ft)
+    assert ap["BOS"][3] == 20
 
 
 def test_bad_inputs_raise():

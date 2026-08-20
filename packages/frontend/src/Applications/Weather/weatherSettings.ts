@@ -1,5 +1,6 @@
 import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerAppEventHandler } from "classicy";
+import { registerApp } from "classicy";
+import { z } from "zod";
 import {
 	type BasemapStyleId,
 	normalizeBasemapStyle,
@@ -105,4 +106,50 @@ export const classicyWeatherEventHandler = (
 	}
 };
 
-registerAppEventHandler("ClassicyAppWeather", classicyWeatherEventHandler);
+export const WeatherDataSchema = z.looseObject({
+	loopSettings: z
+		.looseObject({
+			enabled: z.boolean().describe("Whether radar-loop replay mode is on."),
+			windowHours: z
+				.union([z.literal(1), z.literal(3), z.literal(6), z.literal(12)])
+				.describe("Replay window length in hours."),
+			speed: z
+				.union([z.literal(600), z.literal(1800), z.literal(3600)])
+				.describe("Replay speed multiplier (radar frames are on a 5-minute cadence)."),
+		})
+		.partial()
+		.optional()
+		.describe("Loop-strip playback preferences; ephemeral playhead state is never persisted."),
+	mapSettings: z
+		.looseObject({
+			mapStyle: z.string().describe("Basemap display mode id (classic/radar/satellite)."),
+			darkMap: z.boolean().describe("Dark basemap variant; orthogonal to mapStyle."),
+		})
+		.partial()
+		.optional()
+		.describe("Map appearance (the View menu's style items)."),
+});
+
+export type WeatherData = z.infer<typeof WeatherDataSchema>;
+
+registerApp({
+	id: WEATHER_APP_ID,
+	description: "September 2001 weather: METAR conditions, NEXRAD radar loops, and forecasts.",
+	prefix: "ClassicyAppWeather",
+	handler: classicyWeatherEventHandler,
+	actions: {
+		ClassicyAppWeatherSetLoopSettings: {
+			description: "Persist the whole loop-playback settings object.",
+			params: z.object({
+				loopSettings: z.record(z.string(), z.unknown()).describe("Full WeatherLoopSettings object."),
+			}),
+		},
+		ClassicyAppWeatherSetMapSettings: {
+			description: "Persist the whole map-appearance settings object.",
+			params: z.object({
+				mapSettings: z.record(z.string(), z.unknown()).describe("Full WeatherMapSettings object."),
+			}),
+		},
+	},
+	state: WeatherDataSchema,
+});

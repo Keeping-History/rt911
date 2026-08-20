@@ -14,6 +14,7 @@ vi.mock("classicy", () => ({
 		tzOffset: 0,
 		paused: false,
 	}),
+	registerApp: () => {},
 }));
 const mapProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 vi.mock("../../FlightTracker/FlightMap", () => ({

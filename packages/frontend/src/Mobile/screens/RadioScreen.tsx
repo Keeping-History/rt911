@@ -8,7 +8,7 @@ import {
 	activeSegments,
 	sortStations,
 	type Station,
-} from "../../Applications/RadioScanner/stationGrouping";
+} from "../../Applications/radio-core/stationGrouping";
 import { IpodList } from "../IpodList";
 import { ScreenNavContext, useScreenWheel } from "../WheelContext";
 
@@ -29,7 +29,12 @@ export function RadioScreen({
 	connected,
 }: RadioScreenProps) {
 	const { push } = useContext(ScreenNavContext);
-	const sorted = useMemo(() => sortStations(stations, nowMs), [stations, nowMs]);
+	// No reveal buffer on mobile, so pass no upcoming items: stations sort
+	// on-air first, then offline (there is no "upcoming" tier to distinguish).
+	const sorted = useMemo(
+		() => sortStations(stations, [], nowMs),
+		[stations, nowMs],
+	);
 	// Track the highlight by station KEY, not index: sortStations re-buckets
 	// stations as they come on/off air (nowMs ticks every second), so an index
 	// would silently point at a different station after a reshuffle. The

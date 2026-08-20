@@ -1,8 +1,10 @@
 import Tracker from "@openreplay/tracker";
 
 let tracker: Tracker | null = null;
+let identifiedUserId: string | null = null;
 
 export function initTracker(): void {
+	identifiedUserId = null;
 	const projectKey = import.meta.env.VITE_OPENREPLAY_PROJECT_KEY;
 	if (!projectKey) {
 		tracker = null;
@@ -14,6 +16,28 @@ export function initTracker(): void {
 		...(ingestPoint ? { ingestPoint } : {}),
 	});
 	tracker.start();
+}
+
+/**
+ * Tie the recording to the signed-in user so internal traffic can be told
+ * apart from real visitors. OpenReplay keeps only the last injected userID,
+ * so a blank string after sign-out marks the rest of the session anonymous.
+ * The `userId` metadata key must be declared in the OpenReplay project's
+ * Metadata settings to be searchable.
+ */
+export function identifyUser(
+	user: { id: string; email: string | null } | null,
+): void {
+	if (!tracker) return;
+	if (user) {
+		if (identifiedUserId === user.id) return;
+		identifiedUserId = user.id;
+		tracker.setUserID(user.email ?? user.id);
+		tracker.setMetadata("userId", user.id);
+	} else if (identifiedUserId !== null) {
+		identifiedUserId = null;
+		tracker.setUserID("");
+	}
 }
 
 export function trackVirtualTimeSet(
