@@ -22,6 +22,7 @@ import { z } from "zod";
 import { sanitizeItemIds } from "../radio-core/radioPlayback";
 import type { Lane } from "./cardStatus";
 import { LANES, type LaneOrder } from "./laneOrder";
+import { UNKNOWN_TIER_TAG } from "./tagFilter";
 import { type Tool, TOOLS } from "./toolMode";
 
 const appId = "RadioTraffic.app";
@@ -113,6 +114,40 @@ function sanitizeTags(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
+/**
+ * The tags checked on a first-ever launch, before anything has been persisted.
+ *
+ * `tier:clip` — short recordings, the vast majority of the corpus — is what a
+ * new listener should see; `tier:tape`'s long continuous position tapes stay
+ * hidden until asked for. {@link UNKNOWN_TIER_TAG} rides along with it: party
+ * identification (the offline pass that writes a `tier:*` tag at all) is
+ * manual, does not cover every recording RadioTraffic can show, and skips some
+ * of what it does reach — so a card with no tier tag of its own is not the
+ * same thing as a tape, and defaulting to `tier:clip` alone would silently
+ * bury it with no box in the sidebar able to bring it back. This is a boot
+ * default, not a fallback for bad data: see {@link sanitizeChecked} for why it
+ * applies only when `checked` was never stored at all.
+ */
+export const DEFAULT_CHECKED_TAGS: readonly string[] = ["tier:clip", UNKNOWN_TIER_TAG];
+
+/**
+ * `checked`'s own sanitizer, distinct from {@link sanitizeTags} because it is
+ * the one field where "absent" and "present but empty" must be told apart.
+ *
+ * Every other field in this module treats an unreadable or missing value the
+ * same way: fall back to a fixed default. `checked` cannot, because `[]` is
+ * also its most common *legitimate* value — a listener who unchecked every tag
+ * on purpose. Defaulting `undefined` to {@link DEFAULT_CHECKED_TAGS} but
+ * passing an explicit `[]` straight through `sanitizeTags` is what lets a true
+ * first launch open on "clip" while a listener's deliberate clear survives a
+ * reload. (The persistence effect in RadioTraffic.tsx writes this
+ * already-defaulted state straight back out on mount, so the first save is
+ * `["tier:clip"]`, never `[]` — see the effect's comment.)
+ */
+function sanitizeChecked(value: unknown): string[] {
+	return value === undefined ? [...DEFAULT_CHECKED_TAGS] : sanitizeTags(value);
+}
+
 /** Anything outside the four modal tools falls back — see the header. */
 function sanitizeTool(value: unknown): Tool {
 	return TOOLS.includes(value as Tool) ? (value as Tool) : DEFAULT_TOOL;
@@ -192,7 +227,7 @@ function sanitizeLaneOrder(value: unknown): LaneOrder {
 export function sanitizeRadioTrafficState(stored: unknown): RadioTrafficState {
 	const data = (stored ?? {}) as Record<string, unknown>;
 	return {
-		checked: sanitizeTags(data.checked),
+		checked: sanitizeChecked(data.checked),
 		tool: sanitizeTool(data.tool),
 		collapsed: sanitizeCollapsed(data.collapsed),
 		laneOrder: sanitizeLaneOrder(data.laneOrder),

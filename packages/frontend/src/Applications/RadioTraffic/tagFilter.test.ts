@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { TagDef } from "../../Providers/MediaStream/MediaStreamContext";
-import { groupVocabulary, LARGE_NAMESPACES, matchesFilter } from "./tagFilter";
+import {
+	groupVocabulary,
+	LARGE_NAMESPACES,
+	matchesFilter,
+	UNKNOWN_TIER_TAG,
+	withUnknownTier,
+} from "./tagFilter";
 
 /** A vocabulary row as the wire delivers it: `namespace:value` split out. */
 function def(tag: string): TagDef {
@@ -193,5 +199,63 @@ describe("matchesFilter", () => {
 		const checked = new Set(["facility:zbw", "orphan"]);
 		expect(matchesFilter([zbw], checked)).toBe(false);
 		expect(matchesFilter([zbw, { tag: "orphan" }], checked)).toBe(true);
+	});
+
+	describe("tier:unknown", () => {
+		const clip = def("tier:clip");
+		const tape = def("tier:tape");
+
+		it("matches an item with no tags at all", () => {
+			const checked = new Set([UNKNOWN_TIER_TAG]);
+			expect(matchesFilter([], checked)).toBe(true);
+			expect(matchesFilter(undefined, checked)).toBe(true);
+		});
+
+		it("matches an item whose tags carry no tier namespace", () => {
+			const checked = new Set([UNKNOWN_TIER_TAG]);
+			expect(matchesFilter([zbw, aal11], checked)).toBe(true);
+		});
+
+		it("does not match an item that already carries a real tier tag", () => {
+			const checked = new Set([UNKNOWN_TIER_TAG]);
+			expect(matchesFilter([tape], checked)).toBe(false);
+			expect(matchesFilter([clip], checked)).toBe(false);
+		});
+
+		it("ORs with tier:clip, the pair RadioTrafficContext defaults to", () => {
+			const checked = new Set(["tier:clip", UNKNOWN_TIER_TAG]);
+			expect(matchesFilter([clip], checked)).toBe(true);
+			expect(matchesFilter([], checked)).toBe(true);
+			expect(matchesFilter([tape], checked)).toBe(false);
+		});
+
+		it("still ANDs against an unrelated namespace also checked", () => {
+			const checked = new Set([UNKNOWN_TIER_TAG, "facility:zbw"]);
+			// No tier tag (satisfies tier:unknown) but the wrong facility.
+			expect(matchesFilter([zny], checked)).toBe(false);
+			expect(matchesFilter([zbw], checked)).toBe(true);
+		});
+	});
+});
+
+describe("withUnknownTier", () => {
+	it("appends an Unknown value to the tier group only", () => {
+		const groups = withUnknownTier(
+			groupVocabulary([def("tier:clip"), def("tier:tape"), def("topic:hijack")]),
+		);
+		const tier = groups.find((g) => g.namespace === "tier");
+		const topic = groups.find((g) => g.namespace === "topic");
+		expect(tier?.values.map((v) => v.tag)).toEqual(["tier:clip", "tier:tape", UNKNOWN_TIER_TAG]);
+		expect(topic?.values.map((v) => v.tag)).toEqual(["topic:hijack"]);
+	});
+
+	it("leaves every other group's values untouched", () => {
+		expect(withUnknownTier(groupVocabulary([def("topic:hijack")]))).toEqual(
+			groupVocabulary([def("topic:hijack")]),
+		);
+	});
+
+	it("does nothing to an empty vocabulary", () => {
+		expect(withUnknownTier(groupVocabulary([]))).toEqual([]);
 	});
 });

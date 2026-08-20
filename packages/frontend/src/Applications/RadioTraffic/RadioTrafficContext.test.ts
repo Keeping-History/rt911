@@ -2,6 +2,7 @@ import type { ActionMessage, ClassicyStore } from "classicy";
 import { describe, expect, it } from "vitest";
 import {
 	classicyRadioTrafficEventHandler,
+	DEFAULT_CHECKED_TAGS,
 	DEFAULT_TOOL,
 	DEFAULT_WAVEFORM_COLOR,
 	radioTrafficSetState,
@@ -26,7 +27,7 @@ const appData = (ds: ClassicyStore) =>
 describe("sanitizeRadioTrafficState", () => {
 	it("returns the documented defaults for absent state", () => {
 		expect(sanitizeRadioTrafficState(undefined)).toEqual({
-			checked: [],
+			checked: [...DEFAULT_CHECKED_TAGS],
 			tool: DEFAULT_TOOL,
 			collapsed: { live: false, upcoming: false, previous: false },
 			laneOrder: { live: [], upcoming: [], previous: [] },
@@ -35,6 +36,39 @@ describe("sanitizeRadioTrafficState", () => {
 			useThemeWaveformColor: true,
 			waveformColor: DEFAULT_WAVEFORM_COLOR,
 			playOriginalAudio: false,
+		});
+	});
+
+	// {} is what a store with a registered but never-persisted-to app entry
+	// looks like, and it must read the same as undefined: `data.checked` is
+	// undefined either way, so a true first launch opens on "clip" whichever
+	// shape an empty app entry happens to take.
+	it("defaults an empty stored object to the same first-launch checked set", () => {
+		expect(sanitizeRadioTrafficState({}).checked).toEqual([...DEFAULT_CHECKED_TAGS]);
+	});
+
+	describe("the checked tag filters", () => {
+		// The true first-launch case: `checked` was never persisted at all.
+		// tier:unknown rides along with tier:clip — see DEFAULT_CHECKED_TAGS.
+		it("defaults to tier:clip and tier:unknown when checked was never stored", () => {
+			expect(sanitizeRadioTrafficState(undefined).checked).toEqual([
+				"tier:clip",
+				"tier:unknown",
+			]);
+			expect(sanitizeRadioTrafficState({}).checked).toEqual(["tier:clip", "tier:unknown"]);
+		});
+
+		// A listener who unticked every box gets that choice back, not the
+		// first-launch default re-applied on top of it.
+		it("respects an explicit empty selection instead of re-defaulting it", () => {
+			expect(sanitizeRadioTrafficState({ checked: [] }).checked).toEqual([]);
+		});
+
+		// A previously-persisted, non-default selection survives untouched.
+		it("respects a persisted non-default selection", () => {
+			expect(sanitizeRadioTrafficState({ checked: ["tier:tape"] }).checked).toEqual([
+				"tier:tape",
+			]);
 		});
 	});
 
