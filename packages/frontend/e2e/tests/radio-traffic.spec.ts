@@ -105,7 +105,12 @@ async function tagsAvailable(app: Locator): Promise<boolean> {
  * across them — Playwright will not hand two tests in this file to different
  * workers.
  */
-const test = base.extend<Record<string, never>, { hydrated: { page: Page; app: Locator } }>({
+// `{}`, not `Record<string, never>`, for "no additional per-test fixtures":
+// Playwright's own extend<TestFixtures, WorkerFixtures> generic expects the
+// former structurally — the latter fails tsconfig.e2e.json's stricter check
+// (a separate config from this package's own tsc -b, which never includes
+// e2e/ at all, so this only surfaces in CI's dedicated e2e typecheck step).
+const test = base.extend<{}, { hydrated: { page: Page; app: Locator } }>({
 	hydrated: [
 		async ({ browser }, use) => {
 			const page = await browser.newPage();
