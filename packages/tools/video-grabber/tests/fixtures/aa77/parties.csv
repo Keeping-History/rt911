@@ -1,0 +1,40 @@
+n,time_et,file,side_a,side_b,link,tier
+1,08:12,0812 aa77 taxi to runway t,Dulles Ground,American 77,air-ground,A
+2,08:16,0816 aa77 hold short wait,Dulles Tower,American 77,air-ground,A
+3,08:19,081900 aa77 cleared for take,Dulles Tower,American 77,air-ground,A
+4,08:20,0820 aa77 contact departur,Dulles Tower,American 77,air-ground,A
+5,08:39,083950 aa77 approach indy,ZID sector (unnamed),ZID/adjacent sector,landline,B
+6,08:39,083955 aa77 bobcat or hend,ZID controller,ZID controller (re Bobcat/Henderson sectors),landline,B
+7,08:40,084013 aa77 zid checkin mo,Indianapolis Center (Henderson),American 77,air-ground,A
+8,08:44,084404 aa77 zid climb main,Indianapolis Center (Henderson),American 77,air-ground,A
+9,08:47,084702 aa77 zid turn 10 ri,Indianapolis Center (Henderson),American 77,air-ground,A
+10,08:50,085051 aa77 zid direct fal,Indianapolis Center (Henderson),American 77,air-ground,A
+11,08:56,085634 aa77 zid attempts t,Indianapolis Center (Henderson),American 77 (no reply) + AC579/USAir1751/USAir217/N489QS/Flexjet423/AAL2493,air-ground,A
+12,08:58,085850 aa77 1st contact aa,Indianapolis Center,American Airlines dispatch (Jim McDonald),landline,A
+13,09:01,090107 aa77 zid contact aa,Indianapolis Center,American 2493,air-ground,A
+14,09:02,090248 aa77 zid 2d contact,Indianapolis Center,American Airlines dispatch,landline,A
+15,09:07,090710 aa77 zid moved trac,ZID Henderson controller,ZID supervisor/adjacent position,landline,A
+16,09:09,090954 aa77 zid controller,ZID Henderson controller,ZID controller/supervisor,landline,A
+17,09:11,091154 aa77 zid 3d contact,Indianapolis Center,American Airlines dispatch (Jim McDonald),landline,A
+18,09:15,091539 aa77 zid 4th aa dis,Indianapolis Center,American Airlines dispatch (Jim McDonald),landline,A
+19,09:16,091654 aa77 johnson zdc th,Washington Center OM Kerry Johnson,Indianapolis Center OM John Thomas,landline,A
+20,09:18,091836 aa77 summersall to,FAA Command Center,Indianapolis Center OM John Thomas,landline,A
+21,09:25,092524 aa77 one such repor,FAA Command Center,FAA HQ / unnamed recipient,landline,B
+22,09:30,093019 aa77 zid hold of aa,ZID controller,ZID controller,landline,B
+23,09:32,093222 aa77 danielle heard,Dulles TRACON (Danielle O'Brien),Reagan National tower,landline,B
+24,09:33,093337 aa77 danielle sound,Dulles TRACON,Colton 1065 / Blue Ridge 224 + National,air-ground,B
+25,09:35,093535 aa77 he's descendin,UNDETERMINED,UNDETERMINED,unknown,C
+26,09:35,093536 aa77 scoggins vfr 6,NEADS (Huntress),Boston Center mil liaison Colin Scoggins,landline,A
+27,09:36,093602 aa77 id call to ind,NEADS ID section,Indianapolis Center,landline,A
+28,09:36,093657 aa77 looks like wen,UNDETERMINED,UNDETERMINED,unknown,C
+29,09:37,093728 aa77 track b032 los,NEADS floor (ID/surveillance),NEADS MCC (internal),internal,B
+30,09:38,093836 aa77 id call to zdc,NEADS (Huntress),Washington Center,landline,A
+31,09:38,093854 aa77 gofer 06 aircr,Washington Center/National approach,GOFER 06 (C-130),air-ground,A
+32,09:39,093934 aa77 dulles that gu,Dulles facility (unnamed),Dulles facility (unnamed),internal,B
+33,09:40,094012 aa77 zid impel turn,ZID controller,ZID controller (position relief),landline,B
+34,09:41,094122 aa77 id scoggins pl,NEADS ID section,Boston Center mil liaison Colin Scoggins,landline,A
+35,10:02,100225 aa77 line 4530 repo,UNDETERMINED,UNDETERMINED,unknown,C
+36,10:03,100303 aa77 down sservice,FAA Command Center,FAA HQ "John",landline,B
+37,10:30,103002 aa77 have we found,FAA Command Center,FAA Command Center (internal),internal,B
+38,10:51,105156 aa77 2d into wtc pe,FAA Command Center,FAA HQ,landline,B
+39,10:56,105644 aa77 faa recap wron,FAA Command Center,FAA HQ "John",landline,B

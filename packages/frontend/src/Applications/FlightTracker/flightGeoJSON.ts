@@ -1,0 +1,56 @@
+import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
+import { isNotable, isObserverStyled } from "./notableFlights";
+
+export interface FlightFeature {
+	type: "Feature";
+	id: number;
+	geometry: { type: "Point"; coordinates: [number, number] };
+	properties: {
+		flight: string;
+		carrier: string;
+		alt_ft: number;
+		phase: string;
+		notable: boolean;
+		// Observer-styled (witness aircraft + AF1): highlighted like a notable
+		// but in the observer color and with none of the crash semantics.
+		observer: boolean;
+		// Anonymous radar traffic (RDR-… ids, #263): muted styling, never
+		// clustered, excluded from the 3D layer.
+		anon: boolean;
+		// Degrees clockwise from north; drives the plane icons' icon-rotate.
+		heading: number;
+		// Airframe family (aircraftModels.AircraftFamily) — drives the
+		// per-family 2D silhouette via the layers' data-driven icon-image.
+		family: string;
+	};
+}
+
+export interface FlightFeatureCollection {
+	type: "FeatureCollection";
+	features: FlightFeature[];
+}
+
+// Project the current airborne set into a GeoJSON FeatureCollection for a
+// MapLibre geojson source. Coordinates are [lon, lat] (GeoJSON order). The
+// `notable` prop drives the always-on highlight layer's filter.
+export function flightsToGeoJSON(positions: FlightPosition[]): FlightFeatureCollection {
+	return {
+		type: "FeatureCollection",
+		features: positions.map((p) => ({
+			type: "Feature",
+			id: p.id,
+			geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+			properties: {
+				flight: p.flight,
+				carrier: p.carrier ?? "",
+				alt_ft: p.alt_ft,
+				phase: p.phase ?? "",
+				notable: isNotable(p.flight),
+				observer: isObserverStyled(p.flight),
+				anon: p.flight.startsWith("RDR-"),
+				heading: 0, // static builder — no velocity context
+				family: "generic", // static builder — no route-index context
+			},
+		})),
+	};
+}

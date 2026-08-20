@@ -1,0 +1,1694 @@
+[
+  {
+    "station_id": "CWQB",
+    "name": "QUEBEC/JEAN LESAGE INTL  QUE",
+    "lat": 46.783,
+    "lon": -71.383,
+    "country": "CA",
+    "tz": "America/Toronto",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYEG",
+    "name": "EDMONTON INTL",
+    "lat": 53.31,
+    "lon": -113.58,
+    "country": "CA",
+    "tz": "America/Edmonton",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYHZ",
+    "name": "HALIFAX INTL / STANFIELD INTL",
+    "lat": 44.881,
+    "lon": -63.509,
+    "country": "CA",
+    "tz": "America/Halifax",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYOW",
+    "name": "OTTAWA MACDONALD CARTIER INTL",
+    "lat": 45.323,
+    "lon": -75.669,
+    "country": "CA",
+    "tz": "America/Toronto",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYQR",
+    "name": "REGINA INTL",
+    "lat": 50.433,
+    "lon": -104.667,
+    "country": "CA",
+    "tz": "America/Regina",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYQT",
+    "name": "THUNDER BAY A",
+    "lat": 48.367,
+    "lon": -89.333,
+    "country": "CA",
+    "tz": "America/Toronto",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYSJ",
+    "name": "SAINT JOHN",
+    "lat": 45.317,
+    "lon": -65.883,
+    "country": "CA",
+    "tz": "America/Moncton",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYUL",
+    "name": "MONTREAL/TRUDEAU INT",
+    "lat": 45.467,
+    "lon": -73.733,
+    "country": "CA",
+    "tz": "America/Toronto",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYVR",
+    "name": "VANCOUVER INTL",
+    "lat": 49.194,
+    "lon": -123.184,
+    "country": "CA",
+    "tz": "America/Vancouver",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYWG",
+    "name": "WINNIPEG INTL / JAMES ARMSTRONG RICHARDSON INTL",
+    "lat": 49.91,
+    "lon": -97.24,
+    "country": "CA",
+    "tz": "America/Winnipeg",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYXE",
+    "name": "SASKATOON JOHN G DIEFENBAKER INTL",
+    "lat": 52.167,
+    "lon": -106.7,
+    "country": "CA",
+    "tz": "America/Regina",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYXY",
+    "name": "WHITEHORSE INTL / ERIK NIELSEN INTL",
+    "lat": 60.714,
+    "lon": -135.076,
+    "country": "CA",
+    "tz": "America/Whitehorse",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYYC",
+    "name": "CALGARY INTL",
+    "lat": 51.114,
+    "lon": -114.02,
+    "country": "CA",
+    "tz": "America/Edmonton",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYYJ",
+    "name": "VICTORIA INTL",
+    "lat": 48.647,
+    "lon": -123.426,
+    "country": "CA",
+    "tz": "America/Vancouver",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYYT",
+    "name": "ST JOHNS INTL",
+    "lat": 47.619,
+    "lon": -52.752,
+    "country": "CA",
+    "tz": "America/St_Johns",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYYZ",
+    "name": "LESTER B PEARSON INTL",
+    "lat": 43.677,
+    "lon": -79.631,
+    "country": "CA",
+    "tz": "America/Toronto",
+    "nws_zone": null
+  },
+  {
+    "station_id": "CYZF",
+    "name": "YELLOWKNIFE",
+    "lat": 62.463,
+    "lon": -114.44,
+    "country": "CA",
+    "tz": "America/Edmonton",
+    "nws_zone": null
+  },
+  {
+    "station_id": "KABE",
+    "name": "LEHIGH VALLEY INTERNATIONAL AIRPORT",
+    "lat": 40.65,
+    "lon": -75.448,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "PAZ061"
+  },
+  {
+    "station_id": "KABQ",
+    "name": "ALBUQUERQUE INTL SUNPORT AIRPORT",
+    "lat": 35.042,
+    "lon": -106.615,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "NMZ003"
+  },
+  {
+    "station_id": "KALB",
+    "name": "ALBANY INTERNATIONAL AIRPORT",
+    "lat": 42.747,
+    "lon": -73.799,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NYZ052"
+  },
+  {
+    "station_id": "KAMA",
+    "name": "AMARILLO RICK HUSBAND INTL AIRPORT",
+    "lat": 35.22,
+    "lon": -101.717,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ012"
+  },
+  {
+    "station_id": "KATL",
+    "name": "HARTSFIELD-JACKSON ATLANTA INTL AP",
+    "lat": 33.63,
+    "lon": -84.442,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "GAZ055"
+  },
+  {
+    "station_id": "KAUS",
+    "name": "AUSTIN-BERGSTROM INTL AIRPORT",
+    "lat": 30.183,
+    "lon": -97.68,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ192"
+  },
+  {
+    "station_id": "KAVP",
+    "name": "WILKES-BARRE/SCRANTON INTL AIRPORT",
+    "lat": 41.333,
+    "lon": -75.723,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "PAZ047"
+  },
+  {
+    "station_id": "KBDL",
+    "name": "BRADLEY INTERNATIONAL AIRPORT",
+    "lat": 41.937,
+    "lon": -72.682,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "CTZ002"
+  },
+  {
+    "station_id": "KBFL",
+    "name": "MEADOWS FIELD AIRPORT",
+    "lat": 35.434,
+    "lon": -119.055,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ092"
+  },
+  {
+    "station_id": "KBGR",
+    "name": "BANGOR INTL",
+    "lat": 44.8,
+    "lon": -68.817,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "MEZ015"
+  },
+  {
+    "station_id": "KBHM",
+    "name": "BIRMINGHAM INTERNATIONAL AIRPORT",
+    "lat": 33.565,
+    "lon": -86.745,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ALZ024"
+  },
+  {
+    "station_id": "KBIL",
+    "name": "BILLINGS LOGAN INTERNATIONAL AIRPORT",
+    "lat": 45.807,
+    "lon": -108.546,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "MTZ030"
+  },
+  {
+    "station_id": "KBIS",
+    "name": "BISMARCK MUNICIPAL AIRPORT",
+    "lat": 46.782,
+    "lon": -100.758,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "NDZ035"
+  },
+  {
+    "station_id": "KBNA",
+    "name": "NASHVILLE INTERNATIONAL AIRPORT",
+    "lat": 36.111,
+    "lon": -86.688,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TNZ027"
+  },
+  {
+    "station_id": "KBOI",
+    "name": "BOISE AIR TERMINAL/GOWEN FD AIRPORT",
+    "lat": 43.567,
+    "lon": -116.241,
+    "country": "US",
+    "tz": "America/Boise",
+    "nws_zone": "IDZ014"
+  },
+  {
+    "station_id": "KBOS",
+    "name": "GEN E L LOGAN INTERNATIONAL AIRPORT",
+    "lat": 42.361,
+    "lon": -71.01,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "MAZ015"
+  },
+  {
+    "station_id": "KBRO",
+    "name": "BROWNSVILLE/S PADRE ISLAND INTL AP",
+    "lat": 25.915,
+    "lon": -97.423,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ255"
+  },
+  {
+    "station_id": "KBTV",
+    "name": "BURLINGTON INTERNATIONAL AIRPORT",
+    "lat": 44.468,
+    "lon": -73.15,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "VTZ005"
+  },
+  {
+    "station_id": "KBUF",
+    "name": "BUFFALO NIAGARA INTERNATIONAL AIRPOR",
+    "lat": 42.94,
+    "lon": -78.736,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NYZ010"
+  },
+  {
+    "station_id": "KBWI",
+    "name": "BALTIMORE-WASHINGTON INTL AIRPORT",
+    "lat": 39.173,
+    "lon": -76.684,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "MDZ014"
+  },
+  {
+    "station_id": "KBZN",
+    "name": "GALLATIN FIELD AIRPORT",
+    "lat": 45.788,
+    "lon": -111.162,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "MTZ008"
+  },
+  {
+    "station_id": "KCAE",
+    "name": "COLUMBIA METROPOLITAN AIRPORT",
+    "lat": 33.942,
+    "lon": -81.118,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "SCZ027"
+  },
+  {
+    "station_id": "KCHA",
+    "name": "LOVELL FIELD AIRPORT",
+    "lat": 35.034,
+    "lon": -85.2,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "TNZ099"
+  },
+  {
+    "station_id": "KCHS",
+    "name": "CHARLESTON AFB/INTERNATIONAL AIRPORT",
+    "lat": 32.899,
+    "lon": -80.041,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "SCZ047"
+  },
+  {
+    "station_id": "KCID",
+    "name": "EASTERN IOWA REGIONAL AIRPORT",
+    "lat": 41.883,
+    "lon": -91.725,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "IAZ052"
+  },
+  {
+    "station_id": "KCLE",
+    "name": "CLEVELAND-HOPKINS INTERNATIONAL AP",
+    "lat": 41.406,
+    "lon": -81.852,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "OHZ011"
+  },
+  {
+    "station_id": "KCLT",
+    "name": "CHARLOTTE/DOUGLAS INTERNATIONAL AP",
+    "lat": 35.223,
+    "lon": -80.954,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NCZ071"
+  },
+  {
+    "station_id": "KCMH",
+    "name": "PORT COLUMBUS INTERNATIONAL AIRPORT",
+    "lat": 39.991,
+    "lon": -82.877,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "OHZ055"
+  },
+  {
+    "station_id": "KCOS",
+    "name": "CITY OF COLORADO SPRINGS MUNICIPAL AP",
+    "lat": 38.809,
+    "lon": -104.689,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "COZ071"
+  },
+  {
+    "station_id": "KCOU",
+    "name": "COLUMBIA REGIONAL AIRPORT",
+    "lat": 38.817,
+    "lon": -92.215,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "MOZ041"
+  },
+  {
+    "station_id": "KCPR",
+    "name": "NATRONA COUNTY INTERNATIONAL AP",
+    "lat": 42.898,
+    "lon": -106.474,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "WYZ020"
+  },
+  {
+    "station_id": "KCRP",
+    "name": "CORPUS CHRISTI INTERNATIONAL AIRPORT",
+    "lat": 27.773,
+    "lon": -97.513,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ243"
+  },
+  {
+    "station_id": "KCRW",
+    "name": "YEAGER AIRPORT",
+    "lat": 38.38,
+    "lon": -81.591,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "WVZ015"
+  },
+  {
+    "station_id": "KCVG",
+    "name": "CINCINNATI/NORTHERN KENTUCKY INTL AP",
+    "lat": 39.044,
+    "lon": -84.672,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "KYZ091"
+  },
+  {
+    "station_id": "KCXY",
+    "name": "CAPITAL CITY AIRPORT",
+    "lat": 40.218,
+    "lon": -76.855,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "PAZ065"
+  },
+  {
+    "station_id": "KCYS",
+    "name": "CHEYENNE AIRPORT",
+    "lat": 41.158,
+    "lon": -104.808,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "WYZ069"
+  },
+  {
+    "station_id": "KDAL",
+    "name": "DALLAS LOVE FIELD AIRPORT",
+    "lat": 32.838,
+    "lon": -96.836,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ119"
+  },
+  {
+    "station_id": "KDAY",
+    "name": "J.M.COX DAYTON INTERNATIONAL AIRPORT",
+    "lat": 39.906,
+    "lon": -84.219,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "OHZ061"
+  },
+  {
+    "station_id": "KDCA",
+    "name": "RONALD REAGAN WASHINGTON NATL AP",
+    "lat": 38.847,
+    "lon": -77.035,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "VAZ054"
+  },
+  {
+    "station_id": "KDEN",
+    "name": "DENVER INTERNATIONAL AIRPORT",
+    "lat": 39.847,
+    "lon": -104.656,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "COZ040"
+  },
+  {
+    "station_id": "KDFW",
+    "name": "DALLAS/FT WORTH INTERNATIONAL AP",
+    "lat": 32.897,
+    "lon": -97.022,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ119"
+  },
+  {
+    "station_id": "KDLH",
+    "name": "DULUTH INTERNATIONAL AIRPORT",
+    "lat": 46.844,
+    "lon": -92.187,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "MNZ037"
+  },
+  {
+    "station_id": "KDSM",
+    "name": "DES MOINES INTERNATIONAL AIRPORT",
+    "lat": 41.534,
+    "lon": -93.653,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "IAZ060"
+  },
+  {
+    "station_id": "KDTW",
+    "name": "DETROIT METRO WAYNE COUNTY AIRPORT",
+    "lat": 42.231,
+    "lon": -83.331,
+    "country": "US",
+    "tz": "America/Detroit",
+    "nws_zone": "MIZ076"
+  },
+  {
+    "station_id": "KELP",
+    "name": "EL PASO INTERNATIONAL AIRPORT",
+    "lat": 31.812,
+    "lon": -106.377,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "TXZ055"
+  },
+  {
+    "station_id": "KELY",
+    "name": "ELY AIRPORT/YELLAND FIELD/AIRPORT",
+    "lat": 39.295,
+    "lon": -114.847,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "NVZ035"
+  },
+  {
+    "station_id": "KEUG",
+    "name": "MAHLON SWEET FIELD AIRPORT",
+    "lat": 44.133,
+    "lon": -123.216,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "ORZ010"
+  },
+  {
+    "station_id": "KEWR",
+    "name": "NEWARK LIBERTY INTERNATIONAL AP",
+    "lat": 40.683,
+    "lon": -74.169,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NJZ005"
+  },
+  {
+    "station_id": "KEYW",
+    "name": "KEY WEST INTERNATIONAL AIRPORT",
+    "lat": 24.557,
+    "lon": -81.755,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "FLZ078"
+  },
+  {
+    "station_id": "KFAR",
+    "name": "HECTOR INTERNATIONAL AIRPORT",
+    "lat": 46.924,
+    "lon": -96.812,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "NDZ039"
+  },
+  {
+    "station_id": "KFAT",
+    "name": "FRESNO YOSEMITE INTERNATIONAL AIRPORT",
+    "lat": 36.78,
+    "lon": -119.72,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ093"
+  },
+  {
+    "station_id": "KFLG",
+    "name": "FLAGSTAFF AIRPORT",
+    "lat": 35.133,
+    "lon": -111.667,
+    "country": "US",
+    "tz": "America/Phoenix",
+    "nws_zone": "AZZ015"
+  },
+  {
+    "station_id": "KFMY",
+    "name": "PAGE FIELD AIRPORT",
+    "lat": 26.585,
+    "lon": -81.861,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "FLZ065"
+  },
+  {
+    "station_id": "KFSD",
+    "name": "JOE FOSS FIELD AIRPORT",
+    "lat": 43.578,
+    "lon": -96.754,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "SDZ062"
+  },
+  {
+    "station_id": "KFSM",
+    "name": "FORT SMITH REGIONAL AIRPORT",
+    "lat": 35.333,
+    "lon": -94.365,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "OKZ072"
+  },
+  {
+    "station_id": "KFWA",
+    "name": "FORT WAYNE INTERNATIONAL AIRPORT",
+    "lat": 40.972,
+    "lon": -85.206,
+    "country": "US",
+    "tz": "America/Indiana/Indianapolis",
+    "nws_zone": "INZ018"
+  },
+  {
+    "station_id": "KGEG",
+    "name": "SPOKANE INTERNATIONAL AIRPORT",
+    "lat": 47.622,
+    "lon": -117.528,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "WAZ036"
+  },
+  {
+    "station_id": "KGJT",
+    "name": "GRAND JUNCTION REGIONAL AIRPORT",
+    "lat": 39.134,
+    "lon": -108.541,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "COZ006"
+  },
+  {
+    "station_id": "KGRB",
+    "name": "AUSTIN STRAUBEL INTERNATIONAL AP",
+    "lat": 44.48,
+    "lon": -88.137,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "WIZ039"
+  },
+  {
+    "station_id": "KGRR",
+    "name": "GERALD R FORD INTERNATIONAL AIRPORT",
+    "lat": 42.882,
+    "lon": -85.523,
+    "country": "US",
+    "tz": "America/Detroit",
+    "nws_zone": "MIZ057"
+  },
+  {
+    "station_id": "KGSO",
+    "name": "PIEDMONT TRIAD INTERNATIONAL AIRPORT",
+    "lat": 36.097,
+    "lon": -79.943,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NCZ022"
+  },
+  {
+    "station_id": "KGTF",
+    "name": "GREAT FALLS INTERNATIONAL AIRPORT",
+    "lat": 47.473,
+    "lon": -111.383,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "MTZ012"
+  },
+  {
+    "station_id": "KHLN",
+    "name": "HELENA REGIONAL AIRPORT",
+    "lat": 46.604,
+    "lon": -111.989,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "MTZ014"
+  },
+  {
+    "station_id": "KHSV",
+    "name": "HUNTSVILLE INTL/C.T.JONES FIELD AIRPORT",
+    "lat": 34.644,
+    "lon": -86.786,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": null
+  },
+  {
+    "station_id": "KIAD",
+    "name": "WASHINGTON DULLES INTERNATIONAL AP",
+    "lat": 38.935,
+    "lon": -77.447,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "VAZ053"
+  },
+  {
+    "station_id": "KIAH",
+    "name": "G BUSH INTERCONTINENTAL AP/HOUSTON AP",
+    "lat": 29.984,
+    "lon": -95.361,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ213"
+  },
+  {
+    "station_id": "KICT",
+    "name": "WICHITA EISENHOWER NATIONAL",
+    "lat": 37.648,
+    "lon": -97.43,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "KSZ083"
+  },
+  {
+    "station_id": "KIDA",
+    "name": "IDAHO FALLS REGIONAL ARPT",
+    "lat": 43.52,
+    "lon": -112.068,
+    "country": "US",
+    "tz": "America/Boise",
+    "nws_zone": "IDZ020"
+  },
+  {
+    "station_id": "KIND",
+    "name": "INDIANAPOLIS INTERNATIONAL AIRPORT",
+    "lat": 39.725,
+    "lon": -86.282,
+    "country": "US",
+    "tz": "America/Indiana/Indianapolis",
+    "nws_zone": "INZ047"
+  },
+  {
+    "station_id": "KJAN",
+    "name": "JACKSON INTERNATIONAL AIRPORT",
+    "lat": 32.32,
+    "lon": -90.078,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "MSZ049"
+  },
+  {
+    "station_id": "KJAX",
+    "name": "JACKSONVILLE INTERNATIONAL AIRPORT",
+    "lat": 30.495,
+    "lon": -81.694,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "FLZ024"
+  },
+  {
+    "station_id": "KJFK",
+    "name": "JOHN F KENNEDY INTERNATIONAL AIRPORT",
+    "lat": 40.639,
+    "lon": -73.764,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NYZ076"
+  },
+  {
+    "station_id": "KLAN",
+    "name": "CAPITAL CITY AIRPORT",
+    "lat": 42.776,
+    "lon": -84.6,
+    "country": "US",
+    "tz": "America/Detroit",
+    "nws_zone": "MIZ059"
+  },
+  {
+    "station_id": "KLAS",
+    "name": "MCCARRAN INTERNATIONAL AIRPORT",
+    "lat": 36.072,
+    "lon": -115.163,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "NVZ020"
+  },
+  {
+    "station_id": "KLAX",
+    "name": "LOS ANGELES INTERNATIONAL AIRPORT",
+    "lat": 33.938,
+    "lon": -118.387,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ041"
+  },
+  {
+    "station_id": "KLBB",
+    "name": "LUBBOCK INTERNATIONAL AIRPORT",
+    "lat": 33.666,
+    "lon": -101.823,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ035"
+  },
+  {
+    "station_id": "KLCH",
+    "name": "LAKE CHARLES REGIONAL AIRPORT",
+    "lat": 30.126,
+    "lon": -93.228,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "LAZ041"
+  },
+  {
+    "station_id": "KLEX",
+    "name": "BLUE GRASS AIRPORT",
+    "lat": 38.034,
+    "lon": -84.611,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "KYZ041"
+  },
+  {
+    "station_id": "KLGA",
+    "name": "LA GUARDIA AIRPORT",
+    "lat": 40.779,
+    "lon": -73.88,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NYZ076"
+  },
+  {
+    "station_id": "KLIT",
+    "name": "ADAMS FIELD AIRPORT",
+    "lat": 34.727,
+    "lon": -92.236,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ARZ044"
+  },
+  {
+    "station_id": "KLNK",
+    "name": "LINCOLN MUNICIPAL AIRPORT",
+    "lat": 40.848,
+    "lon": -96.765,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "NEZ066"
+  },
+  {
+    "station_id": "KMAF",
+    "name": "MIDLAND INTERNATIONAL AIRPORT",
+    "lat": 31.948,
+    "lon": -102.209,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ062"
+  },
+  {
+    "station_id": "KMCI",
+    "name": "KANSAS CITY INTERNATIONAL AIRPORT",
+    "lat": 39.297,
+    "lon": -94.731,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "MOZ028"
+  },
+  {
+    "station_id": "KMCO",
+    "name": "ORLANDO INTERNATIONAL AIRPORT",
+    "lat": 28.418,
+    "lon": -81.324,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "FLZ045"
+  },
+  {
+    "station_id": "KMDW",
+    "name": "CHICAGO MIDWAY INTL ARPT",
+    "lat": 41.784,
+    "lon": -87.755,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ILZ005"
+  },
+  {
+    "station_id": "KMEM",
+    "name": "MEMPHIS INTERNATIONAL AIRPORT",
+    "lat": 35.056,
+    "lon": -89.986,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TNZ088"
+  },
+  {
+    "station_id": "KMFR",
+    "name": "ROGUE VALLEY INTL-MEDFORD AIRPORT",
+    "lat": 42.375,
+    "lon": -122.877,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "ORZ026"
+  },
+  {
+    "station_id": "KMGM",
+    "name": "MONTGOMERY RGNL (DANNELLY FD) AP",
+    "lat": 32.3,
+    "lon": -86.407,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ALZ044"
+  },
+  {
+    "station_id": "KMHT",
+    "name": "MANCHESTER AIRPORT",
+    "lat": 42.93,
+    "lon": -71.436,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NHZ013"
+  },
+  {
+    "station_id": "KMIA",
+    "name": "MIAMI INTERNATIONAL AIRPORT",
+    "lat": 25.788,
+    "lon": -80.317,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "FLZ074"
+  },
+  {
+    "station_id": "KMKE",
+    "name": "GENERAL MITCHELL INTERNATIONAL AP",
+    "lat": 42.955,
+    "lon": -87.905,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "WIZ066"
+  },
+  {
+    "station_id": "KMLI",
+    "name": "QUAD CITY INTERNATIONAL AIRPORT",
+    "lat": 41.448,
+    "lon": -90.524,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ILZ015"
+  },
+  {
+    "station_id": "KMOB",
+    "name": "MOBILE REGIONAL AIRPORT",
+    "lat": 30.688,
+    "lon": -88.246,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ALZ061"
+  },
+  {
+    "station_id": "KMRY",
+    "name": "MONTEREY PENINSULA AIRPORT",
+    "lat": 36.59,
+    "lon": -121.849,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ009"
+  },
+  {
+    "station_id": "KMSN",
+    "name": "DANE CO REGIONAL-TRUAX FIELD AIRPORT",
+    "lat": 43.141,
+    "lon": -89.345,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "WIZ063"
+  },
+  {
+    "station_id": "KMSO",
+    "name": "MISSOULA INTERNATIONAL AIRPORT",
+    "lat": 46.921,
+    "lon": -114.094,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "MTZ005"
+  },
+  {
+    "station_id": "KMSP",
+    "name": "MINNEAPOLIS-ST PAUL INTERNATIONAL AP",
+    "lat": 44.885,
+    "lon": -93.231,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "MNZ060"
+  },
+  {
+    "station_id": "KMSY",
+    "name": "LOUIS ARMSTRONG NEW ORLEANS INTL AP",
+    "lat": 29.998,
+    "lon": -90.278,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "LAZ056"
+  },
+  {
+    "station_id": "KOAK",
+    "name": "METRO OAKLAND INTL AIRPORT",
+    "lat": 37.718,
+    "lon": -122.233,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ007"
+  },
+  {
+    "station_id": "KOKC",
+    "name": "WILL ROGERS WORLD AIRPORT",
+    "lat": 35.388,
+    "lon": -97.6,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "OKZ025"
+  },
+  {
+    "station_id": "KOMA",
+    "name": "EPPLEY AIRFIELD AIRPORT",
+    "lat": 41.312,
+    "lon": -95.902,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "NEZ052"
+  },
+  {
+    "station_id": "KORD",
+    "name": "CHICAGO O'HARE INTERNATIONAL AIRPORT",
+    "lat": 41.96,
+    "lon": -87.932,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ILZ013"
+  },
+  {
+    "station_id": "KORF",
+    "name": "NORFOLK INTERNATIONAL AIRPORT",
+    "lat": 36.904,
+    "lon": -76.193,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NCZ015"
+  },
+  {
+    "station_id": "KPBI",
+    "name": "PALM BEACH INTERNATIONAL AIRPORT",
+    "lat": 26.685,
+    "lon": -80.099,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "FLZ068"
+  },
+  {
+    "station_id": "KPDX",
+    "name": "PORTLAND INTERNATIONAL AIRPORT",
+    "lat": 45.596,
+    "lon": -122.609,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "ORZ006"
+  },
+  {
+    "station_id": "KPHL",
+    "name": "PHILADELPHIA INTERNATIONAL AIRPORT",
+    "lat": 39.873,
+    "lon": -75.227,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "PAZ070"
+  },
+  {
+    "station_id": "KPHX",
+    "name": "PHOENIX SKY HARBOR INTL AIRPORT",
+    "lat": 33.428,
+    "lon": -112.004,
+    "country": "US",
+    "tz": "America/Phoenix",
+    "nws_zone": "AZZ023"
+  },
+  {
+    "station_id": "KPIA",
+    "name": "GREATER PEORIA REGIONAL AIRPORT",
+    "lat": 40.667,
+    "lon": -89.684,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ILZ029"
+  },
+  {
+    "station_id": "KPIH",
+    "name": "POCATELLO REGIONAL AIRPORT",
+    "lat": 42.92,
+    "lon": -112.572,
+    "country": "US",
+    "tz": "America/Boise",
+    "nws_zone": "IDZ021"
+  },
+  {
+    "station_id": "KPIT",
+    "name": "PITTSBURGH INTERNATIONAL AIRPORT",
+    "lat": 40.485,
+    "lon": -80.214,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "PAZ021"
+  },
+  {
+    "station_id": "KPUB",
+    "name": "PUEBLO MEMORIAL AIRPORT",
+    "lat": 38.289,
+    "lon": -104.506,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "COZ073"
+  },
+  {
+    "station_id": "KPVD",
+    "name": "THEODORE F GREEN STATE AIRPORT",
+    "lat": 41.723,
+    "lon": -71.432,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "RIZ004"
+  },
+  {
+    "station_id": "KPWM",
+    "name": "PORTLAND INTERNATIONAL JETPORT AP",
+    "lat": 43.642,
+    "lon": -70.304,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "MEZ024"
+  },
+  {
+    "station_id": "KRAP",
+    "name": "RAPID CITY REGIONAL AIRPORT",
+    "lat": 44.046,
+    "lon": -103.054,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "SDZ031"
+  },
+  {
+    "station_id": "KRDD",
+    "name": "REDDING MUNICIPAL AIRPORT",
+    "lat": 40.515,
+    "lon": -122.298,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ015"
+  },
+  {
+    "station_id": "KRDU",
+    "name": "RALEIGH-DURHAM INTERNATIONAL AP",
+    "lat": 35.892,
+    "lon": -78.782,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NCZ041"
+  },
+  {
+    "station_id": "KRFD",
+    "name": "GREATER ROCKFORD AIRPORT",
+    "lat": 42.193,
+    "lon": -89.093,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ILZ003"
+  },
+  {
+    "station_id": "KRIC",
+    "name": "RICHMOND INTERNATIONAL AIRPORT",
+    "lat": 37.512,
+    "lon": -77.323,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "VAZ048"
+  },
+  {
+    "station_id": "KRNO",
+    "name": "RENO/TAHOE INTERNATIONAL AIRPORT",
+    "lat": 39.508,
+    "lon": -119.768,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "NVZ003"
+  },
+  {
+    "station_id": "KROC",
+    "name": "GREATER ROCHESTER INTERNATIONAL AP",
+    "lat": 43.117,
+    "lon": -77.675,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NYZ003"
+  },
+  {
+    "station_id": "KROW",
+    "name": "ROSWELL INTERNATIONAL AIR CENTER AP",
+    "lat": 33.307,
+    "lon": -104.508,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "NMZ018"
+  },
+  {
+    "station_id": "KRST",
+    "name": "ROCHESTER INTERNATIONAL AIRPORT",
+    "lat": 43.904,
+    "lon": -92.492,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "MNZ087"
+  },
+  {
+    "station_id": "KSAN",
+    "name": "SAN DIEGO INTERNATIONAL AIRPORT",
+    "lat": 32.734,
+    "lon": -117.183,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ043"
+  },
+  {
+    "station_id": "KSAT",
+    "name": "SAN ANTONIO INTERNATIONAL AIRPORT",
+    "lat": 29.544,
+    "lon": -98.484,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "TXZ205"
+  },
+  {
+    "station_id": "KSAV",
+    "name": "SAVANNAH/HILTON HEAD INTL AIRPORT",
+    "lat": 32.131,
+    "lon": -81.202,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "GAZ099"
+  },
+  {
+    "station_id": "KSBA",
+    "name": "SANTA BARBARA MUNICIPAL AIRPORT",
+    "lat": 34.424,
+    "lon": -119.842,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ039"
+  },
+  {
+    "station_id": "KSBN",
+    "name": "SOUTH BEND REGIONAL AIRPORT",
+    "lat": 41.707,
+    "lon": -86.316,
+    "country": "US",
+    "tz": "America/Indiana/Indianapolis",
+    "nws_zone": "INZ003"
+  },
+  {
+    "station_id": "KSDF",
+    "name": "LOUISVILLE INTL-STANDIFORD FIELD AP",
+    "lat": 38.177,
+    "lon": -85.731,
+    "country": "US",
+    "tz": "America/Kentucky/Louisville",
+    "nws_zone": "KYZ030"
+  },
+  {
+    "station_id": "KSEA",
+    "name": "SEATTLE-TACOMA INTERNATIONAL AIRPORT",
+    "lat": 47.445,
+    "lon": -122.314,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "WAZ006"
+  },
+  {
+    "station_id": "KSFO",
+    "name": "SAN FRANCISCO INTERNATIONAL AIRPORT",
+    "lat": 37.62,
+    "lon": -122.366,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ006"
+  },
+  {
+    "station_id": "KSGF",
+    "name": "SPRINGFIELD-BRANSON REGIONAL AIRPORT",
+    "lat": 37.24,
+    "lon": -93.39,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "MOZ090"
+  },
+  {
+    "station_id": "KSHV",
+    "name": "SHREVEPORT REGIONAL AIRPORT",
+    "lat": 32.447,
+    "lon": -93.824,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "LAZ001"
+  },
+  {
+    "station_id": "KSJC",
+    "name": "N Y. MINETA SN JO INTL APT",
+    "lat": 37.359,
+    "lon": -121.924,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ008"
+  },
+  {
+    "station_id": "KSLC",
+    "name": "SALT LAKE CITY INTERNATIONAL AIRPORT",
+    "lat": 40.771,
+    "lon": -111.965,
+    "country": "US",
+    "tz": "America/Denver",
+    "nws_zone": "UTZ002"
+  },
+  {
+    "station_id": "KSMF",
+    "name": "SACRAMENTO INTL AIRPORT",
+    "lat": 38.701,
+    "lon": -121.595,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "CAZ015"
+  },
+  {
+    "station_id": "KSPI",
+    "name": "ABRAHAM LINCOLN CAPITAL AIRPORT",
+    "lat": 39.845,
+    "lon": -89.684,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "ILZ051"
+  },
+  {
+    "station_id": "KSTL",
+    "name": "LAMBERT-ST LOUIS INTERNATIONAL AP",
+    "lat": 38.752,
+    "lon": -90.373,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "MOZ063"
+  },
+  {
+    "station_id": "KSYR",
+    "name": "SYRACUSE HANCOCK INTERNATIONAL AP",
+    "lat": 43.111,
+    "lon": -76.104,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "NYZ018"
+  },
+  {
+    "station_id": "KTLH",
+    "name": "TALLAHASSEE REGIONAL AIRPORT",
+    "lat": 30.394,
+    "lon": -84.351,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "FLZ017"
+  },
+  {
+    "station_id": "KTOL",
+    "name": "TOLEDO EXPRESS AIRPORT",
+    "lat": 41.587,
+    "lon": -83.805,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "OHZ003"
+  },
+  {
+    "station_id": "KTPA",
+    "name": "TAMPA INTERNATIONAL AIRPORT",
+    "lat": 27.963,
+    "lon": -82.54,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "FLZ050"
+  },
+  {
+    "station_id": "KTUL",
+    "name": "TULSA INTERNATIONAL AIRPORT",
+    "lat": 36.199,
+    "lon": -95.878,
+    "country": "US",
+    "tz": "America/Chicago",
+    "nws_zone": "OKZ060"
+  },
+  {
+    "station_id": "KTUS",
+    "name": "TUCSON INTERNATIONAL AIRPORT",
+    "lat": 32.132,
+    "lon": -110.956,
+    "country": "US",
+    "tz": "America/Phoenix",
+    "nws_zone": "AZZ033"
+  },
+  {
+    "station_id": "KTYS",
+    "name": "MC GHEE TYSON AIRPORT",
+    "lat": 35.818,
+    "lon": -83.986,
+    "country": "US",
+    "tz": "America/New_York",
+    "nws_zone": "TNZ071"
+  },
+  {
+    "station_id": "KYKM",
+    "name": "YAKIMA AIR TERMINAL/MCALSR FIELD AP",
+    "lat": 46.564,
+    "lon": -120.535,
+    "country": "US",
+    "tz": "America/Los_Angeles",
+    "nws_zone": "WAZ027"
+  },
+  {
+    "station_id": "KYUM",
+    "name": "YUMA INTL AIRPORT",
+    "lat": 32.65,
+    "lon": -114.6,
+    "country": "US",
+    "tz": "America/Phoenix",
+    "nws_zone": "AZZ025"
+  },
+  {
+    "station_id": "MMAA",
+    "name": "GENERAL JUAN N ALVAREZ INTL / ACAPULCO INTL",
+    "lat": 16.757,
+    "lon": -99.754,
+    "country": "MX",
+    "tz": "America/Mexico_City",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMCS",
+    "name": "ABRAHAM GONZALEZ INTL / CIUDAD JUAREZ INTL",
+    "lat": 31.636,
+    "lon": -106.429,
+    "country": "MX",
+    "tz": "America/Ciudad_Juarez",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMCU",
+    "name": "GENERAL R FIERRO VILLALOBOS INTL / CHIHUAHUA INTL",
+    "lat": 28.703,
+    "lon": -105.965,
+    "country": "MX",
+    "tz": "America/Chihuahua",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMGL",
+    "name": "DON MIGUEL HIDALGO Y COSTILLA INTL / GUADALAJARA INTL",
+    "lat": 20.522,
+    "lon": -103.311,
+    "country": "MX",
+    "tz": "America/Mexico_City",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMHO",
+    "name": "GENERAL IGNACIO P GARCIA INTL / HERMOSILLO INTL",
+    "lat": 29.096,
+    "lon": -111.048,
+    "country": "MX",
+    "tz": "America/Hermosillo",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMLO",
+    "name": "GUANAJUATO INTL / LEON INTL",
+    "lat": 20.983,
+    "lon": -101.483,
+    "country": "MX",
+    "tz": "America/Mexico_City",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMMD",
+    "name": "LICENCIADO MANUEL CRESCENCIO REJON INT / MERIDA INTL",
+    "lat": 20.937,
+    "lon": -89.658,
+    "country": "MX",
+    "tz": "America/Merida",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMMX",
+    "name": "LICENCIADO BENITO JUAREZ INTL / MEXICO CITY INTL",
+    "lat": 19.436,
+    "lon": -99.072,
+    "country": "MX",
+    "tz": "America/Mexico_City",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMMY",
+    "name": "GENERAL MARIANO ESCOBEDO INTL / MONTERREY INTL",
+    "lat": 25.778,
+    "lon": -100.107,
+    "country": "MX",
+    "tz": "America/Monterrey",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMMZ",
+    "name": "GENERAL RAFAEL BUELNA INTL / MAZATLAN INTL",
+    "lat": 23.161,
+    "lon": -106.266,
+    "country": "MX",
+    "tz": "America/Mazatlan",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMOX",
+    "name": "XOXOCOTLAN INTL / OAXACA INTL",
+    "lat": 17.0,
+    "lon": -96.733,
+    "country": "MX",
+    "tz": "America/Mexico_City",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMPR",
+    "name": "LICENCIADO GUSTAVO DIAZ ORDAZ INTL / PUERTO VALLARTA INTL",
+    "lat": 20.68,
+    "lon": -105.254,
+    "country": "MX",
+    "tz": "America/Mexico_City",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMSD",
+    "name": "LOS CABOS INTL / SAN JOSE DEL CABO INTL",
+    "lat": 23.152,
+    "lon": -109.721,
+    "country": "MX",
+    "tz": "America/Mazatlan",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMTJ",
+    "name": "GENERAL ABELARDO L RODRIGUEZ INTL / TIJUANA INTL",
+    "lat": 32.541,
+    "lon": -116.97,
+    "country": "MX",
+    "tz": "America/Tijuana",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMTM",
+    "name": "GENERAL FRANCISCO JAVIER MINA INTL / TAMPICO INTL",
+    "lat": 22.296,
+    "lon": -97.866,
+    "country": "MX",
+    "tz": "America/Monterrey",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMUN",
+    "name": "CANCUN INTL",
+    "lat": 21.037,
+    "lon": -86.877,
+    "country": "MX",
+    "tz": "America/Cancun",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMVA",
+    "name": "C P A CARLOS ROVIROSA INTL / VILLAHERMOSA INTL",
+    "lat": 17.983,
+    "lon": -92.817,
+    "country": "MX",
+    "tz": "America/Mexico_City",
+    "nws_zone": null
+  },
+  {
+    "station_id": "MMVR",
+    "name": "GENERAL HERIBERTO JARA INTL / VERACRUZ INTL",
+    "lat": 19.146,
+    "lon": -96.187,
+    "country": "MX",
+    "tz": "America/Mexico_City",
+    "nws_zone": null
+  },
+  {
+    "station_id": "PAFA",
+    "name": "FAIRBANKS INTERNATIONAL",
+    "lat": 64.803,
+    "lon": -147.876,
+    "country": "US",
+    "tz": "America/Anchorage",
+    "nws_zone": "AKZ222"
+  },
+  {
+    "station_id": "PAJN",
+    "name": "JUNEAU INTERNATIONAL",
+    "lat": 58.354,
+    "lon": -134.556,
+    "country": "US",
+    "tz": "America/Juneau",
+    "nws_zone": "AKZ022"
+  },
+  {
+    "station_id": "PANC",
+    "name": "TED STEVENS ANCHORAGE INTL",
+    "lat": 61.169,
+    "lon": -150.028,
+    "country": "US",
+    "tz": "America/Anchorage",
+    "nws_zone": "AKZ101"
+  },
+  {
+    "station_id": "PHLI",
+    "name": "LIHUE AIRPORT",
+    "lat": 21.98,
+    "lon": -159.339,
+    "country": "US",
+    "tz": "Pacific/Honolulu",
+    "nws_zone": "HIZ001"
+  },
+  {
+    "station_id": "PHNL",
+    "name": "HONOLULU INTERNATIONAL AIRPORT",
+    "lat": 21.324,
+    "lon": -157.939,
+    "country": "US",
+    "tz": "Pacific/Honolulu",
+    "nws_zone": "HIZ002"
+  },
+  {
+    "station_id": "PHOG",
+    "name": "KAHULUI AIRPORT",
+    "lat": 20.889,
+    "lon": -156.435,
+    "country": "US",
+    "tz": "Pacific/Honolulu",
+    "nws_zone": "HIZ003"
+  },
+  {
+    "station_id": "PHTO",
+    "name": "HILO INTERNATIONAL AIRPORT",
+    "lat": 19.719,
+    "lon": -155.049,
+    "country": "US",
+    "tz": "Pacific/Honolulu",
+    "nws_zone": "HIZ004"
+  }
+]

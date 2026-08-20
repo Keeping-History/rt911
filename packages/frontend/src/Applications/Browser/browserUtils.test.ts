@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { normalizeUrl, stripProxyUrl } from "./browserUtils";
+import {
+	buildLinkStyle,
+	extractLinkColors,
+	isValidCssColor,
+	normalizeUrl,
+	resolveLinkTarget,
+	stripProxyUrl,
+} from "./browserUtils";
 
 const HOST = "timemachine.911realtime.org";
 
@@ -60,5 +67,101 @@ describe("stripProxyUrl", () => {
 describe("normalizeUrl", () => {
 	it("drops www and trailing slash", () => {
 		expect(normalizeUrl("http://www.cnn.com/")).toBe("http://cnn.com");
+	});
+});
+
+describe("resolveLinkTarget", () => {
+	const CURRENT = "http://www.apple.com/education/";
+
+	it("de-proxies a /web/<url> wrapper to the original target", () => {
+		expect(
+			resolveLinkTarget(
+				`https://${HOST}/web/http://www.apple.com/store/`,
+				"/web/http://www.apple.com/store/",
+				CURRENT,
+				HOST,
+			),
+		).toBe("http://www.apple.com/store/");
+	});
+
+	it("resolves a relative href against the current page", () => {
+		expect(
+			resolveLinkTarget("", "../macosx/", CURRENT, HOST),
+		).toBe("http://www.apple.com/macosx/");
+	});
+
+	it("returns an absolute href as-is", () => {
+		expect(
+			resolveLinkTarget(
+				"http://www.apple.com/ipod/",
+				"http://www.apple.com/ipod/",
+				CURRENT,
+				HOST,
+			),
+		).toBe("http://www.apple.com/ipod/");
+	});
+
+	it("returns null for non-navigable schemes", () => {
+		expect(
+			resolveLinkTarget("mailto:tim@apple.com", "mailto:tim@apple.com", CURRENT, HOST),
+		).toBeNull();
+	});
+});
+
+describe("isValidCssColor", () => {
+	it("accepts hex colors", () => {
+		expect(isValidCssColor("#551A8B")).toBe(true);
+		expect(isValidCssColor("#abc")).toBe(true);
+	});
+	it("accepts named colors", () => {
+		expect(isValidCssColor("purple")).toBe(true);
+	});
+	it("rejects junk", () => {
+		expect(isValidCssColor("not a color")).toBe(false);
+		expect(isValidCssColor("")).toBe(false);
+	});
+});
+
+describe("extractLinkColors", () => {
+	it("reads link/vlink/alink from the raw body tag", () => {
+		expect(
+			extractLinkColors(
+				`<html><body bgcolor="#fff" link="#0000FF" vlink="#551A8B" alink="red">x</body></html>`,
+			),
+		).toEqual({ link: "#0000FF", visited: "#551A8B", active: "red" });
+	});
+	it("normalizes a bare hex value with a leading #", () => {
+		expect(extractLinkColors(`<body vlink=551A8B>`).visited).toBe("#551A8B");
+	});
+	it("returns nulls when body declares no colors", () => {
+		expect(extractLinkColors(`<body bgcolor="#fff">`)).toEqual({
+			link: null,
+			visited: null,
+			active: null,
+		});
+	});
+	it("returns nulls when there is no body tag", () => {
+		expect(extractLinkColors(`<a href="/x">x</a>`)).toEqual({
+			link: null,
+			visited: null,
+			active: null,
+		});
+	});
+});
+
+describe("buildLinkStyle", () => {
+	it("emits a rule per declared color in link → visited → active order", () => {
+		expect(
+			buildLinkStyle({ link: "#00f", visited: "#551A8B", active: "red" }),
+		).toBe(
+			"a:link,area:link{color:#00f}\n" +
+				"a.browserVisited,area.browserVisited{color:#551A8B}\n" +
+				"a:active,area:active{color:red}",
+		);
+	});
+	it("omits rules for absent colors", () => {
+		expect(buildLinkStyle({ link: null, visited: "#551A8B", active: null })).toBe(
+			"a.browserVisited,area.browserVisited{color:#551A8B}",
+		);
 	});
 });

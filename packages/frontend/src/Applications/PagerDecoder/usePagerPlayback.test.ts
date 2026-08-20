@@ -9,6 +9,7 @@ import { usePagerPlayback } from "./usePagerPlayback";
 
 vi.mock("classicy", () => ({
 	registerAppEventHandler: vi.fn(),
+	registerApp: vi.fn(),
 }));
 
 let idSeq = 1;
@@ -48,6 +49,9 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					items: [],
 					pagerItems,
 					mp3Items: [],
+					mp3History: [],
+					mp3Meta: {},
+					mp3MetaGeneration: null,
 					connected: true,
 					addItems: vi.fn(),
 					subscribeFormats: vi.fn(),
@@ -56,9 +60,54 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					unsubscribePager,
 					subscribeMp3: vi.fn(),
 					unsubscribeMp3: vi.fn(),
+					getUpcomingMp3Items: vi.fn(() => []),
 					newsItems: [],
 					subscribeNews: vi.fn(),
 					unsubscribeNews: vi.fn(),
+					alertItems: [],
+					subscribeAlerts: vi.fn(),
+					unsubscribeAlerts: vi.fn(),
+					usenetItems: [],
+					usenetBodies: {},
+					usenetBodyErrors: {},
+					requestUsenetBody: vi.fn(),
+					newsBodies: {},
+					newsBodyErrors: {},
+					requestNewsBody: vi.fn(),
+					subscribeUsenet: vi.fn(),
+					unsubscribeUsenet: vi.fn(),
+					setUsenetGroups: vi.fn(),
+					requestUsenetOlder: vi.fn(),
+					flightPositions: [],
+					subscribeFlights: vi.fn(),
+					unsubscribeFlights: vi.fn(),
+					subscribeFlightsAnon: vi.fn(),
+					unsubscribeFlightsAnon: vi.fn(),
+					flightsHistory: [],
+					flightsHistoryDone: false,
+					flightsSeed: [],
+					requestFlightsHistory: vi.fn(),
+					clearFlightsHistory: vi.fn(),
+					weatherObservations: {},
+					weatherForecastByZone: {},
+					subscribeWeather: vi.fn(),
+					unsubscribeWeather: vi.fn(),
+					requestWeatherForecast: vi.fn(),
+					sources: { video: [], audio: [], pager: [], usenet: [] },
+					clockForced: false,
+					seekInFlight: false,
+					roomCommand: null,
+					chatBuddies: [],
+					chatEnabled: false,
+					chatReason: "not_signed_in",
+					chatMessages: [],
+					chatTypingProfile: null,
+					subscribeChat: vi.fn(),
+					unsubscribeChat: vi.fn(),
+					sendChat: vi.fn(),
+					requestChatHistory: vi.fn(),
+					appendLocalChatMessage: vi.fn(),
+					clearChatData: vi.fn(),
 				},
 				children,
 			}),
@@ -85,12 +134,18 @@ describe("usePagerPlayback", () => {
 		expect(result.current.streamingMeta).toBeNull();
 	});
 
-	it("subscribes to the pager channel on mount and unsubscribes on unmount", () => {
+	it("subscribes to the pager channel when running and unsubscribes on unmount", () => {
 		const { wrapper, subscribePager, unsubscribePager } = makeWrapper([]);
-		const { unmount } = renderHook(() => usePagerPlayback(), { wrapper });
+		const { unmount } = renderHook(() => usePagerPlayback(undefined, false, true), { wrapper });
 		expect(subscribePager).toHaveBeenCalledWith("PagerDecoder.app");
 		unmount();
 		expect(unsubscribePager).toHaveBeenCalledWith("PagerDecoder.app");
+	});
+
+	it("does not subscribe when isRunning is false", () => {
+		const { wrapper, subscribePager } = makeWrapper([]);
+		renderHook(() => usePagerPlayback(undefined, false, false), { wrapper });
+		expect(subscribePager).not.toHaveBeenCalled();
 	});
 
 	it("enqueues and streams a message when a pager item appears", () => {
@@ -130,6 +185,34 @@ describe("usePagerPlayback", () => {
 		expect(result.current.lines[0].text).toBe("Hi there");
 		expect(result.current.streamingMeta).toBeNull();
 		expect(result.current.streamingText).toBe("");
+	});
+
+	it("clearLines() empties completed lines and the in-progress stream", () => {
+		const item = makePagerItem("Mid stream word");
+		const { wrapper } = makeWrapper([item]);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
+
+		// Complete one line, then begin streaming a second one.
+		act(() => { vi.advanceTimersByTime(3); }); // 3 words → first line completes
+		expect(result.current.lines).toHaveLength(1);
+
+		act(() => { result.current.clearLines(); });
+
+		expect(result.current.lines).toHaveLength(0);
+		expect(result.current.streamingText).toBe("");
+		expect(result.current.streamingMeta).toBeNull();
+	});
+
+	it("does not re-stream historical items after clearLines()", () => {
+		const item = makePagerItem("Hi there");
+		const { wrapper } = makeWrapper([item]);
+		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
+
+		act(() => { vi.advanceTimersByTime(2); }); // complete the item
+		act(() => { result.current.clearLines(); });
+		act(() => { vi.advanceTimersByTime(10); }); // a cleared item must not reappear
+
+		expect(result.current.lines).toHaveLength(0);
 	});
 
 	it("does not process the same item twice when items array updates", () => {
@@ -209,14 +292,15 @@ describe("usePagerPlayback", () => {
 		expect(result.current.uniqueValues.provider).toContain("Skytel");
 	});
 
-	it("derives ET time key from UTC start_date", () => {
-		// 2001-09-11T07:00:00Z = 03:00:00 EDT
+	it("preserves the raw UTC timestamp on completed lines for the view to format", () => {
+		// Timezone conversion is the view's job (utcIsoToTimeKey); the hook keeps
+		// the raw instant so it can be rendered in the user's selected zone.
 		const item = makePagerItem("Test", "2001-09-11T07:00:00.000Z");
 		const { wrapper } = makeWrapper([item]);
 		const { result } = renderHook(() => usePagerPlayback(), { wrapper });
 
 		act(() => { vi.advanceTimersByTime(5); }); // complete message
 
-		expect(result.current.lines[0].timeKey).toBe("03:00:00");
+		expect(result.current.lines[0].timestamp).toBe("2001-09-11T07:00:00.000Z");
 	});
 });

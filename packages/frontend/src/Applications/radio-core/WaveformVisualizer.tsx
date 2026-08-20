@@ -1,0 +1,263 @@
+import type React from "react";
+import { useEffect, useRef } from "react";
+import { captureAudioElement } from "./audioCapture";
+import { keepAudioContextAlive } from "./audioContextKeepAlive";
+import type { VizMode } from "./radioScannerSettings";
+
+interface WaveformVisualizerProps {
+	audioEl: HTMLAudioElement | null;
+	/** Current display mode — owned and persisted by RadioScanner. */
+	mode: VizMode;
+	/** Advance to the next mode; the parent persists the change. */
+	onCycleMode: () => void;
+	/** Custom colors; null/undefined = follow the Classicy theme variables. */
+	colors?: { bright: string; dim: string } | null;
+}
+
+// Fallbacks when the Classicy theme variables aren't set (e.g. in tests).
+const FALLBACK_BRIGHT = "rgba(0,210,90,0.9)";
+const FALLBACK_DIM = "rgba(0,180,70,0.3)";
+
+interface WaveColors {
+	bright: string;
+	dim: string;
+}
+
+function linearGrad(d: CanvasRenderingContext2D, h: number, c: WaveColors): CanvasGradient {
+	const g = d.createLinearGradient(0, 0, 0, h);
+	g.addColorStop(0, c.bright);
+	g.addColorStop(1, c.dim);
+	return g;
+}
+
+function drawBars(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: number, c: WaveColors) {
+	const buf = new Uint8Array(a.frequencyBinCount);
+	a.getByteFrequencyData(buf);
+	d.clearRect(0, 0, w, h);
+	const g = linearGrad(d, h, c);
+	const n = Math.min(buf.length, Math.floor(w / 4));
+	const bw = (w / n) * 0.6;
+	const gap = (w / n) * 0.4;
+	for (let i = 0; i < n; i++) {
+		const bh = (buf[Math.floor((i / n) * buf.length)] / 255) * h;
+		d.fillStyle = g;
+		d.fillRect(i * (bw + gap), h - bh, bw, bh);
+	}
+}
+
+function drawSpectrum(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: number, c: WaveColors) {
+	const buf = new Uint8Array(a.frequencyBinCount);
+	a.getByteFrequencyData(buf);
+	d.clearRect(0, 0, w, h);
+	const g = linearGrad(d, h, c);
+	const last = buf.length - 1;
+
+	d.beginPath();
+	d.moveTo(0, h);
+	for (let i = 0; i < buf.length; i++) d.lineTo((i / last) * w, h - (buf[i] / 255) * h);
+	d.lineTo(w, h);
+	d.closePath();
+	d.globalAlpha = 0.5;
+	d.fillStyle = g;
+	d.fill();
+
+	d.globalAlpha = 1;
+	d.beginPath();
+	d.moveTo(0, h - (buf[0] / 255) * h);
+	for (let i = 1; i < buf.length; i++) d.lineTo((i / last) * w, h - (buf[i] / 255) * h);
+	d.strokeStyle = c.bright;
+	d.lineWidth = 2;
+	d.stroke();
+}
+
+function drawRadial(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: number, c: WaveColors) {
+	const buf = new Uint8Array(a.frequencyBinCount);
+	a.getByteFrequencyData(buf);
+	d.clearRect(0, 0, w, h);
+
+	const cx = w / 2;
+	const cy = h / 2;
+	const r0 = Math.min(w, h) * 0.15;
+	const maxH = Math.min(w, h) * 0.35;
+	const n = 128;
+	const bw = ((2 * Math.PI * r0) / n) * 0.7;
+
+	// Radial gradient: dim at center, bright at outer edge of bars.
+	const g = d.createRadialGradient(cx, cy, r0, cx, cy, r0 + maxH);
+	g.addColorStop(0, c.dim);
+	g.addColorStop(1, c.bright);
+
+	d.globalAlpha = 0.85;
+	for (let i = 0; i < n; i++) {
+		const bh = (buf[Math.floor((i / n) * buf.length * 0.75)] / 255) * maxH;
+		if (bh < 1) continue;
+		d.save();
+		d.translate(cx, cy);
+		d.rotate((i / n) * 2 * Math.PI - Math.PI / 2);
+		d.fillStyle = g;
+		d.fillRect(-bw / 2, r0, bw, bh);
+		d.restore();
+	}
+	d.globalAlpha = 1;
+}
+
+function drawWave(d: CanvasRenderingContext2D, a: AnalyserNode, w: number, h: number, c: WaveColors) {
+	const buf = new Uint8Array(a.fftSize);
+	a.getByteTimeDomainData(buf);
+	d.clearRect(0, 0, w, h);
+	const g = linearGrad(d, h, c);
+	const sw = w / buf.length;
+
+	d.beginPath();
+	d.moveTo(0, h / 2);
+	for (let i = 0; i < buf.length; i++) d.lineTo(i * sw, ((buf[i] - 128) / 128) * (h / 2) + h / 2);
+	d.lineTo(w, h / 2);
+	d.lineTo(w, h);
+	d.lineTo(0, h);
+	d.closePath();
+	d.globalAlpha = 0.3;
+	d.fillStyle = g;
+	d.fill();
+
+	d.globalAlpha = 1;
+	d.beginPath();
+	d.moveTo(0, ((buf[0] - 128) / 128) * (h / 2) + h / 2);
+	for (let i = 1; i < buf.length; i++) d.lineTo(i * sw, ((buf[i] - 128) / 128) * (h / 2) + h / 2);
+	d.strokeStyle = c.bright;
+	d.lineWidth = 2;
+	d.stroke();
+}
+
+/**
+ * Renders a real-time audio visualizer using the Web Audio API and Canvas 2D.
+ * Uses overlay mode so the canvas is absolutely positioned inside the nearest
+ * positioned ancestor. A small toggle button cycles through four visualization
+ * modes.
+ */
+export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
+	audioEl,
+	mode,
+	onCycleMode,
+	colors,
+}) => {
+	const containerRef = useRef<HTMLDivElement>(null);
+	// Read per frame via refs so the rAF loop tracks prop changes without
+	// tearing down the capture/canvas effect.
+	const modeRef = useRef(mode);
+	modeRef.current = mode;
+	const colorsRef = useRef(colors ?? null);
+	colorsRef.current = colors ?? null;
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: mode/colors intentionally excluded — read each frame via refs
+	useEffect(() => {
+		const container = containerRef.current;
+		if (!container || !audioEl) return;
+
+		// Get or create the shared capture (source → gain → destination) for
+		// this element — audioCapture.ts owns it so StationPlayer can silence
+		// captured elements in-graph. The gain path to the speakers persists
+		// when the visualizer is stopped or recreated between renders.
+		const entry = captureAudioElement(audioEl);
+		if (!entry) return;
+		entry.ctx.resume().catch(() => {});
+		const stopKeepAlive = keepAudioContextAlive(entry.ctx);
+
+		// Tap post-gain so the waveform reflects what is actually audible —
+		// a muted or un-soloed clip draws flat instead of dancing silently.
+		const { gain } = entry;
+
+		const analyser = entry.ctx.createAnalyser();
+		analyser.fftSize = 2048;
+		analyser.smoothingTimeConstant = 0.8;
+		gain.connect(analyser);
+
+		const canvas = document.createElement("canvas");
+		canvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;";
+		container.appendChild(canvas);
+
+		const resize = () => {
+			canvas.width = container.clientWidth;
+			canvas.height = container.clientHeight;
+		};
+		resize();
+		const ro = new ResizeObserver(resize);
+		ro.observe(container);
+
+		const ctx2d = canvas.getContext("2d");
+		if (!ctx2d) {
+			canvas.remove();
+			ro.disconnect();
+			stopKeepAlive();
+			return;
+		}
+
+		// Live computed style: re-reading the theme variables each frame keeps
+		// the waveform in sync when the Appearance control panel re-themes.
+		const computed = getComputedStyle(container);
+
+		let rafId: number;
+		const draw = () => {
+			rafId = requestAnimationFrame(draw);
+			const w = canvas.width;
+			const h = canvas.height;
+			if (w === 0 || h === 0) return;
+			const c: WaveColors = colorsRef.current ?? {
+				bright:
+					computed.getPropertyValue("--color-theme-03").trim() ||
+					FALLBACK_BRIGHT,
+				dim:
+					computed.getPropertyValue("--color-theme-05").trim() ||
+					FALLBACK_DIM,
+			};
+			const m = modeRef.current;
+			if (m === "Bars") drawBars(ctx2d, analyser, w, h, c);
+			else if (m === "Spectrum") drawSpectrum(ctx2d, analyser, w, h, c);
+			else if (m === "Radial") drawRadial(ctx2d, analyser, w, h, c);
+			else drawWave(ctx2d, analyser, w, h, c);
+		};
+		draw();
+
+		return () => {
+			cancelAnimationFrame(rafId);
+			ro.disconnect();
+			// Remove canvas before stopping so StrictMode's double-invoke doesn't
+			// leave a stale canvas when the effect re-runs.
+			canvas.remove();
+			gain.disconnect(analyser);
+			stopKeepAlive();
+		};
+	}, [audioEl]);
+
+	return (
+		<div
+			ref={containerRef}
+			style={{
+				position: "absolute",
+				inset: 0,
+				pointerEvents: "none",
+			}}
+		>
+			<button
+				type="button"
+				onMouseUp={onCycleMode}
+				style={{
+					position: "absolute",
+					bottom: "var(--window-padding-size, 6px)",
+					right: "var(--window-padding-size, 6px)",
+					pointerEvents: "auto",
+					opacity: 0.5,
+					background: "transparent",
+					border: "none",
+					cursor: "pointer",
+					fontSize: "0.7em",
+					fontFamily: "var(--ui-font)",
+					color: "var(--color-theme-02, rgba(0, 210, 90, 0.8))",
+					padding: "2px 4px",
+					zIndex: 999,
+				}}
+			>
+				{mode}
+			</button>
+		</div>
+	);
+};

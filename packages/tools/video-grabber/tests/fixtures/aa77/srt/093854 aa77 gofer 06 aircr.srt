@@ -1,0 +1,32 @@
+1
+00:00:00,000 --> 00:00:02,800
+ And uh, Washington, this is gopher 06.
+
+2
+00:00:02,800 --> 00:00:04,000
+ Gopher 06, guys.
+
+3
+00:00:04,000 --> 00:00:07,000
+ Yes sir, that aircraft is down. He's in our 12 o'clock position.
+
+4
+00:00:07,000 --> 00:00:13,000
+ Uh, looks like it's just to the north west of the airfield at this time, sir.
+
+5
+00:00:13,000 --> 00:00:16,000
+ Gopher 86, thank you. Descend and maintain 2000.
+
+6
+00:00:16,000 --> 00:00:18,000
+ Okay, we're down to 2000.
+
+7
+00:00:29,000 --> 00:00:34,000
+ And uh, this is gopher 06, it looks like that aircraft crashed into the Pentagon, sir.
+
+8
+00:00:34,000 --> 00:00:38,000
+ Gopher 86, gopher 06, thank you.
+

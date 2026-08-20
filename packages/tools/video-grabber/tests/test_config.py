@@ -64,3 +64,31 @@ def test_min_duration_seconds_is_int(monkeypatch):
     cfg = Config()
     assert cfg.min_duration_seconds == 600
     assert type(cfg.min_duration_seconds) is int
+
+
+def test_config_has_transcription_defaults(monkeypatch):
+    for k in ("WHISPER_BIN", "WHISPER_MODEL", "WHISPER_THREADS", "SUBTITLES_PREFIX"):
+        monkeypatch.delenv(k, raising=False)
+    from video_grabber.config import Config
+    cfg = Config()
+    assert cfg.whisper_bin == "whisper-cli"
+    assert cfg.whisper_model.endswith("ggml-medium.en.bin")
+    assert cfg.whisper_threads == 4
+    assert cfg.subtitles_prefix == "subtitles"
+
+
+def test_normalize_defaults():
+    cfg = Config()
+    assert cfg.norm_target_i == -16.0
+    assert cfg.norm_target_tp == -1.5
+    assert cfg.norm_tolerance_lu == 1.0
+    assert cfg.cf_api_token == ""
+    assert cfg.cf_zone_id == ""
+
+
+def test_normalize_env_overrides(monkeypatch):
+    monkeypatch.setenv("NORM_TARGET_I", "-18")
+    monkeypatch.setenv("NORM_TOLERANCE_LU", "0.5")
+    cfg = Config()
+    assert cfg.norm_target_i == -18.0
+    assert cfg.norm_tolerance_lu == 0.5

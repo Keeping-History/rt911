@@ -1,0 +1,138 @@
+{
+  "_README": "Hand-curated as-printed 2001 daily bars for delisted/lineage-broken symbols (see symbols.py). Sources: (a) Wayback-archived Yahoo table.csv captures whose crawl date PRECEDES the ticker's lineage break — their unadjusted Close column matched archived 2001 CNNfn Dow-30/sector tables to the penny wherever both exist; (b) github.com/sahilnale/hft-simulator unadjusted daily histories, admitted per-symbol only after its 2001-09-10/17/18 closes matched independently-established CNN values exactly; (c) contemporaneous CNN/CNNfn articles via Wayback for symbols with no surviving machine-readable series. Where a source gives only closes, the bar's high/low are the min/max span of the day's known endpoints and the open is left for the generator's prior-close fill (flat open=close on the 9/17 gap day) — conservative bounds, never invented ranges. Beware: post-lineage-break captures serve the WRONG COMPANY (a 2014 capture of ?s=t returns SBC, today's Stooq AMR.US is Alpha Metallurgical Resources).",
+  "AMR": {
+    "citation": "Wayback ichart.finance.yahoo.com table.csv?s=AMR captured 2011-12-29 (AMR Corp still listed), full unadjusted OHLC; closes corroborated by CNN 2001-09-17 sectorstox + 2001-09-18 airlines_bailout articles (web.archive.org/web/20111229215457, /web/20011116095042, /web/20011116101603)",
+    "bars": [
+      { "date": "2001-09-07", "open": 30.70, "high": 31.10, "low": 29.59, "close": 30.15 },
+      { "date": "2001-09-10", "open": 29.95, "high": 29.99, "low": 29.25, "close": 29.70 },
+      { "date": "2001-09-17", "open": 16.00, "high": 19.95, "low": 15.90, "close": 18.00 },
+      { "date": "2001-09-18", "open": 19.80, "high": 20.93, "low": 19.23, "close": 20.00 }
+    ]
+  },
+  "UAL": {
+    "citation": "Wayback table.finance.yahoo.com weekly CSV captured 2002-01-24 (week-of-9/4 close = 9/7 close; week-of-9/10 is a single-session week = exact 9/10 OHLC; 9/17 open) + CNN 2001-09-17/18 closes (web.archive.org/web/20020124115920, /web/20011116095042, /web/20011130024400); 9/7 and 9/17-18 high/low are conservative endpoint spans",
+    "bars": [
+      { "date": "2001-09-07", "open": 31.55, "high": 31.55, "low": 31.55, "close": 31.55 },
+      { "date": "2001-09-10", "open": 30.65, "high": 31.07, "low": 30.39, "close": 30.82 },
+      { "date": "2001-09-17", "open": 18.25, "high": 18.25, "low": 17.50, "close": 17.50 },
+      { "date": "2001-09-18", "high": 18.99, "low": 17.50, "close": 18.99 }
+    ]
+  },
+  "DAL": {
+    "citation": "Wayback chart.yahoo.com table.csv?s=dal captured 2001-10-04 (contemporaneous, 6 years before the 2007 post-bankruptcy DAL relisting), full unadjusted OHLC; closes match CNN 2001-09-17 sectorstox (-16.61 to 20.64) and 2001-09-18 NY wrap (+2.29 to 22.93) exactly (web.archive.org/web/20011004100534, /web/20011116095042, /web/20011215210505)",
+    "bars": [
+      { "date": "2001-09-07", "open": 38.09, "high": 38.20, "low": 36.90, "close": 37.08 },
+      { "date": "2001-09-10", "open": 37.00, "high": 37.60, "low": 36.80, "close": 37.25 },
+      { "date": "2001-09-17", "open": 20.00, "high": 24.20, "low": 20.00, "close": 20.64 },
+      { "date": "2001-09-18", "open": 22.25, "high": 23.95, "low": 21.39, "close": 22.93 }
+    ]
+  },
+  "CAL": {
+    "citation": "github.com/sahilnale/hft-simulator data/history/CAL.csv (unadjusted; 9/10=39.64, 9/17=20.05, 9/18=17.72 all match CNN-established closes exactly, authenticating the series and its 9/7 row + OHLC) cross-checked vs CNN sectorstox/airlines_bailout (web.archive.org/web/20011116095042, /web/20011116101603)",
+    "bars": [
+      { "date": "2001-09-07", "open": 42.25, "high": 42.25, "low": 39.80, "close": 40.09 },
+      { "date": "2001-09-10", "open": 39.75, "high": 39.95, "low": 39.15, "close": 39.64 },
+      { "date": "2001-09-17", "open": 19.00, "high": 20.77, "low": 19.00, "close": 20.05 },
+      { "date": "2001-09-18", "open": 20.75, "high": 20.75, "low": 17.70, "close": 17.72 }
+    ]
+  },
+  "NWAC": {
+    "citation": "Wayback chart.yahoo.com Historical Quotes page for Nasdaq:NWAC captured 2001-11-24 (contemporaneous, years before delisting), full unadjusted OHLC; closes match CNN 2001-09-17 sectorstox (-7.20 to 12.42) and the 9/19 airline_layoffs derivation (12.91) exactly, and its 9/6 close 20.15 matches CNN's midday-9/7 prior close (web.archive.org/web/20011124175335, /web/20011116095042, /web/20011116093518)",
+    "bars": [
+      { "date": "2001-09-07", "open": 20.06, "high": 20.12, "low": 19.63, "close": 20.00 },
+      { "date": "2001-09-10", "open": 19.91, "high": 20.12, "low": 19.47, "close": 19.62 },
+      { "date": "2001-09-17", "open": 12.62, "high": 13.70, "low": 12.22, "close": 12.42 },
+      { "date": "2001-09-18", "open": 13.24, "high": 13.84, "low": 12.90, "close": 12.91 }
+    ]
+  },
+  "U": {
+    "citation": "Wayback chart.yahoo.com table.csv?s=u captured 2001-11-01 (contemporaneous, years before ticker reuse), full unadjusted OHLC; closes match CNN 2001-09-17 sectorstox/NY wrap (-6.05 to 5.57) and the 9/19 derivation (5.81) exactly (web.archive.org/web/20011101101516, /web/20011116095042, /web/20011109114019)",
+    "bars": [
+      { "date": "2001-09-07", "open": 12.45, "high": 12.45, "low": 11.75, "close": 11.90 },
+      { "date": "2001-09-10", "open": 11.80, "high": 11.83, "low": 11.50, "close": 11.62 },
+      { "date": "2001-09-17", "open": 6.50, "high": 7.55, "low": 5.45, "close": 5.57 },
+      { "date": "2001-09-18", "open": 5.85, "high": 6.05, "low": 5.47, "close": 5.81 }
+    ]
+  },
+  "EK": {
+    "citation": "Wayback chart.yahoo.com table.csv?s=ek captured 2003-09-19 (EK still listed), full unadjusted OHLC; matches archived CNNfn Dow-30 table 9/18 close 39.83 and CNN 9/19 Kodak article to the penny (web.archive.org/web/20030919145038, /web/20010919060626)",
+    "bars": [
+      { "date": "2001-09-07", "open": 44.80, "high": 45.55, "low": 44.80, "close": 45.17 },
+      { "date": "2001-09-10", "open": 44.45, "high": 44.85, "low": 43.03, "close": 43.23 },
+      { "date": "2001-09-17", "open": 40.50, "high": 42.00, "low": 40.39, "close": 40.73 },
+      { "date": "2001-09-18", "open": 40.73, "high": 40.73, "low": 39.26, "close": 39.83 }
+    ]
+  },
+  "GM": {
+    "citation": "Wayback ichart.finance.yahoo.com table.csv?s=GM captured 2009-01-01 (old GM, data 1962-2008), full unadjusted OHLC; confirmed by CNN 9/7 wrap ('down $1.87 to $51.40'), CNN 9/17 GM article, archived CNNfn Dow-30 table (web.archive.org/web/20090101004301, /web/20011105213758, /web/20010919060626)",
+    "bars": [
+      { "date": "2001-09-07", "open": 53.00, "high": 53.00, "low": 50.62, "close": 51.40 },
+      { "date": "2001-09-10", "open": 51.40, "high": 52.06, "low": 50.51, "close": 51.58 },
+      { "date": "2001-09-17", "open": 46.50, "high": 47.50, "low": 44.45, "close": 44.60 },
+      { "date": "2001-09-18", "open": 44.90, "high": 46.00, "low": 44.00, "close": 44.01 }
+    ]
+  },
+  "T": {
+    "citation": "Old AT&T Corp (pre-Nov-2002 reverse split; NOT the SBC lineage that wears T today — a 2014 Wayback capture of ?s=t serves SBC prices and was rejected). CNN 9/10 NY wrap ('T: down $0.05 to $17.65' → 9/7=17.70), archived CNNfn Dow-30 + widely-held tables 9/18 18.30 (+0.78 → 9/17=17.52) (web.archive.org/web/20020314193051, /web/20010919060626, /web/20010919060711); high/low are conservative endpoint spans",
+    "bars": [
+      { "date": "2001-09-07", "open": 17.70, "high": 17.70, "low": 17.70, "close": 17.70 },
+      { "date": "2001-09-10", "high": 17.70, "low": 17.65, "close": 17.65 },
+      { "date": "2001-09-17", "high": 17.65, "low": 17.52, "close": 17.52 },
+      { "date": "2001-09-18", "high": 18.30, "low": 17.52, "close": 18.30 }
+    ]
+  },
+  "MMC": {
+    "citation": "Wayback ichart.finance.yahoo.com table.csv?s=mmc captured 2014 (MMC lineage continuous, Close column as-printed pre-2002-split ~$87 vs adj ~$30), full unadjusted OHLC; independently reproduced row-for-row by github.com/sahilnale/hft-simulator MMC.csv (web.archive.org/web/20140618060200)",
+    "bars": [
+      { "date": "2001-09-07", "open": 87.00, "high": 88.60, "low": 86.50, "close": 87.11 },
+      { "date": "2001-09-10", "open": 86.00, "high": 87.74, "low": 84.65, "close": 87.00 },
+      { "date": "2001-09-17", "open": 86.00, "high": 87.00, "low": 83.87, "close": 84.50 },
+      { "date": "2001-09-18", "open": 84.70, "high": 84.97, "low": 83.54, "close": 83.89 }
+    ]
+  },
+  "MER": {
+    "citation": "github.com/sahilnale/hft-simulator data/history/MER.csv (unadjusted, no splits after Aug 2000; 9/10=46.85 and 9/17=41.48/-11.5% match the Bloomberg-derived figures in the 9/11 insider-trading literature; dataset reproduces CNNfn printed closes exactly for AIG/C), full OHLC",
+    "bars": [
+      { "date": "2001-09-07", "open": 48.51, "high": 49.20, "low": 46.00, "close": 46.09 },
+      { "date": "2001-09-10", "open": 45.20, "high": 47.99, "low": 45.20, "close": 46.85 },
+      { "date": "2001-09-17", "open": 42.20, "high": 44.20, "low": 40.50, "close": 41.48 },
+      { "date": "2001-09-18", "open": 41.75, "high": 41.81, "low": 39.10, "close": 39.81 }
+    ]
+  },
+  "LEH": {
+    "citation": "Wayback ichart.finance.yahoo.com table.csv?s=LEH captured 2005-11-22 (BEFORE Lehman's Apr-2006 2-for-1 split, so Close is as-printed 2001 dollars) agreeing exactly with github.com/sahilnale/hft-simulator LEH.csv, full OHLC (web.archive.org/web/20051122001749)",
+    "bars": [
+      { "date": "2001-09-07", "open": 62.85, "high": 64.10, "low": 60.50, "close": 60.79 },
+      { "date": "2001-09-10", "open": 60.50, "high": 62.60, "low": 59.85, "close": 62.05 },
+      { "date": "2001-09-17", "open": 60.00, "high": 60.00, "low": 54.45, "close": 55.16 },
+      { "date": "2001-09-18", "open": 55.90, "high": 56.02, "low": 52.39, "close": 52.39 }
+    ]
+  },
+  "BSC": {
+    "citation": "Wayback itable.finance.yahoo.com table.csv?s=bsc captured 2006-06-02 (Bear Stearns alive, no 2001-2006 splits) agreeing exactly with github.com/sahilnale/hft-simulator BSC.csv, full OHLC (web.archive.org/web/20060602011707)",
+    "bars": [
+      { "date": "2001-09-07", "open": 51.01, "high": 51.20, "low": 49.20, "close": 49.70 },
+      { "date": "2001-09-10", "open": 49.30, "high": 51.05, "low": 49.10, "close": 50.24 },
+      { "date": "2001-09-17", "open": 49.24, "high": 49.24, "low": 45.77, "close": 46.45 },
+      { "date": "2001-09-18", "open": 46.46, "high": 46.76, "low": 45.20, "close": 45.63 }
+    ]
+  },
+  "RTN": {
+    "citation": "github.com/sahilnale/hft-simulator data/history/RTN.csv (unadjusted Raytheon Company series, pre-RTX; 9/10=24.85, 9/17=31.50/+26.8%, 9/18=31.56 all match CNN sectorstox + archived CNNfn Aerospace snapshot exactly, authenticating the 9/7 row + OHLC) (web.archive.org/web/20011116095042, /web/20010920091257)",
+    "bars": [
+      { "date": "2001-09-07", "open": 25.70, "high": 25.98, "low": 24.50, "close": 24.85 },
+      { "date": "2001-09-10", "open": 24.25, "high": 24.85, "low": 23.95, "close": 24.85 },
+      { "date": "2001-09-17", "open": 35.50, "high": 36.00, "low": 29.60, "close": 31.50 },
+      { "date": "2001-09-18", "open": 31.50, "high": 32.00, "low": 30.51, "close": 31.56 }
+    ]
+  },
+  "HLT": {
+    "citation": "github.com/sahilnale/hft-simulator data/history/HLT.csv (unadjusted pre-2007-buyout Hilton Hotels Corp series, NOT today's 2013 re-listing; 9/10=11.19, 9/17=8.55, 9/18=7.85 all match CNN sectorstox/hotstox/hilton articles exactly, authenticating the 9/7 row + OHLC) (web.archive.org/web/20011116095042)",
+    "bars": [
+      { "date": "2001-09-07", "open": 11.78, "high": 11.83, "low": 11.40, "close": 11.44 },
+      { "date": "2001-09-10", "open": 11.34, "high": 11.35, "low": 11.01, "close": 11.19 },
+      { "date": "2001-09-17", "open": 8.50, "high": 9.15, "low": 8.50, "close": 8.55 },
+      { "date": "2001-09-18", "open": 8.25, "high": 8.32, "low": 7.80, "close": 7.85 }
+    ]
+  }
+}

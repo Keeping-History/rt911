@@ -110,6 +110,48 @@ func TestUpsertOverwritesAndMovesScore(t *testing.T) {
 	}
 }
 
+func TestItemsInRangeIsHalfOpen(t *testing.T) {
+	rdb, done := newTestRedis(t)
+	defer done()
+	ctx := context.Background()
+
+	base := time.Date(2001, 9, 11, 8, 46, 0, 0, time.UTC)
+	// Items at the lower edge, inside, and exactly at the (exclusive) upper edge.
+	at := func(id, offsetSec int) model.MediaItem {
+		return model.MediaItem{ID: id, Title: "x", Approved: 1, StartDate: base.Add(time.Duration(offsetSec) * time.Second)}
+	}
+	for _, it := range []model.MediaItem{at(1, 0), at(2, 60), at(3, 120), at(4, 300)} {
+		if err := Upsert(ctx, rdb, it); err != nil {
+			t.Fatalf("Upsert: %v", err)
+		}
+	}
+
+	// [base, base+300s): lo inclusive (id 1), interior (2,3), hi exclusive (id 4 excluded).
+	got, err := ItemsInRange(ctx, rdb, base, base.Add(300*time.Second))
+	if err != nil {
+		t.Fatalf("ItemsInRange: %v", err)
+	}
+	ids := map[int]bool{}
+	for _, it := range got {
+		ids[it.ID] = true
+	}
+	if !ids[1] || !ids[2] || !ids[3] {
+		t.Fatalf("expected ids 1,2,3 in [base, base+300s), got %+v", ids)
+	}
+	if ids[4] {
+		t.Fatalf("upper bound must be exclusive: id 4 at base+300s should be absent, got %+v", ids)
+	}
+
+	// A window starting at id 2's second includes it (lo inclusive).
+	got, err = ItemsInRange(ctx, rdb, base.Add(60*time.Second), base.Add(120*time.Second))
+	if err != nil {
+		t.Fatalf("ItemsInRange second window: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != 2 {
+		t.Fatalf("expected only id 2 in [base+60s, base+120s), got %+v", got)
+	}
+}
+
 func TestItemsAtEmptySecondReturnsNothing(t *testing.T) {
 	rdb, done := newTestRedis(t)
 	defer done()
@@ -121,5 +163,41 @@ func TestItemsAtEmptySecondReturnsNothing(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("expected empty result, got %+v", got)
+	}
+}
+
+// The flight warm flushes whole minute-buckets (each up to ~100 KB of msgpack)
+// in pipelineChunk-sized Execs — a single flush can be hundreds of MB, which
+// the go-redis default ~3s write timeout can't cover, so the warm aborts with
+// an i/o timeout (hit in prod). Connect must raise the write timeout unless the
+// URL sets one explicitly.
+func TestConnectRaisesWriteTimeoutForBulkWarm(t *testing.T) {
+	c := Connect("redis://localhost:6379")
+	defer c.Close()
+	if got := c.Options().WriteTimeout; got != bulkWarmWriteTimeout {
+		t.Fatalf("expected WriteTimeout %v for bulk warm, got %v", bulkWarmWriteTimeout, got)
+	}
+}
+
+func TestConnectHonorsExplicitURLWriteTimeout(t *testing.T) {
+	c := Connect("redis://localhost:6379?write_timeout=5s")
+	defer c.Close()
+	if got := c.Options().WriteTimeout; got != 5*time.Second {
+		t.Fatalf("expected explicit URL write_timeout to win (5s), got %v", got)
+	}
+}
+
+// ResolveRedisURLs backs the REDIS_WRITE_URL seam: an edge pod reads a local
+// replica but must write cache warms and the master clock through the
+// primary. An empty write URL means single-instance mode (reads and writes
+// share one URL) — the default path must stay byte-for-byte the old behavior.
+func TestResolveRedisURLs(t *testing.T) {
+	read, write := ResolveRedisURLs("redis://replica:6379", "")
+	if read != "redis://replica:6379" || write != "redis://replica:6379" {
+		t.Fatalf("empty write should default to read, got %q %q", read, write)
+	}
+	read, write = ResolveRedisURLs("redis://replica:6379", "redis://primary:6379")
+	if read != "redis://replica:6379" || write != "redis://primary:6379" {
+		t.Fatalf("explicit write must be preserved, got %q %q", read, write)
 	}
 }

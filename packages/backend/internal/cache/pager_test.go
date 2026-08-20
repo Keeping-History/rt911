@@ -44,6 +44,33 @@ func TestUpsertPagerThenPagerItemsAt(t *testing.T) {
 	}
 }
 
+func TestPagerItemsInRangeIsHalfOpen(t *testing.T) {
+	rdb, done := newTestRedis(t)
+	defer done()
+	ctx := context.Background()
+
+	base := time.Date(2001, 9, 11, 12, 46, 0, 0, time.UTC)
+	for i, off := range []int{0, 90, 599, 600} {
+		it := model.PagerItem{ID: i + 1, Message: "p", Approved: 1, StartDate: base.Add(time.Duration(off) * time.Second)}
+		if err := UpsertPager(ctx, rdb, it); err != nil {
+			t.Fatalf("UpsertPager: %v", err)
+		}
+	}
+
+	// 600s window: ids 1,2,3 inside; id 4 at the exclusive upper edge is excluded.
+	got, err := PagerItemsInRange(ctx, rdb, base, base.Add(600*time.Second))
+	if err != nil {
+		t.Fatalf("PagerItemsInRange: %v", err)
+	}
+	ids := map[int]bool{}
+	for _, it := range got {
+		ids[it.ID] = true
+	}
+	if !ids[1] || !ids[2] || !ids[3] || ids[4] {
+		t.Fatalf("expected ids 1,2,3 (not 4) in [base, base+600s), got %+v", ids)
+	}
+}
+
 func TestForgetPagerRemovesItem(t *testing.T) {
 	rdb, done := newTestRedis(t)
 	defer done()

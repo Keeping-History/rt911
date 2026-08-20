@@ -1,0 +1,33 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "height_roof": "417.0",
+        "construction_year": "1972",
+        "ground_elevation": "13",
+        "feature_code": "2100",
+        "name": "1 WTC"
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [[[[-74.0113, 40.715], [-74.0113, 40.7155], [-74.0108, 40.7155], [-74.0108, 40.715], [-74.0113, 40.715]]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "height_roof": "200.0",
+        "construction_year": "1960",
+        "ground_elevation": "10",
+        "feature_code": "2100",
+        "name": null
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [[[[-73.95, 40.75], [-73.95, 40.7505], [-73.9495, 40.7505], [-73.9495, 40.75], [-73.95, 40.75]]]]
+      }
+    }
+  ]
+}

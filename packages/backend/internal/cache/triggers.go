@@ -12,7 +12,7 @@ import (
 // with anything Directus or another tenant might install on the same table.
 var (
 	createNotifyFunctionSQL = fmt.Sprintf(`
-CREATE OR REPLACE FUNCTION rt911_notify_media_items_change()
+CREATE OR REPLACE FUNCTION rt911_notify_tv_channels_change()
 RETURNS trigger AS $$
 DECLARE payload json;
 BEGIN
@@ -26,16 +26,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;`, notifyChannel)
 
-	dropNotifyTriggerSQL = `DROP TRIGGER IF EXISTS rt911_media_items_changed ON media_items;`
+	dropNotifyTriggerSQL = `DROP TRIGGER IF EXISTS rt911_tv_channels_changed ON tv_channels;`
 
 	createNotifyTriggerSQL = `
-CREATE TRIGGER rt911_media_items_changed
-AFTER INSERT OR UPDATE OR DELETE ON media_items
-FOR EACH ROW EXECUTE FUNCTION rt911_notify_media_items_change();`
+CREATE TRIGGER rt911_tv_channels_changed
+AFTER INSERT OR UPDATE OR DELETE ON tv_channels
+FOR EACH ROW EXECUTE FUNCTION rt911_notify_tv_channels_change();`
 )
 
 // InstallTriggers ensures the Postgres trigger and function that fire
-// NOTIFY on media_items changes are present. Idempotent — safe to call on
+// NOTIFY on tv_channels changes are present. Idempotent — safe to call on
 // every boot.
 func InstallTriggers(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
 	for _, q := range []string{createNotifyFunctionSQL, dropNotifyTriggerSQL, createNotifyTriggerSQL} {

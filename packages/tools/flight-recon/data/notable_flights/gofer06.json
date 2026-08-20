@@ -1,0 +1,2309 @@
+{
+ "flight": "GOFER06",
+ "carrier": "ANG",
+ "flight_date": "2001-09-11",
+ "origin": "ADW",
+ "scheduled_dest": "MSP",
+ "aircraft": "Lockheed C-130H Hercules",
+ "registration": null,
+ "details": {
+  "crew": {
+   "captain": "Lt. Col. Steven O'Brien"
+  },
+  "fate": {
+   "text": "Witnessed the Pentagon impact and later the Flight 93 crash site; continued home and landed safely"
+  }
+ },
+ "sources": [
+  "84th Radar Evaluation Squadron (RADES) radar data analysis for the FBI, 13 Sep 2001 (FOIA release): per-sweep radar returns with computed lat/lon, Mode C altitude, and Mode 3 beacon code",
+  "9/11 Commission interview of Lt. Col. Steven O'Brien, USAF 133rd Airlift Wing (Minnesota Air National Guard), archives.gov declassified ISCAP 2011-048-doc22",
+  "9/11 Commission Report, Ch. 1 notes - the C-130H asked by Washington control to identify and follow AA77, then near the UA93 crash site"
+ ],
+ "provenance_notes": [
+  "RADAR-SURVEYED TRACK: 284 of 285 waypoints are 84 RADES radar returns (sites PLA; ~12 s antenna sweep), extracted by analysis/extract_rades_notables.py. Cross-site registration bias is corrected toward the primary site; garbled plots are speed-filtered. The remaining 1 waypoints are documented anchors (takeoff runway, coverage-gap positions, impact point).",
+  "ALTITUDE: alt_src='modec' waypoints carry the transponder's Mode C pressure altitude (100 ft quanta); alt_src='interp' waypoints (transponder off) interpolate through the documented NTSB profile anchors; alt_src='anchor' are the documented anchors themselves.",
+  "TAKEOFF ANCHOR APPROXIMATION: the Andrews AFB runway anchor at 13:31:00Z is placed ~90 s before the first radar return (13:32:26Z, 300 ft Mode C in the climb-out); O'Brien reported taking off 'about 09:30' ET. NO IMPACT: the aircraft did not crash \u2014 the track simply ends at the last RADES return (14:29:20Z) as it leaves the analyzed coverage, en route Minneapolis-St. Paul."
+ ],
+ "waypoints": [
+  {
+   "utc": "2001-09-11T13:31:00Z",
+   "lat": 38.8108,
+   "lon": -76.867,
+   "alt_ft": 0,
+   "site": "anchor",
+   "alt_src": "anchor"
+  },
+  {
+   "utc": "2001-09-11T13:32:26Z",
+   "lat": 38.8226,
+   "lon": -76.8745,
+   "alt_ft": 300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:32:38Z",
+   "lat": 38.8315,
+   "lon": -76.8735,
+   "alt_ft": 500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:32:50Z",
+   "lat": 38.8396,
+   "lon": -76.8754,
+   "alt_ft": 800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:33:02Z",
+   "lat": 38.8468,
+   "lon": -76.8801,
+   "alt_ft": 1100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:33:14Z",
+   "lat": 38.8502,
+   "lon": -76.8906,
+   "alt_ft": 1300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:33:26Z",
+   "lat": 38.8497,
+   "lon": -76.9013,
+   "alt_ft": 1700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:33:38Z",
+   "lat": 38.8475,
+   "lon": -76.9148,
+   "alt_ft": 1800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:33:50Z",
+   "lat": 38.8462,
+   "lon": -76.9283,
+   "alt_ft": 2000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:34:01Z",
+   "lat": 38.8433,
+   "lon": -76.9424,
+   "alt_ft": 2191,
+   "site": "PLA",
+   "alt_src": "interp"
+  },
+  {
+   "utc": "2001-09-11T13:34:13Z",
+   "lat": 38.8397,
+   "lon": -76.9583,
+   "alt_ft": 2400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:34:25Z",
+   "lat": 38.8343,
+   "lon": -76.9723,
+   "alt_ft": 2600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:34:49Z",
+   "lat": 38.8281,
+   "lon": -77.0052,
+   "alt_ft": 2700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:35:01Z",
+   "lat": 38.8245,
+   "lon": -77.0217,
+   "alt_ft": 2800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:35:13Z",
+   "lat": 38.8217,
+   "lon": -77.0356,
+   "alt_ft": 2900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:35:25Z",
+   "lat": 38.8177,
+   "lon": -77.0524,
+   "alt_ft": 3100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:35:37Z",
+   "lat": 38.814,
+   "lon": -77.0691,
+   "alt_ft": 3200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:35:49Z",
+   "lat": 38.8103,
+   "lon": -77.0833,
+   "alt_ft": 3400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:36:01Z",
+   "lat": 38.8071,
+   "lon": -77.1002,
+   "alt_ft": 3500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:36:13Z",
+   "lat": 38.8038,
+   "lon": -77.1144,
+   "alt_ft": 3500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:36:25Z",
+   "lat": 38.7966,
+   "lon": -77.1295,
+   "alt_ft": 3600,
+   "site": "PLA",
+   "alt_src": "interp"
+  },
+  {
+   "utc": "2001-09-11T13:36:37Z",
+   "lat": 38.7963,
+   "lon": -77.146,
+   "alt_ft": 3700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:36:49Z",
+   "lat": 38.7949,
+   "lon": -77.1627,
+   "alt_ft": 3700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:37:00Z",
+   "lat": 38.7952,
+   "lon": -77.1762,
+   "alt_ft": 3700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:37:12Z",
+   "lat": 38.8027,
+   "lon": -77.1906,
+   "alt_ft": 3600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:37:24Z",
+   "lat": 38.8127,
+   "lon": -77.1936,
+   "alt_ft": 3600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:37:36Z",
+   "lat": 38.8228,
+   "lon": -77.1888,
+   "alt_ft": 3600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:37:48Z",
+   "lat": 38.8313,
+   "lon": -77.1738,
+   "alt_ft": 3500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:38:00Z",
+   "lat": 38.8359,
+   "lon": -77.1596,
+   "alt_ft": 3300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:38:12Z",
+   "lat": 38.8401,
+   "lon": -77.1456,
+   "alt_ft": 2900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:38:24Z",
+   "lat": 38.8436,
+   "lon": -77.1291,
+   "alt_ft": 2500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:38:36Z",
+   "lat": 38.8476,
+   "lon": -77.1153,
+   "alt_ft": 2300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:38:47Z",
+   "lat": 38.851,
+   "lon": -77.0989,
+   "alt_ft": 2100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:38:59Z",
+   "lat": 38.8538,
+   "lon": -77.0827,
+   "alt_ft": 2100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:39:11Z",
+   "lat": 38.86,
+   "lon": -77.0689,
+   "alt_ft": 2200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:39:23Z",
+   "lat": 38.8699,
+   "lon": -77.0684,
+   "alt_ft": 2300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:39:35Z",
+   "lat": 38.8747,
+   "lon": -77.0816,
+   "alt_ft": 2600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:39:47Z",
+   "lat": 38.8764,
+   "lon": -77.0976,
+   "alt_ft": 2700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:39:59Z",
+   "lat": 38.8737,
+   "lon": -77.1137,
+   "alt_ft": 2900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:40:11Z",
+   "lat": 38.872,
+   "lon": -77.1324,
+   "alt_ft": 3000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:40:35Z",
+   "lat": 38.8778,
+   "lon": -77.1616,
+   "alt_ft": 3800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:40:46Z",
+   "lat": 38.8849,
+   "lon": -77.1723,
+   "alt_ft": 4200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:40:58Z",
+   "lat": 38.8924,
+   "lon": -77.1831,
+   "alt_ft": 4600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:41:10Z",
+   "lat": 38.9002,
+   "lon": -77.1915,
+   "alt_ft": 4900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:41:22Z",
+   "lat": 38.9096,
+   "lon": -77.2002,
+   "alt_ft": 5200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:41:34Z",
+   "lat": 38.918,
+   "lon": -77.2095,
+   "alt_ft": 5450,
+   "site": "PLA",
+   "alt_src": "interp"
+  },
+  {
+   "utc": "2001-09-11T13:41:46Z",
+   "lat": 38.9257,
+   "lon": -77.2182,
+   "alt_ft": 5700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:41:58Z",
+   "lat": 38.9341,
+   "lon": -77.2276,
+   "alt_ft": 6000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:42:09Z",
+   "lat": 38.9416,
+   "lon": -77.2372,
+   "alt_ft": 6400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:42:21Z",
+   "lat": 38.9503,
+   "lon": -77.2446,
+   "alt_ft": 6700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:42:33Z",
+   "lat": 38.9573,
+   "lon": -77.2546,
+   "alt_ft": 7000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:42:45Z",
+   "lat": 38.9622,
+   "lon": -77.2616,
+   "alt_ft": 7400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:42:57Z",
+   "lat": 38.9712,
+   "lon": -77.2727,
+   "alt_ft": 7600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:43:09Z",
+   "lat": 38.9787,
+   "lon": -77.281,
+   "alt_ft": 7900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:43:21Z",
+   "lat": 38.9865,
+   "lon": -77.2896,
+   "alt_ft": 8100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:43:33Z",
+   "lat": 38.993,
+   "lon": -77.2981,
+   "alt_ft": 8300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:43:44Z",
+   "lat": 38.9998,
+   "lon": -77.307,
+   "alt_ft": 8700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:43:56Z",
+   "lat": 39.0076,
+   "lon": -77.3168,
+   "alt_ft": 9100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:44:08Z",
+   "lat": 39.015,
+   "lon": -77.3239,
+   "alt_ft": 9400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:44:20Z",
+   "lat": 39.024,
+   "lon": -77.3293,
+   "alt_ft": 9700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:44:32Z",
+   "lat": 39.031,
+   "lon": -77.3369,
+   "alt_ft": 10000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:44:44Z",
+   "lat": 39.0397,
+   "lon": -77.343,
+   "alt_ft": 10300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:44:55Z",
+   "lat": 39.0497,
+   "lon": -77.3474,
+   "alt_ft": 10600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:45:07Z",
+   "lat": 39.0589,
+   "lon": -77.355,
+   "alt_ft": 11000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:45:19Z",
+   "lat": 39.0659,
+   "lon": -77.361,
+   "alt_ft": 11300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:45:31Z",
+   "lat": 39.0736,
+   "lon": -77.3648,
+   "alt_ft": 11600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:45:43Z",
+   "lat": 39.0817,
+   "lon": -77.3693,
+   "alt_ft": 11900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:45:55Z",
+   "lat": 39.0909,
+   "lon": -77.3752,
+   "alt_ft": 12200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:46:07Z",
+   "lat": 39.1005,
+   "lon": -77.3787,
+   "alt_ft": 12500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:46:18Z",
+   "lat": 39.1084,
+   "lon": -77.3842,
+   "alt_ft": 12800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:46:30Z",
+   "lat": 39.1177,
+   "lon": -77.3881,
+   "alt_ft": 13100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:46:42Z",
+   "lat": 39.1255,
+   "lon": -77.3942,
+   "alt_ft": 13300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:46:54Z",
+   "lat": 39.1343,
+   "lon": -77.3983,
+   "alt_ft": 13500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:47:06Z",
+   "lat": 39.1416,
+   "lon": -77.4046,
+   "alt_ft": 13800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:47:18Z",
+   "lat": 39.1518,
+   "lon": -77.4115,
+   "alt_ft": 14000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:47:30Z",
+   "lat": 39.1598,
+   "lon": -77.4156,
+   "alt_ft": 14200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:47:41Z",
+   "lat": 39.1688,
+   "lon": -77.4218,
+   "alt_ft": 14400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:47:53Z",
+   "lat": 39.1775,
+   "lon": -77.4278,
+   "alt_ft": 14600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:48:05Z",
+   "lat": 39.1864,
+   "lon": -77.4347,
+   "alt_ft": 14800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:48:17Z",
+   "lat": 39.1963,
+   "lon": -77.4394,
+   "alt_ft": 15000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:48:29Z",
+   "lat": 39.2048,
+   "lon": -77.4465,
+   "alt_ft": 15200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:48:41Z",
+   "lat": 39.2144,
+   "lon": -77.4514,
+   "alt_ft": 15400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:48:53Z",
+   "lat": 39.2228,
+   "lon": -77.4593,
+   "alt_ft": 15500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:49:04Z",
+   "lat": 39.2323,
+   "lon": -77.465,
+   "alt_ft": 15600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:49:16Z",
+   "lat": 39.2421,
+   "lon": -77.4718,
+   "alt_ft": 15600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:49:28Z",
+   "lat": 39.2521,
+   "lon": -77.4798,
+   "alt_ft": 15700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:49:40Z",
+   "lat": 39.2637,
+   "lon": -77.4864,
+   "alt_ft": 15700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:49:52Z",
+   "lat": 39.273,
+   "lon": -77.4939,
+   "alt_ft": 15700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:50:04Z",
+   "lat": 39.2844,
+   "lon": -77.5016,
+   "alt_ft": 15800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:50:16Z",
+   "lat": 39.2931,
+   "lon": -77.5083,
+   "alt_ft": 16000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:50:28Z",
+   "lat": 39.3037,
+   "lon": -77.5145,
+   "alt_ft": 16200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:50:39Z",
+   "lat": 39.3147,
+   "lon": -77.5229,
+   "alt_ft": 16300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:50:51Z",
+   "lat": 39.3254,
+   "lon": -77.5309,
+   "alt_ft": 16400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:51:03Z",
+   "lat": 39.3354,
+   "lon": -77.5367,
+   "alt_ft": 16600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:51:15Z",
+   "lat": 39.3452,
+   "lon": -77.542,
+   "alt_ft": 16800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:51:27Z",
+   "lat": 39.3555,
+   "lon": -77.5504,
+   "alt_ft": 16900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:51:39Z",
+   "lat": 39.3652,
+   "lon": -77.5563,
+   "alt_ft": 17100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:51:51Z",
+   "lat": 39.3752,
+   "lon": -77.5645,
+   "alt_ft": 17200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:52:03Z",
+   "lat": 39.3848,
+   "lon": -77.5711,
+   "alt_ft": 17400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:52:15Z",
+   "lat": 39.3944,
+   "lon": -77.5781,
+   "alt_ft": 17600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:52:26Z",
+   "lat": 39.4037,
+   "lon": -77.5843,
+   "alt_ft": 17800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:52:38Z",
+   "lat": 39.4132,
+   "lon": -77.5919,
+   "alt_ft": 17900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:52:50Z",
+   "lat": 39.4224,
+   "lon": -77.5987,
+   "alt_ft": 18100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:53:02Z",
+   "lat": 39.4333,
+   "lon": -77.6043,
+   "alt_ft": 18200,
+   "site": "PLA",
+   "alt_src": "interp"
+  },
+  {
+   "utc": "2001-09-11T13:53:14Z",
+   "lat": 39.4407,
+   "lon": -77.612,
+   "alt_ft": 18300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:53:26Z",
+   "lat": 39.4478,
+   "lon": -77.621,
+   "alt_ft": 18400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:53:38Z",
+   "lat": 39.453,
+   "lon": -77.634,
+   "alt_ft": 18600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:53:50Z",
+   "lat": 39.4559,
+   "lon": -77.6451,
+   "alt_ft": 18700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:54:01Z",
+   "lat": 39.4608,
+   "lon": -77.6584,
+   "alt_ft": 18800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:54:13Z",
+   "lat": 39.4653,
+   "lon": -77.6696,
+   "alt_ft": 19000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:54:25Z",
+   "lat": 39.4678,
+   "lon": -77.6822,
+   "alt_ft": 19100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:54:37Z",
+   "lat": 39.4721,
+   "lon": -77.6949,
+   "alt_ft": 19200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:54:49Z",
+   "lat": 39.4763,
+   "lon": -77.7089,
+   "alt_ft": 19300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:55:01Z",
+   "lat": 39.4803,
+   "lon": -77.7184,
+   "alt_ft": 19500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:55:13Z",
+   "lat": 39.4841,
+   "lon": -77.734,
+   "alt_ft": 19600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:55:25Z",
+   "lat": 39.4898,
+   "lon": -77.7488,
+   "alt_ft": 19800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:55:37Z",
+   "lat": 39.4934,
+   "lon": -77.76,
+   "alt_ft": 19900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:55:48Z",
+   "lat": 39.4967,
+   "lon": -77.7726,
+   "alt_ft": 20100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:56:00Z",
+   "lat": 39.5021,
+   "lon": -77.7856,
+   "alt_ft": 20200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:56:12Z",
+   "lat": 39.5049,
+   "lon": -77.8009,
+   "alt_ft": 20400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:56:24Z",
+   "lat": 39.5101,
+   "lon": -77.8119,
+   "alt_ft": 20500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:56:36Z",
+   "lat": 39.5147,
+   "lon": -77.8267,
+   "alt_ft": 20700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:56:48Z",
+   "lat": 39.5174,
+   "lon": -77.8389,
+   "alt_ft": 20900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:57:00Z",
+   "lat": 39.5218,
+   "lon": -77.8529,
+   "alt_ft": 21000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:57:12Z",
+   "lat": 39.5263,
+   "lon": -77.8658,
+   "alt_ft": 21200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:57:23Z",
+   "lat": 39.5303,
+   "lon": -77.8802,
+   "alt_ft": 21300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:57:35Z",
+   "lat": 39.5345,
+   "lon": -77.8936,
+   "alt_ft": 21400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:57:47Z",
+   "lat": 39.5384,
+   "lon": -77.9071,
+   "alt_ft": 21600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:57:59Z",
+   "lat": 39.5427,
+   "lon": -77.9181,
+   "alt_ft": 21700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:58:11Z",
+   "lat": 39.5463,
+   "lon": -77.932,
+   "alt_ft": 21800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:58:23Z",
+   "lat": 39.5498,
+   "lon": -77.946,
+   "alt_ft": 22000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:58:35Z",
+   "lat": 39.5554,
+   "lon": -77.9596,
+   "alt_ft": 22200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:58:47Z",
+   "lat": 39.5592,
+   "lon": -77.9713,
+   "alt_ft": 22300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:58:59Z",
+   "lat": 39.5621,
+   "lon": -77.9859,
+   "alt_ft": 22500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:59:10Z",
+   "lat": 39.5673,
+   "lon": -78.0001,
+   "alt_ft": 22600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:59:22Z",
+   "lat": 39.5706,
+   "lon": -78.0122,
+   "alt_ft": 22700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:59:34Z",
+   "lat": 39.5758,
+   "lon": -78.0254,
+   "alt_ft": 22800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:59:46Z",
+   "lat": 39.5785,
+   "lon": -78.0393,
+   "alt_ft": 22900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T13:59:58Z",
+   "lat": 39.5834,
+   "lon": -78.0528,
+   "alt_ft": 23100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:00:10Z",
+   "lat": 39.5886,
+   "lon": -78.0651,
+   "alt_ft": 23200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:00:22Z",
+   "lat": 39.5932,
+   "lon": -78.079,
+   "alt_ft": 23300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:00:34Z",
+   "lat": 39.5958,
+   "lon": -78.092,
+   "alt_ft": 23300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:00:46Z",
+   "lat": 39.5996,
+   "lon": -78.1077,
+   "alt_ft": 23400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:00:57Z",
+   "lat": 39.6043,
+   "lon": -78.1206,
+   "alt_ft": 23500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:01:09Z",
+   "lat": 39.6078,
+   "lon": -78.1366,
+   "alt_ft": 23500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:01:21Z",
+   "lat": 39.6116,
+   "lon": -78.1513,
+   "alt_ft": 23600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:01:33Z",
+   "lat": 39.6183,
+   "lon": -78.1644,
+   "alt_ft": 23700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:01:45Z",
+   "lat": 39.6224,
+   "lon": -78.178,
+   "alt_ft": 23800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:01:57Z",
+   "lat": 39.6258,
+   "lon": -78.1932,
+   "alt_ft": 23800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:02:09Z",
+   "lat": 39.6321,
+   "lon": -78.2068,
+   "alt_ft": 23900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:02:21Z",
+   "lat": 39.6351,
+   "lon": -78.2223,
+   "alt_ft": 23900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:02:33Z",
+   "lat": 39.6405,
+   "lon": -78.2378,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:02:44Z",
+   "lat": 39.6457,
+   "lon": -78.2534,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:02:56Z",
+   "lat": 39.6483,
+   "lon": -78.2694,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:03:08Z",
+   "lat": 39.6539,
+   "lon": -78.2838,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:03:20Z",
+   "lat": 39.6586,
+   "lon": -78.2999,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:03:32Z",
+   "lat": 39.6657,
+   "lon": -78.316,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:03:44Z",
+   "lat": 39.6749,
+   "lon": -78.3277,
+   "alt_ft": 23900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:03:56Z",
+   "lat": 39.6919,
+   "lon": -78.328,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:04:08Z",
+   "lat": 39.7035,
+   "lon": -78.3239,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:04:20Z",
+   "lat": 39.7192,
+   "lon": -78.3159,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:04:32Z",
+   "lat": 39.7315,
+   "lon": -78.3095,
+   "alt_ft": 24100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:04:44Z",
+   "lat": 39.7454,
+   "lon": -78.2994,
+   "alt_ft": 24100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:04:55Z",
+   "lat": 39.7603,
+   "lon": -78.292,
+   "alt_ft": 24100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:05:07Z",
+   "lat": 39.774,
+   "lon": -78.2811,
+   "alt_ft": 24200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:05:19Z",
+   "lat": 39.7888,
+   "lon": -78.2729,
+   "alt_ft": 24300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:05:31Z",
+   "lat": 39.8011,
+   "lon": -78.2649,
+   "alt_ft": 24200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:05:43Z",
+   "lat": 39.8165,
+   "lon": -78.2542,
+   "alt_ft": 24100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:05:55Z",
+   "lat": 39.8319,
+   "lon": -78.2429,
+   "alt_ft": 24100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:06:07Z",
+   "lat": 39.846,
+   "lon": -78.235,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:06:19Z",
+   "lat": 39.862,
+   "lon": -78.2279,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:06:31Z",
+   "lat": 39.8766,
+   "lon": -78.2173,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:06:43Z",
+   "lat": 39.8919,
+   "lon": -78.2114,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:06:55Z",
+   "lat": 39.9079,
+   "lon": -78.2102,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:07:07Z",
+   "lat": 39.9228,
+   "lon": -78.2129,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:07:19Z",
+   "lat": 39.9358,
+   "lon": -78.2218,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:07:30Z",
+   "lat": 39.945,
+   "lon": -78.2361,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:07:42Z",
+   "lat": 39.9494,
+   "lon": -78.2581,
+   "alt_ft": 24100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:07:54Z",
+   "lat": 39.9564,
+   "lon": -78.2718,
+   "alt_ft": 24100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:08:06Z",
+   "lat": 39.9638,
+   "lon": -78.291,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:08:18Z",
+   "lat": 39.9691,
+   "lon": -78.3093,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:08:30Z",
+   "lat": 39.9757,
+   "lon": -78.3234,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:08:42Z",
+   "lat": 39.9841,
+   "lon": -78.3388,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:08:54Z",
+   "lat": 39.9897,
+   "lon": -78.3555,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:09:06Z",
+   "lat": 39.9979,
+   "lon": -78.3712,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:09:18Z",
+   "lat": 40.0033,
+   "lon": -78.3881,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:09:29Z",
+   "lat": 40.0087,
+   "lon": -78.4109,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:09:41Z",
+   "lat": 40.0155,
+   "lon": -78.4236,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:09:53Z",
+   "lat": 40.0214,
+   "lon": -78.4445,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:10:05Z",
+   "lat": 40.0262,
+   "lon": -78.4621,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:10:17Z",
+   "lat": 40.0336,
+   "lon": -78.4788,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:10:29Z",
+   "lat": 40.0418,
+   "lon": -78.4933,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:10:41Z",
+   "lat": 40.0471,
+   "lon": -78.515,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:10:53Z",
+   "lat": 40.0552,
+   "lon": -78.5238,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:11:05Z",
+   "lat": 40.0602,
+   "lon": -78.5457,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:11:16Z",
+   "lat": 40.067,
+   "lon": -78.5632,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:11:28Z",
+   "lat": 40.0737,
+   "lon": -78.5807,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:11:40Z",
+   "lat": 40.0792,
+   "lon": -78.6008,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:11:52Z",
+   "lat": 40.0867,
+   "lon": -78.6163,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:12:04Z",
+   "lat": 40.093,
+   "lon": -78.6343,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:12:16Z",
+   "lat": 40.1004,
+   "lon": -78.65,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:12:28Z",
+   "lat": 40.1064,
+   "lon": -78.6682,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:12:40Z",
+   "lat": 40.1147,
+   "lon": -78.6817,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:12:52Z",
+   "lat": 40.1218,
+   "lon": -78.6977,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:13:04Z",
+   "lat": 40.1263,
+   "lon": -78.7188,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:13:15Z",
+   "lat": 40.1319,
+   "lon": -78.7376,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:13:27Z",
+   "lat": 40.1387,
+   "lon": -78.754,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:13:39Z",
+   "lat": 40.1466,
+   "lon": -78.768,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:13:51Z",
+   "lat": 40.1506,
+   "lon": -78.7896,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:14:03Z",
+   "lat": 40.157,
+   "lon": -78.8063,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:14:15Z",
+   "lat": 40.162,
+   "lon": -78.8257,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:14:27Z",
+   "lat": 40.1726,
+   "lon": -78.8391,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:14:39Z",
+   "lat": 40.1788,
+   "lon": -78.8561,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:14:51Z",
+   "lat": 40.1821,
+   "lon": -78.8784,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:15:03Z",
+   "lat": 40.1908,
+   "lon": -78.8905,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:15:15Z",
+   "lat": 40.1984,
+   "lon": -78.9094,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:15:26Z",
+   "lat": 40.2027,
+   "lon": -78.9295,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:15:38Z",
+   "lat": 40.2128,
+   "lon": -78.9391,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:15:50Z",
+   "lat": 40.2186,
+   "lon": -78.961,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:16:02Z",
+   "lat": 40.2241,
+   "lon": -78.9787,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:16:14Z",
+   "lat": 40.2279,
+   "lon": -78.9992,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:16:26Z",
+   "lat": 40.2396,
+   "lon": -79.0107,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:16:38Z",
+   "lat": 40.2432,
+   "lon": -79.0314,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:16:50Z",
+   "lat": 40.2499,
+   "lon": -79.0512,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:17:02Z",
+   "lat": 40.2566,
+   "lon": -79.0667,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:17:14Z",
+   "lat": 40.2648,
+   "lon": -79.0795,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:17:26Z",
+   "lat": 40.2696,
+   "lon": -79.1023,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:17:37Z",
+   "lat": 40.2743,
+   "lon": -79.1208,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:17:49Z",
+   "lat": 40.284,
+   "lon": -79.1355,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:18:01Z",
+   "lat": 40.2903,
+   "lon": -79.1513,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:18:13Z",
+   "lat": 40.2963,
+   "lon": -79.1718,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:18:25Z",
+   "lat": 40.306,
+   "lon": -79.1821,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:18:37Z",
+   "lat": 40.3084,
+   "lon": -79.2084,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:18:49Z",
+   "lat": 40.3143,
+   "lon": -79.2245,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:19:01Z",
+   "lat": 40.3218,
+   "lon": -79.2425,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:19:13Z",
+   "lat": 40.3274,
+   "lon": -79.2634,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:19:25Z",
+   "lat": 40.3332,
+   "lon": -79.2798,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:19:36Z",
+   "lat": 40.3443,
+   "lon": -79.2922,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:19:48Z",
+   "lat": 40.348,
+   "lon": -79.3116,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:20:00Z",
+   "lat": 40.3551,
+   "lon": -79.3299,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:20:12Z",
+   "lat": 40.3642,
+   "lon": -79.3454,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:20:24Z",
+   "lat": 40.3676,
+   "lon": -79.3651,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:20:36Z",
+   "lat": 40.3726,
+   "lon": -79.3866,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:20:48Z",
+   "lat": 40.3835,
+   "lon": -79.3993,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:21:00Z",
+   "lat": 40.3887,
+   "lon": -79.4162,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:21:12Z",
+   "lat": 40.3933,
+   "lon": -79.4379,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:21:24Z",
+   "lat": 40.3963,
+   "lon": -79.458,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:21:36Z",
+   "lat": 40.4071,
+   "lon": -79.4708,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:21:47Z",
+   "lat": 40.4114,
+   "lon": -79.4929,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:21:59Z",
+   "lat": 40.4141,
+   "lon": -79.5131,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:22:11Z",
+   "lat": 40.4248,
+   "lon": -79.5261,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:22:23Z",
+   "lat": 40.4311,
+   "lon": -79.5453,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:22:35Z",
+   "lat": 40.4402,
+   "lon": -79.5565,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:22:47Z",
+   "lat": 40.4464,
+   "lon": -79.5758,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:22:59Z",
+   "lat": 40.4479,
+   "lon": -79.6014,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:23:11Z",
+   "lat": 40.4561,
+   "lon": -79.6178,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:23:23Z",
+   "lat": 40.4652,
+   "lon": -79.6291,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:23:35Z",
+   "lat": 40.4687,
+   "lon": -79.6518,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:23:46Z",
+   "lat": 40.4792,
+   "lon": -79.6651,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:23:58Z",
+   "lat": 40.4873,
+   "lon": -79.6817,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:24:10Z",
+   "lat": 40.4938,
+   "lon": -79.6963,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:24:22Z",
+   "lat": 40.5019,
+   "lon": -79.7129,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:24:34Z",
+   "lat": 40.5026,
+   "lon": -79.7392,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:24:46Z",
+   "lat": 40.5129,
+   "lon": -79.7526,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:24:58Z",
+   "lat": 40.5243,
+   "lon": -79.7609,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:25:10Z",
+   "lat": 40.5222,
+   "lon": -79.7907,
+   "alt_ft": 24000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:25:22Z",
+   "lat": 40.5274,
+   "lon": -79.8109,
+   "alt_ft": 23800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:25:34Z",
+   "lat": 40.5351,
+   "lon": -79.8278,
+   "alt_ft": 23600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:25:46Z",
+   "lat": 40.548,
+   "lon": -79.8382,
+   "alt_ft": 23400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:25:57Z",
+   "lat": 40.5516,
+   "lon": -79.8565,
+   "alt_ft": 23200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:26:09Z",
+   "lat": 40.5592,
+   "lon": -79.8735,
+   "alt_ft": 22900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:26:21Z",
+   "lat": 40.5575,
+   "lon": -79.8986,
+   "alt_ft": 22700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:26:33Z",
+   "lat": 40.5662,
+   "lon": -79.9105,
+   "alt_ft": 22400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:26:45Z",
+   "lat": 40.579,
+   "lon": -79.9209,
+   "alt_ft": 22000,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:26:57Z",
+   "lat": 40.5797,
+   "lon": -79.9429,
+   "alt_ft": 21600,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:27:09Z",
+   "lat": 40.5925,
+   "lon": -79.9534,
+   "alt_ft": 21200,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:27:21Z",
+   "lat": 40.5876,
+   "lon": -79.9823,
+   "alt_ft": 20800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:27:33Z",
+   "lat": 40.6032,
+   "lon": -79.9894,
+   "alt_ft": 20400,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:27:45Z",
+   "lat": 40.6035,
+   "lon": -80.0116,
+   "alt_ft": 20100,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:27:57Z",
+   "lat": 40.6149,
+   "lon": -80.0202,
+   "alt_ft": 19700,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:28:08Z",
+   "lat": 40.6194,
+   "lon": -80.0411,
+   "alt_ft": 19300,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:28:20Z",
+   "lat": 40.6251,
+   "lon": -80.0565,
+   "alt_ft": 18900,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:28:32Z",
+   "lat": 40.6351,
+   "lon": -80.0706,
+   "alt_ft": 18500,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:28:56Z",
+   "lat": 40.6537,
+   "lon": -80.0967,
+   "alt_ft": 17800,
+   "site": "PLA",
+   "alt_src": "modec"
+  },
+  {
+   "utc": "2001-09-11T14:29:20Z",
+   "lat": 40.6751,
+   "lon": -80.1192,
+   "alt_ft": 16900,
+   "site": "PLA",
+   "alt_src": "modec"
+  }
+ ]
+}

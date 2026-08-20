@@ -137,7 +137,7 @@ def test_upsert_job_unknown_channel_goes_to_pending_review(connection):
 
 # --- transition_job round-trip (catches stage-cast and audit-row bugs) ---
 
-def test_transition_job_updates_stage_and_writes_audit_row(connection):
+def test_transition_job_updates_stage_and_writes_audit_row(connection, engine, monkeypatch):
     upsert_job(
         connection,
         {"identifier": "int-test-trans", "title": "t", "creator": "CNN"},
@@ -149,7 +149,11 @@ def test_transition_job_updates_stage_and_writes_audit_row(connection):
         {"id": "int-test-trans"},
     ).scalar()
 
-    transition_job(connection, str(job_id), "downloading", from_stage="discovered")
+    # transition_job opens its own short-lived connection (idle_session_timeout
+    # safety); point its get_db at the test engine so it hits the same DB.
+    import video_grabber.pipeline.flows as flows_mod
+    monkeypatch.setattr(flows_mod, "get_db", lambda: engine.connect())
+    transition_job(str(job_id), "downloading", from_stage="discovered")
 
     stage = connection.execute(
         sa.text("SELECT stage FROM video_jobs WHERE id = :id"), {"id": job_id},
@@ -167,7 +171,7 @@ def test_transition_job_updates_stage_and_writes_audit_row(connection):
     assert str(audit.to_stage) == "downloading"
 
 
-def test_transition_job_failed_with_error_message_persists(connection):
+def test_transition_job_failed_with_error_message_persists(connection, engine, monkeypatch):
     upsert_job(
         connection,
         {"identifier": "int-test-fail", "title": "t", "creator": "CNN"},
@@ -179,7 +183,9 @@ def test_transition_job_failed_with_error_message_persists(connection):
         {"id": "int-test-fail"},
     ).scalar()
 
-    transition_job(connection, str(job_id), "failed", error="boom")
+    import video_grabber.pipeline.flows as flows_mod
+    monkeypatch.setattr(flows_mod, "get_db", lambda: engine.connect())
+    transition_job(str(job_id), "failed", error="boom")
 
     err, stage = connection.execute(
         sa.text("SELECT error_message, stage FROM video_jobs WHERE id = :id"),

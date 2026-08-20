@@ -1,0 +1,6853 @@
+[
+  {
+    "name": "Lehigh Valley International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.6518,
+    "lon": -75.4428,
+    "iata": "ABE",
+    "icao": "KABE",
+    "city": "Allentown/Bethlehem",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 393,
+      "runway_count": 2,
+      "longest_runway_ft": 7599
+    }
+  },
+  {
+    "name": "Abilene Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.4113,
+    "lon": -99.6819,
+    "iata": "ABI",
+    "icao": "KABI",
+    "city": "Abilene",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 1791,
+      "runway_count": 3,
+      "longest_runway_ft": 7208
+    }
+  },
+  {
+    "name": "Albuquerque International Sunport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.04,
+    "lon": -106.6089,
+    "iata": "ABQ",
+    "icao": "KABQ",
+    "city": "Albuquerque",
+    "region": "NM",
+    "details": {
+      "elevation_ft": 5355,
+      "runway_count": 3,
+      "longest_runway_ft": 13793
+    }
+  },
+  {
+    "name": "Aberdeen Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.4491,
+    "lon": -98.4218,
+    "iata": "ABR",
+    "icao": "KABR",
+    "city": "Aberdeen",
+    "region": "SD",
+    "details": {
+      "elevation_ft": 1302,
+      "runway_count": 2,
+      "longest_runway_ft": 6901
+    }
+  },
+  {
+    "name": "Southwest Georgia Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.5329,
+    "lon": -84.1962,
+    "iata": "ABY",
+    "icao": "KABY",
+    "city": "Albany",
+    "region": "GA",
+    "details": {
+      "elevation_ft": 197,
+      "runway_count": 2,
+      "longest_runway_ft": 6601
+    }
+  },
+  {
+    "name": "Nantucket Memorial Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.2531,
+    "lon": -70.0602,
+    "iata": "ACK",
+    "icao": "KACK",
+    "city": "Nantucket",
+    "region": "MA",
+    "details": {
+      "elevation_ft": 47,
+      "runway_count": 2,
+      "longest_runway_ft": 6303
+    }
+  },
+  {
+    "name": "Waco Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.6113,
+    "lon": -97.2305,
+    "iata": "ACT",
+    "icao": "KACT",
+    "city": "Waco",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 516,
+      "runway_count": 2,
+      "longest_runway_ft": 7107
+    }
+  },
+  {
+    "name": "California Redwood Coast-Humboldt County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.9781,
+    "lon": -124.109,
+    "iata": "ACV",
+    "icao": "KACV",
+    "city": "Arcata/Eureka",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 221,
+      "runway_count": 2,
+      "longest_runway_ft": 6046
+    }
+  },
+  {
+    "name": "Atlantic City International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.4562,
+    "lon": -74.5775,
+    "iata": "ACY",
+    "icao": "KACY",
+    "city": "Atlantic City",
+    "region": "NJ",
+    "details": {
+      "elevation_ft": 75,
+      "runway_count": 2,
+      "longest_runway_ft": 10001
+    }
+  },
+  {
+    "name": "Kodiak Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 57.75,
+    "lon": -152.494,
+    "iata": "ADQ",
+    "icao": "PADQ",
+    "city": "Kodiak",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 78,
+      "runway_count": 3,
+      "longest_runway_ft": 7534
+    }
+  },
+  {
+    "name": "Alexandria International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.3258,
+    "lon": -92.5467,
+    "iata": "AEX",
+    "icao": "KAEX",
+    "city": "Alexandria",
+    "region": "LA",
+    "details": {
+      "elevation_ft": 89,
+      "runway_count": 1,
+      "longest_runway_ft": 9352
+    }
+  },
+  {
+    "name": "Augusta Regional At Bush Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.3699,
+    "lon": -81.9645,
+    "iata": "AGS",
+    "icao": "KAGS",
+    "city": "Augusta",
+    "region": "GA",
+    "details": {
+      "elevation_ft": 144,
+      "runway_count": 2,
+      "longest_runway_ft": 8001
+    }
+  },
+  {
+    "name": "Athens Ben Epps Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.9488,
+    "lon": -83.3256,
+    "iata": "AHN",
+    "icao": "KAHN",
+    "city": "Athens",
+    "region": "GA",
+    "details": {
+      "elevation_ft": 808,
+      "runway_count": 2,
+      "longest_runway_ft": 6122
+    }
+  },
+  {
+    "name": "King Salmon Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 58.6778,
+    "lon": -156.652,
+    "iata": "AKN",
+    "icao": "PAKN",
+    "city": "King Salmon",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 73,
+      "runway_count": 3,
+      "longest_runway_ft": 8901
+    }
+  },
+  {
+    "name": "Albany International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.7483,
+    "lon": -73.8017,
+    "iata": "ALB",
+    "icao": "KALB",
+    "city": "Albany",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 285,
+      "runway_count": 2,
+      "longest_runway_ft": 8500
+    }
+  },
+  {
+    "name": "Waterloo Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.5571,
+    "lon": -92.4003,
+    "iata": "ALO",
+    "icao": "KALO",
+    "city": "Waterloo",
+    "region": "IA",
+    "details": {
+      "elevation_ft": 873,
+      "runway_count": 2,
+      "longest_runway_ft": 8399
+    }
+  },
+  {
+    "name": "Walla Walla Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.0949,
+    "lon": -118.288,
+    "iata": "ALW",
+    "icao": "KALW",
+    "city": "Walla Walla",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 1194,
+      "runway_count": 1,
+      "longest_runway_ft": 6527
+    }
+  },
+  {
+    "name": "Rick Husband Amarillo International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.2179,
+    "lon": -101.7064,
+    "iata": "AMA",
+    "icao": "KAMA",
+    "city": "Amarillo",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 3607,
+      "runway_count": 2,
+      "longest_runway_ft": 13502
+    }
+  },
+  {
+    "name": "Ted Stevens Anchorage International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 61.179,
+    "lon": -149.9926,
+    "iata": "ANC",
+    "icao": "PANC",
+    "city": "Anchorage",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 152,
+      "runway_count": 3,
+      "longest_runway_ft": 12400
+    }
+  },
+  {
+    "name": "Aniak Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 61.5816,
+    "lon": -159.543,
+    "iata": "ANI",
+    "icao": "PANI",
+    "city": "Aniak",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 88,
+      "runway_count": 1,
+      "longest_runway_ft": 6200
+    }
+  },
+  {
+    "name": "Altoona Blair County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.2964,
+    "lon": -78.32,
+    "iata": "AOO",
+    "icao": "KAOO",
+    "city": "Altoona",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 1503,
+      "runway_count": 2,
+      "longest_runway_ft": 5465
+    }
+  },
+  {
+    "name": "Naples Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 26.1526,
+    "lon": -81.7753,
+    "iata": "APF",
+    "icao": "KAPF",
+    "city": "Naples",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 8,
+      "runway_count": 3,
+      "longest_runway_ft": 6600
+    }
+  },
+  {
+    "name": "Alpena County Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.0781,
+    "lon": -83.5603,
+    "iata": "APN",
+    "icao": "KAPN",
+    "city": "Alpena",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 690,
+      "runway_count": 2,
+      "longest_runway_ft": 9001
+    }
+  },
+  {
+    "name": "Aspen-Pitkin County Airport (Sardy Field)",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.2232,
+    "lon": -106.869,
+    "iata": "ASE",
+    "icao": "KASE",
+    "city": "Aspen",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 7820,
+      "runway_count": 1,
+      "longest_runway_ft": 8006
+    }
+  },
+  {
+    "name": "Hartsfield Jackson Atlanta International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.6367,
+    "lon": -84.4281,
+    "iata": "ATL",
+    "icao": "KATL",
+    "city": "Atlanta",
+    "region": "GA",
+    "details": {
+      "elevation_ft": 1026,
+      "runway_count": 5,
+      "longest_runway_ft": 12390
+    }
+  },
+  {
+    "name": "Appleton International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.2585,
+    "lon": -88.519,
+    "iata": "ATW",
+    "icao": "KATW",
+    "city": "Appleton",
+    "region": "WI",
+    "details": {
+      "elevation_ft": 918,
+      "runway_count": 2,
+      "longest_runway_ft": 8003
+    }
+  },
+  {
+    "name": "Austin Bergstrom International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.1975,
+    "lon": -97.662,
+    "iata": "AUS",
+    "icao": "KAUS",
+    "city": "Austin",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 542,
+      "runway_count": 2,
+      "longest_runway_ft": 12250
+    }
+  },
+  {
+    "name": "Asheville Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.4355,
+    "lon": -82.5419,
+    "iata": "AVL",
+    "icao": "KAVL",
+    "city": "Asheville",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 2165,
+      "runway_count": 1,
+      "longest_runway_ft": 8002
+    }
+  },
+  {
+    "name": "Wilkes-Barre/Scranton International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.3371,
+    "lon": -75.7242,
+    "iata": "AVP",
+    "icao": "KAVP",
+    "city": "Wilkes-Barre/Scranton",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 962,
+      "runway_count": 2,
+      "longest_runway_ft": 7502
+    }
+  },
+  {
+    "name": "Kalamazoo/Battle Creek International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.2321,
+    "lon": -85.5496,
+    "iata": "AZO",
+    "icao": "KAZO",
+    "city": "Kalamazoo",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 874,
+      "runway_count": 3,
+      "longest_runway_ft": 6502
+    }
+  },
+  {
+    "name": "Bradley International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.9386,
+    "lon": -72.688,
+    "iata": "BDL",
+    "icao": "KBDL",
+    "city": "Hartford",
+    "region": "CT",
+    "details": {
+      "elevation_ft": 173,
+      "runway_count": 2,
+      "longest_runway_ft": 9510
+    }
+  },
+  {
+    "name": "Laurence G Hanscom Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.47,
+    "lon": -71.289,
+    "iata": "BED",
+    "icao": "KBED",
+    "city": "Bedford",
+    "region": "MA",
+    "details": {
+      "elevation_ft": 133,
+      "runway_count": 2,
+      "longest_runway_ft": 7011
+    }
+  },
+  {
+    "name": "Bethel Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 60.7798,
+    "lon": -161.838,
+    "iata": "BET",
+    "icao": "PABE",
+    "city": "Bethel",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 126,
+      "runway_count": 3,
+      "longest_runway_ft": 6400
+    }
+  },
+  {
+    "name": "Bradford Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.8031,
+    "lon": -78.6401,
+    "iata": "BFD",
+    "icao": "KBFD",
+    "city": "Bradford",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 2143,
+      "runway_count": 2,
+      "longest_runway_ft": 6307
+    }
+  },
+  {
+    "name": "Western Neb. Rgnl/William B. Heilig Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.874,
+    "lon": -103.596,
+    "iata": "BFF",
+    "icao": "KBFF",
+    "city": "Scottsbluff",
+    "region": "NE",
+    "details": {
+      "elevation_ft": 3967,
+      "runway_count": 2,
+      "longest_runway_ft": 8279
+    }
+  },
+  {
+    "name": "King County International Airport - Boeing Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.527,
+    "lon": -122.2999,
+    "iata": "BFI",
+    "icao": "KBFI",
+    "city": "Seattle",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 21,
+      "runway_count": 2,
+      "longest_runway_ft": 10007
+    }
+  },
+  {
+    "name": "Meadows Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.4336,
+    "lon": -119.057,
+    "iata": "BFL",
+    "icao": "KBFL",
+    "city": "Bakersfield",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 510,
+      "runway_count": 2,
+      "longest_runway_ft": 10849
+    }
+  },
+  {
+    "name": "Greater Binghamton/Edwin A Link field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.2087,
+    "lon": -75.9798,
+    "iata": "BGM",
+    "icao": "KBGM",
+    "city": "Binghamton",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 1636,
+      "runway_count": 2,
+      "longest_runway_ft": 7305
+    }
+  },
+  {
+    "name": "Bangor International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.8064,
+    "lon": -68.8267,
+    "iata": "BGR",
+    "icao": "KBGR",
+    "city": "Bangor",
+    "region": "ME",
+    "details": {
+      "elevation_ft": 192,
+      "runway_count": 1,
+      "longest_runway_ft": 11440
+    }
+  },
+  {
+    "name": "Hancock County-Bar Harbor Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.45,
+    "lon": -68.3615,
+    "iata": "BHB",
+    "icao": "KBHB",
+    "city": "Bar Harbor",
+    "region": "ME",
+    "details": {
+      "elevation_ft": 83,
+      "runway_count": 2,
+      "longest_runway_ft": 5200
+    }
+  },
+  {
+    "name": "Birmingham-Shuttlesworth International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.5629,
+    "lon": -86.7507,
+    "iata": "BHM",
+    "icao": "KBHM",
+    "city": "Birmingham",
+    "region": "AL",
+    "details": {
+      "elevation_ft": 650,
+      "runway_count": 2,
+      "longest_runway_ft": 12007
+    }
+  },
+  {
+    "name": "Block Island State Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.1684,
+    "lon": -71.5786,
+    "iata": "BID",
+    "icao": "KBID",
+    "city": "Block Island",
+    "region": "RI",
+    "details": {
+      "elevation_ft": 108,
+      "runway_count": 1,
+      "longest_runway_ft": 2502
+    }
+  },
+  {
+    "name": "Billings Logan International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.8089,
+    "lon": -108.5412,
+    "iata": "BIL",
+    "icao": "KBIL",
+    "city": "Billings",
+    "region": "MT",
+    "details": {
+      "elevation_ft": 3652,
+      "runway_count": 3,
+      "longest_runway_ft": 10518
+    }
+  },
+  {
+    "name": "Bismarck Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.7727,
+    "lon": -100.7469,
+    "iata": "BIS",
+    "icao": "KBIS",
+    "city": "Bismarck",
+    "region": "ND",
+    "details": {
+      "elevation_ft": 1661,
+      "runway_count": 2,
+      "longest_runway_ft": 8794
+    }
+  },
+  {
+    "name": "Bemidji Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.5094,
+    "lon": -94.9337,
+    "iata": "BJI",
+    "icao": "KBJI",
+    "city": "Bemidji",
+    "region": "MN",
+    "details": {
+      "elevation_ft": 1391,
+      "runway_count": 2,
+      "longest_runway_ft": 7004
+    }
+  },
+  {
+    "name": "Bellingham International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 48.7928,
+    "lon": -122.538,
+    "iata": "BLI",
+    "icao": "KBLI",
+    "city": "Bellingham",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 170,
+      "runway_count": 1,
+      "longest_runway_ft": 6700
+    }
+  },
+  {
+    "name": "Scott AFB/Midamerica Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.5452,
+    "lon": -89.8352,
+    "iata": "BLV",
+    "icao": "KBLV",
+    "city": "Belleville",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 459,
+      "runway_count": 2,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Central Illinois Regional Airport at Bloomington-Normal",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.4771,
+    "lon": -88.9159,
+    "iata": "BMI",
+    "icao": "KBMI",
+    "city": "Bloomington/Normal",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 871,
+      "runway_count": 2,
+      "longest_runway_ft": 8000
+    }
+  },
+  {
+    "name": "Nashville International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.1245,
+    "lon": -86.6782,
+    "iata": "BNA",
+    "icao": "KBNA",
+    "city": "Nashville",
+    "region": "TN",
+    "details": {
+      "elevation_ft": 599,
+      "runway_count": 4,
+      "longest_runway_ft": 11030
+    }
+  },
+  {
+    "name": "Boise Air Terminal/Gowen Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.5644,
+    "lon": -116.223,
+    "iata": "BOI",
+    "icao": "KBOI",
+    "city": "Boise",
+    "region": "ID",
+    "details": {
+      "elevation_ft": 2871,
+      "runway_count": 2,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Boston Logan International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.362,
+    "lon": -71.0079,
+    "iata": "BOS",
+    "icao": "KBOS",
+    "city": "Boston",
+    "region": "MA",
+    "details": {
+      "elevation_ft": 20,
+      "runway_count": 6,
+      "longest_runway_ft": 10083
+    }
+  },
+  {
+    "name": "Jack Brooks Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 29.9508,
+    "lon": -94.0207,
+    "iata": "BPT",
+    "icao": "KBPT",
+    "city": "Beaumont/Port Arthur",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 15,
+      "runway_count": 2,
+      "longest_runway_ft": 6751
+    }
+  },
+  {
+    "name": "Brunswick Golden Isles Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.2588,
+    "lon": -81.4665,
+    "iata": "BQK",
+    "icao": "KBQK",
+    "city": "Brunswick",
+    "region": "GA",
+    "details": {
+      "elevation_ft": 26,
+      "runway_count": 1,
+      "longest_runway_ft": 8001
+    }
+  },
+  {
+    "name": "Brainerd Lakes Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.4029,
+    "lon": -94.1297,
+    "iata": "BRD",
+    "icao": "KBRD",
+    "city": "Brainerd",
+    "region": "MN",
+    "details": {
+      "elevation_ft": 1232,
+      "runway_count": 3,
+      "longest_runway_ft": 7100
+    }
+  },
+  {
+    "name": "Southeast Iowa Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.7832,
+    "lon": -91.1255,
+    "iata": "BRL",
+    "icao": "KBRL",
+    "city": "Burlington",
+    "region": "IA",
+    "details": {
+      "elevation_ft": 698,
+      "runway_count": 2,
+      "longest_runway_ft": 6102
+    }
+  },
+  {
+    "name": "Brownsville South Padre Island International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 25.9072,
+    "lon": -97.4252,
+    "iata": "BRO",
+    "icao": "KBRO",
+    "city": "Brownsville",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 22,
+      "runway_count": 2,
+      "longest_runway_ft": 7399
+    }
+  },
+  {
+    "name": "Wiley Post Will Rogers Memorial Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 71.2854,
+    "lon": -156.766,
+    "iata": "BRW",
+    "icao": "PABR",
+    "city": "Utqia\u0121vik",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 44,
+      "runway_count": 1,
+      "longest_runway_ft": 7100
+    }
+  },
+  {
+    "name": "Bert Mooney Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.9548,
+    "lon": -112.497,
+    "iata": "BTM",
+    "icao": "KBTM",
+    "city": "Butte",
+    "region": "MT",
+    "details": {
+      "elevation_ft": 5550,
+      "runway_count": 2,
+      "longest_runway_ft": 9000
+    }
+  },
+  {
+    "name": "Baton Rouge Metropolitan Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.5332,
+    "lon": -91.1496,
+    "iata": "BTR",
+    "icao": "KBTR",
+    "city": "Baton Rouge",
+    "region": "LA",
+    "details": {
+      "elevation_ft": 70,
+      "runway_count": 3,
+      "longest_runway_ft": 7500
+    }
+  },
+  {
+    "name": "Patrick Leahy Burlington International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.4719,
+    "lon": -73.1533,
+    "iata": "BTV",
+    "icao": "KBTV",
+    "city": "Burlington",
+    "region": "VT",
+    "details": {
+      "elevation_ft": 335,
+      "runway_count": 2,
+      "longest_runway_ft": 8319
+    }
+  },
+  {
+    "name": "Buffalo Niagara International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.9405,
+    "lon": -78.7322,
+    "iata": "BUF",
+    "icao": "KBUF",
+    "city": "Buffalo",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 728,
+      "runway_count": 2,
+      "longest_runway_ft": 8829
+    }
+  },
+  {
+    "name": "Hollywood Burbank/Bob Hope Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.2028,
+    "lon": -118.3581,
+    "iata": "BUR",
+    "icao": "KBUR",
+    "city": "Burbank",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 778,
+      "runway_count": 2,
+      "longest_runway_ft": 6886
+    }
+  },
+  {
+    "name": "Baltimore/Washington International Thurgood Marshall Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.1754,
+    "lon": -76.6683,
+    "iata": "BWI",
+    "icao": "KBWI",
+    "city": "Baltimore",
+    "region": "MD",
+    "details": {
+      "elevation_ft": 146,
+      "runway_count": 3,
+      "longest_runway_ft": 10503
+    }
+  },
+  {
+    "name": "Bozeman Yellowstone International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.7789,
+    "lon": -111.1537,
+    "iata": "BZN",
+    "icao": "KBZN",
+    "city": "Bozeman",
+    "region": "MT",
+    "details": {
+      "elevation_ft": 4473,
+      "runway_count": 4,
+      "longest_runway_ft": 8994
+    }
+  },
+  {
+    "name": "Columbia Metropolitan Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.9382,
+    "lon": -81.123,
+    "iata": "CAE",
+    "icao": "KCAE",
+    "city": "Columbia",
+    "region": "SC",
+    "details": {
+      "elevation_ft": 236,
+      "runway_count": 2,
+      "longest_runway_ft": 8601
+    }
+  },
+  {
+    "name": "Akron Canton Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.9161,
+    "lon": -81.4422,
+    "iata": "CAK",
+    "icao": "KCAK",
+    "city": "Akron",
+    "region": "OH",
+    "details": {
+      "elevation_ft": 1228,
+      "runway_count": 2,
+      "longest_runway_ft": 8204
+    }
+  },
+  {
+    "name": "Cedar City Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.701,
+    "lon": -113.099,
+    "iata": "CDC",
+    "icao": "KCDC",
+    "city": "Cedar City",
+    "region": "UT",
+    "details": {
+      "elevation_ft": 5622,
+      "runway_count": 2,
+      "longest_runway_ft": 8653
+    }
+  },
+  {
+    "name": "Merle K (Mudhole) Smith Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 60.4918,
+    "lon": -145.478,
+    "iata": "CDV",
+    "icao": "PACV",
+    "city": "Cordova",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 54,
+      "runway_count": 2,
+      "longest_runway_ft": 7500
+    }
+  },
+  {
+    "name": "Jack Mc Namara Field Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.7789,
+    "lon": -124.2364,
+    "iata": "CEC",
+    "icao": "KCEC",
+    "city": "Crescent City",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 61,
+      "runway_count": 2,
+      "longest_runway_ft": 5002
+    }
+  },
+  {
+    "name": "Chattanooga Metropolitan Airport (Lovell Field)",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.0353,
+    "lon": -85.2038,
+    "iata": "CHA",
+    "icao": "KCHA",
+    "city": "Chattanooga",
+    "region": "TN",
+    "details": {
+      "elevation_ft": 683,
+      "runway_count": 2,
+      "longest_runway_ft": 7400
+    }
+  },
+  {
+    "name": "Charlottesville Albemarle Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.1386,
+    "lon": -78.4529,
+    "iata": "CHO",
+    "icao": "KCHO",
+    "city": "Charlottesville",
+    "region": "VA",
+    "details": {
+      "elevation_ft": 639,
+      "runway_count": 1,
+      "longest_runway_ft": 6801
+    }
+  },
+  {
+    "name": "Charleston International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.8962,
+    "lon": -80.0382,
+    "iata": "CHS",
+    "icao": "KCHS",
+    "city": "Charleston",
+    "region": "SC",
+    "details": {
+      "elevation_ft": 46,
+      "runway_count": 2,
+      "longest_runway_ft": 9001
+    }
+  },
+  {
+    "name": "Chico Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.7956,
+    "lon": -121.8577,
+    "iata": "CIC",
+    "icao": "KCIC",
+    "city": "Chico",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 240,
+      "runway_count": 2,
+      "longest_runway_ft": 6724
+    }
+  },
+  {
+    "name": "The Eastern Iowa Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.8847,
+    "lon": -91.7108,
+    "iata": "CID",
+    "icao": "KCID",
+    "city": "Cedar Rapids",
+    "region": "IA",
+    "details": {
+      "elevation_ft": 869,
+      "runway_count": 2,
+      "longest_runway_ft": 8600
+    }
+  },
+  {
+    "name": "Chippewa County International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.242,
+    "lon": -84.4621,
+    "iata": "CIU",
+    "icao": "KCIU",
+    "city": "Kincheloe",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 800,
+      "runway_count": 2,
+      "longest_runway_ft": 7203
+    }
+  },
+  {
+    "name": "North Central West Virginia Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.2966,
+    "lon": -80.2281,
+    "iata": "CKB",
+    "icao": "KCKB",
+    "city": "Bridgeport",
+    "region": "WV",
+    "details": {
+      "elevation_ft": 1217,
+      "runway_count": 1,
+      "longest_runway_ft": 7800
+    }
+  },
+  {
+    "name": "McClellan-Palomar Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.1283,
+    "lon": -117.28,
+    "iata": "CLD",
+    "icao": "KCRQ",
+    "city": "Carlsbad",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 331,
+      "runway_count": 1,
+      "longest_runway_ft": 4897
+    }
+  },
+  {
+    "name": "Cleveland Hopkins International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.4117,
+    "lon": -81.8498,
+    "iata": "CLE",
+    "icao": "KCLE",
+    "city": "Cleveland",
+    "region": "OH",
+    "details": {
+      "elevation_ft": 791,
+      "runway_count": 3,
+      "longest_runway_ft": 9953
+    }
+  },
+  {
+    "name": "Easterwood Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.5886,
+    "lon": -96.3638,
+    "iata": "CLL",
+    "icao": "KCLL",
+    "city": "College Station",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 320,
+      "runway_count": 2,
+      "longest_runway_ft": 7000
+    }
+  },
+  {
+    "name": "William R Fairchild International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 48.1202,
+    "lon": -123.5,
+    "iata": "CLM",
+    "icao": "KCLM",
+    "city": "Port Angeles",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 291,
+      "runway_count": 2,
+      "longest_runway_ft": 6347
+    }
+  },
+  {
+    "name": "Charlotte Douglas International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.214,
+    "lon": -80.9431,
+    "iata": "CLT",
+    "icao": "KCLT",
+    "city": "Charlotte",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 748,
+      "runway_count": 3,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "John Glenn Columbus International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.998,
+    "lon": -82.8919,
+    "iata": "CMH",
+    "icao": "KCMH",
+    "city": "Columbus",
+    "region": "OH",
+    "details": {
+      "elevation_ft": 815,
+      "runway_count": 2,
+      "longest_runway_ft": 10114
+    }
+  },
+  {
+    "name": "University of Illinois Willard Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.0398,
+    "lon": -88.2762,
+    "iata": "CMI",
+    "icao": "KCMI",
+    "city": "Savoy",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 755,
+      "runway_count": 3,
+      "longest_runway_ft": 8101
+    }
+  },
+  {
+    "name": "Houghton County Memorial Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.1684,
+    "lon": -88.4891,
+    "iata": "CMX",
+    "icao": "KCMX",
+    "city": "Hancock",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 1095,
+      "runway_count": 2,
+      "longest_runway_ft": 6501
+    }
+  },
+  {
+    "name": "Yellowstone Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.5202,
+    "lon": -109.024,
+    "iata": "COD",
+    "icao": "KCOD",
+    "city": "Cody",
+    "region": "WY",
+    "details": {
+      "elevation_ft": 5102,
+      "runway_count": 1,
+      "longest_runway_ft": 8268
+    }
+  },
+  {
+    "name": "City of Colorado Springs Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.8058,
+    "lon": -104.701,
+    "iata": "COS",
+    "icao": "KCOS",
+    "city": "Colorado Springs",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 6187,
+      "runway_count": 3,
+      "longest_runway_ft": 13500
+    }
+  },
+  {
+    "name": "Columbia Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.8181,
+    "lon": -92.2196,
+    "iata": "COU",
+    "icao": "KCOU",
+    "city": "Columbia",
+    "region": "MO",
+    "details": {
+      "elevation_ft": 889,
+      "runway_count": 2,
+      "longest_runway_ft": 7401
+    }
+  },
+  {
+    "name": "Casper-Natrona County International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.9074,
+    "lon": -106.4616,
+    "iata": "CPR",
+    "icao": "KCPR",
+    "city": "Casper",
+    "region": "WY",
+    "details": {
+      "elevation_ft": 5350,
+      "runway_count": 2,
+      "longest_runway_ft": 10165
+    }
+  },
+  {
+    "name": "Corpus Christi International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 27.7704,
+    "lon": -97.5012,
+    "iata": "CRP",
+    "icao": "KCRP",
+    "city": "Corpus Christi",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 44,
+      "runway_count": 2,
+      "longest_runway_ft": 7510
+    }
+  },
+  {
+    "name": "Yeager Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.3731,
+    "lon": -81.5932,
+    "iata": "CRW",
+    "icao": "KCRW",
+    "city": "Charleston",
+    "region": "WV",
+    "details": {
+      "elevation_ft": 981,
+      "runway_count": 1,
+      "longest_runway_ft": 6715
+    }
+  },
+  {
+    "name": "Columbus Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.5164,
+    "lon": -84.9396,
+    "iata": "CSG",
+    "icao": "KCSG",
+    "city": "Columbus",
+    "region": "GA",
+    "details": {
+      "elevation_ft": 397,
+      "runway_count": 2,
+      "longest_runway_ft": 6997
+    }
+  },
+  {
+    "name": "Cincinnati Northern Kentucky International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.0488,
+    "lon": -84.6678,
+    "iata": "CVG",
+    "icao": "KCVG",
+    "city": "Cincinnati / Covington",
+    "region": "KY",
+    "details": {
+      "elevation_ft": 896,
+      "runway_count": 4,
+      "longest_runway_ft": 12001
+    }
+  },
+  {
+    "name": "Central Wisconsin Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.7774,
+    "lon": -89.6702,
+    "iata": "CWA",
+    "icao": "KCWA",
+    "city": "Mosinee",
+    "region": "WI",
+    "details": {
+      "elevation_ft": 1277,
+      "runway_count": 2,
+      "longest_runway_ft": 7723
+    }
+  },
+  {
+    "name": "Cheyenne Regional Jerry Olson Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.1557,
+    "lon": -104.812,
+    "iata": "CYS",
+    "icao": "KCYS",
+    "city": "Cheyenne",
+    "region": "WY",
+    "details": {
+      "elevation_ft": 6159,
+      "runway_count": 2,
+      "longest_runway_ft": 9270
+    }
+  },
+  {
+    "name": "Daytona Beach International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 29.1825,
+    "lon": -81.0595,
+    "iata": "DAB",
+    "icao": "KDAB",
+    "city": "Daytona Beach",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 34,
+      "runway_count": 3,
+      "longest_runway_ft": 10500
+    }
+  },
+  {
+    "name": "Dallas Love Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.8448,
+    "lon": -96.8477,
+    "iata": "DAL",
+    "icao": "KDAL",
+    "city": "Dallas",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 487,
+      "runway_count": 2,
+      "longest_runway_ft": 8800
+    }
+  },
+  {
+    "name": "James M. Cox Dayton International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.9024,
+    "lon": -84.2194,
+    "iata": "DAY",
+    "icao": "KDAY",
+    "city": "Dayton",
+    "region": "OH",
+    "details": {
+      "elevation_ft": 1009,
+      "runway_count": 3,
+      "longest_runway_ft": 10901
+    }
+  },
+  {
+    "name": "Dubuque Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.402,
+    "lon": -90.7095,
+    "iata": "DBQ",
+    "icao": "KDBQ",
+    "city": "Dubuque",
+    "region": "IA",
+    "details": {
+      "elevation_ft": 1077,
+      "runway_count": 2,
+      "longest_runway_ft": 6502
+    }
+  },
+  {
+    "name": "Ronald Reagan Washington National Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.8521,
+    "lon": -77.0377,
+    "iata": "DCA",
+    "icao": "KDCA",
+    "city": "Washington",
+    "region": "DC",
+    "details": {
+      "elevation_ft": 15,
+      "runway_count": 3,
+      "longest_runway_ft": 7169
+    }
+  },
+  {
+    "name": "Decatur Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.8346,
+    "lon": -88.8657,
+    "iata": "DEC",
+    "icao": "KDEC",
+    "city": "Decatur",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 682,
+      "runway_count": 3,
+      "longest_runway_ft": 8496
+    }
+  },
+  {
+    "name": "Denver International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.86,
+    "lon": -104.6738,
+    "iata": "DEN",
+    "icao": "KDEN",
+    "city": "Denver",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 5431,
+      "runway_count": 6,
+      "longest_runway_ft": 16000
+    }
+  },
+  {
+    "name": "Coleman A. Young Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.4092,
+    "lon": -83.0099,
+    "iata": "DET",
+    "icao": "KDET",
+    "city": "Detroit",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 626,
+      "runway_count": 1,
+      "longest_runway_ft": 5092
+    }
+  },
+  {
+    "name": "Dallas Fort Worth International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.8968,
+    "lon": -97.038,
+    "iata": "DFW",
+    "icao": "KDFW",
+    "city": "Dallas-Fort Worth",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 607,
+      "runway_count": 7,
+      "longest_runway_ft": 13401
+    }
+  },
+  {
+    "name": "Dothan Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.3213,
+    "lon": -85.4496,
+    "iata": "DHN",
+    "icao": "KDHN",
+    "city": "Dothan",
+    "region": "AL",
+    "details": {
+      "elevation_ft": 401,
+      "runway_count": 2,
+      "longest_runway_ft": 8500
+    }
+  },
+  {
+    "name": "Dillingham Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 59.0447,
+    "lon": -158.505,
+    "iata": "DLG",
+    "icao": "PADL",
+    "city": "Dillingham",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 81,
+      "runway_count": 1,
+      "longest_runway_ft": 6400
+    }
+  },
+  {
+    "name": "Duluth International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.8419,
+    "lon": -92.1987,
+    "iata": "DLH",
+    "icao": "KDLH",
+    "city": "Duluth",
+    "region": "MN",
+    "details": {
+      "elevation_ft": 1428,
+      "runway_count": 2,
+      "longest_runway_ft": 10591
+    }
+  },
+  {
+    "name": "Durango La Plata County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.1515,
+    "lon": -107.754,
+    "iata": "DRO",
+    "icao": "KDRO",
+    "city": "Durango",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 6685,
+      "runway_count": 1,
+      "longest_runway_ft": 9201
+    }
+  },
+  {
+    "name": "Des Moines International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.534,
+    "lon": -93.6567,
+    "iata": "DSM",
+    "icao": "KDSM",
+    "city": "Des Moines",
+    "region": "IA",
+    "details": {
+      "elevation_ft": 958,
+      "runway_count": 2,
+      "longest_runway_ft": 9004
+    }
+  },
+  {
+    "name": "Detroit Metropolitan Wayne County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.2138,
+    "lon": -83.3538,
+    "iata": "DTW",
+    "icao": "KDTW",
+    "city": "Detroit",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 645,
+      "runway_count": 6,
+      "longest_runway_ft": 12003
+    }
+  },
+  {
+    "name": "DuBois Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.1783,
+    "lon": -78.8987,
+    "iata": "DUJ",
+    "icao": "KDUJ",
+    "city": "Dubois",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 1817,
+      "runway_count": 1,
+      "longest_runway_ft": 5503
+    }
+  },
+  {
+    "name": "Tom Madsen (Dutch Harbor) Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 53.8988,
+    "lon": -166.545,
+    "iata": "DUT",
+    "icao": "PADU",
+    "city": "Unalaska",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 22,
+      "runway_count": 1,
+      "longest_runway_ft": 4500
+    }
+  },
+  {
+    "name": "Kearney Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.727,
+    "lon": -99.0068,
+    "iata": "EAR",
+    "icao": "KEAR",
+    "city": "Kearney",
+    "region": "NE",
+    "details": {
+      "elevation_ft": 2131,
+      "runway_count": 2,
+      "longest_runway_ft": 7094
+    }
+  },
+  {
+    "name": "Pangborn Memorial Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.3989,
+    "lon": -120.207,
+    "iata": "EAT",
+    "icao": "KEAT",
+    "city": "Wenatchee",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 1249,
+      "runway_count": 1,
+      "longest_runway_ft": 7000
+    }
+  },
+  {
+    "name": "Chippewa Valley Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.8658,
+    "lon": -91.4843,
+    "iata": "EAU",
+    "icao": "KEAU",
+    "city": "Eau Claire",
+    "region": "WI",
+    "details": {
+      "elevation_ft": 913,
+      "runway_count": 2,
+      "longest_runway_ft": 8101
+    }
+  },
+  {
+    "name": "Ellington Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 29.6073,
+    "lon": -95.1588,
+    "iata": "EFD",
+    "icao": "KEFD",
+    "city": "Houston",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 32,
+      "runway_count": 2,
+      "longest_runway_ft": 9001
+    }
+  },
+  {
+    "name": "Eagle County Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.6426,
+    "lon": -106.918,
+    "iata": "EGE",
+    "icao": "KEGE",
+    "city": "Eagle",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 6548,
+      "runway_count": 1,
+      "longest_runway_ft": 9000
+    }
+  },
+  {
+    "name": "Elko Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.8249,
+    "lon": -115.792,
+    "iata": "EKO",
+    "icao": "KEKO",
+    "city": "Elko",
+    "region": "NV",
+    "details": {
+      "elevation_ft": 5140,
+      "runway_count": 2,
+      "longest_runway_ft": 7214
+    }
+  },
+  {
+    "name": "Elmira Corning Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.1599,
+    "lon": -76.8916,
+    "iata": "ELM",
+    "icao": "KELM",
+    "city": "Elmira/Corning",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 954,
+      "runway_count": 3,
+      "longest_runway_ft": 8001
+    }
+  },
+  {
+    "name": "El Paso International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.8099,
+    "lon": -106.3756,
+    "iata": "ELP",
+    "icao": "KELP",
+    "city": "El Paso",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 3959,
+      "runway_count": 3,
+      "longest_runway_ft": 12020
+    }
+  },
+  {
+    "name": "Kenai Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 60.5709,
+    "lon": -151.2452,
+    "iata": "ENA",
+    "icao": "PAEN",
+    "city": "Kenai",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 99,
+      "runway_count": 3,
+      "longest_runway_ft": 7855
+    }
+  },
+  {
+    "name": "Erie International Tom Ridge Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.0831,
+    "lon": -80.1739,
+    "iata": "ERI",
+    "icao": "KERI",
+    "city": "Erie",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 732,
+      "runway_count": 2,
+      "longest_runway_ft": 8420
+    }
+  },
+  {
+    "name": "Delta County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.7232,
+    "lon": -87.0886,
+    "iata": "ESC",
+    "icao": "KESC",
+    "city": "Escanaba",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 609,
+      "runway_count": 2,
+      "longest_runway_ft": 6498
+    }
+  },
+  {
+    "name": "Eugene Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.1246,
+    "lon": -123.212,
+    "iata": "EUG",
+    "icao": "KEUG",
+    "city": "Eugene",
+    "region": "OR",
+    "details": {
+      "elevation_ft": 374,
+      "runway_count": 2,
+      "longest_runway_ft": 8009
+    }
+  },
+  {
+    "name": "Evansville Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.037,
+    "lon": -87.5324,
+    "iata": "EVV",
+    "icao": "KEVV",
+    "city": "Evansville",
+    "region": "IN",
+    "details": {
+      "elevation_ft": 418,
+      "runway_count": 3,
+      "longest_runway_ft": 8021
+    }
+  },
+  {
+    "name": "New Bedford Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.6761,
+    "lon": -70.9569,
+    "iata": "EWB",
+    "icao": "KEWB",
+    "city": "New Bedford",
+    "region": "MA",
+    "details": {
+      "elevation_ft": 80,
+      "runway_count": 2,
+      "longest_runway_ft": 5400
+    }
+  },
+  {
+    "name": "Coastal Carolina Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.073,
+    "lon": -77.0429,
+    "iata": "EWN",
+    "icao": "KEWN",
+    "city": "New Bern",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 18,
+      "runway_count": 2,
+      "longest_runway_ft": 6452
+    }
+  },
+  {
+    "name": "Newark Liberty International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.6894,
+    "lon": -74.1705,
+    "iata": "EWR",
+    "icao": "KEWR",
+    "city": "Newark",
+    "region": "NJ",
+    "details": {
+      "elevation_ft": 18,
+      "runway_count": 3,
+      "longest_runway_ft": 11000
+    }
+  },
+  {
+    "name": "Key West International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 24.5561,
+    "lon": -81.7596,
+    "iata": "EYW",
+    "icao": "KEYW",
+    "city": "Key West",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 3,
+      "runway_count": 1,
+      "longest_runway_ft": 5076
+    }
+  },
+  {
+    "name": "Fairbanks International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 64.8151,
+    "lon": -147.856,
+    "iata": "FAI",
+    "icao": "PAFA",
+    "city": "Fairbanks",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 439,
+      "runway_count": 4,
+      "longest_runway_ft": 11800
+    }
+  },
+  {
+    "name": "Hector International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.9207,
+    "lon": -96.8158,
+    "iata": "FAR",
+    "icao": "KFAR",
+    "city": "Fargo",
+    "region": "ND",
+    "details": {
+      "elevation_ft": 902,
+      "runway_count": 3,
+      "longest_runway_ft": 9001
+    }
+  },
+  {
+    "name": "Fresno Yosemite International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.7758,
+    "lon": -119.718,
+    "iata": "FAT",
+    "icao": "KFAT",
+    "city": "Fresno",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 336,
+      "runway_count": 2,
+      "longest_runway_ft": 9539
+    }
+  },
+  {
+    "name": "Fayetteville Regional Airport - Grannis Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.9912,
+    "lon": -78.8803,
+    "iata": "FAY",
+    "icao": "KFAY",
+    "city": "Fayetteville",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 189,
+      "runway_count": 2,
+      "longest_runway_ft": 7709
+    }
+  },
+  {
+    "name": "Glacier Park International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 48.3105,
+    "lon": -114.256,
+    "iata": "FCA",
+    "icao": "KGPI",
+    "city": "Kalispell",
+    "region": "MT",
+    "details": {
+      "elevation_ft": 2977,
+      "runway_count": 2,
+      "longest_runway_ft": 9007
+    }
+  },
+  {
+    "name": "Flagstaff Pulliam Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.1398,
+    "lon": -111.6698,
+    "iata": "FLG",
+    "icao": "KFLG",
+    "city": "Flagstaff",
+    "region": "AZ",
+    "details": {
+      "elevation_ft": 7014,
+      "runway_count": 1,
+      "longest_runway_ft": 8800
+    }
+  },
+  {
+    "name": "Fort Lauderdale Hollywood International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 26.0726,
+    "lon": -80.1527,
+    "iata": "FLL",
+    "icao": "KFLL",
+    "city": "Fort Lauderdale",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 9,
+      "runway_count": 2,
+      "longest_runway_ft": 9000
+    }
+  },
+  {
+    "name": "Florence Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.1854,
+    "lon": -79.7239,
+    "iata": "FLO",
+    "icao": "KFLO",
+    "city": "Florence",
+    "region": "SC",
+    "details": {
+      "elevation_ft": 146,
+      "runway_count": 2,
+      "longest_runway_ft": 6502
+    }
+  },
+  {
+    "name": "Four Corners Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.7412,
+    "lon": -108.23,
+    "iata": "FMN",
+    "icao": "KFMN",
+    "city": "Farmington",
+    "region": "NM",
+    "details": {
+      "elevation_ft": 5506,
+      "runway_count": 2,
+      "longest_runway_ft": 6704
+    }
+  },
+  {
+    "name": "Bishop International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.9693,
+    "lon": -83.7434,
+    "iata": "FNT",
+    "icao": "KFNT",
+    "city": "Flint",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 782,
+      "runway_count": 2,
+      "longest_runway_ft": 7852
+    }
+  },
+  {
+    "name": "Fort Dodge Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.5526,
+    "lon": -94.1912,
+    "iata": "FOD",
+    "icao": "KFOD",
+    "city": "Fort Dodge",
+    "region": "IA",
+    "details": {
+      "elevation_ft": 1156,
+      "runway_count": 2,
+      "longest_runway_ft": 6547
+    }
+  },
+  {
+    "name": "Friday Harbor Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 48.5237,
+    "lon": -123.0246,
+    "iata": "FRD",
+    "icao": "KFHR",
+    "city": "Friday Harbor",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 113,
+      "runway_count": 1,
+      "longest_runway_ft": 3402
+    }
+  },
+  {
+    "name": "Sioux Falls Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.5855,
+    "lon": -96.7412,
+    "iata": "FSD",
+    "icao": "KFSD",
+    "city": "Sioux Falls",
+    "region": "SD",
+    "details": {
+      "elevation_ft": 1429,
+      "runway_count": 3,
+      "longest_runway_ft": 9000
+    }
+  },
+  {
+    "name": "Fort Smith Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.3366,
+    "lon": -94.3674,
+    "iata": "FSM",
+    "icao": "KFSM",
+    "city": "Fort Smith",
+    "region": "AR",
+    "details": {
+      "elevation_ft": 469,
+      "runway_count": 1,
+      "longest_runway_ft": 8000
+    }
+  },
+  {
+    "name": "Fort Wayne International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.9789,
+    "lon": -85.1945,
+    "iata": "FWA",
+    "icao": "KFWA",
+    "city": "Fort Wayne",
+    "region": "IN",
+    "details": {
+      "elevation_ft": 814,
+      "runway_count": 3,
+      "longest_runway_ft": 11981
+    }
+  },
+  {
+    "name": "Fort Yukon Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 66.5717,
+    "lon": -145.25,
+    "iata": "FYU",
+    "icao": "PFYU",
+    "city": "Fort Yukon",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 433,
+      "runway_count": 1,
+      "longest_runway_ft": 5000
+    }
+  },
+  {
+    "name": "Northeast Wyoming Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.3489,
+    "lon": -105.539,
+    "iata": "GCC",
+    "icao": "KGCC",
+    "city": "Gillette",
+    "region": "WY",
+    "details": {
+      "elevation_ft": 4365,
+      "runway_count": 2,
+      "longest_runway_ft": 7501
+    }
+  },
+  {
+    "name": "Garden City Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.9275,
+    "lon": -100.724,
+    "iata": "GCK",
+    "icao": "KGCK",
+    "city": "Garden City",
+    "region": "KS",
+    "details": {
+      "elevation_ft": 2891,
+      "runway_count": 2,
+      "longest_runway_ft": 7299
+    }
+  },
+  {
+    "name": "Grand Canyon National Park Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.9524,
+    "lon": -112.147,
+    "iata": "GCN",
+    "icao": "KGCN",
+    "city": "Grand Canyon - Tusayan",
+    "region": "AZ",
+    "details": {
+      "elevation_ft": 6609,
+      "runway_count": 1,
+      "longest_runway_ft": 8999
+    }
+  },
+  {
+    "name": "Grand Canyon West Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.9858,
+    "lon": -113.8171,
+    "iata": "GCW",
+    "icao": "K1G4",
+    "city": "Peach Springs",
+    "region": "AZ",
+    "details": {
+      "elevation_ft": 4825,
+      "runway_count": 1,
+      "longest_runway_ft": 5000
+    }
+  },
+  {
+    "name": "Spokane International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.6199,
+    "lon": -117.534,
+    "iata": "GEG",
+    "icao": "KGEG",
+    "city": "Spokane",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 2376,
+      "runway_count": 2,
+      "longest_runway_ft": 11002
+    }
+  },
+  {
+    "name": "Grand Forks International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.9493,
+    "lon": -97.1761,
+    "iata": "GFK",
+    "icao": "KGFK",
+    "city": "Grand Forks",
+    "region": "ND",
+    "details": {
+      "elevation_ft": 845,
+      "runway_count": 4,
+      "longest_runway_ft": 7351
+    }
+  },
+  {
+    "name": "East Texas Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.384,
+    "lon": -94.7115,
+    "iata": "GGG",
+    "icao": "KGGG",
+    "city": "Longview",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 365,
+      "runway_count": 2,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Grand Junction Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.1267,
+    "lon": -108.5294,
+    "iata": "GJT",
+    "icao": "KGJT",
+    "city": "Grand Junction",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 4858,
+      "runway_count": 2,
+      "longest_runway_ft": 9339
+    }
+  },
+  {
+    "name": "Mid Delta Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.4829,
+    "lon": -90.9856,
+    "iata": "GLH",
+    "icao": "KGLH",
+    "city": "Greenville",
+    "region": "MS",
+    "details": {
+      "elevation_ft": 131,
+      "runway_count": 2,
+      "longest_runway_ft": 8001
+    }
+  },
+  {
+    "name": "Gainesville Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 29.6901,
+    "lon": -82.2718,
+    "iata": "GNV",
+    "icao": "KGNV",
+    "city": "Gainesville",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 152,
+      "runway_count": 2,
+      "longest_runway_ft": 7504
+    }
+  },
+  {
+    "name": "Groton New London Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.3301,
+    "lon": -72.0451,
+    "iata": "GON",
+    "icao": "KGON",
+    "city": "Groton",
+    "region": "CT",
+    "details": {
+      "elevation_ft": 9,
+      "runway_count": 2,
+      "longest_runway_ft": 5000
+    }
+  },
+  {
+    "name": "Gulfport Biloxi International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.4056,
+    "lon": -89.0698,
+    "iata": "GPT",
+    "icao": "KGPT",
+    "city": "Gulfport",
+    "region": "MS",
+    "details": {
+      "elevation_ft": 28,
+      "runway_count": 2,
+      "longest_runway_ft": 9002
+    }
+  },
+  {
+    "name": "Grand Rapids Itasca Co-Gordon Newstrom field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.2111,
+    "lon": -93.5098,
+    "iata": "GPZ",
+    "icao": "KGPZ",
+    "city": "Grand Rapids",
+    "region": "MN",
+    "details": {
+      "elevation_ft": 1355,
+      "runway_count": 2,
+      "longest_runway_ft": 5756
+    }
+  },
+  {
+    "name": "Austin Straubel International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.4835,
+    "lon": -88.1308,
+    "iata": "GRB",
+    "icao": "KGRB",
+    "city": "Green Bay",
+    "region": "WI",
+    "details": {
+      "elevation_ft": 695,
+      "runway_count": 2,
+      "longest_runway_ft": 8700
+    }
+  },
+  {
+    "name": "Central Nebraska Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.9675,
+    "lon": -98.3096,
+    "iata": "GRI",
+    "icao": "KGRI",
+    "city": "Grand Island",
+    "region": "NE",
+    "details": {
+      "elevation_ft": 1847,
+      "runway_count": 2,
+      "longest_runway_ft": 7002
+    }
+  },
+  {
+    "name": "Gerald R. Ford International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.8808,
+    "lon": -85.5228,
+    "iata": "GRR",
+    "icao": "KGRR",
+    "city": "Grand Rapids",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 794,
+      "runway_count": 3,
+      "longest_runway_ft": 10001
+    }
+  },
+  {
+    "name": "Piedmont Triad International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.0994,
+    "lon": -79.9373,
+    "iata": "GSO",
+    "icao": "KGSO",
+    "city": "Greensboro",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 925,
+      "runway_count": 3,
+      "longest_runway_ft": 10001
+    }
+  },
+  {
+    "name": "Greenville-Spartanburg International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.8957,
+    "lon": -82.2189,
+    "iata": "GSP",
+    "icao": "KGSP",
+    "city": "Greenville/Greer/Spartanburg",
+    "region": "SC",
+    "details": {
+      "elevation_ft": 964,
+      "runway_count": 1,
+      "longest_runway_ft": 11001
+    }
+  },
+  {
+    "name": "Gustavus Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 58.4253,
+    "lon": -135.707,
+    "iata": "GST",
+    "icao": "PAGS",
+    "city": "Gustavus",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 35,
+      "runway_count": 2,
+      "longest_runway_ft": 6720
+    }
+  },
+  {
+    "name": "Great Falls International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.482,
+    "lon": -111.371,
+    "iata": "GTF",
+    "icao": "KGTF",
+    "city": "Great Falls",
+    "region": "MT",
+    "details": {
+      "elevation_ft": 3680,
+      "runway_count": 3,
+      "longest_runway_ft": 10502
+    }
+  },
+  {
+    "name": "Golden Triangle Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.4503,
+    "lon": -88.5914,
+    "iata": "GTR",
+    "icao": "KGTR",
+    "city": "Columbus/W Point/Starkville",
+    "region": "MS",
+    "details": {
+      "elevation_ft": 264,
+      "runway_count": 1,
+      "longest_runway_ft": 8003
+    }
+  },
+  {
+    "name": "Gunnison Crested Butte Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.5347,
+    "lon": -106.9346,
+    "iata": "GUC",
+    "icao": "KGUC",
+    "city": "Gunnison",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 7680,
+      "runway_count": 2,
+      "longest_runway_ft": 9400
+    }
+  },
+  {
+    "name": "Gary/Chicago International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.6171,
+    "lon": -87.4132,
+    "iata": "GYY",
+    "icao": "KGYY",
+    "city": "Gary",
+    "region": "IN",
+    "details": {
+      "elevation_ft": 591,
+      "runway_count": 2,
+      "longest_runway_ft": 8859
+    }
+  },
+  {
+    "name": "Yampa Valley Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.4812,
+    "lon": -107.218,
+    "iata": "HDN",
+    "icao": "KHDN",
+    "city": "Hayden",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 6606,
+      "runway_count": 1,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Hagerstown Regional Richard A Henson Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.7088,
+    "lon": -77.728,
+    "iata": "HGR",
+    "icao": "KHGR",
+    "city": "Hagerstown",
+    "region": "MD",
+    "details": {
+      "elevation_ft": 703,
+      "runway_count": 2,
+      "longest_runway_ft": 7000
+    }
+  },
+  {
+    "name": "Hilton Head Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.2244,
+    "lon": -80.6975,
+    "iata": "HHH",
+    "icao": "KHXD",
+    "city": "Hilton Head Island",
+    "region": "SC",
+    "details": {
+      "elevation_ft": 19,
+      "runway_count": 1,
+      "longest_runway_ft": 5000
+    }
+  },
+  {
+    "name": "Range Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.3848,
+    "lon": -92.8369,
+    "iata": "HIB",
+    "icao": "KHIB",
+    "city": "Hibbing",
+    "region": "MN",
+    "details": {
+      "elevation_ft": 1354,
+      "runway_count": 2,
+      "longest_runway_ft": 6758
+    }
+  },
+  {
+    "name": "Hickory Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.7411,
+    "lon": -81.3895,
+    "iata": "HKY",
+    "icao": "KHKY",
+    "city": "Hickory",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 1190,
+      "runway_count": 1,
+      "longest_runway_ft": 6401
+    }
+  },
+  {
+    "name": "Helena Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.6068,
+    "lon": -111.983,
+    "iata": "HLN",
+    "icao": "KHLN",
+    "city": "Helena",
+    "region": "MT",
+    "details": {
+      "elevation_ft": 3877,
+      "runway_count": 3,
+      "longest_runway_ft": 9000
+    }
+  },
+  {
+    "name": "Hoonah Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 58.0961,
+    "lon": -135.4101,
+    "iata": "HNH",
+    "icao": "PAOH",
+    "city": "Hoonah",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 19,
+      "runway_count": 1,
+      "longest_runway_ft": 3367
+    }
+  },
+  {
+    "name": "Daniel K. Inouye International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 21.3184,
+    "lon": -157.9257,
+    "iata": "HNL",
+    "icao": "PHNL",
+    "city": "Honolulu, Oahu",
+    "region": "HI",
+    "details": {
+      "elevation_ft": 13,
+      "runway_count": 6,
+      "longest_runway_ft": 12360
+    }
+  },
+  {
+    "name": "Haines Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 59.2439,
+    "lon": -135.5239,
+    "iata": "HNS",
+    "icao": "PAHN",
+    "city": "Haines",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 15,
+      "runway_count": 1,
+      "longest_runway_ft": 4000
+    }
+  },
+  {
+    "name": "Homer Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 59.6445,
+    "lon": -151.4792,
+    "iata": "HOM",
+    "icao": "PAHO",
+    "city": "Homer",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 84,
+      "runway_count": 1,
+      "longest_runway_ft": 6701
+    }
+  },
+  {
+    "name": "William P. Hobby Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 29.6453,
+    "lon": -95.2768,
+    "iata": "HOU",
+    "icao": "KHOU",
+    "city": "Houston",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 46,
+      "runway_count": 3,
+      "longest_runway_ft": 7602
+    }
+  },
+  {
+    "name": "Westchester County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.067,
+    "lon": -73.7076,
+    "iata": "HPN",
+    "icao": "KHPN",
+    "city": "White Plains",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 439,
+      "runway_count": 2,
+      "longest_runway_ft": 6549
+    }
+  },
+  {
+    "name": "Valley International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 26.2285,
+    "lon": -97.6544,
+    "iata": "HRL",
+    "icao": "KHRL",
+    "city": "Harlingen",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 36,
+      "runway_count": 3,
+      "longest_runway_ft": 9400
+    }
+  },
+  {
+    "name": "Henderson Executive Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.9728,
+    "lon": -115.134,
+    "iata": "HSH",
+    "icao": "KHND",
+    "city": "Las Vegas",
+    "region": "NV",
+    "details": {
+      "elevation_ft": 2492,
+      "runway_count": 2,
+      "longest_runway_ft": 6501
+    }
+  },
+  {
+    "name": "Huntsville International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.6362,
+    "lon": -86.7744,
+    "iata": "HSV",
+    "icao": "KHSV",
+    "city": "Huntsville",
+    "region": "AL",
+    "details": {
+      "elevation_ft": 629,
+      "runway_count": 2,
+      "longest_runway_ft": 12600
+    }
+  },
+  {
+    "name": "Tri-State Airport / Milton J. Ferguson Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.3667,
+    "lon": -82.558,
+    "iata": "HTS",
+    "icao": "KHTS",
+    "city": "Huntington",
+    "region": "WV",
+    "details": {
+      "elevation_ft": 828,
+      "runway_count": 1,
+      "longest_runway_ft": 7017
+    }
+  },
+  {
+    "name": "Tweed New Haven Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.2629,
+    "lon": -72.8877,
+    "iata": "HVN",
+    "icao": "KHVN",
+    "city": "New Haven",
+    "region": "CT",
+    "details": {
+      "elevation_ft": 12,
+      "runway_count": 1,
+      "longest_runway_ft": 5600
+    }
+  },
+  {
+    "name": "Cape Cod Gateway Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.6693,
+    "lon": -70.2804,
+    "iata": "HYA",
+    "icao": "KHYA",
+    "city": "Hyannis",
+    "region": "MA",
+    "details": {
+      "elevation_ft": 54,
+      "runway_count": 2,
+      "longest_runway_ft": 5425
+    }
+  },
+  {
+    "name": "Washington Dulles International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.9445,
+    "lon": -77.4558,
+    "iata": "IAD",
+    "icao": "KIAD",
+    "city": "Dulles",
+    "region": "VA",
+    "details": {
+      "elevation_ft": 312,
+      "runway_count": 4,
+      "longest_runway_ft": 11500
+    }
+  },
+  {
+    "name": "George Bush Intercontinental Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 29.9844,
+    "lon": -95.3414,
+    "iata": "IAH",
+    "icao": "KIAH",
+    "city": "Houston",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 97,
+      "runway_count": 5,
+      "longest_runway_ft": 12001
+    }
+  },
+  {
+    "name": "Wichita Dwight D. Eisenhower National Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.6503,
+    "lon": -97.4286,
+    "iata": "ICT",
+    "icao": "KICT",
+    "city": "Wichita",
+    "region": "KS",
+    "details": {
+      "elevation_ft": 1333,
+      "runway_count": 3,
+      "longest_runway_ft": 10302
+    }
+  },
+  {
+    "name": "Idaho Falls Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.5146,
+    "lon": -112.071,
+    "iata": "IDA",
+    "icao": "KIDA",
+    "city": "Idaho Falls",
+    "region": "ID",
+    "details": {
+      "elevation_ft": 4744,
+      "runway_count": 2,
+      "longest_runway_ft": 9002
+    }
+  },
+  {
+    "name": "Laughlin Bullhead International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.1547,
+    "lon": -114.5593,
+    "iata": "IFP",
+    "icao": "KIFP",
+    "city": "Bullhead City",
+    "region": "AZ",
+    "details": {
+      "elevation_ft": 701,
+      "runway_count": 1,
+      "longest_runway_ft": 8501
+    }
+  },
+  {
+    "name": "Skylark Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.0858,
+    "lon": -97.6865,
+    "iata": "ILE",
+    "icao": "KILE",
+    "city": "Killeen",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 848,
+      "runway_count": 1,
+      "longest_runway_ft": 5495
+    }
+  },
+  {
+    "name": "Wilmington International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.2723,
+    "lon": -77.9051,
+    "iata": "ILM",
+    "icao": "KILM",
+    "city": "Wilmington",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 32,
+      "runway_count": 2,
+      "longest_runway_ft": 8016
+    }
+  },
+  {
+    "name": "Indianapolis International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.7173,
+    "lon": -86.2944,
+    "iata": "IND",
+    "icao": "KIND",
+    "city": "Indianapolis",
+    "region": "IN",
+    "details": {
+      "elevation_ft": 797,
+      "runway_count": 3,
+      "longest_runway_ft": 11200
+    }
+  },
+  {
+    "name": "Falls International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 48.5662,
+    "lon": -93.4031,
+    "iata": "INL",
+    "icao": "KINL",
+    "city": "International Falls",
+    "region": "MN",
+    "details": {
+      "elevation_ft": 1185,
+      "runway_count": 2,
+      "longest_runway_ft": 7400
+    }
+  },
+  {
+    "name": "Imperial County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.8354,
+    "lon": -115.574,
+    "iata": "IPL",
+    "icao": "KIPL",
+    "city": "Imperial",
+    "region": "CA",
+    "details": {
+      "elevation_ft": -54,
+      "runway_count": 2,
+      "longest_runway_ft": 5308
+    }
+  },
+  {
+    "name": "Williamsport Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.2421,
+    "lon": -76.9224,
+    "iata": "IPT",
+    "icao": "KIPT",
+    "city": "Williamsport",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 529,
+      "runway_count": 2,
+      "longest_runway_ft": 6825
+    }
+  },
+  {
+    "name": "Long Island MacArthur Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.7963,
+    "lon": -73.1017,
+    "iata": "ISP",
+    "icao": "KISP",
+    "city": "Islip",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 99,
+      "runway_count": 3,
+      "longest_runway_ft": 7006
+    }
+  },
+  {
+    "name": "Ithaca Tompkins Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.491,
+    "lon": -76.4584,
+    "iata": "ITH",
+    "icao": "KITH",
+    "city": "Ithaca",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 1099,
+      "runway_count": 2,
+      "longest_runway_ft": 6977
+    }
+  },
+  {
+    "name": "Hilo International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 19.7214,
+    "lon": -155.0454,
+    "iata": "ITO",
+    "icao": "PHTO",
+    "city": "Hilo",
+    "region": "HI",
+    "details": {
+      "elevation_ft": 38,
+      "runway_count": 2,
+      "longest_runway_ft": 9800
+    }
+  },
+  {
+    "name": "Inyokern Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.6588,
+    "lon": -117.83,
+    "iata": "IYK",
+    "icao": "KIYK",
+    "city": "Inyokern",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 2457,
+      "runway_count": 3,
+      "longest_runway_ft": 7100
+    }
+  },
+  {
+    "name": "Jackson Hole Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.6073,
+    "lon": -110.738,
+    "iata": "JAC",
+    "icao": "KJAC",
+    "city": "Jackson",
+    "region": "WY",
+    "details": {
+      "elevation_ft": 6451,
+      "runway_count": 1,
+      "longest_runway_ft": 6300
+    }
+  },
+  {
+    "name": "Jackson-Medgar Wiley Evers International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.3112,
+    "lon": -90.0759,
+    "iata": "JAN",
+    "icao": "KJAN",
+    "city": "Jackson",
+    "region": "MS",
+    "details": {
+      "elevation_ft": 346,
+      "runway_count": 2,
+      "longest_runway_ft": 8500
+    }
+  },
+  {
+    "name": "Jacksonville International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.4925,
+    "lon": -81.6878,
+    "iata": "JAX",
+    "icao": "KJAX",
+    "city": "Jacksonville",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 30,
+      "runway_count": 2,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "John F. Kennedy International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.6394,
+    "lon": -73.7793,
+    "iata": "JFK",
+    "icao": "KJFK",
+    "city": "New York",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 13,
+      "runway_count": 4,
+      "longest_runway_ft": 14511
+    }
+  },
+  {
+    "name": "Chautauqua County-Jamestown Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.1542,
+    "lon": -79.254,
+    "iata": "JHW",
+    "icao": "KJHW",
+    "city": "Jamestown",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 1723,
+      "runway_count": 2,
+      "longest_runway_ft": 5300
+    }
+  },
+  {
+    "name": "Joplin Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.1518,
+    "lon": -94.4983,
+    "iata": "JLN",
+    "icao": "KJLN",
+    "city": "Joplin",
+    "region": "MO",
+    "details": {
+      "elevation_ft": 981,
+      "runway_count": 2,
+      "longest_runway_ft": 6502
+    }
+  },
+  {
+    "name": "Juneau International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 58.3549,
+    "lon": -134.5744,
+    "iata": "JNU",
+    "icao": "PAJN",
+    "city": "Juneau",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 21,
+      "runway_count": 2,
+      "longest_runway_ft": 8857
+    }
+  },
+  {
+    "name": "John Murtha Johnstown Cambria County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.3161,
+    "lon": -78.8339,
+    "iata": "JST",
+    "icao": "KJST",
+    "city": "Johnstown",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 2284,
+      "runway_count": 2,
+      "longest_runway_ft": 7004
+    }
+  },
+  {
+    "name": "Kodiak Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 57.8062,
+    "lon": -152.3737,
+    "iata": "KDK",
+    "icao": "PAKD",
+    "city": "Kodiak",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 139,
+      "runway_count": 1,
+      "longest_runway_ft": 2475
+    }
+  },
+  {
+    "name": "Manokotak Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 58.9321,
+    "lon": -158.9019,
+    "iata": "KMO",
+    "icao": "PAMB",
+    "city": "Manokotak",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 107,
+      "runway_count": 1,
+      "longest_runway_ft": 3300
+    }
+  },
+  {
+    "name": "Ellison Onizuka Kona International Airport at Ke\u0101hole",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 19.7388,
+    "lon": -156.0456,
+    "iata": "KOA",
+    "icao": "PHKO",
+    "city": "Kailua-Kona",
+    "region": "HI",
+    "details": {
+      "elevation_ft": 47,
+      "runway_count": 1,
+      "longest_runway_ft": 11000
+    }
+  },
+  {
+    "name": "Ketchikan International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 55.3556,
+    "lon": -131.714,
+    "iata": "KTN",
+    "icao": "PAKT",
+    "city": "Ketchikan",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 89,
+      "runway_count": 1,
+      "longest_runway_ft": 7500
+    }
+  },
+  {
+    "name": "Purdue University Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.4129,
+    "lon": -86.9394,
+    "iata": "LAF",
+    "icao": "KLAF",
+    "city": "West Lafayette",
+    "region": "IN",
+    "details": {
+      "elevation_ft": 606,
+      "runway_count": 2,
+      "longest_runway_ft": 6600
+    }
+  },
+  {
+    "name": "Capital Region International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.7776,
+    "lon": -84.5857,
+    "iata": "LAN",
+    "icao": "KLAN",
+    "city": "Lansing",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 861,
+      "runway_count": 3,
+      "longest_runway_ft": 8506
+    }
+  },
+  {
+    "name": "Laramie Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.3121,
+    "lon": -105.675,
+    "iata": "LAR",
+    "icao": "KLAR",
+    "city": "Laramie",
+    "region": "WY",
+    "details": {
+      "elevation_ft": 7284,
+      "runway_count": 2,
+      "longest_runway_ft": 8503
+    }
+  },
+  {
+    "name": "Harry Reid International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.0834,
+    "lon": -115.1518,
+    "iata": "LAS",
+    "icao": "KLAS",
+    "city": "Las Vegas",
+    "region": "NV",
+    "details": {
+      "elevation_ft": 2181,
+      "runway_count": 4,
+      "longest_runway_ft": 14835
+    }
+  },
+  {
+    "name": "Lawton Fort Sill Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.5677,
+    "lon": -98.4166,
+    "iata": "LAW",
+    "icao": "KLAW",
+    "city": "Lawton",
+    "region": "OK",
+    "details": {
+      "elevation_ft": 1110,
+      "runway_count": 1,
+      "longest_runway_ft": 8599
+    }
+  },
+  {
+    "name": "Los Angeles International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.9425,
+    "lon": -118.408,
+    "iata": "LAX",
+    "icao": "KLAX",
+    "city": "Los Angeles",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 125,
+      "runway_count": 4,
+      "longest_runway_ft": 12894
+    }
+  },
+  {
+    "name": "Lubbock Preston Smith International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.6636,
+    "lon": -101.823,
+    "iata": "LBB",
+    "icao": "KLBB",
+    "city": "Lubbock",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 3282,
+      "runway_count": 3,
+      "longest_runway_ft": 11500
+    }
+  },
+  {
+    "name": "Arnold Palmer Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.2759,
+    "lon": -79.4048,
+    "iata": "LBE",
+    "icao": "KLBE",
+    "city": "Latrobe",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 1199,
+      "runway_count": 1,
+      "longest_runway_ft": 8222
+    }
+  },
+  {
+    "name": "Lake Charles Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.1261,
+    "lon": -93.2233,
+    "iata": "LCH",
+    "icao": "KLCH",
+    "city": "Lake Charles",
+    "region": "LA",
+    "details": {
+      "elevation_ft": 15,
+      "runway_count": 2,
+      "longest_runway_ft": 6500
+    }
+  },
+  {
+    "name": "Lebanon Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.6261,
+    "lon": -72.3042,
+    "iata": "LEB",
+    "icao": "KLEB",
+    "city": "Lebanon",
+    "region": "NH",
+    "details": {
+      "elevation_ft": 603,
+      "runway_count": 2,
+      "longest_runway_ft": 5496
+    }
+  },
+  {
+    "name": "Blue Grass Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.0351,
+    "lon": -84.6067,
+    "iata": "LEX",
+    "icao": "KLEX",
+    "city": "Lexington",
+    "region": "KY",
+    "details": {
+      "elevation_ft": 979,
+      "runway_count": 2,
+      "longest_runway_ft": 7004
+    }
+  },
+  {
+    "name": "Lafayette Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.2053,
+    "lon": -91.9876,
+    "iata": "LFT",
+    "icao": "KLFT",
+    "city": "Lafayette",
+    "region": "LA",
+    "details": {
+      "elevation_ft": 42,
+      "runway_count": 3,
+      "longest_runway_ft": 8000
+    }
+  },
+  {
+    "name": "LaGuardia Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.7772,
+    "lon": -73.8726,
+    "iata": "LGA",
+    "icao": "KLGA",
+    "city": "New York",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 21,
+      "runway_count": 2,
+      "longest_runway_ft": 7002
+    }
+  },
+  {
+    "name": "Long Beach International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.8165,
+    "lon": -118.1499,
+    "iata": "LGB",
+    "icao": "KLGB",
+    "city": "Long Beach",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 60,
+      "runway_count": 3,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Lihue Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 21.9744,
+    "lon": -159.3371,
+    "iata": "LIH",
+    "icao": "PHLI",
+    "city": "Lihue, Kauai",
+    "region": "HI",
+    "details": {
+      "elevation_ft": 153,
+      "runway_count": 2,
+      "longest_runway_ft": 6500
+    }
+  },
+  {
+    "name": "Bill & Hillary Clinton National Airport/Adams Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.7292,
+    "lon": -92.2236,
+    "iata": "LIT",
+    "icao": "KLIT",
+    "city": "Little Rock",
+    "region": "AR",
+    "details": {
+      "elevation_ft": 262,
+      "runway_count": 3,
+      "longest_runway_ft": 8273
+    }
+  },
+  {
+    "name": "Crater Lake-Klamath Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.1561,
+    "lon": -121.733,
+    "iata": "LMT",
+    "icao": "KLMT",
+    "city": "Klamath Falls",
+    "region": "OR",
+    "details": {
+      "elevation_ft": 4095,
+      "runway_count": 2,
+      "longest_runway_ft": 10302
+    }
+  },
+  {
+    "name": "Lincoln Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.8449,
+    "lon": -96.7618,
+    "iata": "LNK",
+    "icao": "KLNK",
+    "city": "Lincoln",
+    "region": "NE",
+    "details": {
+      "elevation_ft": 1219,
+      "runway_count": 3,
+      "longest_runway_ft": 12901
+    }
+  },
+  {
+    "name": "Lancaster Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.1217,
+    "lon": -76.2961,
+    "iata": "LNS",
+    "icao": "KLNS",
+    "city": "Lancaster",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 403,
+      "runway_count": 2,
+      "longest_runway_ft": 6933
+    }
+  },
+  {
+    "name": "Lanai Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 20.7857,
+    "lon": -156.9513,
+    "iata": "LNY",
+    "icao": "PHNY",
+    "city": "Lanai City",
+    "region": "HI",
+    "details": {
+      "elevation_ft": 1308,
+      "runway_count": 1,
+      "longest_runway_ft": 5001
+    }
+  },
+  {
+    "name": "Laredo International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 27.5438,
+    "lon": -99.4616,
+    "iata": "LRD",
+    "icao": "KLRD",
+    "city": "Laredo",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 508,
+      "runway_count": 3,
+      "longest_runway_ft": 8743
+    }
+  },
+  {
+    "name": "La Crosse Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.879,
+    "lon": -91.2567,
+    "iata": "LSE",
+    "icao": "KLSE",
+    "city": "La Crosse",
+    "region": "WI",
+    "details": {
+      "elevation_ft": 655,
+      "runway_count": 3,
+      "longest_runway_ft": 8742
+    }
+  },
+  {
+    "name": "Greenbrier Valley Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.8579,
+    "lon": -80.4004,
+    "iata": "LWB",
+    "icao": "KLWB",
+    "city": "Lewisburg",
+    "region": "WV",
+    "details": {
+      "elevation_ft": 2302,
+      "runway_count": 1,
+      "longest_runway_ft": 7003
+    }
+  },
+  {
+    "name": "Lewiston Nez Perce County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.3745,
+    "lon": -117.015,
+    "iata": "LWS",
+    "icao": "KLWS",
+    "city": "Lewiston",
+    "region": "ID",
+    "details": {
+      "elevation_ft": 1442,
+      "runway_count": 2,
+      "longest_runway_ft": 6511
+    }
+  },
+  {
+    "name": "Lynchburg Regional Airport - Preston Glenn Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.3267,
+    "lon": -79.2004,
+    "iata": "LYH",
+    "icao": "KLYH",
+    "city": "Lynchburg",
+    "region": "VA",
+    "details": {
+      "elevation_ft": 938,
+      "runway_count": 2,
+      "longest_runway_ft": 7100
+    }
+  },
+  {
+    "name": "Midland International Air and Space Port",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.9425,
+    "lon": -102.202,
+    "iata": "MAF",
+    "icao": "KMAF",
+    "city": "Midland",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 2871,
+      "runway_count": 4,
+      "longest_runway_ft": 9501
+    }
+  },
+  {
+    "name": "MBS International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.5332,
+    "lon": -84.0831,
+    "iata": "MBS",
+    "icao": "KMBS",
+    "city": "Freeland",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 668,
+      "runway_count": 2,
+      "longest_runway_ft": 8002
+    }
+  },
+  {
+    "name": "Kansas City International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.3017,
+    "lon": -94.7139,
+    "iata": "MCI",
+    "icao": "KMCI",
+    "city": "Kansas City",
+    "region": "MO",
+    "details": {
+      "elevation_ft": 1026,
+      "runway_count": 3,
+      "longest_runway_ft": 10801
+    }
+  },
+  {
+    "name": "Middle Georgia Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.6928,
+    "lon": -83.6492,
+    "iata": "MCN",
+    "icao": "KMCN",
+    "city": "Macon",
+    "region": "GA",
+    "details": {
+      "elevation_ft": 354,
+      "runway_count": 2,
+      "longest_runway_ft": 6500
+    }
+  },
+  {
+    "name": "Orlando International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 28.4294,
+    "lon": -81.309,
+    "iata": "MCO",
+    "icao": "KMCO",
+    "city": "Orlando",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 96,
+      "runway_count": 4,
+      "longest_runway_ft": 12005
+    }
+  },
+  {
+    "name": "Mason City Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.1598,
+    "lon": -93.3297,
+    "iata": "MCW",
+    "icao": "KMCW",
+    "city": "Mason City",
+    "region": "IA",
+    "details": {
+      "elevation_ft": 1213,
+      "runway_count": 2,
+      "longest_runway_ft": 6501
+    }
+  },
+  {
+    "name": "Harrisburg International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.1928,
+    "lon": -76.7623,
+    "iata": "MDT",
+    "icao": "KMDT",
+    "city": "Harrisburg",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 310,
+      "runway_count": 1,
+      "longest_runway_ft": 10001
+    }
+  },
+  {
+    "name": "Chicago Midway International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.786,
+    "lon": -87.7524,
+    "iata": "MDW",
+    "icao": "KMDW",
+    "city": "Chicago",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 620,
+      "runway_count": 4,
+      "longest_runway_ft": 6522
+    }
+  },
+  {
+    "name": "Key Field / Meridian Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.3326,
+    "lon": -88.7519,
+    "iata": "MEI",
+    "icao": "KMEI",
+    "city": "Meridian",
+    "region": "MS",
+    "details": {
+      "elevation_ft": 297,
+      "runway_count": 2,
+      "longest_runway_ft": 10003
+    }
+  },
+  {
+    "name": "Memphis International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.0438,
+    "lon": -89.9763,
+    "iata": "MEM",
+    "icao": "KMEM",
+    "city": "Memphis",
+    "region": "TN",
+    "details": {
+      "elevation_ft": 341,
+      "runway_count": 4,
+      "longest_runway_ft": 11120
+    }
+  },
+  {
+    "name": "McAllen Miller International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 26.1761,
+    "lon": -98.238,
+    "iata": "MFE",
+    "icao": "KMFE",
+    "city": "McAllen",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 107,
+      "runway_count": 2,
+      "longest_runway_ft": 7120
+    }
+  },
+  {
+    "name": "Rogue Valley International-Medford Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.3742,
+    "lon": -122.873,
+    "iata": "MFR",
+    "icao": "KMFR",
+    "city": "Medford",
+    "region": "OR",
+    "details": {
+      "elevation_ft": 1335,
+      "runway_count": 1,
+      "longest_runway_ft": 8800
+    }
+  },
+  {
+    "name": "Montgomery Regional (Dannelly Field) Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.3006,
+    "lon": -86.394,
+    "iata": "MGM",
+    "icao": "KMGM",
+    "city": "Montgomery",
+    "region": "AL",
+    "details": {
+      "elevation_ft": 221,
+      "runway_count": 2,
+      "longest_runway_ft": 9020
+    }
+  },
+  {
+    "name": "Morgantown Municipal Airport Walter L. (Bill) Hart Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.6433,
+    "lon": -79.9176,
+    "iata": "MGW",
+    "icao": "KMGW",
+    "city": "Morgantown",
+    "region": "WV",
+    "details": {
+      "elevation_ft": 1248,
+      "runway_count": 1,
+      "longest_runway_ft": 5199
+    }
+  },
+  {
+    "name": "Manhattan Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.141,
+    "lon": -96.6708,
+    "iata": "MHK",
+    "icao": "KMHK",
+    "city": "Manhattan",
+    "region": "KS",
+    "details": {
+      "elevation_ft": 1057,
+      "runway_count": 2,
+      "longest_runway_ft": 7400
+    }
+  },
+  {
+    "name": "Manchester-Boston Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.9326,
+    "lon": -71.4357,
+    "iata": "MHT",
+    "icao": "KMHT",
+    "city": "Manchester",
+    "region": "NH",
+    "details": {
+      "elevation_ft": 266,
+      "runway_count": 2,
+      "longest_runway_ft": 9250
+    }
+  },
+  {
+    "name": "Miami International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 25.796,
+    "lon": -80.2898,
+    "iata": "MIA",
+    "icao": "KMIA",
+    "city": "Miami",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 8,
+      "runway_count": 4,
+      "longest_runway_ft": 13016
+    }
+  },
+  {
+    "name": "General Mitchell International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.9472,
+    "lon": -87.8966,
+    "iata": "MKE",
+    "icao": "KMKE",
+    "city": "Milwaukee",
+    "region": "WI",
+    "details": {
+      "elevation_ft": 723,
+      "runway_count": 5,
+      "longest_runway_ft": 9990
+    }
+  },
+  {
+    "name": "Muskegon County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.1695,
+    "lon": -86.2382,
+    "iata": "MKG",
+    "icao": "KMKG",
+    "city": "Muskegon",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 629,
+      "runway_count": 2,
+      "longest_runway_ft": 6500
+    }
+  },
+  {
+    "name": "Molokai Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 21.1529,
+    "lon": -157.096,
+    "iata": "MKK",
+    "icao": "PHMK",
+    "city": "Kaunakakai",
+    "region": "HI",
+    "details": {
+      "elevation_ft": 454,
+      "runway_count": 2,
+      "longest_runway_ft": 4494
+    }
+  },
+  {
+    "name": "Melbourne Orlando International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 28.102,
+    "lon": -80.6411,
+    "iata": "MLB",
+    "icao": "KMLB",
+    "city": "Melbourne",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 33,
+      "runway_count": 3,
+      "longest_runway_ft": 10181
+    }
+  },
+  {
+    "name": "Quad City International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.4485,
+    "lon": -90.5075,
+    "iata": "MLI",
+    "icao": "KMLI",
+    "city": "Moline",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 590,
+      "runway_count": 3,
+      "longest_runway_ft": 10002
+    }
+  },
+  {
+    "name": "Monroe Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.5109,
+    "lon": -92.0377,
+    "iata": "MLU",
+    "icao": "KMLU",
+    "city": "Monroe",
+    "region": "LA",
+    "details": {
+      "elevation_ft": 79,
+      "runway_count": 2,
+      "longest_runway_ft": 7504
+    }
+  },
+  {
+    "name": "Mobile Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.6912,
+    "lon": -88.2428,
+    "iata": "MOB",
+    "icao": "KMOB",
+    "city": "Mobile",
+    "region": "AL",
+    "details": {
+      "elevation_ft": 219,
+      "runway_count": 2,
+      "longest_runway_ft": 8502
+    }
+  },
+  {
+    "name": "Modesto City Co-Harry Sham Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.6258,
+    "lon": -120.954,
+    "iata": "MOD",
+    "icao": "KMOD",
+    "city": "Modesto",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 97,
+      "runway_count": 2,
+      "longest_runway_ft": 5904
+    }
+  },
+  {
+    "name": "Minot International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 48.258,
+    "lon": -101.2791,
+    "iata": "MOT",
+    "icao": "KMOT",
+    "city": "Minot",
+    "region": "ND",
+    "details": {
+      "elevation_ft": 1716,
+      "runway_count": 2,
+      "longest_runway_ft": 7700
+    }
+  },
+  {
+    "name": "Marquette/Sawyer International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.3515,
+    "lon": -87.3959,
+    "iata": "MQT",
+    "icao": "KSAW",
+    "city": "Gwinn",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 1221,
+      "runway_count": 1,
+      "longest_runway_ft": 9072
+    }
+  },
+  {
+    "name": "Monterey Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.5868,
+    "lon": -121.8442,
+    "iata": "MRY",
+    "icao": "KMRY",
+    "city": "Monterey",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 257,
+      "runway_count": 2,
+      "longest_runway_ft": 7175
+    }
+  },
+  {
+    "name": "Dane County Regional Truax Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.1399,
+    "lon": -89.3375,
+    "iata": "MSN",
+    "icao": "KMSN",
+    "city": "Madison",
+    "region": "WI",
+    "details": {
+      "elevation_ft": 887,
+      "runway_count": 3,
+      "longest_runway_ft": 9006
+    }
+  },
+  {
+    "name": "Missoula Montana Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.9158,
+    "lon": -114.0911,
+    "iata": "MSO",
+    "icao": "KMSO",
+    "city": "Missoula",
+    "region": "MT",
+    "details": {
+      "elevation_ft": 3206,
+      "runway_count": 1,
+      "longest_runway_ft": 9501
+    }
+  },
+  {
+    "name": "Minneapolis\u2013Saint Paul International Airport / Wold\u2013Chamberlain Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.8801,
+    "lon": -93.2217,
+    "iata": "MSP",
+    "icao": "KMSP",
+    "city": "Minneapolis",
+    "region": "MN",
+    "details": {
+      "elevation_ft": 841,
+      "runway_count": 4,
+      "longest_runway_ft": 11006
+    }
+  },
+  {
+    "name": "Louis Armstrong New Orleans International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 29.9934,
+    "lon": -90.2647,
+    "iata": "MSY",
+    "icao": "KMSY",
+    "city": "New Orleans",
+    "region": "LA",
+    "details": {
+      "elevation_ft": 4,
+      "runway_count": 2,
+      "longest_runway_ft": 10104
+    }
+  },
+  {
+    "name": "Florida Keys Marathon International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 24.726,
+    "lon": -81.0514,
+    "iata": "MTH",
+    "icao": "KMTH",
+    "city": "Marathon",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 5,
+      "runway_count": 1,
+      "longest_runway_ft": 5008
+    }
+  },
+  {
+    "name": "Montrose Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.5098,
+    "lon": -107.894,
+    "iata": "MTJ",
+    "icao": "KMTJ",
+    "city": "Montrose",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 5759,
+      "runway_count": 2,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Metlakatla Seaplane Base",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 55.131,
+    "lon": -131.578,
+    "iata": "MTM",
+    "icao": "PAMM",
+    "city": "Metlakatla",
+    "region": "AK",
+    "details": {
+      "elevation_ft": null,
+      "runway_count": 2,
+      "longest_runway_ft": 5000
+    }
+  },
+  {
+    "name": "Martha's Vineyard Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.3931,
+    "lon": -70.6143,
+    "iata": "MVY",
+    "icao": "KMVY",
+    "city": "Martha's Vineyard",
+    "region": "MA",
+    "details": {
+      "elevation_ft": 67,
+      "runway_count": 2,
+      "longest_runway_ft": 5504
+    }
+  },
+  {
+    "name": "Veterans Airport of Southern Illinois",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.7512,
+    "lon": -89.0166,
+    "iata": "MWA",
+    "icao": "KMWA",
+    "city": "Marion",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 472,
+      "runway_count": 2,
+      "longest_runway_ft": 8012
+    }
+  },
+  {
+    "name": "Grant County International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.2077,
+    "lon": -119.32,
+    "iata": "MWH",
+    "icao": "KMWH",
+    "city": "Moses Lake",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 1189,
+      "runway_count": 5,
+      "longest_runway_ft": 13503
+    }
+  },
+  {
+    "name": "Myrtle Beach International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.6797,
+    "lon": -78.9283,
+    "iata": "MYR",
+    "icao": "KMYR",
+    "city": "Myrtle Beach",
+    "region": "SC",
+    "details": {
+      "elevation_ft": 25,
+      "runway_count": 1,
+      "longest_runway_ft": 9503
+    }
+  },
+  {
+    "name": "Albert J Ellis Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.8292,
+    "lon": -77.6121,
+    "iata": "OAJ",
+    "icao": "KOAJ",
+    "city": "Richlands",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 94,
+      "runway_count": 1,
+      "longest_runway_ft": 7100
+    }
+  },
+  {
+    "name": "Oakland San Francisco Bay Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.7201,
+    "lon": -122.2212,
+    "iata": "OAK",
+    "icao": "KOAK",
+    "city": "Oakland",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 9,
+      "runway_count": 4,
+      "longest_runway_ft": 10520
+    }
+  },
+  {
+    "name": "Kahului International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 20.8963,
+    "lon": -156.4318,
+    "iata": "OGG",
+    "icao": "PHOG",
+    "city": "Kahului",
+    "region": "HI",
+    "details": {
+      "elevation_ft": 54,
+      "runway_count": 2,
+      "longest_runway_ft": 6998
+    }
+  },
+  {
+    "name": "OKC Will Rogers World Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.3934,
+    "lon": -97.5982,
+    "iata": "OKC",
+    "icao": "KOKC",
+    "city": "Oklahoma City",
+    "region": "OK",
+    "details": {
+      "elevation_ft": 1295,
+      "runway_count": 4,
+      "longest_runway_ft": 9802
+    }
+  },
+  {
+    "name": "Eppley Airfield",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.3032,
+    "lon": -95.8941,
+    "iata": "OMA",
+    "icao": "KOMA",
+    "city": "Omaha",
+    "region": "NE",
+    "details": {
+      "elevation_ft": 984,
+      "runway_count": 3,
+      "longest_runway_ft": 9502
+    }
+  },
+  {
+    "name": "Nome Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 64.5122,
+    "lon": -165.445,
+    "iata": "OME",
+    "icao": "PAOM",
+    "city": "Nome",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 37,
+      "runway_count": 2,
+      "longest_runway_ft": 6176
+    }
+  },
+  {
+    "name": "Ontario International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.056,
+    "lon": -117.601,
+    "iata": "ONT",
+    "icao": "KONT",
+    "city": "Ontario",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 944,
+      "runway_count": 2,
+      "longest_runway_ft": 12197
+    }
+  },
+  {
+    "name": "Chicago O'Hare International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.9786,
+    "lon": -87.9048,
+    "iata": "ORD",
+    "icao": "KORD",
+    "city": "Chicago",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 680,
+      "runway_count": 8,
+      "longest_runway_ft": 13000
+    }
+  },
+  {
+    "name": "Norfolk International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.8953,
+    "lon": -76.201,
+    "iata": "ORF",
+    "icao": "KORF",
+    "city": "Norfolk",
+    "region": "VA",
+    "details": {
+      "elevation_ft": 26,
+      "runway_count": 2,
+      "longest_runway_ft": 9001
+    }
+  },
+  {
+    "name": "Worcester Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.2673,
+    "lon": -71.8757,
+    "iata": "ORH",
+    "icao": "KORH",
+    "city": "Worcester",
+    "region": "MA",
+    "details": {
+      "elevation_ft": 1009,
+      "runway_count": 2,
+      "longest_runway_ft": 7001
+    }
+  },
+  {
+    "name": "Southwest Oregon Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.4171,
+    "lon": -124.246,
+    "iata": "OTH",
+    "icao": "KOTH",
+    "city": "North Bend",
+    "region": "OR",
+    "details": {
+      "elevation_ft": 17,
+      "runway_count": 2,
+      "longest_runway_ft": 5980
+    }
+  },
+  {
+    "name": "Anacortes Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 48.4985,
+    "lon": -122.6625,
+    "iata": "OTS",
+    "icao": "K74S",
+    "city": "Anacortes",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 241,
+      "runway_count": 1,
+      "longest_runway_ft": 3018
+    }
+  },
+  {
+    "name": "Ralph Wien Memorial Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 66.8847,
+    "lon": -162.599,
+    "iata": "OTZ",
+    "icao": "PAOT",
+    "city": "Kotzebue",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 14,
+      "runway_count": 2,
+      "longest_runway_ft": 6300
+    }
+  },
+  {
+    "name": "Owensboro Daviess County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.7401,
+    "lon": -87.1668,
+    "iata": "OWB",
+    "icao": "KOWB",
+    "city": "Owensboro",
+    "region": "KY",
+    "details": {
+      "elevation_ft": 407,
+      "runway_count": 2,
+      "longest_runway_ft": 8000
+    }
+  },
+  {
+    "name": "Oxnard Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.2008,
+    "lon": -119.207,
+    "iata": "OXR",
+    "icao": "KOXR",
+    "city": "Oxnard",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 45,
+      "runway_count": 1,
+      "longest_runway_ft": 5953
+    }
+  },
+  {
+    "name": "Barkley Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.0608,
+    "lon": -88.7738,
+    "iata": "PAH",
+    "icao": "KPAH",
+    "city": "Paducah",
+    "region": "KY",
+    "details": {
+      "elevation_ft": 410,
+      "runway_count": 2,
+      "longest_runway_ft": 6499
+    }
+  },
+  {
+    "name": "President Donald J. Trump International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 26.6832,
+    "lon": -80.0956,
+    "iata": "PBI",
+    "icao": "KDJT",
+    "city": "West Palm Beach",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 19,
+      "runway_count": 3,
+      "longest_runway_ft": 10001
+    }
+  },
+  {
+    "name": "Eastern Oregon Regional Airport at Pendleton",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.6951,
+    "lon": -118.841,
+    "iata": "PDT",
+    "icao": "KPDT",
+    "city": "Pendleton",
+    "region": "OR",
+    "details": {
+      "elevation_ft": 1497,
+      "runway_count": 2,
+      "longest_runway_ft": 6301
+    }
+  },
+  {
+    "name": "Portland International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.5887,
+    "lon": -122.598,
+    "iata": "PDX",
+    "icao": "KPDX",
+    "city": "Portland",
+    "region": "OR",
+    "details": {
+      "elevation_ft": 31,
+      "runway_count": 3,
+      "longest_runway_ft": 11000
+    }
+  },
+  {
+    "name": "Page Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.9242,
+    "lon": -111.4477,
+    "iata": "PGA",
+    "icao": "KPGA",
+    "city": "Page",
+    "region": "AZ",
+    "details": {
+      "elevation_ft": 4316,
+      "runway_count": 2,
+      "longest_runway_ft": 5950
+    }
+  },
+  {
+    "name": "Pitt-Greenville Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.6355,
+    "lon": -77.3843,
+    "iata": "PGV",
+    "icao": "KPGV",
+    "city": "Greenville",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 26,
+      "runway_count": 2,
+      "longest_runway_ft": 7175
+    }
+  },
+  {
+    "name": "Newport News Williamsburg International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.1319,
+    "lon": -76.493,
+    "iata": "PHF",
+    "icao": "KPHF",
+    "city": "Newport News",
+    "region": "VA",
+    "details": {
+      "elevation_ft": 42,
+      "runway_count": 2,
+      "longest_runway_ft": 8003
+    }
+  },
+  {
+    "name": "Philadelphia International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.8719,
+    "lon": -75.2411,
+    "iata": "PHL",
+    "icao": "KPHL",
+    "city": "Philadelphia",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 36,
+      "runway_count": 4,
+      "longest_runway_ft": 12000
+    }
+  },
+  {
+    "name": "Phoenix Sky Harbor International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.4353,
+    "lon": -112.0059,
+    "iata": "PHX",
+    "icao": "KPHX",
+    "city": "Phoenix",
+    "region": "AZ",
+    "details": {
+      "elevation_ft": 1135,
+      "runway_count": 3,
+      "longest_runway_ft": 11489
+    }
+  },
+  {
+    "name": "General Wayne A. Downing Peoria International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.6638,
+    "lon": -89.6926,
+    "iata": "PIA",
+    "icao": "KPIA",
+    "city": "Peoria",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 660,
+      "runway_count": 2,
+      "longest_runway_ft": 10104
+    }
+  },
+  {
+    "name": "Hattiesburg Laurel Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.4671,
+    "lon": -89.3371,
+    "iata": "PIB",
+    "icao": "KPIB",
+    "city": "Moselle",
+    "region": "MS",
+    "details": {
+      "elevation_ft": 298,
+      "runway_count": 1,
+      "longest_runway_ft": 6503
+    }
+  },
+  {
+    "name": "St. Petersburg Clearwater International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 27.9102,
+    "lon": -82.6874,
+    "iata": "PIE",
+    "icao": "KPIE",
+    "city": "Pinellas Park",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 11,
+      "runway_count": 2,
+      "longest_runway_ft": 9730
+    }
+  },
+  {
+    "name": "Pocatello Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.9098,
+    "lon": -112.596,
+    "iata": "PIH",
+    "icao": "KPIH",
+    "city": "Pocatello",
+    "region": "ID",
+    "details": {
+      "elevation_ft": 4452,
+      "runway_count": 2,
+      "longest_runway_ft": 9059
+    }
+  },
+  {
+    "name": "Pierre Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.3827,
+    "lon": -100.286,
+    "iata": "PIR",
+    "icao": "KPIR",
+    "city": "Pierre",
+    "region": "SD",
+    "details": {
+      "elevation_ft": 1744,
+      "runway_count": 2,
+      "longest_runway_ft": 6900
+    }
+  },
+  {
+    "name": "Pittsburgh International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.4915,
+    "lon": -80.2329,
+    "iata": "PIT",
+    "icao": "KPIT",
+    "city": "Pittsburgh",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 1203,
+      "runway_count": 4,
+      "longest_runway_ft": 11500
+    }
+  },
+  {
+    "name": "Mid Ohio Valley Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.3451,
+    "lon": -81.4392,
+    "iata": "PKB",
+    "icao": "KPKB",
+    "city": "Parkersburg (Williamstown)",
+    "region": "WV",
+    "details": {
+      "elevation_ft": 858,
+      "runway_count": 2,
+      "longest_runway_ft": 7240
+    }
+  },
+  {
+    "name": "Pellston Regional Airport of Emmet County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.5709,
+    "lon": -84.7967,
+    "iata": "PLN",
+    "icao": "KPLN",
+    "city": "Pellston",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 721,
+      "runway_count": 2,
+      "longest_runway_ft": 6513
+    }
+  },
+  {
+    "name": "Pensacola International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.4727,
+    "lon": -87.1866,
+    "iata": "PNS",
+    "icao": "KPNS",
+    "city": "Pensacola",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 121,
+      "runway_count": 2,
+      "longest_runway_ft": 7004
+    }
+  },
+  {
+    "name": "Presque Isle International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.689,
+    "lon": -68.0448,
+    "iata": "PQI",
+    "icao": "KPQI",
+    "city": "Presque Isle",
+    "region": "ME",
+    "details": {
+      "elevation_ft": 534,
+      "runway_count": 2,
+      "longest_runway_ft": 7441
+    }
+  },
+  {
+    "name": "Tri Cities Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.2647,
+    "lon": -119.119,
+    "iata": "PSC",
+    "icao": "KPSC",
+    "city": "Pasco",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 410,
+      "runway_count": 3,
+      "longest_runway_ft": 7707
+    }
+  },
+  {
+    "name": "Petersburg James A Johnson Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 56.8017,
+    "lon": -132.945,
+    "iata": "PSG",
+    "icao": "PAPG",
+    "city": "Petersburg",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 111,
+      "runway_count": 1,
+      "longest_runway_ft": 6400
+    }
+  },
+  {
+    "name": "Portsmouth International Airport at Pease",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.0779,
+    "lon": -70.8233,
+    "iata": "PSM",
+    "icao": "KPSM",
+    "city": "Portsmouth",
+    "region": "NH",
+    "details": {
+      "elevation_ft": 100,
+      "runway_count": 1,
+      "longest_runway_ft": 11321
+    }
+  },
+  {
+    "name": "Palm Springs International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.8297,
+    "lon": -116.507,
+    "iata": "PSP",
+    "icao": "KPSP",
+    "city": "Palm Springs",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 477,
+      "runway_count": 2,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Pullman-Moscow Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.7416,
+    "lon": -117.1116,
+    "iata": "PUW",
+    "icao": "KPUW",
+    "city": "Pullman",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 2556,
+      "runway_count": 1,
+      "longest_runway_ft": 7100
+    }
+  },
+  {
+    "name": "Provincetown Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.0719,
+    "lon": -70.2214,
+    "iata": "PVC",
+    "icao": "KPVC",
+    "city": "Provincetown",
+    "region": "MA",
+    "details": {
+      "elevation_ft": 9,
+      "runway_count": 1,
+      "longest_runway_ft": 3502
+    }
+  },
+  {
+    "name": "Rhode Island T. F. Green International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.725,
+    "lon": -71.4257,
+    "iata": "PVD",
+    "icao": "KPVD",
+    "city": "Providence/Warwick",
+    "region": "RI",
+    "details": {
+      "elevation_ft": 55,
+      "runway_count": 2,
+      "longest_runway_ft": 8700
+    }
+  },
+  {
+    "name": "Portland International Jetport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.6462,
+    "lon": -70.3093,
+    "iata": "PWM",
+    "icao": "KPWM",
+    "city": "Portland",
+    "region": "ME",
+    "details": {
+      "elevation_ft": 76,
+      "runway_count": 2,
+      "longest_runway_ft": 7200
+    }
+  },
+  {
+    "name": "Rapid City Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.0453,
+    "lon": -103.057,
+    "iata": "RAP",
+    "icao": "KRAP",
+    "city": "Rapid City",
+    "region": "SD",
+    "details": {
+      "elevation_ft": 3204,
+      "runway_count": 2,
+      "longest_runway_ft": 8701
+    }
+  },
+  {
+    "name": "Redding Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.509,
+    "lon": -122.293,
+    "iata": "RDD",
+    "icao": "KRDD",
+    "city": "Redding",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 505,
+      "runway_count": 2,
+      "longest_runway_ft": 7003
+    }
+  },
+  {
+    "name": "Reading Regional Airport (Carl A Spaatz Field)",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.3785,
+    "lon": -75.9652,
+    "iata": "RDG",
+    "icao": "KRDG",
+    "city": "Reading",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 344,
+      "runway_count": 2,
+      "longest_runway_ft": 6350
+    }
+  },
+  {
+    "name": "Roberts Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.2541,
+    "lon": -121.15,
+    "iata": "RDM",
+    "icao": "KRDM",
+    "city": "Redmond",
+    "region": "OR",
+    "details": {
+      "elevation_ft": 3080,
+      "runway_count": 2,
+      "longest_runway_ft": 7038
+    }
+  },
+  {
+    "name": "Raleigh-Durham International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.8787,
+    "lon": -78.7873,
+    "iata": "RDU",
+    "icao": "KRDU",
+    "city": "Raleigh/Durham",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 435,
+      "runway_count": 3,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Chicago Rockford International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.1954,
+    "lon": -89.0972,
+    "iata": "RFD",
+    "icao": "KRFD",
+    "city": "Chicago/Rockford",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 742,
+      "runway_count": 2,
+      "longest_runway_ft": 10002
+    }
+  },
+  {
+    "name": "Rhinelander Oneida County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.6312,
+    "lon": -89.4675,
+    "iata": "RHI",
+    "icao": "KRHI",
+    "city": "Rhinelander",
+    "region": "WI",
+    "details": {
+      "elevation_ft": 1624,
+      "runway_count": 2,
+      "longest_runway_ft": 6800
+    }
+  },
+  {
+    "name": "Richmond International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.5052,
+    "lon": -77.3197,
+    "iata": "RIC",
+    "icao": "KRIC",
+    "city": "Richmond",
+    "region": "VA",
+    "details": {
+      "elevation_ft": 167,
+      "runway_count": 2,
+      "longest_runway_ft": 9003
+    }
+  },
+  {
+    "name": "Central Wyoming Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.0642,
+    "lon": -108.46,
+    "iata": "RIW",
+    "icao": "KRIW",
+    "city": "Riverton",
+    "region": "WY",
+    "details": {
+      "elevation_ft": 5525,
+      "runway_count": 2,
+      "longest_runway_ft": 8204
+    }
+  },
+  {
+    "name": "Knox County Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.0601,
+    "lon": -69.0992,
+    "iata": "RKD",
+    "icao": "KRKD",
+    "city": "Rockland",
+    "region": "ME",
+    "details": {
+      "elevation_ft": 56,
+      "runway_count": 2,
+      "longest_runway_ft": 5412
+    }
+  },
+  {
+    "name": "Southwest Wyoming Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.5942,
+    "lon": -109.065,
+    "iata": "RKS",
+    "icao": "KRKS",
+    "city": "Rock Springs",
+    "region": "WY",
+    "details": {
+      "elevation_ft": 6764,
+      "runway_count": 2,
+      "longest_runway_ft": 10002
+    }
+  },
+  {
+    "name": "Reno Tahoe International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.4991,
+    "lon": -119.768,
+    "iata": "RNO",
+    "icao": "KRNO",
+    "city": "Reno",
+    "region": "NV",
+    "details": {
+      "elevation_ft": 4415,
+      "runway_count": 3,
+      "longest_runway_ft": 11001
+    }
+  },
+  {
+    "name": "Roanoke\u2013Blacksburg Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.3255,
+    "lon": -79.9754,
+    "iata": "ROA",
+    "icao": "KROA",
+    "city": "Roanoke",
+    "region": "VA",
+    "details": {
+      "elevation_ft": 1175,
+      "runway_count": 2,
+      "longest_runway_ft": 6800
+    }
+  },
+  {
+    "name": "Frederick Douglass Greater Rochester International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.1189,
+    "lon": -77.6724,
+    "iata": "ROC",
+    "icao": "KROC",
+    "city": "Rochester",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 559,
+      "runway_count": 3,
+      "longest_runway_ft": 8001
+    }
+  },
+  {
+    "name": "Roswell Air Center Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.3016,
+    "lon": -104.531,
+    "iata": "ROW",
+    "icao": "KROW",
+    "city": "Roswell",
+    "region": "NM",
+    "details": {
+      "elevation_ft": 3671,
+      "runway_count": 2,
+      "longest_runway_ft": 13000
+    }
+  },
+  {
+    "name": "Rochester International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.9083,
+    "lon": -92.5,
+    "iata": "RST",
+    "icao": "KRST",
+    "city": "Rochester",
+    "region": "MN",
+    "details": {
+      "elevation_ft": 1317,
+      "runway_count": 2,
+      "longest_runway_ft": 9034
+    }
+  },
+  {
+    "name": "Southwest Florida International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 26.5347,
+    "lon": -81.7528,
+    "iata": "RSW",
+    "icao": "KRSW",
+    "city": "Fort Myers",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 30,
+      "runway_count": 1,
+      "longest_runway_ft": 12000
+    }
+  },
+  {
+    "name": "Santa Fe Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.6171,
+    "lon": -106.089,
+    "iata": "SAF",
+    "icao": "KSAF",
+    "city": "Santa Fe",
+    "region": "NM",
+    "details": {
+      "elevation_ft": 6348,
+      "runway_count": 3,
+      "longest_runway_ft": 8366
+    }
+  },
+  {
+    "name": "San Diego International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.7336,
+    "lon": -117.19,
+    "iata": "SAN",
+    "icao": "KSAN",
+    "city": "San Diego",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 17,
+      "runway_count": 1,
+      "longest_runway_ft": 9401
+    }
+  },
+  {
+    "name": "San Antonio International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 29.5337,
+    "lon": -98.4698,
+    "iata": "SAT",
+    "icao": "KSAT",
+    "city": "San Antonio",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 809,
+      "runway_count": 3,
+      "longest_runway_ft": 8505
+    }
+  },
+  {
+    "name": "Savannah Hilton Head International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.1266,
+    "lon": -81.2,
+    "iata": "SAV",
+    "icao": "KSAV",
+    "city": "Savannah",
+    "region": "GA",
+    "details": {
+      "elevation_ft": 50,
+      "runway_count": 2,
+      "longest_runway_ft": 9351
+    }
+  },
+  {
+    "name": "Santa Barbara Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.4262,
+    "lon": -119.84,
+    "iata": "SBA",
+    "icao": "KSBA",
+    "city": "Santa Barbara",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 13,
+      "runway_count": 3,
+      "longest_runway_ft": 6037
+    }
+  },
+  {
+    "name": "South Bend International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.7083,
+    "lon": -86.3169,
+    "iata": "SBN",
+    "icao": "KSBN",
+    "city": "South Bend",
+    "region": "IN",
+    "details": {
+      "elevation_ft": 799,
+      "runway_count": 3,
+      "longest_runway_ft": 8412
+    }
+  },
+  {
+    "name": "San Luis County Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.2368,
+    "lon": -120.642,
+    "iata": "SBP",
+    "icao": "KSBP",
+    "city": "San Luis Obispo",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 212,
+      "runway_count": 2,
+      "longest_runway_ft": 6101
+    }
+  },
+  {
+    "name": "Salisbury Ocean City Wicomico Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.3405,
+    "lon": -75.5103,
+    "iata": "SBY",
+    "icao": "KSBY",
+    "city": "Salisbury",
+    "region": "MD",
+    "details": {
+      "elevation_ft": 52,
+      "runway_count": 2,
+      "longest_runway_ft": 6400
+    }
+  },
+  {
+    "name": "Deadhorse Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 70.1947,
+    "lon": -148.465,
+    "iata": "SCC",
+    "icao": "PASC",
+    "city": "Deadhorse",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 65,
+      "runway_count": 1,
+      "longest_runway_ft": 6500
+    }
+  },
+  {
+    "name": "State College Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.8494,
+    "lon": -77.8485,
+    "iata": "SCE",
+    "icao": "KUNV",
+    "city": "State College",
+    "region": "PA",
+    "details": {
+      "elevation_ft": 1239,
+      "runway_count": 1,
+      "longest_runway_ft": 6701
+    }
+  },
+  {
+    "name": "Louisville Muhammad Ali International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.1706,
+    "lon": -85.7351,
+    "iata": "SDF",
+    "icao": "KSDF",
+    "city": "Louisville",
+    "region": "KY",
+    "details": {
+      "elevation_ft": 501,
+      "runway_count": 3,
+      "longest_runway_ft": 11887
+    }
+  },
+  {
+    "name": "Sidney - Richland Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.7051,
+    "lon": -104.1944,
+    "iata": "SDY",
+    "icao": "KSDY",
+    "city": "Sidney",
+    "region": "MT",
+    "details": {
+      "elevation_ft": 1985,
+      "runway_count": 2,
+      "longest_runway_ft": 5705
+    }
+  },
+  {
+    "name": "Seattle\u2013Tacoma International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 47.4479,
+    "lon": -122.3103,
+    "iata": "SEA",
+    "icao": "KSEA",
+    "city": "Seattle",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 433,
+      "runway_count": 3,
+      "longest_runway_ft": 11901
+    }
+  },
+  {
+    "name": "Orlando Sanford International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 28.7743,
+    "lon": -81.2346,
+    "iata": "SFB",
+    "icao": "KSFB",
+    "city": "Orlando",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 55,
+      "runway_count": 4,
+      "longest_runway_ft": 11002
+    }
+  },
+  {
+    "name": "San Francisco International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.6198,
+    "lon": -122.3748,
+    "iata": "SFO",
+    "icao": "KSFO",
+    "city": "San Francisco",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 13,
+      "runway_count": 4,
+      "longest_runway_ft": 11870
+    }
+  },
+  {
+    "name": "Springfield Branson National Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.245,
+    "lon": -93.3886,
+    "iata": "SGF",
+    "icao": "KSGF",
+    "city": "Springfield",
+    "region": "MO",
+    "details": {
+      "elevation_ft": 1268,
+      "runway_count": 2,
+      "longest_runway_ft": 8000
+    }
+  },
+  {
+    "name": "Skagway Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 59.4603,
+    "lon": -135.3167,
+    "iata": "SGY",
+    "icao": "PAGY",
+    "city": "Skagway",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 44,
+      "runway_count": 1,
+      "longest_runway_ft": 3550
+    }
+  },
+  {
+    "name": "Shenandoah Valley Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.2638,
+    "lon": -78.8964,
+    "iata": "SHD",
+    "icao": "KSHD",
+    "city": "Weyers Cave",
+    "region": "VA",
+    "details": {
+      "elevation_ft": 1201,
+      "runway_count": 1,
+      "longest_runway_ft": 6002
+    }
+  },
+  {
+    "name": "Sheridan County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.7692,
+    "lon": -106.98,
+    "iata": "SHR",
+    "icao": "KSHR",
+    "city": "Sheridan",
+    "region": "WY",
+    "details": {
+      "elevation_ft": 4021,
+      "runway_count": 2,
+      "longest_runway_ft": 8301
+    }
+  },
+  {
+    "name": "Shreveport Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.4447,
+    "lon": -93.8267,
+    "iata": "SHV",
+    "icao": "KSHV",
+    "city": "Shreveport",
+    "region": "LA",
+    "details": {
+      "elevation_ft": 258,
+      "runway_count": 2,
+      "longest_runway_ft": 8348
+    }
+  },
+  {
+    "name": "Sitka Rocky Gutierrez Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 57.0471,
+    "lon": -135.362,
+    "iata": "SIT",
+    "icao": "PASI",
+    "city": "Sitka",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 21,
+      "runway_count": 1,
+      "longest_runway_ft": 7200
+    }
+  },
+  {
+    "name": "Norman Y. Mineta San Jose International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.3625,
+    "lon": -121.9292,
+    "iata": "SJC",
+    "icao": "KSJC",
+    "city": "San Jose",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 62,
+      "runway_count": 2,
+      "longest_runway_ft": 11000
+    }
+  },
+  {
+    "name": "San Angelo Regional Mathis Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 31.3577,
+    "lon": -100.496,
+    "iata": "SJT",
+    "icao": "KSJT",
+    "city": "San Angelo",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 1919,
+      "runway_count": 3,
+      "longest_runway_ft": 8054
+    }
+  },
+  {
+    "name": "Salt Lake City International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.7889,
+    "lon": -111.9799,
+    "iata": "SLC",
+    "icao": "KSLC",
+    "city": "Salt Lake City",
+    "region": "UT",
+    "details": {
+      "elevation_ft": 4227,
+      "runway_count": 4,
+      "longest_runway_ft": 12002
+    }
+  },
+  {
+    "name": "Salina Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.791,
+    "lon": -97.6522,
+    "iata": "SLN",
+    "icao": "KSLN",
+    "city": "Salina",
+    "region": "KS",
+    "details": {
+      "elevation_ft": 1288,
+      "runway_count": 4,
+      "longest_runway_ft": 12301
+    }
+  },
+  {
+    "name": "Sacramento International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.6954,
+    "lon": -121.591,
+    "iata": "SMF",
+    "icao": "KSMF",
+    "city": "Sacramento",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 27,
+      "runway_count": 2,
+      "longest_runway_ft": 8605
+    }
+  },
+  {
+    "name": "Santa Maria Public Airport Captain G Allan Hancock Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.8989,
+    "lon": -120.457,
+    "iata": "SMX",
+    "icao": "KSMX",
+    "city": "Santa Maria",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 261,
+      "runway_count": 2,
+      "longest_runway_ft": 8004
+    }
+  },
+  {
+    "name": "John Wayne Orange County International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.6751,
+    "lon": -117.8693,
+    "iata": "SNA",
+    "icao": "KSNA",
+    "city": "Santa Ana",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 56,
+      "runway_count": 2,
+      "longest_runway_ft": 5700
+    }
+  },
+  {
+    "name": "Moore County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.2372,
+    "lon": -79.3894,
+    "iata": "SOP",
+    "icao": "KSOP",
+    "city": "Carthage",
+    "region": "NC",
+    "details": {
+      "elevation_ft": 455,
+      "runway_count": 1,
+      "longest_runway_ft": 6503
+    }
+  },
+  {
+    "name": "Abraham Lincoln Capital Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.8441,
+    "lon": -89.6779,
+    "iata": "SPI",
+    "icao": "KSPI",
+    "city": "Springfield",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 598,
+      "runway_count": 3,
+      "longest_runway_ft": 8001
+    }
+  },
+  {
+    "name": "Wichita Falls Municipal Airport / Sheppard Air Force Base",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.9888,
+    "lon": -98.4919,
+    "iata": "SPS",
+    "icao": "KSPS",
+    "city": "Wichita Falls",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 1019,
+      "runway_count": 4,
+      "longest_runway_ft": 13100
+    }
+  },
+  {
+    "name": "Sarasota Bradenton International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 27.3946,
+    "lon": -82.5544,
+    "iata": "SRQ",
+    "icao": "KSRQ",
+    "city": "Sarasota/Bradenton",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 30,
+      "runway_count": 2,
+      "longest_runway_ft": 9500
+    }
+  },
+  {
+    "name": "Saint Cloud Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 45.5466,
+    "lon": -94.0599,
+    "iata": "STC",
+    "icao": "KSTC",
+    "city": "Saint Cloud",
+    "region": "MN",
+    "details": {
+      "elevation_ft": 1031,
+      "runway_count": 2,
+      "longest_runway_ft": 7500
+    }
+  },
+  {
+    "name": "St. Louis Lambert International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.7487,
+    "lon": -90.37,
+    "iata": "STL",
+    "icao": "KSTL",
+    "city": "St Louis",
+    "region": "MO",
+    "details": {
+      "elevation_ft": 618,
+      "runway_count": 4,
+      "longest_runway_ft": 11020
+    }
+  },
+  {
+    "name": "Charles M. Schulz Sonoma County Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 38.509,
+    "lon": -122.813,
+    "iata": "STS",
+    "icao": "KSTS",
+    "city": "Santa Rosa",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 128,
+      "runway_count": 2,
+      "longest_runway_ft": 6000
+    }
+  },
+  {
+    "name": "Friedman Memorial Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.5044,
+    "lon": -114.296,
+    "iata": "SUN",
+    "icao": "KSUN",
+    "city": "Hailey",
+    "region": "ID",
+    "details": {
+      "elevation_ft": 5318,
+      "runway_count": 1,
+      "longest_runway_ft": 7550
+    }
+  },
+  {
+    "name": "Sioux Gateway Airport / Brigadier General Bud Day Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.3976,
+    "lon": -96.3822,
+    "iata": "SUX",
+    "icao": "KSUX",
+    "city": "Sioux City",
+    "region": "IA",
+    "details": {
+      "elevation_ft": 1098,
+      "runway_count": 2,
+      "longest_runway_ft": 9002
+    }
+  },
+  {
+    "name": "New York Stewart International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.5042,
+    "lon": -74.1089,
+    "iata": "SWF",
+    "icao": "KSWF",
+    "city": "Newburgh",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 491,
+      "runway_count": 2,
+      "longest_runway_ft": 11817
+    }
+  },
+  {
+    "name": "Syracuse Hancock International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 43.1112,
+    "lon": -76.1063,
+    "iata": "SYR",
+    "icao": "KSYR",
+    "city": "Syracuse",
+    "region": "NY",
+    "details": {
+      "elevation_ft": 421,
+      "runway_count": 2,
+      "longest_runway_ft": 9013
+    }
+  },
+  {
+    "name": "Telluride Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 37.9538,
+    "lon": -107.908,
+    "iata": "TEX",
+    "icao": "KTEX",
+    "city": "Telluride",
+    "region": "CO",
+    "details": {
+      "elevation_ft": 9070,
+      "runway_count": 1,
+      "longest_runway_ft": 7111
+    }
+  },
+  {
+    "name": "Talkeetna Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 62.3205,
+    "lon": -150.094,
+    "iata": "TKA",
+    "icao": "PATK",
+    "city": "Talkeetna",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 358,
+      "runway_count": 1,
+      "longest_runway_ft": 3500
+    }
+  },
+  {
+    "name": "Tallahassee International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.4012,
+    "lon": -84.3543,
+    "iata": "TLH",
+    "icao": "KTLH",
+    "city": "Tallahassee",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 81,
+      "runway_count": 2,
+      "longest_runway_ft": 8000
+    }
+  },
+  {
+    "name": "Eugene F. Kranz Toledo Express Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.5868,
+    "lon": -83.8078,
+    "iata": "TOL",
+    "icao": "KTOL",
+    "city": "Toledo",
+    "region": "OH",
+    "details": {
+      "elevation_ft": 683,
+      "runway_count": 2,
+      "longest_runway_ft": 10600
+    }
+  },
+  {
+    "name": "Tampa International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 27.9755,
+    "lon": -82.5332,
+    "iata": "TPA",
+    "icao": "KTPA",
+    "city": "Tampa",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 26,
+      "runway_count": 3,
+      "longest_runway_ft": 11002
+    }
+  },
+  {
+    "name": "Tri-Cities Regional TN/VA Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.4752,
+    "lon": -82.4074,
+    "iata": "TRI",
+    "icao": "KTRI",
+    "city": "Blountville",
+    "region": "TN",
+    "details": {
+      "elevation_ft": 1519,
+      "runway_count": 2,
+      "longest_runway_ft": 8000
+    }
+  },
+  {
+    "name": "Trenton Mercer Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 40.2767,
+    "lon": -74.8135,
+    "iata": "TTN",
+    "icao": "KTTN",
+    "city": "Ewing Township",
+    "region": "NJ",
+    "details": {
+      "elevation_ft": 213,
+      "runway_count": 2,
+      "longest_runway_ft": 6006
+    }
+  },
+  {
+    "name": "Tulsa International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.1971,
+    "lon": -95.8862,
+    "iata": "TUL",
+    "icao": "KTUL",
+    "city": "Tulsa",
+    "region": "OK",
+    "details": {
+      "elevation_ft": 677,
+      "runway_count": 3,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Tupelo Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 34.2681,
+    "lon": -88.7699,
+    "iata": "TUP",
+    "icao": "KTUP",
+    "city": "Tupelo",
+    "region": "MS",
+    "details": {
+      "elevation_ft": 346,
+      "runway_count": 1,
+      "longest_runway_ft": 7150
+    }
+  },
+  {
+    "name": "Tucson International Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.115,
+    "lon": -110.9381,
+    "iata": "TUS",
+    "icao": "KTUS",
+    "city": "Tucson",
+    "region": "AZ",
+    "details": {
+      "elevation_ft": 2643,
+      "runway_count": 2,
+      "longest_runway_ft": 10996
+    }
+  },
+  {
+    "name": "Cherry Capital Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 44.7414,
+    "lon": -85.5822,
+    "iata": "TVC",
+    "icao": "KTVC",
+    "city": "Traverse City",
+    "region": "MI",
+    "details": {
+      "elevation_ft": 624,
+      "runway_count": 2,
+      "longest_runway_ft": 7016
+    }
+  },
+  {
+    "name": "Joslin Field Magic Valley Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 42.4818,
+    "lon": -114.488,
+    "iata": "TWF",
+    "icao": "KTWF",
+    "city": "Twin Falls",
+    "region": "ID",
+    "details": {
+      "elevation_ft": 4154,
+      "runway_count": 2,
+      "longest_runway_ft": 8704
+    }
+  },
+  {
+    "name": "Texarkana Regional Airport (Webb Field)",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 33.4537,
+    "lon": -93.991,
+    "iata": "TXK",
+    "icao": "KTXK",
+    "city": "Texarkana",
+    "region": "AR",
+    "details": {
+      "elevation_ft": 390,
+      "runway_count": 2,
+      "longest_runway_ft": 6602
+    }
+  },
+  {
+    "name": "Tyler Pounds Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.3541,
+    "lon": -95.4024,
+    "iata": "TYR",
+    "icao": "KTYR",
+    "city": "Tyler",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 544,
+      "runway_count": 3,
+      "longest_runway_ft": 8334
+    }
+  },
+  {
+    "name": "McGhee Tyson Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 35.811,
+    "lon": -83.994,
+    "iata": "TYS",
+    "icao": "KTYS",
+    "city": "Knoxville/Maryville",
+    "region": "TN",
+    "details": {
+      "elevation_ft": 981,
+      "runway_count": 2,
+      "longest_runway_ft": 10000
+    }
+  },
+  {
+    "name": "Quincy Regional Airport Baldwin Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 39.9427,
+    "lon": -91.1946,
+    "iata": "UIN",
+    "icao": "KUIN",
+    "city": "Quincy",
+    "region": "IL",
+    "details": {
+      "elevation_ft": 768,
+      "runway_count": 3,
+      "longest_runway_ft": 7098
+    }
+  },
+  {
+    "name": "Victoria Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 28.8526,
+    "lon": -96.9185,
+    "iata": "VCT",
+    "icao": "KVCT",
+    "city": "Victoria",
+    "region": "TX",
+    "details": {
+      "elevation_ft": 115,
+      "runway_count": 2,
+      "longest_runway_ft": 9111
+    }
+  },
+  {
+    "name": "Valdez Pioneer Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 61.1327,
+    "lon": -146.2466,
+    "iata": "VDZ",
+    "icao": "PAVD",
+    "city": "Valdez",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 121,
+      "runway_count": 1,
+      "longest_runway_ft": 6500
+    }
+  },
+  {
+    "name": "North Las Vegas Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.2091,
+    "lon": -115.194,
+    "iata": "VGT",
+    "icao": "KVGT",
+    "city": "Las Vegas",
+    "region": "NV",
+    "details": {
+      "elevation_ft": 2205,
+      "runway_count": 3,
+      "longest_runway_ft": 5005
+    }
+  },
+  {
+    "name": "Visalia Municipal Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.3187,
+    "lon": -119.393,
+    "iata": "VIS",
+    "icao": "KVIS",
+    "city": "Visalia",
+    "region": "CA",
+    "details": {
+      "elevation_ft": 295,
+      "runway_count": 1,
+      "longest_runway_ft": 6562
+    }
+  },
+  {
+    "name": "Valdosta Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.7825,
+    "lon": -83.2767,
+    "iata": "VLD",
+    "icao": "KVLD",
+    "city": "Valdosta",
+    "region": "GA",
+    "details": {
+      "elevation_ft": 203,
+      "runway_count": 2,
+      "longest_runway_ft": 8003
+    }
+  },
+  {
+    "name": "Destin-Fort Walton Beach Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 30.4813,
+    "lon": -86.5158,
+    "iata": "VPS",
+    "icao": "KVPS",
+    "city": "Valparaiso",
+    "region": "FL",
+    "details": {
+      "elevation_ft": 87,
+      "runway_count": 2,
+      "longest_runway_ft": 12004
+    }
+  },
+  {
+    "name": "Wrangell Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 56.4843,
+    "lon": -132.37,
+    "iata": "WRG",
+    "icao": "PAWG",
+    "city": "Wrangell",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 49,
+      "runway_count": 1,
+      "longest_runway_ft": 6000
+    }
+  },
+  {
+    "name": "Westerly State Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.3496,
+    "lon": -71.8034,
+    "iata": "WST",
+    "icao": "KWST",
+    "city": "Westerly",
+    "region": "RI",
+    "details": {
+      "elevation_ft": 81,
+      "runway_count": 2,
+      "longest_runway_ft": 4010
+    }
+  },
+  {
+    "name": "Northwest Arkansas National Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 36.2819,
+    "lon": -94.3068,
+    "iata": "XNA",
+    "icao": "KXNA",
+    "city": "Fayetteville/Springdale/Rogers",
+    "region": "AR",
+    "details": {
+      "elevation_ft": 1287,
+      "runway_count": 2,
+      "longest_runway_ft": 8801
+    }
+  },
+  {
+    "name": "Yakutat Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 59.5087,
+    "lon": -139.6604,
+    "iata": "YAK",
+    "icao": "PAYA",
+    "city": "Yakutat",
+    "region": "AK",
+    "details": {
+      "elevation_ft": 33,
+      "runway_count": 2,
+      "longest_runway_ft": 7732
+    }
+  },
+  {
+    "name": "Yakima Air Terminal McAllister Field",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 46.5682,
+    "lon": -120.544,
+    "iata": "YKM",
+    "icao": "KYKM",
+    "city": "Yakima",
+    "region": "WA",
+    "details": {
+      "elevation_ft": 1099,
+      "runway_count": 2,
+      "longest_runway_ft": 7604
+    }
+  },
+  {
+    "name": "Youngstown Warren Regional Airport",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 41.2607,
+    "lon": -80.6791,
+    "iata": "YNG",
+    "icao": "KYNG",
+    "city": "Youngstown/Warren",
+    "region": "OH",
+    "details": {
+      "elevation_ft": 1192,
+      "runway_count": 3,
+      "longest_runway_ft": 9003
+    }
+  },
+  {
+    "name": "Yuma International Airport / Marine Corps Air Station Yuma",
+    "layer": "Major Airports",
+    "category": "airport",
+    "detail_title": "Airport Details",
+    "lat": 32.6509,
+    "lon": -114.6094,
+    "iata": "YUM",
+    "icao": "KNYL",
+    "city": "Yuma",
+    "region": "AZ",
+    "details": {
+      "elevation_ft": 213,
+      "runway_count": 4,
+      "longest_runway_ft": 13300
+    }
+  }
+]

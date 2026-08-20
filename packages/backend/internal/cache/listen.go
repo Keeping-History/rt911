@@ -16,7 +16,9 @@ import (
 )
 
 const (
-	notifyChannel  = "media_items_changed"
+	// The main video channel reads from tv_channels (the stitched per-channel HLS
+	// streams), not media_items. mp3/news/pager/usenet keep their own tables.
+	notifyChannel  = "tv_channels_changed"
 	initialBackoff = 1 * time.Second
 	maxBackoff     = 30 * time.Second
 )
@@ -26,7 +28,7 @@ type changeNotification struct {
 	ID int    `json:"id"`
 }
 
-// Listen subscribes to Postgres NOTIFY on media_items changes and keeps the
+// Listen subscribes to Postgres NOTIFY on tv_channels changes and keeps the
 // Redis cache in sync with the database. Intended to run for the process
 // lifetime in a dedicated goroutine.
 //

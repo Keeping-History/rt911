@@ -1,0 +1,66 @@
+// Two columns: labels, then controls. Every field except Description passes
+// labelPosition="left", and `display: contents` dissolves each control's own
+// holder so its label and input land directly in this grid — that's what lets
+// `max-content` size one shared label column to whichever label is longest.
+// A hard-coded width can't do the job: classicy scales type off --ui-font-size,
+// which the Appearance control panel changes at runtime.
+.fbForm {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    min-width: 440px;
+
+    :global(.classicyLabelLeft) {
+        display: contents;
+    }
+
+    :global(.classicyLabelLeft) > :global(.classicyControlLabelHolder) {
+        justify-content: flex-end;
+        white-space: nowrap;
+    }
+
+    // Attachments stacks a button over the chosen-file list, so its label reads
+    // better pinned to the top of that stack than centred against all of it.
+    :global(.classicyFileInputHolder.classicyLabelLeft) > * {
+        align-self: start;
+    }
+
+    // Description keeps its label above, and the button/error rows have no
+    // label at all: all of them run the full width.
+    > :global(.classicyTextEditorHolder),
+    .fbActions,
+    .fbError {
+        grid-column: 1 / -1;
+    }
+}
+
+.fbActions {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+.fbError {
+    color: #c00;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.fbSuccess {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    align-items: center;
+    text-align: center;
+    font-size: 12px;
+}
+
+.fbSuccessLink {
+    color: #00f;
+    text-decoration: underline;
+    cursor: pointer;
+}

@@ -10,6 +10,24 @@ export interface PagerRecord {
 	message: string;
 }
 
+/**
+ * Extract an HH:MM:SS time key from an ISO timestamp's UTC fields. The streamer
+ * positions every item against the virtual clock (MediaStreamProvider reveals
+ * items by `localDate`, which is the displayed wall-clock expressed in UTC), so a
+ * pager item's start_date already carries the wall-clock the user should see —
+ * applying a timezone offset here would double-count it. Returns "" for an
+ * unparseable timestamp.
+ */
+export function isoToTimeKey(iso: string): string {
+	const ms = new Date(iso).getTime();
+	if (Number.isNaN(ms)) return "";
+	const d = new Date(ms);
+	const h = String(d.getUTCHours()).padStart(2, "0");
+	const m = String(d.getUTCMinutes()).padStart(2, "0");
+	const s = String(d.getUTCSeconds()).padStart(2, "0");
+	return `${h}:${m}:${s}`;
+}
+
 /** Extract HH:MM:SS from a "YYYY-MM-DD HH:MM:SS" timestamp string. Returns "" if malformed. */
 export function extractTimeKey(timestamp: string): string {
 	const parts = timestamp.split(" ");

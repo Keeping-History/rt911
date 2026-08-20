@@ -2,12 +2,17 @@
 Tests for Directus media_items writer.
 Mocks HTTP calls — no real Directus instance required.
 """
+import json
 import respx
 import httpx
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-from video_grabber.directus.writer import write_media_item
+from video_grabber.directus.writer import (
+    patch_mp3_subtitles,
+    patch_tv_channel_subtitles,
+    write_media_item,
+)
 from video_grabber.config import Config
 
 
@@ -243,21 +248,28 @@ def test_upsert_channel_keys_on_url_not_content_subfield():
         captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"data": []})
 
-    respx.get("http://directus:8055/items/media_items").mock(side_effect=capture_get)
+    def capture_post(request):
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"data": {"id": 1}})
+
+    respx.get("http://directus:8055/items/tv_channels").mock(side_effect=capture_get)
     respx.get("http://directus:8055/items/sources").mock(
         return_value=httpx.Response(200, json={"data": [{"id": 18}]})
     )
-    post = respx.post("http://directus:8055/items/media_items").mock(
-        return_value=httpx.Response(200, json={"data": {"id": 1}})
-    )
+    post = respx.post("http://directus:8055/items/tv_channels").mock(side_effect=capture_post)
 
     upsert_channel_media_item(channel, "playlists/weta/master.m3u8",
-                              datetime(2001, 9, 9, tzinfo=timezone.utc), cfg)
+                              datetime(2001, 9, 9, tzinfo=timezone.utc),
+                              datetime(2001, 9, 18, tzinfo=timezone.utc), cfg)
 
     assert captured["params"].get("filter[url][_eq]") == \
         "https://files.911realtime.org/playlists/weta/master.m3u8"
     assert "filter[content][channel_stream][_eq]" not in captured["params"]
     assert post.called
+    # The channel row spans the whole window with a calculated duration.
+    assert captured["body"]["start_date"] == "2001-09-09T00:00:00"
+    assert captured["body"]["end_date"] == "2001-09-18T00:00:00"
+    assert captured["body"]["calc_duration"] == 9 * 86400
 
 
 @respx.mock
@@ -268,20 +280,78 @@ def test_upsert_channel_patches_when_row_exists():
     cfg = make_cfg()
     channel = MagicMock(slug="weta", display_name="WETA", timezone="EDT")
 
-    respx.get("http://directus:8055/items/media_items").mock(
+    respx.get("http://directus:8055/items/tv_channels").mock(
         return_value=httpx.Response(200, json={"data": [{"id": 460681}]})
     )
     respx.get("http://directus:8055/items/sources").mock(
         return_value=httpx.Response(200, json={"data": [{"id": 18}]})
     )
-    post = respx.post("http://directus:8055/items/media_items").mock(
+    post = respx.post("http://directus:8055/items/tv_channels").mock(
         return_value=httpx.Response(200, json={"data": {}})
     )
-    patch = respx.patch("http://directus:8055/items/media_items/460681").mock(
+    patch = respx.patch("http://directus:8055/items/tv_channels/460681").mock(
         return_value=httpx.Response(200, json={"data": {"id": 460681}})
     )
 
     upsert_channel_media_item(channel, "playlists/weta/master.m3u8",
-                              datetime(2001, 9, 9, tzinfo=timezone.utc), cfg)
+                              datetime(2001, 9, 9, tzinfo=timezone.utc),
+                              datetime(2001, 9, 18, tzinfo=timezone.utc), cfg)
 
     assert patch.called and not post.called
+
+
+# --- subtitle PATCH helpers ---
+
+
+def _cfg():
+    c = Config()
+    c.directus_url = "http://directus"
+    c.directus_api_token = "tok"
+    return c
+
+
+def test_patch_mp3_subtitles_patches_matched_row():
+    seen = {}
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            assert "/items/mp3_items" in str(request.url)
+            return httpx.Response(200, json={"data": [{"id": 7}]})
+        seen["url"] = str(request.url)
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"data": {"id": 7}})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    ok = patch_mp3_subtitles(
+        "https://files.911realtime.org/audio/x.mp3",
+        "https://files.911realtime.org/subtitles/audio/x.srt",
+        _cfg(), client=client,
+    )
+    assert ok is True
+    assert seen["url"].endswith("/items/mp3_items/7")
+    assert seen["body"]["subtitles"].endswith("/subtitles/audio/x.srt")
+
+
+def test_patch_mp3_subtitles_no_match_returns_false():
+    def handler(request):
+        return httpx.Response(200, json={"data": []})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    ok = patch_mp3_subtitles("u", "s", _cfg(), client=client)
+    assert ok is False
+
+
+def test_patch_tv_channel_subtitles_matches_channel_marker():
+    seen = {}
+    def handler(request):
+        if request.method == "GET":
+            assert "channel_stream" in str(request.url) or "content" in str(request.url)
+            return httpx.Response(200, json={"data": [{"id": 3}]})
+        seen["url"] = str(request.url)
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"data": {"id": 3}})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    ok = patch_tv_channel_subtitles(
+        "cnn", "https://files.911realtime.org/subtitles/cnn/channel.srt",
+        _cfg(), client=client,
+    )
+    assert ok is True
+    assert seen["url"].endswith("/items/tv_channels/3")
+    assert seen["body"]["subtitles"].endswith("/subtitles/cnn/channel.srt")

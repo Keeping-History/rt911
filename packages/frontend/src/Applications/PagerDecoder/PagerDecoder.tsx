@@ -1,5 +1,6 @@
 import {
 	ClassicyApp,
+	ClassicyButton,
 	ClassicyControlGroup,
 	ClassicyIcons,
 	ClassicyInput,
@@ -11,14 +12,18 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import { useContext, useEffect, useRef, useState } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamContext";
+import { trackAppToggle } from "../../openreplay";
 import styles from "./PagerDecoder.module.scss";
 import type {
 	PagerDecoderFilter,
 	PagerDecoderSettings,
 } from "./PagerDecoderContext";
 import { DEFAULT_PAGER_SETTINGS } from "./PagerDecoderContext";
+import { isoToTimeKey } from "./pagerUtils";
 import type { CompletedLine } from "./usePagerPlayback";
 import { usePagerPlayback } from "./usePagerPlayback";
 
@@ -27,12 +32,28 @@ const MAX_WILDCARD_LENGTH = 25;
 export const PagerDecoder = () => {
 	const appId = "PagerDecoder.app";
 	const appName = "Pager Decoder";
-	const appIcon = ClassicyIcons.applications.internetExplorer.mailbox;
+	const appIcon = ClassicyIcons.applications.pager.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const dispatch = useAppManagerDispatch();
 	const appState = useAppManager(
 		(state) => state.System.Manager.Applications.apps[appId],
 	);
+
+	const isOpen = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
+	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (prevIsOpenRef.current === undefined) {
+			prevIsOpenRef.current = isOpen;
+			return;
+		}
+		if (prevIsOpenRef.current === isOpen) return;
+		prevIsOpenRef.current = isOpen;
+		trackAppToggle(appId, isOpen ? "open" : "close");
+	}, [isOpen]);
 
 	const settings: PagerDecoderSettings =
 		(appState?.data?.settings as PagerDecoderSettings | undefined) ??
@@ -51,10 +72,13 @@ export const PagerDecoder = () => {
 	const { connected } = useContext(MediaStreamContext);
 	const isPaused =
 		appState?.windows?.find((w) => w.id === "pager-terminal")?.closed ?? false;
-	const { lines, streamingText, streamingMeta, uniqueValues } = usePagerPlayback(
-		settings,
-		isPaused,
-	);
+	const { lines, streamingText, streamingMeta, uniqueValues, clearLines } =
+		usePagerPlayback(settings, isPaused, !!appState);
+
+	// View-only ordering. `lines` is stored oldest→newest; `newestFirst` flips the
+	// presentation so the most recent message sits at the top instead of the bottom.
+	const [newestFirst, setNewestFirst] = useState(false);
+	const displayedLines = newestFirst ? [...lines].reverse() : lines;
 
 	const [detailLines, setDetailLines] = useState<CompletedLine[]>([]);
 	const openDetail = (line: CompletedLine) => {
@@ -67,10 +91,11 @@ export const PagerDecoder = () => {
 	};
 
 	const terminalRef = useRef<HTMLDivElement>(null);
+	// Keep the newest message in view: scroll to whichever edge it lives on.
 	useEffect(() => {
 		const el = terminalRef.current;
-		if (el) el.scrollTop = el.scrollHeight;
-	}, []);
+		if (el) el.scrollTop = newestFirst ? 0 : el.scrollHeight;
+	}, [lines.length, newestFirst]);
 
 	// Track message completion timestamps for rolling msgs/min rate
 	const completionTimesRef = useRef<number[]>([]);
@@ -174,6 +199,30 @@ export const PagerDecoder = () => {
 					onChangeFunc={(e) => updateRetention(e.target.value)}
 				/>
 			</div>
+			<div className={styles.filterField}>
+				<ClassicyButton buttonSize="small" onClickFunc={clearLines}>
+					Clear
+				</ClassicyButton>
+				<ClassicyButton
+					buttonSize="small"
+					depressed={newestFirst}
+					onClickFunc={() => setNewestFirst((v) => !v)}
+				>
+					<span style={{ fontSize: "var(--body-font-size)" }}>
+						{newestFirst ? "▲" : "▼"}
+					</span>
+				</ClassicyButton>
+			</div>
+		</div>
+	);
+
+	const streamingBlock = streamingMeta && (
+		<div className={styles.line}>
+			<span className={styles.meta}>
+				[{isoToTimeKey(streamingMeta.timestamp)}] {streamingMeta.provider}{" "}
+			</span>
+			{streamingText}
+			<span className={styles.cursor} aria-hidden="true" />
 		</div>
 	);
 
@@ -191,13 +240,14 @@ export const PagerDecoder = () => {
 			name={appName}
 			icon={appIcon}
 			defaultWindow="pager-terminal"
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			<ClassicyWindow
 				id="pager-terminal"
 				title="Pager Decoder"
 				appId={appId}
-				initialSize={[680, 480]}
-				initialPosition={[80, 60]}
+				initialSize={["75%", "75%"]}
+				initialPosition={["left", "top"]}
 				appMenu={appMenu}
 				header={
 					<p>
@@ -216,7 +266,9 @@ export const PagerDecoder = () => {
 					{!connected && lines.length === 0 && (
 						<p className={styles.loading}>Waiting for server connection…</p>
 					)}
-					{lines.map((line) => (
+					{/* The in-progress message is the newest, so it leads when newest-first. */}
+					{newestFirst && streamingBlock}
+					{displayedLines.map((line) => (
 						<button
 							key={line.id}
 							className={styles.line}
@@ -225,20 +277,12 @@ export const PagerDecoder = () => {
 							type="button"
 						>
 							<span className={styles.meta}>
-								[{line.timeKey}] {line.provider}{" "}
+								[{isoToTimeKey(line.timestamp)}] {line.provider}{" "}
 							</span>
 							{line.text}
 						</button>
 					))}
-					{streamingMeta && (
-						<div className={styles.line}>
-							<span className={styles.meta}>
-								[{streamingMeta.timeKey}] {streamingMeta.provider}{" "}
-							</span>
-							{streamingText}
-							<span className={styles.cursor} aria-hidden="true" />
-						</div>
-					)}
+					{!newestFirst && streamingBlock}
 					{connected && !streamingMeta && (
 						<span className={styles.cursor} aria-hidden="true" />
 					)}
@@ -260,7 +304,7 @@ export const PagerDecoder = () => {
 					title="Message Details"
 					appId={appId}
 					icon={appIcon}
-					initialSize={[420, 340]}
+					initialSize={["50%", "50%"]}
 					initialPosition={[200 + i * 20, 160 + i * 20]}
 					appMenu={appMenu}
 					resizable={false}
@@ -316,6 +360,7 @@ export const PagerDecoder = () => {
 					</div>
 				</ClassicyWindow>
 			))}
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

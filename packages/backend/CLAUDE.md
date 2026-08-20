@@ -8,6 +8,15 @@ Guidance for AI coding assistants working in this Go service. Read [`SPEC.md`](.
 
 A WebSocket streamer that drives a **virtual clock** per client and pushes `media_items` whose `start_date` falls in the current virtual second. Postgres (Directus-owned) is the source of truth; Redis is the per-second hot cache; one goroutine per session manages the clock and one shared `Hub` goroutine fans out 1 Hz ticks.
 
+Cross-pod delivery goes through [`internal/fanout`](./internal/fanout) — a typed
+Redis pub/sub bus. The streamer runs as N replicas, so anything originating on a
+single pod (an operator's HTTP call, a teacher's command) reaches only that
+pod's sessions unless it is republished. The bus carries **no persistence and no
+delivery guarantee**: a pod that is down for the publish never sees the message,
+which is why `internal/clock` keeps its own Redis key for boot recovery and uses
+the bus only for the live edge. Anything a late joiner must still observe has to
+persist separately — don't add persistence to the bus, add it beside the bus.
+
 Module: `classicy/streamer` (see [`go.mod`](./go.mod)).
 Entrypoint: [`cmd/server/main.go`](./cmd/server/main.go).
 All non-entry code lives under [`internal/`](./internal) and is intentionally not importable from outside this module.
@@ -45,7 +54,9 @@ Each `Session` also runs two more goroutines under the WebSocket handler: a `wri
 1. **Never block the Hub.** The hub's tick fan-out is non-blocking (`select { case s.tickCh <- struct{}{}: default: }`). If you change `Session.tickCh` to a blocking send or remove the `default`, a slow client takes down every other session. Don't.
 2. **`Session.send_` must never block.** It uses the same non-blocking pattern with a `default` that logs and drops. Do not change to a blocking send "for reliability" — the writePump backpressure is what protects us from a slow socket.
 3. **Hold `Session.mu` for the shortest possible window.** Take it, mutate, release, *then* call `send_` or do I/O. Look at `Heartbeat` and `RunTimePump` for the pattern.
-4. **Postgres for seek/init, Redis for tick.** `CurrentItems` (overlap window) is called only from the handler's `init` and `seek` paths. The 1 Hz tick path uses `cache.ItemsAt` only. Don't mix them.
+4. **Postgres for seek/init, Redis for tick.** `CurrentItems` (overlap window) is called only from the handler's `init` and `seek` paths. The tick path uses Redis only. Don't mix them.
+   - **Exception: the `usenet` channel reads Postgres on the tick too.** Usenet messages carry full bodies (far too large to warm into Redis) and delivery is gated to the group(s) a client is viewing, so the per-tick query volume is tiny. `Session` therefore holds a `*pgxpool.Pool`, and `db.UsenetItemsInRange` (indexed on `(source, start_date)`) serves the windowed tick directly — there is no usenet Redis cache, listener, or warm. This is deliberate; don't "fix" it back into Redis.
+   - **The tick is windowed, not per-second.** `RunTimePump` advances vTime every tick but only issues a Redis lookup when the clock nears a channel's horizon — it fetches a **forward window** (`cache.*ItemsInRange`, half-open `[lo, hi)`) once per window, not `cache.*ItemsAt` every second. Most ticks are no-ops. This is the scaling lever (de-syncs the per-tick Redis burst across spread sessions); don't revert it to a per-second `ItemsAt` lookup. Window sizes + lead live in the `window*`/`leadSeconds` constants; horizons are per-channel `Session` fields. The client buffers each window and reveal-gates items by `start_date` — see [`docs/websocket-protocol.md`](./docs/websocket-protocol.md). (`*ItemsAt` remain only for the single-second boundary snapshot and tests.)
 5. **The Redis cache is kept in sync via Postgres NOTIFY.** `cache.InstallTriggers` installs an `AFTER INSERT/UPDATE/DELETE` trigger on `media_items` that fires `NOTIFY media_items_changed` with an `{op, id}` payload. `cache.Listen` runs in a dedicated goroutine, applies each change incrementally (`Upsert` / `Forget`), and **resyncs the entire cache against Postgres on every (re)connect** so notifications dropped during a disconnect are recovered. Don't add a parallel "rewarm" path — extend the listener instead.
 6. **All times are UTC `time.Time`.** Wire format is RFC3339 (or one of the fallbacks in `parseTime`). Never compare formatted strings; always parse first.
 7. **Nullable text columns are `*string` at scan time.** Directus emits `NULL` for empty strings; pgx cannot scan `NULL` into a non-pointer string. Use `derefStr` like `queryItems` already does — don't shortcut to `&it.Field` directly.
@@ -88,7 +99,7 @@ Each `Session` also runs two more goroutines under the WebSocket handler: a `wri
 
 Formats are just strings (`m3u8`, `mp4`, `html`, `modal`, `usenet`). Adding a new one requires no backend change unless filtering or schema validation depends on the list — currently neither does. Update the seed script's `select-dropdown` choices in `seed.mjs` if you want it editable in Directus.
 
-> `pager`, `mp3` and `news` are **not** formats — each lives in its own table (`pager_items` / `mp3_items` / `news_items`) and is delivered on an opt-in subscription channel (`subscribe`/`unsubscribe`), with parallel `db`/`cache` code (`*ItemsAt`, distinct `pager:*` / `mp3:*` / `news:*` Redis keys, `ListenPager` / `ListenMp3` / `ListenNews`) and a dedicated server→client frame. pager has its own `PagerItem` model (instant, forward-only single-second snapshot); mp3 and news **reuse `MediaItem`** and ride `mp3`/`news`-typed frames reusing the `items` field — mp3 uses a pure overlap snapshot (durational audio), news uses the media overlap+5-min-instant-lookback (mostly instant headlines). HTML is slated to follow the same extract-into-channel pattern — generalise the `Session.subscriptions` set, don't special-case each one.
+> `pager`, `mp3` and `news` are **not** formats — each lives in its own table (`pager_items` / `mp3_items` / `news_items`) and is delivered on an opt-in subscription channel (`subscribe`/`unsubscribe`), with parallel `db`/`cache` code (`*ItemsAt`, distinct `pager:*` / `mp3:*` / `news:*` Redis keys, `ListenPager` / `ListenMp3` / `ListenNews`) and a dedicated server→client frame. pager has its own `PagerItem` model (instant, forward-only single-second snapshot); mp3 and news **reuse `MediaItem`** and ride `mp3`/`news`-typed frames reusing the `items` field — mp3 uses a pure overlap snapshot (durational audio), news uses the media overlap+5-min-instant-lookback (mostly instant headlines). `usenet` adds a fourth: its own `UsenetItem` model, **Postgres-only** (no Redis — see hard rule #4 exception), **server-side per-newsgroup filtering** (`usenet_filter` sets the viewed group(s); a group can hold millions of messages), a backlog snapshot + forward windowing + `usenet_more` pagination, and newsgroups delivered as `sources` rows of `type="usenet"`. See [`../tools/video-grabber/docs/usenet-ingestion.md`](../tools/video-grabber/docs/usenet-ingestion.md) for how the data is produced. `flights` is a fifth: its own `FlightPosition` model (instant per-minute aircraft samples from `flight_positions`), delivered on the same opt-in subscribe channel pattern, but cached as **per-minute msgpack buckets** in a single Redis HASH (`flight:minutes`, no ZSET — minute keys are computed arithmetically) and **without any trigger/listener**: the data is immutable bulk output of the flight-recon COPY loader (which bypasses row triggers anyway). After a flight-recon re-load, rewarm with `redis-cli DEL flight:minutes` + a streamer restart. HTML is slated to follow the same extract-into-channel pattern — generalise the `Session.subscriptions` set, don't special-case each one.
 
 ### Add a new subscription channel (pager-style)
 
@@ -106,6 +117,25 @@ Pager is the reference implementation of an opt-in side channel that lives in it
 2. Add it to the `selectFrom` constant in [`internal/db/postgres.go`](./internal/db/postgres.go) **and** the `rows.Scan(...)` call in `queryItems`. Order matters — keep them aligned.
 3. If nullable, scan into a `*string` / `*int` local and `derefStr` it.
 4. Update the field list in `seed.mjs` so fresh Directus installs get it.
+
+### Provision the CMS `pages` collections
+
+[`apply-pages-schema.mjs`](./apply-pages-schema.mjs) provisions the `pages` /
+`page_authors` collections (see [`../../plans/2026-08-06-cms-pages-design.md`](../../plans/2026-08-06-cms-pages-design.md)),
+reading its definitions from [`pages-collections.mjs`](./pages-collections.mjs). Dry run
+by default, `--apply` to commit, `--verify` to assert the live schema still matches.
+Like `apply-chat-schema.mjs`, it is deliberately independent of `seed.mjs` — that script
+bulk-imports fixture data on import, so it must never be run to add a collection.
+
+Two things that bite:
+
+- **`--apply` creates missing collections wholesale and cannot add a field to an existing
+  one.** There is no `POST /fields` path. Add a field to `pages-collections.mjs` and
+  `--apply` reports "already present, skipping" while `--verify` reports it MISSING —
+  no mode reconciles that. Add the field by hand via `POST /fields/<collection>`.
+- **The public read on `pages` uses an explicit field list**, not `["*"]`, to keep the
+  `user_created` / `user_updated` UUIDs private. Any new field must be added to
+  `PAGES_PUBLIC_FIELDS` or it is invisible to the frontend.
 
 ---
 

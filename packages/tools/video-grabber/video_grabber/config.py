@@ -6,6 +6,10 @@ def _int(key: str, default: int) -> int:
     return int(os.getenv(key, str(default)))
 
 
+def _float(key: str, default: float) -> float:
+    return float(os.getenv(key, str(default)))
+
+
 @dataclass
 class Config:
     database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", ""))
@@ -19,3 +23,78 @@ class Config:
     directus_api_token: str = field(default_factory=lambda: os.getenv("DIRECTUS_API_TOKEN", ""))
     ia_rate_per_sec: int = field(default_factory=lambda: _int("IA_RATE_PER_SEC", 2))
     min_duration_seconds: int = field(default_factory=lambda: _int("MIN_DURATION_SECONDS", 720))
+
+    # --- Transcript minute summarisation ---
+    # Tier defaults to llm-extract: the model only chooses which source lines to
+    # keep and the output is rebuilt verbatim, so it cannot fabricate. llm-abstract
+    # compresses harder but its output has to clear the containment gate.
+    anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
+    summarize_model: str = field(default_factory=lambda: os.getenv("SUMMARIZE_MODEL", "claude-haiku-4-5"))
+    summarize_tier: str = field(default_factory=lambda: os.getenv("SUMMARIZE_TIER", "llm-extract"))
+    # Party identification is judgment-heavy; the summarizer's haiku default is
+    # too light for deciding who is speaking on a garbled tape.
+    parties_model: str = field(default_factory=lambda: os.getenv("PARTIES_MODEL", "claude-sonnet-5"))
+    enhance_chain: str = field(default_factory=lambda: os.getenv("ENHANCE_CHAIN", ""))
+    deep_filter_bin: str = field(
+        default_factory=lambda: os.getenv("DEEP_FILTER_BIN", "/usr/local/bin/deep-filter")
+    )
+    summarize_max_units: int = field(default_factory=lambda: _int("SUMMARIZE_MAX_UNITS", 3))
+    summarize_concurrency: int = field(default_factory=lambda: _int("SUMMARIZE_CONCURRENCY", 8))
+
+    # --- Audio transcription (whisper.cpp) ---
+    whisper_bin: str = field(default_factory=lambda: os.getenv("WHISPER_BIN", "whisper-cli"))
+    whisper_model: str = field(default_factory=lambda: os.getenv("WHISPER_MODEL", "/opt/models/ggml-medium.en.bin"))
+    vad_model: str = field(default_factory=lambda: os.getenv("VAD_MODEL", "/opt/models/ggml-silero-v5.1.2.bin"))
+    chunk_seconds: int = field(default_factory=lambda: _int("TRANSCRIBE_CHUNK_SECONDS", 600))
+    chunk_overlap_seconds: int = field(default_factory=lambda: _int("TRANSCRIBE_CHUNK_OVERLAP_SECONDS", 5))
+    whisper_threads: int = field(default_factory=lambda: _int("WHISPER_THREADS", 4))
+    subtitles_prefix: str = field(default_factory=lambda: os.getenv("SUBTITLES_PREFIX", "subtitles"))
+
+    # --- Usenet newsgroup ingestion ---
+    # IA collections to scan for newsgroup mbox archives. usenethistorical is
+    # entirely pre-2001; giganews is large and straddles the cutoff (trimmed per
+    # message at the process stage). See plans/usenet-archive-ingestion.md.
+    usenet_collections: str = field(default_factory=lambda: os.getenv("USENET_COLLECTIONS", "usenethistorical,giganews"))
+    # Per-message cutoff passed to mbox_parser --before. Keep messages on or before
+    # this date (exclusive of later), so the replay never reveals "future" posts.
+    usenet_before: str = field(default_factory=lambda: os.getenv("USENET_BEFORE", "2001-09-21"))
+    # A usenet_jobs row untouched (no heartbeat / transition) this long while in an
+    # in-flight stage (downloading/downloaded/processing) is treated as orphaned by
+    # a dead process-usenet-item run and re-queued at the head of dispatch-usenet.
+    # Must exceed the heartbeat interval (60s) by a comfortable margin.
+    usenet_orphan_stale_minutes: int = field(default_factory=lambda: _int("USENET_ORPHAN_STALE_MINUTES", 10))
+
+    # --- Channel thumbnail generation ---
+    # Real-world UTC timestamp when the virtual clock was set to the channel window's
+    # start_date (2001-09-09T00:00:00Z). Used to compute virtual_now as:
+    #   start_date + (real_now - VIRTUAL_EPOCH_REAL) % window_duration
+    virtual_epoch_real: str = field(
+        default_factory=lambda: os.getenv("VIRTUAL_EPOCH_REAL", "2026-06-25T13:00:00+00:00")
+    )
+
+    # --- Audio loudness normalization (normalize/ pipeline) ---
+    # EBU R128 targets for the dynaudnorm+loudnorm chain; tolerance is the
+    # analyze stage's "already fine, skip" band around norm_target_i.
+    norm_target_i: float = field(default_factory=lambda: _float("NORM_TARGET_I", -16.0))
+    norm_target_tp: float = field(default_factory=lambda: _float("NORM_TARGET_TP", -1.5))
+    norm_tolerance_lu: float = field(default_factory=lambda: _float("NORM_TOLERANCE_LU", 1.0))
+    # Cloudflare purge (best-effort) after in-place overwrite of audio/ objects.
+    cf_api_token: str = field(default_factory=lambda: os.getenv("CF_API_TOKEN", ""))
+    cf_zone_id: str = field(default_factory=lambda: os.getenv("CF_ZONE_ID", ""))
+
+    # --- Transcript segments (transcript/ pipeline) ---
+    # Which radio sources count as *broadcast* for chat_transcript_segments.
+    # mp3_items also holds NEADS/NORAD air-defense tapes: operational military
+    # comms no civilian could hear on 9/11, so feeding them to a buddy would
+    # hand it knowledge the tier design exists to withhold. They are also
+    # walkie-talkie audio and transcribe badly. What they contain belongs in
+    # curated tier-1 entries, written by a person.
+    transcript_radio_sources: str = field(
+        default_factory=lambda: os.getenv("TRANSCRIPT_RADIO_SOURCES", "WINS,WCBS")
+    )
+
+    def transcript_radio_source_list(self) -> list[str]:
+        return [s.strip() for s in self.transcript_radio_sources.split(",") if s.strip()]
+
+    def usenet_collection_list(self) -> list[str]:
+        return [c.strip() for c in self.usenet_collections.split(",") if c.strip()]

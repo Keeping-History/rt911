@@ -11,10 +11,11 @@
  *   node bootstrap.mjs
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { CHAT_COLLECTIONS, CHAT_INDEX_SQL } from "./chat-collections.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -115,17 +116,34 @@ async function createCollections(token) {
     console.log("Creating collection: sources");
     await api(token, "POST", "/collections", {
       collection: "sources",
-      meta: { icon: "radio", note: "Broadcast sources / networks" },
+      meta: { icon: "radio", note: "Sources / networks / newsgroups, classified by type" },
       schema: {},
       fields: [
         { field: "id",          type: "integer", schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true, readonly: true } },
         { field: "name",        type: "string",  schema: { is_nullable: false }, meta: { required: true, interface: "input", width: "half" } },
         { field: "slug",        type: "string",  schema: { is_nullable: false, is_unique: true }, meta: { required: true, interface: "input", width: "half" } },
+        // type discriminates what kind of source a row is, so one table can back
+        // every channel's filter: "video" (TV), "pager", "usenet" (newsgroup), …
+        { field: "type",        type: "string",  schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["video", "pager", "usenet"].map((v) => ({ text: v, value: v })) } } },
         { field: "description", type: "text",    schema: {}, meta: { interface: "input-multiline" } },
       ],
     });
+    // message_count is precomputed per source (used by usenet newsgroups — the
+    // corpus is historical/immutable, so the count is stable). Integer added
+    // individually (bulk endpoint creates string columns).
+    await api(token, "POST", "/fields/sources", { field: "message_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", readonly: true, note: "Precomputed item count (usenet)" } });
   } else {
     console.log("Collection sources already exists, skipping.");
+    // Ensure the type/message_count columns exist on a pre-existing sources collection.
+    const have = new Set((await api(token, "GET", "/fields/sources")).data.map((f) => f.field));
+    if (!have.has("type")) {
+      console.log("Adding field: sources.type");
+      await api(token, "POST", "/fields/sources", { field: "type", type: "string", schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["video", "pager", "usenet"].map((v) => ({ text: v, value: v })) } } });
+    }
+    if (!have.has("message_count")) {
+      console.log("Adding field: sources.message_count");
+      await api(token, "POST", "/fields/sources", { field: "message_count", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", width: "half", readonly: true, note: "Precomputed item count (usenet)" } });
+    }
   }
 
   // media_items and mp3_items share the same shape — mp3 reuses the MediaItem
@@ -138,9 +156,10 @@ async function createCollections(token) {
     { field: "end_date",      type: "dateTime", schema: { is_nullable: true }, meta: { interface: "datetime", width: "half" } },
     { field: "timezone",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
     { field: "url",           type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
-    { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "html", "modal"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
+    { field: "format",        type: "string",   schema: { is_nullable: true }, meta: { interface: "select-dropdown", width: "half", options: { choices: ["m3u8", "mp4", "modal"].map((v) => ({ text: v.toUpperCase(), value: v })) } } },
     { field: "image",         type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
     { field: "image_caption", type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half" } },
+    { field: "subtitles",     type: "text",     schema: { is_nullable: true }, meta: { interface: "input", width: "full", note: "Public URL to the .srt subtitle file" } },
     { field: "content",       type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
   ];
 
@@ -214,6 +233,100 @@ async function createCollections(token) {
   }
   await ensureNumericFields("news_items");
 
+  // tv_channels — the stitched continuous HLS channels (one row per channel,
+  // each pointing at its playlists/<slug>/master.m3u8), same shape as media_items.
+  // The TV app's main video channel reads from this table (the streamer's
+  // selectFrom / media_items_changed listener point here), separating the 23
+  // channel streams from media_items' per-program clips.
+  if (!names.includes("tv_channels")) {
+    console.log("Creating collection: tv_channels");
+    await api(token, "POST", "/collections", {
+      collection: "tv_channels",
+      meta: { icon: "live_tv", sort_field: "sort", note: "Stitched continuous HLS channels" },
+      schema: {},
+      fields: mediaLikeBaseFields,
+    });
+  } else {
+    console.log("Collection tv_channels already exists, skipping.");
+  }
+  await ensureNumericFields("tv_channels");
+
+  // alert_items — media-shaped collection (same shape as tv_channels / tm_bookmarks):
+  // a title/full_title + a start_date the desktop clock can seek to. Authored in the
+  // Directus admin UI (ships empty on a fresh install). Like tm_bookmarks it is not
+  // streamed, so — matching that precedent — its `source` field is left unlinked (no
+  // sources relation). See seed note below re: public read if the frontend fetches it.
+  if (!names.includes("alert_items")) {
+    console.log("Creating collection: alert_items");
+    await api(token, "POST", "/collections", {
+      collection: "alert_items",
+      meta: { icon: "warning", sort_field: "sort", note: "Alert timeline events" },
+      schema: {},
+      fields: mediaLikeBaseFields,
+    });
+    // Widen varchar(255) columns to text, matching the other media-shaped tables.
+    widenMediaLikeColumns("alert_items");
+  } else {
+    console.log("Collection alert_items already exists, skipping.");
+  }
+  await ensureNumericFields("alert_items");
+
+  // severity is alert-only (not in mediaLikeBaseFields): it selects the ClassicyAlert
+  // icon (note/caution/stop) when alert_items is streamed on the "alerts" channel.
+  // Idempotent add, matching the ensureNumericFields introspection idiom.
+  {
+    const alertFields = await api(token, "GET", "/fields/alert_items");
+    const haveSeverity = new Set(alertFields.data.map((f) => f.field)).has("severity");
+    if (!haveSeverity) {
+      console.log("Adding field: alert_items.severity");
+      await api(token, "POST", "/fields/alert_items", {
+        field: "severity",
+        type: "string",
+        schema: { is_nullable: true, default_value: "note" },
+        meta: {
+          interface: "select-dropdown",
+          width: "half",
+          note: "Alert icon: note | caution | stop",
+          options: { choices: ["note", "caution", "stop"].map((v) => ({ text: v, value: v })) },
+        },
+      });
+    }
+  }
+
+  // tm_bookmarks — Time Machine "jump to a moment" bookmarks. Same media_items
+  // shape as alert_items (a title/full_title + a start_date the desktop clock
+  // seeks to). Read directly over Directus REST by the frontend Time Machine app
+  // — not streamed — so the public policy is granted read access to it
+  // (ensurePublicReadAccess). Ships empty; rows are authored in
+  // the Directus admin UI.
+  if (!names.includes("tm_bookmarks")) {
+    console.log("Creating collection: tm_bookmarks");
+    await api(token, "POST", "/collections", {
+      collection: "tm_bookmarks",
+      meta: { icon: "bookmark", sort_field: "sort", note: "Time Machine bookmarks (jump-to timeline events)" },
+      schema: {},
+      fields: mediaLikeBaseFields,
+    });
+    // Widen varchar(255) columns to text so long event descriptions fit, matching
+    // the other media-shaped tables. Done in the fresh-create branch only.
+    widenMediaLikeColumns("tm_bookmarks");
+  } else {
+    console.log("Collection tm_bookmarks already exists, skipping.");
+  }
+  await ensureNumericFields("tm_bookmarks");
+
+  // ---- IM Buddies (see plans/2026-07-24-im-buddies-chatbot-design.md) ----
+  // Definitions live in chat-collections.mjs (shared with apply-chat-schema.mjs)
+  // so the two never drift apart.
+  for (const spec of CHAT_COLLECTIONS) {
+    if (!names.includes(spec.collection)) {
+      console.log(`Creating collection: ${spec.collection}`);
+      await api(token, "POST", "/collections", spec);
+    } else {
+      console.log(`Collection ${spec.collection} already exists, skipping.`);
+    }
+  }
+
   // pager_items — pager traffic lives in its own table (not media_items). Every
   // pager item is "instant": a start_date with no duration/end_date. provider is
   // a plain text column, not a sources FK.
@@ -239,14 +352,183 @@ async function createCollections(token) {
     // string columns when type is in the bulk payload (same caveat as media_items).
     await api(token, "POST", "/fields/pager_items", { field: "approved", type: "integer", schema: { default_value: 1 }, meta: { interface: "input", width: "half", note: "1 = approved, 0 = pending" } });
     await api(token, "POST", "/fields/pager_items", { field: "sort", type: "integer", schema: { is_nullable: true }, meta: { interface: "input", hidden: true } });
+    // source FK into sources (type="pager"), backfilled from provider by
+    // migratePagerSources. provider is kept as the import field + audit trail.
+    await api(token, "POST", "/fields/pager_items", { field: "source", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", display: "related-values", width: "half", note: "Provider (sources row, type=pager)" } });
   } else {
     console.log("Collection pager_items already exists, skipping.");
+    // Ensure the source FK exists on a pre-existing pager_items (migration).
+    const have = new Set((await api(token, "GET", "/fields/pager_items")).data.map((f) => f.field));
+    if (!have.has("source")) {
+      console.log("Adding field: pager_items.source");
+      await api(token, "POST", "/fields/pager_items", { field: "source", type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", display: "related-values", width: "half", note: "Provider (sources row, type=pager)" } });
+    }
   }
+
+  // usenet_items — Usenet messages, one row per post. Like pager_items, each post
+  // is "instant": a start_date (the posting time, the streamer's schedule key) with
+  // no duration/end_date. The newsgroup is NOT stored inline — it is a row in the
+  // shared sources table (type="usenet") that usenet_items.source references, the
+  // same way media_items/news_items/mp3_items link their source. message_id is NOT
+  // unique (crossposts repeat it). references/in_reply_to are kept raw so threading
+  // can be derived; thread_id/parent_id are populated by the threading stage
+  // (usenetarchive). See plans/usenet-archive-ingestion.md for the producer.
+  if (!names.includes("usenet_items")) {
+    console.log("Creating collection: usenet_items");
+    await api(token, "POST", "/collections", {
+      collection: "usenet_items",
+      meta: { icon: "article", sort_field: "sort", note: "Usenet messages" },
+      schema: {},
+      fields: [
+        { field: "id",           type: "integer",  schema: { is_primary_key: true, has_auto_increment: true }, meta: { hidden: true, readonly: true } },
+        { field: "start_date",   type: "dateTime", schema: { is_nullable: false }, meta: { required: true, interface: "datetime", width: "half", note: "Posting time (UTC); the streamer's schedule key" } },
+        { field: "subject",      type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "full" } },
+        { field: "author",       type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "From header (name + email)" } },
+        { field: "message_id",   type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Message-ID (not unique: crossposts repeat)" } },
+        { field: "references",   type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline", note: "Raw References header (thread ancestry)" } },
+        { field: "in_reply_to",  type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "In-Reply-To (parent message-id)" } },
+        { field: "thread_id",    type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Set by threading stage; null until then" } },
+        { field: "parent_id",    type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Parent message-id within thread" } },
+        { field: "body",         type: "text",     schema: { is_nullable: true }, meta: { interface: "input-multiline" } },
+        { field: "date_source",  type: "string",   schema: { is_nullable: true }, meta: { interface: "input", width: "half", note: "Header the start_date came from (QA)" } },
+      ],
+    });
+    // Integer columns added individually (bulk endpoint creates strings). source
+    // is the FK into sources (type="usenet"); the relation is wired in createRelations.
+    await api(token, "POST", "/fields/usenet_items", { field: "source",   type: "integer", schema: { is_nullable: true }, meta: { interface: "select-dropdown-m2o", display: "related-values", width: "half", note: "Newsgroup (sources row, type=usenet)" } });
+    await api(token, "POST", "/fields/usenet_items", { field: "approved", type: "integer", schema: { default_value: 1 }, meta: { interface: "input", width: "half", note: "1 = approved, 0 = pending" } });
+    await api(token, "POST", "/fields/usenet_items", { field: "sort",     type: "integer", schema: { is_nullable: true }, meta: { interface: "input", hidden: true } });
+
+    // Widen text columns (Directus makes varchar(255), too short for some From/
+    // Message-ID/subject headers) and index the per-group time lookups the streamer
+    // does — the usenet channel reads Postgres directly (no Redis cache), so this
+    // (source, start_date) index is what keeps CurrentUsenetItems/UsenetItemsInRange
+    // fast. Done in the fresh-create branch so it never rewrites a populated table.
+    psql(`
+      ALTER TABLE usenet_items
+        ALTER COLUMN subject     TYPE text,
+        ALTER COLUMN author      TYPE text,
+        ALTER COLUMN message_id  TYPE text,
+        ALTER COLUMN in_reply_to TYPE text,
+        ALTER COLUMN thread_id   TYPE text,
+        ALTER COLUMN parent_id   TYPE text,
+        ALTER COLUMN date_source TYPE text;
+      CREATE INDEX IF NOT EXISTS idx_usenet_items_source_start
+        ON usenet_items (source, start_date);
+    `);
+  } else {
+    console.log("Collection usenet_items already exists, skipping.");
+  }
+}
+
+// Collections the frontend reads anonymously (no token) over Directus REST, so
+// the Directus public policy needs read access to them:
+//
+//   tm_bookmarks  — the Time Machine app's jump-to bookmarks. All fields
+//                   (non-sensitive event bookmarks), no filter.
+//   mp3_items / news_items / pager_items / tv_channels — the HyperCard stack
+//                   embeds (packages/frontend/src/Applications/HyperCard/
+//                   extensions/directusCollections.ts) fetch one row per embed;
+//                   the Playlist Editor's News browsing also reads news_items
+//                   (directusVolume.ts filters/groups by `source`, which is why
+//                   `source` is in that field list — a filter field must be
+//                   readable or the query 403s). Fields are explicit, never
+//                   ["*"] (the PAGES_PUBLIC_FIELDS precedent in
+//                   pages-collections.mjs), and each grant is filtered to
+//                   approved = 1 so unapproved rows stay invisible over REST
+//                   just as over the streamer.
+//
+// Kept in sync by hand with apply-hypercard-public-perms.mjs — the standalone,
+// drift-detecting version of these grants for already-seeded installs
+// (Dockerfile.seed bakes only seed.mjs, so the list can't live in a shared
+// module). Idempotent: skips any grant that already exists; converging a
+// wrong/narrowed grant is that script's job, not this one's.
+const APPROVED_FILTER = { approved: { _eq: 1 } };
+
+const PUBLIC_READ_GRANTS = [
+  { collection: "tm_bookmarks", fields: ["*"], permissions: null },
+  {
+    // Character-for-character the same list as apply-hypercard-public-perms.mjs's
+    // mp3_items grant — see the comment there for what each group of fields is
+    // for, and for why `parties`, `tags_curated` and `derived_at` are absent.
+    collection: "mp3_items",
+    fields: [
+      "id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles", "image", "peaks",
+      // Kept in step with apply-hypercard-public-perms.mjs — see the note there
+      // on why `tags` stays granted.
+      "tags",
+      "subject", "link", "tier", "confidence", "evidence", "participants", "mentions", "provenance",
+    ],
+    permissions: APPROVED_FILTER,
+  },
+  {
+    collection: "news_items",
+    fields: ["id", "title", "full_title", "content", "start_date", "image", "image_caption", "url", "format", "source"],
+    permissions: APPROVED_FILTER,
+  },
+  {
+    collection: "pager_items",
+    fields: ["id", "start_date", "provider", "recipient_id", "id_type", "channel", "mode", "message"],
+    permissions: APPROVED_FILTER,
+  },
+  {
+    collection: "tv_channels",
+    fields: ["id", "title", "full_title", "url", "source", "start_date", "end_date", "calc_duration", "timezone", "subtitles"],
+    permissions: APPROVED_FILTER,
+  },
+];
+
+async function ensurePublicReadAccess(token) {
+  const policies = await api(token, "GET", "/policies?fields=id,name&limit=-1");
+  const publicPolicy = policies.data.find((p) => p.name === "$t:public_label");
+  if (!publicPolicy) {
+    console.warn("Public policy not found — skipping public read grants.");
+    return;
+  }
+  const existing = await api(
+    token,
+    "GET",
+    `/permissions?filter[policy][_eq]=${publicPolicy.id}&filter[action][_eq]=read&limit=-1`,
+  );
+  for (const grant of PUBLIC_READ_GRANTS) {
+    if (existing.data.some((p) => p.collection === grant.collection)) {
+      console.log(`Public read on ${grant.collection} already granted, skipping.`);
+      continue;
+    }
+    console.log(`Granting public read on ${grant.collection}`);
+    await api(token, "POST", "/permissions", {
+      policy: publicPolicy.id,
+      collection: grant.collection,
+      action: "read",
+      fields: grant.fields,
+      permissions: grant.permissions,
+    });
+  }
+}
+
+// createStreamerIndexes indexes the per-table time lookups the streamer's init/seek
+// queries run. usenet already has its own (source, start_date) index (see
+// createCollections); the video/news/mp3/pager tables are filtered by
+// (approved, start_date) on every Current*Items call, which without an index is a
+// sequential scan — invisible at low traffic, a bottleneck under a connection burst.
+// Run unconditionally (not just in the fresh-create branch) so existing, already
+// populated tables get the index too; IF NOT EXISTS makes re-runs a no-op. These
+// tables are small and write-rarely (historical data), so a plain CREATE INDEX's
+// brief lock is fine — switch to CREATE INDEX CONCURRENTLY if that ever changes.
+function createStreamerIndexes() {
+  console.log("Ensuring streamer (approved, start_date) indexes…");
+  psql(`
+    CREATE INDEX IF NOT EXISTS idx_tv_channels_approved_start ON tv_channels (approved, start_date);
+    CREATE INDEX IF NOT EXISTS idx_news_items_approved_start  ON news_items  (approved, start_date);
+    CREATE INDEX IF NOT EXISTS idx_mp3_items_approved_start   ON mp3_items   (approved, start_date);
+    CREATE INDEX IF NOT EXISTS idx_pager_items_approved_start ON pager_items (approved, start_date);
+  `);
+  psql(CHAT_INDEX_SQL);
 }
 
 async function createRelations(token) {
   const existing = await api(token, "GET", "/relations");
-  for (const collection of ["media_items", "mp3_items", "news_items"]) {
+  for (const collection of ["media_items", "mp3_items", "news_items", "tv_channels", "usenet_items", "pager_items"]) {
     const alreadyLinked = existing.data.some(
       (r) => r.collection === collection && r.field === "source",
     );
@@ -276,7 +558,7 @@ async function importSources(token, records) {
 
   const toCreate = slugs
     .filter((s) => s && !existingSlugs.has(s))
-    .map((s) => ({ name: s, slug: s }));
+    .map((s) => ({ name: s, slug: s, type: "video" }));
 
   if (toCreate.length === 0) {
     console.log("All sources already exist, skipping.");
@@ -289,7 +571,7 @@ async function importSources(token, records) {
   return Object.fromEntries(all.data.map((s) => [s.slug, s.id]));
 }
 
-const MEDIA_LIKE_COLS = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,content,sort`;
+const MEDIA_LIKE_COLS = `title,full_title,source,start_date,end_date,calc_duration,timezone,url,format,approved,mute,volume,jump,"trim",image,image_caption,subtitles,content,sort`;
 
 // Widen varchar columns — Directus creates string fields as varchar(255) which is
 // too short for content/url/etc. Applies to any media-shaped table.
@@ -303,6 +585,7 @@ function widenMediaLikeColumns(table) {
       ALTER COLUMN format         TYPE text,
       ALTER COLUMN image          TYPE text,
       ALTER COLUMN image_caption  TYPE text,
+      ALTER COLUMN subtitles      TYPE text,
       ALTER COLUMN content        TYPE text;
   `);
 }
@@ -330,6 +613,7 @@ function insertMediaLikeRecords(table, records, sourceMap) {
       sqlVal(r.trim),
       sqlVal(r.image || null),
       sqlVal(r.image_caption || null),
+      sqlVal(r.subtitles || null),
       sqlVal(r.content || null),
       sqlVal(r.sort),
     ].join(",")})`).join(",\n");
@@ -345,11 +629,13 @@ async function importMediaItems(token, records, sourceMap) {
     console.log("media_items already has records, skipping TV import.");
     return;
   }
-  // mp3 lives in its own table/channel — keep it out of media_items.
-  const nonMp3 = records.filter((r) => r.format !== "mp3");
+  // mp3 lives in its own table/channel; html entries are duplicates of news
+  // items (same History Commons articles) — keep both out of media_items.
+  const EXCLUDED = new Set(["mp3", "html"]);
+  const tvOnly = records.filter((r) => !EXCLUDED.has(r.format));
   widenMediaLikeColumns("media_items");
-  console.log(`Importing ${nonMp3.length} TV media items (excluding mp3) in batches of 500…`);
-  insertMediaLikeRecords("media_items", nonMp3, sourceMap);
+  console.log(`Importing ${tvOnly.length} TV media items (excluding mp3 + html) in batches of 500…`);
+  insertMediaLikeRecords("media_items", tvOnly, sourceMap);
 }
 
 async function importMp3Items(token, records, sourceMap) {
@@ -480,7 +766,13 @@ function parseTitleDate(title) {
 }
 
 function transformNewsEntry(entry, sort, sourceId) {
-  const { startDate, parsedEndDate, durationSeconds } = parseTitleDate(entry.title ?? "");
+  let { startDate, parsedEndDate, durationSeconds } = parseTitleDate(entry.title ?? "");
+
+  // Clock times parsed from titles are Eastern (EDT for the 9/11-era data); store
+  // UTC like every other stream. Date-only entries (midnight) carry no real
+  // time-of-day, so they stay naive — only convert when a time was parsed.
+  if (startDate && !startDate.endsWith(" 00:00:00")) startDate = etToUtc(startDate);
+  if (parsedEndDate && !parsedEndDate.endsWith(" 00:00:00")) parsedEndDate = etToUtc(parsedEndDate);
 
   const calcDuration =
     durationSeconds !== null && durationSeconds > 0 && durationSeconds < ONE_HOUR_SECONDS
@@ -569,6 +861,7 @@ async function importNewsItems(token, records, sourceId) {
       sqlVal(r.trim),
       sqlVal(r.image),
       sqlVal(r.image_caption),
+      sqlVal(r.subtitles),
       sqlVal(r.content),
       sqlVal(r.sort),
     ].join(",")})`).join(",\n");
@@ -654,23 +947,73 @@ async function importPagerItems(token, records) {
   console.log("\nDone.");
 }
 
+// migratePagerSources backfills pager_items.source from the legacy provider text
+// column: it creates one sources row (type="pager") per distinct provider and
+// points each pager_items.source at it. Idempotent — safe on fresh installs (run
+// after the import) and on already-deployed data. The provider column is left in
+// place as the import field + audit trail; the backend now reads the provider via
+// the source join (db.AvailablePagerProviders / pagerSelectFrom).
+async function migratePagerSources(token) {
+  // The relation/field must exist first; createCollections + createRelations handle
+  // that. Only attempt the data backfill if the table actually has the columns.
+  const fields = new Set((await api(token, "GET", "/fields/pager_items")).data.map((f) => f.field));
+  if (!fields.has("source") || !fields.has("provider")) {
+    console.log("pager_items missing source/provider column, skipping pager source backfill.");
+    return;
+  }
+  console.log("Backfilling pager_items.source from provider…");
+  psql(`
+    INSERT INTO sources (name, slug, type)
+    SELECT DISTINCT provider, provider, 'pager'
+    FROM pager_items
+    WHERE provider IS NOT NULL AND provider <> ''
+    ON CONFLICT (slug) DO NOTHING;
+
+    -- A provider may already exist as a source created before the type column
+    -- (type IS NULL); the INSERT above skips it (ON CONFLICT), so claim it as
+    -- pager here — otherwise the FK backfill below matches nothing.
+    UPDATE sources SET type = 'pager'
+    WHERE type IS NULL
+      AND slug IN (SELECT DISTINCT provider FROM pager_items WHERE provider IS NOT NULL AND provider <> '');
+
+    UPDATE pager_items pi
+    SET source = s.id
+    FROM sources s
+    WHERE s.slug = pi.provider AND s.type = 'pager' AND pi.source IS DISTINCT FROM s.id;
+  `);
+  console.log("Pager source backfill done.");
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
-const mediaRecords = JSON.parse(readFileSync(MEDIA_DATA_PATH, "utf8"));
-const newsRecords  = JSON.parse(readFileSync(NEWS_DATA_PATH,  "utf8"));
-console.log(`Loaded ${mediaRecords.length} TV records from ${MEDIA_DATA_PATH}`);
-console.log(`Loaded ${newsRecords.length} news records from ${NEWS_DATA_PATH}`);
-console.log("Loading pager records (large file, may take a moment)…");
-const pagerRecords = JSON.parse(readFileSync(PAGER_DATA_PATH, "utf8"));
-console.log(`Loaded ${pagerRecords.length} pager records from ${PAGER_DATA_PATH}`);
+// Load a seed dataset, tolerating a missing file. The import functions already
+// skip when their table is populated, and the schema/backfill work doesn't touch
+// these files — so against an already-seeded Directus the data is unused, and the
+// seed image needn't bake it in. A fresh full seed supplies the files via the
+// *_DATA_PATH env vars (or by mounting them).
+function loadJsonOrEmpty(path, label) {
+  if (!existsSync(path)) {
+    console.warn(`Seed data not found at ${path} — skipping ${label} import (schema + backfill still run).`);
+    return [];
+  }
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+const mediaRecords = loadJsonOrEmpty(MEDIA_DATA_PATH, "TV media");
+const newsRecords  = loadJsonOrEmpty(NEWS_DATA_PATH, "news");
+console.log(`Loaded ${mediaRecords.length} TV records, ${newsRecords.length} news records`);
+const pagerRecords = loadJsonOrEmpty(PAGER_DATA_PATH, "pager");
+console.log(`Loaded ${pagerRecords.length} pager records`);
 
 const token = await getToken();
 console.log("Authenticated.");
 
 await createCollections(token);
 await createRelations(token);
+await ensurePublicReadAccess(token);
+createStreamerIndexes();
 
 console.log("\n--- TV media items (entries_media.json) ---");
 const sourceMap = await importSources(token, mediaRecords);
@@ -685,5 +1028,6 @@ await importNewsItems(token, newsRecords, newsSourceId);
 
 console.log("\n--- Pager items (pager_entries.json) ---");
 await importPagerItems(token, pagerRecords);
+await migratePagerSources(token);
 
 console.log("\nBootstrap complete. Directus is at", DIRECTUS_URL);

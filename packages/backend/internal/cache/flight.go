@@ -1,0 +1,150 @@
+package cache
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log/slog"
+	"strconv"
+	"time"
+
+	"classicy/streamer/internal/db"
+	"classicy/streamer/internal/model"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	goredis "github.com/redis/go-redis/v9"
+	"github.com/vmihailenco/msgpack/v5"
+)
+
+// Flight positions are per-minute samples, so they are cached as one value per
+// minute (a msgpack-encoded []model.FlightPosition) instead of one entry per
+// row: at ~3.5M rows, per-entry Redis overhead (~200 B of dictEntry/SDS/score
+// bookkeeping per HASH+ZSET pair) would cost ~1 GB for ~100-byte payloads,
+// while ~13k minute buckets cost ~350 MB total. Minutes form a regular grid,
+// so a range lookup computes its keys arithmetically — no ZSET at all.
+//
+// There is no Upsert/Forget/NOTIFY path: flight data is immutable bulk data
+// loaded via COPY (which bypasses row triggers anyway). After a flight-recon
+// re-load, rewarm with `DEL flight:minutes` + a streamer restart.
+const (
+	KeyFlightMinutes     = "flight:minutes"      // HASH  unix-minute epoch → msgpack []FlightPosition
+	KeyFlightAnonMinutes = "flight-anon:minutes" // same shape, RDR-% anonymous radar traffic (#263)
+)
+
+// minuteKey returns the HASH field for the minute containing t.
+func minuteKey(t time.Time) string {
+	return strconv.FormatInt(t.Truncate(time.Minute).Unix(), 10)
+}
+
+// Bucket values use msgpack with the json struct tags — the same encoding the
+// wire uses (see session.encodeMsg) — so cache and wire never disagree on field
+// names, and buckets stay ~30% smaller than JSON.
+func encodeFlightBucket(items []model.FlightPosition) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := msgpack.NewEncoder(&buf)
+	enc.SetCustomStructTag("json")
+	if err := enc.Encode(items); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func decodeFlightBucket(data []byte) ([]model.FlightPosition, error) {
+	var items []model.FlightPosition
+	dec := msgpack.NewDecoder(bytes.NewReader(data))
+	dec.SetCustomStructTag("json")
+	if err := dec.Decode(&items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// PutFlightBucket stores the positions for one minute, replacing any existing
+// bucket. The warm path writes via its own pipeline; this single-key variant
+// exists for tests and one-off repairs.
+func PutFlightBucket(ctx context.Context, rdb *goredis.Client, key string, minute time.Time, items []model.FlightPosition) error {
+	data, err := encodeFlightBucket(items)
+	if err != nil {
+		return fmt.Errorf("encode flight bucket: %w", err)
+	}
+	return rdb.HSet(ctx, key, minuteKey(minute), data).Err()
+}
+
+// FlightPositionsInRange returns flight positions whose start_date is in the
+// half-open interval [lo, hi). Bucket keys are computed arithmetically (one per
+// minute touching the range) and fetched in a single HMGET; items in the
+// boundary buckets are filtered so the contract matches the other channels'
+// *ItemsInRange exactly. Missing minutes are normal (nobody airborne, or
+// outside the loaded data range). A bucket that fails to decode is logged and
+// skipped — one corrupt bucket loses ≤1 minute of data, not the window; the
+// logger parameter (absent from the sibling *ItemsInRange helpers) exists for
+// exactly that partial-failure report.
+func FlightPositionsInRange(ctx context.Context, rdb *goredis.Client, key string, lo, hi time.Time, logger *slog.Logger) ([]model.FlightPosition, error) {
+	if !hi.After(lo) {
+		return nil, nil
+	}
+	fields := make([]string, 0, int(hi.Sub(lo)/time.Minute)+2)
+	for m := lo.Truncate(time.Minute); m.Before(hi); m = m.Add(time.Minute) {
+		fields = append(fields, minuteKey(m))
+	}
+	vals, err := rdb.HMGet(ctx, key, fields...).Result()
+	if err != nil {
+		return nil, err
+	}
+	var out []model.FlightPosition
+	for i, v := range vals {
+		if v == nil {
+			continue
+		}
+		items, err := decodeFlightBucket([]byte(v.(string)))
+		if err != nil {
+			logger.Warn("flight bucket decode failed", "minute", fields[i], "error", err)
+			continue
+		}
+		for _, it := range items {
+			if !it.StartDate.Before(lo) && it.StartDate.Before(hi) {
+				out = append(out, it)
+			}
+		}
+	}
+	return out, nil
+}
+
+// WarmFlightCache loads all flight positions from PostgreSQL into per-minute
+// Redis buckets if not already present. One streaming scan at boot; there is no
+// incremental sync (see the keyFlightMinutes comment).
+func WarmFlightCache(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, key string, anon bool, logger *slog.Logger) error {
+	n, err := rdb.HLen(ctx, key).Result()
+	if err == nil && n > 0 {
+		logger.Info("flight cache already warm", "key", key, "minutes", n)
+		return nil
+	}
+
+	logger.Info("warming flight cache from database…", "key", key)
+	pipe := rdb.Pipeline()
+	buckets, positions := 0, 0
+	err = db.StreamFlightPositions(ctx, pool, anon, func(minute time.Time, items []model.FlightPosition) error {
+		data, err := encodeFlightBucket(items)
+		if err != nil {
+			return fmt.Errorf("encode flight bucket %s: %w", minuteKey(minute), err)
+		}
+		pipe.HSet(ctx, key, minuteKey(minute), data)
+		buckets++
+		positions += len(items)
+		pipe, err = flushIfFull(ctx, rdb, pipe, buckets)
+		return err
+	})
+	if err != nil {
+		// A partial warm must not satisfy the HLEN warm-skip guard on the next
+		// boot — flights has no listener to self-heal, so drop what was written
+		// and let the next restart retry from scratch.
+		rdb.Del(ctx, key)
+		return fmt.Errorf("load flight positions: %w", err)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		rdb.Del(ctx, key)
+		return fmt.Errorf("pipeline exec: %w", err)
+	}
+	logger.Info("flight cache warm", "key", key, "minutes", buckets, "positions", positions)
+	return nil
+}

@@ -1,0 +1,107 @@
+{
+ "generic": {
+  "file": "generic.stl",
+  "model": "Airbus A320",
+  "license": "CC-BY 4.0",
+  "author": "PHILdesign",
+  "source": "https://www.thingiverse.com/thing:2203732 (mirror: https://archive.org/details/thingiverse-2203732)"
+ },
+ "b737": {
+  "file": "b737.stl",
+  "model": "Boeing 737-800",
+  "license": "CC-BY 4.0",
+  "author": "Jonah Ashton (Jonahash)",
+  "source": "https://www.thingiverse.com/thing:2426394 (mirror: https://archive.org/details/thingiverse-2426394)"
+ },
+ "b757": {
+  "file": "b757.stl",
+  "model": "Boeing 757-200 (converted from FlightGear AC3D)",
+  "license": "GPL-2.0+ (FlightGear FGAddon; converted AC3D->STL locally via ac2stl.py; derivative stays GPL)",
+  "author": "Liam Gathercole, Skyop, Isais Prestes; reworked by Juuso Tapaninen (FlightGear 757-200 AUTHORS)",
+  "source": "https://sourceforge.net/p/flightgear/fgaddon/HEAD/tree/trunk/Aircraft/757-200/"
+ },
+ "b767": {
+  "file": "b767.stl",
+  "model": "Boeing 767-300ER",
+  "license": "CC-BY-SA 3.0",
+  "author": "RTicknor (Thingiverse)",
+  "source": "https://www.thingiverse.com/thing:947061"
+ },
+ "b777": {
+  "file": "b777.stl",
+  "model": "Boeing 777-300ER",
+  "license": "CC-BY 4.0",
+  "author": "Jevan Yu (jyu, Thingiverse)",
+  "source": "https://www.thingiverse.com/thing:1703733"
+ },
+ "b727": {
+  "file": "b727.stl",
+  "model": "Boeing 727 (converted from OBJ)",
+  "license": "GPL-2.0 (converted OBJ->STL locally via obj2stl.py; derivative stays GPL-2.0)",
+  "author": "Bogdan Deac (yuppy)",
+  "source": "https://www.thingiverse.com/thing:3452615"
+ },
+ "md80": {
+  "file": "md80.stl",
+  "model": "Boeing 717 (MD-95; stands in for DC-9/MD-80/MD-88/717 T-tail family)",
+  "license": "CC-BY 3.0 (zip LICENSE.txt; IA mirror metadata lists CC-BY 4.0)",
+  "author": "A. C. (Adcoff72)",
+  "source": "https://www.thingiverse.com/thing:3319522"
+ },
+ "dc10": {
+  "file": "dc10.stl",
+  "model": "McDonnell Douglas DC-10",
+  "license": "CC-BY 4.0",
+  "author": "Reean24 (Thingiverse), derived from 'DC10' by manilov.ap (Sketchfab, CC-BY)",
+  "source": "https://www.thingiverse.com/thing:5278513"
+ },
+ "a319": {
+  "file": "a319.stl",
+  "model": "Airbus A319",
+  "license": "CC-BY-SA 3.0",
+  "author": "P6619 (Thingiverse)",
+  "source": "https://www.thingiverse.com/thing:173006"
+ },
+ "a320": {
+  "file": "a320.stl",
+  "model": "Airbus A321",
+  "license": "CC-BY-SA 3.0",
+  "author": "P6619 (Thingiverse)",
+  "source": "https://www.thingiverse.com/thing:173007"
+ },
+ "crj": {
+  "file": "crj.stl",
+  "model": "Bombardier CRJ-200",
+  "license": "CC-BY 3.0 (zip LICENSE.txt; IA metadata CC-BY 4.0)",
+  "author": "Fredepo",
+  "source": "https://www.thingiverse.com/thing:1308356"
+ },
+ "erj": {
+  "file": "erj.stl",
+  "model": "Embraer ERJ-145XR 1/200",
+  "license": "CC-BY 3.0 (zip LICENSE.txt; IA metadata CC-BY 4.0)",
+  "author": "RTicknor",
+  "source": "https://www.thingiverse.com/thing:1727564"
+ },
+ "atr": {
+  "file": "atr.stl",
+  "model": "Fairchild-Dornier 328JET (high-wing T-tail regional; jet engines, not props)",
+  "license": "CC-BY 3.0 (zip LICENSE.txt; IA metadata CC-BY 4.0)",
+  "author": "A. C. (Adcoff72)",
+  "source": "https://www.thingiverse.com/thing:3319511"
+ },
+ "bizjet": {
+  "file": "bizjet.stl",
+  "model": "Gulfstream G550 1/200 (close to G-V/G-II silhouette)",
+  "license": "CC-BY 3.0 (zip LICENSE.txt; IA metadata CC-BY 4.0)",
+  "author": "Giddi",
+  "source": "https://www.thingiverse.com/thing:3315582"
+ },
+ "dc3": {
+  "file": "dc3.stl",
+  "model": "Douglas DC-3",
+  "license": "CC-BY 3.0",
+  "author": "pumpkinhead3d",
+  "source": "https://www.thingiverse.com/thing:2733162"
+ }
+}

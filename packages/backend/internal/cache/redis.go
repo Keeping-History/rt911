@@ -11,8 +11,8 @@ import (
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 
-	goredis "github.com/redis/go-redis/v9"
 	"github.com/jackc/pgx/v5/pgxpool"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 const (
@@ -38,11 +38,35 @@ func flushIfFull(ctx context.Context, rdb *goredis.Client, pipe goredis.Pipeline
 	return pipe, nil
 }
 
-// Connect parses a Redis URL and returns a client.
+// bulkWarmWriteTimeout is the per-write deadline for the pipelined cache warms.
+// A warm/resync flushes the full dataset in pipelineChunk-sized Execs; the
+// flight cache in particular batches whole minute-buckets (each up to ~100 KB
+// of msgpack), so a single Exec can be hundreds of MB — go-redis's default ~3s
+// write timeout can't cover that and the warm aborts with an i/o timeout,
+// dropping the partial. This only bounds how long an individual write may take,
+// so live serving is unaffected.
+const bulkWarmWriteTimeout = 30 * time.Second
+
+// ResolveRedisURLs returns the (read, write) connection URLs. writeURL is
+// optional: empty means single-instance mode where reads and writes share
+// one URL. A distinct writeURL is used when this pod reads a local replica
+// but must write (cache warms, master clock) through the primary.
+func ResolveRedisURLs(readURL, writeURL string) (string, string) {
+	if writeURL == "" {
+		return readURL, readURL
+	}
+	return readURL, writeURL
+}
+
+// Connect parses a Redis URL and returns a client. It raises the write timeout
+// to bulkWarmWriteTimeout for the bulk cache warms unless the URL sets one.
 func Connect(url string) *goredis.Client {
 	opt, err := goredis.ParseURL(url)
 	if err != nil {
 		opt = &goredis.Options{Addr: "localhost:6379"}
+	}
+	if opt.WriteTimeout == 0 {
+		opt.WriteTimeout = bulkWarmWriteTimeout
 	}
 	return goredis.NewClient(opt)
 }
@@ -124,6 +148,21 @@ func ItemsAt(ctx context.Context, rdb *goredis.Client, t time.Time) ([]model.Med
 	ids, err := rdb.ZRangeByScore(ctx, keyByStart, &goredis.ZRangeBy{
 		Min: strconv.FormatFloat(lo, 'f', 0, 64),
 		Max: strconv.FormatFloat(hi, 'f', 0, 64),
+	}).Result()
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	return fetchByIDs(ctx, rdb, ids)
+}
+
+// ItemsInRange returns items whose start_date Unix-second is in the half-open
+// interval [lo, hi). Half-open coverage lets the session refill contiguous
+// windows ([horizon, horizon+window)) with no gaps and no cross-window
+// duplicates — the windowing refill path uses this instead of per-second ItemsAt.
+func ItemsInRange(ctx context.Context, rdb *goredis.Client, lo, hi time.Time) ([]model.MediaItem, error) {
+	ids, err := rdb.ZRangeByScore(ctx, keyByStart, &goredis.ZRangeBy{
+		Min: strconv.FormatInt(lo.Unix(), 10),
+		Max: "(" + strconv.FormatInt(hi.Unix(), 10), // exclusive upper bound
 	}).Result()
 	if err != nil || len(ids) == 0 {
 		return nil, err

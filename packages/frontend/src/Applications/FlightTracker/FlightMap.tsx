@@ -1,0 +1,1865 @@
+import * as maplibregl from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import { Protocol } from "pmtiles";
+import { type FC, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { MapCompass } from "./MapCompass";
+import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
+import type { FlightFeatureCollection } from "./flightGeoJSON";
+import { basemapPalette, pixelPlanes, TERRAIN_SOURCE } from "../../lib/basemap/basemapStyles";
+import { invertHex } from "./colorInvert";
+import {
+	type BasemapStyleId,
+	type BasemapUrls,
+	SECONDARY_TRACK_COLOR,
+	TRACK_LINE_COLOR,
+	TRACK_SHADOW_COLOR,
+	applyMapColors,
+	buildBasemapStyle,
+	type FlightMapColors,
+	highlightTrailColor,
+	trailColor,
+	trailGradient,
+} from "./flightMapStyle";
+import { type PhasePalette, phaseLineColorExpression } from "./flightPhases";
+import { sourceDashExpression, sourceOpacityExpression } from "./flightProvenance";
+import planeSvg from "./plane.svg?raw";
+import pinSvg from "./pin.svg?raw";
+import { type MapPoi, type PoiLayerConfig, layerIndexOf, splitPoisForRender } from "./mapPois";
+import {
+	PLANE_ICON_ID,
+	PLANE_ICON_PX,
+	PLANE_NOTABLE_ICON_ID,
+	PLANE_NOTABLE_ICON_PX,
+	PLANE_ANON_ICON_ID,
+	PLANE_OBSERVER_ICON_ID,
+	buildPlaneImage,
+	familyIconId,
+	familyIconPx,
+	familyNotableIconId,
+	familyNotableIconPx,
+	familyObserverIconId,
+	iconDisplayPx,
+} from "./flightIcons";
+import {
+	type FlightMotion,
+	type LandingClock,
+	type MotionBuffer,
+	TRAIL_MULTIPLIER_MAX,
+	TRAIL_POINTS,
+	extrapolate,
+	motionNow,
+	motionPointsToGeoJSON,
+	motionTrailsToGeoJSON,
+	seedMotionFromHistory,
+	updateMotion,
+} from "./flightMotion";
+import {
+	RADAR_FALLBACK_COLOR,
+	resolveCssColor,
+	sweepLineGeoJSON,
+	sweepTrailGeoJSON,
+} from "./flightRadar";
+import {
+	ALT_EXAGGERATION,
+	type AltitudeSample,
+	altitudeFtAt,
+	exaggeratedHeightM,
+	kmPerPixel,
+	plane3DTargetPx,
+} from "./flightAltitude";
+import { buildTrackTube, buildTrailTubes } from "./trackTube";
+import { TrackTube3DLayer } from "./trackTubeLayer";
+import { buildPlaneInstanceBatches, buildSphereMesh } from "./plane3dMesh";
+import { type AircraftFamily, loadAircraftMesh } from "./aircraftModels";
+import { loadAircraftIconSvg } from "./aircraftIcons";
+import { Planes3DLayer } from "./planes3DLayer";
+import { Buildings3DLayer } from "./buildings3DLayer";
+import { buildFootprintMesh, placeHeroMesh } from "./buildingMesh";
+import { useBuildings } from "./useBuildings";
+import { buildingColorRgb, buildingsVisibleAtZoom, heroColorRgb } from "./buildings";
+import { useHeroBuildings } from "./useHeroBuildings";
+import { loadHeroStl } from "./buildingModels";
+import { excludeFootprints, manifestToPlacement } from "./heroBuildings";
+import {
+	type DragPixels,
+	type SelectMode,
+	dragBounds,
+	insideSelection,
+	overlayStyle,
+} from "./selectTool";
+import styles from "./FlightTracker.module.scss";
+import {
+	type ReplayBuffer,
+	buildReplayTrailInstances,
+	replayPointsAt,
+} from "./flightReplay";
+import { type LoopClock, playheadAt } from "./loopClock";
+import {
+	type CameraMode,
+	cameraPose,
+	MAX_FOLLOW_PITCH,
+} from "./flightCamera";
+
+// maplibre-gl 6.x is ESM-only and locates its worker script relative to its
+// own import.meta.url at runtime. Vite's dev-server dep optimizer pre-bundles
+// maplibre-gl.mjs into node_modules/.vite/deps/, which drags that self-located
+// URL along with it — the worker file never actually lives there, so the
+// default resolution 404s and the map falls back to (slower, unsupported)
+// main-thread tile parsing. Feeding it Vite's own resolved worker URL sidesteps
+// the mismatch in both dev and prod. See maplibre-gl's Vite integration guide.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
+
+// Register the pmtiles:// protocol once per page (adding it twice throws).
+let protocolRegistered = false;
+function ensurePmtilesProtocol() {
+	if (protocolRegistered) return;
+	maplibregl.addProtocol("pmtiles", new Protocol().tile);
+	protocolRegistered = true;
+}
+
+// Build both plane images and (re)install them. updateImage on a color change
+// keeps the symbol layers untouched. Never throws into React — on failure the
+// map just has no plane icons (prod browsers always have canvas; jsdom tests
+// mock this module).
+async function installPlaneIcons(
+	map: maplibregl.Map,
+	pinColor: string,
+	notablePinColor: string,
+	observerPinColor: string,
+	anonPinColor: string,
+	pixelate: boolean,
+) {
+	try {
+		const [regular, notable, observer, anon] = await Promise.all([
+			buildPlaneImage(planeSvg, pinColor, iconDisplayPx(PLANE_ICON_PX, pixelate), pixelate),
+			buildPlaneImage(planeSvg, notablePinColor, PLANE_NOTABLE_ICON_PX, pixelate),
+			buildPlaneImage(planeSvg, observerPinColor, PLANE_NOTABLE_ICON_PX, pixelate),
+			buildPlaneImage(planeSvg, anonPinColor, iconDisplayPx(PLANE_ICON_PX, pixelate), pixelate),
+		]);
+		if (map.hasImage(PLANE_ICON_ID)) map.updateImage(PLANE_ICON_ID, regular);
+		else map.addImage(PLANE_ICON_ID, regular, { pixelRatio: 2 });
+		if (map.hasImage(PLANE_NOTABLE_ICON_ID)) map.updateImage(PLANE_NOTABLE_ICON_ID, notable);
+		else map.addImage(PLANE_NOTABLE_ICON_ID, notable, { pixelRatio: 2 });
+		if (map.hasImage(PLANE_OBSERVER_ICON_ID)) map.updateImage(PLANE_OBSERVER_ICON_ID, observer);
+		else map.addImage(PLANE_OBSERVER_ICON_ID, observer, { pixelRatio: 2 });
+		if (map.hasImage(PLANE_ANON_ICON_ID)) map.updateImage(PLANE_ANON_ICON_ID, anon);
+		else map.addImage(PLANE_ANON_ICON_ID, anon, { pixelRatio: 2 });
+	} catch (err) {
+		console.warn("plane icons unavailable:", err);
+	}
+}
+
+// Per-family silhouette variant of installPlaneIcons: same colorize +
+// rasterize pipeline, at the family's relative display size.
+async function installFamilyIcon(
+	map: maplibregl.Map,
+	family: string,
+	svg: string,
+	pinColor: string,
+	notablePinColor: string,
+	observerPinColor: string,
+	pixelate: boolean,
+) {
+	try {
+		const [regular, notable, observer] = await Promise.all([
+			buildPlaneImage(svg, pinColor, iconDisplayPx(familyIconPx(family), pixelate), pixelate),
+			buildPlaneImage(svg, notablePinColor, familyNotableIconPx(family), pixelate),
+			buildPlaneImage(svg, observerPinColor, familyNotableIconPx(family), pixelate),
+		]);
+		const id = familyIconId(family);
+		const notableId = familyNotableIconId(family);
+		const observerId = familyObserverIconId(family);
+		if (map.hasImage(id)) map.updateImage(id, regular);
+		else map.addImage(id, regular, { pixelRatio: 2 });
+		if (map.hasImage(notableId)) map.updateImage(notableId, notable);
+		else map.addImage(notableId, notable, { pixelRatio: 2 });
+		if (map.hasImage(observerId)) map.updateImage(observerId, observer);
+		else map.addImage(observerId, observer, { pixelRatio: 2 });
+	} catch (err) {
+		console.warn(`family icon ${family} unavailable:`, err);
+	}
+}
+
+// Data-driven icon choice: the family's silhouette once its image has
+// registered, the generic icon until then (["image", id] only resolves for
+// registered images, so coalesce falls through cleanly). Prefixes must
+// match flightIcons.familyIconId / familyNotableIconId.
+const FAMILY_ICON_IMAGE = [
+	"coalesce",
+	["image", ["concat", "plane-", ["get", "family"]]],
+	["image", PLANE_ICON_ID],
+] as unknown as maplibregl.ExpressionSpecification;
+const FAMILY_NOTABLE_ICON_IMAGE = [
+	"coalesce",
+	["image", ["concat", "plane-notable-", ["get", "family"]]],
+	["image", PLANE_NOTABLE_ICON_ID],
+] as unknown as maplibregl.ExpressionSpecification;
+const FAMILY_OBSERVER_ICON_IMAGE = [
+	"coalesce",
+	["image", ["concat", "plane-observer-", ["get", "family"]]],
+	["image", PLANE_OBSERVER_ICON_ID],
+] as unknown as maplibregl.ExpressionSpecification;
+// The highlight layer serves both categories; the flag picks the icon set.
+const HIGHLIGHT_ICON_IMAGE = [
+	"case",
+	["==", ["get", "observer"], true],
+	FAMILY_OBSERVER_ICON_IMAGE,
+	FAMILY_NOTABLE_ICON_IMAGE,
+] as unknown as maplibregl.ExpressionSpecification;
+
+// Kick off (once per family) the silhouette fetch for every family in view;
+// on arrival, rasterize + register both color variants. "generic" never
+// fetches — the fallback icon IS the generic art. Callers pass live refs so
+// late-resolving fetches see the current map/colors (or bail if unmounted).
+function requestFamilyIcons(
+	fc: FlightFeatureCollection,
+	requested: Set<string>,
+	loaded: Map<string, string>,
+	mapRef: { current: maplibregl.Map | null },
+	colorsRef: { current: FlightMapColors },
+) {
+	for (const f of fc.features) {
+		const family = f.properties.family;
+		if (!family || family === "generic" || requested.has(family)) continue;
+		requested.add(family);
+		void loadAircraftIconSvg(family as AircraftFamily).then((svg) => {
+			const map = mapRef.current;
+			if (!svg || !map) return;
+			loaded.set(family, svg);
+			void installFamilyIcon(
+				map, family, svg,
+				colorsRef.current.pinColor, colorsRef.current.notablePinColor,
+				colorsRef.current.observerPinColor, pixelPlanes(colorsRef.current.mapStyle),
+			);
+		});
+	}
+}
+
+export const POI_PIN_ICON_ID = "poi-pin";
+export const POI_PIN_PX = 18; // display size; rasterized at 2×
+export const POI_LAYER_IDS = [
+	"poi-clusters", "poi-cluster-counts", "poi-cluster-pins", "poi-plain-pins", "map-poi-selected",
+];
+const POI_SELECTED_SCALE = 1.25;
+
+/** POIs → point features carrying id/name/iata/layerIndex for the pin label,
+ * hit-test, and cluster-color match. layerIndex defaults to 0 when the
+ * layer's config isn't (yet) known — e.g. the single-POI selected overlay. */
+export function poisToGeoJSON(
+	pois: MapPoi[],
+	layerIndex?: Map<string, number>,
+): GeoJSON.FeatureCollection {
+	return {
+		type: "FeatureCollection",
+		features: pois.map((p) => ({
+			type: "Feature",
+			geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+			properties: {
+				id: p.id, name: p.name, iata: p.iata ?? "", layer: p.layer,
+				layerIndex: layerIndex?.get(p.layer) ?? 0,
+			},
+		})),
+	};
+}
+
+// circle-color for the cluster dots: match the aggregated layerIndex → its
+// palette color; fallback covers the (empty-config) idle case.
+export function poiClusterColorExpression(
+	configs: PoiLayerConfig[],
+	fallback: string,
+): maplibregl.ExpressionSpecification | string {
+	if (configs.length === 0) return fallback;
+	const pairs = configs.flatMap((c) => [c.index, c.color]);
+	return ["match", ["get", "layerIndex"], ...pairs, fallback] as unknown as maplibregl.ExpressionSpecification;
+}
+
+// One writer for both sources + the cluster color, used by load + the effect.
+function applyPoiData(
+	map: maplibregl.Map,
+	pois: MapPoi[],
+	configs: PoiLayerConfig[],
+	fallbackColor: string,
+) {
+	const idx = layerIndexOf(configs);
+	const { clustered, plain } = splitPoisForRender(pois, configs);
+	(map.getSource("map-pois-clustered") as maplibregl.GeoJSONSource | undefined)
+		?.setData(poisToGeoJSON(clustered, idx));
+	(map.getSource("map-pois-plain") as maplibregl.GeoJSONSource | undefined)
+		?.setData(poisToGeoJSON(plain, idx));
+	if (map.getLayer("poi-clusters"))
+		map.setPaintProperty("poi-clusters", "circle-color", poiClusterColorExpression(configs, fallbackColor));
+}
+
+async function installPoiIcon(map: maplibregl.Map, color: string, pixelate: boolean) {
+	try {
+		const img = await buildPlaneImage(pinSvg, color, POI_PIN_PX, pixelate);
+		if (map.hasImage(POI_PIN_ICON_ID)) map.updateImage(POI_PIN_ICON_ID, img);
+		else map.addImage(POI_PIN_ICON_ID, img, { pixelRatio: 2 });
+	} catch (err) {
+		console.warn("poi pin icon unavailable:", err);
+	}
+}
+
+/**
+ * Transient camera commands for MapControls (zoom/pinpoints/compass). The
+ * persisted toggles (globe/cluster/3D) stay declarative props; only one-shot
+ * camera moves go through this imperative seam — no consumer ever touches the
+ * raw MapLibre instance.
+ */
+export interface FlightMapHandle {
+	zoomIn(): void;
+	zoomOut(): void;
+	flyTo(center: [number, number], zoom: number): void;
+	resetNorth(): void;
+}
+
+interface FlightMapProps {
+	ref?: Ref<FlightMapHandle>;
+	positions: FlightPosition[];
+	// Short history lookback from the provider (flightsSeed): earlier samples
+	// that give freshly-seeded single-sample flights a heading immediately.
+	seedPositions?: FlightPosition[];
+	basemapUrls: BasemapUrls;
+	trackGeoJSON: GeoJSON.FeatureCollection | null;
+	// Raw altitude profile of the selected flight: the smooth 3D track tube
+	// splines it in all three axes (see trackTube.ts).
+	trackProfile?: AltitudeSample[] | null;
+	// Which phase vocabulary the profile's phases belong to. The 2D segments
+	// arrive pre-colored in trackGeoJSON, but the 3D tube colors its own
+	// vertices, so it needs the selected flight's palette (flightPhases.ts).
+	trackPalette?: PhasePalette;
+	// Every OTHER multi-selected flight's altitude profile (issue #326): each
+	// gets its own plain (unphased) 3D tube alongside the active one's above,
+	// mirroring trackGeoJSON's secondary 2D features.
+	secondaryTrackProfiles?: { flight: string; profile: AltitudeSample[] }[];
+	nowMs: number;
+	playing: boolean;
+	mapStyle: BasemapStyleId;
+	darkMap: boolean;
+	// CSS hex strings — FlightTracker converts from the persisted packed ints.
+	pinColor: string;
+	notablePinColor: string;
+	observerPinColor: string;
+	anonPinColor: string;
+	// Hero landmark model color (packed 0xRRGGBB), light/dark map variants;
+	// optional so existing call sites that predate hero landmarks keep working.
+	buildingHeroColorLight?: number;
+	buildingHeroColorDark?: number;
+	radarSweep: boolean;
+	// Comet-tail length as a multiple of TRAIL_POINTS; 0 turns tails off.
+	trailMultiplier: number;
+	// Loop mode (optional with idle defaults so non-loop call sites stay simple):
+	// while enabled, replay-trail pins replay replayBuffer at the loopClock's playhead,
+	// wrapped into the sliding [now − loopWindowMs, now) window.
+	loopEnabled?: boolean;
+	loopWindowMs?: number;
+	loopClock?: LoopClock;
+	replayBuffer?: ReplayBuffer;
+	// Filter Flights (issue #188): replay trails of flights outside this set are
+	// skipped at draw time; null/omitted shows all. Live pins are filtered
+	// upstream by FlightTracker via the positions array itself.
+	visibleFlights?: Set<string> | null;
+	// flight → wheels-down/crash UTC ms (flightLanding.landingClockOf): every
+	// dead-reckoning builder clamps to it, freezing landed flights at their
+	// track end instead of gliding past the runway.
+	landingClock?: LandingClock;
+	// MapControls toggles (issues #218/#222/#223); persisted in FlightMapSettings.
+	globe?: boolean;
+	threeD?: boolean;
+	// Topography (hillshade + 3D ground mesh); persisted in FlightMapSettings.
+	terrain?: boolean;
+	cluster?: boolean;
+	// Area-select tool (issue #225): while armed, drags trace a rectangle or
+	// circle instead of panning; the release reports the flights inside.
+	selectMode?: SelectMode;
+	onAreaSelect?: (flights: string[]) => void;
+	// Fires when the camera crosses the pitched threshold in either direction —
+	// FlightTracker keeps the 3D toggle in sync with manual z-axis drags.
+	onPitchedChange?: (pitched: boolean) => void;
+	// Airframe family for a flight (aircraftModels.familyForAircraftType via
+	// the route index) — picks which 3D model its instances render with.
+	aircraftFamilyOf?: (flight: string, startDate: string) => string;
+	// Camera follow (tracked flights): while `followFlight` is a callsign the
+	// camera locks onto that flight every frame in `cameraMode`'s framing, and
+	// user pan/zoom/rotate are disabled. null/omitted = free camera.
+	followFlight?: string | null;
+	cameraMode?: CameraMode;
+	onSelectFlight: (flight: string) => void;
+	onToggleFlight?: (flight: string) => void;
+	onClearSelection: () => void;
+	// POI markers (airports, etc.) — enabled set computed by FlightTracker.
+	pois?: MapPoi[];
+	// Per-layer palette color + clustering flag (mapPois.poiLayerConfigs), one
+	// entry per ENABLED layer — drives which shared source a POI feeds and the
+	// cluster dot's circle-color match.
+	poiLayers?: PoiLayerConfig[];
+	selectedPoiId?: number | null;
+	onSelectPoi?: (poi: MapPoi) => void;
+}
+
+// Enable/disable every user camera handler in one place (the follow lock owns
+// the camera while active). Defensive against handlers a given build/mock may
+// not expose — only dragPan is guaranteed in the test harness.
+//
+// boxZoom is deliberately absent: MapLibre's default Shift+drag box-zoom
+// competes directly with shift-click multi-select (issue #310) — a click is
+// just a near-zero-distance drag, so boxZoom's handler can swallow the
+// gesture before the app's own click handler ever sees a clean shiftKey
+// click. It's disabled permanently at construction (`boxZoom: false`) and
+// must stay out of this list, or re-enabling camera interactivity here
+// (follow-unlock) would silently turn it back on.
+type MapHandler = { enable?: () => void; disable?: () => void };
+function setCameraInteractive(map: maplibregl.Map, on: boolean) {
+	const m = map as unknown as Record<string, MapHandler | undefined>;
+	for (const key of [
+		"dragPan", "dragRotate", "scrollZoom",
+		"doubleClickZoom", "keyboard", "touchZoomRotate", "touchPitch",
+	]) {
+		const h = m[key];
+		if (on) h?.enable?.();
+		else h?.disable?.();
+	}
+}
+
+// Restore the pitch band to the 2D/3D toggle's constraints (mirrors the threeD
+// effect's ordering — maplibre rejects min > max).
+function restorePitchConstraints(map: maplibregl.Map, threeD: boolean) {
+	if (threeD) {
+		map.setMaxPitch(THREE_D_MAX_PITCH);
+		map.setMinPitch(THREE_D_MIN_PITCH);
+	} else {
+		map.setMinPitch(0);
+		map.setMaxPitch(0);
+	}
+}
+
+/** Non-highlighted features only — notables and observers never cluster (issue #222). */
+export function nonNotableFeatures(fc: FlightFeatureCollection): FlightFeatureCollection {
+	return {
+		type: "FeatureCollection",
+		features: fc.features.filter(
+			(f) => f.properties.notable !== true && f.properties.observer !== true
+				&& f.properties.anon !== true,
+		),
+	};
+}
+
+// Representative lng/lat for a hit-test feature: the point itself, or a 3D
+// plane slab's first ring vertex (close enough at marker scale for
+// nearest-hit ranking and circle-radius refinement).
+function featureAnchor(f: { geometry: GeoJSON.Geometry }): [number, number] | null {
+	if (f.geometry.type === "Point") return f.geometry.coordinates as [number, number];
+	if (f.geometry.type === "Polygon") return f.geometry.coordinates[0][0] as [number, number];
+	return null;
+}
+
+// Screen position of a location AT ALTITUDE, or null when it's hidden behind
+// the planet. queryRenderedFeatures hit-tests ground footprints, not the
+// visually elevated pixels — so 3D hit tests project the elevated point
+// themselves, via per-projection INTERNAL transform methods (absent from the
+// public types, present in every 5.x and 6.x build; verified live):
+//  - mercator: transform.coordinatePoint(mercCoord, elevationMeters)
+//  - globe: transform.projectTileCoordinates(x, y, tileID, getElevation) —
+//    the CPU twin of the shaders' projectTileFor3D. A synthetic zoom-0 tile
+//    makes in-tile coords = mercator × EXTENT, and the result is NDC, so it
+//    converts through the transform's canvas size. Occluded points (far side
+//    of the sphere) return null rather than a bogus mirror position.
+// If both are missing (or throw), fall back to the ground projection — no
+// worse than the pre-fix behavior.
+const TILE_EXTENT = 8192;
+const WORLD_TILE = { wrap: 0, canonical: { x: 0, y: 0, z: 0 } };
+
+// The transform's own internal shape is stable across 5.x/6.x; only where it
+// HANGS OFF the map moved.
+type AltitudeTransform = {
+	coordinatePoint?: (
+		coord: maplibregl.MercatorCoordinate,
+		elevation: number,
+	) => { x: number; y: number };
+	// Exaggerated terrain height at the camera center; 0 without terrain.
+	elevation?: number;
+	projectTileCoordinates?: (
+		x: number,
+		y: number,
+		tileID: typeof WORLD_TILE,
+		getElevation: () => number,
+	) => { point: { x: number; y: number }; isOccluded?: boolean };
+	width?: number;
+	height?: number;
+};
+
+/**
+ * Locate the active transform on a Map, across MapLibre's two layouts.
+ *
+ * MapLibre 6 stopped having `Map` extend `Camera` and composes it instead, so
+ * the transform moved from `map.transform` (5.x) to `map._camera.transform`.
+ * Reading only the 5.x spot silently degraded every pitched hit test to the
+ * ground projection, which put the hit target thousands of feet below the
+ * aircraft actually drawn — 3D clicks stopped selecting anything at all while
+ * flat 2D (queryRenderedFeatures on real style layers) kept working.
+ *
+ * Neither spot is public API, so this can break again on a major bump. It
+ * returns undefined rather than guessing, and the one caller reports that
+ * loudly instead of quietly falling back.
+ */
+function altitudeTransform(map: maplibregl.Map): AltitudeTransform | undefined {
+	const m = map as unknown as {
+		_camera?: { transform?: AltitudeTransform };
+		transform?: AltitudeTransform;
+	};
+	return m._camera?.transform ?? m.transform;
+}
+
+// One warning per map, not per call: a missing transform means every 3D click
+// silently mis-targets — invisible in logs and easy to mistake for bad data —
+// but this runs once per plane per frame, so unlatched it would flood.
+const warnedMissingTransform = new WeakSet<maplibregl.Map>();
+
+function projectAtAltitude(
+	map: maplibregl.Map,
+	lon: number,
+	lat: number,
+	altM: number,
+): { x: number; y: number } | null {
+	const transform = altitudeTransform(map);
+	if (!transform && !warnedMissingTransform.has(map)) {
+		warnedMissingTransform.add(map);
+		console.warn(
+			"[FlightMap] No MapLibre transform found at map._camera.transform or " +
+				"map.transform — 3D hit-testing is falling back to ground positions " +
+				"and clicking aircraft in 3D will not select them. MapLibre likely " +
+				"moved the transform again; update altitudeTransform().",
+		);
+	}
+	try {
+		if (transform?.coordinatePoint) {
+			// coordinatePoint's pixel matrix is built BEFORE MapLibre's terrain
+			// "elevate camera over terrain" translate, but custom layers render
+			// through the view-proj matrix built AFTER it — so with terrain on,
+			// the shader draws aircraft transform.elevation meters lower than
+			// this predicts. Subtracting it projects exactly where the plane is
+			// drawn; without terrain, elevation is 0 and this is a no-op.
+			return transform.coordinatePoint(
+				maplibregl.MercatorCoordinate.fromLngLat([lon, lat]),
+				altM - (transform.elevation ?? 0),
+			);
+		}
+		if (transform?.projectTileCoordinates && transform.width && transform.height) {
+			const merc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat]);
+			const p = transform.projectTileCoordinates(
+				merc.x * TILE_EXTENT,
+				merc.y * TILE_EXTENT,
+				WORLD_TILE,
+				() => altM,
+			);
+			if (p.isOccluded) return null;
+			return {
+				x: ((p.point.x + 1) / 2) * transform.width,
+				y: ((1 - p.point.y) / 2) * transform.height,
+			};
+		}
+	} catch {
+		// fall through to ground projection
+	}
+	return map.project([lon, lat]);
+}
+
+/**
+ * Single resolver for the pitch × cluster × projection layer matrix (one
+ * writer — split writers previously stomped each other's visibility).
+ * Pitched: aircraft render in true 3D (flat icons AND flat cluster blobs
+ * hide); flat: cluster decides between icons and blobs. All pitched 3D
+ * geometry comes from the custom WebGL layers (both projections — see
+ * syncPlaneVisibility), so this matrix only covers the flat style layers.
+ */
+export function planeLayerVisibility(
+	cluster: boolean,
+	pitched: boolean,
+): Record<string, boolean> {
+	return {
+		"flights-dots": !cluster && !pitched,
+		"flights-notable": !pitched,
+		"flights-anon-dots": !pitched,
+		"flight-trails": !cluster && !pitched,
+		"cluster-circles": cluster && !pitched,
+		"cluster-counts": cluster && !pitched,
+		"cluster-planes": cluster && !pitched,
+		"replay-trail-dots": !pitched,
+		"replay-trail-notable": !pitched,
+	};
+}
+
+const IDLE_LOOP_CLOCK: LoopClock = {
+	anchorVirtual: 0,
+	anchorWall: 0,
+	speed: 10,
+	scrubbing: false,
+	paused: false,
+};
+const EMPTY_REPLAY_BUFFER: ReplayBuffer = new Map();
+
+const NA_CENTER: [number, number] = [-98, 39];
+const NA_ZOOM = 3;
+// Resting camera pitch the 3D toggle eases/jumps to (issue #223).
+export const THREE_D_PITCH = 60;
+// Pitch ceiling while 3D is ON: right-drag can tilt past the resting angle all
+// the way up to MapLibre's hard maximum (85°, same as the follow cockpit), so
+// the z axis keeps rotating instead of locking at THREE_D_PITCH. The toggle
+// still only *eases to* THREE_D_PITCH; this is purely the interactive bound.
+export const THREE_D_MAX_PITCH = 85;
+// Pitch floor while 3D is ON: right-drag can tilt freely between this and
+// THREE_D_MAX_PITCH, but never flatten back into 2D — leaving 3D is the
+// toggle's job. Comfortably above the 5° pitched threshold so the 3D layers
+// can't flicker off mid-drag.
+export const THREE_D_MIN_PITCH = 10;
+const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
+const EMPTY_SECONDARY_TRACKS: { flight: string; profile: AltitudeSample[] }[] = [];
+const FRAME_MS = 66; // ~15 fps animation gate
+// Click hit-test slop (px). Dots are a small (3px) and gliding target, so an
+// exact-pixel hit-test misses easily; a click within this radius selects the
+// nearest dot instead of clearing the selection.
+const HIT_TOLERANCE = 6;
+// Replay-trail pins replay history under the live planes; the reduced opacity is the
+// "this is not live" cue (replay-trails-under-live rendering).
+const REPLAY_TRAIL_OPACITY = 0.4;
+const REPLAY_TRAIL_STROKE_COLOR = "#ffffff";
+
+export const FlightMap: FC<FlightMapProps> = ({
+	ref: handleRef,
+	positions, seedPositions, basemapUrls, trackGeoJSON,
+	trackProfile = null, trackPalette, secondaryTrackProfiles = EMPTY_SECONDARY_TRACKS, nowMs, playing,
+	mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, radarSweep, trailMultiplier,
+	// Warm-stone defaults mirror flightMapSettings.ts's DEFAULT_FLIGHT_MAP_SETTINGS
+	// so call sites that predate hero landmarks (or omit the setting) still get a
+	// sensible hero color instead of an unset value.
+	buildingHeroColorLight = 0xb0a48c, buildingHeroColorDark = 0xc7b8a0,
+	loopEnabled = false, loopWindowMs = 1_800_000,
+	loopClock = IDLE_LOOP_CLOCK, replayBuffer = EMPTY_REPLAY_BUFFER,
+	visibleFlights = null, landingClock,
+	globe = false, threeD = false, terrain = false, cluster = false,
+	selectMode = "off", onAreaSelect, onPitchedChange, aircraftFamilyOf,
+	followFlight = null, cameraMode = "track",
+	onSelectFlight, onClearSelection, onToggleFlight,
+	pois = [], poiLayers = [], selectedPoiId = null, onSelectPoi,
+}) => {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const mapRef = useRef<maplibregl.Map | null>(null);
+	const loadedRef = useRef(false);
+	// Latest props read inside map event handlers registered once at create time.
+	const positionsRef = useRef(positions);
+	positionsRef.current = positions;
+	const seedRef = useRef(seedPositions);
+	seedRef.current = seedPositions;
+	const poisRef = useRef(pois);
+	poisRef.current = pois;
+	const poiLayersRef = useRef(poiLayers);
+	poiLayersRef.current = poiLayers;
+	// 2001 skyline footprints (issue #229 Plan 1): loaded once per page, fed
+	// into the custom Buildings3DLayer both at load and as they arrive.
+	const buildings = useBuildings();
+	const buildingsRef = useRef(buildings);
+	buildingsRef.current = buildings;
+	// Hero landmark manifest (WTC complex, Pentagon): loaded once per page,
+	// placed via their own STL fetch in the rAF loop below.
+	const heroes = useHeroBuildings();
+	const heroesRef = useRef(heroes);
+	heroesRef.current = heroes;
+	// Exclude-bboxes of heroes whose STL has actually loaded — the fallback
+	// invariant: a footprint is only ever hidden once its replacement is real.
+	const activeHeroExcludesRef = useRef<[number, number, number, number][]>([]);
+	// Heroes whose STL fetch has been kicked off (once per session).
+	const requestedHeroesRef = useRef<Set<string>>(new Set());
+	const cbRef = useRef({
+		onSelectFlight, onClearSelection, onToggleFlight, onAreaSelect, onPitchedChange, aircraftFamilyOf, onSelectPoi,
+	});
+	cbRef.current = {
+		onSelectFlight, onClearSelection, onToggleFlight, onAreaSelect, onPitchedChange, aircraftFamilyOf, onSelectPoi,
+	};
+	// Families whose STL fetch has been kicked off (once per session).
+	const requestedMeshesRef = useRef(new Set<string>());
+	// 2D silhouettes: families whose SVG fetch has been kicked off, and the
+	// resolved SVG text per family (kept so color changes can re-rasterize).
+	const requestedIconFamiliesRef = useRef<Set<string>>(new Set());
+	const loadedIconSvgsRef = useRef<Map<string, string>>(new Map());
+	const selectModeRef = useRef<SelectMode>(selectMode);
+	selectModeRef.current = selectMode;
+	// In-flight drag state (mutated at event rate); the overlay div re-renders
+	// through React state so the visual tracks the pointer.
+	const dragRef = useRef<DragPixels | null>(null);
+	const [overlay, setOverlay] = useState<{ mode: "rect" | "circle"; d: DragPixels } | null>(null);
+	const colorsRef = useRef<
+		FlightMapColors & { buildingHeroColorLight: number; buildingHeroColorDark: number }
+	>({
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, terrain,
+		buildingHeroColorLight, buildingHeroColorDark,
+	});
+	colorsRef.current = {
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, terrain,
+		buildingHeroColorLight, buildingHeroColorDark,
+	};
+	const radarSweepRef = useRef(radarSweep);
+	radarSweepRef.current = radarSweep;
+	const trailMultiplierRef = useRef(trailMultiplier);
+	trailMultiplierRef.current = trailMultiplier;
+	const globeRef = useRef(globe);
+	globeRef.current = globe;
+	const threeDRef = useRef(threeD);
+	threeDRef.current = threeD;
+	const clusterRef = useRef(cluster);
+	clusterRef.current = cluster;
+	const loopRef = useRef({
+		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
+		visible: visibleFlights,
+	});
+	loopRef.current = {
+		enabled: loopEnabled, windowMs: loopWindowMs, clock: loopClock, buffer: replayBuffer,
+		visible: visibleFlights,
+	};
+	// Camera follow: the rAF loop reads the current target/mode; followActiveRef
+	// is the lock flag other effects check so they don't fight the driven camera.
+	const followRef = useRef({ flight: followFlight, mode: cameraMode });
+	followRef.current = { flight: followFlight, mode: cameraMode };
+	const followActiveRef = useRef(false);
+
+	useImperativeHandle(handleRef, () => ({
+		zoomIn: () => {
+			const map = mapRef.current;
+			map?.easeTo({ zoom: map.getZoom() + 1, duration: 250 });
+		},
+		zoomOut: () => {
+			const map = mapRef.current;
+			map?.easeTo({ zoom: map.getZoom() - 1, duration: 250 });
+		},
+		flyTo: (center, zoom) => mapRef.current?.flyTo({ center, zoom, essential: true }),
+		resetNorth: () => mapRef.current?.easeTo({ bearing: 0, duration: 400 }),
+	}), []);
+
+	const motionBufferRef = useRef<MotionBuffer>(new Map());
+	// Landing/crash instants, read at frame rate by every motion builder.
+	const landingRef = useRef<LandingClock | undefined>(landingClock);
+	landingRef.current = landingClock;
+	// Smooth virtual "now" as the rAF loop computes it — used by the pitched
+	// hit tests so clicked positions match the gliding render exactly.
+	const smoothNow = () => {
+		const a = anchorRef.current;
+		return playingRef.current ? a.virtual + (performance.now() - a.wall) : a.virtual;
+	};
+	// Screen positions of every airborne plane AT its rendered (glided)
+	// altitude — the pitched replacement for queryRenderedFeatures, which only
+	// tests fill-extrusion ground footprints.
+	const planeScreenPositions = (map: maplibregl.Map) => {
+		const now = smoothNow();
+		const out: { flight: string; x: number; y: number }[] = [];
+		for (const m of motionBufferRef.current.values()) {
+			// Same landing clamp as the render, so clicks land on frozen planes.
+			const effNow = motionNow(m, now, landingRef.current);
+			const altFt = altitudeFtAt(m, effNow);
+			if (altFt <= 0) continue;
+			const head = extrapolate(m, effNow);
+			const p = projectAtAltitude(map, head.lon, head.lat, exaggeratedHeightM(altFt));
+			if (!p) continue; // behind the globe — not clickable
+			out.push({ flight: m.item.flight, x: p.x, y: p.y });
+		}
+		return out;
+	};
+	const nowMsRef = useRef(nowMs);
+	nowMsRef.current = nowMs;
+	const playingRef = useRef(playing);
+	playingRef.current = playing;
+	// Smooth virtual clock anchor: virtual instant + the wall time it was set.
+	const anchorRef = useRef({ virtual: nowMs, wall: 0 });
+	// Whether a frame is owed while paused (buffer/clock changed since last draw).
+	const dirtyRef = useRef(true);
+	// Map bearing, mirrored into React state for the compass overlay.
+	const [bearing, setBearing] = useState(0);
+	// Whether the camera is meaningfully pitched (3D button OR manual
+	// right-click). Altitude geometry renders only while pitched — flat
+	// top-down maps keep the classic 2D look with zero extra draw cost.
+	const pitchedRef = useRef(false);
+	// The true-3D aircraft custom layer (issue #250); one instance per map.
+	const planes3DRef = useRef<Planes3DLayer | null>(null);
+	// Its replay-trail-sphere sibling (issue #242): same class, sphere mesh, translucent.
+	const replayTrail3DRef = useRef<Planes3DLayer | null>(null);
+	// The selected flight's smooth 3D track tube.
+	const trackTubeRef = useRef<TrackTube3DLayer | null>(null);
+	// One plain (unphased) tube per OTHER multi-selected flight (issue #326),
+	// keyed by flight — added/removed as the selection changes, unlike the
+	// fixed-at-load layers above. Mirrors trackGeoJSON's secondary 2D features.
+	const secondaryTubesRef = useRef<Map<string, TrackTube3DLayer>>(new Map());
+	// Smooth live-trail ribbons (same class, translucent + flat-shaded).
+	const trailTubeRef = useRef<TrackTube3DLayer | null>(null);
+	// Alternating-frame gate for the ribbon rebuild (see the rAF loop).
+	const trailFrameRef = useRef(false);
+	// The static 2001-buildings custom layer (issue #229); one instance per map.
+	const buildings3DRef = useRef<Buildings3DLayer | null>(null);
+	const trackProfileRef = useRef<AltitudeSample[] | null>(trackProfile);
+	trackProfileRef.current = trackProfile;
+	// Read inside the map-load callback, which captures values once.
+	const trackPaletteRef = useRef<PhasePalette | undefined>(trackPalette);
+	trackPaletteRef.current = trackPalette;
+	// Apply the layer-visibility matrix AND the custom layers' draw gates from
+	// one place, so the three flags can never drift apart across call sites.
+	const syncPlaneVisibility = (map: maplibregl.Map) => {
+		for (const [id, visible] of Object.entries(
+			planeLayerVisibility(clusterRef.current, pitchedRef.current),
+		)) {
+			map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+		}
+		// The custom layers render under BOTH projections — projectTileFor3D's
+		// GLOBE branch handles the sphere (verified live 2026-07-15), so the
+		// old extrusion fallbacks are gone.
+		const custom3D = pitchedRef.current;
+		planes3DRef.current?.setVisible(custom3D);
+		replayTrail3DRef.current?.setVisible(custom3D);
+		trackTubeRef.current?.setVisible(custom3D);
+		for (const tube of secondaryTubesRef.current.values()) tube.setVisible(custom3D);
+		trailTubeRef.current?.setVisible(custom3D && !clusterRef.current);
+		// Pitched: the elevated geometry carries the track color, so the ground
+		// line darkens into its shadow; flat: it IS the track, full color.
+		map.setPaintProperty(
+			"track-line",
+			"line-color",
+			pitchedRef.current ? TRACK_SHADOW_COLOR : phaseLineColorExpression(),
+		);
+	};
+	// The 2001 skyline only reads at city detail — hidden at the continental
+	// default view, shown once the camera zooms into a metro area.
+	const syncBuildingVisibility = (map: maplibregl.Map) => {
+		buildings3DRef.current?.setVisible(buildingsVisibleAtZoom(map.getZoom()));
+	};
+
+	// Create the map once (basemapUrls is effectively stable from env).
+	useEffect(() => {
+		if (!containerRef.current) return;
+		ensurePmtilesProtocol();
+		const map = new maplibregl.Map({
+			container: containerRef.current,
+			style: buildBasemapStyle(basemapUrls, colorsRef.current.mapStyle, colorsRef.current.darkMap),
+			center: NA_CENTER,
+			zoom: NA_ZOOM,
+			attributionControl: false,
+			// MapLibre's default Shift+drag box-zoom would otherwise intercept
+			// shift-click multi-select (see setCameraInteractive's comment above).
+			boxZoom: false,
+			// Pitch is exclusively the 3D toggle's domain: with 3D off the map is
+			// hard-locked flat (right-drag still rotates bearing, never the z
+			// axis); with 3D on right-drag tilts freely across
+			// [THREE_D_MIN_PITCH, THREE_D_MAX_PITCH] — can't flatten back into 2D,
+			// but can rotate the z axis well past the resting THREE_D_PITCH. The
+			// threeD effect moves both bounds on toggle.
+			minPitch: threeDRef.current ? THREE_D_MIN_PITCH : 0,
+			maxPitch: threeDRef.current ? THREE_D_MAX_PITCH : 0,
+		});
+		mapRef.current = map;
+
+		map.on("load", () => {
+			const colors = colorsRef.current;
+			// Projection/pitch are style-coupled, so a persisted globe/3D setting
+			// is seeded here rather than in the props effects (which skip pre-load).
+			map.setProjection({ type: globeRef.current ? "globe" : "mercator" });
+			if (threeDRef.current) map.jumpTo({ pitch: THREE_D_PITCH });
+			updateMotion(motionBufferRef.current, positionsRef.current);
+			if (seedRef.current?.length)
+				seedMotionFromHistory(motionBufferRef.current, seedRef.current);
+			const initialPointsFc = motionPointsToGeoJSON(
+				motionBufferRef.current, nowMsRef.current, landingRef.current,
+				(m: FlightMotion) => cbRef.current.aircraftFamilyOf?.(m.item.flight, m.item.start_date) ?? "generic",
+			);
+			map.addSource("flights", { type: "geojson", data: initialPointsFc });
+			requestFamilyIcons(
+				initialPointsFc, requestedIconFamiliesRef.current, loadedIconSvgsRef.current,
+				mapRef, colorsRef,
+			);
+			map.addSource("track", { type: "geojson", data: EMPTY_FC });
+			// lineMetrics enables the line-progress-based fade gradient on the trails.
+			map.addSource("flight-trails", { type: "geojson", data: EMPTY_FC, lineMetrics: true });
+			map.addLayer({
+				id: "track-line", type: "line", source: "track",
+				paint: {
+					"line-color": phaseLineColorExpression(),
+					"line-width": 2,
+					// Provenance (#263): estimated stretches dash + dim.
+					"line-dasharray": sourceDashExpression(),
+					"line-opacity": sourceOpacityExpression(),
+				},
+			});
+			// Breadcrumb trails under the dots, faded oldest→head by a line-gradient.
+			map.addLayer({
+				id: "flight-trails", type: "line", source: "flight-trails",
+				paint: { "line-width": 1.2, "line-gradient": trailGradient(colors.mapStyle, colors.darkMap) },
+			});
+			// Anonymous radar traffic (#263): muted styling — generic icon, smaller
+			// and translucent, under the identified traffic. Empty until the
+			// flights-anon channel is subscribed (the Other toggle).
+			map.addLayer({
+				id: "flights-anon-dots", type: "symbol", source: "flights",
+				filter: ["==", ["get", "anon"], true],
+				layout: {
+					"icon-image": ["image", PLANE_ANON_ICON_ID],
+					"icon-size": 0.8,
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
+				},
+				// Anonymous traffic sits behind the identified flights: 50% less
+				// saturated (see flightMapSettings.desaturate) at 75% opacity.
+				paint: { "icon-opacity": 0.75 },
+			});
+			map.addLayer({
+				id: "flights-dots", type: "symbol", source: "flights",
+				filter: ["all", ["!=", ["get", "notable"], true], ["!=", ["get", "observer"], true],
+					["!=", ["get", "anon"], true]],
+				layout: {
+					"icon-image": FAMILY_ICON_IMAGE,
+					// Grow to 1.5× while zooming in, capping at ~zoom 9 — where a
+					// typical viewport spans roughly 100 miles at CONUS latitudes
+					// (interpolate clamps past the last stop). Notables stay fixed.
+					"icon-size": ["interpolate", ["linear"], ["zoom"], 4, 1, 9, 1.5],
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
+				},
+			});
+			// Always-on highlight of the notable flights (renders nothing until the
+			// notable-flights data story loads AA11/UA175/AA77/UA93) and observer
+			// aircraft (GOFER06), which share the layer in their own color.
+			map.addLayer({
+				id: "flights-notable", type: "symbol", source: "flights",
+				filter: ["any", ["==", ["get", "notable"], true], ["==", ["get", "observer"], true]],
+				layout: {
+					"icon-image": HIGHLIGHT_ICON_IMAGE,
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
+				},
+				// A parked highlight (AF1 at a ground stop) dims so a motionless
+				// icon reads as "on the ground", not a stuck render.
+				paint: { "icon-opacity": ["case", ["==", ["get", "phase"], "ground"], 0.55, 1] },
+			});
+			void installPlaneIcons(
+				map, colors.pinColor, colors.notablePinColor, colors.observerPinColor,
+				colors.anonPinColor, pixelPlanes(colors.mapStyle),
+			);
+			// Cluster mode (issue #222): a second, pre-clustered source — MapLibre
+			// fixes the cluster option at addSource time, so toggling is a
+			// visibility swap between the plane/trail layers and these three.
+			// Notables are excluded from the feed (nonNotableFeatures) and keep
+			// rendering individually from the raw source above.
+			const clusterVis = clusterRef.current ? ("visible" as const) : ("none" as const);
+			map.addSource("flights-clustered", {
+				type: "geojson", data: EMPTY_FC,
+				cluster: true, clusterRadius: 40, clusterMaxZoom: 10,
+			});
+			map.addLayer({
+				id: "cluster-circles", type: "circle", source: "flights-clustered",
+				filter: ["has", "point_count"],
+				layout: { visibility: clusterVis },
+				paint: {
+					"circle-color": colors.pinColor, "circle-opacity": 0.8,
+					"circle-stroke-width": 1.5, "circle-stroke-color": "#ffffff",
+					"circle-radius": ["step", ["get", "point_count"], 10, 25, 14, 100, 18, 400, 24],
+				},
+			});
+			map.addLayer({
+				id: "cluster-counts", type: "symbol", source: "flights-clustered",
+				filter: ["has", "point_count"],
+				layout: {
+					visibility: clusterVis,
+					"text-field": "{point_count_abbreviated}",
+					"text-font": ["Noto Sans Regular"],
+					"text-size": 11,
+					"text-allow-overlap": true,
+				},
+				paint: { "text-color": "#ffffff" },
+			});
+			map.addLayer({
+				id: "cluster-planes", type: "symbol", source: "flights-clustered",
+				filter: ["!", ["has", "point_count"]],
+				layout: {
+					visibility: clusterVis,
+					"icon-image": FAMILY_ICON_IMAGE,
+					"icon-size": ["interpolate", ["linear"], ["zoom"], 4, 1, 9, 1.5],
+					"icon-rotate": ["-", ["get", "heading"], 90],
+					"icon-rotation-alignment": "map",
+					"icon-allow-overlap": true,
+					"icon-ignore-placement": true,
+				},
+			});
+			// All 3D geometry — aircraft, trail ribbons, replay-trail spheres,
+			// the selected flight's track tube — renders through the custom
+			// WebGL layers added below; MapLibre's fill-extrusion (flat tops,
+			// no per-vertex elevation) is out of the 3D picture entirely.
+			// Loop-mode replay trails render under BOTH live plane layers ("flights-dots"
+			// is the lower of the two, so inserting before it puts replay trails under
+			// both) but above the trails. They stay simple circles — visually
+			// distinct from the live plane icons, and recolorable via paint (the
+			// icons bake their color in). Not clickable: the hit-test below only
+			// queries the live layers.
+			map.addSource("replay-trails", { type: "geojson", data: EMPTY_FC });
+			map.addLayer({
+				id: "replay-trail-dots", type: "circle", source: "replay-trails",
+				paint: {
+					"circle-radius": 3, "circle-color": colors.pinColor,
+					"circle-opacity": REPLAY_TRAIL_OPACITY,
+					"circle-stroke-width": 0.5, "circle-stroke-color": REPLAY_TRAIL_STROKE_COLOR,
+					"circle-stroke-opacity": REPLAY_TRAIL_OPACITY,
+				},
+			}, "flights-dots");
+			map.addLayer({
+				id: "replay-trail-notable", type: "circle", source: "replay-trails",
+				filter: ["any", ["==", ["get", "notable"], true], ["==", ["get", "observer"], true]],
+				paint: {
+					"circle-radius": 5,
+					"circle-color": highlightTrailColor(colors.notablePinColor, colors.observerPinColor),
+					"circle-opacity": REPLAY_TRAIL_OPACITY,
+					"circle-stroke-width": 1, "circle-stroke-color": REPLAY_TRAIL_STROKE_COLOR,
+					"circle-stroke-opacity": REPLAY_TRAIL_OPACITY,
+				},
+			}, "flights-dots");
+			// Radar sweep + afterglow wedge, under the track line and all flight
+			// layers. Color = Classicy theme var, resolved from the DOM because
+			// WebGL paint can't read CSS custom properties.
+			map.addSource("radar-sweep", {
+				type: "geojson", data: sweepLineGeoJSON(nowMsRef.current),
+			});
+			map.addSource("radar-trail", {
+				type: "geojson", data: sweepTrailGeoJSON(nowMsRef.current),
+			});
+			const radarColor = resolveCssColor(
+				containerRef.current ?? document.documentElement,
+				"--color-system-04",
+				RADAR_FALLBACK_COLOR,
+			);
+			const radarVisibility = radarSweepRef.current ? "visible" : "none";
+			map.addLayer({
+				id: "radar-trail", type: "fill", source: "radar-trail",
+				layout: { visibility: radarVisibility },
+				paint: { "fill-color": radarColor, "fill-opacity": ["get", "opacity"] },
+			}, "track-line");
+			map.addLayer({
+				id: "radar-sweep", type: "line", source: "radar-sweep",
+				layout: { visibility: radarVisibility },
+				paint: { "line-color": radarColor, "line-width": 1.5, "line-opacity": 0.8 },
+			}, "track-line");
+			// Two shared POI sources: clustered layers feed the first, unclustered
+			// layers the second. Both ground-level → excluded from planeLayerVisibility.
+			map.addSource("map-pois-clustered", {
+				type: "geojson", data: EMPTY_FC,
+				cluster: true, clusterRadius: 44, clusterMaxZoom: 9, promoteId: "id",
+				clusterProperties: { layerIndex: ["max", ["get", "layerIndex"]] },
+			});
+			map.addLayer({
+				id: "poi-clusters", type: "circle", source: "map-pois-clustered",
+				filter: ["has", "point_count"],
+				paint: {
+					"circle-color": colors.pinColor, "circle-opacity": 0.75,
+					"circle-stroke-width": 1.5, "circle-stroke-color": "#ffffff",
+					"circle-radius": ["step", ["get", "point_count"], 10, 25, 14, 100, 18, 400, 24],
+				},
+			});
+			map.addLayer({
+				id: "poi-cluster-counts", type: "symbol", source: "map-pois-clustered",
+				filter: ["has", "point_count"],
+				layout: {
+					"text-field": "{point_count_abbreviated}",
+					"text-font": ["Noto Sans Regular"], "text-size": 11, "text-allow-overlap": true,
+				},
+				paint: { "text-color": "#ffffff" },
+			});
+			const poiPinLayout: maplibregl.SymbolLayerSpecification["layout"] = {
+				"icon-image": POI_PIN_ICON_ID, "icon-anchor": "bottom", "icon-allow-overlap": true,
+				"icon-size": ["interpolate", ["linear"], ["zoom"], 3, 0.7, 8, 1],
+				"text-field": ["get", "iata"], "text-font": ["Noto Sans Regular"], "text-size": 10,
+				"text-offset": [0, 0.4], "text-anchor": "top", "text-allow-overlap": false, "text-optional": true,
+			};
+			const poiLabelBg = basemapPalette(colors.mapStyle, colors.darkMap).background;
+			const poiPinPaint: maplibregl.SymbolLayerSpecification["paint"] = {
+				"text-color": invertHex(poiLabelBg), "text-halo-color": poiLabelBg, "text-halo-width": 1,
+			};
+			map.addLayer({
+				id: "poi-cluster-pins", type: "symbol", source: "map-pois-clustered",
+				filter: ["!", ["has", "point_count"]], layout: poiPinLayout, paint: poiPinPaint,
+			});
+			map.addSource("map-pois-plain", { type: "geojson", data: EMPTY_FC, promoteId: "id" });
+			map.addLayer({ id: "poi-plain-pins", type: "symbol", source: "map-pois-plain", layout: poiPinLayout, paint: poiPinPaint });
+			// Selected POI drawn 25% larger on its own single-feature source, ALWAYS
+			// on top — so the chosen airport pops out even from inside a cluster.
+			map.addSource("map-poi-selected", { type: "geojson", data: EMPTY_FC });
+			map.addLayer({
+				id: "map-poi-selected", type: "symbol", source: "map-poi-selected",
+				layout: {
+					"icon-image": POI_PIN_ICON_ID, "icon-anchor": "bottom",
+					"icon-allow-overlap": true, "icon-ignore-placement": true,
+					"icon-size": ["interpolate", ["linear"], ["zoom"], 3, 0.7 * POI_SELECTED_SCALE, 8, POI_SELECTED_SCALE],
+				},
+			});
+			void installPoiIcon(map, colors.pinColor, pixelPlanes(colors.mapStyle));
+			applyPoiData(map, poisRef.current, poiLayersRef.current, colors.pinColor);
+			applyMapColors(map, colorsRef.current);
+			// Projection/pitch-style load-time seed for the terrain mesh: the
+			// [terrain] effect below skips pre-load renders.
+			if (colorsRef.current.terrain)
+				map.setTerrain({ source: TERRAIN_SOURCE, exaggeration: ALT_EXAGGERATION });
+			// Now that every layer exists, resolve the pitch × cluster visibility
+			// matrix ONCE from the actual camera. The jumpTo pitch seed above
+			// fires "pitch" BEFORE the layers are added (its handler skips layer
+			// writes while loadedRef is false — flipped only here, at the very
+			// end), so a 3D-restored session must not depend on that event: this
+			// is what hides the 2D pins after a refresh with 3D persisted on.
+			// The 2001 skyline (issue #229): static custom layer, added BEFORE the
+			// aircraft layers so planes always render on top of the buildings.
+			const buildings3D = new Buildings3DLayer();
+			buildings3DRef.current = buildings3D;
+			map.addLayer(buildings3D);
+			buildings3D.setColor(buildingColorRgb(colors.mapStyle, colors.darkMap));
+			buildings3D.setHeroColor(heroColorRgb(colors));
+			if (buildingsRef.current.length > 0) {
+				const feats = excludeFootprints(buildingsRef.current, activeHeroExcludesRef.current);
+				buildings3D.setMesh("footprints", buildFootprintMesh(feats));
+			}
+			syncBuildingVisibility(map);
+			// True-3D aircraft (issue #250): custom layer on top of the stack;
+			// its colors follow the pin pair like every other plane layer.
+			const planes3D = new Planes3DLayer();
+			planes3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor,
+				colors.anonPinColor);
+			planes3D.setPixelate(pixelPlanes(colors.mapStyle));
+			planes3DRef.current = planes3D;
+			map.addLayer(planes3D);
+			// Loop-mode replay-trail spheres (issue #242): same instanced-mesh layer with
+			// a sphere mesh at the 2D replay trails' opacity. Added after the aircraft —
+			// translucent geometry must draw after the opaque planes it blends over.
+			const replayTrail3D = new Planes3DLayer({
+				id: "replay-trails-3d-model",
+				buildMesh: () => buildSphereMesh(),
+				opacity: REPLAY_TRAIL_OPACITY,
+			});
+			replayTrail3D.setColors(colors.pinColor, colors.notablePinColor, colors.observerPinColor,
+				colors.anonPinColor);
+			replayTrail3D.setPixelate(pixelPlanes(colors.mapStyle));
+			replayTrail3DRef.current = replayTrail3D;
+			map.addLayer(replayTrail3D);
+			// Smooth 3D track tube: splined selected-flight path with per-vertex
+			// elevation (the curtain staircases; it stays as the globe fallback).
+			const trackTube = new TrackTube3DLayer();
+			trackTube.setColor(TRACK_LINE_COLOR);
+			trackTube.setGeometry(
+				buildTrackTube(trackProfileRef.current, undefined, trackPaletteRef.current),
+			);
+			trackTubeRef.current = trackTube;
+			map.addLayer(trackTube);
+			// Smooth live-trail ribbons: splined breadcrumbs with per-vertex
+			// elevation, replacing the chunky fill-extrusion slabs. Translucent
+			// and flat-shaded like the 2D trail lines they mirror.
+			const trailTube = new TrackTube3DLayer({
+				id: "trails-3d-model", opacity: 0.45, shaded: false,
+			});
+			trailTube.setColor(trailColor(colors.mapStyle, colors.darkMap));
+			trailTubeRef.current = trailTube;
+			map.addLayer(trailTube);
+			pitchedRef.current = map.getPitch() > 5;
+			syncPlaneVisibility(map);
+			loadedRef.current = true;
+			dirtyRef.current = true;
+		});
+
+		// Forgiving hit-test: query a small box around the click and select the
+		// NEAREST dot within it; clear the selection only when nothing is nearby.
+		// (An exact-pixel layer click missed too often on the tiny gliding dots.)
+		// Area-select drag (issue #225). MapLibre still emits mouse events with
+		// dragPan disabled; the release queries the box and refines per-shape.
+		map.on("mousedown", (e) => {
+			if (selectModeRef.current === "off") return;
+			dragRef.current = {
+				startX: e.point.x, startY: e.point.y, curX: e.point.x, curY: e.point.y,
+			};
+		});
+		map.on("mousemove", (e) => {
+			const d = dragRef.current;
+			const mode = selectModeRef.current;
+			if (!d || mode === "off") return;
+			d.curX = e.point.x;
+			d.curY = e.point.y;
+			setOverlay({ mode, d: { ...d } });
+		});
+		map.on("mouseup", (e) => {
+			const d = dragRef.current;
+			const mode = selectModeRef.current;
+			dragRef.current = null;
+			setOverlay(null);
+			if (!d || mode === "off") return;
+			d.curX = e.point.x;
+			d.curY = e.point.y;
+			const flights: string[] = [];
+			if (pitchedRef.current) {
+				// Pitched: test the planes' elevated screen positions directly
+				// (fill-extrusion footprints sit far from the visible aircraft).
+				for (const p of planeScreenPositions(map)) {
+					if (!insideSelection(mode, d, p.x, p.y)) continue;
+					if (!flights.includes(p.flight)) flights.push(p.flight);
+				}
+			} else {
+				const b = dragBounds(mode, d);
+				const feats = map.queryRenderedFeatures(
+					[[b.minX, b.minY], [b.maxX, b.maxY]],
+					{ layers: ["flights-dots", "flights-anon-dots", "flights-notable", "cluster-planes"] },
+				);
+				for (const f of feats) {
+					const anchor = featureAnchor(f);
+					if (!anchor) continue;
+					const pp = map.project(anchor);
+					if (!insideSelection(mode, d, pp.x, pp.y)) continue;
+					const flight = String(f.properties?.flight ?? "");
+					if (flight && !flights.includes(flight)) flights.push(flight);
+				}
+			}
+			cbRef.current.onAreaSelect?.(flights);
+		});
+
+		map.on("click", (e) => {
+			// While a select tool is armed, the drag handlers own the pointer.
+			if (selectModeRef.current !== "off") return;
+			// Shift-click toggles the hit flight in/out of the multi-selection
+			// instead of replacing it (issue #310).
+			const additive = !!(e as { originalEvent?: { shiftKey?: boolean } }).originalEvent?.shiftKey;
+			const { x, y } = e.point;
+			// Pitched: hit-test against the planes' ELEVATED screen positions.
+			// queryRenderedFeatures only sees fill-extrusion ground footprints,
+			// which sit far below the visible aircraft at cruise altitudes.
+			if (pitchedRef.current) {
+				// POIs first (ground-level; works in flat and pitched modes). A POI
+				// cluster or pin within HIT_TOLERANCE takes precedence over flights and
+				// returns here; otherwise fall through to flight hit-testing.
+				const poiHits = map.queryRenderedFeatures(
+					[[x - HIT_TOLERANCE, y - HIT_TOLERANCE], [x + HIT_TOLERANCE, y + HIT_TOLERANCE]],
+					{ layers: ["poi-clusters", "poi-cluster-pins", "poi-plain-pins"] },
+				);
+				const poiCluster = poiHits.find((f) => f.properties?.cluster === true);
+				if (poiCluster && poiCluster.geometry.type === "Point") {
+					const src = map.getSource("map-pois-clustered") as maplibregl.GeoJSONSource | undefined;
+					const center = poiCluster.geometry.coordinates as [number, number];
+					void src
+						?.getClusterExpansionZoom(Number(poiCluster.properties?.cluster_id))
+						.then((zoom) => map.easeTo({ center, zoom }))
+						.catch(() => {});
+					return;
+				}
+				const poiPin = poiHits.find((f) => f.properties?.cluster !== true);
+				if (poiPin) {
+					const id = Number(poiPin.properties?.id);
+					const hit = poisRef.current.find((p) => p.id === id);
+					if (hit) { cbRef.current.onSelectPoi?.(hit); return; }
+				}
+				const tolerance = plane3DTargetPx(map.getZoom()) / 2 + HIT_TOLERANCE;
+				let bestFlight: string | null = null;
+				let bestDist = tolerance * tolerance;
+				for (const p of planeScreenPositions(map)) {
+					const d = (p.x - x) ** 2 + (p.y - y) ** 2;
+					if (d < bestDist) {
+						bestDist = d;
+						bestFlight = p.flight;
+					}
+				}
+				if (bestFlight) {
+					if (additive) cbRef.current.onToggleFlight?.(bestFlight);
+					else cbRef.current.onSelectFlight(bestFlight);
+				} else if (!additive) cbRef.current.onClearSelection();
+				return;
+			}
+			// POIs first (ground-level; works in flat and pitched modes). A POI
+			// cluster or pin within HIT_TOLERANCE takes precedence over flights and
+			// returns here; otherwise fall through to flight hit-testing.
+			const poiHits = map.queryRenderedFeatures(
+				[[x - HIT_TOLERANCE, y - HIT_TOLERANCE], [x + HIT_TOLERANCE, y + HIT_TOLERANCE]],
+				{ layers: ["poi-clusters", "poi-cluster-pins", "poi-plain-pins"] },
+			);
+			const poiCluster = poiHits.find((f) => f.properties?.cluster === true);
+			if (poiCluster && poiCluster.geometry.type === "Point") {
+				const src = map.getSource("map-pois-clustered") as maplibregl.GeoJSONSource | undefined;
+				const center = poiCluster.geometry.coordinates as [number, number];
+				void src
+					?.getClusterExpansionZoom(Number(poiCluster.properties?.cluster_id))
+					.then((zoom) => map.easeTo({ center, zoom }))
+					.catch(() => {});
+				return;
+			}
+			const poiPin = poiHits.find((f) => f.properties?.cluster !== true);
+			if (poiPin) {
+				const id = Number(poiPin.properties?.id);
+				const hit = poisRef.current.find((p) => p.id === id);
+				if (hit) { cbRef.current.onSelectPoi?.(hit); return; }
+			}
+			const near = map.queryRenderedFeatures(
+				[
+					[x - HIT_TOLERANCE, y - HIT_TOLERANCE],
+					[x + HIT_TOLERANCE, y + HIT_TOLERANCE],
+				],
+				{
+					layers: ["flights-dots", "flights-anon-dots", "flights-notable", "cluster-planes",
+						"cluster-circles"],
+				},
+			);
+			// A cluster blob expands instead of selecting.
+			const clusterHit = near.find((f) => f.properties?.cluster === true);
+			if (clusterHit && clusterHit.geometry.type === "Point") {
+				const src = map.getSource("flights-clustered") as maplibregl.GeoJSONSource | undefined;
+				const center = clusterHit.geometry.coordinates as [number, number];
+				void src
+					?.getClusterExpansionZoom(Number(clusterHit.properties?.cluster_id))
+					.then((zoom) => map.easeTo({ center, zoom }))
+					.catch(() => {});
+				return;
+			}
+			if (near.length === 0) {
+				if (!additive) cbRef.current.onClearSelection();
+				return;
+			}
+			let best = near[0];
+			let bestDist = Number.POSITIVE_INFINITY;
+			for (const f of near) {
+				const anchor = featureAnchor(f);
+				if (!anchor) continue;
+				const pp = map.project(anchor);
+				const d = (pp.x - x) ** 2 + (pp.y - y) ** 2;
+				if (d < bestDist) {
+					bestDist = d;
+					best = f;
+				}
+			}
+			if (best.properties) {
+				const fl = String(best.properties.flight);
+				if (additive) cbRef.current.onToggleFlight?.(fl);
+				else cbRef.current.onSelectFlight(fl);
+			}
+		});
+
+		map.on("rotate", () => setBearing(map.getBearing()));
+		// Altitude layers key off the ACTUAL pitch so both the 3D toggle and a
+		// manual right-click pitch reveal them.
+		map.on("pitch", () => {
+			const on = map.getPitch() > 5;
+			if (on === pitchedRef.current) return;
+			pitchedRef.current = on;
+			if (loadedRef.current) syncPlaneVisibility(map);
+			dirtyRef.current = true;
+			// While following, pitch is camera-driven (not a manual right-drag), so
+			// it must not flip the persisted 3D toggle — only report real user tilts.
+			if (!followActiveRef.current) cbRef.current.onPitchedChange?.(on);
+		});
+		// Plane-slab size tracks the zoom (constant on-screen size); wake a
+		// paused map so a zoom while paused re-sizes the 3D planes.
+		map.on("zoom", () => {
+			if (pitchedRef.current) dirtyRef.current = true;
+			if (loadedRef.current) syncBuildingVisibility(map);
+		});
+
+		const ro = new ResizeObserver(() => map.resize());
+		ro.observe(containerRef.current);
+
+		return () => {
+			ro.disconnect();
+			map.remove(); // also fires the custom layers' onRemove (GL teardown)
+			planes3DRef.current = null;
+			replayTrail3DRef.current = null;
+			trackTubeRef.current = null;
+			secondaryTubesRef.current = new Map();
+			trailTubeRef.current = null;
+			buildings3DRef.current = null;
+			mapRef.current = null;
+			loadedRef.current = false;
+		};
+	}, [basemapUrls]);
+
+	// Fold each new airborne snapshot into the motion buffer, then re-apply the
+	// heading seed: chunks can land before OR after the snapshot that creates
+	// the buffer entries they refine, and seeding is idempotent either way.
+	useEffect(() => {
+		updateMotion(motionBufferRef.current, positions);
+		if (seedPositions?.length)
+			seedMotionFromHistory(motionBufferRef.current, seedPositions);
+		dirtyRef.current = true;
+	}, [positions, seedPositions]);
+
+	// Re-anchor the smooth clock on each coarse provider tick / play-state change.
+	useEffect(() => {
+		anchorRef.current = { virtual: nowMs, wall: performance.now() };
+		dirtyRef.current = true;
+	}, [nowMs]);
+	useEffect(() => {
+		dirtyRef.current = true;
+	}, [playing]);
+
+	// Push the selected track (or clear it).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		const src = map.getSource("track") as maplibregl.GeoJSONSource | undefined;
+		src?.setData(trackGeoJSON ?? EMPTY_FC);
+	}, [trackGeoJSON]);
+
+	// Feed the two POI sources + recolor clusters when the enabled set, layer
+	// configs, or clustering toggles change.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		applyPoiData(map, pois, poiLayers, pinColor);
+		dirtyRef.current = true;
+	}, [pois, poiLayers, pinColor]);
+
+	// Single writer for the "footprints" mesh: always re-applies the current
+	// active hero excludes so a footprint hidden by a loaded hero STL can't
+	// reappear when the raw buildings list itself changes (or vice versa).
+	const rebuildFootprints = useCallback(() => {
+		const layer = buildings3DRef.current;
+		if (!layer) return;
+		const feats = excludeFootprints(buildingsRef.current, activeHeroExcludesRef.current);
+		layer.setMesh("footprints", buildFootprintMesh(feats));
+		dirtyRef.current = true;
+	}, []);
+
+	// Feed the buildings layer once the async footprint fetch resolves — the
+	// load handler above only seeds it if the (module-cached) data already
+	// arrived before this map instance mounted.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: refs + stable helper
+	useEffect(() => {
+		if (buildings3DRef.current && buildings.length > 0) rebuildFootprints();
+	}, [buildings, rebuildFootprints]);
+
+	// Feed the selected-pin overlay with just the selected POI (or clear it).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		const src = map.getSource("map-poi-selected") as maplibregl.GeoJSONSource | undefined;
+		const sel = pois.find((p) => p.id === selectedPoiId) ?? null;
+		src?.setData(sel ? poisToGeoJSON([sel]) : EMPTY_FC);
+		dirtyRef.current = true;
+	}, [pois, selectedPoiId]);
+
+	// Rebuild the smooth track tube when the selection's profile changes; an
+	// empty/null profile clears it. Radius comes per-frame from the rAF loop.
+	useEffect(() => {
+		if (!mapRef.current || !loadedRef.current) return;
+		trackTubeRef.current?.setGeometry(buildTrackTube(trackProfile, undefined, trackPalette));
+		dirtyRef.current = true;
+	}, [trackProfile, trackPalette]);
+
+	// Add/remove/rebuild one plain 3D tube per OTHER multi-selected flight
+	// (issue #326), keyed by flight so an unrelated prop change doesn't tear
+	// down and recreate every tube. Radius/vertical-drop come per-frame from
+	// the rAF loop, same as the active tube.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		const wanted = new Set(secondaryTrackProfiles.map((t) => t.flight));
+		for (const [flight, tube] of secondaryTubesRef.current) {
+			if (wanted.has(flight)) continue;
+			if (map.getLayer(tube.id)) map.removeLayer(tube.id);
+			secondaryTubesRef.current.delete(flight);
+		}
+		for (const { flight, profile } of secondaryTrackProfiles) {
+			let tube = secondaryTubesRef.current.get(flight);
+			if (!tube) {
+				tube = new TrackTube3DLayer({ id: `track-tube-3d-secondary-${flight}` });
+				tube.setColor(SECONDARY_TRACK_COLOR);
+				tube.setVisible(pitchedRef.current);
+				secondaryTubesRef.current.set(flight, tube);
+				map.addLayer(tube);
+			}
+			tube.setGeometry(buildTrackTube(profile, undefined, undefined));
+		}
+		dirtyRef.current = true;
+	}, [secondaryTrackProfiles]);
+
+	// Re-theme / recolor live. setPaintProperty only — setStyle() would tear
+	// down the flights/trails/track sources and layers. Before "load" fires,
+	// the load handler's applyMapColors call picks up the latest values.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		applyMapColors(map, { mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, terrain });
+		// mapStyle is already a dep, so switching to/from radar re-rasterizes
+		// every registered icon into (or out of) its 8-bit variant for free.
+		const pixelate = pixelPlanes(mapStyle);
+		void installPlaneIcons(map, pinColor, notablePinColor, observerPinColor, anonPinColor, pixelate);
+		for (const [family, svg] of loadedIconSvgsRef.current) {
+			void installFamilyIcon(
+				map, family, svg, pinColor, notablePinColor, observerPinColor, pixelate,
+			);
+		}
+		void installPoiIcon(map, pinColor, pixelate);
+		const poiLabelBg = basemapPalette(mapStyle, darkMap).background;
+		for (const id of ["poi-cluster-pins", "poi-plain-pins"]) {
+			if (map.getLayer(id)) {
+				map.setPaintProperty(id, "text-color", invertHex(poiLabelBg));
+				map.setPaintProperty(id, "text-halo-color", poiLabelBg);
+			}
+		}
+		buildings3DRef.current?.setColor(buildingColorRgb(mapStyle, darkMap));
+		buildings3DRef.current?.setHeroColor(
+			heroColorRgb({ mapStyle, darkMap, buildingHeroColorLight, buildingHeroColorDark }),
+		);
+		planes3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor, anonPinColor);
+		replayTrail3DRef.current?.setColors(pinColor, notablePinColor, observerPinColor, anonPinColor);
+		// The 3D meshes get the same radar 8-bit treatment as the 2D icons, via a
+		// low-res render pass rather than a re-rasterize (see Planes3DLayer).
+		planes3DRef.current?.setPixelate(pixelate);
+		replayTrail3DRef.current?.setPixelate(pixelate);
+		trailTubeRef.current?.setColor(trailColor(mapStyle, darkMap));
+	}, [
+		mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, terrain,
+		buildingHeroColorLight, buildingHeroColorDark,
+	]);
+
+	// Arm/disarm the select tool: panning off, crosshair cursor, stale drag
+	// cleared. Runs pre-load safely (dragPan exists from construction).
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map) return;
+		// The follow lock owns pan while active; it re-applies the select-tool
+		// state on release, so don't let a selectMode change re-enable pan here.
+		if (followActiveRef.current) return;
+		if (selectMode !== "off") {
+			map.dragPan.disable();
+			map.getCanvas().style.cursor = "crosshair";
+		} else {
+			map.dragPan.enable();
+			map.getCanvas().style.cursor = "";
+			dragRef.current = null;
+			setOverlay(null);
+		}
+	}, [selectMode]);
+
+	// Cluster toggle: resolve the full pitch × cluster visibility matrix; the
+	// rAF loop feeds whichever sources are active.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		syncPlaneVisibility(map);
+		dirtyRef.current = true;
+	}, [cluster]);
+
+	// Mercator ↔ globe. Projection survives style-paint changes, so this only
+	// needs to run on the toggle itself (plus the load-time seed above). The
+	// pitched-aircraft render path swaps with it (custom layer ↔ extrusion
+	// fallback), so the visibility matrix re-resolves too.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		map.setProjection({ type: globe ? "globe" : "mercator" });
+		syncPlaneVisibility(map);
+		dirtyRef.current = true;
+	}, [globe]);
+
+	// 3D mode gates pitch entirely: ON confines the camera to
+	// [THREE_D_MIN_PITCH, THREE_D_MAX_PITCH] (right-drag tilts freely within the
+	// band — up past the resting angle — but can't flatten back to 2D) and eases
+	// to the THREE_D_PITCH preset; OFF collapses the band to exactly 0, which
+	// snaps the camera flat and makes right-drag bearing-only. Order matters both
+	// ways: MapLibre rejects min > max, so max lifts before min on enable and min
+	// drops before max on disable.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		// The follow lock owns the pitch band while active (cockpit drives its own
+		// pitch); it re-applies these constraints from threeDRef on release, so
+		// skip here to avoid clamping the driven pitch.
+		if (followActiveRef.current) return;
+		if (threeD) {
+			map.setMaxPitch(THREE_D_MAX_PITCH);
+			map.setMinPitch(THREE_D_MIN_PITCH);
+			map.easeTo({ pitch: THREE_D_PITCH, duration: 600 });
+		} else {
+			map.setMinPitch(0);
+			map.setMaxPitch(0);
+		}
+	}, [threeD]);
+
+	// Terrain mesh on/off. The hillshade half of the toggle rides the re-theme
+	// effect above (applyMapColors); this owns only the ground mesh.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		// Terrain shares the aircraft altitude exaggeration so mountains stay in
+		// proportion to the rendered flights. Safe against burial: a plane's MSL
+		// altitude is always ≥ the ground's, so scaling both by the same factor
+		// keeps every plane above the mesh.
+		map.setTerrain(terrain ? { source: TERRAIN_SOURCE, exaggeration: ALT_EXAGGERATION } : null);
+		dirtyRef.current = true;
+	}, [terrain]);
+
+	// Camera follow lock (tracked flights): entering disables user camera control
+	// and opens the pitch band so the rAF loop can drive any framing; leaving
+	// re-enables control (honoring an armed select tool) and restores the 2D/3D
+	// pitch constraints. The per-frame camera drive lives in the rAF loop below.
+	useEffect(() => {
+		// dragPan / pitch APIs exist from construction (no layers needed), so this
+		// runs pre-load safely — a follow set before "load" still locks the camera.
+		const map = mapRef.current;
+		if (!map) return;
+		const active = followFlight != null;
+		if (active === followActiveRef.current) return;
+		followActiveRef.current = active;
+		if (active) {
+			setCameraInteractive(map, false);
+			map.setMinPitch(0);
+			map.setMaxPitch(MAX_FOLLOW_PITCH);
+		} else {
+			setCameraInteractive(map, true);
+			// A select tool armed during follow (shouldn't happen — it's disabled in
+			// the toolbar — but be safe) keeps pan off and the crosshair cursor.
+			if (selectModeRef.current !== "off") {
+				map.dragPan.disable();
+				map.getCanvas().style.cursor = "crosshair";
+			}
+			restorePitchConstraints(map, threeDRef.current);
+		}
+		dirtyRef.current = true;
+	}, [followFlight]);
+
+	// Show/hide the radar sweep. On re-enable, re-resolve the theme color so an
+	// Appearance-theme switch that happened while hidden is picked up. dirtyRef
+	// makes a paused map redraw once so the change is visible immediately.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		const vis = radarSweep ? "visible" : "none";
+		map.setLayoutProperty("radar-sweep", "visibility", vis);
+		map.setLayoutProperty("radar-trail", "visibility", vis);
+		if (radarSweep) {
+			const c = resolveCssColor(
+				containerRef.current ?? document.documentElement,
+				"--color-system-04",
+				RADAR_FALLBACK_COLOR,
+			);
+			map.setPaintProperty("radar-sweep", "line-color", c);
+			map.setPaintProperty("radar-trail", "fill-color", c);
+		}
+		dirtyRef.current = true;
+	}, [radarSweep]);
+
+	// New trail length applies next frame; wake a paused map for one redraw.
+	useEffect(() => {
+		dirtyRef.current = true;
+	}, [trailMultiplier]);
+
+	// Hero manifest resolving (async fetch) applies next frame; wake a paused,
+	// loop-disabled, idle map so the hero STLs actually get requested/drawn
+	// instead of waiting for playback to resume.
+	useEffect(() => {
+		dirtyRef.current = true;
+	}, [heroes]);
+
+	// Entering/leaving loop mode: clear the replay-trail layer when leaving so stale
+	// replay trails don't linger under a paused map; dirtyRef redraws once either way.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		if (!loopEnabled) {
+			(map.getSource("replay-trails") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY_FC);
+			replayTrail3DRef.current?.updateInstances(new Float32Array(0), 0);
+		}
+		dirtyRef.current = true;
+	}, [loopEnabled]);
+
+	// Glide dots + draw trails at ~15 fps off a smooth virtual clock. While
+	// playing, advance wall-time deltas from the anchor (RATE 1×); while paused,
+	// hold at the anchor and idle after the last draw. All virtual/UTC ms.
+	useEffect(() => {
+		let lastRender = 0;
+		const loop = (wall: number) => {
+			raf = requestAnimationFrame(loop);
+			const map = mapRef.current;
+			if (!map || !loadedRef.current) return;
+			if (wall - lastRender < FRAME_MS) return;
+			// Loop mode animates even while the virtual clock is paused: the live
+			// edge freezes but the loop keeps cycling through the frozen window.
+			if (!playingRef.current && !dirtyRef.current && !loopRef.current.enabled) {
+				lastRender = wall;
+				return;
+			}
+			lastRender = wall;
+			dirtyRef.current = false;
+			const a = anchorRef.current;
+			const now = playingRef.current ? a.virtual + (wall - a.wall) : a.virtual;
+			const buf = motionBufferRef.current;
+			const landing = landingRef.current;
+			// Camera follow: lock onto the followed flight's live (glided) position,
+			// heading-driven framing per mode. jumpTo (not easeTo) so it tracks the
+			// dot frame-for-frame instead of chasing an animation. Its pitch change
+			// flows through the "pitch" handler → 3D geometry arms for cockpit/highlight.
+			const follow = followRef.current;
+			if (follow.flight) {
+				const fm = buf.get(follow.flight);
+				if (fm) {
+					const head = extrapolate(fm, motionNow(fm, now, landing));
+					map.jumpTo(
+						cameraPose(
+							follow.mode,
+							{ lon: head.lon, lat: head.lat, headingDeg: fm.headingDeg },
+							map.getZoom(),
+						),
+					);
+				}
+			}
+			const pointsFc = motionPointsToGeoJSON(
+				buf, now, landing,
+				(m: FlightMotion) => cbRef.current.aircraftFamilyOf?.(m.item.flight, m.item.start_date) ?? "generic",
+			);
+			requestFamilyIcons(
+				pointsFc, requestedIconFamiliesRef.current, loadedIconSvgsRef.current,
+				mapRef, colorsRef,
+			);
+			(map.getSource("flights") as maplibregl.GeoJSONSource | undefined)?.setData(pointsFc);
+			if (clusterRef.current) {
+				(map.getSource("flights-clustered") as maplibregl.GeoJSONSource | undefined)?.setData(
+					nonNotableFeatures(pointsFc),
+				);
+			}
+			if (pitchedRef.current) {
+				const zoom = map.getZoom();
+				const sizeKm = plane3DTargetPx(zoom) * kmPerPixel(zoom, map.getCenter().lat);
+				// Track-tube thickness tracks the marker scale (half the trail
+				// ribbons' 0.08 width factor); radius is a uniform, so this is free.
+				const tubeRadiusM = sizeKm * 1000 * 0.04;
+				trackTubeRef.current?.setRadius(tubeRadiusM);
+				// Sink the tube to just under the plane's belly so the two stop
+				// colliding at the aircraft's head: the marker's real-world half-
+				// height is sizeKm*500 m, so drop by that plus the tube's own
+				// radius. Uniform-driven, so it tracks zoom with no rebuild.
+				trackTubeRef.current?.setVerticalDrop(sizeKm * 500 + tubeRadiusM);
+				for (const tube of secondaryTubesRef.current.values()) {
+					tube.setRadius(tubeRadiusM);
+					tube.setVerticalDrop(sizeKm * 500 + tubeRadiusM);
+				}
+				if (planes3DRef.current) {
+					// Per-airframe batches (issue #250 follow-up): each family
+					// draws its own model; unloaded families render the prism
+					// until their STL arrives, and every family seen kicks off
+					// its (cached, immutable) asset fetch.
+					const layer = planes3DRef.current;
+					const batches = buildPlaneInstanceBatches(
+						buf, now, sizeKm,
+						(m) => cbRef.current.aircraftFamilyOf?.(m.item.flight, m.item.start_date) ?? "default",
+						landing,
+					);
+					for (const b of batches) {
+						if (b.meshKey !== "default" && !requestedMeshesRef.current.has(b.meshKey)) {
+							requestedMeshesRef.current.add(b.meshKey);
+							void loadAircraftMesh(b.meshKey as AircraftFamily).then((mesh) => {
+								if (mesh) layer.registerMesh(b.meshKey, mesh);
+							});
+						}
+					}
+					layer.updateBatches(batches);
+					map.triggerRepaint();
+				}
+			}
+			// Clamp: hand-edited persisted state must not build million-point trails.
+			const clamped = Math.min(Math.max(trailMultiplierRef.current, 0), TRAIL_MULTIPLIER_MAX);
+			const trailPoints = Math.round(TRAIL_POINTS * clamped);
+			if (pitchedRef.current) {
+				// Floating splined ribbons replace the ground lines while pitched;
+				// width tracks the plane-marker scale via the radius uniform.
+				// Ribbons rebuild every SECOND pass (~7.5 fps): they're wide soft
+				// shapes whose per-frame delta is subpixel, and their geometry is
+				// the heaviest per-frame build with thousands aloft.
+				trailFrameRef.current = !trailFrameRef.current;
+				const zoomT = map.getZoom();
+				const sizeKmT = plane3DTargetPx(zoomT) * kmPerPixel(zoomT, map.getCenter().lat);
+				if (trailTubeRef.current && trailFrameRef.current) {
+					trailTubeRef.current.setRadius(sizeKmT * 1000 * 0.04); // half-width
+					trailTubeRef.current.setGeometry(buildTrailTubes(buf, now, {
+						displayPoints: trailPoints,
+						// Subdivision only where corners are visible on screen.
+						steps: zoomT <= 5 ? 1 : zoomT <= 7 ? 2 : 3,
+						// Stop the ribbon at the tail: the 3D models span ±0.9 of
+						// the half-size along their length.
+						headOffsetM: sizeKmT * 450,
+						landing,
+					}));
+					map.triggerRepaint();
+				}
+			} else {
+				(map.getSource("flight-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
+					motionTrailsToGeoJSON(buf, now, trailPoints, landing),
+				);
+			}
+			if (radarSweepRef.current) {
+				(map.getSource("radar-sweep") as maplibregl.GeoJSONSource | undefined)?.setData(
+					sweepLineGeoJSON(now),
+				);
+				(map.getSource("radar-trail") as maplibregl.GeoJSONSource | undefined)?.setData(
+					sweepTrailGeoJSON(now),
+				);
+			}
+			const loopState = loopRef.current;
+			if (loopState.enabled) {
+				const playhead = playheadAt(
+					loopState.clock, wall, now - loopState.windowMs, now,
+				);
+				if (pitchedRef.current) {
+					const zoomG = map.getZoom();
+					const replayTrailRadiusKm =
+						plane3DTargetPx(zoomG) * kmPerPixel(zoomG, map.getCenter().lat) * 0.12;
+					if (replayTrail3DRef.current) {
+						const inst = buildReplayTrailInstances(
+							loopState.buffer, playhead, loopState.visible, replayTrailRadiusKm,
+						);
+						replayTrail3DRef.current.updateInstances(inst.data, inst.count);
+						map.triggerRepaint();
+					}
+				} else {
+					(map.getSource("replay-trails") as maplibregl.GeoJSONSource | undefined)?.setData(
+						replayPointsAt(loopState.buffer, playhead, loopState.visible),
+					);
+				}
+			}
+			// Hero landmark models (issue #229 Plan 3): kick off each hero's STL
+			// fetch once; on success, place its mesh and hide the extruded
+			// footprints it covers. A failed/pending load leaves those footprints
+			// drawn (graceful fallback) — unlike aircraft meshes, this doesn't
+			// need to be gated on pitched/3D since the buildings layer itself
+			// draws under both projections.
+			for (const hero of heroesRef.current) {
+				if (requestedHeroesRef.current.has(hero.id)) continue;
+				requestedHeroesRef.current.add(hero.id);
+				void loadHeroStl(hero.stlPath).then((stl) => {
+					const layer = buildings3DRef.current;
+					if (!stl || !layer) return; // failure -> extruded fallback stays
+					layer.setMesh(hero.id, placeHeroMesh(stl, manifestToPlacement(hero)));
+					layer.markHero(hero.id);
+					activeHeroExcludesRef.current = [...activeHeroExcludesRef.current, hero.exclude];
+					rebuildFootprints(); // hide the now-covered extruded footprints
+				});
+			}
+		};
+		let raf = requestAnimationFrame(loop);
+		return () => cancelAnimationFrame(raf);
+	}, []);
+
+	return (
+		<div
+			style={{
+				position: "relative",
+				width: "100%",
+				height: "100%",
+				// In globe projection the canvas is transparent around the planet;
+				// match that "space" to the style's ground tone instead of the
+				// window's white body.
+				background: basemapPalette(mapStyle, darkMap).background,
+			}}
+		>
+			<div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+			<MapCompass
+				bearing={bearing}
+				onReset={() => mapRef.current?.easeTo({ bearing: 0, duration: 400 })}
+			/>
+			{overlay && (
+				<div className={styles.selectOverlay} style={overlayStyle(overlay.mode, overlay.d)} />
+			)}
+		</div>
+	);
+};

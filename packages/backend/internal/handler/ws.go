@@ -1,19 +1,30 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"sync"
 	"time"
 
+	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/db"
+	"classicy/streamer/internal/model"
 	"classicy/streamer/internal/session"
 
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
+	"golang.org/x/time/rate"
 )
+
+// weatherZoneRe validates a client-supplied NWS UGC zone code (e.g. "NYZ072")
+// before it feeds a SQL LIKE in db.CurrentWeatherForecast.
+var weatherZoneRe = regexp.MustCompile(`^[A-Z]{2}Z\d{3}$`)
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -28,6 +39,14 @@ type inMsg struct {
 	Time string `json:"time,omitempty"`
 }
 
+// maxRoomIDLen bounds a client-supplied room id. Playlist ids are short; this
+// is only a guard against a client parking megabytes in a session field.
+const maxRoomIDLen = 128
+
+type roomMsg struct {
+	Room string `json:"room"`
+}
+
 // filterMsg carries a format whitelist from the client.
 // Formats nil or empty means "send all formats".
 type filterMsg struct {
@@ -36,24 +55,284 @@ type filterMsg struct {
 }
 
 // channelMsg carries the channel name for subscribe/unsubscribe. Valid channels
-// are "pager", "mp3" and "news".
+// are "pager", "mp3", "news", "usenet", "flights" and "weather".
 type channelMsg struct {
 	Type    string `json:"type"`
 	Channel string `json:"channel"`
 }
 
+// usenetFilterMsg carries the set of newsgroups the client is currently viewing.
+// The usenet channel only delivers messages from these groups (empty = none).
+type usenetFilterMsg struct {
+	Type       string   `json:"type"`
+	Newsgroups []string `json:"newsgroups"`
+}
+
+// usenetMoreMsg requests the page of messages older than `before` (the oldest the
+// client currently holds) for the viewed newsgroup(s) — backlog pagination.
+type usenetMoreMsg struct {
+	Type       string   `json:"type"`
+	Newsgroups []string `json:"newsgroups"`
+	Before     string   `json:"before"`
+}
+
+// usenetBodyMsg requests the full body of one archived message by id. The body is
+// no longer carried in list frames; the client fetches it when a message opens.
+type usenetBodyMsg struct {
+	Type string `json:"type"`
+	ID   int    `json:"id"`
+}
+
+// newsBodyMsg requests the full text of one news article by id. Article bodies are
+// not carried in the news snapshot (see db.CurrentNewsItems); the client fetches
+// one when an article's detail window opens.
+type newsBodyMsg struct {
+	Type string `json:"type"`
+	ID   int    `json:"id"`
+}
+
+// flightsHistoryMsg requests the trailing N minutes of flight positions — the
+// Flight Tracker's loop mode uses 30/90, its heading seed a few minutes. id is
+// echoed on every reply chunk so the client can discard chunks of a superseded
+// request (and route seed vs loop replies, which share this message type).
+type flightsHistoryMsg struct {
+	// Channel selects the corpus: "" or "flights" (default) or "flights-anon"
+	// (requires the matching subscription).
+	Channel string `json:"channel,omitempty"`
+	Type    string `json:"type"`
+	Minutes int    `json:"minutes"`
+	ID      int    `json:"id"`
+}
+
+// Bounds for flightsHistoryMsg.Minutes: a range rather than a preset list so
+// the frontend can tune its lookbacks without a lockstep backend deploy. The
+// cap matches the largest loop window; at ~600-900 rows/min it bounds a single
+// request to roughly the same worst case the loop mode already implies.
+const (
+	flightsHistoryMinMinutes = 1
+	flightsHistoryMaxMinutes = 90
+)
+
+// weatherForecastMsg requests the current forecast product for a single NWS
+// zone (UGC code, e.g. "NYZ072") at the client's virtual time. id is echoed
+// on the reply so the client can match it to the request.
+type weatherForecastMsg struct {
+	Type string `json:"type"`
+	Zone string `json:"zone"`
+	ID   int    `json:"id"`
+}
+
+// chatSendMsg carries one student message to a buddy on the chat channel.
+type chatSendMsg struct {
+	Type    string `json:"type"`
+	Profile int    `json:"profile"`
+	Body    string `json:"body"`
+}
+
+// chatHistoryMsg requests prior turns with a buddy, at or before Before
+// (RFC3339), oldest-page-first pagination the same way usenet_more works.
+type chatHistoryMsg struct {
+	Type    string `json:"type"`
+	Profile int    `json:"profile"`
+	Before  string `json:"before"`
+	Limit   int    `json:"limit"`
+}
+
+// chatHistoryDefaultLimit is both the default a chat_history request that
+// omits limit (or supplies a non-positive one) gets, and the ceiling any
+// request is clamped to -- the same bound ChatSend's own context read uses.
+// Without the ceiling a client-supplied {"limit": 1000000} would be accepted
+// and issue that query as-is.
+const chatHistoryDefaultLimit = 40
+
+// clampChatHistoryLimit floors a non-positive or omitted limit to the default
+// and ceilings an oversized one to the same bound, rather than trusting a
+// client-supplied value in either direction.
+func clampChatHistoryLimit(limit int) int {
+	if limit <= 0 || limit > chatHistoryDefaultLimit {
+		return chatHistoryDefaultLimit
+	}
+	return limit
+}
+
+// ProfileCache holds the buddy roster, plus the beacon/phase configuration
+// that resolves each buddy's emotional arc across the virtual clock, for the
+// life of the process. Chat config is tiny and static; every connection
+// reads the same values rather than querying.
+type ProfileCache struct {
+	mu           sync.RWMutex
+	profiles     []chat.Profile
+	beacons      map[int]chat.Beacon
+	phases       map[int][]chat.Phase
+	schedules    []chat.Schedule
+	bcastSources []chat.BroadcastSource
+	userFields   []chat.UserField
+}
+
+func NewProfileCache() *ProfileCache { return &ProfileCache{} }
+
+func (c *ProfileCache) Get() []chat.Profile {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.profiles
+}
+
+func (c *ProfileCache) Set(p []chat.Profile) {
+	c.mu.Lock()
+	c.profiles = p
+	c.mu.Unlock()
+}
+
+// SetPhaseData installs the beacon and phase configuration. Call once at boot,
+// alongside Set.
+func (c *ProfileCache) SetPhaseData(beacons map[int]chat.Beacon, phases map[int][]chat.Phase) {
+	c.mu.Lock()
+	c.beacons, c.phases = beacons, phases
+	c.mu.Unlock()
+}
+
+// PhaseData returns the beacon and phase configuration installed by
+// SetPhaseData.
+func (c *ProfileCache) PhaseData() (map[int]chat.Beacon, map[int][]chat.Phase) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.beacons, c.phases
+}
+
+// SetSchedules installs the proactive-beat configuration. Call once at boot,
+// alongside Set and SetPhaseData.
+func (c *ProfileCache) SetSchedules(schedules []chat.Schedule) {
+	c.mu.Lock()
+	c.schedules = schedules
+	c.mu.Unlock()
+}
+
+// SetBroadcastSources installs the reach/market classification. Call once at
+// boot, alongside Set and SetPhaseData.
+func (c *ProfileCache) SetBroadcastSources(sources []chat.BroadcastSource) {
+	c.mu.Lock()
+	c.bcastSources = sources
+	c.mu.Unlock()
+}
+
+// BroadcastSources returns the classification installed by SetBroadcastSources.
+func (c *ProfileCache) BroadcastSources() []chat.BroadcastSource {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.bcastSources
+}
+
+// Schedules returns the proactive-beat configuration installed by
+// SetSchedules.
+func (c *ProfileCache) Schedules() []chat.Schedule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.schedules
+}
+
+// SetUserFields installs which directus_users columns buddies may know about
+// the signed-in user. Call once at boot, alongside Set and SetPhaseData.
+func (c *ProfileCache) SetUserFields(fields []chat.UserField) {
+	c.mu.Lock()
+	c.userFields = fields
+	c.mu.Unlock()
+}
+
+// UserFields returns the exposure list installed by SetUserFields.
+func (c *ProfileCache) UserFields() []chat.UserField {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.userFields
+}
+
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
-func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) http.HandlerFunc {
+func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sources *db.SourcesCache, chatProfiles *ProfileCache, trustedOrigins *OriginAllowlist, logger *slog.Logger) http.HandlerFunc {
+	// shedLog rate-limits the at-capacity warning: shedding kicks in exactly when
+	// connections flood, so an unthrottled per-rejection log would itself become a
+	// flood. The 503 the client receives is the real, unthrottled signal.
+	shedLog := rate.Sometimes{Interval: time.Second}
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Load-shedding: reserve a slot before upgrading so an overloaded pod
+		// rejects new connections with a clean 503 instead of accepting them and
+		// crashing — a crash drops every already-connected client at once. The slot
+		// is released when the handler returns, i.e. when the connection ends.
+		if !hub.TryAcquire() {
+			shedLog.Do(func() {
+				logger.Warn("at capacity, shedding connection", "active", hub.Active(), "remote", r.RemoteAddr)
+			})
+			http.Error(w, "server at capacity", http.StatusServiceUnavailable)
+			return
+		}
+		defer hub.Release()
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			logger.Warn("websocket upgrade failed", "error", err, "remote", r.RemoteAddr)
 			return
 		}
 
-		sess := session.NewSession(hub, rdb, logger)
+		sess := session.NewSession(hub, rdb, pool, logger)
+
+		// Chat is the only channel that needs an identity. Resolving it here (not
+		// on subscribe) keeps the lookup off the message path, and a failure is
+		// non-fatal: the session stays anonymous and every other channel works.
+		// This also runs after the hub slot is acquired and holds one of the
+		// pool's connections while in flight, so an unbounded wait here (e.g.
+		// behind a lock or a saturated pool) would starve the usenet/weather
+		// tick paths too. Bound it and degrade to anonymous on timeout — same
+		// as the existing error path — never reject the connection.
+		// The cookie alone is not enough. SameSite=lax bounds it to the site,
+		// so any host under 911realtime.org — including ones serving archived
+		// third-party content — can reach us with a signed-in user's cookie
+		// attached. Only origins we publish may turn that cookie into an
+		// identity; everyone else streams anonymously.
+		if token := db.SessionTokenFrom(r); token != "" {
+			origin := r.Header.Get("Origin")
+			if !trustedOrigins.Trusted(origin) {
+				// Logged because the failure is otherwise invisible: the socket
+				// connects, media plays, and chat just reports not_signed_in to
+				// a user who is demonstrably signed in.
+				logger.Info("session cookie ignored: untrusted origin", "origin", origin)
+			} else {
+				lookupCtx, lookupCancel := context.WithTimeout(r.Context(), 2*time.Second)
+				uid, name, err := db.LookupSessionUser(lookupCtx, pool, token)
+				if err != nil {
+					logger.Warn("directus session lookup failed", "error", err)
+				} else if uid != "" {
+					sess.SetUser(uid)
+					// Naming the student keeps a buddy from reaching for the
+					// only other name in its own persona -- Carol, written as
+					// "Danny's aunt", greeted every student as Danny.
+					sess.SetUserName(name)
+					// Bounded by the same lookupCtx as the identity read
+					// above, and non-fatal for the same reason: a slow or
+					// failed profile read must leave the user signed in and
+					// every other channel working, not reject the connection.
+					if fields := chatProfiles.UserFields(); len(fields) > 0 {
+						profile, err := chat.LoadUserProfile(lookupCtx, pool, uid, fields)
+						if err != nil {
+							logger.Warn("chat user profile load failed", "error", err)
+						} else {
+							sess.SetUserProfile(profile)
+						}
+					}
+				}
+				lookupCancel()
+			}
+		}
+		sess.SetProfiles(chatProfiles.Get())
+		beacons, phases := chatProfiles.PhaseData()
+		sess.SetPhaseData(beacons, phases)
+		sess.SetSchedules(chatProfiles.Schedules())
+		sess.SetBroadcastSources(chatProfiles.BroadcastSources())
+
 		hub.Register(sess)
+
+		// Late joiners are locked immediately; everyone else heard the broadcast.
+		if t, ok := hub.MasterNow(); ok {
+			sess.SendClock(true, t)
+		}
 
 		// writePump — runs until the session closes or a write fails.
 		go func() {
@@ -93,6 +372,16 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 			return nil
 		})
 
+		// effectiveTime substitutes the master time for any client-supplied time
+		// while forced mode is active — a divergent or hand-rolled client cannot
+		// stream data from a different moment.
+		effectiveTime := func(t time.Time) time.Time {
+			if mt, ok := hub.MasterNow(); ok {
+				return mt
+			}
+			return t
+		}
+
 		for {
 			_, raw, err := conn.ReadMessage()
 			if err != nil {
@@ -114,6 +403,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					sess.SendError("invalid time: " + err.Error())
 					continue
 				}
+				t = effectiveTime(t)
 				items, err := db.CurrentItems(r.Context(), pool, t)
 				if err != nil {
 					logger.Warn("current items query failed", "error", err)
@@ -121,7 +411,8 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.Init(t, items)
-				sendSubscribedSnapshots(r, sess, pool, t, logger)
+				sendSubscribedSnapshots(r, sess, pool, rdb, t, logger)
+				sendSources(r, sess, sources)
 
 			case "seek":
 				t, err := parseTime(msg.Time)
@@ -129,6 +420,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					sess.SendError("invalid time: " + err.Error())
 					continue
 				}
+				t = effectiveTime(t)
 				items, err := db.CurrentItems(r.Context(), pool, t)
 				if err != nil {
 					logger.Warn("seek items query failed", "error", err)
@@ -136,7 +428,7 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					continue
 				}
 				sess.Seek(t, items)
-				sendSubscribedSnapshots(r, sess, pool, t, logger)
+				sendSubscribedSnapshots(r, sess, pool, rdb, t, logger)
 
 			case "heartbeat":
 				t, err := parseTime(msg.Time)
@@ -154,6 +446,48 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 				}
 				sess.SetFormatFilter(fmsg.Formats)
 
+			case "usenet_filter":
+				var umsg usenetFilterMsg
+				if err := json.Unmarshal(raw, &umsg); err != nil {
+					sess.SendError("malformed usenet_filter message")
+					continue
+				}
+				sess.SetUsenetGroups(umsg.Newsgroups)
+				// Deliver the backlog for the newly-selected group(s) at the current
+				// virtual time so the client immediately sees messages up to "now".
+				if t, ok := sess.VirtualTime(); ok {
+					sendUsenetSnapshot(r, sess, pool, t, logger)
+				}
+
+			case "usenet_more":
+				var umsg usenetMoreMsg
+				if err := json.Unmarshal(raw, &umsg); err != nil {
+					sess.SendError("malformed usenet_more message")
+					continue
+				}
+				before, err := parseTime(umsg.Before)
+				if err != nil {
+					sess.SendError("invalid time: " + err.Error())
+					continue
+				}
+				sendUsenetOlder(r, sess, pool, umsg.Newsgroups, before, logger)
+
+			case "usenet_body":
+				var umsg usenetBodyMsg
+				if err := json.Unmarshal(raw, &umsg); err != nil {
+					sess.SendError("malformed usenet_body message")
+					continue
+				}
+				sendUsenetBody(r, sess, pool, umsg.ID, logger)
+
+			case "news_body":
+				var nmsg newsBodyMsg
+				if err := json.Unmarshal(raw, &nmsg); err != nil {
+					sess.SendError("malformed news_body message")
+					continue
+				}
+				sendNewsBody(r, sess, pool, nmsg.ID, logger)
+
 			case "subscribe":
 				var cmsg channelMsg
 				if err := json.Unmarshal(raw, &cmsg); err != nil {
@@ -164,12 +498,56 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 					sess.SendError(fmt.Sprintf("unknown channel %q", cmsg.Channel))
 					continue
 				}
+				if cmsg.Channel == session.ChannelChat && sess.UserID() == "" {
+					sess.SendChatState()
+					continue
+				}
 				sess.Subscribe(cmsg.Channel)
+				if cmsg.Channel == session.ChannelChat {
+					// Opening IM Buddies is the natural moment to pick up a
+					// profile edit made moments earlier in the Account app. A
+					// failed re-read KEEPS the previous value rather than
+					// blanking it: a buddy that forgets your name because one
+					// query timed out is worse than a slightly stale one.
+					if uid := sess.UserID(); uid != "" {
+						if fields := chatProfiles.UserFields(); len(fields) > 0 {
+							subCtx, subCancel := context.WithTimeout(r.Context(), 2*time.Second)
+							profile, err := chat.LoadUserProfile(subCtx, pool, uid, fields)
+							subCancel()
+							if err != nil {
+								logger.Warn("chat user profile refresh failed", "error", err)
+							} else {
+								sess.SetUserProfile(profile)
+							}
+						}
+					}
+					sess.SendChatState()
+					sess.SendChatRoster()
+					continue
+				}
 				// Deliver an immediate snapshot at the current virtual time so the
 				// client gets the active items without waiting for the next tick.
 				if t, ok := sess.VirtualTime(); ok {
-					sendChannelSnapshot(r, sess, pool, cmsg.Channel, t, logger)
+					sendChannelSnapshot(r, sess, pool, rdb, cmsg.Channel, t, logger)
 				}
+
+			case "join_room":
+				var rmsg roomMsg
+				if err := json.Unmarshal(raw, &rmsg); err != nil {
+					sess.SendError("malformed join_room message")
+					continue
+				}
+				// Bounded because it is echoed back in no frame but is held per
+				// session and compared on every broadcast; an unbounded id is
+				// free memory for a client to waste.
+				if len(rmsg.Room) > maxRoomIDLen {
+					sess.SendError("room id too long")
+					continue
+				}
+				sess.JoinRoom(rmsg.Room)
+
+			case "leave_room":
+				sess.LeaveRoom()
 
 			case "unsubscribe":
 				var cmsg channelMsg
@@ -183,11 +561,86 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, log
 				}
 				sess.Unsubscribe(cmsg.Channel)
 
+			case "flights_history":
+				var fmsg flightsHistoryMsg
+				if err := json.Unmarshal(raw, &fmsg); err != nil {
+					sess.SendError("malformed flights_history message")
+					continue
+				}
+				if fmsg.Minutes < flightsHistoryMinMinutes || fmsg.Minutes > flightsHistoryMaxMinutes {
+					sess.SendError("invalid flights_history minutes")
+					continue
+				}
+				// History (loop or heading seed) is a channel feature; without the
+				// matching subscription there is nothing to serve, so the request
+				// is silently dropped.
+				key := cache.KeyFlightMinutes
+				needed := session.ChannelFlights
+				switch fmsg.Channel {
+				case "", session.ChannelFlights:
+				case session.ChannelFlightsAnon:
+					key = cache.KeyFlightAnonMinutes
+					needed = session.ChannelFlightsAnon
+				default:
+					sess.SendError("invalid flights_history channel")
+					continue
+				}
+				if !sess.Subscribed(needed) {
+					continue
+				}
+				if t, ok := sess.VirtualTime(); ok {
+					sendFlightsHistory(r, sess, rdb, key, fmsg.ID, t, fmsg.Minutes, logger)
+				}
+
+			case "weather_forecast":
+				var wmsg weatherForecastMsg
+				if err := json.Unmarshal(raw, &wmsg); err != nil {
+					sess.SendError("malformed weather_forecast message")
+					continue
+				}
+				// The forecast lookup is a weather-channel feature, and the zone feeds
+				// a SQL LIKE, so both gates return before touching the pool. Neither
+				// case sends an error frame — an unsubscribed client or a stale/mistyped
+				// zone selection isn't something the user needs to see as an error,
+				// mirroring flights_history's silent-drop gating for the unsubscribed case.
+				if !sess.Subscribed(session.ChannelWeather) || !weatherZoneRe.MatchString(wmsg.Zone) {
+					continue
+				}
+				if t, ok := sess.VirtualTime(); ok {
+					sendWeatherForecast(r, sess, pool, wmsg.ID, wmsg.Zone, t, logger)
+				}
+
 			case "pause":
 				sess.Pause()
 
 			case "resume":
 				sess.Resume()
+
+			case "chat_send":
+				var cmsg chatSendMsg
+				if err := json.Unmarshal(raw, &cmsg); err != nil {
+					sess.SendError("malformed chat_send message")
+					continue
+				}
+				sess.ChatSend(cmsg.Profile, cmsg.Body)
+
+			case "chat_history":
+				var cmsg chatHistoryMsg
+				if err := json.Unmarshal(raw, &cmsg); err != nil {
+					sess.SendError("malformed chat_history message")
+					continue
+				}
+				before, err := parseTime(cmsg.Before)
+				if err != nil {
+					sess.SendError("invalid time: " + err.Error())
+					continue
+				}
+				sess.ChatHistory(cmsg.Profile, before, clampChatHistoryLimit(cmsg.Limit))
+
+			// No payload to unmarshal: the target is always the session's own
+			// authenticated user, so there is nothing for a client to specify.
+			case "chat_clear":
+				sess.ChatClear()
 
 			default:
 				sess.SendError(fmt.Sprintf("unknown message type %q", msg.Type))
@@ -232,22 +685,77 @@ func sendPagerSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Poo
 // session if it is subscribed to the mp3 channel. Unlike pager, mp3 is durational
 // audio, so the snapshot returns the recording playing at t (start ≤ t ≤ end) and
 // the Radio app resumes it mid-file via the jump offset.
-func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
 	if !sess.Subscribed(session.ChannelMp3) {
 		return
 	}
+
+	// First, and only ever once — see sendMp3Meta. Ahead of the item frames so
+	// the client has the metadata for anything it is about to be handed.
+	sendMp3Meta(r, sess, rdb, logger)
+
 	items, err := db.CurrentMp3Items(r.Context(), pool, t)
 	if err != nil {
 		logger.Warn("current mp3 items query failed", "error", err)
 		return
 	}
 	sess.SendMp3(t, items)
+
+	// The Radio app's "Previous" list shows a station's full past schedule, which
+	// the live stream never covers (snapshots are active-only, windows are
+	// forward-only). Deliver the complete history up to t alongside the snapshot;
+	// the frame always sends (even empty) so a backward seek resets the client.
+	history, err := db.Mp3ItemHistory(r.Context(), pool, t)
+	if err != nil {
+		logger.Warn("mp3 history query failed", "error", err)
+		return
+	}
+	sess.SendMp3History(t, history)
 }
 
-// sendNewsSnapshot delivers the news items active at t to the session if it is
-// subscribed to the news channel. Like the media path, the snapshot uses an
-// overlap window plus a 5-minute lookback for instant headlines (most news is
-// instant), so a seek to t still shows recently-fired stories.
+// sendMp3Meta delivers the one-shot mp3_meta frame. Called from the same
+// init/seek/subscribe path as the item frames above, but sends on the first of
+// those only: the metadata is corpus-wide, immutable and has no time dimension,
+// so a seek cannot change any of it, while re-sending would cost ~1.5 MB per
+// scrub. Session.SendMp3Meta is what enforces the once; the Mp3MetaSent check
+// here is what keeps a seek from paying for the Redis read and the decode to
+// produce a frame that would then be dropped.
+//
+// Served from the warm Redis snapshot, never Postgres — this runs on every seek
+// of every session, and the underlying query joins the whole tag graph.
+func sendMp3Meta(r *http.Request, sess *session.Session, rdb *goredis.Client, logger *slog.Logger) {
+	if sess.Mp3MetaSent() {
+		return
+	}
+	meta, err := cache.LoadMp3Meta(r.Context(), rdb)
+	if err != nil {
+		logger.Warn("mp3 metadata load failed", "error", err)
+		return
+	}
+	// No snapshot built yet (a subscribe that raced the first warm, or a schema
+	// without the metadata columns). Send nothing rather than an empty corpus:
+	// the frame is one-shot, so an empty one would be cached as the truth for the
+	// life of the connection.
+	if meta == nil {
+		return
+	}
+	items, err := meta.Items()
+	if err != nil {
+		logger.Warn("mp3 metadata decode failed", "error", err)
+		return
+	}
+	sess.SendMp3Meta(meta.Generation, items)
+}
+
+// sendNewsSnapshot delivers the complete news back catalogue — every article
+// from db.NewsEpoch up to t — to the session if it is subscribed to the news
+// channel. Unlike the media/mp3 paths, this is not a windowed/overlap query:
+// News is never client-side time-pruned, so the whole history has to arrive
+// up front (on init, seek, and subscribe) for the app to show it. Items are
+// headline-only — bodies are omitted here and fetched on demand per-article
+// via the news_body request/reply round-trip (see the "news_body" case in
+// this file) — sending bodies for the full backlog on every seek would be
+// multiple MB of payload the client mostly never reads.
 func sendNewsSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
 	if !sess.Subscribed(session.ChannelNews) {
 		return
@@ -260,27 +768,244 @@ func sendNewsSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool
 	sess.SendNews(t, items)
 }
 
+// usenetSnapshotLimit bounds the backlog returned when a client opens a newsgroup:
+// the most recent N messages up to the virtual clock. A group's full history can be
+// large, so older messages are fetched on demand (pagination, future work).
+const usenetSnapshotLimit = 500
+
+// sendUsenetSnapshot delivers the backlog (most recent messages up to t) for every
+// newsgroup the session is currently viewing, if it is subscribed to the usenet
+// channel. Called from init, seek, subscribe, and usenet_filter. Reads Postgres
+// (like the other snapshots), filtered to the active group(s) so a large group
+// never floods the client.
+func sendUsenetSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelUsenet) {
+		return
+	}
+	var batch []model.UsenetItem
+	for _, g := range sess.ActiveUsenetGroups() {
+		items, err := db.CurrentUsenetItems(r.Context(), pool, g, t, usenetSnapshotLimit)
+		if err != nil {
+			logger.Warn("current usenet items query failed", "group", g, "error", err)
+			continue
+		}
+		batch = append(batch, items...)
+	}
+	sess.SendUsenet(t, batch)
+}
+
+// sendUsenetOlder delivers the page of messages older than `before` for the given
+// newsgroup(s) if the session is subscribed to usenet. All such messages are ≤ the
+// virtual clock, so they ride the normal usenet frame and the client merges them in.
+func sendUsenetOlder(r *http.Request, sess *session.Session, pool *pgxpool.Pool, newsgroups []string, before time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelUsenet) {
+		return
+	}
+	var batch []model.UsenetItem
+	for _, g := range newsgroups {
+		items, err := db.OlderUsenetItems(r.Context(), pool, g, before, usenetSnapshotLimit)
+		if err != nil {
+			logger.Warn("older usenet items query failed", "group", g, "error", err)
+			continue
+		}
+		batch = append(batch, items...)
+	}
+	sess.SendUsenet(before, batch)
+}
+
+// sendUsenetBody fetches one message's body by id and replies on the usenet_body
+// frame. Only approved messages are served; a missing/unapproved id, a query
+// error, or a request from a client not subscribed to usenet all send an empty
+// body with an explanatory message so the client shows an error line rather than
+// hanging on "loading" — a body request always gets a reply.
+func sendUsenetBody(r *http.Request, sess *session.Session, pool *pgxpool.Pool, id int, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelUsenet) {
+		sess.SendUsenetBody(id, "", "message unavailable")
+		return
+	}
+	item, err := db.UsenetItemByID(r.Context(), pool, id)
+	if err != nil {
+		logger.Warn("usenet body query failed", "id", id, "error", err)
+		sess.SendUsenetBody(id, "", "message unavailable")
+		return
+	}
+	if item == nil || item.Approved != 1 {
+		sess.SendUsenetBody(id, "", "message unavailable")
+		return
+	}
+	sess.SendUsenetBody(id, item.Body, "")
+}
+
+// sendNewsBody fetches one article's body by id and replies on the news_body frame.
+// Only approved articles are served; a missing/unapproved id, a query error, or a
+// request from a client not subscribed to news all send an empty body with an
+// explanatory message so the client shows an error line rather than hanging on
+// "loading" — a body request always gets a reply.
+func sendNewsBody(r *http.Request, sess *session.Session, pool *pgxpool.Pool, id int, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelNews) || pool == nil {
+		sess.SendNewsBody(id, "", "article unavailable")
+		return
+	}
+	body, found, err := db.NewsItemBody(r.Context(), pool, id)
+	if err != nil {
+		logger.Warn("news body query failed", "id", id, "error", err)
+		sess.SendNewsBody(id, "", "article unavailable")
+		return
+	}
+	if !found {
+		sess.SendNewsBody(id, "", "article unavailable")
+		return
+	}
+	sess.SendNewsBody(id, body, "")
+}
+
+// flightsSnapshotLookback covers the airborne picture at t: positions are
+// per-minute samples, so any flight airborne at t has a sample within the
+// trailing 90s (two minute buckets across the boundary).
+const flightsSnapshotLookback = 90 * time.Second
+
+// sendFlightsSnapshot delivers the airborne set at t to the session if it is
+// subscribed to the flights channel. Unlike the other snapshots this reads the
+// Redis minute buckets, not Postgres: the flight cache is the channel's only
+// read path (no Current* query, no serving index on the table), and the buckets
+// covering [t−90s, t] already hold the latest sample of every airborne flight.
+func sendFlightsSnapshot(r *http.Request, sess *session.Session, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelFlights) {
+		return
+	}
+	items, err := cache.FlightPositionsInRange(r.Context(), rdb, cache.KeyFlightMinutes, t.Add(-flightsSnapshotLookback), t.Add(time.Second), logger)
+	if err != nil {
+		logger.Warn("flights snapshot lookup failed", "error", err)
+		return
+	}
+	sess.SendFlights(t, items)
+}
+
+// sendFlightsAnonSnapshot is the flights-anon twin: same airborne-picture
+// lookback against the anonymous-traffic bucket key, its own frame type.
+func sendFlightsAnonSnapshot(r *http.Request, sess *session.Session, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelFlightsAnon) {
+		return
+	}
+	items, err := cache.FlightPositionsInRange(r.Context(), rdb, cache.KeyFlightAnonMinutes, t.Add(-flightsSnapshotLookback), t.Add(time.Second), logger)
+	if err != nil {
+		logger.Warn("flights-anon snapshot lookup failed", "error", err)
+		return
+	}
+	sess.SendFlightsAnon(t, items)
+}
+
+// flightsHistoryChunk bounds one flights_history reply frame at ~10 minute
+// buckets (~6-9k positions, a few hundred KB of msgpack). A single 90-minute
+// frame would be several MB — enough to stall the write pump and the client
+// decoder, so the window is streamed in pieces.
+const flightsHistoryChunk = 10 * time.Minute
+
+// sendFlightsHistory streams the [t−minutes, t] window to the client in chunked
+// flights_history frames, ending with an (always-sent) done frame. A chunk that
+// fails to read is skipped: the client still gets the rest of the window and
+// the done marker — a hole in the loop beats no loop.
+func sendFlightsHistory(r *http.Request, sess *session.Session, rdb *goredis.Client, key string, reqID int, t time.Time, minutes int, logger *slog.Logger) {
+	lo := t.Add(-time.Duration(minutes) * time.Minute)
+	hi := t.Add(time.Second) // include the current instant, like the snapshot
+	for chunkLo := lo; chunkLo.Before(hi); chunkLo = chunkLo.Add(flightsHistoryChunk) {
+		chunkHi := chunkLo.Add(flightsHistoryChunk)
+		if chunkHi.After(hi) {
+			chunkHi = hi
+		}
+		items, err := cache.FlightPositionsInRange(r.Context(), rdb, key, chunkLo, chunkHi, logger)
+		if err != nil {
+			logger.Warn("flights history lookup failed", "error", err)
+			continue
+		}
+		sess.SendFlightsHistory(reqID, chunkLo, items, false)
+	}
+	sess.SendFlightsHistory(reqID, t, nil, true)
+}
+
+// sendWeatherSnapshot delivers the latest observation at or before t for every
+// station to the session if it is subscribed to the weather channel. Called
+// from init, seek, and subscribe. Unlike the tick path's windowed reads, this
+// is a point-in-time DISTINCT ON lookup with no lookback bound baked in — a
+// station silent for hours still shows its last observation, labeled by its
+// own timestamp; forecasts are not part of the snapshot (on-demand only, via
+// weather_forecast).
+func sendWeatherSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+	if !sess.Subscribed(session.ChannelWeather) {
+		return
+	}
+	obs, err := db.CurrentWeatherObs(r.Context(), pool, t)
+	if err != nil {
+		logger.Warn("current weather obs query failed", "error", err)
+		return
+	}
+	sess.SendWeather(t, obs, nil)
+}
+
+// sendWeatherForecast looks up the forecast product covering zone at t and
+// replies on the weather_forecast frame, echoing reqID. Unlike
+// sendWeatherSnapshot, this always sends — CurrentWeatherForecast returning
+// (nil, nil) (no product covers the zone) or a query error still gets a
+// reply (empty forecast field) so the client's request doesn't hang.
+func sendWeatherForecast(r *http.Request, sess *session.Session, pool *pgxpool.Pool, reqID int, zone string, t time.Time, logger *slog.Logger) {
+	fc, err := db.CurrentWeatherForecast(r.Context(), pool, zone, t)
+	if err != nil {
+		logger.Warn("current weather forecast query failed", "zone", zone, "error", err)
+		sess.SendWeatherForecast(reqID, t, nil)
+		return
+	}
+	sess.SendWeatherForecast(reqID, t, fc)
+}
+
+// sendSources delivers the time-independent available-source lists for client
+// filters (TV channels, RadioScanner audio stations, pager providers, newsgroups). Called once per init —
+// sources don't change with virtual time, so seek does not resend them. The four
+// underlying queries are identical for every client, so they're memoized behind a
+// TTL cache (db.SourcesCache): a connection storm issues at most one refresh per
+// interval instead of four Postgres queries per connection. A failed refresh serves
+// the last good value — a missing list only degrades a filter UI, it must not break streaming.
+func sendSources(r *http.Request, sess *session.Session, sources *db.SourcesCache) {
+	s := sources.Get(r.Context())
+	sess.SendSources(s.Video, s.Audio, s.Pager, s.Usenet)
+}
+
 // knownChannel reports whether ch is a valid subscription channel.
 func knownChannel(ch string) bool {
-	return ch == session.ChannelPager || ch == session.ChannelMp3 || ch == session.ChannelNews
+	return ch == session.ChannelPager || ch == session.ChannelMp3 ||
+		ch == session.ChannelNews || ch == session.ChannelUsenet ||
+		ch == session.ChannelFlights || ch == session.ChannelFlightsAnon ||
+		ch == session.ChannelWeather || ch == session.ChannelAlerts ||
+		ch == session.ChannelChat
 }
 
 // sendChannelSnapshot delivers the subscribe-time snapshot for a single channel.
-func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, channel string, t time.Time, logger *slog.Logger) {
+func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, rdb *goredis.Client, channel string, t time.Time, logger *slog.Logger) {
 	switch channel {
 	case session.ChannelPager:
 		sendPagerSnapshot(r, sess, pool, t, logger)
 	case session.ChannelMp3:
-		sendMp3Snapshot(r, sess, pool, t, logger)
+		sendMp3Snapshot(r, sess, pool, rdb, t, logger)
 	case session.ChannelNews:
 		sendNewsSnapshot(r, sess, pool, t, logger)
+	case session.ChannelUsenet:
+		sendUsenetSnapshot(r, sess, pool, t, logger)
+	case session.ChannelFlights:
+		sendFlightsSnapshot(r, sess, rdb, t, logger)
+	case session.ChannelFlightsAnon:
+		sendFlightsAnonSnapshot(r, sess, rdb, t, logger)
+	case session.ChannelWeather:
+		sendWeatherSnapshot(r, sess, pool, t, logger)
 	}
 }
 
 // sendSubscribedSnapshots delivers snapshots for every channel the session is
 // subscribed to. Called from init and seek; each helper no-ops if unsubscribed.
-func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpool.Pool, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
 	sendPagerSnapshot(r, sess, pool, t, logger)
-	sendMp3Snapshot(r, sess, pool, t, logger)
+	sendMp3Snapshot(r, sess, pool, rdb, t, logger)
 	sendNewsSnapshot(r, sess, pool, t, logger)
+	sendUsenetSnapshot(r, sess, pool, t, logger)
+	sendFlightsSnapshot(r, sess, rdb, t, logger)
+	sendFlightsAnonSnapshot(r, sess, rdb, t, logger)
+	sendWeatherSnapshot(r, sess, pool, t, logger)
 }

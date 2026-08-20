@@ -109,6 +109,20 @@ func NewsItemsAt(ctx context.Context, rdb *goredis.Client, t time.Time) ([]model
 	return fetchNewsByIDs(ctx, rdb, ids)
 }
 
+// NewsItemsInRange returns news items whose start_date Unix-second is in the
+// half-open interval [lo, hi). Used by the windowing refill path; client-side
+// reveal gating paces the (mostly instant) headlines by the virtual clock.
+func NewsItemsInRange(ctx context.Context, rdb *goredis.Client, lo, hi time.Time) ([]model.MediaItem, error) {
+	ids, err := rdb.ZRangeByScore(ctx, keyNewsByStart, &goredis.ZRangeBy{
+		Min: strconv.FormatInt(lo.Unix(), 10),
+		Max: "(" + strconv.FormatInt(hi.Unix(), 10), // exclusive upper bound
+	}).Result()
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	return fetchNewsByIDs(ctx, rdb, ids)
+}
+
 func fetchNewsByIDs(ctx context.Context, rdb *goredis.Client, ids []string) ([]model.MediaItem, error) {
 	vals, err := rdb.HMGet(ctx, keyNewsItems, ids...).Result()
 	if err != nil {

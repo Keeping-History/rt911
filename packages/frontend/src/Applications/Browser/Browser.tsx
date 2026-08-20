@@ -11,6 +11,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import DOMPurify from "dompurify";
 import {
 	type FC as FunctionalComponent,
@@ -21,9 +22,21 @@ import {
 	useState,
 } from "react";
 
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
+import { trackAppToggle } from "../../openreplay";
 import "./Browser.scss";
 import "./BrowserContext";
-import type { BrowserFavorite, BrowserHomePage } from "./BrowserContext";
+import type {
+	BrowserFavorite,
+	BrowserHistoryEntry,
+	BrowserHomePage,
+	BrowserRemoteCommand,
+} from "./BrowserContext";
+import {
+	buildLinkStyle,
+	DEFAULT_VISITED_COLOR,
+	extractLinkColors,
+} from "./browserUtils";
 import {
 	DEFAULT_PROXY_CONFIG,
 	type TimeMachineProxyConfig,
@@ -44,29 +57,45 @@ interface ShadowLinkClick {
 	rawHref: string;
 }
 
-const ShadowContent: FunctionalComponent<{
+export const ShadowContent: FunctionalComponent<{
 	html: string;
 	onLinkClick: (link: ShadowLinkClick) => void;
-}> = ({ html, onLinkClick }) => {
+	isVisited?: (href: string, rawHref: string) => boolean;
+}> = ({ html, onLinkClick, isVisited }) => {
 	const hostRef = useRef<HTMLDivElement>(null);
 	const shadowRef = useRef<ShadowRoot | null>(null);
+	// Persistent siblings inside the shadow root: styleRef holds the page's
+	// reconstructed link colors; docRef holds the sanitized page. Only docRef's
+	// innerHTML is replaced per navigation, so the <style> survives.
+	const styleRef = useRef<HTMLStyleElement | null>(null);
+	const docRef = useRef<HTMLDivElement | null>(null);
 	const onLinkClickRef = useRef(onLinkClick);
 	onLinkClickRef.current = onLinkClick;
 
 	useEffect(() => {
 		if (hostRef.current && !shadowRef.current) {
-			shadowRef.current = hostRef.current.attachShadow({ mode: "open" });
+			const shadow = hostRef.current.attachShadow({ mode: "open" });
+			const style = document.createElement("style");
+			const doc = document.createElement("div");
+			shadow.append(style, doc);
+			shadowRef.current = shadow;
+			styleRef.current = style;
+			docRef.current = doc;
 		}
 		// No cleanup: ShadowRoot cannot be detached once attached (browser limitation)
 	}, []);
 
 	useEffect(() => {
-		if (shadowRef.current) {
-			// Content is sanitized via DOMPurify before being set
-			shadowRef.current.innerHTML = DOMPurify.sanitize(html, {
-				FORCE_BODY: true,
-			});
-		}
+		if (!docRef.current || !styleRef.current) return;
+		// Content is sanitized via DOMPurify before being set
+		docRef.current.innerHTML = DOMPurify.sanitize(html, { FORCE_BODY: true });
+		// Recreate the page's <body link/vlink/alink> colors as a stylesheet,
+		// always giving visited links a color even when the page declares none.
+		const colors = extractLinkColors(html);
+		styleRef.current.textContent = buildLinkStyle({
+			...colors,
+			visited: colors.visited ?? DEFAULT_VISITED_COLOR,
+		});
 	}, [html]);
 
 	useEffect(() => {
@@ -78,17 +107,38 @@ const ShadowContent: FunctionalComponent<{
 				| HTMLElement
 				| undefined;
 			if (!clickTarget) return;
-			const anchor = clickTarget.closest?.("a");
-			if (!anchor) return;
+			// `area` matches image-map regions: a click inside a <map>'s region is
+			// dispatched on the <area>, which has .href/href like an <a> but isn't
+			// one — without this it escapes to the host browser's native navigation.
+			const link = clickTarget.closest?.("a, area") as
+				| HTMLAnchorElement
+				| HTMLAreaElement
+				| null;
+			if (!link) return;
 			mouseEvent.preventDefault();
 			onLinkClickRef.current({
-				href: anchor.href,
-				rawHref: anchor.getAttribute("href") || "",
+				href: link.href,
+				rawHref: link.getAttribute("href") || "",
 			});
 		};
 		shadow.addEventListener("click", handler);
 		return () => shadow.removeEventListener("click", handler);
 	}, []);
+
+	// Tag links the user has already visited with `.browserVisited`; the
+	// stylesheet (set above) colors them. Re-runs when the page changes or the
+	// visited set grows (isVisited identity changes).
+	useEffect(() => {
+		const doc = docRef.current;
+		if (!doc || !isVisited) return;
+		doc.querySelectorAll("a[href], area[href]").forEach((el) => {
+			const link = el as HTMLAnchorElement | HTMLAreaElement;
+			link.classList.toggle(
+				"browserVisited",
+				isVisited(link.href, link.getAttribute("href") || ""),
+			);
+		});
+	}, [html, isVisited]);
 
 	return <div ref={hostRef} className="browserPage" />;
 };
@@ -108,14 +158,34 @@ export const Browser = () => {
 	const appName = "Browser";
 	const appId = "Browser.app";
 	const appIcon = ClassicyIcons.applications.internetExplorer.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const desktopEventDispatch = useAppManagerDispatch();
 	const appState = useAppManager(
 		(state) => state.System.Manager.Applications.apps[appId],
 	);
 
+	const isOpen = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
+	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (prevIsOpenRef.current === undefined) {
+			prevIsOpenRef.current = isOpen;
+			return;
+		}
+		if (prevIsOpenRef.current === isOpen) return;
+		prevIsOpenRef.current = isOpen;
+		trackAppToggle(appId, isOpen ? "open" : "close");
+	}, [isOpen]);
+
 	const favorites = useAppManager(
 		(state) => (state.System.Manager.Applications.apps[appId]?.data?.favorites ?? []) as BrowserFavorite[],
+	);
+
+	const history = useAppManager(
+		(state) => (state.System.Manager.Applications.apps[appId]?.data?.history ?? []) as BrowserHistoryEntry[],
 	);
 
 	const proxyConfig: TimeMachineProxyConfig =
@@ -222,12 +292,25 @@ export const Browser = () => {
 		goBack,
 		goForward,
 		handleContentClick,
+		isVisited,
 	} = useBrowserNavigation({
 		defaultUrl: DEFAULT_URL,
 		proxyConfig,
 		onShowError: showError,
 		onRecordVisit: recordVisit,
+		visitedHistory: history,
 	});
+
+	// Apply each remote navigate command (playlist scheduled browser entries)
+	// exactly once, tracked by its monotonic seq. No retry condition needed —
+	// navigation depends on no stream data.
+	const remoteCommand = appState?.data?.command as BrowserRemoteCommand | undefined;
+	const lastCommandSeqRef = useRef(0);
+	useEffect(() => {
+		if (!remoteCommand || remoteCommand.seq <= lastCommandSeqRef.current) return;
+		lastCommandSeqRef.current = remoteCommand.seq;
+		if (remoteCommand.kind === "navigate") goTo(remoteCommand.url);
+	}, [remoteCommand, goTo]);
 
 	const windowIcon = useMemo(() => {
 		const currentDomain = normalizeDomain(addressBarValue);
@@ -293,6 +376,7 @@ export const Browser = () => {
 			name={appName}
 			icon={appIcon}
 			defaultWindow={"browser"}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{showSettings && (
 				<ClassicyWindow
@@ -446,8 +530,8 @@ export const Browser = () => {
 				icon={windowIcon}
 				appId={appId}
 				scrollable={false}
-				initialSize={[100, 500]}
-				initialPosition={[100, 100]}
+				initialSize={["50%", "50%"]}
+				initialPosition={["left", "top"]}
 				appMenu={appMenu}
 				growable={true}
 			>
@@ -558,8 +642,8 @@ export const Browser = () => {
 						<img
 							src={
 								isLoading
-									? ClassicyIcons.applications.internetExplorer.loaderAnimated
-									: ClassicyIcons.applications.internetExplorer.loader
+									? `${import.meta.env.BASE_URL}img/throbber.gif`
+									: `${import.meta.env.BASE_URL}img/throbber-static.gif`
 							}
 							className="browserLoaderIcon"
 							alt="Loader"
@@ -591,11 +675,13 @@ export const Browser = () => {
 						<ShadowContent
 							html={htmlContent}
 							onLinkClick={handleContentClick}
+							isVisited={isVisited}
 						/>
 					</div>
 					<div className="browserStatusBar">{statusText}</div>
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

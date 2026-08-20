@@ -19,11 +19,21 @@ Gap logic ported from packages/backend/gen-epg.mjs:65-101.
 Every slot boundary gets #EXT-X-DISCONTINUITY + absolute #EXT-X-MAP URL +
 #EXT-X-PROGRAM-DATE-TIME.
 """
+import posixpath
 from datetime import datetime, date, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
 
+from video_grabber.video.gap_filler import POOL_TILES, POOL_VERSION, TILE_SECONDS
+
 WASABI_BASE = "https://files.911realtime.org"
+
+# Shared, channel-independent sequenced gap pool (see gap_filler). A gap is filled
+# by referencing this pool's tiles IN ORDER so each carries an increasing fMP4
+# sequence_number/tfdt; ``POOL_VERSION`` is in the path so an encoding change
+# lands at a fresh URL that misses every cache layer (CDN, proxy, viewer OS cache).
+GAP_POOL_PREFIX = f"{WASABI_BASE}/hls/{POOL_VERSION}"
+
 REND_NAMES = ["full", "mid", "thumb"]
 REND_BANDWIDTHS = {"full": 2628000, "mid": 396000, "thumb": 136000}
 REND_RESOLUTIONS = {"full": "854x480", "mid": "320x240", "thumb": "160x120"}
@@ -38,6 +48,7 @@ def assemble_range(
     db,
     *,
     slots: Optional[list] = None,
+    cfg=None,
 ) -> tuple[dict[str, str], dict]:
     """
     Build continuous HLS playlists and EPG JSON for ``channel`` across
@@ -48,13 +59,23 @@ def assemble_range(
 
     The published playlist URL is channel-level (``playlists/<slug>/``) because the
     product serves one continuous stream per channel, regenerated in place as
-    more content is acquired. The blue gap package is likewise channel-level
-    (``hls/<slug>/_gap``) — its content is date-independent.
+    more content is acquired. Dead air is filled from the shared sequenced gap
+    pool (see :mod:`gap_filler`) so each gap tile carries an increasing fMP4
+    sequence_number/tfdt and conformant players track the timeline.
+
+    ``cfg`` enables *accurate* program ``#EXTINF``: the assembler reads each
+    program's real per-segment durations from its uploaded ``index.m3u8`` and
+    paths segments from the stored upload key. Without ``cfg`` it falls back to a
+    synthesized integer-second layout (the path the unit tests exercise).
     """
     if slots is None:
         slots = _fetch_slots(db, channel.id, window_start, window_end)
 
-    gap_prefix = f"{WASABI_BASE}/hls/{channel.slug}/_gap"
+    s3 = None
+    if cfg is not None:
+        from video_grabber.storage.wasabi import _make_s3_client
+        s3 = _make_s3_client(cfg)
+    gap_prefix = GAP_POOL_PREFIX
 
     rend_lines: dict[str, list[str]] = {
         r: [
@@ -71,7 +92,7 @@ def assemble_range(
 
     for slot in slots:
         if slot.starts_at > cursor:
-            gap_secs = int((slot.starts_at - cursor).total_seconds())
+            gap_secs = (slot.starts_at - cursor).total_seconds()
             _append_gap(rend_lines, cursor, gap_secs, gap_prefix)
             epg_grid.append({
                 "title": "[No Signal]",
@@ -79,13 +100,38 @@ def assemble_range(
                 "end": slot.starts_at.isoformat(),
             })
 
-        # Segments live under the program's own air date (== slot.starts_at),
-        # matching the upload path in storage/wasabi.py.
-        slot_yyyymmdd = slot.starts_at.strftime("%Y%m%d")
-        slot_prefix = (
-            f"{WASABI_BASE}/hls/{channel.slug}/{slot_yyyymmdd}/{slot.program.ia_identifier}"
-        )
-        _append_slot(rend_lines, slot, slot_prefix)
+        # Segments live at their original upload location (storage/wasabi.py),
+        # which is keyed by the channel slug *at encode time*. That slug can
+        # later change when a program is reassigned to its correct channel, so
+        # path the segments from the authoritative stored upload key — otherwise
+        # every reassigned program points at a dead URL under the new slug. Fall
+        # back to reconstructing from the current slug when no key is recorded
+        # (e.g. unit tests that hand-build slots).
+        seg_base = getattr(slot.program, "segment_base", None)
+        program_segs = None
+        if isinstance(seg_base, str) and seg_base:
+            slot_prefix = f"{WASABI_BASE}/{seg_base}"
+            if cfg is not None:
+                program_segs = _program_segments(seg_base, cfg, s3)
+        else:
+            slot_yyyymmdd = slot.starts_at.strftime("%Y%m%d")
+            slot_prefix = (
+                f"{WASABI_BASE}/hls/{channel.slug}/{slot_yyyymmdd}/{slot.program.ia_identifier}"
+            )
+        filled = _append_slot(rend_lines, slot, slot_prefix, program_segs)
+        # The slot's wall-clock span is sized from the source .mpg probe, which
+        # over-reports vs the actual encoded HLS, so a program's real segments
+        # can fall short of the slot. Blue-pad the shortfall to keep cumulative
+        # #EXTINF equal to wall-clock (the legacy integer path "filled" it with
+        # segment URLs that 404). Only the accurate path under-fills; the
+        # integer fallback already covers the whole span.
+        slot_secs = (slot.ends_at - slot.starts_at).total_seconds()
+        pad = slot_secs - filled
+        if pad > 1.0:
+            _append_gap(
+                rend_lines, slot.starts_at + timedelta(seconds=filled),
+                pad, gap_prefix,
+            )
         epg_grid.append({
             "title": slot.program.title,
             "description": slot.program.description,
@@ -96,7 +142,7 @@ def assemble_range(
         cursor = slot.ends_at
 
     if cursor < window_end:
-        gap_secs = int((window_end - cursor).total_seconds())
+        gap_secs = (window_end - cursor).total_seconds()
         _append_gap(rend_lines, cursor, gap_secs, gap_prefix)
         epg_grid.append({
             "title": "[No Signal]",
@@ -135,30 +181,73 @@ def assemble_day(
     db,
     *,
     slots: Optional[list] = None,
+    cfg=None,
 ) -> tuple[dict[str, str], dict]:
     """24-hour special case of :func:`assemble_range` (one UTC midnight-to-midnight day)."""
     window_start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
     window_end = window_start + timedelta(days=1)
-    return assemble_range(channel, window_start, window_end, db, slots=slots)
+    return assemble_range(channel, window_start, window_end, db, slots=slots, cfg=cfg)
 
 
-def _append_gap(rend_lines: dict, gap_start: datetime, gap_secs: int, gap_prefix: str) -> None:
-    n_segs, remainder = divmod(gap_secs, _SEGMENT_DURATION)
-    for r in REND_NAMES:
-        rend_lines[r].append("#EXT-X-DISCONTINUITY")
-        rend_lines[r].append(f'#EXT-X-MAP:URI="{gap_prefix}/{r}/init.mp4"')
-        rend_lines[r].append(f"#EXT-X-PROGRAM-DATE-TIME:{gap_start.isoformat()}")
-        for _ in range(n_segs):
-            rend_lines[r].append(f"#EXTINF:{_SEGMENT_DURATION},")
-            rend_lines[r].append(f"{gap_prefix}/{r}/seg_gap_{_SEGMENT_DURATION}s.m4s")
-        if remainder:
-            rend_lines[r].append(f"#EXTINF:{remainder},")
-            rend_lines[r].append(f"{gap_prefix}/{r}/seg_gap_{remainder}s.m4s")
+def _fmt(secs: float) -> str:
+    """Format an ``#EXTINF`` duration to millisecond precision, trimming
+    trailing zeros so whole values render bare (6.0 -> "6", legacy-identical)
+    and real fractional durations stay readable (6.006006 -> "6.006")."""
+    return f"{secs:.3f}".rstrip("0").rstrip(".")
 
 
-def _append_slot(rend_lines: dict, slot, slot_prefix: str) -> None:
-    slot_secs = int((slot.ends_at - slot.starts_at).total_seconds())
-    n_segs, remainder = divmod(slot_secs, _SEGMENT_DURATION)
+def _append_gap(
+    rend_lines: dict, gap_start: datetime, gap_secs: float, gap_prefix: str,
+) -> None:
+    """Fill ``gap_secs`` of dead air by referencing the shared sequenced pool's
+    tiles in order (seg0000, seg0001, …) so each carries an increasing fMP4
+    sequence_number/tfdt. Every ``POOL_TILES`` tiles the run resets with a fresh
+    ``#EXT-X-DISCONTINUITY`` + ``#EXT-X-PROGRAM-DATE-TIME``, letting the bounded
+    pool be reused (and re-anchored to wall-clock) for arbitrarily long gaps. The
+    final tile's ``#EXTINF`` is clipped so the gap fills its span exactly; the
+    cumulative timeline therefore stays equal to wall-clock."""
+    remaining = gap_secs
+    run_start = gap_start
+    while remaining > 1e-6:
+        for r in REND_NAMES:
+            rend_lines[r].append("#EXT-X-DISCONTINUITY")
+            rend_lines[r].append(f'#EXT-X-MAP:URI="{gap_prefix}/{r}/init.mp4"')
+            rend_lines[r].append(f"#EXT-X-PROGRAM-DATE-TIME:{run_start.isoformat()}")
+        run_filled = 0.0
+        k = 0
+        while k < POOL_TILES and remaining > 1e-6:
+            dur = TILE_SECONDS if TILE_SECONDS <= remaining else remaining
+            for r in REND_NAMES:
+                rend_lines[r].append(f"#EXTINF:{_fmt(dur)},")
+                rend_lines[r].append(f"{gap_prefix}/{r}/seg{k:04d}.m4s")
+            remaining -= dur
+            run_filled += dur
+            k += 1
+        run_start = run_start + timedelta(seconds=run_filled)
+
+
+def _append_slot(
+    rend_lines: dict, slot, slot_prefix: str,
+    program_segs: Optional[list[tuple[str, float]]] = None,
+) -> float:
+    """Append a program slot's segments, returning the wall-clock seconds filled
+    (so the caller can blue-pad any shortfall to the slot's span)."""
+    slot_secs = (slot.ends_at - slot.starts_at).total_seconds()
+    emitted = _clip_program_segments(program_segs, slot_secs) if program_segs else None
+
+    if emitted:
+        for r in REND_NAMES:
+            rend_lines[r].append("#EXT-X-DISCONTINUITY")
+            rend_lines[r].append(f'#EXT-X-MAP:URI="{slot_prefix}/{r}/init.mp4"')
+            rend_lines[r].append(f"#EXT-X-PROGRAM-DATE-TIME:{slot.starts_at.isoformat()}")
+            for name, dur in emitted:
+                rend_lines[r].append(f"#EXTINF:{_fmt(dur)},")
+                rend_lines[r].append(f"{slot_prefix}/{r}/{name}")
+        return sum(dur for _, dur in emitted)
+
+    # Fallback: synthesize an integer-second layout from the slot duration. Used
+    # in tests (no cfg) and when a program's index.m3u8 can't be read.
+    n_segs, remainder = divmod(int(slot_secs), _SEGMENT_DURATION)
     for r in REND_NAMES:
         rend_lines[r].append("#EXT-X-DISCONTINUITY")
         rend_lines[r].append(f'#EXT-X-MAP:URI="{slot_prefix}/{r}/init.mp4"')
@@ -169,6 +258,65 @@ def _append_slot(rend_lines: dict, slot, slot_prefix: str) -> None:
         if remainder:
             rend_lines[r].append(f"#EXTINF:{remainder},")
             rend_lines[r].append(f"{slot_prefix}/{r}/seg{n_segs:04d}.m4s")
+    return float(n_segs * _SEGMENT_DURATION + remainder)
+
+
+def _clip_program_segments(
+    program_segs: list[tuple[str, float]], slot_secs: float
+) -> list[tuple[str, float]]:
+    """Emit real segments filling the slot's wall-clock span *exactly*.
+
+    Whole segments are emitted at their true ``#EXTINF`` until the next one
+    would overrun the slot; that final segment's ``#EXTINF`` is then clipped to
+    land the program's total on ``slot_secs`` to the millisecond (the file still
+    holds its full ~6 s of frames — only the timeline duration is trimmed). This
+    keeps cumulative ``#EXTINF`` equal to wall-clock at every program boundary,
+    so a pure-``#EXTINF`` player's elapsed time matches the burned-in clock with
+    no per-program accumulation. A slot the scheduler clipped for overlap (span
+    ≪ program) simply stops early; the residual under-fill (program shorter than
+    its slot) is under one segment and re-anchored by the next ``PROGRAM-DATE-TIME``."""
+    emitted: list[tuple[str, float]] = []
+    cum = 0.0
+    for name, dur in program_segs:
+        remaining = slot_secs - cum
+        if remaining <= 1e-6:
+            break
+        if dur <= remaining + 1e-6:
+            emitted.append((name, dur))
+            cum += dur
+        else:
+            emitted.append((name, remaining))  # clip final segment to fill slot
+            break
+    return emitted
+
+
+def _program_segments(seg_base: str, cfg, s3) -> Optional[list[tuple[str, float]]]:
+    """Real ``(segment_name, duration)`` pairs from a program's uploaded
+    ``index.m3u8`` (the ``full`` rendition is authoritative — every rendition
+    shares segment timing). Returns None if the playlist can't be read or
+    parsed, so the caller falls back to the synthesized layout. Renditions all
+    use the same segment filenames, so these durations apply to each."""
+    from video_grabber.storage.wasabi import read_text
+
+    try:
+        text = read_text(f"{seg_base}/full/index.m3u8", cfg, s3=s3)
+    except Exception:
+        return None
+
+    segs: list[tuple[str, float]] = []
+    dur: Optional[float] = None
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("#EXTINF:"):
+            try:
+                dur = float(line.split(":", 1)[1].rstrip(","))
+            except ValueError:
+                dur = None
+        elif line and not line.startswith("#"):
+            if dur is not None:
+                segs.append((line.rsplit("/", 1)[-1], dur))
+            dur = None
+    return segs or None
 
 
 def _fetch_slots(db, channel_id: str, window_start: datetime, window_end: datetime) -> list:
@@ -180,10 +328,16 @@ def _fetch_slots(db, channel_id: str, window_start: datetime, window_end: dateti
     pattern ``flows.get_job`` uses for its channel/program relationships).
     """
     from sqlalchemy import text
+    # Pull the program's actual upload key via a scalar subquery (rather than a
+    # JOIN) so a program with more than one video_jobs row can't multiply the
+    # slot into duplicate segments. Newest uploaded key wins.
     rows = db.execute(
         text(
             "SELECT s.starts_at, s.ends_at, "
-            "       p.ia_identifier, p.title, p.description "
+            "       p.ia_identifier, p.title, p.description, "
+            "       (SELECT v.wasabi_key FROM video_jobs v "
+            "        WHERE v.program_id = p.id AND v.wasabi_key IS NOT NULL "
+            "        ORDER BY v.last_transition_at DESC LIMIT 1) AS wasabi_key "
             "FROM schedule_slots s "
             "JOIN programs p ON p.id = s.program_id "
             "WHERE s.channel_id = :cid AND s.starts_at >= :ws AND s.ends_at <= :we "
@@ -199,7 +353,23 @@ def _fetch_slots(db, channel_id: str, window_start: datetime, window_end: dateti
                 ia_identifier=r["ia_identifier"],
                 title=r["title"],
                 description=r["description"],
+                segment_base=_segment_base(r["wasabi_key"]),
             ),
         )
         for r in rows
     ]
+
+
+def _segment_base(wasabi_key: Optional[str]) -> Optional[str]:
+    """The directory holding a program's rendition folders, taken from its
+    stored upload key (e.g.
+    ``hls/king/20010911/CNN_..._Larry_King_Live/master.m3u8`` ->
+    ``hls/king/20010911/CNN_..._Larry_King_Live``).
+
+    This is the *actual* upload location — keyed by the channel slug at encode
+    time — and stays correct after a program is reassigned to a different
+    channel, where ``channel.slug`` no longer matches the stored path.
+    """
+    if not wasabi_key:
+        return None
+    return posixpath.dirname(wasabi_key)

@@ -1,0 +1,59 @@
+/* News article embed for HyperCard cards. Scrolls within the authored rect. */
+.classicyHyperCardNews {
+	width: 100%;
+	height: 100%;
+	overflow-y: auto;
+	padding: 8px 10px;
+	background: #fff;
+	box-sizing: border-box;
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+.classicyHyperCardNewsHeadline {
+	margin: 0 0 4px;
+	font-size: 16px;
+	font-weight: bold;
+	line-height: 1.2;
+}
+
+.classicyHyperCardNewsDate {
+	margin: 0 0 8px;
+	font-size: 10px;
+	color: #666;
+}
+
+.classicyHyperCardNewsFigure {
+	margin: 0 0 8px;
+}
+
+.classicyHyperCardNewsFigure img {
+	max-width: 100%;
+	height: auto;
+	display: block;
+}
+
+.classicyHyperCardNewsFigure figcaption {
+	font-size: 10px;
+	font-style: italic;
+	color: #666;
+	margin-top: 2px;
+}
+
+.classicyHyperCardNewsBody :is(p, ul, ol) {
+	margin: 0 0 8px;
+}
+
+.classicyHyperCardNewsBody img {
+	max-width: 100%;
+	height: auto;
+}
+
+.classicyHyperCardNewsMessage {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-style: italic;
+	color: #555;
+	text-align: center;
+}

@@ -8,6 +8,8 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
+import classNames from "classnames";
 import type React from "react";
 import {
 	type ChangeEvent,
@@ -15,18 +17,23 @@ import {
 	useContext,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import {
 	MediaStreamContext,
 	type MediaItem,
 } from "../../Providers/MediaStream/MediaStreamContext";
+import { trackAppToggle } from "../../openreplay";
+import { newsSetOpenDocuments, type NewsRemoteCommand } from "./NewsContext";
 import styles from "./News.module.scss";
 
 export const News: React.FC = () => {
 	const appName = "News";
 	const appId = "News.app";
 	const appIcon = ClassicyIcons.applications.news.app as string;
+	const aboutWindow = useAboutApp(appId, appIcon);
 	const appMenu = useMemo(
 		() => [
 			{
@@ -39,22 +46,50 @@ export const News: React.FC = () => {
 	);
 
 	const desktopEventDispatch = useAppManagerDispatch();
-	const dateTime    = useAppManager((s) => s.System.Manager.DateAndTime.dateTime);
+	const dateTime       = useAppManager((s) => s.System.Manager.DateAndTime.dateTime);
 	const timeZoneOffset = useAppManager((s) => s.System.Manager.DateAndTime.timeZoneOffset);
-	const appWindows  = useAppManager((s) => s.System.Manager.Applications.apps[appId]?.windows ?? []);
+	// Boolean selector: the full apps[appId] object changes reference on every window
+	// interaction (move, focus, z-order), causing a re-render each time.
+	const isRunning  = useAppManager((s) => appId in (s.System.Manager.Applications.apps ?? {}));
+	// Omit the ?? [] fallback from the selector — a fresh [] on every call is a new
+	// reference that would make openDocumentDetails/getWindowOpenOffset always unstable.
+	const appWindows = useAppManager((s) => s.System.Manager.Applications.apps[appId]?.windows);
 	const paddingSize = useAppManager((s) => s.System.Manager.Appearance.activeTheme.measurements.window.paddingSize);
+
+	const isOpen = useAppManager(
+		(state) =>
+			state.System.Manager.Applications.apps[appId]?.open ?? false,
+	);
+	const prevIsOpenRef = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (prevIsOpenRef.current === undefined) {
+			prevIsOpenRef.current = isOpen;
+			return;
+		}
+		if (prevIsOpenRef.current === isOpen) return;
+		prevIsOpenRef.current = isOpen;
+		trackAppToggle(appId, isOpen ? "open" : "close");
+	}, [isOpen]);
 
 	const [limit, setLimit] = useState<number>(10);
 	const [offset, setOffset] = useState<number>(0);
 	const [thumbStyle, setThumbStyle] = useState<"small" | "large">("small");
 	const [openDocuments, setOpenDocuments] = useState<number[]>([]);
 
-	// News is delivered on its own opt-in channel; subscribe on mount.
-	const { newsItems: items, subscribeNews, unsubscribeNews } = useContext(MediaStreamContext);
+	// News is delivered on its own opt-in channel; subscribe only while the app is open.
+	const {
+		newsItems: items,
+		subscribeNews,
+		unsubscribeNews,
+		newsBodies,
+		newsBodyErrors,
+		requestNewsBody,
+	} = useContext(MediaStreamContext);
 	useEffect(() => {
+		if (!isRunning) return;
 		subscribeNews(appId);
 		return () => unsubscribeNews(appId);
-	}, [subscribeNews, unsubscribeNews, appId]);
+	}, [isRunning, subscribeNews, unsubscribeNews, appId]);
 
 	const entries = useMemo(
 		() =>
@@ -80,9 +115,14 @@ export const News: React.FC = () => {
 		[filteredEntries, offset, limit],
 	);
 
+	const getDoc = useCallback(
+		(docId: number) => entries.find((entry: MediaItem) => entry.id === docId),
+		[entries],
+	);
+
 	const openDocumentDetails = useCallback((docId: number) => {
 		setOpenDocuments((prev) => Array.from(new Set([...prev, docId])));
-		const ws = appWindows.find(
+		const ws = (appWindows ?? []).find(
 			(w: { id: string }) => w.id === `${appId}_newsitem_${docId}`,
 		);
 		if (ws) {
@@ -91,7 +131,61 @@ export const News: React.FC = () => {
 		}
 	}, [appWindows, desktopEventDispatch]);
 
-	const paginate = (direction: "forward" | "back" | "now") => {
+	// Publish the open-documents set (playlist locked-focus reconciliation reads it).
+	useEffect(() => {
+		desktopEventDispatch(newsSetOpenDocuments(openDocuments));
+	}, [openDocuments, desktopEventDispatch]);
+
+	// Backlog articles arrive without content (the snapshot is headline-only), so
+	// each open detail window fetches its body — but only when the item itself
+	// doesn't already carry one. Articles that arrive on the live forward window
+	// DO carry content, so fetching unconditionally would fire a pointless
+	// round-trip for those, and a failure on that redundant fetch would render
+	// "article unavailable" directly above the content that was already there.
+	// requestNewsBody de-dupes against cached and in-flight ids, so re-running
+	// on any change is still safe.
+	//
+	// getDoc(docId) undefined means the article isn't in the *current* (clock-
+	// bounded) catalogue — either the window opened before its item arrived, or
+	// (after a backward seek) the item was evicted from newsItems. The server
+	// applies no time gating to news_body, so a request for an evicted id would
+	// happily re-fetch a future article's text into the cache; gating on doc
+	// presence here (and on the render below) is what keeps that text from
+	// coming back after a rewind.
+	useEffect(() => {
+		for (const docId of openDocuments) {
+			const doc = getDoc(docId);
+			if (doc && !doc.content) requestNewsBody(docId);
+		}
+	}, [openDocuments, requestNewsBody, getDoc]);
+
+	// Apply each remote focus command exactly once, tracked by its monotonic
+	// seq (TV.tsx's pattern). Consume only when the article exists in the
+	// stream AND its detail window has been rendered — otherwise leave the seq
+	// unconsumed so the effect retries as items/appWindows update.
+	const command = useAppManager(
+		(s) =>
+			s.System.Manager.Applications.apps[appId]?.data?.command as
+				| NewsRemoteCommand
+				| undefined,
+	);
+	const lastCommandSeqRef = useRef(0);
+	useEffect(() => {
+		if (!command || command.seq <= lastCommandSeqRef.current) return;
+		if (command.kind !== "focus") {
+			lastCommandSeqRef.current = command.seq;
+			return;
+		}
+		const exists = items.some((i) => i.id === command.docId);
+		const hasWindow = (appWindows ?? []).some(
+			(w: { id: string }) => w.id === `${appId}_newsitem_${command.docId}`,
+		);
+		if (!exists || !hasWindow) return; // retry on next items/windows update
+		lastCommandSeqRef.current = command.seq;
+		openDocumentDetails(command.docId);
+	}, [command, items, appWindows, openDocumentDetails]);
+
+	const paginate = useCallback((direction: "forward" | "back" | "now") => {
 		if (direction === "now") {
 			setOffset(0);
 		} else if (direction === "back") {
@@ -103,7 +197,7 @@ export const News: React.FC = () => {
 		} else {
 			setOffset(0);
 		}
-	};
+	}, [filteredEntries.length, entries.length, offset, limit]);
 
 	const formatDate = useCallback(
 		(dateStr: string | undefined, options: Intl.DateTimeFormatOptions): string => {
@@ -121,13 +215,8 @@ export const News: React.FC = () => {
 		[],
 	);
 
-	const getDoc = useCallback(
-		(docId: number) => entries.find((entry: MediaItem) => entry.id === docId),
-		[entries],
-	);
-
 	const getWindowOpenOffset = useCallback(
-		() => (appWindows.filter((w: { closed: boolean }) => !w.closed).length ?? 0) * paddingSize,
+		() => ((appWindows ?? []).filter((w: { closed: boolean }) => !w.closed).length ?? 0) * paddingSize,
 		[appWindows, paddingSize],
 	);
 
@@ -138,6 +227,7 @@ export const News: React.FC = () => {
 			icon={appIcon}
 			defaultWindow={"latest_news"}
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			<ClassicyWindow
 				id={"latest_news"}
@@ -149,16 +239,14 @@ export const News: React.FC = () => {
 				zoomable={true}
 				scrollable={true}
 				collapsable={true}
-				initialSize={[500, 300]}
-				initialPosition={[300, 50]}
+				initialSize={["75%", "75%"]}
+				initialPosition={["left", "top"]}
 				minimumSize={[500, 300]}
 				modal={false}
 				appMenu={appMenu}
 			>
-				<div style={{}} className={styles.newsHeader}>
-					<div
-						style={{ flexGrow: 1, marginLeft: "var(--window-padding-size)" }}
-					>
+				<div className={styles.newsHeader}>
+					<div className={styles.newsPerPageWrap}>
 						<ClassicyPopUpMenu
 							id={"per_page"}
 							label={"Per Page"}
@@ -176,7 +264,7 @@ export const News: React.FC = () => {
 							selected={limit.toString()}
 						/>
 					</div>
-					<div style={{ flexGrow: 1 }}>
+					<div className={styles.newsThumbSizeWrap}>
 						<ClassicyPopUpMenu
 							id={"thumb_size"}
 							label={"Size"}
@@ -201,41 +289,19 @@ export const News: React.FC = () => {
 						&gt;&gt;
 					</ClassicyButton>
 				</div>
-				<div style={{ padding: ".5em" }}>
-					<h1
-						style={{
-							padding: "0",
-							margin: 0,
-							backgroundImage:
-								"linear-gradient(.25turn, white, var(--color-system-05))",
-						}}
-					>
+				<div className={styles.newsBody}>
+					<h1 className={styles.newsTitle}>
 						Latest News
 					</h1>
 					{displayEntries.length > 0 && (
-						<div
-							style={{
-								display: "flex",
-								justifyContent: "space-between",
-							}}
-						>
-							<p
-								style={{
-									fontFamily: "var(--ui-font)",
-									fontSize: "calc(var(--ui-font-size) * .8)",
-								}}
-							>
+						<div className={styles.newsMeta}>
+							<p className={styles.newsMetaText}>
 								From{" "}
 								{formatDate(displayEntries.at(0)?.start_date, { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric" })}{" "}
 								to{" "}
 								{formatDate(displayEntries.at(-1)?.end_date, { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric" })}
 							</p>
-							<p
-								style={{
-									fontFamily: "var(--ui-font)",
-									fontSize: "calc(var(--ui-font-size) * .8)",
-								}}
-							>
+							<p className={styles.newsMetaText}>
 								Total Articles:{" "}
 								{
 									entries.filter((e) => {
@@ -250,57 +316,28 @@ export const News: React.FC = () => {
 					)}
 					<hr />
 
-					<ul
-						style={{
-							fontFamily: "var(--header-font)",
-							padding: "0 calc(var(--window-control-size) * 2)",
-						}}
-					>
+					<ul className={styles.newsList}>
 						{displayEntries.map((entry) => (
 							<li
 								key={entry.id}
-								style={{
-									display: "flex",
-									flexDirection: "row",
-									gap: "var(--window-control-size)",
-									alignContent: "center",
-									alignItems: "center",
-									justifyContent: "center",
-									margin: "0",
-									borderBottom: "1px solid black",
-									padding: "calc(var(--window-control-size) ) 0",
-									listStyle:
-										!entry.image || thumbStyle === "small" ? "outside" : "none",
-									fontSize:
-										thumbStyle === "small"
-											? "var(--ui-font-size)"
-											: "calc(var(--ui-font-size)*2)",
-								}}
+								className={classNames(styles.newsListItem, {
+									[styles.newsListItemLarge]: thumbStyle === "large",
+									[styles.newsListItemNoBullet]:
+										Boolean(entry.image) && thumbStyle === "large",
+								})}
 							>
 								{entry.image && (
 									<img
 										src={entry.image}
-										style={{
-											width: thumbStyle === "small" ? "10%" : "100%",
-											aspectRatio: thumbStyle === "small" ? 1 : "auto",
-											objectFit: "cover",
-											float: "right",
-											marginBottom: "var(--window-control-size)",
-											marginLeft: "var(--window-control-size)",
-											borderRadius: "calc(var(--window-control-size)/2)",
-										}}
+										className={classNames(styles.newsThumb, {
+											[styles.newsThumbLarge]: thumbStyle === "large",
+										})}
 										alt="Thumbnail"
 									/>
 								)}
 								<button
 									type="button"
-									style={{
-										background: "none",
-										border: "none",
-										padding: 0,
-										cursor: "pointer",
-										textAlign: "left",
-									}}
+									className={styles.newsListItemButton}
 									onClick={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
@@ -308,24 +345,17 @@ export const News: React.FC = () => {
 									}}
 								>
 									<h1
-										style={{
-											fontSize:
-												thumbStyle === "small"
-													? "calc(var(--ui-font-size))"
-													: "calc(var(--ui-header-size))",
-										}}
+										className={classNames(styles.newsListItemTitle, {
+											[styles.newsListItemTitleLarge]: thumbStyle === "large",
+										})}
 									>
 										{entry.title}
 									</h1>
 								</button>
 								<span
-									style={{
-										fontFamily: "var(--ui-font)",
-										fontSize:
-											thumbStyle === "small"
-												? "calc(var(--ui-font-size)*.7)"
-												: "calc(var(--ui-font-size)*1)",
-									}}
+									className={classNames(styles.newsListItemDate, {
+										[styles.newsListItemDateLarge]: thumbStyle === "large",
+									})}
 								>
 									{" "}
 									{formatDate(entry.start_date, { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric", second: "numeric" })}{" "}
@@ -335,88 +365,88 @@ export const News: React.FC = () => {
 					</ul>
 				</div>
 			</ClassicyWindow>
-			{openDocuments.map((docId: number) => (
-				<ClassicyWindow
-					onCloseFunc={() => {
-						setOpenDocuments(openDocuments.filter((d) => d !== docId));
-					}}
-					id={`${appId}_newsitem_${docId}`}
-					key={`${appId}_newsitem_${docId}`}
-					icon={appIcon}
-					title={getDoc(docId)?.title}
-					appId={appId}
-					closable={true}
-					resizable={true}
-					zoomable={true}
-					scrollable={true}
-					collapsable={true}
-					initialSize={[400, 400]}
-					initialPosition={[
-						10 + getWindowOpenOffset(),
-						20 + getWindowOpenOffset(),
-					]}
-					modal={false}
-					appMenu={appMenu}
-				>
-					<div style={{ padding: ".5em" }}>
-						<h1
-							style={{
-								margin: "var(--window-padding-size) 0",
-								fontFamily: "var(--header-font)",
-							}}
-						>
-							{getDoc(docId)?.title}
-						</h1>
-						<h6
-							style={{
-								margin: "var(--window-padding-size) 0",
-								fontFamily: "var(--ui-font)",
-							}}
-						>
-							{formatDate(getDoc(docId)?.start_date, { month: "numeric", day: "numeric", year: "numeric" })}{" "}
-							{formatDate(getDoc(docId)?.start_date, { hour: "numeric", minute: "numeric", second: "numeric" })} -{" "}
-							{getDoc(docId)?.source}
-						</h6>
+			{openDocuments.map((docId: number) => {
+				// doc absent means the article isn't in the current (clock-bounded)
+				// catalogue — most commonly a backward seek evicted it after this
+				// window was opened. newsBodies may still hold a cached body fetched
+				// before the eviction (the server applies no time gating to
+				// news_body), so that cache must never be rendered once its article
+				// has fallen out of newsItems.
+				const doc = getDoc(docId);
+				return (
+					<ClassicyWindow
+						onCloseFunc={() => {
+							setOpenDocuments((prev) => prev.filter((d) => d !== docId));
+						}}
+						id={`${appId}_newsitem_${docId}`}
+						key={`${appId}_newsitem_${docId}`}
+						icon={appIcon}
+						title={doc?.title}
+						appId={appId}
+						closable={true}
+						resizable={true}
+						zoomable={true}
+						scrollable={true}
+						collapsable={true}
+						initialSize={[400, 400]}
+						initialPosition={[
+							10 + getWindowOpenOffset(),
+							20 + getWindowOpenOffset(),
+						]}
+						modal={false}
+						appMenu={appMenu}
+					>
+						<div className={styles.newsBody}>
+							<h1 className={styles.newsDetailTitle}>
+								{doc?.title}
+							</h1>
+							<h6 className={styles.newsDetailMeta}>
+								{formatDate(doc?.start_date, { month: "numeric", day: "numeric", year: "numeric" })}{" "}
+								{formatDate(doc?.start_date, { hour: "numeric", minute: "numeric", second: "numeric" })} -{" "}
+								{doc?.source}
+							</h6>
 
-						<hr style={{ borderTop: "black 1px solid" }} />
-						{getDoc(docId)?.image && (
-							<figure>
-								<img
-									src={getDoc(docId)?.image}
-									style={{ width: "100%" }}
-									alt=""
-								/>
-								<figcaption className={styles.newsCaption}>
-									{getDoc(docId)?.image_caption}
-								</figcaption>
-							</figure>
-						)}
-						<div
-							style={{
-								display: "flex",
-								flexDirection: "row",
-								gap: "var(--window-padding-size)",
-							}}
-						>
-							<p
-								style={{
-									fontSize: "var(--ui-font-size)",
-									color: "var(--color-theme-05)",
-								}}
-							>
-								•••
-							</p>
-							<div
-								style={{ fontFamily: "var(--body-font)" }}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus media_items table via the MediaStream provider.
-								dangerouslySetInnerHTML={{
-									__html: getDoc(docId)?.content || "",
-								}}
-							></div>
+							<hr className={styles.newsDetailDivider} />
+							{doc?.image && (
+								<figure>
+									<img
+										src={doc?.image}
+										className={styles.newsDetailImage}
+										alt=""
+									/>
+									<figcaption className={styles.newsCaption}>
+										{doc?.image_caption}
+									</figcaption>
+								</figure>
+							)}
+							<div className={styles.newsDetailContentRow}>
+								<p className={styles.newsDetailBullet}>
+									•••
+								</p>
+								{!doc ? (
+									<p className={styles.newsDetailBody}>
+										This article is not available at the current date and time.
+									</p>
+								) : newsBodyErrors[docId] ? (
+									<p className={styles.newsDetailBody}>{newsBodyErrors[docId]}</p>
+								) : !(docId in newsBodies) && !doc.content ? (
+									<p className={styles.newsDetailBody}>Loading…</p>
+								) : null}
+								{doc && (
+									<div
+										className={styles.newsDetailBody}
+										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus news_items table via the MediaStream provider.
+										dangerouslySetInnerHTML={{
+											__html: newsBodies[docId] ?? doc.content ?? "",
+										}}
+									></div>
+								)}
+							</div>
 						</div>
-					</div>
-				</ClassicyWindow>
-			))}
+					</ClassicyWindow>
+				);
+			})}
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

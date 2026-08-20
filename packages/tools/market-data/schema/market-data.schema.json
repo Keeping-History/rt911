@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://files.911realtime.org/market/market-data.schema.json",
+  "title": "MarketWatch static data bundle",
+  "description": "Everything the MarketWatch frontend app needs: per-symbol daily bars (as-printed 2001 prices, NOT split-adjusted) and the market calendar for Sept 2001, all timestamps UTC.",
+  "type": "object",
+  "required": ["version", "range", "calendar", "symbols"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "range": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "string", "format": "date" },
+        "end": { "type": "string", "format": "date" }
+      }
+    },
+    "calendar": {
+      "type": "object",
+      "description": "Per-market trading calendar. Keys are market ids.",
+      "required": ["equity", "bond"],
+      "additionalProperties": false,
+      "properties": {
+        "equity": { "$ref": "#/$defs/marketCalendar" },
+        "bond": { "$ref": "#/$defs/marketCalendar" }
+      }
+    },
+    "symbols": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/symbol" }
+    }
+  },
+  "$defs": {
+    "marketCalendar": {
+      "type": "object",
+      "required": ["sessions", "closures"],
+      "additionalProperties": false,
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["date", "open", "close"],
+            "additionalProperties": false,
+            "properties": {
+              "date": { "type": "string", "format": "date" },
+              "open": { "type": "string", "format": "date-time" },
+              "close": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "closures": {
+          "type": "array",
+          "description": "Extraordinary closures (NOT weekends/overnights — those are just gaps between sessions). A timestamp inside a closure renders as HALTED.",
+          "items": {
+            "type": "object",
+            "required": ["start", "end", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "start": { "type": "string", "format": "date-time" },
+              "end": { "type": "string", "format": "date-time" },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "symbol": {
+      "type": "object",
+      "required": ["symbol", "name", "tags", "unit", "market", "bars", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "symbol": { "type": "string", "description": "2001-era display ticker" },
+        "name": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": {
+            "enum": ["index", "dow30", "airline", "insurer", "broker", "defense", "travel", "bond"]
+          },
+          "minItems": 1
+        },
+        "unit": { "enum": ["usd", "percent"] },
+        "market": { "enum": ["equity", "bond"] },
+        "source": {
+          "type": "string",
+          "description": "Provenance: yahoo:<ticker>, fred:<series>, or override:<citation>"
+        },
+        "bars": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["date", "close"],
+            "additionalProperties": false,
+            "properties": {
+              "date": { "type": "string", "format": "date" },
+              "open": { "type": "number" },
+              "high": { "type": "number" },
+              "low": { "type": "number" },
+              "close": { "type": "number" },
+              "volume": { "type": "number" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

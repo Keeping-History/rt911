@@ -11,6 +11,44 @@ Also stitches per-channel continuous HLS streams + EPG guide JSON.
 - `video_grabber/video/` — `encoder.py` (libx264 + h264_vaapi paths), `gap_filler.py`.
 - `video_grabber/epg/` — `assembler.py`, `scheduler.py` (channel stitching).
 - `video_grabber/{storage,directus,ia,db}/` — Wasabi S3, Directus writer, IA scan, migrations.
+- `video_grabber/usenet/` — a **second, independent pipeline**: ingest Usenet newsgroup
+  archives from IA, thread them with usenetarchive (C++), write to Directus. Own state
+  table (`usenet_jobs`, migration `002`) and Prefect flows (`scan-usenet`/`process-usenet-item`/
+  `dispatch-usenet`). See [`docs/usenet-ingestion.md`](docs/usenet-ingestion.md) — read it before
+  touching the threading pipeline; it documents the required usenetarchive build sequence and the
+  non-obvious gotchas (compressed-input, exit codes, packed msgids, OOM, NUL bytes, payload size).
+- `video_grabber/transcribe/` — a **third pipeline**: transcribe encoded TV programs +
+  radio MP3s with whisper.cpp (Vulkan/iGPU) into per-channel and per-MP3 SRT/VTT,
+  register in Directus (`subtitles` column). Own state table (`transcribe_jobs`,
+  migration `003`) and flows (`scan-transcribe`/`transcribe-item`/`dispatch-transcribe`/
+  `build-channel-subtitles`). See [`docs/transcription.md`](docs/transcription.md).
+- `video_grabber/normalize/` — a **fourth pipeline**: measure loudness of every
+  `audio/*.mp3` (report in `normalize_jobs`, migration `005`), then — via the
+  manually-triggered `dispatch-normalize` only — normalize files in place
+  (dynaudnorm + two-pass EBU R128 loudnorm), archiving originals to
+  `audio-original/` first (first-write-wins). See [`docs/normalization.md`](docs/normalization.md).
+- `video_grabber/parties/` — a **fifth pipeline**: identify who each `audio/*.mp3`
+  recording's traffic is between and tag it for searching, writing `mp3_items.parties`
+  and the `mp3_tags` / `mp3_items_tags` many-to-many. No state table —
+  `parties.schema_version` is the idempotency marker. Every name the model returns must
+  appear in a document it was shown; where the 9/11 Commission catalogued the same clip
+  (`commission_clips.json`) their narrative is admitted as a second source, with
+  per-field provenance. Two flows: `identify-parties` (calls the model) and
+  `rebuild-tags` (re-derives tags from stored `parties`, no inference — use it whenever
+  `tags.py`/`vocab.py` derivation changes). See
+  [`docs/party-identification.md`](docs/party-identification.md) — read it before
+  changing the prompt or the gate, and do not weaken the gate to raise yield.
+  **`mp3_items.tags` is an m2m alias, not a column** — it cannot be set by PATCHing the
+  item, which is what the writer used to do when `tags` was a json array.
+- `video_grabber/peaks/` — a **sixth pipeline**: reduce every `audio/*.mp3` to a
+  fixed 480-bucket `[min, max]` amplitude envelope for the Playlist Editor's
+  timeline waveform, writing `mp3_items.peaks`. No state table — `peaks IS NOT
+  NULL` is the idempotency marker. One manual-only flow, `compute-peaks`
+  (`dry_run=True` by default). See [`docs/peaks.md`](docs/peaks.md) — read it
+  before touching the decode path: ffmpeg exits **0** on a truncated MP3, so
+  `check=True` alone does not make a stored envelope trustworthy and the
+  decoded-length guard is what keeps a partial decode from being written
+  permanently.
 - `k8s/` — deployment manifests (see Deploy below).
 - `tests/` — pytest. `test_migrations.py` needs a live Postgres; it **errors** (not
   fails) when none is reachable — that's an environment gap, not a regression.

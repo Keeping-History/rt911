@@ -145,6 +145,68 @@ preceding minutes.
 
 - `GET /health` returns `200 OK` unconditionally as long as the HTTP server is running. Used by Docker and Kubernetes liveness probes. It does **not** check Redis or Postgres reachability — those are checked once at boot and then assumed; if a downstream goes away, the streamer logs and continues serving until it cannot.
 
+### `GET|POST /clock` — forced clock mode (operator only)
+
+Guarded by the `X-Clock-Key` header (constant-time compare against
+`CLOCK_CONTROL_KEY`; unset ⇒ 404, feature off).
+
+- `GET /clock` → `{"active": false}` or `{"active": true, "time": "..."}`
+- `POST /clock {"active": true, "time": "2001-09-11T13:03:00Z"}` — enable/jump
+- `POST /clock {"active": false}` — release
+
+State persists in Redis (`clock:master`) and fans out across pods via pub/sub
+(`clock:master:changed`), so a pod restart mid-session stays forced.
+
+While active, every session is slaved to the master time: `init`/`seek` clamp
+the client-supplied time to master (the ack echoes the clamped value),
+`heartbeat` pins the session clock to master instead of trusting client drift,
+and `pause` is acked but not applied. On release, sessions keep ticking
+forward from wherever the master left them — nothing jumps back. See
+[`docs/websocket-protocol.md`](./docs/websocket-protocol.md) for the wire
+frames (`clock`, `heartbeat_ack.master_time`).
+
+### `POST /alert` — operator alert push
+
+Guarded by `X-Alert-Key` (`ALERT_CONTROL_KEY`; unset ⇒ 404, feature off).
+
+- `POST /alert {"id": 42}` — raise `alert_items` row 42 on every connected client now
+
+Alert *content* already reaches every pod through the `alert_items` NOTIFY
+listener; what that path cannot do is raise an alert off-schedule, because
+delivery is gated on the row's `start_date` against each client's virtual
+clock. This endpoint is that path: the row is read once on the receiving pod,
+fanned out over Redis pub/sub (`alerts:push`), and each pod restamps it with
+each session's own virtual time so it is immediately due for that client.
+
+### `POST /room` — live teacher control
+
+- `POST /room {"room":"42","action":"jump","time":"2001-09-11T13:03:00Z"}`
+- `POST /room {"room":"42","action":"focus","app":"TV.app"}`
+- `POST /room {"room":"42","action":"message","message":"Look at channel 4"}`
+- `POST /room {"room":"42","action":"lock","target":"clock","on":true}` — lock/unlock the clock
+
+A room is a playlist id; clients join with the `join_room` frame. Commands fan
+out over Redis pub/sub (`room:command`) so a class split across pods stays in
+step, and are delivered only to sessions in that room. Nothing is persisted — a
+disconnected client does not receive the command on reconnect.
+
+**Authorisation is per playlist, not a shared credential.** There is no control
+key: the caller's Directus session cookie is resolved to a user id and compared
+against the playlist's `user_created`. Only the user who created a playlist may
+drive its room, so a session belonging to some *other* playlist's owner grants
+nothing. Origin is checked first (the cookie is `SameSite=lax`, which bounds it
+to the site rather than the origin), and the endpoint is rate-limited because
+each request costs a session lookup and an ownership lookup before it can be
+refused.
+
+A playlist with **no** recorded creator is drivable by nobody — treating an
+empty `user_created` as "unowned, so anyone" would make every seeded or
+imported row a public remote control for whoever found its id.
+
+Responses: `401` not signed in, `403` untrusted origin or not your playlist,
+`404`/`403` are deliberately not distinguished for a missing playlist (that
+would be an oracle for which ids exist), `429` rate limited, `202` accepted.
+
 ---
 
 ## 4. Non-functional requirements

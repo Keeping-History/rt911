@@ -8,12 +8,26 @@ Directus media_items writer.
 """
 import json
 from datetime import timedelta
+from urllib.parse import quote
 
 import httpx
 
 from video_grabber.config import Config
 
 _WASABI_BASE = "https://files.911realtime.org"
+
+
+def wasabi_public_url(key: str) -> str:
+    """Public URL for a bucket key, encoded the way mp3_items.url stores it.
+
+    Load-bearing: patch_mp3_subtitles matches mp3_items.url with an exact _eq
+    filter. Directus stores '…/0812%20aa77….mp3'; passing the raw key matched
+    only the three folders whose filenames contain no spaces, silently leaving
+    575 of 621 rows unlinked while the pipeline reported success.
+
+    quote() leaves '/' alone by default, so path structure survives.
+    """
+    return f"{_WASABI_BASE}/{quote(key)}"
 
 
 def get_directus_token(cfg: Config) -> str:
@@ -78,18 +92,25 @@ def write_media_item(job, wasabi_url: str, cfg: Config) -> None:
     resp.raise_for_status()
 
 
-def upsert_channel_media_item(channel, master_url: str, window_start, cfg: Config) -> None:
-    """Upsert the single continuous-stream media_item for a channel.
+def upsert_channel_media_item(
+    channel, master_url: str, window_start, window_end, cfg: Config
+) -> None:
+    """Upsert the single continuous-stream row for a channel into ``tv_channels``.
 
-    Idempotent on the playlist ``url`` (``epg/<slug>/master.m3u8``), which is
-    fixed and unique per channel — so there is exactly one row per channel and
-    re-runs PATCH it in place as more content is acquired. ``url`` is a normal
-    indexed field; we key on it rather than ``content`` because ``content`` is
-    stored as an opaque JSON *string*. It can only be matched as a whole blob
-    (``filter[content][_eq]``, as ``write_media_item`` does); traversing into a
-    subfield (``filter[content][channel_stream]``) 403s. The
-    ``content.channel_stream`` marker is still written for downstream consumers,
-    just not queried.
+    The stitched per-channel HLS streams live in their own ``tv_channels`` table
+    (same shape as ``media_items``) — that is the table the streamer's main video
+    channel reads. Idempotent on the playlist ``url``
+    (``playlists/<slug>/master.m3u8``), which is fixed and unique per channel — so
+    there is exactly one row per channel and re-runs PATCH it in place as more
+    content is acquired. ``url`` is a normal indexed field; we key on it rather
+    than ``content`` because ``content`` is stored as an opaque JSON *string* that
+    can only be matched as a whole blob. The ``content.channel_stream`` marker is
+    still written for downstream consumers, just not queried.
+
+    ``start_date``/``end_date`` span the whole assembled window and
+    ``calc_duration`` is its length in seconds — the channel stream is continuous
+    across that span (gaps are blue-filled), so it is "active" for the entire
+    window, not just an instant.
     """
     token = get_directus_token(cfg)
     headers = {
@@ -103,6 +124,8 @@ def upsert_channel_media_item(channel, master_url: str, window_start, cfg: Confi
         "full_title": channel.display_name,
         "source": _resolve_source_id(channel.slug, headers, cfg),
         "start_date": window_start.strftime("%Y-%m-%dT%H:%M:%S"),
+        "end_date": window_end.strftime("%Y-%m-%dT%H:%M:%S"),
+        "calc_duration": int((window_end - window_start).total_seconds()),
         "timezone": channel.timezone,
         "url": url,
         "format": "m3u8",
@@ -111,7 +134,7 @@ def upsert_channel_media_item(channel, master_url: str, window_start, cfg: Confi
     }
 
     resp = httpx.get(
-        f"{cfg.directus_url}/items/media_items",
+        f"{cfg.directus_url}/items/tv_channels",
         params={"filter[url][_eq]": url, "fields": "id"},
         headers=headers,
     )
@@ -121,13 +144,13 @@ def upsert_channel_media_item(channel, master_url: str, window_start, cfg: Confi
     if existing:
         item_id = existing[0]["id"]
         resp = httpx.patch(
-            f"{cfg.directus_url}/items/media_items/{item_id}",
+            f"{cfg.directus_url}/items/tv_channels/{item_id}",
             content=json.dumps(payload),
             headers=headers,
         )
     else:
         resp = httpx.post(
-            f"{cfg.directus_url}/items/media_items",
+            f"{cfg.directus_url}/items/tv_channels",
             content=json.dumps(payload),
             headers=headers,
         )
@@ -146,3 +169,81 @@ def _resolve_source_id(slug: str, headers: dict, cfg: Config) -> int | None:
     resp.raise_for_status()
     data = resp.json().get("data", [])
     return data[0]["id"] if data else None
+
+
+def _auth_headers(cfg: Config) -> dict:
+    return {
+        "Authorization": f"Bearer {get_directus_token(cfg)}",
+        "Content-Type": "application/json",
+    }
+
+
+def patch_mp3_subtitles(mp3_url: str, srt_url: str, cfg: Config, *, client=httpx) -> bool:
+    """Attach ``srt_url`` to the ``mp3_items`` row whose ``url`` == ``mp3_url``.
+
+    Keyed on ``url`` exactly like ``upsert_channel_media_item`` keys tv_channels —
+    a normal indexed field, unlike the opaque ``content`` JSON string. Idempotent:
+    re-running just re-PATCHes the same value. Returns False if no row matched."""
+    headers = _auth_headers(cfg)
+    resp = client.get(
+        f"{cfg.directus_url}/items/mp3_items",
+        params={"filter[url][_eq]": mp3_url, "fields": "id"},
+        headers=headers,
+    )
+    resp.raise_for_status()
+    data = resp.json().get("data") or []
+    if not data:
+        return False
+    item_id = data[0]["id"]
+    resp = client.patch(
+        f"{cfg.directus_url}/items/mp3_items/{item_id}",
+        content=json.dumps({"subtitles": srt_url}),
+        headers=headers,
+    )
+    resp.raise_for_status()
+    return True
+
+
+def get_tv_channel_start_date(channel_slug: str, cfg: Config, *, client=httpx):
+    """Return the start_date (naive UTC datetime) for the tv_channels row, or None."""
+    from datetime import datetime
+    headers = _auth_headers(cfg)
+    marker = json.dumps({"channel_stream": channel_slug})
+    resp = client.get(
+        f"{cfg.directus_url}/items/tv_channels",
+        params={"filter[content][_eq]": marker, "fields": "start_date"},
+        headers=headers,
+    )
+    resp.raise_for_status()
+    data = resp.json().get("data") or []
+    if not data:
+        return None
+    return datetime.strptime(data[0]["start_date"], "%Y-%m-%dT%H:%M:%S")
+
+
+def patch_tv_channel_subtitles(channel_slug: str, srt_url: str, cfg: Config, *, client=httpx) -> bool:
+    """Attach ``srt_url`` to the ``tv_channels`` row for ``channel_slug``.
+
+    Matches on the ``content`` marker ``{"channel_stream": slug}`` that
+    ``upsert_channel_media_item`` writes — ``content`` is an opaque JSON *string*
+    so it is matched as a whole blob (``_eq``), not traversed. Returns False if no
+    row matched (channel not yet assembled)."""
+    headers = _auth_headers(cfg)
+    marker = json.dumps({"channel_stream": channel_slug})
+    resp = client.get(
+        f"{cfg.directus_url}/items/tv_channels",
+        params={"filter[content][_eq]": marker, "fields": "id"},
+        headers=headers,
+    )
+    resp.raise_for_status()
+    data = resp.json().get("data") or []
+    if not data:
+        return False
+    item_id = data[0]["id"]
+    resp = client.patch(
+        f"{cfg.directus_url}/items/tv_channels/{item_id}",
+        content=json.dumps({"subtitles": srt_url}),
+        headers=headers,
+    )
+    resp.raise_for_status()
+    return True

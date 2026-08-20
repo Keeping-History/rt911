@@ -9,3 +9,5 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+# Vendored at image-build time from the sibling mbox_parser tool (see CI + Dockerfile).
+/mbox_parser.py

@@ -22,34 +22,54 @@ permissions:
 
 env:
   # Public backend URLs compiled into the frontend bundle.
-  FE_VITE_PROXY_PROTOCOL: "https:"
+  FE_VITE_PROXY_PROTOCOL: "wss:"
   FE_VITE_PROXY_HOST: "timemachine.911realtime.org"
   FE_VITE_PROXY_PORT: "443"
-  FE_VITE_MEDIA_STREAM_URL: "wss://stream-beta.911realtime.org/stream"
+  FE_VITE_MEDIA_STREAM_URL: "wss://stream.911realtime.org/stream"
+  FE_VITE_OPENREPLAY_PROJECT_KEY: "fsiCRmSeFQkdKxDDwD0C"
+  FE_VITE_OPENREPLAY_INGEST_URL: "https://openreplay.911realtime.org/ingest"
+  FE_VITE_FEEDBACK_URL: "https://stream.911realtime.org"
+  FE_VITE_DIRECTUS_URL: "https://api.911realtime.org"
 
 jobs:
   # Type-check, lint and unit-test the frontend. The Docker image build only runs
-  # `vite build` (transpile-only), so without this job tsc/eslint/vitest never run
+  # `vite build` (transpile-only), so without this job tsc/oxlint/vitest never run
   # in CI and can regress silently.
   frontend-checks:
     name: frontend-checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Type-check
         run: pnpm --filter @rt911/frontend exec tsc -b
       - name: Lint
-        run: pnpm --filter @rt911/frontend exec eslint .
+        run: pnpm --filter @rt911/frontend exec oxlint .
       - name: Test
         run: pnpm --filter @rt911/frontend run test
 
+  streamer-test:
+    name: streamer-test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: packages/backend/go.mod
+          cache-dependency-path: packages/backend/go.sum
+      - name: Test
+        run: go test ./...
+
   streamer:
+    needs: [streamer-test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -66,10 +86,45 @@ jobs:
           cache-from: type=gha,scope=streamer
           cache-to: type=gha,mode=max,scope=streamer
 
-  frontend:
+  api-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+      - name: Extension unit tests
+        run: |
+          npm --prefix packages/directus-extensions/profile-api ci
+          npm --prefix packages/directus-extensions/profile-api test
+
+  api:
+    needs: [api-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: packages/directus-extensions
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/keeping-history/rt911-api:${{ github.sha }}
+            ghcr.io/keeping-history/rt911-api:${{ github.event_name == 'pull_request' && github.sha || github.ref_name }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  frontend:
+    # Both gates, not just the cheap one: the image this job pushes to GHCR is
+    # what Argo CD Image Updater rolls out, so an E2E failure has to stop it here
+    # or a broken desktop ships. E2E costs ~100s and starts at the same time as
+    # frontend-checks, so this rarely adds wall-clock over the old ordering.
+    needs: [frontend-checks, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -86,8 +141,72 @@ jobs:
             VITE_PROXY_HOST=${{ env.FE_VITE_PROXY_HOST }}
             VITE_PROXY_PORT=${{ env.FE_VITE_PROXY_PORT }}
             VITE_MEDIA_STREAM_URL=${{ env.FE_VITE_MEDIA_STREAM_URL }}
+            VITE_OPENREPLAY_PROJECT_KEY=${{ env.FE_VITE_OPENREPLAY_PROJECT_KEY }}
+            VITE_OPENREPLAY_INGEST_URL=${{ env.FE_VITE_OPENREPLAY_INGEST_URL }}
+            VITE_FEEDBACK_URL=${{ env.FE_VITE_FEEDBACK_URL }}
+            VITE_DIRECTUS_URL=${{ env.FE_VITE_DIRECTUS_URL }}
           tags: |
             ghcr.io/keeping-history/rt911-frontend:${{ github.sha }}
             ghcr.io/keeping-history/rt911-frontend:${{ github.event_name == 'pull_request' && github.sha || github.ref_name }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+  # Runs alongside frontend-checks rather than after it: the two are independent
+  # (Playwright drives a dev server, it doesn't consume tsc/oxlint output), so
+  # gating E2E on checks only delayed the slower signal. Deliberately NOT
+  # continue-on-error — a red E2E fails the workflow, and `frontend` needs it, so
+  # a broken desktop can't be built into an image or pushed to GHCR for Argo CD
+  # to roll out. Keep `e2e` in main's required status checks so it blocks merges
+  # too; the workflow alone can't enforce that half.
+  # Runs inside the official Playwright image (browsers + system deps
+  # preinstalled) instead of `playwright install --with-deps`, which calls
+  # apt-get against the runner's azure.archive.ubuntu.com mirror — a
+  # long-standing, still-open flake (actions/runner-images#11347) that can
+  # hang the step for tens of minutes with no output. Keep this tag's
+  # version in lockstep with @playwright/test in packages/frontend/package.json.
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type-check E2E
+        run: pnpm --filter @rt911/frontend exec tsc --project tsconfig.e2e.json --noEmit
+      - name: Run E2E tests
+        run: pnpm --filter @rt911/frontend exec playwright test
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: playwright-report
+          path: packages/frontend/playwright-report/
+          retention-days: 30
+      - name: Post PR comment
+        uses: actions/github-script@v9
+        if: always() && github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            let body;
+            try {
+              const results = JSON.parse(
+                fs.readFileSync('packages/frontend/playwright-report/results.json', 'utf8')
+              );
+              // Playwright JSON reporter uses `expected`/`unexpected`, not `passed`/`failed`
+              const { expected, unexpected, flaky, skipped } = results.stats;
+              const icon = unexpected > 0 ? '⚠️' : '✅';
+              body = `${icon} **Playwright E2E** — ${expected} passed · ${unexpected} failed · ${flaky} flaky · ${skipped} skipped\n\n[Full report](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            } catch (e) {
+              body = `⚠️ **Playwright E2E** — results unavailable (dev server failed to start or tests crashed before writing output)\n\n[Run logs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            }
+            await github.rest.issues.createComment({
+              ...context.repo, issue_number: context.issue.number, body
+            });

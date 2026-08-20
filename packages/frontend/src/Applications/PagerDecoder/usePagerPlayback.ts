@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
 	MediaStreamContext,
 	type PagerItem,
@@ -10,7 +10,8 @@ import { matchesFilter } from "./pagerUtils";
 
 export interface CompletedLine {
 	id: string;
-	timeKey: string;
+	/** Raw UTC ISO timestamp; the view formats it in the user's selected timezone. */
+	timestamp: string;
 	provider: string;
 	text: string;
 	record: PagerRecord;
@@ -19,20 +20,12 @@ export interface CompletedLine {
 export interface PlaybackState {
 	lines: CompletedLine[];
 	streamingText: string;
-	streamingMeta: { timeKey: string; provider: string } | null;
+	streamingMeta: { timestamp: string; provider: string } | null;
 	uniqueValues: { provider: string[]; id_type: string[]; channel: string[] };
-}
-
-/** Extract the original ET HH:MM:SS from a UTC ISO timestamp.
- *  Pager data was recorded in EDT (UTC-4). */
-function utcIsoToETTimeKey(isoUtc: string): string {
-	const utcMs = new Date(isoUtc).getTime();
-	const edtMs = utcMs - 4 * 3600 * 1000;
-	const d = new Date(edtMs);
-	const h = String(d.getUTCHours()).padStart(2, "0");
-	const m = String(d.getUTCMinutes()).padStart(2, "0");
-	const s = String(d.getUTCSeconds()).padStart(2, "0");
-	return `${h}:${m}:${s}`;
+	/** Wipe the visible terminal: completed lines, the in-progress stream, and any
+	 *  queued-but-not-yet-rendered items. Already-seen IDs stay remembered so cleared
+	 *  history is not re-streamed when the context array re-renders. */
+	clearLines: () => void;
 }
 
 /** Convert a PagerItem from the pager channel to a PagerRecord. The streamer now
@@ -52,25 +45,27 @@ function pagerItemToPagerRecord(item: PagerItem): PagerRecord | null {
 
 interface StreamingItem {
 	record: PagerRecord;
-	timeKey: string;
 }
 
 export function usePagerPlayback(
 	settings: PagerDecoderSettings = DEFAULT_PAGER_SETTINGS,
 	paused = false,
+	isRunning = false,
 ): PlaybackState {
-	const { pagerItems, subscribePager, unsubscribePager } = useContext(MediaStreamContext);
+	const { pagerItems, subscribePager, unsubscribePager, sources } =
+		useContext(MediaStreamContext);
 
-	// Opt into the pager channel so the server delivers pager items to this session.
+	// Opt into the pager channel only while the app is open.
 	useEffect(() => {
+		if (!isRunning) return;
 		subscribePager("PagerDecoder.app");
 		return () => unsubscribePager("PagerDecoder.app");
-	}, [subscribePager, unsubscribePager]);
+	}, [isRunning, subscribePager, unsubscribePager]);
 
 	const [lines, setLines] = useState<CompletedLine[]>([]);
 	const [streamingText, setStreamingText] = useState("");
 	const [streamingMeta, setStreamingMeta] = useState<{
-		timeKey: string;
+		timestamp: string;
 		provider: string;
 	} | null>(null);
 
@@ -88,6 +83,15 @@ export function usePagerPlayback(
 		id_type:  [],
 		channel:  [],
 	});
+
+	const clearLines = useCallback(() => {
+		queueRef.current = [];
+		currentItemRef.current = null;
+		wordIndexRef.current = 0;
+		setLines([]);
+		setStreamingText("");
+		setStreamingMeta(null);
+	}, []);
 
 	const settingsRef = useRef(settings);
 	settingsRef.current = settings;
@@ -121,10 +125,7 @@ export function usePagerPlayback(
 
 			if (!matchesFilter(record, settingsRef.current.filter)) continue;
 
-			queueRef.current.push({
-				record,
-				timeKey: utcIsoToETTimeKey(item.start_date),
-			});
+			queueRef.current.push({ record });
 		}
 
 		if (hasNewUnique) {
@@ -146,7 +147,7 @@ export function usePagerPlayback(
 				if (!next) return;
 				currentItemRef.current = next;
 				wordIndexRef.current = 0;
-				setStreamingMeta({ timeKey: next.timeKey, provider: next.record.provider });
+				setStreamingMeta({ timestamp: next.record.timestamp, provider: next.record.provider });
 				setStreamingText("");
 			}
 
@@ -158,11 +159,11 @@ export function usePagerPlayback(
 
 			if (wordIndexRef.current >= words.length) {
 				const completed: CompletedLine = {
-					id:       `${item.timeKey}-${item.record.recipient_id}-${Date.now()}`,
-					timeKey:  item.timeKey,
-					provider: item.record.provider,
-					text:     item.record.message,
-					record:   item.record,
+					id:        `${item.record.timestamp}-${item.record.recipient_id}-${Date.now()}`,
+					timestamp: item.record.timestamp,
+					provider:  item.record.provider,
+					text:      item.record.message,
+					record:    item.record,
 				};
 				const retention = settingsRef.current.retentionLines;
 				setLines((prev) => {
@@ -179,5 +180,17 @@ export function usePagerPlayback(
 		return () => clearInterval(streamId);
 	}, []);
 
-	return { lines, streamingText, streamingMeta, uniqueValues };
+	// The provider filter list is the server's complete, time-independent provider
+	// set (sources.pager) unioned with any providers already seen in-stream — so
+	// the dropdown is fully populated immediately, not only after items scroll past.
+	const mergedUniqueValues = useMemo<PlaybackState["uniqueValues"]>(
+		() => ({
+			provider: [...new Set([...sources.pager, ...uniqueValues.provider])].sort(),
+			id_type: uniqueValues.id_type,
+			channel: uniqueValues.channel,
+		}),
+		[sources.pager, uniqueValues],
+	);
+
+	return { lines, streamingText, streamingMeta, uniqueValues: mergedUniqueValues, clearLines };
 }

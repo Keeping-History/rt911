@@ -1,0 +1,64 @@
+1
+00:00:00,000 --> 00:00:01,620
+ American dispatch, Jim McConnell.
+
+2
+00:00:01,620 --> 00:00:05,280
+ This is Indianapolis Center, trying to get a hold of American 77.
+
+3
+00:00:05,280 --> 00:00:07,960
+ Uh, Indy, hang on one second please.
+
+4
+00:00:07,960 --> 00:00:08,960
+ What?
+
+5
+00:00:08,960 --> 00:00:09,960
+ Hang on one second, sir.
+
+6
+00:00:09,960 --> 00:00:10,960
+ All right.
+
+7
+00:00:10,960 --> 00:00:11,960
+ What are you trying to get a hold of?
+
+8
+00:00:11,960 --> 00:00:12,960
+ American 77.
+
+9
+00:00:12,960 --> 00:00:13,960
+ OK.
+
+10
+00:00:13,960 --> 00:00:14,960
+ On frequency 120.27.
+
+11
+00:00:14,960 --> 00:00:15,960
+ 120.27.
+
+12
+00:00:15,960 --> 00:00:16,960
+ We were talking to him and all of a sudden it's just, uh, OK.
+
+13
+00:00:16,960 --> 00:00:17,960
+ All right, we'll get it home for you.
+
+14
+00:00:17,960 --> 00:00:18,960
+ All right.
+
+15
+00:00:18,960 --> 00:00:19,960
+ Thank you.
+
+16
+00:00:19,960 --> 00:00:37,120
+ American 77.27, we were talking to him and all of a sudden it's just, uh, OK.
+

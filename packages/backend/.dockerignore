@@ -1,0 +1,11 @@
+# Large seed datasets — not baked into either image. The seed image loads them at
+# runtime from a mount (for a fresh full seed) or tolerates their absence; the Go
+# streamer image doesn't use them. Excluding keeps the build context small.
+entries_media.json
+entries_news.json
+pager_entries.json
+# Repo cruft never needed in an image build.
+.git
+node_modules
+k8s
+*.md
