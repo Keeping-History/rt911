@@ -51,13 +51,28 @@ import { isAudioBlocked, subscribeAudioBlocked } from "../radio-core/audioBlocke
 import { resolveAudioUrl } from "../radio-core/audioSource";
 import { BROADCAST_STATIONS, groupStations, startMs } from "../radio-core/stationGrouping";
 import appIconPng from "./app.png";
-import { connectClock, clockMoved, ensure, release, releaseAll, setLevel } from "./audioCoordinator";
+import {
+	clockMoved,
+	clockPauseChanged,
+	connectClock,
+	ensure,
+	hasEnded,
+	release,
+	releaseAll,
+	setLevel,
+} from "./audioCoordinator";
 import { historyPool, type Lane, laneFor, rememberItems } from "./cardStatus";
 import { FilterTree } from "./FilterTree";
 import { LANES, type LaneOrder, reconcileLaneOrder, reorderLane } from "./laneOrder";
 import { LaneSection } from "./LaneSection";
 import { LaneSmallPlayer } from "./LaneSmallPlayer";
-import { nextHeldLiveIds, sameIdSet, withManualHold } from "./liveHold";
+import {
+	IDLE_RELEASE_MS,
+	nextHeldLiveIds,
+	pruneIdleTouches,
+	sameIdSet,
+	withManualHold,
+} from "./liveHold";
 import styles from "./radioTraffic.module.scss";
 import {
 	radioTrafficSetState,
@@ -293,8 +308,22 @@ export const RadioTraffic: React.FC = () => {
 	 * untouched card simply disappears once its clock window ends, and a touched
 	 * one stays no matter what they do to it afterward (mute it, pause it again),
 	 * which is why this is add-only (addId) rather than a toggle like `stopped`.
+	 *
+	 * The hold itself is not permanent: `pruneIdleTouches` below drops an id
+	 * once IDLE_RELEASE_MS passes with nothing happening on it — see
+	 * `lastLiveActivityRef`.
 	 */
 	const [touchedLiveIds, setTouchedLiveIds] = useState<ReadonlySet<number>>(() => new Set());
+	/**
+	 * When each touched id last did something worth extending its hold for — a
+	 * press/scrub (stamped where `touchedLiveIds` is set), or a tick spent
+	 * actually playing (stamped in the idle-prune effect below). A ref, not
+	 * state: it is bookkeeping for `pruneIdleTouches`, not something anything
+	 * renders from, and it would otherwise need pruning of its own to stop
+	 * growing across a whole session — the idle-prune effect deletes an id's
+	 * entry the same tick it drops out of `touchedLiveIds`.
+	 */
+	const lastLiveActivityRef = useRef<Map<number, number>>(new Map());
 	/**
 	 * Story 045: LIVE ids `partitionLanes` holds past their clock window because
 	 * the listener has touched them — see liveHold.ts. Read one render behind on
@@ -434,13 +463,36 @@ export const RadioTraffic: React.FC = () => {
 	// touchedLiveIds keying off the same `=== "live"` test as `stopped` is what
 	// makes the hold self-sustaining rather than one-shot: as long as a touched
 	// id keeps reporting "live" (because withManualHold is holding it there),
-	// its touch survives; only once it genuinely leaves LIVE for good does the
-	// touch — and with it, the hold — get dropped.
+	// its touch survives; only once it genuinely leaves LIVE for good, OR sits
+	// idle for IDLE_RELEASE_MS (see pruneIdleTouches), does the touch — and
+	// with it, the hold — get dropped.
 	useEffect(() => {
 		setStopped((ids) => retainIds(ids, (id) => membership.get(id) === "live"));
 		setUserStarted((ids) => retainIds(ids, (id) => membership.has(id)));
-		setTouchedLiveIds((ids) => retainIds(ids, (id) => membership.get(id) === "live"));
-	}, [membership]);
+
+		// A touched card renews its own activity stamp for as long as it is
+		// actually playing — following the clock, not paused, tape not run out —
+		// so nothing further from the listener is needed to keep it fresh. Once
+		// it stops doing any of those, the stamp left by that last change (a
+		// pause press, or simply reaching the end) is what the idle clock below
+		// counts from.
+		const now = Date.now();
+		for (const id of touchedLiveIds) {
+			if (membership.get(id) === "live" && !stopped.has(id) && !hasEnded(id)) {
+				lastLiveActivityRef.current.set(id, now);
+			}
+		}
+		setTouchedLiveIds((ids) => {
+			const stillLive = retainIds(ids, (id) => membership.get(id) === "live");
+			const fresh = pruneIdleTouches(stillLive, lastLiveActivityRef.current, now, IDLE_RELEASE_MS);
+			// The ref is bookkeeping for ids `touchedLiveIds` still names — drop
+			// anything else so it cannot grow unbounded across a long session.
+			for (const id of lastLiveActivityRef.current.keys()) {
+				if (!fresh.has(id)) lastLiveActivityRef.current.delete(id);
+			}
+			return fresh;
+		});
+	}, [membership, stopped, touchedLiveIds]);
 
 	// ── The filter ───────────────────────────────────────────────────────────
 	const [vocabulary, setVocabulary] = useState<VocabularyState>(() => ({
@@ -504,6 +556,13 @@ export const RadioTraffic: React.FC = () => {
 	useEffect(() => {
 		clockMoved();
 	}, [anchorMs]);
+
+	// The operator pausing or resuming the virtual clock — the Classicy control
+	// panel, not this app's own tools — pauses or resumes every LIVE player still
+	// following it, the same way RadioTuner's StationPlayer already does.
+	useEffect(() => {
+		clockPauseChanged(clockPaused);
+	}, [clockPaused]);
 
 	// Which elements should exist, and WHICH COPY of each recording they play.
 	// LANE membership, NOT filter visibility: the element outlives the card so a
@@ -651,7 +710,11 @@ export const RadioTraffic: React.FC = () => {
 			setStopped((ids) => toggleId(ids, itemId));
 			// A play/pause press is a touch — see touchedLiveIds above — whichever
 			// direction it toggled `stopped`, so this is add-only, never undone by
-			// pressing the button again.
+			// pressing the button again. Stamping activity here, not just adding to
+			// the set, is what gives a brand-new touch its own fresh idle window
+			// rather than reusing whatever a stale entry from a much earlier touch
+			// on this id would otherwise leave behind.
+			lastLiveActivityRef.current.set(itemId, Date.now());
 			setTouchedLiveIds((ids) => addId(ids, itemId));
 		}
 		// An UPCOMING clip has no audio yet; there is nothing to start.
@@ -660,6 +723,10 @@ export const RadioTraffic: React.FC = () => {
 
 	/** A LIVE card's waveform was scrubbed — the other half of a touch. */
 	const onManualSeek = useCallback((itemId: number) => {
+		// PeaksWaveform calls this on every pointermove of a drag, not once per
+		// gesture, so a scrub in progress re-stamps continuously and can never go
+		// idle mid-drag.
+		lastLiveActivityRef.current.set(itemId, Date.now());
 		setTouchedLiveIds((ids) => addId(ids, itemId));
 	}, []);
 

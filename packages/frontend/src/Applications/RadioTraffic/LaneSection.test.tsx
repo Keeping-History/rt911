@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import type { Lane } from "./cardStatus";
 import { LANE_LABELS, LaneSection } from "./LaneSection";
@@ -88,6 +88,27 @@ function stubSlotBoxes(root: ParentNode, laneTop = 0) {
 				top: laneTop + i * 130,
 				bottom: laneTop + i * 130 + 124,
 			}) as DOMRect;
+	});
+}
+
+/**
+ * jsdom performs no layout, so every offsetLeft is always 0 — meaningless for
+ * the scroll-compensation effect, which reads each card's own real x-position.
+ * A prototype-level getter (not a per-element stub) so it stays correct as
+ * React reorders, adds and removes slots across a rerender: every `.rtLaneSlot`
+ * reports its OWN index among its current siblings, times a fixed pitch —
+ * exactly like a real flex/grid row of equal-width cards. Call once; leave in
+ * place for however many renders a test drives. Undone in this describe's own
+ * `afterEach` so it cannot leak into other files.
+ */
+function stubSlotPitch(pitch = 100) {
+	Object.defineProperty(HTMLElement.prototype, "offsetLeft", {
+		configurable: true,
+		get(this: HTMLElement) {
+			const parent = this.parentElement;
+			if (!parent) return 0;
+			return Array.prototype.indexOf.call(parent.children, this) * pitch;
+		},
 	});
 }
 
@@ -328,41 +349,95 @@ describe("LaneSection automatic ordering (story 044)", () => {
 		expect(shownIds(container)).toEqual([4, 2, 1, 3]);
 	});
 
-	it("compensates the lane's scroll offset when a new card is inserted at the left", () => {
-		const { container, rerender } = render(
-			<LaneSection
-				lane="live"
-				items={ITEMS}
-				tool="hand"
-				renderCard={renderCard}
-				renderCollapsedCard={renderCollapsedCard}
-			/>,
-		);
-		const cards = container.querySelector("[data-lane-cards]") as HTMLElement;
-		// jsdom performs no layout, so scrollWidth/scrollLeft are inert without
-		// this — the same stubbing trick stubSlotBoxes uses for
-		// getBoundingClientRect, just for the two properties the compensation
-		// effect reads instead.
-		Object.defineProperty(cards, "scrollWidth", { value: 300, configurable: true });
-		Object.defineProperty(cards, "scrollLeft", {
-			value: 50,
-			writable: true,
-			configurable: true,
+	describe("scroll compensation", () => {
+		beforeEach(() => stubSlotPitch());
+		afterEach(() => Reflect.deleteProperty(HTMLElement.prototype, "offsetLeft"));
+
+		/**
+		 * Mounts the lane, pins scrollLeft to `at`, then rerenders with identical
+		 * props once before the caller's own change — a plain post-mount
+		 * `Object.defineProperty` sets the DOM's scrollLeft but does not, by
+		 * itself, reach the effect's OWN baseline, which only samples
+		 * `cards.scrollLeft` when its deps change. This mirrors the real world:
+		 * a scroll from outside this component only becomes visible to it the
+		 * next time a card actually arrives or leaves.
+		 */
+		function mountAt(scrollLeft: number) {
+			const lane = (items: typeof ITEMS) => (
+				<LaneSection
+					lane="live"
+					items={items}
+					tool="hand"
+					renderCard={renderCard}
+					renderCollapsedCard={renderCollapsedCard}
+				/>
+			);
+			const { container, rerender } = render(lane(ITEMS));
+			const cards = container.querySelector("[data-lane-cards]") as HTMLElement;
+			Object.defineProperty(cards, "scrollLeft", {
+				value: scrollLeft,
+				writable: true,
+				configurable: true,
+			});
+			rerender(lane(ITEMS));
+			return { container, cards, rerender: (items: typeof ITEMS) => rerender(lane(items)) };
+		}
+
+		it("compensates the lane's scroll offset when a card arrives to the left of what's visible", () => {
+			const { cards, rerender } = mountAt(0);
+
+			const FOUR = makeItem({ id: 4, full_title: "clip 4" });
+			rerender([...ITEMS, FOUR]);
+
+			// New arrivals land at the front (stabilizeLaneOrder), so card 1 — the
+			// first card visible at scrollLeft 0 — moved from x=0 to x=100. The
+			// scroll position moves by that same 100px, so it stays exactly where
+			// it was even though card 1 itself never changed.
+			expect(cards.scrollLeft).toBe(100);
 		});
 
-		const FOUR = makeItem({ id: 4, full_title: "clip 4" });
-		rerender(
-			<LaneSection
-				lane="live"
-				items={[...ITEMS, FOUR]}
-				tool="hand"
-				renderCard={renderCard}
-				renderCollapsedCard={renderCollapsedCard}
-			/>,
-		);
-		// The card row grew by the new card's width; the scroll position moves by
-		// the same amount so the cards already on screen stay on screen.
-		expect(cards.scrollLeft).toBe(350);
+		it("compensates the lane's scroll offset when a card to the left is removed", () => {
+			// Card 2 (x=100) is the first one still on screen once card 1 has
+			// scrolled past.
+			const { cards, rerender } = mountAt(100);
+
+			rerender(ITEMS.slice(1));
+
+			// Card 1 left the lane. Card 2 — the anchor — slides from x=100 to
+			// x=0 to close the gap, so the scroll position slides back by the same
+			// 100px: without this, the view would jump left to show card 1's old
+			// spot, now occupied by card 2, as if the listener had scrolled there.
+			expect(cards.scrollLeft).toBe(0);
+		});
+
+		it("compensates once for an arrival and a departure landing in the same tick", () => {
+			const { container, cards, rerender } = mountAt(100);
+
+			// Card 1 leaves and card 4 arrives (at the front) in the same render —
+			// the clock does not serialise these into separate ticks.
+			const FOUR = makeItem({ id: 4, full_title: "clip 4" });
+			rerender([...ITEMS.slice(1), FOUR]);
+
+			// Order becomes [4, 2, 3]. Card 2 — the anchor — held x=100 and holds
+			// x=100 again (one slot in from a departure, one slot out from an
+			// arrival cancel exactly), so nothing about the scroll needs to move.
+			expect(shownIds(container)).toEqual([4, 2, 3]);
+			expect(cards.scrollLeft).toBe(100);
+		});
+
+		it("leaves scrollLeft alone when the anchor itself is the card that leaves", () => {
+			// Card 1 (x=0) is the leftmost card at scrollLeft 0, so it is the
+			// anchor — and it is also the one about to leave.
+			const { cards, rerender } = mountAt(0);
+
+			rerender(ITEMS.slice(1));
+
+			// The anchor did not survive, so there is no "where it ended up" to
+			// chase — but the position that was correct (the very start of the
+			// lane) still is, so leaving scrollLeft untouched is the right answer
+			// here, not a missed case.
+			expect(cards.scrollLeft).toBe(0);
+		});
 	});
 
 	it("leaves scrollLeft alone on a render that inserted nothing new", () => {

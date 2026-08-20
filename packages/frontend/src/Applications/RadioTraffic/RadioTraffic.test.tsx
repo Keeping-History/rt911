@@ -889,6 +889,42 @@ describe("RadioTraffic — the manual hold (story 045)", () => {
 		expect(laneIds("live")).toEqual([10]);
 		expect(laneIds("previous")).toEqual([]);
 	});
+
+	it("releases a paused card's hold once it has sat idle for ten real seconds", async () => {
+		const { rerender } = await renderHold();
+		const transport = cardOf(10)?.querySelector("button[aria-label='Pause']");
+		fireEvent.click(transport as Element);
+		await act(async () => {});
+		expect(laneIds("live")).toEqual([10]);
+
+		// Ten real (wall-clock) seconds pass with nothing further happening to
+		// the card — distinct from PAST_END, which only moves the simulated
+		// broadcast clock the lane windows are measured against.
+		vi.advanceTimersByTime(10_000);
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([]);
+		expect(laneIds("previous")).toEqual([10]);
+	});
+
+	it("does not release a card still playing, however much real time passes", async () => {
+		const restoreBox = stubWaveformBox();
+		const { rerender } = await renderHold();
+		const canvas = cardOf(10)?.querySelector("canvas");
+		fireEvent.pointerDown(canvas as Element, { clientX: 50 });
+		await act(async () => {});
+		expect(laneIds("live")).toEqual([10]);
+
+		// The card was scrubbed, never paused, so it is still "playing" by the
+		// idle-release criterion — every render that finds it live and not
+		// stopped renews its own activity stamp, with no further touch needed.
+		vi.advanceTimersByTime(10_000);
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+		restoreBox.mockRestore();
+	});
 });
 
 describe("RadioTraffic — persisted state", () => {

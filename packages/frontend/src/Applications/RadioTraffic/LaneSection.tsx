@@ -193,12 +193,19 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	// Only the id being dragged is state; the rest of the gesture lives in a ref
 	// because nothing renders from it and a pointermove per frame should not.
 	const [draggingId, setDraggingId] = useState<number | null>(null);
-	// The ids this lane rendered last tick, and the scroll width that went with
-	// them — stabilizeLaneOrder's "before" and the scroll-jump compensation's
-	// baseline. Undefined until the first commit: there is nothing to compare
-	// the very first render against, for either.
+	// The ids this lane rendered last tick — stabilizeLaneOrder's "before".
+	// Undefined until the first commit: there is nothing to compare the very
+	// first render against.
 	const previousIdsRef = useRef<readonly number[] | undefined>(undefined);
-	const scrollWidthRef = useRef(0);
+	// Every surviving card's own x-position, snapshotted after each commit —
+	// the scroll-jump compensation's baseline. A per-card position rather than
+	// a single scrollWidth number so a card leaving (not just one arriving) can
+	// be compensated for, and so an arrival or departure OUTSIDE the visible
+	// window (to the right of what the listener can see) costs nothing: only a
+	// card whose own position moved says the scroll needs to.
+	const scrollSnapshotRef = useRef<{ offsets: Map<number, number>; scrollLeft: number } | null>(
+		null,
+	);
 
 	const label = LANE_LABELS[lane];
 	const fixedCollapse = LANE_FIXED_COLLAPSE[lane];
@@ -220,21 +227,59 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	// Runs after the DOM reflects `ordered`, before the browser paints — a
 	// plain useEffect would let the jump flash on screen for one frame first.
 	//
-	// Compensation is scoped to ticks that actually inserted a new card: a
-	// collapse toggle or a manual pin swap also changes `cardsRef`'s content
-	// width, and nudging scrollLeft for either of those would introduce the
-	// very jump this exists to prevent, on a gesture that never asked for one.
+	// Compensation is scoped to ticks that actually added or removed a card: a
+	// collapse toggle or a manual pin swap also re-lays-out `cardsRef`'s
+	// content, and nudging scrollLeft for either of those would introduce the
+	// very jump this exists to prevent, on a gesture that never asked for one
+	// (a manual drag is the one case a card SHOULD visibly move).
 	useLayoutEffect(() => {
 		const cards = cardsRef.current;
 		const previous = previousIdsRef.current;
 		if (cards) {
-			const insertedAtLeft =
-				previous !== undefined && ordered.some((item) => !previous.includes(item.id));
-			if (insertedAtLeft) {
-				const grew = cards.scrollWidth - scrollWidthRef.current;
-				if (grew > 0) cards.scrollLeft += grew;
+			const currentIds = ordered.map((item) => item.id);
+			const idSetChanged =
+				previous !== undefined &&
+				(currentIds.length !== previous.length ||
+					currentIds.some((id) => !previous.includes(id)) ||
+					previous.some((id) => !currentIds.includes(id)));
+
+			const newOffsets = new Map<number, number>();
+			for (const child of Array.from(cards.children)) {
+				const raw = (child as HTMLElement).dataset.laneItem;
+				if (raw !== undefined) newOffsets.set(Number(raw), (child as HTMLElement).offsetLeft);
 			}
-			scrollWidthRef.current = cards.scrollWidth;
+
+			const snapshot = scrollSnapshotRef.current;
+			if (idSetChanged && snapshot && previous) {
+				// The anchor is the first card, IN THE OLD ORDER, that was at or
+				// past the old scroll position — the leftmost card the listener
+				// could actually see before this update. Walking `previous` rather
+				// than the new `currentIds` matters: it is what makes this the
+				// card that WAS at the viewport's edge, not just whichever
+				// survivor happens to be first now — a card arriving or leaving
+				// anywhere ELSE in the lane must not be free to relabel a
+				// different card as "where the listener was looking."
+				for (const id of previous) {
+					const before = snapshot.offsets.get(id);
+					if (before === undefined || before < snapshot.scrollLeft) continue;
+					// Found the true anchor. If it did not survive this update —
+					// it was the card that left — there is no "where it ended up"
+					// to chase, so scrollLeft is left exactly where it was rather
+					// than substituting a different card's movement for its own.
+					const after = newOffsets.get(id);
+					if (after !== undefined) {
+						const delta = after - before;
+						if (delta !== 0) cards.scrollLeft += delta;
+					}
+					break;
+				}
+			}
+
+			// This tick's layout is the next tick's baseline, whether or not it
+			// was compensated — `cards.scrollLeft` is read back rather than
+			// computed, so a real browser clamping the assignment above is
+			// exactly what the next comparison measures against too.
+			scrollSnapshotRef.current = { offsets: newOffsets, scrollLeft: cards.scrollLeft };
 		}
 		previousIdsRef.current = ordered.map((item) => item.id);
 	}, [ordered]);

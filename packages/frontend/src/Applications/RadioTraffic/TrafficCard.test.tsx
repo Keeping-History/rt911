@@ -338,6 +338,63 @@ describe("TrafficCard seeking", () => {
 	});
 });
 
+describe("TrafficCard rewind", () => {
+	it("seeks to the start of the recording through the coordinator", () => {
+		// NOT `el.currentTime = 0` from here, for the same reason a waveform
+		// scrub isn't: the coordinator caches the position every reader —
+		// this card's own badge included — is looking at.
+		const { getByRole } = renderCard({ lane: "live" });
+
+		fireEvent.click(getByRole("button", { name: "Rewind to start" }));
+
+		expect(audio.seekTo).toHaveBeenCalledWith(makeItem().id, 0);
+	});
+
+	it("reports the rewind to the shell in addition to seeking", () => {
+		// Same signal a scrub reports (Story 045's hold) — a deliberate rewind
+		// is exactly the kind of press that should take a LIVE card off the
+		// clock the way dragging the waveform does.
+		const onManualSeek = vi.fn();
+		const { getByRole } = renderCard({ lane: "live", onManualSeek });
+
+		fireEvent.click(getByRole("button", { name: "Rewind to start" }));
+
+		expect(onManualSeek).toHaveBeenCalledTimes(1);
+	});
+
+	it("is offered even when the clip is paused", () => {
+		// Rewind resets position, not playback state — it must not require
+		// the card to already be playing.
+		const { getByRole } = renderCard({ lane: "live", paused: true });
+
+		fireEvent.click(getByRole("button", { name: "Rewind to start" }));
+
+		expect(audio.seekTo).toHaveBeenCalledWith(makeItem().id, 0);
+	});
+
+	it("keeps a rewind from also firing the lane's active tool", () => {
+		// Same collision the mute button and the waveform already guard
+		// against: the card sits in a slot whose pointerup applies the tool
+		// palette's current tool.
+		const onSlotPointerUp = vi.fn();
+		const { getByRole } = render(
+			<div onPointerUp={onSlotPointerUp}>
+				<TrafficCard
+					item={makeItem()}
+					lane="live"
+					tzOffsetHours={-4}
+					nowMs={START_MS}
+					onTogglePause={() => {}}
+				/>
+			</div>,
+		);
+
+		fireEvent.pointerUp(getByRole("button", { name: "Rewind to start" }));
+
+		expect(onSlotPointerUp).not.toHaveBeenCalled();
+	});
+});
+
 // Story 028. A card follows the virtual clock until the listener says
 // otherwise; the transport button is one of the two ways they say it.
 describe("TrafficCard clock-follow", () => {

@@ -117,6 +117,32 @@ const SpeakerIcon: React.FC<{ muted: boolean }> = ({ muted }) => (
 	</svg>
 );
 
+/**
+ * A circular arrow open at the top, with an arrowhead at its left end — the
+ * rewind-to-start button's artwork. `currentColor`, same reasoning as the
+ * speaker: one asset has to read on both a bright LIVE card and a dimmed
+ * UPCOMING one.
+ */
+const RewindIcon: React.FC = () => (
+	<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" role="presentation">
+		<path
+			d="M8 2.5a5.5 5.5 0 1 1 -5.5 5.5"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			fill="none"
+			strokeLinecap="round"
+		/>
+		<path
+			d="M5 5.3L2 8l3 2.7"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			fill="none"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		/>
+	</svg>
+);
+
 /** The badge, in the few characters the 196px header can spare beside a subject. */
 function badgeLabel(badge: Badge): string {
 	switch (badge.kind) {
@@ -233,6 +259,16 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 		},
 		[item.id, durationMs, onManualSeek],
 	);
+
+	// The rewind button: the same write the waveform's own left edge would make
+	// (seekTo already clamps to 0 and floors negative input, so this is not a
+	// special case of it), reported through the same onManualSeek signal a
+	// scrub uses — a deliberate rewind is exactly the kind of press that should
+	// take a LIVE card off the clock's own hold the way a scrub does.
+	const onRewind = useCallback(() => {
+		seekTo(item.id, 0);
+		onManualSeek?.();
+	}, [item.id, onManualSeek]);
 
 	// Stopping means opposite things in the two lanes that can be playing.
 	//
@@ -367,6 +403,20 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 					onClickFunc={onTransport}
 				>
 					<span aria-hidden="true">{paused ? "▶" : "❚❚"}</span>
+				</ClassicyBevelButton>
+				<ClassicyBevelButton
+					square
+					bevelWidth="small"
+					data-card-rewind
+					aria-label="Rewind to start"
+					title="Rewind to start"
+					onClickFunc={onRewind}
+					// Same collision the mute button and the waveform already guard
+					// against: left to bubble, letting go of a rewind press under the
+					// mute tool would rewind AND mute the card in one release.
+					onPointerUp={(e) => e.stopPropagation()}
+				>
+					<RewindIcon />
 				</ClassicyBevelButton>
 				<ClassicyBevelButton
 					mode="toggle"

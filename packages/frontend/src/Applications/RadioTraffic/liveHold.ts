@@ -72,6 +72,45 @@ export function nextHeldLiveIds(
 }
 
 /**
+ * How long a touch survives with no activity before its hold lapses.
+ *
+ * A touch is not forever: it is only meant to bridge the gap while the
+ * listener is still doing something with the card. `pruneIdleTouches` expects
+ * activity to have been re-stamped every tick a card is actually playing, and
+ * on every drag frame of a scrub — so this is really how long since the
+ * listener last did anything with this card, not how long since they first
+ * touched it.
+ */
+export const IDLE_RELEASE_MS = 10_000;
+
+/**
+ * Which touched ids are still fresh enough to keep their hold.
+ *
+ * `lastActivityMs` is the shell's own record of when each id last did
+ * something worth extending the hold for — a press/scrub, or a tick while it
+ * was actually playing (see RadioTraffic.tsx). An id with no recorded
+ * activity is treated as stale rather than kept: every id that reaches
+ * `touchedIds` is stamped at the moment it is added, so a missing entry means
+ * the bookkeeping lost it, not that it is still fresh.
+ *
+ * Returns `touchedIds` itself when nothing was dropped — the same
+ * no-op-is-the-same-object discipline `sameIdSet` exists for below.
+ */
+export function pruneIdleTouches(
+	touchedIds: ReadonlySet<number>,
+	lastActivityMs: ReadonlyMap<number, number>,
+	nowMs: number,
+	idleMs: number = IDLE_RELEASE_MS,
+): ReadonlySet<number> {
+	const next = new Set<number>();
+	for (const id of touchedIds) {
+		const last = lastActivityMs.get(id);
+		if (last !== undefined && nowMs - last < idleMs) next.add(id);
+	}
+	return next.size === touchedIds.size ? touchedIds : next;
+}
+
+/**
  * Same ids, whatever order they arrived in.
  *
  * The shell feeds `nextHeldLiveIds`'s result straight into React state on

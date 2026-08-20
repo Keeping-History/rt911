@@ -146,6 +146,16 @@ export function PeaksWaveform({
 	// the element has to still be alive to release — a card unmounts for
 	// reasons that have nothing to do with the pointer (a tag filter, a lane
 	// migration).
+	//
+	// All three are registered on the CAPTURE phase, not the default bubble
+	// phase. The waveform box's own container stops propagation on pointerup
+	// (TrafficCard.tsx, so releasing a scrub does not also fire the lane/card
+	// click underneath) — a bubble-phase window listener sits downstream of
+	// that stopPropagation() and would simply never see the event, leaving
+	// this drag "ended" in name only while the move listener stayed attached
+	// and kept following the pointer with no button held. Capture runs before
+	// the event reaches that container at all, so it cannot be swallowed by
+	// anything a descendant does on the way back up.
 	const seekRef = useRef(onSeekPct);
 	seekRef.current = onSeekPct;
 	const endDragRef = useRef<(() => void) | null>(null);
@@ -186,15 +196,15 @@ export function PeaksWaveform({
 				seekAt(ev.clientX);
 			};
 			const end = () => {
-				window.removeEventListener("pointermove", move);
-				window.removeEventListener("pointerup", end);
-				window.removeEventListener("pointercancel", end);
+				window.removeEventListener("pointermove", move, true);
+				window.removeEventListener("pointerup", end, true);
+				window.removeEventListener("pointercancel", end, true);
 				endDragRef.current = null;
 			};
 			endDragRef.current = end;
-			window.addEventListener("pointermove", move);
-			window.addEventListener("pointerup", end);
-			window.addEventListener("pointercancel", end);
+			window.addEventListener("pointermove", move, true);
+			window.addEventListener("pointerup", end, true);
+			window.addEventListener("pointercancel", end, true);
 		},
 		[seekAt, isInsideBox],
 	);

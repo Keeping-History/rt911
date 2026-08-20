@@ -395,6 +395,30 @@ describe("PeaksWaveform", () => {
 			expect(onSeekPct).not.toHaveBeenCalled();
 		});
 
+		it("still ends the drag when a container stops propagation on pointerup", () => {
+			// TrafficCard's waveform box does exactly this — release must not also
+			// fire the lane/card click underneath it. A bubble-phase window
+			// listener would sit downstream of that stopPropagation() and never
+			// see the event at all, leaving the drag "ended" in name only while
+			// the move listener stayed attached and kept following the pointer
+			// with no button held.
+			const onSeekPct = vi.fn();
+			stubBox(0, 200);
+			const { container } = render(
+				<div onPointerUp={(e) => e.stopPropagation()}>
+					<PeaksWaveform peaks={peaks} height={40} onSeekPct={onSeekPct} />
+				</div>,
+			);
+			const canvas = container.querySelector("canvas")!;
+
+			fireEvent.pointerDown(canvas, { clientX: 20 });
+			fireEvent.pointerUp(canvas);
+			onSeekPct.mockClear();
+			fireEvent.pointerMove(window, { clientX: 100 });
+
+			expect(onSeekPct).not.toHaveBeenCalled();
+		});
+
 		it("stops scrubbing the instant the pointer leaves the waveform box horizontally", () => {
 			// The drag is tracked on the window (not the canvas) so it can detect
 			// this itself instead of never hearing about it — a scrub is only live

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextHeldLiveIds, sameIdSet, withManualHold } from "./liveHold";
+import { nextHeldLiveIds, pruneIdleTouches, sameIdSet, withManualHold } from "./liveHold";
 
 describe("withManualHold", () => {
 	it("leaves UPCOMING and LIVE verdicts alone, held or not", () => {
@@ -47,6 +47,44 @@ describe("nextHeldLiveIds", () => {
 		const held = nextHeldLiveIds([{ id: 5 }], () => true);
 		expect(held.has(999)).toBe(false);
 		expect([...held]).toEqual([5]);
+	});
+});
+
+describe("pruneIdleTouches", () => {
+	it("keeps an id whose last activity is inside the idle window", () => {
+		const touched = new Set([1]);
+		const activity = new Map([[1, 9_000]]);
+		expect(pruneIdleTouches(touched, activity, 10_000, 10_000)).toEqual(new Set([1]));
+	});
+
+	it("drops an id once its last activity is at least idleMs old", () => {
+		const touched = new Set([1]);
+		const activity = new Map([[1, 0]]);
+		expect(pruneIdleTouches(touched, activity, 10_000, 10_000).has(1)).toBe(false);
+	});
+
+	it("drops an id with no recorded activity at all", () => {
+		const touched = new Set([1]);
+		expect(pruneIdleTouches(touched, new Map(), 10_000, 10_000).has(1)).toBe(false);
+	});
+
+	it("returns the same object when nothing was dropped", () => {
+		const touched = new Set([1, 2]);
+		const activity = new Map([
+			[1, 5_000],
+			[2, 5_000],
+		]);
+		expect(pruneIdleTouches(touched, activity, 6_000, 10_000)).toBe(touched);
+	});
+
+	it("keeps only the still-fresh ids out of several", () => {
+		const touched = new Set([1, 2, 3]);
+		const activity = new Map([
+			[1, 0],
+			[2, 9_999],
+			[3, 5_000],
+		]);
+		expect([...pruneIdleTouches(touched, activity, 10_000, 10_000)].sort()).toEqual([2, 3]);
 	});
 });
 
