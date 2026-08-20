@@ -23,6 +23,8 @@
 
 import type React from "react";
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
+import Marquee from "../radio-core/marquee";
+import { useHorizontalOverflow } from "../radio-core/useHorizontalOverflow";
 import styles from "./laneSmallPlayer.module.scss";
 import { durationSecondsLabel, startLabel } from "./smallPlayerLabels";
 import { itemTiming } from "./tabs/itemTiming";
@@ -43,6 +45,16 @@ export interface LaneSmallPlayerProps {
 	 * far more often than the day it's read for could actually change.
 	 */
 	currentMs: number | null;
+	/**
+	 * Whether an overflowing chip row may marquee-scroll (issue #522).
+	 * Defaults to false so a bare `<LaneSmallPlayer>` — every existing test,
+	 * and any future caller that forgets the prop — keeps the old clipped
+	 * single row. RadioTraffic.tsx opts UPCOMING and PREVIOUS in and leaves
+	 * LIVE out: LIVE's collapsed card sits above a mix a listener is actively
+	 * scanning, and a scrolling tag row there would be one more thing moving
+	 * on a card whose whole point is "not the busy view".
+	 */
+	enableMarquee?: boolean;
 }
 
 export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
@@ -50,6 +62,7 @@ export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
 	meta,
 	tzOffsetHours,
 	currentMs,
+	enableMarquee = false,
 }) => {
 	const timing = itemTiming(item);
 	// The same fallback the full card uses: an untranscribed clip still has a
@@ -59,6 +72,30 @@ export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
 	const duration = durationSecondsLabel(timing.durationSec);
 	const link = meta?.link?.trim();
 	const tags = meta?.tags ?? [];
+	const { containerRef, contentRef, overflowing } = useHorizontalOverflow();
+
+	const chipList = (
+		<ul
+			ref={enableMarquee ? contentRef : undefined}
+			className={styles.rtSmallChips}
+			aria-label="Tags"
+		>
+			{tags.map((tag) => (
+				// mp3_tags.color is NULL on every row today, so the namespace
+				// palette is what actually paints these; chipColor honours a
+				// curator's colour first if one is ever set. Same call the
+				// Details panel makes, so the two can never drift.
+				<li
+					key={tag.tag}
+					className={styles.rtSmallChip}
+					data-namespace={tag.namespace}
+					style={{ background: chipColor(tag) }}
+				>
+					{tagLabel(tag)}
+				</li>
+			))}
+		</ul>
+	);
 
 	return (
 		<article className={styles.rtSmallPlayer} data-small-player={item.id}>
@@ -67,24 +104,20 @@ export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
 				{`${subject}`}
 			</h3>
 
-			{tags.length > 0 && (
-				<ul className={styles.rtSmallChips} aria-label="Tags">
-					{tags.map((tag) => (
-						// mp3_tags.color is NULL on every row today, so the namespace
-						// palette is what actually paints these; chipColor honours a
-						// curator's colour first if one is ever set. Same call the
-						// Details panel makes, so the two can never drift.
-						<li
-							key={tag.tag}
-							className={styles.rtSmallChip}
-							data-namespace={tag.namespace}
-							style={{ background: chipColor(tag) }}
-						>
-							{tagLabel(tag)}
-						</li>
-					))}
-				</ul>
-			)}
+			{tags.length > 0 &&
+				(enableMarquee ? (
+					<div ref={containerRef} className={styles.rtSmallChipsWrapper}>
+						{overflowing ? (
+							<Marquee direction="left" speed={20} pauseOnHover gradient={false}>
+								{chipList}
+							</Marquee>
+						) : (
+							chipList
+						)}
+					</div>
+				) : (
+					chipList
+				))}
 
 			<div className={styles.rtSmallFooter}>
 				<div className={styles.rtSmallTimings}>

@@ -796,18 +796,24 @@ export const RadioTraffic: React.FC = () => {
 
 	// The folded lanes' players (story 027). One renderer for all three lanes,
 	// because a small player carries no lane-dependent state — no badge, no
-	// transport, no mute — which is exactly what makes it small.
+	// transport, no mute — which is exactly what makes it small. Curried by
+	// lane, like `renderCard` above, purely to carry `enableMarquee` (issue
+	// #522): LIVE's collapsed card sits above a mix a listener is actively
+	// scanning and keeps the old clipped, non-scrolling chip row; UPCOMING and
+	// PREVIOUS — reference views with nothing else moving on the card — marquee
+	// a chip row too wide to fit instead of silently dropping the rest of it.
 	// anchorMs, not nowMs: the small player only needs "today" to the nearest
 	// virtual minute, and nowMs is recomputed every render tick for waveform
 	// seeking — keying this callback on it would invalidate every folded card's
 	// memoisation once a second instead of once a minute.
 	const renderCollapsedCard = useCallback(
-		(item: MediaItem) => (
+		(lane: Lane) => (item: MediaItem) => (
 			<LaneSmallPlayer
 				item={item}
 				meta={mp3Meta[item.id]}
 				tzOffsetHours={tz}
 				currentMs={anchorMs}
+				enableMarquee={lane !== "live"}
 			/>
 		),
 		[mp3Meta, tz, anchorMs],
@@ -933,7 +939,7 @@ export const RadioTraffic: React.FC = () => {
 								tool={tool}
 								onReorder={(fromId, toIndex) => onReorder(lane, fromId, toIndex)}
 								renderCard={renderCard(lane)}
-								renderCollapsedCard={renderCollapsedCard}
+								renderCollapsedCard={renderCollapsedCard(lane)}
 							/>
 						))}
 					</main>
