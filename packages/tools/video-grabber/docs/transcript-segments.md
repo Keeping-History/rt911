@@ -176,7 +176,7 @@ normalization isn't rediscovered the hard way.
   need retries, `transcribe_jobs` (`db/migrations/versions/003_transcribe_jobs.py`)
   is the template.
 - **No new Directus collection.** `chat_transcript_segments` was applied to
-  `api-beta` in Plan A.
+  Directus in Plan A.
 - **No schedule.** Nothing here changes on its own; the source SRTs are fixed.
 - **No retrieval.** Querying these segments for the chatbot is a separate
   (Plan C) concern.

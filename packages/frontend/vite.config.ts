@@ -1,6 +1,6 @@
 import react from "@vitejs/plugin-react";
 import path from "path";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, type ProxyOptions } from "vite";
 import { pagesRouteSlug } from "./src/Pages/route";
 
 /**
@@ -43,7 +43,17 @@ function crossOriginIsolationExceptPages(): Plugin {
 const DIRECTUS_PROXY_TARGET = process.env.DIRECTUS_PROXY_TARGET ?? "https://api.911realtime.org";
 
 /**
- * Re-bind an upstream `Set-Cookie` so the dev server can hold it.
+ * Where the dev-server streamer proxy forwards to. Defaults to a locally-run
+ * streamer, unlike the Directus proxy above: the mp3 metadata routes are new
+ * on this branch and are not on the deployed image, so pointing at production
+ * would proxy a 404. Override from the shell to aim elsewhere.
+ *
+ * Deliberately NOT `VITE_`-prefixed — read here, in Node, at config time only.
+ */
+const STREAMER_PROXY_TARGET = process.env.STREAMER_PROXY_TARGET ?? "http://localhost:8080";
+
+/**
+ * Re-bind an upstream `Set-Cookie` so a localhost server can hold it.
  *
  * Directus issues its session cookie with `Domain=.911realtime.org; Secure`.
  * The domain attribute alone makes the browser discard the cookie on
@@ -57,7 +67,7 @@ const DIRECTUS_PROXY_TARGET = process.env.DIRECTUS_PROXY_TARGET ?? "https://api.
  * needs no change: once proxied the request is same-origin, which Lax already
  * permits — it was only ever the cross-site case that dropped the cookie.
  */
-export function rebindCookieToDevServer(cookie: string): string {
+export function rebindCookieToLocalhost(cookie: string): string {
 	return cookie
 		.split(";")
 		.filter((part) => {
@@ -67,70 +77,106 @@ export function rebindCookieToDevServer(cookie: string): string {
 		.join(";");
 }
 
+/**
+ * Proxy table shared by the dev server AND `vite preview`.
+ *
+ * Both serve the app from `localhost`, so both hit the same wall, and a fix
+ * that only covered `vite dev` left `vite preview` unable to make ANY Directus
+ * call — including anonymous reads. Defining this once means the two can't
+ * drift.
+ *
+ * On the Directus entry: it is proxied so the browser sees Directus as
+ * SAME-ORIGIN with the server. Reaching the real host from localhost is
+ * impossible, and not for one reason — the deployed Directus carries all
+ * three of:
+ *
+ *   CORS_ORIGIN              the product domains only. A request from
+ *                            localhost comes back with no
+ *                            Access-Control-Allow-Origin at all, so the
+ *                            browser discards the response before app code
+ *                            sees it. This applies to ANONYMOUS reads too, not
+ *                            just credentialed ones — and a wildcard is
+ *                            illegal for credentialed requests, so no single
+ *                            server-side value would cover both.
+ *   SESSION_COOKIE_DOMAIN    .911realtime.org — unstorable on localhost.
+ *   SESSION_COOKIE_SAME_SITE lax — not sent on cross-site requests.
+ *
+ * Routing through the server's own origin sidesteps all three at once: a
+ * same-origin request runs no CORS check, and the rewritten cookie above binds
+ * to localhost. That is why this is a proxy and not an allow-list entry —
+ * widening the deployed CORS/cookie config to admit localhost would mean
+ * SameSite=None on the real session cookie, weakening production auth for
+ * everyone to serve local development.
+ *
+ * Inert by default: reached only when VITE_DIRECTUS_URL=/directus, which is
+ * set by `.env.development` (dev) or `.env.preview` (build --mode preview).
+ * Unset, the app calls Directus directly and nothing hits this route.
+ */
+const localProxy: Record<string, ProxyOptions> = {
+	"/feedback": {
+		target: "http://localhost:8080",
+		changeOrigin: true,
+	},
+	/**
+	 * The streamer's mp3 metadata routes, for the same reason `/feedback` is
+	 * here: the deployed CORS allow-list is `911realtime.org` and the GitHub
+	 * Pages preview only, so a browser on `localhost:5173` gets no
+	 * `Access-Control-Allow-Origin` back and discards the response. Widening
+	 * that list to admit localhost is not the fix — see the note above on why
+	 * proxying beats an allow-list entry.
+	 *
+	 * Points at a locally-run streamer rather than production, because these
+	 * routes ship with this branch and do not exist on the deployed image yet;
+	 * against production they 404 regardless of CORS.
+	 *
+	 * Inert by default: reached only when VITE_STREAM_HTTP_BASE is empty, which
+	 * makes the app build relative `/mp3/...` URLs. Unset, it calls the streamer
+	 * directly and nothing hits this route.
+	 */
+	"/mp3": {
+		target: STREAMER_PROXY_TARGET,
+		changeOrigin: true,
+	},
+	"/directus": {
+		target: DIRECTUS_PROXY_TARGET,
+		changeOrigin: true,
+		rewrite: (requestPath) => requestPath.replace(/^\/directus/, ""),
+		configure: (proxy) => {
+			proxy.on("proxyRes", (proxyRes) => {
+				const cookies = proxyRes.headers["set-cookie"];
+				if (!cookies) return;
+				proxyRes.headers["set-cookie"] = cookies.map(rebindCookieToLocalhost);
+			});
+		},
+	},
+};
+
 // https://vite.dev/config/
 export default defineConfig({
 	plugins: [react(), crossOriginIsolationExceptPages()],
-	server: {
-		proxy: {
-			"/feedback": {
-				target: "http://localhost:8080",
-				changeOrigin: true,
-			},
-			/**
-			 * Directus, proxied so the browser sees it as SAME-ORIGIN with the dev
-			 * server. Signing in from localhost against the real host is impossible,
-			 * and not for one reason — the deployed Directus carries all three of:
-			 *
-			 *   CORS_ORIGIN              the product domains only. A credentialed
-			 *                            request from localhost comes back with no
-			 *                            Access-Control-Allow-Origin at all, so the
-			 *                            browser discards the response before app
-			 *                            code sees it (a wildcard is illegal for
-			 *                            credentialed requests, so there is no
-			 *                            server-side value that would cover both).
-			 *   SESSION_COOKIE_DOMAIN    .911realtime.org — unstorable on localhost.
-			 *   SESSION_COOKIE_SAME_SITE lax — not sent on cross-site requests.
-			 *
-			 * Routing through the dev server's own origin sidesteps all three at
-			 * once: a same-origin request runs no CORS check, and the rewritten
-			 * cookie above binds to localhost. That is why this is a proxy and not
-			 * an allow-list entry — widening the deployed CORS/cookie config to
-			 * admit localhost would mean SameSite=None on the real session cookie,
-			 * weakening production auth for everyone to serve local development.
-			 *
-			 * Dev-server only, and inert by default: it is reached only when
-			 * VITE_DIRECTUS_URL=/directus (see .env.example). Unset, the app calls
-			 * Directus directly and nothing ever hits this route.
-			 */
-			"/directus": {
-				target: DIRECTUS_PROXY_TARGET,
-				changeOrigin: true,
-				rewrite: (requestPath) => requestPath.replace(/^\/directus/, ""),
-				configure: (proxy) => {
-					proxy.on("proxyRes", (proxyRes) => {
-						const cookies = proxyRes.headers["set-cookie"];
-						if (!cookies) return;
-						proxyRes.headers["set-cookie"] = cookies.map(rebindCookieToDevServer);
-					});
-				},
-			},
-		},
-	},
+	server: { proxy: localProxy },
+	// `vite preview` serves the built bundle, and a production-mode build bakes
+	// the ABSOLUTE Directus URL — which localhost can't call. Pair this with
+	// `vite build --mode preview` (see the preview:auth script) so the bundle
+	// carries /directus and this proxy has something to answer.
+	preview: { proxy: localProxy },
 	build: {
 		sourcemap: true,
 		rollupOptions: {
 			output: {
 				// Isolate maplibre-gl (+ its pmtiles protocol) into its own chunk.
-				// This is CORRECTNESS, not just code-splitting: maplibre-gl 5.x ships
+				// Originally CORRECTNESS, not just code-splitting: maplibre-gl 5.x shipped
 				// only a prebuilt UMD bundle (no ESM entry), and when Rolldown (Vite 8)
-				// scope-hoists it into the shared app chunk it mangles an internal
-				// variable declaration — the reference survives (renamed T4/f) but its
-				// binding is dropped, so maplibre throws "T4 is not defined" the moment
-				// its source-error path runs (e.g. the Flight Tracker basemap 404s).
-				// That ReferenceError aborts map load and no aircraft ever render — a
+				// scope-hoisted it into the shared app chunk it mangled an internal
+				// variable declaration — the reference survived (renamed T4/f) but its
+				// binding was dropped, so maplibre threw "T4 is not defined" the moment
+				// its source-error path ran (e.g. the Flight Tracker basemap 404s).
+				// That ReferenceError aborted map load and no aircraft ever rendered — a
 				// production-only break invisible in the dev server (unbundled maplibre).
-				// Keeping maplibre in its own chunk preserves its IIFE scope and avoids
-				// the mis-hoist. Do not fold this back into the main chunk.
+				// maplibre-gl 6.x is ESM-only (no more UMD/IIFE build), so the specific
+				// mis-hoist this worked around may no longer apply — untested, so the
+				// isolation stays as cheap insurance. Do not fold this back into the main
+				// chunk without confirming the v5 failure mode is actually gone.
 				manualChunks(id) {
 					if (id.includes("maplibre-gl") || id.includes("pmtiles")) return "maplibre";
 				},

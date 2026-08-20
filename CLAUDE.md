@@ -24,8 +24,9 @@ From the repo root:
 pnpm install
 pnpm dev              # frontend dev server (vite -d), localhost:5173
 pnpm build            # tsc -b && vite build (frontend)
+pnpm preview:auth     # build + serve a PRODUCTION bundle locally, able to reach Directus
 pnpm test             # vitest run (frontend)
-pnpm lint             # eslint . (frontend)
+pnpm lint             # oxlint . (frontend)
 pnpm setup            # seed the backend data store (packages/backend/seed.mjs)
 pnpm db:gen-epg       # generate EPG data
 ```
@@ -50,7 +51,7 @@ pytest tests/test_resolve.py::test_name
 ruff check video_grabber/ tests/
 ```
 
-CI (`.github/workflows/build.yml`) runs `tsc -b`, `eslint .`, and `vitest run` for the frontend and `go test ./...` for the backend as required checks before building/pushing images. Playwright E2E is also required: it runs in parallel with `frontend-checks`, and the `frontend` image job `needs:` it, so a red E2E blocks both the merge and the GHCR push that Argo CD rolls out.
+CI (`.github/workflows/build.yml`) runs `tsc -b`, `oxlint .`, and `vitest run` for the frontend and `go test ./...` for the backend as required checks before building/pushing images. Playwright E2E is also required: it runs in parallel with `frontend-checks`, and the `frontend` image job `needs:` it, so a red E2E blocks both the merge and the GHCR push that Argo CD rolls out.
 
 ## Cross-cutting things to know
 

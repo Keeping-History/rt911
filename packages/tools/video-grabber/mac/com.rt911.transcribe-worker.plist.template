@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.rt911.transcribe-worker-__N__</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/transcribe/run-worker.sh</string>
+        <string>mac-__N__</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <!-- MUST be Standard. Background throttles CPU/IO/GPU, and whisper --vad
+         then hangs indefinitely rather than merely running slow: the worker
+         stays alive, heartbeats, and never completes a job. 6 files/hour vs
+         108 on this one word. dispatch_worker asserts this at startup. -->
+    <key>ProcessType</key><string>Standard</string>
+    <key>StandardOutPath</key><string>__HOME__/transcribe/logs/worker-mac-__N__.launchd.log</string>
+    <key>StandardErrorPath</key><string>__HOME__/transcribe/logs/worker-mac-__N__.launchd.log</string>
+</dict>
+</plist>

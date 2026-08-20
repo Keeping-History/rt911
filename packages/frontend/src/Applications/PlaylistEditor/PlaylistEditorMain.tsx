@@ -1,32 +1,56 @@
-import {
-	ClassicyButton,
-	ClassicyFileOpenDialog,
-	type ClassicyFileOpenSelection,
-	ClassicyTree,
-	type ClassicyTreeNode,
-	desktopVolume,
-	fileSystemVolume,
-	useClassicyFileSystem,
-} from "classicy";
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
-import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
-import { useMediaStream } from "../../Providers/MediaStream/useMediaStream";
-import { createDirectusVolume, MEDIA_FILE_TYPES } from "./directusVolume";
-import {
-	editorReducer,
-	type EditorEntry,
-	initialEditorState,
-	selectionsToEntries,
-	utcIsoToDisplayWallClock,
-} from "./editorState";
-import { EntryForm } from "./EntryForm";
+import { ClassicyControlLabel, ClassicySplitView, ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "classicy";
+import type { ReactNode } from "react";
+import { Disclosure } from "../../Components/Disclosure/Disclosure";
+import type { MediaEntry, PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
+import { BROADCAST_STATIONS } from "../radio-core/stationGrouping";
+import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayWallClock } from "./editorState";
+import { MediaRadioRow } from "./MediaRadioRow";
+import { MediaTvRow, type TvEditorEntry } from "./MediaTvRow";
 import { PlaylistTimeline } from "./PlaylistTimeline";
-import { SaveBar } from "./SaveBar";
 
 const KIND_BRANCHES: [PlaylistEntry["kind"], string][] = [
 	["media", "Media"], ["app", "Apps"], ["settings", "Settings"],
 	["file", "Files"], ["jump", "Jumps"], ["browser", "Browser"],
+];
+
+// The Media tab's disclosure sections, in broadcast-dial order. Radio is one
+// playlist app but two product apps, split by BROADCAST_STATIONS the same way
+// the Radio Tuner and Radio Scanner partition the shared mp3 stream — so it
+// gets two sections here, keyed by the entry's station rather than app alone.
+type MediaSection = {
+	/** Also selects the section's body renderer — see mediaTab below. */
+	key: string;
+	label: string;
+	emptyHint: string;
+	match: (e: EditorEntry & { entry: MediaEntry }) => boolean;
+};
+
+const isBroadcastStation = (e: { entry: MediaEntry }) =>
+	BROADCAST_STATIONS.has(e.entry.itemId.toUpperCase());
+
+const MEDIA_SECTIONS: MediaSection[] = [
+	{
+		key: "tv", label: "TV Channels", emptyHint: "No TV channels yet.",
+		match: (e) => e.entry.app === "tv",
+	},
+	{
+		key: "radio", label: "Radio Stations",
+		emptyHint: "No radio stations yet.",
+		match: (e) => e.entry.app === "radio" && isBroadcastStation(e),
+	},
+	{
+		key: "radio-traffic", label: "Radio Traffic",
+		emptyHint: "No radio traffic yet.",
+		match: (e) => e.entry.app === "radio" && !isBroadcastStation(e),
+	},
+	{
+		key: "news", label: "News", emptyHint: "No news stories yet.",
+		match: (e) => e.entry.app === "news",
+	},
+	{
+		key: "flights", label: "Flights", emptyHint: "No flights yet.",
+		match: (e) => e.entry.app === "flights",
+	},
 ];
 
 function entrySummary(e: EditorEntry): string {
@@ -44,175 +68,139 @@ function entrySummary(e: EditorEntry): string {
 	}
 }
 
+/**
+ * The editing surface, and nothing else.
+ *
+ * The header (title, mode, status, Save) and the Add bar are gone: they live in
+ * the File/Edit menus and the Tools palette now, so a resizable vertical
+ * split view fills the window: the timeline on top, the entries grouped by
+ * kind in a tab group below. Entry EDITING is gone too — an entry's Edit button
+ * selects it and reveals the shared Settings utility window (SettingsWindow),
+ * which renders the form for the active document's selection. This component
+ * holds no state — its owning document window passes the playlist's slice of
+ * the keyed store, a dispatcher, and the Settings-window opener.
+ */
 export function PlaylistEditorMain({
-	record,
-	onBack,
-	onDirtyChange = () => {},
-	closeRequested = false,
-	onCancelClose = () => {},
-	onQuit = () => {},
+	state,
+	edit,
+	openSettings = () => {},
+	zoom,
+	onZoomChange,
 }: {
-	record: PlaylistRecord;
-	onBack: () => void;
-	/** Fired on mount and whenever dirtiness changes, so the owning window
-	 * (PlaylistEditor) can gate its close confirmation without holding its own
-	 * copy of the editor state. */
-	onDirtyChange?: (dirty: boolean) => void;
-	/** True while the owning window wants to close but the editor is dirty:
-	 * swaps the whole editor body for a three-button save/discard/cancel strip. */
-	closeRequested?: boolean;
-	onCancelClose?: () => void;
-	onQuit?: () => void;
+	state: EditorState;
+	edit: (playlistId: string, action: EditorAction) => void;
+	/** Reveal the Settings utility window; wired to the provider's
+	 * openSettingsWindow by PlaylistDocumentWindow. */
+	openSettings?: () => void;
+	/** Timeline zoom, owned by the document window so the View menu and the
+	 * timeline's own buttons drive one value. Passed straight through — this
+	 * component still holds no state of its own. */
+	zoom: number;
+	onZoomChange: (zoom: number) => void;
 }) {
-	const [state, dispatch] = useReducer(editorReducer, record, initialEditorState);
-	const [dialogMode, setDialogMode] = useState<"media" | "file" | null>(null);
+	const dispatch = (action: EditorAction) => edit(state.playlistId, action);
 
-	useEffect(() => {
-		onDirtyChange(state.dirty);
-	}, [state.dirty, onDirtyChange]);
-	const fs = useClassicyFileSystem();
-	const { sources } = useMediaStream();
-	// sources object identity changes on WS updates; the volume's closures read
-	// this ref (not the render's `sources`) so they always see the live lists,
-	// even though the volume itself is created only once (below).
-	const sourcesRef = useRef(sources);
-	sourcesRef.current = sources;
-
-	const localVolumes = useMemo(
-		() => [desktopVolume(fs), fileSystemVolume(fs, "Macintosh HD")],
-		[fs],
-	);
-	const archiveVolume = useMemo(
-		() =>
-			createDirectusVolume({
-				tvSlugs: () => sourcesRef.current.video,
-				radioSlugs: () => sourcesRef.current.audio,
-			}),
-		// volume identity must stay stable for the dialog's per-folder cache
-		[],
-	);
-
-	const selected = state.entries.find((e) => e.uid === state.selectedUid) ?? null;
-
-	const nodes: ClassicyTreeNode[] = KIND_BRANCHES.map(([kind, label]) => ({
-		id: `branch-${kind}`,
-		label,
-		defaultOpen: true,
-		children: state.entries
-			.filter((e) => e.entry.kind === kind)
-			.map((e) => ({
-				id: e.uid,
-				label: entrySummary(e),
-				buttons: [
-					{ label: "Edit", onClickFunc: () => dispatch({ type: "select", uid: e.uid }) },
-					{ label: "Remove", onClickFunc: () => dispatch({ type: "removeEntry", uid: e.uid }) },
-				],
-			})),
-	})).filter((b) => (b.children?.length ?? 0) > 0);
-
-	const handleDialogOpen = (selections: ClassicyFileOpenSelection[]) => {
-		dispatch({ type: "addEntries", entries: selectionsToEntries(selections) });
-		setDialogMode(null);
+	const editEntry = (uid: string) => {
+		dispatch({ type: "select", uid });
+		openSettings();
 	};
 
-	// The owning window asked to close while the editor is dirty: replace the
-	// whole editor body with a save/discard/cancel strip instead of layering a
-	// modal over it. Reuses SaveBar so the strip's Save button gets the same
-	// invalid/warnings gate as the always-on Save above, rather than a second
-	// copy of that logic.
-	if (closeRequested) {
-		return (
-			<div className="playlistEditorMain">
-				<div className="playlistEditorCloseConfirm">
-					<p>{`Save changes to "${state.title}" before closing?`}</p>
-					<SaveBar state={state} onSaved={onQuit} warningCancelLabel="Keep Editing" />
-					<ClassicyButton onClickFunc={onQuit}>Don't Save</ClassicyButton>
-					<ClassicyButton onClickFunc={onCancelClose}>Cancel</ClassicyButton>
-				</div>
-			</div>
-		);
-	}
+	// Tree rows keep the ClassicyTree chrome (flat, branchless nodes) so
+	// Edit/Remove render the same everywhere they still appear.
+	const treeNodes = (entries: EditorEntry[]): ClassicyTreeNode[] =>
+		entries.map((e) => ({
+			id: e.uid,
+			label: entrySummary(e),
+			buttons: [
+				{ label: "Edit", onClickFunc: () => editEntry(e.uid) },
+				{ label: "Remove", onClickFunc: () => dispatch({ type: "removeEntry", uid: e.uid }) },
+			],
+		}));
+
+	// The Media tab splits into one disclosure per media app. The two sections
+	// whose entries name a whole station render as side-scrolling logo-card rows
+	// — TV from the bundled EPG icons, Radio Stations from the Directus artwork
+	// map — while Radio Traffic, News and Flights keep tree rows: their entries
+	// are individual clips/stories, not stations, and have no logo of their own.
+	// Sections always boot open: entries load from Directus after first render,
+	// and a closed-at-mount section would hide them on arrival.
+	const mediaEntries = state.entries.filter(
+		(e): e is EditorEntry & { entry: MediaEntry } => e.entry.kind === "media",
+	);
+	const mediaTab = (
+		<div className="playlistMediaSections">
+			{MEDIA_SECTIONS.map(({ key, label, emptyHint, match }) => {
+				const entries = mediaEntries.filter(match);
+				let body: ReactNode;
+				if (entries.length === 0) {
+					body = <ClassicyControlLabel label={emptyHint} />;
+				} else if (key === "tv") {
+					body = (
+						<MediaTvRow
+							entries={entries as TvEditorEntry[]}
+							selectedUid={state.selectedUid}
+							onEdit={editEntry}
+							onRemove={(uid) => dispatch({ type: "removeEntry", uid })}
+						/>
+					);
+				} else if (key === "radio") {
+					body = (
+						<MediaRadioRow
+							entries={entries}
+							selectedUid={state.selectedUid}
+							onEdit={editEntry}
+							onRemove={(uid) => dispatch({ type: "removeEntry", uid })}
+						/>
+					);
+				} else {
+					body = <ClassicyTree nodes={treeNodes(entries)} />;
+				}
+				return (
+					<Disclosure key={key} label={label} defaultOpen>
+						{body}
+					</Disclosure>
+				);
+			})}
+		</div>
+	);
+
+	// One tab per entry kind, always all six: stable tab positions beat the old
+	// tree's hide-empty-branches behavior.
+	const tabs = KIND_BRANCHES.map(([kind, label]) => {
+		if (kind === "media") return { title: label, children: mediaTab };
+		const nodes = treeNodes(state.entries.filter((e) => e.entry.kind === kind));
+		return {
+			title: label,
+			children:
+				nodes.length > 0 ? (
+					<ClassicyTree nodes={nodes} />
+				) : (
+					<ClassicyControlLabel label={`No ${label.toLowerCase()} entries yet.`} />
+				),
+		};
+	});
 
 	return (
 		<div className="playlistEditorMain">
-			<div className="playlistEditorHeader">
-				<ClassicyButton onClickFunc={onBack}>‹ My Playlists</ClassicyButton>
-				<label>
-					Title
-					<input
-						aria-label="Title"
-						type="text"
-						value={state.title}
-						onChange={(e) => dispatch({ type: "setTitle", title: e.target.value })}
-					/>
-				</label>
-				<label>
-					<input type="radio" name="mode" checked={state.mode === "restrict"}
-						onChange={() => dispatch({ type: "setMode", mode: "restrict" })} />
-					Restrict
-				</label>
-				<label>
-					<input type="radio" name="mode" checked={state.mode === "annotate"}
-						onChange={() => dispatch({ type: "setMode", mode: "annotate" })} />
-					Annotate
-				</label>
-				<select aria-label="Status" value={state.status}
-					onChange={(e) => dispatch({ type: "setStatus", status: e.target.value as "draft" | "published" })}>
-					<option value="draft">Draft</option>
-					<option value="published">Published</option>
-				</select>
-				<SaveBar state={state} onSaved={() => dispatch({ type: "markSaved" })} />
-			</div>
-
-			<div className="playlistEditorAddBar">
-				<ClassicyButton onClickFunc={() => setDialogMode("media")}>Add Media…</ClassicyButton>
-				<ClassicyButton onClickFunc={() => setDialogMode("file")}>Add File…</ClassicyButton>
-				<ClassicyButton onClickFunc={() => dispatch({ type: "addEntries", entries: [{ entry: { kind: "app", appId: "TimeMachine.app", disabled: true } }] })}>Add App Rule</ClassicyButton>
-				<ClassicyButton onClickFunc={() => dispatch({ type: "addEntries", entries: [{ entry: { kind: "settings", appId: "TV.app", values: {} } }] })}>Add Settings</ClassicyButton>
-				<ClassicyButton onClickFunc={() => dispatch({ type: "addEntries", entries: [{ entry: { kind: "jump", at: "", to: "" } }] })}>Add Jump</ClassicyButton>
-				<ClassicyButton onClickFunc={() => dispatch({ type: "addEntries", entries: [{ entry: { kind: "browser", url: "http://", at: "" } }] })}>Add Browser</ClassicyButton>
-			</div>
-
-			<div className="playlistEditorBody">
+			<ClassicySplitView direction="vertical" defaultSizes={[30, 70]}>
+				<PlaylistTimeline
+					entries={state.entries}
+					selectedUid={state.selectedUid}
+					onSelect={(uid) => dispatch({ type: "select", uid })}
+					onSetEntryBound={(uid, edge, iso) => {
+						const e = state.entries.find((x) => x.uid === uid);
+						if (!e || e.entry.kind !== "media") return;
+						dispatch({ type: "updateEntry", uid, entry: { ...e.entry, [edge]: iso } });
+					}}
+					zoom={zoom}
+					onZoomChange={onZoomChange}
+					start={state.start}
+					end={state.end}
+				/>
 				<div className="playlistEditorEntries">
-					<ClassicyTree nodes={nodes} />
+					<ClassicyTabs tabs={tabs} />
 				</div>
-				{selected && (
-					<EntryForm
-						key={selected.uid}
-						value={selected}
-						onChange={(entry) => dispatch({ type: "updateEntry", uid: selected.uid, entry })}
-					/>
-				)}
-			</div>
-
-			<PlaylistTimeline
-				entries={state.entries}
-				selectedUid={state.selectedUid}
-				onSelect={(uid) => dispatch({ type: "select", uid })}
-			/>
-
-			<ClassicyFileOpenDialog
-				id="playlist_editor_open"
-				appId="PlaylistEditor.app"
-				open={dialogMode !== null}
-				title={dialogMode === "media" ? "Add Media" : "Add File"}
-				volumes={dialogMode === "media" ? [...localVolumes, archiveVolume] : localVolumes}
-				selectionMode={dialogMode === "media" ? "multi" : "single"}
-				fileTypeFilters={
-					dialogMode === "media"
-						? [
-								{ label: "All Media", types: Object.values(MEDIA_FILE_TYPES) },
-								{ label: "TV Channels", types: [MEDIA_FILE_TYPES.tv] },
-								{ label: "Radio Stations", types: [MEDIA_FILE_TYPES.radio] },
-								{ label: "News", types: [MEDIA_FILE_TYPES.news] },
-								{ label: "Flights", types: [MEDIA_FILE_TYPES.flight] },
-							]
-						: undefined
-				}
-				onOpenFunc={handleDialogOpen}
-				onCancelFunc={() => setDialogMode(null)}
-			/>
+			</ClassicySplitView>
 		</div>
 	);
 }

@@ -1,0 +1,108 @@
+// The app shell: a 141px sidebar (tools above the filter tree) beside the three
+// stacked lanes, inside the design's 892x601 window.
+//
+// This file owns the two-column frame and nothing else — the palette, the tree,
+// the lanes and the cards each ship their own module, and restyling any of them
+// from here would give two files an opinion about the same box.
+
+.rtShell {
+  // Chip fills, keyed by tag namespace, declared HERE because two different
+  // things paint chips now — the card's Details panel and the collapsed small
+  // player — and a palette scoped to either one would leave the other's chips
+  // grey. tagPalette.ts names these; mp3_tags.color is NULL on all 1131 rows
+  // today, so this is the only colour a chip ever actually gets.
+  //
+  // cardTabs.module.scss still repeats the same seven values on .rtTabPanel.
+  // That copy is now redundant and should be deleted, but tabs/ belongs to
+  // another story in flight — the values are identical, so until then the
+  // duplicate simply re-declares what it inherits.
+  --rt-tag-topic: #b8c8e8;
+  --rt-tag-facility: #bcd8bc;
+  --rt-tag-link: #e8d8b0;
+  --rt-tag-tier: #d8c0d8;
+  --rt-tag-aircraft: #b0d8d8;
+  --rt-tag-agency: #e0c0b0;
+  --rt-tag-role: #d0d0b8;
+  --rt-tag-person: #d8c8c8;
+  --rt-tag-default: var(--color-system-03);
+
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--ui-font);
+  font-size: var(--ui-font-size);
+}
+
+// Fixed width, matching filterTree's own 141px: the lanes start at x=144 in the
+// design and must not walk left as the vocabulary changes width.
+.rtSidebar {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--window-border-size) * 4);
+  flex: 0 0 auto;
+  padding: calc(var(--window-border-size) * 4) 0 calc(var(--window-border-size) * 4) calc(var(--window-border-size) * 4);
+  border-right: var(--window-border-size) solid var(--color-system-04);
+  overflow: hidden;
+}
+
+// The lanes stack and NOTHING here scrolls. The column hands each lane a fixed
+// share of the window (3:2:1, see laneSection.module.scss) and each lane scrolls
+// its own cards, which is what keeps all three label strips on screen — the
+// arrangement this file previously rejected only failed because the lanes were
+// min-height'd tall enough to push each other off the bottom.
+//
+// Flush and edge to edge, both from the design: the lanes' own borders are the
+// only thing between them, and PREVIOUS is as wide as LIVE and UPCOMING.
+.rtLanes {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  // Lets the lanes be constrained by the window rather than by their content.
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+// Wraps each card so a tool click has a target. Contents-only display so the
+// wrapper adds no box of its own between the lane slot and the card.
+.rtCardSlot {
+  display: contents;
+}
+
+// The autoplay-unlock notice. Same copy and same job as the tuner's overlay:
+// Safari refuses gesture-less sound on page load, and audioCoordinator's
+// document-level retry listeners make any click the fix, so this only has to
+// ask for one.
+.rtUnlockOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 45%);
+}
+
+.rtUnlockOverlayBox {
+  padding: calc(var(--window-padding-size) * 2) calc(var(--window-control-size) + var(--window-border-size) * 4);
+  text-align: center;
+  color: var(--color-system-06);
+  background: var(--color-system-02);
+  border: calc(var(--window-border-size) * 2) outset var(--color-system-04);
+}
+
+.rtUnlockOverlayTitle {
+  margin: 0;
+  font-weight: bold;
+}
+
+.rtUnlockOverlayHint {
+  margin: calc(var(--window-border-size) * 4) 0 0;
+}

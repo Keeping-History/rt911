@@ -9,6 +9,7 @@ import { usePagerPlayback } from "./usePagerPlayback";
 
 vi.mock("classicy", () => ({
 	registerAppEventHandler: vi.fn(),
+	registerApp: vi.fn(),
 }));
 
 let idSeq = 1;
@@ -49,6 +50,8 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					pagerItems,
 					mp3Items: [],
 					mp3History: [],
+					mp3Meta: {},
+					mp3MetaGeneration: null,
 					connected: true,
 					addItems: vi.fn(),
 					subscribeFormats: vi.fn(),
@@ -92,6 +95,7 @@ function makeWrapper(pagerItems: PagerItem[]) {
 					requestWeatherForecast: vi.fn(),
 					sources: { video: [], audio: [], pager: [], usenet: [] },
 					clockForced: false,
+					seekInFlight: false,
 					roomCommand: null,
 					chatBuddies: [],
 					chatEnabled: false,

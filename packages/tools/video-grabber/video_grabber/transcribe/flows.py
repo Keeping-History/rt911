@@ -35,6 +35,7 @@ from video_grabber.storage import wasabi
 from video_grabber.transcribe.audio import extract_audio
 from video_grabber.transcribe.chunking import windows
 from video_grabber.transcribe.srt import (
+    collapse_repetition_loops,
     Cue,
     dedupe_consecutive,
     merge,
@@ -45,6 +46,7 @@ from video_grabber.transcribe.srt import (
     strip_nonspeech_cues,
 )
 from video_grabber.transcribe.whisper import transcribe_wav
+from video_grabber.version import code_version
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
 _ASYNCPG_PREFIX = "postgresql+asyncpg://"
@@ -136,6 +138,41 @@ def probe_duration_seconds(path: Path) -> float:
     return float(r.stdout.strip())
 
 
+def slice_wav(src: Path, dest: Path, offset_ms: int, length_ms: int) -> Path:
+    """Cut one window out of a WAV as its own file.
+
+    Whisper is given the segment rather than the whole recording with -ot/-d,
+    because --vad scans the ENTIRE input regardless of the duration flag. On a
+    1-hour file that is ~11 s of wasted VAD per window; on the 6.75-hour NORAD
+    tapes it is ~74 s per window across ~41 windows, which is most of the
+    runtime. Measured on a 1-hour file: 49.8 s via -d, 38 s pre-split including
+    the cut.
+
+    -c copy on PCM is a byte-range cut, so this costs almost nothing.
+    """
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-y",
+         "-ss", f"{offset_ms / 1000:.3f}", "-t", f"{length_ms / 1000:.3f}",
+         "-i", str(src), "-c", "copy", str(dest)],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(f"ffmpeg could not slice {src} at {offset_ms}ms: {r.stderr[-400:]}")
+    return dest
+
+
+def read_whisper_text(path: Path) -> str:
+    """Read a whisper output file, tolerating bytes that are not valid UTF-8.
+
+    whisper.cpp writes raw decoder output and does not guarantee UTF-8. One NORAD
+    tape emitted 0xb5 mid-file, which failed the whole job on the default strict
+    decode -- losing 6+ hours of transcription over one byte. Replacing the
+    offending bytes keeps the rest, which is the right trade for an archive: one
+    mojibake character beats no transcript at all.
+    """
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
 def transcribe_windows(wav: Path, scratch: Path, cfg, duration_s: float) -> list[Cue]:
     """Transcribe a recording as a sequence of bounded windows, merged onto one
     timeline.
@@ -153,9 +190,13 @@ def transcribe_windows(wav: Path, scratch: Path, cfg, duration_s: float) -> list
         windows(duration_s, cfg.chunk_seconds, cfg.chunk_overlap_seconds)
     ):
         base = scratch / f"w{i:04d}"
-        srt_path = transcribe_wav(wav, base, cfg, offset_ms=offset_ms,
-                                  duration_ms=length_ms, vad=True)
-        blocks.append(shift(parse_srt(srt_path.read_text()), offset_ms / 1000.0))
+        segment = scratch / f"w{i:04d}.wav"
+        slice_wav(wav, segment, offset_ms, length_ms)
+        try:
+            srt_path = transcribe_wav(segment, base, cfg, vad=True)
+            blocks.append(shift(parse_srt(read_whisper_text(srt_path)), offset_ms / 1000.0))
+        finally:
+            segment.unlink(missing_ok=True)
     return merge(blocks)
 
 
@@ -283,7 +324,13 @@ def transcribe_item_flow(job_id: str) -> None:
         # collapsing is what made six hours of open-mic NEADS audio look like a
         # clean 84-word transcript. dedupe then removes genuine hallucination
         # loops, where whisper repeats a phrase over silence.
-        clean_cues = dedupe_consecutive(strip_nonspeech_cues(cues))
+        # Order matters. strip first so markers are removed outright rather than
+        # collapsed to one; then collapse cycles, which catches the alternating
+        # A/B/A/B loops dedupe_consecutive cannot see; then dedupe the leftover
+        # identical pairs a cycle of two repeats leaves behind.
+        clean_cues = dedupe_consecutive(
+            collapse_repetition_loops(strip_nonspeech_cues(cues))
+        )
         out_base = scratch / "out"
         out_base.parent.mkdir(parents=True, exist_ok=True)
         srt_path = out_base.with_suffix(".srt")
@@ -293,8 +340,8 @@ def transcribe_item_flow(job_id: str) -> None:
 
         base_key = subtitle_base_key(job.kind, job.source_key, cfg)
         srt_key = f"{base_key}.srt"
-        wasabi.upload_text(srt_path.read_text(), srt_key, cfg)
-        wasabi.upload_text(vtt_path.read_text(), f"{base_key}.vtt", cfg)
+        wasabi.upload_text(read_whisper_text(srt_path), srt_key, cfg)
+        wasabi.upload_text(read_whisper_text(vtt_path), f"{base_key}.vtt", cfg)
 
         if job.kind == "mp3":
             matched = patch_mp3_subtitles(job.source_url, wasabi_public_url(srt_key), cfg)
@@ -380,11 +427,17 @@ def dispatch_transcribe_flow(max_runs: int = 1000, max_retries: int = 3) -> None
     processed = 0
     with get_db() as db:
         while processed < max_runs:
+            # `code_version` records the commit of whoever CLAIMS. This path
+            # dispatches to `transcribe-item`, which may execute on the cluster
+            # pod or on the Mac, so the stamp is a claim-side fact, not proof of
+            # what ran. The per-worker claim in dispatch_worker.py — where claim
+            # and execution are the same process — is the authoritative one.
             row = db.execute(sa.text("""
                 UPDATE transcribe_jobs SET
                     stage = 'transcribing',
                     retry_count = retry_count + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
-                    last_transition_at = now()
+                    last_transition_at = now(),
+                    code_version = :code_version
                 WHERE id = (
                     SELECT id FROM transcribe_jobs
                     WHERE stage = 'pending'
@@ -394,7 +447,7 @@ def dispatch_transcribe_flow(max_runs: int = 1000, max_retries: int = 3) -> None
                     LIMIT 1
                 )
                 RETURNING id
-            """), {"max_retries": max_retries}).first()
+            """), {"max_retries": max_retries, "code_version": code_version()}).first()
             db.commit()
             if row is None:
                 logger.info("dispatch-transcribe: queue empty after %d runs", processed)

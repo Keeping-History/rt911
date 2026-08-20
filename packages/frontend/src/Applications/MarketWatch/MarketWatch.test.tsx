@@ -16,6 +16,8 @@ vi.mock('classicy', () => ({
     ),
     ClassicyIcons: { applications: {} },
     registerClassicyIcons: <T,>(icons: T) => icons,
+    registerApp: () => {},
+    getAppManifest: () => undefined,
     quitMenuItemHelper: () => ({}),
     useClassicyHelpMenu: () => {},
     useAppManager: (sel: (s: unknown) => unknown) =>
@@ -38,7 +40,7 @@ vi.mock('classicy', () => ({
 
 vi.mock('../../openreplay', () => ({ trackAppToggle: vi.fn() }))
 
-vi.mock('../RadioScanner/marquee', () => ({
+vi.mock('../radio-core/marquee', () => ({
     default: ({ children }: { children: React.ReactNode }) => <div data-testid="marquee">{children}</div>,
 }))
 

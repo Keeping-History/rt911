@@ -1,12 +1,33 @@
-import { ClassicyAlert, ClassicyApp, useAppManager, useAppManagerDispatch, useClassicyDateTime } from "classicy";
+import {
+	ClassicyAlert,
+	ClassicyApp,
+	ClassicyIcons,
+	registerClassicyIcons,
+	useAppManager,
+	useAppManagerDispatch,
+	useClassicyDateTime,
+} from "classicy";
 import { useContext, useEffect, useRef, useState } from "react";
 import { clampClockIso } from "../../Applications/HyperCard/extensions/dateRange";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { MediaStreamContext } from "../MediaStream/MediaStreamContext";
+import classroomIconPng from "./classroom.png";
 import { playlistAppMeta } from "./playlistApps";
+import { usePlaylist } from "./PlaylistContext";
 
 const appId = "RoomControl.app";
 const appName = "Classroom";
+
+// This app's own icon, registered into the shared registry at
+// ClassicyIcons.applications.roomControl.app. registerClassicyIcons assigns
+// shallowly, so the existing applications namespace is spread in to keep
+// classicy's bundled app icons (and other apps' registrations) intact.
+const ICONS = registerClassicyIcons({
+	applications: {
+		...ClassicyIcons.applications,
+		roomControl: { app: classroomIconPng },
+	},
+});
 
 /**
  * Applies live teacher commands to this desktop.
@@ -32,17 +53,21 @@ export function RoomControlBridge() {
 	const dateTimeLocked = useAppManager(
 		(s) => s.System.Manager.DateAndTime.dateTimeLocked,
 	);
+	// The definition-refresh seam for a teacher's "reload" push. The bridge is a
+	// desktop child, mounted inside PlaylistProvider, so the parent's context is
+	// readable here even though the command itself arrives on the WebSocket.
+	const { reloadDefinition } = usePlaylist();
 	const [note, setNote] = useState<{ seq: number; body: string } | null>(null);
 
 	// The effect below must see the latest writers without re-running when only
 	// they change — it runs on a new command, nothing else.
-	const latest = useRef({ setDateTime, dispatch, dateTimeLocked });
-	latest.current = { setDateTime, dispatch, dateTimeLocked };
+	const latest = useRef({ setDateTime, dispatch, dateTimeLocked, reloadDefinition });
+	latest.current = { setDateTime, dispatch, dateTimeLocked, reloadDefinition };
 
 	const seq = roomCommand?.seq ?? 0;
 	useEffect(() => {
 		if (!roomCommand || seq === 0) return;
-		const { setDateTime, dispatch, dateTimeLocked } = latest.current;
+		const { setDateTime, dispatch, dateTimeLocked, reloadDefinition } = latest.current;
 
 		switch (roomCommand.action) {
 			case "jump": {
@@ -83,13 +108,26 @@ export function RoomControlBridge() {
 				});
 				return;
 			}
+			case "reload": {
+				// Re-fetch the published definition and re-evaluate. Deliberately
+				// touches nothing else — in particular it must not clear room
+				// lock state, which is an independent surface.
+				reloadDefinition();
+				return;
+			}
 		}
 		// Intentionally keyed on seq alone — see the doc comment.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [seq]);
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon="" extension addSystemMenu={false}>
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={ICONS.applications.roomControl.app}
+			extension
+			addSystemMenu={false}
+		>
 			{note && (
 				<ClassicyAlert
 					key={note.seq}

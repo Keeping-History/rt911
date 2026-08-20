@@ -15,6 +15,7 @@ import {
 	type ChatMessage,
 	type ChatStateReason,
 	type FlightPosition,
+	type ItemMeta,
 	MediaStreamContext,
 	type MediaItem,
 	type PagerItem,
@@ -93,6 +94,18 @@ interface WsMp3HistoryMessage {
 	items?: MediaItem[];
 }
 
+// The one-shot Radio Traffic metadata for the whole mp3 corpus, keyed by item
+// id. Sent once per session, before the first mp3 snapshot, and never resent —
+// not on seek, not on resubscribe. `items` is an id-keyed map rather than the
+// ordered list every other channel carries (the client joins it onto items it
+// already holds, so order means nothing) and rides INTEGER keys on the wire,
+// which msgpack decoding turns into the numeric properties of a plain object.
+interface WsMp3MetaMessage {
+	type: "mp3_meta";
+	generation?: string;
+	items?: Record<number, ItemMeta>;
+}
+
 interface WsNewsMessage {
 	type: "news";
 	items: MediaItem[];
@@ -110,7 +123,7 @@ interface WsAlertsMessage {
 // so it arrives regardless of which replica this client's socket landed on.
 interface WsRoomCommandMessage {
 	type: "room_command";
-	action: "jump" | "focus" | "message" | "lock";
+	action: "jump" | "focus" | "message" | "lock" | "reload";
 	time?: string;
 	app?: string;
 	message?: string;
@@ -256,6 +269,7 @@ type WsIncomingMessage =
 	| WsPagerMessage
 	| WsMp3Message
 	| WsMp3HistoryMessage
+	| WsMp3MetaMessage
 	| WsNewsMessage
 	| WsAlertsMessage
 	| WsUsenetMessage
@@ -305,6 +319,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
 	const [mp3History, setMp3History] = useState<MediaItem[]>([]);
+	// Corpus-wide mp3 metadata from the one-shot mp3_meta frame. Deliberately
+	// absent from every buffer, tick and seek path below: it has no time
+	// dimension, so there is nothing for the reveal gate or retention to decide.
+	const [mp3Meta, setMp3Meta] = useState<Record<number, ItemMeta>>({});
+	const [mp3MetaGeneration, setMp3MetaGeneration] = useState<string | null>(null);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
 	const [alertItems, setAlertItems] = useState<AlertItem[]>([]);
 	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
@@ -480,6 +499,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	// long-lived socket closure, which needs the current value synchronously
 	// (state updates are not visible until the next render).
 	const [clockForced, setClockForced] = useState(false);
+	// Raised when a clock seek is dispatched, lowered by the mp3 frame that
+	// answers it — see seekInFlight on MediaStreamContextValue for why the clear
+	// listens to mp3_history as well.
+	const [seekInFlight, setSeekInFlight] = useState(false);
 	// Latest live teacher command for the joined room; see RoomCommand.
 	const [roomCommand, setRoomCommand] = useState<RoomCommand | null>(null);
 	const clockForcedRef = useRef(false);
@@ -1140,6 +1163,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// any in-flight pre-seek reply via the id-echo guard.
 			setWeatherForecastByZone({});
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
+			// Every clock-following consumer is now holding stale positions until
+			// the fresh window lands. Raised here rather than in the on-connect
+			// seek below: that one has nothing on screen to invalidate.
+			setSeekInFlight(true);
 			// The old timeline's loop history is meaningless at the new instant.
 			sendFlightsHistoryRequest();
 			// The motion buffer rebuilds from single samples after a seek, so the
@@ -1309,6 +1336,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 
 			if (msg.type === "mp3") {
+				// Before the empty-list guard: an mp3 frame carrying nothing still
+				// answers the seek, and returning early would strand the flag.
+				setSeekInFlight(false);
 				const incomingMp3 = (msg as WsMp3Message).items;
 				if (!incomingMp3 || incomingMp3.length === 0) return;
 				const { due, future } = partitionByDue(incomingMp3, now);
@@ -1323,10 +1353,24 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 
 			if (msg.type === "mp3_history") {
+				// Sent on every seek even when empty, unlike `mp3` — so this is the
+				// clear that fires when the new instant lands in a silent stretch.
+				setSeekInFlight(false);
 				// The full back-catalogue up to the snapshot instant. Replace wholesale
 				// (each frame is complete, and an empty one clears after a backward
 				// seek); skip the reveal buffer and retention — history is already past.
 				setMp3History((msg as WsMp3HistoryMessage).items ?? []);
+				return;
+			}
+
+			if (msg.type === "mp3_meta") {
+				// One frame per session, replaced wholesale — a reconnect is a new
+				// session and sends its own. No reveal buffer and no retention pass:
+				// this is reference data about 2001, not a window on the clock, so a
+				// finished clip still needs the entry that describes it.
+				const meta = msg as WsMp3MetaMessage;
+				setMp3Meta(meta.items ?? {});
+				setMp3MetaGeneration(meta.generation ?? null);
 				return;
 			}
 
@@ -1656,6 +1700,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerItems,
 			mp3Items,
 			mp3History: gatedMp3History,
+			mp3Meta,
+			mp3MetaGeneration,
 			newsItems,
 			alertItems,
 			usenetItems,
@@ -1699,6 +1745,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			seekInFlight,
 			roomCommand,
 			chatBuddies,
 			chatEnabled,
@@ -1717,6 +1764,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerItems,
 			mp3Items,
 			gatedMp3History,
+			mp3Meta,
+			mp3MetaGeneration,
 			newsItems,
 			alertItems,
 			usenetItems,
@@ -1758,6 +1807,7 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			seekInFlight,
 			roomCommand,
 			chatBuddies,
 			chatEnabled,

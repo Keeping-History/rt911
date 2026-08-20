@@ -29,7 +29,18 @@ vi.mock("classicy", async (importOriginal) => ({
 }));
 
 import { PlaylistProvider } from "./PlaylistProvider";
+import { usePlaylist, type PlaylistContextValue } from "./PlaylistContext";
 import { PERMISSION_DENIED } from "./playlistApps";
+
+/** Exposes the provider's context value to tests (reloadDefinition, title…).
+ * Read through `ctx()` — a call result is never narrowed, so assertions after
+ * `grabbed = null` see the value the render actually wrote. */
+let grabbed: PlaylistContextValue | null = null;
+const ctx = () => grabbed;
+function Grab() {
+	grabbed = usePlaylist();
+	return <p>kid</p>;
+}
 
 const definition = {
 	version: 1,
@@ -286,6 +297,72 @@ describe("PlaylistProvider", () => {
 				),
 			).toBe(true),
 		);
+	});
+
+	// --- mid-class definition push (reloadDefinition) ----------------------
+
+	const rowWith = (title: string, entries: unknown[] = []) =>
+		new Response(
+			JSON.stringify({
+				data: {
+					title,
+					status: "published",
+					definition: { version: 1, mode: "annotate", entries },
+				},
+			}),
+			{ status: 200 },
+		);
+
+	it("reloadDefinition re-fetches and swaps in the new definition", async () => {
+		grabbed = null;
+		const f = vi.fn(async () => rowWith("Before"));
+		vi.stubGlobal("fetch", f);
+		render(
+			<PlaylistProvider>
+				<Grab />
+			</PlaylistProvider>,
+		);
+		await waitFor(() => expect(ctx()?.title).toBe("Before"));
+
+		f.mockImplementation(async () => rowWith("After"));
+		ctx()!.reloadDefinition();
+		await waitFor(() => expect(ctx()?.title).toBe("After"));
+		expect(f).toHaveBeenCalledTimes(2);
+		// The refresh must not touch the clock or the room lock: no clock write,
+		// no lock/unlock dispatch — only playlist-engine reconciliation runs.
+		expect(mockClock.setDateTime).not.toHaveBeenCalled();
+		expect(
+			dispatched.some(
+				(a) =>
+					a.type === "ClassicyManagerDateTimeLock" ||
+					a.type === "ClassicyManagerDateTimeUnlock",
+			),
+		).toBe(false);
+	});
+
+	it("a failed reload keeps the current definition and stays quiet", async () => {
+		grabbed = null;
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const f = vi.fn(async () => rowWith("Before"));
+		vi.stubGlobal("fetch", f);
+		render(
+			<PlaylistProvider>
+				<Grab />
+			</PlaylistProvider>,
+		);
+		await waitFor(() => expect(ctx()?.title).toBe("Before"));
+
+		f.mockImplementation(async () => new Response("x", { status: 404 }));
+		ctx()!.reloadDefinition();
+		await waitFor(() => expect(f).toHaveBeenCalledTimes(2));
+		// Unlike the initial load, a mid-lesson flake must not tear the lesson
+		// down: no error dialog, definition unchanged.
+		expect(ctx()?.title).toBe("Before");
+		expect(ctx()?.active).toBe(true);
+		expect(
+			dispatched.some((a) => a.type === "ClassicyDesktopShowErrorDialog"),
+		).toBe(false);
+		warn.mockRestore();
 	});
 
 	it("shows a load-failure dialog and stays fail-open", async () => {

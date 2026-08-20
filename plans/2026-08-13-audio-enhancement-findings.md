@@ -126,3 +126,65 @@ The storage pattern for the toggle already exists: `normalize-item` does
 archive-first in-place replacement, with originals preserved under
 `audio-original/` (711 of 789 files today). What is missing is exposing that
 archived URL on `mp3_items` so the front end can switch.
+
+## Chain decision (2026-08-13)
+
+`render-audition` produced eight AA77 clips through four chains. Chosen by
+listening: **`dsp_only`** — bandpass 200–3400 Hz plus `speechnorm`, no model.
+
+This matches what the ASR experiment measured but could not settle on its own.
+DeepFilterNet is trained on wideband speech in environmental noise; radio audio is
+already band-limited to roughly 300–3400 Hz, so the model reads the speech itself as
+noise and attenuates it. At full attenuation it destroyed `084013 aa77 zid checkin`,
+a clip that is perfectly intelligible unprocessed, into `(unintelligible radio
+chatter)`.
+
+Set as `ENHANCE_CHAIN` in the worker ConfigMap (infra `8e3bab1`). The corpus render
+refuses to start while it is unset.
+
+Worth stating plainly, because it is easy to assume otherwise: this choice has **no
+effect on transcripts**. Transcription reads `audio/` and never `audio-enhanced/`,
+enforced by a test. Enhancement is a listening feature only.
+
+## Corpus re-transcription results, and a correction (2026-08-14)
+
+The chunked/VAD pass ran over all 782 eligible files. 787 done, 1 failed.
+
+**The "sparse" metric this document leans on is wrong, and the 125-candidate figure
+above should not be trusted.** Reading the flagged transcripts against their audio
+shows it measures *how quiet a channel is*, not whether transcription worked:
+
+| wpm | what is actually in the transcript |
+|---|---|
+| 0.4 | "This is the end of the re-recording concerning events on September 11, 2001." — a complete transcript of a mostly-silent tape |
+| 8.6 | The FAA's certification preamble, read verbatim and transcribed correctly |
+| 23.5 | 1,340 words of genuine ATC traffic over 57 minutes |
+| 24.2 | "Boston Center, TMU, we have a problem here, we have a hijacked aircraft headed towards New York… scramble some F-16s" |
+
+That last one is among the most significant recordings in the archive, transcribed
+accurately, and the metric called it a rescue candidate. An FAA TMU position where a
+controller speaks a few times an hour is *correctly* transcribed at 3 wpm.
+
+Scored on signals that actually indicate failure — an empty transcript, or one
+containing nothing but `[inaudible]`/`[Music]` markers:
+
+| | before | after |
+|---|---:|---:|
+| true failures | 13 | **9** |
+| total words | 529,263 | **615,684** (+86k, 1.2×) |
+| SRTs | 695 | 781 |
+
+So the corpus-wide gain is **1.2×, not the 26× the NEADS tape showed**. That tape was a
+genuine catastrophic failure (84 words for 6.67 hours, from `[Music]` cues collapsing to
+one) and went to ~2,307 real words; generalising from it overstated the problem. The
+chunking work was still worth doing — it fixed the real failures and added 86k words —
+but most of the corpus was never broken, only quiet.
+
+Any future evaluation should use empty/degenerate as the failure signal and ignore
+words-per-minute entirely.
+
+### Outstanding
+
+- 1 job failed on non-UTF-8 whisper output (`0xb5`); fixed by `read_whisper_text`.
+- 8 files have no SRT: the 6 uncatalogued FDNY tapes (#377), one never-transcribed ZBW
+  file, and the UTF-8 failure above.

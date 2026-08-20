@@ -77,6 +77,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) + a forward **window** (default 600 s) per refill while subscribed. Client reveal-gate preserves forward-only pacing. |
 | `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) + a forward **window** (default 300 s) per refill while subscribed. Reuses the `items` field. |
 | `mp3_history`     | `time`, `items[]`             | The **complete** mp3 back-catalogue up to `t` (every approved item with `start_date ≤ t`), sent with each mp3 snapshot (subscribe/init/seek). Backs the Radio app's "Previous" list. Replace client state wholesale — the frame is sent even when empty so a backward seek clears it. Not reveal-gated or retention-pruned. |
+| `mp3_meta`        | `generation`, `items{}`       | **One-shot per session.** The Radio Traffic metadata for every approved mp3 item, keyed by item id (not a list — the client joins it onto items it already holds). Sent once, on the first mp3 snapshot; **never resent on seek**. Carries no `time`: the metadata has no time dimension. Carries no vocabulary — that comes from `GET /mp3/tags`. See [`mp3_meta`](#mp3_meta) below. |
 | `news`            | `time`, `items[]`             | News back catalogue (every approved article from the start of 2001-09-09 up to `t`, **headline-only** — no `content`) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `flights`         | `time`, `flights[]`           | Flights snapshot (airborne picture covering `[t−90s, t]`) on subscribe/init/seek, plus a forward **window** (default 300 s) per refill while subscribed. |
@@ -314,6 +315,62 @@ schedule backing the Radio app's "Previous" list, which the live stream (active-
 forward-only windows) never covers. The client replaces its history state wholesale per frame
 (sent even when empty), and it is exempt from the reveal gate and retention pruning: history is
 by definition already in the past.
+
+### `mp3_meta`
+
+The first mp3 snapshot of a session is preceded by exactly one `mp3_meta` frame — the Radio
+Traffic card metadata for the whole corpus, keyed by item id:
+
+```jsonc
+{
+  "type": "mp3_meta",
+  "generation": "9f2c…",          // cache-build stamp; see below
+  "items": {
+    "5821": {
+      "subject": "Boston Center coordinates with NEADS",
+      "link": "…", "tier": "primary", "confidence": "high", "evidence": "…",
+      "participants": [ { "person": "…", "facility": "ZBW", "position": "…", "role": "…", "confidence": "…" } ],
+      "mentions": { "facilities": [], "aircraft": [], "people": [] },
+      "provenance": { "generated_at": "…", "sources": {}, "commission": {} },
+      "tags":  [ { "tag": "facility:zbw", "namespace": "facility", "value": "ZBW", "color": null } ],
+      "peaks": [ [-3, 3], [-12, 10], … ]   // 480 [min,max] buckets, -128..127
+    }
+  }
+}
+```
+
+**It is sent once per session and is never resent — not on seek, not on resubscribe.** That is
+the frame's entire reason for existing. `mp3_history` carries the whole ~755-item back catalogue
+and is re-sent wholesale on every subscribe/init/seek; at ~2 KB of metadata per item, hanging any
+of this off `MediaItem` would put ~1.5 MB of msgpack on every Time Machine scrub. The metadata is
+immutable historical reference data with no time dimension, so it travels once, on its own frame,
+and the `mp3`/`mp3_history` frames stay exactly what they were. It is exempt from the reveal gate
+and from retention pruning for the same reason — there is nothing time-scoped to gate.
+
+An item with no derived metadata is still present with an empty `tags` list; `tags` is the one
+field always sent, so a client can tell "nothing is tagged" from "no metadata for this id". An id
+absent from `items` altogether has no metadata at all (59 of 814 recordings have no `parties`
+blob to derive from) and the card degrades to title plus transcript.
+
+There is deliberately **no `vocabulary` field.** The tag vocabulary is byte-identical for every
+session, so pushing a copy down each socket is waste; it is served by `GET /mp3/tags` and cached
+by the browser, which also lets the filter sidebar paint without waiting on the socket.
+
+`generation` is the stamp of the cache build this metadata came from, and `GET /mp3/tags` returns
+the same value for the same build. Without it a client can end up holding a vocabulary from build
+N and item tags from build N+1, and render a chip on a card that its own filter tree has no
+checkbox for; on a mismatch the client refetches the vocabulary. The value is a content hash, not
+a per-process id, precisely because the streamer runs N replicas — a client that takes its
+vocabulary from one pod's HTTP route and its item tags from another pod's socket must see the same
+stamp for the same data.
+
+The snapshot behind this frame is built once per cache warm and rebuilt when Postgres says the
+corpus changed — including on writes to `mp3_tags` and `mp3_items_tags`, which the tag pipeline
+rewrites without ever touching `mp3_items`.
+
+If no snapshot has been built yet (a subscribe racing the first warm, or a database without the
+derived metadata columns), **no frame is sent at all** rather than an empty one: the frame is
+one-shot, so an empty corpus would be held as the truth for the life of the connection.
 
 The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Its
 snapshot is not a window: it is the complete back catalogue from **the start of
@@ -723,16 +780,24 @@ command addressed to that room:
 { "type": "room_command", "action": "focus", "app": "TV.app" }
 { "type": "room_command", "action": "message", "message": "Look at channel 4" }
 { "type": "room_command", "action": "lock", "target": "clock", "on": true }
+{ "type": "room_command", "action": "reload" }
 ```
 
 | Field     | Type   | Notes                                                                    |
 | --------- | ------ | ------------------------------------------------------------------------ |
-| `action`  | string | `jump` \| `focus` \| `message`. Unknown actions are rejected at the operator endpoint and never reach a client. |
+| `action`  | string | `jump` \| `focus` \| `message` \| `lock` \| `reload`. Unknown actions are rejected at the operator endpoint and never reach a client. |
 | `time`    | string | `jump` only — the virtual instant to move every student's clock to.       |
 | `app`     | string | `focus` only — the Classicy app id to bring to front (e.g. `TV.app`).     |
 | `message` | string | `message` only — the note body to display.                                |
 | `target`  | string | `lock` only — the surface to lock. `clock` is the only one implemented.   |
 | `on`      | bool   | `lock` only — the state to move to. **Always present on a lock frame**, including `false`: it rides a pointer server-side so an unlock is not dropped by `omitempty`. A client that receives a lock frame without `on` should do nothing rather than assume `false`. |
+
+`reload` carries no payload at all: it tells every student to **re-fetch the published playlist
+definition from Directus and re-evaluate it** — the definition itself never rides this wire. It is
+how a teacher's mid-class edit ("Push Update to Class") reaches students whose page loaded the
+older definition. Applying a `reload` must not touch the client's room lock state — the two are
+independent surfaces, and a definition refresh that silently unlocked the clock would free a
+classroom the teacher had locked.
 
 A **room is a playlist id**: students following `?playlist=<id>` are its members. The streamer
 never resolves the id — playlists are authored in Directus and executed client-side; the id
@@ -740,17 +805,29 @@ travels as an opaque string.
 
 Commands originate on whichever pod served the teacher's `POST /room` call and are relayed to the
 others over Redis pub/sub (`internal/fanout`), so a class spread across replicas stays in step.
-That relay is **fire-and-forget and nothing is persisted**: a client that is disconnected when a
-command is sent does not receive it on reconnect, and a `jump` is not replayed. Room membership
-lives on the session, so a client must re-send `join_room` after every reconnect (the frontend's
-`MediaStreamProvider` does this alongside its channel re-subscribes).
+The relay itself is fire-and-forget, but each pod also **remembers the last-known control state per
+room** — the latest `jump`, the latest `lock`, and whether a `reload` has been pushed — and
+**replays it as ordinary `room_command` frames when a session sends `join_room`**, in application
+order (`jump`, then `lock`, then `reload`). A student who connects late, or reconnects after a
+drop, therefore converges with the class without any new client logic: the replayed frames are the
+same commands a live student saw, and the client applies them idempotently. The transient actions
+(`focus`, `message`) are moments rather than state and are deliberately **not** replayed.
+
+Two bounds on that memory: it is **per pod and in-memory** (fed by the fanout bus, which every pod
+subscribes to — including the publisher, via Redis's self-echo), so a pod that restarts starts
+empty and catches up on the teacher's next command; and it is keyed by playlist id with one command
+per sticky action, written only by the owner-authorised `POST /room` path, so it cannot grow under
+client control. Room membership still lives on the session, so a client must re-send `join_room`
+after every reconnect (the frontend's `MediaStreamProvider` does this alongside its channel
+re-subscribes) — the replay-on-join is what turns that re-join into a full catch-up.
 
 A `jump` is ignored by the client while [forced clock mode](#forced-clock-mode-server--client-clock-heartbeat_ackmaster_time)
 is active — the operator's master clock outranks a teacher.
 
-`lock` is **absolute, never a toggle**: the streamer holds no lock state, so the teacher's client owns
-the on/off and sends the value it wants. Two consequences: reopening the teacher's Control window
-resets its buttons (students stay locked — only the button forgets), and two teachers driving one
+`lock` is **absolute, never a toggle**: the teacher's client owns the on/off and sends the value it
+wants — the per-room memory above is replay state for late joiners, not an authority a toggle could
+consult (there is no read-back API). Two consequences: reopening the teacher's playlist document
+window resets its Control menu (students stay locked — only the checkmark forgets), and two teachers driving one
 playlist will not see each other's state. `content` is a deliberate non-target — it exists as a
 disabled button in the teacher UI and the server rejects it with 400, so a dead control can never
 look like a working one.

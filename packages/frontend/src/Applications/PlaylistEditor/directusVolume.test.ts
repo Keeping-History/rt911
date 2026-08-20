@@ -13,15 +13,20 @@ const groupRows = [{ source: 7 }, { source: 9 }];
 const newsRows = [
 	{ id: 101, title: "Morning Edition", start_date: "2001-09-11T10:00:00Z" },
 ];
-const flightRows = [
-	{ flight: "AA11", origin: "BOS", scheduled_dest: "LAX", wheels_off_utc: "2001-09-11T11:59:00.000Z", wheels_on_utc: null },
-];
+const flightRow = (flight: string) => ({
+	flight, origin: "BOS", scheduled_dest: "LAX",
+	wheels_off_utc: "2001-09-11T11:59:00.000Z", wheels_on_utc: null,
+});
 
 function fetchFor(url: string): unknown[] {
 	if (url.includes("/items/sources")) return sourcesRows;
 	if (url.includes("groupBy=source")) return groupRows;
 	if (url.includes("/items/news_items")) return newsRows;
-	if (url.includes("/items/flight_tracks")) return flightRows;
+	if (url.includes("/items/flight_tracks")) {
+		const byCallsign = /filter\[flight\]\[_eq\]=([^&]+)/.exec(url);
+		if (byCallsign) return [flightRow(byCallsign[1])];
+		return [flightRow("AA11")];
+	}
 	throw new Error(`unexpected url ${url}`);
 }
 
@@ -38,7 +43,7 @@ const fetchFn = vi.fn(async (url: string) => {
 const volume = () =>
 	createDirectusVolume({
 		tvSlugs: () => ["ABC", "CNN"],
-		radioSlugs: () => ["FDNY-Manhattan"],
+		radioSlugs: () => ["WINS", "FDNY-Manhattan"],
 		fetchFn: fetchFn as unknown as typeof fetch,
 	});
 
@@ -49,15 +54,44 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("createDirectusVolume", () => {
-	it("lists the four top folders without fetching", async () => {
+	it("lists the five top folders without fetching", async () => {
 		const entries = await volume().list([]);
-		expect(entries.map((e: typeof entries[number]) => e.name)).toEqual(["TV Channels", "Radio Stations", "News", "Flights"]);
+		expect(entries.map((e: typeof entries[number]) => e.name)).toEqual([
+			"TV Channels", "Radio Stations", "Radio Traffic", "News", "Flights",
+		]);
 		expect(fetchFn).not.toHaveBeenCalled();
+	});
+
+	it("splits radio slugs into broadcast stations and traffic by BROADCAST_STATIONS", async () => {
+		const stations = await volume().list(["Radio Stations"]);
+		expect(stations.map((e: typeof stations[number]) => e.name)).toEqual([
+			"Select All", "WINS",
+		]);
+		expect(stations[1]).toMatchObject({
+			fileType: MEDIA_FILE_TYPES.radio, meta: { app: "radio", itemId: "WINS" },
+		});
+
+		const traffic = await volume().list(["Radio Traffic"]);
+		expect(traffic.map((e: typeof traffic[number]) => e.name)).toEqual([
+			"Select All", "FDNY-Manhattan",
+		]);
+		expect(traffic[0]).toMatchObject({
+			name: "Select All", fileType: MEDIA_FILE_TYPES.radioTraffic,
+			meta: { selectAllPaths: [["Radio Traffic"]] },
+		});
+		expect(traffic[1]).toMatchObject({
+			fileType: MEDIA_FILE_TYPES.radioTraffic,
+			meta: { app: "radio", itemId: "FDNY-Manhattan" },
+		});
 	});
 
 	it("lists TV channels from the injected slugs with playlist meta", async () => {
 		const entries = await volume().list(["TV Channels"]);
 		expect(entries[0]).toMatchObject({
+			name: "Select All", kind: "file", fileType: MEDIA_FILE_TYPES.tv,
+			meta: { selectAllPaths: [["TV Channels"]] },
+		});
+		expect(entries[1]).toMatchObject({
 			name: "ABC", kind: "file", fileType: MEDIA_FILE_TYPES.tv,
 			meta: { app: "tv", itemId: "ABC" },
 		});
@@ -75,28 +109,51 @@ describe("createDirectusVolume", () => {
 		await vol.list(["News"]);
 		const entries = await vol.list(["News", "New York Times"]);
 		expect(entries[0]).toMatchObject({
+			name: "Select All", fileType: MEDIA_FILE_TYPES.news,
+			meta: { selectAllPaths: [["News", "New York Times"]] },
+		});
+		expect(entries[1]).toMatchObject({
 			name: "Morning Edition", fileType: MEDIA_FILE_TYPES.news,
 			meta: { app: "news", itemId: "101", publishedAt: "2001-09-11T10:00:00Z" },
 		});
 	});
 
-	it("lists notable flights with departure/arrival meta", async () => {
+	it("lists notable flights with departure/arrival meta, including observer and presidential aircraft", async () => {
 		const entries = await volume().list(["Flights", "Notable Flights"]);
 		expect(entries[0]).toMatchObject({
+			name: "Select All", fileType: MEDIA_FILE_TYPES.flight,
+			meta: { selectAllPaths: [["Flights", "Notable Flights"]] },
+		});
+		expect(entries[1]).toMatchObject({
 			fileType: MEDIA_FILE_TYPES.flight,
 			meta: { app: "flights", itemId: "AA11", departure: "2001-09-11T11:59:00.000Z", arrival: null },
 		});
+		const names = entries.map((e: typeof entries[number]) => e.meta?.itemId);
+		expect(names).toContain("GOFER06");
+		expect(names).toContain("AF1");
 	});
 
-	it("lists airline → dates → flights", async () => {
+	it("lists airline → dates → flights with Select All at each level", async () => {
 		const vol = volume();
 		const airlines = await vol.list(["Flights"]);
 		expect(airlines[0].name).toBe("Notable Flights");
 		expect(airlines.find((e: typeof airlines[number]) => e.name === "American Airlines")).toBeTruthy();
 		const dates = await vol.list(["Flights", "American Airlines"]);
+		expect(dates[0]).toMatchObject({
+			name: "All American Airlines Flights", kind: "file",
+			fileType: MEDIA_FILE_TYPES.flight,
+		});
+		expect((dates[0].meta?.selectAllPaths as string[][]).length).toBe(10);
+		expect((dates[0].meta?.selectAllPaths as string[][])[2]).toEqual(
+			["Flights", "American Airlines", "2001-09-11"],
+		);
 		expect(dates.map((d: typeof dates[number]) => d.name)).toContain("2001-09-11");
 		const flights = await vol.list(["Flights", "American Airlines", "2001-09-11"]);
-		expect(flights[0].name).toBe("AA11 — BOS→LAX");
+		expect(flights[0]).toMatchObject({
+			name: "Select All",
+			meta: { selectAllPaths: [["Flights", "American Airlines", "2001-09-11"]] },
+		});
+		expect(flights[1].name).toBe("AA11 — BOS→LAX");
 	});
 
 	it("never overlaps fetches and caches per-folder results", async () => {

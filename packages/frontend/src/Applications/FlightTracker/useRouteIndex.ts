@@ -145,7 +145,7 @@ export function useRouteIndex(positions: FlightPosition[]): RouteIndex {
 	useEffect(() => {
 		const listener = () => setVersion((v) => v + 1);
 		listeners.add(listener);
-		// Dates load in SERIES: concurrent same-path requests to api-beta can
+		// Dates load in SERIES: concurrent same-path requests to Directus can
 		// come back with their response bodies mixed by the proxy layer (see
 		// useNotableCrashSites.loadCrashSites) — a poisoned date would cache
 		// another date's rows permanently.

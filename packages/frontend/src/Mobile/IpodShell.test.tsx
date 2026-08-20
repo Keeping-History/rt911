@@ -34,7 +34,7 @@ vi.mock("classicy", async (importOriginal) => ({
 	QuickTimeVideoEmbed: () => <div data-testid="qt-embed" />,
 }));
 
-vi.mock("../Applications/RadioScanner/StationPlayer", () => ({
+vi.mock("../Applications/radio-core/StationPlayer", () => ({
 	StationPlayer: () => <div data-testid="station-player" />,
 }));
 

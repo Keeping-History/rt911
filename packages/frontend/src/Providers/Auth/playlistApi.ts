@@ -50,13 +50,23 @@ function assertValidDefinition(definition: unknown): void {
 
 const LIST_FIELDS = "id,title,status,date_updated,user_created";
 
+// Directus's Redis response cache (CACHE_TTL=10m, no auto-purge) will happily
+// serve a pre-save body to these reads — a freshly created playlist stayed off
+// the list for 10 minutes. `Cache-Control: no-store` makes Directus skip its
+// cache for this request; the server only honors it because the infra repo
+// sets CACHE_SKIP_ALLOWED=true. Cache-Control is NOT a CORS-safelisted request
+// header (that list is response-side only), so it rides a preflight — the
+// api-cors-credentialed middleware in the infra repo must keep it allowlisted
+// or these reads fail outright.
+const FRESH_READ = { "Cache-Control": "no-store" };
+
 export async function listMine(
 	meId: string,
 	fetchFn: typeof fetch = fetch,
 ): Promise<PlaylistSummary[]> {
 	const res = await fetchFn(
 		`${DIRECTUS_URL}/items/playlists?fields=${LIST_FIELDS}&sort=-date_updated&limit=200`,
-		{ credentials: "include" },
+		{ credentials: "include", headers: FRESH_READ },
 	);
 	const rows = await handle<PlaylistSummary[]>(res, "Failed to list playlists");
 	return rows.filter((r) => r.user_created === meId);
@@ -68,6 +78,7 @@ export async function getPlaylist(
 ): Promise<PlaylistRecord> {
 	const res = await fetchFn(`${DIRECTUS_URL}/items/playlists/${encodeURIComponent(id)}`, {
 		credentials: "include",
+		headers: FRESH_READ,
 	});
 	return handle<PlaylistRecord>(res, "Failed to load playlist");
 }
@@ -113,7 +124,7 @@ export async function deletePlaylist(id: string, fetchFn: typeof fetch = fetch):
 }
 
 // getPlaylist then createPlaylist — two SEQUENTIAL awaits, never
-// Promise.all: parallel same-path requests to api-beta can return mixed
+// Promise.all: parallel same-path requests to Directus can return mixed
 // response bodies (see loadPlaylist.ts / useRouteIndex.ts).
 export async function duplicatePlaylist(
 	id: string,

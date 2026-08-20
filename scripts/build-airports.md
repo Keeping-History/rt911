@@ -10,8 +10,8 @@ Regenerate only if new flight data introduces unseen airport codes.
 
 1. Pull the distinct route codes from Directus (public read, no auth):
    ```sh
-   curl -s 'https://api-beta.911realtime.org/items/flight_tracks?groupBy[]=origin&limit=-1' -o origins.json
-   curl -s 'https://api-beta.911realtime.org/items/flight_tracks?groupBy[]=scheduled_dest&limit=-1' -o dests.json
+   curl -s 'https://api.911realtime.org/items/flight_tracks?groupBy[]=origin&limit=-1' -o origins.json
+   curl -s 'https://api.911realtime.org/items/flight_tracks?groupBy[]=scheduled_dest&limit=-1' -o dests.json
    ```
 2. Download the public-domain OurAirports dataset:
    ```sh
