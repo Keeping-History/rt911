@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chipColor, tagLabel, tagsIn, TAG_NAMESPACES } from "./tagPalette";
+import { chipColor, tagGroups, tagLabel, tagsIn, TAG_NAMESPACES } from "./tagPalette";
 
 describe("chipColor", () => {
 	it("keys off the namespace, because mp3_tags.color is null on every row", () => {
@@ -69,5 +69,39 @@ describe("tagsIn", () => {
 
 	it("is empty for an item with no tags at all", () => {
 		expect(tagsIn(undefined, "topic")).toEqual([]);
+	});
+});
+
+describe("tagGroups", () => {
+	const tags = [
+		{ tag: "topic:hijacking", namespace: "topic", value: "Hijacking" },
+		{ tag: "facility:zbw", namespace: "facility", value: "ZBW" },
+		{ tag: "aircraft:aal11", namespace: "aircraft", value: "AAL11" },
+	];
+
+	it("groups tags into a labelled row per namespace, in vocabulary order", () => {
+		expect(tagGroups(tags).map((g) => g.key)).toEqual(["topic", "facility", "aircraft"]);
+		expect(tagGroups(tags).map((g) => g.label)).toEqual(["Topics", "Facilities", "Aircraft"]);
+	});
+
+	it("drops a namespace with no tags rather than printing an empty row", () => {
+		expect(tagGroups(tags).map((g) => g.key)).not.toContain("person");
+	});
+
+	it("files a tag from an unknown namespace under a trailing Other row", () => {
+		// mp3_tags.namespace is NOT NULL, so a ninth namespace means a curator
+		// added one, not that a tag lost its namespace.
+		const groups = tagGroups([{ tag: "weather:vfr", namespace: "weather", value: "VFR" }]);
+		expect(groups).toEqual([
+			{
+				key: "other",
+				label: "Other",
+				tags: [{ tag: "weather:vfr", namespace: "weather", value: "VFR" }],
+			},
+		]);
+	});
+
+	it("is empty for an item with no tags at all", () => {
+		expect(tagGroups(undefined)).toEqual([]);
 	});
 });
