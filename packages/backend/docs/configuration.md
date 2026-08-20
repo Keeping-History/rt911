@@ -89,8 +89,11 @@ Structured keys you'll see:
 ## Security posture
 
 The streamer is **read-only and unauthenticated** on its data paths (the
-operator endpoints above are the exception, each gated by its own key). It
-assumes:
+operator endpoints above are the exception, each gated by its own key). Treat
+`ALERT_CONTROL_KEY` as an admin credential: an alert's `content` — whether an
+existing `alert_items` row or an ad-hoc payload — is rendered as HTML by every
+connected client's Alerts extension, so the key is the whole access control.
+It assumes:
 
 1. The reverse proxy (or CDN) terminates TLS.
 2. The reverse proxy enforces origin allow-listing if you care — the in-process `CheckOrigin` returns `true` for everything.

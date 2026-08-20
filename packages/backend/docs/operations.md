@@ -150,6 +150,26 @@ docker compose exec rt911-cache redis-cli HGET media:items 12345
 
 The Unix timestamp for "2001-09-11T08:46:00Z" is `1000201560`.
 
+### Send an alert to everyone connected right now
+
+Scheduled alerts live in `alert_items` and fire when a client's virtual clock crosses their
+`start_date`. To interrupt everyone *immediately* — a maintenance notice, a classroom
+announcement — POST to `/alert` instead. It needs `ALERT_CONTROL_KEY` set on the streamer, and
+reaches every pod (see [`SPEC.md`](../SPEC.md#post-alert--operator-alert-push)):
+
+```sh
+curl -sS https://stream.911realtime.org/alert \
+  -H "X-Alert-Key: $ALERT_CONTROL_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Server maintenance in 10 minutes",
+       "content":"<p>The site will be briefly unavailable.</p>",
+       "severity":"caution"}'
+# {"id":-16777216,"title":"Server maintenance in 10 minutes"}
+```
+
+That's an ad-hoc alert — never persisted, gone once delivered. To fire an already-curated
+`alert_items` row early instead, send its id: `-d '{"id":4001}'`.
+
 ### Watch a session in flight
 
 There's no introspection endpoint, but you can correlate by session ID:

@@ -170,13 +170,25 @@ frames (`clock`, `heartbeat_ack.master_time`).
 Guarded by `X-Alert-Key` (`ALERT_CONTROL_KEY`; unset ⇒ 404, feature off).
 
 - `POST /alert {"id": 42}` — raise `alert_items` row 42 on every connected client now
+- `POST /alert {"title": "…", "content": "…", "severity": "caution"}` — push an
+  ad-hoc alert that has no `alert_items` row at all
 
 Alert *content* already reaches every pod through the `alert_items` NOTIFY
 listener; what that path cannot do is raise an alert off-schedule, because
 delivery is gated on the row's `start_date` against each client's virtual
-clock. This endpoint is that path: the row is read once on the receiving pod,
-fanned out over Redis pub/sub (`alerts:push`), and each pod restamps it with
-each session's own virtual time so it is immediately due for that client.
+clock. This endpoint is that path: the item — loaded by id, or assembled
+ad-hoc — is fanned out over Redis pub/sub (`alerts:push`) exactly once, and
+each pod restamps it with each session's own virtual time so it is immediately
+due for that client.
+
+An ad-hoc alert is **never persisted** — it never enters `alert_items` or the
+Redis media cache, only the fanout bus. It needs `title` (≤500 characters,
+whitespace-only rejected); `content`, `image`, `image_caption` are optional;
+`severity` defaults to `note` and must otherwise be `note`, `caution`, or
+`stop`. It is assigned a negative id — packed from a per-pod random salt and a
+per-pod counter — so it can never collide with a positive Directus id, or with
+an ad-hoc alert issued by a *different* pod, even though the same item (id
+included) is fanned out to every pod in the deployment.
 
 ### `POST /room` — live teacher control
 
