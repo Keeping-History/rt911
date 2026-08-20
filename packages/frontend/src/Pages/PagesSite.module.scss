@@ -1,0 +1,571 @@
+@use 'classicy/scss/appearance';
+
+/**
+ * Only what Classicy does not already provide.
+ *
+ * The chrome itself — menu bar, menus, window frame, title bar — uses
+ * Classicy's own global classes (classicyDesktop, classicyDesktopMenu,
+ * classicyMenuItem, classicyWindowFrame, …). Everything here is layout glue for
+ * a static page plus typography for author-written prose, and every value comes
+ * from a theme variable rather than a literal.
+ */
+
+/* Classicy's .classicyDesktop is width/height 100%, so it needs a sized
+   parent. This makes the surface fill the viewport and stack the menu bar
+   above the page area. */
+.root {
+	position: fixed;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* .classicyDesktop sets overflow:hidden; the page area is what scrolls. */
+.desktopArea {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+	padding: calc(var(--window-padding-size) * 4) calc(var(--window-padding-size) * 2);
+}
+
+/* Classicy's .classicyWindow is absolutely positioned and height-capped by the
+   window manager. This surface has no window manager: the window sits in normal
+   flow, sized for reading, and grows with its content while .desktopArea
+   scrolls. Everything else about the class — frame, bevel, title bar — is left
+   exactly as Classicy draws it. */
+.window {
+	position: relative;
+	max-height: none;
+	width: min(56rem, 100%);
+}
+
+.windowZoomed {
+	width: 100%;
+}
+
+/* The window contents area is chrome-coloured; authored text sits on document
+   white, as a document window does. */
+.document {
+	background: var(--color-window-document);
+	padding: calc(var(--window-padding-size) * 3);
+	min-height: 16rem;
+	overflow-wrap: break-word;
+
+	/* Classicy sets `user-select: none` on .classicyDesktop, which is right for a
+	   desktop you drag icons around — but `user-select` inherits, so it reaches
+	   authored prose too and readers can't copy a quote or a citation. Re-enabled
+	   here rather than fought at the root: this element is a descendant of the
+	   desktop, so its own declaration wins outright and no specificity contest is
+	   involved. Chrome keeps Classicy's default — the title bar and the
+	   drag-suppression rule both scope themselves and are untouched. */
+	-webkit-user-select: text;
+	user-select: text;
+}
+
+/* Classicy sets --ui-font/--ui-font-size on .classicyMenuWrapper, which the bar
+   now has. Restating them on the top-level item keeps it correct even if that
+   wrapper moves or a future menu item is rendered outside one. */
+.menuTitle {
+	font-family: var(--ui-font), sans-serif;
+	font-size: var(--ui-font-size);
+}
+
+/* ---- byline ---- */
+
+.byline {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--window-padding-size) * 2);
+	margin-bottom: calc(var(--window-padding-size) * 3);
+	padding-bottom: calc(var(--window-padding-size) * 2);
+	border-bottom: var(--window-border-size) solid var(--color-system-05);
+	font-family: var(--ui-font), sans-serif;
+	font-size: var(--ui-font-size);
+}
+
+.avatar {
+	width: var(--icon-size-regular);
+	height: var(--icon-size-regular);
+	object-fit: cover;
+	border: var(--window-border-size) solid var(--color-system-05);
+}
+
+.bylineName {
+	font-weight: 700;
+}
+
+.bylineMeta a {
+	color: var(--color-theme-04);
+}
+
+/* ---- authored body ---- */
+
+.body {
+	font-family: var(--body-font), serif;
+	font-size: var(--body-font-size);
+	line-height: 1.55;
+	color: var(--color-black);
+
+	h1,
+	h2,
+	h3,
+	h4 {
+		font-family: var(--header-font), sans-serif;
+		line-height: 1.2;
+		margin: 1.4em 0 .4em;
+	}
+
+	/* Headings run a quarter larger than Classicy's chrome-scaled header size,
+	   which is tuned for title bars and menus rather than prose. Applied as one
+	   ratio so each heading keeps its own relationship to the theme baseline and
+	   a future adjustment stays a single number. */
+	--page-heading-scale: 1.25;
+
+	h1 { font-size: calc(var(--header-font-size) * 1.25 * var(--page-heading-scale)); }
+	h2 { font-size: calc(var(--header-font-size) * var(--page-heading-scale)); }
+	h3 { font-size: calc(var(--header-font-size) * .85 * var(--page-heading-scale)); }
+	h4 { font-size: calc(var(--ui-font-size) * var(--page-heading-scale)); }
+
+	p { margin: 0 0 1em; }
+
+	ul,
+	ol { margin: 0 0 1em 1.5em; }
+
+	/* Classicy paints every marker under .classicyDesktop with a chrome colour
+	   (`.classicyDesktop *::marker`) — right for its own UI lists, wrong for
+	   authored prose, where a bullet or number is body text and reads black.
+	   Setting .body's `color` can't fix it: that rule declares ::marker colour
+	   explicitly, so there is nothing left to inherit. This selector's
+	   specificity (0,1,2) is what actually beats it (0,1,1) — don't drop the
+	   `li`. Covers ol numbers as well as ul bullets. */
+	li::marker { color: var(--color-black); }
+
+	blockquote {
+		margin: 0 0 1em;
+		padding-left: calc(var(--window-padding-size) * 2);
+		border-left: calc(var(--window-border-size) * 2) solid var(--color-system-05);
+		color: var(--color-system-07);
+	}
+
+	a { color: var(--color-theme-04); }
+
+	/* Authored media must never widen the frame and force the page to scroll
+	   sideways. */
+	img,
+	iframe {
+		display: block;
+		max-width: 100%;
+		height: auto;
+		margin: 1em 0;
+		border: var(--window-border-size) solid var(--color-system-05);
+	}
+
+	iframe {
+		width: 100%;
+		aspect-ratio: 16 / 9;
+	}
+
+	/* Wide content scrolls inside its own box, for the same reason. */
+	pre {
+		display: block;
+		max-width: 100%;
+		overflow-x: auto;
+	}
+
+	/* ---- tables ----
+	   Styled after the Finder's list view, because that is the table this
+	   desktop already shows its users: a beveled column-header strip, a hairline
+	   frame, and banded rows. The values are lifted from Classicy's own
+	   .classicyFileBrowserViewTable* rules in classicy.css so a theme change
+	   moves both together — none of them are literals.
+
+	   The scroll container is added by renderPageHtml, not by authors; :global()
+	   is required because that class is injected into sanitized HTML and so
+	   never passes through this module's name hashing. */
+	:global(.pageTableScroll) {
+		max-width: 100%;
+		margin: 0 0 1em;
+		overflow-x: auto;
+		border: var(--window-border-size) solid var(--color-black);
+		background: var(--color-white);
+	}
+
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		/* Tabular data is interface, not prose: the Finder sets its list view in
+		   the UI face, and body serif at body size wraps far too readily inside
+		   a narrow column. */
+		font-family: var(--ui-font), sans-serif;
+		font-size: calc(var(--ui-font-size) * .9);
+		color: var(--color-black);
+		text-align: left;
+	}
+
+	caption {
+		caption-side: top;
+		padding: var(--window-padding-size) calc(var(--window-padding-size) * 1.5);
+		border-bottom: var(--window-border-size) solid var(--color-system-05);
+		background: var(--color-system-02);
+		font-weight: 700;
+		text-align: left;
+	}
+
+	th,
+	td {
+		padding: var(--window-padding-size) calc(var(--window-padding-size) * 1.5);
+		vertical-align: top;
+	}
+
+	/* The bevel is what makes a header read as a clickable column header rather
+	   than a shaded first row — same inset pair Classicy puts on
+	   .classicyFileBrowserViewTableColumnHeader. */
+	th, thead th {
+		position: relative;
+		background: var(--color-system-03);
+		box-shadow:
+			inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) var(--color-system-05),
+			inset var(--window-border-size) var(--window-border-size) var(--color-window-border-outset);
+		font-weight: 400;
+		font-stretch: condensed;
+		white-space: nowrap;
+	}
+
+	/* Alternating bands. Odd rows are stated explicitly rather than left to the
+	   table's background so the banding survives a nested or re-ordered tbody. */
+	tbody tr:nth-child(odd) { background: var(--color-white); }
+	tbody tr:nth-child(even) { background: var(--color-system-01); }
+
+	/* A leading <th> inside the body is a row label, not a column header: it
+	   keeps the band it sits in and just carries weight. */
+	tbody th {
+		font-weight: 700;
+		white-space: nowrap;
+	}
+
+	code {
+		font-family: var(--mono-font), monospace;
+		font-size: var(--mono-font-size);
+		background: var(--color-system-02);
+		padding: 0 .25em;
+	}
+}
+
+.status {
+	font-family: var(--ui-font), sans-serif;
+	font-size: var(--ui-font-size);
+	padding: calc(var(--window-padding-size) * 6) 0;
+	text-align: center;
+	color: var(--color-system-07);
+}
+
+/* Menu links inherit Classicy's .classicyMenuItem p a styling; this only marks
+   nesting depth and the current page. */
+.menuChild {
+	padding-left: calc(var(--window-padding-size) * 3);
+}
+
+.menuCurrent {
+	font-weight: normal;
+}
+
+/* ---- document actions ---- */
+
+/* ClassicyButton carries its own outer margin (the `margin` prop) and
+   overwrites any className passed to it, so the only way to line the button up
+   with the title above it is to pull the row back by the same amount. `sm` is
+   half a padding unit — keep the two in step if the prop changes. */
+.actions {
+	display: flex;
+	align-items: center;
+	margin: 0 0 calc(var(--window-padding-size) * 2) calc(var(--window-padding-size) * -.5);
+	background-color: var(--color-system-03);
+	border-bottom: 1px solid black;
+	padding: 0 var(--window-padding-size);
+}
+
+/* The icon sits inside the button, so it can't be styled through ClassicyButton
+   (which overwrites className) — the rule targets the child img instead. The
+   source art is a full-size 32px system icon; height is capped to the button's
+   text so the control keeps its standard height, and `vertical-align` does the
+   optical centring against the label since the button lays its children out as
+   inline content, not as a flex row. */
+.buttonIcon {
+	height: calc(var(--ui-font-size) * 1.25);
+	width: auto;
+	margin-right: calc(var(--window-padding-size) * .5);
+	vertical-align: middle;
+}
+
+/* Present in the DOM at all times but only ever rendered on paper — a printout
+   that has lost its browser chrome has nothing else that says where it came
+   from. Kept out of the accessibility tree since the address is already the
+   page's own location. */
+.printSource {
+	display: none;
+}
+
+/* ---- print ---- */
+
+@media print {
+	@page {
+		margin: .75in;
+	}
+
+	/* app.css pins the whole shell to the viewport — `body { height: calc(100vh)
+	   !important }` and `overflow: hidden` on html, body and #root — because the
+	   desktop is a full-screen app that must never scroll the document. Those
+	   three declarations also cap any printout at exactly one sheet, and because
+	   they sit two ancestors above this surface, nothing scoped to .root can
+	   undo them. Everything below is downstream of getting this right: the
+	   printed page looked flawless while silently losing every sheet after the
+	   first. */
+	:global(html),
+	:global(body),
+	:global(#root) {
+		height: auto !important;
+		min-height: 0 !important;
+		overflow: visible !important;
+		background: #fff !important;
+	}
+
+	/* On screen this surface is a fixed, overflow-hidden desktop wrapping a
+	   window whose contents area is itself an `overflow: auto` box of fixed
+	   height. Each of those three independently truncates a printout to the
+	   first sheet in Chrome and Safari, so printing begins by dismantling the
+	   layout: static flow, nothing clipped, every height automatic.
+
+	   The !importants are deliberate and load-bearing. Every rule in this block
+	   overrides one of Classicy's own global declarations on the same element,
+	   some of them two-class selectors (`.classicyWindow .classicyWindowContents`)
+	   that a single hashed class can't outweigh — and this module's position in
+	   the stylesheet order relative to classicy.css isn't ours to control. */
+	.root {
+		position: static !important;
+		display: block !important;
+		overflow: visible !important;
+		width: auto !important;
+		height: auto !important;
+		background: none !important;
+	}
+
+	.desktopArea {
+		display: block !important;
+		overflow: visible !important;
+		padding: 0 !important;
+	}
+
+	.window {
+		position: static !important;
+		width: auto !important;
+		max-width: none !important;
+		max-height: none !important;
+		padding: 0 !important;
+		border: 0 !important;
+		background: none !important;
+		box-shadow: none !important;
+	}
+
+	:global(.classicyWindowContents) {
+		height: auto !important;
+		overflow: visible !important;
+		border: 0 !important;
+		background: #fff !important;
+		box-shadow: none !important;
+	}
+
+	:global(.classicyWindowContentsInner) {
+		height: auto !important;
+	}
+
+	.document {
+		min-height: 0 !important;
+		padding: 0 !important;
+		background: #fff !important;
+	}
+
+	/* Interface, not content: the menu bar is navigation, the title bar only
+	   repeats the <h1> below it, the frame edges are decoration, and a Print
+	   button on paper is a joke at the reader's expense. */
+	:global(.classicyDesktopMenuBar),
+	:global(.classicyWindowTitleBar),
+	:global(.classicyWindowFrameEdge),
+	.actions {
+		display: none !important;
+	}
+
+	.printSource {
+		display: block;
+		margin-bottom: 18pt;
+		padding-bottom: 4pt;
+		border-bottom: .5pt solid #999;
+		font-family: Georgia, "Times New Roman", serif;
+		font-size: 8pt;
+		color: #444;
+	}
+
+	/* The screen faces are bitmap system fonts built for 72dpi chrome; at print
+	   resolution they set badly and read worse. Paper gets a real text face at a
+	   real point size — this is the one place the surface deliberately stops
+	   looking like Mac OS 8. */
+	.docTitle {
+		margin: 0 0 .3em;
+		font-family: var(--header-font), serif;
+		font-size: 20pt;
+		line-height: 1.15;
+		break-after: avoid;
+		page-break-after: avoid;
+	}
+
+	.byline {
+		margin-bottom: 14pt;
+		padding-bottom: 6pt;
+		border-bottom-color: #999;
+		font-family: var(--ui-font), sans-serif;
+		font-size: 9pt;
+	}
+
+	.body {
+		font-family: var(--body-font), sans-serif;
+		font-size: 11pt;
+		line-height: 1.45;
+		color: #000;
+
+		h1,
+		h2,
+		h3,
+		h4 {
+		font-family: var(--header-font), serif;
+			margin: 1.2em 0 .35em;
+			/* A heading stranded at the foot of a sheet is the classic printout
+			   defect; both spellings are needed for Safari. */
+			break-after: avoid;
+			page-break-after: avoid;
+		}
+
+		h1 { font-size: 16pt; }
+		h2 { font-size: 13.5pt; }
+		h3 { font-size: 12pt; }
+		h4 { font-size: 11pt; }
+
+		p {
+			orphans: 3;
+			widows: 3;
+		}
+
+		/* Underlined and black: colour is what the link cue collapses to on a
+		   mono printer otherwise. */
+		a {
+			color: #000;
+			text-decoration: underline;
+		}
+
+		/* A printed link goes nowhere unless its address travels with it.
+		   Restricted to absolute http(s) hrefs — expanding an in-site relative
+		   link to "(/about)" is noise. */
+		a[href^="http"]::after {
+			content: " <" attr(href) ">";
+			font-size: .85em;
+			word-break: break-all;
+		}
+
+		img {
+			max-width: 100%;
+			border-color: #999;
+			break-inside: avoid;
+			page-break-inside: avoid;
+		}
+
+		/* An embedded player prints as an empty rectangle, so it is dropped
+		   rather than reserved space for. */
+		iframe { display: none; }
+
+		blockquote {
+			border-left-color: #999;
+			color: #000;
+			break-inside: avoid;
+			page-break-inside: avoid;
+		}
+
+		code {
+			background: none;
+			padding: 0;
+			font-family: var(--mono-font), monospace;
+			font-size: 9.5pt;
+		}
+
+		/* Horizontal scrolling has no meaning on paper: wrap instead of clipping
+		   the overflow away where the reader can never reach it. */
+		pre {
+			overflow: visible;
+			white-space: pre-wrap;
+			word-break: break-word;
+			border: .5pt solid #999;
+			padding: 6pt;
+		}
+
+		/* ---- tables on paper ----
+		   Browsers drop background colours from printouts unless the user opts
+		   in, so the screen table's bands and beveled header strip would print
+		   as an undifferentiated grid. Rules always print, so on paper the
+		   structure is carried by rules instead: a heavy frame top and bottom,
+		   a rule under the header, hairlines between rows. */
+		:global(.pageTableScroll) {
+			overflow: visible !important;
+			border: 0 !important;
+			background: none !important;
+		}
+
+		table {
+			width: 100%;
+			font-family: var(--body-font), sans-serif;
+			font-size: 9.5pt;
+			border-top: 1pt solid #000;
+			border-bottom: 1pt solid #000;
+		}
+
+		/* A table spanning a page break reprints its header on the next sheet —
+		   the whole reason to mark up a <thead> at all. */
+		thead { display: table-header-group; }
+		tfoot { display: table-footer-group; }
+
+		/* Not applied to the table itself: a table longer than a sheet has to be
+		   allowed to break, it is the individual row that must stay whole. */
+		tr {
+			break-inside: avoid;
+			page-break-inside: avoid;
+		}
+
+		thead th {
+			background: none !important;
+			box-shadow: none !important;
+			border-bottom: .75pt solid #000;
+			font-weight: 700;
+			font-stretch: normal;
+		}
+
+		tbody tr {
+			background: none !important;
+		}
+
+		tbody th,
+		tbody td {
+			border-bottom: .25pt solid #bbb;
+		}
+
+		th,
+		td {
+			padding: 3pt 6pt 3pt 0;
+		}
+
+		caption {
+			padding: 0 0 4pt;
+			border: 0;
+			background: none !important;
+			font-size: 9.5pt;
+		}
+	}
+}

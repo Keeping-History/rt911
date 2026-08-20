@@ -15,6 +15,7 @@ vi.mock("classicy", () => ({
 	registerHyperCardEffectHandler: (_name: string, h: typeof hooks.handler) => {
 		hooks.handler = h;
 	},
+	registerApp: () => {},
 }));
 
 import { HyperCardClockBridge } from "./HyperCardClockBridge";

@@ -1,4 +1,5 @@
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Protocol } from "pmtiles";
 import { type FC, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { MapCompass } from "./MapCompass";
@@ -9,6 +10,7 @@ import { invertHex } from "./colorInvert";
 import {
 	type BasemapStyleId,
 	type BasemapUrls,
+	SECONDARY_TRACK_COLOR,
 	TRACK_LINE_COLOR,
 	TRACK_SHADOW_COLOR,
 	applyMapColors,
@@ -18,7 +20,7 @@ import {
 	trailColor,
 	trailGradient,
 } from "./flightMapStyle";
-import { phaseLineColorExpression } from "./flightPhases";
+import { type PhasePalette, phaseLineColorExpression } from "./flightPhases";
 import { sourceDashExpression, sourceOpacityExpression } from "./flightProvenance";
 import planeSvg from "./plane.svg?raw";
 import pinSvg from "./pin.svg?raw";
@@ -97,6 +99,15 @@ import {
 	cameraPose,
 	MAX_FOLLOW_PITCH,
 } from "./flightCamera";
+
+// maplibre-gl 6.x is ESM-only and locates its worker script relative to its
+// own import.meta.url at runtime. Vite's dev-server dep optimizer pre-bundles
+// maplibre-gl.mjs into node_modules/.vite/deps/, which drags that self-located
+// URL along with it — the worker file never actually lives there, so the
+// default resolution 404s and the map falls back to (slower, unsupported)
+// main-thread tile parsing. Feeding it Vite's own resolved worker URL sidesteps
+// the mismatch in both dev and prod. See maplibre-gl's Vite integration guide.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 // Register the pmtiles:// protocol once per page (adding it twice throws).
 let protocolRegistered = false;
@@ -313,6 +324,14 @@ interface FlightMapProps {
 	// Raw altitude profile of the selected flight: the smooth 3D track tube
 	// splines it in all three axes (see trackTube.ts).
 	trackProfile?: AltitudeSample[] | null;
+	// Which phase vocabulary the profile's phases belong to. The 2D segments
+	// arrive pre-colored in trackGeoJSON, but the 3D tube colors its own
+	// vertices, so it needs the selected flight's palette (flightPhases.ts).
+	trackPalette?: PhasePalette;
+	// Every OTHER multi-selected flight's altitude profile (issue #326): each
+	// gets its own plain (unphased) 3D tube alongside the active one's above,
+	// mirroring trackGeoJSON's secondary 2D features.
+	secondaryTrackProfiles?: { flight: string; profile: AltitudeSample[] }[];
 	nowMs: number;
 	playing: boolean;
 	mapStyle: BasemapStyleId;
@@ -381,11 +400,19 @@ interface FlightMapProps {
 // Enable/disable every user camera handler in one place (the follow lock owns
 // the camera while active). Defensive against handlers a given build/mock may
 // not expose — only dragPan is guaranteed in the test harness.
+//
+// boxZoom is deliberately absent: MapLibre's default Shift+drag box-zoom
+// competes directly with shift-click multi-select (issue #310) — a click is
+// just a near-zero-distance drag, so boxZoom's handler can swallow the
+// gesture before the app's own click handler ever sees a clean shiftKey
+// click. It's disabled permanently at construction (`boxZoom: false`) and
+// must stay out of this list, or re-enabling camera interactivity here
+// (follow-unlock) would silently turn it back on.
 type MapHandler = { enable?: () => void; disable?: () => void };
 function setCameraInteractive(map: maplibregl.Map, on: boolean) {
 	const m = map as unknown as Record<string, MapHandler | undefined>;
 	for (const key of [
-		"dragPan", "dragRotate", "scrollZoom", "boxZoom",
+		"dragPan", "dragRotate", "scrollZoom",
 		"doubleClickZoom", "keyboard", "touchZoomRotate", "touchPitch",
 	]) {
 		const h = m[key];
@@ -430,7 +457,7 @@ function featureAnchor(f: { geometry: GeoJSON.Geometry }): [number, number] | nu
 // the planet. queryRenderedFeatures hit-tests ground footprints, not the
 // visually elevated pixels — so 3D hit tests project the elevated point
 // themselves, via per-projection INTERNAL transform methods (absent from the
-// public types, present in every 5.x build; verified live):
+// public types, present in every 5.x and 6.x build; verified live):
 //  - mercator: transform.coordinatePoint(mercCoord, elevationMeters)
 //  - globe: transform.projectTileCoordinates(x, y, tileID, getElevation) —
 //    the CPU twin of the shaders' projectTileFor3D. A synthetic zoom-0 tile
@@ -441,32 +468,69 @@ function featureAnchor(f: { geometry: GeoJSON.Geometry }): [number, number] | nu
 // worse than the pre-fix behavior.
 const TILE_EXTENT = 8192;
 const WORLD_TILE = { wrap: 0, canonical: { x: 0, y: 0, z: 0 } };
+
+// The transform's own internal shape is stable across 5.x/6.x; only where it
+// HANGS OFF the map moved.
+type AltitudeTransform = {
+	coordinatePoint?: (
+		coord: maplibregl.MercatorCoordinate,
+		elevation: number,
+	) => { x: number; y: number };
+	// Exaggerated terrain height at the camera center; 0 without terrain.
+	elevation?: number;
+	projectTileCoordinates?: (
+		x: number,
+		y: number,
+		tileID: typeof WORLD_TILE,
+		getElevation: () => number,
+	) => { point: { x: number; y: number }; isOccluded?: boolean };
+	width?: number;
+	height?: number;
+};
+
+/**
+ * Locate the active transform on a Map, across MapLibre's two layouts.
+ *
+ * MapLibre 6 stopped having `Map` extend `Camera` and composes it instead, so
+ * the transform moved from `map.transform` (5.x) to `map._camera.transform`.
+ * Reading only the 5.x spot silently degraded every pitched hit test to the
+ * ground projection, which put the hit target thousands of feet below the
+ * aircraft actually drawn — 3D clicks stopped selecting anything at all while
+ * flat 2D (queryRenderedFeatures on real style layers) kept working.
+ *
+ * Neither spot is public API, so this can break again on a major bump. It
+ * returns undefined rather than guessing, and the one caller reports that
+ * loudly instead of quietly falling back.
+ */
+function altitudeTransform(map: maplibregl.Map): AltitudeTransform | undefined {
+	const m = map as unknown as {
+		_camera?: { transform?: AltitudeTransform };
+		transform?: AltitudeTransform;
+	};
+	return m._camera?.transform ?? m.transform;
+}
+
+// One warning per map, not per call: a missing transform means every 3D click
+// silently mis-targets — invisible in logs and easy to mistake for bad data —
+// but this runs once per plane per frame, so unlatched it would flood.
+const warnedMissingTransform = new WeakSet<maplibregl.Map>();
+
 function projectAtAltitude(
 	map: maplibregl.Map,
 	lon: number,
 	lat: number,
 	altM: number,
 ): { x: number; y: number } | null {
-	const transform = (
-		map as unknown as {
-			transform?: {
-				coordinatePoint?: (
-					coord: maplibregl.MercatorCoordinate,
-					elevation: number,
-				) => { x: number; y: number };
-				// Exaggerated terrain height at the camera center; 0 without terrain.
-				elevation?: number;
-				projectTileCoordinates?: (
-					x: number,
-					y: number,
-					tileID: typeof WORLD_TILE,
-					getElevation: () => number,
-				) => { point: { x: number; y: number }; isOccluded?: boolean };
-				width?: number;
-				height?: number;
-			};
-		}
-	).transform;
+	const transform = altitudeTransform(map);
+	if (!transform && !warnedMissingTransform.has(map)) {
+		warnedMissingTransform.add(map);
+		console.warn(
+			"[FlightMap] No MapLibre transform found at map._camera.transform or " +
+				"map.transform — 3D hit-testing is falling back to ground positions " +
+				"and clicking aircraft in 3D will not select them. MapLibre likely " +
+				"moved the transform again; update altitudeTransform().",
+		);
+	}
 	try {
 		if (transform?.coordinatePoint) {
 			// coordinatePoint's pixel matrix is built BEFORE MapLibre's terrain
@@ -549,6 +613,7 @@ export const THREE_D_MAX_PITCH = 85;
 // can't flicker off mid-drag.
 export const THREE_D_MIN_PITCH = 10;
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
+const EMPTY_SECONDARY_TRACKS: { flight: string; profile: AltitudeSample[] }[] = [];
 const FRAME_MS = 66; // ~15 fps animation gate
 // Click hit-test slop (px). Dots are a small (3px) and gliding target, so an
 // exact-pixel hit-test misses easily; a click within this radius selects the
@@ -562,7 +627,7 @@ const REPLAY_TRAIL_STROKE_COLOR = "#ffffff";
 export const FlightMap: FC<FlightMapProps> = ({
 	ref: handleRef,
 	positions, seedPositions, basemapUrls, trackGeoJSON,
-	trackProfile = null, nowMs, playing,
+	trackProfile = null, trackPalette, secondaryTrackProfiles = EMPTY_SECONDARY_TRACKS, nowMs, playing,
 	mapStyle, darkMap, pinColor, notablePinColor, observerPinColor, anonPinColor, radarSweep, trailMultiplier,
 	// Warm-stone defaults mirror flightMapSettings.ts's DEFAULT_FLIGHT_MAP_SETTINGS
 	// so call sites that predate hero landmarks (or omit the setting) still get a
@@ -717,6 +782,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const replayTrail3DRef = useRef<Planes3DLayer | null>(null);
 	// The selected flight's smooth 3D track tube.
 	const trackTubeRef = useRef<TrackTube3DLayer | null>(null);
+	// One plain (unphased) tube per OTHER multi-selected flight (issue #326),
+	// keyed by flight — added/removed as the selection changes, unlike the
+	// fixed-at-load layers above. Mirrors trackGeoJSON's secondary 2D features.
+	const secondaryTubesRef = useRef<Map<string, TrackTube3DLayer>>(new Map());
 	// Smooth live-trail ribbons (same class, translucent + flat-shaded).
 	const trailTubeRef = useRef<TrackTube3DLayer | null>(null);
 	// Alternating-frame gate for the ribbon rebuild (see the rAF loop).
@@ -725,6 +794,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 	const buildings3DRef = useRef<Buildings3DLayer | null>(null);
 	const trackProfileRef = useRef<AltitudeSample[] | null>(trackProfile);
 	trackProfileRef.current = trackProfile;
+	// Read inside the map-load callback, which captures values once.
+	const trackPaletteRef = useRef<PhasePalette | undefined>(trackPalette);
+	trackPaletteRef.current = trackPalette;
 	// Apply the layer-visibility matrix AND the custom layers' draw gates from
 	// one place, so the three flags can never drift apart across call sites.
 	const syncPlaneVisibility = (map: maplibregl.Map) => {
@@ -740,6 +812,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 		planes3DRef.current?.setVisible(custom3D);
 		replayTrail3DRef.current?.setVisible(custom3D);
 		trackTubeRef.current?.setVisible(custom3D);
+		for (const tube of secondaryTubesRef.current.values()) tube.setVisible(custom3D);
 		trailTubeRef.current?.setVisible(custom3D && !clusterRef.current);
 		// Pitched: the elevated geometry carries the track color, so the ground
 		// line darkens into its shadow; flat: it IS the track, full color.
@@ -765,6 +838,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			center: NA_CENTER,
 			zoom: NA_ZOOM,
 			attributionControl: false,
+			// MapLibre's default Shift+drag box-zoom would otherwise intercept
+			// shift-click multi-select (see setCameraInteractive's comment above).
+			boxZoom: false,
 			// Pitch is exclusively the 3D toggle's domain: with 3D off the map is
 			// hard-locked flat (right-drag still rotates bearing, never the z
 			// axis); with 3D on right-drag tilts freely across
@@ -859,6 +935,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 					"icon-allow-overlap": true,
 					"icon-ignore-placement": true,
 				},
+				// A parked highlight (AF1 at a ground stop) dims so a motionless
+				// icon reads as "on the ground", not a stuck render.
+				paint: { "icon-opacity": ["case", ["==", ["get", "phase"], "ground"], 0.55, 1] },
 			});
 			void installPlaneIcons(
 				map, colors.pinColor, colors.notablePinColor, colors.observerPinColor,
@@ -1067,7 +1146,9 @@ export const FlightMap: FC<FlightMapProps> = ({
 			// elevation (the curtain staircases; it stays as the globe fallback).
 			const trackTube = new TrackTube3DLayer();
 			trackTube.setColor(TRACK_LINE_COLOR);
-			trackTube.setGeometry(buildTrackTube(trackProfileRef.current));
+			trackTube.setGeometry(
+				buildTrackTube(trackProfileRef.current, undefined, trackPaletteRef.current),
+			);
 			trackTubeRef.current = trackTube;
 			map.addLayer(trackTube);
 			// Smooth live-trail ribbons: splined breadcrumbs with per-vertex
@@ -1284,6 +1365,7 @@ export const FlightMap: FC<FlightMapProps> = ({
 			planes3DRef.current = null;
 			replayTrail3DRef.current = null;
 			trackTubeRef.current = null;
+			secondaryTubesRef.current = new Map();
 			trailTubeRef.current = null;
 			buildings3DRef.current = null;
 			mapRef.current = null;
@@ -1360,9 +1442,36 @@ export const FlightMap: FC<FlightMapProps> = ({
 	// empty/null profile clears it. Radius comes per-frame from the rAF loop.
 	useEffect(() => {
 		if (!mapRef.current || !loadedRef.current) return;
-		trackTubeRef.current?.setGeometry(buildTrackTube(trackProfile));
+		trackTubeRef.current?.setGeometry(buildTrackTube(trackProfile, undefined, trackPalette));
 		dirtyRef.current = true;
-	}, [trackProfile]);
+	}, [trackProfile, trackPalette]);
+
+	// Add/remove/rebuild one plain 3D tube per OTHER multi-selected flight
+	// (issue #326), keyed by flight so an unrelated prop change doesn't tear
+	// down and recreate every tube. Radius/vertical-drop come per-frame from
+	// the rAF loop, same as the active tube.
+	useEffect(() => {
+		const map = mapRef.current;
+		if (!map || !loadedRef.current) return;
+		const wanted = new Set(secondaryTrackProfiles.map((t) => t.flight));
+		for (const [flight, tube] of secondaryTubesRef.current) {
+			if (wanted.has(flight)) continue;
+			if (map.getLayer(tube.id)) map.removeLayer(tube.id);
+			secondaryTubesRef.current.delete(flight);
+		}
+		for (const { flight, profile } of secondaryTrackProfiles) {
+			let tube = secondaryTubesRef.current.get(flight);
+			if (!tube) {
+				tube = new TrackTube3DLayer({ id: `track-tube-3d-secondary-${flight}` });
+				tube.setColor(SECONDARY_TRACK_COLOR);
+				tube.setVisible(pitchedRef.current);
+				secondaryTubesRef.current.set(flight, tube);
+				map.addLayer(tube);
+			}
+			tube.setGeometry(buildTrackTube(profile, undefined, undefined));
+		}
+		dirtyRef.current = true;
+	}, [secondaryTrackProfiles]);
 
 	// Re-theme / recolor live. setPaintProperty only — setStyle() would tear
 	// down the flights/trails/track sources and layers. Before "load" fires,
@@ -1621,6 +1730,10 @@ export const FlightMap: FC<FlightMapProps> = ({
 				// height is sizeKm*500 m, so drop by that plus the tube's own
 				// radius. Uniform-driven, so it tracks zoom with no rebuild.
 				trackTubeRef.current?.setVerticalDrop(sizeKm * 500 + tubeRadiusM);
+				for (const tube of secondaryTubesRef.current.values()) {
+					tube.setRadius(tubeRadiusM);
+					tube.setVerticalDrop(sizeKm * 500 + tubeRadiusM);
+				}
 				if (planes3DRef.current) {
 					// Per-airframe batches (issue #250 follow-up): each family
 					// draws its own model; unloaded families render the prism

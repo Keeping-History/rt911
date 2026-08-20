@@ -7,8 +7,12 @@ import {
     useAppManager,
     useClassicyDateTime,
 } from 'classicy'
+// Side effect: registers this app's manifest (registerApp) at import time.
+import './MarketWatchContext';
+import { manifestDescription } from '../../Components/manifestDescription';
 import { useEffect, useMemo, useRef } from 'react'
 
+import { useAboutApp } from '../../Components/AboutApp/AboutApp'
 import { virtualUtcMs } from '../../Providers/MediaStream/virtualClock'
 import { trackAppToggle } from '../../openreplay'
 import appIconPng from './app.png'
@@ -62,6 +66,7 @@ export const MarketWatch = () => {
     const appId = 'MarketWatch.app'
     const appName = 'MarketWatch'
     const appIcon = ICONS.applications.marketWatch.app
+    const aboutWindow = useAboutApp(appId, appIcon)
 
     const isOpen = useAppManager((state) => state.System.Manager.Applications.apps[appId]?.open ?? false)
     const prevIsOpenRef = useRef<boolean | undefined>(undefined)
@@ -109,7 +114,13 @@ export const MarketWatch = () => {
     ]
 
     return (
-        <ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="marketwatch-board">
+        <ClassicyApp
+            id={appId}
+            name={appName}
+            icon={appIcon}
+            defaultWindow="marketwatch-board"
+            desktopIconBalloonHelp={manifestDescription(appId)}
+        >
             <ClassicyWindow
                 id="marketwatch-board"
                 title="MarketWatch"
@@ -166,6 +177,7 @@ export const MarketWatch = () => {
                     )}
                 </div>
             </ClassicyWindow>
+            {aboutWindow}
         </ClassicyApp>
     )
 }

@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"classicy/streamer/internal/fanout"
+
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -43,6 +45,12 @@ type MasterClock struct {
 	rdb    *goredis.Client
 	logger *slog.Logger
 
+	// bus carries state changes to the other pods. Persistence stays here
+	// (redisKey, below) rather than moving onto the bus: pub/sub is
+	// fire-and-forget, so a pod that was down for the publish recovers the
+	// state only by re-reading the key at boot.
+	bus *fanout.Bus[State]
+
 	mu sync.RWMutex
 	st State
 
@@ -53,7 +61,14 @@ type MasterClock struct {
 }
 
 func New(rdb *goredis.Client, logger *slog.Logger) *MasterClock {
-	return &MasterClock{rdb: rdb, logger: logger}
+	m := &MasterClock{
+		rdb:    rdb,
+		logger: logger,
+		bus:    fanout.New[State](rdb, redisChannel, logger),
+	}
+	// setLocal dedupes, which is what makes our own echo harmless.
+	m.bus.OnMessage(m.setLocal)
+	return m
 }
 
 func (m *MasterClock) OnChange(fn func(State)) { m.onChange = fn }
@@ -104,7 +119,7 @@ func (m *MasterClock) apply(ctx context.Context, st State) error {
 	m.setLocal(canonical)
 	// Publish failure is non-fatal: this pod has already applied and
 	// broadcast; other pods recover on their next boot Load.
-	if err := m.rdb.Publish(ctx, redisChannel, data).Err(); err != nil {
+	if err := m.bus.Publish(ctx, canonical); err != nil {
 		m.logger.Warn("master clock publish failed", "error", err)
 	}
 	return nil
@@ -138,18 +153,6 @@ func (m *MasterClock) Load(ctx context.Context) error {
 	return nil
 }
 
-// Run applies published state changes for the process lifetime. go-redis
-// PubSub reconnects internally; the loop exits when ctx is canceled.
-func (m *MasterClock) Run(ctx context.Context) {
-	sub := m.rdb.Subscribe(ctx, redisChannel)
-	defer sub.Close()
-	go func() { <-ctx.Done(); sub.Close() }()
-	for msg := range sub.Channel() {
-		var st State
-		if err := json.Unmarshal([]byte(msg.Payload), &st); err != nil {
-			m.logger.Warn("bad master clock notification", "payload", msg.Payload, "error", err)
-			continue
-		}
-		m.setLocal(st)
-	}
-}
+// Run applies published state changes for the process lifetime; the loop exits
+// when ctx is canceled. Call it in its own goroutine.
+func (m *MasterClock) Run(ctx context.Context) { m.bus.Run(ctx) }

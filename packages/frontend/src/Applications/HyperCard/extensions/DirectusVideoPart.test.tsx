@@ -19,6 +19,7 @@ vi.mock("classicy", () => ({
 		);
 	},
 	timeFriendly: (s: number) => `t${Math.floor(s)}`,
+	registerApp: () => {},
 }));
 
 import { DirectusVideo, DirectusVideoPart } from "./DirectusVideoPart";

@@ -2,7 +2,8 @@
 // `data` without per-app set-state actions. Registered under its own prefix
 // (TVContext-style) so it routes ahead of the core app reducer.
 import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerAppEventHandler } from "classicy";
+import { registerApp } from "classicy";
+import { z } from "zod";
 
 /** Merge keys into apps[appId].data — used for playlist settings entries. */
 export const playlistMergeAppData = (
@@ -21,4 +22,20 @@ export const classicyPlaylistEventHandler = (
 	return ds;
 };
 
-registerAppEventHandler("ClassicyAppPlaylist", classicyPlaylistEventHandler);
+registerApp({
+	id: "PlaylistEditor.app",
+	description: "Author teacher playlists and drive live rooms (jump, focus, message, lock).",
+	prefix: "ClassicyAppPlaylist",
+	handler: classicyPlaylistEventHandler,
+	actions: {
+		ClassicyAppPlaylistMergeData: {
+			description: "Merge keys into another app's data slice (playlist settings entries).",
+			params: z.object({
+				appId: z.string().describe("Target app id whose data receives the merge."),
+				values: z.record(z.string(), z.unknown()).describe("Keys merged into the target app's data."),
+			}),
+		},
+	},
+	// No state schema: this handler writes into OTHER apps' data slices, and
+	// PlaylistEditor.app itself persists nothing through this prefix.
+});

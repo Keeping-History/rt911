@@ -15,6 +15,7 @@ airing at air_date sits at (air_date − tv_channels.start_date) seconds in the
 stream (see ../epg/assembler.py and docs/transcription.md)."""
 import os
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,15 +26,27 @@ from prefect.deployments import run_deployment
 
 from video_grabber.config import Config
 from video_grabber.directus.writer import (
-    _WASABI_BASE,
     get_tv_channel_start_date,
     patch_mp3_subtitles,
     patch_tv_channel_subtitles,
+    wasabi_public_url,
 )
 from video_grabber.storage import wasabi
 from video_grabber.transcribe.audio import extract_audio
-from video_grabber.transcribe.srt import Cue, dedupe_consecutive, merge, parse_srt, render_srt, render_vtt, shift
+from video_grabber.transcribe.chunking import windows
+from video_grabber.transcribe.srt import (
+    collapse_repetition_loops,
+    Cue,
+    dedupe_consecutive,
+    merge,
+    parse_srt,
+    render_srt,
+    render_vtt,
+    shift,
+    strip_nonspeech_cues,
+)
 from video_grabber.transcribe.whisper import transcribe_wav
+from video_grabber.version import code_version
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
 _ASYNCPG_PREFIX = "postgresql+asyncpg://"
@@ -114,6 +127,108 @@ def build_channel_cues(window_start: datetime, programs: list[tuple[datetime, st
     return merge(blocks)
 
 
+def probe_duration_seconds(path: Path) -> float:
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", str(path)],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0 or not r.stdout.strip():
+        raise RuntimeError(f"ffprobe could not read a duration from {path}")
+    return float(r.stdout.strip())
+
+
+def slice_wav(src: Path, dest: Path, offset_ms: int, length_ms: int) -> Path:
+    """Cut one window out of a WAV as its own file.
+
+    Whisper is given the segment rather than the whole recording with -ot/-d,
+    because --vad scans the ENTIRE input regardless of the duration flag. On a
+    1-hour file that is ~11 s of wasted VAD per window; on the 6.75-hour NORAD
+    tapes it is ~74 s per window across ~41 windows, which is most of the
+    runtime. Measured on a 1-hour file: 49.8 s via -d, 38 s pre-split including
+    the cut.
+
+    -c copy on PCM is a byte-range cut, so this costs almost nothing.
+    """
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-y",
+         "-ss", f"{offset_ms / 1000:.3f}", "-t", f"{length_ms / 1000:.3f}",
+         "-i", str(src), "-c", "copy", str(dest)],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(f"ffmpeg could not slice {src} at {offset_ms}ms: {r.stderr[-400:]}")
+    return dest
+
+
+def read_whisper_text(path: Path) -> str:
+    """Read a whisper output file, tolerating bytes that are not valid UTF-8.
+
+    whisper.cpp writes raw decoder output and does not guarantee UTF-8. One NORAD
+    tape emitted 0xb5 mid-file, which failed the whole job on the default strict
+    decode -- losing 6+ hours of transcription over one byte. Replacing the
+    offending bytes keeps the rest, which is the right trade for an archive: one
+    mojibake character beats no transcript at all.
+    """
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def transcribe_windows(wav: Path, scratch: Path, cfg, duration_s: float) -> list[Cue]:
+    """Transcribe a recording as a sequence of bounded windows, merged onto one
+    timeline.
+
+    Whole-file transcription collapses on the long position tapes: a single
+    5-minute window of the NEADS MCC tape yields 150 words while the entire
+    6.67-hour file yields 84. See
+    plans/2026-08-13-audio-enhancement-findings.md.
+
+    VAD is enabled for every window. On the short clips it costs nothing; on the
+    tapes it is what stops hours of open-mic silence swamping the decoder.
+    """
+    blocks: list[list[Cue]] = []
+    for i, (offset_ms, length_ms) in enumerate(
+        windows(duration_s, cfg.chunk_seconds, cfg.chunk_overlap_seconds)
+    ):
+        base = scratch / f"w{i:04d}"
+        segment = scratch / f"w{i:04d}.wav"
+        slice_wav(wav, segment, offset_ms, length_ms)
+        try:
+            srt_path = transcribe_wav(segment, base, cfg, vad=True)
+            blocks.append(shift(parse_srt(read_whisper_text(srt_path)), offset_ms / 1000.0))
+        finally:
+            segment.unlink(missing_ok=True)
+    return merge(blocks)
+
+
+def existing_srt_key(mp3_key: str, srt_stems: set[str], srt_paths: set[str]) -> str | None:
+    """Return the SRT key already in the bucket for *mp3_key*, or None.
+
+    Checks the mirrored layout first and falls back to the historical flat-stem
+    layout, so this stays correct whichever layout the bucket is currently in.
+    """
+    mirrored = f"subtitles/{Path(mp3_key).with_suffix('.srt')}"
+    if mirrored in srt_paths:
+        return mirrored
+    stem = Path(mp3_key).stem
+    if stem in srt_stems:
+        return f"subtitles/audio/{stem}.srt"
+    return None
+
+
+def subtitle_base_key(job_kind: str, source_key: str, cfg) -> str:
+    """Extension-less subtitle key for a source.
+
+    mp3 keys mirror their full audio/ path rather than collapsing to a bare
+    stem: 93 basenames repeat across folders, and a flat namespace makes the
+    second transcription silently overwrite the first. Those 93 are currently
+    genuine duplicates of the same clip, so nothing is corrupt today — this is
+    hardening against the first real collision.
+    """
+    if job_kind == "tv":
+        return f"{cfg.subtitles_prefix}/programs/{source_key}"
+    return f"{cfg.subtitles_prefix}/{Path(source_key).with_suffix('')}"
+
+
 # ---- flows ----------------------------------------------------------------
 
 @flow(name="scan-transcribe")
@@ -132,7 +247,7 @@ def scan_transcribe_flow() -> None:
         """)).mappings().all()
         tv_n = 0
         for r in tv_rows:
-            src_url = f"{_WASABI_BASE}/{r['wasabi_key']}"
+            src_url = wasabi_public_url(r["wasabi_key"])
             res = db.execute(sa.text("""
                 INSERT INTO transcribe_jobs (kind, source_key, channel_slug, source_url, stage)
                 VALUES ('tv', :sk, :slug, :url, 'pending')
@@ -145,7 +260,7 @@ def scan_transcribe_flow() -> None:
         mp3_keys = [k for k in wasabi.list_keys("audio/", cfg) if k.lower().endswith(".mp3")]
         mp3_n = 0
         for key in mp3_keys:
-            src_url = f"{_WASABI_BASE}/{key}"
+            src_url = wasabi_public_url(key)
             res = db.execute(sa.text("""
                 INSERT INTO transcribe_jobs (kind, source_key, source_url, stage)
                 VALUES ('mp3', :sk, :url, 'pending')
@@ -154,6 +269,41 @@ def scan_transcribe_flow() -> None:
             mp3_n += res.rowcount or 0
         db.commit()
         logger.info("scan-transcribe: +%d tv, +%d mp3 new jobs", tv_n, mp3_n)
+
+
+@flow(name="reconcile-transcribe-jobs")
+def reconcile_transcribe_jobs_flow() -> None:
+    """Seed transcribe_jobs as 'done' for every mp3 whose SRT already exists.
+
+    Load-bearing guard. transcribe_jobs is empty, and scan-transcribe only
+    de-duplicates against rows that are already there — so without this, the next
+    scan re-enqueues all 789 mp3s and re-transcribes ~296 hours of audio that is
+    already captioned. Idempotent: ON CONFLICT DO NOTHING.
+    """
+    logger = get_run_logger()
+    cfg = Config()
+    srt_keys = [k for k in wasabi.list_keys(f"{cfg.subtitles_prefix}/", cfg)
+                if k.endswith(".srt")]
+    srt_paths = set(srt_keys)
+    srt_stems = {Path(k).stem for k in srt_keys}
+    mp3_keys = [k for k in wasabi.list_keys("audio/", cfg) if k.lower().endswith(".mp3")]
+
+    seeded = skipped = 0
+    with get_db() as db:
+        for key in mp3_keys:
+            srt_key = existing_srt_key(key, srt_stems, srt_paths)
+            if srt_key is None:
+                skipped += 1
+                continue
+            res = db.execute(sa.text("""
+                INSERT INTO transcribe_jobs (kind, source_key, source_url, stage, srt_key)
+                VALUES ('mp3', :sk, :url, 'done', :srt)
+                ON CONFLICT (source_key) DO NOTHING
+            """), {"sk": key, "url": wasabi_public_url(key), "srt": srt_key})
+            seeded += res.rowcount or 0
+        db.commit()
+    logger.info("reconcile-transcribe-jobs: seeded %d done, %d still untranscribed",
+                seeded, skipped)
 
 
 @flow(name="transcribe-item", retries=1, retry_delay_seconds=60)
@@ -167,34 +317,43 @@ def transcribe_item_flow(job_id: str) -> None:
     try:
         transition_transcribe_job(job_id, "transcribing")
         wav = extract_audio(job.source_url, scratch / "audio.wav")
-        out_base = scratch / "out"
-        srt_path = transcribe_wav(wav, out_base, cfg)
-        vtt_path = out_base.with_suffix(".vtt")
+        cues = transcribe_windows(wav, scratch, cfg, probe_duration_seconds(wav))
 
-        # Overwrite both files with hallucination-loop-cleaned cues. Whisper
-        # sometimes repeats a phrase over silence at the end of a file; keeping
-        # only the first occurrence of each consecutive identical cue removes it.
-        clean_cues = dedupe_consecutive(parse_srt(srt_path.read_text()))
+        # strip_nonspeech_cues runs BEFORE dedupe_consecutive so [Music] and
+        # [BLANK_AUDIO] are removed outright rather than collapsed to one cue —
+        # collapsing is what made six hours of open-mic NEADS audio look like a
+        # clean 84-word transcript. dedupe then removes genuine hallucination
+        # loops, where whisper repeats a phrase over silence.
+        # Order matters. strip first so markers are removed outright rather than
+        # collapsed to one; then collapse cycles, which catches the alternating
+        # A/B/A/B loops dedupe_consecutive cannot see; then dedupe the leftover
+        # identical pairs a cycle of two repeats leaves behind.
+        clean_cues = dedupe_consecutive(
+            collapse_repetition_loops(strip_nonspeech_cues(cues))
+        )
+        out_base = scratch / "out"
+        out_base.parent.mkdir(parents=True, exist_ok=True)
+        srt_path = out_base.with_suffix(".srt")
+        vtt_path = out_base.with_suffix(".vtt")
         srt_path.write_text(render_srt(clean_cues))
         vtt_path.write_text(render_vtt(clean_cues))
 
-        if job.kind == "tv":
-            base_key = f"{cfg.subtitles_prefix}/programs/{job.source_key}"
-        else:  # mp3 → mirror the audio/ basename
-            stem = Path(job.source_key).stem
-            base_key = f"{cfg.subtitles_prefix}/audio/{stem}"
+        base_key = subtitle_base_key(job.kind, job.source_key, cfg)
         srt_key = f"{base_key}.srt"
-        wasabi.upload_text(srt_path.read_text(), srt_key, cfg)
-        wasabi.upload_text(vtt_path.read_text(), f"{base_key}.vtt", cfg)
+        wasabi.upload_text(read_whisper_text(srt_path), srt_key, cfg)
+        wasabi.upload_text(read_whisper_text(vtt_path), f"{base_key}.vtt", cfg)
 
         if job.kind == "mp3":
-            matched = patch_mp3_subtitles(job.source_url, f"{_WASABI_BASE}/{srt_key}", cfg)
+            matched = patch_mp3_subtitles(job.source_url, wasabi_public_url(srt_key), cfg)
             if not matched:
-                logger.warning(
-                    "transcribe-item: patch_mp3_subtitles found no mp3_items row for "
-                    "source_url=%s source_key=%s — SRT/VTT uploaded but Directus not updated",
-                    job.source_url,
-                    job.source_key,
+                # A miss means the SRT is in the bucket but nothing points at it.
+                # This warned-and-continued for 575 jobs while every run reported
+                # success — which is how the URL-encoding bug survived 18 months.
+                # It is a failure, not a note.
+                raise RuntimeError(
+                    f"patch_mp3_subtitles matched no mp3_items row for "
+                    f"source_url={job.source_url!r} (source_key={job.source_key!r}). "
+                    f"SRT/VTT uploaded to {srt_key!r} but the row is unlinked."
                 )
 
         transition_transcribe_job(job_id, "done", srt_key=srt_key)
@@ -253,7 +412,7 @@ def build_channel_subtitles_flow(channel_slug: str) -> None:
     srt_key = f"{base_key}.srt"
     wasabi.upload_text(render_srt(cues), srt_key, cfg)
     wasabi.upload_text(render_vtt(cues), f"{base_key}.vtt", cfg)
-    patch_tv_channel_subtitles(channel_slug, f"{_WASABI_BASE}/{srt_key}", cfg)
+    patch_tv_channel_subtitles(channel_slug, wasabi_public_url(srt_key), cfg)
     logger.info("build-channel-subtitles: %s merged %d programs → %s",
                 channel_slug, len(rows), srt_key)
 
@@ -268,11 +427,17 @@ def dispatch_transcribe_flow(max_runs: int = 1000, max_retries: int = 3) -> None
     processed = 0
     with get_db() as db:
         while processed < max_runs:
+            # `code_version` records the commit of whoever CLAIMS. This path
+            # dispatches to `transcribe-item`, which may execute on the cluster
+            # pod or on the Mac, so the stamp is a claim-side fact, not proof of
+            # what ran. The per-worker claim in dispatch_worker.py — where claim
+            # and execution are the same process — is the authoritative one.
             row = db.execute(sa.text("""
                 UPDATE transcribe_jobs SET
                     stage = 'transcribing',
                     retry_count = retry_count + CASE WHEN stage = 'failed' THEN 1 ELSE 0 END,
-                    last_transition_at = now()
+                    last_transition_at = now(),
+                    code_version = :code_version
                 WHERE id = (
                     SELECT id FROM transcribe_jobs
                     WHERE stage = 'pending'
@@ -282,7 +447,7 @@ def dispatch_transcribe_flow(max_runs: int = 1000, max_retries: int = 3) -> None
                     LIMIT 1
                 )
                 RETURNING id
-            """), {"max_retries": max_retries}).first()
+            """), {"max_retries": max_retries, "code_version": code_version()}).first()
             db.commit()
             if row is None:
                 logger.info("dispatch-transcribe: queue empty after %d runs", processed)

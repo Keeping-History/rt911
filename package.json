@@ -5,25 +5,13 @@
 	"scripts": {
 		"dev": "pnpm --filter @rt911/frontend dev",
 		"build": "pnpm --filter @rt911/frontend build",
+		"preview:auth": "pnpm --filter @rt911/frontend preview:auth",
 		"test": "pnpm --filter @rt911/frontend test",
 		"lint": "pnpm --filter @rt911/frontend lint",
 		"setup": "node packages/backend/seed.mjs",
 		"db:gen-epg": "node packages/backend/gen-epg.mjs",
 		"bump:classicy": "pnpm update classicy --latest --recursive --silent",
 		"prepare": "husky"
-	},
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"es5-ext",
-			"esbuild"
-		],
-		"overrides": {
-			"brace-expansion": ">=5.0.6",
-			"undici": ">=7.28.0 <8",
-			"js-yaml": ">=4.2.0 <5",
-			"esbuild": ">=0.28.1",
-			"@babel/core": ">=7.29.6 <8"
-		}
 	},
 	"volta": {
 		"node": "25.2.0"

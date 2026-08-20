@@ -1,0 +1,8 @@
+1
+00:00:00,000 --> 00:00:04,960
+ American 77, turn left heading 270 and connect Porsche.
+
+2
+00:00:04,960 --> 00:00:08,080
+ 7 heading to March, American 7, nice and good day.
+

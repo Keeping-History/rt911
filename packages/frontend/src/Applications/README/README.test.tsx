@@ -32,7 +32,8 @@ vi.mock("classicy", () => ({
 	ClassicyControlGroup: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
 	ClassicyIcons: { applications: {} },
 	registerClassicyIcons: (icons: Record<string, unknown>) => icons,
-	registerAppEventHandler: () => {},
+	registerApp: () => {},
+	getAppManifest: () => undefined,
 	quitMenuItemHelper: () => ({ id: "quit" }),
 	useAppManager: (selector: (s: unknown) => unknown) =>
 		selector({

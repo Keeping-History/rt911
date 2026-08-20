@@ -1,5 +1,6 @@
 import {
 	ClassicyApp,
+	ClassicyBalloonHelp,
 	ClassicyBevelButton,
 	ClassicyButton,
 	ClassicyControlGroup,
@@ -8,12 +9,14 @@ import {
 	ClassicySlider,
 	ClassicySpinner,
 	ClassicyWindow,
+	describeAppState,
 	quitMenuItemHelper,
 	registerClassicyIcons,
 	useAppManager,
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import bookPng from "./book.png";
 import type React from "react";
@@ -59,6 +62,16 @@ function formatSeconds(s: number): string {
 const appName = "Time Machine";
 const appId = TIME_MACHINE_APP_ID;
 const appIcon = ICONS.applications.timeMachine.app;
+
+// Balloon-help content sourced from the manifest's state schema (the
+// TimeMachineDataSchema field .describe() text registered in
+// timeMachineSettings.ts) rather than hand-duplicated strings — read once at
+// module scope since the manifest registry doesn't change at runtime. Titles
+// are supplied here: describeAppState's own `title` is the raw field name,
+// not end-user text (see the classicy manifest handoff, §6).
+const skipBalloon = describeAppState(appId, "settings.skipMinutes");
+const stepBalloon = describeAppState(appId, "settings.stepSeconds");
+const scrubBalloon = describeAppState(appId, "settings.scrubSeconds");
 
 // Classicy persists each app's window entries (and which one was focused) to
 // localStorage, but the Settings/Bookmarks windows are gated behind ephemeral
@@ -283,6 +296,7 @@ export const TimeMachine: React.FC = () => {
 			icon={appIcon}
 			defaultWindow={`${appId}_main`}
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{showSettings && (
 				<ClassicyWindow
@@ -302,61 +316,94 @@ export const TimeMachine: React.FC = () => {
 				>
 					<div className={styles.settings}>
 						<ClassicyControlGroup label="Skip" backgroundColor="var(--color-system-02-)">
-							<ClassicySlider
-								id="controls_skip_minutes"
-								labelTitle="Duration:"
-								labelPosition="left"
-								labelSize="small"
-								value={settingsForm.skipMinutes}
-								min={1}
-								max={60}
-								step={1}
-								valueLabel={`${settingsForm.skipMinutes} min`}
-								onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-									setSettingsForm((f) => ({
-										...f,
-										skipMinutes: parseInt(e.target.value, 10),
-									}))
-								}
-							/>
+							{(() => {
+								const slider = (
+									<ClassicySlider
+										id="controls_skip_minutes"
+										labelTitle="Duration:"
+										labelPosition="left"
+										labelSize="small"
+										value={settingsForm.skipMinutes}
+										min={1}
+										max={60}
+										step={1}
+										valueLabel={`${settingsForm.skipMinutes} min`}
+										onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+											setSettingsForm((f) => ({
+												...f,
+												skipMinutes: parseInt(e.target.value, 10),
+											}))
+										}
+									/>
+								);
+								return skipBalloon ? (
+									<ClassicyBalloonHelp title="Skip distance" content={skipBalloon.content}>
+										{slider}
+									</ClassicyBalloonHelp>
+								) : (
+									slider
+								);
+							})()}
 						</ClassicyControlGroup>
 						<ClassicyControlGroup label="Step" backgroundColor="var(--color-system-02-)">
-							<ClassicySlider
-								id="controls_step_seconds"
-								labelTitle="Duration:"
-								labelPosition="left"
-								labelSize="small"
-								value={settingsForm.stepSeconds}
-								min={1}
-								max={600}
-								step={1}
-								valueLabel={formatSeconds(settingsForm.stepSeconds)}
-								onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-									setSettingsForm((f) => ({
-										...f,
-										stepSeconds: parseInt(e.target.value, 10),
-									}))
-								}
-							/>
+							{(() => {
+								const slider = (
+									<ClassicySlider
+										id="controls_step_seconds"
+										labelTitle="Duration:"
+										labelPosition="left"
+										labelSize="small"
+										value={settingsForm.stepSeconds}
+										min={1}
+										max={600}
+										step={1}
+										valueLabel={formatSeconds(settingsForm.stepSeconds)}
+										onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+											setSettingsForm((f) => ({
+												...f,
+												stepSeconds: parseInt(e.target.value, 10),
+											}))
+										}
+									/>
+								);
+								return stepBalloon ? (
+									<ClassicyBalloonHelp title="Step distance" content={stepBalloon.content}>
+										{slider}
+									</ClassicyBalloonHelp>
+								) : (
+									slider
+								);
+							})()}
 						</ClassicyControlGroup>
 						<ClassicyControlGroup label="Scrub" backgroundColor="var(--color-system-02-)">
-							<ClassicySlider
-								id="controls_scrub_seconds"
-								labelTitle="Duration:"
-								labelPosition="left"
-								labelSize="small"
-								value={settingsForm.scrubSeconds}
-								min={1}
-								max={60}
-								step={1}
-								valueLabel={formatSeconds(settingsForm.scrubSeconds)}
-								onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-									setSettingsForm((f) => ({
-										...f,
-										scrubSeconds: parseInt(e.target.value, 10),
-									}))
-								}
-							/>
+							{(() => {
+								const slider = (
+									<ClassicySlider
+										id="controls_scrub_seconds"
+										labelTitle="Duration:"
+										labelPosition="left"
+										labelSize="small"
+										value={settingsForm.scrubSeconds}
+										min={1}
+										max={60}
+										step={1}
+										valueLabel={formatSeconds(settingsForm.scrubSeconds)}
+										onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+											setSettingsForm((f) => ({
+												...f,
+												scrubSeconds: parseInt(e.target.value, 10),
+											}))
+										}
+									/>
+								);
+								return scrubBalloon ? (
+									<ClassicyBalloonHelp title="Scrub distance" content={scrubBalloon.content}>
+										{slider}
+									</ClassicyBalloonHelp>
+								) : (
+									slider
+								);
+							})()}
 						</ClassicyControlGroup>
 						<div className={styles.settingsButtons}>
 							<ClassicyButton onClickFunc={() => setShowSettings(false)}>
@@ -424,9 +471,9 @@ export const TimeMachine: React.FC = () => {
 				zoomable={false}
 				scrollable={false}
 				collapsable={true}
-				initialSize={[380, 90]}
+				initialSize={[380, 105]}
 				initialPosition={[300, 200]}
-				minimumSize={[340, 130]}
+				minimumSize={[380, 105]}
 				modal={false}
 				appMenu={appMenu}
 			>

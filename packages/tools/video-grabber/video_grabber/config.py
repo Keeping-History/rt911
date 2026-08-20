@@ -31,12 +31,22 @@ class Config:
     anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
     summarize_model: str = field(default_factory=lambda: os.getenv("SUMMARIZE_MODEL", "claude-haiku-4-5"))
     summarize_tier: str = field(default_factory=lambda: os.getenv("SUMMARIZE_TIER", "llm-extract"))
+    # Party identification is judgment-heavy; the summarizer's haiku default is
+    # too light for deciding who is speaking on a garbled tape.
+    parties_model: str = field(default_factory=lambda: os.getenv("PARTIES_MODEL", "claude-sonnet-5"))
+    enhance_chain: str = field(default_factory=lambda: os.getenv("ENHANCE_CHAIN", ""))
+    deep_filter_bin: str = field(
+        default_factory=lambda: os.getenv("DEEP_FILTER_BIN", "/usr/local/bin/deep-filter")
+    )
     summarize_max_units: int = field(default_factory=lambda: _int("SUMMARIZE_MAX_UNITS", 3))
     summarize_concurrency: int = field(default_factory=lambda: _int("SUMMARIZE_CONCURRENCY", 8))
 
     # --- Audio transcription (whisper.cpp) ---
     whisper_bin: str = field(default_factory=lambda: os.getenv("WHISPER_BIN", "whisper-cli"))
     whisper_model: str = field(default_factory=lambda: os.getenv("WHISPER_MODEL", "/opt/models/ggml-medium.en.bin"))
+    vad_model: str = field(default_factory=lambda: os.getenv("VAD_MODEL", "/opt/models/ggml-silero-v5.1.2.bin"))
+    chunk_seconds: int = field(default_factory=lambda: _int("TRANSCRIBE_CHUNK_SECONDS", 600))
+    chunk_overlap_seconds: int = field(default_factory=lambda: _int("TRANSCRIBE_CHUNK_OVERLAP_SECONDS", 5))
     whisper_threads: int = field(default_factory=lambda: _int("WHISPER_THREADS", 4))
     subtitles_prefix: str = field(default_factory=lambda: os.getenv("SUBTITLES_PREFIX", "subtitles"))
 

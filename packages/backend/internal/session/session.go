@@ -133,6 +133,15 @@ type outMsg struct {
 	Direction string        `json:"direction,omitempty"`
 	Kind      string        `json:"kind,omitempty"`
 	MessageID int           `json:"message_id,omitempty"`
+	// Action/App ride room_command: Action is one of model.RoomAction*, App is
+	// the Classicy app id a "focus" action targets. The jump target rides the
+	// existing Time field and the note rides Msg.
+	Action string `json:"action,omitempty"`
+	App    string `json:"app,omitempty"`
+	// Target/On ride a room_command with action "lock". On is a pointer so an
+	// unlock (false) is transmitted rather than dropped by omitempty.
+	Target string `json:"target,omitempty"`
+	On     *bool  `json:"on,omitempty"`
 	// Cleared rides chat_cleared: how many messages the clear marked. Purely
 	// informational (the client resets on the frame's arrival, not its count),
 	// so omitempty dropping a zero is harmless -- clearing an already-empty
@@ -158,6 +167,9 @@ type Session struct {
 	paused        bool
 	formatFilter  map[string]struct{} // nil = send all formats
 	subscriptions map[string]struct{} // opt-in delivery channels (e.g. "pager")
+	// room is the teacher-controlled room this session follows (a playlist id),
+	// or "" for none. Guarded by mu like every other session field.
+	room string
 
 	// Per-channel look-ahead high-water marks: the exclusive upper edge of the
 	// last window sent on each channel. Channels are subscribed at different
@@ -178,6 +190,10 @@ type Session struct {
 	// loaded once into memory (SetSchedules) and DueBetween is a pure filter --
 	// so there is no window/lead tuning, just the half-open bound itself.
 	chatHorizon time.Time
+
+	// mp3MetaSent records that this session has already had its one mp3_meta
+	// frame. Guarded by mu. See SendMp3Meta for why it is one-shot.
+	mp3MetaSent bool
 
 	// usenetGroups is the set of newsgroups the client is currently viewing. The
 	// usenet channel is delivered only for these groups — a group can hold millions
@@ -200,6 +216,7 @@ type Session struct {
 	// All guarded by mu.
 	userID       string
 	userName     string
+	userProfile  chat.UserProfile
 	profiles     []chat.Profile
 	beacons      map[int]chat.Beacon
 	phases       map[int][]chat.Phase
@@ -384,6 +401,65 @@ func (s *Session) SendMp3History(t time.Time, items []model.MediaItem) {
 	s.send_(outMsg{Type: "mp3_history", Time: t.Format(time.RFC3339), Items: items})
 }
 
+// Mp3MetaMessage is the one-shot mp3_meta frame: the Radio Traffic metadata for
+// every approved recording, keyed by item id.
+//
+// Per-item metadata only. The tag vocabulary is byte-identical for every session
+// on the server, so pushing a copy of it down each socket is pure waste; it is
+// served by GET /mp3/tags instead and cached by the browser. There is
+// deliberately no vocabulary field here.
+//
+// It rides its own envelope rather than outMsg because Items is an id-keyed map,
+// not the ordered []MediaItem every other channel's frame carries — the client
+// joins it onto items it already holds, so order means nothing.
+type Mp3MetaMessage struct {
+	Type string `json:"type"`
+	// Generation is the cache build this metadata came from, and GET /mp3/tags
+	// returns the same value for the same build. Without it a client can end up
+	// holding a vocabulary from build N and item tags from build N+1, and render
+	// a chip on a card that its own filter tree has no checkbox for. With it the
+	// mismatch is visible and the client refetches.
+	Generation string                 `json:"generation"`
+	Items      map[int]model.ItemMeta `json:"items"`
+}
+
+// SendMp3Meta delivers the mp3_meta frame — once per session, never again.
+//
+// The one-shot is the entire point of the frame's existence. mp3_history carries
+// the whole ~755-item back catalogue and is re-sent wholesale on every subscribe,
+// init and seek; at ~2 KB of metadata per item, folding this into it would put
+// ~1.5 MB of msgpack on every Time Machine scrub. The metadata is immutable
+// historical reference data with no time dimension at all, so a seek cannot
+// change any of it and re-sending it could only ever cost bandwidth.
+//
+// Unsubscribe deliberately does not clear the flag. A client that unsubscribes
+// still holds the metadata it was sent, and resubscribing is a UI toggle — it
+// must not cost 1.5 MB.
+func (s *Session) SendMp3Meta(generation string, items map[int]model.ItemMeta) {
+	s.mu.Lock()
+	if s.mp3MetaSent {
+		s.mu.Unlock()
+		return
+	}
+	s.mp3MetaSent = true
+	s.mu.Unlock()
+
+	s.sendFrame("mp3_meta", Mp3MetaMessage{
+		Type:       "mp3_meta",
+		Generation: generation,
+		Items:      items,
+	})
+}
+
+// Mp3MetaSent reports whether the mp3_meta frame has already gone out. Lets the
+// handler skip the Redis read and the ~1.5 MB decode behind it on every seek,
+// rather than relying on SendMp3Meta to drop the result afterwards.
+func (s *Session) Mp3MetaSent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.mp3MetaSent
+}
+
 // SendNews delivers a batch of news items at time t on the news channel. Like
 // mp3, news reuses the MediaItem shape and the Items field, with a distinct
 // "news" type so the client routes it to the News app. No frame for an empty batch.
@@ -485,6 +561,85 @@ func (s *Session) SendAlerts(t time.Time, items []model.AlertItem) {
 		return
 	}
 	s.send_(outMsg{Type: "alerts", Time: t.Format(time.RFC3339), Alerts: items})
+}
+
+// PushAlert delivers an operator-pushed alert to this session immediately,
+// regardless of the alert's own scheduled start_date. No-op when the session
+// has not subscribed to the alerts channel or has not initialised yet.
+//
+// The stamp is deliberate. The client reveal-gates alerts by start_date against
+// its own virtual clock (partitionByDue in MediaStreamProvider), and every
+// session sits at a different instant unless forced clock mode is on — so a
+// push carrying the row's real start_date would land in most clients' future
+// buffer and never show. Rewriting the copy to this session's own virtual time
+// is what makes "push this alert now" mean now, for each client.
+func (s *Session) PushAlert(item model.AlertItem) {
+	s.mu.Lock()
+	_, subscribed := s.subscriptions[ChannelAlerts]
+	vt := s.virtualTime
+	s.mu.Unlock()
+	if !subscribed || vt.IsZero() {
+		return
+	}
+	item.StartDate = vt
+	s.SendAlerts(vt, []model.AlertItem{item})
+}
+
+// JoinRoom puts this session in a teacher-controlled room, replacing any
+// previous membership. The room id is the playlist the student is following;
+// it is opaque here (see model.RoomCommand). An empty id leaves the room.
+//
+// Joining replays the room's last-known control state (see Hub.RoomState) as
+// ordinary room_command frames, so a student who connects — or reconnects —
+// after the teacher jumped, locked, or pushed a definition update still
+// converges with the class. The client applies commands idempotently, so a
+// re-join that replays state it already holds is harmless.
+func (s *Session) JoinRoom(room string) {
+	s.mu.Lock()
+	s.room = room
+	s.mu.Unlock()
+	if room == "" || s.hub == nil {
+		return
+	}
+	for _, cmd := range s.hub.RoomState(room) {
+		s.SendRoomCommand(cmd)
+	}
+}
+
+// LeaveRoom drops this session's room membership.
+func (s *Session) LeaveRoom() { s.JoinRoom("") }
+
+// Room reports the session's current room, or "" when it is in none.
+func (s *Session) Room() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.room
+}
+
+// SendRoomCommand relays one live teacher action to this client.
+//
+// The room is not re-checked here: the hub already matched membership, and
+// re-reading it would only reintroduce a race with a concurrent JoinRoom
+// without preventing anything — the command was addressed to the room the
+// session was in when the hub looked.
+func (s *Session) SendRoomCommand(cmd model.RoomCommand) {
+	out := outMsg{Type: "room_command", Action: cmd.Action}
+	switch cmd.Action {
+	case model.RoomActionJump:
+		out.Time = cmd.Time.UTC().Format(time.RFC3339)
+	case model.RoomActionFocus:
+		out.App = cmd.App
+	case model.RoomActionMessage:
+		out.Msg = cmd.Message
+	case model.RoomActionLock:
+		out.Target = cmd.Target
+		on := cmd.On
+		out.On = &on
+	case model.RoomActionReload:
+		// No payload: the client re-fetches the published definition from
+		// Directus itself — the definition never rides this wire.
+	}
+	s.send_(out)
 }
 
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the
@@ -672,6 +827,25 @@ func (s *Session) SetUserName(name string) {
 	s.mu.Lock()
 	s.userName = name
 	s.mu.Unlock()
+}
+
+// SetUserProfile records what buddies know about the student beyond their
+// name. Called at connect and again when the chat channel is subscribed, so
+// opening IM Buddies picks up an edit made moments earlier in the Account app.
+// A zero value is fine -- the composer then omits the block entirely.
+func (s *Session) SetUserProfile(p chat.UserProfile) {
+	s.mu.Lock()
+	s.userProfile = p
+	s.mu.Unlock()
+}
+
+// identity returns how buddies address this student and what they know about
+// them. Both are refreshed on chat subscribe, so callers must read them at use
+// time rather than caching a copy from connect.
+func (s *Session) identity() (string, chat.UserProfile) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.userName, s.userProfile
 }
 
 func (s *Session) SetProfiles(p []chat.Profile) {
@@ -875,6 +1049,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 	s.mu.Lock()
 	userID, vTime, profiles := s.userID, s.virtualTime, s.profiles
 	userName := s.userName
+	userProfile := s.userProfile
 	beacons, phases := s.beacons, s.phases
 	bcastSources := s.bcastSources
 	s.recentSends = append(s.recentSends, now)
@@ -945,6 +1120,7 @@ func (s *Session) ChatSend(profileID int, body string) {
 	// in distress while telling a distressed one it is opening the conversation.
 	job.Distress = decision.Outcome == "escalate"
 	job.UserName = userName
+	job.UserProfile = userProfile
 	job.Deliver = s.chatDeliver(userID, profileID, vTime, job.Kind)
 
 	gen := s.hub.Generator()
@@ -1154,6 +1330,12 @@ func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID str
 			}
 		}
 
+		// A proactive beat addresses the student exactly as a reply does. This
+		// path never set UserName at all, so until now a buddy that messaged
+		// you first did not know your name -- the same bug the reply path
+		// already fixed.
+		userName, userProfile := s.identity()
+
 		switch sc.Kind {
 		case "static":
 			s.deliverStaticBeat(ctx, userID, sc.ProfileID, t, sc.Text)
@@ -1168,6 +1350,8 @@ func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID str
 			s.send_(outMsg{Type: "chat_typing", Profile: sc.ProfileID})
 			job := buildChatJob(userID, profile, phases, beacons, sc.Prompt, "scheduled", true, t,
 				digest, recentPassages, live, timeline, history, nil)
+			job.UserName = userName
+			job.UserProfile = userProfile
 			job.Deliver = s.chatDeliver(userID, sc.ProfileID, t, job.Kind)
 			gen := s.hub.Generator()
 			if gen == nil || !gen.Enqueue(job) {
@@ -1589,17 +1773,27 @@ func (s *Session) dueBeats(t time.Time) []chat.Schedule {
 // field names, so the wire keys (and the frontend TS interfaces) stay identical.
 // time.Time fields encode as the msgpack timestamp extension; the client decodes
 // them back to ISO strings.
-func encodeMsg(m outMsg) ([]byte, error) {
+// encodeFrame msgpack-encodes any outbound frame, with SetCustomStructTag("json")
+// so the json tags are the wire field names (hard rule #8).
+func encodeFrame(frame any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
 	enc.SetCustomStructTag("json")
-	if err := enc.Encode(m); err != nil {
+	if err := enc.Encode(frame); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-func (s *Session) send_(m outMsg) {
+func encodeMsg(m outMsg) ([]byte, error) { return encodeFrame(m) }
+
+func (s *Session) send_(m outMsg) { s.sendFrame(m.Type, m) }
+
+// sendFrame is the single outbound path. Nearly every frame is an outMsg and
+// goes through send_; mp3_meta has its own envelope (an id-keyed map, not the
+// []MediaItem outMsg carries) and comes here directly. typ is passed separately
+// only so the drop warning can name what was dropped.
+func (s *Session) sendFrame(typ string, frame any) {
 	// Don't write to a closed session.
 	select {
 	case <-s.done:
@@ -1607,7 +1801,7 @@ func (s *Session) send_(m outMsg) {
 	default:
 	}
 
-	data, err := encodeMsg(m)
+	data, err := encodeFrame(frame)
 	if err != nil {
 		return
 	}
@@ -1616,7 +1810,7 @@ func (s *Session) send_(m outMsg) {
 	case s.send <- data:
 	case <-s.done:
 	default:
-		s.logger.Warn("send buffer full, dropping message", "type", m.Type)
+		s.logger.Warn("send buffer full, dropping message", "type", typ)
 	}
 }
 

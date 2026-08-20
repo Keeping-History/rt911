@@ -8,6 +8,15 @@ Guidance for AI coding assistants working in this Go service. Read [`SPEC.md`](.
 
 A WebSocket streamer that drives a **virtual clock** per client and pushes `media_items` whose `start_date` falls in the current virtual second. Postgres (Directus-owned) is the source of truth; Redis is the per-second hot cache; one goroutine per session manages the clock and one shared `Hub` goroutine fans out 1 Hz ticks.
 
+Cross-pod delivery goes through [`internal/fanout`](./internal/fanout) — a typed
+Redis pub/sub bus. The streamer runs as N replicas, so anything originating on a
+single pod (an operator's HTTP call, a teacher's command) reaches only that
+pod's sessions unless it is republished. The bus carries **no persistence and no
+delivery guarantee**: a pod that is down for the publish never sees the message,
+which is why `internal/clock` keeps its own Redis key for boot recovery and uses
+the bus only for the live edge. Anything a late joiner must still observe has to
+persist separately — don't add persistence to the bus, add it beside the bus.
+
 Module: `classicy/streamer` (see [`go.mod`](./go.mod)).
 Entrypoint: [`cmd/server/main.go`](./cmd/server/main.go).
 All non-entry code lives under [`internal/`](./internal) and is intentionally not importable from outside this module.
@@ -108,6 +117,25 @@ Pager is the reference implementation of an opt-in side channel that lives in it
 2. Add it to the `selectFrom` constant in [`internal/db/postgres.go`](./internal/db/postgres.go) **and** the `rows.Scan(...)` call in `queryItems`. Order matters — keep them aligned.
 3. If nullable, scan into a `*string` / `*int` local and `derefStr` it.
 4. Update the field list in `seed.mjs` so fresh Directus installs get it.
+
+### Provision the CMS `pages` collections
+
+[`apply-pages-schema.mjs`](./apply-pages-schema.mjs) provisions the `pages` /
+`page_authors` collections (see [`../../plans/2026-08-06-cms-pages-design.md`](../../plans/2026-08-06-cms-pages-design.md)),
+reading its definitions from [`pages-collections.mjs`](./pages-collections.mjs). Dry run
+by default, `--apply` to commit, `--verify` to assert the live schema still matches.
+Like `apply-chat-schema.mjs`, it is deliberately independent of `seed.mjs` — that script
+bulk-imports fixture data on import, so it must never be run to add a collection.
+
+Two things that bite:
+
+- **`--apply` creates missing collections wholesale and cannot add a field to an existing
+  one.** There is no `POST /fields` path. Add a field to `pages-collections.mjs` and
+  `--apply` reports "already present, skipping" while `--verify` reports it MISSING —
+  no mode reconciles that. Add the field by hand via `POST /fields/<collection>`.
+- **The public read on `pages` uses an explicit field list**, not `["*"]`, to keep the
+  `user_created` / `user_updated` UUIDs private. Any new field must be added to
+  `PAGES_PUBLIC_FIELDS` or it is invisible to the frontend.
 
 ---
 

@@ -174,6 +174,7 @@ describe("categoryFlag (3D shader instance category)", () => {
 	it("maps each corpus to its shader category", () => {
 		expect(categoryFlag("AA11")).toBe(1); // notable
 		expect(categoryFlag("GOFER06")).toBe(2); // observer
+		expect(categoryFlag("AF1")).toBe(2); // presidential — observer-styled
 		expect(categoryFlag("RDR-00042")).toBe(3); // anonymous radar traffic
 		expect(categoryFlag("WN367")).toBe(0); // identified airline flight
 	});

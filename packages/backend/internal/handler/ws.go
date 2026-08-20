@@ -39,6 +39,14 @@ type inMsg struct {
 	Time string `json:"time,omitempty"`
 }
 
+// maxRoomIDLen bounds a client-supplied room id. Playlist ids are short; this
+// is only a guard against a client parking megabytes in a session field.
+const maxRoomIDLen = 128
+
+type roomMsg struct {
+	Room string `json:"room"`
+}
+
 // filterMsg carries a format whitelist from the client.
 // Formats nil or empty means "send all formats".
 type filterMsg struct {
@@ -158,6 +166,7 @@ type ProfileCache struct {
 	phases       map[int][]chat.Phase
 	schedules    []chat.Schedule
 	bcastSources []chat.BroadcastSource
+	userFields   []chat.UserField
 }
 
 func NewProfileCache() *ProfileCache { return &ProfileCache{} }
@@ -221,6 +230,21 @@ func (c *ProfileCache) Schedules() []chat.Schedule {
 	return c.schedules
 }
 
+// SetUserFields installs which directus_users columns buddies may know about
+// the signed-in user. Call once at boot, alongside Set and SetPhaseData.
+func (c *ProfileCache) SetUserFields(fields []chat.UserField) {
+	c.mu.Lock()
+	c.userFields = fields
+	c.mu.Unlock()
+}
+
+// UserFields returns the exposure list installed by SetUserFields.
+func (c *ProfileCache) UserFields() []chat.UserField {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.userFields
+}
+
 // NewWSHandler returns an http.HandlerFunc that upgrades connections to WebSocket
 // and drives a session for each client.
 func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sources *db.SourcesCache, chatProfiles *ProfileCache, trustedOrigins *OriginAllowlist, logger *slog.Logger) http.HandlerFunc {
@@ -273,7 +297,6 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 			} else {
 				lookupCtx, lookupCancel := context.WithTimeout(r.Context(), 2*time.Second)
 				uid, name, err := db.LookupSessionUser(lookupCtx, pool, token)
-				lookupCancel()
 				if err != nil {
 					logger.Warn("directus session lookup failed", "error", err)
 				} else if uid != "" {
@@ -282,14 +305,26 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 					// only other name in its own persona -- Carol, written as
 					// "Danny's aunt", greeted every student as Danny.
 					sess.SetUserName(name)
+					// Bounded by the same lookupCtx as the identity read
+					// above, and non-fatal for the same reason: a slow or
+					// failed profile read must leave the user signed in and
+					// every other channel working, not reject the connection.
+					if fields := chatProfiles.UserFields(); len(fields) > 0 {
+						profile, err := chat.LoadUserProfile(lookupCtx, pool, uid, fields)
+						if err != nil {
+							logger.Warn("chat user profile load failed", "error", err)
+						} else {
+							sess.SetUserProfile(profile)
+						}
+					}
 				}
+				lookupCancel()
 			}
 		}
 		sess.SetProfiles(chatProfiles.Get())
 		beacons, phases := chatProfiles.PhaseData()
 		sess.SetPhaseData(beacons, phases)
 		sess.SetSchedules(chatProfiles.Schedules())
-		sess.SetBroadcastSources(chatProfiles.BroadcastSources())
 		sess.SetBroadcastSources(chatProfiles.BroadcastSources())
 
 		hub.Register(sess)
@@ -469,6 +504,23 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 				}
 				sess.Subscribe(cmsg.Channel)
 				if cmsg.Channel == session.ChannelChat {
+					// Opening IM Buddies is the natural moment to pick up a
+					// profile edit made moments earlier in the Account app. A
+					// failed re-read KEEPS the previous value rather than
+					// blanking it: a buddy that forgets your name because one
+					// query timed out is worse than a slightly stale one.
+					if uid := sess.UserID(); uid != "" {
+						if fields := chatProfiles.UserFields(); len(fields) > 0 {
+							subCtx, subCancel := context.WithTimeout(r.Context(), 2*time.Second)
+							profile, err := chat.LoadUserProfile(subCtx, pool, uid, fields)
+							subCancel()
+							if err != nil {
+								logger.Warn("chat user profile refresh failed", "error", err)
+							} else {
+								sess.SetUserProfile(profile)
+							}
+						}
+					}
 					sess.SendChatState()
 					sess.SendChatRoster()
 					continue
@@ -478,6 +530,24 @@ func NewWSHandler(hub *session.Hub, rdb *goredis.Client, pool *pgxpool.Pool, sou
 				if t, ok := sess.VirtualTime(); ok {
 					sendChannelSnapshot(r, sess, pool, rdb, cmsg.Channel, t, logger)
 				}
+
+			case "join_room":
+				var rmsg roomMsg
+				if err := json.Unmarshal(raw, &rmsg); err != nil {
+					sess.SendError("malformed join_room message")
+					continue
+				}
+				// Bounded because it is echoed back in no frame but is held per
+				// session and compared on every broadcast; an unbounded id is
+				// free memory for a client to waste.
+				if len(rmsg.Room) > maxRoomIDLen {
+					sess.SendError("room id too long")
+					continue
+				}
+				sess.JoinRoom(rmsg.Room)
+
+			case "leave_room":
+				sess.LeaveRoom()
 
 			case "unsubscribe":
 				var cmsg channelMsg
@@ -615,10 +685,15 @@ func sendPagerSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.Poo
 // session if it is subscribed to the mp3 channel. Unlike pager, mp3 is durational
 // audio, so the snapshot returns the recording playing at t (start ≤ t ≤ end) and
 // the Radio app resumes it mid-file via the jump offset.
-func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, t time.Time, logger *slog.Logger) {
+func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
 	if !sess.Subscribed(session.ChannelMp3) {
 		return
 	}
+
+	// First, and only ever once — see sendMp3Meta. Ahead of the item frames so
+	// the client has the metadata for anything it is about to be handed.
+	sendMp3Meta(r, sess, rdb, logger)
+
 	items, err := db.CurrentMp3Items(r.Context(), pool, t)
 	if err != nil {
 		logger.Warn("current mp3 items query failed", "error", err)
@@ -636,6 +711,40 @@ func sendMp3Snapshot(r *http.Request, sess *session.Session, pool *pgxpool.Pool,
 		return
 	}
 	sess.SendMp3History(t, history)
+}
+
+// sendMp3Meta delivers the one-shot mp3_meta frame. Called from the same
+// init/seek/subscribe path as the item frames above, but sends on the first of
+// those only: the metadata is corpus-wide, immutable and has no time dimension,
+// so a seek cannot change any of it, while re-sending would cost ~1.5 MB per
+// scrub. Session.SendMp3Meta is what enforces the once; the Mp3MetaSent check
+// here is what keeps a seek from paying for the Redis read and the decode to
+// produce a frame that would then be dropped.
+//
+// Served from the warm Redis snapshot, never Postgres — this runs on every seek
+// of every session, and the underlying query joins the whole tag graph.
+func sendMp3Meta(r *http.Request, sess *session.Session, rdb *goredis.Client, logger *slog.Logger) {
+	if sess.Mp3MetaSent() {
+		return
+	}
+	meta, err := cache.LoadMp3Meta(r.Context(), rdb)
+	if err != nil {
+		logger.Warn("mp3 metadata load failed", "error", err)
+		return
+	}
+	// No snapshot built yet (a subscribe that raced the first warm, or a schema
+	// without the metadata columns). Send nothing rather than an empty corpus:
+	// the frame is one-shot, so an empty one would be cached as the truth for the
+	// life of the connection.
+	if meta == nil {
+		return
+	}
+	items, err := meta.Items()
+	if err != nil {
+		logger.Warn("mp3 metadata decode failed", "error", err)
+		return
+	}
+	sess.SendMp3Meta(meta.Generation, items)
 }
 
 // sendNewsSnapshot delivers the complete news back catalogue — every article
@@ -875,7 +984,7 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 	case session.ChannelPager:
 		sendPagerSnapshot(r, sess, pool, t, logger)
 	case session.ChannelMp3:
-		sendMp3Snapshot(r, sess, pool, t, logger)
+		sendMp3Snapshot(r, sess, pool, rdb, t, logger)
 	case session.ChannelNews:
 		sendNewsSnapshot(r, sess, pool, t, logger)
 	case session.ChannelUsenet:
@@ -893,7 +1002,7 @@ func sendChannelSnapshot(r *http.Request, sess *session.Session, pool *pgxpool.P
 // subscribed to. Called from init and seek; each helper no-ops if unsubscribed.
 func sendSubscribedSnapshots(r *http.Request, sess *session.Session, pool *pgxpool.Pool, rdb *goredis.Client, t time.Time, logger *slog.Logger) {
 	sendPagerSnapshot(r, sess, pool, t, logger)
-	sendMp3Snapshot(r, sess, pool, t, logger)
+	sendMp3Snapshot(r, sess, pool, rdb, t, logger)
 	sendNewsSnapshot(r, sess, pool, t, logger)
 	sendUsenetSnapshot(r, sess, pool, t, logger)
 	sendFlightsSnapshot(r, sess, rdb, t, logger)

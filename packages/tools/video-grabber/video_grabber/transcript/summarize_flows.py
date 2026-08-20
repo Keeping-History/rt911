@@ -34,24 +34,52 @@ from video_grabber.transcript.summarize import (
 )
 
 
-def anthropic_completer(cfg: Config):
-    """Build a `complete(system, user) -> str` bound to the configured model.
+# max_tokens caps thinking AND reply text together, and the newer models think by
+# default when `thinking` is unset. The summarizer's own replies are a couple of
+# hundred tokens, so 400 looked right — but it is a ceiling, not a reservation:
+# you are billed for tokens actually emitted, so a generous cap costs nothing on
+# a model that does not think, and is the difference between a working call and
+# an empty string on one that does. claude-haiku-4-5 (the default) does not think;
+# SUMMARIZE_MODEL can point anywhere, which is why the default is sized for the
+# thinking case. See PARTIES_MAX_TOKENS in parties/flows.py for the measurement.
+DEFAULT_MAX_TOKENS = 4000
+
+
+def anthropic_completer(cfg: Config, *, model: str | None = None,
+                        max_tokens: int = DEFAULT_MAX_TOKENS):
+    """Build a `complete(system, user) -> str` bound to a model.
 
     Wrapped rather than passed as a client so summarize.py stays free of the SDK
     and its rules — every judgment in there is unit-testable without a key.
+
+    Defaults to the summarizer's model; party identification passes its own,
+    since it needs more reasoning and a larger JSON reply.
     """
     import anthropic
 
     client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
+    chosen = model or cfg.summarize_model
 
     def complete(system: str, user: str) -> str:
         msg = client.messages.create(
-            model=cfg.summarize_model,
-            max_tokens=400,
+            model=chosen,
+            max_tokens=max_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
         )
-        return "".join(b.text for b in msg.content if b.type == "text")
+        text = "".join(b.text for b in msg.content if b.type == "text")
+        if not text.strip() and msg.stop_reason == "max_tokens":
+            # Returning "" here is how this failed silently before: the caller
+            # cannot tell a truncated call from a model that had nothing to say,
+            # so the summarizer quietly degraded to mechanical condensation and
+            # party identification logged "did not return JSON". Name the cause.
+            raise ValueError(
+                f"model {chosen} returned no text: the whole max_tokens={max_tokens} "
+                f"budget went on thinking (stop_reason=max_tokens, blocks="
+                f"{[b.type for b in msg.content]}). Raise the budget rather than "
+                f"changing the prompt."
+            )
+        return text
 
     return complete
 

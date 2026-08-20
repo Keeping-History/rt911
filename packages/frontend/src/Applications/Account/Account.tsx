@@ -9,6 +9,9 @@ import {
 	quitMenuItemHelper,
 	registerClassicyIcons,
 } from "classicy";
+// Side effect: registers this app's manifest (registerApp) at import time.
+import "./AccountContext";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -153,6 +156,7 @@ export const Account: React.FC<AccountProps> = ({ hostnameForTest }) => {
 			icon={appIcon}
 			defaultWindow="account_main"
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			<ClassicyWindow
 				id="account_main"

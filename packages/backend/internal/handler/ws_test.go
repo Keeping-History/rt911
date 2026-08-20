@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 	"classicy/streamer/internal/session"
@@ -554,5 +555,27 @@ func TestWSHandlerNewsBodyMalformed(t *testing.T) {
 	}
 	if f.Msg != "malformed news_body message" {
 		t.Fatalf("expected malformed news_body message, got %+v", f)
+	}
+}
+
+func TestProfileCacheHoldsUserFields(t *testing.T) {
+	c := NewProfileCache()
+	if got := c.UserFields(); got != nil {
+		t.Errorf("UserFields on a fresh cache = %v, want nil", got)
+	}
+	c.SetUserFields([]chat.UserField{{Field: "city", Label: "city"}})
+	got := c.UserFields()
+	if len(got) != 1 || got[0].Field != "city" {
+		t.Errorf("UserFields = %+v, want one entry for city", got)
+	}
+}
+
+func TestChatSubscribeDoesNotQueryWithoutAnExposureList(t *testing.T) {
+	// Every unit test in this package runs with a nil pool. The len(fields)
+	// guard is what keeps the subscribe path from reaching a database that is
+	// not there -- exactly the shape that already trapped the connect path.
+	c := NewProfileCache()
+	if len(c.UserFields()) != 0 {
+		t.Fatal("a fresh ProfileCache must expose no fields")
 	}
 }

@@ -27,17 +27,25 @@ func newTestSession(t *testing.T) *Session {
 }
 
 // recvType drains one queued outbound message and returns its decoded envelope.
+// decodeFrame decodes one outbound frame off the wire. Split out of recvType so
+// tests that pull from s.send themselves (the cross-pod poll loop) decode the
+// same way rather than re-implementing the msgpack tag setup.
+func decodeFrame(t *testing.T, data []byte) outMsg {
+	t.Helper()
+	var m outMsg
+	dec := msgpack.NewDecoder(bytes.NewReader(data))
+	dec.SetCustomStructTag("json")
+	if err := dec.Decode(&m); err != nil {
+		t.Fatalf("decode outbound: %v", err)
+	}
+	return m
+}
+
 func recvType(t *testing.T, s *Session) outMsg {
 	t.Helper()
 	select {
 	case data := <-s.send:
-		var m outMsg
-		dec := msgpack.NewDecoder(bytes.NewReader(data))
-		dec.SetCustomStructTag("json")
-		if err := dec.Decode(&m); err != nil {
-			t.Fatalf("decode outbound: %v", err)
-		}
-		return m
+		return decodeFrame(t, data)
 	default:
 		t.Fatal("expected an outbound message, got none")
 		return outMsg{}
@@ -1764,6 +1772,33 @@ func TestTierRoutingSurvivesACrossedAssignment(t *testing.T) {
 	}
 	if len(tl) != 1 || tl[0].Text != "written later" {
 		t.Errorf("timeline = %+v, want the timeline passage", tl)
+	}
+}
+
+func TestSetUserProfileIsReadBackByIdentity(t *testing.T) {
+	s := &Session{}
+	s.SetUserName("Dave")
+	s.SetUserProfile(chat.UserProfile{Values: []chat.UserValue{{Label: "city", Text: "Columbus"}}})
+
+	name, profile := s.identity()
+	if name != "Dave" {
+		t.Errorf("identity name = %q, want %q", name, "Dave")
+	}
+	if len(profile.Values) != 1 || profile.Values[0].Text != "Columbus" {
+		t.Errorf("identity profile = %+v, want one value Columbus", profile.Values)
+	}
+}
+
+func TestSetUserProfileOverwritesRatherThanAppends(t *testing.T) {
+	// The chat-subscribe re-read replaces the profile wholesale. If it appended,
+	// a user who cleared a field would keep answering for it forever.
+	s := &Session{}
+	s.SetUserProfile(chat.UserProfile{Values: []chat.UserValue{{Label: "city", Text: "Columbus"}}})
+	s.SetUserProfile(chat.UserProfile{Values: []chat.UserValue{{Label: "city", Text: "Toledo"}}})
+
+	_, profile := s.identity()
+	if len(profile.Values) != 1 || profile.Values[0].Text != "Toledo" {
+		t.Errorf("identity profile = %+v, want exactly one value Toledo", profile.Values)
 	}
 }
 

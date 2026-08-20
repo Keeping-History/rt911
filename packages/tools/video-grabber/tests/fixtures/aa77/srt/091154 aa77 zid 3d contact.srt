@@ -1,0 +1,36 @@
+1
+00:00:00,000 --> 00:00:01,520
+ American dispatch, Jim McDonald.
+
+2
+00:00:01,520 --> 00:00:04,320
+ Indianapolis Center, did you get a hold of American 77 by chance?
+
+3
+00:00:04,320 --> 00:00:07,920
+ No, sir, but we have an unconfirmed report that the second airplane hit the World Trade Center.
+
+4
+00:00:09,920 --> 00:00:10,420
+ Say again.
+
+5
+00:00:11,520 --> 00:00:19,280
+ You know, we lost American 11 through hijacking, so American was the boss in the Los Angeles flight.
+
+6
+00:00:21,360 --> 00:00:26,560
+ All right, I can't really, I can't hear what you're saying there. You said American 11?
+
+7
+00:00:26,560 --> 00:00:34,400
+ Yes, we were hijacked. It was a Parson LA flight, and 77 is a Dulles LA flight,
+
+8
+00:00:35,040 --> 00:00:40,560
+ and we have an unconfirmed report a second airplane just flew into the World Trade Center.
+
+9
+00:00:40,560 --> 00:00:42,720
+ Thank you very much. Goodbye.
+

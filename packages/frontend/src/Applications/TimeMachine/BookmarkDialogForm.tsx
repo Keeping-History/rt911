@@ -1,4 +1,10 @@
-import { ClassicyButton, ClassicyPopUpMenu, ClassicySpinner } from "classicy";
+import {
+	ClassicyButton,
+	ClassicyForm,
+	ClassicyInput,
+	ClassicyPopUpMenu,
+	ClassicySpinner,
+} from "classicy";
 import type React from "react";
 import { useMemo, useState } from "react";
 import type { PersonalBookmarkInput } from "./bookmarksApi";
@@ -45,30 +51,26 @@ export const BookmarkDialogForm: React.FC<BookmarkDialogFormProps> = ({
 	};
 
 	return (
-		<div className={styles.dialog}>
-			<label className={styles.dialogField}>
-				Title
-				<input
-					aria-label="Title"
-					type="text"
-					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-					className={styles.timeInput}
-					style={{ width: "100%" }}
+		// The module's .dialog class keeps its layout; the form wrapper adds
+		// submit semantics so Enter in the title field saves.
+		<ClassicyForm className={styles.dialog} onSubmitFunc={handleSave}>
+			<div className={styles.dialogField}>
+				<ClassicyInput
+					id="bookmark-dialog-title"
+					labelTitle="Title"
+					prefillValue={title}
+					onChangeFunc={(e) => setTitle(e.target.value)}
 				/>
-			</label>
-			<label className={styles.dialogField}>
-				Category
-				<input
-					aria-label="Category"
-					type="text"
-					value={category}
+			</div>
+			<div className={styles.dialogField}>
+				<ClassicyInput
+					id="bookmark-dialog-category"
+					labelTitle="Category"
 					placeholder="General"
-					onChange={(e) => setCategory(e.target.value)}
-					className={styles.timeInput}
-					style={{ width: "100%" }}
+					prefillValue={category}
+					onChangeFunc={(e) => setCategory(e.target.value)}
 				/>
-			</label>
+			</div>
 			<div className={styles.dialogTime}>
 				<ClassicySpinner
 					id="bookmark-dialog-h"
@@ -116,10 +118,10 @@ export const BookmarkDialogForm: React.FC<BookmarkDialogFormProps> = ({
 			</div>
 			<div className={styles.settingsButtons}>
 				<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
-				<ClassicyButton isDefault={true} disabled={!canSave} onClickFunc={handleSave}>
+				<ClassicyButton isDefault={true} buttonType="submit" disabled={!canSave}>
 					Save
 				</ClassicyButton>
 			</div>
-		</div>
+		</ClassicyForm>
 	);
 };

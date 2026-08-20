@@ -89,4 +89,13 @@ describe("dropLandedPositions", () => {
 			dropLandedPositions([pos({ flight: "XX123" })], index, WHEELS_ON_MS * 2),
 		).toHaveLength(1);
 	});
+
+	it("explicit ground rows survive dropLandedPositions past the linger window", () => {
+		// AF1 overnight at SRQ: wheels-on long past, but the row says phase=ground —
+		// an explicit "still here", not a stale lingering flight.
+		const p = pos({ flight: "AF1", phase: "ground" });
+		const af1Index = indexFor("AF1", "2001-09-10", "2001-09-11T02:48:00Z");
+		const nowMs = Date.parse("2001-09-11T03:30:00Z"); // 42 min after wheels-on
+		expect(dropLandedPositions([p], af1Index, nowMs)).toHaveLength(1);
+	});
 });

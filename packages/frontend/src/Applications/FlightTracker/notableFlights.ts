@@ -24,3 +24,20 @@ export function isNotable(flight: string): boolean {
 export function isObserver(flight: string): boolean {
 	return OBSERVER_SET.has(flight);
 }
+
+// Air Force One (SAM 28000). Its own category — presidential, not a witness —
+// but rendered with the observer treatment (teal highlight, never clustered,
+// no crash semantics) until a dedicated presidential color exists. Copy and
+// badges key off isPresidential; map styling keys off isObserverStyled.
+export const PRESIDENTIAL_FLIGHTS = ["AF1"] as const;
+
+const PRESIDENTIAL_SET: ReadonlySet<string> = new Set(PRESIDENTIAL_FLIGHTS);
+
+export function isPresidential(flight: string): boolean {
+	return PRESIDENTIAL_SET.has(flight);
+}
+
+// The styling union: every flight the observer-colored highlight layers serve.
+export function isObserverStyled(flight: string): boolean {
+	return OBSERVER_SET.has(flight) || PRESIDENTIAL_SET.has(flight);
+}

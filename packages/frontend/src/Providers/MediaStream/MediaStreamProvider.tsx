@@ -15,9 +15,11 @@ import {
 	type ChatMessage,
 	type ChatStateReason,
 	type FlightPosition,
+	type ItemMeta,
 	MediaStreamContext,
 	type MediaItem,
 	type PagerItem,
+	type RoomCommand,
 	type UsenetItem,
 	type WeatherForecast,
 	type WeatherObservation,
@@ -31,10 +33,12 @@ import { drainDue, partitionByDue } from "./revealBuffer";
 import { keepInstantItem, keepMediaItem } from "./retention";
 import { shouldSeek } from "./seekDetection";
 import { virtualUtcMs } from "./virtualClock";
+import { playlistIdFromSearch } from "../Playlist/loadPlaylist";
 import { usePlaylist } from "../Playlist/PlaylistContext";
 import { playlistAppMeta } from "../Playlist/playlistApps";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { mergeLatestPerStation } from "./weatherMerge";
+import { reconnectDelayMs } from "./reconnectBackoff";
 import {
 	applyBodyFrame,
 	emptyBodyState,
@@ -90,6 +94,18 @@ interface WsMp3HistoryMessage {
 	items?: MediaItem[];
 }
 
+// The one-shot Radio Traffic metadata for the whole mp3 corpus, keyed by item
+// id. Sent once per session, before the first mp3 snapshot, and never resent —
+// not on seek, not on resubscribe. `items` is an id-keyed map rather than the
+// ordered list every other channel carries (the client joins it onto items it
+// already holds, so order means nothing) and rides INTEGER keys on the wire,
+// which msgpack decoding turns into the numeric properties of a plain object.
+interface WsMp3MetaMessage {
+	type: "mp3_meta";
+	generation?: string;
+	items?: Record<number, ItemMeta>;
+}
+
 interface WsNewsMessage {
 	type: "news";
 	items: MediaItem[];
@@ -101,6 +117,18 @@ interface WsNewsMessage {
 interface WsAlertsMessage {
 	type: "alerts";
 	alerts: AlertItem[];
+}
+
+// A live teacher command for the joined room. Relayed cross-pod by the streamer,
+// so it arrives regardless of which replica this client's socket landed on.
+interface WsRoomCommandMessage {
+	type: "room_command";
+	action: "jump" | "focus" | "message" | "lock" | "reload";
+	time?: string;
+	app?: string;
+	message?: string;
+	target?: "clock";
+	on?: boolean;
 }
 
 // usenet messages ride their own field (not items) and carry per-message newsgroup.
@@ -241,6 +269,7 @@ type WsIncomingMessage =
 	| WsPagerMessage
 	| WsMp3Message
 	| WsMp3HistoryMessage
+	| WsMp3MetaMessage
 	| WsNewsMessage
 	| WsAlertsMessage
 	| WsUsenetMessage
@@ -290,6 +319,11 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	const [pagerItems, setPagerItems] = useState<PagerItem[]>([]);
 	const [mp3Items, setMp3Items] = useState<MediaItem[]>([]);
 	const [mp3History, setMp3History] = useState<MediaItem[]>([]);
+	// Corpus-wide mp3 metadata from the one-shot mp3_meta frame. Deliberately
+	// absent from every buffer, tick and seek path below: it has no time
+	// dimension, so there is nothing for the reveal gate or retention to decide.
+	const [mp3Meta, setMp3Meta] = useState<Record<number, ItemMeta>>({});
+	const [mp3MetaGeneration, setMp3MetaGeneration] = useState<string | null>(null);
 	const [newsItems, setNewsItems] = useState<MediaItem[]>([]);
 	const [alertItems, setAlertItems] = useState<AlertItem[]>([]);
 	const [usenetItems, setUsenetItems] = useState<UsenetItem[]>([]);
@@ -400,6 +434,23 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 
 	const wsRef = useRef<WebSocket | null>(null);
 
+	// Bumping this re-runs the WebSocket effect, which is what actually performs a
+	// reconnect: the cleanup closes the dead socket and the fresh pass builds a new
+	// one, so `onopen`'s subscription replay is reached by exactly one code path
+	// whether the connection is the first or the fifth.
+	//
+	// The streamer is redeployed on every merge to main and each rollout drops
+	// every socket. Until this existed, `onclose` only flipped `connected` to
+	// false: nothing constructed a second socket, so that replay could only ever
+	// run at mount, and every later send() silently no-oped against a CLOSED
+	// socket (see `send`). That is why a Flight Tracker that had gone empty could
+	// not be recovered by seeking — the `seek` frame was swallowed too — and only
+	// a page reload brought flights back.
+	const [connectGen, setConnectGen] = useState(0);
+	// Consecutive failed attempts, reset by a successful open. Drives the backoff.
+	const reconnectAttempt = useRef(0);
+	const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 	// Live mirror of the clock's paused state for the WebSocket effect's onopen,
 	// which must assert pause on a connection opened while already paused.
 	// Reading `paused` there directly would go stale, and adding it to that
@@ -448,6 +499,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 	// long-lived socket closure, which needs the current value synchronously
 	// (state updates are not visible until the next render).
 	const [clockForced, setClockForced] = useState(false);
+	// Raised when a clock seek is dispatched, lowered by the mp3 frame that
+	// answers it — see seekInFlight on MediaStreamContextValue for why the clear
+	// listens to mp3_history as well.
+	const [seekInFlight, setSeekInFlight] = useState(false);
+	// Latest live teacher command for the joined room; see RoomCommand.
+	const [roomCommand, setRoomCommand] = useState<RoomCommand | null>(null);
 	const clockForcedRef = useRef(false);
 
 	// Snap the local clock to `iso` via the sanctioned setDateTimeFromUtc seam,
@@ -1106,6 +1163,10 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			// any in-flight pre-seek reply via the id-echo guard.
 			setWeatherForecastByZone({});
 			send({ type: "seek", time: new Date(dateTime).toISOString() });
+			// Every clock-following consumer is now holding stale positions until
+			// the fresh window lands. Raised here rather than in the on-connect
+			// seek below: that one has nothing on screen to invalidate.
+			setSeekInFlight(true);
 			// The old timeline's loop history is meaningless at the new instant.
 			sendFlightsHistoryRequest();
 			// The motion buffer rebuilds from single samples after a seek, so the
@@ -1153,12 +1214,20 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 			setConnected(true);
+			// A connection that opened is a connection that worked; the next outage
+			// starts its backoff from scratch rather than inheriting this one's.
+			reconnectAttempt.current = 0;
 			ws.send(
 				JSON.stringify({
 					type: "init",
 					time: new Date(utcMsRef.current).toISOString(),
 				}),
 			);
+			// Rejoin the teacher-controlled room. Same reason as the
+			// subscriptions below: room membership lives on the session, so a
+			// reconnect (or a failover onto another pod) starts with none.
+			const room = playlistIdFromSearch(window.location.search);
+			if (room) ws.send(JSON.stringify({ type: "join_room", room }));
 			// Re-establish channel subscriptions after a reconnect — the server
 			// does not remember subscriptions across connections.
 			if (pagerSubscribers.current.size > 0) {
@@ -1267,6 +1336,9 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 
 			if (msg.type === "mp3") {
+				// Before the empty-list guard: an mp3 frame carrying nothing still
+				// answers the seek, and returning early would strand the flag.
+				setSeekInFlight(false);
 				const incomingMp3 = (msg as WsMp3Message).items;
 				if (!incomingMp3 || incomingMp3.length === 0) return;
 				const { due, future } = partitionByDue(incomingMp3, now);
@@ -1281,10 +1353,24 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 
 			if (msg.type === "mp3_history") {
+				// Sent on every seek even when empty, unlike `mp3` — so this is the
+				// clear that fires when the new instant lands in a silent stretch.
+				setSeekInFlight(false);
 				// The full back-catalogue up to the snapshot instant. Replace wholesale
 				// (each frame is complete, and an empty one clears after a backward
 				// seek); skip the reveal buffer and retention — history is already past.
 				setMp3History((msg as WsMp3HistoryMessage).items ?? []);
+				return;
+			}
+
+			if (msg.type === "mp3_meta") {
+				// One frame per session, replaced wholesale — a reconnect is a new
+				// session and sends its own. No reveal buffer and no retention pass:
+				// this is reference data about 2001, not a window on the clock, so a
+				// finished clip still needs the entry that describes it.
+				const meta = msg as WsMp3MetaMessage;
+				setMp3Meta(meta.items ?? {});
+				setMp3MetaGeneration(meta.generation ?? null);
 				return;
 			}
 
@@ -1489,6 +1575,22 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 				return;
 			}
 
+			if (msg.type === "room_command") {
+				const m = msg as WsRoomCommandMessage;
+				// seq is what makes a repeated identical command observable —
+				// a teacher may focus the same app twice on purpose.
+				setRoomCommand((prev) => ({
+					action: m.action,
+					time: m.time,
+					app: m.app,
+					message: m.message,
+					target: m.target,
+					on: m.on,
+					seq: (prev?.seq ?? 0) + 1,
+				}));
+				return;
+			}
+
 			if (msg.type === "clock") {
 				const m = msg as WsClockMessage;
 				setForced(m.active);
@@ -1526,6 +1628,15 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			if (!active) return;
 			setConnected(false);
 			clearInterval(heartbeatId);
+			// Schedule the rebuild rather than doing it here: bumping connectGen
+			// re-runs this effect, whose cleanup closes this socket properly before
+			// the new one is made.
+			const delay = reconnectDelayMs(reconnectAttempt.current);
+			reconnectAttempt.current += 1;
+			reconnectTimer.current = setTimeout(() => {
+				reconnectTimer.current = null;
+				setConnectGen((g) => g + 1);
+			}, delay);
 		};
 
 		ws.onerror = () => {
@@ -1535,6 +1646,12 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 		return () => {
 			active = false;
 			clearInterval(heartbeatId);
+			// A pending retry must not outlive the provider, or it bumps state on an
+			// unmounted tree and resurrects the socket after teardown.
+			if (reconnectTimer.current !== null) {
+				clearTimeout(reconnectTimer.current);
+				reconnectTimer.current = null;
+			}
 			ws.onclose = null;
 			// Calling close() on a CONNECTING socket logs a browser error.
 			// Defer to onopen so it can close cleanly once the handshake finishes.
@@ -1545,11 +1662,13 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			}
 			wsRef.current = null;
 		};
-		// Intentionally runs once on mount; utcMsRef carries the live value.
-		// sendFlightsHistoryRequest/sendFlightsSeedRequest/sendWeatherForecastRequest/
-		// setForced/applyForcedTime are all stable (empty or `send`-only deps), so
-		// listing them satisfies the lint without re-running the effect.
+		// Re-runs only when connectGen changes (a scheduled reconnect); utcMsRef
+		// carries the live value. sendFlightsHistoryRequest/sendFlightsSeedRequest/
+		// sendWeatherForecastRequest/setForced/applyForcedTime are all stable (empty
+		// or `send`-only deps), so listing them satisfies the lint without
+		// re-running the effect.
 	}, [
+		connectGen,
 		sendFlightsHistoryRequest,
 		sendFlightsSeedRequest,
 		sendWeatherForecastRequest,
@@ -1581,6 +1700,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerItems,
 			mp3Items,
 			mp3History: gatedMp3History,
+			mp3Meta,
+			mp3MetaGeneration,
 			newsItems,
 			alertItems,
 			usenetItems,
@@ -1624,6 +1745,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			seekInFlight,
+			roomCommand,
 			chatBuddies,
 			chatEnabled,
 			chatReason,
@@ -1641,6 +1764,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			pagerItems,
 			mp3Items,
 			gatedMp3History,
+			mp3Meta,
+			mp3MetaGeneration,
 			newsItems,
 			alertItems,
 			usenetItems,
@@ -1682,6 +1807,8 @@ export const MediaStreamProvider: FC<MediaStreamProviderProps> = ({
 			unsubscribeWeather,
 			requestWeatherForecast,
 			clockForced,
+			seekInFlight,
+			roomCommand,
 			chatBuddies,
 			chatEnabled,
 			chatReason,

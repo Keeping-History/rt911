@@ -1,0 +1,8 @@
+1
+00:00:00,000 --> 00:00:03,040
+ American 77, clear direct to Thomas.
+
+2
+00:00:03,040 --> 00:00:05,640
+ Clear direct to Thomas, American 77, thank you sir.
+

@@ -42,7 +42,7 @@ func TestSourcesCacheServesLastGoodOnRefreshError(t *testing.T) {
 		return Sources{}, context.DeadlineExceeded
 	}
 	c := newSourcesCacheWithLoader(loader, time.Nanosecond) // force immediate expiry
-	_ = c.Get(context.Background())                          // seed
+	_ = c.Get(context.Background())                         // seed
 	time.Sleep(time.Millisecond)
 	v := c.Get(context.Background()) // refresh fails → last good
 	if len(v.Video) != 1 || v.Video[0] != "cnn" {

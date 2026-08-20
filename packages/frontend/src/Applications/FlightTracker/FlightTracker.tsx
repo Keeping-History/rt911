@@ -17,6 +17,7 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import {
 	type ChangeEvent,
@@ -28,6 +29,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import {
 	MediaStreamContext,
 	type FlightPosition,
@@ -72,7 +74,7 @@ import {
 	flightTrackerSetFocusedFlight,
 } from "./flightTrackerCommands";
 import { useNotableCrashSites } from "./useNotableCrashSites";
-import { isNotable, isObserver } from "./notableFlights";
+import { isNotable, isObserverStyled, isPresidential } from "./notableFlights";
 import { isEstimated, orderedTrackSources } from "./flightProvenance";
 import type { CameraMode } from "./flightCamera";
 import { useRouteIndex } from "./useRouteIndex";
@@ -91,13 +93,15 @@ import {
 import styles from "./FlightTracker.module.scss";
 import type { FeatureCollection } from "geojson";
 import { buildTrackSegments } from "./flightTrackSegments";
-import { orderedTrackPhases } from "./flightPhases";
+import { orderedTrackPhases, phasePaletteFor } from "./flightPhases";
 import {
 	BASEMAP_URLS,
 	type BasemapStyleId,
 	effectiveTone,
 	normalizeBasemapStyle,
+	SECONDARY_TRACK_COLOR,
 } from "./flightMapStyle";
+import { type SecondaryTrack, useMultiFlightTracks } from "./useMultiFlightTracks";
 import { toggleFlightSelection } from "./selectionToggle";
 
 // This app's own icon, registered into the shared registry at
@@ -115,6 +119,7 @@ export const FlightTracker: FC = () => {
 	const appId = "FlightTracker.app";
 	const appName = "Flight Tracker";
 	const appIcon = ICONS.applications.flightTracker.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const isRunning = useAppManager(
 		(s) => appId in (s.System.Manager.Applications.apps ?? {}),
@@ -356,6 +361,18 @@ export const FlightTracker: FC = () => {
 		() => flightPositions.filter((p) => p.flight.startsWith("RDR-")).length,
 		[flightPositions],
 	);
+	// Parked aircraft (AF1 during its ground stops) are on the map but not
+	// "aloft" — the status bar subtracts them like it subtracts anon traffic.
+	const groundedCount = useMemo(
+		() => flightPositions.filter((p) => p.phase === "ground").length,
+		[flightPositions],
+	);
+	// Status-bar numerator. Must share the denominator's semantics: filtering to
+	// a parked aircraft otherwise reads "1 of 0 aircraft aloft".
+	const filteredAloft = useMemo(
+		() => filteredPositions.filter((p) => p.phase !== "ground").length,
+		[filteredPositions],
+	);
 	// Wheels-down/crash instants for the airborne set: the map's dead-reckoning
 	// clamp (a landed flight freezes at its track end instead of overshooting).
 	const landingClock = useMemo(
@@ -426,12 +443,14 @@ export const FlightTracker: FC = () => {
 		setSelectedPoi(poi);
 	}, []);
 
-	// Camera follow targets the five tracked flights (the notables + observer).
-	// canFollow gates the toggle; followFlight (null unless armed AND a tracked
-	// flight is selected) is what FlightMap locks onto. Keeping cameraFollow in
-	// lockstep with canFollow means "following" never lingers with nothing to
-	// follow — so cameraFollow alone drives the toolbar's locked-out controls.
-	const canFollow = !!selected && (isNotable(selected.flight) || isObserver(selected.flight));
+	// Camera follow targets the curated highlight flights — notables, observer,
+	// Air Force One. canFollow gates the toggle; followFlight (null unless armed
+	// AND a tracked flight is selected) is what FlightMap locks onto. Keeping
+	// cameraFollow in lockstep with canFollow means "following" never lingers
+	// with nothing to follow — so cameraFollow alone drives the toolbar's
+	// locked-out controls. Follow is a viewport convenience, not a crash-
+	// semantics behavior, so it uses the observer-styled union (not isNotable-only).
+	const canFollow = !!selected && (isNotable(selected.flight) || isObserverStyled(selected.flight));
 	useEffect(() => {
 		if (cameraFollow && !canFollow) setCameraFollow(false);
 	}, [cameraFollow, canFollow]);
@@ -695,8 +714,26 @@ export const FlightTracker: FC = () => {
 		[selected],
 	);
 	const { track, loading, error } = useFlightTrack(selection);
-	// Altitude profile → smooth 3D track tube for the selected flight.
-	const { profile } = useAltitudeProfile(selection);
+	// Altitude profile → smooth 3D track tube for the selected flight, and (for
+	// notable/estimated flights) the drawn track itself. Keyed to the SELECTED
+	// leg's flight_date so a two-row flight (AF1: 9/10 and 9/11) can't be served
+	// the other day's route — see useAltitudeProfile's doc comment.
+	const { profile } = useAltitudeProfile(selection, track?.flight_date ?? null);
+
+	// Every OTHER multi-selected flight (issue #326): the active one above
+	// keeps its richer phase-colored/profile-driven track, these get a plain
+	// track each so a shift-click or area-select multi-selection shows every
+	// flight's path, not just the one shown in the detail pane's dropdown.
+	// Memoized the same way `selection` is — multiSelected/activeFlightIdx
+	// only get fresh references on a genuine selection change.
+	const secondarySelections: TrackSelection[] = useMemo(
+		() =>
+			multiSelected
+				.filter((_, i) => i !== activeFlightIdx)
+				.map((p) => ({ flight: p.flight, startDate: p.start_date })),
+		[multiSelected, activeFlightIdx],
+	);
+	const secondaryTracks = useMultiFlightTracks(secondarySelections);
 
 	// Live fix for the selected flight (`selected` is a click-time snapshot; the
 	// streamed set updates each minute-bucket). Heading is the bearing of the
@@ -834,21 +871,59 @@ export const FlightTracker: FC = () => {
 		[profile],
 	);
 
+	// 3D counterpart of secondaryFeatures below: every OTHER multi-selected
+	// flight with a loaded altitude profile, for FlightMap's secondary tubes.
+	const secondaryTrackProfiles = useMemo(
+		() =>
+			[...secondaryTracks.values()]
+				.filter((t): t is SecondaryTrack & { profile: NonNullable<SecondaryTrack["profile"]> } =>
+					!!t.profile,
+				)
+				.map((t) => ({ flight: t.flight, profile: t.profile })),
+		[secondaryTracks],
+	);
+
+	// One plain feature per OTHER multi-selected flight, colored distinctly
+	// from the active track (issue #326) — appended to whichever branch below
+	// produces the active flight's own feature(s).
+	const secondaryFeatures = useMemo<GeoJSON.Feature[]>(
+		() =>
+			[...secondaryTracks.values()]
+				.filter((t): t is SecondaryTrack & { geometry: NonNullable<SecondaryTrack["geometry"]> } =>
+					!!t.geometry,
+				)
+				.map((t) => ({
+					type: "Feature" as const,
+					geometry: t.geometry,
+					properties: { color: SECONDARY_TRACK_COLOR },
+				})),
+		[secondaryTracks],
+	);
+
 	const trackGeoJSON: FeatureCollection | null = useMemo(() => {
-		if (!track?.geometry) return null;
+		if (!track?.geometry) {
+			return secondaryFeatures.length
+				? { type: "FeatureCollection", features: secondaryFeatures }
+				: null;
+		}
 		if (
 			selection && profile && profile.length >= 2
 			&& (isNotable(selection.flight) || hasEstimated)
 		) {
-			const features = buildTrackSegments(profile);
-			if (features.length) return { type: "FeatureCollection", features };
+			const features = buildTrackSegments(profile, phasePaletteFor(selection.flight));
+			if (features.length) {
+				return { type: "FeatureCollection", features: [...features, ...secondaryFeatures] };
+			}
 		}
 		// non-notable (or no profile yet): the decimated track as one plain feature.
 		return {
 			type: "FeatureCollection",
-			features: [{ type: "Feature", geometry: track.geometry, properties: {} }],
+			features: [
+				{ type: "Feature", geometry: track.geometry, properties: {} },
+				...secondaryFeatures,
+			],
 		};
-	}, [track?.geometry, selection, profile, hasEstimated]);
+	}, [track?.geometry, selection, profile, hasEstimated, secondaryFeatures]);
 
 	// Provenance legend: only meaningful once a track actually mixes radar and
 	// estimated stretches.
@@ -857,13 +932,15 @@ export const FlightTracker: FC = () => {
 		[hasEstimated, profile],
 	);
 
-	// Phase legend (issue #310): same gate as the per-phase track segments — only
-	// notable flights with a smoothed profile get colored phases, so only they get
-	// a legend. Ordered-unique so it mirrors the drawn segments.
+	// Phase legend (issue #310): notable flights and AF1 get colored phase
+	// segments (AF1's include the parked-gray "ground" phase), so both get a
+	// legend. Deliberately NOT every hasEstimated flight: those are segmented by
+	// provenance, which the trackSources legend above already explains.
+	// Ordered-unique so it mirrors the drawn segments.
 	const trackPhases = useMemo<string[]>(() => {
-		if (
-			!(track?.geometry && selection && isNotable(selection.flight) && profile && profile.length >= 2)
-		) {
+		const phaseColored = !!selection
+			&& (isNotable(selection.flight) || isPresidential(selection.flight));
+		if (!(track?.geometry && phaseColored && profile && profile.length >= 2)) {
 			return [];
 		}
 		return orderedTrackPhases(profile);
@@ -874,7 +951,13 @@ export const FlightTracker: FC = () => {
 	const tone = effectiveTone(settings.mapStyle, settings.darkMap);
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="flight-map">
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={appIcon}
+			defaultWindow="flight-map"
+			desktopIconBalloonHelp={manifestDescription(appId)}
+		>
 			{showSettings && (
 				<ClassicyWindow
 					id="flight-settings"
@@ -1223,6 +1306,8 @@ export const FlightTracker: FC = () => {
 								basemapUrls={BASEMAP_URLS}
 								trackGeoJSON={trackGeoJSON}
 								trackProfile={profile}
+								trackPalette={phasePaletteFor(selection?.flight)}
+								secondaryTrackProfiles={secondaryTrackProfiles}
 								nowMs={nowMs}
 								playing={!paused}
 								mapStyle={settings.mapStyle}
@@ -1371,8 +1456,8 @@ export const FlightTracker: FC = () => {
 							</span>
 							<span className={`${styles.statusBarCell} ${styles.statusBarRight}`}>
 								{visibleFlights
-									? `${filteredPositions.length} of ${flightPositions.length - anonAloft} aircraft aloft · filtered${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`
-									: `${flightPositions.length - anonAloft} aircraft aloft${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`}
+									? `${filteredAloft} of ${flightPositions.length - anonAloft - groundedCount} aircraft aloft · filtered${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`
+									: `${flightPositions.length - anonAloft - groundedCount} aircraft aloft${anonAloft > 0 ? ` · +${anonAloft} other` : ""}`}
 							</span>
 						</div>
 					</div>
@@ -1400,6 +1485,7 @@ export const FlightTracker: FC = () => {
 					</div>
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

@@ -16,8 +16,10 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import type {
 	MediaItem,
 	MediaStreamFilter,
@@ -40,6 +42,10 @@ import {
 	tvSetVolumeLimit,
 } from "./TVContext";
 import { moveChannel, orderChannels } from "./channelOrder";
+import { ThumbnailTile } from "./ThumbnailTile";
+import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
+import type { EpgIconNamespace } from "./epgIcons";
+import multiviewIcon from "./multiview.png";
 import { useThumbnailReorder } from "./useThumbnailReorder";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
 import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
@@ -90,7 +96,11 @@ type ClassicyTVProps = Record<string, never>;
 export const TV: React.FC<ClassicyTVProps> = () => {
 	const appName = "TV";
 	const appId = "TV.app";
-	const appIcon = ClassicyIcons.applications.epg.app as string;
+	// classicy no longer declares the epg namespace — epgIcons.ts registers it,
+	// so the read goes through a cast at the registered address.
+	const epgIconSet = (ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg;
+	const appIcon = epgIconSet.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const desktopEventDispatch = useAppManagerDispatch();
 	const appState = useAppManager(
@@ -820,6 +830,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			name={appName}
 			icon={appIcon}
 			defaultWindow={`${appId}_main`}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{showSettings && (
 				<ClassicyWindow
@@ -1125,7 +1136,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 									}
 								>
 									<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
-										MultiView
+										{/* alt is the button's accessible name now that the label is gone —
+										    the balloon help above explains, but only on hover. */}
+										<img className={styles.tvControlIcon} src={multiviewIcon} alt="MultiView" />
 									</ClassicyButton>
 								</ClassicyBalloonHelp>
 								<ClassicyBalloonHelp
@@ -1143,7 +1156,14 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										buttonSize="small"
 										margin="sm" padding="sm"
 									>
-										{tvPaused ? "Play" : "Pause"}
+										{/* The icon shows the ACTION, not the state: paused offers Play. */}
+										<img
+											className={styles.tvControlIcon}
+											src={(tvPaused
+												? ClassicyIcons.system.quicktime.playButton
+												: ClassicyIcons.system.quicktime.pauseButton) as string}
+											alt={tvPaused ? "Play" : "Pause"}
+										/>
 									</ClassicyButton>
 								</ClassicyBalloonHelp>
 								<ClassicyBalloonHelp
@@ -1162,7 +1182,15 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										buttonSize="small"
 										margin="sm" padding="sm"
 									>
-										Mute
+										{/* Same speaker pair the per-grid-player mute button already uses,
+										    so one convention covers both mute controls in this app. */}
+										<img
+											className={styles.tvControlIcon}
+											src={(overallMuted
+												? ClassicyIcons.controlPanels.soundManager.soundMute
+												: ClassicyIcons.controlPanels.soundManager.soundOn) as string}
+											alt={overallMuted ? "Unmute" : "Mute"}
+										/>
 									</ClassicyButton>
 								</ClassicyBalloonHelp>
 								<ClassicyBalloonHelp
@@ -1178,7 +1206,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										buttonSize="small"
 										margin="sm" padding="sm"
 									>
-										{captionsOn ? "CC On" : "CC Off"}
+										{/* One artwork for both states — the pressed styling carries on/off
+										    visually, so the alt text has to carry it for everyone else. */}
+										<img
+											className={styles.tvControlIcon}
+											src={epgIconSet.cc}
+											alt={captionsOn ? "Closed captions on" : "Closed captions off"}
+										/>
 									</ClassicyButton>
 								</ClassicyBalloonHelp>
 							</div>
@@ -1250,9 +1284,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								const isSelected = selectedPlayers.includes(item.id);
 
 								return (
-									<button
+									<ThumbnailTile
 										key={item.id}
-										data-source={item.source}
+										item={item}
 										className={[
 											styles.tvPlayer,
 											isActive || isSelected ? styles.tvPlayerSelected : "",
@@ -1264,10 +1298,15 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										]
 											.filter(Boolean)
 											.join(" ")}
-										{...(item.source ? reorder.handlers(item.source) : {})}
-										onClick={() => {
-											// A drag just ended — it must not focus or select.
-											if (reorder.consumeSuppressedClick()) return;
+										multiSelectMode={multiSelectMode}
+										isActive={isActive}
+										isSelected={isSelected}
+										thumbTs={thumbTs}
+										reorderHandlers={
+											item.source ? reorder.handlers(item.source) : undefined
+										}
+										consumeSuppressedClick={reorder.consumeSuppressedClick}
+										onPress={() => {
 											if (multiSelectMode) {
 												togglePlayerSelection(item.id);
 											} else {
@@ -1275,33 +1314,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 											}
 											setHasInteracted(true);
 										}}
-										onKeyDown={(e) => {
-											if (e.key === "Enter" || e.key === " ") {
-												if (multiSelectMode) {
-													togglePlayerSelection(item.id);
-												} else {
-													setActivePlayer(item.id);
-												}
-												setHasInteracted(true);
-											}
-										}}
-										type="button"
-									>
-										<div className={styles.tvChannelTitleHolder}>
-											<p className={styles.tvChannelTitle}>{item.source}</p>
-										</div>
-										<img
-											className={styles.tvThumbnailImage}
-											src={`https://files.911realtime.org/thumbnails/${
-												item.source?.toLowerCase() ?? "offline"
-											}/${thumbTs}.jpg`}
-											onError={(e) => {
-												e.currentTarget.src =
-													"https://files.911realtime.org/thumbnails/offline.jpg";
-											}}
-											alt=""
-										/>
-									</button>
+									/>
 								);
 							})}
 							{reorder.dragOutline && (
@@ -1319,6 +1332,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					</div>
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

@@ -75,17 +75,18 @@ func TestSessionTokenFromIgnoresAJWTWithNoSessionClaim(t *testing.T) {
 	}
 }
 
-func TestDisplayNamePrefersTheChosenUsername(t *testing.T) {
+func TestDisplayNamePrefersTheRealFirstName(t *testing.T) {
 	p := func(s string) *string { return &s }
 	cases := []struct {
 		name                         string
 		username, email, first, last *string
 		want                         string
 	}{
-		{"username wins", p("skaterboi1988"), p("dan@x.com"), p("Dan"), p("Reed"), "skaterboi1988"},
-		{"falls back to the email local part", nil, p("dan@x.com"), p("Dan"), p("Reed"), "dan"},
-		{"then to the name", nil, nil, p("Dan"), p("Reed"), "Dan Reed"},
-		{"first name alone is enough", nil, nil, p("Dan"), nil, "Dan"},
+		{"a real first name wins", p("skaterboi1988"), p("dan@x.com"), p("Dan"), p("Reed"), "Dan"},
+		{"falls back to the chosen username", p("skaterboi1988"), p("dan@x.com"), nil, p("Reed"), "skaterboi1988"},
+		{"then to the email local part", nil, p("dan@x.com"), nil, p("Reed"), "dan"},
+		{"then to whatever name is left", nil, nil, nil, p("Reed"), "Reed"},
+		{"a blank first name is not a name", nil, p("dan@x.com"), p("   "), nil, "dan"},
 		{"nothing at all yields empty, never a guess", nil, nil, nil, nil, ""},
 		{"a malformed email is not used", nil, p("no-at-sign"), nil, nil, ""},
 	}

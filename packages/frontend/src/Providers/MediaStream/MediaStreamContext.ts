@@ -44,8 +44,81 @@ export interface MediaItem {
 	image_caption?: string;
 	/** Public URL to the .srt subtitle file; the .vtt sibling is derived for <track>. */
 	subtitles?: string;
+	/**
+	 * Public URL to the noise-reduced render, when one exists.
+	 *
+	 * `url` stays canonical and always points at the source recording — it is the
+	 * join key for the whole audio pipeline. This is the listening copy, and it is
+	 * null until the enhancement pass has processed that file.
+	 */
+	enhanced_url?: string | null;
 	content?: string;
 	sort?: number;
+}
+
+/**
+ * One tag in the mp3 corpus' controlled vocabulary — `facility:zbw` and the
+ * pieces the sidebar renders it from. The same shape appears twice: on an
+ * item's own `tags` (from the mp3_meta frame) and in the vocabulary served by
+ * `GET /mp3/tags`, which is what makes the two comparable at all.
+ */
+export interface TagDef {
+	tag: string;
+	namespace?: string;
+	value?: string;
+	color?: string;
+}
+
+/** One party to a recorded conversation. */
+export interface Participant {
+	person?: string;
+	facility?: string;
+	position?: string;
+	role?: string;
+	confidence?: string;
+}
+
+/**
+ * Entities a recording names without being party to. All three lists are always
+ * present (possibly empty) because the derivation always writes all three — a
+ * card has to be able to say "nobody else was named" definitely.
+ */
+export interface Mentions {
+	facilities: string[];
+	aircraft: string[];
+	people: string[];
+}
+
+/**
+ * The Radio Traffic card's view of one mp3 item: who the traffic is between,
+ * what it is about, how far to trust that, and the waveform envelope.
+ *
+ * Deliberately NOT part of MediaItem. `mp3_history` carries the whole ~755-item
+ * back catalogue and is re-sent in full on every seek, so a field here folded
+ * into MediaItem would cost roughly 1.5 MB of msgpack on every Time Machine
+ * scrub. It arrives once instead, on the one-shot `mp3_meta` frame.
+ *
+ * Every field is optional but `tags`, which the server always sends (empty when
+ * nothing is tagged) so "this item has no tags" is distinguishable from "this
+ * item has no metadata at all" — the latter being an id absent from mp3Meta.
+ */
+export interface ItemMeta {
+	subject?: string;
+	link?: string;
+	tier?: string;
+	confidence?: string;
+	evidence?: string;
+	participants?: Participant[];
+	mentions?: Mentions;
+	/**
+	 * Where the published values came from, path by path. Left opaque: nothing
+	 * renders it yet, and typing a shape no consumer reads would be a guess
+	 * about a display that hasn't been designed.
+	 */
+	provenance?: unknown;
+	tags?: TagDef[];
+	/** 480 [min, max] amplitude buckets scaled to -128..127. */
+	peaks?: [number, number][];
 }
 
 /**
@@ -234,6 +307,31 @@ export interface WsHeartbeatAckMessage {
 	master_time?: string;
 }
 
+/**
+ * A live teacher action pushed to every student in a room. Rooms are playlist
+ * ids: the streamer relays these across pods (see internal/fanout) so a class
+ * split over several replicas stays in step.
+ */
+export interface RoomCommand {
+	action: "jump" | "focus" | "message" | "lock" | "reload";
+	/** Virtual-clock target for "jump", as a UTC string. */
+	time?: string;
+	/** Classicy app id for "focus", e.g. "TV.app". */
+	app?: string;
+	/** Note body for "message". */
+	message?: string;
+	/** Lock surface for "lock". Only the clock is implemented today. */
+	target?: "clock";
+	/**
+	 * Lock state for "lock". Optional-but-meaningful: the server sends it as a
+	 * pointer precisely so an unlock (`false`) survives the wire, so treat a
+	 * missing value as "no instruction" rather than as `false`.
+	 */
+	on?: boolean;
+	/** Monotonic per-client counter; see roomCommand above. */
+	seq: number;
+}
+
 export interface MediaStreamContextValue {
 	items: MediaItem[];
 	/** Pager items received while subscribed to the pager channel. */
@@ -247,6 +345,28 @@ export interface MediaStreamContextValue {
 	 * it backs the Radio app's full "Previous" schedule.
 	 */
 	mp3History: MediaItem[];
+	/**
+	 * Radio Traffic metadata for the whole mp3 corpus, keyed by item id, from
+	 * the one-shot `mp3_meta` frame.
+	 *
+	 * Alone among this provider's channels it is NOT time-scoped, so it is
+	 * exempt from both the reveal gate and retention pruning, and a seek leaves
+	 * it untouched: the server sends the frame once per session and never
+	 * resends it, so anything that dropped it would leave the cards bare for the
+	 * rest of the session with nothing left to restore them.
+	 *
+	 * An id with no entry has no derived metadata (59 of 814 recordings have no
+	 * `parties` blob) — reading one yields undefined, and the card falls back to
+	 * its title and transcript.
+	 */
+	mp3Meta: Record<number, ItemMeta>;
+	/**
+	 * The cache build `mp3Meta` came from, or null before the frame arrives.
+	 * `GET /mp3/tags` stamps the same value, so a client holding a vocabulary
+	 * from build N and item tags from N+1 can see the mismatch and refetch
+	 * rather than render a tag chip its own filter tree has no checkbox for.
+	 */
+	mp3MetaGeneration: string | null;
 	/** news items received while subscribed to the news channel. Same shape as items. */
 	newsItems: MediaItem[];
 	/** usenet messages received for the currently-viewed newsgroup(s). */
@@ -342,6 +462,28 @@ export interface MediaStreamContextValue {
 	requestWeatherForecast: (zone: string) => void;
 	/** True while the server is forcing the clock (Time Machine locked). */
 	clockForced: boolean;
+	/**
+	 * True between dispatching a `{type:"seek"}` and the first mp3 frame that
+	 * answers it. One connection-level flag, not one per item: a seek drops
+	 * every buffer at once, so nothing that follows the virtual clock has valid
+	 * data until the fresh window lands. The Radio Traffic card reads it for its
+	 * SEEKING badge, which appears on one card at a time only because one card
+	 * is following the clock.
+	 *
+	 * Cleared by `mp3` OR `mp3_history` — whichever arrives first. `mp3_history`
+	 * is the load-bearing one: it is sent on every seek even when empty, whereas
+	 * seeking into a stretch with no audio produces no `mp3` frame at all, which
+	 * would strand the flag raised.
+	 */
+	seekInFlight: boolean;
+
+	/**
+	 * The most recent live teacher command for the room this client joined
+	 * (its `?playlist=` id), or null if none has arrived. `seq` increments on
+	 * every command so an identical repeat — a teacher pressing "focus TV"
+	 * twice — is still observable as a new event by effects keyed on it.
+	 */
+	roomCommand: RoomCommand | null;
 	/** alerts received while subscribed to the alerts channel. */
 	alertItems: AlertItem[];
 	/** Opt into alerts-channel delivery. Ref-counted by appId. */
@@ -396,6 +538,8 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	pagerItems: [],
 	mp3Items: [],
 	mp3History: [],
+	mp3Meta: {},
+	mp3MetaGeneration: null,
 	newsItems: [],
 	usenetItems: [],
 	usenetBodies: {},
@@ -436,6 +580,8 @@ export const MediaStreamContext = createContext<MediaStreamContextValue>({
 	unsubscribeWeather: () => {},
 	requestWeatherForecast: () => {},
 	clockForced: false,
+	seekInFlight: false,
+	roomCommand: null,
 	alertItems: [],
 	subscribeAlerts: () => {},
 	unsubscribeAlerts: () => {},

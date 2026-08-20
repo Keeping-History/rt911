@@ -13,9 +13,9 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { DEFAULT_RADIO_SCANNER_SETTINGS } from "../Applications/RadioScanner/radioScannerSettings";
-import { StationPlayer } from "../Applications/RadioScanner/StationPlayer";
-import { mergeWithSources } from "../Applications/RadioScanner/stationGrouping";
+import { DEFAULT_RADIO_SCANNER_SETTINGS } from "../Applications/radio-core/radioScannerSettings";
+import { StationPlayer } from "../Applications/radio-core/StationPlayer";
+import { mergeWithSources } from "../Applications/radio-core/stationGrouping";
 import { formatUtcAsLocalTime } from "../Applications/TimeMachine/setVirtualClock";
 import type { MediaStreamFilter } from "../Providers/MediaStream/MediaStreamContext";
 import { useMediaStream } from "../Providers/MediaStream/useMediaStream";

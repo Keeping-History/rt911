@@ -24,8 +24,9 @@ From the repo root:
 pnpm install
 pnpm dev              # frontend dev server (vite -d), localhost:5173
 pnpm build            # tsc -b && vite build (frontend)
+pnpm preview:auth     # build + serve a PRODUCTION bundle locally, able to reach Directus
 pnpm test             # vitest run (frontend)
-pnpm lint             # eslint . (frontend)
+pnpm lint             # oxlint . (frontend)
 pnpm setup            # seed the backend data store (packages/backend/seed.mjs)
 pnpm db:gen-epg       # generate EPG data
 ```
@@ -50,7 +51,7 @@ pytest tests/test_resolve.py::test_name
 ruff check video_grabber/ tests/
 ```
 
-CI (`.github/workflows/build.yml`) runs `tsc -b`, `eslint .`, and `vitest run` for the frontend and `go test ./...` for the backend as required checks before building/pushing images. Playwright E2E is also required: it runs in parallel with `frontend-checks`, and the `frontend` image job `needs:` it, so a red E2E blocks both the merge and the GHCR push that Argo CD rolls out.
+CI (`.github/workflows/build.yml`) runs `tsc -b`, `oxlint .`, and `vitest run` for the frontend and `go test ./...` for the backend as required checks before building/pushing images. Playwright E2E is also required: it runs in parallel with `frontend-checks`, and the `frontend` image job `needs:` it, so a red E2E blocks both the merge and the GHCR push that Argo CD rolls out.
 
 ## Cross-cutting things to know
 
@@ -59,5 +60,6 @@ CI (`.github/workflows/build.yml`) runs `tsc -b`, `eslint .`, and `vitest run` f
 - **Deployment is GitOps, not imperative.** Both the frontend and backend images are built and pushed to GHCR by `.github/workflows/build.yml` (tagged by branch/SHA). Actual rollout happens via ArgoCD pulling from a **separate** repo, `github.com/Keeping-History/infra` — `automated.selfHeal: true` means `kubectl set image` or any other imperative cluster edit gets reverted within seconds. Landing on `main` and letting the infra repo's image-tag automation + ArgoCD sync do its thing is the correct way to ship. `packages/tools/video-grabber/CLAUDE.md`'s "Build & deploy workflow" section documents the exact mechanics; the same pattern applies to the streamer and frontend images.
 - **`classicy` auto-updates on every commit.** `.husky/pre-commit` runs `pnpm update classicy --latest --recursive --silent` and stages `pnpm-lock.yaml` before every commit — the frontend's `package.json` pins `classicy` to `"latest"` deliberately. Don't be alarmed by an unrelated classicy version bump riding along in your diff, and don't hand-edit that version. When developing against an unpublished local Classicy build, use `pnpm use:local` / `pnpm use:published` from `packages/frontend` instead.
 - **Media assets live outside this repo.** Video/audio/image/PDF bytes are hosted on Wasabi and served via `files.911realtime.org`; nothing here serves raw media. `packages/tools/video-grabber` populates Postgres/Directus metadata and uploads assets; the frontend and backend only ever reference URLs.
+- **Every AI-assisted commit must carry its `Co-Authored-By: Claude …` trailer, including commits made by subagents.** This project publishes an authorship breakdown ([`scripts/provenance.mjs`](scripts/provenance.mjs)), and the trailer is the only *certain* signal it has. The known failure mode: an implementation plan that spells out a literal `git commit -m "…"` for a subagent to run produces a commit with no trailer at all, and the work is silently recorded as human. When writing a plan, put the trailer in the commit command; when reviewing one, check that it is there. Anything the heuristic gets wrong can be corrected permanently in `scripts/provenance-overrides.json`.
 
 @.claude/wiz-claude.md

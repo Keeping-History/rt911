@@ -1,0 +1,172 @@
+1
+00:00:00,000 --> 00:00:02,000
+ American 77, Indy.
+
+2
+00:00:04,000 --> 00:00:09,000
+ Indianapolis, good morning. Our Canada 579 with you. 350 for 390.
+
+3
+00:00:11,000 --> 00:00:13,000
+ Our Canada 579, Indy Center, roger.
+
+4
+00:00:14,000 --> 00:00:15,000
+ American 77, Indy.
+
+5
+00:00:22,000 --> 00:00:24,000
+ American 77, American Indy.
+
+6
+00:00:30,000 --> 00:00:32,000
+ American 77, American Indy.
+
+7
+00:00:41,000 --> 00:00:44,000
+ American 77, American Indy. Radio check. How do you read?
+
+8
+00:00:56,000 --> 00:00:59,000
+ American 77, American. Radio check. How do you read?
+
+9
+00:01:00,000 --> 00:01:01,000
+ Radio check.
+
+10
+00:01:04,000 --> 00:01:06,000
+ This is, uh...
+
+11
+00:01:08,000 --> 00:01:12,000
+ This is, uh, Henderson. American 77. I don't know what happened to him. I'm trying to read somebody.
+
+12
+00:01:13,000 --> 00:01:18,000
+ Looks like he took a turn to the south and now I'm, uh, I don't know what altitude he's at or what he's doing.
+
+13
+00:01:19,000 --> 00:01:21,000
+ He's heading towards the mound at the 35.
+
+14
+00:01:21,000 --> 00:01:22,000
+ Well, just let me know.
+
+15
+00:01:22,000 --> 00:01:24,000
+ Okay, I'll try to get ahold of him. Thanks.
+
+16
+00:01:25,000 --> 00:01:29,000
+ American 10-23, contact Indy Center on 123.77. Good day.
+
+17
+00:01:30,000 --> 00:01:32,000
+ 17-57, American 10-23. Good day.
+
+18
+00:01:32,000 --> 00:01:35,000
+ Yes, sir. 17-51, descend and maintain flight level 350.
+
+19
+00:01:36,000 --> 00:01:38,000
+ 17-51, descend to 350.
+
+20
+00:01:39,000 --> 00:01:41,000
+ Number 489, Quebec Sierra. Clear direct Spartansburg.
+
+21
+00:01:42,000 --> 00:01:44,000
+ Clear direct Spartansburg. 489, Quebec Sierra.
+
+22
+00:01:45,000 --> 00:01:47,000
+ American 77, Indy. Radio check. How do you read?
+
+23
+00:02:00,000 --> 00:02:07,000
+ Indy, what are you calling flex jet 423?
+
+24
+00:02:08,000 --> 00:02:14,000
+ Flex jet 423, negative. American 77, Indy Center. How do you read?
+
+25
+00:02:21,000 --> 00:02:24,000
+ American 77, Indy. Radio check. How do you read?
+
+26
+00:02:31,000 --> 00:02:36,000
+ US Air 1751, contact Indy Center on 134.22. Good day.
+
+27
+00:02:37,000 --> 00:02:39,000
+ 1751, 3422.
+
+28
+00:02:42,000 --> 00:02:46,000
+ Number 489, Quebec Sierra. Contact Indy Center on 134.22. Good day.
+
+29
+00:02:47,000 --> 00:02:49,000
+ 34229, Quebec Sierra. Good day.
+
+30
+00:02:50,000 --> 00:02:53,000
+ US Air 12, correction US Air 217. Clear direct Holston Mountain.
+
+31
+00:02:54,000 --> 00:02:56,000
+ Clear direct Holston Mountain. You said 217.
+
+32
+00:03:00,000 --> 00:03:02,000
+ Thank you.
+
+33
+00:03:14,000 --> 00:03:23,000
+ Vacos. This is Henderson. Still haven't got American 77. Last tee was at 35 going to Falmouth, so I don't know where he is out there anywhere yet, so I'm still trying to get a hold of him. We can contact the company.
+
+34
+00:03:24,000 --> 00:03:25,000
+ Okay. Okay.
+
+35
+00:03:30,000 --> 00:03:41,000
+ Flex jet 2, correction, flex jet 423. Contact Indy Center on 134.22. Good day.
+
+36
+00:03:42,000 --> 00:03:45,000
+ 12.59, Cleveland.
+
+37
+00:03:48,000 --> 00:03:50,000
+ 12.59, Morgantown.
+
+38
+00:03:55,000 --> 00:03:57,000
+ American 77, Indy.
+
+39
+00:03:58,000 --> 00:04:01,000
+ Center, American 2493.
+
+40
+00:04:02,000 --> 00:04:03,000
+ American 2493, go ahead.
+
+41
+00:04:04,000 --> 00:04:08,000
+ Yeah, we sent a message to dispatch to have him come up on 2027. Is that what you want him to do?
+
+42
+00:04:09,000 --> 00:04:18,000
+ Yeah, we had him on the west side of our airspace and he went into coast and don't have a track on him and now he's not talking to me, so we don't know exactly what happened to him. We're trying to get a hold of him. We also contacted your company, so thanks for the help.
+
+43
+00:04:19,000 --> 00:04:20,000
+ Alright.
+

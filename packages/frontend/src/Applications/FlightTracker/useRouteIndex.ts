@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { DIRECTUS_URL } from "../../lib/endpoints";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
-import { prevUtcDay, routeKey, type RouteIndex, type RouteIndexRow } from "./flightFilter";
-import { flightDateOf } from "./useFlightTrack";
+import { routeKey, type RouteIndex, type RouteIndexRow } from "./flightFilter";
+import { flightDateOf, prevUtcDay } from "./flightDates";
 
 // The route index is the bulk sibling of useFlightTrack's per-flight fetch —
 // every flight_tracks row for a date, small fields only (no geometry), so
@@ -127,7 +127,7 @@ export function useRouteIndex(positions: FlightPosition[]): RouteIndex {
 	// Stable key of distinct dates so effects/memos don't churn per position tick.
 	// Each sample's own UTC date AND the day before it are both loaded: an
 	// evening-departure flight's flight_date (BTS local date) lands on the
-	// previous UTC day from its samples' start_date (see flightFilter.prevUtcDay
+	// previous UTC day from its samples' start_date (see flightDates.prevUtcDay
 	// for the full local-vs-UTC explanation), so routeRowFor's fallback lookup
 	// needs that earlier date's index already fetched.
 	const datesKey = useMemo(() => {
@@ -145,7 +145,7 @@ export function useRouteIndex(positions: FlightPosition[]): RouteIndex {
 	useEffect(() => {
 		const listener = () => setVersion((v) => v + 1);
 		listeners.add(listener);
-		// Dates load in SERIES: concurrent same-path requests to api-beta can
+		// Dates load in SERIES: concurrent same-path requests to Directus can
 		// come back with their response bodies mixed by the proxy layer (see
 		// useNotableCrashSites.loadCrashSites) — a poisoned date would cache
 		// another date's rows permanently.

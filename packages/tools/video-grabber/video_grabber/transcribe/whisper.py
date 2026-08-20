@@ -12,7 +12,9 @@ from pathlib import Path
 from video_grabber.config import Config
 
 
-def transcribe_wav(wav: Path, out_base: Path, cfg: Config, *, runner=subprocess.run) -> Path:
+def transcribe_wav(wav: Path, out_base: Path, cfg: Config, *,
+                   offset_ms: int = 0, duration_ms: int = 0, vad: bool = False,
+                   runner=subprocess.run) -> Path:
     out_base.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         cfg.whisper_bin,
@@ -22,8 +24,16 @@ def transcribe_wav(wav: Path, out_base: Path, cfg: Config, *, runner=subprocess.
         "--output-srt",
         "--output-vtt",
         "--output-file", str(out_base),
-        str(wav),
     ]
+    if vad:
+        # VAD skips the long silences on open-mic position tapes: both a large
+        # compute saving and the reason the decoder stops collapsing on them.
+        cmd += ["--vad", "--vad-model", cfg.vad_model]
+    if offset_ms:
+        cmd += ["-ot", str(offset_ms)]
+    if duration_ms:
+        cmd += ["-d", str(duration_ms)]
+    cmd.append(str(wav))
     result = runner(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"whisper-cli failed ({result.returncode}): {result.stderr[-2000:]}")

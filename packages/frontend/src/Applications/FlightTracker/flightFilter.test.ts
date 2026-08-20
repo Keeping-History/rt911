@@ -8,7 +8,6 @@ import {
 	isFilterActive,
 	matchesFilter,
 	popUpOptions,
-	prevUtcDay,
 	routeKey,
 	routeRowFor,
 	visibleFlightSet,
@@ -39,16 +38,6 @@ const filter = (over: Partial<FlightFilter>): FlightFilter => ({
 describe("routeKey", () => {
 	it("joins flight and date with a pipe", () => {
 		expect(routeKey("AA11", "2001-09-11")).toBe("AA11|2001-09-11");
-	});
-});
-
-describe("prevUtcDay", () => {
-	it("steps back one UTC day", () => {
-		expect(prevUtcDay("2001-09-13")).toBe("2001-09-12");
-	});
-
-	it("crosses a month boundary", () => {
-		expect(prevUtcDay("2001-10-01")).toBe("2001-09-30");
 	});
 });
 

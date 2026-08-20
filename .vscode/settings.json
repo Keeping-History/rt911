@@ -32,5 +32,9 @@
         "statusBar.debuggingBackground": "#dd0531",
         "statusBar.debuggingForeground": "#e7e7e7"
     },
-    "peacock.color": "#dd0531"
+    "peacock.color": "#dd0531",
+    "debug.javascript.defaultRuntimeExecutable": {
+        "pwa-node": "~/.local/share/mise/shims/node"
+    },
+    "python.defaultInterpreterPath": "~/.local/share/mise/installs/python/3.12/bin/python"
 }

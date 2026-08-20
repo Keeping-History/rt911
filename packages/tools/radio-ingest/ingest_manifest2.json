@@ -1,0 +1,110 @@
+[
+ {
+  "source_slug": "WOR",
+  "file": "WOR-AM_2001-09-11_ET0848.mp3",
+  "bucket_key": "audio/radio/WOR/WOR-AM_2001-09-11_ET0848.mp3",
+  "title": "WOR 710",
+  "full_title": "WOR 710 New York \u2014 Sept 11, 8:48-10:50 AM ET (archive.org)",
+  "start_date": "2001-09-11T12:48:34",
+  "end_date": "2001-09-11T14:50:36",
+  "calc_duration": 7322,
+  "timezone": "EDT",
+  "note": "south tower collapse live at ~4230s"
+ },
+ {
+  "source_slug": "KOH",
+  "file": "KOH-AM_2001-09-11_ET0849.mp3",
+  "bucket_key": "audio/radio/KOH/KOH-AM_2001-09-11_ET0849.mp3",
+  "title": "News Talk 780 KOH",
+  "full_title": "KOH 780 Reno \u2014 Sept 11, ~8:49-11:01 AM ET, ABC feed + local (archive.org)",
+  "start_date": "2001-09-11T12:49:00",
+  "end_date": "2001-09-11T15:01:29",
+  "calc_duration": 7950,
+  "timezone": "PDT",
+  "note": "start +/-90s; content-bounded"
+ },
+ {
+  "source_slug": "BBC-R4",
+  "file": "BBC-R4_World-Tonight_2001-09-11_ET1700.mp3",
+  "bucket_key": "audio/radio/BBC-R4/BBC-R4_World-Tonight_2001-09-11_ET1700.mp3",
+  "title": "BBC Radio 4",
+  "full_title": "BBC Radio 4 \u2014 The World Tonight special edition, Sept 11, 10 PM UK / 5 PM ET",
+  "start_date": "2001-09-11T21:00:00",
+  "end_date": "2001-09-11T22:05:57",
+  "calc_duration": 3957,
+  "timezone": "BST",
+  "note": "program open verified"
+ },
+ {
+  "source_slug": "WAMU",
+  "file": "WAMU-NPR_2001-09-11_evening-a_ET1907.mp3",
+  "bucket_key": "audio/radio/WAMU/WAMU-NPR_2001-09-11_evening-a_ET1907.mp3",
+  "title": "WAMU 88.5 / NPR",
+  "full_title": "WAMU-NPR \u2014 Sept 11 evening coverage part 1, 7:07-8:22 PM ET (archive.org)",
+  "start_date": "2001-09-11T23:07:00",
+  "end_date": "2001-09-12T00:22:38",
+  "calc_duration": 4538,
+  "timezone": "EDT",
+  "note": "continuous into part 2"
+ },
+ {
+  "source_slug": "WAMU",
+  "file": "WAMU-NPR_2001-09-11_evening-b_ET2022.mp3",
+  "bucket_key": "audio/radio/WAMU/WAMU-NPR_2001-09-11_evening-b_ET2022.mp3",
+  "title": "WAMU 88.5 / NPR",
+  "full_title": "WAMU-NPR \u2014 Sept 11 evening coverage part 2 incl. Bush address, 8:22-9:03 PM ET",
+  "start_date": "2001-09-12T00:22:36",
+  "end_date": "2001-09-12T01:03:36",
+  "calc_duration": 2460,
+  "timezone": "EDT",
+  "note": "Bush 8:30 PM address anchors this file"
+ },
+ {
+  "source_slug": "WABC",
+  "file": "WABC-AM_2001-09-11_hole-patch_ET1050.mp3",
+  "bucket_key": "audio/radio/WABC/WABC-AM_2001-09-11_hole-patch_ET1050.mp3",
+  "title": "77 WABC New York",
+  "full_title": "WABC 770 \u2014 Sept 11, 10:50-10:59 AM ET patch (archive.org aircheck)",
+  "start_date": "2001-09-11T14:50:20",
+  "end_date": "2001-09-11T14:59:30",
+  "calc_duration": 550,
+  "timezone": "EDT",
+  "note": "fills the 10:50-11:00 hole; aligned via 11:00 ABC hourly open"
+ },
+ {
+  "source_slug": "WCBS",
+  "file": "WCBS-AM_2001-09-11_gap-patch_ET172710.mp3",
+  "bucket_key": "audio/radio/WCBS/WCBS-AM_2001-09-11_gap-patch_ET172710.mp3",
+  "title": "WCBS Newsradio 880",
+  "full_title": "WCBS 880 \u2014 Sept 11, 5:27-5:30 PM ET patch (official release)",
+  "start_date": "2001-09-11T21:27:10",
+  "end_date": "2001-09-11T21:30:50",
+  "calc_duration": 220,
+  "timezone": "EDT",
+  "note": "fills the 4-min radiotapes gap; WTC7 anchor proven segment"
+ },
+ {
+  "source_slug": "WCBS",
+  "file": "WCBS-AM_2001-09-12_morning_ET0716.mp3",
+  "bucket_key": "audio/radio/WCBS/WCBS-AM_2001-09-12_morning_ET0716.mp3",
+  "title": "WCBS Newsradio 880",
+  "full_title": "WCBS 880 \u2014 Sept 12 morning-after coverage, 7:16-9:18 AM ET (official release)",
+  "start_date": "2001-09-12T11:16:00",
+  "end_date": "2001-09-12T13:18:09",
+  "calc_duration": 7329,
+  "timezone": "EDT",
+  "note": "new coverage"
+ },
+ {
+  "source_slug": "WCBS",
+  "file": "WCBS-AM_2001-09-12_afternoon_ET1405.mp3",
+  "bucket_key": "audio/radio/WCBS/WCBS-AM_2001-09-12_afternoon_ET1405.mp3",
+  "title": "WCBS Newsradio 880",
+  "full_title": "WCBS 880 \u2014 Sept 12 afternoon coverage, 2:05-3:16 PM ET (official release)",
+  "start_date": "2001-09-12T18:05:00",
+  "end_date": "2001-09-12T19:16:34",
+  "calc_duration": 4294,
+  "timezone": "EDT",
+  "note": "new coverage"
+ }
+]

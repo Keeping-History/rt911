@@ -174,6 +174,21 @@ def content_words(text: str) -> set[str]:
     return out
 
 
+def unsupported_words(text: str, source: str) -> list[str]:
+    """Content words in *text* that no variant of appears in *source*.
+
+    Shared by the summary gate and the party-identification gate: both need to
+    ask "did the model reach outside what it was shown?", and both answer it the
+    same way. Any overlap between a word's variants and the source's counts as
+    present.
+    """
+    allowed = content_words(source)
+    return sorted({
+        w for w in _WORD.findall(text.lower())
+        if w not in _STOPWORDS and not (_variants(w) & allowed)
+    })
+
+
 def validate_abstract(summary: str, source: str) -> str | None:
     """Return a rejection reason, or None if the summary is contained by the source.
 
@@ -185,12 +200,7 @@ def validate_abstract(summary: str, source: str) -> str | None:
     """
     if not summary.strip():
         return "empty"
-    allowed = content_words(source)
-    # Any overlap between a word's variants and the source's counts as present.
-    invented = sorted(
-        w for w in _WORD.findall(summary.lower())
-        if w not in _STOPWORDS and not (_variants(w) & allowed)
-    )
+    invented = unsupported_words(summary, source)
     if invented:
         return f"introduced words absent from source: {', '.join(invented[:6])}"
     if len(summary) > len(source):

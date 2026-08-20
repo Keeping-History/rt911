@@ -1,4 +1,4 @@
-import type { ClassicyFileOpenSelection } from "classicy";
+import type { ClassicyFileDialogEntry, ClassicyFileOpenSelection } from "classicy";
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import { parsePlaylist } from "../../Providers/Playlist/parsePlaylist";
 import type {
@@ -24,6 +24,9 @@ export type EditorState = {
 	title: string;
 	mode: "restrict" | "annotate";
 	status: "draft" | "published";
+	/** Playlist-level window (virtual-clock UTC ISO); see PlaylistDefinition. */
+	start?: string;
+	end?: string;
 	entries: EditorEntry[];
 	selectedUid: string | null;
 	dirty: boolean;
@@ -33,11 +36,15 @@ export type EditorState = {
 export type EditorAction =
 	| { type: "load"; record: PlaylistRecord }
 	| { type: "setTitle"; title: string }
+	| { type: "renamed"; title: string }
 	| { type: "setMode"; mode: "restrict" | "annotate" }
+	| { type: "setWindow"; start?: string; end?: string }
 	| { type: "setStatus"; status: "draft" | "published" }
 	| {
 			type: "addEntries";
 			entries: { entry: PlaylistEntry; timelineMeta?: EditorEntry["timelineMeta"] }[];
+			/** Select the last added entry, so the Settings window can edit it. */
+			select?: boolean;
 	  }
 	| { type: "updateEntry"; uid: string; entry: PlaylistEntry }
 	| { type: "removeEntry"; uid: string }
@@ -58,6 +65,8 @@ export function initialEditorState(record: PlaylistRecord): EditorState {
 		title: record.title,
 		mode: parsed.definition?.mode ?? "annotate",
 		status: record.status === "published" ? "published" : "draft",
+		start: parsed.definition?.start,
+		end: parsed.definition?.end,
 		entries,
 		selectedUid: null,
 		dirty: false,
@@ -71,8 +80,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 			return initialEditorState(action.record);
 		case "setTitle":
 			return { ...state, title: action.title, dirty: true };
+		case "renamed":
+			// Rename has ALREADY written the title to the server, so unlike
+			// setTitle this must not mark the document dirty — that would make
+			// the next Save re-send the whole definition, including edits the
+			// user has not chosen to save yet.
+			return { ...state, title: action.title };
 		case "setMode":
 			return { ...state, mode: action.mode, dirty: true };
+		case "setWindow":
+			// Both bounds together: the dialog edits them as one schedule, and a
+			// partial update could not distinguish "leave alone" from "clear".
+			return { ...state, start: action.start, end: action.end, dirty: true };
 		case "setStatus":
 			return { ...state, status: action.status, dirty: true };
 		case "addEntries": {
@@ -82,7 +101,16 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 				entry: e.entry,
 				timelineMeta: e.timelineMeta,
 			}));
-			return { ...state, entries: [...state.entries, ...added], nextUid: next, dirty: true };
+			return {
+				...state,
+				entries: [...state.entries, ...added],
+				nextUid: next,
+				dirty: true,
+				selectedUid:
+					action.select && added.length > 0
+						? added[added.length - 1].uid
+						: state.selectedUid,
+			};
 		}
 		case "updateEntry":
 			return {
@@ -107,7 +135,13 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 }
 
 export function assembleDefinition(state: EditorState): PlaylistDefinition {
-	return { version: 1, mode: state.mode, entries: state.entries.map((e) => e.entry) };
+	return {
+		version: 1,
+		mode: state.mode,
+		...(state.start !== undefined ? { start: state.start } : {}),
+		...(state.end !== undefined ? { end: state.end } : {}),
+		entries: state.entries.map((e) => e.entry),
+	};
 }
 
 export function displayWallClockToUtcIso(d: Date): string {
@@ -149,5 +183,58 @@ export function selectionsToEntries(
 			return [{ entry: { kind: "file", path: meta.classicyPath, at: "" } as PlaylistEntry }];
 		}
 		return [];
+	});
+}
+
+function selectAllPathsOf(entry: ClassicyFileDialogEntry): string[][] | null {
+	const paths = entry.meta?.selectAllPaths;
+	return Array.isArray(paths) ? (paths as string[][]) : null;
+}
+
+/**
+ * Resolves "Select All" pseudo-entries (meta.selectAllPaths, produced by the
+ * archive volume in directusVolume.ts) into the file entries of the folders
+ * they stand for, by re-listing those folders through the volume's own cached
+ * list(). Plain selections pass through untouched. Media entries are deduped
+ * by app+itemId within the batch, so picking "Select All" alongside one of the
+ * items it covers doesn't add it twice.
+ */
+export async function expandSelections(
+	selections: ClassicyFileOpenSelection[],
+	listFolder: (path: string[]) => Promise<ClassicyFileDialogEntry[]>,
+): Promise<{ entry: PlaylistEntry; timelineMeta?: EditorEntry["timelineMeta"] }[]> {
+	const flat: ClassicyFileOpenSelection[] = [];
+	for (const sel of selections) {
+		const paths = selectAllPathsOf(sel.entry);
+		if (!paths) {
+			flat.push(sel);
+			continue;
+		}
+		// Sequential on purpose: each list() call may hit Directus, and those
+		// must stay serialized (see directusQueue.ts).
+		for (const path of paths) {
+			try {
+				const items = await listFolder(path);
+				for (const item of items) {
+					// Folders and the folder's own Select All entry are not items.
+					if (item.kind === "file" && !selectAllPathsOf(item)) {
+						flat.push({ volumeId: sel.volumeId, path, entry: item });
+					}
+				}
+			} catch (err) {
+				console.warn(
+					`playlist-editor: Select All listing failed for ${path.join("/")}:`,
+					err,
+				);
+			}
+		}
+	}
+	const seen = new Set<string>();
+	return selectionsToEntries(flat).filter((e) => {
+		if (e.entry.kind !== "media") return true;
+		const key = `${e.entry.app} ${e.entry.itemId}`;
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
 	});
 }

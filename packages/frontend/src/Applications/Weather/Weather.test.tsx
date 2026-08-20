@@ -101,6 +101,8 @@ vi.mock("classicy", () => ({
 		/>
 	),
 	registerAppEventHandler: () => {},
+	registerApp: () => {},
+	getAppManifest: () => undefined,
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({
 			System: {
@@ -117,6 +119,7 @@ vi.mock("classicy", () => ({
 	ClassicyIcons: { applications: {} },
 	registerClassicyIcons: <T,>(icons: T) => icons,
 	quitMenuItemHelper: () => ({}),
+	useClassicyHelpMenu: () => {},
 	useClassicyDateTime: () => ({
 		dateTime: mockClock.current,
 		tzOffset: 0,
@@ -201,6 +204,8 @@ function makeCtxValue(
 		pagerItems: [],
 		mp3Items: [],
 		mp3History: [],
+		mp3Meta: {},
+		mp3MetaGeneration: null,
 		newsItems: [],
 		alertItems: [],
 		subscribeAlerts: () => {},
@@ -244,6 +249,8 @@ function makeCtxValue(
 		unsubscribeWeather: () => {},
 		requestWeatherForecast: () => {},
 		clockForced: false,
+		seekInFlight: false,
+		roomCommand: null,
 		chatBuddies: [],
 		chatEnabled: false,
 		chatReason: "not_signed_in",
