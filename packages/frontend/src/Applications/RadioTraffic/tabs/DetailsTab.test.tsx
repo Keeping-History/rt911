@@ -17,77 +17,41 @@ const column = (root: HTMLElement, name: string) =>
 	root.querySelector(`[data-column="${name}"]`);
 
 describe("DetailsTab layout", () => {
-	it("renders two columns, Details and Tags, and no Summary", () => {
-		// Summary is a tab of its own (story 035). It is the panel's longest
-		// content and the reason every tab can now share one fixed height, so a
-		// Details panel that still drew it would put the height back.
+	it("renders a single Details column, and no Tags or Summary", () => {
+		// Summary is a tab of its own (story 035); Tags moved to the Mentions
+		// tab (issue #521), so Details is down to the one column it has left.
 		const { container, getByText, queryByText } = render(
 			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
 		);
 		expect(column(container, "call-details")).not.toBeNull();
-		expect(column(container, "tags")).not.toBeNull();
+		expect(column(container, "tags")).toBeNull();
 		expect(column(container, "summary")).toBeNull();
-		for (const heading of ["Details", "Tags"]) {
-			expect(getByText(heading)).toBeTruthy();
-		}
+		expect(getByText("Details")).toBeTruthy();
+		expect(queryByText("Tags")).toBeNull();
 		expect(queryByText("Summary")).toBeNull();
 	});
 
 	it("keeps the timings in Details and never prints the subject", () => {
-		// Which column a fact lands in is the whole point of the redesign — a
-		// panel that renders both headings but files the subject under Tags would
-		// pass a heading-only check.
 		const { container, queryByText } = render(
 			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
 		);
 		expect(column(container, "call-details")?.querySelector('[data-field="start"]')).not.toBeNull();
 		expect(container.querySelector('[data-field="subject"]')).toBeNull();
 		expect(queryByText(makeMeta().subject as string)).toBeNull();
-		expect(column(container, "tags")?.querySelectorAll("li").length).toBe(3);
 	});
 
-	it("groups chips into a labelled row per namespace, in vocabulary order", () => {
-		const { container } = render(
-			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
-		);
-		const groups = [...container.querySelectorAll("[data-tag-group]")];
-		expect(groups.map((g) => g.getAttribute("data-tag-group"))).toEqual([
-			"topic",
-			"facility",
-			"aircraft",
-		]);
-		expect(groups.map((g) => g.querySelector("dt")?.textContent)).toEqual([
-			"Topics",
-			"Facilities",
-			"Aircraft",
-		]);
-	});
-
-	it("files a tag from an unknown namespace under Other rather than dropping it", () => {
-		// mp3_tags.namespace is NOT NULL, so a ninth namespace means a curator
-		// added one. Hiding their tag would look exactly like the tag not existing.
+	it("keeps the Details column, saying so, when nothing is timeable", () => {
+		// A collapsed column would leave cards in a lane misaligned with each
+		// other, and an empty box reads as a broken tab rather than an untimed
+		// clip.
 		const { container, getByText } = render(
 			<DetailsTab
-				item={makeItem()}
-				meta={makeMeta({
-					tags: [{ tag: "weather:vfr", namespace: "weather", value: "VFR" }],
-				})}
+				item={makeItem({ start_date: "not-a-date", end_date: undefined, calc_duration: undefined })}
 				tzOffsetHours={TZ}
 			/>,
 		);
-		expect(container.querySelector('[data-tag-group="other"]')).not.toBeNull();
-		expect(getByText("VFR")).toBeTruthy();
-	});
-
-	it("keeps both columns, each saying so, for an item with no metadata", () => {
-		// Columns that collapsed would leave cards in a lane misaligned with each
-		// other, and an empty box reads as a broken tab rather than an untagged clip.
-		const { container, getByText } = render(
-			<DetailsTab item={makeItem()} tzOffsetHours={TZ} />,
-		);
 		expect(column(container, "call-details")).not.toBeNull();
-		expect(column(container, "tags")).not.toBeNull();
-		expect(getByText("No tags.")).toBeTruthy();
+		expect(getByText("No timings.")).toBeTruthy();
 	});
 });
 
@@ -100,41 +64,6 @@ describe("DetailsTab", () => {
 		expect(field(container, "end")).toMatch(/^8:49:44\sAM$/);
 		expect(field(container, "duration")).toBe("03:13");
 		expect(field(container, "link")).toBe("ZBW ↔ AAL11");
-	});
-
-	it("renders one chip per tag, labelled by its vocabulary value", () => {
-		const { getAllByRole } = render(
-			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
-		);
-		expect(getAllByRole("listitem").map((li) => li.textContent)).toEqual([
-			"Hijacking",
-			"ZBW",
-			"AAL11",
-		]);
-	});
-
-	it("colours chips by namespace, because mp3_tags.color is null on every row", () => {
-		const { getAllByRole } = render(
-			<DetailsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
-		);
-		const backgrounds = getAllByRole("listitem").map((li) => li.style.background);
-		expect(backgrounds.every((b) => b.length > 0)).toBe(true);
-		expect(new Set(backgrounds).size).toBe(3);
-	});
-
-	it("lets a curator's colour win when one is ever set", () => {
-		const { getAllByRole } = render(
-			<DetailsTab
-				item={makeItem()}
-				meta={makeMeta({
-					tags: [
-						{ tag: "facility:zbw", namespace: "facility", value: "ZBW", color: "rgb(1, 2, 3)" },
-					],
-				})}
-				tzOffsetHours={TZ}
-			/>,
-		);
-		expect(getAllByRole("listitem")[0].style.background).toBe("rgb(1, 2, 3)");
 	});
 
 	it("shifts the clock with the display offset rather than the browser's zone", () => {
@@ -160,12 +89,9 @@ describe("DetailsTab", () => {
 		expect(container.querySelector('[data-field="duration"]')).toBeNull();
 	});
 
-	it("omits the link and chips for an item with no metadata", () => {
-		const { container, queryAllByRole } = render(
-			<DetailsTab item={makeItem()} tzOffsetHours={TZ} />,
-		);
+	it("omits the link for an item with no metadata", () => {
+		const { container } = render(<DetailsTab item={makeItem()} tzOffsetHours={TZ} />);
 		expect(container.querySelector('[data-field="link"]')).toBeNull();
-		expect(queryAllByRole("listitem")).toHaveLength(0);
 		// The times come off the item itself, so they survive the metadata gap.
 		expect(field(container, "start")).toMatch(/^8:46:31\sAM$/);
 	});

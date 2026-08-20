@@ -301,6 +301,19 @@
   overflow-x: hidden;
 }
 
+// Mentions ------------------------------------------------------------------
+//
+// The second scrolling panel (issue #521). Mentions gained a tags section
+// with the same unbounded-namespace-groups shape Transcript's cue list has —
+// a clip can carry many tags, and the fixed panel height would otherwise clip
+// them the way the old Details "Tags" column did. Same rule as Transcript's
+// override: `auto`, so a short mentions panel that fits shows no scrollbar,
+// and vertical only, since the content here wraps rather than running wide.
+.rtTabPanel[data-tab="mentions"] {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .rtCueList {
   margin: 0;
   padding: 0;

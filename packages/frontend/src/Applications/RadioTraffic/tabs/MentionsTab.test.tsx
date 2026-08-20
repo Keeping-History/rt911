@@ -7,8 +7,11 @@ afterEach(cleanup);
 
 const TZ = -4;
 
+// Excludes the tags section's own `data-column="tags"` — a fifth,
+// differently-shaped section (issue #521), not one of the four mentions
+// columns this helper is naming.
 const columnNames = (root: HTMLElement) =>
-	Array.from(root.querySelectorAll("[data-column]")).map((c) =>
+	Array.from(root.querySelectorAll('[data-column]:not([data-column="tags"])')).map((c) =>
 		c.getAttribute("data-column"),
 	);
 
@@ -16,6 +19,10 @@ const columnValues = (root: HTMLElement, name: string) =>
 	Array.from(root.querySelectorAll(`[data-column="${name}"] li`)).map(
 		(li) => li.textContent,
 	);
+
+const tagsSection = (root: HTMLElement) => root.querySelector('[data-column="tags"]');
+
+const tagGroupEls = (root: HTMLElement) => [...root.querySelectorAll("[data-tag-group]")];
 
 describe("MentionsTab", () => {
 	it("renders four columns: facilities, aircraft, people and topics", () => {
@@ -113,5 +120,112 @@ describe("MentionsTab", () => {
 			/>,
 		);
 		expect(columnNames(container)).toEqual(["facilities"]);
+	});
+});
+
+// The tags section — moved here from the Details tab's Tags column (issue
+// #521), which had no vertical scroll and clipped a clip with many tags.
+// Mentions already scrolls the way Transcript does, so the chips read in
+// full here instead.
+describe("MentionsTab tags section", () => {
+	it("renders a fifth section, appended after the four mentions columns", () => {
+		const { container } = render(
+			<MentionsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
+		);
+		expect(columnNames(container)).toEqual(["facilities", "aircraft", "people", "topics"]);
+		expect(tagsSection(container)).not.toBeNull();
+	});
+
+	it("groups chips into a labelled row per namespace, in vocabulary order", () => {
+		const { container } = render(
+			<MentionsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
+		);
+		const groups = tagGroupEls(container);
+		expect(groups.map((g) => g.getAttribute("data-tag-group"))).toEqual([
+			"topic",
+			"facility",
+			"aircraft",
+		]);
+		expect(groups.map((g) => g.querySelector("dt")?.textContent)).toEqual([
+			"Topics",
+			"Facilities",
+			"Aircraft",
+		]);
+	});
+
+	it("renders one chip per tag, labelled by its vocabulary value", () => {
+		const { container } = render(
+			<MentionsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
+		);
+		const chips = [...(tagsSection(container)?.querySelectorAll("li") ?? [])];
+		expect(chips.map((li) => li.textContent)).toEqual(["Hijacking", "ZBW", "AAL11"]);
+	});
+
+	it("colours chips by namespace, because mp3_tags.color is null on every row", () => {
+		const { container } = render(
+			<MentionsTab item={makeItem()} meta={makeMeta()} tzOffsetHours={TZ} />,
+		);
+		const chips = [
+			...(tagsSection(container)?.querySelectorAll<HTMLLIElement>("li") ?? []),
+		];
+		const backgrounds = chips.map((li) => li.style.background);
+		expect(backgrounds.every((b) => b.length > 0)).toBe(true);
+		expect(new Set(backgrounds).size).toBe(3);
+	});
+
+	it("lets a curator's colour win when one is ever set", () => {
+		const { container } = render(
+			<MentionsTab
+				item={makeItem()}
+				meta={makeMeta({
+					tags: [
+						{ tag: "facility:zbw", namespace: "facility", value: "ZBW", color: "rgb(1, 2, 3)" },
+					],
+				})}
+				tzOffsetHours={TZ}
+			/>,
+		);
+		const chip = tagsSection(container)?.querySelector<HTMLLIElement>("li");
+		expect(chip?.style.background).toBe("rgb(1, 2, 3)");
+	});
+
+	it("files a tag from an unknown namespace under Other rather than dropping it", () => {
+		// mp3_tags.namespace is NOT NULL, so a ninth namespace means a curator
+		// added one. Hiding their tag would look exactly like the tag not
+		// existing.
+		const { container, getByText } = render(
+			<MentionsTab
+				item={makeItem()}
+				meta={makeMeta({
+					tags: [{ tag: "weather:vfr", namespace: "weather", value: "VFR" }],
+				})}
+				tzOffsetHours={TZ}
+			/>,
+		);
+		expect(container.querySelector('[data-tag-group="other"]')).not.toBeNull();
+		expect(getByText("VFR")).toBeTruthy();
+	});
+
+	it("omits the tags section — not a \"No tags.\" line — for an item with no tags", () => {
+		// Consistent with the four mentions columns' own empty behaviour: an
+		// absent value drops its section rather than printing that it is absent.
+		const { container, queryByText } = render(
+			<MentionsTab
+				item={makeItem()}
+				meta={makeMeta({
+					mentions: { facilities: ["ZNY"], aircraft: [], people: [] },
+					tags: [],
+				})}
+				tzOffsetHours={TZ}
+			/>,
+		);
+		expect(tagsSection(container)).toBeNull();
+		expect(queryByText("No tags.")).toBeNull();
+		expect(queryByText("Tags")).toBeNull();
+	});
+
+	it("omits the tags section for an item with no metadata at all", () => {
+		const { container } = render(<MentionsTab item={makeItem()} tzOffsetHours={TZ} />);
+		expect(tagsSection(container)).toBeNull();
 	});
 });

@@ -87,3 +87,36 @@ export function tagsIn(
 ): TagDef[] {
 	return (tags ?? []).filter((tag) => tag.namespace === namespace);
 }
+
+/** One labelled row of chips: a namespace and the tags that belong to it. */
+export interface TagGroup {
+	key: string;
+	label: string;
+	tags: TagDef[];
+}
+
+/**
+ * The tags grouped into the rows the design shows, in vocabulary order.
+ *
+ * A tag whose namespace is outside the eight tags.py emits is collected into a
+ * trailing "Other" row rather than dropped: mp3_tags.namespace is NOT NULL, so
+ * a ninth value means a curator added a namespace, and silently hiding their
+ * tag would look identical to the tag not existing.
+ *
+ * Shared by the Mentions tab's tags section and (formerly) the Details tab's
+ * Tags column — lifted here so the namespace-grouping/"Other"-bucket logic
+ * has exactly one implementation (issue #521).
+ */
+export function tagGroups(tags: readonly TagDef[] | undefined): TagGroup[] {
+	const all = tags ?? [];
+	const known = new Set<string>(TAG_NAMESPACES);
+	const groups: TagGroup[] = TAG_NAMESPACES.map((namespace) => ({
+		key: namespace,
+		label: namespaceLabel(namespace),
+		tags: all.filter((tag) => tag.namespace === namespace),
+	})).filter((group) => group.tags.length > 0);
+
+	const other = all.filter((tag) => !tag.namespace || !known.has(tag.namespace));
+	if (other.length > 0) groups.push({ key: "other", label: "Other", tags: other });
+	return groups;
+}
