@@ -35,3 +35,7 @@ packages/frontend/.husky/_/post-commit
 /packages/frontend/playwright-report/
 /packages/frontend/test-results/
 .playwright-mcp
+.vscode
+.ruff_cache
+.superpowers
+.pytest_cache

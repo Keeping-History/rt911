@@ -34,18 +34,28 @@ export interface LaneSmallPlayerProps {
 	meta?: ItemMeta;
 	/** The desktop's display offset in hours (-4 on 2001-09-11). */
 	tzOffsetHours: number;
+	/**
+	 * The virtual clock's current instant (true UTC, e.g. RadioTraffic's
+	 * `anchorMs`) — read-only, threaded through to `startLabel` so it can drop
+	 * the date when a clip started on the same display-shifted day the clock
+	 * currently reads (issue #523). NOT the ms-precise seek clock: that ticks
+	 * every render frame and would invalidate every folded card's memoisation
+	 * far more often than the day it's read for could actually change.
+	 */
+	currentMs: number | null;
 }
 
 export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
 	item,
 	meta,
 	tzOffsetHours,
+	currentMs,
 }) => {
 	const timing = itemTiming(item);
 	// The same fallback the full card uses: an untranscribed clip still has a
 	// title, and a blank quote would read as a rendering fault.
 	const subject = meta?.subject?.trim() || item.full_title;
-	const start = startLabel(timing.startMs, tzOffsetHours);
+	const start = startLabel(timing.startMs, tzOffsetHours, currentMs);
 	const duration = durationSecondsLabel(timing.durationSec);
 	const link = meta?.link?.trim();
 	const tags = meta?.tags ?? [];
