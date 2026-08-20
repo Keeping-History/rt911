@@ -1,0 +1,275 @@
+.emoticon {
+	display: inline-block;
+	width: 13px;
+	height: 13px;
+	vertical-align: -2px;
+	flex-shrink: 0;
+
+	svg {
+		width: 100%;
+		height: 100%;
+		display: block;
+	}
+}
+
+.signOn {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px;
+}
+
+.signOnLogoRow {
+	display: flex;
+	justify-content: center;
+	padding-bottom: 4px;
+}
+
+.signOnLogo {
+	display: block;
+}
+
+.signOnCheckboxes {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.signOnButtons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 6px;
+}
+
+.buddyList {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.buddyGroups {
+	flex: 1;
+	overflow-y: auto;
+}
+
+.buddyGroupHeader {
+	padding: 2px 6px;
+	font-weight: bold;
+}
+
+.buddyRow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 12px;
+	cursor: default;
+
+	// Same fallback pair classicy's own ClassicyPlacardMenuItem hover uses
+	// (dist/classicy.css: --color-theme-hover, falling back to
+	// --color-system-05) — this row is themed the same way any other
+	// hoverable list item in the library is.
+	// :not(.buddyRowSelected) matters. `.buddyRow:hover` is (0,2,0) and
+	// `.buddyRowSelected` was (0,1,0), so hover won -- and since your pointer is
+	// still on the row you just clicked, the selection colour was painted over
+	// at exactly the moment you looked for it, making clicking look inert (#326).
+	&:hover:not(.buddyRowSelected) {
+		background-color: var(--color-theme-hover, var(--color-system-05));
+	}
+}
+
+// Matches ClassicyTree's own selected-node styling
+// (.classicyTreeNodeSelected{background:var(--color-select)} /
+// .classicyTreeNodeSelected .classicyTreeNodeLabel{color:var(--color-white)}
+// in dist/classicy.css) — this list's selection uses the same theme tokens
+// as the library's native list widget, not a one-off color.
+.buddyRow.buddyRowSelected {
+	background: var(--color-select);
+	// Also beats .buddyRowOffline's grey below: a selected offline buddy should
+	// read as SELECTED first. Its offline state is still carried by the hollow
+	// dot, which the selection does not touch.
+	color: var(--color-white);
+}
+
+// Matches ClassicyTree's own disabled-node label color
+// (.classicyTreeNodeDisabled .classicyTreeNodeLabel{color:var(--color-system-05)}
+// in dist/classicy.css) — the closest existing "greyed out" convention in
+// the library, reused here for an offline buddy's row text.
+.buddyRowOffline {
+	color: var(--color-system-05);
+}
+
+// Unread count for a buddy whose chat window is closed. Deliberately NOT
+// var(--color-select) on its background: a selected row already paints itself
+// that colour (.buddyRowSelected above), which would swallow the badge whole.
+// Inverting it — the row's own surface colour behind the selection colour —
+// reads on both a plain row and a selected one, and still uses only theme
+// tokens.
+.buddyUnread {
+	margin-left: auto;
+	padding: 0 4px;
+	border: 1px solid var(--color-system-07);
+	border-radius: 7px;
+	background: var(--color-white);
+	color: var(--color-select);
+	font-size: 9px;
+	line-height: 12px;
+	font-weight: bold;
+	flex-shrink: 0;
+}
+
+.buddyDot {
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex-shrink: 0;
+
+	// Deliberate exception to the theme-token rule above: green/grey here is
+	// a semantic presence indicator (the AIM/IM "online now" traffic light),
+	// not a themed surface color, and AIM's own presence dot was never
+	// theme-coloured either — see AppearanceManager, which never targets it.
+	background: #2fa72f;
+}
+
+.buddyDotOffline {
+	background: #aaa;
+}
+
+.buddyListActions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--window-control-size);
+	padding:  calc(var(--window-padding-size)/2) var(--window-padding-size);
+	background: var(--color-system-02);
+	border-top: var(--window-border-size) solid var(--color-black);
+}
+
+.buddyListStatus {
+	// Same hairline-separator token Newsgroups.module.scss uses for
+	// .paneTitle/.groupList borders.
+	border-top: var(--window-border-size) solid var(--color-system-07);
+	height: calc(var(--window-padding-size)*2 + var(--window-border-size)*2);
+	padding: 0 var(--window-padding-size);
+	font-size: calc(var(--ui-font-size)*.75);
+	font-family: var(--ui-font);
+	background: var(--color-system-03);
+}
+
+.chatWindow {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	// min-height:0 on BOTH this and .chatTranscript, or neither scrolls. A flex
+	// item defaults to min-height:auto, which refuses to shrink below its
+	// content's intrinsic height -- so the transcript GREW with the conversation
+	// instead of scrolling, scrollHeight equalled clientHeight, and the
+	// stick-to-bottom effect in ChatWindow.tsx wrote a scrollTop that could
+	// never move (#319). Same pattern as Newsgroups.module.scss's .layout.
+	min-height: 0;
+}
+
+.chatTranscript {
+	flex: 1;
+	// See .chatWindow above -- without this, overflow-y never engages.
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--window-padding-size);
+}
+
+.chatMessage {
+	padding: 1px 0;
+}
+
+.chatMessageName {
+	font-weight: bold;
+}
+
+.chatTyping {
+	// Same hairline-separator token buddyListStatus uses above.
+	border-top: var(--window-border-size) solid var(--color-system-07);
+	padding:  calc(var(--window-padding-size)/2) var(--window-padding-size);
+	font-size: calc(var(--ui-font-size)*.75);
+	font-style: italic;
+	// Same "greyed out" convention as .buddyRowOffline above (matches
+	// ClassicyTree's disabled-node label color).
+	color: var(--color-system-05);
+}
+
+.chatCompose {
+	// Same hairline-separator token buddyListStatus/chatTyping use above.
+	border-top: var(--window-border-size) solid var(--color-system-07);
+	padding: calc(var(--window-padding-size)/2) var(--window-padding-size);
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.chatComposeRow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+
+	// Clear the window's resize grip, which classicy draws over the bottom-right
+	// corner -- right on top of the Send button (#320). Its width is
+	// calc(var(--window-padding-size) * 2.5 + var(--window-border-size) * 1.5)
+	// in classicy.css, so the gutter is derived from the same variables rather
+	// than a guessed pixel count that would drift if the theme changed.
+	padding-right: calc(var(--window-padding-size) * 2.5 + var(--window-border-size) * 1.5);
+
+	// The compose text field is the one element in this row that should
+	// stretch to fill the space between the smiley and Send buttons.
+	> :nth-child(2) {
+		flex: 1;
+	}
+}
+
+.chatComposeHint {
+	font-size: calc(var(--ui-font-size)*.75);
+	color: var(--color-system-05);
+}
+
+.chatEmoticonPicker {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	padding: 2px 0;
+}
+
+.infoWindow {
+	display: flex;
+	flex-direction: column;
+	gap: var(--window-control-size);
+	padding: var(--window-padding-size);
+	height: 100%;
+}
+
+.infoRow {
+	font-size: calc(var(--ui-font-size)*.75);
+}
+
+.infoLabel {
+	font-weight: bold;
+}
+
+.infoProfile {
+	flex: 1;
+	overflow-y: auto;
+	// Same hairline-separator token buddyListStatus/chatCompose use above, used
+	// here as a full border rather than just a top rule since this is a
+	// standalone read-only text area, not a divider between two rows.
+	border: var(--window-border-size) solid var(--color-system-07);
+	background: var(--color-white);
+	padding: calc(var(--window-padding-size)/2);
+	white-space: pre-wrap;
+}
+
+// The menu-bar extension shows the app icon alone rather than a word (#323):
+// a menu-bar extra is an icon-sized slot, and two words of chrome for one app
+// crowded it.
+.menuBarIcon {
+	display: block;
+	width: 16px;
+	height: 16px;
+	object-fit: contain;
+}

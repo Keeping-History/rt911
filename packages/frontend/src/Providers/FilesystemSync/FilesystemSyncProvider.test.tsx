@@ -8,6 +8,7 @@ const dispatch = vi.fn();
 vi.mock("classicy", () => ({
 	useClassicyFileSystem: () => ({ reconcileWithAdapters, load, snapshot }),
 	dispatch: (...a: unknown[]) => dispatch(...a),
+	registerApp: () => {},
 }));
 
 const authState: { status: string; user: unknown } = { status: "loading", user: null };

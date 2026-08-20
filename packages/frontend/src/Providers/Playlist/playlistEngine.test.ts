@@ -106,3 +106,64 @@ describe("initialFocusEvents", () => {
 		expect(events.map((e) => (e.kind === "focus" ? e.itemId : ""))).toEqual(["wnyc"]);
 	});
 });
+
+describe("playlist-level window", () => {
+	// def with a playlist window wrapped around the same entries: the class
+	// runs 12:45–13:10 (half-open), so the 13:03 jump is in but nothing after
+	// 13:10 can happen.
+	const windowed: PlaylistDefinition = {
+		...def,
+		start: "2001-09-11T12:45:00",
+		end: "2001-09-11T13:10:00",
+	};
+
+	it("outside the window, restrict mode locks everything out but frees the desktop", () => {
+		for (const t of [T("12:44:59"), T("13:10:00"), T("15:00:00")]) {
+			const snap = evaluate(windowed, t);
+			// Unbounded entry ABC would be available at these times without the window.
+			expect(snap.isItemAvailable("tv", "ABC")).toBe(false);
+			expect(snap.disabledApps.size).toBe(0);
+			expect(snap.lockedFocus.size).toBe(0);
+			expect(snap.lockedSettings.size).toBe(0);
+			expect(snap.browserShouldBe).toEqual({ open: false });
+		}
+	});
+
+	it("outside the window is a stable snapshot reference (provider diffing)", () => {
+		expect(evaluate(windowed, T("12:00:00"))).toBe(evaluate(windowed, T("12:30:00")));
+	});
+
+	it("outside the window, annotate mode is simply inactive (ALLOW_ALL)", () => {
+		const annotate = { ...windowed, mode: "annotate" as const };
+		expect(evaluate(annotate, T("12:00:00"))).toBe(ALLOW_ALL);
+		// Inside the window annotate still window-binds its listed items.
+		expect(evaluate(annotate, T("13:00:00")).isItemAvailable("tv", "NBC")).toBe(true);
+	});
+
+	it("inside the window everything behaves as without one, boundaries half-open", () => {
+		expect(evaluate(windowed, T("12:45:00")).isItemAvailable("tv", "ABC")).toBe(true);
+		expect(evaluate(windowed, T("13:09:59")).isItemAvailable("tv", "ABC")).toBe(true);
+		expect(evaluate(windowed, T("12:50:00")).disabledApps.has("TimeMachine.app")).toBe(true);
+		expect(evaluate(windowed, T("12:50:00")).lockedFocus.get("tv")).toBe("CNN");
+	});
+
+	it("collectCrossings skips triggers scheduled outside the window", () => {
+		// Without the window this range fires file(13:00) + jump(13:03); with an
+		// end at 13:02 the jump is outside the playlist and must not fire even
+		// though the clock crossed it.
+		const shortEnd = { ...windowed, end: "2001-09-11T13:02:00" };
+		const events = collectCrossings(shortEnd, T("12:59:59"), T("13:03:00"));
+		expect(events.map((e) => e.kind)).toEqual(["file"]);
+		// The full window keeps both.
+		expect(
+			collectCrossings(windowed, T("12:59:59"), T("13:03:00")).map((e) => e.kind),
+		).toEqual(["file", "jump"]);
+	});
+
+	it("initialFocusEvents is empty when joining outside the window", () => {
+		expect(initialFocusEvents(windowed, T("12:00:00"))).toEqual([]);
+		expect(initialFocusEvents(windowed, T("13:10:00"))).toEqual([]);
+		// Joining inside still tunes.
+		expect(initialFocusEvents(windowed, T("12:50:00")).length).toBeGreaterThan(0);
+	});
+});

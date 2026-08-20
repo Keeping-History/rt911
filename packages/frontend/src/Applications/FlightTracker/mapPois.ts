@@ -1,3 +1,5 @@
+import type { FlightPoiSettings } from "./flightMapSettings";
+
 // POI markers loaded from the Directus `map_pois` collection. A POI belongs to
 // a named `layer` (the toggle unit) and a `category` (render/behavior class).
 // Airport-specific statistics live in the free-form `details` blob so the
@@ -61,3 +63,66 @@ export const POI_DETAIL_FIELDS: ReadonlyArray<{
 	{ key: "opened_year", label: "Opened", format: String },
 	{ key: "note", label: "Note", format: String },
 ];
+
+// Distinct, legible-on-both-tones cluster-dot colors, indexed by layer. Cycles
+// if there are ever more layers than entries.
+export const POI_LAYER_PALETTE: readonly string[] = [
+	"#c0202a", // red
+	"#1f6feb", // blue
+	"#2e8b57", // sea green
+	"#b8860b", // dark goldenrod
+	"#8a2be2", // blue violet
+	"#e0692b", // orange
+];
+
+export interface PoiLayerConfig {
+	layer: string;
+	index: number;
+	color: string;
+	clustered: boolean;
+}
+
+/** One config per ENABLED layer (sorted), with its palette color + clustering flag. */
+export function poiLayerConfigs(
+	allPois: MapPoi[],
+	settings: FlightPoiSettings,
+): PoiLayerConfig[] {
+	if (!settings.enabled) return [];
+	const off = new Set(settings.disabledLayers);
+	const unclustered = new Set(settings.unclusteredLayers);
+	return distinctLayers(allPois)
+		.filter((l) => !off.has(l))
+		.map((layer, index) => ({
+			layer,
+			index,
+			color: POI_LAYER_PALETTE[index % POI_LAYER_PALETTE.length],
+			clustered: !unclustered.has(layer),
+		}));
+}
+
+export const LARGEST_HUB_CLASS = "Large";
+
+/** Airport POIs are limited to Large hubs; other categories pass through. */
+export function unclusteredAirportFilter(pois: MapPoi[]): MapPoi[] {
+	return pois.filter(
+		(p) => p.category !== "airport" || p.details?.hub_class === LARGEST_HUB_CLASS,
+	);
+}
+
+/** Partition enabled POIs into the clustered vs plain source feeds. */
+export function splitPoisForRender(
+	enabledPois: MapPoi[],
+	configs: PoiLayerConfig[],
+): { clustered: MapPoi[]; plain: MapPoi[] } {
+	const clusteredLayers = new Set(configs.filter((c) => c.clustered).map((c) => c.layer));
+	const clustered = enabledPois.filter((p) => clusteredLayers.has(p.layer));
+	const plain = unclusteredAirportFilter(
+		enabledPois.filter((p) => !clusteredLayers.has(p.layer)),
+	);
+	return { clustered, plain };
+}
+
+/** layer name → config index (for the GeoJSON stamp + cluster-color match). */
+export function layerIndexOf(configs: PoiLayerConfig[]): Map<string, number> {
+	return new Map(configs.map((c) => [c.layer, c.index]));
+}

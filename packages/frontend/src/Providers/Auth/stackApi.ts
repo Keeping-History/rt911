@@ -2,7 +2,7 @@
 // user's Directus session cookie; the Teacher policy's permissions are
 // own-rows-only, so list needs no client-side filter (unlike playlistApi).
 import { validateStack } from "classicy";
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 import { AuthRequiredError, ForbiddenError } from "./authApi";
 
 export interface StackSummary {

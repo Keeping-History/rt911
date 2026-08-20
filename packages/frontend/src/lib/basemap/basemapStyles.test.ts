@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	BASEMAP_URLS,
 	TERRAIN_SOURCE,
@@ -7,6 +7,8 @@ import {
 	basemapPalette,
 	buildBasemapStyle,
 	effectiveTone,
+	HIRES_BORDER_FADE,
+	NE_BORDER_FADE,
 	groundVisibility,
 	hillshadePalette,
 	hillshadeVisibility,
@@ -19,6 +21,8 @@ const URLS = {
 	satelliteDay: "https://x.example/day.pmtiles",
 	satelliteNight: "https://x.example/night.pmtiles",
 	terrainDem: "https://x.example/dem.pmtiles",
+	coast: "https://x.example/coast.pmtiles",
+	borders: "https://x.example/borders.pmtiles",
 };
 
 const ALL_STYLES: BasemapStyleId[] = ["classic", "radar", "satellite"];
@@ -46,11 +50,41 @@ describe("normalizeBasemapStyle", () => {
 });
 
 describe("BASEMAP_URLS", () => {
-	it("defaults to the files.911realtime.org maps/ prefix", () => {
-		expect(BASEMAP_URLS.vector).toContain("/maps/world-basemap.pmtiles");
-		expect(BASEMAP_URLS.satelliteDay).toContain("/maps/na-satellite-day.pmtiles");
-		expect(BASEMAP_URLS.satelliteNight).toContain("/maps/na-satellite-night.pmtiles");
-		expect(BASEMAP_URLS.terrainDem).toContain("/maps/terrain-dem.pmtiles");
+	// Every URL is env-overridable, and the module reads import.meta.env once at
+	// import time — so asserting the ambient BASEMAP_URLS tests whatever the
+	// developer's .env happens to say, not the shipped default. Clear the
+	// overrides and re-import to get at the real defaults.
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		vi.resetModules();
+	});
+
+	it("defaults to the files.911realtime.org maps/ prefix", async () => {
+		for (const key of [
+			"VITE_FLIGHT_BASEMAP_URL",
+			"VITE_SATELLITE_DAY_BASEMAP_URL",
+			"VITE_SATELLITE_NIGHT_BASEMAP_URL",
+			"VITE_TERRAIN_DEM_URL",
+		]) {
+			vi.stubEnv(key, undefined);
+		}
+		vi.resetModules();
+		const { BASEMAP_URLS: defaults } = await import("./basemapStyles");
+
+		expect(defaults.vector).toContain("/maps/world-basemap.pmtiles");
+		expect(defaults.satelliteDay).toContain("/maps/na-satellite-day.pmtiles");
+		expect(defaults.satelliteNight).toContain("/maps/na-satellite-night.pmtiles");
+		expect(defaults.terrainDem).toContain("/maps/terrain-dem.pmtiles");
+	});
+
+	it("lets the environment override a default", async () => {
+		vi.stubEnv("VITE_FLIGHT_BASEMAP_URL", "https://x.example/rollback.pmtiles");
+		vi.resetModules();
+		const { BASEMAP_URLS: overridden } = await import("./basemapStyles");
+
+		expect(overridden.vector).toBe("https://x.example/rollback.pmtiles");
+		// Unrelated keys keep their defaults rather than collapsing together.
+		expect(overridden.terrainDem).toContain("/maps/terrain-dem.pmtiles");
 	});
 });
 
@@ -72,12 +106,12 @@ describe("buildBasemapStyle — superset structure", () => {
 		expect(night.type).toBe("raster");
 	});
 
-	it("orders layers background → rasters → land/lakes → hillshades → countries/states", () => {
+	it("orders layers background → rasters → land/coast/lakes → hillshades → countries/states", () => {
 		expect(style.layers.map((l) => l.id)).toEqual([
 			"background", "satellite-day", "satellite-night",
-			"land", "lakes",
+			"land", "coast-land", "lakes",
 			"hillshade-classic", "hillshade-radar", "hillshade-satellite",
-			"countries", "states",
+			"countries", "states", "borders-countries", "borders-states",
 		]);
 	});
 
@@ -126,9 +160,9 @@ describe("groundVisibility matrix", () => {
 });
 
 describe("basemapPalette", () => {
-	it("classic palettes are the original paper and slate values", () => {
-		expect(basemapPalette("classic", false).background).toBe("#efe9dd");
-		expect(basemapPalette("classic", true).background).toBe("#1c1c22");
+	it("classic palettes are water-toned", () => {
+		expect(basemapPalette("classic", false).background).toBe("#aeb9bf");
+		expect(basemapPalette("classic", true).background).toBe("#12151c");
 	});
 	it("radar returns the same phosphor palette regardless of darkMap", () => {
 		expect(basemapPalette("radar", false)).toEqual(basemapPalette("radar", true));
@@ -137,6 +171,15 @@ describe("basemapPalette", () => {
 	it("satellite borders are translucent white over imagery", () => {
 		expect(basemapPalette("satellite", false).countries).toContain("rgba(255,255,255");
 		expect(basemapPalette("satellite", true).countries).toContain("rgba(255,255,255");
+	});
+	it("classic uses a water-toned background and lakes; radar/satellite unchanged", () => {
+		expect(basemapPalette("classic", false).background).toBe("#aeb9bf");
+		expect(basemapPalette("classic", false).lakes).toBe("#aeb9bf");
+		expect(basemapPalette("classic", true).background).toBe("#12151c");
+		expect(basemapPalette("classic", true).lakes).toBe("#12151c");
+		// unchanged
+		expect(basemapPalette("radar", false).background).toBe("#041004");
+		expect(basemapPalette("satellite", false).background).toBe("#0b1b33");
 	});
 });
 
@@ -212,6 +255,26 @@ describe("applyBasemapStyle", () => {
 		expect(map.layout["hillshade-classic"].visibility).toBe("none");
 		expect(map.layout["hillshade-radar"].visibility).toBe("none");
 		expect(map.layout["hillshade-satellite"].visibility).toBe("none");
+	});
+
+	it("recolors coast-land and shows it in classic, hides it in satellite", () => {
+		const classicMap = recordingMap();
+		applyBasemapStyle(classicMap, "classic", false);
+		expect(classicMap.layout["coast-land"].visibility).toBe("visible");
+		expect(classicMap.paint["coast-land"]["fill-color"]).toBe(
+			basemapPalette("classic", false).land,
+		);
+
+		const satMap = recordingMap();
+		applyBasemapStyle(satMap, "satellite", false);
+		expect(satMap.layout["coast-land"].visibility).toBe("none");
+	});
+
+	it("recolors the high-res border lines on a live switch (parity with build)", () => {
+		const map = recordingMap();
+		applyBasemapStyle(map, "radar", false);
+		expect(map.paint["borders-countries"]["line-color"]).toBe(basemapPalette("radar", false).countries);
+		expect(map.paint["borders-states"]["line-color"]).toBe(basemapPalette("radar", false).states);
 	});
 });
 
@@ -326,5 +389,85 @@ describe("terrain source + hillshade layers", () => {
 		expect(paint("hillshade-classic")["hillshade-exaggeration"]).toBe(
 			hillshadePalette("classic", true).exaggeration,
 		);
+	});
+});
+
+describe("coast overlay (CONUS coastline)", () => {
+	const style = buildBasemapStyle(URLS, "classic", false);
+
+	it("adds the coast vector source", () => {
+		expect(style.sources.coast).toEqual({
+			type: "vector",
+			url: "pmtiles://https://x.example/coast.pmtiles",
+		});
+	});
+
+	it("adds a coast-land fill ordered after land and before lakes", () => {
+		const ids = style.layers.map((l) => l.id);
+		expect(ids).toContain("coast-land");
+		expect(ids.indexOf("coast-land")).toBeGreaterThan(ids.indexOf("land"));
+		expect(ids.indexOf("coast-land")).toBeLessThan(ids.indexOf("lakes"));
+	});
+
+	it("paints coast-land with the land color and shows it wherever the vector ground shows", () => {
+		const layer = style.layers.find((l) => l.id === "coast-land");
+		expect(layer).toMatchObject({
+			source: "coast",
+			"source-layer": "land",
+			paint: { "fill-color": basemapPalette("classic", false).land },
+			layout: { visibility: "visible" },
+		});
+	});
+
+	it("hides coast-land in satellite mode (raster is the ground)", () => {
+		const sat = buildBasemapStyle(URLS, "satellite", false);
+		const layer = sat.layers.find((l) => l.id === "coast-land");
+		expect(layer?.layout?.visibility).toBe("none");
+	});
+
+	it("BASEMAP_URLS.coast defaults to the hosted conus-coast file", () => {
+		expect(BASEMAP_URLS.coast).toContain("/maps/conus-coast.pmtiles");
+	});
+});
+
+describe("high-res border lines (CONUS boundaries)", () => {
+	const style = buildBasemapStyle(URLS, "classic", false);
+	const layer = (id: string) => style.layers.find((l) => l.id === id);
+
+	it("adds the borders vector source", () => {
+		expect(style.sources.borders).toEqual({
+			type: "vector",
+			url: "pmtiles://https://x.example/borders.pmtiles",
+		});
+	});
+
+	it("adds borders-countries and borders-states line layers over the coarse NE lines", () => {
+		const ids = style.layers.map((l) => l.id);
+		expect(ids.indexOf("borders-countries")).toBeGreaterThan(ids.indexOf("countries"));
+		expect(ids.indexOf("borders-states")).toBeGreaterThan(ids.indexOf("states"));
+		expect(layer("borders-countries")).toMatchObject({
+			source: "borders", "source-layer": "countries",
+			paint: { "line-color": basemapPalette("classic", false).countries, "line-opacity": HIRES_BORDER_FADE },
+		});
+		expect(layer("borders-states")).toMatchObject({
+			source: "borders", "source-layer": "states",
+			paint: { "line-color": basemapPalette("classic", false).states, "line-opacity": HIRES_BORDER_FADE },
+		});
+	});
+
+	it("fades the coarse NE world lines out by z7 (handoff to the overlay)", () => {
+		const paintOf = (id: string) => layer(id)?.paint as Record<string, unknown> | undefined;
+		expect(paintOf("countries")?.["line-opacity"]).toEqual(NE_BORDER_FADE);
+		expect(paintOf("states")?.["line-opacity"]).toEqual(NE_BORDER_FADE);
+	});
+
+	it("both border tiers are gone by building zoom (opacity 0 at the last stop)", () => {
+		// HIRES fades out to 0 at z13.5; NE fades out to 0 at z7 — no boundary line at street scale.
+		expect(HIRES_BORDER_FADE.at(-1)).toBe(0);
+		expect(NE_BORDER_FADE.at(-1)).toBe(0);
+	});
+
+	it("BASEMAP_URLS.borders defaults to the hosted conus-borders file", () => {
+		expect(BASEMAP_URLS.borders).toContain("/maps/conus-borders.pmtiles");
 	});
 });

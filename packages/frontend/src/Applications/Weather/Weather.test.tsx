@@ -101,6 +101,8 @@ vi.mock("classicy", () => ({
 		/>
 	),
 	registerAppEventHandler: () => {},
+	registerApp: () => {},
+	getAppManifest: () => undefined,
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({
 			System: {
@@ -117,6 +119,7 @@ vi.mock("classicy", () => ({
 	ClassicyIcons: { applications: {} },
 	registerClassicyIcons: <T,>(icons: T) => icons,
 	quitMenuItemHelper: () => ({}),
+	useClassicyHelpMenu: () => {},
 	useClassicyDateTime: () => ({
 		dateTime: mockClock.current,
 		tzOffset: 0,
@@ -201,6 +204,8 @@ function makeCtxValue(
 		pagerItems: [],
 		mp3Items: [],
 		mp3History: [],
+		mp3Meta: {},
+		mp3MetaGeneration: null,
 		newsItems: [],
 		alertItems: [],
 		subscribeAlerts: () => {},
@@ -209,6 +214,9 @@ function makeCtxValue(
 		usenetBodies: {},
 		usenetBodyErrors: {},
 		requestUsenetBody: () => {},
+		newsBodies: {},
+		newsBodyErrors: {},
+		requestNewsBody: () => {},
 		sources: { video: [], audio: [], pager: [], usenet: [] },
 		connected: false,
 		addItems: () => {},
@@ -228,6 +236,8 @@ function makeCtxValue(
 		flightPositions: [],
 		subscribeFlights: () => {},
 		unsubscribeFlights: () => {},
+		subscribeFlightsAnon: () => {},
+		unsubscribeFlightsAnon: () => {},
 		flightsHistory: [],
 		flightsHistoryDone: false,
 		flightsSeed: [],
@@ -239,6 +249,19 @@ function makeCtxValue(
 		unsubscribeWeather: () => {},
 		requestWeatherForecast: () => {},
 		clockForced: false,
+		seekInFlight: false,
+		roomCommand: null,
+		chatBuddies: [],
+		chatEnabled: false,
+		chatReason: "not_signed_in",
+		chatMessages: [],
+		chatTypingProfile: null,
+		subscribeChat: () => {},
+		unsubscribeChat: () => {},
+		sendChat: () => {},
+		requestChatHistory: () => {},
+		appendLocalChatMessage: () => {},
+		clearChatData: () => {},
 		...overrides,
 	};
 }

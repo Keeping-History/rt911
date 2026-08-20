@@ -1,5 +1,6 @@
 import {
 	ClassicyApp,
+	ClassicyBalloonHelp,
 	ClassicyButton,
 	ClassicyCheckbox,
 	ClassicyColorPicker,
@@ -15,8 +16,10 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import type {
 	MediaItem,
 	MediaStreamFilter,
@@ -39,6 +42,10 @@ import {
 	tvSetVolumeLimit,
 } from "./TVContext";
 import { moveChannel, orderChannels } from "./channelOrder";
+import { ThumbnailTile } from "./ThumbnailTile";
+import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
+import type { EpgIconNamespace } from "./epgIcons";
+import multiviewIcon from "./multiview.png";
 import { useThumbnailReorder } from "./useThumbnailReorder";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
 import { bumpToLevel, maybeProbeUp, TV_ABR_CONFIG } from "./abr";
@@ -89,7 +96,11 @@ type ClassicyTVProps = Record<string, never>;
 export const TV: React.FC<ClassicyTVProps> = () => {
 	const appName = "TV";
 	const appId = "TV.app";
-	const appIcon = ClassicyIcons.applications.epg.app as string;
+	// classicy no longer declares the epg namespace — epgIcons.ts registers it,
+	// so the read goes through a cast at the registered address.
+	const epgIconSet = (ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg;
+	const appIcon = epgIconSet.app;
+	const aboutWindow = useAboutApp(appId, appIcon);
 
 	const desktopEventDispatch = useAppManagerDispatch();
 	const appState = useAppManager(
@@ -219,19 +230,13 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	const [multiSelectMode, setMultiSelectMode] = useState<boolean>(
 		(appState?.data?.multiSelectMode as boolean) ?? false,
 	);
-	const [selectedPlayers, setSelectedPlayers] = useState<number[]>(
-		(appState?.data?.selectedPlayers as number[]) ?? [],
-	);
-	const [mutedGridPlayers, setMutedGridPlayers] = useState<number[]>(
-		(appState?.data?.mutedGridPlayers as number[]) ?? [],
-	);
-	// Per-player volume (0..1) keyed by item id. A missing entry plays at full
-	// (1.0), still capped by the universal volumeLimit. Persisted alongside the
-	// mute set through ClassicyAppTVSetGridState — but only on slider release,
-	// not on every drag tick (see persistGridState).
+	const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
+	const [mutedGridPlayers, setMutedGridPlayers] = useState<number[]>([]);
+	// Per-player volume (0..1) keyed by item id. Restored from channelVolumes
+	// (slug-keyed) once items arrive; see the restore effect below.
 	const [gridPlayerVolumes, setGridPlayerVolumes] = useState<
 		Record<number, number>
-	>((appState?.data?.gridPlayerVolumes as Record<number, number>) ?? {});
+	>({});
 	// Live universal volume ceiling driving every player. Seeded from the persisted
 	// value and updated on each slider tick for immediate audio response, but only
 	// written back to the store on slider release (see the slider's onCommitFunc).
@@ -328,6 +333,47 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			setActivePlayer(items[0].id);
 		}
 	}, [items, activePlayer]);
+
+	// One-shot restore of the persisted selection. Persistence stores channel
+	// identity as `source` slugs (ids rotate on program rollover / fresh stream),
+	// so we resolve slugs → current item ids the first time items arrive. Guarded
+	// by restoredRef so it runs exactly once and never clobbers later user edits.
+	const restoredRef = useRef(false);
+	useEffect(() => {
+		if (restoredRef.current || items.length === 0) return;
+		restoredRef.current = true;
+		const data = appState?.data ?? {};
+		const slugToId = (slug: string) =>
+			items.find((i) => i.source === slug)?.id;
+
+		const currentChannel = data.currentChannel as string | undefined;
+		if (currentChannel) {
+			const id = slugToId(currentChannel);
+			if (id !== undefined) setActivePlayer(id);
+		}
+
+		const selectedChannels = (data.selectedChannels as string[] | undefined) ?? [];
+		const restoredSelected = selectedChannels
+			.map(slugToId)
+			.filter((id): id is number => id !== undefined);
+		if (restoredSelected.length > 0) setSelectedPlayers(restoredSelected);
+
+		const mutedChannels = (data.mutedChannels as string[] | undefined) ?? [];
+		const restoredMuted = mutedChannels
+			.map(slugToId)
+			.filter((id): id is number => id !== undefined);
+		if (restoredMuted.length > 0) setMutedGridPlayers(restoredMuted);
+
+		const channelVolumes =
+			(data.channelVolumes as Record<string, number> | undefined) ?? {};
+		const restoredVolumes: Record<number, number> = {};
+		for (const [slug, vol] of Object.entries(channelVolumes)) {
+			const id = slugToId(slug);
+			if (id !== undefined) restoredVolumes[id] = vol;
+		}
+		if (Object.keys(restoredVolumes).length > 0)
+			setGridPlayerVolumes(restoredVolumes);
+	}, [items, appState]);
 
 	// Show the loading overlay whenever we switch channels.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on channel change
@@ -492,18 +538,39 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 	// only changes when layout/mute change — a volume drag does not re-fire the
 	// effect below. The final dragged value is committed explicitly on release.
 	const persistGridState = useCallback(() => {
+		const idToSlug = (id: number) =>
+			itemsRef.current.find((i) => i.id === id)?.source;
+		const selectedChannels = selectedPlayers
+			.map(idToSlug)
+			.filter((s): s is string => !!s);
+		const mutedChannels = mutedGridPlayers
+			.map(idToSlug)
+			.filter((s): s is string => !!s);
+		const channelVolumes: Record<string, number> = {};
+		for (const [id, vol] of Object.entries(gridPlayerVolumesRef.current)) {
+			const slug = idToSlug(Number(id));
+			if (slug) channelVolumes[slug] = vol;
+		}
 		desktopEventDispatch({
 			type: "ClassicyAppTVSetGridState",
 			multiSelectMode,
-			selectedPlayers,
-			mutedGridPlayers,
-			gridPlayerVolumes: gridPlayerVolumesRef.current,
+			selectedChannels,
+			mutedChannels,
+			channelVolumes,
 		});
 	}, [multiSelectMode, selectedPlayers, mutedGridPlayers, desktopEventDispatch]);
 
 	// Persist on mount and whenever layout/mute change (volumes ride along from
 	// the ref). Per-player volume drags persist via persistGridState on release.
+	// Skip the very first run: on mount the selection is empty/not-yet-restored,
+	// and persisting it would overwrite the stored slugs the restore effect reads.
+	// The restore effect's setState re-fires this via persistGridState's identity.
+	const persistedOnceRef = useRef(false);
 	useEffect(() => {
+		if (!persistedOnceRef.current) {
+			persistedOnceRef.current = true;
+			return;
+		}
 		persistGridState();
 	}, [persistGridState]);
 
@@ -668,17 +735,37 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 		[orderedItems, activePlayer],
 	);
 
+	// Menu items are plain data, so balloon help rides along as the `balloon`
+	// field rather than a <ClassicyBalloonHelp> wrapper (which is only for JSX
+	// controls like the buttons below). quitMenuItemHelper builds the item
+	// without one, so the help text is layered on by spreading — built once here
+	// because the same item appears in both File and Edit and shouldn't drift.
+	const quitMenuItem = {
+		...quitMenuItemHelper(appId, appName, appIcon),
+		balloon: {
+			title: "Quit",
+			content: `Close ${appName} and stop playing every channel. Your channel order and volume are remembered for next time.`,
+		},
+	};
+
 	const appMenu = [
 		{
 			id: "file",
 			title: "File",
+			menuChildren: [
+				quitMenuItem,
+			],
+		},
+		{
+			id: "edit",
+			title: "Edit",
 			menuChildren: [
 				{
 					id: `${appId}_settings`,
 					title: "Settings…",
 					onClickFunc: openSettings,
 				},
-				quitMenuItemHelper(appId, appName, appIcon),
+				quitMenuItem,
 			],
 		},
 		{
@@ -689,18 +776,23 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					id: `${appId}_show_epg`,
 					title: "Show EPG",
 					onClickFunc: () => setShowEpg(true),
+					balloon: {
+						content:
+							"Open the on-screen program guide listing what is playing on each channel.",
+					},
 				},
 				{
 					id: `${appId}_channel_up`,
 					title: "Channel ▲",
 					onClickFunc: () => changeChannel(1),
+					balloon: { content: "Switch to the next channel up." },
 				},
 				{
 					id: `${appId}_channel_down`,
 					title: "Channel ▼",
 					onClickFunc: () => changeChannel(-1),
+					balloon: { content: "Switch to the next channel down." },
 				},
-				quitMenuItemHelper(appId, appName, appIcon),
 			],
 		},
 		{
@@ -711,11 +803,22 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					id: `${appId}_mute_all`,
 					title: `${volumeLimit == 0 ? "✓ " : "  "} Mute${volumeLimit ==0 ? "d" : ""}`,
 					onClickFunc: () => volumeLimit == 0 ? setVolumeLimit(100) : setVolumeLimit(0),
+					balloon: {
+						content:
+							volumeLimit == 0
+								? "Turn the sound back on for every channel."
+								: "Silence every channel without pausing playback.",
+					},
 				},
 				{
 					id: `${appId}_pause_all`,
 					title: `${tvPaused ? "✓ " : "  "} Pause${tvPaused ? "d" : ""}`,
-					onClickFunc: () => desktopEventDispatch(tvPaused ? tvResume() : tvPause())
+					onClickFunc: () => desktopEventDispatch(tvPaused ? tvResume() : tvPause()),
+					balloon: {
+						content: tvPaused
+							? "Resume playback on every channel."
+							: "Pause playback on every channel, freezing the picture.",
+					},
 				},
 			],
 		},
@@ -727,12 +830,14 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 			name={appName}
 			icon={appIcon}
 			defaultWindow={`${appId}_main`}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{showSettings && (
 				<ClassicyWindow
 					id={`${appId}_settings`}
 					title={"Settings"}
 					appId={appId}
+					icon={appIcon}
 					closable={true}
 					resizable={false}
 					zoomable={false}
@@ -862,6 +967,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 				id={`${appId}_main`}
 				title={appName}
 				appId={appId}
+				icon={appIcon}
 				closable={true}
 				resizable={true}
 				zoomable={true}
@@ -1022,38 +1128,93 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					<div className={styles.tvBottomRow}>
 						<div className={styles.tvControlPanel}>
 							<div className={styles.tvControlButtons}>
-								<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
-									MultiView
-								</ClassicyButton>
-								<ClassicyButton
-									onClickFunc={() =>
-										desktopEventDispatch(tvPaused ? tvResume() : tvPause())
+								<ClassicyBalloonHelp
+									content={
+										multiSelectMode
+											? "Go back to watching one channel at a time."
+											: "Watch several channels at once. Click thumbnails below to add them to the grid."
 									}
-									depressed={tvPaused}
-									buttonSize="small"
-									margin="sm" padding="sm"
 								>
-									{tvPaused ? "Play" : "Pause"}
-								</ClassicyButton>
-								<ClassicyButton
-									onClickFunc={() => {
-										setHasInteracted(true);
-										desktopEventDispatch(tvSetMuted(!overallMuted));
-									}}
-									depressed={overallMuted}
-									buttonSize="small"
-									margin="sm" padding="sm"
+									<ClassicyButton onClickFunc={toggleMultiSelect} depressed={multiSelectMode} buttonSize="small" margin="sm" padding="sm">
+										{/* alt is the button's accessible name now that the label is gone —
+										    the balloon help above explains, but only on hover. */}
+										<img className={styles.tvControlIcon} src={multiviewIcon} alt="MultiView" />
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
+								<ClassicyBalloonHelp
+									content={
+										tvPaused
+											? "Resume playback on every channel."
+											: "Pause playback on every channel, freezing the picture."
+									}
 								>
-									Mute
-								</ClassicyButton>
-								<ClassicyButton
-									onClickFunc={() => setCaptionsOn((v) => !v)}
-									depressed={captionsOn}
-									buttonSize="small"
-									margin="sm" padding="sm"
+									<ClassicyButton
+										onClickFunc={() =>
+											desktopEventDispatch(tvPaused ? tvResume() : tvPause())
+										}
+										depressed={tvPaused}
+										buttonSize="small"
+										margin="sm" padding="sm"
+									>
+										{/* The icon shows the ACTION, not the state: paused offers Play. */}
+										<img
+											className={styles.tvControlIcon}
+											src={(tvPaused
+												? ClassicyIcons.system.quicktime.playButton
+												: ClassicyIcons.system.quicktime.pauseButton) as string}
+											alt={tvPaused ? "Play" : "Pause"}
+										/>
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
+								<ClassicyBalloonHelp
+									content={
+										overallMuted
+											? "Turn the sound back on for every channel."
+											: "Silence every channel without pausing playback."
+									}
 								>
-									{captionsOn ? "CC On" : "CC Off"}
-								</ClassicyButton>
+									<ClassicyButton
+										onClickFunc={() => {
+											setHasInteracted(true);
+											desktopEventDispatch(tvSetMuted(!overallMuted));
+										}}
+										depressed={overallMuted}
+										buttonSize="small"
+										margin="sm" padding="sm"
+									>
+										{/* Same speaker pair the per-grid-player mute button already uses,
+										    so one convention covers both mute controls in this app. */}
+										<img
+											className={styles.tvControlIcon}
+											src={(overallMuted
+												? ClassicyIcons.controlPanels.soundManager.soundMute
+												: ClassicyIcons.controlPanels.soundManager.soundOn) as string}
+											alt={overallMuted ? "Unmute" : "Mute"}
+										/>
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
+								<ClassicyBalloonHelp
+									content={
+										captionsOn
+											? "Hide the closed captions shown over the picture."
+											: "Show closed captions over the picture."
+									}
+								>
+									<ClassicyButton
+										onClickFunc={() => setCaptionsOn((v) => !v)}
+										depressed={captionsOn}
+										buttonSize="small"
+										margin="sm" padding="sm"
+									>
+										{/* One artwork for both states — the pressed styling carries on/off
+										    visually, so the alt text has to carry it for everyone else. */}
+										<img
+											className={styles.tvControlIcon}
+											src={epgIconSet.cc}
+											alt={captionsOn ? "Closed captions on" : "Closed captions off"}
+										/>
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
 							</div>
 							<ClassicySlider
 								id="tv_universal_volume"
@@ -1075,33 +1236,45 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 							<div className={styles.tvChannelButtons}>
 								{!multiSelectMode && (
 									<>
-										<ClassicyButton
-											onClickFunc={() => changeChannel(1)}
-											buttonSize="small"
-											margin="sm"
-											padding="sm"
-										>
-											▲
-										</ClassicyButton>
-										<ClassicyButton
-											onClickFunc={() => changeChannel(-1)}
-											buttonSize="small"
-											margin="sm"
-											padding="sm"
-										>
-											▼
-										</ClassicyButton>
+										<ClassicyBalloonHelp content="Switch to the next channel up.">
+											<ClassicyButton
+												onClickFunc={() => changeChannel(1)}
+												buttonSize="small"
+												margin="sm"
+												padding="sm"
+											>
+												▲
+											</ClassicyButton>
+										</ClassicyBalloonHelp>
+										<ClassicyBalloonHelp content="Switch to the next channel down.">
+											<ClassicyButton
+												onClickFunc={() => changeChannel(-1)}
+												buttonSize="small"
+												margin="sm"
+												padding="sm"
+											>
+												▼
+											</ClassicyButton>
+										</ClassicyBalloonHelp>
 									</>
 								)}
-								<ClassicyButton
-									onClickFunc={() => setShowEpg((v) => !v)}
-									depressed={showEpg}
-									buttonSize="small"
-									margin="sm"
-									padding="sm"
+								<ClassicyBalloonHelp
+									content={
+										showEpg
+											? "Hide the program guide."
+											: "Show the program guide listing what is playing on each channel."
+									}
 								>
-									EPG
-								</ClassicyButton>
+									<ClassicyButton
+										onClickFunc={() => setShowEpg((v) => !v)}
+										depressed={showEpg}
+										buttonSize="small"
+										margin="sm"
+										padding="sm"
+									>
+										EPG
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
 							</div>
 						</div>
 						<div className={styles.tvThumbnailStrip}>
@@ -1111,9 +1284,9 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 								const isSelected = selectedPlayers.includes(item.id);
 
 								return (
-									<button
+									<ThumbnailTile
 										key={item.id}
-										data-source={item.source}
+										item={item}
 										className={[
 											styles.tvPlayer,
 											isActive || isSelected ? styles.tvPlayerSelected : "",
@@ -1125,10 +1298,15 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 										]
 											.filter(Boolean)
 											.join(" ")}
-										{...(item.source ? reorder.handlers(item.source) : {})}
-										onClick={() => {
-											// A drag just ended — it must not focus or select.
-											if (reorder.consumeSuppressedClick()) return;
+										multiSelectMode={multiSelectMode}
+										isActive={isActive}
+										isSelected={isSelected}
+										thumbTs={thumbTs}
+										reorderHandlers={
+											item.source ? reorder.handlers(item.source) : undefined
+										}
+										consumeSuppressedClick={reorder.consumeSuppressedClick}
+										onPress={() => {
 											if (multiSelectMode) {
 												togglePlayerSelection(item.id);
 											} else {
@@ -1136,33 +1314,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 											}
 											setHasInteracted(true);
 										}}
-										onKeyDown={(e) => {
-											if (e.key === "Enter" || e.key === " ") {
-												if (multiSelectMode) {
-													togglePlayerSelection(item.id);
-												} else {
-													setActivePlayer(item.id);
-												}
-												setHasInteracted(true);
-											}
-										}}
-										type="button"
-									>
-										<div className={styles.tvChannelTitleHolder}>
-											<p className={styles.tvChannelTitle}>{item.source}</p>
-										</div>
-										<img
-											className={styles.tvThumbnailImage}
-											src={`https://files.911realtime.org/thumbnails/${
-												item.source?.toLowerCase() ?? "offline"
-											}/${thumbTs}.jpg`}
-											onError={(e) => {
-												e.currentTarget.src =
-													"https://files.911realtime.org/thumbnails/offline.jpg";
-											}}
-											alt=""
-										/>
-									</button>
+									/>
 								);
 							})}
 							{reorder.dragOutline && (
@@ -1180,6 +1332,7 @@ export const TV: React.FC<ClassicyTVProps> = () => {
 					</div>
 				</div>
 			</ClassicyWindow>
+			{aboutWindow}
 		</ClassicyApp>
 	);
 };

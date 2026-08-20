@@ -1,0 +1,8 @@
+1
+00:00:00,000 --> 00:00:06,560
+ American 77, Wendy, level 330 American 77, Indy, Center, Rogers, clock 3743
+
+2
+00:00:06,560 --> 00:00:08,560
+ 3743, American 77
+

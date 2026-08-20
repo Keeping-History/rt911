@@ -3,11 +3,13 @@
 // Email is absent from updateProfile by design (verified round-trip only).
 import { ClassicyButton, ClassicyControlLabel, ClassicyInput, ClassicyPopUpMenu, ClassicyTabs } from "classicy";
 import type { ChangeEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
-import { requestEmailChange, updateProfile } from "../../Providers/Auth/profileApi";
+import { UsernameTakenError, requestEmailChange, updateProfile } from "../../Providers/Auth/profileApi";
+import { checkUsername, type UsernameCheck } from "../../Providers/Auth/usernameApi";
 import styles from "./Account.module.scss";
+import { SpecialTab } from "./SpecialTab";
 
 const EDUCATOR_ROLES = [
 	{ value: "", label: "—" },
@@ -62,6 +64,30 @@ const ToggleGroup: React.FC<{
 	</div>
 );
 
+export // Match what the backfill produced, so a name typed here cannot differ from one
+// assigned automatically only by case or punctuation. Directus enforces
+// uniqueness, so a clash surfaces as a save error rather than silently taking
+// someone else's name.
+function normalizeUsername(raw: string): string {
+	return raw
+		.toLowerCase()
+		.replace(/[^a-z0-9_]+/g, "")
+		.slice(0, 24);
+}
+
+export // Shape only. Availability is deliberately NOT checked here: a user can read
+// just their own row, so a lookup would return zero rows for every name and
+// report "available" for one already taken. The save is the real check.
+function usernameProblem(name: string): string | null {
+	if (name === "") return null; // clearing it is allowed; the backend falls back
+	// Two, not three: the backfill minted names from email local parts with no
+	// minimum, so real accounts hold "me" and "sa". Demanding three would stop
+	// those users saving their own profile.
+	if (name.length < 2) return "Screen names need at least 2 characters.";
+	if (/^[0-9]+$/.test(name)) return "Screen names need at least one letter.";
+	return null;
+}
+
 export const ProfileEditor: React.FC = () => {
 	const { user, refresh } = useAuth();
 
@@ -72,6 +98,8 @@ export const ProfileEditor: React.FC = () => {
 	// Names
 	const [firstName, setFirstName] = useState(user?.first_name ?? "");
 	const [lastName, setLastName] = useState(user?.last_name ?? "");
+	const [username, setUsername] = useState(user?.username ?? "");
+	const [nameCheck, setNameCheck] = useState<UsernameCheck>("unknown");
 	const [namesBusy, setNamesBusy] = useState(false);
 	const [namesMsg, setNamesMsg] = useState<string | null>(null);
 
@@ -98,18 +126,67 @@ export const ProfileEditor: React.FC = () => {
 	const [passwordBusy, setPasswordBusy] = useState(false);
 	const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
 
+	// Debounced availability check. Advisory only -- the unique index decides,
+	// and the save still handles a conflict -- so an unreachable endpoint leaves
+	// this at "unknown" and blocks nothing.
+	const ownName = user?.username ?? "";
+	const checkSeq = useRef(0);
+	useEffect(() => {
+		const cleaned = normalizeUsername(username);
+		if (usernameProblem(cleaned) !== null || cleaned === ownName) {
+			setNameCheck("unknown");
+			return;
+		}
+		const seq = ++checkSeq.current;
+		const ctrl = new AbortController();
+		const t = setTimeout(() => {
+			checkUsername(cleaned, ctrl.signal).then((result) => {
+				// Ignore a slow answer about a name the user has since changed.
+				if (seq === checkSeq.current) setNameCheck(result);
+			});
+		}, 400);
+		return () => {
+			clearTimeout(t);
+			ctrl.abort();
+		};
+	}, [username, ownName]);
+
 	const toggle = (list: string[], set: (v: string[]) => void) => (value: string) =>
 		set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
 	const saveNames = () => {
+		const cleaned = normalizeUsername(username);
+		const problem = usernameProblem(cleaned);
+		if (problem) {
+			setNamesMsg(problem);
+			return;
+		}
+		// Show what will actually be stored, so a name that lost characters to
+		// normalising does not come back looking like a silent edit.
+		if (cleaned !== username) setUsername(cleaned);
 		setNamesBusy(true);
 		setNamesMsg(null);
-		updateProfile({ first_name: orNull(firstName), last_name: orNull(lastName) })
+		updateProfile({
+			first_name: orNull(firstName),
+			last_name: orNull(lastName),
+			username: orNull(cleaned),
+		})
 			.then(() => {
 				setNamesMsg("Saved.");
 				return refresh();
 			})
-			.catch((err: Error) => setNamesMsg(err.message))
+			.catch((err: Error) => {
+				// The database is the only authority on availability, so the
+				// conflict arrives here rather than before the save. Offer a
+				// name that is one step away instead of just refusing.
+				if (err instanceof UsernameTakenError) {
+					const suggestion = `${err.username}${Math.floor(Math.random() * 90) + 10}`;
+					setUsername(suggestion);
+					setNamesMsg(`"${err.username}" is taken. Try ${suggestion}, or pick your own.`);
+					return;
+				}
+				setNamesMsg(err.message);
+			})
 			.finally(() => setNamesBusy(false));
 	};
 
@@ -189,6 +266,20 @@ export const ProfileEditor: React.FC = () => {
 						disabled={namesBusy}
 						onChangeFunc={(e) => setLastName(e.target.value)}
 					/>
+					<ClassicyInput
+						id="profile-username"
+						labelTitle="Screen Name"
+						prefillValue={username}
+						disabled={namesBusy}
+						onChangeFunc={(e) => setUsername(e.target.value)}
+					/>
+					<div className={styles.hint}>
+						{nameCheck === "taken"
+							? `"${normalizeUsername(username)}" is already taken.`
+							: nameCheck === "available"
+								? `"${normalizeUsername(username)}" is available.`
+								: "This is what your buddies call you in chat. Lowercase letters, numbers and underscores."}
+					</div>
 					<ClassicyButton disabled={namesBusy} onClickFunc={saveNames}>
 						Save Names
 					</ClassicyButton>
@@ -314,6 +405,10 @@ export const ProfileEditor: React.FC = () => {
 			),
 		});
 	}
+
+	// Appended last, after the conditional Password tab, so the destructive
+	// actions always sit furthest from the tabs used routinely.
+	tabs.push({ title: "Special", children: <SpecialTab /> });
 
 	return <ClassicyTabs tabs={tabs} />;
 };

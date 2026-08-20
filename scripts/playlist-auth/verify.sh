@@ -2,7 +2,7 @@
 # Enforcement matrix verification. Safe to run against prod: creates and removes
 # its own users/playlists. Usage: DIRECTUS_ADMIN_PASSWORD=... ./verify.sh [url]
 set -uo pipefail
-URL="${1:-https://api-beta.911realtime.org}"
+URL="${1:-https://api.911realtime.org}"
 FAILS=0
 check() { # description expected actual
   if [ "$2" = "$3" ]; then echo "PASS: $1"; else echo "FAIL: $1 (expected $2 got $3)"; FAILS=$((FAILS+1)); fi

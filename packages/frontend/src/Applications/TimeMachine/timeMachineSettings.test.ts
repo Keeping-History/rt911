@@ -12,6 +12,7 @@ describe("readTimeMachineSettings", () => {
 		expect(readTimeMachineSettings(undefined)).toEqual({
 			skipMinutes: 30,
 			stepSeconds: 300,
+			scrubSeconds: 15,
 		});
 	});
 
@@ -25,12 +26,12 @@ describe("readTimeMachineSettings", () => {
 	it("falls back to defaults for non-finite or out-of-range stored values", () => {
 		expect(
 			readTimeMachineSettings({
-				settings: { skipMinutes: Number.NaN, stepSeconds: -5 },
+				settings: { skipMinutes: Number.NaN, stepSeconds: -5, scrubSeconds: 0 },
 			}),
 		).toEqual(DEFAULT_TIME_MACHINE_SETTINGS);
 		expect(
 			readTimeMachineSettings({
-				settings: { skipMinutes: 999, stepSeconds: 999_999 },
+				settings: { skipMinutes: 999, stepSeconds: 999_999, scrubSeconds: 61 },
 			}),
 		).toEqual(DEFAULT_TIME_MACHINE_SETTINGS);
 	});
@@ -38,7 +39,7 @@ describe("readTimeMachineSettings", () => {
 
 describe("timeMachineSetSettings", () => {
 	it("builds the namespaced action", () => {
-		const s = { skipMinutes: 10, stepSeconds: 60 };
+		const s = { skipMinutes: 10, stepSeconds: 60, scrubSeconds: 20 };
 		expect(timeMachineSetSettings(s)).toEqual({
 			type: "ClassicyAppTimeMachineSetSettings",
 			settings: s,
@@ -61,12 +62,12 @@ describe("classicyTimeMachineEventHandler", () => {
 		const ds = store({ somethingElse: 42 });
 		const next = classicyTimeMachineEventHandler(
 			ds,
-			timeMachineSetSettings({ skipMinutes: 5, stepSeconds: 120 }),
+			timeMachineSetSettings({ skipMinutes: 5, stepSeconds: 120, scrubSeconds: 10 }),
 		);
 		const data = next.System.Manager.Applications.apps["TimeMachine.app"]
 			.data as Record<string, unknown>;
 		expect(data.somethingElse).toBe(42);
-		expect(data.settings).toEqual({ skipMinutes: 5, stepSeconds: 120 });
+		expect(data.settings).toEqual({ skipMinutes: 5, stepSeconds: 120, scrubSeconds: 10 });
 	});
 
 	it("ignores unknown actions and a missing app entry", () => {

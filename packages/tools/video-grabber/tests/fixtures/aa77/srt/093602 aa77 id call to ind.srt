@@ -1,0 +1,344 @@
+1
+00:00:00,000 --> 00:00:03,000
+ We have an aircraft 6 miles away from us.
+
+2
+00:00:03,000 --> 00:00:04,000
+ Andy Center.
+
+3
+00:00:06,000 --> 00:00:07,000
+ Indianapolis to the White House.
+
+4
+00:00:07,000 --> 00:00:08,000
+ Hello?
+
+5
+00:00:08,000 --> 00:00:12,000
+ Indianapolis 100th ID calling. American 77.
+
+6
+00:00:12,000 --> 00:00:17,000
+ We have heard information regarding this aircraft you had last known position.
+
+7
+00:00:17,000 --> 00:00:19,000
+ I'm sorry, say again?
+
+8
+00:00:19,000 --> 00:00:23,000
+ Do you have the last known position of American 77?
+
+9
+00:00:23,000 --> 00:00:24,000
+ Yes.
+
+10
+00:00:24,000 --> 00:00:26,000
+ Could I have that please?
+
+11
+00:00:26,000 --> 00:00:35,000
+ Yeah. Yankee Romeo Kilo 0-8-0 at 0-1-0.
+
+12
+00:00:35,000 --> 00:00:38,000
+ And is there a lat-long, sir?
+
+13
+00:00:41,000 --> 00:00:44,000
+ I don't have a lat-long right here.
+
+14
+00:00:44,000 --> 00:00:45,000
+ We're not sure where that is.
+
+15
+00:00:45,000 --> 00:00:49,000
+ Okay. Do you want an approximate location?
+
+16
+00:00:49,000 --> 00:00:50,000
+ Yes.
+
+17
+00:00:50,000 --> 00:00:54,000
+ It would be Henderson HNN.
+
+18
+00:00:56,000 --> 00:01:01,000
+ I don't know where that is either, sir. We just got cut out of information.
+
+19
+00:01:01,000 --> 00:01:03,000
+ I better not say anything.
+
+20
+00:01:03,000 --> 00:01:10,000
+ Anyways, any last known position of that aircraft is a possible, very serious matter, as you know.
+
+21
+00:01:10,000 --> 00:01:16,000
+ Yeah. He was at 35,000 feet and off to Henderson.
+
+22
+00:01:16,000 --> 00:01:17,000
+ I'm sorry?
+
+23
+00:01:17,000 --> 00:01:19,000
+ Off to Henderson, sir?
+
+24
+00:01:19,000 --> 00:01:23,000
+ Yeah. He's about 35 left of Henderson HNN.
+
+25
+00:01:23,000 --> 00:01:28,000
+ Okay. I don't know where that is. Can you anyway get me a lat-long?
+
+26
+00:01:28,000 --> 00:01:30,000
+ Yeah. Just a moment.
+
+27
+00:01:37,000 --> 00:01:38,000
+ Hey.
+
+28
+00:01:38,000 --> 00:01:39,000
+ Oh my God.
+
+29
+00:01:39,000 --> 00:01:44,000
+ That's a big difference. That's a big difference. You've got to make sure you get that right.
+
+30
+00:01:53,000 --> 00:01:59,000
+ Okay. But when you pass that, when you copy that, don't yell DVF1 because that just fits the car.
+
+31
+00:02:01,000 --> 00:02:03,000
+ There's two F-18s and a Lear.
+
+32
+00:02:03,000 --> 00:02:06,000
+ Well, they better know now because we've got some guy 60 miles south of us.
+
+33
+00:02:06,000 --> 00:02:07,000
+ Hey, Moll?
+
+34
+00:02:07,000 --> 00:02:08,000
+ Go.
+
+35
+00:02:08,000 --> 00:02:11,000
+ Make sure you get heading and speed if you can from Andy.
+
+36
+00:02:16,000 --> 00:02:20,000
+ He jumped. I don't know. Heading and speed on what, Mater?
+
+37
+00:02:20,000 --> 00:02:21,000
+ Hello?
+
+38
+00:02:21,000 --> 00:02:24,000
+ Heading and speed on the Alpha 7-7.
+
+39
+00:02:24,000 --> 00:02:27,000
+ Alpha 7-7. Do we have a heading and speed on that?
+
+40
+00:02:27,000 --> 00:02:33,000
+ Did you hear what he said? He said he's 080 at 010 from York. Do you know what that means?
+
+41
+00:02:35,000 --> 00:02:37,000
+ They're trying to get a lat-long, sir.
+
+42
+00:02:37,000 --> 00:02:39,000
+ What does this here mean? What do you think?
+
+43
+00:02:39,000 --> 00:02:43,000
+ He said 35,000. It was at York 080 at 010.
+
+44
+00:02:43,000 --> 00:02:45,000
+ But he said he's going to get me a lat-long.
+
+45
+00:02:45,000 --> 00:02:47,000
+ Okay. From New York.
+
+46
+00:02:47,000 --> 00:02:51,000
+ No, from -- this is Indianapolis I'm talking to.
+
+47
+00:02:51,000 --> 00:02:53,000
+ That's the last time they talked to him. 080 for 010?
+
+48
+00:02:53,000 --> 00:02:54,000
+ Correct.
+
+49
+00:02:54,000 --> 00:02:55,000
+ From York.
+
+50
+00:02:55,000 --> 00:02:56,000
+ From York?
+
+51
+00:02:56,000 --> 00:02:57,000
+ From York.
+
+52
+00:02:57,000 --> 00:03:04,000
+ Okay. From York, he was 080 for 010 Indianapolis.
+
+53
+00:03:04,000 --> 00:03:07,000
+ Oh, yeah. Could be Pennsylvania last time you talked to him.
+
+54
+00:03:07,000 --> 00:03:09,000
+ But that was his heading.
+
+55
+00:03:09,000 --> 00:03:10,000
+ Okay. You ready?
+
+56
+00:03:10,000 --> 00:03:11,000
+ Go ahead, sir.
+
+57
+00:03:11,000 --> 00:03:13,000
+ Okay. 3841.
+
+58
+00:03:13,000 --> 00:03:14,000
+ 3841.
+
+59
+00:03:14,000 --> 00:03:15,000
+ No.
+
+60
+00:03:15,000 --> 00:03:16,000
+ North.
+
+61
+00:03:16,000 --> 00:03:19,000
+ 08252.
+
+62
+00:03:19,000 --> 00:03:21,000
+ 08252.
+
+63
+00:03:21,000 --> 00:03:22,000
+ Right.
+
+64
+00:03:22,000 --> 00:03:24,000
+ When's that last update, sir?
+
+65
+00:03:24,000 --> 00:03:31,000
+ That is where we saw him approximately 1256Z.
+
+66
+00:03:31,000 --> 00:03:33,000
+ 1256Z. That was his last known point.
+
+67
+00:03:33,000 --> 00:03:34,000
+ Thank you.
+
+68
+00:03:34,000 --> 00:03:35,000
+ Thank you, sir.
+
+69
+00:03:35,000 --> 00:03:37,000
+ Moe, heading in speed. Heading in speed.
+
+70
+00:03:37,000 --> 00:03:38,000
+ What?
+
+71
+00:03:38,000 --> 00:03:39,000
+ Heading in speed.
+
+72
+00:03:39,000 --> 00:03:42,000
+ They're actually heading in speed on that aircraft that you had.
+
+73
+00:03:42,000 --> 00:03:49,000
+ Okay. He was heading westbound approximately 270.
+
+74
+00:03:49,000 --> 00:03:51,000
+ Heading west 270.
+
+75
+00:03:51,000 --> 00:03:53,000
+ And I don't know his speed at this point.
+
+76
+00:03:53,000 --> 00:03:56,000
+ And unknown speed. Last known speed you had?
+
+77
+00:03:56,000 --> 00:04:00,000
+ We haven't gotten that information off of the --
+
+78
+00:04:00,000 --> 00:04:02,000
+ Okay. Is this aircraft while airborne is what I'm --
+
+79
+00:04:02,000 --> 00:04:04,000
+ We don't know. We cannot find it.
+
+80
+00:04:04,000 --> 00:04:06,000
+ Okay. Thank you.
+
+81
+00:04:06,000 --> 00:04:09,000
+ All right. If we need anything else, we'll give you a call.
+
+82
+00:04:09,000 --> 00:04:10,000
+ Okay.
+
+83
+00:04:10,000 --> 00:04:12,000
+ 5-7 Zulu, can somebody write that down, please?
+
+84
+00:04:12,000 --> 00:04:12,500
+ OK.
+
+85
+00:04:12,500 --> 00:04:13,000
+ OK.
+
+86
+00:04:13,000 --> 00:04:14,560
+ Thanks, guys.
+

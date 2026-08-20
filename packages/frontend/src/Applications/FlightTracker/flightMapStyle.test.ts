@@ -47,7 +47,7 @@ describe("applyMapColors", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
 			mapStyle: "satellite", darkMap: true,
-			pinColor: "#00aa00", notablePinColor: "#123456", observerPinColor: "#0f766e",
+			pinColor: "#00aa00", notablePinColor: "#123456", observerPinColor: "#0f766e", anonPinColor: "#8b7d6b",
 			terrain: false,
 		});
 		expect(map.paint.background["background-color"]).toBe(
@@ -72,10 +72,10 @@ describe("applyMapColors", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
 			mapStyle: "classic", darkMap: false,
-			pinColor: "#3a3a3a", notablePinColor: "#c0202a", observerPinColor: "#0f766e",
+			pinColor: "#3a3a3a", notablePinColor: "#c0202a", observerPinColor: "#0f766e", anonPinColor: "#8b7d6b",
 			terrain: false,
 		});
-		expect(map.paint.background["background-color"]).toBe("#efe9dd");
+		expect(map.paint.background["background-color"]).toBe("#aeb9bf");
 		expect(map.layout.land.visibility).toBe("visible");
 		expect(JSON.stringify(map.paint["flight-trails"]["line-gradient"])).toContain("90,90,90");
 	});
@@ -84,7 +84,7 @@ describe("applyMapColors", () => {
 		const map = recordingMap();
 		applyMapColors(map, {
 			mapStyle: "radar", darkMap: false,
-			pinColor: "#ffd700", notablePinColor: "#ff4d4d", observerPinColor: "#2dd4bf",
+			pinColor: "#ffd700", notablePinColor: "#ff4d4d", observerPinColor: "#2dd4bf", anonPinColor: "#9ca3af",
 			terrain: true,
 		});
 		expect(map.layout["hillshade-radar"].visibility).toBe("visible");

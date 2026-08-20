@@ -21,6 +21,9 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
+import type { EpgIconNamespace } from "./epgIcons";
+import { visibleEpgChannels } from "./epgVisibility";
 import { tvTuneChannel } from "./TVContext";
 import epgStyles from "./TVEPGPanel.module.scss";
 import styles from "./TV.module.scss";
@@ -51,6 +54,12 @@ const MINUTES_PER_GRID = 5;
 const GRID_TIME_WIDTH = 30;
 const GRID_WIDTH = 180;
 const CHANNEL_HEADER_WIDTH = 5;
+
+// Read lazily so the lookup always sees the object epgIcons.ts registered,
+// never a pre-registration snapshot. The cast is needed because classicy no
+// longer declares the epg namespace — it exists at runtime by registration.
+const epgIcons = () =>
+	(ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg;
 
 const truncate = (s: string, n: number) =>
 	s.length > n ? `${s.slice(0, n).trimEnd()}…` : s;
@@ -83,6 +92,22 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 	);
 
 	const [gridData, setGridData] = useState<EPGChannel[]>([]);
+
+	// Read straight from the store rather than taking a prop: the panel already
+	// sources the clock this way, and TV.tsx holds the same blacklist for the
+	// player grid, so a prop would be a second copy of one setting.
+	const disabledChannels = useAppManager(
+		(s) => s.System.Manager.Applications.apps["TV.app"]?.data?.disabledChannels as
+			| string[]
+			| undefined,
+	);
+
+	// The guide lists every channel that ever broadcast; Settings decides which of
+	// them this viewer wants to see.
+	const visibleChannels = useMemo(
+		() => visibleEpgChannels(gridData, disabledChannels),
+		[gridData, disabledChannels],
+	);
 
 	useEffect(() => {
 		const controller = new AbortController();
@@ -190,7 +215,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 								<img
 									key={channel.name + Date.parse(gridItem.start) + Date.parse(gridItem.end) + icon}
 									className={epgStyles.epgEntryIcon}
-									src={ClassicyIcons.applications.epg[icon] as string}
+									src={epgIcons()[icon]}
 									alt={icon}
 								/>
 							))}
@@ -206,7 +231,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 		const headers: ReactElement[] = [
 			<div
 				key="column_header_date"
-				className={epgStyles.epgHeaderTime}
+				className={epgStyles.epgHeaderDate}
 				style={{ gridColumn: "1 / span 1" }}
 			>
 				{gridStartTime.toLocaleDateString([], {
@@ -231,7 +256,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 		return headers;
 	}, [gridStartTime]);
 
-	const epgData = useMemo(() => gridData.map((channel, idx) => (
+	const epgData = useMemo(() => visibleChannels.map((channel, idx) => (
 		<Fragment key={`${channel.name}_${channel.number}`}>
 			<div
 				className={epgStyles.epgChannel}
@@ -244,14 +269,14 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 			>
 				<img
 					className={epgStyles.epgChannelIcon}
-					src={ClassicyIcons.applications.epg.channels[channel.icon] as string}
+					src={epgIcons().channels[channel.icon]}
 					alt={`${channel.number} ${channel.callSign} - ${channel.location}`}
 				/>
 				{channel.name}
 			</div>
 			{getProgramData(channel, idx)}
 		</Fragment>
-	)), [getProgramData, gridData, tuneToChannel]);
+	)), [getProgramData, visibleChannels, tuneToChannel]);
 
 	const gridTemplateColumns = `${CHANNEL_HEADER_WIDTH}fr repeat(${GRID_WIDTH / MINUTES_PER_GRID}, 1fr)`;
 

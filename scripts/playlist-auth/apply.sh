@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Create the Teacher role/policy, playlists ownership fields, and permissions.
 # Idempotent: skips anything that already exists (matched by name/field).
-# Usage: DIRECTUS_ADMIN_PASSWORD=... ./apply.sh [https://api-beta.911realtime.org]
+# Usage: DIRECTUS_ADMIN_PASSWORD=... ./apply.sh [https://api.911realtime.org]
 set -euo pipefail
-URL="${1:-https://api-beta.911realtime.org}"
+URL="${1:-https://api.911realtime.org}"
 
 TOKEN=$(curl -sS -X POST "$URL/auth/login" -H "Content-Type: application/json" \
   -d "{\"email\":\"admin@911realtime.org\",\"password\":\"$DIRECTUS_ADMIN_PASSWORD\"}" \

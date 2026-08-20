@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 import type { MapPoi } from "./mapPois";
-
-// Same anonymous-read Directus base as useNotableCrashSites/useFlightTrack.
-const DIRECTUS_URL =
-	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
-	"https://api-beta.911realtime.org";
 
 const FIELDS =
 	"id,name,layer,category,detail_title,lat,lon,iata,icao,city,region,details";
 
-/** Single limit=-1 query — one request avoids the api-beta parallel-mix bug. */
+/** Single limit=-1 query — one request avoids the Directus parallel-mix bug. */
 export function mapPoisUrl(): string {
 	const params = new URLSearchParams({
 		fields: FIELDS,

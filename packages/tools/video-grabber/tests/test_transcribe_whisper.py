@@ -35,3 +35,41 @@ def test_transcribe_wav_raises_on_failure(tmp_path):
         assert "vulkan" in str(e)
     else:
         raise AssertionError("expected RuntimeError")
+
+
+def _cfg():
+    return SimpleNamespace(whisper_bin="whisper-cli", whisper_model="/m.bin",
+                           whisper_threads=4, vad_model="/vad.bin")
+
+
+def _capture(tmp_path, **kw):
+    seen = {}
+
+    def runner(cmd, **_):
+        seen["cmd"] = cmd
+        return SimpleNamespace(returncode=0, stderr="")
+
+    transcribe_wav(tmp_path / "a.wav", tmp_path / "out", _cfg(), runner=runner, **kw)
+    return seen["cmd"]
+
+
+def test_vad_flags_are_passed_when_enabled(tmp_path):
+    cmd = _capture(tmp_path, vad=True)
+    assert "--vad" in cmd
+    assert cmd[cmd.index("--vad-model") + 1] == "/vad.bin"
+
+
+def test_window_flags_are_passed(tmp_path):
+    cmd = _capture(tmp_path, offset_ms=600000, duration_ms=600000)
+    assert cmd[cmd.index("-ot") + 1] == "600000"
+    assert cmd[cmd.index("-d") + 1] == "600000"
+
+
+def test_no_window_flags_when_transcribing_whole_file(tmp_path):
+    cmd = _capture(tmp_path)
+    assert "-ot" not in cmd and "--vad" not in cmd
+
+
+def test_wav_path_stays_last_so_flags_are_never_swallowed(tmp_path):
+    cmd = _capture(tmp_path, vad=True, offset_ms=1000, duration_ms=2000)
+    assert cmd[-1].endswith("a.wav")

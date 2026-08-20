@@ -7,9 +7,11 @@ import { MAX_EXTRAPOLATION_MS } from "./flightMotion";
 // the pure geometry builders in plane3dMesh.ts / trackTube.ts. This module
 // keeps the scale/altitude primitives they share.
 
-// Real-scale altitude is invisible at regional zooms (cruise ≈ 10 km against a
-// ~1000 km viewport), so heights are exaggerated by a fixed factor.
-export const ALT_EXAGGERATION = 10;
+// Vertical exaggeration for all 3D altitude. At real scale (1) cruise altitude
+// (~10 km) is barely perceptible against a ~1000 km regional viewport; a larger
+// factor lifts the climb/descent profile into legibility. Currently 1 — heights
+// are drawn true-to-scale.
+export const ALT_EXAGGERATION = 1;
 export const FT_TO_M = 0.3048;
 
 /** Exaggerated metric height for an altitude in feet. */
@@ -73,4 +75,9 @@ export interface AltitudeSample {
 	lon: number;
 	alt_ft: number;
 	utc: string;
+	phase?: string;
+	// Provenance (#263): "radar" = an 84 RADES surveyed position, "estimated"
+	// = great-circle reconstruction where the radars had no coverage. Absent
+	// on wholly-reconstructed (historical) flights.
+	source?: string;
 }

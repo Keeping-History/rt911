@@ -3,7 +3,8 @@
 // flightMapSettings.ts already owns that prefix and the registry routes by
 // first-prefix-match, so a nested prefix would be swallowed by its handler.
 import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerAppEventHandler } from "classicy";
+import { registerApp } from "classicy";
+import { z } from "zod";
 
 const appId = "FlightTracker.app";
 
@@ -59,4 +60,25 @@ export const classicyFlightRemoteEventHandler = (
 	}
 };
 
-registerAppEventHandler("ClassicyAppFlightRemote", classicyFlightRemoteEventHandler);
+registerApp({
+	id: appId,
+	description:
+		"Radar-reconstructed flight map for September 11, 2001 — tracks, loops, and airport POIs.",
+	prefix: "ClassicyAppFlightRemote",
+	handler: classicyFlightRemoteEventHandler,
+	actions: {
+		ClassicyAppFlightRemoteFocus: {
+			description: "Select the flight with this callsign (one-shot; retries until it is airborne).",
+			params: z.object({ callsign: z.string().describe("Callsign to focus, e.g. \"AA11\".") }),
+		},
+		ClassicyAppFlightRemoteSetFocused: {
+			description: "Publish the currently selected flight (playlist locked-focus reads this).",
+			params: z.object({
+				callsign: z.string().nullable().describe("Selected callsign, or null when nothing is selected."),
+			}),
+		},
+	},
+	// State schema intentionally omitted: flightMapSettings.ts is the primary
+	// module and its FlightTrackerDataSchema covers command/focusedFlight
+	// (handoff §3 — first state schema wins; a second one would warn).
+});

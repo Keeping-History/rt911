@@ -9,6 +9,8 @@ import {
 	flightTrackerSetMapSettings,
 	flightTrackerSetFilterSettings,
 	flightTrackerSetPoiSettings,
+	ANON_DESATURATION,
+	desaturate,
 	intToHex,
 	readFlightLoopSettings,
 	readFlightMapSettings,
@@ -29,7 +31,7 @@ function storeWithApp(data: Record<string, unknown> = {}): ClassicyStore {
 
 describe("classicyFlightTrackerEventHandler", () => {
 	it("persists mapSettings from a SetMapSettings action", () => {
-		const settings = { mapStyle: "radar" as const, darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, observerPinColorLight: 0x0f766e, observerPinColorDark: 0x2dd4bf, radarSweep: false, trailMultiplier: 2, globe: true, cluster: false, threeD: true, terrain: true, cameraMode: "cockpit" as const };
+		const settings = { mapStyle: "radar" as const, darkMap: true, pinColorLight: 0x112233, pinColorDark: 0x778899, notablePinColorLight: 0x445566, notablePinColorDark: 0xaabbcc, observerPinColorLight: 0x0f766e, observerPinColorDark: 0x2dd4bf, buildingHeroColorLight: 0xb0a48c, buildingHeroColorDark: 0xc7b8a0, radarSweep: false, anonTraffic: false, trailMultiplier: 2, globe: true, cluster: false, threeD: true, terrain: true, cameraMode: "cockpit" as const };
 		const out = classicyFlightTrackerEventHandler(
 			storeWithApp(),
 			flightTrackerSetMapSettings(settings),
@@ -99,9 +101,9 @@ describe("readFlightMapSettings", () => {
 
 	it("defaults to independent light/dark pin colors that read on each ground", () => {
 		const s = readFlightMapSettings(undefined);
-		// Light map keeps the original dark-gray / red; dark map gets a lighter,
+		// Light map uses cyan / red; dark map gets a lighter,
 		// higher-contrast pair so pins don't vanish into the slate basemap.
-		expect(s.pinColorLight).toBe(0x3a3a3a);
+		expect(s.pinColorLight).toBe(0x00ffff);
 		expect(s.pinColorDark).toBe(0xffd700);
 		expect(s.notablePinColorLight).toBe(0xc0202a);
 		expect(s.notablePinColorDark).toBe(0xff4d4d);
@@ -150,6 +152,11 @@ describe("readFlightMapSettings", () => {
 		expect(
 			readFlightMapSettings({ mapSettings: { cameraMode: "orbit" } }).cameraMode,
 		).toBe("track");
+	});
+
+	it("includes hero-color defaults", () => {
+		expect(DEFAULT_FLIGHT_MAP_SETTINGS.buildingHeroColorLight).toBeTypeOf("number");
+		expect(DEFAULT_FLIGHT_MAP_SETTINGS.buildingHeroColorDark).toBeTypeOf("number");
 	});
 });
 
@@ -208,18 +215,55 @@ describe("filter settings", () => {
 
 describe("FlightPoiSettings", () => {
 	it("defaults to enabled with no disabled layers", () => {
-		expect(readFlightPoiSettings(undefined)).toEqual({ enabled: true, disabledLayers: [] });
+		expect(readFlightPoiSettings(undefined)).toEqual({ enabled: true, disabledLayers: [], unclusteredLayers: [] });
 	});
 	it("round-trips stored values", () => {
 		const stored = { poiSettings: { enabled: false, disabledLayers: ["Air Bases"] } };
-		expect(readFlightPoiSettings(stored)).toEqual({ enabled: false, disabledLayers: ["Air Bases"] });
+		expect(readFlightPoiSettings(stored)).toEqual({ enabled: false, disabledLayers: ["Air Bases"], unclusteredLayers: [] });
 	});
 	it("fills missing fields from defaults", () => {
 		const stored = { poiSettings: { enabled: false } };
 		expect(readFlightPoiSettings(stored)).toEqual({ ...DEFAULT_FLIGHT_POI_SETTINGS, enabled: false });
 	});
 	it("builds the dispatch action", () => {
-		const action = flightTrackerSetPoiSettings({ enabled: true, disabledLayers: [] });
+		const action = flightTrackerSetPoiSettings({ enabled: true, disabledLayers: [], unclusteredLayers: [] });
 		expect(action.type).toBe("ClassicyAppFlightTrackerSetPoiSettings");
+	});
+	it("defaults unclusteredLayers to [] and round-trips it", () => {
+		expect(readFlightPoiSettings(undefined).unclusteredLayers).toEqual([]);
+		const stored = { poiSettings: { enabled: true, disabledLayers: [], unclusteredLayers: ["Major Airports"] } };
+		expect(readFlightPoiSettings(stored).unclusteredLayers).toEqual(["Major Airports"]);
+	});
+});
+
+describe("desaturate (anonymous radar traffic)", () => {
+	it("halves saturation toward the color's own grey", () => {
+		// pure cyan -> visibly muted, but still cyan-ish (not grey)
+		const out = desaturate(0x00ffff, ANON_DESATURATION);
+		const r = (out >> 16) & 255, g = (out >> 8) & 255, b = out & 255;
+		expect(r).toBeGreaterThan(0); // pulled up toward grey
+		expect(g).toBeLessThan(255); // pulled down toward grey
+		expect(g).toBeGreaterThan(r); // hue preserved: still cyan, not grey
+		expect(b).toBeGreaterThan(r);
+	});
+
+	it("is a no-op at 0 and fully grey at 1", () => {
+		expect(desaturate(0x3a7fd5, 0)).toBe(0x3a7fd5);
+		const grey = desaturate(0x3a7fd5, 1);
+		const r = (grey >> 16) & 255, g = (grey >> 8) & 255, b = grey & 255;
+		expect(Math.abs(r - g)).toBeLessThanOrEqual(1);
+		expect(Math.abs(g - b)).toBeLessThanOrEqual(1);
+	});
+
+	it("leaves an already-grey color alone", () => {
+		expect(desaturate(0x808080, ANON_DESATURATION)).toBe(0x808080);
+	});
+
+	it("keeps perceived lightness roughly constant", () => {
+		const luma = (c: number) =>
+			0.299 * ((c >> 16) & 255) + 0.587 * ((c >> 8) & 255) + 0.114 * (c & 255);
+		for (const c of [0x00ffff, 0xffd700, 0xc0202a]) {
+			expect(Math.abs(luma(desaturate(c, ANON_DESATURATION)) - luma(c))).toBeLessThan(2);
+		}
 	});
 });

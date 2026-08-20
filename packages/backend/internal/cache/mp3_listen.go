@@ -17,6 +17,10 @@ import (
 
 const mp3NotifyChannel = "mp3_items_changed"
 
+// opMp3Tags marks a notification that came from the tag tables rather than from
+// mp3_items. It carries no id on purpose — see createMp3TagsNotifyFunctionSQL.
+const opMp3Tags = "tags"
+
 // rt911_-prefixed so the trigger/function cannot collide with anything Directus
 // or another tenant might install on the same table.
 var (
@@ -41,12 +45,62 @@ $$ LANGUAGE plpgsql;`, mp3NotifyChannel)
 CREATE TRIGGER rt911_mp3_items_changed
 AFTER INSERT OR UPDATE OR DELETE ON mp3_items
 FOR EACH ROW EXECUTE FUNCTION rt911_notify_mp3_items_change();`
+
+	// Tags live in two tables of their own — mp3_tags (the vocabulary) and
+	// mp3_items_tags (the junction) — and until this existed, nothing anywhere
+	// watched either. video-grabber's sync_item_tags rewrites junction rows
+	// without touching mp3_items, so a tag rebuild changed what every card should
+	// show and fired no NOTIFY at all: the metadata snapshot stayed stale until
+	// the next process restart.
+	//
+	// A second function rather than reusing rt911_notify_mp3_items_change,
+	// because that one publishes NEW.id — and on these tables that id is a tag
+	// row or a junction row, not an mp3 item. Feeding it to the item-cache path
+	// would have the listener look up an unrelated mp3_items row and act on it.
+	// The op says "the tag graph moved, rebuild the corpus snapshot", which is
+	// all a whole-corpus rebuild needs to know, so no id is published.
+	createMp3TagsNotifyFunctionSQL = fmt.Sprintf(`
+CREATE OR REPLACE FUNCTION rt911_notify_mp3_tags_change()
+RETURNS trigger AS $$
+BEGIN
+    PERFORM pg_notify('%s', json_build_object('op', '%s')::text);
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;`, mp3NotifyChannel, opMp3Tags)
+
+	dropMp3TagsNotifyTriggerSQL = `DROP TRIGGER IF EXISTS rt911_mp3_tags_changed ON mp3_tags;`
+
+	createMp3TagsNotifyTriggerSQL = `
+CREATE TRIGGER rt911_mp3_tags_changed
+AFTER INSERT OR UPDATE OR DELETE ON mp3_tags
+FOR EACH ROW EXECUTE FUNCTION rt911_notify_mp3_tags_change();`
+
+	dropMp3ItemsTagsNotifyTriggerSQL = `DROP TRIGGER IF EXISTS rt911_mp3_items_tags_changed ON mp3_items_tags;`
+
+	createMp3ItemsTagsNotifyTriggerSQL = `
+CREATE TRIGGER rt911_mp3_items_tags_changed
+AFTER INSERT OR UPDATE OR DELETE ON mp3_items_tags
+FOR EACH ROW EXECUTE FUNCTION rt911_notify_mp3_tags_change();`
+
+	// Ordered: every CREATE TRIGGER is preceded by its own DROP … IF EXISTS, so
+	// re-running the whole list on the next boot replaces rather than collides.
+	mp3TriggerSQL = []string{
+		createMp3NotifyFunctionSQL,
+		dropMp3NotifyTriggerSQL,
+		createMp3NotifyTriggerSQL,
+		createMp3TagsNotifyFunctionSQL,
+		dropMp3TagsNotifyTriggerSQL,
+		createMp3TagsNotifyTriggerSQL,
+		dropMp3ItemsTagsNotifyTriggerSQL,
+		createMp3ItemsTagsNotifyTriggerSQL,
+	}
 )
 
-// InstallMp3Triggers ensures the Postgres trigger and function that fire NOTIFY
-// on mp3_items changes are present. Idempotent — safe to call on every boot.
+// InstallMp3Triggers ensures the Postgres triggers and functions that fire NOTIFY
+// on mp3_items, mp3_tags and mp3_items_tags changes are present. Idempotent —
+// safe to call on every boot.
 func InstallMp3Triggers(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
-	for _, q := range []string{createMp3NotifyFunctionSQL, dropMp3NotifyTriggerSQL, createMp3NotifyTriggerSQL} {
+	for _, q := range mp3TriggerSQL {
 		if _, err := pool.Exec(ctx, q); err != nil {
 			return fmt.Errorf("install mp3 triggers: %w", err)
 		}
@@ -84,6 +138,11 @@ func ListenMp3(ctx context.Context, dsn string, rdb *goredis.Client, pool *pgxpo
 }
 
 func listenMp3Once(ctx context.Context, dsn string, rdb *goredis.Client, pool *pgxpool.Pool, logger *slog.Logger) error {
+	// Scoped to this connection so the rebuilder goroutine below dies with it
+	// rather than accumulating one per reconnect.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
@@ -99,6 +158,10 @@ func listenMp3Once(ctx context.Context, dsn string, rdb *goredis.Client, pool *p
 	}
 	logger.Info("mp3 notify listener attached", "channel", mp3NotifyChannel)
 
+	rebuild := startMp3MetaRebuilder(ctx, metaRebuildDebounce, func(c context.Context) error {
+		return BuildMp3Meta(c, rdb, pool, logger)
+	}, logger)
+
 	for {
 		n, err := conn.WaitForNotification(ctx)
 		if err != nil {
@@ -111,14 +174,25 @@ func listenMp3Once(ctx context.Context, dsn string, rdb *goredis.Client, pool *p
 			continue
 		}
 
-		if err := applyMp3Change(ctx, rdb, pool, change); err != nil {
+		if err := applyMp3Change(ctx, rdb, pool, change, rebuild); err != nil {
 			logger.Warn("mp3 notify apply failed", "id", change.ID, "op", change.Op, "error", err)
 		}
 	}
 }
 
-func applyMp3Change(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, c changeNotification) error {
+func applyMp3Change(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, c changeNotification, rebuild *mp3MetaRebuilder) error {
+	// Every one of these changes invalidates the metadata snapshot: mp3_items
+	// carries the derived metadata columns themselves, and the tag tables carry
+	// what the cards are tagged with. The snapshot is corpus-wide, so there is no
+	// partial update to make — request a rebuild and let the debounce collapse a
+	// burst of them.
+	rebuild.request()
+
 	switch c.Op {
+	case opMp3Tags:
+		// A vocabulary or junction row moved. No mp3_items row changed and the
+		// payload deliberately carries no id, so the item cache stays out of it.
+		return nil
 	case "delete":
 		return ForgetMp3(ctx, rdb, c.ID)
 	case "insert", "update":
@@ -133,6 +207,59 @@ func applyMp3Change(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool
 	default:
 		return fmt.Errorf("unknown op %q", c.Op)
 	}
+}
+
+// metaRebuildDebounce is how long a rebuild request waits for its neighbours.
+//
+// The rederive-mp3-metadata flow patches every one of the ~755 rows that has
+// parties and then delete-inserts each one's junction rows, so a single offline
+// rebuild produces thousands of notifications in a few minutes. Rebuilding per
+// notification would re-read the whole corpus thousands of times to arrive at
+// the same snapshot; coalescing turns the burst into a handful of rebuilds.
+const metaRebuildDebounce = 2 * time.Second
+
+// mp3MetaRebuilder serialises and coalesces metadata rebuilds behind a debounce,
+// off the listener's goroutine so a slow rebuild never stalls the notification
+// loop (and with it the item cache's own freshness).
+type mp3MetaRebuilder struct {
+	req chan struct{}
+}
+
+// request asks for a rebuild. Non-blocking and lossless: the channel holds one
+// pending request, and a second request while one is already pending is
+// redundant — both are asking for the same "rebuild everything".
+func (r *mp3MetaRebuilder) request() {
+	select {
+	case r.req <- struct{}{}:
+	default:
+	}
+}
+
+// startMp3MetaRebuilder runs build in its own goroutine until ctx is done. build
+// is injected rather than closed over here so the coalescing can be tested
+// without a Postgres pool.
+func startMp3MetaRebuilder(ctx context.Context, debounce time.Duration, build func(context.Context) error, logger *slog.Logger) *mp3MetaRebuilder {
+	r := &mp3MetaRebuilder{req: make(chan struct{}, 1)}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-r.req:
+			}
+			// Let the rest of the burst land in the pending slot before reading
+			// the corpus back, then rebuild once for all of it.
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(debounce):
+			}
+			if err := build(ctx); err != nil && ctx.Err() == nil {
+				logger.Warn("mp3 metadata rebuild failed", "error", err)
+			}
+		}
+	}()
+	return r
 }
 
 // resyncMp3 reconciles the mp3 Redis keys with Postgres in one chunked pipeline.
@@ -185,5 +312,12 @@ func resyncMp3(ctx context.Context, rdb *goredis.Client, pool *pgxpool.Pool, log
 		return fmt.Errorf("pipeline exec: %w", err)
 	}
 	logger.Info("mp3 cache resynced", "items", len(liveItems), "removed", removed)
+
+	// Rebuilt here rather than in a parallel rewarm path (hard rule #5): the
+	// listener already owns "reconcile everything against Postgres on every
+	// (re)connect", and the metadata snapshot has exactly the same recovery
+	// problem — notifications dropped while disconnected are only recoverable by
+	// rebuilding wholesale.
+	warmMp3Meta(ctx, rdb, pool, logger)
 	return nil
 }

@@ -6,9 +6,13 @@ import type { AircraftFamily } from "./aircraftModels";
 // rasterize, and (re)install the image on the map when a color changes.
 export const PLANE_ICON_ID = "plane-icon";
 export const PLANE_NOTABLE_ICON_ID = "plane-notable-icon";
-// Observer aircraft (GOFER06) share the notable treatment/size in their own
-// color — see notableFlights.isObserver.
+// The observer treatment covers witness aircraft (GOFER06) and Air Force One
+// (AF1), sharing the notable treatment/size in their own color — see
+// notableFlights.isObserverStyled.
 export const PLANE_OBSERVER_ICON_ID = "plane-observer-icon";
+// Anonymous radar traffic's icon (#263) — own image so its hue is
+// independent of the airline pins.
+export const PLANE_ANON_ICON_ID = "plane-anon-icon";
 export const PLANE_ICON_PX = 12; // display size; rasterized at 2× (pixelRatio 2)
 export const PLANE_NOTABLE_ICON_PX = 32;
 

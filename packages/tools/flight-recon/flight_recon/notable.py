@@ -1,7 +1,9 @@
 """
 Load the notable September 11, 2001 flights — the four hijacked aircraft (AA11,
-UA175, AA77, UA93) plus the C-130H observer that witnessed two of the crashes
-(GOFER06) — into the same ``flight_positions`` / ``flight_tracks`` /
+UA175, AA77, UA93), the C-130H observer that witnessed two of the crashes
+(GOFER06), and Air Force One (AF1, curated as TWO files: the September 10
+positioning flight and the September 11 day) — into the same
+``flight_positions`` / ``flight_tracks`` /
 ``reconstruction_runs`` tables the BTS reconstruction writes, so they appear on
 the streamer ``flights`` channel and in the Flight Tracker exactly like the
 1,945 BTS-derived flights.
@@ -16,11 +18,29 @@ validates, and loads them.
 
 CRITICAL — scoped idempotency
 -----------------------------
-Re-running deletes ONLY these five flight IDs for ``flight_date='2001-09-11'``
-before re-inserting. It must NOT reuse the BTS loader's delete-by-``flight_date``
-window (``pgcopy.copy_positions`` / ``directus.delete_window``), which would wipe
-the 1,945 real flights that share that date. A sentinel BTS flight (e.g. AA1002)
-and the BTS row count must survive a re-run untouched.
+Six flights across seven curated files and TWO dates: AA11, UA175, AA77, UA93
+and GOFER06 on ``2001-09-11``, and AF1 on BOTH ``2001-09-10`` (af1_0910.json,
+the Andrews→Jacksonville→Sarasota positioning flight) and ``2001-09-11``
+(af1.json). Flight ID alone is therefore NOT the load's identity — the
+(flight, flight_date) PAIR is, and ``build_all`` rejects two files claiming the
+same pair.
+
+Re-running deletes ONLY the (flight, flight_date) pairs derived from the LOADED
+FILES (``run`` builds them from the built tracks and hands them to
+``scoped_delete``) before re-inserting. It must NEVER widen to a date window —
+not the BTS loader's delete-by-``flight_date`` (``pgcopy.copy_positions`` /
+``directus.delete_window``), and not "every notable ID on every date in range",
+either of which would wipe the 1,945 real BTS flights sharing those dates. A
+sentinel BTS flight (e.g. AA1002) and the BTS row count must survive a re-run
+untouched.
+
+BEHAVIOR CHANGE — pairs come from the files, so the delete follows the CURRENT
+data, not the previously-loaded data. Changing a curated file's ``flight_date``
+(or deleting a file) leaves the rows written under the OLD pair behind as
+orphans: this loader will never see that pair again and so will never delete it.
+That is deliberate — the alternative is a wider delete that can reach BTS rows.
+An operator who re-dates or removes a curated file must delete the orphaned
+(flight, old_date) rows by hand.
 
 This is a standalone one-time load (a fixed curated set), not a repeatable BTS
 Prefect flow, so it is a plain CLI::
@@ -45,14 +65,31 @@ import psycopg
 from psycopg.types.json import Json
 
 from flight_recon.pgcopy import COLUMNS as POSITION_COLUMNS
-from flight_recon.resample import decimate_polyline, fmt_utc, parse_utc, resample_track
+from flight_recon.resample import (
+    assign_curated_phases, assign_sources, decimate_polyline, fmt_utc, parse_utc,
+    resample_track,
+)
 from reconstruct import ET_OFFSET, et_seconds
 
 log = logging.getLogger(__name__)
 
 FLIGHT_DATE = "2001-09-11"
-NOTABLE_FLIGHTS = ("AA11", "UA175", "AA77", "UA93", "GOFER06")
+NOTABLE_FLIGHTS = ("AA11", "UA175", "AA77", "UA93", "GOFER06", "AF1")
+
+# COPY column list: the shared BTS columns plus per-position provenance
+# (source stays NULL for files without waypoint marks).
+NOTABLE_POSITION_COLUMNS = POSITION_COLUMNS[:-1] + ["source", "run_id"]
 DATA_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "data", "notable_flights")
+
+# reconstruction_runs.source_file is a Directus-managed varchar(255) in prod
+# (LOCAL_SCHEMA_DDL's source_file column matches that width so scratch testing
+# can't mask a length overflow the way an unbounded varchar did before). Keep
+# this compact — count it before adding to it.
+NOTABLE_RUN_SOURCE = (
+    "84 RADES radar returns (FOIA) + NTSB Flight Path Studies / 9/11 Commission "
+    "anchors — AA11, UA175, AA77, UA93, GOFER06; AF1 (SAM 28000) from RADES leg-1 "
+    "returns + published timeline sources. Curated notable_flights load."
+)
 
 # clock_seconds anchor: continuous seconds since ET midnight of the loaded BTS
 # window's FIRST day — not of flight_date. Every prod run in reconstruction_runs
@@ -64,6 +101,9 @@ _WINDOW_START_UTC = datetime(2001, 9, 9, -ET_OFFSET, 0, 0, tzinfo=timezone.utc)
 # Validation bounds (match the BTS loader's North-America envelope).
 _LON_MIN, _LON_MAX = -150.0, -65.0
 _LAT_MIN, _LAT_MAX = 18.0, 65.0
+# INCLUSIVE bound with zero headroom by design: af1.json's leg 3 (Offutt →
+# Andrews) cruises at exactly 45,000 ft — Col. Tillman's sourced figure — so any
+# tightening here, or an off-by-one to `<`, rejects the shipped data.
 _ALT_MIN, _ALT_MAX = 0, 45000
 _IMPACT_TOL_DEG = 1e-3   # last track vertex vs documented impact (~110 m)
 
@@ -84,6 +124,7 @@ CREATE TABLE IF NOT EXISTS flight_positions (
     alt_ft        integer,
     phase         varchar,
     diverted      boolean,
+    source        varchar,
     run_id        varchar NOT NULL
 );
 CREATE TABLE IF NOT EXISTS flight_tracks (
@@ -106,7 +147,7 @@ CREATE TABLE IF NOT EXISTS reconstruction_runs (
     run_id                 varchar PRIMARY KEY,
     start                  date,
     "end"                  date,
-    source_file            varchar,
+    source_file            varchar(255),
     flights_reconstructed  integer,
     positions_count        integer,
     tracks_count           integer,
@@ -136,7 +177,34 @@ def build_flight(data):
     ``track`` is a ``flight_tracks`` dict whose ``geometry`` is a GeoJSON
     LineString. Raises ValueError on any integrity violation."""
     flight = data["flight"]
+    flight_date = data.get("flight_date", FLIGHT_DATE)
     samples = resample_track(data["waypoints"])
+    curated = data.get("phases")
+    if curated:
+        assign_curated_phases(samples, curated)
+    assign_sources(samples, data["waypoints"])
+    # A ground span is a claim that the aircraft is PARKED for its whole length.
+    # Validate that claim against the resampled track — a curated waypoint that
+    # drifts (or climbs) inside a span would otherwise load as a "parked"
+    # aircraft sliding across the apron, with nothing downstream to catch it.
+    for span in data.get("ground_spans", []):
+        s0, s1 = parse_utc(span["start"]), parse_utc(span["end"])
+        inside = [s for s in samples if s0 <= s["utc"] <= s1]
+        base = span.get("base", "?")
+        for s in inside:
+            s["phase"] = "ground"
+        if inside:
+            anchor = inside[0]
+            for s in inside[1:]:
+                if (s["lat"], s["lon"]) != (anchor["lat"], anchor["lon"]):
+                    raise ValueError(
+                        f"{flight}: ground span {span['start']}..{span['end']} ({base}) "
+                        f"moves at {s['utc']}: {s['lat']},{s['lon']} != "
+                        f"{anchor['lat']},{anchor['lon']}")
+                if s["alt_ft"] != anchor["alt_ft"]:
+                    raise ValueError(
+                        f"{flight}: ground span {span['start']}..{span['end']} ({base}) "
+                        f"changes altitude at {s['utc']}: {s['alt_ft']} != {anchor['alt_ft']}")
 
     positions, coords, prev_min = [], [], None
     for s in samples:
@@ -150,12 +218,12 @@ def build_flight(data):
             raise ValueError(f"{flight}: non-increasing minute bucket at {utc}")
         prev_min = minute
         positions.append({
-            "flight": flight, "carrier": data["carrier"], "flight_date": FLIGHT_DATE,
+            "flight": flight, "carrier": data["carrier"], "flight_date": flight_date,
             "utc": fmt_utc(utc),
             "et_seconds": et_seconds(utc),
             "clock_seconds": int((utc - _WINDOW_START_UTC).total_seconds()),
             "lat": s["lat"], "lon": s["lon"], "alt_ft": s["alt_ft"],
-            "phase": s["phase"], "diverted": False,
+            "phase": s["phase"], "diverted": False, "source": s.get("source"),
         })
         coords.append([s["lon"], s["lat"]])
 
@@ -194,10 +262,12 @@ def build_flight(data):
     geometry_coords = decimate_polyline(dense)
 
     track = {
-        "flight": flight, "flight_date": FLIGHT_DATE, "origin": data["origin"],
-        "scheduled_dest": data["scheduled_dest"], "landed_at": None,
-        "diverted": False, "wheels_off_utc": positions[0]["utc"],
-        "wheels_on_utc": None,
+        "flight": flight, "flight_date": flight_date, "origin": data["origin"],
+        "scheduled_dest": data["scheduled_dest"],
+        "landed_at": data.get("landed_at"),
+        "diverted": False,
+        "wheels_off_utc": data.get("wheels_off_utc", positions[0]["utc"]),
+        "wheels_on_utc": data.get("wheels_on_utc"),
         "tail_number": data.get("registration"),
         "aircraft_type": data.get("aircraft"),
         "details": details,
@@ -216,39 +286,47 @@ def build_all(data_dir=DATA_DIR):
         data = load_flight_file(path)
         if data["flight"] not in NOTABLE_FLIGHTS:
             raise ValueError(f"{path}: flight {data['flight']} not in {NOTABLE_FLIGHTS}")
-        seen.add(data["flight"])
+        pair = (data["flight"], data.get("flight_date", FLIGHT_DATE))
+        # (flight, flight_date) is the load's identity key — scoped_delete's
+        # pairs, and therefore the idempotency guarantee, collapse if two files
+        # claim the same one: whichever loaded second would delete the first's rows.
+        if pair in seen:
+            raise ValueError(f"{path}: duplicate (flight, flight_date) {pair} across files")
+        seen.add(pair)
         positions, track = build_flight(data)
         all_positions.extend(positions)
         all_tracks.append(track)
         log.info("built %s: %d positions", data["flight"], len(positions))
-    missing = set(NOTABLE_FLIGHTS) - seen
+    missing = set(NOTABLE_FLIGHTS) - {flight for flight, _ in seen}
     if missing:
         log.warning("notable-flight files missing for: %s", sorted(missing))
     return all_positions, all_tracks
 
 
 # ----------------------------------------------------------------- db writes
-def scoped_delete(cur, flights=NOTABLE_FLIGHTS, flight_date=FLIGHT_DATE):
-    """Delete ONLY the given flight IDs on ``flight_date`` — never a date window.
+def scoped_delete(cur, pairs):
+    """Delete ONLY the given (flight, flight_date) pairs — never a date window.
 
     Returns (positions_deleted, tracks_deleted)."""
-    ids = list(flights)
-    cur.execute("DELETE FROM flight_positions WHERE flight_date = %s AND flight = ANY(%s)",
-                (flight_date, ids))
-    pos = cur.rowcount
-    cur.execute("DELETE FROM flight_tracks WHERE flight_date = %s AND flight = ANY(%s)",
-                (flight_date, ids))
-    trk = cur.rowcount
-    log.info("scoped delete: %d positions, %d tracks for %s on %s", pos, trk, ids, flight_date)
+    pos = trk = 0
+    for flight, fdate in pairs:
+        cur.execute("DELETE FROM flight_positions WHERE flight_date = %s AND flight = %s",
+                    (fdate, flight))
+        pos += cur.rowcount
+        cur.execute("DELETE FROM flight_tracks WHERE flight_date = %s AND flight = %s",
+                    (fdate, flight))
+        trk += cur.rowcount
+    log.info("scoped delete: %d positions, %d tracks for %s", pos, trk, pairs)
     return pos, trk
 
 
 def copy_positions(cur, positions, run_id):
-    with cur.copy(f"COPY flight_positions ({', '.join(POSITION_COLUMNS)}) FROM STDIN") as cp:
+    with cur.copy(f"COPY flight_positions ({', '.join(NOTABLE_POSITION_COLUMNS)}) FROM STDIN") as cp:
         for p in positions:
             cp.write_row([p["flight"], p["carrier"], p["flight_date"], p["utc"],
                           p["et_seconds"], p["clock_seconds"], p["lat"], p["lon"],
-                          p["alt_ft"], p["phase"], p["diverted"], run_id])
+                          p["alt_ft"], p["phase"], p["diverted"], p.get("source"),
+                          run_id])
     return len(positions)
 
 
@@ -265,18 +343,17 @@ def insert_tracks(cur, tracks, run_id):
     return len(tracks)
 
 
-def insert_run(cur, run_id, positions_count, tracks_count):
+def insert_run(cur, run_id, positions_count, tracks):
     """Append one provenance row citing the radar sources (append-only ledger)."""
-    source = ("84 RADES radar returns (FOIA release, FBI analysis 13 Sep 2001) for "
-              "AA11, UA175, AA77, UA93, GOFER06 + NTSB Flight Path Studies "
-              "(2002-02-19) / 9/11 Commission Report Ch.1 gap anchors — curated "
-              "notable_flights load")
+    tracks_count = len(tracks)
+    start = min(t["flight_date"] for t in tracks)
+    end = max(t["flight_date"] for t in tracks)
     cur.execute(
         'INSERT INTO reconstruction_runs (run_id, start, "end", source_file, '
         "flights_reconstructed, positions_count, tracks_count, skipped_count, "
         "skipped, skipped_by_reason, cancelled_by_day, created_at) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        (run_id, FLIGHT_DATE, FLIGHT_DATE, source, tracks_count, positions_count,
+        (run_id, start, end, NOTABLE_RUN_SOURCE, tracks_count, positions_count,
          tracks_count, 0, Json([]), Json({}), Json({}),
          datetime.now(timezone.utc)))
 
@@ -293,10 +370,11 @@ def run(dsn, data_dir=DATA_DIR, dry_run=False, init_schema=False, run_id=None):
             if init_schema:
                 cur.execute(LOCAL_SCHEMA_DDL)
                 log.warning("ensured scratch schema (flight_positions/tracks/runs)")
-            pos_del, trk_del = scoped_delete(cur)
+            pairs = sorted({(t["flight"], t["flight_date"]) for t in tracks})
+            pos_del, trk_del = scoped_delete(cur, pairs)
             n_pos = copy_positions(cur, positions, run_id)
             n_trk = insert_tracks(cur, tracks, run_id)
-            insert_run(cur, run_id, n_pos, n_trk)
+            insert_run(cur, run_id, n_pos, tracks)
         if dry_run:
             conn.rollback()
             log.warning("DRY RUN: rolled back — nothing persisted")

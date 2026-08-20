@@ -48,7 +48,7 @@ describe("altitudeFtAt (glided altitude)", () => {
 		expect(altitudeFtAt(m, T0 + 90_000)).toBeCloseTo(13_000, 6); // +30s at 2,000 ft/min
 		// Holds at the 90s extrapolation clamp instead of climbing forever.
 		expect(altitudeFtAt(m, T0 + 60_000 + 10 * 60_000)).toBeCloseTo(15_000, 6);
-		expect(exaggeratedHeightM(10_000)).toBeCloseTo(30_480, 0); // 10× exaggeration
+		expect(exaggeratedHeightM(10_000)).toBeCloseTo(3_048, 0); // real scale (1×): 10,000 ft in metres
 	});
 
 	it("holds the current altitude for single-sample flights", () => {

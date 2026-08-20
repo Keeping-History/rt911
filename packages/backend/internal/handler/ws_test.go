@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/chat"
+	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 	"classicy/streamer/internal/session"
 
@@ -30,8 +32,11 @@ type wsFrame struct {
 	Msg     string                 `json:"message,omitempty"`
 	Time    string                 `json:"time,omitempty"`
 	ID      int                    `json:"id,omitempty"`
+	Body    string                 `json:"body,omitempty"`
 	Done    bool                   `json:"done,omitempty"`
 	Flights []model.FlightPosition `json:"flights,omitempty"`
+	Enabled bool                   `json:"enabled,omitempty"`
+	Reason  string                 `json:"reason,omitempty"`
 }
 
 func newTestServer(t *testing.T, rdb *goredis.Client) *url.URL {
@@ -39,7 +44,7 @@ func newTestServer(t *testing.T, rdb *goredis.Client) *url.URL {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub := session.NewHub(logger, 0)
 	go hub.Run()
-	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, logger))
+	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, nil, NewProfileCache(), NewOriginAllowlist(""), logger))
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
 	u.Scheme = "ws"
@@ -58,7 +63,7 @@ func TestWSHandlerShedsWhenAtCapacity(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub := session.NewHub(logger, 1) // capacity of exactly one connection
 	go hub.Run()
-	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, logger))
+	srv := httptest.NewServer(NewWSHandler(hub, rdb, nil, nil, NewProfileCache(), NewOriginAllowlist(""), logger))
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
 	u.Scheme = "ws"
@@ -216,6 +221,67 @@ func TestWSHandlerUnsubscribe(t *testing.T) {
 	}
 }
 
+// TestWSHandlerChatSubscribeAnonymousRefused proves the chat channel's most
+// security-relevant behavior: an anonymous session (no Directus session
+// cookie) that subscribes to "chat" gets refused with a chat_state frame
+// rather than the ordinary subscribe_ack every other channel returns. The
+// request never reaches Session.Subscribe, so a nil pool is safe — with no
+// cookie on the dial, db.SessionTokenFrom returns "" and db.LookupSessionUser
+// is never called (see the gate in ws.go's "subscribe" case).
+func TestWSHandlerChatSubscribeAnonymousRefused(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+	sendJSON(t, conn, map[string]string{"type": "subscribe", "channel": "chat"})
+
+	f := readFrame(t, conn)
+	if f.Type != "chat_state" {
+		t.Fatalf("expected chat_state, got %+v", f)
+	}
+	if f.Enabled {
+		t.Fatalf("expected enabled=false for anonymous session, got %+v", f)
+	}
+	if f.Reason != "not_signed_in" {
+		t.Fatalf("expected reason=not_signed_in, got %+v", f)
+	}
+
+	// A follow-up round-trip proves that was the only frame — in particular,
+	// no subscribe_ack (or roster) followed it.
+	sendJSON(t, conn, map[string]string{"type": "pause"})
+	if f := readFrame(t, conn); f.Type != "pause_ack" {
+		t.Fatalf("expected pause_ack immediately after chat_state, got %+v", f)
+	}
+}
+
+// A session cookie presented from an origin we do not publish must not yield an
+// identity, even though SameSite=lax lets the browser attach it.
+//
+// The test server is built with a nil connection pool, so the guard is doing
+// real work here: if the origin check failed to short-circuit, the handler
+// would call LookupSessionUser with a nil pool and panic. Reaching the
+// not_signed_in assertion is therefore proof the cookie was never looked up.
+func TestWSHandlerUntrustedOriginDoesNotAuthenticate(t *testing.T) {
+	u := newTestServer(t, nil)
+
+	header := http.Header{}
+	header.Set("Origin", "https://timemachine.911realtime.org")
+	header.Set("Cookie", db.SessionCookieName+"=a-real-looking-session-token")
+
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), header)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+
+	sendJSON(t, conn, map[string]string{"type": "subscribe", "channel": "chat"})
+
+	f := readFrame(t, conn)
+	if f.Type != "chat_state" {
+		t.Fatalf("expected chat_state, got %+v", f)
+	}
+	if f.Enabled || f.Reason != "not_signed_in" {
+		t.Fatalf("a cookie from an untrusted origin must not authenticate, got %+v", f)
+	}
+}
+
 func TestWSHandlerSubscribeInvalidChannel(t *testing.T) {
 	conn := dialWS(t, newTestServer(t, nil))
 	sendJSON(t, conn, map[string]string{"type": "subscribe", "channel": "not_a_channel"})
@@ -302,7 +368,7 @@ func TestWSHandlerFlightsHistoryChunksAndDone(t *testing.T) {
 		items := []model.FlightPosition{{
 			ID: i + 1, Flight: "AA11", StartDate: m, Lat: 42.0, Lon: -71.0, AltFt: 30000,
 		}}
-		if err := cache.PutFlightBucket(context.Background(), rdb, m, items); err != nil {
+		if err := cache.PutFlightBucket(context.Background(), rdb, cache.KeyFlightMinutes, m, items); err != nil {
 			t.Fatalf("seed bucket: %v", err)
 		}
 	}
@@ -361,7 +427,7 @@ func TestWSHandlerFlightsHistoryShortSeedLookback(t *testing.T) {
 		items := []model.FlightPosition{{
 			ID: i + 1, Flight: "AA11", StartDate: m, Lat: 42.0, Lon: -71.0, AltFt: 30000,
 		}}
-		if err := cache.PutFlightBucket(context.Background(), rdb, m, items); err != nil {
+		if err := cache.PutFlightBucket(context.Background(), rdb, cache.KeyFlightMinutes, m, items); err != nil {
 			t.Fatalf("seed bucket: %v", err)
 		}
 	}
@@ -451,5 +517,65 @@ func TestWSHandlerWeatherForecastIgnoredWhenZoneInvalid(t *testing.T) {
 		if f := readFrame(t, conn); f.Type != "pause_ack" {
 			t.Fatalf("zone %q: expected pause_ack (forecast request silently ignored), got %+v", zone, f)
 		}
+	}
+}
+
+// A news_body request from a client that never subscribed to news must still get a
+// reply — an empty body with a message — so the UI shows an error rather than
+// hanging on "loading". The nil pool here also exercises the nil-pool guard.
+func TestWSHandlerNewsBodyRepliesWhenUnsubscribed(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+
+	sendJSON(t, conn, map[string]any{"type": "news_body", "id": 4210})
+
+	f := readFrame(t, conn)
+	if f.Type != "news_body" {
+		t.Fatalf("expected news_body reply, got %+v", f)
+	}
+	if f.ID != 4210 {
+		t.Fatalf("expected the requested id echoed, got %d", f.ID)
+	}
+	if f.Body != "" || f.Msg == "" {
+		t.Fatalf("expected empty body with a message, got body=%q message=%q", f.Body, f.Msg)
+	}
+}
+
+func TestWSHandlerNewsBodyMalformed(t *testing.T) {
+	conn := dialWS(t, newTestServer(t, nil))
+
+	// id as a string fails to unmarshal into newsBodyMsg.ID (int).
+	if err := conn.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"news_body","id":"nope"}`)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	f := readFrame(t, conn)
+	if f.Type != "error" {
+		t.Fatalf("expected error frame, got %+v", f)
+	}
+	if f.Msg != "malformed news_body message" {
+		t.Fatalf("expected malformed news_body message, got %+v", f)
+	}
+}
+
+func TestProfileCacheHoldsUserFields(t *testing.T) {
+	c := NewProfileCache()
+	if got := c.UserFields(); got != nil {
+		t.Errorf("UserFields on a fresh cache = %v, want nil", got)
+	}
+	c.SetUserFields([]chat.UserField{{Field: "city", Label: "city"}})
+	got := c.UserFields()
+	if len(got) != 1 || got[0].Field != "city" {
+		t.Errorf("UserFields = %+v, want one entry for city", got)
+	}
+}
+
+func TestChatSubscribeDoesNotQueryWithoutAnExposureList(t *testing.T) {
+	// Every unit test in this package runs with a nil pool. The len(fields)
+	// guard is what keeps the subscribe path from reaching a database that is
+	// not there -- exactly the shape that already trapped the connect path.
+	c := NewProfileCache()
+	if len(c.UserFields()) != 0 {
+		t.Fatal("a fresh ProfileCache must expose no fields")
 	}
 }

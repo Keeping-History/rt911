@@ -1,0 +1,116 @@
+package chat
+
+import (
+	"regexp"
+	"strings"
+)
+
+var (
+	reURL        = regexp.MustCompile(`https?://\S+|www\.\S+`)
+	reMarkdown   = regexp.MustCompile("[*_`~#>]+") // Note: > also matches emoticons like >:-) but none are required
+	reWhitespace = regexp.MustCompile(`\s+`)
+	reWordChars  = regexp.MustCompile(`[a-z0-9]+`)
+)
+
+// replacements maps era-incorrect typography to its ASCII equivalent. A 2001 AIM
+// client could not render any of these, so they are as wrong as an emoji.
+var replacements = strings.NewReplacer(
+	"“", `"`, "”", `"`,
+	"‘", "'", "’", "'",
+	"—", "-", "–", "-",
+	"…", "...",
+)
+
+// stripSlang are post-2001 interjections safe to delete outright: each is a
+// standalone word, so removing it leaves a readable sentence. This is the
+// mechanical half of the anachronism rule -- the prompt asks, and this enforces.
+var stripSlang = []string{
+	"smh", "fr", "ngl", "bruh", "lowkey", "highkey", "sus", "yeet",
+	"cringe", "based", "salty",
+}
+
+// Anachronisms is the full list, used for DETECTION. It includes nouns like
+// "google" and "wifi" that cannot be cut without wrecking the sentence around
+// them, so those survive sanitising and are reported instead. Visible drift is
+// better than mangled text.
+var Anachronisms = []string{
+	"smh", "fr", "ngl", "bruh", "lowkey", "highkey", "sus", "yeet",
+	"cringe", "based", "vibe", "vibes", "salty", "ghosted", "selfie",
+	"google", "googled", "texting", "texted", "wifi", "app", "apps",
+	"smartphone", "iphone", "youtube", "facebook", "twitter", "tweet",
+}
+
+// Sanitize reduces a generated reply to what a 2001 IM client could display:
+// plain ASCII text and text emoticons. Everything else is removed rather than
+// escaped -- a buddy typing a literal asterisk is a bug, not a style choice.
+func Sanitize(s string, maxRunes int) string {
+	s = replacements.Replace(s)
+	s = reMarkdown.ReplaceAllString(s, "")
+	s = reURL.ReplaceAllString(s, "")
+
+	// Drop anything still non-ASCII, control characters, or DEL: emoji, accented
+	// characters, box drawing, ANSI escapes. Keep printable ASCII (0x20-0x7E) and
+	// safe whitespace (tab, newline, carriage return, form feed).
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 0x20 && r < 0x7F) || r == 0x09 || r == 0x0A || r == 0x0C || r == 0x0D {
+			b.WriteRune(r)
+		}
+	}
+	s = removeSlang(b.String())
+	s = reWhitespace.ReplaceAllString(s, " ")
+	s = strings.TrimSpace(s)
+
+	return truncateRunes(s, maxRunes)
+}
+
+// removeSlang deletes whole-word post-2001 interjections. Whole-word only, so
+// "fr" cannot fire inside "from" and "based" cannot fire inside "databased".
+func removeSlang(s string) string {
+	words := strings.Split(s, " ")
+	out := make([]string, 0, len(words))
+	for _, w := range words {
+		bare := strings.ToLower(strings.Trim(w, ".,!?;:'\"()"))
+		drop := false
+		for _, sl := range stripSlang {
+			if bare == sl {
+				drop = true
+				break
+			}
+		}
+		if !drop {
+			out = append(out, w)
+		}
+	}
+	return strings.Join(out, " ")
+}
+
+// truncateRunes cuts at the last space before the cap so a reply never ends
+// mid-word, which reads as a crash rather than as brevity.
+func truncateRunes(s string, maxRunes int) string {
+	r := []rune(s)
+	if maxRunes <= 0 || len(r) <= maxRunes {
+		return s
+	}
+	cut := string(r[:maxRunes])
+	if i := strings.LastIndex(cut, " "); i > 0 {
+		cut = cut[:i]
+	}
+	return strings.TrimSpace(cut)
+}
+
+// HasAnachronism reports the first post-2001 term found, matching whole words
+// only so "ngl" does not fire inside "angle".
+func HasAnachronism(s string) (string, bool) {
+	words := reWordChars.FindAllString(strings.ToLower(s), -1)
+	seen := make(map[string]bool, len(words))
+	for _, w := range words {
+		seen[w] = true
+	}
+	for _, a := range Anachronisms {
+		if seen[a] {
+			return a, true
+		}
+	}
+	return "", false
+}

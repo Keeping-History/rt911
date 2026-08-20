@@ -1,7 +1,7 @@
 # Directus enforcement — Teacher role/permissions (ops-as-code)
 
 Creates and verifies the Teacher role/policy on the `playlists` collection in the
-live api-beta Directus instance (https://api-beta.911realtime.org). This is prod;
+live Directus instance (https://api.911realtime.org). This is prod;
 `verify.sh` creates and tears down its own throwaway users/playlists so it's safe
 to run repeatedly.
 
@@ -37,7 +37,7 @@ to run repeatedly.
   users/playlists even on failure.
 
 Both scripts take the instance URL as `$1` (default
-`https://api-beta.911realtime.org`) and read `DIRECTUS_ADMIN_PASSWORD` from the
+`https://api.911realtime.org`) and read `DIRECTUS_ADMIN_PASSWORD` from the
 environment (never pass it as a CLI arg / never let it land in shell history —
 pull it fresh from the cluster secret each time):
 

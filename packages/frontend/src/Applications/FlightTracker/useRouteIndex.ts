@@ -1,21 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
-import { prevUtcDay, routeKey, type RouteIndex, type RouteIndexRow } from "./flightFilter";
-import { flightDateOf } from "./useFlightTrack";
+import { routeKey, type RouteIndex, type RouteIndexRow } from "./flightFilter";
+import { flightDateOf, prevUtcDay } from "./flightDates";
 
-// Same anonymous-read Directus base as useFlightTrack; the route index is the
-// bulk sibling of that per-flight fetch — every flight_tracks row for a date,
-// small fields only (no geometry), so airport/tail filters can see all
-// airborne flights at once instead of issuing hundreds of per-flight requests.
-const DIRECTUS_URL =
-	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
-	"https://api-beta.911realtime.org";
+// The route index is the bulk sibling of useFlightTrack's per-flight fetch —
+// every flight_tracks row for a date, small fields only (no geometry), so
+// airport/tail filters can see all airborne flights at once instead of issuing
+// hundreds of per-flight requests.
 
-// 2001-09-11 has ~1,949 rows (checked 2026-07-10), so one page per date is
-// the norm; pagination is a guard, not the expectation. Note that each
-// sample date fetches two dates' worth of rows (see datesKey below), so the
-// number of fetches is up to 2x the number of distinct sample dates.
+// Row counts vary by an order of magnitude between dates, so multi-page walks
+// are routine, not an edge case: 2001-09-11 has ~1,950 rows (one page) but
+// 2001-09-10 has ~16,367 (six) — both checked 2026-07-24, after the
+// flight-recon reload. Note that each sample date fetches two dates' worth of
+// rows (see datesKey below), so the number of fetches is up to 2x the number
+// of distinct sample dates.
 export const ROUTE_INDEX_PAGE_LIMIT = 3000;
+
+// Hard ceiling on pages walked per date. The largest date in the reloaded
+// dataset (2001-09-10) is ~16.4k rows = 6 pages, so 25 pages (75k rows) is far
+// beyond anything real. This is a circuit breaker, not a tuning knob: the
+// short-page break below delegates loop termination entirely to the server, so
+// any layer that answers every `page=N` with the same full-page body makes it
+// run forever. That is not hypothetical — an edge cache ignoring the query
+// string did exactly this in production (2026-07-22 and again 2026-07-24), and
+// the origin logged this loop reaching page 5883 against a 6-page date.
+export const ROUTE_INDEX_MAX_PAGES = 25;
 
 interface RouteIndexApiRow extends RouteIndexRow {
 	flight: string;
@@ -28,6 +38,10 @@ export function routeIndexUrl(flightDate: string, page: number): string {
 		// flight_tracks has no readable carrier column; carrier filtering uses
 		// the streamed position instead (see flightFilter.matchesFilter).
 		fields: "flight,flight_date,tail_number,origin,scheduled_dest,aircraft_type,wheels_on_utc",
+		// Postgres gives no ordering guarantee for LIMIT/OFFSET without an
+		// ORDER BY, so an unsorted page walk may repeat or skip rows across page
+		// boundaries. Sorting on the primary key makes the paging deterministic.
+		sort: "id",
 		limit: String(ROUTE_INDEX_PAGE_LIMIT),
 		page: String(page),
 	});
@@ -53,11 +67,25 @@ async function loadDate(date: string): Promise<void> {
 	pendingDates.add(date);
 	try {
 		const rows = new Map<string, RouteIndexRow>();
-		for (let page = 1; ; page++) {
+		let complete = false;
+		// First row of the previous page. A page that starts where the last one
+		// started means the server handed back the same body rather than the next
+		// slice — the request is not making progress, so keep walking and this
+		// loop never ends. Bail on the very next page instead of thousands later.
+		let prevFirstKey: string | null = null;
+		for (let page = 1; page <= ROUTE_INDEX_MAX_PAGES; page++) {
 			const res = await fetch(routeIndexUrl(date, page));
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const json = (await res.json()) as { data: RouteIndexApiRow[] };
-			for (const r of json.data) {
+			const data = json.data ?? [];
+			const firstKey = data.length ? routeKey(data[0].flight, data[0].flight_date) : null;
+			if (firstKey !== null && firstKey === prevFirstKey) {
+				throw new Error(
+					`page ${page} repeated page ${page - 1} (stale query-agnostic cache?)`,
+				);
+			}
+			prevFirstKey = firstKey;
+			for (const r of data) {
 				rows.set(routeKey(r.flight, r.flight_date), {
 					tail_number: r.tail_number ?? null,
 					origin: r.origin ?? null,
@@ -66,7 +94,17 @@ async function loadDate(date: string): Promise<void> {
 					wheels_on_utc: r.wheels_on_utc ?? null,
 				});
 			}
-			if (json.data.length < ROUTE_INDEX_PAGE_LIMIT) break;
+			if (data.length < ROUTE_INDEX_PAGE_LIMIT) {
+				complete = true;
+				break;
+			}
+		}
+		// Deliberately not cached when the walk was cut short: a truncated index
+		// silently hides flights from every filter for the rest of the session,
+		// whereas leaving the date uncached lets a later mount retry once the
+		// upstream recovers.
+		if (!complete) {
+			throw new Error(`exceeded ${ROUTE_INDEX_MAX_PAGES} pages`);
 		}
 		routeIndexCache.set(date, rows);
 		for (const l of listeners) l();
@@ -89,7 +127,7 @@ export function useRouteIndex(positions: FlightPosition[]): RouteIndex {
 	// Stable key of distinct dates so effects/memos don't churn per position tick.
 	// Each sample's own UTC date AND the day before it are both loaded: an
 	// evening-departure flight's flight_date (BTS local date) lands on the
-	// previous UTC day from its samples' start_date (see flightFilter.prevUtcDay
+	// previous UTC day from its samples' start_date (see flightDates.prevUtcDay
 	// for the full local-vs-UTC explanation), so routeRowFor's fallback lookup
 	// needs that earlier date's index already fetched.
 	const datesKey = useMemo(() => {
@@ -107,7 +145,7 @@ export function useRouteIndex(positions: FlightPosition[]): RouteIndex {
 	useEffect(() => {
 		const listener = () => setVersion((v) => v + 1);
 		listeners.add(listener);
-		// Dates load in SERIES: concurrent same-path requests to api-beta can
+		// Dates load in SERIES: concurrent same-path requests to Directus can
 		// come back with their response bodies mixed by the proxy layer (see
 		// useNotableCrashSites.loadCrashSites) — a poisoned date would cache
 		// another date's rows permanently.

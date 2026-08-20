@@ -118,7 +118,7 @@ function parseEntry(raw: unknown, warn: (msg: string) => void): PlaylistEntry | 
 // PlaylistApp → owning desktop app id, needed for the disable-wins cross-check.
 const APP_IDS: Record<PlaylistApp, string> = {
 	tv: "TV.app",
-	radio: "RadioScanner.app",
+	radio: "RadioTraffic.app",
 	news: "News.app",
 	flights: "FlightTracker.app",
 };
@@ -134,6 +134,19 @@ export function parsePlaylist(raw: unknown): ParsedPlaylist {
 		!Array.isArray(raw.entries)
 	) {
 		return { definition: null, warnings: ["structurally invalid playlist document"] };
+	}
+
+	// Playlist-level window. A bad bound is dropped alone; an inverted window is
+	// dropped whole — under lockout semantics it would leave the playlist
+	// permanently outside its own window, bricking every student who loads it.
+	let start = validTime(raw.start) ? raw.start : undefined;
+	let end = validTime(raw.end) ? raw.end : undefined;
+	if (raw.start !== undefined && start === undefined) warn("playlist has bad start; ignored");
+	if (raw.end !== undefined && end === undefined) warn("playlist has bad end; ignored");
+	if (start !== undefined && end !== undefined && playlistUtcMs(end) <= playlistUtcMs(start)) {
+		warn(`playlist window end ${end} is not after start ${start}; window ignored`);
+		start = undefined;
+		end = undefined;
 	}
 
 	const entries = raw.entries
@@ -164,7 +177,13 @@ export function parsePlaylist(raw: unknown): ParsedPlaylist {
 		.filter((e): e is PlaylistEntry => e !== null);
 
 	return {
-		definition: { version: 1, mode: raw.mode, entries: checked },
+		definition: {
+			version: 1,
+			mode: raw.mode,
+			...(start !== undefined ? { start } : {}),
+			...(end !== undefined ? { end } : {}),
+			entries: checked,
+		},
 		warnings,
 	};
 }

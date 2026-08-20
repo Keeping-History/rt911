@@ -2,11 +2,13 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"classicy/streamer/internal/model"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -293,6 +295,119 @@ func Mp3ItemHistory(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]mod
 		 ORDER BY mi.start_date`, t)
 }
 
+// mp3MetaSelectFrom reads the Radio Traffic card's metadata for every approved
+// mp3 item. It is a second, independent query path over the same table rather
+// than extra columns on mp3SelectFrom, for two reasons that both have to hold:
+//
+//   - mp3SelectFrom is shared with AllMp3Items/Mp3ItemByID/CurrentMp3Items/
+//     Mp3ItemHistory, all four of which funnel through queryItems — whose
+//     rows.Scan is a fixed 20-column positional list that news, media and the
+//     other MediaItem selects scan through as well. Widening the constant
+//     breaks every one of those callers at once.
+//   - Even if it didn't, the payload is wrong. Mp3ItemHistory ships the entire
+//     ~755-item back catalogue and is re-sent on every seek; hanging this
+//     metadata off MediaItem would put ~1.5 MB of msgpack on every Time Machine
+//     scrub. It is static for the session, so it travels once on its own frame.
+//
+// `parties` is never selected here or anywhere else in this file. It is the
+// private blob these columns are a redacted projection of, carrying the
+// `gate_reasons` and `model` QA signals; model.ItemMeta has nowhere to put them
+// and this query must not fetch them.
+//
+// Tags come from a LATERAL json_agg rather than a plain join so one row comes
+// back per item instead of one per tagging. COALESCE turns json_agg's NULL over
+// an empty set into an empty array, so an item with no junction rows scans to an
+// empty non-nil slice rather than nil.
+const mp3MetaSelectFrom = `
+	SELECT mi.id, mi.subject, mi.link, mi.tier, mi.confidence, mi.evidence,
+	       mi.participants, mi.mentions, mi.provenance, mi.peaks,
+	       COALESCE(tg.tags, '[]'::json)
+	FROM mp3_items mi
+	LEFT JOIN LATERAL (
+	  SELECT json_agg(json_build_object(
+	    'tag', t.tag, 'namespace', t.namespace, 'value', t.value, 'color', t.color
+	  ) ORDER BY t.sort NULLS LAST, t.tag) AS tags
+	  FROM mp3_items_tags j JOIN mp3_tags t ON t.id = j.mp3_tags_id
+	  WHERE j.mp3_items_id = mi.id
+	) tg ON true`
+
+// Mp3Metadata returns the Radio Traffic metadata for every approved mp3 item,
+// keyed by item id. Keyed rather than ordered because the client joins it onto
+// items it already holds from the mp3/mp3_history frames — there is no order
+// here that means anything.
+func Mp3Metadata(ctx context.Context, pool *pgxpool.Pool) (map[int]model.ItemMeta, error) {
+	rows, err := pool.Query(ctx, mp3MetaSelectFrom+` WHERE mi.approved = 1`)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int]model.ItemMeta)
+	for rows.Next() {
+		var id int
+		var m model.ItemMeta
+		// Nullable text columns scan into pointer locals — Directus stores empty
+		// strings as NULL and pgx cannot scan NULL into a non-pointer string.
+		// The json columns need no such handling: pgx zeroes a slice, map or
+		// pointer destination on NULL.
+		var subject, link, tier, confidence, evidence *string
+		if err := rows.Scan(
+			&id, &subject, &link, &tier, &confidence, &evidence,
+			&m.Participants, &m.Mentions, &m.Provenance, &m.Peaks,
+			&m.Tags,
+		); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		derefStr(&m.Subject, subject)
+		derefStr(&m.Link, link)
+		derefStr(&m.Tier, tier)
+		derefStr(&m.Confidence, confidence)
+		derefStr(&m.Evidence, evidence)
+		out[id] = m
+	}
+	return out, rows.Err()
+}
+
+// mp3TagVocabularyQuery reads the whole mp3_tags table (~1,131 rows).
+//
+// Deliberately the full table and not a dedup of what Mp3Metadata aggregates.
+// Vocabulary rows are created but never deleted: a tag the model retracts loses
+// its junction rows while the row itself survives, keeping whatever color/sort a
+// curator set on it. Deriving the vocabulary from the per-item aggregate would
+// silently drop every such tag — and every tag attached only to an unapproved
+// item — from the filter UI, with nothing to say a value had gone missing.
+const mp3TagVocabularyQuery = `
+	SELECT tag, namespace, value, color
+	FROM mp3_tags
+	ORDER BY sort NULLS LAST, tag`
+
+// Mp3TagVocabulary returns the complete mp3 tag vocabulary in display order.
+func Mp3TagVocabulary(ctx context.Context, pool *pgxpool.Pool) ([]model.Tag, error) {
+	rows, err := pool.Query(ctx, mp3TagVocabularyQuery)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	// Non-nil so an empty vocabulary encodes as [] rather than null.
+	out := make([]model.Tag, 0)
+	for rows.Next() {
+		var t model.Tag
+		// namespace is nullable: curated tags are stored verbatim, so a curator
+		// may add one with no namespace at all (see video-grabber's split_tag).
+		var tag, namespace, value, color *string
+		if err := rows.Scan(&tag, &namespace, &value, &color); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		derefStr(&t.Tag, tag)
+		derefStr(&t.Namespace, namespace)
+		derefStr(&t.Value, value)
+		derefStr(&t.Color, color)
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // newsSelectFrom is the shared SELECT … FROM clause for news queries. News items
 // reuse the MediaItem shape (same columns as media_items) but live in their own
 // news_items table, delivered on the opt-in "news" channel.
@@ -302,6 +417,35 @@ const newsSelectFrom = `
 	       mi.url, mi.format, mi.approved, mi.mute,
 	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption, mi.subtitles,
 	       mi.content, mi.sort
+	FROM news_items mi
+	LEFT JOIN sources s ON s.id = mi.source`
+
+// NewsEpoch is the floor for every news read: the start of 2001-09-09.
+//
+// Deliberately midnight UTC, not midnight ET. Articles from 9/9 and 9/10 carry
+// date-only timestamps (start_date is exactly 00:00:00), so a literal midnight-ET
+// floor of 04:00Z would silently exclude every article dated 9/9. No rows have
+// times between 00:00Z and 04:00Z that day, so this admits the 9/9 articles and
+// nothing earlier.
+//
+// MUST be in time.UTC: news_items.start_date is `timestamp without time zone`,
+// and pgx encodes a time.Time to that type using its wall clock in its own
+// location — a value built in any other zone would silently shift the floor.
+var NewsEpoch = time.Date(2001, 9, 9, 0, 0, 0, 0, time.UTC)
+
+// newsListSelectFrom mirrors newsSelectFrom but substitutes an empty literal for
+// mi.content. The backlog snapshot runs to ~1,320 rows whose bodies total ~7.7 MB
+// — far too large to ship on every init/seek/subscribe over a socket with no
+// compression. The client fetches one body on demand via news_body when an article
+// opens. The SQL literal (rather than a second row scanner, which is how usenet
+// solved this) keeps queryItems working unchanged; the column ORDER must still
+// match its scan list exactly.
+const newsListSelectFrom = `
+	SELECT mi.id, mi.title, mi.full_title, s.slug,
+	       mi.start_date, mi.end_date, mi.calc_duration, mi.timezone,
+	       mi.url, mi.format, mi.approved, mi.mute,
+	       mi.volume, mi.jump, mi.trim, mi.image, mi.image_caption, mi.subtitles,
+	       ''::text AS content, mi.sort
 	FROM news_items mi
 	LEFT JOIN sources s ON s.id = mi.source`
 
@@ -325,23 +469,45 @@ func NewsItemByID(ctx context.Context, pool *pgxpool.Pool, id int) (*model.Media
 	return &items[0], nil
 }
 
-// CurrentNewsItems returns approved news items active at time t. Most news is
-// "instant" (start_date = end_date), so — like CurrentItems — instant items are
-// included for a 5-minute lookback window so a seek to t still shows headlines
-// fired in the preceding minutes. Used by the init/seek/subscribe snapshot paths.
+// NewsItemBody returns the article body for one approved news item. found is false
+// when the id is missing or unapproved, letting the caller reply "unavailable"
+// without conflating it with an article whose body is genuinely empty. Bodies are
+// excluded from list frames (see newsListSelectFrom) and fetched on demand.
+func NewsItemBody(ctx context.Context, pool *pgxpool.Pool, id int) (string, bool, error) {
+	// content is nullable — Directus emits NULL for empty rich-text fields.
+	var content *string
+	err := pool.QueryRow(ctx,
+		`SELECT content FROM news_items WHERE id = $1 AND approved = 1`, id).Scan(&content)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("query: %w", err)
+	}
+	if content == nil {
+		return "", true, nil
+	}
+	return *content, true, nil
+}
+
+// CurrentNewsItems returns every approved news article from NewsEpoch up to t,
+// headline-only. This is the News app's complete back catalogue, not a window:
+// the only date gates on the read path are the 9/9 floor and the virtual-clock
+// ceiling. Articles later than t stay withheld so the replay isn't spoiled.
+//
+// The floor tests start_date alone, so a durational article that began before the
+// epoch and is still running at t is excluded. Checked against production: zero
+// approved rows straddle the boundary and 7,255 of 7,339 are instant, so this
+// guards an empty set — one honest comparison beats a compound rule.
+//
+// Used by the init/seek/subscribe snapshot paths.
 func CurrentNewsItems(ctx context.Context, pool *pgxpool.Pool, t time.Time) ([]model.MediaItem, error) {
 	return queryItems(ctx, pool,
-		newsSelectFrom+`
+		newsListSelectFrom+`
 		 WHERE mi.approved = 1
-		   AND (
-		     (mi.start_date <= $1 AND (mi.end_date IS NULL OR mi.end_date >= $1))
-		     OR (
-		       (mi.start_date = mi.end_date OR (mi.calc_duration IS NOT NULL AND mi.calc_duration = 0))
-		       AND mi.start_date <= $1
-		       AND mi.start_date >= $1 - INTERVAL '5 minutes'
-		     )
-		   )
-		 ORDER BY mi.start_date`, t)
+		   AND mi.start_date >= $1
+		   AND mi.start_date <= $2
+		 ORDER BY mi.start_date`, NewsEpoch, t)
 }
 
 // alertSelectFrom mirrors newsSelectFrom but reads alert_items and adds the
@@ -683,13 +849,20 @@ func queryItems(ctx context.Context, pool *pgxpool.Pool, q string, args ...any) 
 // table needs no serving index. COALESCE handles Directus NULLs in one place
 // instead of per-field pointer scans (the derefStr pattern) — every nullable
 // column here has an obvious zero value.
-func StreamFlightPositions(ctx context.Context, pool *pgxpool.Pool, fn func(minute time.Time, items []model.FlightPosition) error) error {
+// The anon parameter splits the corpus at the id namespace: anonymous radar
+// traffic (issue #263) is loaded under RDR-% ids and served on its own
+// channel/cache, so the main flights warm must exclude it and vice versa.
+func StreamFlightPositions(ctx context.Context, pool *pgxpool.Pool, anon bool, fn func(minute time.Time, items []model.FlightPosition) error) error {
+	cond := "AND flight NOT LIKE 'RDR-%'"
+	if anon {
+		cond = "AND flight LIKE 'RDR-%'"
+	}
 	rows, err := pool.Query(ctx, `
 		SELECT id, flight, COALESCE(carrier, ''), utc,
 		       COALESCE(lat, 0), COALESCE(lon, 0), COALESCE(alt_ft, 0),
 		       COALESCE(phase, ''), COALESCE(diverted, false)
 		FROM flight_positions
-		WHERE utc IS NOT NULL
+		WHERE utc IS NOT NULL `+cond+`
 		ORDER BY utc`)
 	if err != nil {
 		return err

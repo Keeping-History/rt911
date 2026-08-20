@@ -1,0 +1,858 @@
+"""
+Segment the RS3 Message Viewer CSV exports (issue #263) into per-aircraft
+radar tracks and estimate how many can be identified against BTS.
+
+Input: ``MV_Exp_*.csv`` files exported from the RS3 app's Message Viewer
+(see RADES_RS3_EXPORT.md). Columns of interest: ``Id`` (radar site), ``Time``
+(UTC, ms), ``M3``+``M3V`` (Mode 3 squawk + valid bit), ``MC``+``MCV`` (Mode C
+altitude ft + valid bit), ``DecLat``/``DecLon`` (RS3-computed position).
+
+Pipeline (each stage prints its numbers; nothing is loaded anywhere):
+
+1. **Unify** the exports into one beacon-return table (valid M3 only). The
+   "Pentagon Combined" export contributes only its pre-11:30Z stretch — the
+   four half-hour raw-file exports cover 11:30-13:30Z with identical sites.
+2. **Segment** into tracks: within each squawk code, a greedy nearest-track
+   association with a staleness gap (240 s) and a speed gate
+   (max(6 nm, dt x 650 kt) + 3 nm cross-site allowance). Squawk codes are
+   NOT unique across the airspace — e.g. code 1443 (AA11's) flies near
+   Dayton OH before AA11 leaves the Boston gate — so continuity does the
+   real work.
+3. **Filter** to aircraft-grade tracks: >= 25 returns, >= 8 min, >= 10 nm
+   net displacement (drops parrot checks, ground targets, garble).
+4. **Correlate departures with BTS**: a track whose first return is below
+   6,000 ft within 8 nm of an airport is a departure signature; match it to
+   BTS 9/11 flights wheels-off from that airport within a tolerance of the
+   estimated liftoff (first return - 60 s). Reports the
+   candidates-per-track histogram and the count of unambiguous 1:1 flights.
+
+Validated against the five curated notable flights: AA77's squawk-3743
+returns in the exports end 12:50:38.660Z @ 38.8308,-81.9414 — identical to
+the curated track's last pre-gap waypoint.
+
+Not part of the shipped package — offline analysis:
+
+    python analysis/segment_rades_exports.py \
+        --exports-dir ".../Radar_Evaluation_Squadron_(RADES)/exports" \
+        [--bts /srv/flight-recon-data/bts_2001-09.csv] \
+        [--airports /srv/flight-recon-data/airports.csv] \
+        [--out tracks.pkl]
+
+Requires pandas (the flight-recon venv has it).
+"""
+
+import argparse
+import glob
+import json
+import math
+import os
+import pickle
+from collections import Counter
+
+import numpy as np
+import pandas as pd
+
+COLS = ["Id", "Time", "M3", "M3V", "MC", "MCV", "DecLat", "DecLon"]
+GAP_S = 240.0     # track staleness
+MAX_KT = 650.0    # speed gate ceiling
+BIAS_NM = 3.0     # cross-site registration allowance
+MIN_RETURNS = 25
+MIN_DUR_S = 480
+MIN_NET_NM = 10.0
+DEP_ALT_FT = 6000
+DEP_AP_NM = 8.0
+LIFTOFF_LEAD_S = 60
+# Radar-coverage time window (UTC secs-of-day) used to bound BTS candidates.
+# The Message Viewer exports covered 09:30-13:30Z; the batch-decoded corpus
+# runs to 17:00Z. Overridable via --window HH:MM-HH:MM.
+WINDOW_S = (9.5 * 3600, 13.5 * 3600)
+
+# Coverage box: default from the 2026-07 half-day exports; refit_cover()
+# widens it to the corpus actually being analyzed (the SEADS decode extends
+# coverage to south Florida and the Gulf).
+COVER = dict(la0=31.2, la1=47.7, lo0=-95.6, lo1=-66.4)
+
+
+def refit_cover(tracks):
+    lats = [p for tr in tracks for p in (tr["pts"][0][1], tr["pts"][-1][1])]
+    lons = [p for tr in tracks for p in (tr["pts"][0][2], tr["pts"][-1][2])]
+    COVER.update(la0=float(np.percentile(lats, 1)), la1=float(np.percentile(lats, 99)),
+                 lo0=float(np.percentile(lons, 1)), lo1=float(np.percentile(lons, 99)))
+    print(f"coverage box refit: lat {COVER['la0']:.1f}..{COVER['la1']:.1f} "
+          f"lon {COVER['lo0']:.1f}..{COVER['lo1']:.1f}")
+
+
+def secs(t):
+    try:
+        h, m, s = str(t).split(":")
+        return int(h) * 3600 + int(m) * 60 + float(s)
+    except Exception:
+        return np.nan
+
+
+def dist_nm(a1, o1, a2, o2):
+    return math.hypot((a1 - a2) * 60, (o1 - o2) * 60 * math.cos(math.radians((a1 + a2) / 2)))
+
+
+def load_beacon_decoded(decoded_dir, raw_only=True):
+    """Beacon-return table from ``rs3_batch_decode`` output (csv.gz).
+
+    ``raw_only`` keeps recordings whose source path was under ``Data/Raw``
+    (per summary.json) — the combined/filtered products are subsets of those
+    and would double-count returns."""
+    import json as _json
+    with open(os.path.join(decoded_dir, "summary.json")) as fh:
+        summary = _json.load(fh)
+    frames = []
+    for rec in summary:
+        if rec.get("status") != "ok":
+            continue
+        if raw_only and "/Data/Raw/" not in rec["file"].replace("\\", "/"):
+            continue
+        df = pd.read_csv(os.path.join(decoded_dir, rec["out"]),
+                         usecols=["Id", "epoch_s", "M3", "M3V", "MC", "MCV", "DecLat", "DecLon"],
+                         dtype={"M3": "string"}, low_memory=False)
+        df = df[(df.M3V == 1) & df.DecLat.notna()]
+        df["secs"] = df.epoch_s % 86400
+        df["mc_ft"] = pd.to_numeric(df.MC, errors="coerce").where(df.MCV == 1)
+        frames.append(df[["Id", "secs", "M3", "DecLat", "DecLon", "mc_ft"]])
+    b = pd.concat(frames, ignore_index=True)
+    # cross-set duplicates are pre-removed by content hash; overlapping raw
+    # recordings (e.g. NEADS re-cuts) can still repeat returns — exact dedupe
+    b = b.drop_duplicates(subset=["Id", "secs", "M3", "DecLat", "DecLon"])
+    print(f"beacon returns: {len(b):,}  span {b.secs.min()/3600:.2f}h -> {b.secs.max()/3600:.2f}h  "
+          f"squawks {b.M3.nunique()}")
+    return b
+
+
+def load_beacon(exports_dir):
+    frames = []
+    combined = glob.glob(os.path.join(exports_dir, "*Combined*.csv"))
+    halves = sorted(set(glob.glob(os.path.join(exports_dir, "MV_Exp_1254*.csv"))) - set(combined))
+    for p in combined:
+        df = pd.read_csv(p, usecols=COLS, dtype={"M3": "string", "MC": "string"}, low_memory=False)
+        df["secs"] = df.Time.map(secs)
+        df = df[(df.M3V == 1) & df.secs.notna() & (df.secs < 11.5 * 3600)]
+        frames.append(df)
+    for p in halves:
+        df = pd.read_csv(p, usecols=COLS, dtype={"M3": "string", "MC": "string"}, low_memory=False)
+        df["secs"] = df.Time.map(secs)
+        frames.append(df[(df.M3V == 1) & df.secs.notna()])
+    b = pd.concat(frames, ignore_index=True).dropna(subset=["DecLat", "DecLon"])
+    b["mc_ft"] = pd.to_numeric(b.MC, errors="coerce").where(b.MCV == 1)
+    print(f"beacon returns: {len(b):,}  span {b.secs.min()/3600:.2f}h -> {b.secs.max()/3600:.2f}h  "
+          f"squawks {b.M3.nunique()}")
+    return b
+
+
+def segment(b):
+    tracks = []
+    for code, g in b.groupby("M3", sort=False):
+        g = g.sort_values("secs")
+        open_tracks = []
+        for row in g.itertuples(index=False):
+            t, lat, lon = row.secs, row.DecLat, row.DecLon
+            best, bestd = None, None
+            for tr in open_tracks:
+                dt = t - tr["t"]
+                if dt > GAP_S:
+                    continue
+                gate = max(6.0, dt / 3600.0 * MAX_KT) + BIAS_NM
+                d = dist_nm(lat, lon, tr["lat"], tr["lon"])
+                if d <= gate and (bestd is None or d < bestd):
+                    best, bestd = tr, d
+            open_tracks = [tr for tr in open_tracks if t - tr["t"] <= GAP_S]
+            if best is None:
+                best = {"code": code, "pts": []}
+                open_tracks.append(best)
+                tracks.append(best)
+            best["pts"].append((t, lat, lon, row.mc_ft, row.Id))
+            best["t"], best["lat"], best["lon"] = t, lat, lon
+    print(f"raw tracks: {len(tracks):,}")
+    good = [tr for tr in tracks
+            if len(tr["pts"]) >= MIN_RETURNS
+            and tr["pts"][-1][0] - tr["pts"][0][0] >= MIN_DUR_S
+            and dist_nm(tr["pts"][0][1], tr["pts"][0][2],
+                        tr["pts"][-1][1], tr["pts"][-1][2]) >= MIN_NET_NM]
+    print(f"aircraft-grade tracks (>={MIN_RETURNS} rtns, >={MIN_DUR_S//60} min, "
+          f">={MIN_NET_NM:.0f} nm): {len(good):,}")
+    return [{"code": tr["code"], "pts": tr["pts"]} for tr in good]
+
+
+# ------------------------------------------------------------------ stitching
+# A single aircraft often yields several tracks: the crew changes squawk on a
+# handoff (UA175 flew 1470 -> 3020 -> 3321), or coverage lapses longer than
+# GAP_S. Stitching links track B after track A when B begins shortly after A
+# ends, at a position consistent with A's terminal velocity, with plausible
+# altitude continuity. Links are greedy mutual-best; chains are transitive.
+STITCH_MAX_DT_S = 600.0     # same-code relink (coverage lapse)
+STITCH_CODECHANGE_DT_S = 240.0   # code-change relink (handoffs are near-instant)
+STITCH_BASE_NM = 8.0
+STITCH_CODECHANGE_NM = 5.0
+STITCH_ALT_FPM = 6000.0
+STITCH_LOW_ALT_FT = 5000.0  # below this a track may be landing/departing:
+                            # never link identities across the ground
+STITCH_HDG_DEG = 75.0       # terminal vs initial course agreement
+
+
+def _velocity(pts, at_end, tail=5):
+    seg = pts[-min(tail, len(pts)):] if at_end else pts[:min(tail, len(pts))]
+    a, b = seg[0], seg[-1]
+    dt = b[0] - a[0]
+    if dt <= 0:
+        return None
+    return (b[1] - a[1]) / dt, (b[2] - a[2]) / dt
+
+
+def _alt_of(p):
+    return None if pd.isna(p[3]) else float(p[3])
+
+
+def stitch(tracks):
+    ends = sorted(range(len(tracks)), key=lambda i: tracks[i]["pts"][-1][0])
+    starts = sorted(range(len(tracks)), key=lambda i: tracks[i]["pts"][0][0])
+    start_times = [tracks[i]["pts"][0][0] for i in starts]
+    import bisect
+    links = []
+    for i in ends:
+        A = tracks[i]["pts"]
+        tA, laA, loA = A[-1][0], A[-1][1], A[-1][2]
+        altA = _alt_of(A[-1])
+        vA = _velocity(A, at_end=True)
+        if vA is None:
+            continue
+        vla, vlo = vA
+        lo_i = bisect.bisect_left(start_times, tA)
+        hi_i = bisect.bisect_right(start_times, tA + STITCH_MAX_DT_S)
+        for k in range(lo_i, hi_i):
+            j = starts[k]
+            if j == i:
+                continue
+            B = tracks[j]["pts"]
+            dt = B[0][0] - tA
+            if dt <= 0 or B[0][0] < A[0][0]:
+                continue
+            same_code = tracks[i]["code"] == tracks[j]["code"]
+            altB = _alt_of(B[0])
+            # identity never crosses the ground: a low ending (landing) or a
+            # low start (fresh departure) links only as a same-code coverage
+            # blink — this is what glued the post-impact traffic onto UA175
+            low = ((altA is not None and altA < STITCH_LOW_ALT_FT)
+                   or (altB is not None and altB < STITCH_LOW_ALT_FT))
+            max_dt = STITCH_MAX_DT_S if same_code else STITCH_CODECHANGE_DT_S
+            if low and not (same_code and dt <= GAP_S * 2):
+                continue
+            if dt > max_dt:
+                continue
+            pla, plo = laA + vla * dt, loA + vlo * dt
+            d = dist_nm(B[0][1], B[0][2], pla, plo)
+            base = STITCH_BASE_NM if same_code else STITCH_CODECHANGE_NM
+            gate = min(base + dt / 3600.0 * 150.0, dt / 3600.0 * MAX_KT + base)
+            if d > gate:
+                continue
+            if not (altA is None or altB is None):
+                max_dalt = (STITCH_ALT_FPM if same_code else 2000.0) * max(dt / 60.0, 1.0)
+                if abs(altB - altA) > max_dalt:
+                    continue
+            # course agreement between A's terminal and B's initial velocity
+            vB = _velocity(B, at_end=False)
+            if vB is not None:
+                hA = math.degrees(math.atan2(vlo, vla)) % 360
+                hB = math.degrees(math.atan2(vB[1], vB[0])) % 360
+                if abs((hA - hB + 180) % 360 - 180) > STITCH_HDG_DEG:
+                    continue
+            links.append((d + dt / 60.0 + (0 if same_code else 2.0), i, j))
+    links.sort()
+    nxt, prv = {}, {}
+    for _sc, i, j in links:
+        if i in nxt or j in prv:
+            continue
+        nxt[i], prv[j] = j, i
+    stitched = []
+    consumed = set()
+    for i in range(len(tracks)):
+        if i in prv or i in consumed:
+            continue
+        chain, k = [i], i
+        while k in nxt:
+            k = nxt[k]
+            chain.append(k)
+        consumed.update(chain)
+        pts = [p for k in chain for p in tracks[k]["pts"]]
+        codes = []
+        for k in chain:
+            if tracks[k]["code"] not in codes:
+                codes.append(tracks[k]["code"])
+        stitched.append({"code": tracks[chain[0]]["code"], "codes": codes,
+                         "pts": pts, "n_fragments": len(chain)})
+    multi = sum(1 for t in stitched if t["n_fragments"] > 1)
+    print(f"stitched: {len(tracks):,} tracks -> {len(stitched):,} chains "
+          f"({multi:,} multi-fragment; longest {max(t['n_fragments'] for t in stitched)})")
+    return stitched
+
+
+def correlate(tracks, bts_path, airports_path):
+    ap = pd.read_csv(airports_path).set_index("code")
+    bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
+    bts = bts[(bts.FlightDate == "2001-09-11") & (bts.Cancelled == 0)].copy()
+
+    def wo_utc(row):
+        try:
+            hhmm = int(float(row.WheelsOff))
+            return (hhmm // 100) * 3600 + (hhmm % 100) * 60 - ap.loc[row.Origin, "utc_offset"] * 3600
+        except Exception:
+            return np.nan
+    bts["wo_secs"] = [wo_utc(r) for r in bts.itertuples(index=False)]
+    bts = bts.dropna(subset=["wo_secs"])
+
+    ap_in = ap[(ap.lat > COVER["la0"]) & (ap.lat < COVER["la1"])
+               & (ap.lon > COVER["lo0"]) & (ap.lon < COVER["lo1"])]
+    apl = list(ap_in.itertuples())
+
+    deps = []
+    for tr in tracks:
+        t, lat, lon, alt, _site = tr["pts"][0]
+        a = None if pd.isna(alt) else float(alt)
+        if a is None:
+            low = [float(p[3]) for p in tr["pts"][:5] if not pd.isna(p[3])]
+            a = min(low) if low else None
+        if a is None or a > DEP_ALT_FT:
+            continue
+        best, bd = None, DEP_AP_NM
+        for arow in apl:
+            d = dist_nm(lat, lon, arow.lat, arow.lon)
+            if d < bd:
+                best, bd = arow.Index, d
+        if best:
+            deps.append({"code": tr["code"], "t0": t, "ap": best, "n": len(tr["pts"])})
+    print(f"departure-signature tracks: {len(deps):,}")
+
+    w0, w1 = WINDOW_S
+    bts_in = bts[(bts.wo_secs >= w0) & (bts.wo_secs <= w1) & bts.Origin.isin(ap_in.index)]
+    print(f"BTS wheels-off {w0/3600:.1f}-{w1/3600:.1f}Z from in-coverage airports: {len(bts_in):,}")
+
+    results = {}
+    for tol in (150, 300):
+        amb = Counter()
+        matched = {}
+        for d in deps:
+            est = d["t0"] - LIFTOFF_LEAD_S
+            c = bts_in[(bts_in.Origin == d["ap"]) & ((bts_in.wo_secs - est).abs() <= tol)]
+            amb[min(len(c), 4)] += 1
+            if len(c) == 1:
+                f = c.iloc[0]
+                matched[f.Reporting_Airline + str(f.Flight_Number)] = (d, dict(
+                    origin=f.Origin, dest=f.Dest, wo_secs=float(f.wo_secs)))
+        print(f"tol +-{tol//60}min: candidates-per-track {dict(sorted(amb.items()))} | "
+              f"BTS flights 1:1: {len(matched):,}")
+        results[tol] = matched
+    return results
+
+
+# ------------------------------------------------------------------ matcher v2
+# Upgrades over correlate(): global mutual-best assignment (each track and each
+# BTS flight used at most once, best score first — hub congestion stops
+# producing "2+ candidates, discard"), per-airport wheels-off bias calibration
+# (BTS times are minute-quantized local; towers also differ systematically in
+# taxi/queue offsets), destination-bearing consistency (a departure's outbound
+# course must roughly agree with the great-circle bearing to its BTS
+# destination), and arrival-side matching as independent evidence (tracks
+# ending low near an airport vs BTS WheelsOn).
+
+BEARING_FREE_DEG = 35     # departures turn on SIDs; under this, no penalty
+BEARING_GATE_DEG = 100    # beyond this, the pairing is rejected outright
+BEARING_WEIGHT = 3.0      # score seconds per degree beyond the free cone
+SCORE_GATE_S = 300.0      # max acceptable score for an assignment
+COURSE_SAMPLE_S = 300     # outbound course measured at first return + this
+# En-route course: measured over the track's later half, after the departure
+# SID/climb turn has finished. This is the discriminating signal — two flights
+# leaving the same airport in the same minute diverge here even when their
+# climb-out headings are identical (the US1105/WN918 swap class).
+ENROUTE_MIN_NM = 15.0
+# Route-corridor audit thresholds (works even when the far endpoint is OUTSIDE
+# radar coverage, which is why most names were previously unjudgeable).
+CORRIDOR_OK_DEG = 30.0
+CORRIDOR_BAD_DEG = 90.0
+
+
+def bearing_deg(lat1, lon1, lat2, lon2):
+    dlon = math.radians(lon2 - lon1)
+    la1, la2 = math.radians(lat1), math.radians(lat2)
+    y = math.sin(dlon) * math.cos(la2)
+    x = math.cos(la1) * math.sin(la2) - math.sin(la1) * math.cos(la2) * math.cos(dlon)
+    return math.degrees(math.atan2(y, x)) % 360
+
+
+def ang_diff(a, b):
+    return abs((a - b + 180) % 360 - 180)
+
+
+def enroute_course(pts):
+    """Course over the track's later half, or None when it barely moves."""
+    if len(pts) < 6:
+        return None
+    a, b = pts[len(pts) // 2], pts[-1]
+    if dist_nm(a[1], a[2], b[1], b[2]) < ENROUTE_MIN_NM:
+        return None
+    return bearing_deg(a[1], a[2], b[1], b[2])
+
+
+def inbound_course(pts):
+    """Course over the track's earlier half (arrival-side twin)."""
+    if len(pts) < 6:
+        return None
+    a, b = pts[0], pts[len(pts) // 2]
+    if dist_nm(a[1], a[2], b[1], b[2]) < ENROUTE_MIN_NM:
+        return None
+    return bearing_deg(a[1], a[2], b[1], b[2])
+
+
+def _endpoint_signatures(tracks, apl):
+    """Departure and arrival signatures with an outbound/inbound course."""
+    deps, arrs = [], []
+    for i, tr in enumerate(tracks):
+        pts = tr["pts"]
+        for kind, p0, seq in (("dep", pts[0], pts), ("arr", pts[-1], pts[::-1])):
+            t, lat, lon, alt, _site = p0
+            a = None if pd.isna(alt) else float(alt)
+            if a is None:
+                low = [float(q[3]) for q in seq[:5] if not pd.isna(q[3])]
+                a = min(low) if low else None
+            if a is None or a > DEP_ALT_FT:
+                continue
+            best, bd = None, DEP_AP_NM
+            for arow in apl:
+                d = dist_nm(lat, lon, arow.lat, arow.lon)
+                if d < bd:
+                    best, bd = arow.Index, d
+            if not best:
+                continue
+            # course away from (dep) / toward (arr) the airport, sampled a few
+            # minutes into / before the end of the track
+            ref = next((q for q in seq if abs(q[0] - t) >= COURSE_SAMPLE_S), seq[-1])
+            course = (bearing_deg(lat, lon, ref[1], ref[2]) if kind == "dep"
+                      else bearing_deg(ref[1], ref[2], lat, lon))
+            sig = {"track": i, "code": tr["code"], "t": t, "ap": best,
+                   "course": course, "n": len(pts),
+                   # the discriminating long-baseline course (see ENROUTE_MIN_NM)
+                   "far_course": enroute_course(pts) if kind == "dep" else inbound_course(pts)}
+            (deps if kind == "dep" else arrs).append(sig)
+    return deps, arrs
+
+
+def _assign(sigs, flights, ap, time_col, bias, lead_s, use_bearing):
+    """Greedy global mutual-best assignment. Returns {flight_key: (sig, score)}."""
+    by_airport = {}
+    for f in flights.itertuples(index=False):
+        by_airport.setdefault(getattr(f, "airport"), []).append(f)
+    pairs = []
+    for s in sigs:
+        est = s["t"] - lead_s - bias.get(s["ap"], 0.0)
+        for f in by_airport.get(s["ap"], []):
+            dt = abs(getattr(f, time_col) - est)
+            if dt > 2 * SCORE_GATE_S:
+                continue
+            score = dt
+            if use_bearing:
+                other = f.Dest if time_col == "wo_secs" else f.Origin
+                if other in ap.index:
+                    frm, to = ((s["ap"], other) if time_col == "wo_secs"
+                               else (other, s["ap"]))
+                    brg = bearing_deg(ap.loc[frm, "lat"], ap.loc[frm, "lon"],
+                                      ap.loc[to, "lat"], ap.loc[to, "lon"])
+                    # The en-route course discriminates where the climb-out
+                    # course cannot; fall back to the climb-out one only when
+                    # the track is too short to have an en-route leg.
+                    far = s.get("far_course")
+                    if far is not None:
+                        diff = ang_diff(far, brg)
+                        free, gate = BEARING_FREE_DEG / 2, BEARING_GATE_DEG / 2
+                    else:
+                        diff = ang_diff(s["course"], brg)
+                        free, gate = BEARING_FREE_DEG, BEARING_GATE_DEG
+                    if diff > gate:
+                        continue
+                    score += BEARING_WEIGHT * max(0.0, diff - free)
+            if score <= SCORE_GATE_S:
+                pairs.append((score, s, f))
+    pairs.sort(key=lambda x: x[0])
+    used_tracks, used_flights, out = set(), set(), {}
+    for score, s, f in pairs:
+        key = f.Reporting_Airline + str(f.Flight_Number)
+        if s["track"] in used_tracks or key in used_flights:
+            continue
+        used_tracks.add(s["track"])
+        used_flights.add(key)
+        out[key] = (s, score)
+    return out
+
+
+def correlate_v2(tracks, bts_path, airports_path, notable_codes=("1443", "3020", "3321", "3743", "1527", "2427")):
+    ap = pd.read_csv(airports_path).set_index("code")
+    bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
+    bts = bts[(bts.FlightDate == "2001-09-11") & (bts.Cancelled == 0)].copy()
+
+    def hhmm_utc(v, origin_or_dest):
+        try:
+            hhmm = int(float(v))
+            return (hhmm // 100) * 3600 + (hhmm % 100) * 60 - ap.loc[origin_or_dest, "utc_offset"] * 3600
+        except Exception:
+            return np.nan
+    bts["wo_secs"] = [hhmm_utc(r.WheelsOff, r.Origin) for r in bts.itertuples(index=False)]
+    bts["wn_secs"] = [hhmm_utc(r.WheelsOn, r.Dest) for r in bts.itertuples(index=False)]
+
+    ap_in = ap[(ap.lat > COVER["la0"]) & (ap.lat < COVER["la1"])
+               & (ap.lon > COVER["lo0"]) & (ap.lon < COVER["lo1"])]
+    apl = list(ap_in.itertuples())
+    deps, arrs = _endpoint_signatures(tracks, apl)
+    print(f"v2 signatures: {len(deps):,} departures, {len(arrs):,} arrivals")
+
+    w0, w1 = WINDOW_S
+    bd = bts.dropna(subset=["wo_secs"])
+    bd = bd[(bd.wo_secs >= w0) & (bd.wo_secs <= w1) & bd.Origin.isin(ap_in.index)].copy()
+    bd["airport"] = bd.Origin
+    ba = bts.dropna(subset=["wn_secs"])
+    ba = ba[(ba.wn_secs >= w0) & (ba.wn_secs <= w1) & ba.Dest.isin(ap_in.index)].copy()
+    ba["airport"] = ba.Dest
+
+    # pass 1 (time only, tight) → per-airport wheels-off bias from >=5 matches
+    pass1 = _assign(deps, bd, ap, "wo_secs", {}, LIFTOFF_LEAD_S, use_bearing=False)
+    resid = {}
+    for key, (s, _sc) in pass1.items():
+        f = bd[(bd.Reporting_Airline + bd.Flight_Number.astype(str)) == key].iloc[0]
+        if abs(s["t"] - LIFTOFF_LEAD_S - f.wo_secs) <= 120:
+            resid.setdefault(s["ap"], []).append(s["t"] - LIFTOFF_LEAD_S - f.wo_secs)
+    bias = {a: float(np.median(v)) for a, v in resid.items() if len(v) >= 5}
+    print(f"v2 pass1: {len(pass1):,} matches; bias calibrated for {len(bias)} airports "
+          f"(median offsets {sorted(round(b) for b in bias.values())[:8]}...)")
+
+    dep_m = _assign(deps, bd, ap, "wo_secs", bias, LIFTOFF_LEAD_S, use_bearing=True)
+    arr_m = _assign(arrs, ba, ap, "wn_secs", bias, -30, use_bearing=True)
+
+    # Same-origin swap guard (the US1105/WN918 failure class): when another
+    # BTS flight departed the same airport within the time gate on a similar
+    # outbound bearing, time+bearing evidence cannot tell the two apart —
+    # refuse the name rather than guess.
+    def dest_bearing(f):
+        if f.Dest not in ap.index or f.Origin not in ap.index:
+            return None
+        return bearing_deg(ap.loc[f.Origin, "lat"], ap.loc[f.Origin, "lon"],
+                           ap.loc[f.Dest, "lat"], ap.loc[f.Dest, "lon"])
+    by_airport = {}
+    for f in bd.itertuples(index=False):
+        by_airport.setdefault(f.airport, []).append(f)
+    ambiguous = []
+    for key, (sig, _sc) in list(dep_m.items()):
+        f = next(x for x in by_airport.get(sig["ap"], [])
+                 if x.Reporting_Airline + str(x.Flight_Number) == key)
+        bf = dest_bearing(f)
+        for g in by_airport.get(sig["ap"], []):
+            gk = g.Reporting_Airline + str(g.Flight_Number)
+            if gk == key or abs(g.wo_secs - f.wo_secs) > 240:
+                continue
+            bg = dest_bearing(g)
+            if bf is None or bg is None or ang_diff(bf, bg) < 40:
+                ambiguous.append(key)
+                break
+    # Report-only: posterior audits (destination/origin consistency) outrank
+    # prior ambiguity — the verified tier is gated by those, not by this.
+    print(f"v2 swap guard: {len(ambiguous)} dep names are same-origin-ambiguous "
+          f"(reported; verified-tier membership decided by the audits)")
+    results_ambiguous = set(ambiguous)
+
+    both = {k for k in dep_m if k in arr_m
+            if dep_m[k][0]["track"] == arr_m[k][0]["track"]}
+    all_named = set(dep_m) | set(arr_m)
+    print(f"v2 named: departures {len(dep_m):,}, arrivals {len(arr_m):,}, "
+          f"both-ends-same-track {len(both):,}, union {len(all_named):,}")
+
+    # negative control: hijacked/observer squawk tracks must stay unnamed
+    bad = [k for k, (s, _sc) in list(dep_m.items()) + list(arr_m.items())
+           if s["code"] in notable_codes]
+    print(f"v2 negative control (notable squawks named): {bad or 'none'}")
+    return {"dep": dep_m, "arr": arr_m, "both": both, "ambiguous": results_ambiguous}
+
+
+def audit_named(tracks, results, bts_path, airports_path):
+    """Destination-consistency audit of departure-named flights (#263).
+
+    For a dep-named flight whose BTS destination lies inside the coverage box
+    and whose wheels-on falls inside the radar window, the matched track ought
+    to END near that destination, low. Verdicts:
+
+    - consistent:    track ends < 25 nm from the BTS destination
+    - inconsistent:  track ends > 60 nm away while below 18,000 ft (an ending
+                     we should be able to explain but can't)
+    - indeterminate: destination out of coverage/window, or the track ends
+                     high mid-air (a fragment - coverage handoff or squawk
+                     change), or in the 25-60 nm approach ring
+
+    Precision estimate = consistent / (consistent + inconsistent). Duration
+    and BTS great-circle distance corroboration are reported alongside.
+    """
+    ap = pd.read_csv(airports_path).set_index("code")
+    bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
+    bts = bts[(bts.FlightDate == "2001-09-11") & (bts.Cancelled == 0)].copy()
+
+    def hhmm_utc(v, code):
+        try:
+            hhmm = int(float(v))
+            return (hhmm // 100) * 3600 + (hhmm % 100) * 60 - ap.loc[code, "utc_offset"] * 3600
+        except Exception:
+            return np.nan
+    ref = {}
+    for r in bts.itertuples(index=False):
+        ref[r.Reporting_Airline + str(r.Flight_Number)] = r
+
+    dep_m = results["dep"]
+    verdicts = Counter()
+    details = []
+    for key, (sig, score) in dep_m.items():
+        f = ref.get(key)
+        tr = tracks[sig["track"]]
+        last = tr["pts"][-1]
+        end_alt = None if pd.isna(last[3]) else float(last[3])
+        v = "indeterminate"
+        d_dest = None
+        diverted = f is not None and getattr(f, "Diverted", 0) == 1
+        if f is not None and not diverted and f.Dest in ap.index:
+            dla, dlo = ap.loc[f.Dest, "lat"], ap.loc[f.Dest, "lon"]
+            in_cover = (COVER["la0"] < dla < COVER["la1"]) and (COVER["lo0"] < dlo < COVER["lo1"])
+            wn = hhmm_utc(f.WheelsOn, f.Dest)
+            d_dest = dist_nm(last[1], last[2], dla, dlo)
+            if in_cover and wn == wn and WINDOW_S[0] <= wn <= WINDOW_S[1] + 1800:
+                if d_dest < 25:
+                    v = "consistent"
+                elif d_dest > 60 and (end_alt is not None and end_alt < 18000):
+                    v = "inconsistent"
+        elif diverted:
+            # 9/11: the FAA ground stop forced landings anywhere — the
+            # scheduled destination proves nothing about the match. A track
+            # ending LOW somewhere is exactly what a correct diverted match
+            # looks like; count these separately (the radar shows where they
+            # actually went, which BTS pre-2003 cannot).
+            v = "diverted-tracked-low" if (end_alt is not None and end_alt < 10000) else "diverted-indeterminate"
+        verdicts[v] += 1
+        details.append({"flight": key, "verdict": v, "end_dist_nm": None if d_dest is None else round(d_dest, 1),
+                        "end_alt": end_alt, "score": round(score, 1)})
+    judged = verdicts["consistent"] + verdicts["inconsistent"]
+    print(f"audit: {dict(verdicts)}  judged={judged}  "
+          f"precision={verdicts['consistent']/judged:.3f}" if judged else "audit: nothing judged")
+
+    # corroboration on consistent matches: track duration vs BTS block time
+    durs = []
+    for d in details:
+        if d["verdict"] != "consistent":
+            continue
+        f = ref[d["flight"]]
+        sig, _ = dep_m[d["flight"]]
+        tr = tracks[sig["track"]]
+        span_min = (tr["pts"][-1][0] - tr["pts"][0][0]) / 60
+        wo = hhmm_utc(f.WheelsOff, f.Origin)
+        wn = hhmm_utc(f.WheelsOn, f.Dest)
+        if wo == wo and wn == wn and wn > wo:
+            durs.append(span_min - (wn - wo) / 60)
+    if durs:
+        a = np.array(durs)
+        print(f"duration delta (track - BTS block) on consistent matches: "
+              f"median {np.median(a):+.1f} min, p90 |delta| {np.percentile(np.abs(a), 90):.1f} min (n={len(a)})")
+    return details
+
+
+def audit_arrivals(tracks, results, bts_path, airports_path):
+    """Origin-consistency audit for arrival-named flights: the matched track
+    should START low near the BTS origin (when the origin is in coverage)."""
+    ap = pd.read_csv(airports_path).set_index("code")
+    bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
+    bts = bts[(bts.FlightDate == "2001-09-11") & (bts.Cancelled == 0)]
+    ref = {r.Reporting_Airline + str(r.Flight_Number): r for r in bts.itertuples(index=False)}
+    verdicts = Counter()
+    out = {}
+    for key, (sig, _sc) in results["arr"].items():
+        f = ref.get(key)
+        tr = tracks[sig["track"]]
+        first = tr["pts"][0]
+        alt0 = None if pd.isna(first[3]) else float(first[3])
+        v = "indeterminate"
+        if f is not None and f.Origin in ap.index:
+            ola, olo = ap.loc[f.Origin, "lat"], ap.loc[f.Origin, "lon"]
+            if (COVER["la0"] < ola < COVER["la1"]) and (COVER["lo0"] < olo < COVER["lo1"]):
+                d = dist_nm(first[1], first[2], ola, olo)
+                if d < 25 and (alt0 is None or alt0 < 12000):
+                    v = "consistent"
+                elif d > 60 and alt0 is not None and alt0 < 12000:
+                    v = "inconsistent"
+        verdicts[v] += 1
+        out[key] = v
+    judged = verdicts["consistent"] + verdicts["inconsistent"]
+    if judged:
+        print(f"arrival audit: {dict(verdicts)}  precision={verdicts['consistent']/judged:.3f}")
+    return out
+
+
+def audit_corridor(tracks, results, bts_path, airports_path, dep_details):
+    """Route-corridor audit — the evidence axis that survives out-of-coverage
+    endpoints (#263).
+
+    A track named ORIGIN->DEST should FLY toward DEST: its en-route course
+    (later half of the track, past the climb-out turn) should agree with the
+    great-circle bearing from origin to destination. This works when the
+    destination is thousands of miles outside radar coverage, which is why
+    most names were previously 'indeterminate'. Arrival-named flights get the
+    mirror test (inbound course vs bearing from origin).
+
+    Returns {flight: "corridor-consistent" | "corridor-contradicted" |
+             "corridor-ambiguous"} for names not already settled by the
+    endpoint audits."""
+    ap = pd.read_csv(airports_path).set_index("code")
+    bts = pd.read_csv(bts_path, dtype={"Flight_Number": "string"})
+    bts = bts[(bts.FlightDate == "2001-09-11") & (bts.Cancelled == 0)]
+    ref = {r.Reporting_Airline + str(r.Flight_Number): r for r in bts.itertuples(index=False)}
+    settled = {d["flight"] for d in dep_details
+               if d["verdict"] in ("consistent", "inconsistent", "diverted-tracked-low")}
+
+    out = Counter()
+    verdicts = {}
+    for kind, matches in (("dep", results["dep"]), ("arr", results["arr"])):
+        for key, (sig, _sc) in matches.items():
+            if key in settled or key in verdicts:
+                continue
+            f = ref.get(key)
+            if f is None or f.Origin not in ap.index or f.Dest not in ap.index:
+                out["no-airport-data"] += 1
+                continue
+            # A diverted flight never flew its filed corridor — not judgeable.
+            if getattr(f, "Diverted", 0) == 1:
+                out["diverted-skip"] += 1
+                continue
+            pts = tracks[sig["track"]]["pts"]
+            course = enroute_course(pts) if kind == "dep" else inbound_course(pts)
+            if course is None:
+                out["too-little-travel"] += 1
+                continue
+            want = bearing_deg(ap.loc[f.Origin, "lat"], ap.loc[f.Origin, "lon"],
+                               ap.loc[f.Dest, "lat"], ap.loc[f.Dest, "lon"])
+            diff = ang_diff(course, want)
+            v = ("corridor-consistent" if diff <= CORRIDOR_OK_DEG
+                 else "corridor-contradicted" if diff >= CORRIDOR_BAD_DEG
+                 else "corridor-ambiguous")
+            verdicts[key] = v
+            out[v] += 1
+    print(f"corridor audit: {dict(out)}")
+    return verdicts
+
+
+def curated_by_minute(notable_dir):
+    """Curated notable tracks as {minute -> (lat, lon)} maps."""
+    import datetime as _dt
+    out = []
+    for path in sorted(glob.glob(os.path.join(notable_dir, "*.json"))):
+        with open(path) as fh:
+            data = json.load(fh)
+        by_min = {}
+        for w in data["waypoints"]:
+            t = (_dt.datetime.strptime(w["utc"], "%Y-%m-%dT%H:%M:%SZ")
+                 - _dt.datetime(2001, 9, 11)).total_seconds()
+            by_min[int(t // 60)] = (w["lat"], w["lon"])
+        out.append((data["flight"], by_min))
+    return out
+
+
+SHADOW_PTS = 10
+SHADOW_NM = 3.0
+
+
+def shadows_notable(pts, curated):
+    """The hijacked/observer aircraft's own radar chains must never be named.
+    True when >= SHADOW_PTS same-minute positions fall within SHADOW_NM."""
+    for _flight, by_min in curated:
+        n = 0
+        for p in pts:
+            q = by_min.get(int(p[0] // 60))
+            if q is not None and dist_nm(q[0], q[1], p[1], p[2]) < SHADOW_NM:
+                n += 1
+                if n >= SHADOW_PTS:
+                    return True
+    return False
+
+
+def export_verified(tracks, results, dep_details, arr_verdicts, out_path,
+                    corridor_verdicts=None, notable_dir=None):
+    """The load-grade set: names carrying independent posterior evidence."""
+    tier = {}
+    for d in dep_details:
+        if d["verdict"] == "consistent":
+            tier.setdefault(d["flight"], []).append("dest-consistent")
+        elif d["verdict"] == "diverted-tracked-low":
+            tier.setdefault(d["flight"], []).append("diverted-tracked")
+    for key in results.get("both", set()):
+        tier.setdefault(key, []).append("both-ends")
+    for key, v in arr_verdicts.items():
+        if v == "consistent":
+            tier.setdefault(key, []).append("origin-consistent")
+    for key, v in (corridor_verdicts or {}).items():
+        if v == "corridor-consistent":
+            tier.setdefault(key, []).append("corridor-consistent")
+    curated = curated_by_minute(notable_dir) if notable_dir else []
+    payload = []
+    blocked = []
+    for key, evidence in sorted(tier.items()):
+        src = results["dep"].get(key) or results["arr"].get(key)
+        sig, score = src
+        tr = tracks[sig["track"]]
+        if curated and shadows_notable(tr["pts"], curated):
+            blocked.append(key)
+            continue
+        payload.append({"flight": key, "evidence": evidence, "score": round(score, 1),
+                        "codes": tr.get("codes", [tr["code"]]),
+                        "returns": len(tr["pts"]),
+                        "t0": tr["pts"][0][0], "t1": tr["pts"][-1][0],
+                        "track_index": sig["track"]})
+    with open(out_path, "w") as fh:
+        json.dump(payload, fh, indent=1)
+    by_ev = Counter(e for p in payload for e in p["evidence"])
+    if blocked:
+        print(f"notable-shadow gate: BLOCKED {len(blocked)} names — {sorted(blocked)}")
+    print(f"verified tier: {len(payload)} flights -> {out_path}  {dict(by_ev)}")
+    return payload
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument("--exports-dir", help="RS3-app Message Viewer CSV exports")
+    src.add_argument("--decoded-dir", help="rs3_batch_decode output directory")
+    p.add_argument("--window", default=None,
+                   help="BTS candidate window as HH:MM-HH:MM UTC (default 09:30-13:30)")
+    p.add_argument("--bts", default="/srv/flight-recon-data/bts_2001-09.csv")
+    p.add_argument("--airports", default="/srv/flight-recon-data/airports.csv")
+    p.add_argument("--out", help="pickle path for the aircraft-grade tracks")
+    p.add_argument("--matches-out", help="JSON path for the +-2min 1:1 matches")
+    args = p.parse_args(argv)
+
+    if args.window:
+        global WINDOW_S
+        a, z = args.window.split("-")
+        to_s = lambda t: int(t.split(":")[0]) * 3600 + int(t.split(":")[1]) * 60  # noqa: E731
+        WINDOW_S = (to_s(a), to_s(z))
+    b = (load_beacon_decoded(args.decoded_dir) if args.decoded_dir
+         else load_beacon(args.exports_dir))
+    tracks = segment(b)
+    if args.decoded_dir:
+        refit_cover(tracks)
+    if args.out:
+        with open(args.out, "wb") as fh:
+            pickle.dump(tracks, fh)
+    results = correlate(tracks, args.bts, args.airports)
+    v2 = correlate_v2(tracks, args.bts, args.airports)
+    audit_named(tracks, v2, args.bts, args.airports)
+    if args.matches_out:
+        payload = [{"flight": fl, "squawk": d["code"], "first_return_secs": d["t0"],
+                    "airport": d["ap"], "returns": d["n"], **meta}
+                   for fl, (d, meta) in sorted(results[150].items())]
+        with open(args.matches_out, "w") as fh:
+            json.dump(payload, fh, indent=1)
+
+
+if __name__ == "__main__":
+    main()

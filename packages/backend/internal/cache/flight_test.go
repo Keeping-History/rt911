@@ -24,11 +24,11 @@ func TestPutFlightBucketThenRangeRoundTrips(t *testing.T) {
 		{ID: 1, Flight: "AA11", Carrier: "AA", StartDate: minute, Lat: 40.7, Lon: -74.0, AltFt: 29000, Phase: "enroute"},
 		{ID: 2, Flight: "UA175", Carrier: "UA", StartDate: minute.Add(10 * time.Second), Lat: 40.6, Lon: -74.1, AltFt: 31000, Phase: "enroute", Diverted: true},
 	}
-	if err := PutFlightBucket(ctx, rdb, minute, items); err != nil {
+	if err := PutFlightBucket(ctx, rdb, KeyFlightMinutes, minute, items); err != nil {
 		t.Fatalf("PutFlightBucket: %v", err)
 	}
 
-	got, err := FlightPositionsInRange(ctx, rdb, minute, minute.Add(time.Minute), discardLogger())
+	got, err := FlightPositionsInRange(ctx, rdb, KeyFlightMinutes, minute, minute.Add(time.Minute), discardLogger())
 	if err != nil {
 		t.Fatalf("FlightPositionsInRange: %v", err)
 	}
@@ -49,20 +49,20 @@ func TestFlightPositionsInRangeIsHalfOpenAndUnaligned(t *testing.T) {
 
 	m0 := time.Date(2001, 9, 11, 13, 0, 0, 0, time.UTC)
 	m1 := m0.Add(time.Minute)
-	if err := PutFlightBucket(ctx, rdb, m0, []model.FlightPosition{
+	if err := PutFlightBucket(ctx, rdb, KeyFlightMinutes, m0, []model.FlightPosition{
 		{ID: 1, Flight: "A", StartDate: m0.Add(10 * time.Second)},
 		{ID: 2, Flight: "B", StartDate: m0.Add(40 * time.Second)},
 	}); err != nil {
 		t.Fatalf("PutFlightBucket m0: %v", err)
 	}
-	if err := PutFlightBucket(ctx, rdb, m1, []model.FlightPosition{
+	if err := PutFlightBucket(ctx, rdb, KeyFlightMinutes, m1, []model.FlightPosition{
 		{ID: 3, Flight: "C", StartDate: m1.Add(20 * time.Second)},
 	}); err != nil {
 		t.Fatalf("PutFlightBucket m1: %v", err)
 	}
 
 	// [m0+30s, m1+20s): id 1 (before lo) and id 3 (at exclusive hi) are out.
-	got, err := FlightPositionsInRange(ctx, rdb, m0.Add(30*time.Second), m1.Add(20*time.Second), discardLogger())
+	got, err := FlightPositionsInRange(ctx, rdb, KeyFlightMinutes, m0.Add(30*time.Second), m1.Add(20*time.Second), discardLogger())
 	if err != nil {
 		t.Fatalf("FlightPositionsInRange: %v", err)
 	}
@@ -79,12 +79,12 @@ func TestFlightPositionsInRangeMissingMinutesAndEmptyRange(t *testing.T) {
 	ctx := context.Background()
 
 	m := time.Date(2001, 9, 11, 14, 0, 0, 0, time.UTC)
-	if err := PutFlightBucket(ctx, rdb, m, []model.FlightPosition{{ID: 9, Flight: "X", StartDate: m}}); err != nil {
+	if err := PutFlightBucket(ctx, rdb, KeyFlightMinutes, m, []model.FlightPosition{{ID: 9, Flight: "X", StartDate: m}}); err != nil {
 		t.Fatalf("PutFlightBucket: %v", err)
 	}
 
 	// Range spans 5 minutes; only one bucket exists.
-	got, err := FlightPositionsInRange(ctx, rdb, m.Add(-2*time.Minute), m.Add(3*time.Minute), discardLogger())
+	got, err := FlightPositionsInRange(ctx, rdb, KeyFlightMinutes, m.Add(-2*time.Minute), m.Add(3*time.Minute), discardLogger())
 	if err != nil {
 		t.Fatalf("FlightPositionsInRange: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestFlightPositionsInRangeMissingMinutesAndEmptyRange(t *testing.T) {
 		t.Fatalf("expected exactly the one stored position, got %+v", got)
 	}
 
-	if got, err := FlightPositionsInRange(ctx, rdb, m, m, discardLogger()); err != nil || len(got) != 0 {
+	if got, err := FlightPositionsInRange(ctx, rdb, KeyFlightMinutes, m, m, discardLogger()); err != nil || len(got) != 0 {
 		t.Fatalf("empty range must return nothing, got %+v err %v", got, err)
 	}
 }
@@ -105,14 +105,14 @@ func TestFlightPositionsInRangeSkipsCorruptBucket(t *testing.T) {
 
 	m0 := time.Date(2001, 9, 11, 15, 0, 0, 0, time.UTC)
 	m1 := m0.Add(time.Minute)
-	if err := rdb.HSet(ctx, keyFlightMinutes, minuteKey(m0), "not msgpack").Err(); err != nil {
+	if err := rdb.HSet(ctx, KeyFlightMinutes, minuteKey(m0), "not msgpack").Err(); err != nil {
 		t.Fatalf("HSet corrupt: %v", err)
 	}
-	if err := PutFlightBucket(ctx, rdb, m1, []model.FlightPosition{{ID: 4, Flight: "D", StartDate: m1}}); err != nil {
+	if err := PutFlightBucket(ctx, rdb, KeyFlightMinutes, m1, []model.FlightPosition{{ID: 4, Flight: "D", StartDate: m1}}); err != nil {
 		t.Fatalf("PutFlightBucket: %v", err)
 	}
 
-	got, err := FlightPositionsInRange(ctx, rdb, m0, m1.Add(time.Minute), discardLogger())
+	got, err := FlightPositionsInRange(ctx, rdb, KeyFlightMinutes, m0, m1.Add(time.Minute), discardLogger())
 	if err != nil {
 		t.Fatalf("FlightPositionsInRange: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestFlightCacheIsolatedFromPager(t *testing.T) {
 	ctx := context.Background()
 
 	at := time.Date(2001, 9, 11, 16, 0, 0, 0, time.UTC)
-	if err := PutFlightBucket(ctx, rdb, at, []model.FlightPosition{{ID: 1, Flight: "E", StartDate: at}}); err != nil {
+	if err := PutFlightBucket(ctx, rdb, KeyFlightMinutes, at, []model.FlightPosition{{ID: 1, Flight: "E", StartDate: at}}); err != nil {
 		t.Fatalf("PutFlightBucket: %v", err)
 	}
 	pager, err := PagerItemsAt(ctx, rdb, at)
@@ -148,11 +148,36 @@ func TestWarmFlightCacheSkipsWhenAlreadyWarm(t *testing.T) {
 	ctx := context.Background()
 
 	m := time.Date(2001, 9, 11, 12, 0, 0, 0, time.UTC)
-	if err := PutFlightBucket(ctx, rdb, m, []model.FlightPosition{{ID: 1, Flight: "F", StartDate: m}}); err != nil {
+	if err := PutFlightBucket(ctx, rdb, KeyFlightMinutes, m, []model.FlightPosition{{ID: 1, Flight: "F", StartDate: m}}); err != nil {
 		t.Fatalf("PutFlightBucket: %v", err)
 	}
 
-	if err := WarmFlightCache(ctx, rdb, nil, discardLogger()); err != nil {
+	if err := WarmFlightCache(ctx, rdb, nil, KeyFlightMinutes, false, discardLogger()); err != nil {
 		t.Fatalf("WarmFlightCache should skip when warm, got %v", err)
+	}
+}
+
+// The flights and flights-anon corpora share bucket machinery but must never
+// bleed into each other: same minute, different HASH keys (#263).
+func TestFlightBucketsAreKeyIsolated(t *testing.T) {
+	rdb, done := newTestRedis(t)
+	defer done()
+	ctx := context.Background()
+
+	m := time.Date(2001, 9, 11, 13, 0, 0, 0, time.UTC)
+	if err := PutFlightBucket(ctx, rdb, KeyFlightMinutes, m, []model.FlightPosition{{ID: 1, Flight: "AA941", StartDate: m}}); err != nil {
+		t.Fatalf("PutFlightBucket named: %v", err)
+	}
+	if err := PutFlightBucket(ctx, rdb, KeyFlightAnonMinutes, m, []model.FlightPosition{{ID: 2, Flight: "RDR-00042", StartDate: m}}); err != nil {
+		t.Fatalf("PutFlightBucket anon: %v", err)
+	}
+
+	named, err := FlightPositionsInRange(ctx, rdb, KeyFlightMinutes, m, m.Add(time.Minute), discardLogger())
+	if err != nil || len(named) != 1 || named[0].Flight != "AA941" {
+		t.Fatalf("named corpus polluted: %v %v", named, err)
+	}
+	anon, err := FlightPositionsInRange(ctx, rdb, KeyFlightAnonMinutes, m, m.Add(time.Minute), discardLogger())
+	if err != nil || len(anon) != 1 || anon[0].Flight != "RDR-00042" {
+		t.Fatalf("anon corpus polluted: %v %v", anon, err)
 	}
 }

@@ -60,7 +60,6 @@ regeneration. Requires the three PREZIPs and the extracted ar102001.zip in
 
 import argparse
 import glob
-import itertools
 import os
 import re
 from collections import Counter, defaultdict

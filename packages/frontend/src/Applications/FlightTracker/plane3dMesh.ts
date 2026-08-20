@@ -1,7 +1,18 @@
 import type { FlightMotion, LandingClock, MotionBuffer } from "./flightMotion";
 import { extrapolate, motionNow } from "./flightMotion";
 import { PLANE_SHAPE, altitudeFtAt, exaggeratedHeightM } from "./flightAltitude";
-import { isNotable, isObserver } from "./notableFlights";
+import { isNotable, isObserverStyled } from "./notableFlights";
+
+/**
+ * Instance category the 3D shader colors by: 0 = regular, 1 = notable,
+ * 2 = observer, 3 = anonymous radar traffic (drawn in the desaturated pin
+ * color at reduced alpha, matching the 2D anonymous-traffic layer).
+ */
+export function categoryFlag(flight: string): number {
+	if (isNotable(flight)) return 1;
+	if (isObserverStyled(flight)) return 2;
+	return flight.startsWith("RDR-") ? 3 : 0;
+}
 
 // Geometry and per-frame instance data for the true-3D aircraft layer
 // (issue #250). Everything here is pure math — no WebGL, no maplibre — so
@@ -204,8 +215,10 @@ export function buildSphereMesh(stacks = 8, slices = 12): PlaneMesh {
 //   i_data1 = [headingRad, pitchRad, halfSizeMeters, notableFlag]
 export const PLANE_INSTANCE_STRIDE = 8;
 
-// Visual pitch clamp (~57°): the altitude exaggeration makes real climb
-// angles dramatic already; beyond this they read as aerobatics.
+// Visual pitch clamp (~57°): real climb angles are shallow, so this rarely
+// bites in normal flight — it guards against sparse/garbage samples that imply
+// a near-vertical rate (e.g. a big altitude jump between two distant samples)
+// reading as aerobatics.
 const MAX_PITCH_RAD = 1.0;
 
 /**
@@ -276,7 +289,7 @@ export function buildPlaneInstanceBatches(
 			data[o + 4] = (m.headingDeg * Math.PI) / 180;
 			data[o + 5] = pitchRadOf(m);
 			data[o + 6] = halfSizeM;
-			data[o + 7] = isNotable(m.item.flight) ? 1 : isObserver(m.item.flight) ? 2 : 0;
+			data[o + 7] = categoryFlag(m.item.flight);
 			count++;
 		}
 		if (count > 0) {
@@ -315,7 +328,7 @@ export function buildPlaneInstances(
 		data[o + 4] = (m.headingDeg * Math.PI) / 180;
 		data[o + 5] = pitchRadOf(m);
 		data[o + 6] = halfSizeM;
-		data[o + 7] = isNotable(m.item.flight) ? 1 : isObserver(m.item.flight) ? 2 : 0;
+		data[o + 7] = categoryFlag(m.item.flight);
 		flights.push(m.item.flight);
 		count++;
 	}

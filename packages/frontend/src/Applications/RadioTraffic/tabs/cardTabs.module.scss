@@ -1,0 +1,330 @@
+// The card tab panels.
+//
+// Every panel is the SAME height, and only Transcript scrolls.
+//
+// The height is shared because switching tabs must not resize the card: a panel
+// that sizes to its content makes the card's height a function of which tab the
+// listener happens to have open, and in a wrapped lane row that resizes every
+// card beside it too. Transcript is why it must be a cap and not a floor — a
+// transcript is arbitrarily long, so "the panel grows to fit" means one clip
+// with three minutes of talk sets the height of its whole row.
+//
+// So Transcript gets the scrollbar and the others do not. That is the trade the
+// earlier content-sized panels were avoiding (a clipped panel reads as an empty
+// tab) and it is only payable because Summary moved out of Details into a tab of
+// its own: what is left on the other panels is short, structured and bounded —
+// four timing rows, a few tag groups, a handful of names.
+//
+// Density still matters, because the card is only 210px wide: no decorative
+// padding, single-line cells ellipsise, and every column earns its width.
+//
+// Colours here are placeholders pending Robbie's pass — the structure is what
+// this file pins, not the palette.
+
+.rtTabPanel {
+  // Chip fills, keyed by tag namespace. mp3_tags.color is NULL on all 1131 rows
+  // today, so this is the only palette a chip ever gets; tagPalette.ts names
+  // these and honours a curator's `color` over them if one is ever set.
+  --rt-tag-topic: #b8c8e8;
+  --rt-tag-facility: #bcd8bc;
+  --rt-tag-link: #e8d8b0;
+  --rt-tag-tier: #d8c0d8;
+  --rt-tag-aircraft: #b0d8d8;
+  --rt-tag-agency: #e0c0b0;
+  --rt-tag-role: #d0d0b8;
+  --rt-tag-person: #d8c8c8;
+  --rt-tag-default: var(--color-system-03);
+
+  // The one height every panel is, and therefore the height the card's tabs
+  // region is whichever tab is open. Six of the theme's own control boxes, at
+  // the card's scale, so it tracks a theme with bigger chrome and a card that is
+  // resized (story 034) instead of pinning a pixel that only suits today's
+  // 1.25x: at the default theme that is the design's 39pt panel with room for
+  // the Details panel's five rows.
+  --rt-tab-panel-height: calc(var(--window-control-size) * 6 * var(--rt-card-scale, 1));
+
+  box-sizing: border-box;
+  width: 100%;
+  // Definite, so the panel's content cannot set it — that is what stops the
+  // Transcript panel from deciding how tall its card, and its whole lane row,
+  // ends up. min-height still fills a card the row has levelled up taller;
+  // it can only ever exceed the fixed height, never fall short of it.
+  height: var(--rt-tab-panel-height);
+  min-height: 100%;
+  // Clipped rather than scrolled: see .rtTabPanel[data-tab="transcript"], the
+  // one panel that overrides this.
+  overflow: hidden;
+  padding: var(--window-border-size) calc(var(--window-border-size) * 2);
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.85);
+  line-height: 1.25;
+  color: var(--color-system-06);
+  background: var(--color-system-01);
+}
+
+// Panel columns -------------------------------------------------------------
+//
+// Figma's Details and Parties tabs are the same shape: N boxed columns side by
+// side, each with a heading bar and label/value rows under it.
+
+.rtPanelColumns {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: calc(var(--window-border-size) * 3);
+  // Otherwise this auto-sizes to its tallest column's content instead of
+  // .rtTabPanel's fixed height, leaving dead space below short columns that
+  // align-items: stretch has nothing to stretch against.
+  height: 100%;
+}
+
+.rtPanelColumn {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  border: var(--window-border-size) solid var(--color-system-05);
+  background: var(--color-system-01);
+}
+
+.rtPanelColumnHead {
+  margin: 0;
+  padding: 0 calc(var(--window-border-size) * 2);
+  font-size: inherit;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-system-01);
+  background: var(--color-system-06);
+}
+
+// Label/value rows — Details' timings and tag groups, Source's provenance.
+.rtDetailRows {
+  margin: 0;
+  padding: 0;
+}
+
+.rtDetailRow {
+  display: flex;
+  flex-direction: row;
+  gap: calc(var(--window-border-size) * 4);
+  padding: 0 calc(var(--window-border-size) * 2);
+}
+
+// Banded rows, as the design draws them: at this type size a band is what keeps
+// a value on the same line as its label across a 3-column panel.
+.rtDetailRow:nth-child(even) {
+  background: var(--color-system-02);
+}
+
+.rtDetailLabel {
+  flex: 0 0 auto;
+  margin: 0;
+  font-weight: bold;
+}
+
+.rtDetailValue {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// A row of chips, which wrap rather than ellipsise.
+.rtChipCell {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+}
+
+.rtSubject {
+  margin: 0;
+  padding: 0 calc(var(--window-border-size) * 2);
+}
+
+// Tag chips. `background` is set inline from tagPalette.chipColor.
+.rtChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--window-border-size) * 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rtChip {
+  padding: 0 calc(var(--window-border-size) * 3);
+  border: var(--window-border-size) solid var(--color-system-05);
+  white-space: nowrap;
+}
+
+// The Mentions grid and the Parties row are the same shape: N columns that
+// share the width.
+.rtColumns {
+  display: flex;
+  flex-direction: row;
+  gap: calc(var(--window-border-size) * 4);
+  align-items: flex-start;
+}
+
+.rtColumn {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.rtColumnLabel {
+  margin: 0;
+  font-size: inherit;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rtColumnList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rtColumnValue,
+.rtPartyField {
+  // <li> already stacks; <span> (rtPartyField, now inside a table cell so a
+  // named speaker's person and facility read as two lines) needs this said
+  // explicitly.
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Parties table ---------------------------------------------------------
+//
+// One row per participant under a fixed header, rather than N side-by-side
+// boxes (rtColumns/rtColumn, still Mentions' shape) — a participant count that
+// varies per clip is what a table's rows absorb naturally, where a box-per-
+// participant layout would need the same three-field header repeated once per
+// box.
+.rtPartiesTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.rtPartiesTable th,
+.rtPartiesTable td {
+  padding: 0 calc(var(--window-border-size) * 2);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Speaker/Facility is the longest header AND the column most likely to carry
+// two stacked values (person and facility both), so it gets the lion's share
+// of the fixed-layout width instead of splitting evenly with Role/Confidence.
+.rtPartiesTable th:nth-child(1),
+.rtPartiesTable td:nth-child(1) {
+  width: 50%;
+}
+
+.rtPartiesTable th:nth-child(2),
+.rtPartiesTable td:nth-child(2) {
+  width: 22%;
+}
+
+.rtPartiesTable th:nth-child(3),
+.rtPartiesTable td:nth-child(3) {
+  width: 28%;
+}
+
+.rtPartiesTable th {
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--color-system-01);
+  background: var(--color-system-06);
+}
+
+// Banded rows, same convention as .rtDetailRow's even/odd striping.
+.rtPartiesTable tbody tr:nth-child(even) {
+  background: var(--color-system-02);
+}
+
+// Confidence badges. The three graded levels must stay visually distinct — the
+// badge is how a reader knows whether to trust the attribution.
+.rtConfBadge {
+  align-self: flex-start;
+  margin-top: var(--window-border-size);
+  padding: 0 calc(var(--window-border-size) * 3);
+  border: var(--window-border-size) solid var(--color-system-05);
+  white-space: nowrap;
+}
+
+.rtConfHigh {
+  background: #a8d8a8;
+}
+
+.rtConfMedium {
+  background: #e8dca0;
+}
+
+.rtConfLow {
+  background: #e8b8b0;
+}
+
+.rtConfOther {
+  background: var(--color-system-03);
+}
+
+// Transcript ----------------------------------------------------------------
+//
+// The whole cue list, not just the cue at the playhead: a card is almost never
+// playing, so a playhead-keyed panel is blank on nearly every card. See
+// TranscriptTab.tsx.
+
+// The one scrolling panel. A transcript is the only tab whose content is
+// genuinely unbounded, so it is the only one where clipping would hide
+// something a listener came looking for — and the only one that has to be
+// stopped from setting its card's height. `auto`, so a short transcript that
+// fits still shows no scrollbar. Vertical only: the cue lines wrap, so a
+// horizontal bar would only ever be a rounding error's worth of overflow.
+.rtTabPanel[data-tab="transcript"] {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.rtCueList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rtCueLine {
+  margin: 0;
+  padding: 0 calc(var(--window-border-size) * 2);
+}
+
+// The cue under the playhead, on the one card in a lane that is actually
+// playing. Absent everywhere else, which is why it is a highlight rather than
+// the only thing the panel renders.
+.rtCueLine[data-active="true"] {
+  font-weight: bold;
+  background: var(--color-system-03);
+}
+
+// Every panel's "there is nothing here" line. A card tab that renders an empty
+// box reads as broken; 7% of the corpus has no metadata at all, so this is a
+// routine state rather than an error one.
+.rtEmpty {
+  margin: 0;
+  padding: 0 calc(var(--window-border-size) * 2);
+  color: var(--color-system-04);
+}

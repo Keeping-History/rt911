@@ -51,7 +51,7 @@ import { avatarUrl } from "../../Providers/Auth/authApi";
 
 // Fill the non-essential AuthUser fields so fixtures stay one-line.
 const makeUser = (over: Partial<AuthUser>): AuthUser => ({
-	id: "1", email: null, first_name: null, last_name: null, avatar: null,
+	id: "1", email: null, username: null, first_name: null, last_name: null, avatar: null,
 	provider: "google", city: null, state: null, country: null,
 	school_name: null, educator_role: null, grade_levels: null, subjects: null,
 	...over,

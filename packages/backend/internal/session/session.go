@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"classicy/streamer/internal/cache"
+	"classicy/streamer/internal/chat"
 	"classicy/streamer/internal/db"
 	"classicy/streamer/internal/model"
 
@@ -31,8 +32,12 @@ const (
 	ChannelNews    = "news"
 	ChannelUsenet  = "usenet"
 	ChannelFlights = "flights"
-	ChannelWeather = "weather"
-	ChannelAlerts  = "alerts"
+	// Anonymous radar traffic (RDR-% ids, issue #263) — its own channel so the
+	// dense extra payload is paid only by clients that enable the map toggle.
+	ChannelFlightsAnon = "flights-anon"
+	ChannelWeather     = "weather"
+	ChannelAlerts      = "alerts"
+	ChannelChat        = "chat"
 )
 
 // Look-ahead windowing. Instead of one Redis lookup + frame per virtual second,
@@ -47,10 +52,15 @@ const (
 // the client never starves. Data is immutable historical, so window size is
 // bounded only by client buffer memory, not freshness.
 const (
-	leadSeconds  = 30 * time.Second
-	windowMedia  = 300 * time.Second
-	windowPager  = 600 * time.Second
-	windowMp3    = 300 * time.Second
+	leadSeconds = 30 * time.Second
+	windowMedia = 300 * time.Second
+	windowPager = 600 * time.Second
+	// mp3/radio is sparse (a handful of durational clips per window) and the
+	// Radio app surfaces this window as its "Coming Up" schedule, so it gets a
+	// deliberately long look-ahead — 10× the dense-media window — to fill that
+	// list well ahead of the clock. Data is immutable historical, so the only
+	// cost is a slightly larger, less frequent refill frame (still tiny for mp3).
+	windowMp3    = 3000 * time.Second
 	windowNews   = 600 * time.Second
 	windowUsenet = 600 * time.Second
 	// flights are dense — ~600-900 airborne rows/min — so they get media's
@@ -97,7 +107,8 @@ type outMsg struct {
 	Alerts  []model.AlertItem `json:"alerts,omitempty"`
 	Sources *SourceList       `json:"sources,omitempty"`
 	Msg     string            `json:"message,omitempty"`
-	// ID/Body carry a single on-demand Usenet article body (usenet_body frame).
+	// ID/Body carry a single on-demand item body — a Usenet article (usenet_body)
+	// or a news article (news_body). Both frames share these fields.
 	ID   int    `json:"id,omitempty"`
 	Body string `json:"body,omitempty"`
 	// Done marks the final chunk of a flights_history reply (the ID field above
@@ -107,6 +118,35 @@ type outMsg struct {
 	// (+Time while active); heartbeat_ack carries MasterTime while forced.
 	Active     *bool  `json:"active,omitempty"`
 	MasterTime string `json:"master_time,omitempty"`
+	// Chat channel. Enabled/Reason ride chat_state; Buddies rides chat_roster;
+	// Profile/Online ride chat_presence. Enabled and Online are pointers so a
+	// false value is transmitted rather than dropped by omitempty. Direction,
+	// Kind, and MessageID ride chat_typing/chat_message: Direction is "in"
+	// (student) or "out" (buddy), Kind mirrors chat_messages.kind ("typed",
+	// "generated", "stall", ...), and MessageID echoes the persisted
+	// chat_messages.id (0 when persistence was skipped, e.g. no pool).
+	Enabled   *bool         `json:"enabled,omitempty"`
+	Reason    string        `json:"reason,omitempty"`
+	Buddies   []model.Buddy `json:"buddies,omitempty"`
+	Profile   int           `json:"profile,omitempty"`
+	Online    *bool         `json:"online,omitempty"`
+	Direction string        `json:"direction,omitempty"`
+	Kind      string        `json:"kind,omitempty"`
+	MessageID int           `json:"message_id,omitempty"`
+	// Action/App ride room_command: Action is one of model.RoomAction*, App is
+	// the Classicy app id a "focus" action targets. The jump target rides the
+	// existing Time field and the note rides Msg.
+	Action string `json:"action,omitempty"`
+	App    string `json:"app,omitempty"`
+	// Target/On ride a room_command with action "lock". On is a pointer so an
+	// unlock (false) is transmitted rather than dropped by omitempty.
+	Target string `json:"target,omitempty"`
+	On     *bool  `json:"on,omitempty"`
+	// Cleared rides chat_cleared: how many messages the clear marked. Purely
+	// informational (the client resets on the frame's arrival, not its count),
+	// so omitempty dropping a zero is harmless -- clearing an already-empty
+	// history is still a successful clear.
+	Cleared int64 `json:"cleared,omitempty"`
 }
 
 // Session holds all state for a single connected client.
@@ -127,23 +167,67 @@ type Session struct {
 	paused        bool
 	formatFilter  map[string]struct{} // nil = send all formats
 	subscriptions map[string]struct{} // opt-in delivery channels (e.g. "pager")
+	// room is the teacher-controlled room this session follows (a playlist id),
+	// or "" for none. Guarded by mu like every other session field.
+	room string
 
 	// Per-channel look-ahead high-water marks: the exclusive upper edge of the
 	// last window sent on each channel. Channels are subscribed at different
 	// times, so each refills independently. All guarded by mu.
-	mediaHorizon   time.Time
-	pagerHorizon   time.Time
-	mp3Horizon     time.Time
-	newsHorizon    time.Time
-	usenetHorizon  time.Time
-	flightsHorizon time.Time
-	weatherHorizon time.Time
-	alertHorizon   time.Time
+	mediaHorizon       time.Time
+	pagerHorizon       time.Time
+	mp3Horizon         time.Time
+	newsHorizon        time.Time
+	usenetHorizon      time.Time
+	flightsHorizon     time.Time
+	flightsAnonHorizon time.Time
+	weatherHorizon     time.Time
+	alertHorizon       time.Time
+	// chatHorizon is the last virtual instant checked for scheduled beats
+	// (chat_schedules): each tick evaluates the half-open (chatHorizon,
+	// virtualTime] window so a beat fires exactly once as the clock advances.
+	// Unlike the other horizons this never triggers a lookup -- schedules is
+	// loaded once into memory (SetSchedules) and DueBetween is a pure filter --
+	// so there is no window/lead tuning, just the half-open bound itself.
+	chatHorizon time.Time
+
+	// mp3MetaSent records that this session has already had its one mp3_meta
+	// frame. Guarded by mu. See SendMp3Meta for why it is one-shot.
+	mp3MetaSent bool
 
 	// usenetGroups is the set of newsgroups the client is currently viewing. The
 	// usenet channel is delivered only for these groups — a group can hold millions
 	// of messages, so nothing is sent until the client selects one. Guarded by mu.
 	usenetGroups map[string]struct{}
+
+	// userID is the authenticated Directus user id ("" = anonymous). profiles is
+	// the configured buddy roster, loaded once at connect time. beacons/phases
+	// are the emotional-arc configuration (also loaded once, via SetPhaseData)
+	// that resolves each profile's Phase for the virtual clock — without them a
+	// buddy would render as chat.DefaultPhase all day regardless of the clock.
+	// schedules is the proactive-beat configuration (loaded once, via
+	// SetSchedules) that RunTimePump checks against chatHorizon each tick.
+	// broadcastSources is the reach/market classification (loaded once, via
+	// SetBroadcastSources) that decides which transcripts a buddy could have
+	// received where they live — a kid in Columbus had cable and the networks,
+	// not Channel 5 New York or 1010 WINS.
+	// presenceSeen is the last online state sent per buddy id, so
+	// syncChatPresence can emit only the buddies whose state actually changed.
+	// All guarded by mu.
+	userID       string
+	userName     string
+	userProfile  chat.UserProfile
+	profiles     []chat.Profile
+	beacons      map[int]chat.Beacon
+	phases       map[int][]chat.Phase
+	schedules    []chat.Schedule
+	bcastSources []chat.BroadcastSource
+	presenceSeen map[int]bool
+
+	// recentSends tracks this session's chat_send wall-clock timestamps for
+	// CheckLocal's rate limit. Trimmed to chatRateTrimWindow on every send so it
+	// cannot grow unbounded across a long connection. Guarded by mu.
+	recentSends []time.Time
 
 	send      chan []byte
 	tickCh    chan struct{}
@@ -253,10 +337,14 @@ func (s *Session) horizonFor(channel string) *time.Time {
 		return &s.usenetHorizon
 	case ChannelFlights:
 		return &s.flightsHorizon
+	case ChannelFlightsAnon:
+		return &s.flightsAnonHorizon
 	case ChannelWeather:
 		return &s.weatherHorizon
 	case ChannelAlerts:
 		return &s.alertHorizon
+	case ChannelChat:
+		return &s.chatHorizon
 	}
 	return nil
 }
@@ -313,6 +401,65 @@ func (s *Session) SendMp3History(t time.Time, items []model.MediaItem) {
 	s.send_(outMsg{Type: "mp3_history", Time: t.Format(time.RFC3339), Items: items})
 }
 
+// Mp3MetaMessage is the one-shot mp3_meta frame: the Radio Traffic metadata for
+// every approved recording, keyed by item id.
+//
+// Per-item metadata only. The tag vocabulary is byte-identical for every session
+// on the server, so pushing a copy of it down each socket is pure waste; it is
+// served by GET /mp3/tags instead and cached by the browser. There is
+// deliberately no vocabulary field here.
+//
+// It rides its own envelope rather than outMsg because Items is an id-keyed map,
+// not the ordered []MediaItem every other channel's frame carries — the client
+// joins it onto items it already holds, so order means nothing.
+type Mp3MetaMessage struct {
+	Type string `json:"type"`
+	// Generation is the cache build this metadata came from, and GET /mp3/tags
+	// returns the same value for the same build. Without it a client can end up
+	// holding a vocabulary from build N and item tags from build N+1, and render
+	// a chip on a card that its own filter tree has no checkbox for. With it the
+	// mismatch is visible and the client refetches.
+	Generation string                 `json:"generation"`
+	Items      map[int]model.ItemMeta `json:"items"`
+}
+
+// SendMp3Meta delivers the mp3_meta frame — once per session, never again.
+//
+// The one-shot is the entire point of the frame's existence. mp3_history carries
+// the whole ~755-item back catalogue and is re-sent wholesale on every subscribe,
+// init and seek; at ~2 KB of metadata per item, folding this into it would put
+// ~1.5 MB of msgpack on every Time Machine scrub. The metadata is immutable
+// historical reference data with no time dimension at all, so a seek cannot
+// change any of it and re-sending it could only ever cost bandwidth.
+//
+// Unsubscribe deliberately does not clear the flag. A client that unsubscribes
+// still holds the metadata it was sent, and resubscribing is a UI toggle — it
+// must not cost 1.5 MB.
+func (s *Session) SendMp3Meta(generation string, items map[int]model.ItemMeta) {
+	s.mu.Lock()
+	if s.mp3MetaSent {
+		s.mu.Unlock()
+		return
+	}
+	s.mp3MetaSent = true
+	s.mu.Unlock()
+
+	s.sendFrame("mp3_meta", Mp3MetaMessage{
+		Type:       "mp3_meta",
+		Generation: generation,
+		Items:      items,
+	})
+}
+
+// Mp3MetaSent reports whether the mp3_meta frame has already gone out. Lets the
+// handler skip the Redis read and the ~1.5 MB decode behind it on every seek,
+// rather than relying on SendMp3Meta to drop the result afterwards.
+func (s *Session) Mp3MetaSent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.mp3MetaSent
+}
+
 // SendNews delivers a batch of news items at time t on the news channel. Like
 // mp3, news reuses the MediaItem shape and the Items field, with a distinct
 // "news" type so the client routes it to the News app. No frame for an empty batch.
@@ -341,6 +488,15 @@ func (s *Session) SendUsenetBody(id int, body, errMsg string) {
 	s.send_(outMsg{Type: "usenet_body", ID: id, Body: body, Msg: errMsg})
 }
 
+// SendNewsBody delivers a single article body in reply to a news_body request.
+// Mirrors SendUsenetBody: on success errMsg is "" and body carries the article
+// HTML; on failure errMsg explains why and body is empty, letting the client tell
+// "unavailable" apart from an article that is genuinely empty. Touches no shared
+// state, so no lock — same shape as the other Send* helpers.
+func (s *Session) SendNewsBody(id int, body, errMsg string) {
+	s.send_(outMsg{Type: "news_body", ID: id, Body: body, Msg: errMsg})
+}
+
 // SendFlights delivers a batch of flight positions at time t on the flights
 // channel. Positions are instant per-minute samples like pager items; no frame
 // is sent for an empty batch (a minute with nobody airborne is silence).
@@ -349,6 +505,16 @@ func (s *Session) SendFlights(t time.Time, items []model.FlightPosition) {
 		return
 	}
 	s.send_(outMsg{Type: "flights", Time: t.Format(time.RFC3339), Flights: items})
+}
+
+// SendFlightsAnon mirrors SendFlights on the flights-anon channel: same
+// FlightPosition payload, its own frame type so the client routes it to the
+// anonymous-traffic buffers only while the toggle is on.
+func (s *Session) SendFlightsAnon(t time.Time, items []model.FlightPosition) {
+	if len(items) == 0 {
+		return
+	}
+	s.send_(outMsg{Type: "flights_anon", Time: t.Format(time.RFC3339), Flights: items})
 }
 
 // SendFlightsHistory delivers one chunk of a flights_history reply, echoing the
@@ -395,6 +561,85 @@ func (s *Session) SendAlerts(t time.Time, items []model.AlertItem) {
 		return
 	}
 	s.send_(outMsg{Type: "alerts", Time: t.Format(time.RFC3339), Alerts: items})
+}
+
+// PushAlert delivers an operator-pushed alert to this session immediately,
+// regardless of the alert's own scheduled start_date. No-op when the session
+// has not subscribed to the alerts channel or has not initialised yet.
+//
+// The stamp is deliberate. The client reveal-gates alerts by start_date against
+// its own virtual clock (partitionByDue in MediaStreamProvider), and every
+// session sits at a different instant unless forced clock mode is on — so a
+// push carrying the row's real start_date would land in most clients' future
+// buffer and never show. Rewriting the copy to this session's own virtual time
+// is what makes "push this alert now" mean now, for each client.
+func (s *Session) PushAlert(item model.AlertItem) {
+	s.mu.Lock()
+	_, subscribed := s.subscriptions[ChannelAlerts]
+	vt := s.virtualTime
+	s.mu.Unlock()
+	if !subscribed || vt.IsZero() {
+		return
+	}
+	item.StartDate = vt
+	s.SendAlerts(vt, []model.AlertItem{item})
+}
+
+// JoinRoom puts this session in a teacher-controlled room, replacing any
+// previous membership. The room id is the playlist the student is following;
+// it is opaque here (see model.RoomCommand). An empty id leaves the room.
+//
+// Joining replays the room's last-known control state (see Hub.RoomState) as
+// ordinary room_command frames, so a student who connects — or reconnects —
+// after the teacher jumped, locked, or pushed a definition update still
+// converges with the class. The client applies commands idempotently, so a
+// re-join that replays state it already holds is harmless.
+func (s *Session) JoinRoom(room string) {
+	s.mu.Lock()
+	s.room = room
+	s.mu.Unlock()
+	if room == "" || s.hub == nil {
+		return
+	}
+	for _, cmd := range s.hub.RoomState(room) {
+		s.SendRoomCommand(cmd)
+	}
+}
+
+// LeaveRoom drops this session's room membership.
+func (s *Session) LeaveRoom() { s.JoinRoom("") }
+
+// Room reports the session's current room, or "" when it is in none.
+func (s *Session) Room() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.room
+}
+
+// SendRoomCommand relays one live teacher action to this client.
+//
+// The room is not re-checked here: the hub already matched membership, and
+// re-reading it would only reintroduce a race with a concurrent JoinRoom
+// without preventing anything — the command was addressed to the room the
+// session was in when the hub looked.
+func (s *Session) SendRoomCommand(cmd model.RoomCommand) {
+	out := outMsg{Type: "room_command", Action: cmd.Action}
+	switch cmd.Action {
+	case model.RoomActionJump:
+		out.Time = cmd.Time.UTC().Format(time.RFC3339)
+	case model.RoomActionFocus:
+		out.App = cmd.App
+	case model.RoomActionMessage:
+		out.Msg = cmd.Message
+	case model.RoomActionLock:
+		out.Target = cmd.Target
+		on := cmd.On
+		out.On = &on
+	case model.RoomActionReload:
+		// No payload: the client re-fetches the published definition from
+		// Directus itself — the definition never rides this wire.
+	}
+	s.send_(out)
 }
 
 // SetUsenetGroups replaces the set of newsgroups the client is viewing on the
@@ -457,6 +702,9 @@ func (s *Session) Init(t time.Time, items []model.MediaItem) {
 	s.mu.Unlock()
 
 	s.send_(outMsg{Type: "init_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
+
+	s.sendChatStateIfSubscribed()
+	s.syncChatPresence()
 }
 
 // Seek moves the client's virtual clock to t and delivers the full set of
@@ -467,7 +715,11 @@ func (s *Session) Seek(t time.Time, items []model.MediaItem) {
 	s.virtualTime = t
 	s.resetHorizons(t)
 	s.mu.Unlock()
+
 	s.send_(outMsg{Type: "seek_ack", Time: t.Format(time.RFC3339), Items: s.applyFormatFilter(items)})
+
+	s.sendChatStateIfSubscribed()
+	s.syncChatPresence()
 }
 
 // resetHorizons points every channel's high-water mark at t so the next tick
@@ -479,8 +731,10 @@ func (s *Session) resetHorizons(t time.Time) {
 	s.newsHorizon = t
 	s.usenetHorizon = t
 	s.flightsHorizon = t
+	s.flightsAnonHorizon = t
 	s.weatherHorizon = t
 	s.alertHorizon = t
+	s.chatHorizon = t
 }
 
 // Pause freezes the client's virtual clock.
@@ -496,6 +750,7 @@ func (s *Session) Pause() {
 	s.paused = true
 	s.mu.Unlock()
 	s.send_(outMsg{Type: "pause_ack"})
+	s.sendChatStateIfSubscribed()
 }
 
 // Resume unfreezes the client's virtual clock.
@@ -504,6 +759,7 @@ func (s *Session) Resume() {
 	s.paused = false
 	s.mu.Unlock()
 	s.send_(outMsg{Type: "resume_ack"})
+	s.sendChatStateIfSubscribed()
 }
 
 // Heartbeat corrects drift if the client's reported time diverges too far.
@@ -547,6 +803,790 @@ func (s *Session) SendError(msg string) {
 	s.send_(outMsg{Type: "error", Msg: msg})
 }
 
+// SetUser records the Directus user this connection authenticated as. An empty
+// id means anonymous, which is the steady state for most visitors — only the
+// chat channel requires an identity.
+func (s *Session) SetUser(id string) {
+	s.mu.Lock()
+	s.userID = id
+	s.mu.Unlock()
+}
+
+// UserID returns the authenticated Directus user id, or "" when anonymous.
+func (s *Session) UserID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.userID
+}
+
+// SetProfiles installs the buddy roster for this session. Config is loaded once
+// at connect time and handed in; sessions never query for it.
+// SetUserName records how buddies should address the student. Empty is fine --
+// the composer then establishes them as an unnamed friend rather than guessing.
+func (s *Session) SetUserName(name string) {
+	s.mu.Lock()
+	s.userName = name
+	s.mu.Unlock()
+}
+
+// SetUserProfile records what buddies know about the student beyond their
+// name. Called at connect and again when the chat channel is subscribed, so
+// opening IM Buddies picks up an edit made moments earlier in the Account app.
+// A zero value is fine -- the composer then omits the block entirely.
+func (s *Session) SetUserProfile(p chat.UserProfile) {
+	s.mu.Lock()
+	s.userProfile = p
+	s.mu.Unlock()
+}
+
+// identity returns how buddies address this student and what they know about
+// them. Both are refreshed on chat subscribe, so callers must read them at use
+// time rather than caching a copy from connect.
+func (s *Session) identity() (string, chat.UserProfile) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.userName, s.userProfile
+}
+
+func (s *Session) SetProfiles(p []chat.Profile) {
+	s.mu.Lock()
+	s.profiles = p
+	s.mu.Unlock()
+}
+
+// SetPhaseData installs the beacon and phase configuration used to resolve
+// each buddy's emotional arc across the virtual clock. Config is loaded once
+// at connect time and handed in, exactly like SetProfiles; sessions never
+// query for it.
+func (s *Session) SetPhaseData(beacons map[int]chat.Beacon, phases map[int][]chat.Phase) {
+	s.mu.Lock()
+	s.beacons = beacons
+	s.phases = phases
+	s.mu.Unlock()
+}
+
+// SetSchedules installs the proactive-beat configuration RunTimePump checks
+// on every tick. Config is loaded once at connect time and handed in, exactly
+// like SetPhaseData; sessions never query for it.
+func (s *Session) SetSchedules(schedules []chat.Schedule) {
+	s.mu.Lock()
+	s.schedules = schedules
+	s.mu.Unlock()
+}
+
+// SetBroadcastSources installs the reach/market classification used to decide
+// which transcripts reach each buddy. Config is loaded once at connect time and
+// handed in, exactly like SetPhaseData; sessions never query for it.
+func (s *Session) SetBroadcastSources(sources []chat.BroadcastSource) {
+	s.mu.Lock()
+	s.bcastSources = sources
+	s.mu.Unlock()
+}
+
+// chatGate evaluates the chat.Gate from live session state. Blocked is always
+// false here — a per-user/per-profile block is a database fact, checked
+// separately in ChatSend after this gate passes, not part of the in-memory
+// session state this snapshot draws from.
+func (s *Session) chatGate() (enabled bool, reason string) {
+	s.mu.Lock()
+	g := chat.Gate{
+		VirtualTime: s.virtualTime,
+		ClockSet:    !s.virtualTime.IsZero(),
+		Paused:      s.paused,
+		SignedIn:    s.userID != "",
+	}
+	s.mu.Unlock()
+	return chat.Available(g)
+}
+
+// SendChatState emits the gate the client binds its input's disabled state to.
+func (s *Session) SendChatState() {
+	enabled, reason := s.chatGate()
+	s.send_(outMsg{Type: "chat_state", Enabled: &enabled, Reason: reason})
+}
+
+// sendChatDisabled emits chat_state{enabled:false, reason} — the shape every
+// ChatSend refusal path (gate failure, a chat_blocks hit, local moderation
+// block) shares.
+func (s *Session) sendChatDisabled(reason string) {
+	enabled := false
+	s.send_(outMsg{Type: "chat_state", Enabled: &enabled, Reason: reason})
+}
+
+// sendChatStateIfSubscribed re-evaluates the chat gate for clock transitions.
+// Unlike SendChatState it respects the opt-in convention: a session that never
+// subscribed to chat gets no chat frames.
+func (s *Session) sendChatStateIfSubscribed() {
+	s.mu.Lock()
+	_, ok := s.subscriptions[ChannelChat]
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	s.SendChatState()
+}
+
+// SendChatRoster emits the full buddy list with each buddy's online state at the
+// current virtual time.
+func (s *Session) SendChatRoster() {
+	s.mu.Lock()
+	profiles, t := s.profiles, s.virtualTime
+	s.mu.Unlock()
+
+	buddies := chat.Roster(profiles, t)
+
+	s.mu.Lock()
+	if s.presenceSeen == nil {
+		s.presenceSeen = make(map[int]bool, len(buddies))
+	}
+	for _, b := range buddies {
+		s.presenceSeen[b.ID] = b.Online
+	}
+	s.mu.Unlock()
+
+	s.send_(outMsg{Type: "chat_roster", Buddies: buddies})
+}
+
+// syncChatPresence emits one chat_presence frame per buddy whose online state
+// changed since the last call. Most ticks emit nothing, so this stays cheap on
+// the tick path.
+func (s *Session) syncChatPresence() {
+	s.mu.Lock()
+	if _, ok := s.subscriptions[ChannelChat]; !ok {
+		s.mu.Unlock()
+		return
+	}
+	profiles, t := s.profiles, s.virtualTime
+	if s.presenceSeen == nil {
+		s.presenceSeen = make(map[int]bool, len(profiles))
+	}
+	var changed []model.Buddy
+	for _, p := range profiles {
+		online := p.OnlineAt(t)
+		if was, seen := s.presenceSeen[p.ID]; !seen || was != online {
+			s.presenceSeen[p.ID] = online
+			changed = append(changed, model.Buddy{ID: p.ID, ScreenName: p.ScreenName, Online: online})
+		}
+	}
+	s.mu.Unlock()
+
+	for _, b := range changed {
+		online := b.Online
+		s.send_(outMsg{Type: "chat_presence", Profile: b.ID, Online: &online})
+	}
+}
+
+const (
+	// chatHistoryLimit bounds both the composer's rolling context (Turn slice
+	// pulled per ChatSend) and a chat_history reply.
+	chatHistoryLimit = 40
+	// chatBroadcastLookback is how far back the tier-2 (recently broadcast)
+	// retrieval reaches — long enough that "what you just heard on TV" still
+	// reads as recent, short enough that it stays a rolling window rather than
+	// the whole day's transcript.
+	chatBroadcastLookback = 10 * time.Minute
+	// chatBroadcastLimit bounds how many segments that window may return. It is
+	// a transfer bound, not the real ceiling — chatKnowledgeMaxRunes is — but it
+	// keeps a busy minute from pulling hundreds of rows before they are trimmed.
+	// Measured on the live corpus: 13:00Z on 9/11 yields ~450 segments across
+	// the national and international sources.
+	chatBroadcastLimit = 150
+	// chatBroadcastMinuteLimit bounds the summarized form of that same window.
+	// One row per channel per minute, so a ten-minute window over a market's
+	// handful of stations lands far under this; it is a runaway guard, not a
+	// budget.
+	chatBroadcastMinuteLimit = 60
+	// chatBroadcastLiveLimit bounds the volatile tail — the segments aired since
+	// the top of the current virtual minute. At most sixty seconds of one
+	// market's stations, so it is small by construction.
+	chatBroadcastLiveLimit = 40
+	// chatLiveMaxRunes caps that tail independently of chatKnowledgeMaxRunes.
+	// It is the one knowledge block that cannot be cached (it moves every
+	// second), so it is the one worth keeping deliberately small.
+	chatLiveMaxRunes = 3000
+	// chatCuratedDetailWindow is how recent a curated entry must be to carry its
+	// detail column as well as its summary. The digest is cumulative, so by the
+	// afternoon it holds the whole day; the elaboration only earns its tokens
+	// while the buddy is still reacting to the event.
+	chatCuratedDetailWindow = 20 * time.Minute
+	// chatKnowledgeMaxRunes caps the three knowledge tiers TOGETHER. Unbounded,
+	// the 13:00Z window is ~261k runes (~65k tokens) in every single message,
+	// against a design budgeted for ~8k tokens of prompt in total. Budget drops
+	// the least authoritative tier first, so a curated fact outranks a transcript
+	// line that merely happened to be on air.
+	//
+	// This stays a backstop rather than the lever it used to be: once tier 2
+	// arrives pre-summarized the window fits well inside it on its own, and the
+	// ceiling only binds on the raw-segment fallback — where it is still what
+	// keeps an unsummarized span from blowing the budget.
+	chatKnowledgeMaxRunes = 24000
+	// chatTimelineLimit bounds the tier-3 fallback search, consulted only when
+	// tiers 1 and 2 turn up nothing for this virtual time.
+	chatTimelineLimit = 5
+	// chatRateTrimWindow bounds recentSends' growth on a long-lived connection;
+	// it only needs to outlive chat's own rate window (60s, guard.go), not the
+	// whole session.
+	chatRateTrimWindow = 5 * time.Minute
+	// chatStallBody is the canned in-character line sent when the generator is
+	// unavailable or its queue is full. Degradation must preserve the illusion,
+	// not read as a system error.
+	chatStallBody = "hang on, phones ringing"
+)
+
+// ChatSend accepts one student message addressed to profileID. The gate is
+// evaluated and, on refusal, answered before anything else runs — in
+// particular before any database read — so a nil pool (every unit test in
+// this package) never sees a query for a message the gate was always going to
+// reject. Enqueue never blocks: a full (or absent) generator degrades to an
+// in-character stall rather than an error frame, preserving the illusion.
+func (s *Session) ChatSend(profileID int, body string) {
+	if enabled, reason := s.chatGate(); !enabled {
+		s.sendChatDisabled(reason)
+		return
+	}
+
+	now := time.Now().UTC()
+	s.mu.Lock()
+	userID, vTime, profiles := s.userID, s.virtualTime, s.profiles
+	userName := s.userName
+	userProfile := s.userProfile
+	beacons, phases := s.beacons, s.phases
+	bcastSources := s.bcastSources
+	s.recentSends = append(s.recentSends, now)
+	s.recentSends = trimBefore(s.recentSends, now.Add(-chatRateTrimWindow))
+	recent := append([]time.Time(nil), s.recentSends...)
+	s.mu.Unlock()
+
+	ctx := context.Background()
+
+	if s.pool != nil {
+		// Wall-clock, not vTime: a moderation cool-down is about the student
+		// waiting it out in real time, not the simulated 2001 clock -- see
+		// chat.LoadBlocks' doc comment.
+		if blocks, err := chat.LoadBlocks(ctx, s.pool, userID, now); err != nil {
+			s.logger.Warn("chat: load blocks failed", "error", err)
+		} else if blocked, _ := chat.BlocksApply(blocks, profileID); blocked {
+			s.sendChatDisabled("blocked")
+			return
+		}
+	}
+
+	decision := chat.CheckLocal(body, now, recent)
+	if decision.Outcome == "block" {
+		s.persistInbound(ctx, userID, profileID, body, vTime, moderationOf(decision))
+		// Persist the block itself, not just this message's moderation flag — a
+		// block that only lasts for the ChatSend call that triggered it is not a
+		// block: reconnecting or rewording the same message would sail straight
+		// through. Scoped to this profile (not global): the design's "block"
+		// outcome is "that buddy stops responding," not "chat disabled outright."
+		// expires comes from decision.CoolDown (wall-clock, per chat.LoadBlocks'
+		// doc comment) rather than nil: CheckLocal's triggers are a 5-term
+		// substring match and a rate limit, neither reliable enough to silence a
+		// buddy forever with no admin recovery path. A permanent block (expires
+		// nil) stays possible, but only as a teacher/admin action outside this
+		// package -- never as a side effect of local moderation.
+		if s.pool != nil {
+			pid := profileID
+			var expires *time.Time
+			if decision.CoolDown > 0 {
+				t := now.Add(decision.CoolDown)
+				expires = &t
+			}
+			if err := chat.CreateBlock(ctx, s.pool, userID, "profile", &pid, decision.Reason, decision.Evidence, expires); err != nil {
+				s.logger.Warn("chat: create block failed", "error", err)
+			}
+		}
+		s.sendChatDisabled("blocked")
+		return
+	}
+
+	var moderation map[string]any
+	if decision.Outcome != "allow" {
+		moderation = moderationOf(decision)
+	}
+	s.persistInbound(ctx, userID, profileID, body, vTime, moderation)
+
+	profile := findProfile(profiles, profileID)
+	history, digest, recentPassages, live, timeline := s.retrieveContext(ctx, userID, profileID, vTime, body,
+		chat.AllowedFor(bcastSources, profile.Market, profile.Watching))
+
+	s.send_(outMsg{Type: "chat_typing", Profile: profileID})
+
+	job := buildChatJob(userID, profile, phases, beacons, body, "generated", false, vTime,
+		digest, recentPassages, live, timeline, history, nil)
+	// Set here rather than as another positional bool on buildChatJob, which
+	// already takes one: two adjacent booleans are a transposition waiting to
+	// happen, and swapping these would tell every ordinary reply the student is
+	// in distress while telling a distressed one it is opening the conversation.
+	job.Distress = decision.Outcome == "escalate"
+	job.UserName = userName
+	job.UserProfile = userProfile
+	job.Deliver = s.chatDeliver(userID, profileID, vTime, job.Kind)
+
+	gen := s.hub.Generator()
+	if gen == nil || !gen.Enqueue(job) {
+		s.sendStall(ctx, userID, profileID, vTime)
+	}
+}
+
+// retrieveContext loads the same three knowledge tiers and rolling history
+// buildChatJob composes into every reply, whether the trigger is a typed
+// ChatSend or a generated scheduled beat — grounding must never drift
+// between the two paths, and duplicating this block was Task 10's original
+// mistake. query drives the tier-3 fallback search consulted only when tiers
+// 1 and 2 are both empty (knowledge.go's own contract for SearchTimeline):
+// the student's own message for ChatSend, or the curator's Prompt for a beat
+// in lieu of anything a student typed. Every value is the zero value when
+// s.pool is nil, exactly like the inline block this replaced.
+// The windowed tiers are read at the top of the current virtual minute rather
+// than at vTime itself. That floor is what makes them cacheable — an upper bound
+// that moves every second produced a byte-different prompt prefix on every
+// message — and `live` carries the remainder since the floor so nothing on air in
+// the last few seconds is lost.
+func (s *Session) retrieveContext(ctx context.Context, userID string, profileID int, vTime time.Time, query string, allow *chat.BroadcastFilter) (history []chat.Turn, digest, recentPassages, live, timeline []chat.Passage) {
+	if s.pool == nil {
+		return nil, nil, nil, nil, nil
+	}
+	floor := chat.FloorMinute(vTime)
+	if h, err := chat.History(ctx, s.pool, userID, profileID, vTime, chatHistoryLimit); err != nil {
+		s.logger.Warn("chat: history load failed", "error", err)
+	} else {
+		history = h
+	}
+	if d, err := chat.LoadCurated(ctx, s.pool, floor, chatCuratedDetailWindow); err != nil {
+		s.logger.Warn("chat: load curated failed", "error", err)
+	} else {
+		digest = d
+	}
+	// Prefer the pre-summarized minutes and fall back to raw segments for the
+	// same span, so an unsummarized stretch degrades to the old behaviour rather
+	// than to a buddy who heard nothing. Both paths take the identical allow
+	// filter — see LoadBroadcastMinutes on why that has to stay true.
+	if m, err := chat.LoadBroadcastMinutes(ctx, s.pool, floor.Add(-chatBroadcastLookback), floor, allow, chatBroadcastMinuteLimit); err != nil {
+		s.logger.Warn("chat: load broadcast minutes failed", "error", err)
+	} else {
+		recentPassages = m
+	}
+	if len(recentPassages) == 0 {
+		if r, err := chat.LoadBroadcast(ctx, s.pool, floor.Add(-chatBroadcastLookback), floor, allow, chatBroadcastLimit); err != nil {
+			s.logger.Warn("chat: load broadcast failed", "error", err)
+		} else {
+			recentPassages = r
+		}
+	}
+	if vTime.After(floor) {
+		if l, err := chat.LoadBroadcast(ctx, s.pool, floor, vTime, allow, chatBroadcastLiveLimit); err != nil {
+			s.logger.Warn("chat: load broadcast live failed", "error", err)
+		} else {
+			live = chat.Budget(l, chatLiveMaxRunes)
+		}
+	}
+	// Tier 3 must land in Timeline, never Digest: retrospective investigative
+	// reporting presented as something the buddy plainly knows is exactly the
+	// misattribution the tier system exists to prevent. See buildChatJob and
+	// its test.
+	if len(digest) == 0 && len(recentPassages) == 0 && len(live) == 0 {
+		if tl, err := chat.SearchTimeline(ctx, s.pool, vTime, query, chatTimelineLimit); err != nil {
+			s.logger.Warn("chat: search timeline failed", "error", err)
+		} else {
+			timeline = tl
+		}
+	}
+
+	// Cap the three tiers together, then put each passage back in its own slot.
+	// Budget drops the least authoritative first, so this is a single knowledge
+	// ceiling with tier priority rather than three independent ones -- a day
+	// thick with curated facts squeezes transcript, not the reverse.
+	// Partitioning by p.Tier is safe because Budget's sort is stable, so each
+	// tier keeps the order its loader returned (chronological for tier 2).
+	//
+	// live is deliberately outside this: it shares tier 2's Tier value, so
+	// feeding it through partitionTiers would merge it back into recentPassages
+	// and collapse the cacheable/volatile split the whole windowing rests on. It
+	// carries its own ceiling (chatLiveMaxRunes) instead.
+	digest, recentPassages, timeline = partitionTiers(chat.Budget(
+		concatPassages(digest, recentPassages, timeline), chatKnowledgeMaxRunes))
+	return history, digest, recentPassages, live, timeline
+}
+
+// chatDeliver builds the Generator's Deliver callback. It runs on a worker
+// goroutine, not the session goroutine, but touches no field s.mu protects:
+// everything it needs (userID, profileID, vTime) was already read under mu in
+// ChatSend and closed over here, so it persists the reply and calls send_
+// with no lock of its own — the shortest possible window is none at all.
+//
+// baseKind is the persisted/wire kind on a successful reply — the caller's
+// Job.Kind, so a typed reply ("generated") and a scheduled beat's generated
+// reply ("scheduled") are distinguishable in chat_messages.kind exactly as
+// the schema's enum intends. The outcome-based overrides below still take
+// priority over it: a refusal, truncation, or provider error is what it is
+// regardless of what triggered the job.
+func (s *Session) chatDeliver(userID string, profileID int, vTime time.Time, baseKind string) func(chat.Reply, error) {
+	return func(reply chat.Reply, err error) {
+		if err != nil {
+			s.logger.Warn("chat: generation failed", "profile", profileID, "error", err)
+		}
+		kind := baseKind
+		switch reply.Outcome {
+		case chat.OutcomeRefused:
+			kind = "refused"
+		case chat.OutcomeTruncated:
+			kind = "truncated"
+		case chat.OutcomeError:
+			kind = "stall"
+			if reply.Body == "" {
+				reply.Body = chatStallBody
+			}
+		}
+
+		msgID := 0
+		if s.pool != nil {
+			id, appendErr := chat.AppendMessage(context.Background(), s.pool, userID, chat.Message{
+				Profile: profileID, Direction: "out", Body: reply.Body, VirtualTime: vTime,
+				Kind: kind, Model: reply.Model, TokensIn: reply.TokensIn, TokensOut: reply.TokensOut,
+				CachedIn: reply.CachedIn, CacheWriteIn: reply.CacheWriteIn,
+			})
+			if appendErr != nil {
+				s.logger.Warn("chat: append reply failed", "error", appendErr)
+			} else {
+				msgID = id
+			}
+		}
+
+		s.send_(outMsg{
+			Type: "chat_message", Profile: profileID, Direction: "out",
+			Body: reply.Body, Time: vTime.Format(time.RFC3339), Kind: kind, MessageID: msgID,
+		})
+	}
+}
+
+// sendStall answers a job the generator never accepted (queue full, or no
+// generator configured at all) with the same canned in-character line and
+// chat_message shape a provider-side outage produces, so the client cannot
+// tell the two degradations apart.
+func (s *Session) sendStall(ctx context.Context, userID string, profileID int, vTime time.Time) {
+	msgID := 0
+	if s.pool != nil {
+		id, err := chat.AppendMessage(ctx, s.pool, userID, chat.Message{
+			Profile: profileID, Direction: "out", Body: chatStallBody, VirtualTime: vTime, Kind: "stall",
+		})
+		if err != nil {
+			s.logger.Warn("chat: append stall failed", "error", err)
+		} else {
+			msgID = id
+		}
+	}
+	s.send_(outMsg{
+		Type: "chat_message", Profile: profileID, Direction: "out",
+		Body: chatStallBody, Time: vTime.Format(time.RFC3339), Kind: "stall", MessageID: msgID,
+	})
+}
+
+// fireBeats delivers every schedule dueBeats reported due, one at a time. It
+// re-checks the same gate ChatSend answers on (signed in, unpaused, inside the
+// chat window) before touching any of them -- a beat is exactly as unwelcome
+// as an inbound reply would be under those conditions, and a session ticking
+// while signed out or paused should not open with a proactive message either.
+// requires_prior_contact then gates each beat individually via
+// HasPriorContact -- with no pool to check against, a beat that requires
+// prior contact is skipped rather than assumed safe. kind="static" delivers
+// Text with no provider call; kind="generated" enqueues a Job through the
+// generator using Prompt as the user message, grounded with the same
+// knowledge-tier retrieval a typed reply gets (retrieveContext) and marked
+// chat.Job.SelfInitiated so the composer renders it as the buddy speaking
+// first rather than answering, following the same stall-on-full-queue
+// degradation ChatSend uses.
+func (s *Session) fireBeats(ctx context.Context, due []chat.Schedule, userID string, profiles []chat.Profile, beacons map[int]chat.Beacon, phases map[int][]chat.Phase, bcastSources []chat.BroadcastSource, t time.Time) {
+	if len(due) == 0 {
+		return
+	}
+	if enabled, _ := s.chatGate(); !enabled {
+		return
+	}
+
+	for _, sc := range due {
+		if s.pool != nil {
+			// Wall-clock, not t (the virtual time this beat fired at): see
+			// chat.LoadBlocks' doc comment on why a moderation cool-down must not
+			// be measured against the simulated clock.
+			if blocks, err := chat.LoadBlocks(ctx, s.pool, userID, time.Now().UTC()); err != nil {
+				s.logger.Warn("chat: scheduled beat load blocks failed", "profile", sc.ProfileID, "error", err)
+			} else if blocked, _ := chat.BlocksApply(blocks, sc.ProfileID); blocked {
+				continue
+			}
+		}
+
+		if sc.RequiresPriorContact {
+			if s.pool == nil {
+				continue
+			}
+			has, err := chat.HasPriorContact(ctx, s.pool, userID, sc.ProfileID, t)
+			if err != nil {
+				s.logger.Warn("chat: scheduled beat prior-contact check failed", "profile", sc.ProfileID, "error", err)
+				continue
+			}
+			if !has {
+				continue
+			}
+		}
+
+		// A proactive beat addresses the student exactly as a reply does. This
+		// path never set UserName at all, so until now a buddy that messaged
+		// you first did not know your name -- the same bug the reply path
+		// already fixed.
+		userName, userProfile := s.identity()
+
+		switch sc.Kind {
+		case "static":
+			s.deliverStaticBeat(ctx, userID, sc.ProfileID, t, sc.Text)
+		case "generated":
+			// Grounded exactly like a typed reply: same three knowledge tiers
+			// and rolling history, via the same retrieveContext ChatSend uses.
+			// query is sc.Prompt in place of a student's message, since none
+			// exists for a beat the buddy is sending unprompted.
+			profile := findProfile(profiles, sc.ProfileID)
+			history, digest, recentPassages, live, timeline := s.retrieveContext(ctx, userID, sc.ProfileID, t, sc.Prompt,
+				chat.AllowedFor(bcastSources, profile.Market, profile.Watching))
+			s.send_(outMsg{Type: "chat_typing", Profile: sc.ProfileID})
+			job := buildChatJob(userID, profile, phases, beacons, sc.Prompt, "scheduled", true, t,
+				digest, recentPassages, live, timeline, history, nil)
+			job.UserName = userName
+			job.UserProfile = userProfile
+			job.Deliver = s.chatDeliver(userID, sc.ProfileID, t, job.Kind)
+			gen := s.hub.Generator()
+			if gen == nil || !gen.Enqueue(job) {
+				s.sendStall(ctx, userID, sc.ProfileID, t)
+			}
+		default:
+			s.logger.Warn("chat: scheduled beat has unknown kind", "id", sc.ID, "kind", sc.Kind)
+		}
+	}
+}
+
+// deliverStaticBeat sends a curator-authored beat verbatim -- no provider
+// call, no risk of an LLM rewriting it -- persisting it the same way
+// chatDeliver persists a generated reply so history and HasPriorContact stay
+// consistent.
+func (s *Session) deliverStaticBeat(ctx context.Context, userID string, profileID int, vTime time.Time, text string) {
+	msgID := 0
+	if s.pool != nil {
+		id, err := chat.AppendMessage(ctx, s.pool, userID, chat.Message{
+			Profile: profileID, Direction: "out", Body: text, VirtualTime: vTime, Kind: "static",
+		})
+		if err != nil {
+			s.logger.Warn("chat: append static beat failed", "error", err)
+		} else {
+			msgID = id
+		}
+	}
+	s.send_(outMsg{
+		Type: "chat_message", Profile: profileID, Direction: "out",
+		Body: text, Time: vTime.Format(time.RFC3339), Kind: "static", MessageID: msgID,
+	})
+}
+
+// persistInbound writes the student's message and returns its id, or 0 when
+// persistence is skipped (nil pool) or fails — the message still reaches the
+// buddy either way, per the design's "chat_messages write fails: message
+// still delivers" contract.
+func (s *Session) persistInbound(ctx context.Context, userID string, profileID int, body string, vTime time.Time, moderation map[string]any) int {
+	if s.pool == nil {
+		return 0
+	}
+	id, err := chat.AppendMessage(ctx, s.pool, userID, chat.Message{
+		Profile: profileID, Direction: "in", Body: body, VirtualTime: vTime,
+		Kind: "typed", Moderation: moderation,
+	})
+	if err != nil {
+		s.logger.Warn("chat: append inbound message failed", "error", err)
+		return 0
+	}
+	return id
+}
+
+// ChatHistory replies to a request for prior turns with profileID, at or
+// before `before`, as a sequence of chat_message frames terminated by one
+// carrying Done — the same chunked-reply shape flights_history already uses.
+// Context is always re-read fresh (never cached), which is what makes a seek
+// rebuild it correctly: the next call sees the new virtual time.
+func (s *Session) ChatHistory(profileID int, before time.Time, limit int) {
+	s.mu.Lock()
+	userID, vTime := s.userID, s.virtualTime
+	s.mu.Unlock()
+
+	// The client's own conversation can't leak 9/11 knowledge the way an
+	// unclamped `before` could on the prompt path, but this path should still
+	// enforce the same virtual-time boundary every other read enforces rather
+	// than trusting whatever the client sends.
+	before = clampChatHistoryBefore(before, vTime)
+
+	if userID == "" || s.pool == nil {
+		s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
+		return
+	}
+
+	messages, err := chat.HistoryDetailed(context.Background(), s.pool, userID, profileID, before, limit)
+	if err != nil {
+		s.logger.Warn("chat: chat_history query failed", "error", err)
+		s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
+		return
+	}
+
+	for _, m := range messages {
+		s.send_(outMsg{
+			Type: "chat_message", Profile: profileID, Direction: m.Direction,
+			Body: m.Body, Time: m.VirtualTime.Format(time.RFC3339), Kind: m.Kind, MessageID: m.ID,
+		})
+	}
+	s.send_(outMsg{Type: "chat_history", Profile: profileID, Done: true})
+}
+
+// ChatClear marks the signed-in user's entire chat history old and confirms
+// with a chat_cleared frame, which is what the client resets its transcript on.
+// No rows are deleted — see chat.ClearMessages.
+//
+// Every failure path sends an error instead of a confirmation, deliberately: a
+// client that emptied its transcript on an unconfirmed clear would show the
+// student a blank conversation that the next reconnect silently refills.
+func (s *Session) ChatClear() {
+	s.mu.Lock()
+	userID := s.userID
+	s.mu.Unlock()
+
+	// The user id is read from the authenticated session, never from the
+	// request, so no client field can aim the clear at another user's history.
+	if userID == "" {
+		s.SendError("not signed in")
+		return
+	}
+	if s.pool == nil {
+		s.SendError("chat history is unavailable")
+		return
+	}
+
+	cleared, err := chat.ClearMessages(context.Background(), s.pool, userID)
+	if err != nil {
+		s.logger.Warn("chat: clear history failed", "error", err)
+		s.SendError("could not clear chat history")
+		return
+	}
+	s.logger.Info("chat: cleared history", "messages", cleared)
+	s.send_(outMsg{Type: "chat_cleared", Cleared: cleared})
+}
+
+// clampChatHistoryBefore bounds a client-supplied chat_history cursor to the
+// session's own virtual time, so the boundary is enforced server-side rather
+// than merely trusted. A zero virtualTime means the clock has not been set
+// yet this connection -- there is no boundary to enforce, so before passes
+// through unclamped rather than collapsing to the zero time and hiding every
+// row.
+func clampChatHistoryBefore(before, virtualTime time.Time) time.Time {
+	if virtualTime.IsZero() {
+		return before
+	}
+	if before.After(virtualTime) {
+		return virtualTime
+	}
+	return before
+}
+
+// findProfile looks up a buddy by id in the session's cached roster. A miss
+// (e.g. a stale client-side id, or — as in several unit tests — no roster
+// loaded at all) falls back to a zero-value Profile carrying only the id: the
+// generator still has enough to enqueue and reply, just without persona
+// fields to render.
+func concatPassages(groups ...[]chat.Passage) []chat.Passage {
+	var out []chat.Passage
+	for _, g := range groups {
+		out = append(out, g...)
+	}
+	return out
+}
+
+// partitionTiers splits a budgeted passage set back into the composer's three
+// slots. Tier 3 must land in Timeline and never Digest: retrospective
+// investigative reporting presented as something the buddy plainly knows is the
+// misattribution the tier system exists to prevent.
+func partitionTiers(passages []chat.Passage) (digest, recent, timeline []chat.Passage) {
+	for _, p := range passages {
+		switch p.Tier {
+		case chat.TierCurated:
+			digest = append(digest, p)
+		case chat.TierBroadcast:
+			recent = append(recent, p)
+		case chat.TierTimeline:
+			timeline = append(timeline, p)
+		}
+	}
+	return digest, recent, timeline
+}
+
+func findProfile(profiles []chat.Profile, id int) chat.Profile {
+	for _, p := range profiles {
+		if p.ID == id {
+			return p
+		}
+	}
+	return chat.Profile{ID: id}
+}
+
+// moderationOf projects a guard Decision to the JSON shape chat_messages.moderation
+// stores. Reason/Evidence are omitted when empty so an "allow" (or a bare
+// escalate/block with no term match) doesn't grow the column with empty keys.
+func moderationOf(d chat.Decision) map[string]any {
+	m := map[string]any{"outcome": d.Outcome}
+	if d.Reason != "" {
+		m["reason"] = d.Reason
+	}
+	if d.Evidence != "" {
+		m["evidence"] = d.Evidence
+	}
+	return m
+}
+
+// buildChatJob assembles a Generator job from already-retrieved passages and
+// configuration. It is a pure mapping — no I/O — precisely so tier crossing
+// (see the package doc on chat.Tier) is a thing a test can catch directly:
+// digest, recent, and timeline must land in Job.Digest, Job.Recent, and
+// Job.Timeline respectively, with no reordering. It serves both a typed
+// ChatSend (kind "generated", selfInitiated false) and a generated scheduled
+// beat (kind "scheduled", selfInitiated true) — the only difference between
+// the two is what the caller passes in, not a second code path.
+//
+// The phase is resolved here, from phases/beacons, rather than passed in
+// pre-resolved: chat.PhaseAt already returns chat.DefaultPhase (ok == false)
+// when profile has no phases configured, so there is nothing left for this
+// function to do on a miss — a second fallback here would just be dead code
+// shadowing PhaseAt's own.
+func buildChatJob(userID string, profile chat.Profile, phases map[int][]chat.Phase, beacons map[int]chat.Beacon, body, kind string, selfInitiated bool, vTime time.Time,
+	digest, recent, live, timeline []chat.Passage, history []chat.Turn, deliver func(chat.Reply, error)) chat.Job {
+	phase, _ := chat.PhaseAt(phases[profile.ID], beacons, vTime)
+	return chat.Job{
+		UserID:        userID,
+		Profile:       profile,
+		Phase:         phase,
+		Body:          body,
+		Kind:          kind,
+		SelfInitiated: selfInitiated,
+		VirtualTime:   vTime,
+		Digest:        digest,
+		Recent:        recent,
+		Live:          live,
+		Timeline:      timeline,
+		History:       history,
+		Deliver:       deliver,
+	}
+}
+
+// trimBefore drops every timestamp strictly before cutoff, preserving order.
+func trimBefore(ts []time.Time, cutoff time.Time) []time.Time {
+	i := 0
+	for i < len(ts) && ts[i].Before(cutoff) {
+		i++
+	}
+	return ts[i:]
+}
+
 // RunTimePump advances virtual time on each hub tick and dispatches new items.
 // Call in a dedicated goroutine.
 func (s *Session) RunTimePump() {
@@ -573,13 +1613,27 @@ func (s *Session) RunTimePump() {
 			newsLo, newsHi, doNews := s.planChannelRefill(ChannelNews, &s.newsHorizon, t, windowNews)
 			usenetLo, usenetHi, doUsenet := s.planChannelRefill(ChannelUsenet, &s.usenetHorizon, t, windowUsenet)
 			flightsLo, flightsHi, doFlights := s.planChannelRefill(ChannelFlights, &s.flightsHorizon, t, windowFlights)
+			anonLo, anonHi, doAnon := s.planChannelRefill(ChannelFlightsAnon, &s.flightsAnonHorizon, t, windowFlights)
 			weatherLo, weatherHi, doWeather := s.planChannelRefill(ChannelWeather, &s.weatherHorizon, t, windowWeather)
 			alertLo, alertHi, doAlert := s.planChannelRefill(ChannelAlerts, &s.alertHorizon, t, windowAlert)
 			var usenetGroups []string
 			if doUsenet {
 				usenetGroups = s.usenetGroupsLocked()
 			}
+			due := s.dueBeats(t)
+			var beatUserID string
+			var beatProfiles []chat.Profile
+			var beatBeacons map[int]chat.Beacon
+			var beatPhases map[int][]chat.Phase
+			var beatSources []chat.BroadcastSource
+			if len(due) > 0 {
+				beatUserID, beatProfiles, beatBeacons, beatPhases = s.userID, s.profiles, s.beacons, s.phases
+				beatSources = s.bcastSources
+			}
 			s.mu.Unlock()
+
+			s.syncChatPresence()
+			s.fireBeats(ctx, due, beatUserID, beatProfiles, beatBeacons, beatPhases, beatSources, t)
 
 			if doMedia {
 				if items, err := cache.ItemsInRange(ctx, s.rdb, mediaLo, mediaHi); err != nil {
@@ -620,10 +1674,17 @@ func (s *Session) RunTimePump() {
 				}
 			}
 			if doFlights {
-				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, flightsLo, flightsHi, s.logger); err != nil {
+				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, cache.KeyFlightMinutes, flightsLo, flightsHi, s.logger); err != nil {
 					s.logger.Warn("flights range lookup failed", "error", err)
 				} else {
 					s.SendFlights(t, items)
+				}
+			}
+			if doAnon {
+				if items, err := cache.FlightPositionsInRange(ctx, s.rdb, cache.KeyFlightAnonMinutes, anonLo, anonHi, s.logger); err != nil {
+					s.logger.Warn("flights-anon range lookup failed", "error", err)
+				} else {
+					s.SendFlightsAnon(t, items)
 				}
 			}
 			// usenet refills per active group, reading Postgres directly (not Redis):
@@ -687,22 +1748,52 @@ func (s *Session) planChannelRefill(channel string, horizon *time.Time, vTime ti
 	return planRefill(horizon, vTime, window)
 }
 
+// dueBeats is planChannelRefill's counterpart for chat_schedules: gated on the
+// chat subscription like every other channel, but with no window/lookup to
+// plan -- schedules is already resident in memory (SetSchedules), so the
+// half-open (chatHorizon, t] slice is computed directly and chatHorizon
+// advances to t in the same step. An empty schedules slice (the live table's
+// steady state until a curator adds rows) returns nil with no work done, so
+// this stays silent on every ordinary tick rather than logging noise. Caller
+// must hold s.mu.
+func (s *Session) dueBeats(t time.Time) []chat.Schedule {
+	if _, ok := s.subscriptions[ChannelChat]; !ok {
+		return nil
+	}
+	if len(s.schedules) == 0 {
+		return nil
+	}
+	from := s.chatHorizon
+	s.chatHorizon = t
+	return chat.DueBetween(s.schedules, s.beacons, from, t)
+}
+
 // encodeMsg serialises an outbound envelope as a MessagePack binary frame.
 // SetCustomStructTag("json") reuses the existing json: struct tags as msgpack
 // field names, so the wire keys (and the frontend TS interfaces) stay identical.
 // time.Time fields encode as the msgpack timestamp extension; the client decodes
 // them back to ISO strings.
-func encodeMsg(m outMsg) ([]byte, error) {
+// encodeFrame msgpack-encodes any outbound frame, with SetCustomStructTag("json")
+// so the json tags are the wire field names (hard rule #8).
+func encodeFrame(frame any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
 	enc.SetCustomStructTag("json")
-	if err := enc.Encode(m); err != nil {
+	if err := enc.Encode(frame); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-func (s *Session) send_(m outMsg) {
+func encodeMsg(m outMsg) ([]byte, error) { return encodeFrame(m) }
+
+func (s *Session) send_(m outMsg) { s.sendFrame(m.Type, m) }
+
+// sendFrame is the single outbound path. Nearly every frame is an outMsg and
+// goes through send_; mp3_meta has its own envelope (an id-keyed map, not the
+// []MediaItem outMsg carries) and comes here directly. typ is passed separately
+// only so the drop warning can name what was dropped.
+func (s *Session) sendFrame(typ string, frame any) {
 	// Don't write to a closed session.
 	select {
 	case <-s.done:
@@ -710,7 +1801,7 @@ func (s *Session) send_(m outMsg) {
 	default:
 	}
 
-	data, err := encodeMsg(m)
+	data, err := encodeFrame(frame)
 	if err != nil {
 		return
 	}
@@ -719,7 +1810,7 @@ func (s *Session) send_(m outMsg) {
 	case s.send <- data:
 	case <-s.done:
 	default:
-		s.logger.Warn("send buffer full, dropping message", "type", m.Type)
+		s.logger.Warn("send buffer full, dropping message", "type", typ)
 	}
 }
 

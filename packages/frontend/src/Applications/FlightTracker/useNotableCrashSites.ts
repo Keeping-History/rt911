@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 import { NOTABLE_FLIGHTS } from "./notableFlights";
 
 // The four notables' final moments, straight from the same flight_positions
@@ -11,10 +12,8 @@ import { NOTABLE_FLIGHTS } from "./notableFlights";
 // seeks. Two samples (not one) so the motion buffer derives the true final
 // heading instead of pointing north after a seek-past-crash.
 //
-// Same anonymous-read Directus base as useFlightTrack/useAltitudeProfile.
-const DIRECTUS_URL =
-	(import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
-	"https://api-beta.911realtime.org";
+// Read over REST on the same anonymous path useFlightTrack/useAltitudeProfile
+// use.
 
 // All four notables flew (and crashed) on 9/11; their BTS-local flight_date
 // never straddles UTC midnight, so no prevUtcDay fallback is needed here.
@@ -68,7 +67,7 @@ async function loadCrashSites(): Promise<void> {
 	try {
 		const samples: FlightPosition[] = [];
 		const crashMs = new Map<string, number>();
-		// SEQUENTIAL on purpose: concurrent same-path requests to api-beta get
+		// SEQUENTIAL on purpose: concurrent same-path requests to Directus get
 		// their response bodies MIXED by the proxy layer (verified 2026-07-15 —
 		// four parallel flight_positions queries all received one flight's
 		// rows; the same queries in series returned correct data). Four small

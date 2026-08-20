@@ -1,0 +1,12 @@
+1
+00:00:00,000 --> 00:00:07,000
+ Go on and ground American 7-7 is on Dixie 26 with information taxi.
+
+2
+00:00:07,000 --> 00:00:10,000
+ American 7-7, Dulles taxi to runway 30.
+
+3
+00:00:10,000 --> 00:00:13,000
+ Taxi 30, American 7-7.
+

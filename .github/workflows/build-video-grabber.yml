@@ -41,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -86,6 +86,10 @@ jobs:
         with:
           context: packages/tools/video-grabber
           push: true
+          # Readable from inside the container, unlike the OCI label below — a
+          # worker stamps this onto the transcribe_jobs row it claims (#379).
+          build-args: |
+            CODE_VERSION=${{ github.sha }}
           tags: |
             ghcr.io/keeping-history/video-grabber:${{ github.sha }}
             ghcr.io/keeping-history/video-grabber:latest

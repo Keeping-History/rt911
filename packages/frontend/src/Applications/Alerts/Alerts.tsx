@@ -1,4 +1,12 @@
-import { ClassicyAlert, ClassicyApp, ClassicyIcons, useAppManager } from "classicy";
+import {
+	ClassicyAlert,
+	ClassicyApp,
+	ClassicySoundActionTypes,
+	useAppManager,
+	useSoundDispatch,
+} from "classicy";
+// Side effect: registers this app's manifest (registerApp) at import time.
+import "./AlertsContext";
 import type React from "react";
 import { useContext, useEffect, useMemo, useState } from "react";
 import {
@@ -6,13 +14,14 @@ import {
 	MediaStreamContext,
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { useAlertsEnabled } from "./alertsSettings";
+import alertPng from "./extension.png";
 
 const appId = "Alerts.app";
 const appName = "Alerts";
 // Extensions have no desktop icon / Apple-menu entry, but ClassicyApp still
 // requires an icon path; reuse an existing bundled icon rather than a
 // non-existent asset since it is never actually rendered anywhere.
-const appIcon = ClassicyIcons.applications.internetExplorer.documentWarning as string;
+const appIcon = alertPng;
 
 /**
  * Silent background extension (Task 8): subscribes to the opt-in "alerts"
@@ -32,6 +41,7 @@ export const Alerts: React.FC = () => {
 	const enabled = useAlertsEnabled();
 	const { alertItems, subscribeAlerts, unsubscribeAlerts } =
 		useContext(MediaStreamContext);
+	const soundDispatch = useSoundDispatch();
 
 	const [dismissed, setDismissed] = useState<Set<number>>(() => new Set());
 
@@ -54,6 +64,23 @@ export const Alerts: React.FC = () => {
 					new Date(a.start_date).getTime() - new Date(b.start_date).getTime(),
 			)[0];
 	}, [alertItems, dismissed]);
+
+	// Ring the classic Mac alert chime each time a NEW alert dialog surfaces.
+	// Keyed on the displayed alert's id (not the `current` object, whose
+	// reference churns as the buffer updates) so it fires exactly once per
+	// distinct alert — including when OK advances to the next queued alert —
+	// and never on an unrelated re-render. Gated on the same `enabled && current`
+	// condition that renders the dialog. Routing through the sound dispatcher
+	// (rather than a raw Audio element) means it honors the Sound control panel's
+	// volume, global mute, and the per-sound disable list.
+	const currentId = current?.id;
+	useEffect(() => {
+		if (!enabled || currentId == null) return;
+		soundDispatch({
+			type: ClassicySoundActionTypes.ClassicySoundPlay,
+			sound: "ClassicyAlertSosumi",
+		});
+	}, [enabled, currentId, soundDispatch]);
 
 	const dismiss = (id: number) =>
 		setDismissed((prev) => {

@@ -41,15 +41,21 @@ Every client message is a JSON object with at least a `type` field. Additional f
 | `seek`        | `time`            | Move the virtual clock to a new instant.      |
 | `heartbeat`   | `time`            | Report client's current virtual time.         |
 | `filter`      | `formats[]`       | Whitelist media formats.                      |
-| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`weather`/`alerts`). |
+| `subscribe`   | `channel`         | Opt into a side channel (`pager`/`mp3`/`news`/`usenet`/`flights`/`flights-anon`/`weather`/`alerts`/`chat`). |
 | `unsubscribe` | `channel`         | Leave a side channel.                         |
 | `usenet_filter` | `newsgroups[]`  | Set the newsgroup(s) the client is viewing; the `usenet` channel delivers only these. |
 | `usenet_more` | `newsgroups[]`, `before` | Request the page of messages older than `before` for the viewed group(s) (backlog pagination). |
 | `usenet_body` | `id`              | Request the full body of one message by id (bodies are no longer in list frames). |
-| `flights_history` | `minutes`, `id` | Request the trailing `minutes` (1-90; loop mode uses 30/90, the heading seed ~3) of flight positions. Requires an active `flights` subscription. `id` is echoed on every reply chunk. |
+| `news_body`   | `id`              | Request the full text of one news article by id (bodies are not in snapshot frames). |
+| `flights_history` | `minutes`, `id`, `channel?` | Request the trailing `minutes` (1-90; loop mode uses 30/90, the heading seed ~3) of flight positions. `channel` selects the corpus: omitted/`flights` (default) or `flights-anon`; the matching subscription is required. `id` is echoed on every reply chunk. |
 | `weather_forecast` | `zone`, `id` | Request the forecast product covering NWS UGC `zone` (e.g. `"NYZ076"`) at the client's virtual time. Requires an active `weather` subscription. `id` is echoed on the reply. |
 | `pause`       | —                 | Stop advancing virtual time.                  |
 | `resume`      | —                 | Resume advancing virtual time.                |
+| `chat_send`   | `profile`, `body` | Send one message to a buddy on the `chat` channel. See [`chat_send`](#chat_send) below. |
+| `chat_history` | `profile`, `before`, `limit` | Request prior turns with a buddy at or before `before` (RFC3339). `limit` defaults to 40 when omitted or non-positive. See [`chat_history`](#chat_history) below. |
+| `chat_clear`  | —                 | Soft-delete the signed-in user's entire chat history, across every buddy. See [`chat_clear`](#chat_clear) below. |
+| `join_room`   | `room`            | Join a teacher-controlled room (the client's `?playlist=` id, max 128 chars). See [room control](#room-control-server--client-room_command) below. |
+| `leave_room`  | —                 | Leave the current room. |
 
 All unknown `type` values produce an `error` reply but do not terminate the session.
 
@@ -61,6 +67,7 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `seek_ack`        | `time`, `items[]`             | Reply to `seek`.                                       |
 | `heartbeat_ack`   | `time`, `master_time`         | Reply to `heartbeat`. `time` is server's vTime; `master_time` is present only while forced clock mode is active (see "Forced clock mode" below). |
 | `clock`           | `active`, `time`              | Forced-clock state push: on connect and on every activate/jump/release (see "Forced clock mode" below). |
+| `room_command`    | `action`, `time`/`app`/`message` | A live teacher command for the room this client joined (see "Room control" below). |
 | `filter_ack`      | —                             | Reply to `filter`.                                     |
 | `subscribe_ack`   | `channel`                     | Reply to `subscribe`.                                  |
 | `unsubscribe_ack` | `channel`                     | Reply to `unsubscribe`.                                |
@@ -70,15 +77,25 @@ All unknown `type` values produce an `error` reply but do not terminate the sess
 | `pager`           | `time`, `pager[]`             | Pager snapshot (on subscribe/init/seek) + a forward **window** (default 600 s) per refill while subscribed. Client reveal-gate preserves forward-only pacing. |
 | `mp3`             | `time`, `items[]`             | mp3/Radio snapshot (items active at `t`) + a forward **window** (default 300 s) per refill while subscribed. Reuses the `items` field. |
 | `mp3_history`     | `time`, `items[]`             | The **complete** mp3 back-catalogue up to `t` (every approved item with `start_date ≤ t`), sent with each mp3 snapshot (subscribe/init/seek). Backs the Radio app's "Previous" list. Replace client state wholesale — the frame is sent even when empty so a backward seek clears it. Not reveal-gated or retention-pruned. |
-| `news`            | `time`, `items[]`             | News snapshot (active at `t` + 5-min instant lookback) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
+| `mp3_meta`        | `generation`, `items{}`       | **One-shot per session.** The Radio Traffic metadata for every approved mp3 item, keyed by item id (not a list — the client joins it onto items it already holds). Sent once, on the first mp3 snapshot; **never resent on seek**. Carries no `time`: the metadata has no time dimension. Carries no vocabulary — that comes from `GET /mp3/tags`. See [`mp3_meta`](#mp3_meta) below. |
+| `news`            | `time`, `items[]`             | News back catalogue (every approved article from the start of 2001-09-09 up to `t`, **headline-only** — no `content`) + a forward **window** (default 600 s) per refill while subscribed. Reuses the `items` field. |
 | `usenet`          | `time`, `usenet[]`            | Usenet messages for the viewed newsgroup(s): backlog snapshot (most recent ≤500 up to `t`) on subscribe/`usenet_filter`/init/seek, plus a forward **window** (default 600 s) per refill. Delivered **only** for the groups set via `usenet_filter`. |
 | `flights`         | `time`, `flights[]`           | Flights snapshot (airborne picture covering `[t−90s, t]`) on subscribe/init/seek, plus a forward **window** (default 300 s) per refill while subscribed. |
+| `flights_anon`    | `time`, `flights[]`           | Identical contract to `flights` for the anonymous radar-traffic corpus (`RDR-…` ids, issue #263). Delivered only while subscribed to `flights-anon`; cached separately (`flight-anon:minutes`), so unsubscribed clients pay nothing. |
 | `flights_history` | `id`, `time`, `flights[]`, `done` | Chunked reply to a `flights_history` request (~10 minute-buckets per frame). The final frame carries `done: true` (and may be empty). `id` echoes the request. |
 | `weather`         | `time`, `weather[]`, `weather_forecasts[]` | Weather snapshot (latest observation per station ≤ `t`, no age limit) on subscribe/init/seek, plus a forward **window** (default 600 s) per refill while subscribed — windowed observations plus any forecast products newly issued in the window. One frame carries both lists; suppressed when both are empty. |
 | `weather_forecast` | `id`, `time`, `weather_forecasts[]` | Reply to `weather_forecast`: the forecast product covering the requested zone at the clock, or an explicit empty `weather_forecasts` when none exists. `id` echoes the request. |
 | `alerts`          | `time`, `alerts[]`            | Forward **window** (default 600 s) of alerts per refill while subscribed. **No subscribe/init/seek snapshot** — see [`alerts` field reference](#server-initiated-alerts) below for why. |
+| `chat_state`      | `enabled`, `reason`           | Pushed on `chat` subscribe, pause, resume, seek, and window-boundary crossings. See [`chat_state`](#chat_state) below. |
+| `chat_roster`     | `buddies[]`                   | Sent once on successful `chat` subscribe. See [`chat_roster`](#chat_roster) below. |
+| `chat_presence`   | `profile`, `online`           | Sent when a buddy signs on or off as the virtual clock advances. See [`chat_presence`](#chat_presence) below. |
+| `chat_typing`     | `profile`                     | Sent immediately on accepting a `chat_send` — the reply lands 2-8s later. See [`chat_typing`](#chat_typing) below. |
+| `chat_message`    | `profile`, `direction`, `body`, `time`, `kind`, `message_id` | One turn of a chat conversation, live or replayed. See [`chat_message`](#chat_message) below. |
+| `chat_history`    | `profile`, `done`             | Terminates a `chat_history` reply (each turn itself rides `chat_message`). See [`chat_history`](#chat_history) below. |
+| `chat_cleared`    | `cleared`                     | Confirms a `chat_clear` succeeded; the client empties its transcript on this frame. See [`chat_clear`](#chat_clear) below. |
 | `usenet_filter_ack` | —                           | Reply to `usenet_filter`.                              |
 | `usenet_body`     | `id`, `body` *or* `id`, `message` | Reply to `usenet_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
+| `news_body`       | `id`, `body` *or* `id`, `message` | Reply to `news_body`: the article body, or an empty body with `message` set when the id is missing/unapproved or the query fails. |
 | `sources`         | `sources`                     | Sent once after `init_ack`: the time-independent set of selectable sources per filter (`sources.video`, `sources.pager`, `sources.usenet`). Not resent on `seek`. |
 | `error`           | `message`                     | Reply to a malformed or unrecognised request.          |
 
@@ -264,9 +281,30 @@ in bulk on the wire, the **client reveal-gate** holds each page until its `start
 still render paced by the virtual clock rather than all at once. This pacing invariant is enforced
 client-side; consumer apps never receive a not-yet-due page.
 
-Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"`, `"weather"` and `"alerts"`;
-any other value yields `{"type":"error","message":"unknown channel \"…\""}`. (HTML is planned.)
-Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
+Valid channels are `"pager"`, `"mp3"`, `"news"`, `"usenet"`, `"flights"`, `"flights-anon"`, `"weather"`, `"alerts"` and
+`"chat"`; any other value yields `{"type":"error","message":"unknown channel \"…\""}`. (HTML is
+planned.) Subscriptions are not remembered across reconnects — re-`subscribe` after reconnecting.
+
+`chat` is the one channel that requires authentication. Whether a session is signed in is resolved
+once, at WebSocket upgrade, from the Directus session cookie — not per message — so a lookup failure
+never affects any other channel. An anonymous session's `subscribe {"channel":"chat"}` is **not**
+accepted: the server does not add the subscription (no `subscribe_ack`) and instead replies with
+`chat_state{enabled:false, reason:"not_signed_in"}`, so the client learns why chat is unavailable
+rather than getting silence or a generic error. A signed-in session's subscribe succeeds normally
+(`subscribe_ack`) and is followed immediately by `chat_state{enabled:true, ...}` and a `chat_roster`
+snapshot — see [`chat_state`](#chat_state) and [`chat_roster`](#chat_roster) below.
+
+**The session cookie is only honoured from an allowlisted `Origin`.** The Directus cookie is scoped
+to `.911realtime.org` with `SameSite=lax`, which bounds it to the *site* rather than the origin — so
+any host under that domain, including ones serving archived third-party content, can reach the
+streamer with a signed-in user's cookie attached. The streamer therefore turns a cookie into an
+identity only for origins we publish (see `DefaultTrustedOrigins` in `internal/handler/origin.go`;
+`CHAT_TRUSTED_ORIGINS` appends more for dev and preview environments).
+
+This gates **identity, not the connection**: an untrusted origin still connects and streams every
+other channel anonymously. The visible symptom of a missing origin is therefore
+`chat_state{enabled:false, reason:"not_signed_in"}` for a user who *is* signed in — the server logs
+`session cookie ignored: untrusted origin` when this happens, which is the fastest way to diagnose it.
 
 The `mp3` channel (Radio app) behaves the same but carries `MediaItem`s on `mp3`-typed frames
 (reusing the `items` field), and — because mp3 is durational audio — its snapshot returns the
@@ -278,9 +316,72 @@ forward-only windows) never covers. The client replaces its history state wholes
 (sent even when empty), and it is exempt from the reveal gate and retention pruning: history is
 by definition already in the past.
 
-The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Most news is
-instant, so its snapshot uses the media overlap-plus-5-minute-instant-lookback window — a seek to
-`t` shows headlines from the preceding minutes.
+### `mp3_meta`
+
+The first mp3 snapshot of a session is preceded by exactly one `mp3_meta` frame — the Radio
+Traffic card metadata for the whole corpus, keyed by item id:
+
+```jsonc
+{
+  "type": "mp3_meta",
+  "generation": "9f2c…",          // cache-build stamp; see below
+  "items": {
+    "5821": {
+      "subject": "Boston Center coordinates with NEADS",
+      "link": "…", "tier": "primary", "confidence": "high", "evidence": "…",
+      "participants": [ { "person": "…", "facility": "ZBW", "position": "…", "role": "…", "confidence": "…" } ],
+      "mentions": { "facilities": [], "aircraft": [], "people": [] },
+      "provenance": { "generated_at": "…", "sources": {}, "commission": {} },
+      "tags":  [ { "tag": "facility:zbw", "namespace": "facility", "value": "ZBW", "color": null } ],
+      "peaks": [ [-3, 3], [-12, 10], … ]   // 480 [min,max] buckets, -128..127
+    }
+  }
+}
+```
+
+**It is sent once per session and is never resent — not on seek, not on resubscribe.** That is
+the frame's entire reason for existing. `mp3_history` carries the whole ~755-item back catalogue
+and is re-sent wholesale on every subscribe/init/seek; at ~2 KB of metadata per item, hanging any
+of this off `MediaItem` would put ~1.5 MB of msgpack on every Time Machine scrub. The metadata is
+immutable historical reference data with no time dimension, so it travels once, on its own frame,
+and the `mp3`/`mp3_history` frames stay exactly what they were. It is exempt from the reveal gate
+and from retention pruning for the same reason — there is nothing time-scoped to gate.
+
+An item with no derived metadata is still present with an empty `tags` list; `tags` is the one
+field always sent, so a client can tell "nothing is tagged" from "no metadata for this id". An id
+absent from `items` altogether has no metadata at all (59 of 814 recordings have no `parties`
+blob to derive from) and the card degrades to title plus transcript.
+
+There is deliberately **no `vocabulary` field.** The tag vocabulary is byte-identical for every
+session, so pushing a copy down each socket is waste; it is served by `GET /mp3/tags` and cached
+by the browser, which also lets the filter sidebar paint without waiting on the socket.
+
+`generation` is the stamp of the cache build this metadata came from, and `GET /mp3/tags` returns
+the same value for the same build. Without it a client can end up holding a vocabulary from build
+N and item tags from build N+1, and render a chip on a card that its own filter tree has no
+checkbox for; on a mismatch the client refetches the vocabulary. The value is a content hash, not
+a per-process id, precisely because the streamer runs N replicas — a client that takes its
+vocabulary from one pod's HTTP route and its item tags from another pod's socket must see the same
+stamp for the same data.
+
+The snapshot behind this frame is built once per cache warm and rebuilt when Postgres says the
+corpus changed — including on writes to `mp3_tags` and `mp3_items_tags`, which the tag pipeline
+rewrites without ever touching `mp3_items`.
+
+If no snapshot has been built yet (a subscribe racing the first warm, or a database without the
+derived metadata columns), **no frame is sent at all** rather than an empty one: the frame is
+one-shot, so an empty corpus would be held as the truth for the life of the connection.
+
+The `news` channel (News app) likewise carries `MediaItem`s on `news`-typed frames. Its
+snapshot is not a window: it is the complete back catalogue from **the start of
+2001-09-09** (the `NewsEpoch` floor, midnight UTC — not ET, since 9/9 and 9/10
+articles carry date-only `00:00:00` timestamps that a midnight-ET floor would
+exclude) up to `t`, so a client sees every headline of the replay so far
+rather than only the last few minutes. Snapshot rows are **headline-only** — `content` is
+empty, because the full bodies run to ~7.7 MB against ~200 KB for headers. The client
+fetches a body on demand via `news_body` when an article opens. Articles later than `t`
+are withheld. Items arriving on the forward window (Redis-backed) *do* carry content:
+there are only a handful per window, so a just-fired headline opens with no round-trip.
 
 The `flights` channel carries `FlightPosition`s on `flights`-typed frames (its own field, not a
 reuse of `items`). Flight positions are per-minute aircraft samples, so — unlike pager's
@@ -668,6 +769,198 @@ plus one alert-only field:
 There is deliberately **no snapshot** frame for this channel (see [the `alerts` channel](#subscribe)
 above) — every `alerts` frame is a forward window, sent once per **window refill** and only when the
 window contains at least one alert; empty windows produce no frame, same as `pager`/`flights`.
+
+### Room control (server → client `room_command`)
+
+Live teacher control over a class. A client that joined a room with `join_room` receives every
+command addressed to that room:
+
+```json
+{ "type": "room_command", "action": "jump", "time": "2001-09-11T13:03:00Z" }
+{ "type": "room_command", "action": "focus", "app": "TV.app" }
+{ "type": "room_command", "action": "message", "message": "Look at channel 4" }
+{ "type": "room_command", "action": "lock", "target": "clock", "on": true }
+{ "type": "room_command", "action": "reload" }
+```
+
+| Field     | Type   | Notes                                                                    |
+| --------- | ------ | ------------------------------------------------------------------------ |
+| `action`  | string | `jump` \| `focus` \| `message` \| `lock` \| `reload`. Unknown actions are rejected at the operator endpoint and never reach a client. |
+| `time`    | string | `jump` only — the virtual instant to move every student's clock to.       |
+| `app`     | string | `focus` only — the Classicy app id to bring to front (e.g. `TV.app`).     |
+| `message` | string | `message` only — the note body to display.                                |
+| `target`  | string | `lock` only — the surface to lock. `clock` is the only one implemented.   |
+| `on`      | bool   | `lock` only — the state to move to. **Always present on a lock frame**, including `false`: it rides a pointer server-side so an unlock is not dropped by `omitempty`. A client that receives a lock frame without `on` should do nothing rather than assume `false`. |
+
+`reload` carries no payload at all: it tells every student to **re-fetch the published playlist
+definition from Directus and re-evaluate it** — the definition itself never rides this wire. It is
+how a teacher's mid-class edit ("Push Update to Class") reaches students whose page loaded the
+older definition. Applying a `reload` must not touch the client's room lock state — the two are
+independent surfaces, and a definition refresh that silently unlocked the clock would free a
+classroom the teacher had locked.
+
+A **room is a playlist id**: students following `?playlist=<id>` are its members. The streamer
+never resolves the id — playlists are authored in Directus and executed client-side; the id
+travels as an opaque string.
+
+Commands originate on whichever pod served the teacher's `POST /room` call and are relayed to the
+others over Redis pub/sub (`internal/fanout`), so a class spread across replicas stays in step.
+The relay itself is fire-and-forget, but each pod also **remembers the last-known control state per
+room** — the latest `jump`, the latest `lock`, and whether a `reload` has been pushed — and
+**replays it as ordinary `room_command` frames when a session sends `join_room`**, in application
+order (`jump`, then `lock`, then `reload`). A student who connects late, or reconnects after a
+drop, therefore converges with the class without any new client logic: the replayed frames are the
+same commands a live student saw, and the client applies them idempotently. The transient actions
+(`focus`, `message`) are moments rather than state and are deliberately **not** replayed.
+
+Two bounds on that memory: it is **per pod and in-memory** (fed by the fanout bus, which every pod
+subscribes to — including the publisher, via Redis's self-echo), so a pod that restarts starts
+empty and catches up on the teacher's next command; and it is keyed by playlist id with one command
+per sticky action, written only by the owner-authorised `POST /room` path, so it cannot grow under
+client control. Room membership still lives on the session, so a client must re-send `join_room`
+after every reconnect (the frontend's `MediaStreamProvider` does this alongside its channel
+re-subscribes) — the replay-on-join is what turns that re-join into a full catch-up.
+
+A `jump` is ignored by the client while [forced clock mode](#forced-clock-mode-server--client-clock-heartbeat_ackmaster_time)
+is active — the operator's master clock outranks a teacher.
+
+`lock` is **absolute, never a toggle**: the teacher's client owns the on/off and sends the value it
+wants — the per-room memory above is replay state for late joiners, not an authority a toggle could
+consult (there is no read-back API). Two consequences: reopening the teacher's playlist document
+window resets its Control menu (students stay locked — only the checkmark forgets), and two teachers driving one
+playlist will not see each other's state. `content` is a deliberate non-target — it exists as a
+disabled button in the teacher UI and the server rejects it with 400, so a dead control can never
+look like a working one.
+
+### `chat_state`
+
+Pushed on subscribe, pause, resume, seek, and window-boundary crossings. The
+client binds its message input's disabled state to `enabled`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `enabled` | bool | Whether the user may send |
+| `reason` | string | `ok`, `paused`, `outside_window`, `blocked`, `not_signed_in` |
+
+### `chat_roster`
+
+Sent once on successful subscribe.
+
+| Field | Type | Notes |
+|---|---|---|
+| `buddies` | array | `{id, screen_name, display_name, avatar, online}`, ordered by the admin's sort field |
+
+`buddies` rides `outMsg`, the envelope shared with every server→client frame including the 1 Hz
+`items` hot path, so it carries `omitempty`. **When the roster is empty (no active `chat_profiles`
+rows) the `buddies` field is omitted from the frame entirely** — it is never sent as `null` or `[]`.
+Clients must treat an absent `buddies` field as an empty list, not as an error or a "still loading"
+signal.
+
+### `chat_presence`
+
+Sent when a buddy signs on or off as the virtual clock advances. One frame per
+changed buddy; most ticks emit none.
+
+| Field | Type | Notes |
+|---|---|---|
+| `profile` | int | `chat_profiles.id` |
+| `online` | bool | New state |
+
+### `chat_send`
+
+Request:
+
+```json
+{ "type": "chat_send", "profile": 2, "body": "did you see the news" }
+```
+
+The gate — signed in, clock inside the chat window, not paused, not blocked — is evaluated
+**before anything else**, including any database read. On refusal the server replies with
+[`chat_state`](#chat_state) carrying the reason and does nothing further; on a `chat_blocks` hit or
+a local-moderation `block` (see the design's Guard tier) it replies the same way with
+`reason: "blocked"`. A message that clears every gate is persisted to `chat_messages`, answered
+immediately with [`chat_typing`](#chat_typing), and handed to the (bounded, non-blocking) generator
+worker pool — never called inline on the session goroutine, so a slow or saturated provider call can
+never stall the Hub or any other session. If the pool is unavailable (queue full, or no provider has
+a configured API key) the buddy answers with an in-character `chat_message` stall (`kind: "stall"`)
+rather than an error frame — degradation preserves the illusion instead of breaking it. A `block`
+outcome from local moderation is the one case that does **not** enqueue a reply at all: the message
+is recorded (flagged in `chat_messages.moderation`) and the session gets `chat_state{enabled:false,
+reason:"blocked"}` instead. An `escalate` outcome (distress, not abuse) is **not** blocked — it is
+delivered and generated normally, flagged in `chat_messages.moderation` for teacher surfacing.
+
+### `chat_history`
+
+Request:
+
+```json
+{ "type": "chat_history", "profile": 2, "before": "2001-09-11T12:50:00Z", "limit": 40 }
+```
+
+Reply: up to `limit` prior turns with `profile`, oldest first, each as its own
+[`chat_message`](#chat_message) frame, followed by a `chat_history` frame carrying `done: true` as
+the completion marker — the same chunked-reply shape `flights_history` uses. History is always
+re-read fresh from `chat_messages` (never cached on the session), which is what makes a `seek`
+rebuild context correctly: the next `chat_history` (or `chat_send`, which pulls its own rolling
+context the same way) sees the new virtual time. An anonymous session, or one connected with no
+database pool, gets an immediate `chat_history{done:true}` with no turns.
+
+### `chat_clear`
+
+Request (no fields — the target is always the session's own authenticated user, so there is nothing
+for a client to specify and no way to aim the clear at another user's history):
+
+```json
+{ "type": "chat_clear" }
+```
+
+Reply on success:
+
+```json
+{ "type": "chat_cleared", "cleared": 42 }
+```
+
+`cleared` is how many rows were marked, and is informational only — the client resets on the frame's
+arrival, not its count, so clearing an already-empty history is still a success (and `cleared` is
+then omitted, being zero).
+
+**Nothing is deleted.** Every matching `chat_messages` row gets a `cleared_at` timestamp, and all
+three conversation reads (`History` for the buddy's prompt context, `HistoryDetailed` for replay, and
+`HasPriorContact` for schedule gating) skip rows that carry one. The transcript therefore leaves the
+product — and the buddies' memory with it — while the log survives for research. Re-clearing does not
+rewrite an earlier clear's timestamp. Contrast Account → Special → Delete My Data, which genuinely
+erases `chat_messages`: that action is a data-erasure request, this one is a reset.
+
+Because a buddy's prior contact is also cleared, scheduled beats gated on `requires_prior_contact`
+stay locked until the student speaks to that buddy again.
+
+An unauthenticated session, or one with no database pool, gets an `error` frame and **no**
+`chat_cleared` — a client that emptied its transcript on an unconfirmed clear would show a blank
+conversation that the next reconnect refills.
+
+### `chat_typing`
+
+Sent the instant a `chat_send` is accepted (gate passed, not blocked) — before the reply is
+generated. This is the latency budget the UI shows, not decoration: the reply itself lands 2-8s
+later as a `chat_message`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `profile` | int | The buddy who is about to reply |
+
+### `chat_message`
+
+One turn of a chat conversation — a student's send, a buddy's generated reply, a stall, or a
+`chat_history` replay.
+
+| Field | Type | Notes |
+|---|---|---|
+| `profile` | int | `chat_profiles.id` |
+| `direction` | string | `"in"` (student → buddy) or `"out"` (buddy → student) |
+| `body` | string | Message text |
+| `time` | string | RFC3339 **virtual** time the message belongs to — not wall-clock send time |
+| `kind` | string | `chat_messages.kind`: `"typed"`, `"generated"`, `"refused"`, `"truncated"`, `"stall"` |
+| `message_id` | int | `chat_messages.id`, echoed so a client can dedupe; `0` when persistence was skipped (no database pool) |
 
 ### `pause`
 

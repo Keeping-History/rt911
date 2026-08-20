@@ -2,7 +2,7 @@
 //
 // Idempotent seed of the Directus `map_pois` collection (schema + public read +
 // airport rows). Run ONCE with admin creds:
-//   DIRECTUS_URL=https://api-beta.911realtime.org DIRECTUS_TOKEN=<admin> node scripts/load-map-pois.mjs
+//   DIRECTUS_URL=https://api.911realtime.org DIRECTUS_TOKEN=<admin> node scripts/load-map-pois.mjs
 //
 // Notes (from prior Directus schema work):
 //  - the `details` field is created with special ["cast-json"] or reads 400.

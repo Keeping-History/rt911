@@ -1,0 +1,32 @@
+1
+00:00:00,000 --> 00:00:05,000
+ This is Henderson. American 77. Do you guys have radar on him? Is he over-foundless?
+
+2
+00:00:05,000 --> 00:00:08,000
+ No, we just moved the track there. We never, you know...
+
+3
+00:00:08,000 --> 00:00:09,000
+ Alright, you just have the track out there?
+
+4
+00:00:09,000 --> 00:00:11,000
+ You guys have never been able to raise him at all?
+
+5
+00:00:11,000 --> 00:00:17,000
+ No, we called company. They can't even get a hold of him. So there's no radio communications and no radar.
+
+6
+00:00:17,000 --> 00:00:22,000
+ And his last clearance, as far as you know, was on course to foundless and then J134, right?
+
+7
+00:00:22,000 --> 00:00:28,000
+ Well, we're just going to treat him like non-radar and we've already told the next sector they're going to have to sterilize for him until we find out.
+
+8
+00:00:28,000 --> 00:00:29,620
+ find out. Okay, thanks.
+

@@ -1,12 +1,15 @@
 // Directus session-cookie auth. httpOnly cookies only — never read/write
 // localStorage or any client-side store here; every request rides
 // credentials:"include" and the browser-held Directus session cookie.
-import { DIRECTUS_URL } from "../Playlist/loadPlaylist";
+import { DIRECTUS_URL } from "../../lib/endpoints";
 
 export interface AuthUser {
 	id: string;
 	email: string | null;
 	first_name: string | null;
+	/** Screen name buddies use in IM Buddies chat. Backfilled from the email
+	 * local part, so it is set for every existing account. */
+	username: string | null;
 	last_name: string | null;
 	avatar: string | null;
 	/** Sign-in provider: "default" = email+password, else "google"/"apple"/… */
@@ -43,7 +46,7 @@ async function serverMessage(res: Response, fallback: string): Promise<string> {
 // 401 means "not signed in" — anonymous is the expected steady state for most
 // visitors, so it resolves to null rather than throwing.
 export async function fetchMe(fetchFn: typeof fetch = fetch): Promise<AuthUser | null> {
-	const res = await fetchFn(`${DIRECTUS_URL}/users/me?fields=id,email,first_name,last_name,avatar,provider,city,state,country,school_name,educator_role,grade_levels,subjects`, {
+	const res = await fetchFn(`${DIRECTUS_URL}/users/me?fields=id,email,username,first_name,last_name,avatar,provider,city,state,country,school_name,educator_role,grade_levels,subjects`, {
 		credentials: "include",
 	});
 	if (res.status === 401) return null;
@@ -96,7 +99,7 @@ export function avatarUrl(fileId: string): string {
 }
 
 // Sequential by design: uploading the new file and patching the user must
-// resolve in order (api-beta mixes concurrent Directus REST responses — see
+// resolve in order (Directus mixes concurrent REST responses — see
 // the useNotableCrashSites/useRouteIndex fix), and the old file can't be
 // deleted until the new one is confirmed as the user's avatar. The trailing
 // delete is best-effort orphan cleanup, not part of the success contract.
@@ -157,15 +160,37 @@ export function isHostOf(hostname: string, domain: string): boolean {
 	return hostname === domain || hostname.endsWith(`.${domain}`);
 }
 
+/**
+ * Directus's URL allow-lists (AUTH_*_REDIRECT_ALLOW_LIST,
+ * USER_REGISTER_URL_ALLOW_LIST) hold https origins only, deliberately — an
+ * http entry would let a session land back over plaintext. But the edge still
+ * answers `http://911realtime.org/` with the app, so a visitor who arrives
+ * without TLS has an `http:` origin, and every URL derived from it was
+ * rejected with INVALID_PAYLOAD. Upgrade the scheme for product-domain hosts;
+ * every other origin (localhost dev servers, PR previews) is passed through
+ * untouched so it keeps its own scheme and port.
+ * Parameterized for tests — callers never pass arguments in production code.
+ */
+export function secureOrigin(
+	hostname: string = window.location.hostname,
+	origin: string = window.location.origin,
+): string {
+	if (!isHostOf(hostname, "911realtime.org")) return origin;
+	return origin.replace(/^http:\/\//, "https://");
+}
+
 // Registration verification links must land on an allow-listed URL
-// (USER_REGISTER_URL_ALLOW_LIST). Production origin by default; the frontend's
-// own origin when it's already on the product domain (future root-domain move).
+// (USER_REGISTER_URL_ALLOW_LIST). The frontend's own origin when it is already
+// on the product domain; the apex otherwise, for builds served elsewhere such
+// as the GitHub Pages PR previews.
 // Parameterized for tests — callers never pass arguments in production code.
 export function registrationLandingUrl(
 	hostname: string = window.location.hostname,
 	origin: string = window.location.origin,
 ): string {
-	return isHostOf(hostname, "911realtime.org") ? `${origin}/` : "https://beta.911realtime.org/";
+	return isHostOf(hostname, "911realtime.org")
+		? `${secureOrigin(hostname, origin)}/`
+		: "https://911realtime.org/";
 }
 
 /**

@@ -3,7 +3,9 @@ import type React from "react";
 import { useState } from "react";
 import readmeStyles from "./README.module.scss";
 import starPng from "./star.png";
+import { TagPills } from "./TagPills";
 import type { ReadmeArticle, ReadmeArticlesState } from "./useReadmeArticles";
+import { visibleArticles } from "./useReadmeArticles";
 
 export function formatArticleDate(iso: string): string {
 	return new Date(iso).toLocaleDateString("en-US", {
@@ -16,12 +18,19 @@ export function formatArticleDate(iso: string): string {
 // The two-pane README window body: article list on the left, the selected
 // article's sanitized HTML on the right. Pure presentation — data arrives via
 // props so this renders (and tests) without classicy or the network.
-export const ReadmeContent: React.FC<{ state: ReadmeArticlesState }> = ({ state }) => {
-	const { articles, loading, error } = state;
+export const ReadmeContent: React.FC<{
+	state: ReadmeArticlesState;
+	hiddenTagIds?: number[];
+}> = ({ state, hiddenTagIds = [] }) => {
+	const { loading, error } = state;
 	const [selectedId, setSelectedId] = useState<number | null>(null);
 
-	// Newest (first) article by default; if a refresh removed the selected
-	// article, fall back to newest rather than a blank pane.
+	// Filter the feed by the reader's tag preferences before rendering/selecting.
+	const articles = visibleArticles(state.articles, hiddenTagIds);
+
+	// Newest (first) visible article by default; if a refresh or filter removed
+	// the selected article, fall back to the newest visible one rather than a
+	// blank pane.
 	const selected: ReadmeArticle | null =
 		articles.find((a) => a.id === selectedId) ?? articles[0] ?? null;
 
@@ -49,12 +58,14 @@ export const ReadmeContent: React.FC<{ state: ReadmeArticlesState }> = ({ state 
 								{a.author ? `${a.author} — ` : ""}
 								{formatArticleDate(a.date_created)}
 							</span>
+							<TagPills tags={a.tags} />
 						</button>
 					</li>
 				))}
 			</ul>
 			<article className={readmeStyles.body}>
 				<h1 className={readmeStyles.bodyHeadline}>{selected.headline}</h1>
+				<TagPills tags={selected.tags} />
 				<div
 					className={readmeStyles.bodyText}
 					// Sanitized via DOMPurify before injection — Browser.tsx precedent.

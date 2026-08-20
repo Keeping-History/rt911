@@ -1,7 +1,7 @@
 import type { FlightPosition } from "../../Providers/MediaStream/MediaStreamContext";
 import type { FlightFeatureCollection } from "./flightGeoJSON";
 import { exaggeratedHeightM } from "./flightAltitude";
-import { isNotable, isObserver } from "./notableFlights";
+import { isNotable, isObserverStyled } from "./notableFlights";
 import {
 	PLANE_INSTANCE_STRIDE,
 	type PlaneInstances,
@@ -31,6 +31,7 @@ export interface ReplayFlight {
 		phase: string;
 		notable: boolean;
 		observer: boolean;
+		anon: boolean;
 	};
 	id: number; // stable feature id (latest sample's row id)
 }
@@ -69,7 +70,8 @@ export function insertReplaySamples(
 					alt_ft: p.alt_ft,
 					phase: p.phase ?? "",
 					notable: isNotable(p.flight),
-					observer: isObserver(p.flight),
+					observer: isObserverStyled(p.flight),
+					anon: p.flight.startsWith("RDR-"),
 				},
 				id: p.id,
 			};
@@ -173,7 +175,7 @@ export function buildReplayTrailInstances(
 		data[o + 2] = exaggeratedHeightM(at.alt_ft);
 		data[o + 3] = mercatorPerMeter(at.lat);
 		data[o + 6] = radiusKm * 1000;
-		data[o + 7] = f.props.notable ? 1 : f.props.observer ? 2 : 0;
+		data[o + 7] = f.props.notable ? 1 : f.props.observer ? 2 : f.props.anon ? 3 : 0;
 		flights.push(flight);
 		count++;
 	}

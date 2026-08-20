@@ -7,6 +7,7 @@ afterEach(cleanup);
 
 const baseProps = (): MapControlsProps => ({
 	globe: false,
+	anonTraffic: false,
 	threeD: false,
 	terrain: false,
 	cluster: false,
@@ -20,6 +21,7 @@ const baseProps = (): MapControlsProps => ({
 	onZoomIn: vi.fn(),
 	onZoomOut: vi.fn(),
 	onToggleGlobe: vi.fn(),
+	onToggleAnonTraffic: vi.fn(),
 	onToggleThreeD: vi.fn(),
 	onToggleTerrain: vi.fn(),
 	onToggleCluster: vi.fn(),
@@ -28,6 +30,7 @@ const baseProps = (): MapControlsProps => ({
 	onSetMapStyle: vi.fn(),
 	onToggleDarkMap: vi.fn(),
 	onOpenFilter: vi.fn(),
+	onClearFilter: vi.fn(),
 	onSetCameraMode: vi.fn(),
 	onToggleCameraFollow: vi.fn(),
 });
@@ -143,15 +146,29 @@ describe("MapControls", () => {
 		expect(filter.getAttribute("aria-pressed")).toBe("true");
 	});
 
+	it("Clear Filter is disabled with no filter, enabled + fires when a filter is applied (#310)", () => {
+		const p = baseProps();
+		const { rerender } = render(<MapControls {...p} filterOn={false} />);
+		const clear = screen.getByRole("button", { name: "Clear filter" }) as HTMLButtonElement;
+		expect(clear.disabled).toBe(true);
+		fireEvent.click(clear);
+		expect(p.onClearFilter).not.toHaveBeenCalled();
+		rerender(<MapControls {...p} filterOn={true} />);
+		expect(clear.disabled).toBe(false);
+		fireEvent.click(clear);
+		expect(p.onClearFilter).toHaveBeenCalledOnce();
+	});
+
 	it("follow toggle is disabled until a tracked flight is selectable, then arms", () => {
 		const p = baseProps();
 		const { rerender } = render(<MapControls {...p} canFollow={false} />);
-		const follow = screen.getByRole("button", { name: "Follow flight" }) as HTMLButtonElement;
+		const follow = screen.getByRole("checkbox") as HTMLInputElement; // the follow toggle (only checkbox here)
+		// Disabled (and unchecked) until a tracked flight is selectable. The
+		// disabled input can't be toggled by a real user, so the attribute is the
+		// guarantee here (jsdom's synthetic click would bypass it).
 		expect(follow.disabled).toBe(true);
-		expect(follow.textContent).toBe("Follow");
-		fireEvent.click(follow);
-		expect(p.onToggleCameraFollow).not.toHaveBeenCalled();
-		// A tracked flight is selected: the toggle arms.
+		expect(follow.checked).toBe(false);
+		// A tracked flight is selected: the checkbox arms.
 		rerender(<MapControls {...p} canFollow={true} />);
 		expect(follow.disabled).toBe(false);
 		fireEvent.click(follow);
@@ -170,15 +187,14 @@ describe("MapControls", () => {
 	it("locks out zoom, marquee, and pinpoints while following (depressed toggle)", () => {
 		const p = baseProps();
 		render(<MapControls {...p} canFollow={true} cameraFollow={true} />);
-		const follow = screen.getByRole("button", { name: "Follow flight" });
-		expect(follow.getAttribute("aria-pressed")).toBe("true");
-		expect(follow.textContent).toBe("Following");
+		const follow = screen.getByRole("checkbox") as HTMLInputElement; // the follow toggle (only checkbox here)
+		expect(follow.checked).toBe(true); // checked = following
 		for (const name of ["Zoom in", "Zoom out", "Select rectangle", "Select circle"]) {
 			expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
 		}
 		expect(popupButton("flight_map_pinpoints").disabled).toBe(true);
-		// The follow toggle itself stays live so you can turn it off.
-		expect((follow as HTMLButtonElement).disabled).toBe(false);
+		// The follow checkbox itself stays live so you can turn it off.
+		expect(follow.disabled).toBe(false);
 	});
 
 	it("radar scope disables the dark toggle and shows it unpressed, keeping darkMap", () => {

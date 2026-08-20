@@ -1,0 +1,103 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "1 WTC (North Tower)", "height_m": 417, "base_elevation_m": 4 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-74.01373, 40.71264],
+          [-74.01373, 40.71321],
+          [-74.01298, 40.71321],
+          [-74.01298, 40.71264],
+          [-74.01373, 40.71264]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "2 WTC (South Tower)", "height_m": 415, "base_elevation_m": 4 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-74.01268, 40.71187],
+          [-74.01268, 40.71244],
+          [-74.01193, 40.71244],
+          [-74.01193, 40.71187],
+          [-74.01268, 40.71187]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "7 WTC", "height_m": 174, "base_elevation_m": 4 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-74.01360, 40.71340],
+          [-74.01360, 40.71395],
+          [-74.01230, 40.71395],
+          [-74.01230, 40.71340],
+          [-74.01360, 40.71340]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "3 WTC (Marriott)", "height_m": 73, "base_elevation_m": 4 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-74.01260, 40.71130],
+          [-74.01260, 40.71170],
+          [-74.01175, 40.71170],
+          [-74.01175, 40.71130],
+          [-74.01260, 40.71130]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "4 WTC", "height_m": 36, "base_elevation_m": 4 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-74.01160, 40.71090],
+          [-74.01160, 40.71130],
+          [-74.01105, 40.71130],
+          [-74.01105, 40.71090],
+          [-74.01160, 40.71090]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "5 WTC", "height_m": 40, "base_elevation_m": 4 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-74.01180, 40.71300],
+          [-74.01180, 40.71350],
+          [-74.01110, 40.71350],
+          [-74.01110, 40.71300],
+          [-74.01180, 40.71300]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "6 WTC", "height_m": 27, "base_elevation_m": 4 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-74.01480, 40.71280],
+          [-74.01480, 40.71325],
+          [-74.01380, 40.71325],
+          [-74.01380, 40.71280],
+          [-74.01480, 40.71280]
+        ]]
+      }
+    }
+  ]
+}
