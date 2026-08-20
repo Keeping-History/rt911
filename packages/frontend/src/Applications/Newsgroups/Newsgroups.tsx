@@ -13,15 +13,15 @@ import {
 // Side effect: registers this app's manifest (registerApp) at import time.
 import "./NewsgroupsContext";
 import { manifestDescription } from "../../Components/manifestDescription";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { trackAppToggle } from "../../openreplay";
 import { DisclosureTriangle } from "./DisclosureTriangle";
-import type { GroupSortField } from "./groupTree";
+import type { GroupRow, GroupSortField } from "./groupTree";
 import { messageBodyView } from "./messageBodyView";
 import styles from "./Newsgroups.module.scss";
-import type { SortField } from "./newsgroupUtils";
+import type { RenderRow, SortField } from "./newsgroupUtils";
 import { useNewsgroups } from "./useNewsgroups";
 
 /** Compact "YYYY-MM-DD HH:mm" for the date column; blank for an unparseable date. */
@@ -31,6 +31,125 @@ const fmtDate = (iso: string): string => {
 	const p = (n: number) => String(n).padStart(2, "0");
 	return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
+
+/**
+ * The newsgroup tree sidebar, split out and memoized so it re-renders only
+ * when its own inputs change — not on every `Newsgroups` render.
+ *
+ * `Newsgroups` reads `useContext(MediaStreamContext)` directly, whose value
+ * changes on every incoming frame across EVERY channel (mp3, pager, flights,
+ * weather, …), not just usenet. Without this split, a large seeded newsgroup
+ * corpus gets fully re-rendered on every one of those unrelated frames — cheap
+ * individually, but frequent enough during a busy session (e.g. Radio Traffic
+ * streaming in the background) to pin the main thread and stall the whole tab,
+ * this app's window included. `groupRows`, `selectedGroup`, `selectGroup` and
+ * `toggleGroupNode` are all referentially stable across an unrelated render
+ * (see `useNewsgroups.ts`), so `memo` actually has something to compare.
+ */
+const NewsgroupTree: React.FC<{
+	groups: unknown[];
+	groupRows: GroupRow[];
+	groupQuery: string;
+	selectedGroup: string | null;
+	selectGroup: (path: string) => void;
+	toggleGroupNode: (path: string) => void;
+}> = memo(({ groups, groupRows, groupQuery, selectedGroup, selectGroup, toggleGroupNode }) => (
+	<>
+		{groups.length === 0 && (
+			<p className={styles.hint}>Loading newsgroups…</p>
+		)}
+		{groups.length > 0 && groupRows.length === 0 && (
+			<p className={styles.hint}>No newsgroups match "{groupQuery.trim()}".</p>
+		)}
+		{groupRows.map(({ node, depth, hasChildren, collapsed }) => {
+			const displayCount = node.isGroup ? node.ownCount : node.totalCount;
+			// A real group reads on click; a pure namespace toggles its subtree.
+			const activate = () => (node.isGroup ? selectGroup(node.path) : toggleGroupNode(node.path));
+			const isActive = node.isGroup && node.path === selectedGroup;
+			return (
+				<div
+					key={node.path}
+					role="button"
+					tabIndex={0}
+					className={`${styles.treeRow} ${isActive ? styles.active : ""}`}
+					style={{ paddingLeft: 6 + depth * 16 }}
+					onClick={activate}
+					onKeyDown={(e) => e.key === "Enter" && activate()}
+				>
+					{hasChildren ? (
+						<button
+							type="button"
+							className={styles.treeToggle}
+							aria-label={collapsed ? "Expand" : "Collapse"}
+							onClick={(e) => {
+								e.stopPropagation();
+								toggleGroupNode(node.path);
+							}}
+						>
+							<DisclosureTriangle open={!collapsed} />
+						</button>
+					) : (
+						<span className={styles.treeSpacer} />
+					)}
+					<span className={styles.groupName}>{node.segment}</span>
+					{displayCount > 0 && (
+						<span className={styles.groupCount}>{displayCount.toLocaleString()}</span>
+					)}
+				</div>
+			);
+		})}
+	</>
+));
+NewsgroupTree.displayName = "NewsgroupTree";
+
+/**
+ * The message list for the currently-open group — the other half of the same
+ * fix `NewsgroupTree` above documents. `rows` is already `useMemo`d in
+ * `useNewsgroups.ts`, but that alone doesn't stop `Newsgroups` re-executing
+ * `rows.map(...)` on every unrelated context render; only splitting the JSX
+ * that actually consumes it into its own `memo`d component does.
+ */
+const MessageRows: React.FC<{
+	rows: RenderRow[];
+	openMessage: (item: UsenetItem) => void;
+	toggleThread: (key: string) => void;
+}> = memo(({ rows, openMessage, toggleThread }) => (
+	<>
+		{rows.map((row) => (
+			<div
+				key={row.item.id}
+				className={styles.row}
+				role="button"
+				tabIndex={0}
+				onDoubleClick={() => openMessage(row.item)}
+				onKeyDown={(e) => e.key === "Enter" && openMessage(row.item)}
+			>
+				<span className={styles.subjectCell} style={{ paddingLeft: 6 + row.depth * 18 }}>
+					{row.isRoot && row.hasChildren ? (
+						<button
+							type="button"
+							className={styles.triangle}
+							aria-label={row.collapsed ? "Expand thread" : "Collapse thread"}
+							onClick={(e) => {
+								e.stopPropagation();
+								toggleThread(row.threadKey);
+							}}
+						>
+							<DisclosureTriangle open={!row.collapsed} />
+						</button>
+					) : (
+						<span className={styles.triangleSpacer} />
+					)}
+					{row.isRoot && row.hasChildren && <span className={styles.count}>{row.count}</span>}
+					<span className={styles.subject}>{row.item.subject?.trim() || "(no subject)"}</span>
+				</span>
+				<span className={styles.authorCell}>{row.item.author}</span>
+				<span className={styles.dateCell}>{fmtDate(row.displayDate)}</span>
+			</div>
+		))}
+	</>
+));
+MessageRows.displayName = "MessageRows";
 
 export const Newsgroups = () => {
 	const appId = "Newsgroups.app";
@@ -90,9 +209,12 @@ export const Newsgroups = () => {
 	const runSearch = () => setGroupQuery(searchText.trim());
 
 	const [openMessages, setOpenMessages] = useState<UsenetItem[]>([]);
-	const openMessage = (item: UsenetItem) => {
+	// useCallback, not a plain arrow function: this is handed to the memoized
+	// MessageRows below as a prop, and a fresh function reference every render
+	// would defeat that memoization the same way an unmemoized rows array would.
+	const openMessage = useCallback((item: UsenetItem) => {
 		setOpenMessages((prev) => (prev.some((m) => m.id === item.id) ? prev : [...prev, item]));
-	};
+	}, []);
 	const closeMessage = (id: number) =>
 		setOpenMessages((prev) => prev.filter((m) => m.id !== id));
 
@@ -188,47 +310,14 @@ export const Newsgroups = () => {
 									{connected ? "Loading newsgroups…" : "Waiting for server…"}
 								</p>
 							)}
-							{groups.length > 0 && groupRows.length === 0 && (
-								<p className={styles.hint}>No newsgroups match “{groupQuery.trim()}”.</p>
-							)}
-							{groupRows.map(({ node, depth, hasChildren, collapsed }) => {
-								const displayCount = node.isGroup ? node.ownCount : node.totalCount;
-								// A real group reads on click; a pure namespace toggles its subtree.
-								const activate = () =>
-									node.isGroup ? selectGroup(node.path) : toggleGroupNode(node.path);
-								const isActive = node.isGroup && node.path === selectedGroup;
-								return (
-									<div
-										key={node.path}
-										role="button"
-										tabIndex={0}
-										className={`${styles.treeRow} ${isActive ? styles.active : ""}`}
-										style={{ paddingLeft: 6 + depth * 16 }}
-										onClick={activate}
-										onKeyDown={(e) => e.key === "Enter" && activate()}
-									>
-										{hasChildren ? (
-											<button
-												type="button"
-												className={styles.treeToggle}
-												aria-label={collapsed ? "Expand" : "Collapse"}
-												onClick={(e) => {
-													e.stopPropagation();
-													toggleGroupNode(node.path);
-												}}
-											>
-												<DisclosureTriangle open={!collapsed} />
-											</button>
-										) : (
-											<span className={styles.treeSpacer} />
-										)}
-										<span className={styles.groupName}>{node.segment}</span>
-										{displayCount > 0 && (
-											<span className={styles.groupCount}>{displayCount.toLocaleString()}</span>
-										)}
-									</div>
-								);
-							})}
+							<NewsgroupTree
+								groups={groups}
+								groupRows={groupRows}
+								groupQuery={groupQuery}
+								selectedGroup={selectedGroup}
+								selectGroup={selectGroup}
+								toggleGroupNode={toggleGroupNode}
+							/>
 						</div>
 					</div>
 					<div className={styles.messageList}>
@@ -251,42 +340,7 @@ export const Newsgroups = () => {
 								))}
 							</div>
 						)}
-						{rows.map((row) => (
-							<div
-								key={row.item.id}
-								className={styles.row}
-								role="button"
-								tabIndex={0}
-								onDoubleClick={() => openMessage(row.item)}
-								onKeyDown={(e) => e.key === "Enter" && openMessage(row.item)}
-							>
-								<span className={styles.subjectCell} style={{ paddingLeft: 6 + row.depth * 18 }}>
-									{row.isRoot && row.hasChildren ? (
-										<button
-											type="button"
-											className={styles.triangle}
-											aria-label={row.collapsed ? "Expand thread" : "Collapse thread"}
-											onClick={(e) => {
-												e.stopPropagation();
-												toggleThread(row.threadKey);
-											}}
-										>
-											<DisclosureTriangle open={!row.collapsed} />
-										</button>
-									) : (
-										<span className={styles.triangleSpacer} />
-									)}
-									{row.isRoot && row.hasChildren && (
-										<span className={styles.count}>{row.count}</span>
-									)}
-									<span className={styles.subject}>
-										{row.item.subject?.trim() || "(no subject)"}
-									</span>
-								</span>
-								<span className={styles.authorCell}>{row.item.author}</span>
-								<span className={styles.dateCell}>{fmtDate(row.displayDate)}</span>
-							</div>
-						))}
+						<MessageRows rows={rows} openMessage={openMessage} toggleThread={toggleThread} />
 						{selectedGroup && rows.length > 0 && (
 							<ClassicyButton onClickFunc={loadOlder} buttonSize={"medium"}>
 								Check For More

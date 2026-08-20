@@ -6,27 +6,26 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 2px;
+  gap: calc(var(--window-border-size) * 2);
 }
 
-.rtTool {
-  width: calc(var(--ui-font-size) * 2);
-  height: calc(var(--ui-font-size) * 2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
+// Story 030: ClassicyBevelButton builds its own className and drops the one
+// it is handed, so the look hangs off the role/state it already exposes
+// (role="radio", aria-checked) instead of a class name from this stylesheet —
+// the same pattern laneSection.module.scss uses for its `[data-lane-mute]`
+// control. Sizing comes from the `square` prop, not a hand-rolled width/height.
+.rtToolPalette [role="radio"] {
   font-family: var(--ui-font);
   font-size: var(--ui-font-size);
   color: var(--color-system-06);
   background: var(--color-system-02);
-  border: 1px solid var(--color-system-05);
+  border: var(--window-border-size) solid var(--color-system-05);
   cursor: pointer;
 }
 
 // The active tool is the mode the whole grid is in, so it reads as held down
 // rather than merely highlighted.
-.rtToolActive {
+.rtToolPalette [role="radio"][aria-checked="true"] {
   background: var(--color-system-05);
   color: var(--color-system-01);
   border-style: inset;

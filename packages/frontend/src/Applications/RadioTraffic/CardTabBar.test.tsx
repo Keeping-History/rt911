@@ -151,17 +151,15 @@ describe("visibleCardTabs", () => {
 		);
 	});
 
-	it("drops Summary, and only Summary, when there is no summary", () => {
-		// Hidden rather than disabled: the strip is 207px and pages with arrows,
-		// so a permanently dead label would cost a live tab its place on screen.
+	it("still offers Summary, and every other tab, when there is no summary", () => {
+		// Story 049: a tab that hides itself when its data is empty is
+		// indistinguishable from a bug — which is exactly what happened here
+		// once `subject` came back null on all 814 rows. Every tab renders its
+		// own "nothing here" state instead of disappearing.
 		for (const meta of [undefined, makeMeta({ subject: undefined }), makeMeta({ subject: " " })]) {
-			expect(visibleCardTabs(meta).map((tab) => tab.id)).toEqual([
-				"details",
-				"transcript",
-				"parties",
-				"mentions",
-				"source",
-			]);
+			expect(visibleCardTabs(meta).map((tab) => tab.id)).toEqual(
+				CARD_TABS.map((tab) => tab.id),
+			);
 		}
 	});
 
@@ -170,7 +168,7 @@ describe("visibleCardTabs", () => {
 		// what lets one card show a tab another card does not.
 		const tabs = visibleCardTabs(undefined);
 		const { getAllByRole, queryByRole } = renderBar({ tabs, active: tabs[0].id });
-		expect(getAllByRole("tab")).toHaveLength(5);
-		expect(queryByRole("tab", { name: "Summary" })).toBeNull();
+		expect(getAllByRole("tab")).toHaveLength(6);
+		expect(queryByRole("tab", { name: "Summary" })).not.toBeNull();
 	});
 });

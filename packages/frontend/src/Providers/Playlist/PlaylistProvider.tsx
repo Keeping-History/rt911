@@ -61,14 +61,16 @@ const FOCUS_DISPATCHERS: Record<PlaylistApp | "browser", (d: Dispatch, itemId: s
 	{
 		tv: (d, itemId) => d(tvTuneChannel(itemId)),
 		// The radio catalog spans two apps post-split: broadcast stations tune
-		// the Radio Tuner, comm-traffic stations the Radio Scanner — matching
-		// playlistFocusAppId's app choice.
-		radio: (d, itemId) =>
-			d(
-				BROADCAST_STATIONS.has(itemId.toUpperCase())
-					? radioTunerTuneStation(itemId)
-					: radioTuneStation(itemId),
-			),
+		// the Radio Tuner (matching playlistFocusAppId's app choice), which still
+		// has a single "current station" to tune. Comm/ATC traffic's successor,
+		// Radio Traffic, has no equivalent per-item focus target — it shows every
+		// LIVE/UPCOMING/PREVIOUS card at once rather than tuning one channel — so
+		// there is nothing to dispatch here yet. applyFocus's ClassicyAppOpen
+		// still opens the app; a real per-card focus (solo? scroll-to?) is a
+		// follow-up story, not something to invent here.
+		radio: (d, itemId) => {
+			if (BROADCAST_STATIONS.has(itemId.toUpperCase())) d(radioTunerTuneStation(itemId));
+		},
 		news: (d, itemId) => d(newsFocusItem(Number(itemId))),
 		flights: (d, itemId) => d(flightTrackerFocusFlight(itemId)),
 		browser: (d, url) => d(browserNavigate(url)),

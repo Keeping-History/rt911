@@ -5,8 +5,11 @@
 // this is that author. Everything a lane needs to decide is decided here:
 //
 //   which cards are in it     the shell passes an already-partitioned list
-//   what order they render in  applyManualOrder, from this lane's pins
-//   whether it is folded away  `collapsed`, except on LIVE (see below)
+//   what order they render in  applyManualOrder for the listener's drags,
+//                               then stabilizeLaneOrder (story 044) for what
+//                               a new arrival or the active card does to it
+//   whether it is folded away  `collapsed`, except LIVE (forced open) and
+//                               UPCOMING (forced closed) — see below
 //   whether a drag does anything  only under the `hand` tool
 //
 //   whether the whole lane is silenced  `muted`, LIVE's mute-all (story 040)
@@ -26,10 +29,10 @@
 
 import { ClassicyBevelButton } from "classicy";
 import type React from "react";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import type { Lane } from "./cardStatus";
-import { applyManualOrder, type LanePins } from "./laneOrder";
+import { applyManualOrder, type LanePins, stabilizeLaneOrder } from "./laneOrder";
 import styles from "./laneSection.module.scss";
 import type { Tool } from "./toolMode";
 
@@ -40,15 +43,23 @@ export const LANE_LABELS: Record<Lane, string> = {
 };
 
 /**
- * LIVE has no expand/collapse control in the design, and this is why it also
- * ignores the flag: it is the lane the app exists to show, and with no control
- * on the strip there would be nothing to click to bring it back. A stale
- * persisted `true` would otherwise hide it for good.
+ * Lanes with no expand/collapse control on the strip, and the fold state each
+ * is fixed at instead of reading `collapsed`.
+ *
+ * LIVE is forced OPEN: it is the lane the app exists to show, and with no
+ * control on the strip there would be nothing to click to bring it back. A
+ * stale persisted `true` would otherwise hide it for good.
+ *
+ * UPCOMING is forced CLOSED — always the small player, never the full card —
+ * per the design. Same reasoning in the other direction: with no button on
+ * the strip, a stale persisted `false` would otherwise leave it stuck open.
+ *
+ * PREVIOUS is absent from this map: its fold state is exactly whatever
+ * `collapsed` says, and its strip is the only one that carries the button.
  */
-export const LANE_COLLAPSIBLE: Record<Lane, boolean> = {
+export const LANE_FIXED_COLLAPSE: Partial<Record<Lane, boolean>> = {
 	live: false,
 	upcoming: true,
-	previous: true,
 };
 
 /**
@@ -123,6 +134,15 @@ export interface LaneSectionProps {
 	items: readonly MediaItem[];
 	/** This lane's pins — see laneOrder. Absent means nothing was ever dragged. */
 	order?: LanePins;
+	/**
+	 * The id of the card that must not appear to move because OTHER cards
+	 * arrived or left — the shell's notion of "highlighted or playing" (a
+	 * soloed LIVE card, a listener-started PREVIOUS clip). Undefined or null
+	 * means nothing is pinned and the lane reorders freely; see
+	 * {@link stabilizeLaneOrder}, which this lane's render order is threaded
+	 * through on every change.
+	 */
+	activeId?: number | null;
 	collapsed?: boolean;
 	onToggleCollapse?: (collapsed: boolean) => void;
 	/**
@@ -158,6 +178,7 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	lane,
 	items,
 	order = [],
+	activeId = null,
 	collapsed = false,
 	onToggleCollapse,
 	muted = false,
@@ -172,14 +193,107 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	// Only the id being dragged is state; the rest of the gesture lives in a ref
 	// because nothing renders from it and a pointermove per frame should not.
 	const [draggingId, setDraggingId] = useState<number | null>(null);
+	// The ids this lane rendered last tick — stabilizeLaneOrder's "before".
+	// Undefined until the first commit: there is nothing to compare the very
+	// first render against.
+	const previousIdsRef = useRef<readonly number[] | undefined>(undefined);
+	// Every surviving card's own x-position, snapshotted after each commit —
+	// the scroll-jump compensation's baseline. A per-card position rather than
+	// a single scrollWidth number so a card leaving (not just one arriving) can
+	// be compensated for, and so an arrival or departure OUTSIDE the visible
+	// window (to the right of what the listener can see) costs nothing: only a
+	// card whose own position moved says the scroll needs to.
+	const scrollSnapshotRef = useRef<{ offsets: Map<number, number>; scrollLeft: number } | null>(
+		null,
+	);
 
 	const label = LANE_LABELS[lane];
-	const collapsible = LANE_COLLAPSIBLE[lane];
-	const isCollapsed = collapsible && collapsed;
-	const ordered = applyManualOrder(items, order);
+	const fixedCollapse = LANE_FIXED_COLLAPSE[lane];
+	const collapsible = fixedCollapse === undefined;
+	const isCollapsed = collapsible ? collapsed : fixedCollapse;
+	// applyManualOrder answers "where did the listener drag this lane's own
+	// siblings"; stabilizeLaneOrder answers what a NEW sibling arriving, or an
+	// old one leaving, does to that arrangement — new cards enter at the left,
+	// and the active card (if it rendered last tick) holds the index it had.
+	//
+	// Memoized, not recomputed inline: this component re-renders on every
+	// clock tick AND on every unrelated MediaStream frame the shell receives
+	// (mp3, pager, flights, weather, …), because RadioTraffic reads the whole
+	// shared context. Without this, `ordered` was a fresh array on every one
+	// of those renders, which made the useLayoutEffect below — a forced
+	// synchronous DOM reflow over every card in the lane — re-run on every
+	// render too, not just ticks that actually changed which cards are here.
+	// With enough live traffic cards accumulated, that was enough to pin the
+	// main thread; `items` and `order` are themselves stable across an
+	// unrelated render (memoized upstream / plain state), so this actually
+	// has something to skip.
+	const ordered = useMemo(
+		() => stabilizeLaneOrder(applyManualOrder(items, order), previousIdsRef.current, activeId),
+		[items, order, activeId],
+	);
 	// Dragging is a mode, not a capability: under the other three tools a press
 	// on a card means solo, mute or unmute, and reordering must not also happen.
 	const canDrag = tool === "hand";
+
+	// Runs after the DOM reflects `ordered`, before the browser paints — a
+	// plain useEffect would let the jump flash on screen for one frame first.
+	//
+	// Compensation is scoped to ticks that actually added or removed a card: a
+	// collapse toggle or a manual pin swap also re-lays-out `cardsRef`'s
+	// content, and nudging scrollLeft for either of those would introduce the
+	// very jump this exists to prevent, on a gesture that never asked for one
+	// (a manual drag is the one case a card SHOULD visibly move).
+	useLayoutEffect(() => {
+		const cards = cardsRef.current;
+		const previous = previousIdsRef.current;
+		if (cards) {
+			const currentIds = ordered.map((item) => item.id);
+			const idSetChanged =
+				previous !== undefined &&
+				(currentIds.length !== previous.length ||
+					currentIds.some((id) => !previous.includes(id)) ||
+					previous.some((id) => !currentIds.includes(id)));
+
+			const newOffsets = new Map<number, number>();
+			for (const child of Array.from(cards.children)) {
+				const raw = (child as HTMLElement).dataset.laneItem;
+				if (raw !== undefined) newOffsets.set(Number(raw), (child as HTMLElement).offsetLeft);
+			}
+
+			const snapshot = scrollSnapshotRef.current;
+			if (idSetChanged && snapshot && previous) {
+				// The anchor is the first card, IN THE OLD ORDER, that was at or
+				// past the old scroll position — the leftmost card the listener
+				// could actually see before this update. Walking `previous` rather
+				// than the new `currentIds` matters: it is what makes this the
+				// card that WAS at the viewport's edge, not just whichever
+				// survivor happens to be first now — a card arriving or leaving
+				// anywhere ELSE in the lane must not be free to relabel a
+				// different card as "where the listener was looking."
+				for (const id of previous) {
+					const before = snapshot.offsets.get(id);
+					if (before === undefined || before < snapshot.scrollLeft) continue;
+					// Found the true anchor. If it did not survive this update —
+					// it was the card that left — there is no "where it ended up"
+					// to chase, so scrollLeft is left exactly where it was rather
+					// than substituting a different card's movement for its own.
+					const after = newOffsets.get(id);
+					if (after !== undefined) {
+						const delta = after - before;
+						if (delta !== 0) cards.scrollLeft += delta;
+					}
+					break;
+				}
+			}
+
+			// This tick's layout is the next tick's baseline, whether or not it
+			// was compensated — `cards.scrollLeft` is read back rather than
+			// computed, so a real browser clamping the assignment above is
+			// exactly what the next comparison measures against too.
+			scrollSnapshotRef.current = { offsets: newOffsets, scrollLeft: cards.scrollLeft };
+		}
+		previousIdsRef.current = ordered.map((item) => item.id);
+	}, [ordered]);
 
 	const endDrag = (target: HTMLElement, pointerId: number) => {
 		dragRef.current = null;
@@ -258,17 +372,23 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 					</ClassicyBevelButton>
 				)}
 				{collapsible && (
-					<button
-						type="button"
-						className={styles.rtLaneToggle}
+					// A Classicy bevel button rather than a bare <button>, like the mute
+					// control above — plain `push` mode (its default) because this is a
+					// disclosure trigger, not a control that holds a state: aria-expanded
+					// already says which way it currently opens, and adding
+					// ClassicyBevelButton's own aria-pressed on top (mode="toggle") would
+					// be a second, redundant state for the same fact.
+					<ClassicyBevelButton
+						square
+						bevelWidth="small"
 						data-lane-toggle
 						aria-expanded={!isCollapsed}
 						aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${label}`}
 						title={`${isCollapsed ? "Expand" : "Collapse"} ${label}`}
-						onClick={() => onToggleCollapse?.(!isCollapsed)}
+						onClickFunc={() => onToggleCollapse?.(!isCollapsed)}
 					>
 						<span aria-hidden="true">{isCollapsed ? "▸" : "▾"}</span>
-					</button>
+					</ClassicyBevelButton>
 				)}
 			</div>
 
