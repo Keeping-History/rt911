@@ -54,7 +54,7 @@ describe("MediaTvRow", () => {
 		expect(screen.getByText("CNN")).not.toBeNull();
 		expect(screen.getByText("BBC")).not.toBeNull();
 		// The logo img is decorative (empty alt); the slug text carries the name.
-		expect(cards[0].querySelector("img.playlistMediaTvLogo")).not.toBeNull();
+		expect(cards[0].querySelector("img.playlistMediaCardLogo")).not.toBeNull();
 	});
 
 	it("edit button reports the entry's uid", () => {
@@ -95,7 +95,7 @@ describe("MediaTvRow", () => {
 			/>,
 		);
 		const cards = screen.getAllByRole("listitem");
-		expect(cards[0].className).not.toContain("playlistMediaTvCardSelected");
-		expect(cards[1].className).toContain("playlistMediaTvCardSelected");
+		expect(cards[0].className).not.toContain("playlistMediaCardSelected");
+		expect(cards[1].className).toContain("playlistMediaCardSelected");
 	});
 });

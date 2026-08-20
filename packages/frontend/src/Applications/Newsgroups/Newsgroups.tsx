@@ -10,6 +10,9 @@ import {
 	quitMenuItemHelper,
 	useAppManager,
 } from "classicy";
+// Side effect: registers this app's manifest (registerApp) at import time.
+import "./NewsgroupsContext";
+import { manifestDescription } from "../../Components/manifestDescription";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAboutApp } from "../../Components/AboutApp/AboutApp";
 import type { UsenetItem } from "../../Providers/MediaStream/MediaStreamContext";
@@ -105,7 +108,13 @@ export const Newsgroups = () => {
 	);
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="newsgroups-main">
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={appIcon}
+			defaultWindow="newsgroups-main"
+			desktopIconBalloonHelp={manifestDescription(appId)}
+		>
 			<ClassicyWindow
 				id="newsgroups-main"
 				title="Newsgroups"

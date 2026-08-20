@@ -10,6 +10,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import appIconPng from "./app.png";
@@ -98,6 +99,7 @@ export const Readme: React.FC = () => {
 			icon={appIcon}
 			defaultWindow="readme_main"
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{showSettings && (
 				<ClassicyWindow

@@ -1,0 +1,120 @@
+// The collapsed player's chrome.
+//
+// Colours are SAMPLED off the Figma "Upcoming Row Players Collapsed" frame
+// (748x124, rendered 1:1) rather than read off the node tree: a #2b2b2b card
+// behind a 1px white edge, sitting on the lane's own grey. That inverts the
+// expanded card — dark on light instead of light on dark — which is the design
+// telling you at a glance that a lane is folded.
+//
+// Nothing here sizes the box. Its WIDTH is the lane's (laneSection sizes the
+// slot as a share of the visible lane, two to a row) and its HEIGHT is its own
+// content, which is what lets a collapsed lane shrink to exactly one small
+// player and hand the rest of the window back to the lanes still showing cards.
+
+.rtSmallPlayer {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  // The design's rows are tight against each other; the only air is the card's
+  // own padding.
+  gap: var(--window-border-size);
+  min-width: 0;
+  padding: var(--window-padding-size);
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.8);
+  line-height: 1.35;
+  color: var(--color-white, #fff);
+  background: #2b2b2b;
+  border: var(--window-border-size) solid var(--color-white, #fff);
+  // A long subject or a long chip row is CLIPPED, never scrolled: the collapsed
+  // lane is already the compact view, and a scrollbar inside it would be a
+  // second thing to scroll inside something you folded away to stop scrolling.
+  overflow: hidden;
+
+}
+
+// The one line the design gives real size to — it is what a listener reads the
+// collapsed lane for.
+.rtSmallSubject {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--ui-font-size);
+  font-weight: normal;
+  line-height: 1.25;
+  color: var(--color-white, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Tags -----------------------------------------------------------------------
+
+// One row, clipped at the card's edge. Wrapping would make the card's height
+// depend on how many tags a curator happened to apply, and with it the height
+// of the whole collapsed lane.
+.rtSmallChips {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: var(--window-border-size);
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  list-style: none;
+  overflow: hidden;
+}
+
+.rtSmallChip {
+  flex: 0 0 auto;
+  padding: 0 calc(var(--window-border-size) * 2);
+  font-size: calc(var(--ui-font-size) * 0.7);
+  line-height: 1.5;
+  // The namespace palette is a set of PASTELS, chosen against the Details
+  // panel's light background. On this card's near-black they still need dark
+  // ink, and inheriting the card's white would make every chip unreadable.
+  color: var(--color-black, #000);
+  white-space: nowrap;
+}
+
+// Timings and link ------------------------------------------------------------
+
+// Start and duration stack at the bottom left, the link type sits opposite them
+// at the bottom right — the design's arrangement, and the one that keeps the
+// link type visible when the timings are the part that has to ellipsise.
+.rtSmallFooter {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--window-padding-size);
+  // Pushes the footer to the card's floor when the card is taller than its
+  // content, which is what a lane with a taller neighbour in the same row does.
+  margin-top: auto;
+  min-width: 0;
+}
+
+.rtSmallTimings {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rtSmallTiming {
+  font-size: calc(var(--ui-font-size) * 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// The one thing on the card the design emphasises besides the subject.
+.rtSmallLink {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: calc(var(--ui-font-size) * 0.75);
+  font-weight: bold;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

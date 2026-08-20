@@ -16,6 +16,7 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import bookPng from "./book.png";
 import type React from "react";
@@ -295,6 +296,7 @@ export const TimeMachine: React.FC = () => {
 			icon={appIcon}
 			defaultWindow={`${appId}_main`}
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{showSettings && (
 				<ClassicyWindow

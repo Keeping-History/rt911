@@ -7,6 +7,9 @@ import {
     useAppManager,
     useClassicyDateTime,
 } from 'classicy'
+// Side effect: registers this app's manifest (registerApp) at import time.
+import './MarketWatchContext';
+import { manifestDescription } from '../../Components/manifestDescription';
 import { useEffect, useMemo, useRef } from 'react'
 
 import { useAboutApp } from '../../Components/AboutApp/AboutApp'
@@ -111,7 +114,13 @@ export const MarketWatch = () => {
     ]
 
     return (
-        <ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="marketwatch-board">
+        <ClassicyApp
+            id={appId}
+            name={appName}
+            icon={appIcon}
+            defaultWindow="marketwatch-board"
+            desktopIconBalloonHelp={manifestDescription(appId)}
+        >
             <ClassicyWindow
                 id="marketwatch-board"
                 title="MarketWatch"

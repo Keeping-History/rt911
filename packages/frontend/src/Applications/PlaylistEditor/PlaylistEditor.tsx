@@ -1,8 +1,9 @@
 import {
 	ClassicyApp, ClassicyButton, ClassicyFileOpenDialog, type ClassicyFileOpenSelection,
-	ClassicyIcons, ClassicyWindow, desktopVolume, fileSystemVolume, quitAppHelper,
-	quitMenuItemHelper, registerClassicyIcons, useAppManagerDispatch, useClassicyFileSystem,
+	ClassicyWindow, desktopVolume, fileSystemVolume, quitAppHelper,
+	quitMenuItemHelper, useAppManagerDispatch, useClassicyFileSystem,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import { useCallback, useMemo, useRef } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
 import { createPlaylist } from "../../Providers/Auth/playlistApi";
@@ -15,17 +16,14 @@ import { PlaylistEditorProvider, usePlaylistEditor } from "./PlaylistEditorProvi
 import { PlaylistList } from "./PlaylistList";
 import { SettingsWindow } from "./SettingsWindow";
 import { ToolsPalette, TOOLS_WINDOW_ID } from "./ToolsPalette";
-import appIconPng from "./app.png";
+import { playlistEditorIcons } from "./playlistIcons";
 import "./PlaylistEditor.scss";
 
 const appId = "PlaylistEditor.app";
 const appName = "Playlists";
 export const GATE_MESSAGE = "You must be signed in to create playlists.";
 
-const ICONS = registerClassicyIcons({
-	applications: { ...ClassicyIcons.applications, playlistEditor: { app: appIconPng } },
-});
-const appIcon = ICONS.applications.playlistEditor.app;
+const appIcon = playlistEditorIcons.app;
 
 const LIST_WINDOW = "playlist_editor_list";
 
@@ -148,6 +146,7 @@ function PlaylistEditorContent() {
 				initialSize={[420, 400]}
 				initialPosition={[100, 80]}
 				appMenu={listMenu}
+				backgroundColor="var(--color-system-03)"
 			>
 				<PlaylistList
 					meId={user?.id ?? ""}
@@ -180,7 +179,7 @@ function PlaylistEditorContent() {
 				appId={appId}
 				open={dialogMode !== null}
 				title={dialogMode === "media" ? "Add Media" : "Add File"}
-				volumes={dialogMode === "media" ? [...localVolumes, archiveVolume] : localVolumes}
+				volumes={dialogMode === "media" ? [archiveVolume] : localVolumes}
 				selectionMode={dialogMode === "media" ? "multi" : "single"}
 				fileTypeFilters={
 					dialogMode === "media"
@@ -188,6 +187,7 @@ function PlaylistEditorContent() {
 								{ label: "All Media", types: Object.values(MEDIA_FILE_TYPES) },
 								{ label: "TV Channels", types: [MEDIA_FILE_TYPES.tv] },
 								{ label: "Radio Stations", types: [MEDIA_FILE_TYPES.radio] },
+							{ label: "Radio Traffic", types: [MEDIA_FILE_TYPES.radioTraffic] },
 								{ label: "News", types: [MEDIA_FILE_TYPES.news] },
 								{ label: "Flights", types: [MEDIA_FILE_TYPES.flight] },
 							]
@@ -212,6 +212,7 @@ export function PlaylistEditor() {
 			icon={appIcon}
 			defaultWindow={LIST_WINDOW}
 			addSystemMenu={false}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{status === "anonymous" && (
 				<ClassicyWindow

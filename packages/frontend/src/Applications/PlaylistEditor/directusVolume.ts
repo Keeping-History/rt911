@@ -5,11 +5,13 @@ import {
 	OBSERVER_FLIGHTS,
 	PRESIDENTIAL_FLIGHTS,
 } from "../FlightTracker/notableFlights";
-import { directusGet } from "./directusQueue";
+import { BROADCAST_STATIONS } from "../radio-core/stationGrouping";
+import { directusGet } from "../../lib/directusQueue";
 
 export const MEDIA_FILE_TYPES = {
 	tv: "tv-channel",
 	radio: "radio-station",
+	radioTraffic: "radio-traffic",
 	news: "news-document",
 	flight: "flight",
 } as const;
@@ -112,6 +114,7 @@ export function createDirectusVolume(
 			return [
 				folder("tv", "TV Channels"),
 				folder("radio", "Radio Stations"),
+				folder("radio-traffic", "Radio Traffic"),
 				folder("news", "News"),
 				folder("flights", "Flights"),
 			];
@@ -125,12 +128,31 @@ export function createDirectusVolume(
 			return withSelectAll(items, "select-all-tv", MEDIA_FILE_TYPES.tv, path);
 		}
 
+		// Radio splits the way the two apps split the shared mp3 stream: full-run
+		// broadcast stations (the Radio Tuner's catalogue, BROADCAST_STATIONS)
+		// versus short comm traffic (everything else — the Radio Scanner's side).
+		// Both kinds address playlist entries as app:"radio"; playlistApps.ts
+		// re-derives which app a slug belongs to from the same set.
 		if (path[0] === "Radio Stations") {
-			const items = radioSlugs().map((slug) => ({
-				id: `radio-${slug}`, name: slug, kind: "file" as const,
-				fileType: MEDIA_FILE_TYPES.radio, meta: { app: "radio", itemId: slug },
-			}));
+			const items = radioSlugs()
+				.filter((slug) => BROADCAST_STATIONS.has(slug.toUpperCase()))
+				.map((slug) => ({
+					id: `radio-${slug}`, name: slug, kind: "file" as const,
+					fileType: MEDIA_FILE_TYPES.radio, meta: { app: "radio", itemId: slug },
+				}));
 			return withSelectAll(items, "select-all-radio", MEDIA_FILE_TYPES.radio, path);
+		}
+
+		if (path[0] === "Radio Traffic") {
+			const items = radioSlugs()
+				.filter((slug) => !BROADCAST_STATIONS.has(slug.toUpperCase()))
+				.map((slug) => ({
+					id: `radio-${slug}`, name: slug, kind: "file" as const,
+					fileType: MEDIA_FILE_TYPES.radioTraffic, meta: { app: "radio", itemId: slug },
+				}));
+			return withSelectAll(
+				items, "select-all-radio-traffic", MEDIA_FILE_TYPES.radioTraffic, path,
+			);
 		}
 
 		if (path[0] === "News" && path.length === 1) {
@@ -227,7 +249,7 @@ export function createDirectusVolume(
 
 	return {
 		id: "rt911-archive",
-		label: "911 Realtime Archive",
+		label: "9/11 Realtime Archive",
 		icon: ClassicyIcons.system.drives.networkDrive,
 		list,
 	};

@@ -102,6 +102,7 @@ vi.mock("classicy", () => ({
 	),
 	registerAppEventHandler: () => {},
 	registerApp: () => {},
+	getAppManifest: () => undefined,
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({
 			System: {
@@ -203,6 +204,8 @@ function makeCtxValue(
 		pagerItems: [],
 		mp3Items: [],
 		mp3History: [],
+		mp3Meta: {},
+		mp3MetaGeneration: null,
 		newsItems: [],
 		alertItems: [],
 		subscribeAlerts: () => {},
@@ -246,6 +249,7 @@ function makeCtxValue(
 		unsubscribeWeather: () => {},
 		requestWeatherForecast: () => {},
 		clockForced: false,
+		seekInFlight: false,
 		roomCommand: null,
 		chatBuddies: [],
 		chatEnabled: false,

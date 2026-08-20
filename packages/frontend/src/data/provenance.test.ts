@@ -8,7 +8,8 @@ const EXPECTED_IDS = [
 	"News.app",
 	"Newsgroups.app",
 	"PagerDecoder.app",
-	"RadioScanner.app",
+	"RadioTraffic.app",
+	"RadioTuner.app",
 	"TV.app",
 	"Weather.app",
 ];
@@ -16,7 +17,7 @@ const EXPECTED_IDS = [
 const PLACEHOLDER = /\b(TBD|TODO|FIXME|XXX)\b/;
 
 describe("APP_PROVENANCE", () => {
-	it("covers exactly the nine in-scope apps", () => {
+	it("covers exactly the ten in-scope apps", () => {
 		expect([...PROVENANCE_APP_IDS].sort()).toEqual(EXPECTED_IDS);
 		expect(Object.keys(APP_PROVENANCE).sort()).toEqual(EXPECTED_IDS);
 	});
@@ -62,7 +63,8 @@ describe("APP_PROVENANCE", () => {
 			"MarketWatch.app",
 			"News.app",
 			"TV.app",
-			"RadioScanner.app",
+			"RadioTraffic.app",
+			"RadioTuner.app",
 			"Browser.app",
 		]) {
 			expect(APP_PROVENANCE[id].method?.length ?? 0).toBeGreaterThan(0);

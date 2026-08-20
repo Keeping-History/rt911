@@ -11,6 +11,7 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import { type FC, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import appIconPng from "./app.png";
 import { useAboutApp } from "../../Components/AboutApp/AboutApp";
@@ -281,7 +282,13 @@ export const Weather: FC = () => {
 	const almanacDay = almanac?.days[currentMMDD] ?? null;
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="weather-main">
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={appIcon}
+			defaultWindow="weather-main"
+			desktopIconBalloonHelp={manifestDescription(appId)}
+		>
 			<ClassicyWindow
 				id="weather-main"
 				title="Weather"

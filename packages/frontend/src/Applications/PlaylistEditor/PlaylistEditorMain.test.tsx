@@ -5,6 +5,10 @@ import { PlaylistEditorMain } from "./PlaylistEditorMain";
 
 afterEach(cleanup);
 
+// The Radio Stations cards read station artwork from Directus; stub the hook so
+// these tests never touch the network (MediaRadioRow.test.tsx owns that path).
+vi.mock("../radio-core/stationLogos", () => ({ useStationLogos: () => ({}) }));
+
 // Entries are grouped under Classicy tabs; inactive panels render `hidden`, so
 // their controls are out of the accessibility tree until the tab is selected.
 // ClassicyTabs commits the active tab on mouseUp (not click).
@@ -55,16 +59,17 @@ describe("PlaylistEditorMain", () => {
 		render(<PlaylistEditorMain state={state()} edit={vi.fn()} {...zoomProps} />);
 		// Media is the initially active tab; each media app gets its own
 		// disclosure, open by default, with a per-section hint when empty.
-		for (const label of ["TV Channels", "Radio Stations", "News", "Flights"]) {
+		for (const label of ["TV Channels", "Radio Stations", "Radio Traffic", "News", "Flights"]) {
 			expect(
 				screen.getByRole("button", { name: new RegExp(label) }).getAttribute("aria-expanded"),
 			).toBe("true");
 		}
 		expect(screen.getByText(/No TV channels yet/i)).not.toBeNull();
 		expect(screen.getByText(/No radio stations yet/i)).not.toBeNull();
+		expect(screen.getByText(/No radio traffic yet/i)).not.toBeNull();
 	});
 
-	it("renders TV media entries as logo cards and radio entries as tree rows", () => {
+	it("renders TV and radio-station entries as logo cards, traffic as tree rows", () => {
 		const edit = vi.fn();
 		const openSettings = vi.fn();
 		render(
@@ -73,6 +78,7 @@ describe("PlaylistEditorMain", () => {
 					entries: [
 						{ uid: "e1", entry: { kind: "media", app: "tv", itemId: "cnn" } },
 						{ uid: "e2", entry: { kind: "media", app: "radio", itemId: "wnyc" } },
+						{ uid: "e3", entry: { kind: "media", app: "radio", itemId: "WINS" } },
 					],
 				})}
 				edit={edit}
@@ -89,8 +95,22 @@ describe("PlaylistEditorMain", () => {
 		screen.getByRole("button", { name: "Remove CNN" }).click();
 		expect(edit).toHaveBeenCalledWith("p1", { type: "removeEntry", uid: "e1" });
 
-		// Radio: still the tree-row treatment for now.
+		// Radio splits by station kind: WINS (a BROADCAST_STATIONS member) sits
+		// under Radio Stations and gets the same card treatment as TV; wnyc
+		// (traffic) stays a tree row under Radio Traffic.
+		expect(screen.getByRole("list", { name: "Radio stations" })).not.toBeNull();
+		screen.getByRole("button", { name: "Edit WINS" }).click();
+		expect(edit).toHaveBeenCalledWith("p1", { type: "select", uid: "e3" });
+		screen.getByRole("button", { name: "Remove WINS" }).click();
+		expect(edit).toHaveBeenCalledWith("p1", { type: "removeEntry", uid: "e3" });
+
 		expect(screen.getByText(/RADIO · wnyc/)).not.toBeNull();
+		expect(screen.queryByText(/RADIO · WINS/)).toBeNull();
+		const stationsSection = screen
+			.getByRole("button", { name: /Radio Stations/ })
+			.closest(".classicyDisclosure");
+		expect(stationsSection?.textContent).toContain("WINS");
+		expect(stationsSection?.textContent).not.toContain("wnyc");
 	});
 
 	it("routes an entry removal through the injected dispatcher", async () => {

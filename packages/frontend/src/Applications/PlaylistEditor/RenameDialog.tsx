@@ -1,4 +1,10 @@
-import { ClassicyButton, ClassicyInput, ClassicyWindow } from "classicy";
+import {
+	ClassicyButton,
+	ClassicyForm,
+	ClassicyFormButtonRow,
+	ClassicyInput,
+	ClassicyWindow,
+} from "classicy";
 import { useState } from "react";
 
 export interface RenameDialogFormProps {
@@ -34,20 +40,21 @@ export function RenameDialogForm({
 	};
 
 	return (
-		<div className="playlistRenameDialog">
+		<ClassicyForm className="playlistRenameDialog" layout="dialog" onSubmitFunc={rename}>
 			<ClassicyInput
 				id={inputId}
 				labelTitle="Title"
 				labelPosition="left"
 				prefillValue={initialTitle}
 				onChangeFunc={(e) => setTitle(e.target.value)}
-				onEnterFunc={rename}
 			/>
-			<ClassicyButton isDefault={true} disabled={trimmed === ""} onClickFunc={rename}>
-				Rename
-			</ClassicyButton>
-			<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
-		</div>
+			<ClassicyFormButtonRow>
+				<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
+				<ClassicyButton isDefault={true} buttonType="submit" disabled={trimmed === ""}>
+					Rename
+				</ClassicyButton>
+			</ClassicyFormButtonRow>
+		</ClassicyForm>
 	);
 }
 

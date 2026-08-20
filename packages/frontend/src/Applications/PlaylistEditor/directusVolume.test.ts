@@ -43,7 +43,7 @@ const fetchFn = vi.fn(async (url: string) => {
 const volume = () =>
 	createDirectusVolume({
 		tvSlugs: () => ["ABC", "CNN"],
-		radioSlugs: () => ["FDNY-Manhattan"],
+		radioSlugs: () => ["WINS", "FDNY-Manhattan"],
 		fetchFn: fetchFn as unknown as typeof fetch,
 	});
 
@@ -54,10 +54,35 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("createDirectusVolume", () => {
-	it("lists the four top folders without fetching", async () => {
+	it("lists the five top folders without fetching", async () => {
 		const entries = await volume().list([]);
-		expect(entries.map((e: typeof entries[number]) => e.name)).toEqual(["TV Channels", "Radio Stations", "News", "Flights"]);
+		expect(entries.map((e: typeof entries[number]) => e.name)).toEqual([
+			"TV Channels", "Radio Stations", "Radio Traffic", "News", "Flights",
+		]);
 		expect(fetchFn).not.toHaveBeenCalled();
+	});
+
+	it("splits radio slugs into broadcast stations and traffic by BROADCAST_STATIONS", async () => {
+		const stations = await volume().list(["Radio Stations"]);
+		expect(stations.map((e: typeof stations[number]) => e.name)).toEqual([
+			"Select All", "WINS",
+		]);
+		expect(stations[1]).toMatchObject({
+			fileType: MEDIA_FILE_TYPES.radio, meta: { app: "radio", itemId: "WINS" },
+		});
+
+		const traffic = await volume().list(["Radio Traffic"]);
+		expect(traffic.map((e: typeof traffic[number]) => e.name)).toEqual([
+			"Select All", "FDNY-Manhattan",
+		]);
+		expect(traffic[0]).toMatchObject({
+			name: "Select All", fileType: MEDIA_FILE_TYPES.radioTraffic,
+			meta: { selectAllPaths: [["Radio Traffic"]] },
+		});
+		expect(traffic[1]).toMatchObject({
+			fileType: MEDIA_FILE_TYPES.radioTraffic,
+			meta: { app: "radio", itemId: "FDNY-Manhattan" },
+		});
 	});
 
 	it("lists TV channels from the injected slugs with playlist meta", async () => {

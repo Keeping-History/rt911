@@ -11,6 +11,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import DOMPurify from "dompurify";
 import {
 	type FC as FunctionalComponent,
@@ -375,6 +376,7 @@ export const Browser = () => {
 			name={appName}
 			icon={appIcon}
 			defaultWindow={"browser"}
+			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{showSettings && (
 				<ClassicyWindow

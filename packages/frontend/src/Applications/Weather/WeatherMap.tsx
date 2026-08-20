@@ -1,5 +1,6 @@
 import type { ExpressionSpecification } from "maplibre-gl";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Protocol } from "pmtiles";
 import { type FC, useEffect, useRef } from "react";
 import type { WeatherObservation } from "../../Providers/MediaStream/MediaStreamContext";
@@ -11,6 +12,11 @@ import {
 } from "../../lib/basemap/basemapStyles";
 import { cToF } from "./weatherUnits";
 import { type RadarIndex, frameUrlFor } from "./weatherRadar";
+
+// See FlightMap.tsx's identical call for why: maplibre-gl 6.x self-locates
+// its worker script off import.meta.url, which Vite's dev dep-optimizer
+// breaks by pre-bundling maplibre-gl.mjs without the worker file alongside it.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 // Register the pmtiles:// protocol once per page. maplibre's addProtocol
 // does NOT throw on duplicates (it silently overwrites the handler — verified

@@ -1,0 +1,34 @@
+// The large-namespace tag picker. Placeholder metrics — the list height and
+// window chrome are Robbie's to set; nothing here encodes a Figma measurement.
+
+.rtTagPicker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--window-padding-size);
+  padding: var(--window-padding-size);
+  font-family: var(--ui-font);
+  font-size: var(--ui-font-size);
+}
+
+// 377 checkboxes do not fit a window, so the list is the only thing that
+// scrolls — the search field and the buttons stay reachable at every scroll
+// position.
+.rtTagPickerList {
+  overflow-y: auto;
+  height: 220px;
+  padding: calc(var(--window-border-size) * 4);
+  background: var(--color-white);
+  border: var(--window-border-size) inset var(--color-system-05);
+}
+
+.rtTagPickerEmpty {
+  padding: calc(var(--window-border-size) * 4);
+  color: var(--color-system-05);
+}
+
+.rtTagPickerButtons {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: var(--window-padding-size);
+}

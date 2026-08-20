@@ -34,6 +34,11 @@ export const TRACK_LINE_COLOR = "#b22222";
 // as the tube's shadow. Flat views keep the full color — there the ground
 // line IS the track.
 export const TRACK_SHADOW_COLOR = "#591111";
+// Every OTHER multi-selected flight's track (the active one keeps the colors
+// above / phaseLineColorExpression) — a steel blue distinct from the phase
+// palettes' reds/greens/blues, the plain-track red, and the breadcrumb-trail
+// grays, so a listener can tell "selected, not detailed" from "just flying".
+export const SECONDARY_TRACK_COLOR = "#4f83cc";
 
 export function trailColor(mapStyle: BasemapStyleId, darkMap: boolean): string {
 	return TRAIL_COLORS[mapStyle][effectiveTone(mapStyle, darkMap)];
