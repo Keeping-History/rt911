@@ -1,5 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
-import { expect, pinVirtualClock, test } from "../fixtures";
+import { expect, pinVirtualClock, test as base } from "../fixtures";
 
 // Radio Traffic E2E: nothing here is mocked — the spec drives the real app
 // against the real dev server, which in turn talks to the real (production)
@@ -38,7 +38,7 @@ async function openRadioTraffic(page: Page): Promise<Locator> {
 	await page.getByRole("button", { name: "Radio Traffic" }).dblclick();
 	const app = radioTrafficWindow(page);
 	await expect(app.getByRole("radiogroup", { name: "Tools" })).toBeVisible({ timeout: 30_000 });
-	await expect(app.getByRole("group", { name: "Tag filters" })).toBeVisible();
+	await expect(app.getByRole("group", { name: "Tag filters" })).toBeVisible({ timeout: 30_000 });
 	return app;
 }
 
@@ -67,85 +67,155 @@ async function tagsAvailable(app: Locator): Promise<boolean> {
 	return checkbox.isVisible();
 }
 
-// Serial, not parallel: every test in this file opens its own Radio Traffic
-// session against the one real (production) streamer, each pulling the full
-// mp3 history over its own WebSocket. Run in parallel across several workers
-// that saturates the shared connection badly enough that even a button click
-// can miss Playwright's default timeout — observed directly on this machine
-// (16 cores, default worker count) — so this file trades wall time for not
-// hammering real infrastructure with N simultaneous full boots.
+// Serial, not parallel: every test in this file shares ONE Radio Traffic
+// session against the one real (production) streamer (see the `hydrated`
+// fixture below) rather than each opening its own — running N of these in
+// parallel, each pulling the full mp3 history over its own WebSocket,
+// saturates the shared connection badly enough that even a button click can
+// miss Playwright's default timeout, observed directly on this machine (16
+// cores, default worker count).
 //
 // The 90s per-test timeout (playwright.config.ts sets no override, so the
-// default is 30s) gives the first test's UPCOMING wait real room: unlike LIVE
-// and PREVIOUS it can legitimately take up to a minute to fill from a cold
-// connection — it comes from the reveal buffer's forward-looking window
+// default is 30s) gives the shared fixture's UPCOMING wait real room: unlike
+// LIVE and PREVIOUS it can legitimately take up to a minute to fill from a
+// cold connection — it comes from the reveal buffer's forward-looking window
 // (MediaStreamProvider), not the history snapshot — observed directly, not a
-// guess (see that test's own comment and the story's Work Log).
-//
-// QUARANTINED 2026-08-20 — all 5 tests below are `test.skip`, blocking main's
-// CI/deploy pipeline. Root cause understood, not yet fully fixed: with real
-// production traffic accumulated over the suite's own wall-clock runtime (this
-// serial group's tests share the one real streamer connection, one after
-// another, so later tests open against a session that has been running, and
-// accumulating archive backlog, for minutes), the app's per-card render cost —
-// even after real fixes landed the same day (TrafficCard memoization,
-// PeaksWaveform canvas-draw batching, LaneSection/Newsgroups re-render loops) —
-// still occasionally exceeds this file's 90s test budget on GitHub's runners,
-// most often on the second test's tool-palette click. Confirmed NOT a hang
-// (the app keeps responding; it's genuinely just slow at that data volume) and
-// NOT specific to any one of the fixes above (each was independently profiled
-// and verified before/after against the real streamer). Re-enable once either
-// the per-card render cost is down further (candidates: virtualizing offscreen
-// cards, reducing what react-memo lets through) or the test itself stops
-// depending on unbounded real-time archive accumulation.
-test.describe.configure({ mode: "serial", timeout: 90_000 });
+// guess (see the fixture's own comment and the story's Work Log).
 
-test.beforeEach(async ({ page }) => {
-	await page.goto("/");
-	await expect(page.locator(".classicyDesktop")).toBeVisible({ timeout: 20_000 });
+/**
+ * One Radio Traffic session, opened and hydrated ONCE per worker, shared by
+ * every test below — not per-test.
+ *
+ * 2026-08-20: this file used to open a fresh session per test. Against the
+ * real (production) archive that is wall-clock-tied, a session opened later
+ * in the suite's run has to catch up on a LARGER backlog than one opened
+ * earlier — the backlog size grows with elapsed real time regardless of how
+ * cheap any one item's render is, so per-test cold starts made every test
+ * after the first progressively more likely to blow its own 90s budget, no
+ * matter how much the render path itself was optimized (see git history
+ * around this date for what got tried: TrafficCard memoization, PeaksWaveform
+ * canvas-draw batching, LaneSection/Newsgroups re-render fixes — all real,
+ * none sufficient, because none of them shrink a backlog that keeps growing
+ * with wall-clock time). Paying the catch-up cost exactly once, then pinning
+ * the clock immediately afterward so the backlog stops growing at all, is
+ * what actually fixes it.
+ *
+ * Worker-scoped: `mode: "serial"` guarantees every test in this file runs in
+ * the same worker, which is what makes a worker-scoped fixture safe to share
+ * across them — Playwright will not hand two tests in this file to different
+ * workers.
+ */
+// `{}`, not `Record<string, never>`, for "no additional per-test fixtures":
+// Playwright's own extend<TestFixtures, WorkerFixtures> generic expects the
+// former structurally — the latter fails tsconfig.e2e.json's stricter check
+// (a separate config from this package's own tsc -b, which never includes
+// e2e/ at all, so this only surfaces in CI's dedicated e2e typecheck step).
+const test = base.extend<{}, { hydrated: { page: Page; app: Locator } }>({
+	hydrated: [
+		async ({ browser }, use) => {
+			const page = await browser.newPage();
+			await page.addLocatorHandler(page.getByRole("button", { name: "POWER ON" }), async (button) => {
+				await button.click();
+			});
+			await page.goto("/");
+			await expect(page.locator(".classicyDesktop")).toBeVisible({ timeout: 20_000 });
+			const app = await openRadioTraffic(page);
+
+			// Real data over a real WebSocket + HTTP history fetch takes a moment to
+			// arrive, and the clock is deliberately left RUNNING (not yet pinned)
+			// while waiting: UPCOMING fills from the reveal buffer's forward-looking
+			// window rather than the history snapshot LIVE/PREVIOUS render from, and
+			// that window can genuinely hold nothing at all for a stretch — a real,
+			// observed gap, not a fixed-wait flake. A window that is currently empty
+			// can still fill a few seconds later as ordinary real-time ticking
+			// slides it forward over the archive's next item, but a clock pinned
+			// BEFORE that happens never gets another chance to. So: wait for all
+			// three lanes with the clock still running, and only pin it once every
+			// lane genuinely has something — see pinVirtualClock's doc comment for
+			// why this spec never seeks (jumps) the clock to force the issue
+			// instead. One poll over the combined condition, not one poll per lane
+			// sequentially — the latter could add up past the fixture's own budget
+			// even though each individual lane resolves well within it.
+			await expect
+				.poll(
+					async () => {
+						const counts = await laneCardCounts(app);
+						return LANES.every((lane) => counts[lane] > 0);
+					},
+					{ timeout: 70_000 },
+				)
+				.toBe(true);
+
+			// Pinned once, here, for the whole file: every test below runs against
+			// this same frozen instant, so lane membership cannot migrate under a
+			// later test's feet AND no further archive backlog accumulates while
+			// the remaining tests run.
+			await pinVirtualClock(page);
+
+			await use({ page, app });
+			await page.close();
+		},
+		// Generous on purpose: this cost is now paid exactly ONCE per worker for
+		// the whole file (five tests' worth of setup used to each separately
+		// risk the old 90s per-test budget) — a couple of extra minutes of
+		// headroom here is cheap insurance against the internal waits (desktop
+		// visible, Tools/Tag-filters visible, the lane poll, pinVirtualClock's
+		// own Time Machine wait) stacking up worse than usual on a given run.
+		{ scope: "worker", timeout: 120_000 },
+	],
 });
 
-test.skip("opens from the desktop and renders cards into the three lanes without them migrating", async ({
-	page,
-}) => {
-	const app = await openRadioTraffic(page);
+test.describe.configure({ mode: "serial", timeout: 90_000 });
 
-	// Real data over a real WebSocket + HTTP history fetch takes a moment to
-	// arrive, and the clock is deliberately left RUNNING (not yet pinned) while
-	// waiting: UPCOMING fills from the reveal buffer's forward-looking window
-	// rather than the history snapshot LIVE/PREVIOUS render from, and that
-	// window can genuinely hold nothing at all for a stretch — a real,
-	// observed gap, not a fixed-wait flake. A window that is currently empty
-	// can still fill a few seconds later as ordinary real-time ticking slides
-	// it forward over the archive's next item, but a clock pinned BEFORE that
-	// happens never gets another chance to. So: wait for all three lanes with
-	// the clock still running, and only pin it once every lane genuinely has
-	// something — see pinVirtualClock's doc comment for why this spec never
-	// seeks (jumps) the clock to force the issue instead.
-	// One poll over the combined condition, not one poll per lane sequentially
-	// — the latter could add up past the test's own timeout even though each
-	// individual lane resolves well within it.
-	await expect
-		.poll(
-			async () => {
-				const counts = await laneCardCounts(app);
-				return LANES.every((lane) => counts[lane] > 0);
-			},
-			{ timeout: 70_000 },
-		)
-		.toBe(true);
+// Sharing one session (the `hydrated` fixture) means BOTH the tool palette
+// and the tag filters now survive from whichever test ran before, not just
+// within one test as they used to.
+//
+// "the tool palette" test below deliberately leaves the LAST tool it tried
+// (Move, i.e. the `hand` tool) selected. RadioTraffic.tsx's own comment on the
+// card slot explains why that matters beyond the palette itself: under
+// `hand`, the slot's drag handlers run on the same pointer events a plain
+// click needs, which broke the tab-bar test when it ran right after.
+//
+// "checking a small-namespace tag" leaves a tag checked, narrowing the
+// visible set — which starved the aircraft-picker test's own "at least one
+// card" wait when it ran right after, since FilterTree has no clear-all
+// affordance to leave itself in a clean state.
+//
+// Reset both to their defaults before every test — Solo (arrow, the app's own
+// DEFAULT_TOOL) and every tag unchecked — so each test starts from the same
+// baseline regardless of run order or what a previous test left selected.
+test.beforeEach(async ({ hydrated }) => {
+	const { app } = hydrated;
+	await app.getByRole("radiogroup", { name: "Tools" }).getByRole("radio", { name: "Solo", exact: true }).click();
 
-	// Now freeze the moment and confirm it holds: sampling twice, several
-	// seconds apart, must land on the exact same partition.
-	await pinVirtualClock(page);
+	const filterGroup = app.getByRole("group", { name: "Tag filters" });
+	const checked = filterGroup.locator('input[type="checkbox"]:checked');
+	// One at a time: unchecking can shrink/reflow the visible checkbox list
+	// (a namespace that had exactly this one checked value may collapse), so
+	// re-querying the live NodeList after each uncheck is what keeps this from
+	// racing its own DOM.
+	// eslint-disable-next-line no-await-in-loop -- sequential on purpose, see above
+	while (await checked.count()) {
+		// eslint-disable-next-line no-await-in-loop -- sequential on purpose, see above
+		await checked.first().uncheck();
+	}
+});
+
+test("renders cards into the three lanes without them migrating", async ({ hydrated }) => {
+	const { app } = hydrated;
+
+	// The clock is already pinned (see the `hydrated` fixture) before this
+	// test runs, so two samples taken any distance apart must already agree —
+	// this is confirming the freeze holds, not waiting for one.
 	const first = await laneCardCounts(app);
-	await page.waitForTimeout(4_000);
+	await hydrated.page.waitForTimeout(4_000);
 	const second = await laneCardCounts(app);
 	expect(second).toEqual(first);
 });
 
-test.skip("the tool palette activates exactly one tool at a time", async ({ page }) => {
-	const app = await openRadioTraffic(page);
+test("the tool palette activates exactly one tool at a time", async ({ hydrated }) => {
+	const { app } = hydrated;
 	const palette = app.getByRole("radiogroup", { name: "Tools" });
 	const toolNames = ["Solo", "Mute", "Unmute", "Move"];
 
@@ -162,8 +232,8 @@ test.skip("the tool palette activates exactly one tool at a time", async ({ page
 	}
 });
 
-test.skip("a card's tab bar switches panels", async ({ page }) => {
-	const app = await openRadioTraffic(page);
+test("a card's tab bar switches panels", async ({ hydrated }) => {
+	const { app } = hydrated;
 	const card = app.locator("[data-item]").first();
 	await expect(card).toBeVisible({ timeout: 30_000 });
 
@@ -184,8 +254,8 @@ test.skip("a card's tab bar switches panels", async ({ page }) => {
 	await expect(card.locator('[data-tab="details"]')).toHaveCount(0);
 });
 
-test.skip("checking a small-namespace tag narrows the visible cards", async ({ page }) => {
-	const app = await openRadioTraffic(page);
+test("checking a small-namespace tag narrows the visible cards", async ({ hydrated }) => {
+	const { app } = hydrated;
 
 	if (!(await tagsAvailable(app))) {
 		test.skip(
@@ -217,10 +287,10 @@ test.skip("checking a small-namespace tag narrows the visible cards", async ({ p
 	await expect.poll(totalCards, { timeout: 15_000 }).toBeLessThan(before);
 });
 
-test.skip("opening the aircraft picker, typing and confirming narrows the cards further", async ({
-	page,
+test("opening the aircraft picker, typing and confirming narrows the cards further", async ({
+	hydrated,
 }) => {
-	const app = await openRadioTraffic(page);
+	const { page, app } = hydrated;
 
 	if (!(await tagsAvailable(app))) {
 		test.skip(
