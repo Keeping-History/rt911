@@ -187,9 +187,32 @@ const PUBLIC_GRANTS = [
     // tuner needs a station's artwork even when that station has nothing
     // streaming, which is most of the day for the one-recording stations, so
     // it cannot rely on the WebSocket items alone.
+    //
+    // `peaks` is the 480-bucket amplitude envelope the Playlist Editor's lane
+    // waveform draws (usePeaksForSpan.ts asks for it by name in `fields`).
+    //
+    // The derived-metadata columns — subject, link, tier, confidence, evidence,
+    // participants, mentions, provenance — are the redacted public projection of
+    // `parties`, materialised by video-grabber's build_public_meta (see
+    // packages/tools/video-grabber/video_grabber/parties/public_meta.py). They
+    // are granted; `parties` itself deliberately is NOT. The whole point of the
+    // projection is that the private blob's QA signals (`gate_reasons`, `model`)
+    // stay 403 to anonymous readers, so adding `parties` here would undo it.
+    // `tags_curated` is curator input rather than published output, and
+    // `derived_at` is an internal derivation-version marker with no reader —
+    // both stay ungranted for the same reason.
     collection: "mp3_items",
     action: "read",
-    fields: ["id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles", "image"],
+    fields: [
+      "id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles", "image", "peaks",
+      // `tags` predates the Radio Traffic work and stays granted. Nothing in
+      // this repo reads it anonymously — the app takes tags from the streamer,
+      // not Directus — but dropping a field that is already public is a
+      // one-way regression for any reader we cannot see, and costs nothing to
+      // keep.
+      "tags",
+      "subject", "link", "tier", "confidence", "evidence", "participants", "mentions", "provenance",
+    ],
     permissions: APPROVED_FILTER,
   },
   {

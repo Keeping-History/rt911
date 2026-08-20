@@ -1,0 +1,49 @@
+// The filter sidebar. The 141px width comes from the design's window geometry
+// (892×601, lanes at x=144); the indentation and the ✓ glyph are classicy's own
+// disclosure and checkbox CSS, so nothing is restyled here.
+
+.rtFilterTree {
+  display: flex;
+  flex-direction: column;
+  width: calc(100% - var(--window-control-size));
+  flex: 0 0 141px;
+  // The tree is the tallest thing in the sidebar and the only part that grows
+  // with the vocabulary, so it is what scrolls.
+  overflow-y: scroll;
+  padding: calc(var(--window-border-size) * 4);
+  font-family: var(--ui-font);
+  font-size: var(--ui-font-size);
+  flex-grow: 1;
+  * {
+    flex-grow: 0 !important;
+  }
+}
+
+// A large namespace's row sits at the same indent as a disclosure header so the
+// eight namespaces read as one list, despite behaving differently.
+//
+// Story 030: ClassicyBevelButton builds its own className and drops the one it
+// is handed, so the row hangs its look off `[data-filter-large-row]` instead —
+// the same pattern laneSection.module.scss uses for `[data-lane-mute]`.
+.rtFilterTree [data-filter-large-row] {
+  display: flex;
+  flex-grow: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: calc(var(--window-border-size) * 4);
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--color-system-06);
+  text-align: left;
+  cursor: pointer;
+  flex-grow: 1;
+}
+
+.rtFilterCount {
+  color: var(--color-system-05);
+}
+
+.rtFilterNotice {
+  margin: 0 0 calc(var(--window-border-size) * 4);
+  color: var(--color-system-05);
+}

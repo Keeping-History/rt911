@@ -151,9 +151,27 @@ export function rulerLabels(zoom: number, bounds: TimelineBounds = FULL_BOUNDS):
 	});
 }
 
+/**
+ * A UTC instant as a fraction of the timeline bounds, UNCLAMPED.
+ *
+ * Anything laid out as a percentage inside the track is in this space — the
+ * track is `zoom * 100%` wide and every child positions against it, so a
+ * fraction here is the one unit that stays meaningful at every zoom level.
+ * Unclamped because a *span* (a recording overlapping the bounds, say) has to
+ * keep its true width: clamping one end would silently stretch or squash it.
+ * {@link timeToFraction} clamps, because a bar's own bounds are meant to.
+ */
+export function msToFraction(ms: number, bounds: TimelineBounds = FULL_BOUNDS): number {
+	return (ms - bounds.startMs) / (bounds.endMs - bounds.startMs);
+}
+
 export function timeToFraction(iso: string, bounds: TimelineBounds = FULL_BOUNDS): number {
-	const frac = (playlistUtcMs(iso) - bounds.startMs) / (bounds.endMs - bounds.startMs);
-	return Math.min(1, Math.max(0, frac));
+	return Math.min(1, Math.max(0, msToFraction(playlistUtcMs(iso), bounds)));
+}
+
+/** The inverse of {@link timeToFraction}: a track fraction back to a UTC ms instant. */
+export function fractionToMs(frac: number, bounds: TimelineBounds = FULL_BOUNDS): number {
+	return bounds.startMs + frac * (bounds.endMs - bounds.startMs);
 }
 
 // Edge drags snap to whole minutes: finer precision is invisible at any zoom

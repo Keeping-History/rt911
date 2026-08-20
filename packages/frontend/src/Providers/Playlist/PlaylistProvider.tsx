@@ -25,8 +25,7 @@ import {
 import { browserNavigate } from "../../Applications/Browser/BrowserContext";
 import { flightTrackerFocusFlight } from "../../Applications/FlightTracker/flightTrackerCommands";
 import { newsFocusItem } from "../../Applications/News/NewsContext";
-import { radioTuneStation } from "../../Applications/RadioScanner/RadioScannerContext";
-import { BROADCAST_STATIONS } from "../../Applications/RadioScanner/stationGrouping";
+import { BROADCAST_STATIONS } from "../../Applications/radio-core/stationGrouping";
 import { radioTunerTuneStation } from "../../Applications/RadioTuner/RadioTunerContext";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";
 import { tvTuneChannel } from "../../Applications/TV/TVContext";
@@ -61,14 +60,16 @@ const FOCUS_DISPATCHERS: Record<PlaylistApp | "browser", (d: Dispatch, itemId: s
 	{
 		tv: (d, itemId) => d(tvTuneChannel(itemId)),
 		// The radio catalog spans two apps post-split: broadcast stations tune
-		// the Radio Tuner, comm-traffic stations the Radio Scanner — matching
-		// playlistFocusAppId's app choice.
-		radio: (d, itemId) =>
-			d(
-				BROADCAST_STATIONS.has(itemId.toUpperCase())
-					? radioTunerTuneStation(itemId)
-					: radioTuneStation(itemId),
-			),
+		// the Radio Tuner (matching playlistFocusAppId's app choice), which still
+		// has a single "current station" to tune. Comm/ATC traffic's successor,
+		// Radio Traffic, has no equivalent per-item focus target — it shows every
+		// LIVE/UPCOMING/PREVIOUS card at once rather than tuning one channel — so
+		// there is nothing to dispatch here yet. applyFocus's ClassicyAppOpen
+		// still opens the app; a real per-card focus (solo? scroll-to?) is a
+		// follow-up story, not something to invent here.
+		radio: (d, itemId) => {
+			if (BROADCAST_STATIONS.has(itemId.toUpperCase())) d(radioTunerTuneStation(itemId));
+		},
 		news: (d, itemId) => d(newsFocusItem(Number(itemId))),
 		flights: (d, itemId) => d(flightTrackerFocusFlight(itemId)),
 		browser: (d, url) => d(browserNavigate(url)),
@@ -272,7 +273,7 @@ export const PlaylistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 	 * definition rather than tearing the lesson down with an error dialog —
 	 * unlike the initial load, the student already has a working playlist.
 	 * Serialized via `reloadInFlightRef`: loadPlaylist must never run
-	 * concurrently with itself (parallel same-path api-beta fetches can return
+	 * concurrently with itself (parallel same-path Directus fetches can return
 	 * mixed bodies — see loadPlaylist.ts), and a burst of reload commands
 	 * collapses into one fetch of the same final definition anyway.
 	 */

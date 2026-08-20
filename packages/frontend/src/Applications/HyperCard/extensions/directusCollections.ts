@@ -107,7 +107,7 @@ interface ItemEnvelope<T> {
  * Fetch a single item from a Directus collection by id.
  *
  * One request per call. Never batch these onto the same path concurrently:
- * api-beta can interleave response bodies under parallel same-path requests
+ * Directus can interleave response bodies under parallel same-path requests
  * (see README/useReadmeArticles.ts and FlightTracker/useRouteIndex.ts) — each
  * embed owning its own distinct `/items/<collection>/<id>` path avoids that.
  */

@@ -77,9 +77,10 @@ const FakeMap = vi.hoisted(() => {
 	return FakeMap;
 });
 vi.mock("maplibre-gl", () => ({
-	default: { Map: FakeMap, addProtocol: vi.fn() },
+	default: { Map: FakeMap, addProtocol: vi.fn(), setWorkerUrl: vi.fn() },
 	Map: FakeMap,
 	addProtocol: vi.fn(),
+	setWorkerUrl: vi.fn(),
 }));
 vi.mock("pmtiles", () => ({ Protocol: class { tile = vi.fn(); } }));
 

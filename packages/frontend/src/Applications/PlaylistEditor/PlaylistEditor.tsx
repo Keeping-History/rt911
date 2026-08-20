@@ -146,6 +146,7 @@ function PlaylistEditorContent() {
 				initialSize={[420, 400]}
 				initialPosition={[100, 80]}
 				appMenu={listMenu}
+				backgroundColor="var(--color-system-03)"
 			>
 				<PlaylistList
 					meId={user?.id ?? ""}

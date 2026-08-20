@@ -7,7 +7,7 @@ afterEach(cleanup);
 
 // The Radio Stations cards read station artwork from Directus; stub the hook so
 // these tests never touch the network (MediaRadioRow.test.tsx owns that path).
-vi.mock("../RadioScanner/stationLogos", () => ({ useStationLogos: () => ({}) }));
+vi.mock("../radio-core/stationLogos", () => ({ useStationLogos: () => ({}) }));
 
 // Entries are grouped under Classicy tabs; inactive panels render `hidden`, so
 // their controls are out of the accessibility tree until the tab is selected.

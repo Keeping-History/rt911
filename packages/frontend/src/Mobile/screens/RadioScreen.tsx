@@ -8,7 +8,7 @@ import {
 	activeSegments,
 	sortStations,
 	type Station,
-} from "../../Applications/RadioScanner/stationGrouping";
+} from "../../Applications/radio-core/stationGrouping";
 import { IpodList } from "../IpodList";
 import { ScreenNavContext, useScreenWheel } from "../WheelContext";
 

@@ -43,6 +43,16 @@ function crossOriginIsolationExceptPages(): Plugin {
 const DIRECTUS_PROXY_TARGET = process.env.DIRECTUS_PROXY_TARGET ?? "https://api.911realtime.org";
 
 /**
+ * Where the dev-server streamer proxy forwards to. Defaults to a locally-run
+ * streamer, unlike the Directus proxy above: the mp3 metadata routes are new
+ * on this branch and are not on the deployed image, so pointing at production
+ * would proxy a 404. Override from the shell to aim elsewhere.
+ *
+ * Deliberately NOT `VITE_`-prefixed — read here, in Node, at config time only.
+ */
+const STREAMER_PROXY_TARGET = process.env.STREAMER_PROXY_TARGET ?? "http://localhost:8080";
+
+/**
  * Re-bind an upstream `Set-Cookie` so a localhost server can hold it.
  *
  * Directus issues its session cookie with `Domain=.911realtime.org; Secure`.
@@ -107,6 +117,26 @@ const localProxy: Record<string, ProxyOptions> = {
 		target: "http://localhost:8080",
 		changeOrigin: true,
 	},
+	/**
+	 * The streamer's mp3 metadata routes, for the same reason `/feedback` is
+	 * here: the deployed CORS allow-list is `911realtime.org` and the GitHub
+	 * Pages preview only, so a browser on `localhost:5173` gets no
+	 * `Access-Control-Allow-Origin` back and discards the response. Widening
+	 * that list to admit localhost is not the fix — see the note above on why
+	 * proxying beats an allow-list entry.
+	 *
+	 * Points at a locally-run streamer rather than production, because these
+	 * routes ship with this branch and do not exist on the deployed image yet;
+	 * against production they 404 regardless of CORS.
+	 *
+	 * Inert by default: reached only when VITE_STREAM_HTTP_BASE is empty, which
+	 * makes the app build relative `/mp3/...` URLs. Unset, it calls the streamer
+	 * directly and nothing hits this route.
+	 */
+	"/mp3": {
+		target: STREAMER_PROXY_TARGET,
+		changeOrigin: true,
+	},
 	"/directus": {
 		target: DIRECTUS_PROXY_TARGET,
 		changeOrigin: true,
@@ -135,16 +165,18 @@ export default defineConfig({
 		rollupOptions: {
 			output: {
 				// Isolate maplibre-gl (+ its pmtiles protocol) into its own chunk.
-				// This is CORRECTNESS, not just code-splitting: maplibre-gl 5.x ships
+				// Originally CORRECTNESS, not just code-splitting: maplibre-gl 5.x shipped
 				// only a prebuilt UMD bundle (no ESM entry), and when Rolldown (Vite 8)
-				// scope-hoists it into the shared app chunk it mangles an internal
-				// variable declaration — the reference survives (renamed T4/f) but its
-				// binding is dropped, so maplibre throws "T4 is not defined" the moment
-				// its source-error path runs (e.g. the Flight Tracker basemap 404s).
-				// That ReferenceError aborts map load and no aircraft ever render — a
+				// scope-hoisted it into the shared app chunk it mangled an internal
+				// variable declaration — the reference survived (renamed T4/f) but its
+				// binding was dropped, so maplibre threw "T4 is not defined" the moment
+				// its source-error path ran (e.g. the Flight Tracker basemap 404s).
+				// That ReferenceError aborted map load and no aircraft ever rendered — a
 				// production-only break invisible in the dev server (unbundled maplibre).
-				// Keeping maplibre in its own chunk preserves its IIFE scope and avoids
-				// the mis-hoist. Do not fold this back into the main chunk.
+				// maplibre-gl 6.x is ESM-only (no more UMD/IIFE build), so the specific
+				// mis-hoist this worked around may no longer apply — untested, so the
+				// isolation stays as cheap insurance. Do not fold this back into the main
+				// chunk without confirming the v5 failure mode is actually gone.
 				manualChunks(id) {
 					if (id.includes("maplibre-gl") || id.includes("pmtiles")) return "maplibre";
 				},

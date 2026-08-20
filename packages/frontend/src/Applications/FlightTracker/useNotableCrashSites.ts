@@ -67,7 +67,7 @@ async function loadCrashSites(): Promise<void> {
 	try {
 		const samples: FlightPosition[] = [];
 		const crashMs = new Map<string, number>();
-		// SEQUENTIAL on purpose: concurrent same-path requests to api-beta get
+		// SEQUENTIAL on purpose: concurrent same-path requests to Directus get
 		// their response bodies MIXED by the proxy layer (verified 2026-07-15 —
 		// four parallel flight_positions queries all received one flight's
 		// rows; the same queries in series returned correct data). Four small

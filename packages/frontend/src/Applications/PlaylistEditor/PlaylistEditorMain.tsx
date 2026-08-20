@@ -2,7 +2,7 @@ import { ClassicyControlLabel, ClassicySplitView, ClassicyTabs, ClassicyTree, ty
 import type { ReactNode } from "react";
 import { Disclosure } from "../../Components/Disclosure/Disclosure";
 import type { MediaEntry, PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
-import { BROADCAST_STATIONS } from "../RadioScanner/stationGrouping";
+import { BROADCAST_STATIONS } from "../radio-core/stationGrouping";
 import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayWallClock } from "./editorState";
 import { MediaRadioRow } from "./MediaRadioRow";
 import { MediaTvRow, type TvEditorEntry } from "./MediaTvRow";

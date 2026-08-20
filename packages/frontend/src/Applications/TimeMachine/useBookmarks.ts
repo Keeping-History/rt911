@@ -51,7 +51,7 @@ export function useBookmarks(): BookmarksState {
 
 		(async () => {
 			try {
-				// Serialized (never parallel) — api-beta can mix concurrent bodies.
+				// Serialized (never parallel) — Directus can mix concurrent bodies.
 				const gRes = await fetch(GLOBAL_URL, { signal: controller.signal });
 				if (!gRes.ok) throw new Error(`HTTP ${gRes.status}`);
 				const gJson = (await gRes.json()) as { data: Bookmark[] };

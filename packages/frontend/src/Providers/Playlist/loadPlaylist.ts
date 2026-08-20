@@ -24,7 +24,7 @@ interface PlaylistRow {
 }
 
 // Exactly ONE request. Never add concurrent fetches here: parallel same-path
-// requests to api-beta can return mixed response bodies (see useRouteIndex.ts).
+// requests to Directus can return mixed response bodies (see useRouteIndex.ts).
 export async function loadPlaylist(
 	id: string,
 	fetchFn: typeof fetch = fetch,

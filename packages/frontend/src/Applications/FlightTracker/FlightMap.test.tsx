@@ -49,6 +49,7 @@ const FakeMap = vi.hoisted(() => {
 			this.layers.push({ ...def, beforeId, __raw: def });
 		}
 		getLayer(id: string) { return this.layers.find((l) => l.id === id); }
+		removeLayer(id: string) { this.layers = this.layers.filter((l) => l.id !== id); }
 		repaints = 0;
 		triggerRepaint() { this.repaints++; }
 		setPaintProperty(layerId: string, name: string, value: unknown) {
@@ -113,6 +114,14 @@ const FakeMap = vi.hoisted(() => {
 			disable: () => { this.dragPanDisabled = true; },
 			enable: () => { this.dragPanDisabled = false; },
 		};
+		// boxZoom is constructor-disabled only (issue #326) — stubbed with a
+		// spy, not wired into setCameraInteractive's toggle list, so a test can
+		// assert it's never re-enabled by a follow-lock cycle.
+		boxZoomEnableCalls = 0;
+		boxZoom = {
+			disable: () => {},
+			enable: () => { this.boxZoomEnableCalls++; },
+		};
 		canvasStyle: Record<string, string> = {};
 		getCanvas() { return { style: this.canvasStyle } as unknown as HTMLCanvasElement; }
 		easeToCalls: Record<string, unknown>[] = [];
@@ -147,9 +156,15 @@ const FakeMercatorCoordinate = vi.hoisted(() => ({
 	}),
 }));
 vi.mock("maplibre-gl", () => ({
-	default: { Map: FakeMap, addProtocol: vi.fn(), MercatorCoordinate: FakeMercatorCoordinate },
+	default: {
+		Map: FakeMap,
+		addProtocol: vi.fn(),
+		setWorkerUrl: vi.fn(),
+		MercatorCoordinate: FakeMercatorCoordinate,
+	},
 	Map: FakeMap,
 	addProtocol: vi.fn(),
+	setWorkerUrl: vi.fn(),
 	MercatorCoordinate: FakeMercatorCoordinate,
 }));
 vi.mock("pmtiles", () => ({ Protocol: class { tile = vi.fn(); } }));
@@ -1082,6 +1097,44 @@ describe("FlightMap", () => {
 	});
 
 
+	it("adds/removes one plain 3D tube per OTHER multi-selected flight (issue #326)", () => {
+		const profile = [
+			{ lon: -74, lat: 40, alt_ft: 1_000, utc: "2001-09-11T12:00:00Z" },
+			{ lon: -73.5, lat: 40.5, alt_ft: 12_000, utc: "2001-09-11T12:01:00Z" },
+		];
+		const common = {
+			positions: [], basemapUrls: TEST_URLS, trackGeoJSON: null, nowMs: 0,
+			playing: false, onSelectFlight: () => {}, onClearSelection: () => {},
+			darkMap: false, mapStyle: "classic" as const, pinColor: "#3a3a3a",
+			notablePinColor: "#c0202a", observerPinColor: "#0f766e", anonPinColor: "#8b7d6b",
+			radarSweep: false, trailMultiplier: 1,
+		};
+		const { rerender } = render(<FlightMap {...common} secondaryTrackProfiles={[]} />);
+		const map = FakeMap.last!;
+		map.fire("load");
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-UA175")).toBeUndefined();
+
+		rerender(<FlightMap {...common} secondaryTrackProfiles={[{ flight: "UA175", profile }]} />);
+		const tube = map.layers.find((l) => l.id === "track-tube-3d-secondary-UA175")!
+			.__raw as import("./trackTubeLayer").TrackTube3DLayer;
+		expect(tube.vertexCount).toBeGreaterThan(0);
+
+		// A second flight joins the selection: its own tube is added, the first survives.
+		rerender(
+			<FlightMap {...common} secondaryTrackProfiles={[
+				{ flight: "UA175", profile },
+				{ flight: "AA77", profile },
+			]} />,
+		);
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-UA175")).toBeDefined();
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-AA77")).toBeDefined();
+
+		// Deselecting UA175 removes only its tube.
+		rerender(<FlightMap {...common} secondaryTrackProfiles={[{ flight: "AA77", profile }]} />);
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-UA175")).toBeUndefined();
+		expect(map.layers.find((l) => l.id === "track-tube-3d-secondary-AA77")).toBeDefined();
+	});
+
 	it("reports pitch-threshold crossings so the 3D toggle can follow the camera", () => {
 		const onPitchedChange = vi.fn();
 		render(
@@ -1106,7 +1159,10 @@ describe("FlightMap", () => {
 		const onSelect = vi.fn();
 		const onClear = vi.fn();
 		// Two airborne planes; stub project() maps lon/lat→x/y (no transform on
-		// the stub, so projectAtAltitude falls back to ground projection).
+		// the stub, so projectAtAltitude falls back to ground projection). That
+		// fallback is the shape of the maplibre-6 regression, so it must be loud —
+		// capture the warning here rather than letting it leak as test noise.
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		render(
 			<FlightMap
 				positions={[
@@ -1128,6 +1184,8 @@ describe("FlightMap", () => {
 		// A click far from every plane clears.
 		map.fire("click", { point: { x: 500, y: 500 } });
 		expect(onClear).toHaveBeenCalled();
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("No MapLibre transform"));
+		warn.mockRestore();
 	});
 
 	it("mercator pitched clicks compensate for the terrain camera-elevation offset", () => {
@@ -1160,6 +1218,59 @@ describe("FlightMap", () => {
 		map.fire("click", { point: { x: 41, y: 31 } });
 		expect(onSelect).toHaveBeenCalledWith("DL404");
 		expect(seenElevations[0]).toBeCloseTo(exaggeratedHeightM(30_000) - 5000);
+	});
+
+	// MapLibre 6 stopped having Map extend Camera: the transform moved from
+	// `map.transform` to `map._camera.transform`. Reading only the old spot made
+	// projectAtAltitude fall through to the GROUND projection, so every pitched
+	// click missed the aircraft drawn at cruise altitude and cleared instead of
+	// selecting — 3D became unclickable while 2D (queryRenderedFeatures) stayed
+	// fine. These two pin the v6 shape so the next major bump fails loudly here.
+	it("mercator pitched clicks find the transform under maplibre 6's _camera", () => {
+		const onSelect = vi.fn();
+		const onClear = vi.fn();
+		render(
+			<FlightMap
+				positions={[pos({ id: 1, flight: "DL404", lon: -40, lat: 30, alt_ft: 30_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={onSelect} onClearSelection={onClear}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a" observerPinColor="#0f766e" anonPinColor="#8b7d6b"
+				radarSweep={false} trailMultiplier={1} threeD={true} />,
+		);
+		const map = FakeMap.last!;
+		// No `map.transform` at all — exactly how a real v6 Map is shaped. The
+		// plane draws at (41, 31); the ground fallback would put it at (-40, 30).
+		(map as unknown as { _camera: unknown })._camera = {
+			transform: { coordinatePoint: () => ({ x: 41, y: 31 }) },
+		};
+		map.fire("load");
+		map.queryResult = [];
+		map.fire("click", { point: { x: 41, y: 31 } });
+		expect(onSelect).toHaveBeenCalledWith("DL404");
+		expect(onClear).not.toHaveBeenCalled();
+	});
+
+	it("globe pitched clicks find the transform under maplibre 6's _camera", () => {
+		const onSelect = vi.fn();
+		render(
+			<FlightMap
+				positions={[pos({ id: 1, flight: "DL404", lon: -40, lat: 30, alt_ft: 30_000 })]}
+				basemapUrls={TEST_URLS} trackGeoJSON={null} nowMs={0} playing={false}
+				onSelectFlight={onSelect} onClearSelection={() => {}}
+				darkMap={false} mapStyle="classic" pinColor="#3a3a3a" notablePinColor="#c0202a" observerPinColor="#0f766e" anonPinColor="#8b7d6b"
+				radarSweep={false} trailMultiplier={1} threeD={true} globe={true} />,
+		);
+		const map = FakeMap.last!;
+		(map as unknown as { _camera: unknown })._camera = {
+			transform: {
+				width: 100, height: 100,
+				projectTileCoordinates: () => ({ point: { x: 0.2, y: -0.4 }, isOccluded: false }),
+			},
+		};
+		map.fire("load");
+		map.queryResult = [];
+		map.fire("click", { point: { x: 61, y: 71 } });
+		expect(onSelect).toHaveBeenCalledWith("DL404");
 	});
 
 	it("globe pitched clicks hit-test via projectTileCoordinates (elevated, not ground)", () => {
@@ -1279,6 +1390,15 @@ describe("FlightMap", () => {
 					followFlight={null} cameraMode="track" />,
 			);
 			expect(map.dragPanDisabled).toBe(false);
+			// ...but never boxZoom (issue #326): it's disabled permanently at
+			// construction because it competes with shift-click multi-select, and
+			// re-enabling camera interactivity here must not undo that.
+			expect(map.boxZoomEnableCalls).toBe(0);
+		});
+
+		it("constructs the map with boxZoom disabled, so Shift+drag can't hijack shift-click multi-select (issue #326)", () => {
+			render(<FlightMap {...common} positions={[]} followFlight={null} cameraMode="track" />);
+			expect(FakeMap.last!.ctorOpts.boxZoom).toBe(false);
 		});
 
 		it("cockpit mode opens the pitch band and drives a steep heading-aligned view", () => {

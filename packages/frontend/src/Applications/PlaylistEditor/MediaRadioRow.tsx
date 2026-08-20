@@ -1,6 +1,6 @@
 import { ClassicyIcons } from "classicy";
 import { useMemo } from "react";
-import { useStationLogos } from "../RadioScanner/stationLogos";
+import { useStationLogos } from "../radio-core/stationLogos";
 import { MediaCardRow, type MediaCardEntry } from "./MediaCardRow";
 
 /** A media entry already narrowed to a broadcast radio station by the caller. */
