@@ -52,6 +52,17 @@ const DEFAULT_FAVORITES: BrowserFavorite[] = [
 	},
 ];
 
+// Stable fallbacks for the selectors below — before ClassicyAppBrowserInitFavorites
+// seeds real data (or in any other momentary gap), `apps[appId]?.data?.favorites`/
+// `.history` reads `undefined`. A `?? []` INLINE in the selector would construct a
+// fresh array on every single store read, which Zustand's useSyncExternalStore
+// compares by reference: a selector that never returns the same value twice reads
+// as "the store changed" on every render, forever — the exact "getSnapshot should
+// be cached to avoid an infinite loop" warning. A module-level constant is the same
+// empty array every time, so the fallback path is as stable as the real one.
+const EMPTY_FAVORITES: BrowserFavorite[] = [];
+const EMPTY_HISTORY: BrowserHistoryEntry[] = [];
+
 interface ShadowLinkClick {
 	href: string;
 	rawHref: string;
@@ -181,11 +192,15 @@ export const Browser = () => {
 	}, [isOpen]);
 
 	const favorites = useAppManager(
-		(state) => (state.System.Manager.Applications.apps[appId]?.data?.favorites ?? []) as BrowserFavorite[],
+		(state) =>
+			(state.System.Manager.Applications.apps[appId]?.data?.favorites ??
+				EMPTY_FAVORITES) as BrowserFavorite[],
 	);
 
 	const history = useAppManager(
-		(state) => (state.System.Manager.Applications.apps[appId]?.data?.history ?? []) as BrowserHistoryEntry[],
+		(state) =>
+			(state.System.Manager.Applications.apps[appId]?.data?.history ??
+				EMPTY_HISTORY) as BrowserHistoryEntry[],
 	);
 
 	const proxyConfig: TimeMachineProxyConfig =

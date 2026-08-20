@@ -116,12 +116,33 @@ export function PeaksWaveform({
 				ctx.fillRect(0, mid - 0.5, width, 1);
 				return;
 			}
+			// One Path2D + one fill(), not one fillRect() per bucket: peaks.length
+			// is 480 on every populated row, so a lane with dozens of cards mounting
+			// at once (a fresh app open catching up on a real archive backlog) was
+			// issuing tens of thousands of individual canvas draw calls synchronously
+			// — each with its own per-call state-validation/compositing overhead —
+			// when the whole envelope is one shape the canvas can rasterize in a
+			// single pass. Same rectangles, same fillStyle, drawn once instead of
+			// peaks.length times.
+			// jsdom (unit tests) mocks a 2D context but has no Path2D — the
+			// fillRect loop it falls back to is exactly what this always did
+			// before the batching below.
 			const step = width / peaks.length;
+			if (typeof Path2D === "undefined") {
+				peaks.forEach(([lo, hi], i) => {
+					const top = mid - (hi / 128) * mid;
+					const bottom = mid - (lo / 128) * mid;
+					ctx.fillRect(i * step, top, Math.max(step, 1), Math.max(bottom - top, 1));
+				});
+				return;
+			}
+			const path = new Path2D();
 			peaks.forEach(([lo, hi], i) => {
 				const top = mid - (hi / 128) * mid;
 				const bottom = mid - (lo / 128) * mid;
-				ctx.fillRect(i * step, top, Math.max(step, 1), Math.max(bottom - top, 1));
+				path.rect(i * step, top, Math.max(step, 1), Math.max(bottom - top, 1));
 			});
+			ctx.fill(path);
 		};
 
 		draw();
