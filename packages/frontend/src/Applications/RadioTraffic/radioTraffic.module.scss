@@ -43,10 +43,10 @@
 .rtSidebar {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(var(--window-border-size) * 4);
   flex: 0 0 auto;
-  padding: 4px 0 4px 4px;
-  border-right: 1px solid var(--color-system-04);
+  padding: calc(var(--window-border-size) * 4) 0 calc(var(--window-border-size) * 4) calc(var(--window-border-size) * 4);
+  border-right: var(--window-border-size) solid var(--color-system-04);
   overflow: hidden;
 }
 
@@ -91,11 +91,11 @@
 }
 
 .rtUnlockOverlayBox {
-  padding: 12px 16px;
+  padding: calc(var(--window-padding-size) * 2) calc(var(--window-control-size) + var(--window-border-size) * 4);
   text-align: center;
   color: var(--color-system-06);
   background: var(--color-system-02);
-  border: 2px outset var(--color-system-04);
+  border: calc(var(--window-border-size) * 2) outset var(--color-system-04);
 }
 
 .rtUnlockOverlayTitle {
@@ -104,5 +104,5 @@
 }
 
 .rtUnlockOverlayHint {
-  margin: 4px 0 0;
+  margin: calc(var(--window-border-size) * 4) 0 0;
 }

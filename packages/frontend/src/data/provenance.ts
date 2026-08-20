@@ -53,8 +53,8 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 		],
 	},
 
-	"RadioScanner.app": {
-		appName: "Radio Scanner",
+	"RadioTraffic.app": {
+		appName: "Radio Traffic",
 		blurb:
 			"Air-traffic control and military radio traffic from the morning of September 11, 2001.",
 		sources: [

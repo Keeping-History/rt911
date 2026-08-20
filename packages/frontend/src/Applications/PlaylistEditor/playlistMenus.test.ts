@@ -133,7 +133,7 @@ describe("documentControlMenu", () => {
 		const onFocusApp = vi.fn();
 		const focus = child(documentControlMenu({ ...noopControl, onFocusApp }), "playlist_control_focus");
 		expect(focus.menuChildren?.map((c) => c.title)).toEqual([
-			"TV", "Radio Scanner", "News", "Flight Tracker",
+			"TV", "Radio Traffic", "News", "Flight Tracker",
 		]);
 
 		focus.menuChildren?.[0].onClickFunc?.();

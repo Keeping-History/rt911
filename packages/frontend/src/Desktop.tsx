@@ -39,7 +39,6 @@ import { Newsgroups } from "./Applications/Newsgroups/Newsgroups";
 import { PagerDecoder } from "./Applications/PagerDecoder/PagerDecoder";
 import { PlaylistEditor } from "./Applications/PlaylistEditor/PlaylistEditor";
 import { Readme } from "./Applications/README/README";
-import { RadioScanner } from "./Applications/RadioScanner/RadioScanner";
 import { RadioTraffic } from "./Applications/RadioTraffic/RadioTraffic";
 import { RadioTuner } from "./Applications/RadioTuner/RadioTuner";
 import { TimeMachine } from "./Applications/TimeMachine/TimeMachine";
@@ -195,7 +194,6 @@ export default function Desktop() {
 			<Newsgroups />
 			<PagerDecoder />
 			<Readme />
-			<RadioScanner />
 			<RadioTraffic />
 			<RadioTuner />
 			<TV />

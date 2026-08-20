@@ -8,7 +8,9 @@ import {
 	type HCOptionField,
 	registerHyperCardCommandEditorMeta,
 	registerHyperCardPartEditorMeta,
+	registerHyperCardOptionPicker,
 } from "classicy";
+import { RadioTrafficClipPicker } from "./RadioTrafficClipPicker";
 
 const text = (key: string, label: string): HCOptionField => ({ key, label, kind: "text" });
 const num = (key: string, label: string): HCOptionField => ({ key, label, kind: "number" });
@@ -18,13 +20,21 @@ const check = (key: string, label: string, dflt?: boolean): HCOptionField => ({
 	kind: "checkbox",
 	...(dflt === undefined ? {} : { default: dflt }),
 });
+const picker = (key: string, label: string, pickerId: string): HCOptionField => ({
+	key,
+	label,
+	kind: "picker",
+	pickerId,
+});
 
 export function registerHyperCardEditorMetadata(): void {
+	registerHyperCardOptionPicker("radioTrafficClip", RadioTrafficClipPicker);
+
 	registerHyperCardPartEditorMeta("directusAudio", {
 		label: "Audio Clip",
 		defaultSize: [200, 96],
 		optionsSchema: [
-			text("itemId", "Clip id (or variable)"),
+			picker("itemId", "Clip", "radioTrafficClip"),
 			text("url", "Direct audio URL"),
 		],
 	});

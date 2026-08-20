@@ -54,7 +54,7 @@
   // Clipped rather than scrolled: see .rtTabPanel[data-tab="transcript"], the
   // one panel that overrides this.
   overflow: hidden;
-  padding: 1px 2px;
+  padding: var(--window-border-size) calc(var(--window-border-size) * 2);
   font-family: var(--ui-font);
   font-size: calc(var(--ui-font-size) * 0.85);
   line-height: 1.25;
@@ -71,7 +71,11 @@
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 3px;
+  gap: calc(var(--window-border-size) * 3);
+  // Otherwise this auto-sizes to its tallest column's content instead of
+  // .rtTabPanel's fixed height, leaving dead space below short columns that
+  // align-items: stretch has nothing to stretch against.
+  height: 100%;
 }
 
 .rtPanelColumn {
@@ -79,13 +83,13 @@
   flex-direction: column;
   flex: 1 1 0;
   min-width: 0;
-  border: 1px solid var(--color-system-05);
+  border: var(--window-border-size) solid var(--color-system-05);
   background: var(--color-system-01);
 }
 
 .rtPanelColumnHead {
   margin: 0;
-  padding: 0 2px;
+  padding: 0 calc(var(--window-border-size) * 2);
   font-size: inherit;
   font-weight: bold;
   text-transform: uppercase;
@@ -106,8 +110,8 @@
 .rtDetailRow {
   display: flex;
   flex-direction: row;
-  gap: 4px;
-  padding: 0 2px;
+  gap: calc(var(--window-border-size) * 4);
+  padding: 0 calc(var(--window-border-size) * 2);
 }
 
 // Banded rows, as the design draws them: at this type size a band is what keeps
@@ -140,22 +144,22 @@
 
 .rtSubject {
   margin: 0;
-  padding: 0 2px;
+  padding: 0 calc(var(--window-border-size) * 2);
 }
 
 // Tag chips. `background` is set inline from tagPalette.chipColor.
 .rtChips {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: calc(var(--window-border-size) * 2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .rtChip {
-  padding: 0 3px;
-  border: 1px solid var(--color-system-05);
+  padding: 0 calc(var(--window-border-size) * 3);
+  border: var(--window-border-size) solid var(--color-system-05);
   white-space: nowrap;
 }
 
@@ -164,7 +168,7 @@
 .rtColumns {
   display: flex;
   flex-direction: row;
-  gap: 4px;
+  gap: calc(var(--window-border-size) * 4);
   align-items: flex-start;
 }
 
@@ -192,18 +196,75 @@
 
 .rtColumnValue,
 .rtPartyField {
+  // <li> already stacks; <span> (rtPartyField, now inside a table cell so a
+  // named speaker's person and facility read as two lines) needs this said
+  // explicitly.
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+// Parties table ---------------------------------------------------------
+//
+// One row per participant under a fixed header, rather than N side-by-side
+// boxes (rtColumns/rtColumn, still Mentions' shape) — a participant count that
+// varies per clip is what a table's rows absorb naturally, where a box-per-
+// participant layout would need the same three-field header repeated once per
+// box.
+.rtPartiesTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.rtPartiesTable th,
+.rtPartiesTable td {
+  padding: 0 calc(var(--window-border-size) * 2);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Speaker/Facility is the longest header AND the column most likely to carry
+// two stacked values (person and facility both), so it gets the lion's share
+// of the fixed-layout width instead of splitting evenly with Role/Confidence.
+.rtPartiesTable th:nth-child(1),
+.rtPartiesTable td:nth-child(1) {
+  width: 50%;
+}
+
+.rtPartiesTable th:nth-child(2),
+.rtPartiesTable td:nth-child(2) {
+  width: 22%;
+}
+
+.rtPartiesTable th:nth-child(3),
+.rtPartiesTable td:nth-child(3) {
+  width: 28%;
+}
+
+.rtPartiesTable th {
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--color-system-01);
+  background: var(--color-system-06);
+}
+
+// Banded rows, same convention as .rtDetailRow's even/odd striping.
+.rtPartiesTable tbody tr:nth-child(even) {
+  background: var(--color-system-02);
 }
 
 // Confidence badges. The three graded levels must stay visually distinct — the
 // badge is how a reader knows whether to trust the attribution.
 .rtConfBadge {
   align-self: flex-start;
-  margin-top: 1px;
-  padding: 0 3px;
-  border: 1px solid var(--color-system-05);
+  margin-top: var(--window-border-size);
+  padding: 0 calc(var(--window-border-size) * 3);
+  border: var(--window-border-size) solid var(--color-system-05);
   white-space: nowrap;
 }
 
@@ -248,7 +309,7 @@
 
 .rtCueLine {
   margin: 0;
-  padding: 0 2px;
+  padding: 0 calc(var(--window-border-size) * 2);
 }
 
 // The cue under the playhead, on the one card in a lane that is actually
@@ -264,6 +325,6 @@
 // routine state rather than an error one.
 .rtEmpty {
   margin: 0;
-  padding: 0 2px;
+  padding: 0 calc(var(--window-border-size) * 2);
   color: var(--color-system-04);
 }

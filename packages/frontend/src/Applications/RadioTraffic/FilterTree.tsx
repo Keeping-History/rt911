@@ -8,7 +8,7 @@
  * have to be reconciled with the picker's, which is handed the same whole set
  * for exactly this reason.
  */
-import { ClassicyCheckbox } from "classicy";
+import { ClassicyBevelButton, ClassicyCheckbox } from "classicy";
 import type React from "react";
 import { Disclosure } from "../../Components/Disclosure/Disclosure";
 import styles from "./filterTree.module.scss";
@@ -75,14 +75,10 @@ const LargeNamespaceRow: React.FC<{
 	count: number;
 	onOpen: (namespace: string) => void;
 }> = ({ group, count, onOpen }) => (
-	<button
-		type="button"
-		className={styles.rtFilterLargeRow}
-		onClick={() => onOpen(group.namespace)}
-	>
+	<ClassicyBevelButton data-filter-large-row onClickFunc={() => onOpen(group.namespace)}>
 		<span>{group.label}…</span>
 		{count > 0 && <span className={styles.rtFilterCount}>({count})</span>}
-	</button>
+	</ClassicyBevelButton>
 );
 
 export const FilterTree: React.FC<FilterTreeProps> = ({

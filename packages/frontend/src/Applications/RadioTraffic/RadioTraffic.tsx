@@ -51,13 +51,28 @@ import { isAudioBlocked, subscribeAudioBlocked } from "../radio-core/audioBlocke
 import { resolveAudioUrl } from "../radio-core/audioSource";
 import { BROADCAST_STATIONS, groupStations, startMs } from "../radio-core/stationGrouping";
 import appIconPng from "./app.png";
-import { connectClock, clockMoved, ensure, release, releaseAll, setLevel } from "./audioCoordinator";
+import {
+	clockMoved,
+	clockPauseChanged,
+	connectClock,
+	ensure,
+	hasEnded,
+	release,
+	releaseAll,
+	setLevel,
+} from "./audioCoordinator";
 import { historyPool, type Lane, laneFor, rememberItems } from "./cardStatus";
 import { FilterTree } from "./FilterTree";
 import { LANES, type LaneOrder, reconcileLaneOrder, reorderLane } from "./laneOrder";
 import { LaneSection } from "./LaneSection";
 import { LaneSmallPlayer } from "./LaneSmallPlayer";
-import { nextHeldLiveIds, sameIdSet, withAudibleHold } from "./liveHold";
+import {
+	IDLE_RELEASE_MS,
+	nextHeldLiveIds,
+	pruneIdleTouches,
+	sameIdSet,
+	withManualHold,
+} from "./liveHold";
 import styles from "./radioTraffic.module.scss";
 import {
 	radioTrafficSetState,
@@ -149,10 +164,11 @@ function excludeBroadcastStations(pool: readonly MediaItem[]): MediaItem[] {
 /**
  * Every card, in its lane, in the order that lane renders before manual pins.
  *
- * `heldLiveIds` is Story 045's audible hold (see liveHold.ts): an id in it
+ * `heldLiveIds` is Story 045's manual hold (see liveHold.ts): an id in it
  * overrides an otherwise-PREVIOUS verdict back to LIVE, so a player the
- * listener can still hear does not vanish out from under them the instant its
- * clock window ends. `laneFor` itself stays exactly as clock-only as its own
+ * listener has touched — paused, played, or scrubbed — does not vanish out
+ * from under them the instant its clock window ends. An untouched player gets
+ * no such reprieve. `laneFor` itself stays exactly as clock-only as its own
  * header promises — this is the reconciliation, not a rewrite of the rule.
  */
 function partitionLanes(
@@ -162,7 +178,7 @@ function partitionLanes(
 ): Record<Lane, MediaItem[]> {
 	const out: Record<Lane, MediaItem[]> = { live: [], upcoming: [], previous: [] };
 	for (const item of pool) {
-		out[withAudibleHold(laneFor(item, nowMs), item.id, heldLiveIds)].push(item);
+		out[withManualHold(laneFor(item, nowMs), item.id, heldLiveIds)].push(item);
 	}
 	out.live.sort(byStartAscending);
 	out.upcoming.sort(byStartAscending);
@@ -185,6 +201,18 @@ function toggleId(set: ReadonlySet<number>, id: number): ReadonlySet<number> {
 	return next;
 }
 
+/**
+ * `set` with `id` added, or `set` itself when it was already there.
+ *
+ * Unlike toggleId, this never removes — a touch is a one-way latch (see
+ * touchedLiveIds below), so a second play/pause or a second scrub on the same
+ * card must not undo the first one's hold.
+ */
+function addId(set: ReadonlySet<number>, id: number): ReadonlySet<number> {
+	if (set.has(id)) return set;
+	return new Set(set).add(id);
+}
+
 /** `set` minus everything `keep` rejects; the same object when nothing was dropped. */
 function retainIds(
 	set: ReadonlySet<number>,
@@ -204,6 +232,16 @@ export const RadioTraffic: React.FC = () => {
 			state.System.Manager.Applications.apps[appId]?.data as
 				| Record<string, unknown>
 				| undefined,
+	);
+	/**
+	 * Story 050: `RadioTraffic` renders unconditionally in `Desktop.tsx` — this
+	 * is the only signal that separates "the window is open" from "the desktop
+	 * booted". `RadioTuner.tsx` and `TV.tsx` already read the same selector
+	 * (currently only for an analytics toggle); this app is the first to gate
+	 * real work on it.
+	 */
+	const isOpen = useAppManager(
+		(state) => state.System.Manager.Applications.apps[appId]?.open ?? false,
 	);
 
 	// Persisted state is read ONCE, through the sanitizer, and owned as React
@@ -265,9 +303,31 @@ export const RadioTraffic: React.FC = () => {
 	/** PREVIOUS clips the listener started by hand — these do NOT follow the clock. */
 	const [userStarted, setUserStarted] = useState<ReadonlySet<number>>(() => new Set());
 	/**
+	 * LIVE cards the listener has manually touched — paused/played, or scrubbed
+	 * the waveform. This is the whole criterion for Story 045's hold below: an
+	 * untouched card simply disappears once its clock window ends, and a touched
+	 * one stays no matter what they do to it afterward (mute it, pause it again),
+	 * which is why this is add-only (addId) rather than a toggle like `stopped`.
+	 *
+	 * The hold itself is not permanent: `pruneIdleTouches` below drops an id
+	 * once IDLE_RELEASE_MS passes with nothing happening on it — see
+	 * `lastLiveActivityRef`.
+	 */
+	const [touchedLiveIds, setTouchedLiveIds] = useState<ReadonlySet<number>>(() => new Set());
+	/**
+	 * When each touched id last did something worth extending its hold for — a
+	 * press/scrub (stamped where `touchedLiveIds` is set), or a tick spent
+	 * actually playing (stamped in the idle-prune effect below). A ref, not
+	 * state: it is bookkeeping for `pruneIdleTouches`, not something anything
+	 * renders from, and it would otherwise need pruning of its own to stop
+	 * growing across a whole session — the idle-prune effect deletes an id's
+	 * entry the same tick it drops out of `touchedLiveIds`.
+	 */
+	const lastLiveActivityRef = useRef<Map<number, number>>(new Map());
+	/**
 	 * Story 045: LIVE ids `partitionLanes` holds past their clock window because
-	 * the listener can still hear them — see liveHold.ts. Read one render behind
-	 * on purpose: it names ids that were already in `lanes.live`, so it can only
+	 * the listener has touched them — see liveHold.ts. Read one render behind on
+	 * purpose: it names ids that were already in `lanes.live`, so it can only
 	 * ever widen LIVE with something that was already there, never manufacture a
 	 * membership `laneFor` never granted.
 	 */
@@ -284,11 +344,17 @@ export const RadioTraffic: React.FC = () => {
 		getUpcomingMp3Items,
 	} = useContext(MediaStreamContext);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-only
+	// Story 050: gated on isOpen, not mount-only. subscribeMp3/unsubscribeMp3
+	// are already ref-counted per appId (MediaStreamProvider.tsx), so this is
+	// the sanctioned way to opt in and out — closing the window must stop
+	// pulling mp3 data from the streamer on this app's behalf, not just stop
+	// showing what already arrived. Reopening re-subscribes and picks the
+	// stream back up from wherever it is, same as a fresh mount would.
 	useEffect(() => {
+		if (!isOpen) return;
 		subscribeMp3(appId);
 		return () => unsubscribeMp3(appId);
-	}, [subscribeMp3, unsubscribeMp3]);
+	}, [isOpen, subscribeMp3, unsubscribeMp3]);
 
 	// ── The clock ────────────────────────────────────────────────────────────
 	// Read-only: every clock WRITE in this repo goes through
@@ -362,21 +428,18 @@ export const RadioTraffic: React.FC = () => {
 
 	// Story 045: what to hold NEXT render, derived from what LIVE actually holds
 	// THIS render — see liveHold.ts's header for why the memory lives out here
-	// rather than in that module. `stopped` and lane/per-card mute are read
-	// straight off React state rather than through the `visible.live`/isAudible
-	// pipeline built below, because a filter-hidden card is still part of the
-	// mix (the same rule the audio-registration effect follows) and must not
-	// lose its hold just because a tag filter hid it.
+	// rather than in that module. `touchedLiveIds` is read straight off React
+	// state rather than through the `visible.live` pipeline built below, because
+	// a filter-hidden card can still be the one the listener touched, and a tag
+	// filter must not be what decides whether it survives its clock window.
 	//
 	// biome-ignore lint/correctness/useExhaustiveDependencies: sameIdSet keeps this from looping — see the setHeldLiveIds call
 	useEffect(() => {
-		const isHeldAudible = (itemId: number) =>
-			!liveLaneMuted && !stopped.has(itemId) && isAudible(audio, itemId, "live");
 		setHeldLiveIds((prev) => {
-			const next = nextHeldLiveIds(lanes.live, isHeldAudible);
+			const next = nextHeldLiveIds(lanes.live, (itemId) => touchedLiveIds.has(itemId));
 			return sameIdSet(prev, next) ? prev : next;
 		});
-	}, [lanes.live, audio, liveLaneMuted, stopped]); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [lanes.live, touchedLiveIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	/** Which lane each rendered card is in — the pin reconciler's whole input. */
 	const membership = useMemo(() => {
@@ -394,13 +457,42 @@ export const RadioTraffic: React.FC = () => {
 		setLaneOrder((order) => reconcileLaneOrder(order, membership));
 	}, [membership]);
 
-	// Both hand-set lists are scoped to a lane the item may have left. Pruning
-	// them here is what stops a stop/start from a previous hour reapplying
-	// itself when a backward seek brings the clip round again.
+	// All three hand-set lists are scoped to a lane the item may have left.
+	// Pruning them here is what stops a stop/start/touch from a previous hour
+	// reapplying itself when a backward seek brings the clip round again.
+	// touchedLiveIds keying off the same `=== "live"` test as `stopped` is what
+	// makes the hold self-sustaining rather than one-shot: as long as a touched
+	// id keeps reporting "live" (because withManualHold is holding it there),
+	// its touch survives; only once it genuinely leaves LIVE for good, OR sits
+	// idle for IDLE_RELEASE_MS (see pruneIdleTouches), does the touch — and
+	// with it, the hold — get dropped.
 	useEffect(() => {
 		setStopped((ids) => retainIds(ids, (id) => membership.get(id) === "live"));
 		setUserStarted((ids) => retainIds(ids, (id) => membership.has(id)));
-	}, [membership]);
+
+		// A touched card renews its own activity stamp for as long as it is
+		// actually playing — following the clock, not paused, tape not run out —
+		// so nothing further from the listener is needed to keep it fresh. Once
+		// it stops doing any of those, the stamp left by that last change (a
+		// pause press, or simply reaching the end) is what the idle clock below
+		// counts from.
+		const now = Date.now();
+		for (const id of touchedLiveIds) {
+			if (membership.get(id) === "live" && !stopped.has(id) && !hasEnded(id)) {
+				lastLiveActivityRef.current.set(id, now);
+			}
+		}
+		setTouchedLiveIds((ids) => {
+			const stillLive = retainIds(ids, (id) => membership.get(id) === "live");
+			const fresh = pruneIdleTouches(stillLive, lastLiveActivityRef.current, now, IDLE_RELEASE_MS);
+			// The ref is bookkeeping for ids `touchedLiveIds` still names — drop
+			// anything else so it cannot grow unbounded across a long session.
+			for (const id of lastLiveActivityRef.current.keys()) {
+				if (!fresh.has(id)) lastLiveActivityRef.current.delete(id);
+			}
+			return fresh;
+		});
+	}, [membership, stopped, touchedLiveIds]);
 
 	// ── The filter ───────────────────────────────────────────────────────────
 	const [vocabulary, setVocabulary] = useState<VocabularyState>(() => ({
@@ -465,6 +557,13 @@ export const RadioTraffic: React.FC = () => {
 		clockMoved();
 	}, [anchorMs]);
 
+	// The operator pausing or resuming the virtual clock — the Classicy control
+	// panel, not this app's own tools — pauses or resumes every LIVE player still
+	// following it, the same way RadioTuner's StationPlayer already does.
+	useEffect(() => {
+		clockPauseChanged(clockPaused);
+	}, [clockPaused]);
+
 	// Which elements should exist, and WHICH COPY of each recording they play.
 	// LANE membership, NOT filter visibility: the element outlives the card so a
 	// re-checked filter resumes at the clock's offset instead of restarting.
@@ -480,7 +579,13 @@ export const RadioTraffic: React.FC = () => {
 	// the swap needs no reload and costs no playback position the coordinator's
 	// clock reseek does not immediately restore.
 	const registeredRef = useRef<Set<number>>(new Set());
+	// Story 050: gated on isOpen, so a closed window registers nothing new — no
+	// <audio> element, no fetch, for a listener who has never opened the app.
+	// Skipping the body while closed is only half of it, though: it does
+	// nothing about elements this effect already registered before the close,
+	// which is what the close-transition effect right below is for.
 	useEffect(() => {
+		if (!isOpen) return;
 		const desired = new Map<number, string>();
 		for (const item of lanes.live) {
 			if (!stopped.has(item.id))
@@ -499,11 +604,27 @@ export const RadioTraffic: React.FC = () => {
 			ensure(itemId, url);
 			registeredRef.current.add(itemId);
 		}
-	}, [lanes.live, lanes.previous, stopped, userStarted, settings.playOriginalAudio]);
+	}, [isOpen, lanes.live, lanes.previous, stopped, userStarted, settings.playOriginalAudio]);
+
+	// Story 050: the window closing is not an unmount — this component stays
+	// mounted for the desktop's whole lifetime — so nothing else stops the
+	// sound. This is the explicit close-transition act: it releases whatever
+	// the registration effect above registered before the close, including a
+	// PREVIOUS clip the listener started by hand, which is exactly as audible
+	// and exactly as much a leak as a LIVE one if left behind. Runs on mount
+	// too when the window starts closed, which is a harmless no-op — nothing
+	// is registered yet.
+	useEffect(() => {
+		if (isOpen) return;
+		releaseAll();
+		registeredRef.current.clear();
+	}, [isOpen]);
 
 	// The app unmounting is the one moment nothing else can stop the sound:
 	// these elements are never in the DOM, so a dropped registry is a leak that
-	// keeps playing.
+	// keeps playing. Kept alongside the close-transition effect above as a
+	// second, unconditional line of defense — this fires even if the desktop
+	// ever stops rendering RadioTraffic outright.
 	useEffect(
 		() => () => {
 			releaseAll();
@@ -585,9 +706,28 @@ export const RadioTraffic: React.FC = () => {
 	);
 
 	const onTogglePause = useCallback((itemId: number, lane: Lane) => {
-		if (lane === "live") setStopped((ids) => toggleId(ids, itemId));
+		if (lane === "live") {
+			setStopped((ids) => toggleId(ids, itemId));
+			// A play/pause press is a touch — see touchedLiveIds above — whichever
+			// direction it toggled `stopped`, so this is add-only, never undone by
+			// pressing the button again. Stamping activity here, not just adding to
+			// the set, is what gives a brand-new touch its own fresh idle window
+			// rather than reusing whatever a stale entry from a much earlier touch
+			// on this id would otherwise leave behind.
+			lastLiveActivityRef.current.set(itemId, Date.now());
+			setTouchedLiveIds((ids) => addId(ids, itemId));
+		}
 		// An UPCOMING clip has no audio yet; there is nothing to start.
 		else if (lane === "previous") setUserStarted((ids) => toggleId(ids, itemId));
+	}, []);
+
+	/** A LIVE card's waveform was scrubbed — the other half of a touch. */
+	const onManualSeek = useCallback((itemId: number) => {
+		// PeaksWaveform calls this on every pointermove of a drag, not once per
+		// gesture, so a scrub in progress re-stamps continuously and can never go
+		// idle mid-drag.
+		lastLiveActivityRef.current.set(itemId, Date.now());
+		setTouchedLiveIds((ids) => addId(ids, itemId));
 	}, []);
 
 	const onReorder = useCallback(
@@ -629,6 +769,11 @@ export const RadioTraffic: React.FC = () => {
 						lane === "live" ? stopped.has(item.id) : !userStarted.has(item.id)
 					}
 					onTogglePause={() => onTogglePause(item.id, lane)}
+					// Only a LIVE scrub is a touch that keeps the card from vanishing —
+					// UPCOMING has no audio to scrub, and PREVIOUS already plays back
+					// from wherever the listener starts it, following no clock a scrub
+					// would need to override.
+					onManualSeek={lane === "live" ? () => onManualSeek(item.id) : undefined}
 					waveformColor={waveformColor}
 				/>
 			</div>
@@ -644,6 +789,7 @@ export const RadioTraffic: React.FC = () => {
 			stopped,
 			onCardClick,
 			onTogglePause,
+			onManualSeek,
 			waveformColor,
 		],
 	);
@@ -753,6 +899,18 @@ export const RadioTraffic: React.FC = () => {
 								lane={lane}
 								items={visible[lane]}
 								order={laneOrder[lane]}
+								// Story 044: the one card that must not appear to move when
+								// the lane reflows. LIVE's active card is whichever one is
+								// soloed (or, with no solo, still the mix — soloId is the
+								// only single-card signal LIVE has); PREVIOUS has no solo
+								// concept, so it's the most recently hand-started clip.
+								activeId={
+									lane === "live"
+										? audio.soloId
+										: lane === "previous"
+											? ([...userStarted].at(-1) ?? null)
+											: null
+								}
 								collapsed={collapsed[lane]}
 								onToggleCollapse={(next) =>
 									setCollapsed((prev) => ({ ...prev, [lane]: next }))

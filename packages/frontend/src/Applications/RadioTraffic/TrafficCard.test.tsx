@@ -70,6 +70,7 @@ function renderCard(
 		muted?: boolean;
 		paused?: boolean;
 		onTogglePause?: () => void;
+		onManualSeek?: () => void;
 		onToggleMute?: () => void;
 	} = {},
 ) {
@@ -85,6 +86,7 @@ function renderCard(
 			muted={props.muted}
 			paused={props.paused}
 			onTogglePause={props.onTogglePause ?? (() => {})}
+			onManualSeek={props.onManualSeek}
 			onToggleMute={props.onToggleMute}
 		/>,
 	);
@@ -307,6 +309,90 @@ describe("TrafficCard seeking", () => {
 
 		expect(audio.seekTo).not.toHaveBeenCalled();
 	});
+
+	it("reports a scrub to the shell in addition to seeking through the coordinator", () => {
+		// RadioTraffic.tsx's Story 045 hold reads this signal, not seekTo — the
+		// card has no idea a hold exists, it only reports the touch.
+		stubWaveformBox();
+		const onManualSeek = vi.fn();
+		const { container } = renderCard({ lane: "live", onManualSeek });
+
+		fireEvent.pointerDown(container.querySelector("canvas")!, { clientX: 50 });
+
+		expect(audio.seekTo).toHaveBeenCalled();
+		expect(onManualSeek).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not report a scrub when the clip has no duration to seek within", () => {
+		// Same guard as the seek itself above — no seek happened, so nothing was
+		// actually scrubbed for the shell to hold onto.
+		stubWaveformBox();
+		const onManualSeek = vi.fn();
+		const endless = { ...makeItem(), end_date: undefined, calc_duration: undefined };
+		renderCard({ item: endless, lane: "live", onManualSeek });
+		// PeaksWaveform is never given onSeekPct at all for a durationless clip
+		// (TrafficCard.tsx: `durationMs > 0 ? onSeekPct : undefined`), so there is
+		// no canvas listener to fire in the first place — nothing to assert beyond
+		// onManualSeek staying untouched through render.
+		expect(onManualSeek).not.toHaveBeenCalled();
+	});
+});
+
+describe("TrafficCard rewind", () => {
+	it("seeks to the start of the recording through the coordinator", () => {
+		// NOT `el.currentTime = 0` from here, for the same reason a waveform
+		// scrub isn't: the coordinator caches the position every reader —
+		// this card's own badge included — is looking at.
+		const { getByRole } = renderCard({ lane: "live" });
+
+		fireEvent.click(getByRole("button", { name: "Rewind to start" }));
+
+		expect(audio.seekTo).toHaveBeenCalledWith(makeItem().id, 0);
+	});
+
+	it("reports the rewind to the shell in addition to seeking", () => {
+		// Same signal a scrub reports (Story 045's hold) — a deliberate rewind
+		// is exactly the kind of press that should take a LIVE card off the
+		// clock the way dragging the waveform does.
+		const onManualSeek = vi.fn();
+		const { getByRole } = renderCard({ lane: "live", onManualSeek });
+
+		fireEvent.click(getByRole("button", { name: "Rewind to start" }));
+
+		expect(onManualSeek).toHaveBeenCalledTimes(1);
+	});
+
+	it("is offered even when the clip is paused", () => {
+		// Rewind resets position, not playback state — it must not require
+		// the card to already be playing.
+		const { getByRole } = renderCard({ lane: "live", paused: true });
+
+		fireEvent.click(getByRole("button", { name: "Rewind to start" }));
+
+		expect(audio.seekTo).toHaveBeenCalledWith(makeItem().id, 0);
+	});
+
+	it("keeps a rewind from also firing the lane's active tool", () => {
+		// Same collision the mute button and the waveform already guard
+		// against: the card sits in a slot whose pointerup applies the tool
+		// palette's current tool.
+		const onSlotPointerUp = vi.fn();
+		const { getByRole } = render(
+			<div onPointerUp={onSlotPointerUp}>
+				<TrafficCard
+					item={makeItem()}
+					lane="live"
+					tzOffsetHours={-4}
+					nowMs={START_MS}
+					onTogglePause={() => {}}
+				/>
+			</div>,
+		);
+
+		fireEvent.pointerUp(getByRole("button", { name: "Rewind to start" }));
+
+		expect(onSlotPointerUp).not.toHaveBeenCalled();
+	});
 });
 
 // Story 028. A card follows the virtual clock until the listener says
@@ -507,12 +593,18 @@ describe("TrafficCard tabs", () => {
 		);
 	});
 
-	it("does not offer a Summary tab to an item with no summary", () => {
-		// A tab that opens onto "No summary." is furniture in a 207px strip that
-		// already pages with arrows to reach its last tabs.
-		const { queryByRole } = renderCard({ meta: makeMeta({ subject: undefined }) });
-		expect(queryByRole("tab", { name: "Summary" })).toBeNull();
+	it("still offers a Summary tab to an item with no summary, with an explicit empty state", () => {
+		// Story 049: hiding the tab when data is empty was indistinguishable from
+		// a bug once `subject` came back null on every one of the 814 rows.
+		const { getByRole, queryByRole, container } = renderCard({
+			meta: makeMeta({ subject: undefined }),
+		});
+		expect(queryByRole("tab", { name: "Summary" })).not.toBeNull();
 		expect(queryByRole("tab", { name: "Details" })).not.toBeNull();
+		fireEvent.click(getByRole("tab", { name: "Summary" }));
+		expect(container.querySelector('[data-tab="summary"]')?.textContent).toContain(
+			"No summary.",
+		);
 	});
 
 	it("swaps the panel when another tab is picked", () => {
@@ -721,8 +813,9 @@ describe("TrafficCard, for an item with no metadata", () => {
 	it("renders as a real card on every tab", () => {
 		const { container, getByRole } = renderCard({ meta: undefined });
 		expect(container.querySelector("[data-lane]")).not.toBeNull();
-		// The tabs such an item HAS: with no metadata there is no summary, so the
-		// card does not offer that one at all (visibleCardTabs).
+		// Every tab (visibleCardTabs), including Summary: with no metadata at all
+		// there is no summary either, and the panel says so rather than the tab
+		// disappearing (story 049).
 		for (const tab of visibleCardTabs(undefined)) {
 			fireEvent.click(getByRole("tab", { name: tab.label }));
 			// Not merely "did not throw": a card whose panel paints an empty box

@@ -1,5 +1,5 @@
 import type { EditorEntry } from "./editorState";
-import { directusGet } from "./directusQueue";
+import { directusGet } from "../../lib/directusQueue";
 
 export async function resolveTimelineMeta(
 	entries: EditorEntry[],

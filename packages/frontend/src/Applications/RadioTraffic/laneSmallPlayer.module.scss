@@ -31,6 +31,7 @@
   // lane is already the compact view, and a scrollbar inside it would be a
   // second thing to scroll inside something you folded away to stop scrolling.
   overflow: hidden;
+
 }
 
 // The one line the design gives real size to — it is what a listener reads the
@@ -38,7 +39,7 @@
 .rtSmallSubject {
   margin: 0;
   min-width: 0;
-  font-size: calc(var(--ui-font-size) * 1.15);
+  font-size: var(--ui-font-size);
   font-weight: normal;
   line-height: 1.25;
   color: var(--color-white, #fff);

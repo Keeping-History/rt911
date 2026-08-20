@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { directusGet } from "./directusQueue";
+import { directusGet } from "../../lib/directusQueue";
 
 export type SpanPeaks = { id: number; startMs: number; endMs: number; peaks: number[][] };
 

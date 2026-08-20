@@ -53,8 +53,9 @@ describe("SummaryTab", () => {
 	});
 
 	it("says so rather than painting an empty box when there is no summary", () => {
-		// Not a state the card routinely shows — it hides the tab instead — but a
-		// panel that renders nothing at all is indistinguishable from a broken one.
+		// Story 049: the tab is always offered, so this is the routine state for
+		// any of the 814 items whose `subject` is null — a panel that renders
+		// nothing at all is indistinguishable from a broken one.
 		const { getByText } = render(<SummaryTab item={makeItem()} tzOffsetHours={TZ} />);
 		expect(getByText("No summary.")).toBeTruthy();
 	});

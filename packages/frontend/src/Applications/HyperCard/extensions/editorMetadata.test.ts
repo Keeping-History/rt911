@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	getHyperCardCommandEditorMeta,
 	getHyperCardPartEditorMeta,
+	getHyperCardOptionPicker,
 } from "classicy";
 import { registerHyperCardEditorMetadata } from "./editorMetadata";
 
@@ -45,5 +46,15 @@ describe("registerHyperCardEditorMetadata", () => {
 		registerHyperCardEditorMetadata();
 		const meta = getHyperCardCommandEditorMeta("setDateTime");
 		expect(meta?.fields.map((f) => f.key)).toEqual(["to", "toVar"]);
+	});
+
+	it("registers the Radio Traffic clip picker for directusAudio's itemId field", () => {
+		registerHyperCardEditorMetadata();
+		const field = getHyperCardPartEditorMeta("directusAudio")?.optionsSchema?.find(
+			(f) => f.key === "itemId",
+		);
+		expect(field?.kind).toBe("picker");
+		expect(field?.pickerId).toBe("radioTrafficClip");
+		expect(getHyperCardOptionPicker("radioTrafficClip")).toBeDefined();
 	});
 });

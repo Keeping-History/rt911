@@ -575,6 +575,32 @@ export function clockMoved(): void {
 }
 
 /**
+ * The virtual clock's pause state changed — pause or resume every
+ * clock-following element to match, the same pattern radio-core's
+ * StationPlayer already uses for the Tuner's continuous stations.
+ *
+ * Left running, a clock-following element keeps advancing in real time while
+ * the clock stands still, and the periodic health check cannot correct the
+ * resulting drift either — it skips its own work while paused, on the same
+ * `clockPaused()` this function reacts to. Resuming needs no reseek: neither
+ * the clock nor a genuinely paused element moved while frozen, so an element
+ * that was in sync when this paused it still is when this resumes it.
+ *
+ * `followsClock` is the same exclusion the reseek and the health check use —
+ * a card the listener has already taken off clock-follow (paused it
+ * themselves, or scrubbed it) is untouched either way, because the clock
+ * pausing is not the listener's own pause button being pressed again.
+ */
+export function clockPauseChanged(paused: boolean): void {
+	if (!clock) return;
+	for (const [itemId, entry] of registry) {
+		if (!followsClock(itemId)) continue;
+		if (paused) entry.el.pause();
+		else if (entry.el.paused) tryPlay(itemId, entry);
+	}
+}
+
+/**
  * A user gesture is the first moment blocked playback can start: Safari refuses
  * gesture-less play() on page load, so a restored session autoplays into a
  * blocked state, and nothing in the card grid necessarily changes React state

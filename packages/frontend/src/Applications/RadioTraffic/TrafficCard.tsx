@@ -23,6 +23,7 @@
 //   currentPct   the playhead over the same, 0..1 — the element's position when
 //                there is an element, the clock's when there is not (story 028).
 
+import { ClassicyBevelButton } from "classicy";
 import type React from "react";
 import {
 	useCallback,
@@ -68,6 +69,13 @@ export interface TrafficCardProps {
 	paused?: boolean;
 	onTogglePause: () => void;
 	/**
+	 * The listener scrubbed the waveform — LIVE only (see RadioTraffic.tsx's
+	 * renderCard). Fired in addition to the seek itself, not instead of it: this
+	 * is purely a signal for Story 045's manual hold, and carries no position of
+	 * its own for the shell to act on.
+	 */
+	onManualSeek?: () => void;
+	/**
 	 * The waveform's ink as a CSS color, or undefined to follow the theme.
 	 *
 	 * A `color` on the waveform slot rather than a prop passed into
@@ -109,6 +117,32 @@ const SpeakerIcon: React.FC<{ muted: boolean }> = ({ muted }) => (
 	</svg>
 );
 
+/**
+ * A circular arrow open at the top, with an arrowhead at its left end — the
+ * rewind-to-start button's artwork. `currentColor`, same reasoning as the
+ * speaker: one asset has to read on both a bright LIVE card and a dimmed
+ * UPCOMING one.
+ */
+const RewindIcon: React.FC = () => (
+	<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" role="presentation">
+		<path
+			d="M8 2.5a5.5 5.5 0 1 1 -5.5 5.5"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			fill="none"
+			strokeLinecap="round"
+		/>
+		<path
+			d="M5 5.3L2 8l3 2.7"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			fill="none"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		/>
+	</svg>
+);
+
 /** The badge, in the few characters the 196px header can spare beside a subject. */
 function badgeLabel(badge: Badge): string {
 	switch (badge.kind) {
@@ -139,6 +173,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	muted = false,
 	paused = false,
 	onTogglePause,
+	onManualSeek,
 	waveformColor,
 	onToggleMute,
 }) => {
@@ -220,9 +255,20 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	const onSeekPct = useCallback(
 		(pct: number) => {
 			seekTo(item.id, pct * durationMs);
+			onManualSeek?.();
 		},
-		[item.id, durationMs],
+		[item.id, durationMs, onManualSeek],
 	);
+
+	// The rewind button: the same write the waveform's own left edge would make
+	// (seekTo already clamps to 0 and floors negative input, so this is not a
+	// special case of it), reported through the same onManualSeek signal a
+	// scrub uses — a deliberate rewind is exactly the kind of press that should
+	// take a LIVE card off the clock's own hold the way a scrub does.
+	const onRewind = useCallback(() => {
+		seekTo(item.id, 0);
+		onManualSeek?.();
+	}, [item.id, onManualSeek]);
 
 	// Stopping means opposite things in the two lanes that can be playing.
 	//
@@ -275,11 +321,11 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 	}, [ended, lane, userPlaying, stopPlayback, onTogglePause]);
 
 	const title = meta?.subject?.trim() || item.full_title;
-	// Summary is only offered when there is one, so the tab list is a fact about
-	// THIS item rather than a constant. The panel is looked up in the same list
-	// the bar draws, and the bar is told which tab that lookup landed on: an item
-	// whose summary goes away while its Summary tab is open then falls back to
-	// Details with Details highlighted, rather than showing one and marking none.
+	// visibleCardTabs offers every tab today (story 049) — the seam stays
+	// because the panel is looked up in the same list the bar draws, and the
+	// bar is told which tab that lookup landed on, which is what lets a tab
+	// that genuinely does depend on the item fall back to Details with Details
+	// highlighted instead of showing a panel with nothing selected.
 	const tabs = useMemo(() => visibleCardTabs(meta), [meta]);
 	const panel = tabs.find((tab) => tab.id === active) ?? tabs[0];
 
@@ -348,26 +394,47 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 			</div>
 
 			<div className={styles.rtCardControls}>
-				<button
-					type="button"
-					className={styles.rtCardTransport}
+				<ClassicyBevelButton
+					square
+					bevelWidth="small"
+					data-card-transport
 					aria-label={paused ? "Play" : "Pause"}
 					title={paused ? "Play" : "Pause"}
-					onClick={onTransport}
+					onClickFunc={onTransport}
 				>
 					<span aria-hidden="true">{paused ? "▶" : "❚❚"}</span>
-				</button>
-				<button
-					type="button"
-					className={styles.rtCardMute}
+				</ClassicyBevelButton>
+				<ClassicyBevelButton
+					square
+					bevelWidth="small"
+					data-card-rewind
+					aria-label="Rewind to start"
+					title="Rewind to start"
+					onClickFunc={onRewind}
+					// Same collision the mute button and the waveform already guard
+					// against: left to bubble, letting go of a rewind press under the
+					// mute tool would rewind AND mute the card in one release.
+					onPointerUp={(e) => e.stopPropagation()}
+				>
+					<RewindIcon />
+				</ClassicyBevelButton>
+				<ClassicyBevelButton
+					mode="toggle"
+					square
+					bevelWidth="small"
+					// Controlled: the mix's own mute is the single source of truth (the
+					// card is a view over props, not a second copy of it), and toggle
+					// mode is what gives this its own aria-pressed for free.
+					on={muted}
+					data-card-mute
 					data-muted={muted}
 					// Named for what the press does, not for the state it is in: a
 					// button called "Muted" reads to a screen reader as an instruction
-					// to mute. aria-pressed carries the state.
+					// to mute. aria-pressed is ClassicyBevelButton's own, computed from
+					// `on` — the same fact `muted` carries.
 					aria-label={muted ? "Unmute" : "Mute"}
-					aria-pressed={muted}
 					title={muted ? "Unmute" : "Mute"}
-					onClick={onToggleMute}
+					onChangeFunc={onToggleMute}
 					// The lane slot and the card slot above both apply the active tool
 					// on pointerup (LaneSection, RadioTraffic's renderCard). Left to
 					// bubble, one press on this button under the mute tool would mute
@@ -376,7 +443,7 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 					onPointerUp={(e) => e.stopPropagation()}
 				>
 					<SpeakerIcon muted={muted} />
-				</button>
+				</ClassicyBevelButton>
 			</div>
 
 			<div className={styles.rtCardTabs}>
