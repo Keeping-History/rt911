@@ -1189,9 +1189,9 @@ describe("RadioTraffic — a collapsed lane", () => {
 		const small = document.querySelector('[data-small-player="4"]');
 		// The tier tag META gives every item, coloured by its namespace.
 		expect(small?.querySelector("li")?.textContent).toBe("secondary");
-		expect(small?.querySelector('[data-field="start"]')?.textContent).toBe(
-			"9/11/2001 8:55 AM ET",
-		);
+		// NOW_MS is 2001-09-11T12:47Z — the same display-day as this item's start,
+		// so #523 drops the date and keeps the time and zone.
+		expect(small?.querySelector('[data-field="start"]')?.textContent).toBe("8:55 AM ET");
 		expect(small?.querySelector('[data-field="duration"]')?.textContent).toBe("60 seconds");
 	});
 

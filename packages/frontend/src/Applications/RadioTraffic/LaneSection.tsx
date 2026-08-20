@@ -29,7 +29,7 @@
 
 import { ClassicyBevelButton } from "classicy";
 import type React from "react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import type { Lane } from "./cardStatus";
 import { applyManualOrder, type LanePins, stabilizeLaneOrder } from "./laneOrder";
@@ -215,10 +215,21 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	// siblings"; stabilizeLaneOrder answers what a NEW sibling arriving, or an
 	// old one leaving, does to that arrangement — new cards enter at the left,
 	// and the active card (if it rendered last tick) holds the index it had.
-	const ordered = stabilizeLaneOrder(
-		applyManualOrder(items, order),
-		previousIdsRef.current,
-		activeId,
+	//
+	// Memoized, not recomputed inline: this component re-renders on every
+	// clock tick AND on every unrelated MediaStream frame the shell receives
+	// (mp3, pager, flights, weather, …), because RadioTraffic reads the whole
+	// shared context. Without this, `ordered` was a fresh array on every one
+	// of those renders, which made the useLayoutEffect below — a forced
+	// synchronous DOM reflow over every card in the lane — re-run on every
+	// render too, not just ticks that actually changed which cards are here.
+	// With enough live traffic cards accumulated, that was enough to pin the
+	// main thread; `items` and `order` are themselves stable across an
+	// unrelated render (memoized upstream / plain state), so this actually
+	// has something to skip.
+	const ordered = useMemo(
+		() => stabilizeLaneOrder(applyManualOrder(items, order), previousIdsRef.current, activeId),
+		[items, order, activeId],
 	);
 	// Dragging is a mode, not a capability: under the other three tools a press
 	// on a card means solo, mute or unmute, and reordering must not also happen.

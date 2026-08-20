@@ -29,26 +29,49 @@ export function zoneLabel(tzOffsetHours: number): string {
 }
 
 /**
- * `9/11/2001 8:33 AM ET` — the collapsed player's start line.
+ * `9/11/2001 8:33 AM ET` — the collapsed player's start line, or just
+ * `8:33 AM ET` when the clip started on the same (display-shifted) day the
+ * virtual clock currently reads.
  *
  * Shift the true-UTC instant by the display offset and format it AS UTC, which
  * is itemTiming.wallClockLabel's trick and for the same reason: the line has to
  * read identically for a listener in Berlin and one in Boston, which handing
  * the raw instant to the browser's own zone would not. Unlike that helper this
- * one carries the date, because a collapsed lane has no card header to carry it.
+ * one can carry the date, because a collapsed lane has no card header to carry
+ * it — but only when the date is not simply "today" as the Classicy clock
+ * currently sees it (issue #523). `nowMs` is the virtual clock's own current
+ * instant (e.g. RadioTraffic's `anchorMs`), shifted by the same offset before
+ * comparing — this is a "current day" question about the desktop's clock, not
+ * the browser's real-world date.
  */
-export function startLabel(ms: number | null, tzOffsetHours: number): string | null {
+export function startLabel(
+	ms: number | null,
+	tzOffsetHours: number,
+	nowMs: number | null,
+): string | null {
 	if (ms === null || !Number.isFinite(ms)) return null;
-	const stamp = new Date(ms + tzOffsetHours * HOUR_MS).toLocaleString("en-US", {
+	const shifted = new Date(ms + tzOffsetHours * HOUR_MS);
+	const sameDay =
+		nowMs !== null &&
+		Number.isFinite(nowMs) &&
+		isSameUtcDay(shifted, new Date(nowMs + tzOffsetHours * HOUR_MS));
+	const stamp = shifted.toLocaleString("en-US", {
 		timeZone: "UTC",
-		month: "numeric",
-		day: "numeric",
-		year: "numeric",
+		...(sameDay ? {} : { month: "numeric", day: "numeric", year: "numeric" }),
 		hour: "numeric",
 		minute: "2-digit",
 	});
 	// en-US separates the date from the time with a comma; the design does not.
 	return `${stamp.replace(", ", " ")} ${zoneLabel(tzOffsetHours)}`;
+}
+
+/** Same calendar day, comparing the UTC fields of two already-shifted stamps. */
+function isSameUtcDay(a: Date, b: Date): boolean {
+	return (
+		a.getUTCFullYear() === b.getUTCFullYear() &&
+		a.getUTCMonth() === b.getUTCMonth() &&
+		a.getUTCDate() === b.getUTCDate()
+	);
 }
 
 /**

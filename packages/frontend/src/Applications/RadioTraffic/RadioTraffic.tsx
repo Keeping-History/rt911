@@ -797,11 +797,20 @@ export const RadioTraffic: React.FC = () => {
 	// The folded lanes' players (story 027). One renderer for all three lanes,
 	// because a small player carries no lane-dependent state — no badge, no
 	// transport, no mute — which is exactly what makes it small.
+	// anchorMs, not nowMs: the small player only needs "today" to the nearest
+	// virtual minute, and nowMs is recomputed every render tick for waveform
+	// seeking — keying this callback on it would invalidate every folded card's
+	// memoisation once a second instead of once a minute.
 	const renderCollapsedCard = useCallback(
 		(item: MediaItem) => (
-			<LaneSmallPlayer item={item} meta={mp3Meta[item.id]} tzOffsetHours={tz} />
+			<LaneSmallPlayer
+				item={item}
+				meta={mp3Meta[item.id]}
+				tzOffsetHours={tz}
+				currentMs={anchorMs}
+			/>
 		),
-		[mp3Meta, tz],
+		[mp3Meta, tz, anchorMs],
 	);
 
 	const appMenu = [

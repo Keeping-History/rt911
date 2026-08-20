@@ -60,7 +60,14 @@ export async function pinVirtualClock(page: Page): Promise<void> {
 
 	const timeMachine = page.getByRole("application", { name: "Time Machine" });
 	const pauseButton = timeMachine.getByRole("button", { name: "Pause", exact: true });
-	await expect(pauseButton).toBeVisible();
+	// The default 5s expect timeout is too tight for this specific moment: every
+	// caller here reaches this point right after the caller's own poll loop has
+	// been busy against a real, data-heavy session (see this function's own doc
+	// comment), so the app can legitimately still be finishing that work when
+	// Time Machine's window is asked to open on top of it. 20s observed to be
+	// comfortably enough in CI without eating meaningfully into the 90s test
+	// budget the caller's own wait already leaves room against.
+	await expect(pauseButton).toBeVisible({ timeout: 20_000 });
 	// Already paused (e.g. a persisted state) is not a failure — just don't
 	// press a disabled button.
 	if (await pauseButton.isEnabled()) {

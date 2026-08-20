@@ -26,6 +26,7 @@
 import { ClassicyBevelButton } from "classicy";
 import type React from "react";
 import {
+	memo,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -162,7 +163,7 @@ function badgeLabel(badge: Badge): string {
 	}
 }
 
-export const TrafficCard: React.FC<TrafficCardProps> = ({
+const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 	item,
 	meta,
 	lane,
@@ -462,3 +463,31 @@ export const TrafficCard: React.FC<TrafficCardProps> = ({
 		</article>
 	);
 };
+
+/**
+ * `onTogglePause`/`onManualSeek`/`onToggleMute` are fresh closures on every
+ * RadioTraffic render — `renderCard` (RadioTraffic.tsx) is invoked anew per
+ * render, not cached per item — but each one only ever does something with
+ * THIS card's own `item.id`/`lane`, which are already compared below. Ignoring
+ * them here, rather than requiring the shell to stabilize three per-item
+ * callbacks, is what lets `memo` actually skip the other ~30+ cards' full
+ * render (waveform draw, tab-bar overflow measurement, …) when a change
+ * affects only one card, or nothing about any card at all — e.g. selecting a
+ * different tool in the palette, which no prop here depends on.
+ */
+function propsAreEqual(prev: TrafficCardProps, next: TrafficCardProps): boolean {
+	return (
+		prev.item === next.item &&
+		prev.meta === next.meta &&
+		prev.lane === next.lane &&
+		prev.tzOffsetHours === next.tzOffsetHours &&
+		prev.nowMs === next.nowMs &&
+		prev.seeking === next.seeking &&
+		prev.userPlaying === next.userPlaying &&
+		prev.muted === next.muted &&
+		prev.paused === next.paused &&
+		prev.waveformColor === next.waveformColor
+	);
+}
+
+export const TrafficCard = memo(TrafficCardImpl, propsAreEqual);
