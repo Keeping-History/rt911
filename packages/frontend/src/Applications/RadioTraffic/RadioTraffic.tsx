@@ -80,7 +80,7 @@ import {
 	sanitizeRadioTrafficState,
 } from "./RadioTrafficContext";
 import { RadioTrafficSettingsWindow } from "./RadioTrafficSettingsWindow";
-import { groupVocabulary, matchesFilter } from "./tagFilter";
+import { groupVocabulary, matchesFilter, withUnknownTier } from "./tagFilter";
 import { TagPickerWindow } from "./TagPickerWindow";
 import { reconcileTagVocabulary, type VocabularyState } from "./tagVocabulary";
 import {
@@ -512,7 +512,12 @@ export const RadioTraffic: React.FC = () => {
 		};
 	}, [mp3MetaGeneration]);
 
-	const groups = useMemo(() => groupVocabulary(vocabulary.vocabulary), [vocabulary]);
+	// withUnknownTier adds a sidebar checkbox for the pseudo-value
+	// matchesFilter treats specially — see tagFilter.ts.
+	const groups = useMemo(
+		() => withUnknownTier(groupVocabulary(vocabulary.vocabulary)),
+		[vocabulary],
+	);
 
 	const visible = useMemo(() => {
 		const keep = (item: MediaItem) => matchesFilter(mp3Meta[item.id]?.tags, checked);

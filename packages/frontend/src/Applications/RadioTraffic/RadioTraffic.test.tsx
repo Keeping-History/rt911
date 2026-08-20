@@ -373,7 +373,12 @@ beforeEach(() => {
 	clock.utcMs = NOW_MS;
 	clock.tzOffset = -4;
 	clock.paused = false;
-	mockAppData.current = {};
+	// checked: [] opts every test that does not care about the tag filter out
+	// of RadioTrafficContext's first-launch default (tier:clip + tier:unknown)
+	// — this suite's fixture tiers are "primary"/"secondary", which that
+	// default would silently hide every card behind. The "tag filtering" and
+	// "persisted state" describes below cover the default itself.
+	mockAppData.current = { checked: [] };
 	mockAppOpen.current = true;
 	mockDispatch.mockClear();
 	audio.elements.clear();
@@ -622,7 +627,7 @@ describe("RadioTraffic — the default mix", () => {
 	});
 
 	it("restores a persisted per-card mute and skips it when choosing the default", async () => {
-		mockAppData.current = { mutedItems: [1] };
+		mockAppData.current = { checked: [], mutedItems: [1] };
 		await renderSettled();
 		expect(audio.elements.get(1)?.muted).toBe(true);
 		// Auto-solo never overrides an explicit mute — it moves to the next card.
@@ -860,7 +865,7 @@ describe("RadioTraffic — the manual hold (story 045)", () => {
 	it("moves an already-muted, untouched LIVE player to PREVIOUS once its window ends", async () => {
 		// Muted from the moment it appeared, never paused, played or scrubbed —
 		// mute alone was never the criterion here, only a touch is.
-		mockAppData.current = { mutedItems: [10] };
+		mockAppData.current = { checked: [], mutedItems: [10] };
 		const { rerender } = await renderHold();
 		expect(laneIds("live")).toEqual([10]);
 		expect(audio.elements.get(10)?.muted).toBe(true);
@@ -997,7 +1002,7 @@ describe("RadioTraffic — persisted state", () => {
 	});
 
 	it("ignores an unreadable laneOrder rather than rendering from it", async () => {
-		mockAppData.current = { laneOrder: { live: [3, "x", 1, 0] } };
+		mockAppData.current = { checked: [], laneOrder: { live: [3, "x", 1, 0] } };
 		await renderSettled();
 		// The bad pin list is dropped whole, so the lane stays chronological.
 		expect(laneIds("live")).toEqual([1, 2, 3]);
@@ -1062,7 +1067,7 @@ describe("RadioTraffic — the LIVE lane mute", () => {
 		// here now" implementation would be indistinguishable on this screen and
 		// wrong on the next one, and the per-card set is where the difference
 		// shows: it stays exactly as the listener left it.
-		mockAppData.current = { mutedItems: [2] };
+		mockAppData.current = { checked: [], mutedItems: [2] };
 		await renderSettled();
 		fireEvent.click(laneMute("live") as Element);
 		await act(async () => {});
@@ -1080,7 +1085,7 @@ describe("RadioTraffic — the LIVE lane mute", () => {
 		// cards already there are individually muted, so with no lane mute the
 		// auto-solo would hand the mix straight to the newcomer. Only the lane
 		// flag keeps it quiet.
-		mockAppData.current = { mutedItems: [1, 2, 3], liveLaneMuted: true };
+		mockAppData.current = { checked: [], mutedItems: [1, 2, 3], liveLaneMuted: true };
 		const arrival = item(8, "2001-09-11T12:46:50.000Z", "2001-09-11T12:52:00.000Z");
 		await renderSettled({ mp3Items: [...LIVE, arrival] });
 
@@ -1149,7 +1154,7 @@ describe("RadioTraffic — the LIVE lane mute", () => {
 		// Unlike solo this names no clip, so a reload cannot make it stale — and
 		// a listener who silenced the app and came back to it talking would
 		// reasonably call that a bug.
-		mockAppData.current = { liveLaneMuted: true };
+		mockAppData.current = { checked: [], liveLaneMuted: true };
 		await renderSettled();
 		expect(audibleLive()).toEqual([]);
 		expect(laneMute("live")?.getAttribute("aria-pressed")).toBe("true");
@@ -1177,14 +1182,14 @@ describe("RadioTraffic — a collapsed lane", () => {
 	it("swaps UPCOMING's full players for small ones", async () => {
 		// UPCOMING is permanently minimized (no stored flag needed to fold it),
 		// but the fixture sets one anyway to show it changes nothing.
-		mockAppData.current = { collapsed: { upcoming: true } };
+		mockAppData.current = { checked: [], collapsed: { upcoming: true } };
 		await renderSettled();
 		expect(smallPlayersIn("upcoming")).toEqual([4, 6]);
 		expect(fullPlayersIn("upcoming")).toEqual([]);
 	});
 
 	it("keeps the clips' metadata readable while folded", async () => {
-		mockAppData.current = { collapsed: { upcoming: true } };
+		mockAppData.current = { checked: [], collapsed: { upcoming: true } };
 		await renderSettled();
 		const small = document.querySelector('[data-small-player="4"]');
 		// The tier tag META gives every item, coloured by its namespace.
@@ -1196,7 +1201,7 @@ describe("RadioTraffic — a collapsed lane", () => {
 	});
 
 	it("leaves the other lanes on their full players", async () => {
-		mockAppData.current = { collapsed: { upcoming: true } };
+		mockAppData.current = { checked: [], collapsed: { upcoming: true } };
 		await renderSettled();
 		expect(laneIds("live")).toEqual([1, 2, 3]);
 		expect(smallPlayersIn("live")).toEqual([]);
@@ -1205,7 +1210,7 @@ describe("RadioTraffic — a collapsed lane", () => {
 	it("keeps LIVE on its full players whatever the stored flag says", async () => {
 		// LIVE has no control to undo a collapse with, so a stale `true` must not
 		// shrink the lane the app exists to show.
-		mockAppData.current = { collapsed: { live: true } };
+		mockAppData.current = { checked: [], collapsed: { live: true } };
 		await renderSettled();
 		expect(laneIds("live")).toEqual([1, 2, 3]);
 		expect(smallPlayersIn("live")).toEqual([]);
@@ -1268,7 +1273,11 @@ describe("RadioTraffic — the waveform color", () => {
 	});
 
 	it("applies a saved color to every card", async () => {
-		mockAppData.current = { useThemeWaveformColor: false, waveformColor: 0x00d25a };
+		mockAppData.current = {
+			checked: [],
+			useThemeWaveformColor: false,
+			waveformColor: 0x00d25a,
+		};
 		await renderSettled();
 		const slots = waveformSlots();
 		expect(slots.length).toBeGreaterThan(1);
@@ -1348,7 +1357,7 @@ describe("RadioTraffic — the original-recording choice", () => {
 	});
 
 	it("plays the source recording when a previous session chose it", async () => {
-		mockAppData.current = { playOriginalAudio: true };
+		mockAppData.current = { checked: [], playOriginalAudio: true };
 		await renderSettled(oneLiveClip);
 		expect(srcOf(1)).toBe(ORIGINAL);
 	});
@@ -1374,7 +1383,7 @@ describe("RadioTraffic — the original-recording choice", () => {
 	});
 
 	it("switches back to the enhanced render just as live", async () => {
-		mockAppData.current = { playOriginalAudio: true };
+		mockAppData.current = { checked: [], playOriginalAudio: true };
 		await renderSettled(oneLiveClip);
 		const element = audio.elements.get(1);
 
@@ -1412,7 +1421,7 @@ describe("RadioTraffic — the original-recording choice", () => {
 	// the safe fallback — the alternative is an undefined src, which fails as a
 	// broken element with nothing on screen to say why.
 	it("falls back to the source recording for a clip with no enhanced copy", async () => {
-		mockAppData.current = { playOriginalAudio: false };
+		mockAppData.current = { checked: [], playOriginalAudio: false };
 		await renderSettled({ ...oneLiveClip, mp3Items: [{ ...both, enhanced_url: null }] });
 		expect(srcOf(1)).toBe(ORIGINAL);
 	});
