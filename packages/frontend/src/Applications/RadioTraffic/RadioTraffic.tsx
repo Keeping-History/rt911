@@ -232,8 +232,8 @@ export const RadioTraffic: React.FC = () => {
 	const appState = useAppManager(
 		(state) =>
 			state.System.Manager.Applications.apps[appId]?.data as
-				| Record<string, unknown>
-				| undefined,
+			| Record<string, unknown>
+			| undefined,
 	);
 	/**
 	 * Story 050: `RadioTraffic` renders unconditionally in `Desktop.tsx` — this
@@ -905,19 +905,21 @@ export const RadioTraffic: React.FC = () => {
 						</div>
 					)}
 					<aside className={styles.rtSidebar}>
+						<ToolPalette tool={tool} onSelect={setTool} />
 						<ClassicyControlGroup label="Filter By..." variant="secondary">
-							<ToolPalette tool={tool} onSelect={setTool} />
-							<LargeNamespaceButtons
-								groups={groups.filter((group) => group.large)}
-								checked={checked}
-								onOpenPicker={setPickerNamespace}
-							/>
-							<FilterTree
-								groups={groups.filter((group) => !group.large)}
-								checked={checked}
-								onToggle={toggleTag}
-								stale={vocabulary.stale}
-							/>
+							<div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+								<LargeNamespaceButtons
+									groups={groups.filter((group) => group.large)}
+									checked={checked}
+									onOpenPicker={setPickerNamespace}
+								/>
+								<FilterTree
+									groups={groups.filter((group) => !group.large)}
+									checked={checked}
+									onToggle={toggleTag}
+									stale={vocabulary.stale}
+								/>
+							</div>
 						</ClassicyControlGroup>
 					</aside>
 					<main className={styles.rtLanes}>
