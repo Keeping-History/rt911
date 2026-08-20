@@ -4,8 +4,8 @@
 .rtTagPicker {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px;
+  gap: var(--window-padding-size);
+  padding: var(--window-padding-size);
   font-family: var(--ui-font);
   font-size: var(--ui-font-size);
 }
@@ -16,13 +16,13 @@
 .rtTagPickerList {
   overflow-y: auto;
   height: 220px;
-  padding: 4px;
+  padding: calc(var(--window-border-size) * 4);
   background: var(--color-white);
-  border: 1px inset var(--color-system-05);
+  border: var(--window-border-size) inset var(--color-system-05);
 }
 
 .rtTagPickerEmpty {
-  padding: 4px;
+  padding: calc(var(--window-border-size) * 4);
   color: var(--color-system-05);
 }
 
@@ -30,5 +30,5 @@
   display: flex;
   flex-direction: row;
   justify-content: flex-end;
-  gap: 6px;
+  gap: var(--window-padding-size);
 }

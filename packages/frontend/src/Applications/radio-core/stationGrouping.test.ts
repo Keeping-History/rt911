@@ -13,6 +13,7 @@ import {
 	sortStations,
 	sortStationsByStatusAndLabel,
 	startTimeLabel,
+	stationKey,
 	type Station,
 	stationLogo,
 	stationStatus,
@@ -56,6 +57,12 @@ describe("groupStations", () => {
 		expect(stations).toHaveLength(1);
 		expect(stations[0].key).toBe("Lonely");
 		expect(stations[0].items.map((i) => i.id)).toEqual([1, 2]);
+	});
+
+	it("stationKey reads a minimal {source, title} shape, not just a full MediaItem", () => {
+		expect(stationKey({ source: "WCBS", title: "ignored" })).toBe("WCBS");
+		expect(stationKey({ source: "", title: "ATC Ground" })).toBe("ATC Ground");
+		expect(stationKey({ title: "ATC Ground" })).toBe("ATC Ground");
 	});
 });
 

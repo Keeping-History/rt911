@@ -23,6 +23,12 @@ const clock = vi.hoisted(() => ({
 
 const mockAppData = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 const mockDispatch = vi.hoisted(() => vi.fn());
+// Story 050: whether the window is open — the gate under test. A plain
+// mutable ref, not React state, because the mock's useAppManager isn't a real
+// store; a test flips this and calls `rerender` to make it take effect, the
+// same technique "the clock" describe block already uses to move the virtual
+// clock.
+const mockAppOpen = vi.hoisted(() => ({ current: true }));
 
 vi.mock("classicy", () => ({
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -53,36 +59,58 @@ vi.mock("classicy", () => ({
 			{children}
 		</div>
 	),
+	// Rest props pass through (role, aria-selected, ref …) rather than being
+	// dropped, because story 030 put CardTabBar's own tabs on this component
+	// specifically for that pass-through — the real ClassicyButton sets no role
+	// of its own, unlike ClassicyBevelButton above.
 	ClassicyButton: ({
 		children,
 		onClickFunc,
+		...rest
 	}: {
 		children?: React.ReactNode;
-		onClickFunc?: () => void;
-	}) => (
-		<button type="button" onClick={onClickFunc}>
+		onClickFunc?: React.MouseEventHandler<HTMLButtonElement>;
+	} & Record<string, unknown>) => (
+		<button {...rest} type="button" onClick={onClickFunc}>
 			{children}
 		</button>
 	),
-	// The lane strip's mute-all toggle (story 040). Reproduced rather than
-	// omitted because this suite asserts on the LIVE lane going silent, and the
-	// only way in is this control: `on` and `onChangeFunc` are the whole of the
-	// contract LaneSection uses, and aria-pressed is how a test finds its state.
+	// Reproduced rather than omitted because this suite drives several of the
+	// controls story 030 moved onto this component — the lane strip's mute-all
+	// toggle (story 040) and the tool palette's radio group among them — through
+	// the real DOM. `mode` decides the role the same way the real component
+	// does (hardcoded, not merely passed through): "radio" gets role="radio" and
+	// aria-checked, "toggle"/"push" (the default) get role="button" and
+	// aria-pressed, which is how a test finds either kind of control's state or
+	// selects it by ARIA role at all.
 	ClassicyBevelButton: ({
 		children,
+		mode = "push",
 		on,
+		onClickFunc,
 		onChangeFunc,
 		...rest
 	}: {
 		children?: React.ReactNode;
+		mode?: "push" | "toggle" | "radio" | "popup";
 		on?: boolean;
+		onClickFunc?: React.MouseEventHandler<HTMLButtonElement>;
 		onChangeFunc?: (on: boolean) => void;
 	} & Record<string, unknown>) => (
 		<button
 			{...rest}
 			type="button"
-			aria-pressed={on ?? false}
-			onClick={() => onChangeFunc?.(!on)}
+			role={mode === "radio" ? "radio" : "button"}
+			aria-checked={mode === "radio" ? (on ?? false) : undefined}
+			aria-pressed={mode === "toggle" || mode === "push" ? (on ?? false) : undefined}
+			onClick={(e) => {
+				// A radio only fires a change when the click actually turns it on —
+				// clicking the already-active tool reports through onClickFunc alone,
+				// same as the real component.
+				if (mode === "toggle") onChangeFunc?.(!(on ?? false));
+				else if (mode === "radio" && !(on ?? false)) onChangeFunc?.(true);
+				onClickFunc?.(e);
+			}}
 		>
 			{children}
 		</button>
@@ -147,7 +175,9 @@ vi.mock("classicy", () => ({
 			System: {
 				Manager: {
 					Applications: {
-						apps: { "RadioTraffic.app": { open: true, data: mockAppData.current } },
+						apps: {
+							"RadioTraffic.app": { open: mockAppOpen.current, data: mockAppData.current },
+						},
 					},
 				},
 			},
@@ -286,11 +316,16 @@ async function renderSettled(over: Partial<MediaStreamContextValue> = {}) {
 	return result;
 }
 
-/** The card ids showing in one lane, top to bottom. */
+/**
+ * The card ids showing in one lane, top to bottom — whichever player form
+ * they're rendered in. UPCOMING is permanently minimized, so its cards carry
+ * `data-small-player` rather than the full card's `data-item`; a lane the
+ * listener folded by hand can be in either form.
+ */
 function laneIds(lane: string): number[] {
 	const section = document.querySelector(`section[data-lane="${lane}"]`);
-	return Array.from(section?.querySelectorAll("article[data-item]") ?? []).map((el) =>
-		Number(el.getAttribute("data-item")),
+	return Array.from(section?.querySelectorAll("[data-item], [data-small-player]") ?? []).map(
+		(el) => Number(el.getAttribute("data-item") ?? el.getAttribute("data-small-player")),
 	);
 }
 
@@ -339,6 +374,7 @@ beforeEach(() => {
 	clock.tzOffset = -4;
 	clock.paused = false;
 	mockAppData.current = {};
+	mockAppOpen.current = true;
 	mockDispatch.mockClear();
 	audio.elements.clear();
 	audio.released.length = 0;
@@ -360,6 +396,135 @@ describe("RadioTraffic — the mp3 subscription", () => {
 		expect(streamCalls.unsubscribe).toEqual([]);
 		unmount();
 		expect(streamCalls.unsubscribe).toEqual(["RadioTraffic.app"]);
+	});
+});
+
+// Story 050. `RadioTraffic` renders unconditionally in Desktop.tsx — closing
+// the window is a `state.System.Manager.Applications.apps[appId].open` flip,
+// never an unmount — so these are the transitions that have to do the work
+// the old mount-only effects used to do for free.
+describe("RadioTraffic — the window lifecycle (story 050)", () => {
+	/**
+	 * Re-renders with the same shape of context so a `mockAppOpen` flip takes
+	 * effect — the same technique the "the clock" describe block above uses to
+	 * move the virtual clock via `rerender`, since the mocked `useAppManager`
+	 * is a plain function over a mutable ref, not a real reactive store.
+	 */
+	async function toggleOpen(
+		rerender: (ui: React.ReactElement) => void,
+		open: boolean,
+		over: Partial<MediaStreamContextValue> = {},
+	) {
+		mockAppOpen.current = open;
+		const ctx: Partial<MediaStreamContextValue> = {
+			mp3Items: LIVE,
+			mp3History: HISTORY,
+			mp3Meta: META,
+			mp3MetaGeneration: "g1",
+			seekInFlight: false,
+			subscribeMp3: (id: string) => streamCalls.subscribe.push(id),
+			unsubscribeMp3: (id: string) => streamCalls.unsubscribe.push(id),
+			getUpcomingMp3Items: () => UPCOMING,
+			...over,
+		};
+		await act(async () => {
+			rerender(
+				<MediaStreamContext.Provider value={ctx as MediaStreamContextValue}>
+					<RadioTraffic />
+				</MediaStreamContext.Provider>,
+			);
+		});
+	}
+
+	// Criterion 1 and 2, from a cold start: a listener who never opens the app
+	// must cost nothing at all.
+	it("subscribes nothing and registers no audio while the window starts closed", async () => {
+		mockAppOpen.current = false;
+		await renderSettled();
+		expect(streamCalls.subscribe).toEqual([]);
+		expect(audio.elements.size).toBe(0);
+	});
+
+	// Criterion 1 and 2, mid-session: an item arriving while the window is
+	// closed must not trigger a fetch either — the registration effect has to
+	// stay gated on every re-render, not just the one at close time.
+	it("registers no new element for a LIVE item that arrives while the window is closed", async () => {
+		const { rerender } = await renderSettled();
+		await toggleOpen(rerender, false);
+		// A sentinel: if the gate ever failed, ensure() would put "1" straight
+		// back into this map on the very next render.
+		audio.elements.delete(1);
+
+		const arrival = item(9, "2001-09-11T12:46:55.000Z", "2001-09-11T12:52:00.000Z");
+		await toggleOpen(rerender, false, { mp3Items: [...LIVE, arrival] });
+
+		expect(audio.elements.has(9)).toBe(false);
+		expect(audio.elements.has(1)).toBe(false);
+	});
+
+	// Criteria 3, 4 and 5: closing releases every registered element — LIVE
+	// and a PREVIOUS clip the listener started by hand alike — and reopening
+	// puts the mix back exactly as if the app had stayed open, with the
+	// position/badge pipe still live.
+	it("closing then reopening releases and re-registers every element, resuming LIVE playback at the clock position", async () => {
+		const { rerender } = await renderSettled();
+		const before: Record<number, HTMLAudioElement | undefined> = {
+			1: audio.elements.get(1),
+			2: audio.elements.get(2),
+			3: audio.elements.get(3),
+		};
+		expect(Object.values(before).every(Boolean)).toBe(true);
+
+		// A PREVIOUS clip the listener started by hand before closing — this
+		// must not be left playing invisibly either.
+		const transport = cardOf(5)?.querySelector("button[aria-label='Play']");
+		fireEvent.click(transport as Element);
+		await act(async () => {});
+		const previousBefore = audio.elements.get(5);
+		expect(previousBefore).toBeDefined();
+
+		await toggleOpen(rerender, false);
+		expect(streamCalls.unsubscribe).toEqual(["RadioTraffic.app"]);
+
+		await toggleOpen(rerender, true);
+		expect(streamCalls.subscribe).toEqual(["RadioTraffic.app", "RadioTraffic.app"]);
+
+		// Every element is a fresh registration, not the one left running
+		// through the close — proof the close actually released it rather than
+		// leaving it playing invisibly, LIVE and PREVIOUS alike.
+		expect(audio.elements.get(1)).not.toBe(before[1]);
+		expect(audio.elements.get(2)).not.toBe(before[2]);
+		expect(audio.elements.get(3)).not.toBe(before[3]);
+		expect(audio.elements.get(5)).not.toBe(previousBefore);
+
+		// The reopened element still reports its position off the same live
+		// pipe as before the close — the same "In sync" reading the
+		// filter-toggle test above gets for the identical clock offset, so
+		// reopening did not leave the badge stuck on a stale or blank reading.
+		const onTheClock = calcSeekSeconds(LIVE[1], NOW_MS);
+		const el2 = audio.elements.get(2) as HTMLAudioElement;
+		el2.currentTime = onTheClock;
+		// A raw dispatchEvent, unlike fireEvent, is not itself act()-wrapped —
+		// wrap the flush explicitly so the resulting position update commits
+		// before the badge is read, the same way a browser's real timeupdate
+		// would land inside React's own event handling.
+		await act(async () => {
+			el2.dispatchEvent(new Event("timeupdate"));
+		});
+		expect(badgeOf(2)).toBe("In sync");
+	});
+
+	// Criterion 6: open/close is a lifecycle change, not a state reset — the
+	// persisted filters/tool/lane order/mutes must be untouched by the cycle.
+	it("does not touch persisted settings across a close/reopen cycle", async () => {
+		const { rerender } = await renderSettled();
+		fireEvent.click(screen.getByLabelText("Primary"));
+		const beforeClose = lastPersisted();
+
+		await toggleOpen(rerender, false);
+		await toggleOpen(rerender, true);
+
+		expect(lastPersisted()).toEqual(beforeClose);
 	});
 });
 
@@ -549,6 +714,219 @@ describe("RadioTraffic — the clock", () => {
 	});
 });
 
+describe("RadioTraffic — the manual hold (story 045)", () => {
+	// A LIVE player the listener has TOUCHED — paused/played it, or scrubbed its
+	// waveform — must not vanish out of the Live lane the instant the clock says
+	// its window is over. An UNTOUCHED player gets no such reprieve, whatever its
+	// mute state — muting and pausing are no longer what this criterion is about
+	// (compare the original story 045, which held anything still audible). One
+	// item, alone in the mix, so it is the auto-solo target with nothing else to
+	// entangle the assertions with.
+	const HOLD_ITEM = item(10, "2001-09-11T12:46:00.000Z", "2001-09-11T12:47:30.000Z");
+	const PAST_END = "2001-09-11T12:48:00.000Z"; // 30s after HOLD_ITEM's end_date
+
+	/**
+	 * jsdom lays nothing out, so the waveform's box is all zeroes and there is
+	 * no fraction for a click to land in. 200px wide at the origin makes
+	 * clientX read straight off as a percentage — same stub TrafficCard.test.tsx
+	 * uses for the same reason.
+	 */
+	function stubWaveformBox() {
+		return vi.spyOn(HTMLCanvasElement.prototype, "getBoundingClientRect").mockReturnValue({
+			left: 0,
+			width: 200,
+			top: 0,
+			height: 40,
+			right: 200,
+			bottom: 40,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+	}
+
+	async function rerenderAt(
+		rerender: (ui: React.ReactElement) => void,
+		iso: string,
+		over: Partial<MediaStreamContextValue> = {},
+	) {
+		clock.utcMs = Date.parse(iso);
+		await act(async () => {
+			rerender(
+				<MediaStreamContext.Provider
+					value={
+						{
+							mp3Items: [HOLD_ITEM],
+							mp3History: [],
+							mp3Meta: {},
+							mp3MetaGeneration: "g1",
+							seekInFlight: false,
+							subscribeMp3: () => {},
+							unsubscribeMp3: () => {},
+							getUpcomingMp3Items: () => [],
+							...over,
+						} as unknown as MediaStreamContextValue
+					}
+				>
+					<RadioTraffic />
+				</MediaStreamContext.Provider>,
+			);
+		});
+	}
+
+	async function renderHold() {
+		return renderSettled({
+			mp3Items: [HOLD_ITEM],
+			mp3History: [],
+			mp3Meta: {},
+			getUpcomingMp3Items: () => [],
+		});
+	}
+
+	it("moves an untouched LIVE player to PREVIOUS once its clock window ends", async () => {
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+		// The default mix: nothing muted, nothing paused, nothing scrubbed — the
+		// listener has done nothing to this card at all.
+		expect(audio.elements.get(10)?.muted).toBe(false);
+
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([]);
+		expect(laneIds("previous")).toEqual([10]);
+	});
+
+	it("holds a card the listener paused, past its clock window", async () => {
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+
+		const transport = cardOf(10)?.querySelector("button[aria-label='Pause']");
+		expect(transport).not.toBeNull();
+		fireEvent.click(transport as Element);
+		await act(async () => {});
+		// Pausing before the window ends does not evict it either — same rule an
+		// ordinary LIVE card follows before its window ends.
+		expect(laneIds("live")).toEqual([10]);
+
+		await rerenderAt(rerender, PAST_END);
+
+		// Still held, paused, past the window — a pause IS the touch, not a
+		// reason to release it.
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+	});
+
+	it("holds a card the listener scrubbed, past its clock window", async () => {
+		const restoreBox = stubWaveformBox();
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+
+		const canvas = cardOf(10)?.querySelector("canvas");
+		expect(canvas).not.toBeNull();
+		fireEvent.pointerDown(canvas as Element, { clientX: 50 });
+		await act(async () => {});
+
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+		restoreBox.mockRestore();
+	});
+
+	it("does not release a touched card's hold by muting it afterward", async () => {
+		// Touched by scrub rather than by pause: pausing releases the element
+		// (the shell only registers audio for LIVE ids not in `stopped`), and a
+		// released element cannot show a mute applied — this test wants the mute
+		// itself to visibly take, so it needs the card still playing.
+		const restoreBox = stubWaveformBox();
+		const { rerender } = await renderHold();
+		const canvas = cardOf(10)?.querySelector("canvas");
+		fireEvent.pointerDown(canvas as Element, { clientX: 50 });
+		await act(async () => {});
+
+		fireEvent.click(screen.getByRole("radio", { name: "Mute" }));
+		fireEvent.pointerUp(document.querySelector("[data-card-slot='10']") as Element);
+		await act(async () => {});
+		expect(audio.elements.get(10)?.muted).toBe(true);
+
+		await rerenderAt(rerender, PAST_END);
+
+		// Touching came first — the mute afterward does not undo it.
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+		restoreBox.mockRestore();
+	});
+
+	it("moves an already-muted, untouched LIVE player to PREVIOUS once its window ends", async () => {
+		// Muted from the moment it appeared, never paused, played or scrubbed —
+		// mute alone was never the criterion here, only a touch is.
+		mockAppData.current = { mutedItems: [10] };
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+		expect(audio.elements.get(10)?.muted).toBe(true);
+
+		await rerenderAt(rerender, PAST_END, { mp3Items: [HOLD_ITEM] });
+
+		expect(laneIds("live")).toEqual([]);
+		expect(laneIds("previous")).toEqual([10]);
+	});
+
+	it("does not release a touched card's hold by silencing the whole LIVE lane", async () => {
+		const { rerender } = await renderHold();
+		const transport = cardOf(10)?.querySelector("button[aria-label='Pause']");
+		fireEvent.click(transport as Element);
+		await act(async () => {});
+
+		const laneMute = document.querySelector(
+			`section[data-lane="live"] [data-lane-mute]`,
+		);
+		fireEvent.click(laneMute as Element);
+		await act(async () => {});
+		expect(laneIds("live")).toEqual([10]);
+
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+	});
+
+	it("releases a paused card's hold once it has sat idle for ten real seconds", async () => {
+		const { rerender } = await renderHold();
+		const transport = cardOf(10)?.querySelector("button[aria-label='Pause']");
+		fireEvent.click(transport as Element);
+		await act(async () => {});
+		expect(laneIds("live")).toEqual([10]);
+
+		// Ten real (wall-clock) seconds pass with nothing further happening to
+		// the card — distinct from PAST_END, which only moves the simulated
+		// broadcast clock the lane windows are measured against.
+		vi.advanceTimersByTime(10_000);
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([]);
+		expect(laneIds("previous")).toEqual([10]);
+	});
+
+	it("does not release a card still playing, however much real time passes", async () => {
+		const restoreBox = stubWaveformBox();
+		const { rerender } = await renderHold();
+		const canvas = cardOf(10)?.querySelector("canvas");
+		fireEvent.pointerDown(canvas as Element, { clientX: 50 });
+		await act(async () => {});
+		expect(laneIds("live")).toEqual([10]);
+
+		// The card was scrubbed, never paused, so it is still "playing" by the
+		// idle-release criterion — every render that finds it live and not
+		// stopped renews its own activity stamp, with no further touch needed.
+		vi.advanceTimersByTime(10_000);
+		await rerenderAt(rerender, PAST_END);
+
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+		restoreBox.mockRestore();
+	});
+});
+
 describe("RadioTraffic — persisted state", () => {
 	// Criterion 7.
 	it("persists checked tags, the tool, lane collapse and laneOrder", async () => {
@@ -556,15 +934,17 @@ describe("RadioTraffic — persisted state", () => {
 
 		fireEvent.click(screen.getByLabelText("Primary"));
 		fireEvent.click(screen.getByRole("radio", { name: "Move" }));
-		const upcoming = document.querySelector(
-			"section[data-lane='upcoming'] [data-lane-toggle]",
+		// PREVIOUS is the only lane left with a collapse control — UPCOMING is
+		// permanently minimized and LIVE never folds.
+		const previous = document.querySelector(
+			"section[data-lane='previous'] [data-lane-toggle]",
 		);
-		fireEvent.click(upcoming as Element);
+		fireEvent.click(previous as Element);
 
 		const persisted = lastPersisted();
 		expect(persisted?.checked).toEqual(["tier:primary"]);
 		expect(persisted?.tool).toBe("hand");
-		expect(persisted?.collapsed).toMatchObject({ upcoming: true, previous: false });
+		expect(persisted?.collapsed).toMatchObject({ previous: true });
 		expect(persisted?.laneOrder).toEqual({ live: [], upcoming: [], previous: [] });
 	});
 
@@ -583,7 +963,7 @@ describe("RadioTraffic — persisted state", () => {
 		mockAppData.current = {
 			checked: ["tier:primary"],
 			tool: "unmute",
-			collapsed: { upcoming: true },
+			collapsed: { previous: true },
 			laneOrder: { live: [], upcoming: [], previous: [] },
 			mutedItems: [],
 		};
@@ -597,7 +977,7 @@ describe("RadioTraffic — persisted state", () => {
 		// observable through aria-expanded.
 		expect(
 			document
-				.querySelector("section[data-lane='upcoming'] [data-lane-toggle]")
+				.querySelector("section[data-lane='previous'] [data-lane-toggle]")
 				?.getAttribute("aria-expanded"),
 		).toBe("false");
 	});
@@ -788,11 +1168,19 @@ describe("RadioTraffic — a collapsed lane", () => {
 			),
 		).map((el) => Number(el.getAttribute("data-small-player")));
 
+	/** Full-card ids only, unlike laneIds — the negative half of the swap below. */
+	const fullPlayersIn = (lane: string) =>
+		Array.from(document.querySelectorAll(`section[data-lane="${lane}"] [data-item]`)).map(
+			(el) => Number(el.getAttribute("data-item")),
+		);
+
 	it("swaps UPCOMING's full players for small ones", async () => {
+		// UPCOMING is permanently minimized (no stored flag needed to fold it),
+		// but the fixture sets one anyway to show it changes nothing.
 		mockAppData.current = { collapsed: { upcoming: true } };
 		await renderSettled();
 		expect(smallPlayersIn("upcoming")).toEqual([4, 6]);
-		expect(laneIds("upcoming")).toEqual([]);
+		expect(fullPlayersIn("upcoming")).toEqual([]);
 	});
 
 	it("keeps the clips' metadata readable while folded", async () => {

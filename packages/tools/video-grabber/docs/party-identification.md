@@ -155,6 +155,70 @@ It reads no transcripts and calls no model, so correcting derivation costs
 nothing but the writes. `identify-parties` is only needed when the *parties*
 themselves must change.
 
+**Superseded by `rederive-mp3-metadata`** (below), which does this and the
+public projection in the same pass. `rebuild-tags` is kept for the case where
+only tag derivation changed, but reaching for `rederive-mp3-metadata` instead
+is usually the safer default: the tags and the public columns are both pure
+functions of the same `parties`, and re-deriving only one of them lets the
+Radio Traffic card's Parties tab and the sidebar's tag filters describe the
+same recording differently, with nothing to say which is current.
+
+## The public projection
+
+`mp3_items.parties` is never readable by an anonymous Directus client — it
+carries the containment gate's QA signals (`gate_reasons`, which values were
+rejected and why; `model`, which model produced the rest), which are working
+notes about *our own pipeline*, not facts about the recording. Everything the
+Radio Traffic card actually shows is nevertheless somewhere in that blob, so a
+redacted copy of it is materialised onto public `mp3_items` columns —
+`subject`, `link`, `tier`, `confidence`, `evidence`, `participants`,
+`mentions`, `provenance` — that a public-read Directus policy and the
+streamer's HTTP/WebSocket routes can serve directly. See
+[`../../backend/docs/data-model.md`](../../backend/docs/data-model.md) for the
+column-by-column shape, and
+[`../../backend/docs/websocket-protocol.md`](../../backend/docs/websocket-protocol.md)
+/ [`../../backend/docs/http-api.md`](../../backend/docs/http-api.md) for how
+they reach the frontend.
+
+[`parties/public_meta.py`](../video_grabber/parties/public_meta.py)'s
+`build_public_meta` is the **only** place this redaction happens, and the
+projection is closed rather than filtered: every public field is enumerated
+explicitly (a `PUBLIC_FIELDS` tuple, a `PARTICIPANT_FIELDS` tuple, and so on),
+so a key neither of `parties`' two producers has started writing yet is
+dropped by default instead of published by default. `gate_reasons` and `model`
+are absent from the projection by construction — there is no field for them on
+the public side, in Python, Go or TypeScript, so nothing downstream has to
+remember to strip them.
+
+### `rederive-mp3-metadata`
+
+The flow that actually keeps the public columns and the tags in step:
+
+```
+rederive-mp3-metadata  dry_run=true              # what it would write
+rederive-mp3-metadata  dry_run=false              # write it
+```
+
+For every row it re-derives `build_public_meta(parties)` and the tags in the
+same pass, stamps `derived_at` with a version + timestamp so "which run wrote
+this row" is answerable, and writes even the 59-of-814 rows with no `parties`
+— an empty projection is the correct, current answer for a recording nobody
+has identified, and leaving stale columns behind would let a projection the
+blob no longer supports survive a re-derivation. It reads no transcripts and
+calls no model, so — like `rebuild-tags` — it costs nothing but the writes to
+run over the whole corpus whenever either derivation changes.
+
+`dry_run=True` by default: this rewrites every public column on all 814 rows,
+and asking what it would do must not be the same gesture as doing it.
+
+Write order is deliberate: the public columns are `PATCH`ed **before** the tag
+junction. Both are watched — `rt911_mp3_items_changed` on `mp3_items` and
+`rt911_mp3_tags_changed`/`rt911_mp3_items_tags_changed` on the two tag tables
+(`backend/internal/cache/mp3_listen.go`) all invalidate the streamer's
+WebSocket/HTTP metadata cache — but writing the columns first still means the
+cache never reloads a row whose projection this pass hasn't reached yet, even
+if a rebuild is interrupted partway through the corpus.
+
 ## Operating it
 
 ```sh

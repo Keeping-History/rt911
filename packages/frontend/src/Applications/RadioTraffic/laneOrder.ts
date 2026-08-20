@@ -26,7 +26,7 @@ import { startMs } from "../radio-core/stationGrouping";
 import { type Lane, laneFor } from "./cardStatus";
 
 /** Every lane, in the order they stack down the window. */
-export const LANES: readonly Lane[] = ["live", "upcoming", "previous"];
+export const LANES: readonly Lane[] = ["upcoming", "live", "previous"];
 
 /** One lane's pins: a flat (itemId, slot) pair list. */
 export type LanePins = readonly number[];

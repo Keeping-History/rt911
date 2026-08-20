@@ -5,31 +5,38 @@
 .rtFilterTree {
   display: flex;
   flex-direction: column;
-  width: 141px;
+  width: calc(100% - var(--window-control-size));
   flex: 0 0 141px;
   // The tree is the tallest thing in the sidebar and the only part that grows
   // with the vocabulary, so it is what scrolls.
-  overflow-y: auto;
-  padding: 4px;
+  overflow-y: scroll;
+  padding: calc(var(--window-border-size) * 4);
   font-family: var(--ui-font);
   font-size: var(--ui-font-size);
+  flex-grow: 1;
+  * {
+    flex-grow: 0 !important;
+  }
 }
 
 // A large namespace's row sits at the same indent as a disclosure header so the
 // eight namespaces read as one list, despite behaving differently.
-.rtFilterLargeRow {
+//
+// Story 030: ClassicyBevelButton builds its own className and drops the one it
+// is handed, so the row hangs its look off `[data-filter-large-row]` instead —
+// the same pattern laneSection.module.scss uses for `[data-lane-mute]`.
+.rtFilterTree [data-filter-large-row] {
   display: flex;
+  flex-grow: 1;
   flex-direction: row;
   align-items: center;
-  gap: 4px;
-  padding: 0;
+  gap: calc(var(--window-border-size) * 4);
   font-family: inherit;
   font-size: inherit;
   color: var(--color-system-06);
-  background: none;
-  border: none;
   text-align: left;
   cursor: pointer;
+  flex-grow: 1;
 }
 
 .rtFilterCount {
@@ -37,6 +44,6 @@
 }
 
 .rtFilterNotice {
-  margin: 0 0 4px;
+  margin: 0 0 calc(var(--window-border-size) * 4);
   color: var(--color-system-05);
 }

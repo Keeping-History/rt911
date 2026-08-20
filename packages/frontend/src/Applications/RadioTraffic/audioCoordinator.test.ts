@@ -16,6 +16,7 @@ import { calcSeekSeconds } from "../radio-core/stationGrouping";
 import {
 	type ClockSource,
 	clockMoved,
+	clockPauseChanged,
 	connectClock,
 	ensure,
 	hasEnded,
@@ -487,6 +488,76 @@ describe("audioCoordinator clock sync", () => {
 			clockMoved();
 
 			expect(el.currentTime).toBe(3);
+		});
+	});
+
+	// StationPlayer's own pattern (radio-core), mirrored here: an element left
+	// running while the clock stands still drifts in real time, and the health
+	// check cannot correct it either — it skips its own work on the same
+	// clockPaused() this reacts to.
+	describe("clock pause/resume", () => {
+		it("pauses every clock-following registered element when the clock pauses", () => {
+			connect();
+			ensure(1, "a.mp3");
+			ensure(2, "b.mp3");
+			pauseSpy.mockClear();
+
+			clockPauseChanged(true);
+
+			expect(pauseSpy).toHaveBeenCalledTimes(2);
+		});
+
+		it("resumes every clock-following registered element when the clock resumes", () => {
+			connect();
+			ensure(1, "a.mp3");
+			ensure(2, "b.mp3");
+			clockPauseChanged(true);
+			playSpy.mockClear();
+
+			clockPauseChanged(false);
+
+			expect(playSpy).toHaveBeenCalledTimes(2);
+		});
+
+		it("leaves an element the listener has taken off clock-follow alone on pause", () => {
+			connect();
+			ensure(1, "a.mp3");
+			unfollowClock(1);
+			pauseSpy.mockClear();
+
+			clockPauseChanged(true);
+
+			expect(pauseSpy).not.toHaveBeenCalled();
+		});
+
+		it("leaves an element the listener has taken off clock-follow alone on resume", () => {
+			connect();
+			ensure(1, "a.mp3");
+			unfollowClock(1);
+			playSpy.mockClear();
+
+			clockPauseChanged(false);
+
+			expect(playSpy).not.toHaveBeenCalled();
+		});
+
+		it("leaves an element the clock source does not claim alone", () => {
+			// Same shape as clock jump reseek's identically-named test: a
+			// listener-started back-catalogue clip is not this clock's to pause.
+			catalogue = [ITEMS[1]];
+			connect();
+			ensure(1, "a.mp3");
+			pauseSpy.mockClear();
+
+			clockPauseChanged(true);
+
+			expect(pauseSpy).not.toHaveBeenCalled();
+		});
+
+		it("does nothing before a clock has connected", () => {
+			// No connect() call — clock is null. The effect that calls this can fire
+			// before connectClock's own effect has, on an unlucky render order.
+			expect(() => clockPauseChanged(true)).not.toThrow();
 		});
 	});
 

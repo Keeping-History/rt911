@@ -8,7 +8,7 @@ const EXPECTED_IDS = [
 	"News.app",
 	"Newsgroups.app",
 	"PagerDecoder.app",
-	"RadioScanner.app",
+	"RadioTraffic.app",
 	"RadioTuner.app",
 	"TV.app",
 	"Weather.app",
@@ -63,7 +63,7 @@ describe("APP_PROVENANCE", () => {
 			"MarketWatch.app",
 			"News.app",
 			"TV.app",
-			"RadioScanner.app",
+			"RadioTraffic.app",
 			"RadioTuner.app",
 			"Browser.app",
 		]) {

@@ -25,9 +25,9 @@ import { TranscriptTab } from "./TranscriptTab";
 
 afterEach(cleanup);
 
-// Summary is in this list even though the card hides that tab for an item with
-// no summary: the panel is a component like the other five, and the guarantee
-// being made here is that none of them can paint an empty box.
+// Summary is in this list on the same footing as the other five (story 049):
+// the card offers it on every card, and the guarantee being made here is that
+// none of the six panels can paint an empty box.
 const PANELS = [
 	["Details", DetailsTab],
 	["Summary", SummaryTab],

@@ -11,7 +11,7 @@ import type { EditorEntry } from "./editorState";
 import { listSettingsApps } from "./settingsRegistry";
 
 const KNOWN_APP_IDS = [
-	"TimeMachine.app", "TV.app", "RadioScanner.app", "News.app",
+	"TimeMachine.app", "TV.app", "RadioTraffic.app", "RadioTuner.app", "News.app",
 	"FlightTracker.app", "Browser.app", "PDFViewer.app", "Weather.app",
 ];
 

@@ -78,7 +78,10 @@ export interface RadioTrafficState extends RadioTrafficSettings {
 	/** Checked tag strings, e.g. `facility:zbw`. */
 	checked: string[];
 	tool: Tool;
-	/** Per-lane fold state. LIVE's is stored but ignored — it has no control. */
+	/**
+	 * Per-lane fold state. LIVE's and UPCOMING's are stored but ignored —
+	 * neither has a control (see LaneSection's LANE_FIXED_COLLAPSE).
+	 */
 	collapsed: Record<Lane, boolean>;
 	laneOrder: LaneOrder;
 	/**
