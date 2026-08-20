@@ -1,0 +1,26 @@
+name: Label merge conflicts
+
+# Flags any open PR that can't be cleanly merged into its base branch with a
+# "has conflict" label (and removes it again once the conflict is resolved).
+# Runs on every PR event and on every push to main, since a push to main is
+# exactly what can newly conflict an otherwise-clean PR.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: prince-chrismc/label-merge-conflicts-action@21e6705eaa6aab66e4e486279389c8e3e4c465b7 # v3.0.4
+        with:
+          conflict_label_name: "has conflict"
+          github_token: ${{ github.token }}
