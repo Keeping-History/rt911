@@ -47,7 +47,22 @@
   flex: 0 0 auto;
   padding: calc(var(--window-border-size) * 4) 0 calc(var(--window-border-size) * 4) calc(var(--window-border-size) * 4);
   border-right: var(--window-border-size) solid var(--color-system-04);
+  background-color: var(--color-system-03);
   overflow: hidden;
+
+  // ClassicyControlGroup's fieldset defaults to flex-grow: 0 (sized to
+  // content), but FilterTree needs a bounded-height ancestor for its own
+  // overflow-y: scroll to kick in instead of pushing the sidebar (and the
+  // window) taller. Once the group box wraps everything the fieldset is
+  // .rtSidebar's only child, so it takes over the flex column job this
+  // element's direct children used to do — the min-height: 0 is what lets it
+  // shrink below its content size so FilterTree's own scroll actually fires.
+  fieldset {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
 }
 
 // The lanes stack and NOTHING here scrolls. The column hands each lane a fixed
