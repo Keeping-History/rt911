@@ -1,0 +1,443 @@
+// The traffic card, sized off the ROW it is standing in (story 034) rather
+// than off a flat multiplier applied to Figma's own numbers.
+//
+// Previously every dimension below was Figma's, multiplied by a single
+// `--rt-card-scale` custom property (1.25, applied uniformly to a 210x124
+// frame). That worked only by coincidence: the lane column hands LIVE,
+// UPCOMING and PREVIOUS three different heights (3/6, 2/6, 1/6 — see
+// laneSection.module.scss), but every card asked for the SAME fixed
+// 210x155 box regardless of which lane it was in. PREVIOUS's 1/6 share is
+// smaller than that box, so its cards were clipped rather than shown whole
+// — the exact bug story 034 exists to fix.
+//
+// The fix is `.rtCard` sized ENTIRELY from the outside in:
+//
+//   height        100% of the row .rtLaneCards hands it (unchanged; this was
+//                 already correct — the min-height floor below is what
+//                 fought it).
+//   width         an ASPECT RATIO off that height (210:150 — Figma's card,
+//                 see the ratio note below), not a length of its own. A
+//                 LIVE row is taller, so a LIVE card is both taller AND
+//                 wider than a PREVIOUS one; that is "LIVE shows 3 rows of
+//                 cards, PREVIOUS 1" in the acceptance criteria — a LIVE
+//                 card is worth three player-rows of space, a PREVIOUS card
+//                 one, and the card's whole footprint reflects that.
+//   `container-type: size` turns THIS box — not the viewport, not a fixed
+//   variable — into the ruler every measurement below is taken against, via
+//   cqw ("1% of the card's own width") and cqh ("1% of the card's own
+//   height"). A calc() dividing a Figma number by 210 or 150 and multiplying
+//   by 100cqw/100cqh is doing exactly what `* var(--rt-card-scale)` used to
+//   do, except the scale factor is now "whatever this card's actual box
+//   works out to be" instead of a hardcoded 1.25 that disagreed with the
+//   lane fractions. Shrink the row and every band inside the card shrinks
+//   with it, in the same proportion, all the way down — nothing is left
+//   behind to overflow.
+//
+//   150 is not Figma's "124" floor: it is the actual sum of every band this
+//   card stacks in flow (header 29 + waveform 54 + controls 14 + the tabs
+//   block's bar 11 + gap 3 + panel floor 39 = 150). 124 undercounts because
+//   the waveform is drawn at double Figma's own 27 for legibility (see
+//   .rtCardWaveform below) — 150 is the number that keeps the aspect ratio
+//   honest with what the card actually stacks, so cqh percentages sum to
+//   the card's real height instead of leaving it short.
+//
+// `overflow: hidden` on the card is a backstop, not the mechanism: with
+// every band expressed as a fraction of the card's own box, the stack should
+// never exceed 100cqh in the first place. It stays in case rounding or a
+// future band pushes the sum past that, which is a display fault to hide
+// rather than a scrollbar to grow.
+//
+// Hairlines are still the one exception to all of this scaling: a border is
+// `var(--window-border-size)` at any card size, never a cq-scaled length.
+
+.rtCard {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-grow: 1;
+  flex-direction: column;
+  // The row's height is the one true size; everything else, including this
+  // card's own width, is derived from it.
+  height: 100%;
+  aspect-ratio: 210 / 150;
+  container-type: size;
+  overflow: hidden;
+  font-family: var(--ui-font);
+  color: var(--color-system-06);
+  background: var(--color-system-02);
+  border: var(--window-border-size) solid var(--color-system-05);
+}
+
+// Lane chrome ---------------------------------------------------------------
+//
+// One table of lane x audible, sampled from the design frame. The lane is what
+// the card is; `audible` is whether the listener is actually hearing it, and the
+// design says so by lifting the same hue into a brighter, more saturated one —
+// crimson to pink on LIVE, navy to blue on PREVIOUS. UPCOMING has no lift
+// because an UPCOMING clip has no audio yet; it gets the opposite treatment, a
+// near-black header and dimmed player chrome, so it reads as not yet live.
+//
+// --rt-card-chrome-filter reaches the waveform and the control bar and stops
+// there: in the design the tab panels below are identical across all three
+// lanes, and dimming them would say the card's DATA is inactive rather than its
+// player.
+
+.rtCard {
+  --rt-card-accent: var(--color-system-05);
+  --rt-card-accent-text: #ffffff;
+  --rt-card-chrome-filter: none;
+}
+
+.rtCard[data-audible="true"] {
+  --rt-card-chrome-filter: brightness(1.06) saturate(1.25);
+}
+
+.rtCard[data-lane="live"] {
+  --rt-card-accent: #ad001d;
+}
+
+.rtCard[data-lane="live"][data-audible="true"] {
+  --rt-card-accent: #ff4f6d;
+}
+
+.rtCard[data-lane="previous"] {
+  --rt-card-accent: #000088;
+  min-width: calc(var(--window-control-size)*25);
+}
+
+.rtCard[data-lane="previous"][data-audible="true"] {
+  --rt-card-accent: #0000ff;
+}
+
+// Silence is a THIRD step on the same hue, not a new colour: a card running but
+// carrying no traffic sits half way between the lane's idle accent and its
+// audible one, so it reads as "playing, nothing to hear" rather than as a
+// stopped card.
+//
+// [data-audible="true"] is load-bearing, not decoration. A muted or paused card
+// already takes the idle accent, and dimming that further would say nothing —
+// the listener is not hearing it either way, so quiet is not news about it.
+// Silence is only worth reporting about a card you are actually listening to.
+.rtCard[data-lane="live"][data-audible="true"][data-silent="true"] {
+  --rt-card-accent: #d62845; // midpoint of #ad001d and #ff4f6d
+}
+
+.rtCard[data-lane="previous"][data-audible="true"][data-silent="true"] {
+  --rt-card-accent: #0000c3; // midpoint of #000088 and #0000ff
+}
+
+// Last of the lane rules on purpose: it must win the specificity tie with the
+// audible lift above even if a caller ever contradicts TrafficCard and marks an
+// UPCOMING card audible.
+.rtCard[data-lane="upcoming"] {
+  --rt-card-accent: #2b2b2b;
+  --rt-card-accent-text: #a6a6a6;
+  --rt-card-chrome-filter: brightness(0.61) saturate(0.7);
+}
+
+// Header -------------------------------------------------------------------
+
+.rtCardHeader {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  // Full-bleed band, with Figma's 7 x 5 inset as padding rather than an offset:
+  // the coloured strip runs edge to edge in the design, and the 196x19 text box
+  // is what is left inside it. In flow it is full-bleed for free — the card's
+  // column stretches it to the content box, i.e. edge to edge inside the border.
+  // 29 of the card's 150-unit height basis (see the file header).
+  height: calc(29 / 150 * 100cqh);
+  padding: calc(5 / 150 * 100cqh) calc(7 / 210 * 100cqw);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: calc(3 / 210 * 100cqw);
+  color: var(--rt-card-accent-text);
+  background: var(--rt-card-accent);
+}
+
+.rtCardTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(calc(var(--ui-font-size) * 0.85), calc(19 / 150 * 100cqh), calc(var(--ui-font-size) * 1.4));
+  font-weight: bold;
+  line-height: calc(19 / 150 * 100cqh);
+  // One line, always: the header's height is part of the card's geometry, and a
+  // wrapping subject would push the waveform off its y.
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Terse by necessity — the badge shares the header with the subject, so drift
+// reads "-6s" rather than "-6 seconds".
+.rtCardBadge {
+  flex: 0 0 auto;
+  padding: 0 calc(3 / 210 * 100cqw);
+  font-size: clamp(calc(var(--ui-font-size) * 0.6), calc(11 / 150 * 100cqh), calc(var(--ui-font-size) * 1));
+  line-height: calc(13 / 150 * 100cqh);
+  white-space: nowrap;
+  color: var(--color-system-06);
+  border: var(--window-border-size) solid var(--color-system-05);
+  background: var(--color-system-03);
+}
+
+// The five badge states must be tellable apart at a glance: they are the only
+// thing on the card that says whether what you are hearing is the truth. Every
+// kind needs a rule of its own here — one without falls back to the block above
+// and reads as a countdown, which is the wrong answer told confidently.
+.rtCardBadge[data-badge="in-sync"] {
+  background: #a8d8a8;
+}
+
+.rtCardBadge[data-badge="drift"] {
+  background: #e8b8b0;
+}
+
+.rtCardBadge[data-badge="seeking"] {
+  background: #e8dca0;
+}
+
+.rtCardBadge[data-badge="countdown"] {
+  background: var(--color-system-03);
+}
+
+.rtCardBadge[data-badge="playing"] {
+  background: #b8c8e8;
+}
+
+// Neutral, where the other four are tinted: silence is the ABSENCE of something
+// to report, not a condition to react to. A tint here would make a quiet stretch
+// compete for attention with a card that has actually come off the clock.
+.rtCardBadge[data-badge="silence"] {
+  background: #d0d0d0;
+}
+
+// Waveform -----------------------------------------------------------------
+
+// `position: relative` is the load-bearing part: PeaksWaveform renders a bare
+// fragment and its scrubbers are `position: absolute`, so this element is their
+// containing block. Without it the markers resolve against the card frame and
+// sit at the wrong instant by the header's height.
+//
+// The height is derived from the SAME cqw basis as the width, not an
+// `aspect-ratio`, and not a length of its own. The envelope is the card's
+// primary display and it was drawn at Figma's 27 — a fifth of the card, and too
+// small to read a clip's shape off, let alone aim a scrub at. Twice that is
+// legible; keeping it a 206:54 relationship rather than a fixed number is what
+// makes it stay legible when story 034 sizes cards by the row instead of by a
+// constant — its height falls straight out of its own (cqw-scaled) width, so
+// it shrinks and grows exactly in step with the rest of the card.
+//
+// `aspect-ratio` would say the same thing more tersely, and was tried first,
+// but PeaksWaveform's <canvas> carries its own width/height ATTRIBUTES (its
+// backing-store resolution, set from a previous measurement) — as a replaced
+// element those act as an intrinsic size that this box's flex automatic
+// minimum can float to, overriding the ratio and roughly doubling the height
+// in practice despite `overflow: clip`. Stating height as a calc() the same
+// way width is stated sidesteps that: there is no ratio left for a stray
+// intrinsic size to out-vote.
+.rtCardWaveform {
+  position: relative;
+  flex: 0 0 auto;
+  // Figma's 2 side inset, as a margin now that the box is in flow. 210 - 2*2 =
+  // the 206 the design gives the waveform. Both width and height come off the
+  // card's own cqw — width directly (206/210), height by carrying the 206:54
+  // relationship through the same basis (54/210 = (206/210) * (54/206)) — so
+  // this box is 206:54 at any card size without ever naming that ratio to
+  // the layout engine.
+  width: calc(206 / 210 * 100cqw);
+  height: calc(32 / 210 * 100cqw);
+  margin: 0 calc(2 / 210 * 100cqw);
+  // Not `hidden`: an `overflow: hidden` box with a scrollable overflow region is
+  // a scroll container the wheel latches onto, and a card sits inside a lane
+  // that scrolls. Nothing here overflows any more — the scrubbers stretch to
+  // this box rather than carrying a height of their own — so there is nothing
+  // to clip and nothing to trap.
+  overflow: clip;
+  color: var(--color-system-06);
+  background: var(--color-system-01);
+  border: var(--window-border-size) solid var(--color-system-04);
+  box-sizing: border-box;
+  filter: var(--rt-card-chrome-filter);
+}
+
+// PeaksWaveform's canvas carries the global `.playlistTimelineWaveform` class,
+// whose only rules live in PlaylistEditor.scss — a stylesheet that reaches the
+// bundle only because PlaylistEditor happens to be imported. The card states
+// its own box rather than inheriting another app's by luck.
+.rtCardWaveform :global(.playlistTimelineWaveform) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  // The envelope is the card's scrub surface, so it says so.
+  cursor: ew-resize;
+  // Horizontal drags are scrubs; vertical ones are the lane scrolling past.
+  // `none` would take the lane's touch scroll away from every card in it.
+  touch-action: pan-y;
+}
+
+// Control bar --------------------------------------------------------------
+
+.rtCardControls {
+  flex: 0 0 auto;
+  margin: 0 calc(2 / 210 * 100cqw);
+  height: calc(14 / 150 * 100cqh);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: calc(3 / 210 * 100cqw);
+  font-size: clamp(calc(var(--ui-font-size) * 0.6), calc(12 / 150 * 100cqh), calc(var(--ui-font-size) * 1));
+  filter: var(--rt-card-chrome-filter);
+}
+
+// ClassicyBevelButton builds its own className and drops the one it is
+// handed, so — same as the lane strip's mute/toggle controls — the sizing
+// hangs off the `data-card-transport`/`data-card-rewind`/`data-card-mute`
+// attributes the component library forwards untouched.
+.rtCardControls [data-card-transport],
+.rtCardControls [data-card-rewind],
+.rtCardControls [data-card-mute] {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  // Square, so both dimensions come off the same (height) basis rather than
+  // width and height drifting apart as the card's aspect ratio is applied.
+  width: calc(14 / 150 * 100cqh);
+  height: calc(14 / 150 * 100cqh);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1;
+  color: var(--color-system-06);
+  background: var(--color-system-02);
+  border: var(--window-border-size) solid var(--color-system-05);
+  cursor: pointer;
+}
+
+// The speaker and the rewind arrow both take the button's ink, so one asset
+// each serves a bright LIVE card and a dimmed UPCOMING one. They fill the
+// button rather than carrying a size of their own, which is what keeps them
+// on the card's scale for free.
+.rtCardControls [data-card-mute] svg,
+.rtCardControls [data-card-rewind] svg {
+  width: 100%;
+  height: 100%;
+}
+
+// Muted is the state worth spotting across a grid of cards, so it is the one
+// that departs from the button's default ink.
+.rtCardControls [data-card-mute][data-muted="true"] {
+  color: var(--color-system-04);
+}
+
+// Tabs ---------------------------------------------------------------------
+
+.rtCardTabs {
+  // Takes whatever height the row's tallest card grants, so the panel's own
+  // content can push the card taller. The `70` top margin this used to carry
+  // stood in for the three absolutely-positioned bands above it; they are in
+  // flow now and stack it themselves.
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 0 0 calc(2 / 210 * 100cqw);
+  width: calc(207 / 210 * 100cqw);
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 / 150 * 100cqh);
+}
+
+.rtCardTabBar {
+  flex: 0 0 auto;
+  height: calc(11 / 150 * 100cqh);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  font-size: clamp(calc(var(--ui-font-size) * 0.6), calc(10 / 150 * 100cqh), calc(var(--ui-font-size) * 1));
+}
+
+// The measured box. The strip inside it is `width: max-content`, so this is the
+// element whose clientWidth decides whether the arrows are needed.
+.rtCardTabViewport {
+  flex: 1 1 0;
+  min-width: 0;
+  // Hidden, not auto: the arrows are the paging affordance at this size, and a
+  // scrollbar would eat most of the height the bar has. Programmatic
+  // scrollIntoView still works on a hidden overflow.
+  overflow: hidden;
+}
+
+.rtCardTabStrip {
+  display: flex;
+  flex-direction: row;
+  // Must not shrink to fit, or scrollWidth never exceeds the viewport and
+  // useHorizontalOverflow can never report an overflow — see its own docs.
+  width: max-content;
+  height: 100%;
+  font-size: calc(var(--ui-font-size)*.65) !important;
+}
+
+// ClassicyButton (the tab strip's own control) and ClassicyBevelButton (the
+// paging arrows) both drop the className they're handed, so these hang off
+// the tablist's own ARIA contract and the `data-tab-arrow` identity hook
+// instead — see trafficCard.module.scss's card-controls block above for the
+// same pattern.
+.rtCardTabBar [role="tab"] {
+  padding: 0 calc(4 / 210 * 100cqw);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: calc(11 / 150 * 100cqh);
+  white-space: nowrap;
+  color: var(--color-system-06);
+  background: var(--color-system-03);
+  border: var(--window-border-size) solid var(--color-system-05);
+  border-bottom: none;
+  cursor: pointer;
+}
+
+// The selected tab joins the panel below it, the way a Platinum tab control
+// does — the seam is what says which panel you are looking at.
+.rtCardTabBar [role="tab"][aria-selected="true"] {
+  background: var(--color-system-01);
+  font-weight: bold;
+}
+
+.rtCardTabBar [data-tab-arrow] {
+  flex: 0 0 auto;
+  // Matched to the tab bar's own (cqh) height rather than a width fraction, so
+  // the arrow stays roughly square with the bar it sits in at any card size.
+  width: calc(11 / 150 * 100cqh);
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: calc(11 / 150 * 100cqh);
+  color: var(--color-system-06);
+  background: var(--color-system-02);
+  border: var(--window-border-size) solid var(--color-system-05);
+  cursor: pointer;
+}
+
+.rtCardTabBar [data-tab-arrow]:disabled {
+  color: var(--color-system-04);
+  cursor: default;
+}
+
+.rtCardPanel {
+  // Grow to fill whatever the tab bar and the bands above it leave behind, but
+  // — unlike the old fixed-card model — SHRINK too: the card's height is now
+  // the row's, a hard ceiling rather than something content could push past,
+  // so a panel that refuses to shrink would overflow a short row instead of
+  // fitting it. Individual tabs that carry genuinely unbounded content (the
+  // transcript) scroll internally rather than resizing this box further — see
+  // tabs/cardTabs.module.scss.
+  flex: 1 1 auto;
+  width: calc(206 / 210 * 100cqw);
+  // Figma's 39, as a floor rather than a cap — and, like everything else here,
+  // scaled off the card's own box rather than fixed, so it never asks for more
+  // room than a short row can actually give it.
+  min-height: calc(39 / 150 * 100cqh);
+  border: var(--window-border-size) solid var(--color-system-05);
+  box-sizing: border-box;
+}

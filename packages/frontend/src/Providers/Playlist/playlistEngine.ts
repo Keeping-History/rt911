@@ -25,13 +25,38 @@ export const ALLOW_ALL: RulesSnapshot = {
 	browserShouldBe: { open: false },
 };
 
+// Outside the playlist-level window in restrict mode: the class hasn't started
+// or is over, so nothing is available — but the desktop itself is back (no app
+// disables, no locks). Annotate mode outside the window is ALLOW_ALL instead:
+// annotate never restricts, its rules just go inert.
+const LOCKED_OUT: RulesSnapshot = {
+	disabledApps: new Set(),
+	isItemAvailable: () => false,
+	lockedFocus: new Map(),
+	lockedSettings: new Map(),
+	browserShouldBe: { open: false },
+};
+
 // Half-open window [start, end); a missing bound is unbounded.
 const withinWindow = (e: MediaEntry, nowMs: number): boolean =>
 	(e.start === undefined || playlistUtcMs(e.start) <= nowMs) &&
 	(e.end === undefined || nowMs < playlistUtcMs(e.end));
 
+/** The playlist-level window in ms; a missing bound is unbounded. */
+function playlistWindowMs(def: PlaylistDefinition): { startMs: number; endMs: number } {
+	return {
+		startMs: def.start === undefined ? Number.NEGATIVE_INFINITY : playlistUtcMs(def.start),
+		endMs: def.end === undefined ? Number.POSITIVE_INFINITY : playlistUtcMs(def.end),
+	};
+}
+
 export function evaluate(def: PlaylistDefinition | null, nowMs: number): RulesSnapshot {
 	if (!def) return ALLOW_ALL;
+
+	const { startMs, endMs } = playlistWindowMs(def);
+	if (nowMs < startMs || nowMs >= endMs) {
+		return def.mode === "restrict" ? LOCKED_OUT : ALLOW_ALL;
+	}
 
 	const disabledApps = new Set<string>();
 	const lockedSettings = new Map<string, Record<string, unknown>>();
@@ -91,17 +116,20 @@ export function collectCrossings(
 	nowMs: number,
 ): TriggerEvent[] {
 	if (!def || nowMs <= prevMs) return [];
+	// Scheduled events exist only inside the playlist window.
+	const { startMs, endMs } = playlistWindowMs(def);
+	const inWindow = (atMs: number) => startMs <= atMs && atMs < endMs;
 	const out: TriggerEvent[] = [];
 	for (const e of def.entries) {
 		if (e.kind === "jump") {
 			const atMs = playlistUtcMs(e.at);
-			if (prevMs < atMs && atMs <= nowMs) out.push({ kind: "jump", atMs, to: e.to });
+			if (prevMs < atMs && atMs <= nowMs && inWindow(atMs)) out.push({ kind: "jump", atMs, to: e.to });
 		} else if (e.kind === "file") {
 			const atMs = playlistUtcMs(e.at);
-			if (prevMs < atMs && atMs <= nowMs) out.push({ kind: "file", atMs, path: e.path });
+			if (prevMs < atMs && atMs <= nowMs && inWindow(atMs)) out.push({ kind: "file", atMs, path: e.path });
 		} else if (e.kind === "media" && e.focus !== undefined && e.start !== undefined) {
 			const atMs = playlistUtcMs(e.start);
-			if (prevMs < atMs && atMs <= nowMs) {
+			if (prevMs < atMs && atMs <= nowMs && inWindow(atMs)) {
 				out.push({ kind: "focus", atMs, app: e.app, itemId: e.itemId, mode: e.focus });
 			}
 		}
@@ -116,6 +144,10 @@ export function initialFocusEvents(
 	nowMs: number,
 ): TriggerEvent[] {
 	if (!def) return [];
+	// Late-join focus is a window-time behavior too: joining before start or
+	// after end must not tune anything.
+	const { startMs, endMs } = playlistWindowMs(def);
+	if (nowMs < startMs || nowMs >= endMs) return [];
 	const out: TriggerEvent[] = [];
 	for (const e of def.entries) {
 		if (e.kind === "media" && e.focus !== undefined && withinWindow(e, nowMs)) {

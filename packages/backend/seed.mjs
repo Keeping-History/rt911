@@ -448,8 +448,17 @@ const APPROVED_FILTER = { approved: { _eq: 1 } };
 const PUBLIC_READ_GRANTS = [
   { collection: "tm_bookmarks", fields: ["*"], permissions: null },
   {
+    // Character-for-character the same list as apply-hypercard-public-perms.mjs's
+    // mp3_items grant — see the comment there for what each group of fields is
+    // for, and for why `parties`, `tags_curated` and `derived_at` are absent.
     collection: "mp3_items",
-    fields: ["id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles"],
+    fields: [
+      "id", "title", "full_title", "url", "source", "start_date", "calc_duration", "subtitles", "image", "peaks",
+      // Kept in step with apply-hypercard-public-perms.mjs — see the note there
+      // on why `tags` stays granted.
+      "tags",
+      "subject", "link", "tier", "confidence", "evidence", "participants", "mentions", "provenance",
+    ],
     permissions: APPROVED_FILTER,
   },
   {

@@ -1,5 +1,6 @@
 import {
 	ClassicyButton,
+	ClassicyLink,
 	ClassicyWindow,
 	useAppManagerDispatch,
 	useClassicyHelpMenu,
@@ -137,9 +138,16 @@ const AboutAppWindow: FC<{
 				<ul className="aboutAppSources">
 					{provenance.sources.map((source) => (
 						<li key={source.url}>
-							<a href={source.url} target="_blank" rel="noreferrer noopener">
+							<ClassicyLink
+								href={source.url}
+								disposition="browser-new"
+								// Kept for modifier/middle-click fallthrough, which bypasses
+								// the desktop opener and uses the browser's own navigation.
+								target="_blank"
+								rel="noreferrer noopener"
+							>
 								{source.name}
-							</a>
+							</ClassicyLink>
 							<span className="aboutAppFeeds">{source.feeds}</span>
 							{source.note && <span className="aboutAppNote">{source.note}</span>}
 						</li>
@@ -166,9 +174,14 @@ const AboutAppWindow: FC<{
 						<ul className="aboutAppCredits">
 							{provenance.credits.map((credit) => (
 								<li key={credit.url}>
-									<a href={credit.url} target="_blank" rel="noreferrer noopener">
+									<ClassicyLink
+										href={credit.url}
+										disposition="browser-new"
+										target="_blank"
+										rel="noreferrer noopener"
+									>
 										{credit.model}
-									</a>
+									</ClassicyLink>
 									<span className="aboutAppFeeds">
 										{credit.author} — {credit.license}
 									</span>

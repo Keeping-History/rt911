@@ -9,7 +9,9 @@ import {
 } from "classicy";
 import { useRef, useState } from "react";
 import { ADD_ACTIONS, type AddAction, runAddAction, runAddSettings } from "./addActions";
+import { playlistEditorIcons } from "./playlistIcons";
 import { usePlaylistEditor } from "./PlaylistEditorProvider";
+import { PlaylistWindowDialog } from "./PlaylistWindowDialog";
 import { settingsAppMenuItems } from "./playlistMenus";
 
 /**
@@ -55,7 +57,11 @@ export function ToolsPalette({
 	icon: string;
 	appMenu: ClassicyMenuItem[];
 }) {
-	const { activeId, edit, setDialogMode, openSettingsWindow } = usePlaylistEditor();
+	const { states, activeId, edit, setDialogMode, openSettingsWindow } = usePlaylistEditor();
+	// The playlist-schedule dialog, editing the ACTIVE playlist's window. State
+	// is just "open"; the values live in the editor state like every other edit.
+	const [schedulingId, setSchedulingId] = useState<string | null>(null);
+	const scheduling = schedulingId !== null ? states[schedulingId] : undefined;
 	// Where the Add Settings app menu is showing (fixed viewport coords under
 	// the button), or null while it is not. A ClassicyContextualMenu rather
 	// than anything anchored inside this window: the palette window is
@@ -118,6 +124,7 @@ export function ToolsPalette({
 	);
 
 	return (
+		<>
 		<ClassicyWindow
 			id={TOOLS_WINDOW_ID}
 			appId={appId}
@@ -164,7 +171,36 @@ export function ToolsPalette({
 						})}
 					</ClassicyButtonToolbarGroup>
 				))}
+				<ClassicyButtonToolbarGroup>
+					<ClassicyBalloonHelp
+						title="Playlist Schedule…"
+						content="Set a start and end time for this playlist. Outside that window the playlist is stopped: no playlist content is available and no scheduled events fire."
+					>
+						<ClassicyBevelButton
+							icon={playlistEditorIcons.editDateTime}
+							iconAlt="Playlist Schedule"
+							aria-label="Playlist Schedule"
+							disabled={activeId === null}
+							onClickFunc={() => setSchedulingId(activeId)}
+						/>
+					</ClassicyBalloonHelp>
+				</ClassicyButtonToolbarGroup>
 			</ClassicyButtonToolbar>
 		</ClassicyWindow>
+		{schedulingId !== null && scheduling && (
+			<PlaylistWindowDialog
+				appId={appId}
+				playlistId={schedulingId}
+				icon={icon}
+				initialStart={scheduling.start}
+				initialEnd={scheduling.end}
+				onSave={(w) => {
+					setSchedulingId(null);
+					edit(schedulingId, { type: "setWindow", start: w.start, end: w.end });
+				}}
+				onCancel={() => setSchedulingId(null)}
+			/>
+		)}
+		</>
 	);
 }

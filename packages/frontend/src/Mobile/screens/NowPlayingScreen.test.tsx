@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Station } from "../../Applications/RadioScanner/stationGrouping";
+import type { Station } from "../../Applications/radio-core/stationGrouping";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { NowPlayingScreen } from "./NowPlayingScreen";
 

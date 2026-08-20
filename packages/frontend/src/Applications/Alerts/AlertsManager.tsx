@@ -11,6 +11,9 @@ import {
 	useClassicyAboutMenu,
 	useClassicyWindowClose,
 } from "classicy";
+// Side effect: registers this app's manifest (registerApp) at import time.
+import "./AlertsContext";
+import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import { setAlertsEnabled, useAlertsEnabled } from "./alertsSettings";
 import alertPng from "./app.png";
@@ -74,6 +77,7 @@ export const AlertsManager: React.FC = () => {
 			defaultWindow={WINDOW_ID}
 			noDesktopIcon={true}
 			addSystemMenu={true}
+			desktopIconBalloonHelp={manifestDescription(APP_ID)}
 		>
 			<ClassicyWindow
 				id={WINDOW_ID}

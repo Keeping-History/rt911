@@ -12,6 +12,7 @@ const windows = vi.hoisted(() => ({ current: {} as Record<string, { appMenu?: Cl
 const fileOpenDialog = vi.hoisted(() => ({
 	current: null as null | {
 		open?: boolean;
+		volumes?: { id: string; label: string }[];
 		onOpenFunc?: (selections: ClassicyFileOpenSelection[]) => void;
 	},
 }));
@@ -26,6 +27,7 @@ vi.mock("classicy", async (importOriginal) => ({
 	},
 	ClassicyFileOpenDialog: (props: {
 		open?: boolean;
+		volumes?: { id: string; label: string }[];
 		onOpenFunc?: (selections: ClassicyFileOpenSelection[]) => void;
 	}) => {
 		fileOpenDialog.current = props;
@@ -161,6 +163,19 @@ describe("PlaylistEditor", () => {
 		});
 		expect(mainEntries.current.p1 ?? []).toHaveLength(0);
 		expect(fileOpenDialog.current?.open).toBe(false);
+	});
+
+	// Media entries only ever come from the archive — offering Desktop /
+	// Macintosh HD there produced selections the playlist couldn't use.
+	it("offers only the 9/11 Realtime Archive volume in the Add Media dialog", () => {
+		render(<PlaylistEditor />);
+
+		act(() => screen.getByRole("button", { name: "Mock Open" }).click());
+		act(() => fireEvent.click(screen.getByRole("button", { name: "Add Media…" })));
+
+		expect(fileOpenDialog.current?.open).toBe(true);
+		expect(fileOpenDialog.current?.volumes?.map((v) => v.id)).toEqual(["rt911-archive"]);
+		expect(fileOpenDialog.current?.volumes?.[0].label).toBe("9/11 Realtime Archive");
 	});
 
 	it("expands a Select All selection through the archive volume into the active document", async () => {

@@ -17,6 +17,7 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 } from "classicy";
+import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import {
 	type ChangeEvent,
@@ -98,7 +99,9 @@ import {
 	type BasemapStyleId,
 	effectiveTone,
 	normalizeBasemapStyle,
+	SECONDARY_TRACK_COLOR,
 } from "./flightMapStyle";
+import { type SecondaryTrack, useMultiFlightTracks } from "./useMultiFlightTracks";
 import { toggleFlightSelection } from "./selectionToggle";
 
 // This app's own icon, registered into the shared registry at
@@ -717,6 +720,21 @@ export const FlightTracker: FC = () => {
 	// the other day's route — see useAltitudeProfile's doc comment.
 	const { profile } = useAltitudeProfile(selection, track?.flight_date ?? null);
 
+	// Every OTHER multi-selected flight (issue #326): the active one above
+	// keeps its richer phase-colored/profile-driven track, these get a plain
+	// track each so a shift-click or area-select multi-selection shows every
+	// flight's path, not just the one shown in the detail pane's dropdown.
+	// Memoized the same way `selection` is — multiSelected/activeFlightIdx
+	// only get fresh references on a genuine selection change.
+	const secondarySelections: TrackSelection[] = useMemo(
+		() =>
+			multiSelected
+				.filter((_, i) => i !== activeFlightIdx)
+				.map((p) => ({ flight: p.flight, startDate: p.start_date })),
+		[multiSelected, activeFlightIdx],
+	);
+	const secondaryTracks = useMultiFlightTracks(secondarySelections);
+
 	// Live fix for the selected flight (`selected` is a click-time snapshot; the
 	// streamed set updates each minute-bucket). Heading is the bearing of the
 	// track leg nearest that fix — no motion-buffer plumbing needed.
@@ -853,21 +871,59 @@ export const FlightTracker: FC = () => {
 		[profile],
 	);
 
+	// 3D counterpart of secondaryFeatures below: every OTHER multi-selected
+	// flight with a loaded altitude profile, for FlightMap's secondary tubes.
+	const secondaryTrackProfiles = useMemo(
+		() =>
+			[...secondaryTracks.values()]
+				.filter((t): t is SecondaryTrack & { profile: NonNullable<SecondaryTrack["profile"]> } =>
+					!!t.profile,
+				)
+				.map((t) => ({ flight: t.flight, profile: t.profile })),
+		[secondaryTracks],
+	);
+
+	// One plain feature per OTHER multi-selected flight, colored distinctly
+	// from the active track (issue #326) — appended to whichever branch below
+	// produces the active flight's own feature(s).
+	const secondaryFeatures = useMemo<GeoJSON.Feature[]>(
+		() =>
+			[...secondaryTracks.values()]
+				.filter((t): t is SecondaryTrack & { geometry: NonNullable<SecondaryTrack["geometry"]> } =>
+					!!t.geometry,
+				)
+				.map((t) => ({
+					type: "Feature" as const,
+					geometry: t.geometry,
+					properties: { color: SECONDARY_TRACK_COLOR },
+				})),
+		[secondaryTracks],
+	);
+
 	const trackGeoJSON: FeatureCollection | null = useMemo(() => {
-		if (!track?.geometry) return null;
+		if (!track?.geometry) {
+			return secondaryFeatures.length
+				? { type: "FeatureCollection", features: secondaryFeatures }
+				: null;
+		}
 		if (
 			selection && profile && profile.length >= 2
 			&& (isNotable(selection.flight) || hasEstimated)
 		) {
 			const features = buildTrackSegments(profile, phasePaletteFor(selection.flight));
-			if (features.length) return { type: "FeatureCollection", features };
+			if (features.length) {
+				return { type: "FeatureCollection", features: [...features, ...secondaryFeatures] };
+			}
 		}
 		// non-notable (or no profile yet): the decimated track as one plain feature.
 		return {
 			type: "FeatureCollection",
-			features: [{ type: "Feature", geometry: track.geometry, properties: {} }],
+			features: [
+				{ type: "Feature", geometry: track.geometry, properties: {} },
+				...secondaryFeatures,
+			],
 		};
-	}, [track?.geometry, selection, profile, hasEstimated]);
+	}, [track?.geometry, selection, profile, hasEstimated, secondaryFeatures]);
 
 	// Provenance legend: only meaningful once a track actually mixes radar and
 	// estimated stretches.
@@ -895,7 +951,13 @@ export const FlightTracker: FC = () => {
 	const tone = effectiveTone(settings.mapStyle, settings.darkMap);
 
 	return (
-		<ClassicyApp id={appId} name={appName} icon={appIcon} defaultWindow="flight-map">
+		<ClassicyApp
+			id={appId}
+			name={appName}
+			icon={appIcon}
+			defaultWindow="flight-map"
+			desktopIconBalloonHelp={manifestDescription(appId)}
+		>
 			{showSettings && (
 				<ClassicyWindow
 					id="flight-settings"
@@ -1245,6 +1307,7 @@ export const FlightTracker: FC = () => {
 								trackGeoJSON={trackGeoJSON}
 								trackProfile={profile}
 								trackPalette={phasePaletteFor(selection?.flight)}
+								secondaryTrackProfiles={secondaryTrackProfiles}
 								nowMs={nowMs}
 								playing={!paused}
 								mapStyle={settings.mapStyle}

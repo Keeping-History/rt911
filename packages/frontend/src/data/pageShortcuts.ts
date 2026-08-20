@@ -5,9 +5,9 @@ import {
 } from "classicy";
 
 /**
- * The present-day CMS pages, as web shortcuts — the single source of truth
- * shared by the desktop icons (Desktop.tsx) and the Finder drive root
- * (DefaultFileSystem.ts).
+ * The present-day CMS pages, plus other external web shortcuts, as the
+ * single source of truth shared by the desktop icons (Desktop.tsx) and the
+ * Finder drive root (DefaultFileSystem.ts).
  *
  * Both surfaces exist deliberately and both read from here: rt911 runs
  * `defaultFileSystemMode="exclusive"` and syncs each signed-in user's tree to
@@ -19,6 +19,11 @@ import {
 export const PAGE_SHORTCUTS = [
 	{ iconId: "shortcut_press", name: "Press Room", url: "/press" },
 	{ iconId: "shortcut_teachers", name: "For Teachers", url: "/teachers" },
+	{
+		iconId: "shortcut_donate",
+		name: "Make a Donation",
+		url: "https://opencollective.com/keepinghistory/projects/911realtime/contribute",
+	},
 ] as const;
 
 /**

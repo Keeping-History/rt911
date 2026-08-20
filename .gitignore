@@ -27,6 +27,8 @@ usenet/**
 .history
 .pnpm-store
 .remember
+# mdkb's local code/doc index — regenerable sqlite, machine-specific
+.mdkb/
 plans/archive
 packages/frontend/.husky/_/post-commit
 **/.husky/_/post-commit

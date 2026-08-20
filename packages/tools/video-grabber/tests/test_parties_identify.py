@@ -38,6 +38,23 @@ def test_atc_folders_are_conversation():
     assert should_identify("audio/AA77/0812 aa77 taxi.mp3") is True
 
 
+@pytest.mark.parametrize("station", [
+    "BBC-R4", "KFI", "KOH", "KQRS", "WABC", "WAMU",
+    "WBAP", "WCBS", "WIBX", "WINS", "WKXW", "WOR",
+])
+def test_every_station_under_radio_is_classified_broadcast(station):
+    """AM/FM station broadcasts, and the classification must be recorded.
+
+    These 31 rows were skipped for two months by falling through as
+    unclassified, which looks identical to a decision. Asserting BROADCAST
+    rather than `should_identify is False` is the point: the weaker assertion
+    would pass again if someone removed the entry.
+    """
+    key = f"audio/radio/{station}/{station}-AM_2001-09-11_ET0900.mp3"
+    assert media_kind(key) == BROADCAST
+    assert should_identify(key) is False
+
+
 def test_unknown_folder_is_skipped_not_identified():
     # Fail-closed: a folder nobody classified must not be identified by default.
     assert media_kind("audio/brand_new_collection/x.mp3") is None
@@ -83,6 +100,18 @@ def test_second_document_only_described_when_supplied():
     assert "COMMISSION" not in bare and "COMMISSION" not in user
     with_doc, user2 = build_messages("x", TIER_CLIP, "093800 Gofer 06")
     assert "COMMISSION" in with_doc and "COMMISSION" in user2
+
+
+def test_prompt_forbids_expanding_a_name_the_document_abbreviates():
+    """The commonest gate hit in the first live batch, and a prompt problem.
+
+    The model expanded a transcript's "Boston" to "Boston Center" — correct as
+    fact, but added knowledge, so the gate dropped the whole facility when
+    "Boston" would have survived.
+    """
+    system, _ = build_messages("x", TIER_CLIP)
+    assert "EXACTLY as the document words it" in system
+    assert "Boston Center" in system
 
 
 def test_tape_tier_is_told_not_to_invent_a_placeholder():
@@ -210,11 +239,24 @@ def test_various_is_no_longer_an_accepted_answer():
 
 # --- the new fields -------------------------------------------------------
 
-def test_subject_must_use_words_from_the_source():
+def test_subject_may_not_name_a_facility_the_source_never_had():
     bad = {**GOOD, "subject": "Cleveland Center reports a hijacking in progress"}
     cleaned, reasons = validate_parties(bad, TRANSCRIPT)
     assert cleaned["subject"] is None
-    assert any("subject introduced words" in r for r in reasons)
+    assert any("subject names" in r for r in reasons)
+
+
+def test_subject_may_use_ordinary_words_the_source_lacks():
+    """The rule that shipped first rejected every subject in the corpus.
+
+    Whole-phrase containment works for a minute summary drawn from a long
+    source; against a two-sentence transcript it flags "reports" and "routine"
+    as inventions. Only names and numbers are policed now.
+    """
+    ok = {**GOOD, "subject": "Indianapolis Center is trying to reach American 77"}
+    cleaned, reasons = validate_parties(ok, TRANSCRIPT)
+    assert cleaned["subject"] == ok["subject"]
+    assert reasons == []
 
 
 def test_subject_survives_when_built_from_source_words():
@@ -222,6 +264,40 @@ def test_subject_survives_when_built_from_source_words():
     assert cleaned["subject"] == GOOD["subject"]
     assert cleaned["sources"]["subject"] == SOURCE_TRANSCRIPT
     assert reasons == []
+
+
+def test_subject_may_not_invent_a_flight_number():
+    bad = {**GOOD, "subject": "Indianapolis Center is trying to reach American 93"}
+    cleaned, reasons = validate_parties(bad, TRANSCRIPT)
+    assert cleaned["subject"] is None
+    assert any("93" in r for r in reasons)
+
+
+# --- spoken digits --------------------------------------------------------
+
+SPOKEN = "Quit 2-5, contact Washington Center 1-3-4-0-0."
+
+
+def test_callsign_matches_a_transcript_that_spells_the_number_out():
+    """Controllers read numbers digit by digit and the transcriber follows.
+
+    'Quit 2-5' is right there in the audio, but a callsign normalised to
+    'Quit 25' looked absent — which is why `aircraft` sat at 54% fill.
+    """
+    ok = {**GOOD, "aircraft": ["Quit 25"], "evidence": "Quit 2-5, contact Washington Center",
+          "subject": None, "participants": []}
+    cleaned, reasons = validate_parties(ok, SPOKEN)
+    assert cleaned["aircraft"] == ["Quit 25"]
+    assert reasons == []
+
+
+def test_spoken_digit_joining_does_not_merge_separate_numbers():
+    """'190, 230' are two altitudes, not the number 190230."""
+    bad = {**GOOD, "aircraft": ["Flight 190230"], "evidence": "passing through 190, 230",
+           "subject": None, "participants": []}
+    cleaned, reasons = validate_parties(bad, "Philadelphia passing through 190, 230.")
+    assert cleaned["aircraft"] == []
+    assert reasons
 
 
 def test_topic_outside_the_vocabulary_is_dropped():
@@ -290,3 +366,45 @@ def test_parse_blames_the_token_budget_for_an_empty_reply(raw):
     """
     with pytest.raises(ValueError, match="no text"):
         parse_parties(raw)
+
+
+# --- the validator must survive arbitrary model output --------------------
+
+@pytest.mark.parametrize("junk", [["transcript"], {"a": 1}, 7, None, True])
+def test_a_wrong_typed_source_is_rejected_not_fatal(junk):
+    """A run over 758 recordings died two hours in on `source: ["transcript"]`.
+
+    `value in dict` raises TypeError for a list or dict key, and the reply is
+    arbitrary JSON from a model. This validator is the only thing between that
+    output and the database, so no input shape may crash it.
+    """
+    bad = {**GOOD, "participants": [
+        {**GOOD["participants"][0], "source": junk},
+    ]}
+    cleaned, _ = validate_parties(bad, TRANSCRIPT)
+    assert isinstance(cleaned["participants"], list)
+
+
+@pytest.mark.parametrize("field,junk", [
+    ("role", ["atc"]),
+    ("confidence", {"level": "high"}),
+])
+def test_a_wrong_typed_participant_field_falls_back(field, junk):
+    bad = {**GOOD, "participants": [{**GOOD["participants"][0], field: junk}]}
+    cleaned, _ = validate_parties(bad, TRANSCRIPT)
+    assert cleaned["participants"][0]["role"] in {"atc", "unknown"}
+    assert cleaned["participants"][0]["confidence"] in {"high", "medium", "low"}
+
+
+@pytest.mark.parametrize("key,junk", [
+    ("topics", [["hijack-report"]]),
+    ("link", ["landline"]),
+    ("confidence", ["high"]),
+    ("sources", ["transcript"]),
+])
+def test_wrong_typed_top_level_fields_do_not_crash(key, junk):
+    cleaned, _ = validate_parties({**GOOD, key: junk}, TRANSCRIPT)
+    assert cleaned["schema_version"] == SCHEMA_VERSION
+    assert cleaned["confidence"] in {"high", "medium", "low"}
+    assert cleaned["link"] in {"air-ground", "landline", "internal",
+                               "conference", "unknown"}

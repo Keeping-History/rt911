@@ -7,7 +7,7 @@ vi.mock("./resolveTimelineMeta", () => ({
 	resolveTimelineMeta: vi.fn(async () => new Map()),
 }));
 
-import { barMaskImage, PlaylistTimeline } from "./PlaylistTimeline";
+import { barMaskImage, edgeCursor, PlaylistTimeline } from "./PlaylistTimeline";
 import { resolveTimelineMeta } from "./resolveTimelineMeta";
 
 /**
@@ -149,6 +149,34 @@ describe("PlaylistTimeline", () => {
 		expect(document.querySelectorAll(".playlistTimelineHourTick")).toHaveLength(40);
 	});
 
+	it("rescales the ruler and bars to a playlist-level window", () => {
+		// A two-hour class: the ruler reads as clock times spanning just the
+		// window, and an entry filling half the window draws at 50% width.
+		render(
+			<PlaylistTimeline
+				entries={[{
+					uid: "e1",
+					entry: {
+						kind: "media", app: "tv", itemId: "CNN",
+						start: "2001-09-11T12:00:00Z", end: "2001-09-11T13:00:00Z",
+					},
+				}]}
+				selectedUid={null}
+				onSelect={vi.fn()}
+				start="2001-09-11T12:00:00Z"
+				end="2001-09-11T14:00:00Z"
+				{...atRest}
+			/>,
+		);
+		const labels = Array.from(document.querySelectorAll(".playlistTimelineDayTick"));
+		expect(labels[0].textContent).toBe("12:00");
+		expect(labels[labels.length - 1].textContent).toBe("14:00");
+
+		const bar = document.querySelector(".playlistTimelineBar") as HTMLElement;
+		expect(bar.style.left).toBe("0%");
+		expect(bar.style.width).toBe("50%");
+	});
+
 	it("right-aligns only the closing ruler label, at every zoom level", () => {
 		// A label at left:100% that is left-aligned draws its whole width past
 		// the track. That is scrollable overflow, and it made a fully zoomed-out
@@ -171,14 +199,13 @@ describe("PlaylistTimeline", () => {
 
 	it("widens the track and subdivides the ruler on zoom in, and restores it on zoom out", () => {
 		render(<Controlled entries={[]} />);
+		// The track width is the zoom's observable effect; the readout element is
+		// a UI detail that has come and gone, so assertions pin the width instead.
 		const track = screen.getByTestId("timeline-track");
-		const level = screen.getByTestId("timeline-zoom-level");
 		expect(track.style.width).toBe("100%");
-		expect(level.textContent).toBe("1×");
 
 		fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
 		expect(track.style.width).toBe("200%");
-		expect(level.textContent).toBe("2×");
 		expect(document.querySelectorAll(".playlistTimelineHourTick").length).toBeGreaterThan(40);
 
 		fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
@@ -198,9 +225,91 @@ describe("PlaylistTimeline", () => {
 
 		// Walk past the top of the ladder; it must stop, not run past MAX_ZOOM.
 		for (let i = 0; i < 12; i += 1) fireEvent.click(zoomIn);
-		expect(screen.getByTestId("timeline-zoom-level").textContent).toBe("64×");
+		expect(screen.getByTestId("timeline-track").style.width).toBe("6400%");
 		expect(zoomIn.disabled).toBe(true);
 		expect(zoomOut.disabled).toBe(false);
+	});
+
+	describe("edge drag", () => {
+		// ABC runs 12:00–13:00 on 11 Sep: startFrac 0.25 of the ten-day span.
+		const dragEntries: EditorEntry[] = [
+			{
+				uid: "e1",
+				entry: {
+					kind: "media", app: "tv", itemId: "ABC",
+					start: "2001-09-11T12:00:00Z", end: "2001-09-11T13:00:00Z",
+				},
+			},
+		];
+
+		// jsdom does no layout, so the track measures 0×0 and every drag would
+		// no-op; a mocked 1000px rect makes clientX read directly as frac ‰.
+		function renderWithTrack(onSetEntryBound = vi.fn()) {
+			render(
+				<PlaylistTimeline
+					entries={dragEntries}
+					selectedUid={null}
+					onSelect={vi.fn()}
+					onSetEntryBound={onSetEntryBound}
+					{...atRest}
+				/>,
+			);
+			vi.spyOn(screen.getByTestId("timeline-track"), "getBoundingClientRect").mockReturnValue({
+				left: 0, width: 1000, top: 0, right: 1000, bottom: 20, height: 20,
+				x: 0, y: 0, toJSON: () => ({}),
+			} as DOMRect);
+			return onSetEntryBound;
+		}
+
+		it("renders no handles when onSetEntryBound is not wired (read-only host)", () => {
+			render(
+				<PlaylistTimeline entries={dragEntries} selectedUid={null} onSelect={vi.fn()} {...atRest} />,
+			);
+			expect(document.querySelector(".playlistTimelineBarHandle")).toBeNull();
+		});
+
+		it("previews the dragged end edge live and commits the snapped ISO only on release", () => {
+			const onSetEntryBound = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-end-e1");
+
+			// 600/1000 of ten days from 9 Sep = 15 Sep 00:00 exactly.
+			fireEvent.pointerDown(handle, { clientX: 600, pointerId: 1 });
+			fireEvent.pointerMove(handle, { clientX: 600, pointerId: 1 });
+
+			const bar = document.querySelector(".playlistTimelineBar") as HTMLElement;
+			expect(parseFloat(bar.style.left)).toBeCloseTo(25);
+			expect(parseFloat(bar.style.width)).toBeCloseTo(35);
+			expect(onSetEntryBound).not.toHaveBeenCalled();
+
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			expect(onSetEntryBound).toHaveBeenCalledWith("e1", "end", "2001-09-15T00:00:00.000Z");
+		});
+
+		it("clamps a start-edge drag one minute short of the entry's end bound", () => {
+			const onSetEntryBound = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-start-e1");
+			fireEvent.pointerDown(handle, { clientX: 990, pointerId: 1 });
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			expect(onSetEntryBound).toHaveBeenCalledWith("e1", "start", "2001-09-11T12:59:00.000Z");
+		});
+
+		it("abandons the drag without committing on pointercancel", () => {
+			const onSetEntryBound = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-start-e1");
+			fireEvent.pointerDown(handle, { clientX: 100, pointerId: 1 });
+			fireEvent.pointerCancel(handle, { pointerId: 1 });
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			expect(onSetEntryBound).not.toHaveBeenCalled();
+		});
+
+		it("uses the View Pane resize cursors: double-arrow idle, travel arrow mid-drag", () => {
+			// jsdom's CSS parser drops url(...) N N cursor values from inline
+			// styles (same class of loss as the maskImage calc() case above), so
+			// the cursor strings are pinned via the helper the handles render with.
+			expect(edgeCursor("lr")).toMatch(/^url\(.+\) 8 8, col-resize$/);
+			expect(edgeCursor("l")).toMatch(/^url\(.+\) 8 8, w-resize$/);
+			expect(edgeCursor("r")).toMatch(/^url\(.+\) 8 8, e-resize$/);
+		});
 	});
 
 	it("un-stacks flags that only collided because they were close as a fraction of ten days", () => {

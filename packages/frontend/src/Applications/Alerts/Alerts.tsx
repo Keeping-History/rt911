@@ -5,6 +5,8 @@ import {
 	useAppManager,
 	useSoundDispatch,
 } from "classicy";
+// Side effect: registers this app's manifest (registerApp) at import time.
+import "./AlertsContext";
 import type React from "react";
 import { useContext, useEffect, useMemo, useState } from "react";
 import {

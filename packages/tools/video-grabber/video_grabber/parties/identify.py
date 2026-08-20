@@ -37,6 +37,7 @@ from __future__ import annotations
 import json
 import re
 
+from video_grabber.parties.spoken import digit_candidates, spoken_to_digits
 from video_grabber.parties.vocab import LINKS, ROLES, TOPICS
 from video_grabber.transcript.summarize import unsupported_words
 
@@ -66,7 +67,13 @@ MEDIA_KIND: dict[str, str] = {
     "ZOB": CONVERSATION, "faa_atc": CONVERSATION, "fdny_dispatch": CONVERSATION,
     "rutgers_audiograph": CONVERSATION,
     # News radio: a broadcast has no counterparty. Excluded by decision.
-    "wins1010": BROADCAST, "wcbs": BROADCAST,
+    # `radio` covers every station under audio/radio/ (BBC-R4, KFI, KOH, KQRS,
+    # WABC, WAMU, WBAP, WCBS, WIBX, WINS, WKXW, WOR) because media_kind keys on
+    # the first segment under audio/, not the station. It is listed explicitly
+    # rather than left to fall through: an unlisted folder is also skipped, so
+    # "we decided these are broadcasts" and "nobody has looked at this folder"
+    # would otherwise be indistinguishable — which is how 31 rows sat unnoticed.
+    "wins1010": BROADCAST, "wcbs": BROADCAST, "radio": BROADCAST,
 }
 
 
@@ -107,9 +114,19 @@ Rules you must follow:
 anything you know about September 11 from any other source.
 - If the documents do not tell you, return null or an empty list. That is a \
 correct answer, not a failure.
+- Word every name EXACTLY as the document words it. Do not expand it, complete \
+it, or add words to it. If the document says "Boston", write "Boston" — not \
+"Boston Center", even when you are confident that is the facility meant. If it \
+never says what someone's position is, leave `position` null rather than \
+writing a generic one like "controller".
 - `evidence` must be an exact quote copied character-for-character from a \
 document.
-- `subject` must be written using words that appear in the documents.
+- `subject` is one short phrase saying what the recording is about. Write it in \
+lower case, capitalising ONLY proper names — facilities, people, callsigns. \
+Every name and number you put in it must appear in the documents; the ordinary \
+words are yours to choose. Example: "Boston Center tells New York Center that \
+American 11 is not responding" — every capitalised word there is a name that \
+must be in the documents, and the rest is ordinary prose.
 
 `participants` lists everyone taking part in the communication — one entry per \
 party, however many there are. Do not force a conversation into two sides. Each \
@@ -185,6 +202,49 @@ def build_messages(
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
 _DIGITS = re.compile(r"\d+")
 
+# Controllers read numbers out digit by digit, and the transcriber writes what it
+# hears: "Quit 2-5", "contact Washington Center 1-3-4-0-0". A callsign normalised
+# to "Quit 25" then looks absent from a transcript that says it plainly. Join runs
+# of digits that are separated only by hyphens or spaces — a comma still separates,
+# so "190, 230" does not silently become the number 190230.
+_SPOKEN_DIGITS = re.compile(r"(?<=\d)[-‑\s]+(?=\d)")
+
+# Capitalised inside the phrase, or carrying a digit: the tokens in a subject that
+# could name something the model was never shown.
+_IDENTITY_TOKEN = re.compile(r"\b(?:[A-Z][\w'-]*|[\w'-]*\d[\w'-]*)\b")
+
+
+def _join_spoken_digits(text: str) -> str:
+    return _SPOKEN_DIGITS.sub("", text or "")
+
+
+def digit_haystack(source: str) -> str:
+    """The source, plus every other way its numbers could have been written.
+
+    Three spellings of one number all appear in this corpus — "2-5" (spoken
+    digits, hyphenated by the transcriber), "twenty five" and "two five" — and a
+    callsign written any of those ways has to match a source written any other.
+    Rather than guess which is canonical, search them all.
+    """
+    return " ".join((
+        source or "",
+        _join_spoken_digits(source),
+        digit_candidates(source or ""),
+    ))
+
+
+def source_numbers(source: str) -> set[str]:
+    """Every whole number the source states, under any of its spellings.
+
+    Whole numbers, not substrings. Checking `"93" in text` accepts a transcript
+    whose only number is 937 — a real false positive found on the NEADS floor
+    tape, where "United 93" scored as supported by audio that mentions US 9-37
+    and never says 93 at all. Synthesised readings make it worse, because a
+    concatenated run of a time readout is a 21-digit string containing almost
+    every short number as a substring.
+    """
+    return set(_DIGITS.findall(digit_haystack(source)))
+
 
 def parse_parties(raw: str) -> dict:
     """Parse the model's reply, tolerating a markdown fence."""
@@ -212,6 +272,21 @@ def parse_parties(raw: str) -> dict:
     return parsed
 
 
+def _member(value: object, allowed) -> bool:
+    """Membership test that survives the model returning the wrong JSON type.
+
+    `value in allowed` raises TypeError when `value` is a list or dict, and the
+    reply is arbitrary JSON from a language model — a run over 758 recordings
+    died two hours in because one of them answered
+    `"source": ["transcript"]` instead of `"source": "transcript"`.
+
+    This validator is the one thing standing between arbitrary model output and
+    the database, so no input shape may crash it. A wrong-typed value is simply
+    not a member, and the caller rejects it like any other bad value.
+    """
+    return isinstance(value, str) and value in allowed
+
+
 def _normalise(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip().lower()
 
@@ -229,10 +304,36 @@ def _callsign_supported(callsign: str, source: str) -> bool:
     requiring the literal token would reject every correct answer. The flight
     number is the part that cannot be invented without inventing an aircraft.
     """
-    digits = _DIGITS.findall(callsign or "")
+    # The model echoes the audio's own phrasing back, so the callsign itself
+    # arrives spelled out as often as the transcript does: 'Delta Eighty Nine'
+    # carries no digits at all until it is read as a number.
+    digits = _DIGITS.findall(spoken_to_digits(callsign or ""))
     if not digits:
         return False
-    return all(d in source for d in digits)
+    stated = source_numbers(source)
+    # Leading zeros are a spelling ("Gofer 06" / "Gofer 6"), not a difference.
+    return all(d in stated or d.lstrip("0") in stated for d in digits)
+
+
+def unsupported_identities(subject: str, source: str) -> list[str]:
+    """Names and numbers in a subject line that the source does not contain.
+
+    A subject is a paraphrase, so the whole-phrase containment rule that governs
+    minute summaries is the wrong instrument: it rejected every subject in the
+    first dry run because ordinary summary words ("reports", "routine",
+    "shortly") are not in a two-sentence transcript.
+
+    What actually needs policing is narrower — the model naming a facility,
+    person or flight it was never shown. Those tokens are capitalised or carry a
+    digit, and the prompt asks for the rest in lower case so the signal is
+    reliable rather than incidental.
+    """
+    haystack = digit_haystack(source)
+    missing = []
+    for token in _IDENTITY_TOKEN.findall(subject or ""):
+        if unsupported_words(token, haystack):
+            missing.append(token)
+    return sorted(set(missing))
 
 
 def validate_parties(
@@ -268,7 +369,7 @@ def validate_parties(
             claimed = declared.get(path)
         if claimed is None:
             return SOURCE_TRANSCRIPT
-        if claimed not in texts:
+        if not _member(claimed, texts):
             reasons.append(f"{path} claims unknown source {claimed!r}")
             return None
         return claimed
@@ -302,9 +403,11 @@ def validate_parties(
                 str(value), source, f"participants[{i}].{field}"
             ) else None
         role = raw.get("role")
-        entry["role"] = role if role in ROLES else "unknown"
+        entry["role"] = role if _member(role, ROLES) else "unknown"
         confidence = raw.get("confidence")
-        entry["confidence"] = confidence if confidence in CONFIDENCE_ORDER else "low"
+        entry["confidence"] = (
+            confidence if _member(confidence, CONFIDENCE_ORDER) else "low"
+        )
         entry["source"] = source
         # An entry naming nobody says only "somebody with this role spoke", which
         # every recording already implies. Drop it rather than pad the list.
@@ -329,11 +432,11 @@ def validate_parties(
     if not subject or subject_source is None:
         cleaned["subject"] = None
     else:
-        missing = unsupported_words(subject, texts[subject_source])
+        missing = unsupported_identities(subject, texts[subject_source])
         if missing:
             reasons.append(
-                f"subject introduced words absent from the {subject_source}: "
-                f"{', '.join(missing[:6])}"
+                f"subject names {missing[:6]} which the {subject_source} "
+                f"never contains"
             )
             cleaned["subject"] = None
         else:
@@ -379,18 +482,18 @@ def validate_parties(
     # --- closed vocabularies ----------------------------------------------
     topics = []
     for topic in cleaned.get("topics") or []:
-        if topic in TOPICS:
+        if _member(topic, TOPICS):
             topics.append(topic)
         else:
             reasons.append(f"topic {topic!r} is not in the controlled vocabulary")
     cleaned["topics"] = sorted(set(topics))
 
-    if cleaned.get("link") not in LINKS:
+    if not _member(cleaned.get("link"), LINKS):
         cleaned["link"] = "unknown"
 
     # --- overall confidence -------------------------------------------------
     overall = cleaned.get("confidence")
-    if overall not in CONFIDENCE_ORDER:
+    if not _member(overall, CONFIDENCE_ORDER):
         overall = "low"
     if reasons and CONFIDENCE_ORDER[overall] > CONFIDENCE_ORDER["medium"]:
         overall = "medium"

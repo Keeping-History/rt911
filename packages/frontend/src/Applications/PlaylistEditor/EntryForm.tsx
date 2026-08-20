@@ -1,83 +1,19 @@
 import {
 	ClassicyCheckbox,
-	ClassicyControlGroup,
 	ClassicyControlLabel,
-	ClassicyDatePicker,
 	ClassicyInput,
 	ClassicyPopUpMenu,
-	ClassicyTimePicker,
 } from "classicy";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { AppSettingsFields } from "./AppSettingsFields";
-import {
-	displayWallClockToUtcIso,
-	type EditorEntry,
-	utcIsoToDisplayWallClock,
-} from "./editorState";
+import { DateTimeField } from "./DateTimeField";
+import type { EditorEntry } from "./editorState";
 import { listSettingsApps } from "./settingsRegistry";
 
-const TIMELINE_MIN = new Date(2001, 8, 9); // Sept 9 2001 (display wall clock)
-const TIMELINE_MAX = new Date(2001, 8, 18, 23, 59, 59);
-// Seed for pickers when there's no value yet: Sept 11 2001, 08:40 (display wall clock).
-const DEFAULT_WALL_CLOCK = new Date(2001, 8, 11, 8, 40);
 const KNOWN_APP_IDS = [
-	"TimeMachine.app", "TV.app", "RadioScanner.app", "News.app",
+	"TimeMachine.app", "TV.app", "RadioTraffic.app", "RadioTuner.app", "News.app",
 	"FlightTracker.app", "Browser.app", "PDFViewer.app", "Weather.app",
 ];
-
-function DateTimeField({
-	label, value, optional, onChange,
-}: {
-	label: string;
-	value: string | undefined;
-	optional?: boolean; // renders the "unbounded" checkbox
-	onChange: (iso: string | undefined) => void;
-}) {
-	const wall = value ? utcIsoToDisplayWallClock(value) : null;
-	const seed = wall ?? DEFAULT_WALL_CLOCK;
-	const setFrom = (d: Date) => onChange(displayWallClockToUtcIso(d));
-	// Required fields always render pickers (there's no way to leave them unset);
-	// optional fields hide the pickers while the "unbounded" checkbox is checked.
-	const showPickers = optional ? value !== undefined : true;
-	return (
-		<ClassicyControlGroup label={label}>
-			{optional && (
-				<ClassicyCheckbox
-					id={`${label}-unbounded`}
-					label="Not Time Bound"
-					checked={value === undefined}
-					onClickFunc={(checked) =>
-						onChange(checked ? undefined : displayWallClockToUtcIso(DEFAULT_WALL_CLOCK))
-					}
-				/>
-			)}
-			{showPickers && (
-				<>
-					<ClassicyDatePicker
-						id={`${label}-date`}
-						prefillValue={seed}
-						minValue={TIMELINE_MIN}
-						maxValue={TIMELINE_MAX}
-						onChangeFunc={(d) => {
-							const merged = new Date(d);
-							if (wall) merged.setHours(wall.getHours(), wall.getMinutes(), wall.getSeconds());
-							setFrom(merged);
-						}}
-					/>
-					<ClassicyTimePicker
-						id={`${label}-time`}
-						prefillValue={seed}
-						onChangeFunc={(d) => {
-							const merged = wall ? new Date(wall) : new Date(seed);
-							merged.setHours(d.getHours(), d.getMinutes(), d.getSeconds());
-							setFrom(merged);
-						}}
-					/>
-				</>
-			)}
-		</ClassicyControlGroup>
-	);
-}
 
 export function EntryForm({
 	value,

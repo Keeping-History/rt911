@@ -6,6 +6,12 @@
 	width: 100%;
 }
 
+.playlistTimelineContainer {
+	display: flex;
+	flex-direction: row;
+	height: calc(100%);
+	overflow: hidden;
+}
 /* The zoom controls sit outside .playlistTimeline on purpose: that element is
  * the scrolling viewport, so controls placed inside it would scroll away from
  * the user as soon as they panned. They are laid out in flow rather than
@@ -16,9 +22,15 @@
 	align-items: center;
 	gap: 4px;
 	padding: 2px 0;
+	height: auto;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
 }
 
 .playlistTimelineZoomLevel {
+	font-family: var(--ui-font);
+	font-size: calc(var(--ui-font-size) * .85);
 	min-width: 3em;
 	text-align: center;
 	font-variant-numeric: tabular-nums; // stops the row twitching as 1×→16× widens
@@ -27,8 +39,9 @@
 .playlistTimeline {
 	position: relative;
 	width: 100%;
+	height: 100%;
 	overflow-x: auto;
-	overflow-y: hidden;
+	overflow-y: auto;
 	font-family: var(--ui-font, sans-serif);
 }
 
@@ -108,25 +121,153 @@
 	flex-direction: column;
 }
 
+/* The bar row's own height. The lane can grow taller than this (an expanded
+ * preview lives underneath), so the bar and the label track are pinned to this
+ * fixed value rather than `height: 100%` — otherwise selecting a lane inflates
+ * its bar into a slab three times taller than every neighbour, which then
+ * paints over the thumbnail strip of any lane whose span it overlaps. */
+$lane-bar-height: 20px;
+
 .playlistTimelineLane {
 	position: relative;
-	height: 20px;
+	min-height: $lane-bar-height;
 }
 
 .playlistTimelineBar {
 	position: absolute;
 	top: 0;
-	height: 100%;
+	height: $lane-bar-height;
 	overflow: hidden;
 	white-space: nowrap;
 	text-align: left;
 	cursor: pointer;
 }
 
+/* The label rides above the bar rather than inside it. `position: sticky`
+ * resolves against the nearest ancestor with a scrolling box, and
+ * `overflow: hidden` counts as one — so a label inside .playlistTimelineBar
+ * would stick to the bar, which never scrolls, and nothing would happen.
+ *
+ * Clipping is therefore done with clip-path, which bounds the label to its
+ * item's span without creating a scroll container the way overflow would. */
+.playlistTimelineLabelTrack {
+	position: absolute;
+	top: 0;
+	height: $lane-bar-height;
+	clip-path: inset(0);
+	pointer-events: none;
+	display: flex;
+	align-items: center;
+}
+
+.playlistTimelineLabel {
+	position: sticky;
+	left: 0;
+	white-space: nowrap;
+	padding-inline: 2px;
+}
+
+/* Edge-drag handles: a slim grab strip pinned to each end of the bar. The
+ * resize cursor itself is set inline from ClassicyIcons — the published
+ * classicy package inlines its cursor PNGs as data URIs in its own CSS, so
+ * there is no asset file this stylesheet could url() reference. */
+.playlistTimelineBarHandle {
+	position: absolute;
+	top: 0;
+	width: 6px;
+	height: 100%;
+	touch-action: none;
+	user-select: none;
+}
+
+.playlistTimelineBarHandle-start {
+	left: 0;
+}
+
+.playlistTimelineBarHandle-end {
+	right: 0;
+}
+
 .playlistTimelineActualSpan {
 	position: absolute;
 	top: 0;
 	height: 100%;
+}
+
+/* Sticky for the same reason .playlistTimelineLabel is — see the note there.
+ * The lane is zoom*100% wide, so anything anchored to its left edge sits
+ * off-screen the moment the user scrolls.
+ *
+ * `width: fit-content` is what makes the stickiness do anything at all. A
+ * sticky box can only shift WITHIN its containing block's rectangle, and a
+ * block-level flex container fills its containing block exactly — so a
+ * full-width strip has zero room to move and stays pinned to track x=0 at
+ * every scroll position (it looks sticky in the stylesheet and measures as a
+ * no-op in the browser). Shrink-to-fit gives it the slack to travel, the same
+ * way .playlistTimelineLabel works by being a shrink-to-fit flex ITEM.
+ *
+ * The top margin clears the bar row above: the bar is absolutely positioned,
+ * so without it the strip starts at the lane's top edge and its first 20px sit
+ * under the bar. */
+.playlistTimelinePreview {
+	position: sticky;
+	left: 0;
+	width: fit-content;
+	margin-top: $lane-bar-height;
+	display: flex;
+	gap: 2px;
+	padding: 2px 0;
+}
+
+.playlistTimelinePreviewThumb {
+	height: 54px;
+	width: auto;
+}
+
+/* The radio preview is a time-positioned overlay, not a summary strip: each
+ * recording sits at its own moment within the entry's window, so — unlike
+ * .playlistTimelinePreview above — this one is `position: relative` and must
+ * NOT be sticky. Sticky would decouple the slots from the timeline positions
+ * they are meant to align with as the user scrolls. */
+.playlistTimelinePreviewRadio {
+	position: relative;
+	left: 0;
+	width: 100%;
+	// Matches the `height={40}` passed to PeaksWaveform (RadioLanePreview):
+	// the canvas has an explicit pixel height, and stretching it to a
+	// differently-sized CSS box would distort the drawn envelope.
+	height: 40px;
+	// Undoes .playlistTimelinePreview's `padding: 2px 0`. There is no global
+	// `box-sizing: border-box` in this app, so that padding is ADDED to the
+	// 40px: the padding box becomes 44px, the slot's `height: 100%` resolves
+	// against it, and the 40px canvas bitmap gets upscaled ~10% vertically —
+	// exactly the distortion the height above exists to prevent.
+	padding: 0;
+	margin-top: $lane-bar-height;
+	// The slots are positioned in TRACK time, and a recording can overrun the
+	// timeline bounds at either end (it is drawn at its true extent so the
+	// envelope stays aligned with the audio it depicts). Clip at the track edge
+	// rather than letting a slot paint into the scroll overflow.
+	overflow: hidden;
+}
+
+.playlistTimelineWaveformSlot {
+	position: absolute;
+	top: 0;
+	height: 100%;
+	overflow: hidden;
+}
+
+.playlistTimelineWaveform {
+	display: block;
+	width: 100%;
+	height: 100%;
+	/* PeaksWaveform resolves the drawing color with getComputedStyle().color,
+	 * so the envelope follows whatever `color` this element inherits from the
+	 * lane — set one here if the waveform ever needs its own. It cannot be done
+	 * by assigning "currentColor" to the canvas fillStyle: that is a CSS
+	 * keyword, not a color a canvas context parses, and the assignment is
+	 * dropped silently, leaving everything painted #000. */
 }
 
 /* Add Settings dropdown: the div only anchors position measurement; the menu
@@ -174,8 +315,9 @@
 	gap: 4px;
 }
 
-/* TV section: one card per entry in a single side-scrolling row. */
-.playlistMediaTvRow {
+/* Station sections (TV Channels, Radio Stations): one card per entry in a
+   single side-scrolling row. */
+.playlistMediaCardRow {
 	display: flex;
 	flex-direction: row;
 	gap: 6px;
@@ -183,7 +325,7 @@
 	padding: 4px 2px;
 }
 
-.playlistMediaTvCard {
+.playlistMediaCard {
 	flex: 0 0 auto;
 	display: flex;
 	flex-direction: column;
@@ -195,52 +337,100 @@
 	background-color: var(--color-system-01);
 }
 
-.playlistMediaTvCardSelected {
+.playlistMediaCardSelected {
 	border-color: var(--color-theme-highlight, var(--color-system-07));
 	background-color: var(--color-system-02);
 }
 
-.playlistMediaTvLogo {
+.playlistMediaCardLogo {
 	width: 48px;
 	height: 48px;
 	object-fit: contain;
+}
+
+/* TV's bundled EPG glyphs are pixel art and want crisp upscaling. */
+.playlistMediaCardLogoPixel {
 	image-rendering: pixelated;
 }
 
-.playlistMediaTvLabel {
-	font-size: calc(var(--ui-font-size) * 0.85);
+/* Radio station artwork is photographic and mostly light-on-transparent, so
+ * it gets the same dark plate the Radio Tuner's display paints behind it. */
+.playlistMediaCardLogoPlate {
+	background-color: var(--color-theme-01);
+	padding: 2px;
+	box-sizing: border-box;
+}
+
+/* The call sign is a ClassicyControlLabel, which renders its own holder +
+ * <label> and takes no className — so the card's treatment is scoped onto
+ * those instead. Two library defaults are deliberately undone here: the
+ * holder's narrow-viewport `display: none` (the call sign is the only thing
+ * identifying a card, so it must never disappear) and the label's side
+ * margin, which would push the text off-centre under the logo. */
+.playlistMediaCard .classicyControlLabelHolder {
+	display: flex;
+	max-width: 72px;
+}
+
+.playlistMediaCard .classicyControlLabel {
+	margin: 0;
 	max-width: 72px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.playlistMediaTvButtons {
+.playlistMediaCardButtons {
 	display: flex;
 	flex-direction: row;
 	gap: 2px;
-}
 
-/* Same look as TimeMachine's bookmark-row icon buttons (its copy lives in a
- * CSS module, so the rule repeats here rather than importing across apps). */
-.playlistIconButton {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
-	padding: 0;
-	border: none;
-	background: transparent;
-	cursor: pointer;
-
-	&:hover {
-		background-color: var(--color-theme-highlight, var(--color-system-04));
-	}
-
+	/* The square/small ClassicyButtons size their own img (90% width); the
+	 * pixel-art edit/trash glyphs just need crisp upscaling. ClassicyButton
+	 * drops a passed className, so the scoping has to live here. */
 	img {
-		width: 14px;
-		height: 14px;
 		image-rendering: pixelated;
 	}
+}
+/* ── Main window: the playlists list ──────────────────────────────────────
+   A Platinum list box (the Drive Setup control panel's shape) over the shared
+   ClassicyTable, with the control buttons in a row beneath it. */
+.playlistList {
+	display: flex;
+	flex-direction: column;
+	gap: var(--window-padding-size);
+	padding: var(--window-padding-size);
+	font-family: var(--ui-font, sans-serif);
+	font-size: var(--ui-font-size, 12px);
+}
+
+/* ClassicyTable supplies the list-view chrome and its own scroll container;
+   this frame adds the inset border and the height that makes the table scroll
+   internally instead of growing the window. */
+.playlistListTable {
+	display: flex;
+	flex-direction: column;
+	border: var(--box-border-size, 2px) inset var(--color-black, #000);
+	background: var(--color-system-01);
+	min-height: calc(var(--window-control-size) * 8);
+	max-height: 320px;
+
+	.classicyTableContainer {
+		flex: 1;
+		min-height: 0;
+	}
+}
+
+.playlistListActions,
+.playlistDeleteConfirm {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--window-padding-size);
+}
+
+.playlistListError {
+	margin: 0;
+	color: var(--color-error);
 }

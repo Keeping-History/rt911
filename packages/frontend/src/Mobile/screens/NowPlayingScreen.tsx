@@ -8,7 +8,7 @@ import {
 	primarySegment,
 	startTimeLabel,
 	type Station,
-} from "../../Applications/RadioScanner/stationGrouping";
+} from "../../Applications/radio-core/stationGrouping";
 import { formatUtcAsLocalTime } from "../../Applications/TimeMachine/setVirtualClock";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 

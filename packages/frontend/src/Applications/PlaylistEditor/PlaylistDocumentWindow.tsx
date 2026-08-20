@@ -15,6 +15,7 @@ import {
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
 import { PLAYLIST_EDITOR_APP_ID, playlistSetTimelineZoom } from "./PlaylistEditorContext";
 import { MAX_ZOOM, MIN_ZOOM, normalizeZoom, steppedZoom } from "./timelineLayout";
+import { playlistEditorIcons } from "./playlistIcons";
 import { usePlaylistEditor } from "./PlaylistEditorProvider";
 import { RenameDialog } from "./RenameDialog";
 import { SendMessageDialog } from "./SendMessageDialog";
@@ -425,7 +426,9 @@ export function PlaylistDocumentWindow({
 				id={windowId}
 				appId={appId}
 				title={state.title}
-				icon={appIcon}
+				// The document icon, not the app icon: these windows are open
+				// playlist documents; only the list window represents the app.
+				icon={playlistEditorIcons.doc}
 				closable={true}
 				resizable={true}
 				zoomable={true}

@@ -53,25 +53,15 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 		],
 	},
 
-	"RadioScanner.app": {
-		appName: "Radio Scanner",
+	"RadioTraffic.app": {
+		appName: "Radio Traffic",
 		blurb:
-			"Air-traffic control, military and commercial radio from the morning of September 11, 2001.",
+			"Air-traffic control and military radio traffic from the morning of September 11, 2001.",
 		sources: [
 			{
 				name: "Rutgers Law Review — “A New Type of War”",
 				url: "https://www.rutgerslawreview.com/a-new-type-of-war/",
 				feeds: "The Rutgers channel — FAA and NORAD audio published with the monograph.",
-			},
-			{
-				name: "Audacy",
-				url: "https://www.audacy.com/1010wins",
-				feeds: "1010 WINS coverage.",
-			},
-			{
-				name: "WCBS Audio Archives",
-				url: "https://www.audacy.com/wcbs880",
-				feeds: "WCBS Newsradio 880 coverage.",
 			},
 			{
 				name: "Internet Archive",
@@ -82,6 +72,47 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 			},
 		],
 		method: [
+			"Captions are machine transcriptions (whisper.cpp), not official transcripts — treat wording as approximate.",
+			"Audio is loudness-normalized from the archived originals; the originals are retained unmodified.",
+		],
+	},
+
+	"RadioTuner.app": {
+		appName: "Radio Tuner",
+		blurb:
+			"Fourteen radio stations from September 11, 2001 — New York, Trenton, Washington, Utica, Detroit, Dallas, Minneapolis, Reno, Los Angeles and London — replayed continuously in step with the virtual clock, several running past midnight into September 12.",
+		sources: [
+			{
+				name: "Audacy",
+				url: "https://www.audacy.com/1010wins",
+				feeds:
+					"1010 WINS, hour by hour from 8 AM through the following morning; WCBS Newsradio 880, released by the station in labeled blocks.",
+			},
+			{
+				name: "radiotapes.com",
+				url: "https://radiotapes.com/special-postings/",
+				feeds:
+					"WABC 770 and WTOP 1500, and the WINS and WCBS hours held there alongside the stations' own releases.",
+				note: "A listener-preserved aircheck collection; individual recordings are credited to their contributors on the site.",
+			},
+			{
+				name: "Internet Archive",
+				url: "https://archive.org/",
+				feeds:
+					"WOR 710 New York, KOH 780 Reno, WAMU 88.5 / NPR's evening coverage, and BBC Radio 4's The World Tonight.",
+			},
+			{
+				name: "Listener-preserved airchecks on YouTube",
+				url: "https://www.youtube.com/",
+				feeds:
+					"New Jersey 101.5 (WKXW), KFI 640 Los Angeles, WRIF Detroit's Drew & Mike, WIBX 950 Utica's Keeler in the Morning, WBAP 820 Dallas, and KQRS 92.5 Minneapolis.",
+				note: "Home recordings uploaded by the listeners who made them, in some cases from cassettes kept for two decades.",
+			},
+		],
+		method: [
+			"Every recording was checked against the clock before it was included: the moments whose times are known to the second — the second plane at 9:03:11, the Pentagon at 9:37:46, the towers at 9:59:04 and 10:28:22 — must fall exactly where each station's start time predicts. Recordings that had been edited, re-assembled from parts, or had their commercials removed drift against those marks and were left out.",
+			"A start time is the moment a tape begins, derived from those checks or from a time the announcer speaks aloud. Where a recording is a few minutes uncertain, it is the tape that is uncertain, not the clock.",
+			"Where one recording of a station stopped and another kept going, the two are stitched: a few minutes of WABC before 11 AM and of WCBS in the late afternoon come from a second recording of that same station, matched to the clock the same way.",
 			"Captions are machine transcriptions (whisper.cpp), not official transcripts — treat wording as approximate.",
 			"Audio is loudness-normalized from the archived originals; the originals are retained unmodified.",
 		],

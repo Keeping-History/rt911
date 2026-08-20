@@ -9,6 +9,9 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 } from "classicy";
+// Side effect: registers this app's manifest (registerApp) at import time.
+import "./IMBuddiesContext";
+import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";
@@ -352,7 +355,13 @@ const IMBuddiesContent: React.FC = () => {
 };
 
 export const IMBuddies: React.FC = () => (
-	<ClassicyApp id={APP_ID} name={APP_NAME} icon={appIcon} defaultWindow="im_signon">
+	<ClassicyApp
+		id={APP_ID}
+		name={APP_NAME}
+		icon={appIcon}
+		defaultWindow="im_signon"
+		desktopIconBalloonHelp={manifestDescription(APP_ID)}
+	>
 		<IMBuddiesProvider>
 			<IMBuddiesContent />
 		</IMBuddiesProvider>
