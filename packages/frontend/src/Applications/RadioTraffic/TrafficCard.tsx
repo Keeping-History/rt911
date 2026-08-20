@@ -203,7 +203,14 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 	);
 
 	const durationMs = (itemTiming(item).durationSec ?? 0) * 1000;
-	const liveMs = calcSeekSeconds(item, nowMs) * 1000;
+	// badgeFor (cardStatus.ts) never reads liveMs for "upcoming" (returns on
+	// `countdown` alone) or "previous" (returns on `userPlaying`/`silent` alone)
+	// — only the LIVE-lane drift calculation uses it. calcSeekSeconds parses
+	// item.start_date through `new Date(...)` on every call, so computing it
+	// unconditionally was real, provably-wasted work on every UPCOMING/PREVIOUS
+	// card, every render — the two lanes with the most cards once a session has
+	// been running a while.
+	const liveMs = lane === "live" ? calcSeekSeconds(item, nowMs) * 1000 : 0;
 
 	// One tick of history, held here rather than in cardStatus so badgeFor stays
 	// a pure function of its arguments — see BadgeArgs.previousKind.
