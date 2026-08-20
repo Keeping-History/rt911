@@ -66,6 +66,7 @@ import { FilterTree } from "./FilterTree";
 import { LANES, type LaneOrder, reconcileLaneOrder, reorderLane } from "./laneOrder";
 import { LaneSection } from "./LaneSection";
 import { LaneSmallPlayer } from "./LaneSmallPlayer";
+import { LargeNamespaceButtons } from "./LargeNamespaceButtons";
 import {
 	IDLE_RELEASE_MS,
 	nextHeldLiveIds,
@@ -904,11 +905,15 @@ export const RadioTraffic: React.FC = () => {
 					)}
 					<aside className={styles.rtSidebar}>
 						<ToolPalette tool={tool} onSelect={setTool} />
+						<LargeNamespaceButtons
+							groups={groups.filter((group) => group.large)}
+							checked={checked}
+							onOpenPicker={setPickerNamespace}
+						/>
 						<FilterTree
-							groups={groups}
+							groups={groups.filter((group) => !group.large)}
 							checked={checked}
 							onToggle={toggleTag}
-							onOpenPicker={setPickerNamespace}
 							stale={vocabulary.stale}
 						/>
 					</aside>
