@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import type { Lane } from "./cardStatus";
 import { LANE_LABELS, LaneSection } from "./LaneSection";
@@ -91,6 +91,27 @@ function stubSlotBoxes(root: ParentNode, laneTop = 0) {
 	});
 }
 
+/**
+ * jsdom performs no layout, so every offsetLeft is always 0 — meaningless for
+ * the scroll-compensation effect, which reads each card's own real x-position.
+ * A prototype-level getter (not a per-element stub) so it stays correct as
+ * React reorders, adds and removes slots across a rerender: every `.rtLaneSlot`
+ * reports its OWN index among its current siblings, times a fixed pitch —
+ * exactly like a real flex/grid row of equal-width cards. Call once; leave in
+ * place for however many renders a test drives. Undone in this describe's own
+ * `afterEach` so it cannot leak into other files.
+ */
+function stubSlotPitch(pitch = 100) {
+	Object.defineProperty(HTMLElement.prototype, "offsetLeft", {
+		configurable: true,
+		get(this: HTMLElement) {
+			const parent = this.parentElement;
+			if (!parent) return 0;
+			return Array.prototype.indexOf.call(parent.children, this) * pitch;
+		},
+	});
+}
+
 /** Centre of the slot at `index`, in the coordinates stubSlotBoxes lays out. */
 const slotCentre = (index: number, laneTop = 0) => ({
 	clientX: 105,
@@ -115,42 +136,46 @@ const slot = (root: ParentNode, id: number) =>
 
 describe("LaneSection collapse", () => {
 	it("gives LIVE no collapse control", () => {
-		// The design has expand/collapse on UPCOMING and PREVIOUS only. LIVE is
-		// what the app is for; it does not fold away.
+		// The design has expand/collapse on PREVIOUS only. LIVE is what the app is
+		// for; it does not fold away.
 		const { container } = renderLane({ lane: "live" });
 		expect(container.querySelector("[data-lane-toggle]")).toBeNull();
 	});
 
-	it("gives UPCOMING and PREVIOUS a collapse control", () => {
-		for (const lane of ["upcoming", "previous"] as const) {
-			cleanup();
-			const { container } = renderLane({ lane });
-			expect(container.querySelector("[data-lane-toggle]")).not.toBeNull();
-		}
+	it("gives UPCOMING no collapse control either", () => {
+		// UPCOMING is permanently minimized (see below) — with no way back to the
+		// full card, a button offering to expand it would do nothing.
+		const { container } = renderLane({ lane: "upcoming" });
+		expect(container.querySelector("[data-lane-toggle]")).toBeNull();
+	});
+
+	it("gives PREVIOUS a collapse control", () => {
+		const { container } = renderLane({ lane: "previous" });
+		expect(container.querySelector("[data-lane-toggle]")).not.toBeNull();
 	});
 
 	it("switches to the small player when collapsed, rather than hiding the clips", () => {
 		// Story 027: collapsing used to empty the lane, which threw away the one
 		// thing a listener collapses a lane to keep. Every clip is still here, in
 		// the same slots, in the compact form instead.
-		const { container } = renderLane({ lane: "upcoming", collapsed: true });
+		const { container } = renderLane({ lane: "previous", collapsed: true });
 		expect(shownIds(container)).toEqual([1, 2, 3]);
 		expect(smallIds(container)).toEqual([1, 2, 3]);
 		expect(fullIds(container)).toEqual([]);
 	});
 
 	it("keeps the label and the control while collapsed", () => {
-		const { container } = renderLane({ lane: "upcoming", collapsed: true });
+		const { container } = renderLane({ lane: "previous", collapsed: true });
 		// The strip is the only thing left to click to get the lane back, so it
 		// has to survive the collapse.
 		expect(container.querySelector("[data-lane-label]")?.textContent).toBe(
-			LANE_LABELS.upcoming,
+			LANE_LABELS.previous,
 		);
 		expect(container.querySelector("[data-lane-toggle]")).not.toBeNull();
 	});
 
 	it("shows the full players again when expanded", () => {
-		const { container } = renderLane({ lane: "upcoming", collapsed: false });
+		const { container } = renderLane({ lane: "previous", collapsed: false });
 		expect(shownIds(container)).toEqual([1, 2, 3]);
 		expect(fullIds(container)).toEqual([1, 2, 3]);
 		expect(smallIds(container)).toEqual([]);
@@ -159,7 +184,7 @@ describe("LaneSection collapse", () => {
 	it("keeps the manual order across the fold", () => {
 		// The slots are the same slots — collapse decides what goes IN them and
 		// nothing else, so a lane the listener has rearranged stays rearranged.
-		const { container } = renderLane({ lane: "upcoming", collapsed: true, order: [3, 0] });
+		const { container } = renderLane({ lane: "previous", collapsed: true, order: [3, 0] });
 		expect(smallIds(container)).toEqual([3, 1, 2]);
 	});
 
@@ -187,6 +212,16 @@ describe("LaneSection collapse", () => {
 		expect(shownIds(container)).toEqual([1, 2, 3]);
 		expect(fullIds(container)).toEqual([1, 2, 3]);
 		expect(smallIds(container)).toEqual([]);
+	});
+
+	it("stays minimized on UPCOMING even when a stale collapsed flag says false", () => {
+		// Same reasoning as LIVE above, mirrored: UPCOMING has no control to undo
+		// a fold with, so a persisted `false` must not be honoured either — the
+		// lane always renders as the small player.
+		const { container } = renderLane({ lane: "upcoming", collapsed: false });
+		expect(shownIds(container)).toEqual([1, 2, 3]);
+		expect(smallIds(container)).toEqual([1, 2, 3]);
+		expect(fullIds(container)).toEqual([]);
 	});
 });
 
@@ -250,6 +285,193 @@ describe("LaneSection ordering", () => {
 		// (id 3, slot 0)
 		const { container } = renderLane({ order: [3, 0] });
 		expect(shownIds(container)).toEqual([3, 1, 2]);
+	});
+});
+
+describe("LaneSection automatic ordering (story 044)", () => {
+	// Story 044: a new item entering a lane must not be free to shove the card
+	// the listener is actually looking at around, and its arrival must not
+	// leave the lane scrolled to a spot that no longer shows what it did a
+	// moment ago. Both are stabilizeLaneOrder's job (laneOrder.test.ts covers
+	// it exhaustively); these confirm LaneSection actually wires it in.
+
+	it("renders a new arrival at the left of the lane", () => {
+		const { container, rerender } = render(
+			<LaneSection
+				lane="live"
+				items={ITEMS}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		expect(shownIds(container)).toEqual([1, 2, 3]);
+
+		const FOUR = makeItem({ id: 4, full_title: "clip 4" });
+		rerender(
+			<LaneSection
+				lane="live"
+				items={[...ITEMS, FOUR]}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		expect(shownIds(container)).toEqual([4, 1, 2, 3]);
+	});
+
+	it("locks the active card's index across a new arrival, letting the rest reflow", () => {
+		const { container, rerender } = render(
+			<LaneSection
+				lane="live"
+				items={ITEMS}
+				activeId={2}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		expect(shownIds(container)).toEqual([1, 2, 3]);
+
+		const FOUR = makeItem({ id: 4, full_title: "clip 4" });
+		rerender(
+			<LaneSection
+				lane="live"
+				items={[...ITEMS, FOUR]}
+				activeId={2}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		// Card 2 held index 1 before the arrival; it holds index 1 after, too —
+		// the new card and the other two reflow around it instead of it moving.
+		expect(shownIds(container)).toEqual([4, 2, 1, 3]);
+	});
+
+	describe("scroll compensation", () => {
+		beforeEach(() => stubSlotPitch());
+		afterEach(() => Reflect.deleteProperty(HTMLElement.prototype, "offsetLeft"));
+
+		/**
+		 * Mounts the lane, pins scrollLeft to `at`, then rerenders with identical
+		 * props once before the caller's own change — a plain post-mount
+		 * `Object.defineProperty` sets the DOM's scrollLeft but does not, by
+		 * itself, reach the effect's OWN baseline, which only samples
+		 * `cards.scrollLeft` when its deps change. This mirrors the real world:
+		 * a scroll from outside this component only becomes visible to it the
+		 * next time a card actually arrives or leaves.
+		 */
+		function mountAt(scrollLeft: number) {
+			const lane = (items: typeof ITEMS) => (
+				<LaneSection
+					lane="live"
+					items={items}
+					tool="hand"
+					renderCard={renderCard}
+					renderCollapsedCard={renderCollapsedCard}
+				/>
+			);
+			const { container, rerender } = render(lane(ITEMS));
+			const cards = container.querySelector("[data-lane-cards]") as HTMLElement;
+			Object.defineProperty(cards, "scrollLeft", {
+				value: scrollLeft,
+				writable: true,
+				configurable: true,
+			});
+			rerender(lane(ITEMS));
+			return { container, cards, rerender: (items: typeof ITEMS) => rerender(lane(items)) };
+		}
+
+		it("compensates the lane's scroll offset when a card arrives to the left of what's visible", () => {
+			const { cards, rerender } = mountAt(0);
+
+			const FOUR = makeItem({ id: 4, full_title: "clip 4" });
+			rerender([...ITEMS, FOUR]);
+
+			// New arrivals land at the front (stabilizeLaneOrder), so card 1 — the
+			// first card visible at scrollLeft 0 — moved from x=0 to x=100. The
+			// scroll position moves by that same 100px, so it stays exactly where
+			// it was even though card 1 itself never changed.
+			expect(cards.scrollLeft).toBe(100);
+		});
+
+		it("compensates the lane's scroll offset when a card to the left is removed", () => {
+			// Card 2 (x=100) is the first one still on screen once card 1 has
+			// scrolled past.
+			const { cards, rerender } = mountAt(100);
+
+			rerender(ITEMS.slice(1));
+
+			// Card 1 left the lane. Card 2 — the anchor — slides from x=100 to
+			// x=0 to close the gap, so the scroll position slides back by the same
+			// 100px: without this, the view would jump left to show card 1's old
+			// spot, now occupied by card 2, as if the listener had scrolled there.
+			expect(cards.scrollLeft).toBe(0);
+		});
+
+		it("compensates once for an arrival and a departure landing in the same tick", () => {
+			const { container, cards, rerender } = mountAt(100);
+
+			// Card 1 leaves and card 4 arrives (at the front) in the same render —
+			// the clock does not serialise these into separate ticks.
+			const FOUR = makeItem({ id: 4, full_title: "clip 4" });
+			rerender([...ITEMS.slice(1), FOUR]);
+
+			// Order becomes [4, 2, 3]. Card 2 — the anchor — held x=100 and holds
+			// x=100 again (one slot in from a departure, one slot out from an
+			// arrival cancel exactly), so nothing about the scroll needs to move.
+			expect(shownIds(container)).toEqual([4, 2, 3]);
+			expect(cards.scrollLeft).toBe(100);
+		});
+
+		it("leaves scrollLeft alone when the anchor itself is the card that leaves", () => {
+			// Card 1 (x=0) is the leftmost card at scrollLeft 0, so it is the
+			// anchor — and it is also the one about to leave.
+			const { cards, rerender } = mountAt(0);
+
+			rerender(ITEMS.slice(1));
+
+			// The anchor did not survive, so there is no "where it ended up" to
+			// chase — but the position that was correct (the very start of the
+			// lane) still is, so leaving scrollLeft untouched is the right answer
+			// here, not a missed case.
+			expect(cards.scrollLeft).toBe(0);
+		});
+	});
+
+	it("leaves scrollLeft alone on a render that inserted nothing new", () => {
+		const { container, rerender } = render(
+			<LaneSection
+				lane="live"
+				items={ITEMS}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		const cards = container.querySelector("[data-lane-cards]") as HTMLElement;
+		Object.defineProperty(cards, "scrollWidth", { value: 300, configurable: true });
+		Object.defineProperty(cards, "scrollLeft", {
+			value: 50,
+			writable: true,
+			configurable: true,
+		});
+
+		// Same items; only the lane's own mute state changed. Nothing arrived,
+		// so nudging scrollLeft here would be a jump with no cause.
+		rerender(
+			<LaneSection
+				lane="live"
+				items={ITEMS}
+				muted
+				onToggleMute={() => {}}
+				tool="hand"
+				renderCard={renderCard}
+				renderCollapsedCard={renderCollapsedCard}
+			/>,
+		);
+		expect(cards.scrollLeft).toBe(50);
 	});
 });
 
@@ -432,12 +654,12 @@ describe("LaneSection chrome hooks", () => {
 		// A collapsed lane stops claiming its share of the column and shrinks to
 		// its strip. That rule keys off data-collapsed, so the flag has to reach
 		// the DOM and not merely hide the cards.
-		const { container } = renderLane({ lane: "upcoming", collapsed: true });
+		const { container } = renderLane({ lane: "previous", collapsed: true });
 		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("true");
 	});
 
 	it("reports an expanded lane as not collapsed", () => {
-		const { container } = renderLane({ lane: "upcoming", collapsed: false });
+		const { container } = renderLane({ lane: "previous", collapsed: false });
 		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("false");
 	});
 
@@ -447,6 +669,13 @@ describe("LaneSection chrome hooks", () => {
 		// the window away with no control on screen to claim it back.
 		const { container } = renderLane({ lane: "live", collapsed: true });
 		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("false");
+	});
+
+	it("always reports UPCOMING as collapsed, whatever it is told", () => {
+		// Mirror of the LIVE case above: UPCOMING has no control on screen to
+		// claim its row back either, so a persisted `false` must not be honoured.
+		const { container } = renderLane({ lane: "upcoming", collapsed: false });
+		expect(container.querySelector("[data-lane]")?.getAttribute("data-collapsed")).toBe("true");
 	});
 
 	it("keeps the cards in their own box, separate from the label strip", () => {

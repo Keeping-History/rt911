@@ -1,7 +1,7 @@
 // Serialized Directus REST access. The Directus API MIXES the response bodies
 // of concurrent browser fetches (verified 2026-07-15), so every REST call in
 // the editor and its volume goes through this single global chain.
-import { DIRECTUS_URL } from "../../lib/endpoints";
+import { DIRECTUS_URL } from "./endpoints";
 
 let chain: Promise<unknown> = Promise.resolve();
 

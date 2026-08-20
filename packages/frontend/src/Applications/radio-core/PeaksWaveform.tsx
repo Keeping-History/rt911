@@ -116,12 +116,33 @@ export function PeaksWaveform({
 				ctx.fillRect(0, mid - 0.5, width, 1);
 				return;
 			}
+			// One Path2D + one fill(), not one fillRect() per bucket: peaks.length
+			// is 480 on every populated row, so a lane with dozens of cards mounting
+			// at once (a fresh app open catching up on a real archive backlog) was
+			// issuing tens of thousands of individual canvas draw calls synchronously
+			// — each with its own per-call state-validation/compositing overhead —
+			// when the whole envelope is one shape the canvas can rasterize in a
+			// single pass. Same rectangles, same fillStyle, drawn once instead of
+			// peaks.length times.
+			// jsdom (unit tests) mocks a 2D context but has no Path2D — the
+			// fillRect loop it falls back to is exactly what this always did
+			// before the batching below.
 			const step = width / peaks.length;
+			if (typeof Path2D === "undefined") {
+				peaks.forEach(([lo, hi], i) => {
+					const top = mid - (hi / 128) * mid;
+					const bottom = mid - (lo / 128) * mid;
+					ctx.fillRect(i * step, top, Math.max(step, 1), Math.max(bottom - top, 1));
+				});
+				return;
+			}
+			const path = new Path2D();
 			peaks.forEach(([lo, hi], i) => {
 				const top = mid - (hi / 128) * mid;
 				const bottom = mid - (lo / 128) * mid;
-				ctx.fillRect(i * step, top, Math.max(step, 1), Math.max(bottom - top, 1));
+				path.rect(i * step, top, Math.max(step, 1), Math.max(bottom - top, 1));
 			});
+			ctx.fill(path);
 		};
 
 		draw();
@@ -134,14 +155,28 @@ export function PeaksWaveform({
 		return () => ro.disconnect();
 	}, [peaks, height]);
 
-	// The pointer maths, and the drag that survives leaving the canvas.
+	// The pointer maths, and a drag that only lives inside the waveform box.
 	//
-	// The move/up pair is on the window rather than on the canvas so a scrub
-	// that runs off the end of the envelope keeps tracking — a card is ~260px
-	// wide and a listener aiming at the last few seconds routinely overshoots it.
-	// Pointer capture would do the same job, but it is per-pointer-id state the
-	// element has to still be alive to release, and a card unmounts for reasons
-	// that have nothing to do with the pointer (a tag filter, a lane migration).
+	// The move/up pair is on the window rather than on the canvas because a
+	// plain canvas listener stops firing the moment the pointer leaves it —
+	// exactly the case this needs to catch, not miss. Each move checks whether
+	// the pointer is still over the canvas's own box and, the instant it isn't,
+	// ends the drag itself rather than waiting for a pointerup that may never
+	// come from outside the element. Pointer capture would report that as
+	// pointerleave rather than ending the gesture, and is per-pointer-id state
+	// the element has to still be alive to release — a card unmounts for
+	// reasons that have nothing to do with the pointer (a tag filter, a lane
+	// migration).
+	//
+	// All three are registered on the CAPTURE phase, not the default bubble
+	// phase. The waveform box's own container stops propagation on pointerup
+	// (TrafficCard.tsx, so releasing a scrub does not also fire the lane/card
+	// click underneath) — a bubble-phase window listener sits downstream of
+	// that stopPropagation() and would simply never see the event, leaving
+	// this drag "ended" in name only while the move listener stayed attached
+	// and kept following the pointer with no button held. Capture runs before
+	// the event reaches that container at all, so it cannot be swallowed by
+	// anything a descendant does on the way back up.
 	const seekRef = useRef(onSeekPct);
 	seekRef.current = onSeekPct;
 	const endDragRef = useRef<(() => void) | null>(null);
@@ -157,23 +192,42 @@ export function PeaksWaveform({
 		seek(clamp01((clientX - rect.left) / rect.width));
 	}, []);
 
+	/** Whether a pointer position still falls inside the waveform's own box. */
+	const isInsideBox = useCallback((clientX: number, clientY: number) => {
+		const canvas = ref.current;
+		if (!canvas) return false;
+		const rect = canvas.getBoundingClientRect();
+		return (
+			clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+		);
+	}, []);
+
 	const startDrag = useCallback(
 		(e: React.PointerEvent<HTMLCanvasElement>) => {
 			endDragRef.current?.();
 			seekAt(e.clientX);
-			const move = (ev: PointerEvent) => seekAt(ev.clientX);
+			const move = (ev: PointerEvent) => {
+				// Leaving the box ends the gesture on the spot instead of clamping
+				// and continuing to track — scrubbing is only "the pointer is down
+				// and over the waveform," never "was down at some point off the edge."
+				if (!isInsideBox(ev.clientX, ev.clientY)) {
+					endDragRef.current?.();
+					return;
+				}
+				seekAt(ev.clientX);
+			};
 			const end = () => {
-				window.removeEventListener("pointermove", move);
-				window.removeEventListener("pointerup", end);
-				window.removeEventListener("pointercancel", end);
+				window.removeEventListener("pointermove", move, true);
+				window.removeEventListener("pointerup", end, true);
+				window.removeEventListener("pointercancel", end, true);
 				endDragRef.current = null;
 			};
 			endDragRef.current = end;
-			window.addEventListener("pointermove", move);
-			window.addEventListener("pointerup", end);
-			window.addEventListener("pointercancel", end);
+			window.addEventListener("pointermove", move, true);
+			window.addEventListener("pointerup", end, true);
+			window.addEventListener("pointercancel", end, true);
 		},
-		[seekAt],
+		[seekAt, isInsideBox],
 	);
 
 	// Unmounting mid-drag must take the window listeners with it.

@@ -10,6 +10,10 @@ afterEach(cleanup);
 /** The desktop's display offset on 2001-09-11. */
 const TZ = -4;
 
+// A day after every fixture's start_date below, so the default render exercises
+// the "different day" (date kept) path unless a test overrides currentMs.
+const NEXT_DAY_NOW_MS = Date.UTC(2001, 8, 12, 16, 0, 0);
+
 function renderPlayer(
 	props: Partial<Parameters<typeof LaneSmallPlayer>[0]> = {},
 ): HTMLElement {
@@ -18,6 +22,7 @@ function renderPlayer(
 			item={props.item ?? makeItem()}
 			meta={"meta" in props ? props.meta : makeMeta()}
 			tzOffsetHours={props.tzOffsetHours ?? TZ}
+			currentMs={"currentMs" in props ? (props.currentMs ?? null) : NEXT_DAY_NOW_MS}
 		/>,
 	);
 	return container;
@@ -35,7 +40,7 @@ describe("LaneSmallPlayer content", () => {
 		const container = renderPlayer({
 			meta: makeMeta({ subject: "Planes, as in plural." }),
 		});
-		expect(field(container, "subject")?.textContent).toBe("“Planes, as in plural.”");
+		expect(field(container, "subject")?.textContent).toBe("Planes, as in plural.");
 	});
 
 	it("shows every tag as a chip", () => {
@@ -61,11 +66,21 @@ describe("LaneSmallPlayer content", () => {
 		expect(new Set(colors).size).toBe(3);
 	});
 
-	it("stamps the start with the date, the time and the zone", () => {
+	it("stamps the start with the date, the time and the zone when the clock reads a different day", () => {
 		const container = renderPlayer({
 			item: makeItem({ start_date: "2001-09-11 12:33:00" }),
+			currentMs: NEXT_DAY_NOW_MS,
 		});
 		expect(field(container, "start")?.textContent).toBe("9/11/2001 8:33 AM ET");
+	});
+
+	it("drops the date, keeping the time and zone, when the clock reads the same day (#523)", () => {
+		const container = renderPlayer({
+			item: makeItem({ start_date: "2001-09-11 12:33:00" }),
+			// Later the same display-day: 2001-09-11T16:00Z is noon ET on the 11th.
+			currentMs: Date.UTC(2001, 8, 11, 16, 0, 0),
+		});
+		expect(field(container, "start")?.textContent).toBe("8:33 AM ET");
 	});
 
 	it("spells the duration out in seconds", () => {
@@ -93,7 +108,7 @@ describe("LaneSmallPlayer with incomplete metadata", () => {
 			item: makeItem({ full_title: "Boston Center — sector 20" }),
 			meta: undefined,
 		});
-		expect(field(container, "subject")?.textContent).toBe("“Boston Center — sector 20”");
+		expect(field(container, "subject")?.textContent).toBe("Boston Center — sector 20");
 	});
 
 	it("ignores a whitespace-only subject rather than quoting nothing", () => {
@@ -101,7 +116,7 @@ describe("LaneSmallPlayer with incomplete metadata", () => {
 			item: makeItem({ full_title: "Boston Center — sector 20" }),
 			meta: makeMeta({ subject: "   " }),
 		});
-		expect(field(container, "subject")?.textContent).toBe("“Boston Center — sector 20”");
+		expect(field(container, "subject")?.textContent).toBe("Boston Center — sector 20");
 	});
 
 	it("still prints the timings for an item with no metadata", () => {
