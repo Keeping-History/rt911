@@ -139,10 +139,10 @@ function PlaylistEditorContent() {
 				title={appName}
 				icon={appIcon}
 				closable={true}
-				resizable={true}
-				zoomable={true}
+				resizable={false}
+				zoomable={false}
 				collapsable={false}
-				scrollable={true}
+				scrollable={false}
 				initialSize={[420, 400]}
 				initialPosition={[100, 80]}
 				appMenu={listMenu}
