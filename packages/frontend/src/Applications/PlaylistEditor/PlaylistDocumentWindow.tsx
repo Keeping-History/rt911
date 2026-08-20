@@ -92,7 +92,7 @@ export function PlaylistDocumentWindow({
 	// close box just closed would leave it off screen.
 	const revealSelf = useCallback(() => {
 		dispatch({ type: "ClassicyWindowOpen", app: { id: appId }, window: { id: windowId } });
-		dispatch({ type: "ClassicyWindowFocus", app: { id: appId }, window: { id: windowId } });
+		dispatch({ type: "ClassicyWindowFocus", app: { id: appId }, window: { id: g } });
 	}, [dispatch, appId, windowId]);
 
 	// Raise this window whenever the provider is asked to open this playlist —
@@ -432,7 +432,7 @@ export function PlaylistDocumentWindow({
 				closable={true}
 				resizable={true}
 				zoomable={true}
-				collapsable={false}
+				collapsable={true}
 				scrollable={true}
 				initialSize={[640, 480]}
 				initialPosition={[140 + index * CASCADE, 90 + index * CASCADE]}
