@@ -21,6 +21,7 @@
 
 import {
 	ClassicyApp,
+	ClassicyControlGroup,
 	ClassicyIcons,
 	ClassicyWindow,
 	intToHex,
@@ -904,18 +905,20 @@ export const RadioTraffic: React.FC = () => {
 						</div>
 					)}
 					<aside className={styles.rtSidebar}>
-						<ToolPalette tool={tool} onSelect={setTool} />
-						<LargeNamespaceButtons
-							groups={groups.filter((group) => group.large)}
-							checked={checked}
-							onOpenPicker={setPickerNamespace}
-						/>
-						<FilterTree
-							groups={groups.filter((group) => !group.large)}
-							checked={checked}
-							onToggle={toggleTag}
-							stale={vocabulary.stale}
-						/>
+						<ClassicyControlGroup label="Filter By..." variant="secondary">
+							<ToolPalette tool={tool} onSelect={setTool} />
+							<LargeNamespaceButtons
+								groups={groups.filter((group) => group.large)}
+								checked={checked}
+								onOpenPicker={setPickerNamespace}
+							/>
+							<FilterTree
+								groups={groups.filter((group) => !group.large)}
+								checked={checked}
+								onToggle={toggleTag}
+								stale={vocabulary.stale}
+							/>
+						</ClassicyControlGroup>
 					</aside>
 					<main className={styles.rtLanes}>
 						{LANES.map((lane) => (

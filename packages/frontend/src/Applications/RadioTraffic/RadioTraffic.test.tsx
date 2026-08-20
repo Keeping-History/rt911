@@ -140,7 +140,18 @@ vi.mock("classicy", () => ({
 		<input id={id} aria-label={labelTitle} />
 	),
 	ClassicyBalloonHelp: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-	ClassicyControlGroup: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	ClassicyControlGroup: ({
+		children,
+		label,
+	}: {
+		children?: React.ReactNode;
+		label?: string;
+	}) => (
+		<fieldset>
+			<legend>{label}</legend>
+			{children}
+		</fieldset>
+	),
 	ClassicyColorPicker: ({
 		labelTitle,
 		value,
@@ -548,6 +559,23 @@ describe("RadioTraffic — lanes", () => {
 		clock.tzOffset = -4;
 		await renderSettled();
 		expect(laneIds("live")).toEqual([1, 2, 3]);
+	});
+});
+
+// Issue 519: the filter panel is a labeled Mac HIG group box, not a bare div.
+describe("RadioTraffic — the sidebar group box", () => {
+	it("wraps the filter panel in a 'Filter By...' group", async () => {
+		await renderSettled();
+		expect(screen.getByRole("group", { name: "Filter By..." })).not.toBeNull();
+	});
+
+	// The tool palette and the filter tree still have to work — the group box is
+	// chrome around them, not a replacement for their own rendering.
+	it("still renders the tool palette and the filter tree inside the group", async () => {
+		await renderSettled();
+		const group = screen.getByRole("group", { name: "Filter By..." });
+		expect(group.querySelector('[role="radio"]')).not.toBeNull();
+		expect(screen.getByLabelText("Primary")).not.toBeNull();
 	});
 });
 
