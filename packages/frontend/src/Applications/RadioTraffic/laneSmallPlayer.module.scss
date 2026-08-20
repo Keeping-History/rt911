@@ -27,9 +27,15 @@
   color: var(--color-white, #fff);
   background: #2b2b2b;
   border: var(--window-border-size) solid var(--color-white, #fff);
-  // A long subject or a long chip row is CLIPPED, never scrolled: the collapsed
-  // lane is already the compact view, and a scrollbar inside it would be a
-  // second thing to scroll inside something you folded away to stop scrolling.
+  // A long subject is still CLIPPED, never scrolled — the collapsed lane is
+  // already the compact view, and a scrollbar inside it would be a second
+  // thing to scroll inside something you folded away to stop scrolling. The
+  // chip row is the one exception (issue #522): UPCOMING and PREVIOUS marquee
+  // an overflowing tag row instead of clipping it, because a curator's tags
+  // are the whole reason to keep reading a folded card rather than expanding
+  // it — clipping them silently threw some away with no way to ever see the
+  // rest. See `.rtSmallChipsWrapper` below for the marquee wiring; the
+  // subject line and footer are unaffected and stay clipped/ellipsised.
   overflow: hidden;
 
 }
@@ -50,19 +56,30 @@
 
 // Tags -----------------------------------------------------------------------
 
-// One row, clipped at the card's edge. Wrapping would make the card's height
-// depend on how many tags a curator happened to apply, and with it the height
-// of the whole collapsed lane.
+// Wraps the chip row so `useHorizontalOverflow` has a fixed-width box to
+// measure the row against; the row itself is `width: max-content` (below) so
+// it can be wider than this wrapper without wrapping onto a second line.
+.rtSmallChipsWrapper {
+  min-width: 0;
+}
+
+// One row, never wrapped — wrapping would make the card's height depend on
+// how many tags a curator happened to apply, and with it the height of the
+// whole collapsed lane. `width: max-content` lets the row grow past its
+// wrapper instead of shrinking to fit it, which is what makes `scrollWidth >
+// clientWidth` — and so overflow, and so the marquee — detectable at all
+// (see `useHorizontalOverflow`'s doc comment). Lanes that don't opt into the
+// marquee (LIVE) still clip this via the card's own `overflow: hidden`.
 .rtSmallChips {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
   gap: var(--window-border-size);
+  width: max-content;
   margin: 0;
   padding: 0;
   min-width: 0;
   list-style: none;
-  overflow: hidden;
 }
 
 .rtSmallChip {

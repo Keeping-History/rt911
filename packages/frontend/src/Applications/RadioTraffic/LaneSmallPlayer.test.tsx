@@ -1,5 +1,19 @@
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// jsdom has no ResizeObserver; the marquee tests below opt LaneSmallPlayer's
+// own useHorizontalOverflow call into actually measuring instead of the
+// hook's no-ResizeObserver "report fits" fallback. Same stub as
+// radio-core/marquee.test.tsx.
+vi.stubGlobal(
+	"ResizeObserver",
+	class {
+		observe() {}
+		unobserve() {}
+		disconnect() {}
+	},
+);
+
 import { LaneSmallPlayer } from "./LaneSmallPlayer";
 import { makeItem, makeMeta } from "./tabs/cardTabFixtures";
 
@@ -22,6 +36,7 @@ function renderPlayer(
 			item={props.item ?? makeItem()}
 			meta={"meta" in props ? props.meta : makeMeta()}
 			tzOffsetHours={props.tzOffsetHours ?? TZ}
+				enableMarquee={props.enableMarquee}
 			currentMs={"currentMs" in props ? (props.currentMs ?? null) : NEXT_DAY_NOW_MS}
 		/>,
 	);
@@ -163,5 +178,49 @@ describe("LaneSmallPlayer chrome", () => {
 		const container = renderPlayer();
 		expect(container.querySelector("button")).toBeNull();
 		expect(container.querySelector("canvas")).toBeNull();
+	});
+});
+
+describe("LaneSmallPlayer marquee (issue #522)", () => {
+	// UPCOMING and PREVIOUS opt into scrolling a chip row too wide to fit,
+	// rather than clipping the rest of a curator's tags away with no way to
+	// ever see them. LIVE never sets `enableMarquee`, so it keeps the plain,
+	// clipped row exercised by the "shows every tag as a chip" test above.
+
+	it("renders the plain chip list, no marquee, when the tags fit", () => {
+		// jsdom reports scrollWidth/clientWidth as 0 by default, so
+		// useHorizontalOverflow's own "fits" arithmetic (0 > 0 + 1) holds even
+		// with a live ResizeObserver — nothing needs to be forced here.
+		const container = renderPlayer({ enableMarquee: true });
+		expect(container.querySelector(".rfm-marquee-container")).toBeNull();
+		const chips = Array.from(container.querySelectorAll("li")).map((li) => li.textContent);
+		expect(chips).toEqual(["Hijacking", "ZBW", "AAL11"]);
+	});
+
+	it("wraps an overflowing chip row in the marquee, keeping every chip present", () => {
+		// Force the row wider than its wrapper: override scrollWidth/clientWidth
+		// on the element prototype so useHorizontalOverflow's synchronous first
+		// measure (on mount, before any real resize) already sees overflow.
+		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+			configurable: true,
+			get: () => 900,
+		});
+		Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+			configurable: true,
+			get: () => 300,
+		});
+		try {
+			const container = renderPlayer({ enableMarquee: true });
+			expect(container.querySelector(".rfm-marquee-container")).not.toBeNull();
+			// react-fast-marquee duplicates its children for a seamless loop, so
+			// each chip appears more than once — assert presence, not count.
+			const chipTexts = new Set(
+				Array.from(container.querySelectorAll("li")).map((li) => li.textContent),
+			);
+			expect(chipTexts).toEqual(new Set(["Hijacking", "ZBW", "AAL11"]));
+		} finally {
+			Reflect.deleteProperty(HTMLElement.prototype, "scrollWidth");
+			Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+		}
 	});
 });
