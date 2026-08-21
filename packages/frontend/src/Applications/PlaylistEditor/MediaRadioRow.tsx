@@ -20,11 +20,13 @@ export type RadioEditorEntry = MediaCardEntry;
 export function MediaRadioRow({
 	entries,
 	selectedUid,
+	onSelect,
 	onEdit,
 	onRemove,
 }: {
 	entries: RadioEditorEntry[];
 	selectedUid: string | null;
+	onSelect: (uid: string) => void;
 	onEdit: (uid: string) => void;
 	onRemove: (uid: string) => void;
 }) {
@@ -46,6 +48,7 @@ export function MediaRadioRow({
 		<MediaCardRow
 			entries={entries}
 			selectedUid={selectedUid}
+			onSelect={onSelect}
 			onEdit={onEdit}
 			onRemove={onRemove}
 			// Read lazily: the generic radio glyph is classicy's, and reading it

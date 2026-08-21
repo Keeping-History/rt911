@@ -25,6 +25,7 @@ const radioEntry = (uid: string, itemId: string): RadioEditorEntry => ({
 
 const row = (entries: RadioEditorEntry[], props: Partial<{
 	selectedUid: string | null;
+	onSelect: (uid: string) => void;
 	onEdit: (uid: string) => void;
 	onRemove: (uid: string) => void;
 }> = {}) =>
@@ -32,6 +33,7 @@ const row = (entries: RadioEditorEntry[], props: Partial<{
 		<MediaRadioRow
 			entries={entries}
 			selectedUid={props.selectedUid ?? null}
+			onSelect={props.onSelect ?? vi.fn()}
 			onEdit={props.onEdit ?? vi.fn()}
 			onRemove={props.onRemove ?? vi.fn()}
 		/>,
@@ -91,6 +93,13 @@ describe("MediaRadioRow", () => {
 		row([radioEntry("e1", "WINS")], { onRemove });
 		screen.getByRole("button", { name: "Remove WINS" }).click();
 		expect(onRemove).toHaveBeenCalledWith("e1");
+	});
+
+	it("clicking the card reports the entry's uid via onSelect", () => {
+		const onSelect = vi.fn();
+		row([radioEntry("e1", "WINS")], { onSelect });
+		screen.getByRole("listitem").click();
+		expect(onSelect).toHaveBeenCalledWith("e1");
 	});
 
 	it("highlights only the selected entry's card", () => {

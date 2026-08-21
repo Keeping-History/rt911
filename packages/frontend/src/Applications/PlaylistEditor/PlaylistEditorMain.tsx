@@ -100,8 +100,16 @@ export function PlaylistEditorMain({
 }) {
 	const dispatch = (action: EditorAction) => edit(state.playlistId, action);
 
-	const editEntry = (uid: string) => {
+	// Row-click always JUST expands the entry's timeline bar — unlike editEntry
+	// below, it never opens the Settings window. Both share this dispatch: the
+	// reducer's selectedUid is a single scalar, so selecting a new uid already
+	// collapses whatever bar was previously expanded.
+	const selectEntry = (uid: string) => {
 		dispatch({ type: "select", uid });
+	};
+
+	const editEntry = (uid: string) => {
+		selectEntry(uid);
 		openSettings();
 	};
 
@@ -139,6 +147,7 @@ export function PlaylistEditorMain({
 						<MediaTvRow
 							entries={entries as TvEditorEntry[]}
 							selectedUid={state.selectedUid}
+							onSelect={selectEntry}
 							onEdit={editEntry}
 							onRemove={(uid) => dispatch({ type: "removeEntry", uid })}
 						/>
@@ -148,6 +157,7 @@ export function PlaylistEditorMain({
 						<MediaRadioRow
 							entries={entries}
 							selectedUid={state.selectedUid}
+							onSelect={selectEntry}
 							onEdit={editEntry}
 							onRemove={(uid) => dispatch({ type: "removeEntry", uid })}
 						/>

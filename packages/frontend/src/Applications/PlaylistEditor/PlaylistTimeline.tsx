@@ -85,7 +85,10 @@ export function PlaylistTimeline({
 }: {
 	entries: EditorEntry[];
 	selectedUid: string | null;
-	onSelect: (uid: string) => void;
+	/** Selects a bar/flag's uid, or — passed null — collapses whatever bar is
+	 * currently expanded. The bar itself toggles (see its onClick below); flags
+	 * always select, never toggle. */
+	onSelect: (uid: string | null) => void;
 	/** Commit an edge drag: set one bound of a media entry's window. Handles
 	 * only render when this is wired, so a read-only host shows plain bars. */
 	onSetEntryBound?: (uid: string, edge: "start" | "end", iso: string) => void;
@@ -440,7 +443,7 @@ export function PlaylistTimeline({
 												maskImage: barMaskImage(fadeStart, fadeEnd),
 											}}
 											title={b.label}
-											onClick={() => onSelect(b.uid)}
+											onClick={() => onSelect(b.uid === selectedUid ? null : b.uid)}
 										>
 											{b.focus === "once" && <span aria-hidden>▸</span>}
 											{b.focus === "locked" && <span aria-hidden>🔒</span>}
