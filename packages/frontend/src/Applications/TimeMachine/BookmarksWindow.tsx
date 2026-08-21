@@ -18,7 +18,6 @@ interface BookmarksWindowProps {
 	onJump: (startDate: string) => void;
 	onEdit: (b: PersonalBookmark) => void;
 	onDelete: (b: PersonalBookmark) => void;
-	onCloseFunc: () => void;
 }
 
 export const BookmarksWindow: React.FC<BookmarksWindowProps> = ({
@@ -34,7 +33,6 @@ export const BookmarksWindow: React.FC<BookmarksWindowProps> = ({
 	onJump,
 	onEdit,
 	onDelete,
-	onCloseFunc,
 }) => (
 	<ClassicyWindow
 		id={`${appId}_bookmarks`}
@@ -51,7 +49,6 @@ export const BookmarksWindow: React.FC<BookmarksWindowProps> = ({
 		initialPosition={[660, 200]}
 		minimumSize={[240, 160]}
 		appMenu={appMenu}
-		onCloseFunc={onCloseFunc}
 	>
 		<BookmarksTree
 			global={global}

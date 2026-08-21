@@ -30,11 +30,12 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
-// Seed the persisted-window store so the Settings window is open on mount
-// (isWindowOpen/readPersistedWindows in TimeMachine.tsx read this at first
-// render) — mirrors how a page reload restores a previously-open window, and
-// avoids having to drive the real Classicy menu bar (which lives in
-// ClassicyDesktop, not mounted here) just to click File > Settings….
+// Seed the persisted-window store so the Settings window is open on mount —
+// the Settings ClassicyWindow is always mounted and reads its open/closed
+// state straight from this store (see TimeMachine.tsx). Mirrors how a page
+// reload restores a previously-open window, and avoids having to drive the
+// real Classicy menu bar (which lives in ClassicyDesktop, not mounted here)
+// just to click File > Settings….
 function openSettingsOnMount(): void {
 	useAppManager.setState((s) => ({
 		...s,
@@ -59,11 +60,9 @@ function openSettingsOnMount(): void {
 								{
 									// Full shape classicy's own ClassicyWindow expects for a
 									// persisted window entry (see zA's default-object literal in
-									// classicy.es.js) — a bare {id, closed} (TimeMachine's own
-									// PersistedWindow interface in windowState.ts) is enough for
-									// TimeMachine's own isWindowOpen() check, but ClassicyWindow
-									// reads this same array entry as its full live window state,
-									// so a partial record renders blank instead of opening.
+									// classicy.es.js) — ClassicyWindow reads this array entry as
+									// its full live window state, so a partial record renders
+									// blank instead of opening.
 									id: `${TIME_MACHINE_APP_ID}_settings`,
 									appId: TIME_MACHINE_APP_ID,
 									closed: false,
@@ -176,5 +175,33 @@ describe("TimeMachine Settings window", () => {
 				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_settings`,
 			) as { closed?: boolean } | undefined;
 		expect(settingsWindow?.closed).toBe(true);
+	});
+});
+
+describe("TimeMachine Bookmarks window", () => {
+	// Bookmarks is converted to the same always-mounted + dispatch pattern as
+	// Settings, for consistency and to remove the latent risk: unlike
+	// Settings, Bookmarks never had a Cancel/Save-style button that bypassed
+	// Classicy's own close mechanism, so (unlike Settings) this suite hasn't
+	// reproduced a concrete persistence bug here — closing only ever went
+	// through the native close box, which Classicy already tracks correctly,
+	// and mounting the old conditionally-rendered window already told
+	// Classicy's store it was open. This test just guards the new path:
+	// openBookmarks dispatches ClassicyWindowOpen/Focus directly rather than
+	// relying on mount-as-a-side-effect to register openness.
+	it("opening Bookmarks via the capture-dialog login prompt persists open to the Classicy store", () => {
+		openSettingsOnMount(); // seeds apps[id].open — needed for ClassicyApp to render children at all
+		render(<TimeMachine />);
+
+		// Not signed in (AuthContext defaults to "anonymous" in this suite), so
+		// Capture Bookmark opens Bookmarks instead of the capture dialog.
+		fireEvent.click(screen.getByLabelText("Capture Bookmark"));
+
+		const bookmarksWindow = useAppManager
+			.getState()
+			.System.Manager.Applications.apps[TIME_MACHINE_APP_ID]?.windows?.find(
+				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_bookmarks`,
+			) as { closed?: boolean } | undefined;
+		expect(bookmarksWindow?.closed).toBe(false);
 	});
 });

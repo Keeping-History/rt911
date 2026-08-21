@@ -39,7 +39,6 @@ import {
 	timeMachineSetSettings,
 } from "./timeMachineSettings";
 import { useBookmarks } from "./useBookmarks";
-import { isWindowOpen } from "./windowState";
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.timeMachine.app. registerClassicyIcons assigns
@@ -73,19 +72,6 @@ const skipBalloon = describeAppState(appId, "settings.skipMinutes");
 const stepBalloon = describeAppState(appId, "settings.stepSeconds");
 const scrubBalloon = describeAppState(appId, "settings.scrubSeconds");
 
-// Classicy persists each app's window entries (and which one was focused) to
-// localStorage, but the Bookmarks window is still gated behind ephemeral React
-// state that resets on reload. Read the persisted entries once at mount so
-// that state can be re-seeded — otherwise a window that was open (and
-// focused) before a reload is orphaned: it never re-mounts, so it never
-// re-registers its live menu handlers and File → Bookmarks… goes dead.
-// (The Settings window no longer needs this — see the comment above its
-// ClassicyWindow below.)
-const readPersistedWindows = (): { id: string; closed?: boolean }[] | undefined =>
-	typeof useAppManager.getState === "function"
-		? useAppManager.getState().System.Manager.Applications.apps[appId]?.windows
-		: undefined;
-
 export const TimeMachine: React.FC = () => {
 
 	// Skip/step durations persist in Classicy app data (the Settings window
@@ -102,16 +88,6 @@ export const TimeMachine: React.FC = () => {
 		[appData],
 	);
 
-	// Restore Bookmarks visibility from the persisted store so it survives a
-	// reload (isWindowOpen is false for absent/closed entries — the common
-	// case). The Settings window doesn't need an equivalent: it is always
-	// mounted (see below) and Classicy's own store — the thing that actually
-	// persists to localStorage — is its only source of truth for open/closed,
-	// the same pattern PlaylistEditorProvider's openSettingsWindow and
-	// AlertsManager's ClassicyWindow use.
-	const [showBookmarks, setShowBookmarks] = useState(() =>
-		isWindowOpen(readPersistedWindows(), `${appId}_bookmarks`),
-	);
 	// Seed the draft from the saved values (not defaults) so a Settings window
 	// restored on reload shows the persisted slider positions immediately;
 	// openSettings re-seeds on a fresh manual open.
@@ -152,7 +128,19 @@ export const TimeMachine: React.FC = () => {
 		closeSettings();
 	}, [settingsForm, desktopEventDispatch, closeSettings]);
 
-	const openBookmarks = useCallback(() => setShowBookmarks(true), []);
+	// Open THEN focus, same idiom as openSettings above.
+	const openBookmarks = useCallback(() => {
+		desktopEventDispatch({
+			type: "ClassicyWindowOpen",
+			app: { id: appId },
+			window: { id: `${appId}_bookmarks` },
+		});
+		desktopEventDispatch({
+			type: "ClassicyWindowFocus",
+			app: { id: appId },
+			window: { id: `${appId}_bookmarks` },
+		});
+	}, [desktopEventDispatch]);
 
 	const appMenu = useMemo(
 		() => [
@@ -209,11 +197,11 @@ export const TimeMachine: React.FC = () => {
 	// Capture the live virtual-clock instant (read only — never writes the clock).
 	const openCaptureDialog = useCallback(() => {
 		if (!signedIn) {
-			setShowBookmarks(true); // Personal section shows the login prompt
+			openBookmarks(); // Personal section shows the login prompt
 			return;
 		}
 		setDialogState({ mode: "create" });
-	}, [signedIn]);
+	}, [signedIn, openBookmarks]);
 
 	const openEditDialog = useCallback((bookmark: PersonalBookmark) => {
 		setDialogState({ mode: "edit", bookmark });
@@ -448,23 +436,21 @@ export const TimeMachine: React.FC = () => {
 					</div>
 				</div>
 			</ClassicyWindow>
-			{showBookmarks && (
-				<BookmarksWindow
-					appId={appId}
-					appMenu={appMenu}
-					icon={appIcon}
-					tzOffset={tzOffset}
-					global={global}
-					personal={personal}
-					loading={bookmarksLoading}
-					error={bookmarksError}
-					signedIn={signedIn}
-					onJump={handleBookmarkClick}
-					onEdit={openEditDialog}
-					onDelete={handleDeletePersonal}
-					onCloseFunc={() => setShowBookmarks(false)}
-				/>
-			)}
+			{/* Always mounted — same reasoning as the Settings window above. */}
+			<BookmarksWindow
+				appId={appId}
+				appMenu={appMenu}
+				icon={appIcon}
+				tzOffset={tzOffset}
+				global={global}
+				personal={personal}
+				loading={bookmarksLoading}
+				error={bookmarksError}
+				signedIn={signedIn}
+				onJump={handleBookmarkClick}
+				onEdit={openEditDialog}
+				onDelete={handleDeletePersonal}
+			/>
 			{dialogState && (
 				<BookmarkDialog
 					appId={appId}
