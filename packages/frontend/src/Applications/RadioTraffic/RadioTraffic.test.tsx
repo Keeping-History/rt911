@@ -868,6 +868,23 @@ describe("RadioTraffic — the manual hold (story 045)", () => {
 		restoreBox.mockRestore();
 	});
 
+	it("holds a card the listener switched tabs on, past its clock window (issue #538)", async () => {
+		const { rerender } = await renderHold();
+		expect(laneIds("live")).toEqual([10]);
+
+		const tab = cardOf(10)?.querySelector('[data-tab-id="summary"]');
+		expect(tab).not.toBeNull();
+		fireEvent.click(tab as Element);
+		await act(async () => {});
+
+		await rerenderAt(rerender, PAST_END);
+
+		// Switching tabs was the only touch — still held, past the window, the
+		// same way a pause or a scrub holds it.
+		expect(laneIds("live")).toEqual([10]);
+		expect(laneIds("previous")).toEqual([]);
+	});
+
 	it("does not release a touched card's hold by muting it afterward", async () => {
 		// Touched by scrub rather than by pause: pausing releases the element
 		// (the shell only registers audio for LIVE ids not in `stopped`), and a

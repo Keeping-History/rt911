@@ -77,6 +77,14 @@ export interface TrafficCardProps {
 	 */
 	onManualSeek?: () => void;
 	/**
+	 * The listener switched this card's tab — LIVE only (see RadioTraffic.tsx's
+	 * renderCard), the same signal `onManualSeek` sends for a scrub. A listener
+	 * reading through a card's tabs is exactly the "actively touching it" Story
+	 * 045's hold exists to detect, so this fires alongside the panel switch
+	 * rather than instead of it.
+	 */
+	onTabSelect?: () => void;
+	/**
 	 * The waveform's ink as a CSS color, or undefined to follow the theme.
 	 *
 	 * A `color` on the waveform slot rather than a prop passed into
@@ -177,6 +185,7 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 	onManualSeek,
 	waveformColor,
 	onToggleMute,
+	onTabSelect,
 }) => {
 	const [active, setActive] = useState(CARD_TABS[0].id);
 
@@ -337,6 +346,16 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 	const tabs = useMemo(() => visibleCardTabs(meta), [meta]);
 	const panel = tabs.find((tab) => tab.id === active) ?? tabs[0];
 
+	// The existing panel switch, plus Story 045's touch signal alongside it —
+	// see onTabSelect above.
+	const handleTabSelect = useCallback(
+		(id: string) => {
+			setActive(id);
+			onTabSelect?.();
+		},
+		[onTabSelect],
+	);
+
 	// The one thing the design signals with brightness: not "is this card
 	// running" but "is this one of the clips you are hearing". Both halves are
 	// needed — a muted clip still advances (audioCoordinator silences rather than
@@ -455,7 +474,7 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 			</div>
 
 			<div className={styles.rtCardTabs}>
-				<CardTabBar tabs={tabs} active={panel.id} onSelect={setActive} />
+				<CardTabBar tabs={tabs} active={panel.id} onSelect={handleTabSelect} />
 				<div className={styles.rtCardPanel}>
 					<panel.Panel
 						item={item}
@@ -472,15 +491,15 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 };
 
 /**
- * `onTogglePause`/`onManualSeek`/`onToggleMute` are fresh closures on every
- * RadioTraffic render — `renderCard` (RadioTraffic.tsx) is invoked anew per
- * render, not cached per item — but each one only ever does something with
- * THIS card's own `item.id`/`lane`, which are already compared below. Ignoring
- * them here, rather than requiring the shell to stabilize three per-item
- * callbacks, is what lets `memo` actually skip the other ~30+ cards' full
- * render (waveform draw, tab-bar overflow measurement, …) when a change
- * affects only one card, or nothing about any card at all — e.g. selecting a
- * different tool in the palette, which no prop here depends on.
+ * `onTogglePause`/`onManualSeek`/`onToggleMute`/`onTabSelect` are fresh
+ * closures on every RadioTraffic render — `renderCard` (RadioTraffic.tsx) is
+ * invoked anew per render, not cached per item — but each one only ever does
+ * something with THIS card's own `item.id`/`lane`, which are already compared
+ * below. Ignoring them here, rather than requiring the shell to stabilize
+ * four per-item callbacks, is what lets `memo` actually skip the other ~30+
+ * cards' full render (waveform draw, tab-bar overflow measurement, …) when a
+ * change affects only one card, or nothing about any card at all — e.g.
+ * selecting a different tool in the palette, which no prop here depends on.
  */
 function propsAreEqual(prev: TrafficCardProps, next: TrafficCardProps): boolean {
 	return (

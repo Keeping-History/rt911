@@ -207,8 +207,8 @@ function toggleId(set: ReadonlySet<number>, id: number): ReadonlySet<number> {
  * `set` with `id` added, or `set` itself when it was already there.
  *
  * Unlike toggleId, this never removes — a touch is a one-way latch (see
- * touchedLiveIds below), so a second play/pause or a second scrub on the same
- * card must not undo the first one's hold.
+ * touchedLiveIds below), so a second play/pause, a second scrub, or a second
+ * tab switch on the same card must not undo the first one's hold.
  */
 function addId(set: ReadonlySet<number>, id: number): ReadonlySet<number> {
 	if (set.has(id)) return set;
@@ -305,11 +305,12 @@ export const RadioTraffic: React.FC = () => {
 	/** PREVIOUS clips the listener started by hand — these do NOT follow the clock. */
 	const [userStarted, setUserStarted] = useState<ReadonlySet<number>>(() => new Set());
 	/**
-	 * LIVE cards the listener has manually touched — paused/played, or scrubbed
-	 * the waveform. This is the whole criterion for Story 045's hold below: an
-	 * untouched card simply disappears once its clock window ends, and a touched
-	 * one stays no matter what they do to it afterward (mute it, pause it again),
-	 * which is why this is add-only (addId) rather than a toggle like `stopped`.
+	 * LIVE cards the listener has manually touched — paused/played, scrubbed
+	 * the waveform, or switched a tab. This is the whole criterion for Story
+	 * 045's hold below: an untouched card simply disappears once its clock
+	 * window ends, and a touched one stays no matter what they do to it
+	 * afterward (mute it, pause it again), which is why this is add-only
+	 * (addId) rather than a toggle like `stopped`.
 	 *
 	 * The hold itself is not permanent: `pruneIdleTouches` below drops an id
 	 * once IDLE_RELEASE_MS passes with nothing happening on it — see
@@ -737,6 +738,18 @@ export const RadioTraffic: React.FC = () => {
 		setTouchedLiveIds((ids) => addId(ids, itemId));
 	}, []);
 
+	/**
+	 * A LIVE card's tab was switched — a third touch, alongside pause and scrub
+	 * (issue #538). A listener reading through a card's tabs is actively engaged
+	 * with it exactly as much as one pausing or scrubbing it, so it both
+	 * establishes the hold on an untouched card and re-stamps it on one already
+	 * held.
+	 */
+	const onTabSelect = useCallback((itemId: number) => {
+		lastLiveActivityRef.current.set(itemId, Date.now());
+		setTouchedLiveIds((ids) => addId(ids, itemId));
+	}, []);
+
 	const onReorder = useCallback(
 		(lane: Lane, fromId: number, toIndex: number) =>
 			setLaneOrder((order) =>
@@ -781,6 +794,9 @@ export const RadioTraffic: React.FC = () => {
 					// from wherever the listener starts it, following no clock a scrub
 					// would need to override.
 					onManualSeek={lane === "live" ? () => onManualSeek(item.id) : undefined}
+					// Same live-lane-only gating as onManualSeek above: UPCOMING and
+					// PREVIOUS have no clock-window hold to establish.
+					onTabSelect={lane === "live" ? () => onTabSelect(item.id) : undefined}
 					waveformColor={waveformColor}
 				/>
 			</div>
@@ -797,6 +813,7 @@ export const RadioTraffic: React.FC = () => {
 			onCardClick,
 			onTogglePause,
 			onManualSeek,
+			onTabSelect,
 			waveformColor,
 		],
 	);
