@@ -78,7 +78,7 @@ interface DragState {
 }
 
 /**
- * The lane mute control's artwork, in its two states.
+ * The lane mute control's artwork, in its three states (issue #537 item 5).
  *
  * The same speaker TrafficCard draws on its own mute button, REDRAWN for the
  * size this one is: the lane strip is one --window-control-size wide, and a
@@ -88,15 +88,28 @@ interface DragState {
  * survives being drawn six pixels wide. Same idea, legibly, rather than the
  * same path data illegibly.
  *
+ * `partial` is the new middle state: at least one station is muted by hand,
+ * short of the mute-ALL press this button itself makes. It draws the same
+ * cone with no sound wave at all — neither the crossed-out "everything is
+ * silent" mark nor the arc that means "everything is getting through" — so a
+ * listener can tell "some of the mix is silenced" apart from both ends
+ * without the button itself reporting the pressed, mute-everything state
+ * `muted` means. `muted` (mute-all) still wins when both are true: pressing
+ * mute-all while some cards are already muted by hand is still the button
+ * saying "everything", not "some things".
+ *
  * Inline rather than an <img> so it takes the strip's ink through
  * `currentColor`.
  */
-const SpeakerIcon: React.FC<{ muted: boolean }> = ({ muted }) => (
+const SpeakerIcon: React.FC<{ muted: boolean; partial?: boolean }> = ({
+	muted,
+	partial = false,
+}) => (
 	<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" role="presentation">
 		<path d="M1 6h4l5-4.5v13L5 10H1z" fill="currentColor" />
 		{muted ? (
 			<path d="M2 14L14 2" stroke="currentColor" strokeWidth="2.5" fill="none" />
-		) : (
+		) : partial ? null : (
 			<path
 				d="M12 4.5a5 5 0 0 1 0 7"
 				stroke="currentColor"
@@ -155,6 +168,14 @@ export interface LaneSectionProps {
 	 */
 	muted?: boolean;
 	/**
+	 * Issue #537 item 5: at least one player in this lane is muted individually
+	 * — the middle of the mute button's three icon states — WITHOUT the whole
+	 * lane being silenced by `muted`. Purely cosmetic: it changes the glyph
+	 * `SpeakerIcon` draws and nothing about `on`/aria-pressed, which stay
+	 * `muted`'s alone — the button is only ever actually PRESSED for mute-all.
+	 */
+	partiallyMuted?: boolean;
+	/**
 	 * Flip the lane mute. Its presence is also what puts the control on the
 	 * strip — the shell hands it to LIVE and to no one else, because LIVE is the
 	 * only lane with a mix to silence (UPCOMING has no audio yet, and PREVIOUS
@@ -182,6 +203,7 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	collapsed = false,
 	onToggleCollapse,
 	muted = false,
+	partiallyMuted = false,
 	onToggleMute,
 	tool,
 	onReorder,
@@ -363,12 +385,21 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 						bevelWidth="small"
 						on={muted}
 						data-lane-mute
+						// Cosmetic only, never read for the pressed state itself — see
+						// SpeakerIcon's doc comment. A screen reader is told the same
+						// "some stations are muted" fact the icon draws, on top of
+						// whichever of Mute/Unmute the press itself still does.
+						data-partially-muted={!muted && partiallyMuted}
 						className={styles.rtLaneMute}
-						aria-label={`${muted ? "Unmute" : "Mute"} ${label}`}
-						title={`${muted ? "Unmute" : "Mute"} ${label}`}
+						aria-label={`${muted ? "Unmute" : "Mute"} ${label}${
+							!muted && partiallyMuted ? " (some stations muted)" : ""
+						}`}
+						title={`${muted ? "Unmute" : "Mute"} ${label}${
+							!muted && partiallyMuted ? " (some stations muted)" : ""
+						}`}
 						onChangeFunc={onToggleMute}
 					>
-						<SpeakerIcon muted={muted} />
+						<SpeakerIcon muted={muted} partial={!muted && partiallyMuted} />
 					</ClassicyBevelButton>
 				)}
 				{collapsible && (

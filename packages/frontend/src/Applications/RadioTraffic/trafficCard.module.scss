@@ -293,10 +293,11 @@
 
 // ClassicyBevelButton builds its own className and drops the one it is
 // handed, so — same as the lane strip's mute/toggle controls — the sizing
-// hangs off the `data-card-transport`/`data-card-rewind`/`data-card-mute`
-// attributes the component library forwards untouched.
+// hangs off the `data-card-transport`/`data-card-rewind`/`data-card-mute`/
+// `data-card-sync-live` attributes the component library forwards untouched.
 .rtCardControls [data-card-transport],
 .rtCardControls [data-card-rewind],
+.rtCardControls [data-card-sync-live],
 .rtCardControls [data-card-mute] {
   flex: 0 0 auto;
   box-sizing: border-box;
@@ -317,12 +318,13 @@
   cursor: pointer;
 }
 
-// The speaker and the rewind arrow both take the button's ink, so one asset
-// each serves a bright LIVE card and a dimmed UPCOMING one. They fill the
-// button rather than carrying a size of their own, which is what keeps them
-// on the card's scale for free.
+// The speaker, the rewind arrow and the sync-live glyph all take the button's
+// ink, so one asset each serves a bright LIVE card and a dimmed UPCOMING one.
+// They fill the button rather than carrying a size of their own, which is
+// what keeps them on the card's scale for free.
 .rtCardControls [data-card-mute] svg,
-.rtCardControls [data-card-rewind] svg {
+.rtCardControls [data-card-rewind] svg,
+.rtCardControls [data-card-sync-live] svg {
   width: 100%;
   height: 100%;
 }
@@ -331,6 +333,16 @@
 // that departs from the button's default ink.
 .rtCardControls [data-card-mute][data-muted="true"] {
   color: var(--color-system-04);
+}
+
+// A greyed-out sync-live button — off the LIVE lane, an unknown-duration
+// clip, or a LIVE clip the clock has already run past the end of — has
+// nowhere sensible to seek to. Dimmed rather than hidden, same as the rest of
+// the app's disabled chrome, so the control stays in the same place on every
+// card and a listener never has to relocate it.
+.rtCardControls [data-card-sync-live]:disabled {
+  color: var(--color-system-05);
+  cursor: default;
 }
 
 // Tabs ---------------------------------------------------------------------

@@ -124,6 +124,17 @@
   text-overflow: ellipsis;
 }
 
+// Stacks the start countdown above the link type, mirroring .rtSmallTimings
+// on the opposite side of the footer — the pair the design's "bottom left /
+// bottom right" arrangement was already built around, just with a second row
+// on the right now that the countdown needs one.
+.rtSmallLinkGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+}
+
 // The one thing on the card the design emphasises besides the subject.
 .rtSmallLink {
   flex: 0 1 auto;
@@ -134,4 +145,13 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+// Issue #537 item 3: time remaining until the clip starts. Same size as the
+// timings on the opposite side of the footer — it is the same KIND of fact —
+// and dropped entirely once the start has passed rather than pinned at "0s"
+// (see LaneSmallPlayer.tsx's startCountdown).
+.rtSmallCountdown {
+  font-size: calc(var(--ui-font-size) * 0.75);
+  white-space: nowrap;
 }
