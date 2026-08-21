@@ -1239,8 +1239,9 @@ describe("RadioTraffic — a collapsed lane", () => {
 		mockAppData.current = { checked: [], collapsed: { upcoming: true } };
 		await renderSettled();
 		const small = document.querySelector('[data-small-player="4"]');
-		// The tier tag META gives every item, coloured by its namespace.
-		expect(small?.querySelector("li")?.textContent).toBe("secondary");
+		// The tier tag META gives every item, coloured by its namespace and
+		// sentence-cased by smallChipLabel (see tagPalette.ts).
+		expect(small?.querySelector("li")?.textContent).toBe("Secondary");
 		// NOW_MS is 2001-09-11T12:47Z — the same display-day as this item's start,
 		// so #523 drops the date and keeps the time and zone.
 		expect(small?.querySelector('[data-field="start"]')?.textContent).toBe("8:55 AM ET");

@@ -78,6 +78,25 @@ export function tagLabel(tag: TagDef): string {
 }
 
 /**
+ * {@link tagLabel}, re-cased for a low-chrome chip that renders text exactly
+ * as returned (LaneSmallPlayer's `.rtSmallChip` — the collapsed lane, which
+ * applies no `text-transform`, unlike the Details/Mentions chips that force
+ * uppercase in CSS and so never showed this raw).
+ *
+ * A tag's `value` is derived from its slug (video-grabber's `parties/tags.py`
+ * `slugify`/`split_tag`) for every namespace except a curator's own hand-typed
+ * `curated` tags — so in practice it is almost always a lowercase,
+ * dash-joined string like `hijack-report`, not prose. Dashes are a
+ * slugification artifact, never punctuation a reader should see, so they
+ * become spaces; the result is cased as a sentence rather than left however
+ * the slug happened to be cased.
+ */
+export function smallChipLabel(tag: TagDef): string {
+	const label = tagLabel(tag).replace(/-/g, " ");
+	return label ? label.charAt(0).toUpperCase() + label.slice(1).toLowerCase() : label;
+}
+
+/**
  * One namespace's tags, in the order the vocabulary gave them (the backend
  * already orders by `sort NULLS LAST, tag`, so this must not re-sort).
  */

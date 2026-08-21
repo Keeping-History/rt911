@@ -61,8 +61,11 @@ describe("LaneSmallPlayer content", () => {
 	it("shows every tag as a chip", () => {
 		const container = renderPlayer();
 		const chips = Array.from(container.querySelectorAll("li")).map((li) => li.textContent);
-		// makeMeta's three tags, by their human values rather than their keys.
-		expect(chips).toEqual(["Hijacking", "ZBW", "AAL11"]);
+		// makeMeta's three tags, by their human values rather than their keys —
+		// sentence-cased via smallChipLabel, not shown verbatim (see
+		// tagPalette.ts's doc comment on why: dashes are a slugification
+		// artifact and real values are near-always lowercase slugs).
+		expect(chips).toEqual(["Hijacking", "Zbw", "Aal11"]);
 	});
 
 	it("colours each chip by its namespace", () => {
@@ -194,7 +197,7 @@ describe("LaneSmallPlayer marquee (issue #522)", () => {
 		const container = renderPlayer({ enableMarquee: true });
 		expect(container.querySelector(".rfm-marquee-container")).toBeNull();
 		const chips = Array.from(container.querySelectorAll("li")).map((li) => li.textContent);
-		expect(chips).toEqual(["Hijacking", "ZBW", "AAL11"]);
+		expect(chips).toEqual(["Hijacking", "Zbw", "Aal11"]);
 	});
 
 	it("wraps an overflowing chip row in the marquee, keeping every chip present", () => {
@@ -217,7 +220,7 @@ describe("LaneSmallPlayer marquee (issue #522)", () => {
 			const chipTexts = new Set(
 				Array.from(container.querySelectorAll("li")).map((li) => li.textContent),
 			);
-			expect(chipTexts).toEqual(new Set(["Hijacking", "ZBW", "AAL11"]));
+			expect(chipTexts).toEqual(new Set(["Hijacking", "Zbw", "Aal11"]));
 		} finally {
 			Reflect.deleteProperty(HTMLElement.prototype, "scrollWidth");
 			Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");

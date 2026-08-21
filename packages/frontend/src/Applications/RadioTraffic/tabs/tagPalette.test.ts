@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chipColor, tagGroups, tagLabel, tagsIn, TAG_NAMESPACES } from "./tagPalette";
+import {
+	chipColor,
+	smallChipLabel,
+	tagGroups,
+	tagLabel,
+	tagsIn,
+	TAG_NAMESPACES,
+} from "./tagPalette";
 
 describe("chipColor", () => {
 	it("keys off the namespace, because mp3_tags.color is null on every row", () => {
@@ -49,6 +56,30 @@ describe("tagLabel", () => {
 
 	it("treats a blank value as no value", () => {
 		expect(tagLabel({ tag: "facility:zbw", value: "   " })).toBe("facility:zbw");
+	});
+});
+
+describe("smallChipLabel", () => {
+	it("replaces dashes with spaces and sentence-cases the result", () => {
+		// The realistic shape: derived values are lowercase, dash-joined slugs
+		// (video-grabber's slugify), not prose — see tagPalette.ts's doc comment.
+		expect(
+			smallChipLabel({ tag: "topic:hijack-report", namespace: "topic", value: "hijack-report" }),
+		).toBe("Hijack report");
+	});
+
+	it("lower-cases an all-caps value rather than leaving it shouting", () => {
+		expect(smallChipLabel({ tag: "facility:zbw", namespace: "facility", value: "ZBW" })).toBe(
+			"Zbw",
+		);
+	});
+
+	it("falls back through tagLabel to the namespaced key when there is no value", () => {
+		expect(smallChipLabel({ tag: "facility:zbw", namespace: "facility" })).toBe("Facility:zbw");
+	});
+
+	it("is a no-op on an empty label", () => {
+		expect(smallChipLabel({ tag: "" })).toBe("");
 	});
 });
 

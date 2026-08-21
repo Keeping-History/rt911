@@ -28,7 +28,7 @@ import { useHorizontalOverflow } from "../radio-core/useHorizontalOverflow";
 import styles from "./laneSmallPlayer.module.scss";
 import { durationSecondsLabel, startLabel } from "./smallPlayerLabels";
 import { itemTiming } from "./tabs/itemTiming";
-import { chipColor, tagLabel } from "./tabs/tagPalette";
+import { chipColor, smallChipLabel } from "./tabs/tagPalette";
 
 export interface LaneSmallPlayerProps {
 	item: MediaItem;
@@ -91,7 +91,7 @@ export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
 					data-namespace={tag.namespace}
 					style={{ background: chipColor(tag) }}
 				>
-					{tagLabel(tag)}
+					{smallChipLabel(tag)}
 				</li>
 			))}
 		</ul>
