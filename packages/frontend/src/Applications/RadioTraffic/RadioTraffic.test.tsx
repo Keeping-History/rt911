@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type React from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -897,7 +897,9 @@ describe("RadioTraffic — the manual hold (story 045)", () => {
 		await act(async () => {});
 
 		fireEvent.click(screen.getByRole("radio", { name: "Mute" }));
-		fireEvent.pointerUp(document.querySelector("[data-card-slot='10']") as Element);
+		fireEvent.pointerUp(
+			document.querySelector("[data-card-slot='10'] [data-card-header]") as Element,
+		);
 		await act(async () => {});
 		expect(audio.elements.get(10)?.muted).toBe(true);
 
@@ -1004,7 +1006,9 @@ describe("RadioTraffic — persisted state", () => {
 	it("persists a per-card mute made with the mute tool", async () => {
 		await renderSettled();
 		fireEvent.click(screen.getByRole("radio", { name: "Mute" }));
-		fireEvent.pointerUp(document.querySelector("[data-card-slot='2']") as Element);
+		fireEvent.pointerUp(
+			document.querySelector("[data-card-slot='2'] [data-card-header]") as Element,
+		);
 
 		expect(lastPersisted()?.mutedItems).toEqual([2]);
 		await act(async () => {});
@@ -1059,7 +1063,9 @@ describe("RadioTraffic — persisted state", () => {
 describe("RadioTraffic — the tools", () => {
 	it("solos the clicked card under the arrow tool", async () => {
 		await renderSettled();
-		fireEvent.pointerUp(document.querySelector("[data-card-slot='3']") as Element);
+		fireEvent.pointerUp(
+			document.querySelector("[data-card-slot='3'] [data-card-header]") as Element,
+		);
 		await act(async () => {});
 
 		expect(audio.elements.get(3)?.muted).toBe(false);
@@ -1070,9 +1076,29 @@ describe("RadioTraffic — the tools", () => {
 	it("does not change the mix under the hand tool", async () => {
 		await renderSettled();
 		fireEvent.click(screen.getByRole("radio", { name: "Move" }));
-		fireEvent.pointerUp(document.querySelector("[data-card-slot='3']") as Element);
+		fireEvent.pointerUp(
+			document.querySelector("[data-card-slot='3'] [data-card-header]") as Element,
+		);
 		await act(async () => {});
 
+		expect(audio.elements.get(1)?.muted).toBe(false);
+		expect(audio.elements.get(3)?.muted).toBe(true);
+	});
+
+	// Issue #537 item 1: a click anywhere in the card used to fire the same
+	// solo/focus toggle as a click on the header, including a click on the
+	// CardTabBar tabs — so switching a tab in one Live player could steal focus
+	// from another. The wrapper (RadioTraffic.tsx's `rtCardSlot`) now scopes its
+	// pointerup to a click that landed inside `[data-card-header]` specifically.
+	it("does not solo a card when only its tab bar is clicked", async () => {
+		await renderSettled();
+		const card = cardOf(3) as HTMLElement;
+
+		fireEvent.click(within(card).getByRole("tab", { name: "Summary" }));
+		await act(async () => {});
+
+		// The default mix (card 1 soloed) is untouched — a tab switch on card 3
+		// did not also solo card 3.
 		expect(audio.elements.get(1)?.muted).toBe(false);
 		expect(audio.elements.get(3)?.muted).toBe(true);
 	});
@@ -1145,7 +1171,9 @@ describe("RadioTraffic — the LIVE lane mute", () => {
 		fireEvent.click(laneMute("live") as Element);
 		await act(async () => {});
 
-		fireEvent.pointerUp(document.querySelector("[data-card-slot='3']") as Element);
+		fireEvent.pointerUp(
+			document.querySelector("[data-card-slot='3'] [data-card-header]") as Element,
+		);
 		await act(async () => {});
 
 		expect(audibleLive()).toEqual([3]);
@@ -1205,6 +1233,21 @@ describe("RadioTraffic — the LIVE lane mute", () => {
 		await renderSettled();
 		expect(audibleLive()).toEqual([]);
 		expect(laneMute("live")?.getAttribute("aria-pressed")).toBe("true");
+	});
+
+	// Issue #537 item 5: the lane mute button's third, cosmetic icon state —
+	// wiring-level check that anyLiveMuted reaches LaneSection as partiallyMuted.
+	it("marks the lane mute as partially muted once one station is muted by hand, without pressing it", async () => {
+		mockAppData.current = { checked: [], mutedItems: [2] };
+		await renderSettled();
+
+		expect(laneMute("live")?.getAttribute("data-partially-muted")).toBe("true");
+		expect(laneMute("live")?.getAttribute("aria-pressed")).toBe("false");
+	});
+
+	it("carries no partially-muted flag when nothing is individually muted", async () => {
+		await renderSettled();
+		expect(laneMute("live")?.getAttribute("data-partially-muted")).toBe("false");
 	});
 });
 

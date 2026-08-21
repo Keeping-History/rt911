@@ -28,6 +28,7 @@ function renderLane(
 		collapsed?: boolean;
 		onToggleCollapse?: (collapsed: boolean) => void;
 		muted?: boolean;
+		partiallyMuted?: boolean;
 		onToggleMute?: (muted: boolean) => void;
 		tool?: Tool;
 		onReorder?: (fromId: number, toIndex: number) => void;
@@ -41,6 +42,7 @@ function renderLane(
 			collapsed={props.collapsed}
 			onToggleCollapse={props.onToggleCollapse}
 			muted={props.muted}
+			partiallyMuted={props.partiallyMuted}
 			onToggleMute={props.onToggleMute}
 			tool={props.tool ?? "hand"}
 			onReorder={props.onReorder}
@@ -272,6 +274,79 @@ describe("LaneSection lane mute", () => {
 		expect(container.querySelector("[data-lane-mute]")?.getAttribute("aria-pressed")).toBe(
 			"false",
 		);
+	});
+});
+
+describe("LaneSection lane mute, third icon state (issue #537 item 5)", () => {
+	// Three looks: nothing muted (cone + arc), at least one station muted by
+	// hand short of mute-all (cone alone, neither arc nor cross), and mute-all
+	// (cone + cross) — but only ever TWO pressed states, since `partiallyMuted`
+	// is cosmetic and never itself presses the button.
+	const paths = (container: HTMLElement) =>
+		container.querySelectorAll("[data-lane-mute] svg path").length;
+
+	it("draws the cone-plus-arc look when nothing is muted at all", () => {
+		const { container } = renderLane({
+			lane: "live",
+			muted: false,
+			partiallyMuted: false,
+			onToggleMute: vi.fn(),
+		});
+		expect(paths(container)).toBe(2);
+	});
+
+	it("draws neither the arc nor the cross when some stations are muted individually", () => {
+		const { container } = renderLane({
+			lane: "live",
+			muted: false,
+			partiallyMuted: true,
+			onToggleMute: vi.fn(),
+		});
+		expect(paths(container)).toBe(1);
+	});
+
+	it("draws the crossed-cone mute-all look regardless of partiallyMuted", () => {
+		const { container } = renderLane({
+			lane: "live",
+			muted: true,
+			partiallyMuted: true,
+			onToggleMute: vi.fn(),
+		});
+		expect(paths(container)).toBe(2);
+	});
+
+	it("never presses the button for partiallyMuted alone — only mute-all presses it", () => {
+		const { container } = renderLane({
+			lane: "live",
+			muted: false,
+			partiallyMuted: true,
+			onToggleMute: vi.fn(),
+		});
+		expect(container.querySelector("[data-lane-mute]")?.getAttribute("aria-pressed")).toBe(
+			"false",
+		);
+	});
+
+	it("tells assistive tech some stations are muted, on top of the Mute/Unmute name", () => {
+		const { getByRole } = renderLane({
+			lane: "live",
+			muted: false,
+			partiallyMuted: true,
+			onToggleMute: vi.fn(),
+		});
+		expect(
+			getByRole("button", { name: `Mute ${LANE_LABELS.live} (some stations muted)` }),
+		).not.toBeNull();
+	});
+
+	it("says nothing extra when nothing is muted at all", () => {
+		const { getByRole } = renderLane({
+			lane: "live",
+			muted: false,
+			partiallyMuted: false,
+			onToggleMute: vi.fn(),
+		});
+		expect(getByRole("button", { name: `Mute ${LANE_LABELS.live}` })).not.toBeNull();
 	});
 });
 

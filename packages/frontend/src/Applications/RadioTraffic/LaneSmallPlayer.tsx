@@ -25,6 +25,7 @@ import type React from "react";
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import Marquee from "../radio-core/marquee";
 import { useHorizontalOverflow } from "../radio-core/useHorizontalOverflow";
+import { countdownFor } from "./cardStatus";
 import styles from "./laneSmallPlayer.module.scss";
 import { durationSecondsLabel, startLabel } from "./smallPlayerLabels";
 import { itemTiming } from "./tabs/itemTiming";
@@ -73,6 +74,20 @@ export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
 	const link = meta?.link?.trim();
 	const tags = meta?.tags ?? [];
 	const { containerRef, contentRef, overflowing } = useHorizontalOverflow();
+
+	/**
+	 * Time remaining until this clip's `start_date` — "59s" under a minute,
+	 * "MM:SS" beyond it, "HH:MM:SS" from an hour out (cardStatus.countdownFor,
+	 * the same rendering the UPCOMING lane's full-card badge already uses).
+	 * Dropped once the start has passed rather than pinned at "0s": a LIVE or
+	 * PREVIOUS clip's collapsed player has nothing left to count down to, same
+	 * as the `start`/`duration`/`link` lines above are each dropped when the
+	 * fact they carry is absent rather than printed empty.
+	 */
+	const startCountdown =
+		currentMs !== null && timing.startMs !== null && timing.startMs > currentMs
+			? countdownFor(item, currentMs)
+			: null;
 
 	const chipList = (
 		<ul
@@ -134,10 +149,19 @@ export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
 						</span>
 					)}
 				</div>
-				{link && (
-					<span className={styles.rtSmallLink} data-field="link" title={link}>
-						{link}
-					</span>
+				{(startCountdown || link) && (
+					<div className={styles.rtSmallLinkGroup}>
+						{startCountdown && (
+							<span className={styles.rtSmallCountdown} data-field="countdown">
+								{startCountdown}
+							</span>
+						)}
+						{link && (
+							<span className={styles.rtSmallLink} data-field="link" title={link}>
+								{link}
+							</span>
+						)}
+					</div>
 				)}
 			</div>
 		</article>

@@ -184,6 +184,33 @@ describe("LaneSmallPlayer chrome", () => {
 	});
 });
 
+describe("LaneSmallPlayer start countdown (issue #537)", () => {
+	// The fixture item's start_date, matching cardTabFixtures' default.
+	const START_MS = Date.parse("2001-09-11T12:46:31Z");
+
+	it("counts down above the link line when the clock is before the clip's start", () => {
+		const container = renderPlayer({ currentMs: START_MS - 4_000 });
+		expect(field(container, "countdown")?.textContent).toBe("4s");
+		// The link line is unaffected — both can show at once.
+		expect(field(container, "link")?.textContent).toBe("ZBW ↔ AAL11");
+	});
+
+	it("uses the same MM:SS/HH:MM:SS rendering as the full card's UPCOMING badge", () => {
+		const container = renderPlayer({ currentMs: START_MS - 200_000 });
+		expect(field(container, "countdown")?.textContent).toBe("03:20");
+	});
+
+	it("drops the countdown once the start has passed, rather than pinning it at 0s", () => {
+		const container = renderPlayer({ currentMs: START_MS + 1_000 });
+		expect(field(container, "countdown")).toBeNull();
+	});
+
+	it("drops the countdown when currentMs is not known", () => {
+		const container = renderPlayer({ currentMs: null });
+		expect(field(container, "countdown")).toBeNull();
+	});
+});
+
 describe("LaneSmallPlayer marquee (issue #522)", () => {
 	// UPCOMING and PREVIOUS opt into scrolling a chip row too wide to fit,
 	// rather than clipping the rest of a curator's tags away with no way to

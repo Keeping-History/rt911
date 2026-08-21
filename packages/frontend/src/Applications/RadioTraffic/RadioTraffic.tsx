@@ -531,6 +531,20 @@ export const RadioTraffic: React.FC = () => {
 		};
 	}, [lanes, mp3Meta, checked]);
 
+	/**
+	 * Issue #537 item 5: at least one Live card carries its own explicit mute,
+	 * short of the whole lane being silenced by `liveLaneMuted`. This is what
+	 * lets the lane-mute button draw a third icon state — "some stations are
+	 * muted" — without itself reporting the pressed, mute-everything state that
+	 * `liveLaneMuted` alone means. A solo's IMPLICIT silence on every other card
+	 * does not count here: this names cards the listener silenced by hand, via
+	 * `audio.muted`, not ones merely excepted from a solo.
+	 */
+	const anyLiveMuted = useMemo(
+		() => visible.live.some((item) => audio.muted.has(item.id)),
+		[visible.live, audio.muted],
+	);
+
 	// ── Audio ────────────────────────────────────────────────────────────────
 	// The mix is the FILTER-VISIBLE live cards, so hiding the solo target hands
 	// the solo on rather than silencing the grid. Called on every visible-mix
@@ -708,7 +722,7 @@ export const RadioTraffic: React.FC = () => {
 				setAudio((state) => releaseLaneMute(state, lanes.live, itemId));
 				return;
 			}
-			setAudio((state) => applyToolClick(state, tool, itemId));
+			setAudio((state) => applyToolClick(state, tool, itemId, lanes.live));
 		},
 		[liveLaneMuted, lanes.live, tool],
 	);
@@ -760,15 +774,26 @@ export const RadioTraffic: React.FC = () => {
 
 	const renderCard = useCallback(
 		(lane: Lane) => (item: MediaItem) => (
-			// A plain div with a pointer handler, exactly like the lane slot it
-			// sits in: making it focusable would put a tab stop in front of every
-			// card's own tab bar and transport button. Under the `hand` tool the
-			// slot's drag handlers run too, and applyToolClick("hand") is a no-op,
-			// so a drag cannot also mute something.
+			// A plain div, exactly like the lane slot it sits in: making it
+			// focusable would put a tab stop in front of every card's own tab bar
+			// and transport button. Issue #537: a click anywhere in the card used
+			// to fire the same solo/mute toggle as a click on the header, including
+			// the CardTabBar tabs, so switching a tab in one Live player could steal
+			// focus from another. Scoping the toggle to a click that landed inside
+			// `[data-card-header]` — rather than moving the handler onto
+			// TrafficCard itself — keeps this closure (and the `tool` it reads
+			// through `onCardClick`) OUTSIDE TrafficCard's memo boundary: that memo
+			// deliberately skips a re-render on a tool change alone (see
+			// TrafficCard's propsAreEqual), so a handler passed in as a prop would
+			// go stale the moment the tool changed underneath it.
 			<div
 				className={styles.rtCardSlot}
 				data-card-slot={item.id}
-				onPointerUp={() => onCardClick(item.id, lane)}
+				onPointerUp={(e) => {
+					if ((e.target as HTMLElement).closest("[data-card-header]")) {
+						onCardClick(item.id, lane);
+					}
+				}}
 			>
 				<TrafficCard
 					item={item}
@@ -968,6 +993,10 @@ export const RadioTraffic: React.FC = () => {
 								// part of the solo/mute model at all.
 								muted={lane === "live" && liveLaneMuted}
 								onToggleMute={lane === "live" ? setLiveLaneMuted : undefined}
+								// Story #537 item 5: LIVE alone has individual per-card mutes to
+								// report — UPCOMING has no mix yet and PREVIOUS's clips are not
+								// part of the solo/mute model at all.
+								partiallyMuted={lane === "live" && anyLiveMuted}
 								tool={tool}
 								onReorder={(fromId, toIndex) => onReorder(lane, fromId, toIndex)}
 								renderCard={renderCard(lane)}

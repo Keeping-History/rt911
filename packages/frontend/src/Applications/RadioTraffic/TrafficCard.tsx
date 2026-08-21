@@ -152,6 +152,31 @@ const RewindIcon: React.FC = () => (
 	</svg>
 );
 
+/**
+ * A broadcast glyph — a filled dot inside a signal arc — for the sync-to-live
+ * button. `currentColor`, same treatment as RewindIcon: one asset has to read
+ * on both a bright LIVE card and a dimmed, disabled one.
+ */
+const LiveSyncIcon: React.FC = () => (
+	<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" role="presentation">
+		<circle cx="8" cy="8" r="1.8" fill="currentColor" />
+		<path
+			d="M5.6 5.6a3.3 3.3 0 0 0 0 4.8M10.4 5.6a3.3 3.3 0 0 1 0 4.8"
+			stroke="currentColor"
+			strokeWidth="1.4"
+			fill="none"
+			strokeLinecap="round"
+		/>
+		<path
+			d="M3.3 3.3a6.6 6.6 0 0 0 0 9.4M12.7 3.3a6.6 6.6 0 0 1 0 9.4"
+			stroke="currentColor"
+			strokeWidth="1.4"
+			fill="none"
+			strokeLinecap="round"
+		/>
+	</svg>
+);
+
 /** The badge, in the few characters the 196px header can spare beside a subject. */
 function badgeLabel(badge: Badge): string {
 	switch (badge.kind) {
@@ -287,6 +312,26 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 		onManualSeek?.();
 	}, [item.id, onManualSeek]);
 
+	/**
+	 * Sync back live (issue #537 item 2): seek the element to where the virtual
+	 * clock says the audio should be right now — `liveMs`, the same number the
+	 * drift badge above is computed from — and, if the listener had stopped this
+	 * card, resume it. Reported through onManualSeek exactly like the rewind
+	 * button: a deliberate resync is exactly the kind of press that should count
+	 * as a touch under Story 045's hold.
+	 *
+	 * Disabled (see the button below) whenever there is nowhere sensible to sync
+	 * TO — off the LIVE lane, a clip with no known duration, or a LIVE clip the
+	 * clock has already run past the end of — so the press is never offered a
+	 * position that does not exist.
+	 */
+	const onSyncLive = useCallback(() => {
+		seekTo(item.id, liveMs);
+		onManualSeek?.();
+		if (paused) onTogglePause();
+	}, [item.id, liveMs, onManualSeek, paused, onTogglePause]);
+	const syncLiveDisabled = lane !== "live" || durationMs <= 0 || liveMs > durationMs;
+
 	// Stopping means opposite things in the two lanes that can be playing.
 	//
 	// A LIVE card is running on the virtual clock, so the listener stopping it is
@@ -378,6 +423,18 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 			{/* The lane is repeated here so the header's colour has a selector of its
 			    own to hang off. It is the same prop the card frame carries, not a
 			    second derivation, so the two cannot come to disagree. */}
+			{/* Issue #537: the ONLY interaction that solos/mutes-toggles this card
+			    via the active tool, or steals focus from another Live card, is a
+			    click here — the shell's `rtCardSlot` wrapper (RadioTraffic.tsx)
+			    scopes its pointerup to this element specifically, so a click
+			    anywhere else in the card, including the CardTabBar tabs below
+			    (which used to bubble a pointerup all the way up to the same
+			    handler), does not fire the same toggle. That scoping lives on the
+			    wrapper, outside this memo'd component, rather than as a prop here:
+			    the toggle's behavior depends on the active tool, which this card
+			    deliberately does not re-render for (see propsAreEqual below), so a
+			    closure passed in as a prop would go stale the moment the tool
+			    changed without also changing one of the props actually compared. */}
 			<header className={styles.rtCardHeader} data-card-header data-lane={lane}>
 				{/* `title` gives the full subject on hover — the header ellipsises. */}
 				<h3 className={styles.rtCardTitle} data-card-title title={title}>
@@ -446,6 +503,21 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 					<RewindIcon />
 				</ClassicyBevelButton>
 				<ClassicyBevelButton
+					square
+					bevelWidth="small"
+					data-card-sync-live
+					disabled={syncLiveDisabled}
+					aria-label="Sync back live"
+					title="Sync back live"
+					onClickFunc={onSyncLive}
+					// Same collision every other control in this row already guards
+					// against — left to bubble, letting go of a resync press would
+					// also fire whatever the active tool does to the card underneath.
+					onPointerUp={(e) => e.stopPropagation()}
+				>
+					<LiveSyncIcon />
+				</ClassicyBevelButton>
+				<ClassicyBevelButton
 					mode="toggle"
 					square
 					bevelWidth="small"
@@ -500,6 +572,9 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
  * cards' full render (waveform draw, tab-bar overflow measurement, …) when a
  * change affects only one card, or nothing about any card at all — e.g.
  * selecting a different tool in the palette, which no prop here depends on.
+ * (The active-tool click itself is scoped to the header row by the shell's
+ * wrapper, outside this memo, for exactly this reason — see the header's own
+ * comment above.)
  */
 function propsAreEqual(prev: TrafficCardProps, next: TrafficCardProps): boolean {
 	return (

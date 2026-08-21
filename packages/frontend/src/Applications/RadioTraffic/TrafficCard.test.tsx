@@ -397,6 +397,119 @@ describe("TrafficCard rewind", () => {
 	});
 });
 
+// Issue #537 item 1. The header row is marked with `data-card-header` so the
+// shell (RadioTraffic.tsx's `rtCardSlot` wrapper) can scope its active-tool
+// click to it specifically — see that file's own tests for the click-routing
+// behavior itself. TrafficCard's own part of the contract is just carrying
+// the attribute.
+describe("TrafficCard header", () => {
+	it("marks the header row so the shell can scope its click to it", () => {
+		const { container } = renderCard();
+		expect(container.querySelector("header")?.hasAttribute("data-card-header")).toBe(true);
+	});
+});
+
+// Issue #537 item 2. A button next to rewind that seeks the card back to
+// wherever the virtual clock says it should be, resuming playback if stopped.
+describe("TrafficCard sync-to-live button", () => {
+	it("renders unconditionally, same as the rewind button, on every lane", () => {
+		for (const lane of ["live", "upcoming", "previous"] as const) {
+			const { getByRole } = renderCard({ lane, nowMs: START_MS });
+			expect(getByRole("button", { name: "Sync back live" })).not.toBeNull();
+			cleanup();
+		}
+	});
+
+	it("is disabled off the live lane", () => {
+		const { getByRole } = renderCard({ lane: "upcoming", nowMs: START_MS - 30_000 });
+		expect(getByRole("button", { name: "Sync back live" })).toHaveProperty("disabled", true);
+	});
+
+	it("is disabled once the clock has run past the clip's end", () => {
+		// liveMs (nowMs - start) exceeds durationMs once the clock is past the end
+		// of the recording — there is nowhere sensible left to sync TO.
+		const { getByRole } = renderCard({
+			lane: "live",
+			nowMs: START_MS + DURATION_MS + 5_000,
+		});
+		expect(getByRole("button", { name: "Sync back live" })).toHaveProperty("disabled", true);
+	});
+
+	it("is disabled for a clip of unknown length", () => {
+		const endless = { ...makeItem(), end_date: undefined, calc_duration: undefined };
+		const { getByRole } = renderCard({ item: endless, lane: "live" });
+		expect(getByRole("button", { name: "Sync back live" })).toHaveProperty("disabled", true);
+	});
+
+	it("seeks to the clock's live position through the coordinator", () => {
+		const { getByRole } = renderCard({ lane: "live", nowMs: START_MS + 60_000 });
+
+		fireEvent.click(getByRole("button", { name: "Sync back live" }));
+
+		expect(audio.seekTo).toHaveBeenCalledWith(makeItem().id, 60_000);
+	});
+
+	it("reports the sync to the shell, same signal a rewind or scrub reports", () => {
+		const onManualSeek = vi.fn();
+		const { getByRole } = renderCard({
+			lane: "live",
+			nowMs: START_MS + 60_000,
+			onManualSeek,
+		});
+
+		fireEvent.click(getByRole("button", { name: "Sync back live" }));
+
+		expect(onManualSeek).toHaveBeenCalledTimes(1);
+	});
+
+	it("resumes playback when the card was stopped", () => {
+		const onTogglePause = vi.fn();
+		const { getByRole } = renderCard({
+			lane: "live",
+			nowMs: START_MS + 60_000,
+			paused: true,
+			onTogglePause,
+		});
+
+		fireEvent.click(getByRole("button", { name: "Sync back live" }));
+
+		expect(onTogglePause).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not touch playback when the card is already playing", () => {
+		const onTogglePause = vi.fn();
+		const { getByRole } = renderCard({
+			lane: "live",
+			nowMs: START_MS + 60_000,
+			paused: false,
+			onTogglePause,
+		});
+
+		fireEvent.click(getByRole("button", { name: "Sync back live" }));
+
+		expect(onTogglePause).not.toHaveBeenCalled();
+	});
+
+	it("keeps its click to itself, so the active tool does not also fire", () => {
+		const onSlotPointerUp = vi.fn();
+		const { getByRole } = render(
+			<div onPointerUp={onSlotPointerUp}>
+				<TrafficCard
+					item={makeItem()}
+					lane="live"
+					tzOffsetHours={-4}
+					nowMs={START_MS + 60_000}
+					onTogglePause={() => {}}
+				/>
+			</div>,
+		);
+
+		fireEvent.pointerUp(getByRole("button", { name: "Sync back live" }));
+
+		expect(onSlotPointerUp).not.toHaveBeenCalled();
+	});
+});
+
 // Story 028. A card follows the virtual clock until the listener says
 // otherwise; the transport button is one of the two ways they say it.
 describe("TrafficCard clock-follow", () => {
