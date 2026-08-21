@@ -170,14 +170,30 @@ describe("applyToolClick", () => {
 			expect(isAudible(next, 11, "live")).toBe(true);
 		});
 
-		it("releases the solo when the muted card IS the solo target", () => {
+		it("releases the solo when the muted card IS the solo target, materialising every other mix member's implicit silence", () => {
 			// Otherwise the click is a silent no-op: effectiveMutedIds keeps the solo
 			// target audible in spite of its manual mute, so the one card the
 			// listener is actually hearing would be the one card they cannot mute.
-			const next = applyToolClick(state(11, []), "mute", 11);
+			// And every OTHER live card was only silent because the solo excepted
+			// 11 from an implicit mute — dropping the solo without folding that
+			// implicit silence into `muted` would reopen the whole board the moment
+			// the listener silenced the one thing they were listening to.
+			const next = applyToolClick(state(11, []), "mute", 11, ALL);
 			expect(next.soloId).toBeNull();
 			expect(isAudible(next, 11, "live")).toBe(false);
-			expect([...next.muted]).toEqual([11]);
+			expect([...next.muted].sort()).toEqual([10, 11, 12]);
+		});
+
+		it("repro: soloing a card then muting it silences the board, not reopens it", () => {
+			// Solo 11 among [10, 11, 12] — everyone else is only implicitly quiet —
+			// then mute 11 with the mute tool. Not the right design for it to hand
+			// 10 and 12 back audible with no click of their own; muting the one card
+			// you are listening to should silence the board.
+			const soloed = applyToolClick(state(null), "arrow", 11);
+			const next = applyToolClick(soloed, "mute", 11, ALL);
+			expect(next.soloId).toBeNull();
+			expect([...next.muted].sort()).toEqual([10, 11, 12]);
+			for (const id of [10, 11, 12]) expect(isAudible(next, id, "live")).toBe(false);
 		});
 
 		it("returns the same object when the card is already muted", () => {

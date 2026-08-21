@@ -105,8 +105,20 @@ export function isAudible(state: AudioState, itemId: number, lane: Lane): boolea
  * The click, interpreted by the active tool. Returns the state object unchanged
  * when nothing moved — the shell feeds this straight back into React state, and
  * a fresh object per click would re-render the grid for no reason.
+ *
+ * `mix` is the LIVE, filter-visible mix — the same list `reconcileSolo` and
+ * `releaseLaneMute` already take, and for the same reason: it is only read by
+ * the `mute` case, and only when the card being muted IS the current solo
+ * target (see that case below). Every other tool ignores it, so callers that
+ * cannot hit that branch (tests exercising `arrow`/`unmute`/`hand` alone) may
+ * omit it — the default empty mix is only wrong for the one case that reads it.
  */
-export function applyToolClick(state: AudioState, tool: Tool, itemId: number): AudioState {
+export function applyToolClick(
+	state: AudioState,
+	tool: Tool,
+	itemId: number,
+	mix: readonly MediaItem[] = [],
+): AudioState {
 	switch (tool) {
 		case "arrow": {
 			if (state.soloId === itemId) return state;
@@ -127,13 +139,23 @@ export function applyToolClick(state: AudioState, tool: Tool, itemId: number): A
 			// focus — under a solo it was already inaudible, and with no solo it is
 			// an ordinary per-card mute.
 			if (state.soloId !== itemId) return { ...state, muted };
-			// Muting the solo target releases the solo. Without this the click is a
-			// silent no-op — effectiveMutedIds keeps the solo target audible in spite
-			// of its manual mute, so the one card the listener is actually hearing
-			// would be the one card they could not silence. And the release is
-			// RECORDED, because it is the listener quietening the lane rather than a
-			// clip running out: reconcileSolo must not answer it by promoting the
-			// next card, which is what made the Live lane impossible to silence.
+			// Muting the solo target releases the solo — but every OTHER live card
+			// was only audible because the solo excepted it from an implicit mute,
+			// not because of any mute of its own. Dropping the solo without
+			// materialising that implicit silence into explicit per-card mutes is
+			// what let muting the one card a listener was actually listening to
+			// reopen the whole board: with the solo gone and nothing else in
+			// `muted`, effectiveMutedIds has nothing left to silence. So every other
+			// mix member is folded into `muted` here, the same move releaseLaneMute
+			// makes in the opposite direction (naming one card to hear materialises
+			// everyone else's implicit audibility into an explicit mute).
+			for (const item of mix) {
+				if (item.id !== itemId) muted.add(item.id);
+			}
+			// The release is RECORDED, because it is the listener quietening the
+			// lane rather than a clip running out: reconcileSolo must not answer it
+			// by promoting the next card, which is what made the Live lane
+			// impossible to silence.
 			return { soloId: null, muted, soloReleasedByMute: true };
 		}
 		case "unmute": {
