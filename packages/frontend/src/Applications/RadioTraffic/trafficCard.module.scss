@@ -352,7 +352,6 @@
 .rtCardTabBar {
   flex: 0 0 auto;
   height: calc(11 / 150 * 100cqh);
-  margin: 0 calc(2 / 150 * -100cqh);
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -396,6 +395,7 @@
   border: var(--window-border-size) solid var(--color-system-05);
   border-bottom: none;
   cursor: pointer;
+  margin: 0 calc(2 / 150 * -100cqh);
 }
 
 // The selected tab joins the panel below it, the way a Platinum tab control
