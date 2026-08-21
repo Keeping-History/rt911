@@ -16,6 +16,16 @@ on:
   pull_request:
   workflow_dispatch:
 
+# One run per branch/PR at a time. Superseded pushes to the same ref cancel
+# whatever's still running for it — without this, two overlapping pushes to
+# main could finish out of order, and whichever run finishes LAST wins the
+# mutable `:main` GHCR tag that Argo CD Image Updater watches, even if it
+# started first and built an older commit than the run that finished before
+# it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   packages: write
