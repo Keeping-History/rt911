@@ -78,6 +78,25 @@ interface DragState {
 }
 
 /**
+ * The cursor-following drag visual: a box the size of the dragged card,
+ * centered on the pointer, in the lane's `.rtLaneCards` strip's content
+ * coordinates (relative to the strip's border box with its horizontal scroll
+ * added back, so it can be absolutely positioned inside the scrolling strip).
+ *
+ * Same shape, and the same TV thumbnail-strip technique it is named after —
+ * see `TV/useThumbnailReorder.ts`'s `DragOutline` — but computed inline here
+ * rather than shared: this lane's strip can be a flex row OR (LIVE) a 2-row
+ * CSS grid, and this is plain rect math against the container either way, not
+ * flex/grid-aware, so nothing about that difference actually needs sharing.
+ */
+interface DragOutline {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/**
  * The lane mute control's artwork, in its three states (issue #537 item 5).
  *
  * The same speaker TrafficCard draws on its own mute button, REDRAWN for the
@@ -215,6 +234,10 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	// Only the id being dragged is state; the rest of the gesture lives in a ref
 	// because nothing renders from it and a pointermove per frame should not.
 	const [draggingId, setDraggingId] = useState<number | null>(null);
+	// The cursor-following outline's box, live for the duration of a drag —
+	// unlike draggingId this DOES change every pointermove, because it is what
+	// the outline element's inline style reads.
+	const [dragOutline, setDragOutline] = useState<DragOutline | null>(null);
 	// The ids this lane rendered last tick — stabilizeLaneOrder's "before".
 	// Undefined until the first commit: there is nothing to compare the very
 	// first render against.
@@ -320,6 +343,7 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 	const endDrag = (target: HTMLElement, pointerId: number) => {
 		dragRef.current = null;
 		setDraggingId(null);
+		setDragOutline(null);
 		target.releasePointerCapture?.(pointerId);
 	};
 
@@ -333,12 +357,29 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 		},
 		onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
 			const drag = dragRef.current;
-			if (!drag || drag.dragging) return;
-			if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) <= DRAG_THRESHOLD_PX) {
-				return;
+			if (!drag) return;
+			if (!drag.dragging) {
+				if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) <= DRAG_THRESHOLD_PX) {
+					return;
+				}
+				drag.dragging = true;
+				setDraggingId(drag.fromId);
 			}
-			drag.dragging = true;
-			setDraggingId(drag.fromId);
+			// Pointer capture keeps events on the pressed card, so currentTarget is
+			// always the dragged card's own slot — same as TV's useThumbnailReorder.
+			const cards = cardsRef.current;
+			if (cards) {
+				const stripRect = cards.getBoundingClientRect();
+				const cardRect = e.currentTarget.getBoundingClientRect();
+				const width = cardRect.right - cardRect.left;
+				const height = cardRect.bottom - cardRect.top;
+				setDragOutline({
+					x: e.clientX - stripRect.left + cards.scrollLeft - width / 2,
+					y: e.clientY - stripRect.top - height / 2,
+					width,
+					height,
+				});
+			}
 		},
 		onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
 			const drag = dragRef.current;
@@ -357,6 +398,7 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 			if (e.key === "Escape" && dragRef.current) {
 				dragRef.current = null;
 				setDraggingId(null);
+				setDragOutline(null);
 			}
 		},
 	});
@@ -441,6 +483,23 @@ export const LaneSection: React.FC<LaneSectionProps> = ({
 						{isCollapsed ? renderCollapsedCard(item) : renderCard(item)}
 					</div>
 				))}
+				{dragOutline && (
+					// The cursor-following "marching ants" box — TV's tvDragOutline
+					// technique, RadioTraffic-prefixed. Rendered last so it paints above
+					// every card slot; the dragged card's own slot keeps the dim
+					// (data-dragging → opacity 0.5) rather than hiding it, exactly the
+					// tvPlayerDragging/tvDragOutline split TV.tsx uses.
+					<div
+						className={styles.rtDragOutline}
+						data-drag-outline
+						style={{
+							left: dragOutline.x,
+							top: dragOutline.y,
+							width: dragOutline.width,
+							height: dragOutline.height,
+						}}
+					/>
+				)}
 			</div>
 		</section>
 	);
