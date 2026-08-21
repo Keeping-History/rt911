@@ -72,6 +72,7 @@ function renderCard(
 		onTogglePause?: () => void;
 		onManualSeek?: () => void;
 		onToggleMute?: () => void;
+		onTabSelect?: () => void;
 	} = {},
 ) {
 	return render(
@@ -88,6 +89,7 @@ function renderCard(
 			onTogglePause={props.onTogglePause ?? (() => {})}
 			onManualSeek={props.onManualSeek}
 			onToggleMute={props.onToggleMute}
+			onTabSelect={props.onTabSelect}
 		/>,
 	);
 }
@@ -612,6 +614,20 @@ describe("TrafficCard tabs", () => {
 		fireEvent.click(getByRole("tab", { name: "Transcript" }));
 		expect(container.querySelector('[data-tab="transcript"]')).not.toBeNull();
 		expect(container.querySelector('[data-tab="details"]')).toBeNull();
+	});
+
+	it("reports a tab switch to the shell, in addition to swapping the panel (issue #538)", () => {
+		const onTabSelect = vi.fn();
+		const { getByRole, container } = renderCard({ meta: makeMeta(), onTabSelect });
+		fireEvent.click(getByRole("tab", { name: "Transcript" }));
+		expect(container.querySelector('[data-tab="transcript"]')).not.toBeNull();
+		expect(onTabSelect).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not fail when onTabSelect is omitted, as UPCOMING/PREVIOUS cards do today", () => {
+		const { getByRole, container } = renderCard({ meta: makeMeta(), lane: "upcoming" });
+		fireEvent.click(getByRole("tab", { name: "Transcript" }));
+		expect(container.querySelector('[data-tab="transcript"]')).not.toBeNull();
 	});
 
 	it("hands the transcript panel the element's own position", async () => {
