@@ -905,9 +905,9 @@ export const RadioTraffic: React.FC = () => {
 						</div>
 					)}
 					<aside className={styles.rtSidebar}>
-						<ToolPalette tool={tool} onSelect={setTool} />
 						<ClassicyControlGroup label="Filter By..." variant="secondary">
 							<div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+								<ToolPalette tool={tool} onSelect={setTool} />
 								<LargeNamespaceButtons
 									groups={groups.filter((group) => group.large)}
 									checked={checked}
