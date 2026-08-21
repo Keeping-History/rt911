@@ -569,12 +569,14 @@ describe("RadioTraffic — the sidebar group box", () => {
 		expect(screen.getByRole("group", { name: "Filter By..." })).not.toBeNull();
 	});
 
-	// The tool palette and the filter tree still have to work — the group box is
-	// chrome around them, not a replacement for their own rendering.
-	it("still renders the tool palette and the filter tree inside the group", async () => {
+	// The tool palette sits above the group as its own toolbar, not inside it —
+	// the group box wraps the filter tree only, and is chrome around that tree,
+	// not a replacement for its own rendering.
+	it("still renders the tool palette and the filter tree", async () => {
 		await renderSettled();
 		const group = screen.getByRole("group", { name: "Filter By..." });
-		expect(group.querySelector('[role="radio"]')).not.toBeNull();
+		expect(group.querySelector('[role="radio"]')).toBeNull();
+		expect(screen.getAllByRole("radio").length).toBeGreaterThan(0);
 		expect(screen.getByLabelText("Primary")).not.toBeNull();
 	});
 });

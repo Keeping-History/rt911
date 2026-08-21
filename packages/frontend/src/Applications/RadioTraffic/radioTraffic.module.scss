@@ -53,10 +53,10 @@
   // ClassicyControlGroup's fieldset defaults to flex-grow: 0 (sized to
   // content), but FilterTree needs a bounded-height ancestor for its own
   // overflow-y: scroll to kick in instead of pushing the sidebar (and the
-  // window) taller. Once the group box wraps everything the fieldset is
-  // .rtSidebar's only child, so it takes over the flex column job this
-  // element's direct children used to do — the min-height: 0 is what lets it
-  // shrink below its content size so FilterTree's own scroll actually fires.
+  // window) taller. ToolPalette (a fixed-height sibling above the fieldset)
+  // takes its natural size; flex: 1 here claims the rest of .rtSidebar's
+  // column for the fieldset — the min-height: 0 is what lets it shrink below
+  // its content size so FilterTree's own scroll actually fires.
   fieldset {
     display: flex;
     flex: 1;
