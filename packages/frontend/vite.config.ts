@@ -194,5 +194,12 @@ export default defineConfig({
 		environment: "jsdom",
 		setupFiles: ["./vitest.setup.ts"],
 		exclude: ["node_modules", "e2e/**"],
+		// jsdom can't decode audio, so classicy's ClassicySoundManager always
+		// fails to load its (base64 data URI) system sound sprites in tests —
+		// logging the full payload via console.error on every mount. Harmless
+		// test-environment noise, but it floods CI logs; drop it.
+		onConsoleLog(log) {
+			if (log.includes("[ClassicySoundManager]")) return false;
+		},
 	},
 });
