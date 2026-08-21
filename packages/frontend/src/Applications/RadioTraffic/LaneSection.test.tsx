@@ -622,6 +622,110 @@ describe("LaneSection drag, with the hand tool", () => {
 	});
 });
 
+describe("LaneSection drag outline (issue #540)", () => {
+	// The dashed cursor-following outline that mirrors TV's tvDragOutline —
+	// see useThumbnailReorder.test.ts for the TV-side equivalents of these.
+	// jsdom gives every unstubbed getBoundingClientRect an all-zero box, so
+	// the `.rtLaneCards` strip itself (stripRect) needs no extra stub: its
+	// left/top are already 0, and a fresh element's scrollLeft is 0 too —
+	// only the dragged card's own box (stubSlotBoxes) is load-bearing here.
+
+	it("shows no outline before the pointer crosses the drag threshold", () => {
+		const { container } = renderLane({ tool: "hand", onReorder: vi.fn() });
+		stubSlotBoxes(container);
+		const source = slot(container, 3);
+		const press = centreOf(source);
+		fireEvent.pointerDown(source, { ...press, pointerId: 1 });
+		expect(container.querySelector("[data-drag-outline]")).toBeNull();
+		const nudged = { clientX: press.clientX + 2, clientY: press.clientY + 1 };
+		fireEvent.pointerMove(source, { ...nudged, pointerId: 1 });
+		expect(container.querySelector("[data-drag-outline]")).toBeNull();
+	});
+
+	it("renders an outline sized to the dragged card, centred on the pointer, once dragging starts", () => {
+		const { container } = renderLane({ tool: "hand", onReorder: vi.fn() });
+		stubSlotBoxes(container);
+		// Card 3 sits in the third slot (index 2): stubSlotBoxes gives every slot
+		// the same 210×124 box, so the outline's size is that regardless of which
+		// card is dragged.
+		const source = slot(container, 3);
+		fireEvent.pointerDown(source, { ...centreOf(source), pointerId: 1 });
+		fireEvent.pointerMove(source, { clientX: 300, clientY: 400, pointerId: 1 });
+		const outline = container.querySelector("[data-drag-outline]") as HTMLElement;
+		expect(outline).not.toBeNull();
+		// x = clientX - stripLeft(0) + scrollLeft(0) - width/2(105) = 300 - 105
+		expect(outline.style.left).toBe("195px");
+		// y = clientY - stripTop(0) - height/2(62) = 400 - 62
+		expect(outline.style.top).toBe("338px");
+		expect(outline.style.width).toBe("210px");
+		expect(outline.style.height).toBe("124px");
+	});
+
+	it("tracks a later pointermove to a new position", () => {
+		const { container } = renderLane({ tool: "hand", onReorder: vi.fn() });
+		stubSlotBoxes(container);
+		const source = slot(container, 3);
+		fireEvent.pointerDown(source, { ...centreOf(source), pointerId: 1 });
+		fireEvent.pointerMove(source, { clientX: 300, clientY: 400, pointerId: 1 });
+		fireEvent.pointerMove(source, { clientX: 350, clientY: 450, pointerId: 1 });
+		const outline = container.querySelector("[data-drag-outline]") as HTMLElement;
+		expect(outline.style.left).toBe("245px");
+		expect(outline.style.top).toBe("388px");
+	});
+
+	it("dims the dragged card's own slot at the same time the outline tracks the pointer", () => {
+		// The split issue #540 asks for: the outline moves, the original slot
+		// dims via the existing [data-dragging] rule — not one or the other.
+		const { container } = renderLane({ tool: "hand", onReorder: vi.fn() });
+		stubSlotBoxes(container);
+		const source = slot(container, 3);
+		fireEvent.pointerDown(source, { ...centreOf(source), pointerId: 1 });
+		fireEvent.pointerMove(source, { clientX: 300, clientY: 400, pointerId: 1 });
+		expect(container.querySelector("[data-drag-outline]")).not.toBeNull();
+		expect(container.querySelector("[data-dragging]")?.getAttribute("data-lane-item")).toBe("3");
+	});
+
+	it("clears the outline on pointerup", () => {
+		const { container } = renderLane({ tool: "hand", onReorder: vi.fn() });
+		stubSlotBoxes(container);
+		const source = slot(container, 3);
+		fireEvent.pointerDown(source, { ...centreOf(source), pointerId: 1 });
+		fireEvent.pointerMove(source, { clientX: 300, clientY: 400, pointerId: 1 });
+		expect(container.querySelector("[data-drag-outline]")).not.toBeNull();
+		fireEvent.pointerUp(source, { clientX: 300, clientY: 400, pointerId: 1 });
+		expect(container.querySelector("[data-drag-outline]")).toBeNull();
+	});
+
+	it("clears the outline on pointercancel", () => {
+		const { container } = renderLane({ tool: "hand", onReorder: vi.fn() });
+		stubSlotBoxes(container);
+		const source = slot(container, 3);
+		fireEvent.pointerDown(source, { ...centreOf(source), pointerId: 1 });
+		fireEvent.pointerMove(source, { clientX: 300, clientY: 400, pointerId: 1 });
+		expect(container.querySelector("[data-drag-outline]")).not.toBeNull();
+		fireEvent.pointerCancel(source, { pointerId: 1 });
+		expect(container.querySelector("[data-drag-outline]")).toBeNull();
+	});
+
+	it("clears the outline on Escape", () => {
+		const { container } = renderLane({ tool: "hand", onReorder: vi.fn() });
+		stubSlotBoxes(container);
+		const source = slot(container, 3);
+		fireEvent.pointerDown(source, { ...centreOf(source), pointerId: 1 });
+		fireEvent.pointerMove(source, { clientX: 300, clientY: 400, pointerId: 1 });
+		expect(container.querySelector("[data-drag-outline]")).not.toBeNull();
+		fireEvent.keyDown(source, { key: "Escape" });
+		expect(container.querySelector("[data-drag-outline]")).toBeNull();
+	});
+
+	it("never shows an outline under a non-hand tool", () => {
+		const { container } = renderLane({ tool: "arrow", onReorder: vi.fn() });
+		stubSlotBoxes(container);
+		drag(slot(container, 3), slotCentre(0));
+		expect(container.querySelector("[data-drag-outline]")).toBeNull();
+	});
+});
+
 describe("LaneSection drag across lanes", () => {
 	/** LIVE at the top of the page, UPCOMING in a band 1000px below it. */
 	const UPCOMING_TOP = 1_000;

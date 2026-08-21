@@ -411,3 +411,31 @@
   cursor: grabbing;
   opacity: 0.5;
 }
+
+// Classic Mac OS 8 "marching ants": a dashed rectangle the size of the
+// dragged card follows the cursor while the original slot stays put (dimmed
+// via the [data-dragging] rule above) — same technique and same class shape
+// as TV.module.scss's .tvDragOutline / @keyframes tvMarchingAnts, RadioTraffic-
+// prefixed per this module's convention. The four repeating gradients draw
+// one dashed edge each; animating their positions marches the ants clockwise.
+.rtDragOutline {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  --ant-color: var(--color-black, #000);
+  background-image:
+    repeating-linear-gradient(90deg, var(--ant-color) 0 4px, transparent 4px 8px),
+    repeating-linear-gradient(90deg, var(--ant-color) 0 4px, transparent 4px 8px),
+    repeating-linear-gradient(0deg, var(--ant-color) 0 4px, transparent 4px 8px),
+    repeating-linear-gradient(0deg, var(--ant-color) 0 4px, transparent 4px 8px);
+  background-size: 100% 2px, 100% 2px, 2px 100%, 2px 100%;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  background-repeat: no-repeat;
+  animation: rtMarchingAnts 0.5s linear infinite;
+}
+
+@keyframes rtMarchingAnts {
+  to {
+    background-position: 8px 0, -8px 100%, 0 -8px, 100% 8px;
+  }
+}
