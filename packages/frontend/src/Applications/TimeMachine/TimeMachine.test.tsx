@@ -155,4 +155,26 @@ describe("TimeMachine Settings window", () => {
 		expect(screen.getByText("Skip distance")).toBeTruthy();
 		expect(screen.getByText(expectedContent!)).toBeTruthy();
 	});
+
+	// Regression test for the bug this suite's rewrite fixed: Cancel/Save used
+	// to only flip TimeMachine's own local `showSettings` boolean, never
+	// telling Classicy's store the window had closed — so the store's
+	// persisted `closed` stayed false, and the window reappeared (unwanted)
+	// on the next reload even though the user had dismissed it. The window is
+	// now always mounted and Cancel/Save dispatch ClassicyWindowClose, so the
+	// store itself is the only thing that has to be right.
+	it("dispatching Cancel persists closed to the Classicy store, not just local state", () => {
+		openSettingsOnMount();
+		render(<TimeMachine />);
+
+		expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+		const settingsWindow = useAppManager
+			.getState()
+			.System.Manager.Applications.apps[TIME_MACHINE_APP_ID]?.windows?.find(
+				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_settings`,
+			) as { closed?: boolean } | undefined;
+		expect(settingsWindow?.closed).toBe(true);
+	});
 });
