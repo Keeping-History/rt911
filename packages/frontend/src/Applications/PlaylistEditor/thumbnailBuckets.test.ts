@@ -40,4 +40,41 @@ describe("thumbnailBuckets", () => {
 			startMs: at(12, 0), endMs: at(13, 0), viewportPx: 0, tilePx: 100,
 		})).toEqual([]);
 	});
+
+	it("keeps the sampled set stable when the window pans by less than one stride", () => {
+		// Two hours of span, 8 tiles => stride = 240 buckets / 8 = 30 buckets =
+		// 900s. A pan of one bucket (30s) is far smaller than that stride, so
+		// this should only ever drop/add an edge, not re-sample the whole strip
+		// (the bug: re-basing buckets on `startBucket` shifted every sampled
+		// index on every call, so React remounted and re-fetched every `<img>`
+		// on the tiniest scroll).
+		const base = { viewportPx: 800, tilePx: 100 };
+		const before = thumbnailBuckets({ startMs: at(12, 0), endMs: at(14, 0), ...base });
+		const after = thumbnailBuckets({
+			startMs: at(12, 0, 30), endMs: at(14, 0, 30), ...base,
+		});
+
+		expect(before).toHaveLength(8);
+		expect(after).toHaveLength(8);
+
+		const shared = after.filter((ts) => before.includes(ts));
+		// All but (at most) the edge that scrolled out should survive.
+		expect(shared.length).toBeGreaterThanOrEqual(before.length - 1);
+		// The window DID move — this isn't just two calls landing on an
+		// identical grid by coincidence.
+		expect(after).not.toEqual(before);
+	});
+
+	it("still fills the width after a large pan (control for the stability test)", () => {
+		// Same shape as above but panned by far more than one stride — every
+		// bucket is free to change, proving the stability assertion above is
+		// actually exercising something rather than always passing.
+		const base = { viewportPx: 800, tilePx: 100 };
+		const before = thumbnailBuckets({ startMs: at(12, 0), endMs: at(14, 0), ...base });
+		const after = thumbnailBuckets({ startMs: at(20, 0), endMs: at(22, 0), ...base });
+
+		expect(before).toHaveLength(8);
+		expect(after).toHaveLength(8);
+		expect(after.some((ts) => before.includes(ts))).toBe(false);
+	});
 });

@@ -58,6 +58,62 @@ describe("LanePreview", () => {
 		expect(imgs[0].src).toContain("files.911realtime.org/thumbnails/cnn/");
 	});
 
+	it("sizes each TV tile to fill the viewport width with no dead space", () => {
+		const viewportPx = 400;
+		render(<LanePreview group="tv" channel="cnn" {...props} viewportPx={viewportPx} />);
+		const imgs = [
+			...document.querySelectorAll<HTMLImageElement>(".playlistTimelinePreviewThumb"),
+		];
+		expect(imgs.length).toBeGreaterThan(1);
+
+		// Matches .playlistTimelinePreview's `gap: 2px` in PlaylistEditor.scss.
+		const GAP_PX = 2;
+		const totalWidth =
+			imgs.reduce((sum, img) => sum + parseFloat(img.style.width), 0) +
+			(imgs.length - 1) * GAP_PX;
+		// count * tileWidth + gaps === viewportPx exactly — no dead space at the
+		// right edge, regardless of the tiles' real (intrinsic) aspect ratio.
+		expect(totalWidth).toBeCloseTo(viewportPx, 6);
+	});
+
+	it("keeps TV <img> DOM nodes across a small visible-span pan", () => {
+		// Two hours of span at this viewport/tile size gives stride = 900s (see
+		// the equivalent thumbnailBuckets.test.ts case) — a 30s pan is far
+		// smaller than that, so this is a few pixels of scroll, not a zoom
+		// change.
+		const spanProps = {
+			...props,
+			visibleStartMs: Date.UTC(2001, 8, 11, 12, 0),
+			visibleEndMs: Date.UTC(2001, 8, 11, 14, 0),
+			viewportPx: 800,
+		};
+		const { container, rerender } = render(<LanePreview group="tv" channel="cnn" {...spanProps} />);
+		const before = [
+			...container.querySelectorAll<HTMLImageElement>(".playlistTimelinePreviewThumb"),
+		];
+		expect(before.length).toBeGreaterThan(1);
+
+		rerender(
+			<LanePreview
+				group="tv"
+				channel="cnn"
+				{...spanProps}
+				visibleStartMs={spanProps.visibleStartMs + 30_000}
+				visibleEndMs={spanProps.visibleEndMs + 30_000}
+			/>,
+		);
+		const after = [
+			...container.querySelectorAll<HTMLImageElement>(".playlistTimelinePreviewThumb"),
+		];
+
+		// All but (at most) the edge tile that scrolled out of range survive as
+		// the SAME DOM node — proving React reused them via a stable key instead
+		// of unmounting/remounting the whole strip, which would flash to blank
+		// and re-issue every <img src> request on each scroll tick.
+		const survivors = after.filter((img) => before.includes(img));
+		expect(survivors.length).toBeGreaterThanOrEqual(before.length - 1);
+	});
+
 	it("renders nothing for a group with no preview", () => {
 		const { container } = render(<LanePreview group="flights" channel="AA11" {...props} />);
 		expect(container.firstChild).toBeNull();

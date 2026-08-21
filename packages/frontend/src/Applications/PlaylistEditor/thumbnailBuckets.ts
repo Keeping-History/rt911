@@ -40,9 +40,23 @@ export function thumbnailBuckets({
 	const count = Math.min(fit, available);
 	const stride = available / count;
 
+	// Sample from a stride-aligned grid anchored at bucket 0 (i.e. multiples of
+	// `stride`), not offsets counted from `startBucket`. A pan at a fixed zoom
+	// keeps `stride` unchanged (same span length, same tile budget), so the
+	// grid itself doesn't move — only the window sliding across it does, which
+	// drops the points that scrolled out and adds the ones newly in range
+	// without renumbering everything in between. Re-basing on `startBucket`
+	// (the previous behaviour) shifted every sampled index by the same
+	// sub-bucket amount on every call, so scrolling by even a few pixels
+	// selected an entirely different set of timestamps — the caller keys
+	// `<img>` nodes by timestamp (`LanePreview.tsx`), so that churn unmounted
+	// and re-fetched the whole strip on every scroll tick instead of just its
+	// edges.
+	const firstGridIndex = Math.ceil(startBucket / stride);
+
 	const out: number[] = [];
 	for (let i = 0; i < count; i++) {
-		const bucket = startBucket + Math.floor(i * stride);
+		const bucket = Math.floor((firstGridIndex + i) * stride);
 		out.push(bucket * BUCKET_SECONDS);
 	}
 	return out;
