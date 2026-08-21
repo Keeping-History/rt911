@@ -352,6 +352,7 @@
 .rtCardTabBar {
   flex: 0 0 auto;
   height: calc(11 / 150 * 100cqh);
+  margin: 0 calc(2 / 150 * -100cqh);
   display: flex;
   flex-direction: row;
   align-items: stretch;
