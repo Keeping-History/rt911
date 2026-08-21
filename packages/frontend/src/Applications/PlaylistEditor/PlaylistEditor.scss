@@ -221,7 +221,15 @@ $lane-bar-height: 20px;
 
 .playlistTimelinePreviewThumb {
 	height: 54px;
-	width: auto;
+	// Width comes from an inline style (LanePreview.tsx) sized to exactly fill
+	// the strip's viewport width — `width: auto` here left dead space at the
+	// right edge whenever a tile's intrinsic aspect ratio didn't happen to sum
+	// to the full width. `object-fit: cover` crops instead of stretching a
+	// tile to that explicit width, and the black background shows through
+	// instead of whatever sits behind the strip for any sliver `cover` doesn't
+	// paint over (a crop-edge rounding gap, or an image that hasn't loaded yet).
+	object-fit: cover;
+	background-color: #000;
 }
 
 /* The radio preview is a time-positioned overlay, not a summary strip: each

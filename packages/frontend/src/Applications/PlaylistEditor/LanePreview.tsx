@@ -6,6 +6,9 @@ import { usePeaksForSpan } from "./usePeaksForSpan";
 const THUMB_BASE = "https://files.911realtime.org/thumbnails";
 const OFFLINE = `${THUMB_BASE}/offline.jpg`;
 
+/** Matches `.playlistTimelinePreview`'s `gap: 2px` in PlaylistEditor.scss. */
+const TILE_GAP_PX = 2;
+
 /** Matches `.playlistTimelinePreviewRadio`'s height in PlaylistEditor.scss. */
 const WAVEFORM_HEIGHT = 40;
 
@@ -76,6 +79,15 @@ export function LanePreview({
 	});
 	if (buckets.length === 0) return null;
 
+	// Explicit per-tile width rather than the thumbnail's intrinsic aspect
+	// ratio (`width: auto` in PlaylistEditor.scss): `count * tileWidth +
+	// (count - 1) * TILE_GAP_PX` works out to exactly `viewportPx` this way,
+	// independent of `Math.floor` in thumbnailBuckets or the real image
+	// dimensions, so the strip fills the bar with no dead space at the right
+	// edge. `object-fit: cover` (PlaylistEditor.scss) crops each tile to this
+	// width instead of stretching/squishing it.
+	const tileWidth = (viewportPx - (buckets.length - 1) * TILE_GAP_PX) / buckets.length;
+
 	const slug = channel.toLowerCase();
 	return (
 		// Sticky for the same reason the label is: the lane is far wider than
@@ -86,6 +98,7 @@ export function LanePreview({
 				<img
 					key={ts}
 					className="playlistTimelinePreviewThumb"
+					style={{ width: tileWidth }}
 					src={`${THUMB_BASE}/${slug}/${ts}.jpg`}
 					onError={(e) => {
 						e.currentTarget.src = OFFLINE;
