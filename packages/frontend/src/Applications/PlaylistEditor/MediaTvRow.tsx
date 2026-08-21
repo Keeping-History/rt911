@@ -29,11 +29,13 @@ export function stationLogo(itemId: string): string {
 export function MediaTvRow({
 	entries,
 	selectedUid,
+	onSelect,
 	onEdit,
 	onRemove,
 }: {
 	entries: TvEditorEntry[];
 	selectedUid: string | null;
+	onSelect: (uid: string) => void;
 	onEdit: (uid: string) => void;
 	onRemove: (uid: string) => void;
 }) {
@@ -41,6 +43,7 @@ export function MediaTvRow({
 		<MediaCardRow
 			entries={entries}
 			selectedUid={selectedUid}
+			onSelect={onSelect}
 			onEdit={onEdit}
 			onRemove={onRemove}
 			logoFor={stationLogo}

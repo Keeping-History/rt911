@@ -18,7 +18,7 @@ import { resolveTimelineMeta } from "./resolveTimelineMeta";
  */
 function Controlled({ entries, onSelect = vi.fn() }: {
 	entries: EditorEntry[];
-	onSelect?: (uid: string) => void;
+	onSelect?: (uid: string | null) => void;
 }) {
 	const [zoom, setZoom] = useState(1);
 	return (
@@ -71,6 +71,26 @@ describe("PlaylistTimeline", () => {
 
 		fireEvent.click(flags[0]);
 		expect(onSelect).toHaveBeenCalledWith("e2");
+	});
+
+	it("toggles: clicking the already-selected bar collapses it, clicking an unselected bar still selects it", () => {
+		const onSelect = vi.fn();
+		const { rerender } = render(
+			<PlaylistTimeline entries={entries} selectedUid={null} onSelect={onSelect} {...atRest} />,
+		);
+		const bar = document.querySelector(".playlistTimelineBar") as HTMLElement;
+
+		// Not yet selected: clicking it selects it.
+		fireEvent.click(bar);
+		expect(onSelect).toHaveBeenCalledWith("e1");
+
+		// Now selected (selectedUid is controlled by the caller — simulate the
+		// caller having applied that dispatch): clicking the same bar again
+		// collapses it.
+		onSelect.mockClear();
+		rerender(<PlaylistTimeline entries={entries} selectedUid="e1" onSelect={onSelect} {...atRest} />);
+		fireEvent.click(bar);
+		expect(onSelect).toHaveBeenCalledWith(null);
 	});
 
 	it("combines both fade edges into one maskImage on a bar with no start/end", () => {

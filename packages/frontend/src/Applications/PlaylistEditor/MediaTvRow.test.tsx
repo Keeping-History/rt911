@@ -45,6 +45,7 @@ describe("MediaTvRow", () => {
 			<MediaTvRow
 				entries={[tvEntry("e1", "cnn"), tvEntry("e2", "bbc")]}
 				selectedUid={null}
+				onSelect={vi.fn()}
 				onEdit={vi.fn()}
 				onRemove={vi.fn()}
 			/>,
@@ -63,6 +64,7 @@ describe("MediaTvRow", () => {
 			<MediaTvRow
 				entries={[tvEntry("e1", "cnn")]}
 				selectedUid={null}
+				onSelect={vi.fn()}
 				onEdit={onEdit}
 				onRemove={vi.fn()}
 			/>,
@@ -77,6 +79,7 @@ describe("MediaTvRow", () => {
 			<MediaTvRow
 				entries={[tvEntry("e1", "cnn")]}
 				selectedUid={null}
+				onSelect={vi.fn()}
 				onEdit={vi.fn()}
 				onRemove={onRemove}
 			/>,
@@ -85,11 +88,27 @@ describe("MediaTvRow", () => {
 		expect(onRemove).toHaveBeenCalledWith("e1");
 	});
 
+	it("clicking the card reports the entry's uid via onSelect", () => {
+		const onSelect = vi.fn();
+		render(
+			<MediaTvRow
+				entries={[tvEntry("e1", "cnn")]}
+				selectedUid={null}
+				onSelect={onSelect}
+				onEdit={vi.fn()}
+				onRemove={vi.fn()}
+			/>,
+		);
+		screen.getByRole("listitem").click();
+		expect(onSelect).toHaveBeenCalledWith("e1");
+	});
+
 	it("highlights only the selected entry's card", () => {
 		render(
 			<MediaTvRow
 				entries={[tvEntry("e1", "cnn"), tvEntry("e2", "bbc")]}
 				selectedUid="e2"
+				onSelect={vi.fn()}
 				onEdit={vi.fn()}
 				onRemove={vi.fn()}
 			/>,
