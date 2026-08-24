@@ -593,37 +593,31 @@ describe("RadioTraffic — tag filtering", () => {
 		expect(laneIds("previous")).toEqual([7]);
 	});
 
-	// Criterion 4. A filter toggle unmounts the card, but the <audio> lives in
-	// the coordinator and keeps running on the clock — so re-checking must show
-	// the position the clip actually reached, not a fresh element at zero.
-	it("resumes a filtered-away clip at its clock offset rather than restarting", async () => {
+	// Criterion 4 (revised). A filter toggle unmounts the card AND releases the
+	// <audio> — a filtered-out item must not keep loading or playing in the
+	// background. Re-checking the filter gets a brand-new element, not the one
+	// that kept running on the clock.
+	it("releases a filtered-away clip's audio instead of leaving it running", async () => {
 		await renderSettled();
 
-		// Where the clock says clip 2 should be: 12:47:00 − 12:46:30 = 30s.
 		const onTheClock = calcSeekSeconds(LIVE[1], NOW_MS);
 		expect(onTheClock).toBe(30);
 		const el = audio.elements.get(2);
 		expect(el).toBeDefined();
 		(el as HTMLAudioElement).currentTime = onTheClock;
-		// In a browser the element announces its own position as it advances;
-		// jsdom does not, so the test says it. Without this the assertion below
-		// would be that a card reports a position nothing ever published.
 		(el as HTMLAudioElement).dispatchEvent(new Event("timeupdate"));
 
 		// Hide it: only tier:primary survives, and clip 2 is secondary.
 		fireEvent.click(screen.getByLabelText("Primary"));
 		expect(cardOf(2)).toBeNull();
-		// The element must survive the card. Releasing it here is what would
-		// force a restart from zero on the way back.
-		expect(audio.released).not.toContain(2);
-		expect((el as HTMLAudioElement).currentTime).toBe(onTheClock);
+		// The whole point: a filtered-out item's element is torn down, not left
+		// running muted in the background.
+		expect(audio.released).toContain(2);
 
 		fireEvent.click(screen.getByLabelText("Primary"));
 		expect(cardOf(2)).not.toBeNull();
-		// Derived from the element's real position: at the clock, so "In sync".
-		// A restarted element would sit 30s behind and read "-30s".
-		expect(audio.elements.get(2)).toBe(el);
-		expect(badgeOf(2)).toBe("In sync");
+		// Re-showing it registers a fresh element rather than reusing the old one.
+		expect(audio.elements.get(2)).not.toBe(el);
 	});
 
 	// Criterion 4's other half, and Story 017's reconcileSolo: effectiveMutedIds

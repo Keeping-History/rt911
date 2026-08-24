@@ -7,17 +7,17 @@
 //
 //   which lane is a card in?   laneFor, over one merged catalogue (partitionLanes)
 //   is it on screen?           matchesFilter, against the checked tag set
-//   can it be heard?           isAudible, over the FILTER-VISIBLE live mix
+//   can it be loaded/heard?    audioCoordinator's registration, over the FILTER-VISIBLE lanes
 //
-// The third is deliberately not the second. A tag filter unmounts a card, but
-// audioCoordinator owns the <audio>, and element lifetime follows LANE
-// membership, not visibility: a clip hidden by a filter keeps playing on the
-// clock, so re-checking that filter shows a card at the position the clip
-// actually reached rather than one restarting from zero. What the filter does
-// change is the MIX — a hidden card is not audible, and a solo pointing at one
-// is reconciled away, because effectiveMutedIds mutes everything except the
-// solo target and an absent target means silence with nothing left on screen to
-// click.
+// audioCoordinator owns the <audio>, and element lifetime follows FILTER
+// VISIBILITY, not bare lane membership: a clip hidden by a tag filter has its
+// element released, so a filtered-out item costs no fetch and no background
+// playback — the trade-off is that re-checking the filter creates a fresh
+// element that has to re-fetch and re-buffer before it resyncs to the clock
+// (via seekToClock on loadedmetadata), rather than one that was quietly
+// keeping pace the whole time. A solo pointing at a hidden card is reconciled
+// away too, because effectiveMutedIds mutes everything except the solo target
+// and an absent target means silence with nothing left on screen to click.
 
 import {
 	ClassicyApp,
@@ -620,10 +620,12 @@ export const RadioTraffic: React.FC = () => {
 	}, [clockPaused]);
 
 	// Which elements should exist, and WHICH COPY of each recording they play.
-	// LANE membership, NOT filter visibility: the element outlives the card so a
-	// re-checked filter resumes at the clock's offset instead of restarting.
-	// Tracked here because the registry is module-level and release() is an
-	// explicit act, never a render side effect.
+	// FILTER visibility, NOT bare lane membership: a card the tag filter hides
+	// gets its <audio> released along with it, so a filtered-out item costs no
+	// fetch and no bandwidth until its filter is re-checked — at the cost of a
+	// fresh element that has to re-fetch and re-buffer before it resyncs to the
+	// clock. Tracked here because the registry is module-level and release() is
+	// an explicit act, never a render side effect.
 	//
 	// resolveAudioUrl, never `item.url`: the mp3 rows carry both the source
 	// recording and the noise-reduced render, and which one a listener hears is
@@ -642,11 +644,11 @@ export const RadioTraffic: React.FC = () => {
 	useEffect(() => {
 		if (!isOpen) return;
 		const desired = new Map<number, string>();
-		for (const item of lanes.live) {
+		for (const item of visible.live) {
 			if (!stopped.has(item.id))
 				desired.set(item.id, resolveAudioUrl(item, settings.playOriginalAudio));
 		}
-		for (const item of lanes.previous) {
+		for (const item of visible.previous) {
 			if (userStarted.has(item.id))
 				desired.set(item.id, resolveAudioUrl(item, settings.playOriginalAudio));
 		}
@@ -659,7 +661,7 @@ export const RadioTraffic: React.FC = () => {
 			ensure(itemId, url);
 			registeredRef.current.add(itemId);
 		}
-	}, [isOpen, lanes.live, lanes.previous, stopped, userStarted, settings.playOriginalAudio]);
+	}, [isOpen, visible.live, visible.previous, stopped, userStarted, settings.playOriginalAudio]);
 
 	// Story 050: the window closing is not an unmount — this component stays
 	// mounted for the desktop's whole lifetime — so nothing else stops the
