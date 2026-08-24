@@ -141,6 +141,22 @@ function mergeById(...lists: readonly (readonly MediaItem[])[]): MediaItem[] {
 }
 
 /**
+ * Same items, by id, order ignored.
+ *
+ * `getUpcomingMp3Items()` (see `upcomingItems` below) hands back a fresh array
+ * from `Array.from(mp3Buffer.current.values())` on every single call, whether
+ * or not the reveal buffer's contents actually moved — so a plain reference
+ * compare downstream would never bail out. This is the cheap check that lets
+ * it: SET membership is what every consumer (mergeById, station grouping)
+ * cares about, not Map iteration order.
+ */
+function sameItemIds(a: readonly MediaItem[], b: readonly MediaItem[]): boolean {
+	if (a.length !== b.length) return false;
+	const ids = new Set(a.map((item) => item.id));
+	return b.every((item) => ids.has(item.id));
+}
+
+/**
  * Everything that is comm traffic — i.e. everything the Radio Tuner does not own.
  *
  * The mp3 stream carries both kinds of audio, and BROADCAST_STATIONS is the one
@@ -406,27 +422,44 @@ export const RadioTraffic: React.FC = () => {
 		rememberItems(seenRef.current, mp3Items);
 	}, [mp3Items]);
 
-	// The reveal buffer is mutable and not React state; re-read it once a second.
+	// The reveal buffer is mutable and not React state; re-read it once a
+	// second. getUpcomingMp3Items() always returns a fresh array (see
+	// sameItemIds' header), so this holds onto the PREVIOUS one when the id set
+	// didn't move — otherwise `pool` below would rebuild on every tick even
+	// when nothing about the upcoming set actually changed.
+	const upcomingRef = useRef<readonly MediaItem[]>([]);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: anchorMs is the 1 Hz clock dep
-	const upcomingItems = useMemo(
-		() => getUpcomingMp3Items(),
-		[anchorMs, getUpcomingMp3Items], // eslint-disable-line react-hooks/exhaustive-deps
+	const upcomingItems = useMemo(() => {
+		const next = getUpcomingMp3Items();
+		if (sameItemIds(upcomingRef.current, next)) return upcomingRef.current;
+		upcomingRef.current = next;
+		return next;
+	}, [anchorMs, getUpcomingMp3Items]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	// The deduplicated, broadcast-excluded catalogue — a Map merge plus a full
+	// station regrouping over every item ever seen (~800 by mid-session).
+	// Split out from `lanes` below so this only reruns when the underlying
+	// data actually changed (a new mp3 frame, a reveal-buffer arrival) rather
+	// than every anchorMs tick: which items exist to classify does not change
+	// once a second just because the clock does.
+	const pool = useMemo(
+		() =>
+			excludeBroadcastStations(
+				mergeById(historyPool(mp3History, seenRef.current), mp3Items, upcomingItems),
+			),
+		[mp3History, mp3Items, upcomingItems],
 	);
 
 	// anchorMs, not nowMs: lane membership is a once-a-second question, and
 	// keying it on the ms-precise reading would repartition the whole catalogue
-	// on every render for an answer that cannot have changed.
+	// on every render for an answer that cannot have changed. Reading `pool`
+	// rather than recomputing it here is what keeps this tick's work down to
+	// classification and sorting — the merge and station regroup already
+	// happened above, only when they needed to.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: anchorMs is the 1 Hz clock dep
 	const lanes = useMemo(
-		() =>
-			partitionLanes(
-				excludeBroadcastStations(
-					mergeById(historyPool(mp3History, seenRef.current), mp3Items, upcomingItems),
-				),
-				getNowMs(),
-				heldLiveIds,
-			),
-		[mp3History, mp3Items, upcomingItems, anchorMs, getNowMs, heldLiveIds], // eslint-disable-line react-hooks/exhaustive-deps
+		() => partitionLanes(pool, getNowMs(), heldLiveIds),
+		[pool, anchorMs, getNowMs, heldLiveIds], // eslint-disable-line react-hooks/exhaustive-deps
 	);
 
 	// Story 045: what to hold NEXT render, derived from what LIVE actually holds

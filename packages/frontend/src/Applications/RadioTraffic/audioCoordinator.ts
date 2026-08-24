@@ -273,7 +273,18 @@ export function ensure(itemId: number, url: string): HTMLAudioElement {
 
 	const el = document.createElement("audio");
 	el.crossOrigin = "anonymous";
-	el.preload = "auto";
+	// "metadata", not "auto": every LIVE card gets an element and stays
+	// playing-but-possibly-muted for as long as it holds the lane (see this
+	// file's header — muting rather than pausing is what keeps an unmuted
+	// station drift-free), so on a busy stretch with several stations live at
+	// once this is several simultaneous elements. "auto" has the browser read
+	// ahead of the playhead as aggressively as it's allowed — sometimes the
+	// whole file — which turns that into a bandwidth burst competing with
+	// everything else on the page, worst on a slow connection. "metadata"
+	// fetches just enough to know duration/seekability and paces the rest of
+	// the buffering to real time once play() is called, which is all an
+	// element actually needs.
+	el.preload = "metadata";
 	// Start muted so the browser permits autoplay; tryPlay unmutes once play()
 	// resolves.
 	el.muted = true;

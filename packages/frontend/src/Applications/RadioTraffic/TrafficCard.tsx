@@ -582,7 +582,12 @@ function propsAreEqual(prev: TrafficCardProps, next: TrafficCardProps): boolean 
 		prev.meta === next.meta &&
 		prev.lane === next.lane &&
 		prev.tzOffsetHours === next.tzOffsetHours &&
-		prev.nowMs === next.nowMs &&
+		// PREVIOUS never reads nowMs — badgeFor's "previous" branch answers off
+		// userPlaying/silent alone, and liveMs is hardcoded to 0 off this lane.
+		// Comparing it anyway forced every idle back-catalogue card (up to
+		// PREVIOUS_LANE_LIMIT of them) to fully re-render on every clock tick for
+		// an output that could not have changed.
+		(next.lane === "previous" || prev.nowMs === next.nowMs) &&
 		prev.seeking === next.seeking &&
 		prev.userPlaying === next.userPlaying &&
 		prev.muted === next.muted &&
