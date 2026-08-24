@@ -39,6 +39,7 @@ import {
 	timeMachineSetSettings,
 } from "./timeMachineSettings";
 import { useBookmarks } from "./useBookmarks";
+import { isWindowOpen } from "./windowState";
 
 // This app's own icon, registered into the shared registry at
 // ClassicyIcons.applications.timeMachine.app. registerClassicyIcons assigns
@@ -72,6 +73,21 @@ const skipBalloon = describeAppState(appId, "settings.skipMinutes");
 const stepBalloon = describeAppState(appId, "settings.stepSeconds");
 const scrubBalloon = describeAppState(appId, "settings.scrubSeconds");
 
+// Settings gets away with being always-mounted (see the comment above its
+// ClassicyWindow below) because it is opened from a single, always-available
+// menu item. Bookmarks is also reachable via the capture-dialog login prompt,
+// but more importantly: ClassicyWindow's own one-time mount effect
+// unconditionally dispatches ClassicyWindowOpen (closed: false) the instant
+// it mounts, regardless of what Classicy had persisted. Mounting Bookmarks
+// unconditionally therefore force-reopens it on every fresh mount even when
+// the persisted store says closed — verified live against 911realtime.org.
+// Reading the persisted entry once, here, lets the app keep Bookmarks
+// unmounted (so that effect never fires) when it was last closed.
+const readPersistedWindows = (): { id: string; closed?: boolean }[] | undefined =>
+	typeof useAppManager.getState === "function"
+		? useAppManager.getState().System.Manager.Applications.apps[appId]?.windows
+		: undefined;
+
 export const TimeMachine: React.FC = () => {
 
 	// Skip/step durations persist in Classicy app data (the Settings window
@@ -86,6 +102,15 @@ export const TimeMachine: React.FC = () => {
 	const { skipMinutes, stepSeconds, scrubSeconds } = useMemo(
 		() => readTimeMachineSettings(appData),
 		[appData],
+	);
+
+	// Restore Bookmarks' mounted-ness from the persisted store so a window
+	// that was open before a reload reappears, and — the actual bug this
+	// guards against — one that was closed stays unmounted instead of being
+	// force-reopened by ClassicyWindow's own mount effect (see
+	// readPersistedWindows above).
+	const [showBookmarks, setShowBookmarks] = useState(() =>
+		isWindowOpen(readPersistedWindows(), `${appId}_bookmarks`),
 	);
 
 	// Seed the draft from the saved values (not defaults) so a Settings window
@@ -128,19 +153,28 @@ export const TimeMachine: React.FC = () => {
 		closeSettings();
 	}, [settingsForm, desktopEventDispatch, closeSettings]);
 
-	// Open THEN focus, same idiom as openSettings above.
+	// If Bookmarks isn't mounted yet, mounting it is enough on its own:
+	// ClassicyWindow's own one-time mount effect registers the window entry
+	// and opens it. Dispatching ClassicyWindowOpen ourselves in that case hits
+	// a window id with no entry yet and crashes the reducer. Once it IS
+	// mounted, that one-time effect has already fired, so reopening a closed
+	// window (or refocusing an open one) needs an explicit dispatch instead.
 	const openBookmarks = useCallback(() => {
-		desktopEventDispatch({
-			type: "ClassicyWindowOpen",
-			app: { id: appId },
-			window: { id: `${appId}_bookmarks` },
-		});
-		desktopEventDispatch({
-			type: "ClassicyWindowFocus",
-			app: { id: appId },
-			window: { id: `${appId}_bookmarks` },
-		});
-	}, [desktopEventDispatch]);
+		if (showBookmarks) {
+			desktopEventDispatch({
+				type: "ClassicyWindowOpen",
+				app: { id: appId },
+				window: { id: `${appId}_bookmarks` },
+			});
+			desktopEventDispatch({
+				type: "ClassicyWindowFocus",
+				app: { id: appId },
+				window: { id: `${appId}_bookmarks` },
+			});
+		} else {
+			setShowBookmarks(true);
+		}
+	}, [showBookmarks, desktopEventDispatch]);
 
 	const appMenu = useMemo(
 		() => [
@@ -436,21 +470,29 @@ export const TimeMachine: React.FC = () => {
 					</div>
 				</div>
 			</ClassicyWindow>
-			{/* Always mounted — same reasoning as the Settings window above. */}
-			<BookmarksWindow
-				appId={appId}
-				appMenu={appMenu}
-				icon={appIcon}
-				tzOffset={tzOffset}
-				global={global}
-				personal={personal}
-				loading={bookmarksLoading}
-				error={bookmarksError}
-				signedIn={signedIn}
-				onJump={handleBookmarkClick}
-				onEdit={openEditDialog}
-				onDelete={handleDeletePersonal}
-			/>
+			{/*
+				Conditionally mounted, unlike Settings above — see the
+				readPersistedWindows/showBookmarks comments near the top of this
+				file for why: an always-mounted Bookmarks window cannot survive a
+				reload closed, because ClassicyWindow force-opens on its own mount
+				effect regardless of what was persisted.
+			*/}
+			{showBookmarks && (
+				<BookmarksWindow
+					appId={appId}
+					appMenu={appMenu}
+					icon={appIcon}
+					tzOffset={tzOffset}
+					global={global}
+					personal={personal}
+					loading={bookmarksLoading}
+					error={bookmarksError}
+					signedIn={signedIn}
+					onJump={handleBookmarkClick}
+					onEdit={openEditDialog}
+					onDelete={handleDeletePersonal}
+				/>
+			)}
 			{dialogState && (
 				<BookmarkDialog
 					appId={appId}
