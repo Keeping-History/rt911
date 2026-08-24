@@ -22,7 +22,7 @@ import { DefaultFileSystem } from "./data/DefaultFileSystem";
 // Re-splitting the desktop chunk for mobile is blocked on a classicy fix.
 import Desktop from "./Desktop";
 import { isMobileDevice } from "./Mobile/detectMobile";
-import { GA_MEASUREMENT_ID } from "./lib/analytics";
+import { GA_MEASUREMENT_ID, isProductionHost } from "./lib/analytics";
 import { pagesRouteSlug } from "./Pages/route";
 import { AuthProvider } from "./Providers/Auth/AuthProvider";
 import { MediaStreamProvider } from "./Providers/MediaStream/MediaStreamProvider";
@@ -90,7 +90,10 @@ createRoot(rootElement).render(
 		<ClassicyAppManagerProvider
 			// Desktop-branch analytics. The pages branch above mounts outside this
 			// provider and loads the same property itself — see lib/analytics.ts.
-			gaMeasurementIds={[GA_MEASUREMENT_ID]}
+			// Empty outside production hostnames: classicy wires gaMeasurementIds
+			// straight into its own GA plugin with no gating of its own, so dev/CI/
+			// PR-preview hosts would otherwise report real hits into production GA.
+			gaMeasurementIds={isProductionHost() ? [GA_MEASUREMENT_ID] : []}
 			defaultFileSystem={DefaultFileSystem}
 			defaultFileSystemMode="exclusive"
 			defaultState={{

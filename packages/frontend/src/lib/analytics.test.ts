@@ -19,7 +19,7 @@ afterEach(cleanDom);
 describe("initGoogleAnalytics", () => {
 	it("injects the gtag.js script for the measurement id", async () => {
 		const { initGoogleAnalytics, GA_MEASUREMENT_ID } = await freshModule();
-		initGoogleAnalytics();
+		initGoogleAnalytics(GA_MEASUREMENT_ID, "911realtime.org");
 		const script = document.head.querySelector<HTMLScriptElement>(
 			'script[src*="googletagmanager.com/gtag/js"]',
 		);
@@ -30,7 +30,7 @@ describe("initGoogleAnalytics", () => {
 
 	it("configures the property with send_page_view disabled (SPA routing)", async () => {
 		const { initGoogleAnalytics, GA_MEASUREMENT_ID } = await freshModule();
-		initGoogleAnalytics();
+		initGoogleAnalytics(GA_MEASUREMENT_ID, "911realtime.org");
 		const pushed = (window.dataLayer ?? []).map((a) => Array.from(a as IArguments));
 		const config = pushed.find((a) => a[0] === "config");
 		expect(config).toBeDefined();
@@ -40,8 +40,8 @@ describe("initGoogleAnalytics", () => {
 
 	it("is idempotent — a second call adds no second tag", async () => {
 		const { initGoogleAnalytics } = await freshModule();
-		initGoogleAnalytics();
-		initGoogleAnalytics();
+		initGoogleAnalytics(undefined, "911realtime.org");
+		initGoogleAnalytics(undefined, "911realtime.org");
 		expect(
 			document.head.querySelectorAll('script[src*="googletagmanager.com"]'),
 		).toHaveLength(1);
@@ -49,24 +49,50 @@ describe("initGoogleAnalytics", () => {
 
 	it("does nothing when the measurement id is empty", async () => {
 		const { initGoogleAnalytics } = await freshModule();
-		initGoogleAnalytics("");
+		initGoogleAnalytics("", "911realtime.org");
 		expect(document.head.querySelector("script")).toBeNull();
 		expect(window.gtag).toBeUndefined();
 	});
 
 	it("pushes an arguments object, not a plain array (gtag.js requires it)", async () => {
 		const { initGoogleAnalytics } = await freshModule();
-		initGoogleAnalytics();
+		initGoogleAnalytics(undefined, "911realtime.org");
 		const first = (window.dataLayer ?? [])[0];
 		expect(Array.isArray(first)).toBe(false);
 		expect(Object.prototype.toString.call(first)).toBe("[object Arguments]");
+	});
+
+	it.each(["localhost", "keeping-history.github.io", "beta.example.com"])(
+		"does nothing on a non-production hostname (%s)",
+		async (hostname) => {
+			const { initGoogleAnalytics } = await freshModule();
+			initGoogleAnalytics(undefined, hostname);
+			expect(document.head.querySelector("script")).toBeNull();
+			expect(window.gtag).toBeUndefined();
+		},
+	);
+
+	it("reports on the beta subdomain as well as the apex domain", async () => {
+		const { initGoogleAnalytics } = await freshModule();
+		initGoogleAnalytics(undefined, "beta.911realtime.org");
+		expect(document.head.querySelector("script")).not.toBeNull();
+	});
+});
+
+describe("isProductionHost", () => {
+	it("allows only the production hostnames", async () => {
+		const { isProductionHost } = await freshModule();
+		expect(isProductionHost("911realtime.org")).toBe(true);
+		expect(isProductionHost("beta.911realtime.org")).toBe(true);
+		expect(isProductionHost("localhost")).toBe(false);
+		expect(isProductionHost("keeping-history.github.io")).toBe(false);
 	});
 });
 
 describe("trackPageView", () => {
 	it("sends a page_view with path, title and location", async () => {
 		const { initGoogleAnalytics, trackPageView } = await freshModule();
-		initGoogleAnalytics();
+		initGoogleAnalytics(undefined, "911realtime.org");
 		const spy = vi.fn();
 		window.gtag = spy;
 
@@ -81,7 +107,7 @@ describe("trackPageView", () => {
 
 	it("flags a 404 so broken links are distinguishable", async () => {
 		const { initGoogleAnalytics, trackPageView } = await freshModule();
-		initGoogleAnalytics();
+		initGoogleAnalytics(undefined, "911realtime.org");
 		const spy = vi.fn();
 		window.gtag = spy;
 

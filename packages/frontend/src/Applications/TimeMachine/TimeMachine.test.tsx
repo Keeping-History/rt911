@@ -31,11 +31,12 @@ afterEach(() => {
 });
 
 // Seed the persisted-window store so the Settings window is open on mount —
-// the Settings ClassicyWindow is always mounted and reads its open/closed
-// state straight from this store (see TimeMachine.tsx). Mirrors how a page
-// reload restores a previously-open window, and avoids having to drive the
-// real Classicy menu bar (which lives in ClassicyDesktop, not mounted here)
-// just to click File > Settings….
+// TimeMachine's own `showSettings` local state reads this once, on mount, to
+// decide whether to render the (conditionally-mounted) Settings ClassicyWindow
+// at all (see TimeMachine.tsx). Mirrors how a page reload restores a
+// previously-open window, and avoids having to drive the real Classicy menu
+// bar (which lives in ClassicyDesktop, not mounted here) just to click
+// File > Settings….
 function openSettingsOnMount(): void {
 	useAppManager.setState((s) => ({
 		...s,
@@ -159,9 +160,10 @@ describe("TimeMachine Settings window", () => {
 	// to only flip TimeMachine's own local `showSettings` boolean, never
 	// telling Classicy's store the window had closed — so the store's
 	// persisted `closed` stayed false, and the window reappeared (unwanted)
-	// on the next reload even though the user had dismissed it. The window is
-	// now always mounted and Cancel/Save dispatch ClassicyWindowClose, so the
-	// store itself is the only thing that has to be right.
+	// on the next reload even though the user had dismissed it (the window's
+	// own close box was never the problem — Classicy already dispatches
+	// ClassicyWindowClose for that path itself). closeSettings now dispatches
+	// it explicitly for the Cancel/Save paths too.
 	it("dispatching Cancel persists closed to the Classicy store, not just local state", () => {
 		openSettingsOnMount();
 		render(<TimeMachine />);
@@ -179,17 +181,21 @@ describe("TimeMachine Settings window", () => {
 });
 
 describe("TimeMachine Bookmarks window", () => {
-	// Bookmarks is converted to the same always-mounted + dispatch pattern as
-	// Settings, for consistency and to remove the latent risk: unlike
-	// Settings, Bookmarks never had a Cancel/Save-style button that bypassed
-	// Classicy's own close mechanism, so (unlike Settings) this suite hasn't
-	// reproduced a concrete persistence bug here — closing only ever went
-	// through the native close box, which Classicy already tracks correctly,
-	// and mounting the old conditionally-rendered window already told
-	// Classicy's store it was open. This test just guards the new path:
-	// openBookmarks dispatches ClassicyWindowOpen/Focus directly rather than
-	// relying on mount-as-a-side-effect to register openness.
-	it("opening Bookmarks via the capture-dialog login prompt persists open to the Classicy store", () => {
+	// Bookmarks follows the same conditionally-mounted pattern as Settings, for
+	// consistency and because the alternative — mounting it unconditionally —
+	// is what this whole file's "make it remember open/closed" work
+	// discovered is actually broken: Classicy's ClassicyWindow dispatches
+	// ClassicyWindowOpen from its own one-time mount effect, and that reducer
+	// case unconditionally sets `closed: false` on the target entry whether it
+	// pre-existed or not. An always-mounted window therefore can NEVER survive
+	// a remount (a page reload, in production) still closed — verified live
+	// against 911realtime.org, including on TimeMachine's own `_main` window,
+	// which has always been unconditionally mounted and reopens the same way.
+	// Gating the window behind local state that starts `false` and only flips
+	// on an explicit user action is what keeps a closed window unmounted, so
+	// its self-opening mount effect never fires. See TimeMachine.tsx's module
+	// doc comment for the full account.
+	it("opening Bookmarks via the capture-dialog login prompt marks it open in the Classicy store", () => {
 		openSettingsOnMount(); // seeds apps[id].open — needed for ClassicyApp to render children at all
 		render(<TimeMachine />);
 
@@ -203,5 +209,70 @@ describe("TimeMachine Bookmarks window", () => {
 				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_bookmarks`,
 			) as { closed?: boolean } | undefined;
 		expect(bookmarksWindow?.closed).toBe(false);
+	});
+
+	// The regression this whole rewrite is actually about: a window closed in
+	// a PRIOR mount of the app must still be closed after a fresh mount (what
+	// a page reload amounts to, from React's perspective — a brand new
+	// component tree reading the same persisted store). If Bookmarks were
+	// unconditionally mounted, ClassicyWindow's own mount effect would reopen
+	// it here regardless of the seeded `closed: true` — see the describe
+	// block's comment above.
+	it("stays closed across a fresh mount when the store already says closed", () => {
+		openSettingsOnMount();
+		useAppManager.setState((s) => {
+			const app = s.System.Manager.Applications.apps[TIME_MACHINE_APP_ID];
+			if (!app) return s;
+			return {
+				...s,
+				System: {
+					...s.System,
+					Manager: {
+						...s.System.Manager,
+						Applications: {
+							...s.System.Manager.Applications,
+							apps: {
+								...s.System.Manager.Applications.apps,
+								[TIME_MACHINE_APP_ID]: {
+									...app,
+									windows: [
+										...(app.windows ?? []),
+										{
+											id: `${TIME_MACHINE_APP_ID}_bookmarks`,
+											appId: TIME_MACHINE_APP_ID,
+											closed: true,
+											focused: false,
+											collapsed: false,
+											dragging: false,
+											moving: false,
+											resizing: false,
+											zoomed: false,
+											size: [300, 320],
+											position: [660, 200],
+											minimumSize: [240, 160],
+											menuBar: [],
+											default: false,
+											windowType: "utility",
+										},
+									],
+								},
+							},
+						},
+					},
+				},
+			};
+		});
+
+		const { unmount } = render(<TimeMachine />);
+		unmount();
+		render(<TimeMachine />);
+
+		const bookmarksWindow = useAppManager
+			.getState()
+			.System.Manager.Applications.apps[TIME_MACHINE_APP_ID]?.windows?.find(
+				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_bookmarks`,
+			) as { closed?: boolean } | undefined;
+		expect(bookmarksWindow?.closed).toBe(true);
+		expect(screen.queryByText("Log in to view and create personal bookmarks.")).toBeNull();
 	});
 });

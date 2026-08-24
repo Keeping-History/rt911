@@ -18,6 +18,25 @@
  *  hands this same constant to classicy for the desktop branch. */
 export const GA_MEASUREMENT_ID = "G-YV25XK2Y3R";
 
+/**
+ * Hostnames allowed to report into the production GA4 property. Everything
+ * else — `localhost` (dev server, vitest, Playwright, `preview:auth`) and
+ * `keeping-history.github.io` (PR previews, which bake these same prod
+ * `VITE_*` values) — boots the identical app.tsx/PagesSite.tsx and would
+ * otherwise report real hits into production analytics. Confirmed 2026-08-24:
+ * localhost sessions were 96% of a reported "traffic spike".
+ */
+const PRODUCTION_HOSTNAMES = new Set(["911realtime.org", "beta.911realtime.org"]);
+
+/** True when running on a hostname allowed to report analytics. Exported so
+ *  app.tsx can gate the desktop branch's `gaMeasurementIds`, which classicy
+ *  wires up internally and this module never sees. */
+export function isProductionHost(
+	hostname: string = typeof window === "undefined" ? "" : window.location.hostname,
+): boolean {
+	return PRODUCTION_HOSTNAMES.has(hostname);
+}
+
 type GtagFn = (...args: unknown[]) => void;
 
 declare global {
@@ -38,9 +57,13 @@ let initialized = false;
  * ever fire for the first page a visitor landed on. Views are sent explicitly
  * by {@link trackPageView} instead — once on load and once per navigation.
  */
-export function initGoogleAnalytics(measurementId: string = GA_MEASUREMENT_ID): void {
+export function initGoogleAnalytics(
+	measurementId: string = GA_MEASUREMENT_ID,
+	hostname: string = typeof window === "undefined" ? "" : window.location.hostname,
+): void {
 	if (initialized) return;
 	if (!measurementId || typeof document === "undefined") return;
+	if (!isProductionHost(hostname)) return;
 	initialized = true;
 
 	window.dataLayer = window.dataLayer ?? [];
