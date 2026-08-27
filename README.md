@@ -1,7 +1,5 @@
 # 911realtime.org
 
-> **An update to 911realtime.org is coming for the 25th anniversary of the September 11, 2001 attacks (September 11, 2026). Stay tuned for more details.**
-
 A project to collect multimedia from the September 11 attacks and synchronize it into a common media player, so the day can be experienced as it unfolded — in real time, across television, radio, pagers, and the web.
 
 - **Visit the site:** <https://911realtime.org>
