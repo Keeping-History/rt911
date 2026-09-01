@@ -43,6 +43,9 @@ afterEach(() => {
 	mockDateTimeLocked = false;
 	mockPause.mockClear();
 	mockResume.mockClear();
+	// Tuning persists the now-playing source (nowPlayingStore.ts); clear it so
+	// one test's tuned station never boots the next test's shell pre-tuned.
+	window.localStorage.clear();
 });
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
@@ -229,5 +232,53 @@ describe("IpodShell forced clock", () => {
 		pressPlayPause(container);
 		expect(mockPause).toHaveBeenCalledTimes(1); // mocked paused: false → pause()
 		expect(mockResume).not.toHaveBeenCalled();
+	});
+});
+
+// A refreshed/reopened phone resumes the tuned source: the shell seeds
+// nowPlaying from nowPlayingStore (localStorage) and writes every change
+// back. The virtual clock itself survives reloads via classicy's persisted
+// store, so restoring the source is what makes "close and reopen" come back
+// playing the same station at the same moment.
+describe("IpodShell now-playing persistence", () => {
+	it("restores a persisted radio station on boot", () => {
+		window.localStorage.setItem(
+			"rt911IpodNowPlaying",
+			JSON.stringify({ kind: "radio", key: "WINS" }),
+		);
+		renderShell(STREAM_UP);
+		expect(screen.getByTestId("station-player")).toBeTruthy();
+		expect(screen.queryByTestId("qt-embed")).toBeNull();
+	});
+
+	it("restores a persisted TV channel on boot (hidden on the menu, audio alive)", () => {
+		window.localStorage.setItem(
+			"rt911IpodNowPlaying",
+			JSON.stringify({ kind: "tv", id: 42 }),
+		);
+		renderShell(STREAM_UP);
+		expect(screen.getByTestId("qt-embed")).toBeTruthy();
+		// Boot lands on the menu; the player is mounted but hidden, same as
+		// backing out of Now Playing with MENU.
+		expect(document.querySelector(".ipodTvPlayerHidden")).toBeTruthy();
+	});
+
+	it("boots untuned when the persisted source references nothing in the stream", () => {
+		window.localStorage.setItem(
+			"rt911IpodNowPlaying",
+			JSON.stringify({ kind: "tv", id: 999 }),
+		);
+		renderShell(STREAM_UP);
+		expect(screen.queryByTestId("qt-embed")).toBeNull();
+		expect(screen.queryByTestId("station-player")).toBeNull();
+	});
+
+	it("persists tuning so the next boot can restore it", () => {
+		renderShell(STREAM_UP);
+		fireEvent.click(screen.getByText("TV"));
+		fireEvent.click(screen.getByText("WABC"));
+		expect(
+			JSON.parse(window.localStorage.getItem("rt911IpodNowPlaying") ?? "null"),
+		).toEqual({ kind: "tv", id: 42 });
 	});
 });
