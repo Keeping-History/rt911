@@ -27,12 +27,14 @@ export interface ClickWheelHandlers {
 	/**
 	 * Optional hold-repeat for the ⏮/⏭ buttons: fired once when the press has
 	 * been held for {@link HOLD_DELAY_MS}, then every {@link HOLD_REPEAT_MS}
-	 * until release. Once a hold has fired, the release does NOT also fire the
-	 * tap handler (onPrev/onNext) — a hold is a different gesture, not a long
-	 * tap. Scrolling cancels a pending or active hold, same as it cancels taps.
+	 * until release. `heldMs` is how long the repeat has been running (0 on
+	 * the first fire), so handlers can accelerate with hold duration. Once a
+	 * hold has fired, the release does NOT also fire the tap handler
+	 * (onPrev/onNext) — a hold is a different gesture, not a long tap.
+	 * Scrolling cancels a pending or active hold, same as it cancels taps.
 	 */
-	onPrevHold?: () => void;
-	onNextHold?: () => void;
+	onPrevHold?: (heldMs: number) => void;
+	onNextHold?: (heldMs: number) => void;
 }
 
 export interface ClickWheel {
@@ -83,6 +85,7 @@ export function useClickWheel(handlers: ClickWheelHandlers): ClickWheel {
 					? handlersRef.current.onPrevHold
 					: handlersRef.current.onNextHold;
 			if (!holdHandler()) return; // no hold behavior registered
+			let repeatStartedAt = 0;
 			const tick = () => {
 				// A drag that crossed the scroll dead zone turns the gesture into a
 				// scroll — stop repeating, exactly as taps are cancelled by scrolls.
@@ -91,10 +94,11 @@ export function useClickWheel(handlers: ClickWheelHandlers): ClickWheel {
 					return;
 				}
 				holdFiredRef.current = true;
-				holdHandler()?.();
+				holdHandler()?.(Date.now() - repeatStartedAt);
 			};
 			holdTimerRef.current = setTimeout(() => {
 				holdTimerRef.current = null;
+				repeatStartedAt = Date.now();
 				tick();
 				holdIntervalRef.current = setInterval(tick, HOLD_REPEAT_MS);
 			}, HOLD_DELAY_MS);

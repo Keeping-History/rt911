@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MediaStreamContextValue } from "../Providers/MediaStream/MediaStreamContext";
 import { MediaStreamContext } from "../Providers/MediaStream/MediaStreamContext";
 import IpodShell from "./IpodShell";
+import { holdSeekStepMs } from "./holdSeekRamp";
 import {
 	clearAudioBlocked,
 	markAudioBlocked,
@@ -303,10 +304,11 @@ describe("IpodShell now-playing persistence", () => {
 	});
 });
 
-// ⏮/⏭ drive the virtual clock: a tap skips 30 seconds, each hold-repeat tick
-// skips a minute, and everything goes through the setDateTimeFromUtc seam
-// (asserted here via the classicy setDateTime callback it wraps). The mocked
-// clock is pinned at 12:40:00 UTC, so expected targets are absolute.
+// ⏮/⏭ drive the virtual clock: a tap skips 30 seconds, hold-repeat ticks
+// skip with acceleration (holdSeekRamp.ts), and everything goes through the
+// setDateTimeFromUtc seam (asserted here via the classicy setDateTime
+// callback it wraps). The mocked clock is pinned at 12:40:00 UTC, so
+// expected targets are absolute.
 describe("IpodShell wheel time skips", () => {
 	const NOW = Date.parse("2001-09-11T12:40:00.000Z");
 
@@ -324,7 +326,7 @@ describe("IpodShell wheel time skips", () => {
 		expect(+mockSetDateTime.mock.calls[0][0]).toBe(NOW - 30_000);
 	});
 
-	it("holding ⏭ repeats one-minute skips and suppresses the 30s tap", () => {
+	it("holding ⏭ repeats accelerating skips and suppresses the 30s tap", () => {
 		vi.useFakeTimers();
 		const { container } = renderShell({ connected: true });
 		const wheelEl = container.querySelector("#control-wheel") as HTMLElement;
@@ -334,10 +336,11 @@ describe("IpodShell wheel time skips", () => {
 		fireEvent.pointerUp(wheelEl, { pointerId: 1, clientX: 0, clientY: 0 });
 		vi.useRealTimers();
 		expect(mockSetDateTime).toHaveBeenCalledTimes(2); // two hold ticks, no tap
-		// The mocked clock is pinned, so every tick seeks from 12:40 → 12:41.
-		for (const call of mockSetDateTime.mock.calls) {
-			expect(+call[0]).toBe(NOW + 60_000);
-		}
+		// The mocked clock is pinned at 12:40, so each tick's target is exactly
+		// the ramp step for its heldMs: 0 held → 1 min, 500ms held → a bit more.
+		expect(+mockSetDateTime.mock.calls[0][0]).toBe(NOW + holdSeekStepMs(0, 500));
+		expect(+mockSetDateTime.mock.calls[1][0]).toBe(NOW + holdSeekStepMs(500, 500));
+		expect(holdSeekStepMs(500, 500)).toBeGreaterThan(holdSeekStepMs(0, 500));
 	});
 
 	it("is inert while the streamer's forced clock is active", () => {
@@ -361,5 +364,33 @@ describe("IpodShell tap-to-start banner", () => {
 		expect(screen.getByText(/Tap anywhere to start audio/)).toBeTruthy();
 		act(() => clearAudioBlocked("test-banner"));
 		expect(screen.queryByText(/Tap anywhere to start audio/)).toBeNull();
+	});
+});
+
+// Settings → Color: the pick lands as data-ipod-color on .ipodRoot (where
+// shell.css retints the vendored artwork) and persists across reloads via
+// ipodColorStore (localStorage is cleared between tests above).
+describe("IpodShell color setting", () => {
+	it("boots silver, recolors via Settings → Color, and persists the pick", () => {
+		const { container } = renderShell({ connected: true });
+		const root = container.querySelector(".ipodRoot") as HTMLElement;
+		expect(root.getAttribute("data-ipod-color")).toBe("silver");
+
+		fireEvent.click(screen.getByText("Settings"));
+		fireEvent.click(screen.getByText("Color"));
+		fireEvent.click(screen.getByText("Pink"));
+
+		expect(root.getAttribute("data-ipod-color")).toBe("pink");
+		// The checkmark follows the pick, iPod-settings style.
+		expect(screen.getByText("✓").closest("li")?.textContent).toContain("Pink");
+		expect(window.localStorage.getItem("rt911IpodColor")).toBe("pink");
+	});
+
+	it("boots with a previously saved color", () => {
+		window.localStorage.setItem("rt911IpodColor", "gold");
+		const { container } = renderShell({ connected: true });
+		expect(
+			container.querySelector(".ipodRoot")?.getAttribute("data-ipod-color"),
+		).toBe("gold");
 	});
 });

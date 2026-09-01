@@ -18,4 +18,17 @@ test.describe("mobile iPod shell", () => {
 		await page.locator("#menu-btn").tap();
 		await expect(page.getByText("Radio", { exact: true })).toBeVisible();
 	});
+
+	test("Settings → Color recolors the device and persists across reload", async ({
+		page,
+	}) => {
+		await page.goto("/");
+		await page.getByText("Settings", { exact: true }).tap();
+		await page.getByText("Color", { exact: true }).tap();
+		await page.getByText("Pink", { exact: true }).tap();
+		// shell.css keys the artwork tint off this attribute.
+		await expect(page.locator(".ipodRoot")).toHaveAttribute("data-ipod-color", "pink");
+		await page.reload();
+		await expect(page.locator(".ipodRoot")).toHaveAttribute("data-ipod-color", "pink");
+	});
 });

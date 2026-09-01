@@ -242,6 +242,19 @@
 .ipodRoot #mid-button.pressed { transform: scale(0.98) !important; filter: brightness(0.9); }
 .ipodRoot #mid-button.pressed .stroke-path { stroke: url(#mid-rock-play); }
 
+/* ── iPod color (Settings → Color) ── */
+/* The five first-gen iPod mini anodized finishes. The vendored artwork's
+   body gradient and wheel ring are SVG presentation attributes, which CSS
+   outranks — the shell stamps data-ipod-color on .ipodRoot and these vars
+   retint them in place. Silver is the vendored default (no vars set). */
+.ipodRoot #shared-fill-1 stop:first-child { stop-color: var(--ipod-body-hi, #f2f2f2); }
+.ipodRoot #shared-fill-1 stop:last-child { stop-color: var(--ipod-body-lo, #808080); }
+.ipodRoot #wheel .fill-path { fill: var(--ipod-wheel, #ffffff); }
+.ipodRoot[data-ipod-color="gold"] { --ipod-body-hi: #ecdfba; --ipod-body-lo: #8e7a47; --ipod-wheel: #e8dcb3; }
+.ipodRoot[data-ipod-color="blue"] { --ipod-body-hi: #c3d9ec; --ipod-body-lo: #48749e; --ipod-wheel: #b6cfe7; }
+.ipodRoot[data-ipod-color="pink"] { --ipod-body-hi: #f4cfda; --ipod-body-lo: #b26380; --ipod-wheel: #efc2d0; }
+.ipodRoot[data-ipod-color="green"] { --ipod-body-hi: #d6e6c0; --ipod-body-lo: #6b904f; --ipod-wheel: #cce0b2; }
+
 /* Expanded hit areas for the small button glyphs */
 .ipodRoot #menu-btn, .ipodRoot #next-btn, .ipodRoot #prev-btn, .ipodRoot #play-pause-btn { overflow: visible; }
 .ipodRoot #menu-btn::after, .ipodRoot #next-btn::after,

@@ -36,6 +36,7 @@ export function MainMenu({ hasNowPlaying }: MainMenuProps) {
 			target: "nowPlaying",
 			disabled: !hasNowPlaying,
 		},
+		{ key: "settings", label: "Settings", arrow: true, target: "settings" },
 		{ key: "about", label: "About", arrow: true, target: "about" },
 	];
 

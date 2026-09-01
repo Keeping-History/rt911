@@ -44,8 +44,10 @@ import {
 	type NowPlayingSource,
 	saveNowPlaying,
 } from "./nowPlayingStore";
+import { type IpodColor, loadIpodColor, saveIpodColor } from "./ipodColorStore";
 import { TvPlayer } from "./TvPlayer";
-import { useClickWheel } from "./useClickWheel";
+import { holdSeekStepMs } from "./holdSeekRamp";
+import { HOLD_REPEAT_MS, useClickWheel } from "./useClickWheel";
 import { useFineClock } from "./useFineClock";
 import {
 	ScreenNavContext,
@@ -54,6 +56,8 @@ import {
 } from "./WheelContext";
 import { AboutScreen } from "./screens/AboutScreen";
 import { BookmarksScreen } from "./screens/BookmarksScreen";
+import { ColorScreen } from "./screens/ColorScreen";
+import { SettingsScreen } from "./screens/SettingsScreen";
 import { MainMenu } from "./screens/MainMenu";
 import { NowPlayingScreen } from "./screens/NowPlayingScreen";
 import { RadioScreen } from "./screens/RadioScreen";
@@ -63,9 +67,10 @@ import { TVScreen } from "./screens/TVScreen";
 
 const APP_ID = "IpodShell.mobile";
 
-// ⏮/⏭ clock skips: a tap moves 30s; each hold-repeat tick moves a minute.
+// ⏮/⏭ clock skips: a tap moves 30s; a hold repeats with acceleration —
+// starting at a minute per tick and ramping up to 30 virtual minutes per
+// real second over 15s held (holdSeekRamp.ts).
 const TAP_SEEK_MS = 30_000;
-const HOLD_SEEK_MS = 60_000;
 
 // Same filter as the desktop TV app: every approved HLS channel. Hoisted so
 // its reference is stable — useMediaStream memoizes the filtered list on it.
@@ -92,6 +97,8 @@ const MemoNowPlayingScreen = memo(NowPlayingScreen);
 const MemoTimeTravelScreen = memo(TimeTravelScreen);
 const MemoBookmarksScreen = memo(BookmarksScreen);
 const MemoScrubScreen = memo(ScrubScreen);
+const MemoSettingsScreen = memo(SettingsScreen);
+const MemoColorScreen = memo(ColorScreen);
 
 export default function IpodShell() {
 	const [stackState, dispatchStack] = useReducer(screenStackReducer, initialScreenStack);
@@ -137,6 +144,12 @@ export default function IpodShell() {
 	useEffect(() => {
 		saveNowPlaying(nowPlaying);
 	}, [nowPlaying]);
+	// Settings → Color: the choice lands as data-ipod-color on the root, where
+	// shell.css retints the vendored artwork; persisted like the tuned source.
+	const [ipodColor, setIpodColor] = useState<IpodColor>(loadIpodColor);
+	useEffect(() => {
+		saveIpodColor(ipodColor);
+	}, [ipodColor]);
 	// Broadcast stations only — the same filter as the desktop RadioTuner.
 	// The comm-traffic clips and tapes belong to Radio Traffic; on the phone
 	// the Radio list is just the stations you could have had on in a kitchen.
@@ -196,13 +209,14 @@ export default function IpodShell() {
 		}
 	}, [dateTimeLocked, screen]);
 
-	// ⏮/⏭ as a time remote: a tap skips the virtual clock 30 seconds, holding
-	// the button keeps skipping in one-minute steps (useClickWheel's
-	// hold-repeat). Writes go through the sanctioned setDateTimeFromUtc seam,
-	// and — like the wheel's play/pause — are inert while the streamer's
-	// forced clock is active. Both steps stay under MediaStreamProvider's 90s
-	// SEEK_THRESHOLD_MS, so skipping nudges the buffers instead of forcing a
-	// full server-side seek on every press.
+	// ⏮/⏭ as a time remote: a tap skips the virtual clock 30 seconds; holding
+	// the button repeats with acceleration (holdSeekRamp.ts), from a minute
+	// per tick up to 30 virtual minutes per real second. Writes go through
+	// the sanctioned setDateTimeFromUtc seam, and — like the wheel's
+	// play/pause — are inert while the streamer's forced clock is active.
+	// Taps and early hold ticks stay under MediaStreamProvider's 90s
+	// SEEK_THRESHOLD_MS (buffer nudges); once the ramp exceeds it, each tick
+	// intentionally becomes a full seek — exactly what a fast scrub means.
 	const seekBy = useCallback(
 		(deltaMs: number) => {
 			if (dateTimeLocked) return;
@@ -225,11 +239,13 @@ export default function IpodShell() {
 			if (screenHandlersRef.current.onNext) screenHandlersRef.current.onNext();
 			else seekBy(TAP_SEEK_MS);
 		},
-		onPrevHold: () => {
-			if (!screenHandlersRef.current.onPrev) seekBy(-HOLD_SEEK_MS);
+		onPrevHold: (heldMs) => {
+			if (!screenHandlersRef.current.onPrev)
+				seekBy(-holdSeekStepMs(heldMs, HOLD_REPEAT_MS));
 		},
-		onNextHold: () => {
-			if (!screenHandlersRef.current.onNext) seekBy(HOLD_SEEK_MS);
+		onNextHold: (heldMs) => {
+			if (!screenHandlersRef.current.onNext)
+				seekBy(holdSeekStepMs(heldMs, HOLD_REPEAT_MS));
 		},
 		onMenu: () => dispatchStack({ type: "pop" }),
 		onPlayPause: () => {
@@ -245,7 +261,7 @@ export default function IpodShell() {
 	).replace(/:\d\d /, " "); // h:mm AM (drop seconds for the status bar)
 
 	return (
-		<div className="ipodRoot">
+		<div className="ipodRoot" data-ipod-color={ipodColor}>
 			<WheelContext.Provider value={wheelRegistry}>
 				<ScreenNavContext.Provider value={nav}>
 					<IpodChrome wheel={wheel}>
@@ -306,6 +322,10 @@ export default function IpodShell() {
 									tzOffset={tzOffset}
 									clockPaused={clockPaused}
 								/>
+							)}
+							{screen === "settings" && <MemoSettingsScreen />}
+							{screen === "settingsColor" && (
+								<MemoColorScreen color={ipodColor} onColorChange={setIpodColor} />
 							)}
 							{screen === "timeTravel" && <MemoTimeTravelScreen />}
 							{screen === "bookmarks" && (

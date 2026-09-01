@@ -10,6 +10,8 @@ export type ScreenId =
 	| "timeTravel"
 	| "bookmarks"
 	| "scrub"
+	| "settings"
+	| "settingsColor"
 	| "about";
 
 export interface ScreenStackState {
@@ -45,5 +47,7 @@ export const SCREEN_TITLES: Record<ScreenId, string> = {
 	timeTravel: "Time Travel",
 	bookmarks: "Bookmarks",
 	scrub: "Scrub",
+	settings: "Settings",
+	settingsColor: "Color",
 	about: "About",
 };

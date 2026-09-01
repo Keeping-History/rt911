@@ -94,8 +94,8 @@ describe("useClickWheel", () => {
 });
 
 // Holding ⏮/⏭ past HOLD_DELAY_MS repeats the hold handler instead of firing
-// the tap on release — the shell maps tap to a 30s clock skip and each hold
-// tick to a one-minute skip.
+// the tap on release — the shell maps tap to a 30s clock skip and hold ticks
+// to an accelerating skip driven by heldMs (holdSeekRamp.ts).
 describe("useClickWheel hold-repeat", () => {
 	afterEach(() => {
 		vi.useRealTimers();
@@ -121,6 +121,19 @@ describe("useClickWheel hold-repeat", () => {
 		expect(handlers.onPrev).not.toHaveBeenCalled(); // the hold consumed the gesture
 		vi.advanceTimersByTime(HOLD_REPEAT_MS * 3);
 		expect(handlers.onPrevHold).toHaveBeenCalledTimes(3); // stopped on release
+	});
+
+	it("reports how long the hold has been running so handlers can accelerate", () => {
+		vi.useFakeTimers(); // fake timers also drive Date.now, so heldMs is exact
+		const handlers = holdHandlers();
+		render(<Harness handlers={handlers} />);
+		fireEvent.pointerDown(screen.getByTestId("next-btn"), { pointerId: 1, ...at(0) });
+		vi.advanceTimersByTime(HOLD_DELAY_MS + HOLD_REPEAT_MS * 2);
+		expect(handlers.onNextHold.mock.calls.map((c) => c[0])).toEqual([
+			0,
+			HOLD_REPEAT_MS,
+			HOLD_REPEAT_MS * 2,
+		]);
 	});
 
 	it("a quick tap still fires the tap handler and never the hold", () => {
