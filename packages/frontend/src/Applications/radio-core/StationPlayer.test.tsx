@@ -64,7 +64,11 @@ describe("StationPlayer", () => {
 	it("renders one <audio> per in-window segment with its url (overlap → both)", () => {
 		const { container } = render(<StationPlayer {...base} />);
 		const audios = Array.from(container.querySelectorAll("audio"));
-		expect(audios.map((a) => a.getAttribute("src")).sort()).toEqual(["a.mp3", "b.mp3"]);
+		// Each src carries a #t= start-position fragment at its clock offset.
+		expect(audios.map((a) => a.getAttribute("src")).sort()).toEqual([
+			"a.mp3#t=420",
+			"b.mp3#t=120",
+		]);
 	});
 
 	it("renders no <audio> in a gap between segments", () => {
@@ -100,7 +104,9 @@ describe("StationPlayer", () => {
 	it("sets volume 0 for files in mutedItems and 1 for others", () => {
 		const { container } = render(<StationPlayer {...base} mutedItems={[1]} />);
 		const audios = Array.from(container.querySelectorAll("audio")) as HTMLAudioElement[];
-		const bySrc = new Map(audios.map((a) => [a.getAttribute("src"), a.volume]));
+		const bySrc = new Map(
+			audios.map((a) => [(a.getAttribute("src") ?? "").split("#")[0], a.volume]),
+		);
 		expect(bySrc.get("a.mp3")).toBe(0); // id 1 muted
 		expect(bySrc.get("b.mp3")).toBe(1); // id 2 not muted
 	});
@@ -124,7 +130,7 @@ describe("StationPlayer", () => {
 
 	it("mutes a playing element via el.muted, not just volume", async () => {
 		const { container, rerender } = render(<StationPlayer {...base} />);
-		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 		await unlock(audio);
 		expect(audio.muted).toBe(false);
 		rerender(<StationPlayer {...base} mutedItems={[1]} />);
@@ -134,7 +140,7 @@ describe("StationPlayer", () => {
 
 	it("unmuting a playing element restores el.muted = false", async () => {
 		const { container, rerender } = render(<StationPlayer {...base} mutedItems={[1]} />);
-		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 		await unlock(audio);
 		expect(audio.muted).toBe(true); // canplay while muted keeps it silent
 		rerender(<StationPlayer {...base} mutedItems={[]} />);
@@ -144,7 +150,7 @@ describe("StationPlayer", () => {
 
 	it("never unmutes an element still waiting for its autoplay unlock", () => {
 		const { rerender, container } = render(<StationPlayer {...base} mutedItems={[2]} />);
-		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 		expect(audio.muted).toBe(true); // pre-play autoplay mute
 		rerender(<StationPlayer {...base} mutedItems={[]} />);
 		expect(audio.muted).toBe(true); // mute-state change must not unlock it
@@ -152,7 +158,7 @@ describe("StationPlayer", () => {
 
 	it("onCanPlay honors the current mute list instead of unconditionally unmuting", async () => {
 		const { container } = render(<StationPlayer {...base} mutedItems={[1]} />);
-		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 		await unlock(audio);
 		expect(audio.muted).toBe(true);
 		expect(audio.volume).toBe(0);
@@ -160,7 +166,7 @@ describe("StationPlayer", () => {
 
 	it("mutes and unmutes through the in-graph gain as well (Safari)", () => {
 		const { container, rerender } = render(<StationPlayer {...base} />);
-		const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+		const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 		vi.mocked(setAudioLevel).mockClear();
 		rerender(<StationPlayer {...base} mutedItems={[1]} />);
 		expect(vi.mocked(setAudioLevel)).toHaveBeenCalledWith(audio, 0);
@@ -190,7 +196,7 @@ describe("StationPlayer", () => {
 			const { container } = render(
 				<StationPlayer {...base} getNowMs={() => now} />,
 			);
-			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 			audio.currentTime = 420; // synced when metadata loaded at 12:47 (item started 12:40)
 			now += 20_000; // 20s pass while playback stays blocked
 			document.dispatchEvent(new Event("click"));
@@ -199,7 +205,7 @@ describe("StationPlayer", () => {
 
 		it("leaves currentTime alone on a healthy start (drift inside tolerance)", () => {
 			const { container } = render(<StationPlayer {...base} />);
-			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 			audio.currentTime = 419.5; // half a second off expected 420: not worth a stutter
 			document.dispatchEvent(new Event("click"));
 			expect(audio.currentTime).toBe(419.5);
@@ -257,7 +263,7 @@ describe("StationPlayer", () => {
 
 		it("marks blocked on a pause it did not initiate (Safari unmute-pause)", () => {
 			const { container, unmount } = render(<StationPlayer {...base} />);
-			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 			expect(isAudioBlocked()).toBe(false);
 			fireEvent(audio, new Event("pause"));
 			expect(isAudioBlocked()).toBe(true);
@@ -267,7 +273,7 @@ describe("StationPlayer", () => {
 
 		it("ignores the pause caused by the clock pausing", () => {
 			const { container, rerender } = render(<StationPlayer {...base} />);
-			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 			rerender(<StationPlayer {...base} clockPaused={true} />);
 			fireEvent(audio, new Event("pause"));
 			expect(isAudioBlocked()).toBe(false);
@@ -278,7 +284,7 @@ describe("StationPlayer", () => {
 				.spyOn(window.HTMLMediaElement.prototype, "ended", "get")
 				.mockReturnValue(true);
 			const { container } = render(<StationPlayer {...base} />);
-			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
 			fireEvent(audio, new Event("pause"));
 			expect(isAudioBlocked()).toBe(false);
 			endedSpy.mockRestore();
@@ -310,5 +316,58 @@ describe("StationPlayer", () => {
 			rerender(<StationPlayer {...base} maxVolume={0.2} />);
 			expect(el.volume).toBe(0.2);
 		});
+	});
+});
+
+// iOS Safari clamps currentTime writes whose target isn't buffered yet on
+// long progressive files (desktop browsers queue them), which left mobile
+// audio ignoring clock jumps entirely. StationPlayer counters with a #t=
+// media-fragment start position and a seeked-event verification that falls
+// back to a fragment reload — see segmentSeek.ts.
+describe("clock-synced seeking (iOS clamp resistance)", () => {
+	let loadSpy: ReturnType<typeof vi.spyOn>;
+	beforeAll(() => {
+		loadSpy = vi.spyOn(window.HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+	});
+	afterAll(() => loadSpy.mockRestore());
+
+	it("mounts each element with a #t= start-position fragment at its clock offset", () => {
+		const { container } = render(<StationPlayer {...base} />);
+		// item 1 started at 12:40, clock is 12:47 → 420s in; item 2 at 12:45 → 120s.
+		expect(container.querySelector('audio[src="a.mp3#t=420"]')).toBeTruthy();
+		expect(container.querySelector('audio[src="b.mp3#t=120"]')).toBeTruthy();
+	});
+
+	it("accepts a seek that landed and does not reload", () => {
+		const { container } = render(<StationPlayer {...base} />);
+		const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
+		loadSpy.mockClear();
+		fireEvent(audio, new Event("loadedmetadata")); // issues the nudge seek → 420
+		expect(audio.currentTime).toBe(420);
+		fireEvent(audio, new Event("seeked")); // landed exactly where intended
+		expect(loadSpy).not.toHaveBeenCalled();
+	});
+
+	it("reloads at a fresh fragment when the browser clamped the seek, once per intent", () => {
+		const { container } = render(<StationPlayer {...base} />);
+		const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
+		loadSpy.mockClear();
+		fireEvent(audio, new Event("loadedmetadata")); // intent: 420
+		audio.currentTime = 3; // iOS-style clamp toward the start
+		fireEvent(audio, new Event("seeked"));
+		expect(loadSpy).toHaveBeenCalledTimes(1);
+		expect(audio.getAttribute("src")).toBe("a.mp3#t=420");
+		// The fallback also failing must not loop — one retry per intent.
+		audio.currentTime = 3;
+		fireEvent(audio, new Event("seeked"));
+		expect(loadSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("a clock scrub re-seeks mounted elements to the new position", () => {
+		const { container, rerender } = render(<StationPlayer {...base} />);
+		const audio = container.querySelector('audio[src^="a.mp3"]') as HTMLAudioElement;
+		const later = t("2001-09-11T12:49:00Z"); // +2min: a scrub, not a tick
+		rerender(<StationPlayer {...base} nowMs={later} getNowMs={() => later} />);
+		expect(audio.currentTime).toBe(540);
 	});
 });
