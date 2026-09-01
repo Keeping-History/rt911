@@ -1,8 +1,14 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Station } from "../../Applications/radio-core/stationGrouping";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { NowPlayingScreen } from "./NowPlayingScreen";
+
+// The screen resolves station artwork through this Directus-backed hook;
+// tests supply the map directly instead of hitting the network.
+vi.mock("../../Applications/radio-core/stationLogos", () => ({
+	useStationLogos: () => ({ WCBS: "https://example.test/wcbs-logo.png" }),
+}));
 
 afterEach(cleanup);
 
@@ -99,5 +105,59 @@ describe("NowPlayingScreen", () => {
 			/>,
 		);
 		expect(screen.getByText("paused")).toBeTruthy();
+	});
+});
+
+// The station's artwork shows above the title, resolved exactly as on the
+// desktop RadioTuner: a streaming item's image first, else the station's own
+// logo from the Directus map (mocked above).
+describe("NowPlayingScreen station logo", () => {
+	it("shows the streaming item's image when the station carries one", () => {
+		const withImage: Station = {
+			...station,
+			items: [{ ...station.items[0], image: "https://example.test/wins-art.png" }],
+		};
+		const { container } = render(
+			<NowPlayingScreen
+				station={withImage}
+				tvChannel={null}
+				nowMs={NOW}
+				tzOffset={-4}
+				clockPaused={false}
+			/>,
+		);
+		const img = container.querySelector("img.ipodStationLogo") as HTMLImageElement;
+		expect(img).toBeTruthy();
+		expect(img.getAttribute("src")).toBe("https://example.test/wins-art.png");
+	});
+
+	it("falls back to the station's Directus logo when nothing is streaming", () => {
+		const dark: Station = { key: "WCBS", label: "WCBS", items: [] };
+		const { container } = render(
+			<NowPlayingScreen
+				station={dark}
+				tvChannel={null}
+				nowMs={NOW}
+				tzOffset={-4}
+				clockPaused={false}
+			/>,
+		);
+		const img = container.querySelector("img.ipodStationLogo") as HTMLImageElement;
+		expect(img).toBeTruthy();
+		expect(img.getAttribute("src")).toBe("https://example.test/wcbs-logo.png");
+	});
+
+	it("renders no logo element when the station has no artwork at all", () => {
+		const dark: Station = { key: "KNOWN-NOWHERE", label: "X", items: [] };
+		const { container } = render(
+			<NowPlayingScreen
+				station={dark}
+				tvChannel={null}
+				nowMs={NOW}
+				tzOffset={-4}
+				clockPaused={false}
+			/>,
+		);
+		expect(container.querySelector("img.ipodStationLogo")).toBeNull();
 	});
 });

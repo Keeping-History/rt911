@@ -47,13 +47,17 @@ export function RadioScreen({
 		sorted.findIndex((s) => s.key === selectedKey),
 	);
 
+	// Off-air stations stay TUNABLE, matching the desktop RadioTuner: most
+	// broadcast stations hold one recording and are dark for most of the
+	// virtual day, but tuning one is meaningful — the shell mounts its player
+	// and the audio comes alive the moment its tape starts. Only the label
+	// says "offline"; nothing is disabled.
 	const items = sorted.map((s) => {
 		const onAir = activeSegments(s, nowMs).length > 0;
 		return {
 			key: s.key,
 			label: s.label,
 			value: s.key === activeStationKey ? "▶" : onAir ? undefined : "offline",
-			disabled: !onAir,
 		};
 	});
 
@@ -63,7 +67,7 @@ export function RadioScreen({
 	};
 
 	const activate = (i: number) => {
-		if (!items[i] || items[i].disabled) return;
+		if (!sorted[i]) return;
 		onTune(sorted[i].key);
 		push("nowPlaying");
 	};

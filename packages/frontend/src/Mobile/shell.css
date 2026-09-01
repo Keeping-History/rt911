@@ -245,3 +245,24 @@
 	position: absolute;
 	inset: -30px;
 }
+
+/* ── Now Playing station logo ── */
+.ipodRoot .ipodStationLogo {
+	display: block;
+	margin: 0 auto;
+	max-width: 60%;
+	max-height: calc(var(--u) * 56);
+	object-fit: contain;
+}
+
+/* ── Tap-to-start banner (iOS autoplay gate) ── */
+.ipodRoot .ipodTapBanner {
+	flex-shrink: 0;
+	background: linear-gradient(to bottom, #fffbe6, #f5ecc0);
+	border-bottom: calc(var(--u) * 1) solid #c9bd85;
+	color: #6b5f1e;
+	text-align: center;
+	font-size: calc(var(--u) * 12);
+	font-weight: 600;
+	padding: calc(var(--u) * 3) calc(var(--u) * 6);
+}
