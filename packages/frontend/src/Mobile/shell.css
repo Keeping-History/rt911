@@ -139,6 +139,10 @@
 	gap: calc(var(--u) * 8);
 	font-weight: 600;
 	border-bottom: calc(var(--u) * 1) solid #eee;
+	/* iOS Safari treats elements without a pointer cursor (or a direct click
+	   handler) as non-clickable in some delegation paths; be explicit so row
+	   taps always dispatch a click promptly. */
+	cursor: pointer;
 }
 .ipodRoot .ipodMenuItem .label {
 	white-space: nowrap;

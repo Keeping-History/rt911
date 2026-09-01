@@ -154,7 +154,22 @@ const localProxy: Record<string, ProxyOptions> = {
 // https://vite.dev/config/
 export default defineConfig({
 	plugins: [react(), crossOriginIsolationExceptPages()],
-	server: { proxy: localProxy },
+	server: {
+		proxy: localProxy,
+		// The boot branches are lazy chunks (app.tsx → DesktopRoot/MobileRoot),
+		// so on a COLD dev server their module graphs aren't discovered until
+		// the entry has executed and the dynamic import lands — a second,
+		// serialized transform phase that landed AFTER page load. That pushed
+		// first-boot-to-desktop past the 5s expect budget of the quickest e2e
+		// specs in CI (measured: goto→desktop 5.9s cold vs 0.9s on the old
+		// eager entry; specs later in the run pass because the server is warm
+		// by then). Pre-transform both branch graphs at server startup so the
+		// first navigation finds them hot. Dev-only; the production bundle is
+		// prebuilt and unaffected.
+		warmup: {
+			clientFiles: ["./src/DesktopRoot.tsx", "./src/MobileRoot.tsx"],
+		},
+	},
 	// `vite preview` serves the built bundle, and a production-mode build bakes
 	// the ABSOLUTE Directus URL — which localhost can't call. Pair this with
 	// `vite build --mode preview` (see the preview:auth script) so the bundle
