@@ -74,6 +74,8 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	clockPausedRef.current = clockPaused;
 	const getNowMsRef = useRef(getNowMs);
 	getNowMsRef.current = getNowMs;
+	const stationRef = useRef(station);
+	stationRef.current = station;
 
 	// Elements whose play() has resolved at least once. Until then an element
 	// must stay el.muted = true (that's what lets the browser permit autoplay),
@@ -104,6 +106,21 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	// any success clears the element's token.
 	const tryPlay = useCallback(
 		(id: number, el: HTMLAudioElement) => {
+			// Re-anchor to the virtual clock before starting. A blocked element
+			// resumes from the currentTime it had when its metadata loaded, but the
+			// clock kept running while it sat paused — and Safari refuses every
+			// gesture-less play() after a page load, so on mobile a fresh page
+			// always sits blocked until the first tap. That gap used to persist as
+			// audible desync: the health check only corrects drift beyond 30s, so
+			// anything smaller stuck until the next clock scrub re-seeked it
+			// ("starts at the wrong point until you change the time"). The 2s
+			// tolerance leaves healthy starts (canplay right after loadedmetadata,
+			// clock-pause resumes, where the clock was frozen too) alone.
+			const item = stationRef.current.items.find((i) => i.id === id);
+			if (item) {
+				const expected = calcSeekSeconds(item, getNowMsRef.current());
+				if (Math.abs(el.currentTime - expected) > 2) el.currentTime = expected;
+			}
 			el.play()
 				.then(() => {
 					clearAudioBlocked(`play-${id}`);

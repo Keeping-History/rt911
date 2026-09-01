@@ -180,6 +180,31 @@ describe("StationPlayer", () => {
 			expect(playSpy).toHaveBeenCalled();
 		});
 
+		it("re-anchors a blocked element to the clock when the gesture finally starts it", () => {
+			// The virtual clock keeps running while an element sits autoplay-
+			// blocked (on mobile every fresh page load is blocked until the first
+			// tap). Resuming from the offset computed at load time started audio
+			// behind the clock — and drift under the health check's 30s window
+			// stuck until the next scrub. tryPlay must re-seek before starting.
+			let now = t("2001-09-11T12:47:00Z");
+			const { container } = render(
+				<StationPlayer {...base} getNowMs={() => now} />,
+			);
+			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			audio.currentTime = 420; // synced when metadata loaded at 12:47 (item started 12:40)
+			now += 20_000; // 20s pass while playback stays blocked
+			document.dispatchEvent(new Event("click"));
+			expect(audio.currentTime).toBe(440); // resumed AT the clock, not 20s behind
+		});
+
+		it("leaves currentTime alone on a healthy start (drift inside tolerance)", () => {
+			const { container } = render(<StationPlayer {...base} />);
+			const audio = container.querySelector('audio[src="a.mp3"]') as HTMLAudioElement;
+			audio.currentTime = 419.5; // half a second off expected 420: not worth a stutter
+			document.dispatchEvent(new Event("click"));
+			expect(audio.currentTime).toBe(419.5);
+		});
+
 		it("does not retry while the clock is paused", () => {
 			render(<StationPlayer {...base} clockPaused={true} />);
 			playSpy.mockClear();

@@ -28,6 +28,11 @@ import {
 	screenStackReducer,
 	type ScreenId,
 } from "./screenStack";
+import {
+	loadNowPlaying,
+	type NowPlayingSource,
+	saveNowPlaying,
+} from "./nowPlayingStore";
 import { TvPlayer } from "./TvPlayer";
 import { useClickWheel } from "./useClickWheel";
 import { useFineClock } from "./useFineClock";
@@ -51,11 +56,7 @@ const APP_ID = "IpodShell.mobile";
 // its reference is stable — useMediaStream memoizes the filtered list on it.
 const TV_CHANNELS_FILTER: MediaStreamFilter = { format: ["m3u8"], approved: true };
 
-/** The single "now playing" source — tuning either kind evicts the other,
- *  which is the whole one-at-a-time rule (design decision 2026-07-15). */
-export type NowPlayingSource =
-	| { kind: "radio"; key: string }
-	| { kind: "tv"; id: number };
+export type { NowPlayingSource } from "./nowPlayingStore";
 
 // The mobile shell never shows the waveform (showWaveform is always false),
 // so StationPlayer's viz props are inert here — defaults and a stable no-op.
@@ -102,7 +103,18 @@ export default function IpodShell() {
 		return () => unsubscribeMp3(APP_ID);
 	}, [subscribeMp3, unsubscribeMp3]);
 
-	const [nowPlaying, setNowPlaying] = useState<NowPlayingSource | null>(null);
+	// Seeded from localStorage so a refreshed/reopened phone resumes the same
+	// tuned station or channel (the virtual clock already survives reloads via
+	// classicy's persisted store); saved back on every change below. The
+	// persisted key/id may reference a station or channel that no longer
+	// exists — the activeStation/activeTvItem lookups already resolve that to
+	// null, so nothing mounts until the stream delivers a match.
+	const [nowPlaying, setNowPlaying] = useState<NowPlayingSource | null>(
+		loadNowPlaying,
+	);
+	useEffect(() => {
+		saveNowPlaying(nowPlaying);
+	}, [nowPlaying]);
 	const stations = useMemo(
 		() => mergeWithSources(sources.audio, mp3Items),
 		[sources.audio, mp3Items],
