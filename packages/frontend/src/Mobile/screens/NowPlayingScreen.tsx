@@ -60,9 +60,14 @@ export function NowPlayingScreen({
 	const primary = primarySegment(activeSegments(station, nowMs));
 
 	return (
-		<div className="ipodTextScreen">
-			{logo && <img className="ipodStationLogo" src={logo} alt="" />}
-			<div className="ipodMarquee ipodCenter">{station.label}</div>
+		<div className="ipodTextScreen ipodNowPlaying">
+			{/* The artwork *is* the station identity — showing the name too just
+			    duplicates it and costs a line on a screen that must not scroll. */}
+			{logo ? (
+				<img className="ipodStationLogo" src={logo} alt={station.label} />
+			) : (
+				<div className="ipodMarquee ipodCenter">{station.label}</div>
+			)}
 			{primary ? (
 				<>
 					<p className="ipodCenter">{primary.full_title || primary.title}</p>

@@ -180,6 +180,11 @@
 	flex-direction: column;
 	gap: calc(var(--u) * 6);
 }
+/* Paragraph spacing comes from the flex gap alone — default <p> margins on
+   top of it made Now Playing taller than the screen (it scrolled). */
+.ipodRoot .ipodTextScreen p {
+	margin: 0;
+}
 .ipodRoot .ipodBigTime {
 	font-size: calc(var(--u) * 26);
 	font-weight: 700;
@@ -246,7 +251,11 @@
 	inset: -30px;
 }
 
-/* ── Now Playing station logo ── */
+/* ── Now Playing (radio) ── */
+/* Everything (logo, title, start time, clock) must fit without scrolling. */
+.ipodRoot .ipodNowPlaying {
+	gap: calc(var(--u) * 4);
+}
 .ipodRoot .ipodStationLogo {
 	display: block;
 	margin: 0 auto;

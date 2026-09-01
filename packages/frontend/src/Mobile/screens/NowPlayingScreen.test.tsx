@@ -147,6 +147,36 @@ describe("NowPlayingScreen station logo", () => {
 		expect(img.getAttribute("src")).toBe("https://example.test/wcbs-logo.png");
 	});
 
+	it("hides the station name when a logo is shown (the artwork is the identity)", () => {
+		const withImage: Station = {
+			...station,
+			items: [{ ...station.items[0], image: "https://example.test/wins-art.png" }],
+		};
+		render(
+			<NowPlayingScreen
+				station={withImage}
+				tvChannel={null}
+				nowMs={NOW}
+				tzOffset={-4}
+				clockPaused={false}
+			/>,
+		);
+		expect(screen.queryByText("WINS")).toBeNull();
+	});
+
+	it("keeps the station name when there is no artwork", () => {
+		render(
+			<NowPlayingScreen
+				station={{ key: "KNOWN-NOWHERE", label: "X", items: [] }}
+				tvChannel={null}
+				nowMs={NOW}
+				tzOffset={-4}
+				clockPaused={false}
+			/>,
+		);
+		expect(screen.getByText("X")).toBeTruthy();
+	});
+
 	it("renders no logo element when the station has no artwork at all", () => {
 		const dark: Station = { key: "KNOWN-NOWHERE", label: "X", items: [] };
 		const { container } = render(
