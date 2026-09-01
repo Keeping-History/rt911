@@ -98,5 +98,11 @@ export function useClickWheel(handlers: ClickWheelHandlers): ClickWheel {
 		[],
 	);
 
-	return { wheelRef, wheelHandlers, buttonDown, pressed };
+	// Stable object identity (only `pressed` varies): IpodChrome's artwork is
+	// memoized on it, so the shell's per-second re-renders (clock tick, stream
+	// frames) don't reconcile the wheel/button subtree at all.
+	return useMemo(
+		() => ({ wheelRef, wheelHandlers, buttonDown, pressed }),
+		[wheelHandlers, buttonDown, pressed],
+	);
 }

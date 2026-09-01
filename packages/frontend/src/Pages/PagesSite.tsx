@@ -1,4 +1,10 @@
 import { ClassicyButton, ClassicyIcons } from "classicy";
+// Classicy styles + Platinum fonts moved out of the entry chunk (the fonts
+// alone are ~900 kB of base64 the mobile shell shouldn't parse at boot); this
+// surface uses the Classicy look, so it imports both itself — classicy.css
+// otherwise arrives via boot/AppProviders.tsx, which pages never mount.
+import "classicy/dist/classicy.css";
+import "classicy/dist/fonts.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { initGoogleAnalytics, trackPageView } from "../lib/analytics";
 import { DIRECTUS_URL } from "../lib/endpoints";

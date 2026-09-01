@@ -6,6 +6,7 @@
 // state and register scroll/select meaning via useScreenWheel.
 import { useAppManager, useClassicyDateTime } from "classicy";
 import {
+	memo,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -59,6 +60,22 @@ export type NowPlayingSource =
 // The mobile shell never shows the waveform (showWaveform is always false),
 // so StationPlayer's viz props are inert here — defaults and a stable no-op.
 const noopCycleVizMode = () => {};
+
+// The shell re-renders on every clock tick (1 Hz) and on every
+// MediaStreamContext change (heartbeats, reveal-buffer promotions, …), since
+// useMediaStream subscribes it to the whole context. Memoizing the screens
+// means those ambient renders reconcile only the header/status text — a
+// screen re-renders when its own props change (or its own state/hooks do),
+// not because the shell ticked. All props passed below are identity-stable
+// except the ones that legitimately drive UI (nowMs, stations, channels).
+const MemoMainMenu = memo(MainMenu);
+const MemoAboutScreen = memo(AboutScreen);
+const MemoRadioScreen = memo(RadioScreen);
+const MemoTVScreen = memo(TVScreen);
+const MemoNowPlayingScreen = memo(NowPlayingScreen);
+const MemoTimeTravelScreen = memo(TimeTravelScreen);
+const MemoBookmarksScreen = memo(BookmarksScreen);
+const MemoScrubScreen = memo(ScrubScreen);
 
 export default function IpodShell() {
 	const [stackState, dispatchStack] = useReducer(screenStackReducer, initialScreenStack);
@@ -186,11 +203,11 @@ export default function IpodShell() {
 						)}
 						<div className="ipodScreenBody" key={screen}>
 							{screen === "menu" && (
-								<MainMenu hasNowPlaying={nowPlaying !== null} />
+								<MemoMainMenu hasNowPlaying={nowPlaying !== null} />
 							)}
-							{screen === "about" && <AboutScreen />}
+							{screen === "about" && <MemoAboutScreen />}
 							{screen === "radio" && (
-								<RadioScreen
+								<MemoRadioScreen
 									stations={stations}
 									nowMs={nowMs}
 									activeStationKey={
@@ -201,7 +218,7 @@ export default function IpodShell() {
 								/>
 							)}
 							{screen === "tv" && (
-								<TVScreen
+								<MemoTVScreen
 									channels={tvChannels}
 									activeTvId={nowPlaying?.kind === "tv" ? nowPlaying.id : null}
 									onTune={tuneTvChannel}
@@ -209,7 +226,7 @@ export default function IpodShell() {
 								/>
 							)}
 							{screen === "nowPlaying" && (
-								<NowPlayingScreen
+								<MemoNowPlayingScreen
 									station={activeStation}
 									tvChannel={activeTvItem}
 									nowMs={nowMs}
@@ -217,10 +234,12 @@ export default function IpodShell() {
 									clockPaused={clockPaused}
 								/>
 							)}
-							{screen === "timeTravel" && <TimeTravelScreen />}
-							{screen === "bookmarks" && <BookmarksScreen tzOffset={tzOffset} />}
+							{screen === "timeTravel" && <MemoTimeTravelScreen />}
+							{screen === "bookmarks" && (
+								<MemoBookmarksScreen tzOffset={tzOffset} />
+							)}
 							{screen === "scrub" && (
-								<ScrubScreen getNowMs={getNowMs} tzOffset={tzOffset} />
+								<MemoScrubScreen getNowMs={getNowMs} tzOffset={tzOffset} />
 							)}
 						</div>
 					</IpodChrome>
