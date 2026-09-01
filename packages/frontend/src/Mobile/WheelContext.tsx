@@ -23,16 +23,21 @@ export function useScreenWheel(handlers: ScreenWheelHandlers): void {
 	const { register } = useContext(WheelContext);
 	const ref = useRef(handlers);
 	ref.current = handlers;
-	useEffect(
-		() =>
-			register({
-				onScroll: (s) => ref.current.onScroll?.(s),
-				onSelect: () => ref.current.onSelect?.(),
-				onPrev: () => ref.current.onPrev?.(),
-				onNext: () => ref.current.onNext?.(),
-			}),
-		[register],
-	);
+	useEffect(() => {
+		// Register ONLY the meanings this screen actually has. The shell gives
+		// unclaimed buttons a default meaning (⏮/⏭ skip the clock), and it
+		// detects a claim by the key being present — registering an
+		// always-defined wrapper for a handler the screen never passed would
+		// silently swallow the default. A screen's handler SET is static for
+		// its lifetime (the values stay fresh through the ref).
+		const h = ref.current;
+		return register({
+			onScroll: h.onScroll ? (s) => ref.current.onScroll?.(s) : undefined,
+			onSelect: h.onSelect ? () => ref.current.onSelect?.() : undefined,
+			onPrev: h.onPrev ? () => ref.current.onPrev?.() : undefined,
+			onNext: h.onNext ? () => ref.current.onNext?.() : undefined,
+		});
+	}, [register]);
 }
 
 export interface ScreenNav {

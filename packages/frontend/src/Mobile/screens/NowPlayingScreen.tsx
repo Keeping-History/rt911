@@ -7,8 +7,10 @@ import {
 	activeSegments,
 	primarySegment,
 	startTimeLabel,
+	stationLogo,
 	type Station,
 } from "../../Applications/radio-core/stationGrouping";
+import { useStationLogos } from "../../Applications/radio-core/stationLogos";
 import { formatUtcAsLocalTime } from "../../Applications/TimeMachine/setVirtualClock";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 
@@ -29,6 +31,11 @@ export function NowPlayingScreen({
 	clockPaused,
 }: NowPlayingScreenProps) {
 	const clock = formatUtcAsLocalTime(new Date(nowMs).toISOString(), tzOffset);
+	// Same artwork the desktop RadioTuner shows: the streaming item's image
+	// when one is on the air, else the station's own logo from Directus (a
+	// fetch failure just leaves the logo off — the hook degrades to {}).
+	const logos = useStationLogos();
+	const logo = station ? stationLogo(station, [], logos) : undefined;
 
 	if (tvChannel) {
 		return (
@@ -54,6 +61,7 @@ export function NowPlayingScreen({
 
 	return (
 		<div className="ipodTextScreen">
+			{logo && <img className="ipodStationLogo" src={logo} alt="" />}
 			<div className="ipodMarquee ipodCenter">{station.label}</div>
 			{primary ? (
 				<>

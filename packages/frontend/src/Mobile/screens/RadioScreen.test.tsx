@@ -58,6 +58,25 @@ describe("RadioScreen", () => {
 		expect(push).toHaveBeenCalledWith("nowPlaying");
 	});
 
+	it("tunes an off-air station (desktop RadioTuner parity: dark ≠ unavailable)", () => {
+		const onTune = vi.fn();
+		const push = vi.fn();
+		render(
+			<ScreenNavContext.Provider value={{ push, pop: vi.fn() }}>
+				<RadioScreen
+					stations={[onAir("WINS"), offAir("WCBS")]}
+					nowMs={NOW}
+					activeStationKey=""
+					onTune={onTune}
+					connected={true}
+				/>
+			</ScreenNavContext.Provider>,
+		);
+		fireEvent.click(screen.getByText("WCBS"));
+		expect(onTune).toHaveBeenCalledWith("WCBS");
+		expect(push).toHaveBeenCalledWith("nowPlaying");
+	});
+
 	it("keeps the highlight on the same station when the sort order reshuffles", () => {
 		// Non-pinned stations (WINS/WCBS are pinned): both start on-air, so the
 		// incoming order [KYW, WBZ] is the display order. Selecting WBZ (index 1)

@@ -1,16 +1,21 @@
 // packages/frontend/src/Mobile/IpodShell.test.tsx
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useContext } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MediaStreamContextValue } from "../Providers/MediaStream/MediaStreamContext";
 import { MediaStreamContext } from "../Providers/MediaStream/MediaStreamContext";
 import IpodShell from "./IpodShell";
+import {
+	clearAudioBlocked,
+	markAudioBlocked,
+} from "../Applications/radio-core/audioBlocked";
 
 // Mutated per-test to drive forced-clock enforcement (see PlaylistProvider.test.tsx
 // for the same mutable-mock convention).
 let mockDateTimeLocked = false;
 const mockPause = vi.fn();
 const mockResume = vi.fn();
+const mockSetDateTime = vi.fn();
 
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
@@ -22,7 +27,7 @@ vi.mock("classicy", async (importOriginal) => ({
 		localDate: new Date("2001-09-11T08:40:00.000Z"),
 		paused: false,
 		tzOffset: -4,
-		setDateTime: vi.fn(),
+		setDateTime: mockSetDateTime,
 		pause: mockPause,
 		resume: mockResume,
 	}),
@@ -38,11 +43,19 @@ vi.mock("../Applications/radio-core/StationPlayer", () => ({
 	StationPlayer: () => <div data-testid="station-player" />,
 }));
 
+// Now Playing fetches station artwork from Directus via this hook; tests
+// must not hit the network.
+vi.mock("../Applications/radio-core/stationLogos", () => ({
+	useStationLogos: () => ({}),
+}));
+
 afterEach(() => {
 	cleanup();
 	mockDateTimeLocked = false;
 	mockPause.mockClear();
 	mockResume.mockClear();
+	mockSetDateTime.mockClear();
+	clearAudioBlocked("test-banner");
 	// Tuning persists the now-playing source (nowPlayingStore.ts); clear it so
 	// one test's tuned station never boots the next test's shell pre-tuned.
 	window.localStorage.clear();
@@ -96,6 +109,13 @@ function pressMenu(container: HTMLElement) {
 	const wheelEl = container.querySelector("#control-wheel") as HTMLElement;
 	const menuBtn = container.querySelector("#menu-btn") as HTMLElement;
 	fireEvent.pointerDown(menuBtn, { pointerId: 1, clientX: 0, clientY: 0 });
+	fireEvent.pointerUp(wheelEl, { pointerId: 1, clientX: 0, clientY: 0 });
+}
+
+function pressWheelButton(container: HTMLElement, btnId: string) {
+	const wheelEl = container.querySelector("#control-wheel") as HTMLElement;
+	const btn = container.querySelector(btnId) as HTMLElement;
+	fireEvent.pointerDown(btn, { pointerId: 1, clientX: 0, clientY: 0 });
 	fireEvent.pointerUp(wheelEl, { pointerId: 1, clientX: 0, clientY: 0 });
 }
 
@@ -280,5 +300,66 @@ describe("IpodShell now-playing persistence", () => {
 		expect(
 			JSON.parse(window.localStorage.getItem("rt911IpodNowPlaying") ?? "null"),
 		).toEqual({ kind: "tv", id: 42 });
+	});
+});
+
+// ⏮/⏭ drive the virtual clock: a tap skips 30 seconds, each hold-repeat tick
+// skips a minute, and everything goes through the setDateTimeFromUtc seam
+// (asserted here via the classicy setDateTime callback it wraps). The mocked
+// clock is pinned at 12:40:00 UTC, so expected targets are absolute.
+describe("IpodShell wheel time skips", () => {
+	const NOW = Date.parse("2001-09-11T12:40:00.000Z");
+
+	it("tapping ⏭ skips the clock forward 30 seconds", () => {
+		const { container } = renderShell({ connected: true });
+		pressWheelButton(container, "#next-btn");
+		expect(mockSetDateTime).toHaveBeenCalledTimes(1);
+		expect(+mockSetDateTime.mock.calls[0][0]).toBe(NOW + 30_000);
+	});
+
+	it("tapping ⏮ skips the clock back 30 seconds", () => {
+		const { container } = renderShell({ connected: true });
+		pressWheelButton(container, "#prev-btn");
+		expect(mockSetDateTime).toHaveBeenCalledTimes(1);
+		expect(+mockSetDateTime.mock.calls[0][0]).toBe(NOW - 30_000);
+	});
+
+	it("holding ⏭ repeats one-minute skips and suppresses the 30s tap", () => {
+		vi.useFakeTimers();
+		const { container } = renderShell({ connected: true });
+		const wheelEl = container.querySelector("#control-wheel") as HTMLElement;
+		const btn = container.querySelector("#next-btn") as HTMLElement;
+		fireEvent.pointerDown(btn, { pointerId: 1, clientX: 0, clientY: 0 });
+		vi.advanceTimersByTime(550 + 500); // HOLD_DELAY_MS + one HOLD_REPEAT_MS
+		fireEvent.pointerUp(wheelEl, { pointerId: 1, clientX: 0, clientY: 0 });
+		vi.useRealTimers();
+		expect(mockSetDateTime).toHaveBeenCalledTimes(2); // two hold ticks, no tap
+		// The mocked clock is pinned, so every tick seeks from 12:40 → 12:41.
+		for (const call of mockSetDateTime.mock.calls) {
+			expect(+call[0]).toBe(NOW + 60_000);
+		}
+	});
+
+	it("is inert while the streamer's forced clock is active", () => {
+		mockDateTimeLocked = true;
+		const { container } = renderShell({ connected: true });
+		pressWheelButton(container, "#next-btn");
+		pressWheelButton(container, "#prev-btn");
+		expect(mockSetDateTime).not.toHaveBeenCalled();
+	});
+});
+
+// iOS refuses gesture-less audio after a reload — a policy that cannot be
+// bypassed — so the shell must at least SAY so. StationPlayer marks the
+// shared audioBlocked signal while the gate holds playback; the shell shows
+// a banner that doubles as the instruction (any tap retries playback).
+describe("IpodShell tap-to-start banner", () => {
+	it("appears while audio is autoplay-blocked and leaves when it clears", () => {
+		renderShell(STREAM_UP);
+		expect(screen.queryByText(/Tap anywhere to start audio/)).toBeNull();
+		act(() => markAudioBlocked("test-banner"));
+		expect(screen.getByText(/Tap anywhere to start audio/)).toBeTruthy();
+		act(() => clearAudioBlocked("test-banner"));
+		expect(screen.queryByText(/Tap anywhere to start audio/)).toBeNull();
 	});
 });

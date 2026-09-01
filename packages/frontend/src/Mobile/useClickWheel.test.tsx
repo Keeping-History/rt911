@@ -1,6 +1,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useClickWheel, type ClickWheelHandlers } from "./useClickWheel";
+import {
+	HOLD_DELAY_MS,
+	HOLD_REPEAT_MS,
+	useClickWheel,
+	type ClickWheelHandlers,
+} from "./useClickWheel";
 
 afterEach(cleanup);
 
@@ -15,6 +20,8 @@ function Harness({ handlers }: { handlers: ClickWheelHandlers }) {
 		>
 			<button type="button" data-testid="menu-btn" onPointerDown={buttonDown("menu")} />
 			<button type="button" data-testid="mid-btn" onPointerDown={buttonDown("select")} />
+			<button type="button" data-testid="prev-btn" onPointerDown={buttonDown("prev")} />
+			<button type="button" data-testid="next-btn" onPointerDown={buttonDown("next")} />
 		</div>
 	);
 }
@@ -83,5 +90,73 @@ describe("useClickWheel", () => {
 		fireEvent.pointerUp(wheel, { pointerId: 1, ...at(0) });
 		expect(wheel.dataset.pressed).toBe("");
 		expect(handlers.onSelect).toHaveBeenCalledTimes(1);
+	});
+});
+
+// Holding ⏮/⏭ past HOLD_DELAY_MS repeats the hold handler instead of firing
+// the tap on release — the shell maps tap to a 30s clock skip and each hold
+// tick to a one-minute skip.
+describe("useClickWheel hold-repeat", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	const holdHandlers = () => ({
+		...makeHandlers(),
+		onPrevHold: vi.fn(),
+		onNextHold: vi.fn(),
+	});
+
+	it("fires the hold handler after the delay, repeats, and suppresses the tap", () => {
+		vi.useFakeTimers();
+		const handlers = holdHandlers();
+		render(<Harness handlers={handlers} />);
+		const wheel = screen.getByTestId("wheel");
+		fireEvent.pointerDown(screen.getByTestId("prev-btn"), { pointerId: 1, ...at(180) });
+		vi.advanceTimersByTime(HOLD_DELAY_MS);
+		expect(handlers.onPrevHold).toHaveBeenCalledTimes(1);
+		vi.advanceTimersByTime(HOLD_REPEAT_MS * 2);
+		expect(handlers.onPrevHold).toHaveBeenCalledTimes(3);
+		fireEvent.pointerUp(wheel, { pointerId: 1, ...at(180) });
+		expect(handlers.onPrev).not.toHaveBeenCalled(); // the hold consumed the gesture
+		vi.advanceTimersByTime(HOLD_REPEAT_MS * 3);
+		expect(handlers.onPrevHold).toHaveBeenCalledTimes(3); // stopped on release
+	});
+
+	it("a quick tap still fires the tap handler and never the hold", () => {
+		vi.useFakeTimers();
+		const handlers = holdHandlers();
+		render(<Harness handlers={handlers} />);
+		const wheel = screen.getByTestId("wheel");
+		fireEvent.pointerDown(screen.getByTestId("next-btn"), { pointerId: 1, ...at(0) });
+		vi.advanceTimersByTime(100);
+		fireEvent.pointerUp(wheel, { pointerId: 1, ...at(0) });
+		expect(handlers.onNext).toHaveBeenCalledTimes(1);
+		vi.advanceTimersByTime(HOLD_DELAY_MS + HOLD_REPEAT_MS * 3);
+		expect(handlers.onNextHold).not.toHaveBeenCalled();
+	});
+
+	it("a drag that becomes a scroll cancels the pending hold", () => {
+		vi.useFakeTimers();
+		const handlers = holdHandlers();
+		render(<Harness handlers={handlers} />);
+		const wheel = screen.getByTestId("wheel");
+		fireEvent.pointerDown(screen.getByTestId("prev-btn"), { pointerId: 1, ...at(90) });
+		fireEvent.pointerMove(wheel, { pointerId: 1, ...at(120) }); // crosses the dead zone
+		vi.advanceTimersByTime(HOLD_DELAY_MS + HOLD_REPEAT_MS * 2);
+		expect(handlers.onPrevHold).not.toHaveBeenCalled();
+		fireEvent.pointerUp(wheel, { pointerId: 1, ...at(120) });
+		expect(handlers.onPrev).not.toHaveBeenCalled(); // scrolls never tap either
+	});
+
+	it("without a hold handler, a long press stays an ordinary tap", () => {
+		vi.useFakeTimers();
+		const handlers = makeHandlers(); // no onPrevHold/onNextHold registered
+		render(<Harness handlers={handlers} />);
+		const wheel = screen.getByTestId("wheel");
+		fireEvent.pointerDown(screen.getByTestId("prev-btn"), { pointerId: 1, ...at(180) });
+		vi.advanceTimersByTime(HOLD_DELAY_MS + HOLD_REPEAT_MS * 4);
+		fireEvent.pointerUp(wheel, { pointerId: 1, ...at(180) });
+		expect(handlers.onPrev).toHaveBeenCalledTimes(1);
 	});
 });

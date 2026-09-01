@@ -1,6 +1,9 @@
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { vttUrl } from "../../Providers/MediaStream/MediaStreamContext";
+import {
+	type MediaItem,
+	vttUrl,
+} from "../../Providers/MediaStream/MediaStreamContext";
 import { clearAudioBlocked, markAudioBlocked } from "./audioBlocked";
 import { setAudioLevel } from "./audioCapture";
 import { CaptionOverlay } from "./CaptionOverlay";
@@ -10,6 +13,11 @@ import {
 	type VizMode,
 } from "./radioScannerSettings";
 import { resolveAudioUrl } from "./audioSource";
+import {
+	type PendingSeek,
+	seekLanded,
+	withStartFragment,
+} from "./segmentSeek";
 import {
 	activeSegments,
 	calcSeekSeconds,
@@ -76,6 +84,81 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 	getNowMsRef.current = getNowMs;
 	const stationRef = useRef(station);
 	stationRef.current = station;
+	const playOriginalAudioRef = useRef(playOriginalAudio);
+	playOriginalAudioRef.current = playOriginalAudio;
+
+	// Per-segment src, frozen at mount WITH a #t= start-position fragment:
+	// Safari resolves media fragments natively with a ranged fetch, so an
+	// element begins at its clock position without needing a post-load seek —
+	// the operation iOS clamps on long progressive files (see segmentSeek.ts).
+	// Recomputed from scratch when the original/enhanced toggle changes.
+	const initialSrcRef = useRef<Map<number, string>>(new Map());
+	const srcModeRef = useRef(playOriginalAudio);
+	if (srcModeRef.current !== playOriginalAudio) {
+		srcModeRef.current = playOriginalAudio;
+		initialSrcRef.current.clear();
+	}
+	const srcFor = (item: MediaItem): string => {
+		let src = initialSrcRef.current.get(item.id);
+		if (src === undefined) {
+			src = withStartFragment(
+				resolveAudioUrl(item, playOriginalAudio),
+				calcSeekSeconds(item, getNowMsRef.current()),
+			);
+			initialSrcRef.current.set(item.id, src);
+		}
+		return src;
+	};
+
+	// Every programmatic seek goes through here so it can be VERIFIED: iOS
+	// Safari clamps currentTime writes whose target isn't buffered yet (desktop
+	// browsers queue them), which left mobile audio ignoring clock jumps
+	// entirely. The element's `seeked` event checks where the seek landed; a
+	// clamp triggers one fragment-reload fallback per intent (see verifySeek).
+	const pendingSeekRef = useRef<Map<number, PendingSeek>>(new Map());
+	const seekSegmentTo = useCallback(
+		(item: MediaItem, el: HTMLAudioElement, want: number) => {
+			pendingSeekRef.current.set(item.id, {
+				want,
+				atMs: Date.now(),
+				retried: false,
+			});
+			el.currentTime = want;
+		},
+		[],
+	);
+
+	const verifySeek = useCallback((item: MediaItem, el: HTMLAudioElement) => {
+		const pending = pendingSeekRef.current.get(item.id);
+		if (!pending) return;
+		if (seekLanded(el.currentTime, pending, Date.now(), clockPausedRef.current)) {
+			pendingSeekRef.current.delete(item.id);
+			return;
+		}
+		if (pending.retried) {
+			// The fallback also missed — stop here; the health check re-issues a
+			// fresh intent within 15s while the drift persists.
+			pendingSeekRef.current.delete(item.id);
+			return;
+		}
+		// Clamped: reposition by reloading at a fresh #t= fragment, which Safari
+		// honors with a ranged fetch at the target. Keep React's rendered src in
+		// agreement so the next render doesn't undo it. onCanPlay restarts
+		// playback through the usual autoplay dance.
+		const target = calcSeekSeconds(item, getNowMsRef.current());
+		const src = withStartFragment(
+			resolveAudioUrl(item, playOriginalAudioRef.current),
+			target,
+		);
+		pendingSeekRef.current.set(item.id, {
+			want: target,
+			atMs: Date.now(),
+			retried: true,
+		});
+		initialSrcRef.current.set(item.id, src);
+		el.src = src;
+		el.load();
+	}, []);
 
 	// Elements whose play() has resolved at least once. Until then an element
 	// must stay el.muted = true (that's what lets the browser permit autoplay),
@@ -119,7 +202,9 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 			const item = stationRef.current.items.find((i) => i.id === id);
 			if (item) {
 				const expected = calcSeekSeconds(item, getNowMsRef.current());
-				if (Math.abs(el.currentTime - expected) > 2) el.currentTime = expected;
+				if (Math.abs(el.currentTime - expected) > 2) {
+					seekSegmentTo(item, el, expected);
+				}
 			}
 			el.play()
 				.then(() => {
@@ -132,7 +217,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 					}
 				});
 		},
-		[unlockAndApplyMuteState],
+		[unlockAndApplyMuteState, seekSegmentTo],
 	);
 
 	// Health check: keep each mounted element playing and within 30s of expected.
@@ -150,11 +235,13 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 					tryPlay(segId, el);
 				}
 				const expected = calcSeekSeconds(item, now);
-				if (Math.abs(el.currentTime - expected) > 30) el.currentTime = expected;
+				if (Math.abs(el.currentTime - expected) > 30) {
+					seekSegmentTo(item, el, expected);
+				}
 			}
 		}, 15_000);
 		return () => clearInterval(id);
-	}, [station, tryPlay]);
+	}, [station, tryPlay, seekSegmentTo]);
 
 	// A user gesture is the first moment blocked playback can start: Safari
 	// refuses gesture-less play() on page load, so a restored session autoplays
@@ -213,10 +300,10 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 		if (Math.abs(delta) > 5_000) {
 			for (const [segId, el] of audioRefs.current) {
 				const item = station.items.find((i) => i.id === segId);
-				if (item) el.currentTime = calcSeekSeconds(item, nowMs);
+				if (item) seekSegmentTo(item, el, calcSeekSeconds(item, nowMs));
 			}
 		}
-	}, [nowMs, station]);
+	}, [nowMs, station, seekSegmentTo]);
 
 	// Stable per-segment ref callbacks: a fixed identity means React invokes the
 	// callback only on real mount/unmount, so a playing element is never re-muted
@@ -241,6 +328,8 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 					unlockedRef.current.delete(id);
 					// A gone element no longer needs a gesture.
 					clearAudioBlocked(`play-${id}`);
+					initialSrcRef.current.delete(id);
+					pendingSeekRef.current.delete(id);
 				}
 			};
 			refCallbacks.current.set(id, cb);
@@ -257,11 +346,13 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 				<audio
 					key={item.id}
 					ref={audioRef(item.id)}
-					src={resolveAudioUrl(item, playOriginalAudio)}
+					src={srcFor(item)}
 					crossOrigin="anonymous"
 					style={{ display: "none" }}
 					onLoadedMetadata={(e) => {
-						e.currentTarget.currentTime = calcSeekSeconds(item, getNowMsRef.current());
+						// The #t= fragment already positioned the element near its clock
+						// spot; this nudge covers the load time and non-fragment browsers.
+						seekSegmentTo(item, e.currentTarget, calcSeekSeconds(item, getNowMsRef.current()));
 						setReadyVersions((prev) => {
 							const next = new Map(prev);
 							next.set(item.id, (prev.get(item.id) ?? 0) + 1);
@@ -273,6 +364,7 @@ export const StationPlayer: React.FC<StationPlayerProps> = ({
 						if (clockPausedRef.current) return;
 						tryPlay(item.id, el);
 					}}
+					onSeeked={(e) => verifySeek(item, e.currentTarget)}
 					onPause={(e) => {
 						const el = e.currentTarget;
 						// A pause we didn't initiate is the autoplay policy speaking —
