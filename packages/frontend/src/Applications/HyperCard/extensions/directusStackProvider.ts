@@ -1,10 +1,12 @@
 /**
- * The Directus-backed HyperCard save destination: signed-in users save stacks
- * to the `stacks` collection (own rows only) and reopen them via File → Open
- * Saved Stack. Contract notes (classicy save-provider seam): save() must
- * RESOLVE {ok:false} on failure — never reject; meta.stackId of
- * "saved:directus:<id>" means the open stack came from this provider, so save
- * updates that row instead of creating a new one.
+ * The Directus-backed HyperCard stack storage: reads back stacks previously
+ * saved to the `stacks` collection via File → Open Saved Stack. Saving is
+ * disabled for now (canSave always returns false — see issue #559) so the
+ * broken "Save to 911realtime" menu item doesn't appear; list/load stay wired
+ * so already-saved stacks remain reachable. Contract notes (classicy
+ * save-provider seam): save() must RESOLVE {ok:false} on failure — never
+ * reject; meta.stackId of "saved:directus:<id>" means the open stack came
+ * from this provider, so save updates that row instead of creating a new one.
  */
 import type { HCSavedStackRef, HCStack, HyperCardSaveProvider } from "classicy";
 import { registerHyperCardSaveProvider } from "classicy";
@@ -14,14 +16,15 @@ import {
 	listMyStacks,
 	updateStack,
 } from "../../../Providers/Auth/stackApi";
-import { isStackProviderSignedIn } from "./stackProviderAuth";
 
 const SAVED_ID = /^saved:directus:(\d+)$/;
 
 export const directusStackSaveProvider: HyperCardSaveProvider = {
 	id: "directus",
 	label: "911realtime",
-	canSave: () => isStackProviderSignedIn(),
+	// Disabled until the save flow is fixed (issue #559) — hides the "Save to
+	// 911realtime" File menu item while list/load keep Open Saved Stack working.
+	canSave: () => false,
 	save: async (stack: HCStack, meta: { stackId: string }) => {
 		try {
 			const match = SAVED_ID.exec(meta.stackId);

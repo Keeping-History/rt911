@@ -12,7 +12,6 @@ import { useEffect, useRef } from "react";
 // is bundled in classicy and auto-mounted by ClassicyDesktop.
 import "./Applications/HyperCard";
 import { HyperCardClockBridge } from "./Applications/HyperCard/extensions/HyperCardClockBridge";
-import { HyperCardStackAuthBridge } from "./Applications/HyperCard/extensions/stackProviderAuth";
 import { Account } from "./Applications/Account/Account";
 import {
 	PAGE_SHORTCUTS,
@@ -181,7 +180,6 @@ export default function Desktop() {
 			<AlertsManager />
 			<HyperCardClockBridge />
 			<RoomControlBridge />
-			<HyperCardStackAuthBridge />
 			<Browser />
 			<TimeMachine />
 			<Feedback />
