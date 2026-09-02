@@ -3,13 +3,18 @@ import {
 	ClassicyCheckbox,
 	ClassicyColorPicker,
 	ClassicyControlGroup,
+	ClassicySlider,
 	ClassicyWindow,
 	MAC_OS_8_CRAYONS,
 } from "classicy";
 import type React from "react";
-import type { ComponentProps, Dispatch, SetStateAction } from "react";
+import type { ChangeEvent, ComponentProps, Dispatch, SetStateAction } from "react";
 import styles from "../radio-core/radio.module.scss";
-import type { RadioTrafficSettings } from "./RadioTrafficContext";
+import {
+	MAX_CONCURRENT_CLIPS,
+	MIN_CONCURRENT_CLIPS,
+	type RadioTrafficSettings,
+} from "./RadioTrafficContext";
 
 interface RadioTrafficSettingsWindowProps {
 	appId: string;
@@ -78,6 +83,34 @@ export const RadioTrafficSettingsWindow: React.FC<RadioTrafficSettingsWindowProp
 					onClickFunc={(checked: boolean) =>
 						setForm((f) => ({ ...f, playOriginalAudio: checked }))
 					}
+				/>
+			</ClassicyControlGroup>
+			<ClassicyControlGroup label="Concurrent Clips">
+				{/* Issue #564: caps how many Live clips may hold an <audio> element
+				    (and therefore a download and a decoder) at once — the rest wait
+				    their turn in clipQueue.ts rather than starting immediately. */}
+				<ClassicySlider
+					id="radiotraffic_settings_max_concurrent_clips"
+					labelTitle="Max at once:"
+					labelPosition="left"
+					labelSize="small"
+					value={form.maxConcurrentClips}
+					min={MIN_CONCURRENT_CLIPS}
+					max={MAX_CONCURRENT_CLIPS}
+					step={1}
+					valueLabel={`${form.maxConcurrentClips}`}
+					onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+						setForm((f) => ({
+							...f,
+							maxConcurrentClips: parseInt(e.target.value, 10),
+						}))
+					}
+				/>
+				<ClassicyCheckbox
+					id="radiotraffic_settings_split"
+					label="Split — pan clips alternately left and right"
+					checked={form.split}
+					onClickFunc={(checked: boolean) => setForm((f) => ({ ...f, split: checked }))}
 				/>
 			</ClassicyControlGroup>
 			<ClassicyControlGroup label="Waveform Color">

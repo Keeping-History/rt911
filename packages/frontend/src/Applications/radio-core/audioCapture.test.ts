@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isAudioBlocked } from "./audioBlocked";
-import { captureAudioElement, setAudioLevel } from "./audioCapture";
+import { captureAudioElement, setAudioLevel, setAudioPan } from "./audioCapture";
 
 class FakeGain {
 	gain = { value: 1 };
+	connect = vi.fn();
+	disconnect = vi.fn();
+}
+class FakePanner {
+	pan = { value: 0 };
 	connect = vi.fn();
 	disconnect = vi.fn();
 }
@@ -13,6 +18,7 @@ class FakeSource {
 class FakeAudioContext {
 	destination = { kind: "destination" };
 	createMediaElementSource = vi.fn(() => new FakeSource());
+	createStereoPanner = vi.fn(() => new FakePanner());
 	createGain = vi.fn(() => new FakeGain());
 	resume = vi.fn().mockResolvedValue(undefined);
 }
@@ -24,13 +30,14 @@ afterEach(() => {
 const el = () => document.createElement("audio");
 
 describe("captureAudioElement", () => {
-	it("builds the permanent source → gain → destination chain", () => {
+	it("builds the permanent source → panner → gain → destination chain", () => {
 		vi.stubGlobal("AudioContext", FakeAudioContext);
 		const a = el();
 		const entry = captureAudioElement(a);
 		expect(entry).not.toBeNull();
 		expect(entry?.ctx.createMediaElementSource).toHaveBeenCalledWith(a);
-		expect(entry?.source.connect).toHaveBeenCalledWith(entry?.gain);
+		expect(entry?.source.connect).toHaveBeenCalledWith(entry?.panner);
+		expect(entry?.panner.connect).toHaveBeenCalledWith(entry?.gain);
 		expect(entry?.gain.connect).toHaveBeenCalledWith(entry?.ctx.destination);
 	});
 
@@ -162,5 +169,35 @@ describe("setAudioLevel", () => {
 
 	it("is safe on an element that never gets captured", () => {
 		expect(() => setAudioLevel(el(), 0.5)).not.toThrow();
+	});
+});
+
+describe("setAudioPan", () => {
+	it("drives the pan of an already-captured element to the exact value", () => {
+		vi.stubGlobal("AudioContext", FakeAudioContext);
+		const a = el();
+		const entry = captureAudioElement(a);
+		setAudioPan(a, -1);
+		expect(entry?.panner.pan.value).toBe(-1);
+		setAudioPan(a, 1);
+		expect(entry?.panner.pan.value).toBe(1);
+	});
+
+	it("is remembered by a later capture (pan set before primary)", () => {
+		vi.stubGlobal("AudioContext", FakeAudioContext);
+		const a = el();
+		setAudioPan(a, -1);
+		const entry = captureAudioElement(a);
+		expect(entry?.panner.pan.value).toBe(-1);
+	});
+
+	it("is safe on an element that never gets captured", () => {
+		expect(() => setAudioPan(el(), -1)).not.toThrow();
+	});
+
+	it("defaults an uncaptured element's panner to centered", () => {
+		vi.stubGlobal("AudioContext", FakeAudioContext);
+		const entry = captureAudioElement(el());
+		expect(entry?.panner.pan.value).toBe(0);
 	});
 });

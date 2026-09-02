@@ -77,6 +77,27 @@ vi.mock("classicy", () => ({
 			onClick={() => onChangeFunc?.(0xff0000)}
 		/>
 	),
+	ClassicySlider: ({
+		id,
+		labelTitle,
+		value,
+		onChangeFunc,
+	}: {
+		id?: string;
+		labelTitle?: string;
+		value?: number;
+		onChangeFunc?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+	}) => (
+		<label htmlFor={id}>
+			{labelTitle}
+			<input
+				id={id}
+				type="range"
+				value={value ?? 0}
+				onChange={(e) => onChangeFunc?.(e)}
+			/>
+		</label>
+	),
 	ClassicyButton: ({
 		children,
 		onClickFunc,
@@ -155,9 +176,9 @@ describe("RadioTrafficSettingsWindow", () => {
 		fireEvent.click(picker() as HTMLElement);
 		fireEvent.click(screen.getByText("Save"));
 		expect(onSave).toHaveBeenCalledWith({
+			...DEFAULT_RADIO_TRAFFIC_SETTINGS,
 			useThemeWaveformColor: false,
 			waveformColor: 0xff0000,
-			playOriginalAudio: false,
 		});
 	});
 
@@ -190,9 +211,9 @@ describe("RadioTrafficSettingsWindow", () => {
 		render(
 			<Harness
 				initial={{
+					...DEFAULT_RADIO_TRAFFIC_SETTINGS,
 					useThemeWaveformColor: false,
 					waveformColor: 0x123456,
-					playOriginalAudio: false,
 				}}
 				onSave={() => {}}
 			/>,
@@ -242,6 +263,89 @@ describe("RadioTrafficSettingsWindow", () => {
 				/>,
 			);
 			expect(originalCheckbox().checked).toBe(true);
+		});
+	});
+
+	// Issue #564.
+	describe("the concurrent-clip cap", () => {
+		const slider = () =>
+			screen.getByLabelText("Max at once:") as HTMLInputElement;
+
+		it("opens on the documented default of 4", () => {
+			render(<Harness onSave={() => {}} />);
+			expect(slider().value).toBe("4");
+		});
+
+		it("hands the chosen cap back on Save", () => {
+			const onSave = vi.fn();
+			render(<Harness onSave={onSave} />);
+			fireEvent.change(slider(), { target: { value: "12" } });
+			fireEvent.click(screen.getByText("Save"));
+			expect(onSave).toHaveBeenCalledWith({
+				...DEFAULT_RADIO_TRAFFIC_SETTINGS,
+				maxConcurrentClips: 12,
+			});
+		});
+
+		it("dispatches nothing when the listener changes it and cancels", () => {
+			const onSave = vi.fn();
+			const onCancel = vi.fn();
+			render(<Harness onSave={onSave} onCancel={onCancel} />);
+			fireEvent.change(slider(), { target: { value: "20" } });
+			fireEvent.click(screen.getByText("Cancel"));
+			expect(onCancel).toHaveBeenCalled();
+			expect(onSave).not.toHaveBeenCalled();
+		});
+
+		it("opens showing the cap a previous session saved", () => {
+			render(
+				<Harness
+					initial={{ ...DEFAULT_RADIO_TRAFFIC_SETTINGS, maxConcurrentClips: 8 }}
+					onSave={() => {}}
+				/>,
+			);
+			expect(slider().value).toBe("8");
+		});
+	});
+
+	describe("Split", () => {
+		const splitCheckbox = () =>
+			screen.getByLabelText("Split — pan clips alternately left and right") as HTMLInputElement;
+
+		it("opens off by default", () => {
+			render(<Harness onSave={() => {}} />);
+			expect(splitCheckbox().checked).toBe(false);
+		});
+
+		it("hands the choice back on Save", () => {
+			const onSave = vi.fn();
+			render(<Harness onSave={onSave} />);
+			fireEvent.click(splitCheckbox());
+			fireEvent.click(screen.getByText("Save"));
+			expect(onSave).toHaveBeenCalledWith({
+				...DEFAULT_RADIO_TRAFFIC_SETTINGS,
+				split: true,
+			});
+		});
+
+		it("dispatches nothing when the listener ticks it and cancels", () => {
+			const onSave = vi.fn();
+			const onCancel = vi.fn();
+			render(<Harness onSave={onSave} onCancel={onCancel} />);
+			fireEvent.click(splitCheckbox());
+			fireEvent.click(screen.getByText("Cancel"));
+			expect(onCancel).toHaveBeenCalled();
+			expect(onSave).not.toHaveBeenCalled();
+		});
+
+		it("opens showing the choice a previous session saved", () => {
+			render(
+				<Harness
+					initial={{ ...DEFAULT_RADIO_TRAFFIC_SETTINGS, split: true }}
+					onSave={() => {}}
+				/>,
+			);
+			expect(splitCheckbox().checked).toBe(true);
 		});
 	});
 });

@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
 	classicyRadioTrafficEventHandler,
 	DEFAULT_CHECKED_TAGS,
+	DEFAULT_MAX_CONCURRENT_CLIPS,
 	DEFAULT_TOOL,
 	DEFAULT_WAVEFORM_COLOR,
+	MAX_CONCURRENT_CLIPS,
+	MIN_CONCURRENT_CLIPS,
 	radioTrafficSetState,
 	sanitizeRadioTrafficState,
 } from "./RadioTrafficContext";
@@ -36,6 +39,8 @@ describe("sanitizeRadioTrafficState", () => {
 			useThemeWaveformColor: true,
 			waveformColor: DEFAULT_WAVEFORM_COLOR,
 			playOriginalAudio: false,
+			maxConcurrentClips: DEFAULT_MAX_CONCURRENT_CLIPS,
+			split: false,
 		});
 	});
 
@@ -83,6 +88,8 @@ describe("sanitizeRadioTrafficState", () => {
 			useThemeWaveformColor: false,
 			waveformColor: 0x0000ff,
 			playOriginalAudio: true,
+			maxConcurrentClips: 8,
+			split: true,
 		};
 		expect(sanitizeRadioTrafficState(stored)).toEqual(stored);
 	});
@@ -229,6 +236,60 @@ describe("sanitizeRadioTrafficState", () => {
 			}
 		});
 	});
+
+	describe("the concurrent-clip cap", () => {
+		it("keeps every integer in the 2-24 range, including both ends", () => {
+			for (const n of [
+				MIN_CONCURRENT_CLIPS,
+				4,
+				12,
+				MAX_CONCURRENT_CLIPS,
+			]) {
+				expect(sanitizeRadioTrafficState({ maxConcurrentClips: n }).maxConcurrentClips).toBe(
+					n,
+				);
+			}
+		});
+
+		// A hand-edited or stale value could be anything, including a number a
+		// ClassicySlider (min 2, max 24) could never itself produce.
+		it("falls back to the default for anything outside 2-24 or not a number", () => {
+			for (const junk of [
+				MIN_CONCURRENT_CLIPS - 1,
+				MAX_CONCURRENT_CLIPS + 1,
+				0,
+				1.5,
+				Number.NaN,
+				"4",
+				null,
+				undefined,
+				{},
+			]) {
+				expect(
+					sanitizeRadioTrafficState({ maxConcurrentClips: junk }).maxConcurrentClips,
+				).toBe(DEFAULT_MAX_CONCURRENT_CLIPS);
+			}
+		});
+
+		it("defaults a state saved before the setting existed to 4", () => {
+			expect(
+				sanitizeRadioTrafficState({ tool: "mute" }).maxConcurrentClips,
+			).toBe(DEFAULT_MAX_CONCURRENT_CLIPS);
+		});
+	});
+
+	describe("Split", () => {
+		it("turns on only for an explicit true", () => {
+			expect(sanitizeRadioTrafficState({ split: true }).split).toBe(true);
+			for (const junk of [false, "true", 1, null, undefined, {}, []]) {
+				expect(sanitizeRadioTrafficState({ split: junk }).split).toBe(false);
+			}
+		});
+
+		it("defaults a state saved before the setting existed to off", () => {
+			expect(sanitizeRadioTrafficState({ tool: "mute" }).split).toBe(false);
+		});
+	});
 });
 
 describe("classicyRadioTrafficEventHandler", () => {
@@ -246,6 +307,8 @@ describe("classicyRadioTrafficEventHandler", () => {
 				useThemeWaveformColor: false,
 				waveformColor: 0xff6600,
 				playOriginalAudio: true,
+				maxConcurrentClips: 12,
+				split: true,
 			}),
 		);
 		expect(appData(next)).toEqual({
@@ -259,6 +322,8 @@ describe("classicyRadioTrafficEventHandler", () => {
 			useThemeWaveformColor: false,
 			waveformColor: 0xff6600,
 			playOriginalAudio: true,
+			maxConcurrentClips: 12,
+			split: true,
 		});
 	});
 
@@ -286,6 +351,8 @@ describe("classicyRadioTrafficEventHandler", () => {
 				useThemeWaveformColor: true,
 				waveformColor: DEFAULT_WAVEFORM_COLOR,
 				playOriginalAudio: false,
+				maxConcurrentClips: DEFAULT_MAX_CONCURRENT_CLIPS,
+				split: false,
 			})),
 		).toBe(ds);
 	});
