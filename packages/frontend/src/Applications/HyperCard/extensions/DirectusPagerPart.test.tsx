@@ -67,4 +67,22 @@ describe("DirectusPagerPart", () => {
 		expect(await screen.findByRole("alert")).toBeTruthy();
 		expect(screen.getByText(/Could not load page/)).toBeTruthy();
 	});
+
+	// issue #560 — itemId widened from a scalar to an array.
+	it("shows a placeholder for an empty itemId array", () => {
+		render(<DirectusPagerPart {...partProps({ itemId: [] })} />);
+		expect(screen.getByText("No page selected")).toBeTruthy();
+	});
+
+	it("renders a stack of readouts when itemId holds more than one id", async () => {
+		vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+			const isFive = String(url).includes("/5?");
+			return Promise.resolve(
+				jsonResponse({ data: { id: isFive ? 5 : 6, message: isFive ? "PAGE FIVE" : "PAGE SIX" } }),
+			);
+		});
+		render(<DirectusPagerPart {...partProps({ itemId: [5, 6] })} />);
+		expect(await screen.findByText("PAGE FIVE")).toBeTruthy();
+		expect(screen.getByText("PAGE SIX")).toBeTruthy();
+	});
 });

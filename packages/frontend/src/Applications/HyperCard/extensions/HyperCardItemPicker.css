@@ -1,0 +1,54 @@
+/* Shared item-picker dialog for the six Directus embed types (issue #560).
+   Same list-scrolls-not-the-window shape as RadioTraffic's tag picker. */
+.classicyHyperCardItemPicker {
+	display: flex;
+	flex-direction: column;
+	gap: var(--window-padding-size, 8px);
+	padding: var(--window-padding-size, 8px);
+	font-family: var(--ui-font);
+	font-size: var(--ui-font-size);
+}
+
+.classicyHyperCardItemPickerList {
+	overflow-y: auto;
+	height: 220px;
+	padding: 6px;
+	background: var(--color-white, #fff);
+	border: 1px inset var(--color-system-05, #888);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.classicyHyperCardItemPickerRow {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	padding: 2px 4px;
+	cursor: pointer;
+}
+
+.classicyHyperCardItemPickerRowLabel {
+	flex: 1;
+	min-width: 0;
+}
+
+.classicyHyperCardItemPickerStatus {
+	padding: 4px;
+	color: var(--color-system-05, #666);
+	font-style: italic;
+}
+
+.classicyHyperCardItemPickerButtons {
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+	gap: var(--window-padding-size, 8px);
+}
+
+/* The inspector-field summary line ahead of a picker field's Browse button
+   (HyperCardOptionPickerField) — e.g. "3 selected" or "(none)". */
+.classicyHyperCardItemPickerFieldSummary {
+	font-size: 11px;
+	color: var(--color-system-05, #666);
+}

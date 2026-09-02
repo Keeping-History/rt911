@@ -6,24 +6,32 @@ import {
 	type DirectusVideoItem,
 	fetchDirectusVideoItem,
 } from "./directusCollections";
+import { HyperCardPartGrid } from "./HyperCardPartGrid";
+import { resolveItemIds } from "./useDirectusItem";
 import { type DirectusVideoOptions, readVideoOptions } from "./videoOptions";
 import { resolveSegment, toUtcMs } from "./videoSegment";
 import "./DirectusVideoPart.css";
 
 /**
- * `directusVideo` HyperCard part — embeds one TV channel stream from the
- * `tv_channels` Directus collection, optionally limited to a start/end segment.
+ * `directusVideo` HyperCard part — embeds one or more TV channel streams from
+ * the `tv_channels` Directus collection, each optionally limited to a
+ * start/end segment.
  *
  * Authored in a stack's JSON:
  *
  *   { "id": "tv", "type": "directusVideo", "rect": [16, 40, 388, 220],
- *     "options": { "channelId": 3, "start": 120, "end": 240,
+ *     "options": { "channelId": [3], "start": 120, "end": 240,
  *                  "controls": true, "loop": true, "captions": true } }
  *
- * `channelId` picks the `tv_channels` row (or pass a direct HLS `url`).
- * `start`/`end` bound the playback window — a number/"M:SS" is a stream offset,
- * a date-bearing time (e.g. "2001-09-11T12:46:00") is a wall-clock instant
- * mapped via the channel's `start_date` (see videoSegment.ts).
+ * `channelId` picks the `tv_channels` row(s) (or pass a direct HLS `url` for a
+ * single embed). It's an array (issue #560's HyperCard item picker stores a
+ * multi-select, and `TVClipPicker` always writes one) but a bare scalar id is
+ * still accepted for a part authored before that change. Two or more ids lay
+ * out as a `DirectusMultiviewPart`-style grid; `start`/`end`/`controls`/etc.
+ * are shared across every tile. `start`/`end` bound the playback window — a
+ * number/"M:SS" is a stream offset, a date-bearing time (e.g.
+ * "2001-09-11T12:46:00") is a wall-clock instant mapped via the channel's
+ * `start_date` (see videoSegment.ts).
  */
 
 type SourceState =
@@ -202,16 +210,51 @@ export function DirectusVideo(props: DirectusVideoProps) {
 	);
 }
 
-/** The registered HyperCard part: adapts part props to {@link DirectusVideo}. */
-export const DirectusVideoPart = ({ options, partId, stackId, fire }: HyperCardPartProps) => {
+/** Resolves `channelId` (or its `itemId` alias) into a list of ids — array-valued per issue #560, with a single legacy scalar still accepted. */
+function readChannelIds(
+	options: Record<string, unknown>,
+	value: string,
+	resolve: (expr: string) => string,
+): string[] {
+	return resolveItemIds(options.channelId ?? options.itemId, value, resolve);
+}
+
+/**
+ * The registered HyperCard part: adapts part props to {@link DirectusVideo}.
+ * Zero or one resolved `channelId` renders exactly as before (a single embed,
+ * falling back to a direct `url`); two or more lay out as a grid of tiles,
+ * one `DirectusVideo` per id, sharing every other option (issue #560).
+ */
+export const DirectusVideoPart = ({ options, value, resolve, partId, stackId, fire }: HyperCardPartProps) => {
 	const opts = useMemo(() => readVideoOptions(options), [options]);
+	const channelIds = useMemo(() => readChannelIds(options, value, resolve), [options, value, resolve]);
 	// Non-looping segment end fires the part's own script (e.g. `go next`).
 	const onSegmentEnd = useCallback(() => fire(), [fire]);
+
+	if (channelIds.length <= 1) {
+		return (
+			<DirectusVideo
+				{...opts}
+				channelId={channelIds[0] ?? opts.channelId}
+				appId={`hc-${stackId}-${partId}`}
+				onSegmentEnd={opts.loop ? undefined : onSegmentEnd}
+			/>
+		);
+	}
+
 	return (
-		<DirectusVideo
-			{...opts}
-			appId={`hc-${stackId}-${partId}`}
-			onSegmentEnd={opts.loop ? undefined : onSegmentEnd}
+		<HyperCardPartGrid
+			className="classicyHyperCardDirectusVideoGrid"
+			items={channelIds}
+			getKey={(id, i) => `${id}-${i}`}
+			renderItem={(id, i) => (
+				<DirectusVideo
+					{...opts}
+					channelId={id}
+					appId={`hc-${stackId}-${partId}-${i}`}
+					onSegmentEnd={opts.loop ? undefined : onSegmentEnd}
+				/>
+			)}
 		/>
 	);
 };

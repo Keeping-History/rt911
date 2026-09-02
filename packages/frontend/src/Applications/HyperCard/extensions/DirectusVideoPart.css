@@ -15,6 +15,11 @@
 	height: 100%;
 }
 
+/* Grid of tiles when `channelId` resolves to more than one id (issue #560). */
+.classicyHyperCardDirectusVideoGrid {
+	background: #000;
+}
+
 .classicyHyperCardDirectusVideoMessage {
 	display: flex;
 	align-items: center;
