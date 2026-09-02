@@ -1,0 +1,14 @@
+// Reserves the alert photograph's layout footprint before it loads. Without
+// an intrinsic size, the browser boxes the <img> at 0 height until the bytes
+// decode, then grows the alert dialog out from under a position classicy
+// already computed on mount — see issue #553 ("low and to the right"). A
+// fixed aspect-ratio placeholder is the only option available here: AlertItem
+// (Providers/MediaStream/MediaStreamContext.ts) carries just an `image` URL,
+// no width/height, so there's no real intrinsic size to reserve up front.
+// 16/9 matches the landscape editorial photography these alerts use (same
+// source content as the News app's images).
+.alertImage {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}

@@ -14,6 +14,7 @@ import {
 	MediaStreamContext,
 } from "../../Providers/MediaStream/MediaStreamContext";
 import { useAlertsEnabled } from "./alertsSettings";
+import styles from "./Alerts.module.scss";
 import alertPng from "./extension.png";
 
 const appId = "Alerts.app";
@@ -110,7 +111,11 @@ export const Alerts: React.FC = () => {
 							{current.image && (
 								<figure style={{ margin: "0 0 var(--window-padding-size) 0" }}>
 									{/* biome-ignore lint/a11y/useAltText: decorative alert image, headline carries meaning */}
-									<img src={current.image} style={{ maxWidth: "100%" }} alt="" />
+									<img
+										src={current.image}
+										className={styles.alertImage}
+										alt=""
+									/>
 									{current.image_caption && (
 										<figcaption>{current.image_caption}</figcaption>
 									)}
