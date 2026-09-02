@@ -7,6 +7,7 @@ import {
 	resetAlertsSettingsForTests,
 	setAlertsEnabled,
 } from "./alertsSettings";
+import stylesModule from "./Alerts.module.scss";
 
 // Seeded Alerts.app data handed to useAppManager; toggled per test to exercise
 // the subscribe-on-mount gate (mirrors News.tsx's isRunning gate).
@@ -170,6 +171,13 @@ describe("Alerts extension", () => {
 		const image = container.querySelector("img");
 		expect(image).not.toBeNull();
 		expect(image?.getAttribute("src")).toBe("https://example.com/alert.jpg");
+		// Issue #553: the alert's box must not grow once the photograph decodes
+		// — its dimensions aren't known ahead of time (AlertItem carries only a
+		// URL), so the fixed-aspect-ratio class reserves the footprint up front.
+		// Vitest's default CSS Modules proxy resolves `styles.alertImage` to the
+		// literal key name, so this also fails if the class is ever renamed
+		// without updating the styling that reserves the space.
+		expect(image?.className).toBe(stylesModule.alertImage);
 
 		expect(screen.getByText("Smoke over lower Manhattan")).not.toBeNull();
 
