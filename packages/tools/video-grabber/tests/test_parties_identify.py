@@ -406,5 +406,5 @@ def test_wrong_typed_top_level_fields_do_not_crash(key, junk):
     cleaned, _ = validate_parties({**GOOD, key: junk}, TRANSCRIPT)
     assert cleaned["schema_version"] == SCHEMA_VERSION
     assert cleaned["confidence"] in {"high", "medium", "low"}
-    assert cleaned["link"] in {"air-ground", "landline", "internal",
-                               "conference", "unknown"}
+    assert cleaned["link"] in {"air-ground", "ground-ground", "landline",
+                               "internal", "conference", "unknown"}

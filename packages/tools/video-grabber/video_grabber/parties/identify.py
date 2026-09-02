@@ -144,7 +144,7 @@ Return ONLY a JSON object:
  "participants":[{"facility":str|null,"position":str|null,"person":str|null,
                   "role":"atc"|"military"|"airline"|"emergency"|"aircraft"|"unknown",
                   "confidence":"high"|"medium"|"low"}],
- "link":"air-ground"|"landline"|"internal"|"conference"|"unknown",
+ "link":"air-ground"|"ground-ground"|"landline"|"internal"|"conference"|"unknown",
  "aircraft":[str],
  "mentions":{"facilities":[str],"aircraft":[str],"people":[str]},
  "subject":str|null,
