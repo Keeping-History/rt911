@@ -35,7 +35,7 @@
 		"react-fast-marquee": "^1.6.5",
 		"react-player": "^3.4.0",
 		"sass-embedded": "^1.103.1",
-		"zod": "^4.4.3"
+		"zod": "^4.5.4"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.62.1",
