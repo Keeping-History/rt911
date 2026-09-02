@@ -219,6 +219,51 @@ describe("applyToolClick", () => {
 			const before = state(null, [10]);
 			expect(applyToolClick(before, "unmute", 11)).toBe(before);
 		});
+
+		it("issue 552: unmute-clicking a non-solo card while a solo is active releases the solo and materialises every other card's implicit silence", () => {
+			// Solo 10, then Unmute-click 11 — 11 was never explicitly muted (it was
+			// silent only because the solo excepted 10 from an implicit mute), so
+			// the old code's `if (!state.muted.has(itemId)) return state;` guard
+			// made this a silent no-op. Both 11 (clicked) and 10 (outgoing solo
+			// target) must stay audible; everyone else becomes an explicit mute.
+			const soloed = applyToolClick(state(null), "arrow", 10);
+			const next = applyToolClick(soloed, "unmute", 11, ALL);
+
+			expect(next.soloId).toBeNull();
+			expect(isAudible(next, 11, "live")).toBe(true);
+			expect(isAudible(next, 10, "live")).toBe(true);
+			expect(isAudible(next, 12, "live")).toBe(false);
+			expect([...next.muted].sort()).toEqual([12]);
+		});
+
+		it("issue 552: a follow-up click on a third card now acts immediately, instead of silently no-op'ing", () => {
+			const soloed = applyToolClick(state(null), "arrow", 10);
+			const afterUnmute = applyToolClick(soloed, "unmute", 11, ALL);
+
+			// 12 is explicitly muted now (see the test above), so the mute tool must
+			// be a no-op (already muted) and the unmute tool must bring it back —
+			// this is the "originally silently no-op'd" click the bug report describes.
+			expect(applyToolClick(afterUnmute, "mute", 12)).toBe(afterUnmute);
+			const unmuted12 = applyToolClick(afterUnmute, "unmute", 12);
+			expect(isAudible(unmuted12, 12, "live")).toBe(true);
+			expect(unmuted12.soloId).toBeNull();
+		});
+
+		it("issue 552: unmute-clicking the solo target itself is unchanged — the existing early-return case", () => {
+			const soloed = applyToolClick(state(null), "arrow", 10);
+			// 10 is the solo target and was never explicitly muted, so the click is
+			// the plain "not in `muted`" no-op, exactly as before this fix.
+			expect(applyToolClick(soloed, "unmute", 10, ALL)).toBe(soloed);
+		});
+
+		it("issue 552: sets soloReleasedByMute to false, unlike the mute tool's release of the same solo", () => {
+			// The listener is asking for MORE cards to be heard, not for quiet, so
+			// reconcileSolo must stay free to auto-solo again if the mix changes —
+			// the same flag releaseLaneMute uses, not the one the mute branch uses.
+			const soloed = applyToolClick(state(null), "arrow", 10);
+			const next = applyToolClick(soloed, "unmute", 11, ALL);
+			expect(next.soloReleasedByMute).toBe(false);
+		});
 	});
 
 	describe("hand", () => {

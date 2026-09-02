@@ -107,11 +107,13 @@ export function isAudible(state: AudioState, itemId: number, lane: Lane): boolea
  * a fresh object per click would re-render the grid for no reason.
  *
  * `mix` is the LIVE, filter-visible mix — the same list `reconcileSolo` and
- * `releaseLaneMute` already take, and for the same reason: it is only read by
- * the `mute` case, and only when the card being muted IS the current solo
- * target (see that case below). Every other tool ignores it, so callers that
- * cannot hit that branch (tests exercising `arrow`/`unmute`/`hand` alone) may
- * omit it — the default empty mix is only wrong for the one case that reads it.
+ * `releaseLaneMute` already take, and for the same reason: it is read by the
+ * `mute` case when the card being muted IS the current solo target (see that
+ * case below), and by the `unmute` case when the card being unmuted is NOT
+ * the current solo target (see that case further down). Every other tool
+ * ignores it, so callers that cannot hit either branch (tests exercising
+ * `arrow`/`hand` alone, or `unmute` with no solo active) may omit it — the
+ * default empty mix is only wrong for the cases that read it.
  */
 export function applyToolClick(
 	state: AudioState,
@@ -159,6 +161,26 @@ export function applyToolClick(
 			return { soloId: null, muted, soloReleasedByMute: true };
 		}
 		case "unmute": {
+			// A solo silences every OTHER live card implicitly, via effectiveMutedIds'
+			// override, not through `muted` — so unmute-clicking one of those cards
+			// used to be a silent no-op: it was never in `muted` to begin with. The
+			// fix mirrors "muting the solo target" above and releaseLaneMute: naming
+			// this card materialises the solo's implicit silence into explicit
+			// per-card mutes for every OTHER mix member, so each becomes independently
+			// clickable again, while this card and the outgoing solo target both stay
+			// audible.
+			if (state.soloId !== null && state.soloId !== itemId) {
+				const muted = new Set(state.muted);
+				muted.delete(itemId);
+				muted.delete(state.soloId);
+				for (const item of mix) {
+					if (item.id !== itemId && item.id !== state.soloId) muted.add(item.id);
+				}
+				// The hand-over stays disarmed, same as the plain case below — this is
+				// the listener asking for MORE cards to be heard, not for quiet, so
+				// reconcileSolo should stay free to auto-solo again if the mix changes.
+				return { soloId: null, muted, soloReleasedByMute: false };
+			}
 			if (!state.muted.has(itemId)) return state;
 			const muted = new Set(state.muted);
 			muted.delete(itemId);
