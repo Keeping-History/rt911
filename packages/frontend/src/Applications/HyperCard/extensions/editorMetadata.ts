@@ -10,7 +10,13 @@ import {
 	registerHyperCardPartEditorMeta,
 	registerHyperCardOptionPicker,
 } from "classicy";
+import { FlightMapPicker } from "./FlightMapPicker";
+import { NewsItemPicker } from "./NewsItemPicker";
+import { PagerMessagePicker } from "./PagerMessagePicker";
 import { RadioTrafficClipPicker } from "./RadioTrafficClipPicker";
+import { TVClipPicker } from "./TVClipPicker";
+import { TVMultiviewPicker } from "./TVMultiviewPicker";
+import { WeatherStationPicker } from "./WeatherStationPicker";
 
 const text = (key: string, label: string): HCOptionField => ({ key, label, kind: "text" });
 const num = (key: string, label: string): HCOptionField => ({ key, label, kind: "number" });
@@ -29,6 +35,12 @@ const picker = (key: string, label: string, pickerId: string): HCOptionField => 
 
 export function registerHyperCardEditorMetadata(): void {
 	registerHyperCardOptionPicker("radioTrafficClip", RadioTrafficClipPicker);
+	registerHyperCardOptionPicker("tvClip", TVClipPicker);
+	registerHyperCardOptionPicker("tvMultiviewVideos", TVMultiviewPicker);
+	registerHyperCardOptionPicker("newsItem", NewsItemPicker);
+	registerHyperCardOptionPicker("pagerMessage", PagerMessagePicker);
+	registerHyperCardOptionPicker("weatherStation", WeatherStationPicker);
+	registerHyperCardOptionPicker("flightMap", FlightMapPicker);
 
 	registerHyperCardPartEditorMeta("directusAudio", {
 		label: "Audio Clip",
@@ -43,7 +55,7 @@ export function registerHyperCardEditorMetadata(): void {
 		defaultSize: [320, 180],
 		defaultOptions: { controls: true },
 		optionsSchema: [
-			num("channelId", "TV channel id"),
+			picker("channelId", "TV channel(s)", "tvClip"),
 			text("url", "Direct HLS URL"),
 			text("start", "Start (offset or wall clock)"),
 			text("end", "End (offset or wall clock)"),
@@ -61,14 +73,14 @@ export function registerHyperCardEditorMetadata(): void {
 		optionsSchema: [
 			text("audio", "Audio (solo | all | mute)"),
 			num("columns", "Columns (blank = auto)"),
-			{ key: "videos", label: "Videos", kind: "json" },
+			picker("videos", "Videos", "tvMultiviewVideos"),
 		],
 	});
 	registerHyperCardPartEditorMeta("directusNews", {
 		label: "News Item",
 		defaultSize: [280, 160],
 		optionsSchema: [
-			text("itemId", "News item id (or variable)"),
+			picker("itemId", "News item(s)", "newsItem"),
 			check("showImage", "Show image", true),
 			check("showDate", "Show date", true),
 		],
@@ -76,18 +88,18 @@ export function registerHyperCardEditorMetadata(): void {
 	registerHyperCardPartEditorMeta("directusPager", {
 		label: "Pager Message",
 		defaultSize: [280, 120],
-		optionsSchema: [text("itemId", "Pager item id (or variable)")],
+		optionsSchema: [picker("itemId", "Pager message(s)", "pagerMessage")],
 	});
 	registerHyperCardPartEditorMeta("directusWeatherStation", {
 		label: "Weather Station",
 		defaultSize: [260, 300],
-		optionsSchema: [text("station", "ICAO station id")],
+		optionsSchema: [picker("station", "Station(s)", "weatherStation")],
 	});
 	registerHyperCardPartEditorMeta("directusFlightMap", {
 		label: "Flight Map",
 		defaultSize: [404, 300],
 		optionsSchema: [
-			text("flight", "Flight (or variable)"),
+			picker("flight", "Flight(s)", "flightMap"),
 			check("notablesOnly", "Notable flights only"),
 			check("darkMap", "Dark map"),
 			text("mapStyle", "Map style"),

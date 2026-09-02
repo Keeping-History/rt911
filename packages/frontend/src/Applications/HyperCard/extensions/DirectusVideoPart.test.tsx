@@ -117,6 +117,29 @@ describe("DirectusVideoPart", () => {
 		expect(await screen.findByRole("alert")).toBeTruthy();
 		expect(screen.getByText(/Could not load video/)).toBeTruthy();
 	});
+
+	// issue #560 — channelId widened from a scalar to an array.
+	it("shows 'No video source' for an empty channelId array", () => {
+		render(<DirectusVideoPart {...partProps({ channelId: [] })} />);
+		expect(screen.getByText("No video source")).toBeTruthy();
+	});
+
+	it("renders one tile per id in a grid when channelId holds more than one", async () => {
+		vi.spyOn(globalThis, "fetch").mockImplementation((url) =>
+			Promise.resolve(
+				jsonResponse({
+					data: { id: 1, title: "T1", url: String(url).includes("/1?") ? "https://x/ch1.m3u8" : "https://x/ch2.m3u8" },
+				}),
+			),
+		);
+		render(<DirectusVideoPart {...partProps({ channelId: [1, 2] })} />);
+		const embeds = await screen.findAllByTestId("qt-embed");
+		expect(embeds).toHaveLength(2);
+		expect(embeds.map((e) => e.getAttribute("data-url")).sort()).toEqual([
+			"https://x/ch1.m3u8",
+			"https://x/ch2.m3u8",
+		]);
+	});
 });
 
 describe("DirectusVideo segment enforcement", () => {

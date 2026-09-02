@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 // audio/video parts predate this and inline their own copy; new single-item
 // parts use these helpers instead of duplicating the fetch/abort/load-state
 // dance.
+//
+// `resolveItemIds` (issue #560) generalizes `resolveItemId` to the array-
+// valued option every picker-backed field now stores; it's option-resolution
+// plumbing rather than a fetch, so the weather-station and flight-map parts
+// use it too even though they don't otherwise touch this module's fetch hook.
 
 /**
  * Resolve an embed's item id from its authored option (passed through the stack
@@ -19,6 +24,32 @@ export function resolveItemId(
 	if (raw === undefined || raw === "") return undefined;
 	const resolved = resolve(String(raw)).trim();
 	return resolved === "" ? undefined : resolved;
+}
+
+/**
+ * The array-aware counterpart to {@link resolveItemId} — resolves a HyperCard
+ * option that now stores an array (or, for a not-yet-resaved legacy part, a
+ * single scalar) into an ordered list of ids, each run through the stack
+ * expression engine so any entry may still reference a variable/field. An
+ * empty/missing option falls back to the part's own field `value` as a
+ * single-entry list, exactly like `resolveItemId`'s own fallback, so an
+ * unconfigured legacy part bound to a field keeps working unchanged.
+ */
+export function resolveItemIds(
+	optionIds: unknown,
+	value: string,
+	resolve: (expr: string) => string,
+): string[] {
+	const raw: (string | number)[] = Array.isArray(optionIds)
+		? optionIds.filter((v): v is string | number => typeof v === "string" || typeof v === "number")
+		: typeof optionIds === "string" || typeof optionIds === "number"
+			? [optionIds]
+			: [];
+	if (raw.length === 0) {
+		const fallback = resolveItemId(undefined, value, resolve);
+		return fallback === undefined ? [] : [fallback];
+	}
+	return raw.map((r) => resolve(String(r)).trim()).filter((r) => r !== "");
 }
 
 export type ItemLoadState<T> =

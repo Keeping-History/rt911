@@ -49,6 +49,29 @@
 	height: auto;
 }
 
+/* Wrapper when `itemId` resolves to more than one article (issue #560) — a
+   scrollable stack, each article divided from the next. */
+.classicyHyperCardNewsList {
+	width: 100%;
+	height: 100%;
+	overflow-y: auto;
+	box-sizing: border-box;
+	background: #fff;
+}
+
+.classicyHyperCardNewsListItem {
+	border-bottom: 2px solid #ccc;
+}
+
+.classicyHyperCardNewsListItem:last-child {
+	border-bottom: none;
+}
+
+.classicyHyperCardNewsListItem .classicyHyperCardNews {
+	height: auto;
+	overflow-y: visible;
+}
+
 .classicyHyperCardNewsMessage {
 	display: flex;
 	align-items: center;

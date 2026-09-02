@@ -1,32 +1,38 @@
 import type { HyperCardPartProps } from "classicy";
 import { useMemo } from "react";
 import { fetchDirectusNewsItem } from "./directusCollections";
-import { resolveItemId, useDirectusItem } from "./useDirectusItem";
+import { resolveItemIds, useDirectusItem } from "./useDirectusItem";
 import "./DirectusNewsPart.css";
 
 /**
- * `directusNews` HyperCard part — embeds one article from the `news_items`
- * Directus collection (History Commons news entries).
+ * `directusNews` HyperCard part — embeds one or more articles from the
+ * `news_items` Directus collection (History Commons news entries).
  *
  *   { "id": "story", "type": "directusNews", "rect": [16, 40, 388, 220],
- *     "options": { "itemId": 42, "showImage": true } }
+ *     "options": { "itemId": [42], "showImage": true } }
  *
- * `itemId` resolves through the stack expression engine (so it may reference a
- * variable/field). The article's `content` is first-party HTML authored in
- * Directus — rendered the same way the News app renders it.
+ * `itemId` is an array (issue #560's `NewsItemPicker` always writes one), but
+ * a bare scalar/variable-name id is still accepted for a part authored before
+ * that change, and each entry resolves through the stack expression engine
+ * (so it may reference a variable/field). Two or more ids render as a
+ * vertical list of articles; the article's `content` is first-party HTML
+ * authored in Directus — rendered the same way the News app renders it.
  */
 
 interface DirectusNewsOptions {
-	itemId?: string | number;
+	itemIds: string[];
 	showImage: boolean;
 	showDate: boolean;
 }
 
-function readOptions(options: Record<string, unknown>): DirectusNewsOptions {
+function readOptions(
+	options: Record<string, unknown>,
+	value: string,
+	resolve: (expr: string) => string,
+): DirectusNewsOptions {
 	const o = options;
 	return {
-		itemId:
-			typeof o.itemId === "string" || typeof o.itemId === "number" ? o.itemId : undefined,
+		itemIds: resolveItemIds(o.itemId, value, resolve),
 		showImage: o.showImage !== false,
 		showDate: o.showDate !== false,
 	};
@@ -48,10 +54,17 @@ function formatDate(iso: string | null | undefined): string {
 	});
 }
 
-export const DirectusNewsPart = ({ options, value, resolve }: HyperCardPartProps) => {
-	const opts = useMemo(() => readOptions(options), [options]);
-	const id = resolveItemId(opts.itemId, value, resolve);
-	const state = useDirectusItem(id, fetchDirectusNewsItem);
+/** One article's body — split out so `DirectusNewsPart` can render several, each with its own load state. */
+function NewsArticle({
+	itemId,
+	showImage,
+	showDate,
+}: {
+	itemId: string;
+	showImage: boolean;
+	showDate: boolean;
+}) {
+	const state = useDirectusItem(itemId, fetchDirectusNewsItem);
 
 	if (state.status === "error") {
 		return (
@@ -71,10 +84,10 @@ export const DirectusNewsPart = ({ options, value, resolve }: HyperCardPartProps
 	return (
 		<article className="classicyHyperCardNews">
 			<h1 className="classicyHyperCardNewsHeadline">{item.full_title || item.title}</h1>
-			{opts.showDate && item.start_date && (
+			{showDate && item.start_date && (
 				<p className="classicyHyperCardNewsDate">{formatDate(item.start_date)}</p>
 			)}
-			{opts.showImage && item.image && (
+			{showImage && item.image && (
 				<figure className="classicyHyperCardNewsFigure">
 					<img src={item.image} alt={item.image_caption || item.title} />
 					{item.image_caption && <figcaption>{item.image_caption}</figcaption>}
@@ -89,5 +102,31 @@ export const DirectusNewsPart = ({ options, value, resolve }: HyperCardPartProps
 				/>
 			)}
 		</article>
+	);
+}
+
+/**
+ * Zero resolved ids renders the same "No article selected" message as
+ * before; one id renders exactly as before (a single `.classicyHyperCardNews`
+ * article, no extra wrapper); two or more render as a scrollable list of
+ * articles (issue #560).
+ */
+export const DirectusNewsPart = ({ options, value, resolve }: HyperCardPartProps) => {
+	const opts = useMemo(() => readOptions(options, value, resolve), [options, value, resolve]);
+
+	if (opts.itemIds.length === 0) {
+		return <div className="classicyHyperCardNews classicyHyperCardNewsMessage">No article selected</div>;
+	}
+	if (opts.itemIds.length === 1) {
+		return <NewsArticle itemId={opts.itemIds[0]} showImage={opts.showImage} showDate={opts.showDate} />;
+	}
+	return (
+		<div className="classicyHyperCardNewsList">
+			{opts.itemIds.map((id, i) => (
+				<div className="classicyHyperCardNewsListItem" key={`${id}-${i}`}>
+					<NewsArticle itemId={id} showImage={opts.showImage} showDate={opts.showDate} />
+				</div>
+			))}
+		</div>
 	);
 };

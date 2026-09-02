@@ -22,23 +22,43 @@ result into its authored `rect`.
   is the registry of embeddable collections + the fields each needs.
 - `extensions/DirectusAudioPart.tsx` — the `directusAudio` part: embeds one
   clip from the `mp3_items` collection (by `itemId`, or a direct `url`).
-- `extensions/DirectusVideoPart.tsx` — the `directusVideo` part: embeds one TV
-  channel stream from `tv_channels`, optionally limited to a start/end segment,
-  using classicy's `QuickTimeVideoEmbed` (HLS) for controls/autoplay/captions.
+- `extensions/DirectusVideoPart.tsx` — the `directusVideo` part: embeds one or
+  more TV channel streams from `tv_channels` (a grid when `channelId` holds
+  more than one id), each optionally limited to a start/end segment, using
+  classicy's `QuickTimeVideoEmbed` (HLS) for controls/autoplay/captions.
   Exports the reusable `DirectusVideo` body.
 - `extensions/DirectusMultiviewPart.tsx` — the `directusMultiview` part: a grid
   ("video wall") of `DirectusVideo` tiles with solo/mute/all audio modes.
-- `extensions/DirectusNewsPart.tsx` — the `directusNews` part: one article from
-  `news_items` (headline, dateline, image, HTML body).
-- `extensions/DirectusPagerPart.tsx` — the `directusPager` part: one instant
-  message from `pager_items`, styled as a pager readout.
+- `extensions/DirectusNewsPart.tsx` — the `directusNews` part: one or more
+  articles from `news_items` (headline, dateline, image, HTML body), stacked
+  vertically when `itemId` holds more than one id.
+- `extensions/DirectusPagerPart.tsx` — the `directusPager` part: one or more
+  instant messages from `pager_items`, styled as pager readouts, stacked
+  vertically when `itemId` holds more than one id.
 - `extensions/useDirectusItem.ts` — shared id-resolution + fetch/load-state hook
-  used by the news/pager parts.
+  used by the news/pager parts; `resolveItemIds` is the array-aware id
+  resolution the video/weather/flight-map parts also use.
 - `extensions/DirectusWeatherPart.tsx` — the `directusWeatherStation` part: one
-  station's live conditions/forecast/almanac, reusing the Weather app's
-  `WeatherStationPanel` (extracted from `Weather.tsx`).
-- `extensions/DirectusFlightMapPart.tsx` — the `directusFlightMap` part: a live
-  plane map reusing the Flight Tracker's `FlightMap` (maplibre/WebGL).
+  or more stations' live conditions/forecast/almanac (a grid when `station`
+  holds more than one id), reusing the Weather app's `WeatherStationPanel`
+  (extracted from `Weather.tsx`).
+- `extensions/DirectusFlightMapPart.tsx` — the `directusFlightMap` part: one or
+  more live plane maps reusing the Flight Tracker's `FlightMap`
+  (maplibre/WebGL) — a grid, one map per focused callsign, when `flight` holds
+  more than one.
+- `extensions/HyperCardPartGrid.tsx` — the shared "video wall" grid layout the
+  video/weather/flight-map parts above lay their multiple tiles out in;
+  generalizes `DirectusMultiviewPart.tsx`'s own grid, which predates it.
+- `extensions/editorMetadata.ts` — registers each part's `optionsSchema` (what
+  the stack editor's inspector shows) and, for every id/array field, a
+  `picker`-kind field bound to a concrete `registerHyperCardOptionPicker`
+  component.
+- `extensions/HyperCardItemPicker.tsx` — the shared searchable/filterable,
+  checkbox-multi-select picker window every concrete picker
+  (`TVClipPicker.tsx`, `TVMultiviewPicker.tsx`, `NewsItemPicker.tsx`,
+  `PagerMessagePicker.tsx`, `WeatherStationPicker.tsx`, `FlightMapPicker.tsx`,
+  and audio's pre-existing `RadioTrafficClipPicker.tsx`) opens from its
+  inspector field, plus the `HyperCardOptionPickerField` shell those six share.
 - `extensions/HyperCardClockBridge.tsx` + `extensions/dateRange.ts` — the
   `setDateTime` *action*: a command queues an effect, the mounted bridge applies
   it through the sanctioned `setDateTimeFromUtc` seam, clamped to the canonical
@@ -75,7 +95,10 @@ variable/field (`"options": { "itemId": "clip" }` tracks the `clip` variable).
   "type": "directusVideo",
   "rect": [12, 40, 416, 232],
   "options": {
-    "channelId": 3,          // a row in tv_channels (or a direct HLS "url")
+    "channelId": [3],        // row(s) in tv_channels (or a direct HLS "url");
+                             // the inspector's TV Channels picker always
+                             // writes an array — two or more ids lay out as a
+                             // grid, sharing every other option below
     "start": 60, "end": 180, // stream-offset seconds, "M:SS", or a
                              // date-bearing wall-clock ("2001-09-11T12:46:00")
     "controls": true,        // native transport (default true); false = chromeless
@@ -113,32 +136,41 @@ the part's own `script` (e.g. `go next`), so clips can chain.
 }
 ```
 
-Each tile takes the full `directusVideo` option set.
+Each tile takes the full `directusVideo` option set. The inspector's Videos
+picker (`TVMultiviewPicker.tsx`) manages each tile's `channelId`, preserving
+whatever other settings (`start`/`autoPlay`/…) are already on a kept tile
+rather than resetting them.
 
 ## Authoring news / pager embeds
 
 ```jsonc
-{ "id": "story", "type": "directusNews",  "rect": [12, 12, 396, 232], "options": { "itemId": 42 } }
-{ "id": "page",  "type": "directusPager", "rect": [12, 40, 396, 150], "options": { "itemId": 128 } }
+{ "id": "story", "type": "directusNews",  "rect": [12, 12, 396, 232], "options": { "itemId": [42] } }
+{ "id": "page",  "type": "directusPager", "rect": [12, 40, 396, 150], "options": { "itemId": [128] } }
 ```
 
-Both take an `itemId` (a `news_items` / `pager_items` row, resolved through the
-stack expression engine). News accepts `showImage`/`showDate`; pager accepts
-`showMeta`.
+Both take an `itemId` array (each entry a `news_items` / `pager_items` row,
+resolved through the stack expression engine) — the inspector's News
+Items/Pager Messages pickers always write an array, and two or more ids
+render as a scrollable vertical list rather than a single article/readout.
+News accepts `showImage`/`showDate`; pager accepts `showMeta`.
 
 ## Authoring weather / flight embeds
 
 ```jsonc
-{ "id": "wx",  "type": "directusWeatherStation", "rect": [12, 40, 396, 210], "options": { "station": "KJFK" } }
-{ "id": "map", "type": "directusFlightMap",      "rect": [12, 44, 396, 206], "options": { "notablesOnly": true, "flight": "AA11", "mapStyle": "radar" } }
+{ "id": "wx",  "type": "directusWeatherStation", "rect": [12, 40, 396, 210], "options": { "station": ["KJFK"] } }
+{ "id": "map", "type": "directusFlightMap",      "rect": [12, 44, 396, 206], "options": { "notablesOnly": true, "flight": ["AA11"], "mapStyle": "radar" } }
 ```
 
 Both read the shared virtual clock and the streamed flight/weather channels via
 `MediaStreamContext` (ref-counted `subscribe*`), so they stay in lockstep with
 the desktop. The weather station reuses `Weather/WeatherStationPanel`; the flight
 map reuses `FlightTracker/FlightMap` and **requires WebGL + a sized card**.
-`station`/`flight` resolve through the stack expression engine (variable-driven
-selection). Flight options: `notablesOnly`, `flight` (focus a callsign),
+`station`/`flight` are arrays (the inspector's Weather Stations/Flights pickers
+always write one, filtered to whatever's *currently* live on the shared
+channel rather than the full historical list) whose entries resolve through
+the stack expression engine (variable-driven selection); two or more ids lay
+out as a grid, one panel/map per id. Flight options: `notablesOnly`, `flight`
+(focus callsign(s), one map per focused flight when there's more than one),
 `mapStyle`/`darkMap`/`radarSweep`/`trailMultiplier`, pin-color overrides.
 
 ## The `setDateTime` action

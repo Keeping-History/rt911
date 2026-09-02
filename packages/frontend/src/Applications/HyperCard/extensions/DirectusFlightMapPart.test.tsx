@@ -83,6 +83,19 @@ describe("DirectusFlightMapPart", () => {
 		);
 		expect(ctx.subscribeFlights).toHaveBeenCalledTimes(1);
 	});
+
+	// issue #560 — flight widened from a scalar to an array.
+	it("renders a single, unfocused map for an empty flight array (same as no option)", () => {
+		renderPart({ flight: [] });
+		expect(mapProps).toHaveLength(1);
+		expect((last().positions as unknown[]).length).toBe(2);
+	});
+
+	it("renders one map per callsign, in a grid, when flight holds more than one", () => {
+		renderPart({ flight: ["AA11", "DAL123"] });
+		expect(mapProps).toHaveLength(2);
+		expect(mapProps.every((p) => (p.positions as unknown[]).length === 2)).toBe(true);
+	});
 });
 
 function partProps(options: Record<string, unknown>): HyperCardPartProps {

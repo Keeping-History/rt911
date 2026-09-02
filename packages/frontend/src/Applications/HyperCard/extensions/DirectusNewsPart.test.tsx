@@ -71,4 +71,22 @@ describe("DirectusNewsPart", () => {
 		expect(await screen.findByRole("alert")).toBeTruthy();
 		expect(screen.getByText(/Could not load article/)).toBeTruthy();
 	});
+
+	// issue #560 — itemId widened from a scalar to an array.
+	it("shows a placeholder for an empty itemId array", () => {
+		render(<DirectusNewsPart {...partProps({ itemId: [] })} />);
+		expect(screen.getByText("No article selected")).toBeTruthy();
+	});
+
+	it("renders a list of articles when itemId holds more than one id", async () => {
+		vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+			const isNine = String(url).includes("/9?");
+			return Promise.resolve(
+				jsonResponse({ data: { id: isNine ? 9 : 10, title: isNine ? "Nine" : "Ten" } }),
+			);
+		});
+		render(<DirectusNewsPart {...partProps({ itemId: [9, 10] })} />);
+		expect(await screen.findByText("Nine")).toBeTruthy();
+		expect(screen.getByText("Ten")).toBeTruthy();
+	});
 });

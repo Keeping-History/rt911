@@ -35,11 +35,6 @@ describe("registerHyperCardEditorMetadata", () => {
 		]);
 		expect(keys("directusNews")).toEqual(["itemId", "showImage", "showDate"]);
 		expect(keys("directusFlightMap")).toContain("trailMultiplier");
-		expect(
-			getHyperCardPartEditorMeta("directusMultiview")?.optionsSchema?.find(
-				(f) => f.key === "videos",
-			)?.kind,
-		).toBe("json");
 	});
 
 	it("registers the setDateTime command builder fields", () => {
@@ -56,5 +51,22 @@ describe("registerHyperCardEditorMetadata", () => {
 		expect(field?.kind).toBe("picker");
 		expect(field?.pickerId).toBe("radioTrafficClip");
 		expect(getHyperCardOptionPicker("radioTrafficClip")).toBeDefined();
+	});
+
+	// Issue #560 — every id/array field that used to be a bare num/text/json
+	// input now opens a picker instead, one per Directus-backed embed type.
+	it.each([
+		["directusVideo", "channelId", "tvClip"],
+		["directusMultiview", "videos", "tvMultiviewVideos"],
+		["directusNews", "itemId", "newsItem"],
+		["directusPager", "itemId", "pagerMessage"],
+		["directusWeatherStation", "station", "weatherStation"],
+		["directusFlightMap", "flight", "flightMap"],
+	])("registers a picker for %s's %s field", (type, key, pickerId) => {
+		registerHyperCardEditorMetadata();
+		const field = getHyperCardPartEditorMeta(type)?.optionsSchema?.find((f) => f.key === key);
+		expect(field?.kind).toBe("picker");
+		expect(field?.pickerId).toBe(pickerId);
+		expect(getHyperCardOptionPicker(pickerId)).toBeDefined();
 	});
 });

@@ -47,6 +47,29 @@
 	padding-top: 2px;
 }
 
+/* Wrapper when `itemId` resolves to more than one message (issue #560) — a
+   scrollable stack, each readout sized to its own content. */
+.classicyHyperCardPagerList {
+	width: 100%;
+	height: 100%;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 6px;
+	box-sizing: border-box;
+	background: #b6b6a8;
+}
+
+.classicyHyperCardPagerList .classicyHyperCardPager {
+	height: auto;
+	padding: 0;
+}
+
+.classicyHyperCardPagerList .classicyHyperCardPagerScreen {
+	overflow-y: visible;
+}
+
 .classicyHyperCardPagerMessage {
 	display: flex;
 	align-items: center;

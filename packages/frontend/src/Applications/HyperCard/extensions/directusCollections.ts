@@ -11,6 +11,7 @@
 // Same env seam every other Directus caller uses; re-exported for parts.
 export { DIRECTUS_URL } from "../../../lib/endpoints";
 import { DIRECTUS_URL } from "../../../lib/endpoints";
+import { directusGet } from "../../../lib/directusQueue";
 
 /**
  * A minimal registry describing which Directus collections HyperCard stacks may
@@ -208,4 +209,93 @@ export function fetchDirectusPagerItem(
 ): Promise<DirectusPagerItem> {
 	const { collection, fields } = DIRECTUS_COLLECTIONS.pager;
 	return fetchDirectusItem<DirectusPagerItem>(collection, id, fields, fetchFn, signal);
+}
+
+// --- List/search fetchers (issue #560 — HyperCard item pickers) -----------
+//
+// Every id-lookup fetcher above answers "give me item N"; the pickers instead
+// need "give me every row I could pick from" so the user can search and
+// multi-select. These go through the same serialized `directusGet` queue
+// PlaylistEditor/radio-core already use for collection LISTS (as opposed to
+// the single-item GETs above, which have always been safe unserialized single
+// requests) — see lib/directusQueue.ts's own comment on why concurrent same-
+// path Directus requests can't be trusted to keep their response bodies apart.
+
+const LIST_LIMIT = 1000;
+
+/** A `tv_channels` row as the TV Clip / TV Multiview pickers list it. */
+export interface DirectusVideoListItem {
+	id: number;
+	title: string;
+	full_title?: string | null;
+	source?: string | null;
+}
+
+/** Every `tv_channels` row (id/title/callsign only) — small enough to fetch whole. */
+export async function fetchDirectusVideoList(
+	fetchFn: typeof fetch = fetch,
+): Promise<DirectusVideoListItem[]> {
+	const rows = await directusGet(
+		"/items/tv_channels?fields=id,title,full_title,source&sort=source,title&limit=" + LIST_LIMIT,
+		fetchFn,
+	);
+	return rows as DirectusVideoListItem[];
+}
+
+/** A `news_items` row as the News Item picker lists it. */
+export interface DirectusNewsListItem {
+	id: number;
+	title: string;
+	full_title?: string | null;
+	start_date?: string | null;
+}
+
+/** Every `news_items` row (id/title/date only), newest first. */
+export async function fetchDirectusNewsList(
+	fetchFn: typeof fetch = fetch,
+): Promise<DirectusNewsListItem[]> {
+	const rows = await directusGet(
+		"/items/news_items?fields=id,title,full_title,start_date&sort=-start_date&limit=" + LIST_LIMIT,
+		fetchFn,
+	);
+	return rows as DirectusNewsListItem[];
+}
+
+/** A `pager_items` row as the Pager Message picker lists it. */
+export interface DirectusPagerListItem {
+	id: number;
+	message: string;
+	provider?: string | null;
+	recipient_id?: string | null;
+	start_date?: string | null;
+}
+
+/** Distinct filter values (issue #560) — every `provider` seen in `pager_items`. */
+export async function fetchDirectusPagerProviders(fetchFn: typeof fetch = fetch): Promise<string[]> {
+	const rows = (await directusGet(
+		"/items/pager_items?aggregate[countDistinct]=provider&groupBy=provider",
+		fetchFn,
+	)) as Array<{ provider?: string | null }>;
+	return rows.map((r) => r.provider).filter((p): p is string => !!p).sort();
+}
+
+/**
+ * `pager_items` rows matching the picker's server-side filters — `provider`
+ * is an exact match (a pop-up of known values), `recipient`/`message` are
+ * substring matches, mirroring PagerDecoder.tsx's own filter bar. Any omitted
+ * filter is unconstrained.
+ */
+export async function fetchDirectusPagerList(
+	filters: { provider?: string; recipient?: string; message?: string },
+	fetchFn: typeof fetch = fetch,
+): Promise<DirectusPagerListItem[]> {
+	const params = new URLSearchParams();
+	params.set("fields", "id,message,provider,recipient_id,start_date");
+	params.set("sort", "-start_date");
+	params.set("limit", String(LIST_LIMIT));
+	if (filters.provider) params.set("filter[provider][_eq]", filters.provider);
+	if (filters.recipient) params.set("filter[recipient_id][_icontains]", filters.recipient);
+	if (filters.message) params.set("filter[message][_icontains]", filters.message);
+	const rows = await directusGet(`/items/pager_items?${params.toString()}`, fetchFn);
+	return rows as DirectusPagerListItem[];
 }
