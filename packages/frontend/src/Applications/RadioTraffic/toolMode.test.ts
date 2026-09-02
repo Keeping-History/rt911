@@ -219,6 +219,55 @@ describe("applyToolClick", () => {
 			const before = state(null, [10]);
 			expect(applyToolClick(before, "unmute", 11)).toBe(before);
 		});
+
+		it("issue 552: unmute-clicking a non-solo card while a solo is active releases the solo and materialises every other card's implicit silence", () => {
+			// Solo 10, then Unmute-click 11 — 11 was never explicitly muted (it was
+			// silent only because the solo excepted 10 from an implicit mute), so
+			// the old code's `if (!state.muted.has(itemId)) return state;` guard
+			// made this a silent no-op. Both 11 (clicked) and 10 (outgoing solo
+			// target) must stay audible; everyone else becomes an explicit mute.
+			const soloed = applyToolClick(state(null), "arrow", 10);
+			const next = applyToolClick(soloed, "unmute", 11, ALL);
+
+			expect(next.soloId).toBeNull();
+			expect(isAudible(next, 11, "live")).toBe(true);
+			expect(isAudible(next, 10, "live")).toBe(true);
+			expect(isAudible(next, 12, "live")).toBe(false);
+			expect([...next.muted].sort()).toEqual([12]);
+		});
+
+		it("issue 552: a follow-up click on a third card now acts immediately, instead of silently no-op'ing", () => {
+			const soloed = applyToolClick(state(null), "arrow", 10);
+			const afterUnmute = applyToolClick(soloed, "unmute", 11, ALL);
+
+			// 12 is explicitly muted now (see the test above), so the mute tool must
+			// be a no-op (already muted) and the unmute tool must bring it back —
+			// this is the "originally silently no-op'd" click the bug report describes.
+			expect(applyToolClick(afterUnmute, "mute", 12)).toBe(afterUnmute);
+			const unmuted12 = applyToolClick(afterUnmute, "unmute", 12);
+			expect(isAudible(unmuted12, 12, "live")).toBe(true);
+			expect(unmuted12.soloId).toBeNull();
+		});
+
+		it("issue 552: unmute-clicking the solo target itself is unchanged — the existing early-return case", () => {
+			const soloed = applyToolClick(state(null), "arrow", 10);
+			// 10 is the solo target and was never explicitly muted, so the click is
+			// the plain "not in `muted`" no-op, exactly as before this fix.
+			expect(applyToolClick(soloed, "unmute", 10, ALL)).toBe(soloed);
+		});
+
+		it("issue 552: suspends auto-solo, the same as the mute tool's release of the same solo", () => {
+			// The listener now has TWO cards intentionally audible with no solo — a
+			// state reconcileSolo has no way to represent other than "don't
+			// reassign". Leaving auto-solo armed here was the actual bug: unlike a
+			// single unit-test call, the shell's reconcileSolo effect re-runs on
+			// every visible-mix tick, so on the very next one it picked ONE of these
+			// two cards and folded the other back into the solo's implicit mute,
+			// undoing the click within about a second.
+			const soloed = applyToolClick(state(null), "arrow", 10);
+			const next = applyToolClick(soloed, "unmute", 11, ALL);
+			expect(next.autoSoloSuspended).toBe(true);
+		});
 	});
 
 	describe("hand", () => {
@@ -305,7 +354,7 @@ describe("releaseLaneMute", () => {
 		// other case: the listener named a card to hear, so reconcileSolo is meant
 		// to answer by pointing the solo at it.
 		const next = releaseLaneMute(state(null, [10, 11, 12]), ALL, 11);
-		expect(next.soloReleasedByMute).toBe(false);
+		expect(next.autoSoloSuspended).toBe(false);
 		expect(reconcileSolo(next, ALL).soloId).toBe(11);
 	});
 
@@ -571,5 +620,68 @@ describe("muting the focus, as against the focus ending", () => {
 
 		// 10 is muted, so the hand-over skips it exactly as autoSoloTarget says.
 		expect(next.soloId).toBe(11);
+	});
+});
+
+// Issue #552 (post-merge follow-up). PR #554 fixed unmute-clicking a
+// non-solo card so that BOTH it and the outgoing solo target stay audible —
+// but shipped with `autoSoloSuspended` left false on that path, on the
+// (wrong) theory that it should read the same as releaseLaneMute's "the
+// listener named a focus" re-arm. It does not: naming a focus leaves exactly
+// ONE card audible, which is the state auto-solo exists to reach on its own,
+// so re-arming there is harmless. This path leaves TWO cards audible with no
+// solo, which auto-solo has never been able to represent — reconcileSolo
+// only ever produces "one card" (a soloId) or "whatever `muted` says", never
+// "pick one of these two." Left armed, the shell's reconcileSolo effect (kept
+// on every visible-mix change, which includes the once-a-second reference
+// churn from the ticking clock even when membership hasn't changed) picked a
+// winner within about a second and the other card fell silent again.
+describe("unmuting a second card while soloed keeps BOTH audible (issue #552)", () => {
+	const nowMs = t("2001-09-11T13:03:00.000Z");
+
+	it("survives one reconcileSolo pass with the same mix", () => {
+		const soloed = applyToolClick(state(null), "arrow", 10);
+		const next = applyToolClick(soloed, "unmute", 11, ALL);
+
+		const reconciled = reconcileSolo(next, mixAt(nowMs));
+
+		expect(reconciled.soloId).toBeNull();
+		expect(isAudible(reconciled, 10, "live")).toBe(true);
+		expect(isAudible(reconciled, 11, "live")).toBe(true);
+		expect(isAudible(reconciled, 12, "live")).toBe(false);
+	});
+
+	it("survives a reconcileSolo pass against a NEW mix array with the same membership", () => {
+		// This is the reproduction that actually matches the bug report: the
+		// RadioTraffic shell recomputes `visible.live` from the virtual clock on
+		// every tick, so the array `reconcileSolo` sees is a fresh reference each
+		// time even when no card entered or left LIVE. A fix that only happened
+		// to work because a test reused the same array/object identities would
+		// pass the case above and still fail here.
+		const soloed = applyToolClick(state(null), "arrow", 10);
+		const next = applyToolClick(soloed, "unmute", 11, ALL);
+
+		const freshMix = mixAt(nowMs).map((mediaItem) => ({ ...mediaItem }));
+		expect(freshMix).not.toBe(mixAt(nowMs));
+		const reconciled = reconcileSolo(next, freshMix);
+
+		expect(reconciled.soloId).toBeNull();
+		expect(isAudible(reconciled, 10, "live")).toBe(true);
+		expect(isAudible(reconciled, 11, "live")).toBe(true);
+	});
+
+	it("stays that way across several ticks, not just the first", () => {
+		const soloed = applyToolClick(state(null), "arrow", 10);
+		let s = applyToolClick(soloed, "unmute", 11, ALL);
+		for (let tick = 0; tick < 5; tick++) {
+			s = reconcileSolo(
+				s,
+				mixAt(nowMs).map((mediaItem) => ({ ...mediaItem })),
+			);
+		}
+
+		expect(s.soloId).toBeNull();
+		expect(isAudible(s, 10, "live")).toBe(true);
+		expect(isAudible(s, 11, "live")).toBe(true);
 	});
 });
