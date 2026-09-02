@@ -9,6 +9,7 @@ import "classicy/dist/classicy.css";
 import type { ReactNode } from "react";
 import { ClassicyAppManagerProvider, registerClassicyFileSystemAdapter } from "classicy";
 import { DefaultFileSystem } from "../data/DefaultFileSystem";
+import { defaultFileSystemSeedMigrations } from "../data/defaultFileSystemSeedMigrations";
 import { GA_MEASUREMENT_ID, isProductionHost } from "../lib/analytics";
 import { AuthProvider } from "../Providers/Auth/AuthProvider";
 import { directusFilesystemAdapter } from "../Providers/FilesystemSync/directusFilesystemAdapter";
@@ -31,6 +32,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 			gaMeasurementIds={isProductionHost() ? [GA_MEASUREMENT_ID] : []}
 			defaultFileSystem={DefaultFileSystem}
 			defaultFileSystemMode="exclusive"
+			defaultFileSystemSeedMigrations={defaultFileSystemSeedMigrations}
 			defaultState={{
 				System: {
 					Manager: {
