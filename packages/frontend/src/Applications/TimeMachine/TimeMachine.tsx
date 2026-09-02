@@ -73,16 +73,16 @@ const skipBalloon = describeAppState(appId, "settings.skipMinutes");
 const stepBalloon = describeAppState(appId, "settings.stepSeconds");
 const scrubBalloon = describeAppState(appId, "settings.scrubSeconds");
 
-// Settings gets away with being always-mounted (see the comment above its
-// ClassicyWindow below) because it is opened from a single, always-available
-// menu item. Bookmarks is also reachable via the capture-dialog login prompt,
-// but more importantly: ClassicyWindow's own one-time mount effect
-// unconditionally dispatches ClassicyWindowOpen (closed: false) the instant
-// it mounts, regardless of what Classicy had persisted. Mounting Bookmarks
+// Both Settings and Bookmarks are conditionally mounted (see their
+// showSettings/showBookmarks state below and the ClassicyWindows further
+// down) because ClassicyWindow's own one-time mount effect unconditionally
+// dispatches ClassicyWindowOpen (closed: false) the instant it mounts,
+// regardless of what Classicy had persisted. Mounting either window
 // unconditionally therefore force-reopens it on every fresh mount even when
-// the persisted store says closed — verified live against 911realtime.org.
-// Reading the persisted entry once, here, lets the app keep Bookmarks
-// unmounted (so that effect never fires) when it was last closed.
+// the persisted store says closed — verified live against 911realtime.org
+// (this bug shipped for Settings even after Bookmarks was fixed for it — see
+// issue #562). Reading the persisted entry once, here, lets the app keep a
+// window unmounted (so that effect never fires) when it was last closed.
 const readPersistedWindows = (): { id: string; closed?: boolean }[] | undefined =>
 	typeof useAppManager.getState === "function"
 		? useAppManager.getState().System.Manager.Applications.apps[appId]?.windows
@@ -104,13 +104,16 @@ export const TimeMachine: React.FC = () => {
 		[appData],
 	);
 
-	// Restore Bookmarks' mounted-ness from the persisted store so a window
-	// that was open before a reload reappears, and — the actual bug this
-	// guards against — one that was closed stays unmounted instead of being
-	// force-reopened by ClassicyWindow's own mount effect (see
+	// Restore Bookmarks' and Settings' mounted-ness from the persisted store so
+	// a window that was open before a reload reappears, and — the actual bug
+	// this guards against — one that was closed stays unmounted instead of
+	// being force-reopened by ClassicyWindow's own mount effect (see
 	// readPersistedWindows above).
 	const [showBookmarks, setShowBookmarks] = useState(() =>
 		isWindowOpen(readPersistedWindows(), `${appId}_bookmarks`),
+	);
+	const [showSettings, setShowSettings] = useState(() =>
+		isWindowOpen(readPersistedWindows(), `${appId}_settings`),
 	);
 
 	// Seed the draft from the saved values (not defaults) so a Settings window
@@ -123,22 +126,32 @@ export const TimeMachine: React.FC = () => {
 	}));
 	const [showOnTop, setShowOnTop] = useState(true);
 
-	// Open THEN focus — ClassicyWindowFocus does not clear `closed`, so
+	// If Settings isn't mounted yet, mounting it is enough on its own:
+	// ClassicyWindow's own one-time mount effect registers the window entry
+	// and opens it. Dispatching ClassicyWindowOpen ourselves in that case hits
+	// a window id with no entry yet and crashes the reducer. Once it IS
+	// mounted, that one-time effect has already fired, so reopening a closed
+	// window (or refocusing an open one) needs an explicit dispatch instead —
+	// open THEN focus, since ClassicyWindowFocus does not clear `closed`, so
 	// focusing alone would do nothing visible to a closed window (same idiom
 	// as PlaylistEditorProvider's openSettingsWindow).
 	const openSettings = useCallback(() => {
 		setSettingsForm({ skipMinutes, stepSeconds, scrubSeconds });
-		desktopEventDispatch({
-			type: "ClassicyWindowOpen",
-			app: { id: appId },
-			window: { id: `${appId}_settings` },
-		});
-		desktopEventDispatch({
-			type: "ClassicyWindowFocus",
-			app: { id: appId },
-			window: { id: `${appId}_settings` },
-		});
-	}, [skipMinutes, stepSeconds, scrubSeconds, desktopEventDispatch]);
+		if (showSettings) {
+			desktopEventDispatch({
+				type: "ClassicyWindowOpen",
+				app: { id: appId },
+				window: { id: `${appId}_settings` },
+			});
+			desktopEventDispatch({
+				type: "ClassicyWindowFocus",
+				app: { id: appId },
+				window: { id: `${appId}_settings` },
+			});
+		} else {
+			setShowSettings(true);
+		}
+	}, [skipMinutes, stepSeconds, scrubSeconds, showSettings, desktopEventDispatch]);
 
 	const closeSettings = useCallback(() => {
 		desktopEventDispatch({
@@ -345,133 +358,134 @@ export const TimeMachine: React.FC = () => {
 			desktopIconBalloonHelp={manifestDescription(appId)}
 		>
 			{/*
-				Always mounted (unlike Bookmarks below) — Classicy's own window
-				store is the single source of truth for open/closed and position,
-				and it's what actually persists to localStorage. Conditionally
-				mounting on ephemeral React state (the old `showSettings &&`) is
-				exactly what broke reload persistence: the state reset to false on
-				every fresh mount, orphaning whatever Classicy had persisted.
-				openSettings/closeSettings above just dispatch ClassicyWindowOpen/
-				Close/Focus — the close box does the same via its own onCloseFunc
-				default, so no local state needs to mirror it here.
+				Conditionally mounted, like Bookmarks below — see the
+				readPersistedWindows/showSettings comments near the top of this
+				file for why: an always-mounted Settings window cannot survive a
+				reload closed, because ClassicyWindow force-opens on its own mount
+				effect regardless of what was persisted (this was issue #562).
+				closeSettings/saveSettings still just dispatch ClassicyWindowClose —
+				the close box does the same via its own onCloseFunc default, so no
+				local state needs to mirror it here beyond the mount gate itself.
 			*/}
-			<ClassicyWindow
-				id={`${appId}_settings`}
-				title="Settings"
-				icon={appIcon}
-				appId={appId}
-				closable={true}
-				resizable={false}
-				zoomable={false}
-				scrollable={false}
-				collapsable={false}
-				initialSize={[300, 0]}
-				initialPosition={[250, 150]}
-				appMenu={appMenu}
-			>
-				<div className={styles.settings}>
-					<ClassicyControlGroup label="Skip" backgroundColor="var(--color-system-02-)">
-						{(() => {
-							const slider = (
-								<ClassicySlider
-									id="controls_skip_minutes"
-									labelTitle="Duration:"
-									labelPosition="left"
-									labelSize="small"
-									value={settingsForm.skipMinutes}
-									min={1}
-									max={60}
-									step={1}
-									valueLabel={`${settingsForm.skipMinutes} min`}
-									onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-										setSettingsForm((f) => ({
-											...f,
-											skipMinutes: parseInt(e.target.value, 10),
-										}))
-									}
-								/>
-							);
-							return skipBalloon ? (
-								<ClassicyBalloonHelp title="Skip distance" content={skipBalloon.content}>
-									{slider}
-								</ClassicyBalloonHelp>
-							) : (
-								slider
-							);
-						})()}
-					</ClassicyControlGroup>
-					<ClassicyControlGroup label="Step" backgroundColor="var(--color-system-02-)">
-						{(() => {
-							const slider = (
-								<ClassicySlider
-									id="controls_step_seconds"
-									labelTitle="Duration:"
-									labelPosition="left"
-									labelSize="small"
-									value={settingsForm.stepSeconds}
-									min={1}
-									max={600}
-									step={1}
-									valueLabel={formatSeconds(settingsForm.stepSeconds)}
-									onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-										setSettingsForm((f) => ({
-											...f,
-											stepSeconds: parseInt(e.target.value, 10),
-										}))
-									}
-								/>
-							);
-							return stepBalloon ? (
-								<ClassicyBalloonHelp title="Step distance" content={stepBalloon.content}>
-									{slider}
-								</ClassicyBalloonHelp>
-							) : (
-								slider
-							);
-						})()}
-					</ClassicyControlGroup>
-					<ClassicyControlGroup label="Scrub" backgroundColor="var(--color-system-02-)">
-						{(() => {
-							const slider = (
-								<ClassicySlider
-									id="controls_scrub_seconds"
-									labelTitle="Duration:"
-									labelPosition="left"
-									labelSize="small"
-									value={settingsForm.scrubSeconds}
-									min={1}
-									max={60}
-									step={1}
-									valueLabel={formatSeconds(settingsForm.scrubSeconds)}
-									onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
-										setSettingsForm((f) => ({
-											...f,
-											scrubSeconds: parseInt(e.target.value, 10),
-										}))
-									}
-								/>
-							);
-							return scrubBalloon ? (
-								<ClassicyBalloonHelp title="Scrub distance" content={scrubBalloon.content}>
-									{slider}
-								</ClassicyBalloonHelp>
-							) : (
-								slider
-							);
-						})()}
-					</ClassicyControlGroup>
-					<div className={styles.settingsButtons}>
-						<ClassicyButton onClickFunc={closeSettings}>
-							Cancel
-						</ClassicyButton>
-						<ClassicyButton isDefault={true} onClickFunc={saveSettings}>
-							Save
-						</ClassicyButton>
+			{showSettings && (
+				<ClassicyWindow
+					id={`${appId}_settings`}
+					title="Settings"
+					icon={appIcon}
+					appId={appId}
+					closable={true}
+					resizable={false}
+					zoomable={false}
+					scrollable={false}
+					collapsable={false}
+					initialSize={[300, 0]}
+					initialPosition={[250, 150]}
+					appMenu={appMenu}
+				>
+					<div className={styles.settings}>
+						<ClassicyControlGroup label="Skip" backgroundColor="var(--color-system-02-)">
+							{(() => {
+								const slider = (
+									<ClassicySlider
+										id="controls_skip_minutes"
+										labelTitle="Duration:"
+										labelPosition="left"
+										labelSize="small"
+										value={settingsForm.skipMinutes}
+										min={1}
+										max={60}
+										step={1}
+										valueLabel={`${settingsForm.skipMinutes} min`}
+										onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+											setSettingsForm((f) => ({
+												...f,
+												skipMinutes: parseInt(e.target.value, 10),
+											}))
+										}
+									/>
+								);
+								return skipBalloon ? (
+									<ClassicyBalloonHelp title="Skip distance" content={skipBalloon.content}>
+										{slider}
+									</ClassicyBalloonHelp>
+								) : (
+									slider
+								);
+							})()}
+						</ClassicyControlGroup>
+						<ClassicyControlGroup label="Step" backgroundColor="var(--color-system-02-)">
+							{(() => {
+								const slider = (
+									<ClassicySlider
+										id="controls_step_seconds"
+										labelTitle="Duration:"
+										labelPosition="left"
+										labelSize="small"
+										value={settingsForm.stepSeconds}
+										min={1}
+										max={600}
+										step={1}
+										valueLabel={formatSeconds(settingsForm.stepSeconds)}
+										onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+											setSettingsForm((f) => ({
+												...f,
+												stepSeconds: parseInt(e.target.value, 10),
+											}))
+										}
+									/>
+								);
+								return stepBalloon ? (
+									<ClassicyBalloonHelp title="Step distance" content={stepBalloon.content}>
+										{slider}
+									</ClassicyBalloonHelp>
+								) : (
+									slider
+								);
+							})()}
+						</ClassicyControlGroup>
+						<ClassicyControlGroup label="Scrub" backgroundColor="var(--color-system-02-)">
+							{(() => {
+								const slider = (
+									<ClassicySlider
+										id="controls_scrub_seconds"
+										labelTitle="Duration:"
+										labelPosition="left"
+										labelSize="small"
+										value={settingsForm.scrubSeconds}
+										min={1}
+										max={60}
+										step={1}
+										valueLabel={formatSeconds(settingsForm.scrubSeconds)}
+										onChangeFunc={(e: ChangeEvent<HTMLInputElement>) =>
+											setSettingsForm((f) => ({
+												...f,
+												scrubSeconds: parseInt(e.target.value, 10),
+											}))
+										}
+									/>
+								);
+								return scrubBalloon ? (
+									<ClassicyBalloonHelp title="Scrub distance" content={scrubBalloon.content}>
+										{slider}
+									</ClassicyBalloonHelp>
+								) : (
+									slider
+								);
+							})()}
+						</ClassicyControlGroup>
+						<div className={styles.settingsButtons}>
+							<ClassicyButton onClickFunc={closeSettings}>
+								Cancel
+							</ClassicyButton>
+							<ClassicyButton isDefault={true} onClickFunc={saveSettings}>
+								Save
+							</ClassicyButton>
+						</div>
 					</div>
-				</div>
-			</ClassicyWindow>
+				</ClassicyWindow>
+			)}
 			{/*
-				Conditionally mounted, unlike Settings above — see the
+				Conditionally mounted, like Settings above — see the
 				readPersistedWindows/showBookmarks comments near the top of this
 				file for why: an always-mounted Bookmarks window cannot survive a
 				reload closed, because ClassicyWindow force-opens on its own mount

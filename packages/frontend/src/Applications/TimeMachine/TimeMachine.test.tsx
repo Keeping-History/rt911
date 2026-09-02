@@ -178,6 +178,69 @@ describe("TimeMachine Settings window", () => {
 			) as { closed?: boolean } | undefined;
 		expect(settingsWindow?.closed).toBe(true);
 	});
+
+	// The regression reported in issue #562: a window closed in a PRIOR mount
+	// of the app must still be closed after a fresh mount (what a page reload
+	// amounts to, from React's perspective — a brand new component tree
+	// reading the same persisted store). Settings used to be unconditionally
+	// mounted, so ClassicyWindow's own one-time mount effect would reopen it
+	// here regardless of the seeded `closed: true` — mirrors the equivalent
+	// Bookmarks test below, which this file's rewrite already covered.
+	it("stays closed across a fresh mount when the store already says closed", () => {
+		useAppManager.setState((s) => ({
+			...s,
+			System: {
+				...s.System,
+				Manager: {
+					...s.System.Manager,
+					Applications: {
+						...s.System.Manager.Applications,
+						apps: {
+							...s.System.Manager.Applications.apps,
+							[TIME_MACHINE_APP_ID]: {
+								...(s.System.Manager.Applications.apps[TIME_MACHINE_APP_ID] ?? {}),
+								// ClassicyApp only gates its children on apps[id].open — see
+								// openSettingsOnMount's comment above.
+								open: true,
+								focused: true,
+								windows: [
+									{
+										id: `${TIME_MACHINE_APP_ID}_settings`,
+										appId: TIME_MACHINE_APP_ID,
+										closed: true,
+										focused: false,
+										collapsed: false,
+										dragging: false,
+										moving: false,
+										resizing: false,
+										zoomed: false,
+										size: [300, 0],
+										position: [250, 150],
+										minimumSize: [300, 0],
+										menuBar: [],
+										default: false,
+										windowType: "document",
+									},
+								],
+							},
+						},
+					},
+				},
+			},
+		}));
+
+		const { unmount } = render(<TimeMachine />);
+		unmount();
+		render(<TimeMachine />);
+
+		const settingsWindow = useAppManager
+			.getState()
+			.System.Manager.Applications.apps[TIME_MACHINE_APP_ID]?.windows?.find(
+				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_settings`,
+			) as { closed?: boolean } | undefined;
+		expect(settingsWindow?.closed).toBe(true);
+		expect(document.getElementById("controls_skip_minutes")).toBeNull();
+	});
 });
 
 describe("TimeMachine Bookmarks window", () => {
