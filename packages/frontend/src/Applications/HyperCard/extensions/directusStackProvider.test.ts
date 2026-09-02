@@ -9,20 +9,16 @@ vi.mock("../../../Providers/Auth/stackApi", () => ({
 
 import { createStack, getStack, listMyStacks, updateStack } from "../../../Providers/Auth/stackApi";
 import { directusStackSaveProvider } from "./directusStackProvider";
-import { setStackProviderAuth } from "./stackProviderAuth";
 
 const VALID = { name: "My Stack", cards: [{ id: "c1" }] };
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	setStackProviderAuth(false);
 });
 
 describe("directusStackSaveProvider", () => {
-	it("canSave mirrors the auth holder", () => {
+	it("canSave is always false", () => {
 		expect(directusStackSaveProvider.canSave()).toBe(false);
-		setStackProviderAuth(true);
-		expect(directusStackSaveProvider.canSave()).toBe(true);
 	});
 
 	it("save creates for non-provider stackIds and updates for saved:directus ids", async () => {
