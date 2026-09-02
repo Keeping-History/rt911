@@ -168,6 +168,22 @@ vi.mock("classicy", () => ({
 			onClick={() => onChangeFunc?.(0xff0000)}
 		/>
 	),
+	ClassicySlider: ({
+		id,
+		labelTitle,
+		value,
+		onChangeFunc,
+	}: {
+		id?: string;
+		labelTitle?: string;
+		value?: number;
+		onChangeFunc?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+	}) => (
+		<label htmlFor={id}>
+			{labelTitle}
+			<input id={id} type="range" value={value ?? 0} onChange={(e) => onChangeFunc?.(e)} />
+		</label>
+	),
 	MAC_OS_8_CRAYONS: [],
 	// The real packing, not a stand-in: the shell hands this straight to a CSS
 	// `color`, so a fake would let a broken conversion pass.

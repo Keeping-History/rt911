@@ -12,8 +12,10 @@ import {
 } from "vitest";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { isAudioBlocked } from "../radio-core/audioBlocked";
+import { captureAudioElement } from "../radio-core/audioCapture";
 import { calcSeekSeconds } from "../radio-core/stationGrouping";
 import {
+	applySplitPanning,
 	type ClockSource,
 	clockMoved,
 	clockPauseChanged,
@@ -661,11 +663,20 @@ describe("audioCoordinator autoplay handling", () => {
 				.filter((type) =>
 					["click", "keydown", "pointerdown"].includes(type as string),
 				);
-		expect(registrations()).toEqual(["click", "keydown", "pointerdown"]);
+		// Loading the module graph registers each type twice, not once: this
+		// module's own retry listeners, plus radio-core/audioCapture's (issue
+		// #564's Split pulls it in as a static import) — each of those modules
+		// still registers its own set exactly once, which is what this test is
+		// actually pinning: neither set grows as more clips are ensure()'d.
+		const afterLoad = registrations();
+		expect(afterLoad).toHaveLength(6);
+		for (const type of ["click", "keydown", "pointerdown"]) {
+			expect(afterLoad.filter((t) => t === type)).toHaveLength(2);
+		}
 
 		fresh.connectClock(source);
 		for (let i = 0; i < 10; i++) fresh.ensure(i, `clip-${i}.mp3`);
-		expect(registrations()).toEqual(["click", "keydown", "pointerdown"]);
+		expect(registrations()).toEqual(afterLoad);
 
 		fresh.releaseAll();
 		addSpy.mockRestore();
@@ -1245,5 +1256,103 @@ describe("audioCoordinator clock-follow", () => {
 
 			expect(el.currentTime).toBe(10);
 		});
+	});
+});
+
+// Issue #564's Split feature. RadioTraffic never mounts radio-core's
+// WaveformVisualizer (its cards draw a static peaks envelope instead), so
+// nothing else in this app ever calls audioCapture's captureAudioElement —
+// applySplitPanning has to do it itself, on demand, the moment a clip
+// actually needs panning off-center.
+describe("audioCoordinator Split panning", () => {
+	class FakeGain {
+		gain = { value: 1 };
+		connect = vi.fn();
+	}
+	class FakePanner {
+		pan = { value: 0 };
+		connect = vi.fn();
+	}
+	class FakeSource {
+		connect = vi.fn();
+	}
+	class FakeAudioContext {
+		static instances = 0;
+		destination = { kind: "destination" };
+		createMediaElementSource = vi.fn(() => new FakeSource());
+		createStereoPanner = vi.fn(() => new FakePanner());
+		createGain = vi.fn(() => new FakeGain());
+		resume = vi.fn().mockResolvedValue(undefined);
+		constructor() {
+			FakeAudioContext.instances++;
+		}
+	}
+
+	beforeEach(() => {
+		FakeAudioContext.instances = 0;
+		vi.stubGlobal("AudioContext", FakeAudioContext);
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	/**
+	 * The pan value the capture chain actually holds for `el`. A second
+	 * `captureAudioElement` call is a documented no-op that returns the SAME
+	 * entry (audioCapture.test.ts's "returns the same entry on repeat
+	 * capture"), so this reads the live graph applySplitPanning already built
+	 * without audioCoordinator needing to expose its own captured entries.
+	 */
+	function panOf(el: HTMLAudioElement): number {
+		return captureAudioElement(el)?.panner.pan.value ?? Number.NaN;
+	}
+
+	it("pans even slots left and odd slots right when enabled", () => {
+		connect();
+		const one = ensure(1, "a.mp3");
+		const two = ensure(2, "b.mp3");
+		const three = ensure(3, "c.mp3");
+
+		applySplitPanning([1, 2, 3], true);
+
+		expect(panOf(one)).toBe(-1);
+		expect(panOf(two)).toBe(1);
+		expect(panOf(three)).toBe(-1);
+	});
+
+	it("does not capture an id that is not named in the order at all", () => {
+		connect();
+		ensure(1, "a.mp3");
+
+		applySplitPanning([], true);
+
+		expect(FakeAudioContext.instances).toBe(0);
+	});
+
+	it("re-centers every panned element immediately when Split turns off", () => {
+		// robbiebyrd's amendment: an already-panned clip must not wait for a
+		// fresh admission to come back to center.
+		connect();
+		const one = ensure(1, "a.mp3");
+		applySplitPanning([1], true);
+		expect(panOf(one)).toBe(-1);
+
+		applySplitPanning([1], false);
+
+		expect(panOf(one)).toBe(0);
+	});
+
+	it("never captures an element for the default, Split-off case", () => {
+		connect();
+		ensure(1, "a.mp3");
+
+		applySplitPanning([1], false);
+
+		expect(FakeAudioContext.instances).toBe(0);
+	});
+
+	it("skips an id with no registered element", () => {
+		connect();
+		expect(() => applySplitPanning([1, 2], true)).not.toThrow();
 	});
 });

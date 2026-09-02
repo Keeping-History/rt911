@@ -36,6 +36,7 @@
 
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { clearAudioBlocked, markAudioBlocked } from "../radio-core/audioBlocked";
+import { captureAudioElement, setAudioLevel, setAudioPan } from "../radio-core/audioCapture";
 import { calcSeekSeconds } from "../radio-core/stationGrouping";
 
 /** A clock move larger than this is a scrub, not ordinary advance. */
@@ -222,6 +223,12 @@ function tryPlay(itemId: number, entry: Entry): void {
 			// silenced would shout the moment a retry succeeded.
 			entry.unlocked = true;
 			entry.el.muted = !entry.audible;
+			// Mirrored into the capture module's in-graph gain alongside el.muted,
+			// same pairing radio-core's StationPlayer already uses: Safari ignores
+			// volume AND muted once Split (issue #564) has captured this element
+			// for panning, and setAudioLevel is a documented no-op on an element
+			// that never gets captured, so this costs nothing the rest of the time.
+			setAudioLevel(entry.el, entry.audible ? 1 : 0);
 			notify(itemId);
 		})
 		.catch((err: unknown) => {
@@ -381,7 +388,46 @@ export function setLevel(itemId: number, audible: boolean): void {
 	// Before the gate opens the element must stay muted whatever the mix says;
 	// tryPlay applies the level the moment play() resolves.
 	if (entry.unlocked) entry.el.muted = !audible;
+	// Gain has no autoplay gate to wait for (setAudioLevel's own doc), so this
+	// applies immediately and unconditionally — the same mirroring tryPlay does
+	// on unlock, for the same Safari-captured-element reason.
+	setAudioLevel(entry.el, audible ? 1 : 0);
 	notify(itemId);
+}
+
+/**
+ * Issue #564's Split feature: hard-pan every registered id named in `order`
+ * by its position there (index 0 left, 1 right, 2 left, …), or re-center all
+ * of them when `enabled` is false.
+ *
+ * `order` is clipQueue.ts's admitted list — this function has no opinion
+ * about who gets to be in it, only where the ids that are get panned. An id
+ * with no registered element (still pending, released, filtered out) is
+ * silently skipped: there is no `<audio>` to pan, and it will get today's
+ * `enabled`/index answer applied the moment RadioTraffic.tsx registers it,
+ * same as every other per-element setting here.
+ *
+ * Capturing (via audioCapture's captureAudioElement) happens lazily, only for
+ * a pan that is actually off-center — the default, Split-off case therefore
+ * captures nothing and costs nothing beyond this loop and a `pan.value`
+ * write that setAudioPan already no-ops on an uncaptured element. Turning
+ * Split off after it was on still reaches every previously-captured element,
+ * because setAudioPan writes straight into an existing graph without asking
+ * this function to capture anything first — see the AMENDMENT below.
+ *
+ * AMENDMENT (robbiebyrd): re-centering on Split-off is immediate, not merely
+ * "the next admission" — every currently registered id in `order` gets
+ * `pan(0)` in the same call that turned Split off, whether or not it was ever
+ * actually panned off-center before.
+ */
+export function applySplitPanning(order: readonly number[], enabled: boolean): void {
+	order.forEach((itemId, index) => {
+		const entry = registry.get(itemId);
+		if (!entry) return;
+		const pan = enabled ? (index % 2 === 0 ? -1 : 1) : 0;
+		if (pan !== 0) captureAudioElement(entry.el);
+		setAudioPan(entry.el, pan);
+	});
 }
 
 /**

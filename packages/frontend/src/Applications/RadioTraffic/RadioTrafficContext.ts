@@ -40,6 +40,11 @@ export const DEFAULT_TOOL: Tool = "arrow";
  */
 export const DEFAULT_WAVEFORM_COLOR = 0x00d25a;
 
+/** Issue #564: the concurrency cap's allowed range and its opening value. */
+export const MIN_CONCURRENT_CLIPS = 2;
+export const MAX_CONCURRENT_CLIPS = 24;
+export const DEFAULT_MAX_CONCURRENT_CLIPS = 4;
+
 /**
  * The slice of persisted state the Settings window edits.
  *
@@ -66,12 +71,31 @@ export interface RadioTrafficSettings {
 	 * renders, where it sat in front of broadcast stations it does not describe.
 	 */
 	playOriginalAudio: boolean;
+	/**
+	 * Issue #564: how many LIVE clips may hold an `<audio>` element (and
+	 * therefore a download and a decoder) at once — clipQueue.ts's admission
+	 * cap. `MIN_CONCURRENT_CLIPS`..`MAX_CONCURRENT_CLIPS`, default
+	 * `DEFAULT_MAX_CONCURRENT_CLIPS`. Scoped to the LIVE lane only: a
+	 * back-catalogue clip the listener starts by hand from PREVIOUS is not
+	 * counted against it (RadioTraffic.tsx's registration effect).
+	 */
+	maxConcurrentClips: number;
+	/**
+	 * Issue #564: hard-pan admitted LIVE clips alternately left/right by their
+	 * queue admission slot (slot 0 left, slot 1 right, slot 2 left, …) instead
+	 * of leaving every clip centered. Defaults false — the mix has always been
+	 * centered, and panning is an unusual enough listening mode that it should
+	 * be something a listener opts into, not discovers by accident.
+	 */
+	split: boolean;
 }
 
 export const DEFAULT_RADIO_TRAFFIC_SETTINGS: RadioTrafficSettings = {
 	useThemeWaveformColor: true,
 	waveformColor: DEFAULT_WAVEFORM_COLOR,
 	playOriginalAudio: false,
+	maxConcurrentClips: DEFAULT_MAX_CONCURRENT_CLIPS,
+	split: false,
 };
 
 /** Everything Radio Traffic persists, after sanitizing. */
@@ -210,6 +234,34 @@ function sanitizePlayOriginalAudio(value: unknown): boolean {
 	return value === true;
 }
 
+/**
+ * The concurrency cap, clamped to `MIN_CONCURRENT_CLIPS..MAX_CONCURRENT_CLIPS`.
+ *
+ * Mirrors `sanitizeWaveformColor`'s shape: a stored value outside the range a
+ * `ClassicySlider` can even produce (or not a number at all) falls back to the
+ * default rather than being clamped into range, because a silently-clamped
+ * number would leave the slider showing something the listener never chose.
+ */
+function sanitizeMaxConcurrentClips(value: unknown): number {
+	return typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= MIN_CONCURRENT_CLIPS &&
+		value <= MAX_CONCURRENT_CLIPS
+		? value
+		: DEFAULT_MAX_CONCURRENT_CLIPS;
+}
+
+/**
+ * Only an explicit `true` turns Split on.
+ *
+ * Mirrors `sanitizePlayOriginalAudio`: absent, `undefined` and garbage all mean
+ * the centered mix, which is both the default and what every session played
+ * before this setting existed — so nothing needs migrating.
+ */
+function sanitizeSplit(value: unknown): boolean {
+	return value === true;
+}
+
 function sanitizeLaneOrder(value: unknown): LaneOrder {
 	const stored = (value ?? {}) as Record<string, unknown>;
 	const out = {} as Record<Lane, readonly number[]>;
@@ -238,6 +290,8 @@ export function sanitizeRadioTrafficState(stored: unknown): RadioTrafficState {
 		useThemeWaveformColor: sanitizeUseThemeWaveformColor(data.useThemeWaveformColor),
 		waveformColor: sanitizeWaveformColor(data.waveformColor),
 		playOriginalAudio: sanitizePlayOriginalAudio(data.playOriginalAudio),
+		maxConcurrentClips: sanitizeMaxConcurrentClips(data.maxConcurrentClips),
+		split: sanitizeSplit(data.split),
 	};
 }
 
@@ -253,6 +307,8 @@ export const radioTrafficSetState = (state: RadioTrafficState): ActionMessage =>
 	useThemeWaveformColor: state.useThemeWaveformColor,
 	waveformColor: state.waveformColor,
 	playOriginalAudio: state.playOriginalAudio,
+	maxConcurrentClips: state.maxConcurrentClips,
+	split: state.split,
 });
 
 export const classicyRadioTrafficEventHandler = (
@@ -276,6 +332,8 @@ export const classicyRadioTrafficEventHandler = (
 				useThemeWaveformColor: action.useThemeWaveformColor,
 				waveformColor: action.waveformColor,
 				playOriginalAudio: action.playOriginalAudio,
+				maxConcurrentClips: action.maxConcurrentClips,
+				split: action.split,
 			};
 			return ds;
 		default:
@@ -338,6 +396,16 @@ export const RadioTrafficDataSchema = z.looseObject({
 		.describe(
 			"Whether cards play the original recording instead of the cleaned-up, noise-reduced one.",
 		),
+	maxConcurrentClips: z
+		.number()
+		.optional()
+		.describe(
+			"How many Live clips may play/download at once, 2-24 (default 4) — the rest wait their turn.",
+		),
+	split: z
+		.boolean()
+		.optional()
+		.describe("Whether admitted Live clips are hard-panned alternately left and right."),
 });
 
 export type RadioTrafficData = z.infer<typeof RadioTrafficDataSchema>;
@@ -351,7 +419,7 @@ registerApp({
 	actions: {
 		ClassicyAppRadioTrafficSetState: {
 			description:
-				"Persist the tag filters, the selected tool, the folded lanes, the manual card order, the per-card mutes, the Live lane mute, the waveform color and the original-recording choice.",
+				"Persist the tag filters, the selected tool, the folded lanes, the manual card order, the per-card mutes, the Live lane mute, the waveform color, the original-recording choice, the concurrent-clip cap and the Split setting.",
 			params: z.object({
 				checked: z.array(z.string()).describe("Ticked tag filters."),
 				tool: z.string().describe("Selected tool: arrow, mute, unmute or hand."),
@@ -366,6 +434,12 @@ registerApp({
 				playOriginalAudio: z
 					.boolean()
 					.describe("Whether to play the original recording rather than the enhanced one."),
+				maxConcurrentClips: z
+					.number()
+					.describe("How many Live clips may play/download at once, 2-24."),
+				split: z
+					.boolean()
+					.describe("Whether admitted Live clips are hard-panned alternately left and right."),
 			}),
 		},
 	},

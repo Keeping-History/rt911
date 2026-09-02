@@ -53,6 +53,7 @@ import { resolveAudioUrl } from "../radio-core/audioSource";
 import { BROADCAST_STATIONS, groupStations, startMs } from "../radio-core/stationGrouping";
 import appIconPng from "./app.png";
 import {
+	applySplitPanning,
 	clockMoved,
 	clockPauseChanged,
 	connectClock,
@@ -63,6 +64,7 @@ import {
 	setLevel,
 } from "./audioCoordinator";
 import { historyPool, type Lane, laneFor, rememberItems } from "./cardStatus";
+import { EMPTY_CLIP_QUEUE_STATE, reconcileClipQueue } from "./clipQueue";
 import { FilterTree } from "./FilterTree";
 import { LANES, type LaneOrder, reconcileLaneOrder, reorderLane } from "./laneOrder";
 import { LaneSection } from "./LaneSection";
@@ -291,6 +293,8 @@ export const RadioTraffic: React.FC = () => {
 		useThemeWaveformColor: restored.useThemeWaveformColor,
 		waveformColor: restored.waveformColor,
 		playOriginalAudio: restored.playOriginalAudio,
+		maxConcurrentClips: restored.maxConcurrentClips,
+		split: restored.split,
 	}));
 
 	// The Settings draft (the Tuner's pattern, and TimeMachine's before it):
@@ -619,6 +623,22 @@ export const RadioTraffic: React.FC = () => {
 		clockPauseChanged(clockPaused);
 	}, [clockPaused]);
 
+	// ── Issue #564: the concurrency cap ─────────────────────────────────────
+	// LIVE only (robbiebyrd's amendment) — a PREVIOUS clip the listener starts
+	// by hand is registered unconditionally below, same as before this issue.
+	// `visible.live` is already sorted earliest-start-first (partitionLanes),
+	// which doubles as clipQueue's arrival order.
+	const desiredLiveIds = useMemo(
+		() => visible.live.filter((item) => !stopped.has(item.id)).map((item) => item.id),
+		[visible.live, stopped],
+	);
+	const [clipQueue, setClipQueue] = useState(EMPTY_CLIP_QUEUE_STATE);
+	useEffect(() => {
+		setClipQueue((state) =>
+			reconcileClipQueue(state, desiredLiveIds, settings.maxConcurrentClips),
+		);
+	}, [desiredLiveIds, settings.maxConcurrentClips]);
+
 	// Which elements should exist, and WHICH COPY of each recording they play.
 	// FILTER visibility, NOT bare lane membership: a card the tag filter hides
 	// gets its <audio> released along with it, so a filtered-out item costs no
@@ -644,8 +664,14 @@ export const RadioTraffic: React.FC = () => {
 	useEffect(() => {
 		if (!isOpen) return;
 		const desired = new Map<number, string>();
+		// Issue #564: LIVE is gated on clipQueue's admission, not bare filter
+		// visibility — a pending id gets no element at all, which is the whole
+		// of "the number of clips should limit audio processing, as well as
+		// downloading." `stopped` is already excluded upstream, in
+		// `desiredLiveIds` feeding the queue above.
+		const admittedIds = new Set(clipQueue.admitted);
 		for (const item of visible.live) {
-			if (!stopped.has(item.id))
+			if (admittedIds.has(item.id))
 				desired.set(item.id, resolveAudioUrl(item, settings.playOriginalAudio));
 		}
 		for (const item of visible.previous) {
@@ -661,7 +687,25 @@ export const RadioTraffic: React.FC = () => {
 			ensure(itemId, url);
 			registeredRef.current.add(itemId);
 		}
-	}, [isOpen, visible.live, visible.previous, stopped, userStarted, settings.playOriginalAudio]);
+	}, [
+		isOpen,
+		visible.live,
+		visible.previous,
+		clipQueue.admitted,
+		userStarted,
+		settings.playOriginalAudio,
+	]);
+
+	// Issue #564's Split: pan admitted LIVE clips alternately left/right by
+	// their queue slot, or re-center all of them the instant Split is turned
+	// off (robbiebyrd's amendment — see applySplitPanning's own doc). A
+	// separate effect from the registration one above: this only needs to
+	// react to admission order and the Split flag, not the whole desired-set
+	// diff, and re-centering on toggle-off must fire even when nothing about
+	// admission itself changed this tick.
+	useEffect(() => {
+		applySplitPanning(clipQueue.admitted, settings.split);
+	}, [clipQueue.admitted, settings.split]);
 
 	// Story 050: the window closing is not an unmount — this component stays
 	// mounted for the desktop's whole lifetime — so nothing else stops the
@@ -706,7 +750,13 @@ export const RadioTraffic: React.FC = () => {
 			// they pressed play, and it is not part of the solo/mute mix at all.
 			setLevel(itemId, audibleIds.has(itemId) || userStarted.has(itemId));
 		}
-	}, [visible.live, audio, userStarted, liveLaneMuted]);
+		// clipQueue.admitted: issue #564's cap registers a LIVE element one
+		// render behind the mix that decides its level (reconcileClipQueue's own
+		// setState hop) — without this dependency, a card admitted on that later
+		// render would sit at whatever level `registeredRef` happened to hold
+		// nothing for the last time this effect's OTHER deps changed, i.e.
+		// unmuted by default, however the mix actually reads.
+	}, [visible.live, audio, userStarted, liveLaneMuted, clipQueue.admitted]);
 
 	const audioBlocked = useSyncExternalStore(subscribeAudioBlocked, isAudioBlocked);
 
@@ -723,6 +773,8 @@ export const RadioTraffic: React.FC = () => {
 				useThemeWaveformColor: settings.useThemeWaveformColor,
 				waveformColor: settings.waveformColor,
 				playOriginalAudio: settings.playOriginalAudio,
+				maxConcurrentClips: settings.maxConcurrentClips,
+				split: settings.split,
 			}),
 		);
 	}, [
