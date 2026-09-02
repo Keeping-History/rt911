@@ -48,6 +48,8 @@ import {
 import { type Badge, badgeFor, countdownFor, type Lane } from "./cardStatus";
 import { isSilentAt } from "./silence";
 import { CARD_TABS, CardTabBar, visibleCardTabs } from "./CardTabBar";
+import { isTapeTier } from "./tagFilter";
+import { DetailsTab } from "./tabs/DetailsTab";
 import { itemTiming } from "./tabs/itemTiming";
 import styles from "./trafficCard.module.scss";
 
@@ -390,6 +392,12 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 	// highlighted instead of showing a panel with nothing selected.
 	const tabs = useMemo(() => visibleCardTabs(meta), [meta]);
 	const panel = tabs.find((tab) => tab.id === active) ?? tabs[0];
+	// Issue #565: a tape is one long continuous recording — the tab strip
+	// (Details, Summary, Mentions, ...) offers nothing to switch between, so it
+	// is skipped entirely in favor of Details' content alone, bypassing the
+	// tab-selection state above rather than pinning `active` to "details" (which
+	// would still render a CardTabBar with one, meaningless, button on it).
+	const tape = isTapeTier(meta);
 
 	// The existing panel switch, plus Story 045's touch signal alongside it —
 	// see onTabSelect above.
@@ -546,16 +554,22 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 			</div>
 
 			<div className={styles.rtCardTabs}>
-				<CardTabBar tabs={tabs} active={panel.id} onSelect={handleTabSelect} />
+				{!tape && (
+					<CardTabBar tabs={tabs} active={panel.id} onSelect={handleTabSelect} />
+				)}
 				<div className={styles.rtCardPanel}>
-					<panel.Panel
-						item={item}
-						meta={meta}
-						tzOffsetHours={tzOffsetHours}
-						// The element's own position, not the clock's: a drifting card
-						// must caption the words it is actually saying.
-						currentTimeSec={currentMs === undefined ? undefined : currentMs / 1000}
-					/>
+					{tape ? (
+						<DetailsTab item={item} meta={meta} tzOffsetHours={tzOffsetHours} />
+					) : (
+						<panel.Panel
+							item={item}
+							meta={meta}
+							tzOffsetHours={tzOffsetHours}
+							// The element's own position, not the clock's: a drifting card
+							// must caption the words it is actually saying.
+							currentTimeSec={currentMs === undefined ? undefined : currentMs / 1000}
+						/>
+					)}
 				</div>
 			</div>
 		</article>

@@ -96,6 +96,22 @@ export const TIER_NAMESPACE = "tier";
  */
 export const UNKNOWN_TIER_TAG = `${TIER_NAMESPACE}:unknown`;
 
+/** The tag `tier_for` (video-grabber's `parties/identify.py`) writes for a long-form recording. */
+export const TAPE_TIER_TAG = `${TIER_NAMESPACE}:tape`;
+
+/**
+ * A tape (as opposed to a clip): one of the long continuous position
+ * recordings, where the per-item tab strip (Details, Summary, Mentions, ...)
+ * adds nothing a listener needs — see issue #565. Reads the tier straight off
+ * `meta.tags`, the same field `matchesFilter` reads it from above, rather
+ * than `ItemMeta.tier`: nothing populates that scalar today, and adding a
+ * second reader of a field the pipeline doesn't write would just be a second
+ * place for the two to disagree.
+ */
+export function isTapeTier(meta: { tags?: TagDef[] } | undefined): boolean {
+	return (meta?.tags ?? []).some((t) => t.tag === TAPE_TIER_TAG);
+}
+
 /**
  * Does `tags` survive `checked`? OR within a namespace, AND across namespaces.
  *

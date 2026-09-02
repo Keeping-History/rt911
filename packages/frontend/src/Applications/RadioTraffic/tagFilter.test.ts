@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TagDef } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	groupVocabulary,
+	isTapeTier,
 	LARGE_NAMESPACES,
 	matchesFilter,
 	UNKNOWN_TIER_TAG,
@@ -257,5 +258,27 @@ describe("withUnknownTier", () => {
 
 	it("does nothing to an empty vocabulary", () => {
 		expect(withUnknownTier(groupVocabulary([]))).toEqual([]);
+	});
+});
+
+describe("isTapeTier", () => {
+	it("is true for an item carrying tier:tape", () => {
+		expect(isTapeTier({ tags: [def("tier:tape")] })).toBe(true);
+	});
+
+	it("is false for an item carrying tier:clip", () => {
+		expect(isTapeTier({ tags: [def("tier:clip")] })).toBe(false);
+	});
+
+	it("is false for an item with no tier tag at all", () => {
+		expect(isTapeTier({ tags: [def("topic:hijack")] })).toBe(false);
+	});
+
+	it("is false for an item with no tags", () => {
+		expect(isTapeTier({ tags: [] })).toBe(false);
+	});
+
+	it("is false for undefined meta", () => {
+		expect(isTapeTier(undefined)).toBe(false);
 	});
 });

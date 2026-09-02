@@ -757,6 +757,34 @@ describe("TrafficCard tabs", () => {
 	});
 });
 
+describe("TrafficCard tape tier (issue #565)", () => {
+	it("renders Details' own content with no tab strip for a tier:tape item", () => {
+		const { queryByRole, container } = renderCard({
+			meta: makeMeta({
+				tags: [{ tag: "tier:tape", namespace: "tier", value: "Tape" }],
+			}),
+		});
+		expect(queryByRole("tablist")).toBeNull();
+		expect(queryByRole("tab")).toBeNull();
+		expect(container.querySelector('[data-tab="details"]')).not.toBeNull();
+	});
+
+	it("still shows the tab strip for a tier:clip item", () => {
+		const { getAllByRole, container } = renderCard({
+			meta: makeMeta({
+				tags: [{ tag: "tier:clip", namespace: "tier", value: "Clip" }],
+			}),
+		});
+		expect(getAllByRole("tab")).toHaveLength(6);
+		expect(container.querySelector('[data-tab="details"]')).not.toBeNull();
+	});
+
+	it("still shows the tab strip for an item with no tier tag at all", () => {
+		const { getAllByRole } = renderCard({ meta: makeMeta() });
+		expect(getAllByRole("tab")).toHaveLength(6);
+	});
+});
+
 describe("TrafficCard control bar", () => {
 	it("toggles the pause button", () => {
 		const onTogglePause = vi.fn();
