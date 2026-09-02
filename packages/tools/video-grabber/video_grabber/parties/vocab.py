@@ -132,7 +132,7 @@ ROLES: frozenset[str] = frozenset({
 })
 
 LINKS: frozenset[str] = frozenset({
-    "air-ground", "landline", "internal", "conference", "unknown",
+    "air-ground", "ground-ground", "landline", "internal", "conference", "unknown",
 })
 
 
