@@ -23,9 +23,9 @@
 
 import type React from "react";
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
+import { countdownFor } from "../radio-core/countdownFormat";
 import Marquee from "../radio-core/marquee";
 import { useHorizontalOverflow } from "../radio-core/useHorizontalOverflow";
-import { countdownFor } from "./cardStatus";
 import styles from "./laneSmallPlayer.module.scss";
 import { durationSecondsLabel, startLabel } from "./smallPlayerLabels";
 import { itemTiming } from "./tabs/itemTiming";
@@ -77,8 +77,9 @@ export const LaneSmallPlayer: React.FC<LaneSmallPlayerProps> = ({
 
 	/**
 	 * Time remaining until this clip's `start_date` — "59s" under a minute,
-	 * "MM:SS" beyond it, "HH:MM:SS" from an hour out (cardStatus.countdownFor,
-	 * the same rendering the UPCOMING lane's full-card badge already uses).
+	 * "MM:SS" beyond it, "HH:MM:SS" from an hour out (radio-core's
+	 * countdownFor, the same rendering the UPCOMING lane's full-card badge
+	 * already uses).
 	 * Dropped once the start has passed rather than pinned at "0s": a LIVE or
 	 * PREVIOUS clip's collapsed player has nothing left to count down to, same
 	 * as the `start`/`duration`/`link` lines above are each dropped when the

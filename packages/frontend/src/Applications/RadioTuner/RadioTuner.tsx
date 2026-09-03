@@ -1,5 +1,6 @@
 import {
     ClassicyApp,
+    ClassicyBalloonHelp,
     ClassicyButton,
     ClassicyIcons,
     ClassicyWindow,
@@ -25,6 +26,7 @@ import { MediaStreamContext } from "../../Providers/MediaStream/MediaStreamConte
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { trackAppToggle } from "../../openreplay";
 import { isAudioBlocked, subscribeAudioBlocked } from "../radio-core/audioBlocked";
+import { countdownFor } from "../radio-core/countdownFormat";
 // import { NowPlayingList } from "./NowPlayingList";
 import {
     effectiveMutedIds,
@@ -48,6 +50,7 @@ import {
     sortStationsByStatusAndLabel,
     stationLogo,
     stationStatus,
+    upcomingSegments,
 } from "../radio-core/stationGrouping";
 import { useStationLogos } from "../radio-core/stationLogos";
 import "./RadioTunerContext";
@@ -318,6 +321,19 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
         [activeStationObj, upcomingItems, nowMs],
     );
 
+    // "Starts in <countdown>" shown under the logo while the tuned station is
+    // scheduled but not yet on air — the same next-item lookup and formatter
+    // the strip's balloon help uses, so the two always agree.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: nowMs is the clock dep
+    const activeUpcomingCountdown = useMemo(() => {
+        if (!activeStationObj) return null;
+        if (stationStatus(activeStationObj, upcomingItems, nowMs) !== "upcoming") {
+            return null;
+        }
+        const next = upcomingSegments(activeStationObj, upcomingItems, nowMs, 1)[0];
+        return next ? countdownFor(next, nowMs) : null;
+    }, [activeStationObj, upcomingItems, nowMs]);
+
     // The active station's in-window segments — shared by the now-playing
     // list, the solo lifecycle, and the effective-mute derivation.
     // biome-ignore lint/correctness/useExhaustiveDependencies: nowMs is the clock dep
@@ -425,6 +441,11 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
                                             {activeStationObj.label}
                                         </p>
                                     )}
+                                    {activeUpcomingCountdown && (
+                                        <p className={styles.rsDisplayCountdown}>
+                                            Starts in {activeUpcomingCountdown}
+                                        </p>
+                                    )}
                                     {/* <NowPlayingList
                                         segments={playingSegments}
                                         mutedItems={mutedItems}
@@ -468,9 +489,13 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
                         <div className={styles.rsStationStrip}>
                             {stripStations.map((station) => {
                                 const isActive = station.key === activeStation;
-                                return (
+                                const status = stationStatus(
+                                    station,
+                                    upcomingItems,
+                                    nowMs,
+                                );
+                                const button = (
                                     <ClassicyButton
-                                        key={station.key}
                                         depressed={isActive}
                                         onClickFunc={() =>
                                             setActiveStation(station.key)
@@ -478,13 +503,38 @@ export const RadioTuner: React.FC<RadioTunerProps> = () => {
                                     >
                                         <StationButtonContent
                                             label={station.label}
-                                            status={stationStatus(
-                                                station,
-                                                upcomingItems,
-                                                nowMs,
-                                            )}
+                                            status={status}
                                         />
                                     </ClassicyButton>
+                                );
+                                if (status !== "upcoming") {
+                                    return (
+                                        <div key={station.key}>{button}</div>
+                                    );
+                                }
+                                // The strip re-sorts every tick (nowMs), so the
+                                // next item is looked up fresh rather than
+                                // carried from stripStations — a station one
+                                // clip away from going on-air still needs an
+                                // accurate countdown up to its last second.
+                                const next = upcomingSegments(
+                                    station,
+                                    upcomingItems,
+                                    nowMs,
+                                    1,
+                                )[0];
+                                if (!next) {
+                                    return (
+                                        <div key={station.key}>{button}</div>
+                                    );
+                                }
+                                return (
+                                    <ClassicyBalloonHelp
+                                        key={station.key}
+                                        content={`Starts in ${countdownFor(next, nowMs)}`}
+                                    >
+                                        {button}
+                                    </ClassicyBalloonHelp>
                                 );
                             })}
                         </div>

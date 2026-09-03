@@ -11,7 +11,6 @@
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import {
 	activeSegments,
-	countdownLabel,
 	groupStations,
 	upcomingSegments,
 } from "../radio-core/stationGrouping";
@@ -49,14 +48,6 @@ export type Badge =
 const DRIFT_ENTER_MS = 3_000;
 const DRIFT_EXIT_MS = 1_000;
 
-/** Below a minute the countdown drops the MM: prefix ("4s", not "00:04"). */
-const COUNTDOWN_SHORT_FORM_SECONDS = 60;
-
-/** From an hour out the countdown grows an HH field, so 90 minutes is not "90:00". */
-const SECONDS_PER_HOUR = 3_600;
-
-const pad2 = (value: number): string => String(value).padStart(2, "0");
-
 /**
  * The lane `item` belongs to at `nowMs`.
  *
@@ -83,35 +74,6 @@ export function laneFor(item: MediaItem, nowMs: number): Lane {
 	return "previous";
 }
 
-/**
- * Countdown text for an UPCOMING card: "4s" inside the last minute, "03:13"
- * beyond it, "01:30:00" from an hour out.
- *
- * The *rounding* is radio-core's countdownLabel unchanged — the card and the
- * scanner's Coming Up list agree up to the whole second, hitting zero exactly at
- * the start instant and never a tick early — but the *rendering* is this
- * module's. countdownLabel is unbounded in its minutes field, so an item two
- * hours out reads "120:00" there: correct arithmetic, but a card badge that
- * makes a listener divide by 60 in their head, and one that reads as a
- * plausible-but-wrong "1:20" at a glance. Hours are split off here rather than
- * in radio-core because ten other consumers already agree on that MM:SS form
- * and none of them asked for this.
- */
-export function countdownFor(item: MediaItem, nowMs: number): string {
-	const [minutes, seconds] = countdownLabel(item, nowMs).split(":").map(Number);
-	const total = minutes * 60 + seconds;
-
-	if (total < COUNTDOWN_SHORT_FORM_SECONDS) return `${total}s`;
-	if (total < SECONDS_PER_HOUR) {
-		return `${pad2(Math.floor(total / 60))}:${pad2(total % 60)}`;
-	}
-	// Every field is two digits, so the badge's width never moves as the clock
-	// runs down and the header's subject never reflows a character at a time.
-	const hours = Math.floor(total / SECONDS_PER_HOUR);
-	const rest = total % SECONDS_PER_HOUR;
-	return `${pad2(hours)}:${pad2(Math.floor(rest / 60))}:${pad2(rest % 60)}`;
-}
-
 export interface BadgeArgs {
 	lane: Lane;
 	/** Where the virtual clock says the audio should be: calcSeekSeconds(item, now) * 1000. */
@@ -122,7 +84,7 @@ export interface BadgeArgs {
 	seeking: boolean;
 	/** The listener started this clip themselves (as opposed to it following the clock). */
 	userPlaying: boolean;
-	/** UPCOMING only: the text from countdownFor(). */
+	/** UPCOMING only: the text from radio-core's countdownFor(). */
 	countdown?: string;
 	/**
 	 * What this same card's badge read last tick, or undefined on the first one.
