@@ -8,12 +8,68 @@ import math
 import sys
 from pathlib import Path
 
+import numpy as np
+import open3d as o3d
+
 from nyc_glb import extract_world_triangles
-from process_models import decimate, write_stl
+from process_models import write_stl
 
 HERE = Path(__file__).parent
 OUT = HERE / "processed"
-TRI_BUDGET = 150_000
+TRI_BUDGET = 200_000
+
+
+def quadric_decimate(tris: list, target_triangles: int) -> list:
+	"""Weld the triangle soup into a shared vertex/index mesh and run open3d's
+	quadric-error-metric simplification.
+
+	This -- not vertex-clustering grid-snapping -- is what the original
+	WTC hero model's pipeline used (see HERO_MODELS_CREDITS.md's prior
+	entry: "decimated (open3d quadric, ~90k tris)"). Grid-snapping treats
+	the input as a flat, topology-free triangle soup and independently
+	rounds each vertex to the nearest grid point; on a regular repeating
+	facade pattern (window bays, wall panels) that reliably shatters the
+	pattern into jagged, degenerate-looking triangles because nearby-but-
+	distinct vertices from different panels snap unevenly. Quadric
+	decimation collapses edges by actual visual-error cost against a
+	real vertex/index mesh, which preserves large-scale silhouette and
+	regular patterns far better at the same triangle budget.
+	"""
+	vert_map: dict[tuple[float, float, float], int] = {}
+	verts: list[tuple[float, float, float]] = []
+	idx: list[tuple[int, int, int]] = []
+
+	def key(v: tuple[float, float, float]) -> tuple[float, float, float]:
+		return (round(v[0], 3), round(v[1], 3), round(v[2], 3))
+
+	for tri in tris:
+		face = []
+		for v in tri:
+			k = key(v)
+			i = vert_map.get(k)
+			if i is None:
+				i = len(verts)
+				vert_map[k] = i
+				verts.append(v)
+			face.append(i)
+		idx.append(tuple(face))
+
+	mesh = o3d.geometry.TriangleMesh()
+	mesh.vertices = o3d.utility.Vector3dVector(np.array(verts, dtype=np.float64))
+	mesh.triangles = o3d.utility.Vector3iVector(np.array(idx, dtype=np.int32))
+
+	simplified = mesh.simplify_quadric_decimation(target_number_of_triangles=target_triangles)
+
+	out_verts = np.asarray(simplified.vertices)
+	out_tris = np.asarray(simplified.triangles)
+	return [
+		(
+			tuple(out_verts[a]),
+			tuple(out_verts[b]),
+			tuple(out_verts[c]),
+		)
+		for a, b, c in out_tris
+	]
 
 # --- Calibration constants (see plans/2026-09-03-nyc-90s-hero-model-design.md) ---
 NORTH_TOWER_MODEL_XZ = (-9.861272500021942, -34.7795508877096)
@@ -90,7 +146,7 @@ def main() -> None:
 	tris = extract_world_triangles(src)
 	print(f"{len(tris):,} triangles extracted")
 
-	decimated = decimate(tris, TRI_BUDGET, start_step=0.113)
+	decimated = quadric_decimate(tris, TRI_BUDGET)
 	print(f"decimated to {len(decimated):,} triangles")
 
 	calibrated = calibrate(decimated)
