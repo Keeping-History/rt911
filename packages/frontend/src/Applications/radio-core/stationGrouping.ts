@@ -87,6 +87,20 @@ export function startTimeLabel(item: MediaItem, tzOffsetHours: number): string {
 	});
 }
 
+/**
+ * Source slug → human display label, for slugs whose call sign alone doesn't
+ * say what it is (most broadcast call signs — "WCBS", "WINS" — are
+ * self-explanatory and need no entry here).
+ */
+export const STATION_LABELS: Record<string, string> = {
+	FDNY: "FDNY Manhattan",
+};
+
+/** A station's display label: its STATION_LABELS override, or the raw slug. */
+function stationLabel(key: string): string {
+	return STATION_LABELS[key] ?? key;
+}
+
 /** Group items into stations keyed by source (title fallback), first-seen order. */
 export function groupStations(items: MediaItem[]): Station[] {
 	const order: string[] = [];
@@ -95,7 +109,7 @@ export function groupStations(items: MediaItem[]): Station[] {
 		const key = stationKey(item);
 		let station = byKey.get(key);
 		if (!station) {
-			station = { key, label: key, items: [] };
+			station = { key, label: stationLabel(key), items: [] };
 			byKey.set(key, station);
 			order.push(key);
 		}
@@ -265,6 +279,15 @@ export const BROADCAST_STATIONS = new Set([
 	"BBC-R4",
 ]);
 
+/**
+ * Mobile's Radio screen has no separate Scanner surface, so it additionally
+ * carries FDNY Manhattan dispatch audio alongside the desktop's
+ * continuous-broadcast set. Kept mobile-only (used only by Mobile/IpodShell.tsx)
+ * rather than folded into BROADCAST_STATIONS: that set is shared with the
+ * desktop RadioTuner app, which should keep showing only continuous broadcast.
+ */
+export const MOBILE_BROADCAST_STATIONS = new Set([...BROADCAST_STATIONS, "FDNY"]);
+
 /** Stations pinned to the front of the strip regardless of online state. */
 export const PINNED_STATIONS = ["WINS", "WCBS"];
 
@@ -336,12 +359,12 @@ export function mergeWithSources(audioSources: string[], items: MediaItem[]): St
 	const order: string[] = [...audioSources];
 	const byKey = new Map<string, Station>();
 	for (const key of audioSources) {
-		byKey.set(key, { key, label: key, items: [] });
+		byKey.set(key, { key, label: stationLabel(key), items: [] });
 	}
 	for (const it of items) {
 		const key = stationKey(it);
 		if (!byKey.has(key)) {
-			byKey.set(key, { key, label: key, items: [] });
+			byKey.set(key, { key, label: stationLabel(key), items: [] });
 			order.push(key);
 		}
 		(byKey.get(key) as Station).items.push(it);

@@ -22,7 +22,7 @@ import {
 import { DEFAULT_RADIO_SCANNER_SETTINGS } from "../Applications/radio-core/radioScannerSettings";
 import { StationPlayer } from "../Applications/radio-core/StationPlayer";
 import {
-	BROADCAST_STATIONS,
+	MOBILE_BROADCAST_STATIONS,
 	mergeWithSources,
 } from "../Applications/radio-core/stationGrouping";
 import {
@@ -150,13 +150,15 @@ export default function IpodShell() {
 	useEffect(() => {
 		saveIpodColor(ipodColor);
 	}, [ipodColor]);
-	// Broadcast stations only — the same filter as the desktop RadioTuner.
-	// The comm-traffic clips and tapes belong to Radio Traffic; on the phone
-	// the Radio list is just the stations you could have had on in a kitchen.
+	// Broadcast stations, plus a mobile-only carve-out (MOBILE_BROADCAST_STATIONS)
+	// for dispatch audio that has no other home on the phone — there's no
+	// separate Scanner surface here the way desktop splits RadioTuner/RadioTraffic.
+	// The rest of the comm-traffic clips and tapes stay on desktop Radio Traffic;
+	// otherwise the Radio list is just the stations you could have had on in a kitchen.
 	const stations = useMemo(
 		() =>
 			mergeWithSources(sources.audio, mp3Items).filter((s) =>
-				BROADCAST_STATIONS.has(s.key),
+				MOBILE_BROADCAST_STATIONS.has(s.key),
 			),
 		[sources.audio, mp3Items],
 	);
