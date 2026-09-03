@@ -1,4 +1,4 @@
-import { AIRCRAFT_CREDITS, WTC_HERO_CREDIT, type ModelCredit } from "./aircraftCredits";
+import { AIRCRAFT_CREDITS, NYC_90S_HERO_CREDIT, type ModelCredit } from "./aircraftCredits";
 
 export type ProvenanceSource = {
 	/** Human-readable name of the upstream source. */
@@ -321,7 +321,7 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 			"Descents are anchored to each airport's real field elevation. Altitudes are exaggerated relative to the terrain so tracks stay readable.",
 			"The Pentagon renders as an extruded footprint rather than a detailed model — no license-clean model was sourced.",
 		],
-		credits: [WTC_HERO_CREDIT, ...AIRCRAFT_CREDITS],
+		credits: [NYC_90S_HERO_CREDIT, ...AIRCRAFT_CREDITS],
 	},
 };
 

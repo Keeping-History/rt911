@@ -83,7 +83,7 @@ describe("useAboutApp", () => {
 
 		expect(await screen.findByText(/Bureau of Transportation Statistics/)).toBeTruthy();
 		expect(screen.getByText(/reconstructed, not recorded/)).toBeTruthy();
-		expect(screen.getByText(/NanoRay/)).toBeTruthy();
+		expect(screen.getAllByText(/rorovera201305/).length).toBeGreaterThan(0);
 	});
 
 	it("opens source links in a new tab without leaking the referrer", async () => {

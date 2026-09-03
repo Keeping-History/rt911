@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { AIRCRAFT_CREDITS, WTC_HERO_CREDIT } from "./aircraftCredits";
+import { AIRCRAFT_CREDITS, NYC_90S_HERO_CREDIT } from "./aircraftCredits";
 
 describe("model credits", () => {
 	it("carries every aircraft family in the hosted manifest", () => {
 		expect(AIRCRAFT_CREDITS).toHaveLength(15);
 	});
 
-	it.each([...AIRCRAFT_CREDITS, WTC_HERO_CREDIT])(
+	it.each([...AIRCRAFT_CREDITS, NYC_90S_HERO_CREDIT])(
 		"$model has author, license and an https source",
 		(credit) => {
 			expect(credit.model.trim().length).toBeGreaterThan(0);
@@ -16,9 +16,9 @@ describe("model credits", () => {
 		},
 	);
 
-	it("credits NanoRay for the WTC complex under CC-BY", () => {
-		expect(WTC_HERO_CREDIT.author).toContain("NanoRay");
-		expect(WTC_HERO_CREDIT.license).toContain("CC-BY");
+	it("credits rorovera201305 for the NYC 90s model under CC-BY", () => {
+		expect(NYC_90S_HERO_CREDIT.author).toContain("rorovera201305");
+		expect(NYC_90S_HERO_CREDIT.license).toContain("CC-BY");
 	});
 
 	it("has no duplicate models", () => {

@@ -4,15 +4,23 @@ Hero landmark 3D models are hosted on Wasabi (`files.911realtime.org/maps/heroes
 and referenced by `maps/hero-buildings.json`; they are not committed to this repo.
 Attribution required by their licenses is recorded here.
 
-## World Trade Center complex (`wtc-complex`)
+## New York in the 1990s (`nyc-90s-v1`)
 
-- **Model:** "World Trade Center" by **NanoRay** — the original 1974–2001 complex.
-- **Source:** https://sketchfab.com/3d-models/world-trade-center-673f0ab7f31e4d878fb2c7920cea0ec5
+- **Model:** "New York In The 90's" by **rorovera201305**.
+- **Source:** https://skfb.ly/oSMBU
 - **License:** **CC Attribution (CC-BY 4.0)** — https://creativecommons.org/licenses/by/4.0/
-- **Use:** downloaded as glTF, decimated (open3d quadric, ~90k tris), reoriented
-  (+Y north / +Z up), scaled to the true ~417 m tower height, and hosted as
-  `maps/heroes/wtc-complex-v2.stl`. This is a derivative work; attribution to
-  NanoRay is retained per CC-BY.
+- **Use:** downloaded as glTF (187 meshes, 2.68M triangles, no textures). Every
+  node's transform was baked into world space and the source's single flat
+  ground/street-plane mesh dropped (`scripts/aircraft-models/nyc_glb.py`), the
+  remainder decimated by vertex clustering to ~115k triangles, then calibrated
+  onto real lng/lat/meters via a 2-point similarity transform anchored on the
+  North and South Towers' documented footprint centers and heights
+  (`packages/tools/building-recon`'s curated `wtc_complex_2001.geojson`) —
+  see `scripts/aircraft-models/process_nyc_model.py`. Hosted as
+  `maps/heroes/nyc-90s-v1.stl`. This is a derivative work; attribution to
+  rorovera201305 is retained per CC-BY. Replaces the prior NanoRay WTC-only
+  model (`wtc-complex-v2.stl`, no longer referenced) and, within its
+  footprint, the extruded 2001-buildings GeoJSON layer.
 
 _(The Pentagon currently renders as an extruded footprint — no license-clean hero
 model sourced yet.)_

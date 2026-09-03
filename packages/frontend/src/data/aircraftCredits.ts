@@ -1,7 +1,8 @@
 /**
  * Vendored copy of https://files.911realtime.org/maps/aircraft/models.json
  * (the manifest sitting beside the STLs the Flight Tracker fetches), plus the
- * WTC hero entry from Applications/FlightTracker/HERO_MODELS_CREDITS.md.
+ * NYC hero entry from ./FlightTracker/HERO_MODELS_CREDITS.md
+ * (Applications/FlightTracker/HERO_MODELS_CREDITS.md relative to src/).
  *
  * Copied 2026-08-04. This is deliberately a copy, not a fetch, so the About
  * window works with no network. It can drift from the hosted manifest when a
@@ -36,12 +37,12 @@ export type ModelCredit = {
 export const AIRCRAFT_MODEL_DERIVATIVE_NOTICE =
 	"All models are reoriented, rescaled and decimated to ≤6k triangles for rendering; each is a modified derivative of the linked original. Derivatives of CC-BY-SA originals are distributed under CC-BY-SA 3.0.";
 
-export const WTC_HERO_CREDIT: ModelCredit = {
-	model: "World Trade Center complex (1974–2001)",
-	author: "NanoRay",
+export const NYC_90S_HERO_CREDIT: ModelCredit = {
+	model: "New York In The 90's",
+	author: "rorovera201305",
 	license: "CC-BY 4.0",
-	url: "https://sketchfab.com/3d-models/world-trade-center-673f0ab7f31e4d878fb2c7920cea0ec5",
-	note: "Decimated, reoriented and scaled to the true tower height — a derivative work, attribution retained per CC-BY.",
+	url: "https://skfb.ly/oSMBU",
+	note: "\"New York In The 90's\" by rorovera201305 is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/). Decimated (2.68M → ~115k triangles), recentered and rescaled to match the real World Trade Center towers' documented height and separation — a derivative work, attribution retained per CC-BY.",
 };
 
 export const AIRCRAFT_CREDITS: ModelCredit[] = [
