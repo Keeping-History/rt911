@@ -42,21 +42,74 @@ env:
   FE_VITE_DIRECTUS_URL: "https://api.911realtime.org"
 
 jobs:
-  # Type-check, lint and unit-test the frontend. The Docker image build only runs
-  # `vite build` (transpile-only), so without this job tsc/oxlint/vitest never run
-  # in CI and can regress silently.
-  frontend-checks:
-    name: frontend-checks
+  # Type-check, lint and unit-test the frontend, as three independent jobs
+  # instead of one — they don't depend on each other's output, so running them
+  # concurrently (each on its own runner) cuts this path from the sum of all
+  # three to just the slowest one. The Docker image build only runs `vite
+  # build` (transpile-only), so without these, tsc/oxlint/vitest never run in
+  # CI and can regress silently.
+  #
+  # main's branch protection requires frontend-typecheck, frontend-lint and
+  # frontend-test individually (no aggregator job) — keep the branch
+  # protection required status checks in sync with these names if you rename
+  # or remove one.
+  frontend-typecheck:
+    name: frontend-typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Type-check
         run: pnpm --filter @rt911/frontend exec tsc -b
+
+  frontend-lint:
+    name: frontend-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Lint
         run: pnpm --filter @rt911/frontend exec oxlint .
+
+  frontend-test:
+    name: frontend-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Test
         run: pnpm --filter @rt911/frontend run test
 
@@ -127,11 +180,12 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
   frontend:
-    # Both gates, not just the cheap one: the image this job pushes to GHCR is
-    # what Argo CD Image Updater rolls out, so an E2E failure has to stop it here
-    # or a broken desktop ships. E2E costs ~100s and starts at the same time as
-    # frontend-checks, so this rarely adds wall-clock over the old ordering.
-    needs: [frontend-checks, e2e]
+    # All four gates, not just the cheap ones: the image this job pushes to
+    # GHCR is what Argo CD Image Updater rolls out, so any failure has to stop
+    # it here or a broken desktop ships. E2E costs ~100s and starts at the
+    # same time as the frontend-* checks, so this rarely adds wall-clock over
+    # gating on E2E alone.
+    needs: [frontend-typecheck, frontend-lint, frontend-test, e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -161,9 +215,10 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-  # Runs alongside frontend-checks rather than after it: the two are independent
-  # (Playwright drives a dev server, it doesn't consume tsc/oxlint output), so
-  # gating E2E on checks only delayed the slower signal. Deliberately NOT
+  # Runs alongside frontend-typecheck/frontend-lint/frontend-test rather than
+  # after them: E2E is independent of those (Playwright drives a dev server,
+  # it doesn't consume tsc/oxlint output), so gating it on them only delayed
+  # the slower signal. Deliberately NOT
   # continue-on-error — a red E2E fails the workflow, and `frontend` needs it, so
   # a broken desktop can't be built into an image or pushed to GHCR for Argo CD
   # to roll out. Keep `e2e` in main's required status checks so it blocks merges
@@ -186,6 +241,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Type-check E2E

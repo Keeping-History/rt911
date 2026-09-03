@@ -1,18 +1,21 @@
 name: Bump classicy
 
-# Pull the latest `classicy` release into pnpm-lock.yaml and, if it actually
-# changed, land it on `main` so the deployed frontend picks it up.
+# Pull the latest `classicy` release into pnpm-lock.yaml (and
+# packages/frontend/package.json's version pin) and, if it actually changed,
+# land it on `main` so the deployed frontend picks it up.
 #
-# Why this exists: the frontend pins `classicy` to "latest" and `.husky/pre-commit`
-# auto-bumps it on every human commit — but between commits a fresh classicy
-# release won't reach production on its own. This workflow is the button (manual
-# or fired by classicy's publish) that forces that refresh. Because build.yml
-# installs with `--frozen-lockfile`, the bump MUST be committed to the lockfile
-# on `main` — "just rebuild" would reinstall the old version.
+# Why this exists: the frontend pins `classicy` to an exact version and
+# `.husky/pre-commit` auto-bumps it on every human commit — but between commits
+# a fresh classicy release won't reach production on its own. This workflow is
+# the button (manual or fired by classicy's publish) that forces that refresh.
+# Because build.yml installs with `--frozen-lockfile`, the bump MUST be
+# committed to the lockfile on `main` — "just rebuild" would reinstall the old
+# version.
 #
-# Why a PR + auto-merge instead of a direct push: `main` requires the `streamer`,
-# `frontend` and `frontend-checks` status checks. `github-actions[bot]` is not a
-# repo admin, so a direct push of a fresh commit is rejected (GH006 — "required
+# Why a PR + auto-merge instead of a direct push: `main` requires the
+# `streamer`, `frontend`, `frontend-typecheck`, `frontend-lint`,
+# `frontend-test` and `e2e` status checks. `github-actions[bot]` is not a repo
+# admin, so a direct push of a fresh commit is rejected (GH006 — "required
 # status checks are expected"). Instead we open a PR *as the RT911_DISPATCH
 # GitHub App* and enable auto-merge: the App identity (unlike GITHUB_TOKEN) fires
 # the PR's checks, and once they go green GitHub squash-merges automatically. The
@@ -70,6 +73,17 @@ jobs:
       - uses: jdx/mise-action@v4
         # Provisions node/pnpm from mise.toml, matching build.yml.
 
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
       - name: Show trigger
         env:
           # Empty on manual runs; set to the published tag on repository_dispatch.
@@ -92,7 +106,12 @@ jobs:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           TAG: ${{ github.event.client_payload.tag }}
         run: |
-          if git diff --quiet -- pnpm-lock.yaml; then
+          # classicy is pinned to an exact version, so `pnpm update --latest`
+          # rewrites packages/frontend/package.json's pin in addition to the
+          # lockfile — check (and stage) both, or the bump PR would leave
+          # package.json stale and the next non-frozen `pnpm install` would
+          # revert it.
+          if git diff --quiet -- pnpm-lock.yaml packages/frontend/package.json; then
             echo "::notice::classicy already up to date — no PR needed"
             exit 0
           fi
@@ -102,7 +121,7 @@ jobs:
           # Roll a single, always-current bump branch. Force-push so a stacked-up
           # release supersedes an in-flight one instead of piling up stale PRs.
           git checkout -B "$BRANCH"
-          git add pnpm-lock.yaml
+          git add pnpm-lock.yaml packages/frontend/package.json
           git commit -m "$title"
           git push --force --set-upstream origin "$BRANCH"
 

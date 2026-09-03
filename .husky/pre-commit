@@ -1,4 +1,7 @@
 #!/bin/sh
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 pnpm update classicy --latest --recursive --silent
-git add pnpm-lock.yaml
+# classicy is pinned to an exact version (not "latest"), so --latest rewrites
+# packages/frontend/package.json's pin in addition to the lockfile — stage both,
+# or the bump silently reverts on the next non-frozen `pnpm install`.
+git add pnpm-lock.yaml packages/frontend/package.json
