@@ -16,13 +16,24 @@ extension point**, not new rendering code — no changes to `buildingMesh.ts`,
   (materials are flat `pbrMetallicRoughness.baseColorFactor` only — no images).
 - No georeferencing of any kind (no CESIUM_RTC or similar extension); it's an
   artist's scene centered on its own local origin.
-- Real-world extent, computed by composing the *full* node-transform hierarchy
-  (root axis-swap × `.fbx` import scale × the `"New York"` node's own additional
-  scale/rotation) down to each mesh's POSITION accessor bounds: **~1000m × 550m
-  horizontal, ~550m of local "height" range** (axes aren't consistent with true
-  meters — see Calibration). This is a Lower-Manhattan-block scale, comparable
-  to the area the current `buildings-2001.geojson` extrusion layer already
-  covers, not a whole-borough model.
+- Real-world extent: composing the *full* node-transform hierarchy (root
+  axis-swap × `.fbx` import scale × the `"New York"` node's own additional
+  scale/rotation) down to each mesh's POSITION accessor bounds gives an
+  overall bounding box of **~999 × 58 × 553 local units** (X, Y-up, Z). The
+  model's own units are **not** 1:1 meters, though: the two tallest structures
+  in the scene cluster ~13.8 local units apart at local heights ~54.5 and
+  ~44.5 — almost certainly the Twin Towers (nothing else in the scene comes
+  close to that height, and no other pair of structures is nearly as tall and
+  nearly as close together). Cross-checking against the curated real values
+  in `packages/tools/building-recon/data/wtc_complex_2001.geojson` (417m
+  North Tower height; ~123m real center-to-center tower separation, derived
+  from its footprint rectangles) gives two independent scale estimates —
+  417⁄54.5≈7.7 and 123⁄13.8≈8.9 m/unit — that agree closely enough to treat
+  **~8 m/unit** as the calibration starting hypothesis. At that scale the
+  model's real extent is roughly **8km × 4.7km**: a real swath of Manhattan
+  (matching the "New York in the 90s" cityscape title), not a single WTC-block
+  diorama. This is a hypothesis to confirm visually (Task 4 below), not a
+  certainty — but it's what the plan calibrates from rather than guessing.
 - License: CC-BY 4.0. Required attribution text (exact, as supplied):
   > "New York In The 90's" (https://skfb.ly/oSMBU) by rorovera201305 is
   > licensed under Creative Commons Attribution
@@ -37,22 +48,25 @@ the existing STL pipeline, not folded into `process_models.py` — that script's
 `auto_orient`/`normalize` are aircraft-specific fuselage/wing heuristics that
 don't apply here):
 
-- Parse the GLB (`pygltflib` or `trimesh`), walk the scene graph, and bake each
-  node's cumulative transform into world-space vertex positions — the same
-  math used to compute the real-world extent above, reused rather than
-  re-derived.
+- Parse the GLB with the standard library only (`struct` + `json`), matching
+  this toolkit's existing house style (`process_models.py` has no external
+  dependencies either) — a GLB container and a glTF scene graph with
+  FLOAT/UNSIGNED_INT accessors don't need a library. Walk the scene graph and
+  bake each node's cumulative transform into world-space vertex positions —
+  the same math already prototyped and verified against this file (see
+  Calibration) — reused rather than re-derived.
 - Drop `Camera`/`Light` nodes, drop UV/material data (STL carries neither);
   keep geometry only, merged into one triangle soup.
 - Recompute face normals during merge (existing STL writer pattern in
   `process_models.py`'s `write_stl` already does this per-triangle — reuse
   that approach rather than trusting the source normals, which may not
   survive the transform bake consistently).
-- Decimate to a triangle budget appropriate for a full-block model (existing
-  hero precedent: WTC-only decimated to ~90k tris; this covers a larger area
-  with more distinct buildings, so the budget needs its own judgment call
-  during implementation — optimize losslessly first, per your answer, and
-  only decimate further if the resulting STL is still too large).
-- **Bake the full placement transform into the STL's vertices** (anisotropic
+- Decimate from the source's 2.68M triangles to a triangle budget appropriate
+  for a multi-kilometer cityscape (existing hero precedent: the WTC-only
+  model, covering a tiny fraction of this area, was decimated to ~90k tris;
+  150k is the starting budget for this much larger scene, sized against the
+  visual result and file size in Task 2 rather than fixed in advance).
+- **Bake the full placement transform into the STL's vertices** (uniform
   scale, rotation, recentering to a chosen real-world anchor), rather than
   relying on `HeroPlacement.scale`, which is a single uniform scalar and
   can't correct the model's own inconsistent axis proportions. After this
@@ -62,18 +76,67 @@ don't apply here):
 
 ### 2. Calibration
 
-- **Vertical/anchor reference:** AA11's real, already-reconstructed flight
-  track terminal point (north face of the North Tower, floors 93–99) gives a
-  ground-truth lng/lat/altitude. Pull the exact terminal point from the
-  `flight_tracks` data (notable-flights track, shipped in PR #170) rather
-  than estimating floor heights by hand.
-- **Horizontal fit and rotation:** visually align the model's street grid
-  against the satellite basemap already in the app (Manhattan's ~29°
-  off-true-north grid skew), iterating in the conversion script until it
-  reads correctly at the Flight Tracker's normal 3D-buildings zoom level
-  (`BUILDINGS_MIN_ZOOM = 12`).
-- Ground elevation (`baseElevM`) carries over the existing WTC entry's value
-  (4m) unless the new model's own base geometry suggests otherwise.
+Two real-world impact points anchor this precisely rather than by eye alone —
+both towers, both faces, both known to the floor:
+
+- **North Tower, north face, floors 93–99** — where AA11 hit.
+- **South Tower, south face, floors 77–85** — where UA175 hit.
+
+**Identifying the two towers in the model:** scanning every mesh's highest
+vertex finds two clusters far taller than anything else in the scene and nowhere
+else close to their height: one centered near local `(x≈-9.96, z≈-34.71)`
+reaching local height ≈54.5, and one centered near local `(x≈1.64, z≈-42.47)`
+reaching local height ≈44.5, ~13.96 local units apart. Nothing else in the
+2.68M-triangle scene comes close on either dimension — this is the strongest
+signal available short of opening the mesh in a viewer, and Task 4 confirms it
+visually before committing.
+
+**Two independent scale checks agree:** the curated real values in
+`packages/tools/building-recon/data/wtc_complex_2001.geojson` put the North
+Tower at 417m and the two towers' footprint centers 123.3m apart (haversine
+over their rectangle centers, `(-74.013355, 40.712925)` and
+`(-74.012305, 40.712155)`). That gives 417⁄54.5 ≈ 7.7 m/unit from height and
+123.3⁄13.96 ≈ 8.83 m/unit from separation — independent measurements landing
+within 15% of each other, which is corroboration, not proof: **use 8.5 m/unit
+as the initial uniform scale**, applied to both the horizontal plane and
+height (not the anisotropic split the first draft of this doc assumed — one
+scale factor already explains both measurements reasonably well; only refine
+toward anisotropic if the visual check in Task 4 shows a systematic mismatch).
+
+**Horizontal placement is a 2-point similarity transform**, not eyeballing:
+with two point-correspondences (model cluster centroid ↔ real tower center,
+for both towers) the scale, rotation, and translation are fully determined —
+solve for them arithmetically, then use the satellite basemap only to sanity
+check the result and catch a wrong-handedness mirror flip, not to hunt for
+the fit by hand. Concretely: convert both real tower centers to local
+east/north meters around a chosen origin (reuse `lngLatToMercator` /
+`mercatorPerMeter` math from `buildingMesh.ts` — same formulas, just called
+from Python rather than TypeScript), take the vector between them in both
+spaces, and the ratio and angle between those two vectors give scale and
+bearing directly; translation then falls out from making one control point
+match exactly.
+
+**Vertical placement:** target the *midpoint* of each impact floor band as the
+calibration check, using each tower's own true height ÷ 110 floors for a
+per-floor figure (417⁄110 ≈ 3.79m for the North Tower, 415⁄110 ≈ 3.77m for the
+South Tower — these are derived approximations for placement purposes, not
+claimed historical figures): North Tower floors 93–99 ≈ 352–376m AGL, South
+Tower floors 77–85 ≈ 290–320m AGL. After the horizontal similarity transform
+and the 8.5 m/unit vertical scale are applied, each tower's modeled height at
+its respective face should land inside its band; Task 4's visual check
+confirms this and nudges the vertical scale if it doesn't.
+
+Ground elevation (`baseElevM`) carries over the existing WTC entry's value
+(4m) unless the new model's own base geometry suggests otherwise.
+
+**Note on track data vs. footprint data:** `flight_tracks`' own AA11/UA175
+terminal points (`-74.01303, 40.71236` and `-74.01314, 40.71078`) sit tens to
+~120m off the curated tower footprints — expected, since the app's own method
+notes disclose flight paths as reconstructed/interpolated, not survey-precise.
+The curated `wtc_complex_2001.geojson` rectangles are the authoritative
+geometry for the similarity-transform math above; the tracks are a visual
+plausibility check in Task 4 (does the line entering the frame end up at
+roughly the right tower and face), not a numeric input.
 
 ### 3. Manifest swap
 
@@ -81,11 +144,18 @@ don't apply here):
   Wasabi; `public/maps/hero-buildings.sample.json` is the dev fixture and
   needs the same edit) with the new model's entry — new `id`, new `stl_url`,
   `scale: 1.0`, calibrated `lng`/`lat`/`bearing_deg`/`base_elev_m`.
-- Size `exclude` to the new model's full ~1000m × 550m footprint (not just
-  the old WTC-only bbox), so `excludeFootprints` hides the GeoJSON extrusion
-  polygons under the new model's coverage while everywhere else (Pentagon,
-  anything outside the model's footprint) keeps rendering as extrusions
-  exactly as today — no change to that fallback mechanism.
+- Size `exclude` to the new model's actual calibrated footprint, computed
+  (not guessed) by converting the transformed mesh's world-space bounding box
+  back to lng/lat with the same `lngLatToMercator`/`mercatorPerMeter` math
+  used for calibration. At the ~8.5 m/unit scale hypothesis this is roughly
+  8km × 4.7km — likely large enough to cover the *entire* current
+  `buildings-2001.geojson` Manhattan AOI (`-74.020, 40.701` to
+  `-74.002, 40.720`, ~1.5km × 2.1km per `building-recon`'s README), not just
+  a WTC-sized bbox. If Task 4's visual check confirms that, the Manhattan
+  extrusion layer is fully superseded by the new model in practice — nothing
+  needs deleting, since `excludeFootprints` already hides whatever falls
+  inside the bbox and Pentagon-area extrusions (a separate AOI, unaffected)
+  keep rendering regardless.
 - Upload the new STL to `files.911realtime.org/maps/heroes/` (naming
   convention: follow `wtc-complex-v2.stl`'s pattern, e.g.
   `nyc-90s-v1.stl`). The old `wtc-complex-v2.stl` stays put — nothing
@@ -131,8 +201,9 @@ is the existing behavior for any hero model and needs no new code.
 - Manual verification per `packages/frontend:verify`: load Flight Tracker at
   a Lower Manhattan zoom (≥12) with 3D buildings on, confirm the new model
   renders in place of both the old WTC STL and the extruded footprints under
-  it, and that the AA11 track's impact point visually lines up with the
-  model's North Tower face.
+  it, and that both AA11's track (terminating at the North Tower's north
+  face, floors 93–99) and UA175's track (terminating at the South Tower's
+  south face, floors 77–85) visually line up with the correct tower and face.
 
 ## Out of scope
 
