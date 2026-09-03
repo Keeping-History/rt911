@@ -83,6 +83,17 @@ function NewsArticle({
 		},
 		[dispatch],
 	);
+	// A fresh `{ __html }` object every render defeats React's
+	// dangerouslySetInnerHTML diff (it's not a deep string compare), resetting
+	// the DOM on every re-render — including every hover, via
+	// useNewsContentBalloon's own state — which made links inert (see News.tsx
+	// for the full story). Memoize on the content STRING, not `state` itself
+	// (a fresh object from useDirectusItem every render, which would defeat
+	// the memo the same way); computed here, before the early returns below,
+	// so this hook always runs and hook order stays stable across the
+	// loading/error/ready states.
+	const content = state.status === "ready" ? (state.item.content ?? "") : "";
+	const innerHtml = useMemo(() => ({ __html: content }), [content]);
 
 	if (state.status === "error") {
 		return (
@@ -117,7 +128,7 @@ function NewsArticle({
 					the News app renders news_items.content. */}
 					<div
 						className="classicyHyperCardNewsBody"
-						dangerouslySetInnerHTML={{ __html: item.content }}
+						dangerouslySetInnerHTML={innerHtml}
 						onClick={(e) => handleNewsContentClick(e, openNewsItem)}
 						{...containerHandlers}
 					/>

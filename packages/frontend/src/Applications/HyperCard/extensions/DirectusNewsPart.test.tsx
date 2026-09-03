@@ -156,6 +156,32 @@ describe("DirectusNewsPart", () => {
 		expect(screen.getByTestId("balloon-portal")).toBeTruthy();
 	});
 
+	// Regression: same root cause as News.tsx's equivalent test — a fresh
+	// `{ __html }` literal every render defeated React's dangerouslySetInnerHTML
+	// diff and reset the DOM (including every `<a>`) on every re-render, even
+	// with unchanged content, which is what made links inert.
+	it("an anchor inside the article survives an unrelated re-render, and stays clickable", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			jsonResponse({
+				data: { id: 9, title: "T", content: '<p>See <a href="#/news-item/55">also</a>.</p>' },
+			}),
+		);
+		const { rerender } = render(<DirectusNewsPart {...partProps({ itemId: 9 })} />);
+		await screen.findByText("T");
+
+		const anchorBefore = screen.getByText("also");
+		for (let i = 0; i < 5; i++) {
+			rerender(<DirectusNewsPart {...partProps({ itemId: 9 })} />);
+		}
+		const anchorAfter = screen.getByText("also");
+		expect(anchorAfter).toBe(anchorBefore);
+
+		fireEvent.click(anchorAfter);
+		expect(dispatchMock).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "ClassicyAppNewsFocusItem", docId: 55 }),
+		);
+	});
+
 	it("renders a list of articles when itemId holds more than one id", async () => {
 		vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
 			const isNine = String(url).includes("/9?");

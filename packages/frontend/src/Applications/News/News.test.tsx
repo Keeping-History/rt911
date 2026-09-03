@@ -328,4 +328,42 @@ describe("News detail window body rendering", () => {
 		expect(balloonHandlers.onMouseEnter).toHaveBeenCalled();
 		expect(screen.getByTestId("balloon-portal")).toBeTruthy();
 	});
+
+	// Regression: News re-renders on every virtual-clock tick regardless of
+	// whether an open article's content actually changed. A literal
+	// `dangerouslySetInnerHTML={{ __html: html }}` — a fresh wrapper object
+	// every render — reset the DOM (tore down and rebuilt every `<a>`) on each
+	// of those unrelated re-renders, even though the html string was
+	// unchanged, because React's diff isn't a deep string compare. In the
+	// browser this repeated at tens of times a second (amplified by hover
+	// re-firing on the freshly-replaced node under the cursor) and made links
+	// inert — a real click's mousedown/mouseup could each land on a different
+	// DOM node. Simulated here via unrelated re-renders (a dateTime tick that
+	// doesn't touch newsItems).
+	it("an anchor inside an open article survives an unrelated re-render (e.g. a clock tick), and stays clickable", () => {
+		const linked = makeItem({ id: 31, title: "Linked article", content: "<p>Linked body.</p>" });
+		const source = makeItem({
+			id: 30,
+			title: "Ticking article",
+			content: '<p>See <a href="#/news-item/31">also</a>.</p>',
+		});
+		const { rerender } = renderWithContext({ newsItems: [source, linked] });
+		openDoc("Ticking article");
+
+		const anchorBefore = screen.getByText("also");
+
+		for (let i = 0; i < 5; i++) {
+			rerender(
+				<MediaStreamContext.Provider value={makeCtxValue({ newsItems: [source, linked] })}>
+					<News />
+				</MediaStreamContext.Provider>,
+			);
+		}
+
+		const anchorAfter = screen.getByText("also");
+		expect(anchorAfter).toBe(anchorBefore);
+
+		fireEvent.click(anchorAfter);
+		expect(screen.getByText("Linked body.")).toBeTruthy();
+	});
 });

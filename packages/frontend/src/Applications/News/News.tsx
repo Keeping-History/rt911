@@ -42,12 +42,23 @@ const NewsArticleBody: React.FC<{ html: string; onOpenNewsItem: (docId: number) 
 	onOpenNewsItem,
 }) => {
 	const { containerHandlers, balloon } = useNewsContentBalloon();
+	// News re-renders on every virtual-clock tick (and the balloon's own hover
+	// state adds more), so a literal `{ __html: html }` here — a fresh object
+	// every render — kept resetting the DOM even though `html` never changed:
+	// React's dangerouslySetInnerHTML diff isn't a deep string compare, so an
+	// object identity change alone was enough to re-run `innerHTML =`, tearing
+	// down and rebuilding every `<a>` several times a second. That's what made
+	// links inert (a real click's mousedown/mouseup could land on two
+	// different DOM nodes) and was the visible "content keeps re-rendering"
+	// symptom. Memoizing on `html` keeps the object stable across renders that
+	// don't actually change the content.
+	const innerHtml = useMemo(() => ({ __html: html }), [html]);
 	return (
 		<>
 			<div
 				className={styles.newsDetailBody}
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus news_items table via the MediaStream provider.
-				dangerouslySetInnerHTML={{ __html: html }}
+				dangerouslySetInnerHTML={innerHtml}
 				onClick={(e) => handleNewsContentClick(e, onOpenNewsItem)}
 				{...containerHandlers}
 			></div>
