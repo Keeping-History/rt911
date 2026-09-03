@@ -1,5 +1,9 @@
 import type { HyperCardPartProps } from "classicy";
-import { useMemo } from "react";
+import { ClassicyIcons, useAppManagerDispatch } from "classicy";
+import { useCallback, useMemo } from "react";
+import { handleNewsContentClick } from "../../../lib/newsContentLinks";
+import { useNewsContentBalloon } from "../../../lib/useNewsContentBalloon";
+import { newsFocusItem } from "../../News/NewsContext";
 import { fetchDirectusNewsItem } from "./directusCollections";
 import { resolveItemIds, useDirectusItem } from "./useDirectusItem";
 import "./DirectusNewsPart.css";
@@ -65,6 +69,20 @@ function NewsArticle({
 	showDate: boolean;
 }) {
 	const state = useDirectusItem(itemId, fetchDirectusNewsItem);
+	const dispatch = useAppManagerDispatch();
+	const { containerHandlers, balloon } = useNewsContentBalloon();
+	const openNewsItem = useCallback(
+		(docId: number) => {
+			// Bring the News app forward (PlaylistProvider's applyFocus pattern)
+			// before focusing — News may not already be running.
+			dispatch({
+				type: "ClassicyAppOpen",
+				app: { id: "News.app", name: "News", icon: ClassicyIcons.applications.news.app as string },
+			});
+			dispatch(newsFocusItem(docId));
+		},
+		[dispatch],
+	);
 
 	if (state.status === "error") {
 		return (
@@ -94,12 +112,17 @@ function NewsArticle({
 				</figure>
 			)}
 			{item.content && (
-				// First-party HTML authored in Directus — rendered raw, exactly as
-				// the News app renders news_items.content.
-				<div
-					className="classicyHyperCardNewsBody"
-					dangerouslySetInnerHTML={{ __html: item.content }}
-				/>
+				<>
+					{/* First-party HTML authored in Directus — rendered raw, exactly as
+					the News app renders news_items.content. */}
+					<div
+						className="classicyHyperCardNewsBody"
+						dangerouslySetInnerHTML={{ __html: item.content }}
+						onClick={(e) => handleNewsContentClick(e, openNewsItem)}
+						{...containerHandlers}
+					/>
+					{balloon}
+				</>
 			)}
 		</article>
 	);

@@ -25,9 +25,36 @@ import {
 	MediaStreamContext,
 	type MediaItem,
 } from "../../Providers/MediaStream/MediaStreamContext";
+import { handleNewsContentClick } from "../../lib/newsContentLinks";
+import { useNewsContentBalloon } from "../../lib/useNewsContentBalloon";
 import { trackAppToggle } from "../../openreplay";
 import { newsSetOpenDocuments, type NewsRemoteCommand } from "./NewsContext";
 import styles from "./News.module.scss";
+
+/**
+ * The article body — split out from News so each open detail window's
+ * hover-balloon (useNewsContentBalloon) and click delegation get their own
+ * hook instance; both need to live on this specific dangerouslySetInnerHTML
+ * container, not the list-level News component.
+ */
+const NewsArticleBody: React.FC<{ html: string; onOpenNewsItem: (docId: number) => void }> = ({
+	html,
+	onOpenNewsItem,
+}) => {
+	const { containerHandlers, balloon } = useNewsContentBalloon();
+	return (
+		<>
+			<div
+				className={styles.newsDetailBody}
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus news_items table via the MediaStream provider.
+				dangerouslySetInnerHTML={{ __html: html }}
+				onClick={(e) => handleNewsContentClick(e, onOpenNewsItem)}
+				{...containerHandlers}
+			></div>
+			{balloon}
+		</>
+	);
+};
 
 export const News: React.FC = () => {
 	const appName = "News";
@@ -161,8 +188,13 @@ export const News: React.FC = () => {
 
 	// Apply each remote focus command exactly once, tracked by its monotonic
 	// seq (TV.tsx's pattern). Consume only when the article exists in the
-	// stream AND its detail window has been rendered — otherwise leave the seq
-	// unconsumed so the effect retries as items/appWindows update.
+	// stream — otherwise leave the seq unconsumed so the effect retries as
+	// items update. openDocumentDetails itself handles both cases: a docId
+	// with no window yet (adds it to openDocuments, which mounts one) and a
+	// docId whose window already exists but is closed/unfocused (reopens and
+	// focuses it) — the same call the headline-click handler below uses, so a
+	// focus command can open an article that was never manually opened, not
+	// just re-focus one already on screen.
 	const command = useAppManager(
 		(s) =>
 			s.System.Manager.Applications.apps[appId]?.data?.command as
@@ -177,13 +209,10 @@ export const News: React.FC = () => {
 			return;
 		}
 		const exists = items.some((i) => i.id === command.docId);
-		const hasWindow = (appWindows ?? []).some(
-			(w: { id: string }) => w.id === `${appId}_newsitem_${command.docId}`,
-		);
-		if (!exists || !hasWindow) return; // retry on next items/windows update
+		if (!exists) return; // retry once the article enters the current catalogue
 		lastCommandSeqRef.current = command.seq;
 		openDocumentDetails(command.docId);
-	}, [command, items, appWindows, openDocumentDetails]);
+	}, [command, items, openDocumentDetails]);
 
 	const paginate = useCallback((direction: "forward" | "back" | "now") => {
 		if (direction === "now") {
@@ -433,13 +462,10 @@ export const News: React.FC = () => {
 									<p className={styles.newsDetailBody}>Loading…</p>
 								) : null}
 								{doc && (
-									<div
-										className={styles.newsDetailBody}
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content comes from the Directus news_items table via the MediaStream provider.
-										dangerouslySetInnerHTML={{
-											__html: newsBodies[docId] ?? doc.content ?? "",
-										}}
-									></div>
+									<NewsArticleBody
+										html={newsBodies[docId] ?? doc.content ?? ""}
+										onOpenNewsItem={openDocumentDetails}
+									/>
 								)}
 							</div>
 						</div>

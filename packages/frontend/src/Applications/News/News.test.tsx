@@ -31,12 +31,17 @@ const mockState = vi.hoisted(() => ({
 	},
 }));
 
+const balloonHandlers = vi.hoisted(() => ({ onMouseEnter: vi.fn(), onMouseLeave: vi.fn() }));
 vi.mock("classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	ClassicyWindow: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	useAppManager: (selector: (s: unknown) => unknown) => selector(mockState.value),
 	useAppManagerDispatch: () => dispatchMock,
+	useClassicyBalloonHelp: () => ({
+		handlers: balloonHandlers,
+		balloon: <div data-testid="balloon-portal" />,
+	}),
 }));
 
 vi.mock("../../openreplay", () => ({ trackAppToggle: () => {} }));
@@ -151,6 +156,8 @@ describe("News detail window body rendering", () => {
 	afterEach(() => {
 		cleanup();
 		dispatchMock.mockClear();
+		balloonHandlers.onMouseEnter.mockClear();
+		balloonHandlers.onMouseLeave.mockClear();
 		mockState.value.System.Manager.Applications.apps["News.app"] = {
 			open: true,
 			windows: [],
@@ -248,5 +255,77 @@ describe("News detail window body rendering", () => {
 		);
 
 		expect(requestNewsBody).not.toHaveBeenCalled();
+	});
+
+	// A cross-app remote focus command (dispatched by the Playlist engine, or by
+	// a HyperCard in-content link resolving to this article) must be able to
+	// open a detail window that was never manually clicked open — not just
+	// re-focus one already on screen.
+	it("a remote focus command opens a detail window that was never manually opened", () => {
+		const item = makeItem({ id: 8, title: "Fresh article", content: "<p>Fresh.</p>" });
+		renderWithContext({ newsItems: [item] });
+		expect(screen.queryByText("Fresh.")).toBeNull();
+
+		mockState.value.System.Manager.Applications.apps["News.app"].data = {
+			command: { seq: 1, kind: "focus", docId: 8 },
+		};
+		render(
+			<MediaStreamContext.Provider value={makeCtxValue({ newsItems: [item] })}>
+				<News />
+			</MediaStreamContext.Provider>,
+		);
+
+		expect(screen.getByText("Fresh.")).toBeTruthy();
+	});
+
+	it("clicking an internal cross-reference link in an article body opens that article in-app", () => {
+		const linked = makeItem({ id: 20, title: "Linked article", content: "<p>Linked body.</p>" });
+		const source = makeItem({
+			id: 21,
+			title: "Source article",
+			content: '<p>See <a href="#/news-item/20">also</a>.</p>',
+		});
+		renderWithContext({ newsItems: [source, linked] });
+		openDoc("Source article");
+
+		fireEvent.click(screen.getByText("also"));
+
+		expect(screen.getByText("Linked body.")).toBeTruthy();
+	});
+
+	it("clicking an external link in an article body opens it in a new window, not in place", () => {
+		const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+		const source = makeItem({
+			id: 22,
+			title: "Sourced article",
+			content:
+				'<p>Per <a href="https://web.archive.org/web/2015/http://historycommons.org/x">History Commons</a>.</p>',
+		});
+		renderWithContext({ newsItems: [source] });
+		openDoc("Sourced article");
+
+		fireEvent.click(screen.getByText("History Commons"));
+
+		expect(openSpy).toHaveBeenCalledWith(
+			"https://web.archive.org/web/2015/http://historycommons.org/x",
+			"_blank",
+			"noopener,noreferrer",
+		);
+		openSpy.mockRestore();
+	});
+
+	it("hovering a link with a data-balloon-title shows the balloon", () => {
+		const source = makeItem({
+			id: 23,
+			title: "Balloon source",
+			content: '<p><a href="#/news-item/1" data-balloon-title="Target Headline">see</a></p>',
+		});
+		renderWithContext({ newsItems: [source] });
+		openDoc("Balloon source");
+
+		fireEvent.mouseOver(screen.getByText("see"));
+
+		expect(balloonHandlers.onMouseEnter).toHaveBeenCalled();
+		expect(screen.getByTestId("balloon-portal")).toBeTruthy();
 	});
 });

@@ -1,11 +1,26 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HyperCardPartProps } from "classicy";
+
+const dispatchMock = vi.hoisted(() => vi.fn());
+const balloonHandlers = vi.hoisted(() => ({ onMouseEnter: vi.fn(), onMouseLeave: vi.fn() }));
+vi.mock("classicy", async (importOriginal) => ({
+	...(await importOriginal<Record<string, unknown>>()),
+	useAppManagerDispatch: () => dispatchMock,
+	useClassicyBalloonHelp: () => ({
+		handlers: balloonHandlers,
+		balloon: <div data-testid="balloon-portal" />,
+	}),
+}));
+
 import { DirectusNewsPart } from "./DirectusNewsPart";
 
 afterEach(() => {
 	cleanup();
 	vi.restoreAllMocks();
+	dispatchMock.mockClear();
+	balloonHandlers.onMouseEnter.mockClear();
+	balloonHandlers.onMouseLeave.mockClear();
 });
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
@@ -76,6 +91,69 @@ describe("DirectusNewsPart", () => {
 	it("shows a placeholder for an empty itemId array", () => {
 		render(<DirectusNewsPart {...partProps({ itemId: [] })} />);
 		expect(screen.getByText("No article selected")).toBeTruthy();
+	});
+
+	it("clicking an internal cross-reference link opens the News app and focuses that article", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			jsonResponse({
+				data: { id: 9, title: "T", content: '<p>See <a href="#/news-item/55">also</a>.</p>' },
+			}),
+		);
+		render(<DirectusNewsPart {...partProps({ itemId: 9 })} />);
+		await screen.findByText("T");
+
+		fireEvent.click(screen.getByText("also"));
+
+		expect(dispatchMock).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "ClassicyAppOpen" }),
+		);
+		expect(dispatchMock).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "ClassicyAppNewsFocusItem", docId: 55 }),
+		);
+	});
+
+	it("clicking an external link opens it in a new window instead of navigating in place", async () => {
+		const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			jsonResponse({
+				data: {
+					id: 9,
+					title: "T",
+					content:
+						'<p>Per <a href="https://web.archive.org/web/2015/http://historycommons.org/x">History Commons</a>.</p>',
+				},
+			}),
+		);
+		render(<DirectusNewsPart {...partProps({ itemId: 9 })} />);
+		await screen.findByText("T");
+
+		fireEvent.click(screen.getByText("History Commons"));
+
+		expect(openSpy).toHaveBeenCalledWith(
+			"https://web.archive.org/web/2015/http://historycommons.org/x",
+			"_blank",
+			"noopener,noreferrer",
+		);
+		expect(dispatchMock).not.toHaveBeenCalled();
+	});
+
+	it("hovering a link with a data-balloon-title shows the balloon", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			jsonResponse({
+				data: {
+					id: 9,
+					title: "T",
+					content: '<p>See <a href="#/news-item/55" data-balloon-title="Target Headline">also</a>.</p>',
+				},
+			}),
+		);
+		render(<DirectusNewsPart {...partProps({ itemId: 9 })} />);
+		await screen.findByText("T");
+
+		fireEvent.mouseOver(screen.getByText("also"));
+
+		expect(balloonHandlers.onMouseEnter).toHaveBeenCalled();
+		expect(screen.getByTestId("balloon-portal")).toBeTruthy();
 	});
 
 	it("renders a list of articles when itemId holds more than one id", async () => {
