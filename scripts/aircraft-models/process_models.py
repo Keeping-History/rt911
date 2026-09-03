@@ -119,12 +119,13 @@ def normalize(tris):
 		for t in tris]
 
 
-def decimate(tris, budget):
+def decimate(tris, budget, start_step=0.008):
 	"""Vertex clustering: snap to a grid, drop collapsed triangles. The grid
 	step doubles until the triangle count fits the budget."""
 	if len(tris) <= budget:
 		return tris
-	step = 0.008
+	step = start_step
+	max_step = start_step * 25  # matches the original hardcoded 0.008 -> 0.2 range
 	while True:
 		snapped = []
 		for t in tris:
@@ -145,7 +146,7 @@ def decimate(tris, budget):
 				continue
 			seen.add(key)
 			out.append(t)
-		if len(out) <= budget or step > 0.2:
+		if len(out) <= budget or step > max_step:
 			return out
 		step *= 1.4
 
