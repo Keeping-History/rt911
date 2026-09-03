@@ -47,7 +47,7 @@ import {
 } from "./audioCoordinator";
 import { type Badge, badgeFor, countdownFor, type Lane } from "./cardStatus";
 import { isSilentAt } from "./silence";
-import { CARD_TABS, CardTabBar, visibleCardTabs } from "./CardTabBar";
+import { CARD_TABS, CardTabBar, tapeCardTabs, visibleCardTabs } from "./CardTabBar";
 import { isTapeTier } from "./tagFilter";
 import { DetailsTab } from "./tabs/DetailsTab";
 import { itemTiming } from "./tabs/itemTiming";
@@ -391,13 +391,21 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 	// that genuinely does depend on the item fall back to Details with Details
 	// highlighted instead of showing a panel with nothing selected.
 	const tabs = useMemo(() => visibleCardTabs(meta), [meta]);
-	const panel = tabs.find((tab) => tab.id === active) ?? tabs[0];
-	// Issue #565: a tape is one long continuous recording — the tab strip
-	// (Details, Summary, Mentions, ...) offers nothing to switch between, so it
-	// is skipped entirely in favor of Details' content alone, bypassing the
-	// tab-selection state above rather than pinning `active` to "details" (which
-	// would still render a CardTabBar with one, meaningless, button on it).
 	const tape = isTapeTier(meta);
+	// `item.subtitles` is the same field TranscriptTab itself fetches from —
+	// a missing one means no transcript exists for this clip at all, not a
+	// gap in the pipeline (see TranscriptTab.tsx).
+	const hasTranscript = Boolean(item.subtitles);
+	// Issue #565, amended by #574: a tier:tape item is one long continuous
+	// recording, so Summary/Parties/Mentions/Source have nothing to switch to
+	// — that reasoning still holds. What #574 changes is Transcript: a tape
+	// WITH one now gets a 2-tab strip (Details, Transcript) through the same
+	// tabs.find lookup tier:clip already uses below; a tape with none keeps
+	// #565's original bypass — DetailsTab's own content rendered bare, with
+	// no tab strip and no tab-selection state involved at all.
+	const tapeBare = tape && !hasTranscript;
+	const displayTabs = tape && hasTranscript ? tapeCardTabs(tabs) : tabs;
+	const panel = displayTabs.find((tab) => tab.id === active) ?? displayTabs[0];
 
 	// The existing panel switch, plus Story 045's touch signal alongside it —
 	// see onTabSelect above.
@@ -554,11 +562,11 @@ const TrafficCardImpl: React.FC<TrafficCardProps> = ({
 			</div>
 
 			<div className={styles.rtCardTabs}>
-				{!tape && (
-					<CardTabBar tabs={tabs} active={panel.id} onSelect={handleTabSelect} />
+				{!tapeBare && (
+					<CardTabBar tabs={displayTabs} active={panel.id} onSelect={handleTabSelect} />
 				)}
 				<div className={styles.rtCardPanel}>
-					{tape ? (
+					{tapeBare ? (
 						<DetailsTab item={item} meta={meta} tzOffsetHours={tzOffsetHours} />
 					) : (
 						<panel.Panel

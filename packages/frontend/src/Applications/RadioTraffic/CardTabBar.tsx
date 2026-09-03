@@ -73,6 +73,20 @@ export function visibleCardTabs(meta: ItemMeta | undefined): readonly CardTab[] 
 	return CARD_TABS.filter((tab) => tab.available?.(meta) ?? true);
 }
 
+/**
+ * The 2-tab strip a `tier:tape` item with a transcript gets (issue #574) —
+ * Details and Transcript are the only two of the six that vary card to card
+ * on a tape's own terms: Summary/Parties/Mentions/Source still have nothing
+ * to switch to on one long continuous recording (issue #565's reasoning
+ * stands for those four), but a transcript changes with the recording
+ * exactly the way Details does. Filters the item's own `visibleCardTabs`
+ * result rather than re-deriving from `CARD_TABS` directly, so a tab
+ * `available` has already ruled out for this item stays ruled out here too.
+ */
+export function tapeCardTabs(tabs: readonly CardTab[]): readonly CardTab[] {
+	return tabs.filter((tab) => tab.id === "details" || tab.id === "transcript");
+}
+
 interface CardTabBarProps {
 	tabs: readonly CardTab[];
 	active: string;
