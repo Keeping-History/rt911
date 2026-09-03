@@ -16,8 +16,8 @@ OUT = HERE / "processed"
 TRI_BUDGET = 150_000
 
 # --- Calibration constants (see plans/2026-09-03-nyc-90s-hero-model-design.md) ---
-NORTH_TOWER_MODEL_XZ = (-9.96, -34.71)
-SOUTH_TOWER_MODEL_XZ = (1.64, -42.47)
+NORTH_TOWER_MODEL_XZ = (-9.861272500021942, -34.7795508877096)
+SOUTH_TOWER_MODEL_XZ = (0.5595594159559328, -41.01730324635449)
 NORTH_TOWER_LNGLAT = (-74.013355, 40.712925)
 SOUTH_TOWER_LNGLAT = (-74.012305, 40.712155)
 GROUND_Y_MODEL = 0.311
@@ -90,7 +90,7 @@ def main() -> None:
 	tris = extract_world_triangles(src)
 	print(f"{len(tris):,} triangles extracted")
 
-	decimated = decimate(tris, TRI_BUDGET, start_step=2.0)
+	decimated = decimate(tris, TRI_BUDGET, start_step=0.113)
 	print(f"decimated to {len(decimated):,} triangles")
 
 	calibrated = calibrate(decimated)

@@ -40,3 +40,4 @@ packages/frontend/.husky/_/post-commit
 .ruff_cache
 .superpowers
 .pytest_cache
+__pycache__/

@@ -79,11 +79,23 @@ def _apply(m: list[list[float]], p: tuple[float, float, float]) -> tuple[float, 
 	return tuple(m[i][0] * x + m[i][1] * y + m[i][2] * z + m[i][3] for i in range(3))
 
 
-def extract_world_triangles(path: Path) -> list[Triangle]:
+# The scene's single flat ground/street plane -- its own local bounding box
+# spans the entire model (confirmed by inspection), so left in it renders as
+# one giant textureless "building" covering the whole footprint, hiding the
+# real basemap underneath and drowning out the actual towers. Every other
+# mesh in the file ("Roof_...", "Building1_Wall1_...", etc.) is real massing
+# and is kept; only this exact ground plane is excluded by default.
+DEFAULT_EXCLUDE_MESH_NAMES = frozenset({"Map_Map1_0_Map1_0"})
+
+
+def extract_world_triangles(
+	path: Path, exclude_mesh_names: frozenset[str] = DEFAULT_EXCLUDE_MESH_NAMES
+) -> list[Triangle]:
 	"""Every mesh primitive's triangles, baked into world space.
 
-	Skips Camera/Light nodes (no "mesh" key) and any primitive whose mode
-	isn't TRIANGLES (4) -- every primitive in this file is TRIANGLES.
+	Skips Camera/Light nodes (no "mesh" key), any primitive whose mode isn't
+	TRIANGLES (4) -- every primitive in this file is TRIANGLES -- and any
+	mesh named in `exclude_mesh_names` (see DEFAULT_EXCLUDE_MESH_NAMES).
 	"""
 	gltf, binary = read_glb(path)
 	nodes = gltf["nodes"]
@@ -94,7 +106,7 @@ def extract_world_triangles(path: Path) -> list[Triangle]:
 	def visit(idx: int, parent_m: list[list[float]]) -> None:
 		node = nodes[idx]
 		m = _matmul(parent_m, _node_local_matrix(node))
-		if "mesh" in node:
+		if "mesh" in node and meshes[node["mesh"]].get("name") not in exclude_mesh_names:
 			mesh = meshes[node["mesh"]]
 			for prim in mesh["primitives"]:
 				if prim.get("mode", 4) != 4:
@@ -127,7 +139,7 @@ if __name__ == "__main__":
 	print(f"bounds x: {min(xs):.3f} .. {max(xs):.3f}")
 	print(f"bounds y: {min(ys):.3f} .. {max(ys):.3f}")
 	print(f"bounds z: {min(zs):.3f} .. {max(zs):.3f}")
-	assert len(tris) == 2_678_405, f"expected 2,678,405 triangles, got {len(tris)}"
+	assert len(tris) == 2_670_213, f"expected 2,670,213 triangles (2,678,405 minus the excluded ground plane), got {len(tris)}"
 	assert -4.0 < min(ys) < -3.0, f"unexpected min Y: {min(ys)}"
 	assert 54.0 < max(ys) < 55.0, f"unexpected max Y: {max(ys)}"
 	print("OK: matches the bounds recorded in plans/2026-09-03-nyc-90s-hero-model-design.md")

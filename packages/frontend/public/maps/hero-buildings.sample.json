@@ -1,14 +1,14 @@
 {
   "heroes": [
     {
-      "id": "placeholder-wtc",
-      "stl_url": "maps/heroes/placeholder-tower.stl",
-      "lng": -74.0134,
-      "lat": 40.7127,
+      "id": "nyc-90s-v1",
+      "stl_url": "maps/heroes/nyc-90s-v1.stl",
+      "lng": -74.013355,
+      "lat": 40.712925,
       "bearing_deg": 0,
       "scale": 1.0,
       "base_elev_m": 4,
-      "exclude": [-74.0155, 40.7108, -74.0110, 40.7140]
+      "exclude": [-74.07585, 40.68164, -73.94628, 40.74934]
     }
   ]
 }
