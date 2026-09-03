@@ -35,6 +35,7 @@ import {
 	useSyncExternalStore,
 } from "react";
 import type { ItemMeta, MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
+import { countdownFor } from "../radio-core/countdownFormat";
 import { PeaksWaveform } from "../radio-core/PeaksWaveform";
 import { calcSeekSeconds } from "../radio-core/stationGrouping";
 import {
@@ -45,7 +46,7 @@ import {
 	subscribe,
 	unfollowClock,
 } from "./audioCoordinator";
-import { type Badge, badgeFor, countdownFor, type Lane } from "./cardStatus";
+import { type Badge, badgeFor, type Lane } from "./cardStatus";
 import { isSilentAt } from "./silence";
 import { CARD_TABS, CardTabBar, tapeCardTabs, visibleCardTabs } from "./CardTabBar";
 import { isTapeTier } from "./tagFilter";

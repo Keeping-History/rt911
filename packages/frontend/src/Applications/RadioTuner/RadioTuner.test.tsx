@@ -179,6 +179,17 @@ vi.mock("classicy", () => ({
 			{children}
 		</button>
 	),
+	ClassicyBalloonHelp: ({
+		content,
+		children,
+	}: {
+		content?: string;
+		children?: React.ReactNode;
+	}) => (
+		<div data-balloon-content={content}>
+			{children}
+		</div>
+	),
 	ClassicyIcons: {
 		applications: { radio: { app: "radio.png" } },
 		controlPanels: { soundManager: { sound33: "sound.png" } },
@@ -245,6 +256,8 @@ function renderTuner(
 		item(2, "WCBS", "2001-09-11T12:30:00.000Z"),
 		item(3, "ATC", "2001-09-11T12:30:00.000Z"),
 	],
+	upcomingItems: MediaItem[] = [],
+	audioSources: string[] = ["WINS", "WCBS", "ATC"],
 ): void {
 	mockAppData.current = data;
 	const ctx: Partial<MediaStreamContextValue> = {
@@ -252,13 +265,13 @@ function renderTuner(
 		mp3History: [],
 		sources: {
 			video: [],
-			audio: ["WINS", "WCBS", "ATC"],
+			audio: audioSources,
 			pager: [],
 			usenet: [],
 		},
 		subscribeMp3: () => {},
 		unsubscribeMp3: () => {},
-		getUpcomingMp3Items: () => [],
+		getUpcomingMp3Items: () => upcomingItems,
 	};
 	render(
 		<MediaStreamContext.Provider value={ctx as MediaStreamContextValue}>
@@ -371,6 +384,72 @@ describe("RadioTuner station logo", () => {
 		const logo = screen.getByAltText("WINS") as HTMLImageElement;
 		expect(logo.className).toContain("rsDisplayLogo");
 		expect(logo.className).not.toContain("rsDisplayLogoOffline");
+	});
+});
+
+describe("RadioTuner upcoming countdown", () => {
+	afterEach(() => {
+		mockDispatch.mockClear();
+		stationPlayerProps.current = null;
+		cleanup();
+	});
+
+	// The mocked useClassicyDateTime reports the clock as paused, so
+	// RadioTuner's fine clock (getNowMs) contributes zero real-time elapsed —
+	// nowMs is pinned to 2001-09-11T12:40:00.000Z for every test in this file.
+
+	it("shows a Starts-in balloon over an upcoming station's strip button, and none over an on-air one", () => {
+		renderTuner(
+			{},
+			[item(1, "WINS", "2001-09-11T12:30:00.000Z")],
+			[item(4, "WOR", "2001-09-11T12:41:04.000Z")],
+			["WINS", "WOR"],
+		);
+
+		// WOR has nothing on air yet but one queued item 64s out — its strip
+		// button should sit inside a balloon reading the formatted countdown.
+		const worLabel = screen.getByText("WOR");
+		const worBalloon = worLabel.closest("[data-balloon-content]");
+		expect(worBalloon).not.toBeNull();
+		expect(worBalloon?.getAttribute("data-balloon-content")).toBe(
+			"Starts in 01:04",
+		);
+
+		// WINS is on-air (active by default) — its strip button label carries
+		// no balloon at all.
+		const winsStripLabel = screen
+			.getAllByText("WINS")
+			.find((el) => el.className.includes("rsStationSource"));
+		expect(winsStripLabel).toBeDefined();
+		expect(winsStripLabel?.closest("[data-balloon-content]")).toBeNull();
+	});
+
+	it("shows no balloon over an offline station's strip button", () => {
+		// WCBS is in the source list but carries neither an active nor an
+		// upcoming item — offline, not upcoming, so no balloon at all.
+		renderTuner(
+			{},
+			[item(1, "WINS", "2001-09-11T12:30:00.000Z")],
+			[],
+			["WINS", "WCBS"],
+		);
+		const wcbsLabel = screen.getByText("WCBS");
+		expect(wcbsLabel.closest("[data-balloon-content]")).toBeNull();
+	});
+
+	it("shows a countdown line under the logo when the active station is upcoming", () => {
+		renderTuner(
+			{},
+			[],
+			[item(4, "WOR", "2001-09-11T12:41:04.000Z")],
+			["WOR"],
+		);
+		expect(screen.getByText("Starts in 01:04")).toBeTruthy();
+	});
+
+	it("shows no countdown line under the logo when the active station is on-air", () => {
+		renderTuner();
+		expect(screen.queryByText(/Starts in/)).toBeNull();
 	});
 });
 

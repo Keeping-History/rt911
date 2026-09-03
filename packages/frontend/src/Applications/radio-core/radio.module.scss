@@ -92,6 +92,17 @@
   opacity: 0.55;
 }
 
+// "Starts in <countdown>", shown under the logo/call-sign only while the
+// tuned station is upcoming — same tabular-nums treatment as the scanner's
+// rsCountdown so the digits don't jitter the line width as they tick down.
+.rsDisplayCountdown {
+  font-family: var(--ui-font);
+  font-size: calc(var(--ui-font-size) * 0.85);
+  color: var(--color-theme-02);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
 .rsDisplayTitle {
   font-family: var(--ui-font);
   font-size: calc(var(--ui-font-size) * 1.5);
@@ -135,12 +146,22 @@
   background-color: var(--color-system-03);
   padding: calc(var(--window-padding-size));
 
+  // Every station is one flex item — either the ClassicyButton directly, or a
+  // wrapping <div> (a plain key holder for on-air/offline stations, or
+  // ClassicyBalloonHelp's own inline-block anchor for upcoming ones). Both
+  // wrapper forms must refuse to shrink exactly like a bare button already
+  // did, or `overflow-x: auto` here (which drops the flex item's automatic
+  // minimum size to 0) would let only the wrapped stations squash below their
+  // content on a crowded strip.
+  > * {
+    flex-shrink: 0;
+  }
+
   // Stations are ClassicyButtons. The pressed/active and selected look comes
   // from the button's own `depressed` state; here we only size each one for
   // the horizontal strip — the light/label layout lives on the
   // .rsStationBtnContent wrapper inside (StationButtonContent).
   :global(.classicyButton) {
-    flex-shrink: 0;
     height: 90%;
     min-width: 8em;
     display: flex;
