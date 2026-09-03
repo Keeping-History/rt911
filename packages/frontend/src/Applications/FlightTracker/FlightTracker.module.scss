@@ -53,8 +53,8 @@
 // show an image instead of a text label. Source PNGs are 1024×1024; render at the
 // theme's control size with no edge smoothing so the downscale stays pixelated.
 .mapControlIcon {
-	width: var(--window-control-size);
-	height: var(--window-control-size);
+	width: calc(var(--window-control-size)*1.5);
+	height: calc(var(--window-control-size)*1.5);
 	display: block;
 	flex-shrink: 0;
 	image-rendering: pixelated;
