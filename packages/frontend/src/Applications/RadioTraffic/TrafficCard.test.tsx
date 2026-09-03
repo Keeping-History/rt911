@@ -758,8 +758,12 @@ describe("TrafficCard tabs", () => {
 });
 
 describe("TrafficCard tape tier (issue #565)", () => {
-	it("renders Details' own content with no tab strip for a tier:tape item", () => {
+	it("renders Details' own content with no tab strip for a tier:tape item with no transcript", () => {
+		// Issue #574: the no-tab-strip bypass is now gated on subtitles, not tier
+		// alone — makeItem()'s fixture default sets subtitles, so this case has to
+		// override it to keep exercising #565's original, transcript-less path.
 		const { queryByRole, container } = renderCard({
+			item: makeItem({ subtitles: undefined }),
 			meta: makeMeta({
 				tags: [{ tag: "tier:tape", namespace: "tier", value: "Tape" }],
 			}),
@@ -782,6 +786,25 @@ describe("TrafficCard tape tier (issue #565)", () => {
 	it("still shows the tab strip for an item with no tier tag at all", () => {
 		const { getAllByRole } = renderCard({ meta: makeMeta() });
 		expect(getAllByRole("tab")).toHaveLength(6);
+	});
+});
+
+describe("TrafficCard tape tier with transcript (issue #574)", () => {
+	it("shows a 2-tab strip (Details, Transcript) for a tier:tape item with a transcript", () => {
+		const { getAllByRole, getByRole, container } = renderCard({
+			// makeItem()'s default already sets subtitles — spelled out here so the
+			// case reads as deliberate rather than accidental.
+			item: makeItem({ subtitles: "https://files.example/clip.srt" }),
+			meta: makeMeta({
+				tags: [{ tag: "tier:tape", namespace: "tier", value: "Tape" }],
+			}),
+		});
+		const tabs = getAllByRole("tab");
+		expect(tabs.map((tab) => tab.textContent)).toEqual(["Details", "Transcript"]);
+		expect(container.querySelector('[data-tab="details"]')).not.toBeNull();
+
+		fireEvent.click(getByRole("tab", { name: "Transcript" }));
+		expect(container.querySelector('[data-tab="transcript"]')).not.toBeNull();
 	});
 });
 
