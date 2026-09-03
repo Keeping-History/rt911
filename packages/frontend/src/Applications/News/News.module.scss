@@ -93,10 +93,11 @@
 }
 
 .newsListItemTitle {
-  font-size: var(--ui-font-size);
+  font-family: var(--header-font);
+    font-size: calc(var(--header-font-size)*.75) !important;
 
   &.newsListItemTitleLarge {
-    font-size: var(--ui-header-size);
+    font-size: calc(var(--header-font-size)*1) !important;
   }
 }
 
