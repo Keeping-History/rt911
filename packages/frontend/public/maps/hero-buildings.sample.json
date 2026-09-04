@@ -1,14 +1,14 @@
 {
   "heroes": [
     {
-      "id": "nyc-90s-v1",
-      "stl_url": "maps/heroes/nyc-90s-v1.stl",
+      "id": "nyc-90s-wtc-only",
+      "stl_url": "maps/heroes/nyc-90s-wtc-only.stl",
       "lng": -74.013355,
       "lat": 40.712925,
       "bearing_deg": 0,
       "scale": 1.0,
       "base_elev_m": 4,
-      "exclude": [-74.07585, 40.68164, -73.94628, 40.74934]
+      "exclude": [-74.01610, 40.70987, -74.00940, 40.71530]
     }
   ]
 }

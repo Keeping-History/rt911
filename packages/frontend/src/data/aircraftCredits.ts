@@ -42,7 +42,7 @@ export const NYC_90S_HERO_CREDIT: ModelCredit = {
 	author: "rorovera201305",
 	license: "CC-BY 4.0",
 	url: "https://skfb.ly/oSMBU",
-	note: "\"New York In The 90's\" by rorovera201305 is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/). Decimated (2.68M → 200k triangles via quadric-error simplification), recentered and rescaled to match the real World Trade Center towers' documented height and separation — a derivative work, attribution retained per CC-BY.",
+	note: "\"New York In The 90's\" by rorovera201305 is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/). Clipped to the World Trade Center complex, decimated (2.68M → 150k triangles via quadric-error simplification), recentered and rescaled to match the real towers' documented height and separation — a derivative work, attribution retained per CC-BY.",
 };
 
 export const AIRCRAFT_CREDITS: ModelCredit[] = [

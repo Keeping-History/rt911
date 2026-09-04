@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
-"""Bake new_york_in_the_90s.glb into a calibrated, decimated hero STL.
+"""Bake new_york_in_the_90s.glb into a calibrated, decimated WTC hero STL.
+
+Scope: the WTC complex only, not the whole city. A full-model rotation
+search against building-recon's real 1,510-building Lower Manhattan
+dataset (both a plain-rotation and a mirrored-rotation search, every
+degree) found no rigid transform that aligns the source model with real
+Manhattan beyond a few hundred meters of the towers -- this is a
+stylized Sketchfab diorama, not a surveyed dataset, and only its "hero"
+subject (the towers) was built to consistent scale/position. Clipping to
+just the WTC complex, where the model IS accurate (confirmed against
+building-recon's curated wtc_complex_2001.geojson footprints), and
+leaving the real extruded-building data for everywhere else, is the
+approach that's actually correct rather than a wholesale city replacement.
 
 Run: python3 process_nyc_model.py [path/to/new_york_in_the_90s.glb]
-Writes processed/nyc-90s-v1.stl plus the manifest snippet to stdout.
+Writes processed/nyc-90s-wtc-only.stl plus the manifest snippet to stdout.
 """
 import math
 import sys
@@ -16,7 +28,12 @@ from process_models import write_stl
 
 HERE = Path(__file__).parent
 OUT = HERE / "processed"
-TRI_BUDGET = 200_000
+TRI_BUDGET = 150_000
+# Radius (real meters) around the midpoint between the two towers to keep.
+# Sized to comfortably cover the WTC superblock (towers, plaza, 3-7 WTC)
+# without reaching into the surrounding city, where the source model's
+# geometry is no longer positioned to real-world accuracy.
+CLIP_RADIUS_M = 280.0
 
 
 def quadric_decimate(tris: list, target_triangles: int) -> list:
@@ -123,6 +140,24 @@ def calibrate(tris: list) -> list:
 	return [tuple(transform(v) for v in tri) for tri in tris]
 
 
+def clip_to_wtc_complex(tris: list, radius_m: float) -> list:
+	"""Keep only calibrated triangles within `radius_m` of the midpoint
+	between the two towers. Must run on already-calibrated (real-meter)
+	triangles, not raw model-space ones."""
+	a, b = fit_horizontal_similarity()
+	nz = a * complex(*NORTH_TOWER_MODEL_XZ) + b
+	sz = a * complex(*SOUTH_TOWER_MODEL_XZ) + b
+	mid_east = (nz.real + sz.real) / 2
+	mid_north = (nz.imag + sz.imag) / 2
+	out = []
+	for tri in tris:
+		cx = sum(v[0] for v in tri) / 3
+		cy = sum(v[1] for v in tri) / 3
+		if math.hypot(cx - mid_east, cy - mid_north) <= radius_m:
+			out.append(tri)
+	return out
+
+
 def exclude_bbox(tris: list) -> tuple[float, float, float, float]:
 	"""The calibrated mesh's footprint as a [minLng, minLat, maxLng, maxLat]
 	box, for the manifest's `exclude` field. Inverts enu_meters around the
@@ -146,16 +181,18 @@ def main() -> None:
 	tris = extract_world_triangles(src)
 	print(f"{len(tris):,} triangles extracted")
 
-	decimated = quadric_decimate(tris, TRI_BUDGET)
+	calibrated = calibrate(tris)
+	clipped = clip_to_wtc_complex(calibrated, CLIP_RADIUS_M)
+	print(f"clipped to {len(clipped):,} triangles within {CLIP_RADIUS_M}m of the WTC complex")
+
+	decimated = quadric_decimate(clipped, TRI_BUDGET)
 	print(f"decimated to {len(decimated):,} triangles")
 
-	calibrated = calibrate(decimated)
-
-	dst = OUT / "nyc-90s-v1.stl"
-	write_stl(calibrated, dst)
+	dst = OUT / "nyc-90s-wtc-only.stl"
+	write_stl(decimated, dst)
 	print(f"wrote {dst} ({dst.stat().st_size / 1024 / 1024:.1f} MB)")
 
-	min_lng, min_lat, max_lng, max_lat = exclude_bbox(calibrated)
+	min_lng, min_lat, max_lng, max_lat = exclude_bbox(decimated)
 	print(f'"exclude": [{min_lng:.5f}, {min_lat:.5f}, {max_lng:.5f}, {max_lat:.5f}]')
 
 	a, _b = fit_horizontal_similarity()
