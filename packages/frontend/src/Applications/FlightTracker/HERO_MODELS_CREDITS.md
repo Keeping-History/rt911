@@ -35,10 +35,12 @@ Attribution required by their licenses is recorded here.
   hero below can't: the real towers no longer stand, so no modern building
   dataset has them.
 
-## Manhattan buildings (pre-9/11), from NYC DoITT's 3D Building Model (`doitt-lower-manhattan`)
+## Manhattan buildings (pre-9/11), from NYC DoITT's 3D Building Model (`doitt-manhattan`)
 
 - **Data:** NYC DoITT's 3D Building Model (real photogrammetric massing and
-  rooflines, not extrusions), filtered to `CNSTRCT_YR <= 2001`.
+  rooflines, not extrusions) for all of Manhattan, filtered to
+  `CNSTRCT_YR <= 2001` (44,054 of 45,304 buildings; the other 1,250 postdate
+  2001 and are excluded, including anything rebuilt at the WTC site).
 - **Source:** https://www1.nyc.gov/site/doitt/initiatives/3d-building.page
   (NYC Open Data, DoITT terms of use), accessed via the public
   SceneServer/FeatureServer backing Esri's Manhattan Skyscraper Explorer
@@ -49,12 +51,14 @@ Attribution required by their licenses is recorded here.
   `obb.center`, so no calibration or fitting is needed, unlike the WTC hero
   above. Per-building `OBJECTID` (fetched from the companion FeatureServer,
   `scripts/doitt-buildings/fetch_attributes.py`) gated which triangles were
-  kept by construction year; buildings built after 2001 (including anything
-  rebuilt at the WTC site) are excluded, which is what leaves the gap the WTC
-  hero fills. Hosted as `maps/heroes/doitt-lower-manhattan.stl`. Replaces the
-  flat extruded-building GeoJSON layer within its coverage; that layer
-  remains the fallback for everywhere this hero doesn't reach (e.g. the
-  Pentagon).
+  kept by construction year, which is what leaves the gap the WTC hero
+  fills. The full extraction (3.46M triangles) was decimated via open3d
+  quadric-error simplification to 800k triangles (`scripts/doitt-buildings/build_stl.py`)
+  — real, structured mesh geometry holds up far better under decimation
+  than the WTC hero's stylized source did at a comparable ratio. Hosted as
+  `maps/heroes/doitt-manhattan.stl` (38MB). Replaces the flat
+  extruded-building GeoJSON layer within its coverage; that layer remains
+  the fallback for everywhere this hero doesn't reach (e.g. the Pentagon).
 
 _(The Pentagon currently renders as an extruded footprint — no license-clean hero
 model sourced yet.)_

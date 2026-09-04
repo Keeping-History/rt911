@@ -35,7 +35,7 @@ HERE = Path(__file__).parent
 
 YEAR_CUTOFF = 2001
 # Lower Manhattan AOI, matching building-recon's existing scope, padded a bit.
-AOI = (-74.025, 40.698, -73.998, 40.723)  # minLng, minLat, maxLng, maxLat
+AOI = (-74.025, 40.698, -73.905, 40.880)  # minLng, minLat, maxLng, maxLat -- all of Manhattan
 
 Triangle = tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]
 

@@ -11,11 +11,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "aircraft-models"))
 from process_models import write_stl  # noqa: E402
+from process_nyc_model import quadric_decimate  # noqa: E402
 
 HERE = Path(__file__).parent
 NORTH_TOWER_LNGLAT = (-74.013355, 40.712925)
 BASE_ELEV_M = 4.0
 METERS_PER_DEG_LAT = 111_320.0
+# Real, structured mesh geometry decimates far more gracefully than the
+# artistic diorama did -- this still preserves individual building shapes
+# across all of Manhattan at a size comparable to the other hero models.
+TRI_BUDGET = 800_000
 
 
 def enu_meters(lng: float, lat: float) -> tuple[float, float]:
@@ -29,15 +34,19 @@ def main() -> None:
 		tris = pickle.load(f)
 	print(f"{len(tris):,} triangles")
 
-	out_tris = []
+	converted = []
 	for tri in tris:
 		verts = []
 		for lng, lat, height_m in tri:
 			east, north = enu_meters(lng, lat)
 			verts.append((east, north, height_m + BASE_ELEV_M))
-		out_tris.append(tuple(verts))
+		converted.append(tuple(verts))
 
-	dst = HERE / "doitt-lower-manhattan.stl"
+	print("decimating ...")
+	out_tris = quadric_decimate(converted, TRI_BUDGET)
+	print(f"decimated to {len(out_tris):,} triangles")
+
+	dst = HERE / "doitt-manhattan.stl"
 	write_stl(out_tris, dst)
 	print(f"wrote {dst} ({dst.stat().st_size / 1024 / 1024:.1f} MB)")
 

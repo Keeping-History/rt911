@@ -1,14 +1,14 @@
 {
   "heroes": [
     {
-      "id": "doitt-lower-manhattan",
-      "stl_url": "maps/heroes/doitt-lower-manhattan.stl",
+      "id": "doitt-manhattan",
+      "stl_url": "maps/heroes/doitt-manhattan.stl",
       "lng": -74.013355,
       "lat": 40.712925,
       "bearing_deg": 0,
       "scale": 1.0,
       "base_elev_m": 0,
-      "exclude": [-74.01901, 40.70048, -73.98981, 40.73150]
+      "exclude": [-74.01901, 40.70048, -73.91123, 40.87445]
     },
     {
       "id": "nyc-90s-wtc-only",

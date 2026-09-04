@@ -55,10 +55,11 @@ python3 build_stl.py           # -> doitt-lower-manhattan.stl
 ```
 
 `extract_geometry.py`'s `AOI` and `YEAR_CUTOFF` constants control scope;
-`AOI` currently matches `building-recon`'s existing Lower Manhattan area.
-Widening it re-walks more of the node tree (the full service covers all of
-Manhattan up to ~40.87°N) and produces a larger STL — no code changes needed,
-just a bigger box and more fetch time.
+`AOI` currently covers all of Manhattan (the service's full extent, up to
+~40.87°N) — 44,054 buildings, 3.46M triangles before decimation, 800k
+after, 38MB. `build_stl.py`'s `TRI_BUDGET` controls the decimation target;
+real building geometry holds up well even at fairly aggressive ratios
+(unlike the WTC hero's stylized source).
 
 Upload the result to Wasabi at `maps/heroes/doitt-lower-manhattan.stl` and
 add/update its entry in `maps/hero-buildings.json` (see the frontend's
