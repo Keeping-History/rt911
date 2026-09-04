@@ -56,7 +56,7 @@
 	opacity: 0.75;
 	margin-top: calc(var(--windows-border-size) *2);
 	font-family: var(--ui-font);
-	font-size: var(--ui-font-size);
+	font-size: calc(var(--ui-font-size)*.75);
 }
 
 .body {
