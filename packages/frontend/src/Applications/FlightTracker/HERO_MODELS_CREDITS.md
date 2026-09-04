@@ -31,8 +31,30 @@ Attribution required by their licenses is recorded here.
   no rigid transform aligning the source model with real Manhattan beyond a
   few hundred meters of the towers — it's a stylized diorama whose "hero"
   subject (the towers) was built to consistent scale/position, not a
-  surveyed dataset. The rest of Lower Manhattan keeps rendering from the
-  real, surveyed extruded-building data, as it did before this model existed.
+  surveyed dataset. This hero exists specifically to fill the gap the DoITT
+  hero below can't: the real towers no longer stand, so no modern building
+  dataset has them.
+
+## Manhattan buildings (pre-9/11), from NYC DoITT's 3D Building Model (`doitt-lower-manhattan`)
+
+- **Data:** NYC DoITT's 3D Building Model (real photogrammetric massing and
+  rooflines, not extrusions), filtered to `CNSTRCT_YR <= 2001`.
+- **Source:** https://www1.nyc.gov/site/doitt/initiatives/3d-building.page
+  (NYC Open Data, DoITT terms of use), accessed via the public
+  SceneServer/FeatureServer backing Esri's Manhattan Skyscraper Explorer
+  showcase app (`services2.arcgis.com/cFEFS0EWrhfDeVw9/.../showcases_manhattan_buildings`).
+- **Use:** the SceneServer's I3S node tree was walked and its binary mesh
+  buffers parsed directly (`scripts/doitt-buildings/extract_geometry.py`) --
+  vertex positions are plain per-node degree/meter offsets from each node's
+  `obb.center`, so no calibration or fitting is needed, unlike the WTC hero
+  above. Per-building `OBJECTID` (fetched from the companion FeatureServer,
+  `scripts/doitt-buildings/fetch_attributes.py`) gated which triangles were
+  kept by construction year; buildings built after 2001 (including anything
+  rebuilt at the WTC site) are excluded, which is what leaves the gap the WTC
+  hero fills. Hosted as `maps/heroes/doitt-lower-manhattan.stl`. Replaces the
+  flat extruded-building GeoJSON layer within its coverage; that layer
+  remains the fallback for everywhere this hero doesn't reach (e.g. the
+  Pentagon).
 
 _(The Pentagon currently renders as an extruded footprint — no license-clean hero
 model sourced yet.)_

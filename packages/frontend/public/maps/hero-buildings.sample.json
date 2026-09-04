@@ -1,13 +1,23 @@
 {
   "heroes": [
     {
+      "id": "doitt-lower-manhattan",
+      "stl_url": "maps/heroes/doitt-lower-manhattan.stl",
+      "lng": -74.013355,
+      "lat": 40.712925,
+      "bearing_deg": 0,
+      "scale": 1.0,
+      "base_elev_m": 0,
+      "exclude": [-74.01901, 40.70048, -73.98981, 40.73150]
+    },
+    {
       "id": "nyc-90s-wtc-only",
       "stl_url": "maps/heroes/nyc-90s-wtc-only.stl",
       "lng": -74.013355,
       "lat": 40.712925,
       "bearing_deg": 0,
       "scale": 1.0,
-      "base_elev_m": 4,
+      "base_elev_m": 0,
       "exclude": [-74.01610, 40.70987, -74.00940, 40.71530]
     }
   ]

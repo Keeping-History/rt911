@@ -41,3 +41,4 @@ packages/frontend/.husky/_/post-commit
 .superpowers
 .pytest_cache
 __pycache__/
+*.pkl

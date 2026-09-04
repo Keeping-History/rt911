@@ -281,6 +281,12 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 				feeds: "Lower Manhattan building footprints and heights, filtered to those standing in 2001.",
 			},
 			{
+				name: "NYC DoITT — 3D Building Model",
+				url: "https://www1.nyc.gov/site/doitt/initiatives/3d-building.page",
+				feeds: "Real photogrammetric building massing and rooflines for Manhattan, filtered to CNSTRCT_YR ≤ 2001, replacing flat extrusions within its coverage.",
+				note: "Accessed via Esri's Manhattan Skyscraper Explorer showcase app's public SceneServer/FeatureServer (services2.arcgis.com), which republishes this NYC Open Data feed under DoITT's terms of use.",
+			},
+			{
 				name: "Arlington County GIS Open Data",
 				url: "https://gisdata-arlgis.opendata.arcgis.com/",
 				feeds: "Pentagon and Arlington building footprints.",
@@ -320,6 +326,7 @@ export const APP_PROVENANCE: Record<string, AppProvenance> = {
 			"The four hijacked flights and the C-130 use real per-sweep radar positions where radar saw them. Where transponders were switched off, the path interpolates through documented NTSB anchors and the coverage gap is marked as such.",
 			"Descents are anchored to each airport's real field elevation. Altitudes are exaggerated relative to the terrain so tracks stay readable.",
 			"The Pentagon renders as an extruded footprint rather than a detailed model — no license-clean model was sourced.",
+			"Manhattan buildings standing on 9/11 render from real photogrammetric 3D models (DoITT's 3D Building Model, filtered to CNSTRCT_YR ≤ 2001), not flat extrusions, wherever that coverage reaches. The World Trade Center site is the one deliberate exception: it's absent from any modern building dataset (the towers no longer stand), so the WTC complex hero model fills exactly that gap.",
 		],
 		credits: [NYC_90S_HERO_CREDIT, ...AIRCRAFT_CREDITS],
 	},
