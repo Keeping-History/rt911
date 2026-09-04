@@ -1,7 +1,7 @@
 import { ClassicyBalloonHelp, ClassicyBevelButton } from "classicy";
 import type React from "react";
 import styles from "./trafficTools.module.scss";
-import { type Tool, TOOL_BALLOONS, TOOL_GLYPHS, TOOL_LABELS, TOOLS } from "./toolMode";
+import { type Tool, TOOL_BALLOONS, TOOL_ICONS, TOOL_LABELS, TOOLS } from "./toolMode";
 
 interface ToolPaletteProps {
 	tool: Tool;
@@ -17,11 +17,11 @@ interface ToolPaletteProps {
  * A radio group, not four toggles, because that is what modal tools are: one
  * choice out of four, and a screen reader should read it that way.
  *
- * The glyphs are placeholders (see TOOL_GLYPHS) — Robbie replaces the artwork.
- * Which is exactly why the balloons matter here more than on a labelled
- * control: a glyph the listener cannot read is the whole of the button, and
- * picking the wrong tool in a modal app silently changes what every card click
- * means. `ClassicyBalloonHelp` rather than `useClassicyBalloonHelp`: its anchor
+ * Each tool's icon is a PNG (see TOOL_ICONS). The balloons still matter here
+ * more than on a labelled control: an icon the listener cannot read is the
+ * whole of the button, and picking the wrong tool in a modal app silently
+ * changes what every card click means. `ClassicyBalloonHelp` rather than
+ * `useClassicyBalloonHelp`: its anchor
  * <div> sits between the radiogroup and the radios, which the palette's flex
  * row and every `role="radio"` query are indifferent to — the reason
  * TV/ThumbnailTile.tsx needs the hook (drop targets resolved by walking direct
@@ -50,7 +50,7 @@ export const ToolPalette: React.FC<ToolPaletteProps> = ({ tool, onSelect }) => (
 					// reports every pick regardless.
 					onClickFunc={() => onSelect(t)}
 				>
-					<span aria-hidden="true">{TOOL_GLYPHS[t]}</span>
+					<img className={styles.rtToolIcon} src={TOOL_ICONS[t]} alt="" />
 				</ClassicyBevelButton>
 			</ClassicyBalloonHelp>
 		))}

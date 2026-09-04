@@ -14,7 +14,11 @@
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";
 import { effectiveMutedIds } from "../radio-core/radioPlayback";
 import { startMs } from "../radio-core/stationGrouping";
+import arrowPng from "./arrow.png";
 import type { Lane } from "./cardStatus";
+import handPng from "./hand.png";
+import mutePng from "./mute.png";
+import unmutePng from "./unmute.png";
 
 export type Tool = "arrow" | "mute" | "unmute" | "hand";
 
@@ -46,15 +50,15 @@ export const TOOL_BALLOONS: Record<Tool, string> = {
 };
 
 /**
- * Placeholder artwork. Deliberately one map of one character each so replacing
- * the glyphs is a single edit here — swap the strings for <img> imports the way
- * StationButtonContent does with its indicator lights, and nothing else moves.
+ * Toolbar artwork, one PNG per tool — imported the way StationButtonContent
+ * does with its indicator lights, so this map is the single place a future
+ * icon swap touches.
  */
-export const TOOL_GLYPHS: Record<Tool, string> = {
-	arrow: "▲",
-	mute: "●",
-	unmute: "○",
-	hand: "▦",
+export const TOOL_ICONS: Record<Tool, string> = {
+	arrow: arrowPng,
+	mute: mutePng,
+	unmute: unmutePng,
+	hand: handPng,
 };
 
 /** Which cards the listener can hear. `muted` is per card and survives a tool change. */

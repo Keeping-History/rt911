@@ -45,15 +45,13 @@ describe("ToolPalette", () => {
 		expect(onSelect).toHaveBeenCalledWith("hand");
 	});
 
-	it("carries a placeholder glyph per tool, swappable in one place", () => {
-		// Robbie replaces the artwork; the test pins that each tool HAS its own
-		// distinct glyph, not what that glyph looks like.
+	it("carries its own icon per tool", () => {
 		const { getByRole } = render(<ToolPalette tool="arrow" onSelect={() => {}} />);
-		const glyphs = TOOLS.map(
-			(tool) => getByRole("radio", { name: TOOL_LABELS[tool] }).textContent,
+		const icons = TOOLS.map(
+			(tool) => getByRole("radio", { name: TOOL_LABELS[tool] }).querySelector("img")?.src,
 		);
-		expect(glyphs.every((g) => g !== null && g.length > 0)).toBe(true);
-		expect(new Set(glyphs).size).toBe(TOOLS.length);
+		expect(icons.every((src) => !!src)).toBe(true);
+		expect(new Set(icons).size).toBe(TOOLS.length);
 	});
 
 	it("groups the tools so a screen reader reads them as one choice", () => {

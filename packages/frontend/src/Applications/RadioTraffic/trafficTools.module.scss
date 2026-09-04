@@ -1,6 +1,4 @@
-// The modal tool palette. Placeholder chrome around placeholder glyphs —
-// Robbie replaces the artwork, so nothing here encodes a specific icon size
-// beyond the square button the glyph sits in.
+// The modal tool palette.
 
 .rtToolPalette {
   display: flex;
@@ -29,4 +27,14 @@
   background: var(--color-system-05);
   color: var(--color-system-01);
   border-style: inset;
+}
+
+// Sizes the tool's icon PNG the same way StationButtonContent sizes its
+// indicator lights — off the UI font size rather than the source pixel
+// dimensions, so the four icons (not all cropped to the same canvas) line up.
+.rtToolIcon {
+  display: block;
+  min-width: calc(var(--window-control-size)*1);
+  height: auto;
+  image-rendering: pixelated;
 }
