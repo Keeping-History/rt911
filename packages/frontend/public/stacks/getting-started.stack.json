@@ -123,7 +123,7 @@
 					"locked": true,
 					"rect": [12, 44, 488, 250],
 					"options": { "multiline": true },
-					"content": "You arrive at 8:40 AM; the first impact is at 8:46. Seven steps:\n\n1. Open TV — the last minutes of ordinary morning television, until coverage breaks in around 8:49, channel by channel.\n2. Open Flight Tracker — over 2,500 aircraft aloft; the hijacked flights are red.\n3. Open Pager Decoder — and just let it run.\n4. Open Radio Scanner — WINS and WCBS are New York news radio; AA11, atc and NEADS/NORAD carry the air-traffic-control recordings.\n5. Jump with Time Machine — every app follows the clock.\n6. Open the Browser — the web as it was archived that day.\n7. Open Macintosh HD → Documents → Newspapers — the next morning's front pages.\n\nThe cards that follow cover each app in turn — with a button to open the real thing."
+					"content": "You arrive at 8:40 AM; the first impact is at 8:46. Eight steps:\n\n1. Open TV — the last minutes of ordinary morning television, until coverage breaks in around 8:49, channel by channel.\n2. Open Flight Tracker — over 2,500 aircraft aloft; the hijacked flights are red.\n3. Open Pager Decoder — and just let it run.\n4. Open Radio Traffic — AA11, atc and NEADS/NORAD carry the air-traffic-control recordings, as short clips.\n5. Open Radio Tuner — WINS and WCBS are New York news radio, playing continuously.\n6. Jump with Time Machine — every app follows the clock.\n7. Open the Browser — the web as it was archived that day.\n8. Open Macintosh HD → Documents → Newspapers — the next morning's front pages.\n\nThe cards that follow cover each app in turn — with a button to open the real thing."
 				}
 			]
 		},
@@ -229,31 +229,61 @@
 			]
 		},
 		{
-			"id": "radio",
-			"name": "Radio Scanner",
+			"id": "radioTraffic",
+			"name": "Radio Traffic",
 			"background": "guide",
 			"parts": [
 				{
-					"id": "radioTitle",
+					"id": "radioTrafficTitle",
 					"type": "label",
 					"rect": [12, 14, 488, 22],
-					"content": "Radio Scanner — the airwaves"
+					"content": "Radio Traffic — air-traffic control & dispatch"
 				},
 				{
-					"id": "radioBody",
+					"id": "radioTrafficBody",
 					"type": "field",
 					"locked": true,
 					"rect": [12, 44, 488, 216],
 					"options": { "multiline": true },
-					"content": "A scanner of period radio: New York news stations (WINS, WCBS), Rutgers college radio, and the air-traffic-control and NORAD/NEADS recordings tied to the hijacked flights, synchronized to the moment they happened.\n\nClick a station button along the bottom to tune it. The display shows what's playing now, what's coming up and what you missed, over a live waveform. Audio keeps playing if you switch browser tabs."
+					"content": "The air-traffic-control, NORAD/NEADS and dispatch recordings tied to the hijacked flights and the response to them, synchronized to the moment they happened — hundreds of short clips instead of one continuous feed.\n\nClips move through three lanes as the clock advances — LIVE, UPCOMING and PREVIOUS. Filter by aircraft, facility, person and more in the sidebar; each clip has its own Details, Summary, Transcript, Parties, Mentions and Source tabs."
 				},
 				{
-					"id": "radioOpen",
+					"id": "radioTrafficOpen",
 					"type": "button",
-					"name": "Open Radio Scanner",
+					"name": "Open Radio Traffic",
 					"rect": [332, 270, 168, 28],
 					"script": {
-						"onMouseUp": [{ "do": "openApp", "app": "RadioScanner.app" }]
+						"onMouseUp": [{ "do": "openApp", "app": "RadioTraffic.app" }]
+					}
+				}
+			]
+		},
+		{
+			"id": "radioTuner",
+			"name": "Radio Tuner",
+			"background": "guide",
+			"parts": [
+				{
+					"id": "radioTunerTitle",
+					"type": "label",
+					"rect": [12, 14, 488, 22],
+					"content": "Radio Tuner — period radio stations"
+				},
+				{
+					"id": "radioTunerBody",
+					"type": "field",
+					"locked": true,
+					"rect": [12, 44, 488, 216],
+					"options": { "multiline": true },
+					"content": "Fourteen period radio stations — New York news radio (WINS, WCBS) among stations from across the country and the BBC — playing continuously against the virtual clock, exactly as they aired.\n\nClick a station button along the bottom to tune it. The display shows what's playing now over a live waveform, and hovering an upcoming station shows a countdown to when it goes live. Audio keeps playing if you switch browser tabs."
+				},
+				{
+					"id": "radioTunerOpen",
+					"type": "button",
+					"name": "Open Radio Tuner",
+					"rect": [332, 270, 168, 28],
+					"script": {
+						"onMouseUp": [{ "do": "openApp", "app": "RadioTuner.app" }]
 					}
 				}
 			]

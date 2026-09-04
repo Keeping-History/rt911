@@ -44,7 +44,7 @@ export const DefaultFileSystem: ClassicyFileSystemTree = {
 			_mimeType: "application/json",
 			_icon: ClassicyIcons.system.files.document,
 			_url: stackUrl("getting-started.stack.json"),
-			_size: 21169,
+			_size: 22399,
 		},
 		// The Oregon Trail — a classic Apple II / MECC educational game rebuilt as
 		// a portable HyperCard JSON stack (outfit a wagon, then manage food, health
