@@ -26,7 +26,7 @@
 		"@openreplay/tracker": "^18.1.2",
 		"classicy": "0.79.0",
 		"classnames": "^2.5.1",
-		"dompurify": "^3.4.14",
+		"dompurify": "^3.4.16",
 		"html2canvas-pro": "^2.4.0",
 		"maplibre-gl": "^6.6.0",
 		"pmtiles": "^4.4.1",
