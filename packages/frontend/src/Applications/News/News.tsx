@@ -4,6 +4,8 @@ import {
 	ClassicyIcons,
 	ClassicyPopUpMenu,
 	ClassicyWindow,
+	getAppWindow,
+	listAppWindows,
 	quitMenuItemHelper,
 	useAppManager,
 	useAppManagerDispatch,
@@ -89,8 +91,10 @@ export const News: React.FC = () => {
 	// Boolean selector: the full apps[appId] object changes reference on every window
 	// interaction (move, focus, z-order), causing a re-render each time.
 	const isRunning  = useAppManager((s) => appId in (s.System.Manager.Applications.apps ?? {}));
-	// Omit the ?? [] fallback from the selector — a fresh [] on every call is a new
-	// reference that would make openDocumentDetails/getWindowOpenOffset always unstable.
+	// Select the raw windows record (keyed by window id) and read it through
+	// Classicy's getAppWindow/listAppWindows. No fallback in the selector — a fresh
+	// object on every call is a new reference that would make
+	// openDocumentDetails/getWindowOpenOffset always unstable.
 	const appWindows = useAppManager((s) => s.System.Manager.Applications.apps[appId]?.windows);
 	const paddingSize = useAppManager((s) => s.System.Manager.Appearance.activeTheme.measurements.window.paddingSize);
 
@@ -160,9 +164,7 @@ export const News: React.FC = () => {
 
 	const openDocumentDetails = useCallback((docId: number) => {
 		setOpenDocuments((prev) => Array.from(new Set([...prev, docId])));
-		const ws = (appWindows ?? []).find(
-			(w: { id: string }) => w.id === `${appId}_newsitem_${docId}`,
-		);
+		const ws = getAppWindow({ windows: appWindows }, `${appId}_newsitem_${docId}`);
 		if (ws) {
 			desktopEventDispatch({ type: "ClassicyWindowOpen",  app: { id: appId }, window: { ...ws, closed: false } });
 			desktopEventDispatch({ type: "ClassicyWindowFocus", app: { id: appId }, window: ws });
@@ -256,7 +258,7 @@ export const News: React.FC = () => {
 	);
 
 	const getWindowOpenOffset = useCallback(
-		() => ((appWindows ?? []).filter((w: { closed: boolean }) => !w.closed).length ?? 0) * paddingSize,
+		() => listAppWindows({ windows: appWindows }).filter((w) => !w.closed).length * paddingSize,
 		[appWindows, paddingSize],
 	);
 

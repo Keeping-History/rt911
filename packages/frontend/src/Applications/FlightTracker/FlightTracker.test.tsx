@@ -209,7 +209,7 @@ vi.mock("classicy", () => ({
 						apps: {
 							"FlightTracker.app": {
 								open: true,
-								windows: [],
+								windows: {},
 								data: mockAppData.current,
 							},
 						},

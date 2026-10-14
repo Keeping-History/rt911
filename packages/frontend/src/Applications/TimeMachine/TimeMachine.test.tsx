@@ -7,7 +7,7 @@
 // no-mock pattern).
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeAppState, useAppManager } from "classicy";
+import { describeAppState, getAppWindow, useAppManager } from "classicy";
 import { TIME_MACHINE_APP_ID, TimeMachineDataSchema } from "./timeMachineSettings";
 import { TimeMachine } from "./TimeMachine";
 
@@ -57,11 +57,11 @@ function openSettingsOnMount(): void {
 							// nothing.
 							open: true,
 							focused: true,
-							windows: [
-								{
+							windows: {
+								[`${TIME_MACHINE_APP_ID}_settings`]: {
 									// Full shape classicy's own ClassicyWindow expects for a
 									// persisted window entry (see zA's default-object literal in
-									// classicy.es.js) — ClassicyWindow reads this array entry as
+									// classicy.es.js) — ClassicyWindow reads this entry as
 									// its full live window state, so a partial record renders
 									// blank instead of opening.
 									id: `${TIME_MACHINE_APP_ID}_settings`,
@@ -80,7 +80,7 @@ function openSettingsOnMount(): void {
 									default: false,
 									windowType: "document",
 								},
-							],
+							},
 						},
 					},
 				},
@@ -171,11 +171,10 @@ describe("TimeMachine Settings window", () => {
 		expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
 		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-		const settingsWindow = useAppManager
-			.getState()
-			.System.Manager.Applications.apps[TIME_MACHINE_APP_ID]?.windows?.find(
-				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_settings`,
-			) as { closed?: boolean } | undefined;
+		const settingsWindow = getAppWindow(
+			useAppManager.getState().System.Manager.Applications.apps[TIME_MACHINE_APP_ID],
+			`${TIME_MACHINE_APP_ID}_settings`,
+		);
 		expect(settingsWindow?.closed).toBe(true);
 	});
 
@@ -203,8 +202,8 @@ describe("TimeMachine Settings window", () => {
 								// openSettingsOnMount's comment above.
 								open: true,
 								focused: true,
-								windows: [
-									{
+								windows: {
+									[`${TIME_MACHINE_APP_ID}_settings`]: {
 										id: `${TIME_MACHINE_APP_ID}_settings`,
 										appId: TIME_MACHINE_APP_ID,
 										closed: true,
@@ -221,7 +220,7 @@ describe("TimeMachine Settings window", () => {
 										default: false,
 										windowType: "document",
 									},
-								],
+								},
 							},
 						},
 					},
@@ -233,11 +232,10 @@ describe("TimeMachine Settings window", () => {
 		unmount();
 		render(<TimeMachine />);
 
-		const settingsWindow = useAppManager
-			.getState()
-			.System.Manager.Applications.apps[TIME_MACHINE_APP_ID]?.windows?.find(
-				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_settings`,
-			) as { closed?: boolean } | undefined;
+		const settingsWindow = getAppWindow(
+			useAppManager.getState().System.Manager.Applications.apps[TIME_MACHINE_APP_ID],
+			`${TIME_MACHINE_APP_ID}_settings`,
+		);
 		expect(settingsWindow?.closed).toBe(true);
 		expect(document.getElementById("controls_skip_minutes")).toBeNull();
 	});
@@ -266,11 +264,10 @@ describe("TimeMachine Bookmarks window", () => {
 		// Capture Bookmark opens Bookmarks instead of the capture dialog.
 		fireEvent.click(screen.getByLabelText("Capture Bookmark"));
 
-		const bookmarksWindow = useAppManager
-			.getState()
-			.System.Manager.Applications.apps[TIME_MACHINE_APP_ID]?.windows?.find(
-				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_bookmarks`,
-			) as { closed?: boolean } | undefined;
+		const bookmarksWindow = getAppWindow(
+			useAppManager.getState().System.Manager.Applications.apps[TIME_MACHINE_APP_ID],
+			`${TIME_MACHINE_APP_ID}_bookmarks`,
+		);
 		expect(bookmarksWindow?.closed).toBe(false);
 	});
 
@@ -298,9 +295,9 @@ describe("TimeMachine Bookmarks window", () => {
 								...s.System.Manager.Applications.apps,
 								[TIME_MACHINE_APP_ID]: {
 									...app,
-									windows: [
-										...(app.windows ?? []),
-										{
+									windows: {
+										...app.windows,
+										[`${TIME_MACHINE_APP_ID}_bookmarks`]: {
 											id: `${TIME_MACHINE_APP_ID}_bookmarks`,
 											appId: TIME_MACHINE_APP_ID,
 											closed: true,
@@ -317,7 +314,7 @@ describe("TimeMachine Bookmarks window", () => {
 											default: false,
 											windowType: "utility",
 										},
-									],
+									},
 								},
 							},
 						},
@@ -330,11 +327,10 @@ describe("TimeMachine Bookmarks window", () => {
 		unmount();
 		render(<TimeMachine />);
 
-		const bookmarksWindow = useAppManager
-			.getState()
-			.System.Manager.Applications.apps[TIME_MACHINE_APP_ID]?.windows?.find(
-				(w: { id: string }) => w.id === `${TIME_MACHINE_APP_ID}_bookmarks`,
-			) as { closed?: boolean } | undefined;
+		const bookmarksWindow = getAppWindow(
+			useAppManager.getState().System.Manager.Applications.apps[TIME_MACHINE_APP_ID],
+			`${TIME_MACHINE_APP_ID}_bookmarks`,
+		);
 		expect(bookmarksWindow?.closed).toBe(true);
 		expect(screen.queryByText("Log in to view and create personal bookmarks.")).toBeNull();
 	});

@@ -20,7 +20,7 @@ const mockState = vi.hoisted(() => ({
 				DateAndTime: { dateTime: "2001-09-11T12:40:00.000Z", timeZoneOffset: "-4" },
 				Applications: {
 					apps: {
-						"News.app": { open: true, windows: [] as unknown[], data: {} },
+						"News.app": { open: true, windows: {}, data: {} },
 					},
 				},
 				Appearance: {
@@ -160,7 +160,7 @@ describe("News detail window body rendering", () => {
 		balloonHandlers.onMouseLeave.mockClear();
 		mockState.value.System.Manager.Applications.apps["News.app"] = {
 			open: true,
-			windows: [],
+			windows: {},
 			data: {},
 		};
 	});

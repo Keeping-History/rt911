@@ -25,7 +25,7 @@ vi.mock('classicy', () => ({
             System: {
                 Manager: {
                     Applications: {
-                        apps: { 'MarketWatch.app': { open: true, windows: [] } },
+                        apps: { 'MarketWatch.app': { open: true, windows: {} } },
                     },
                 },
             },

@@ -35,7 +35,7 @@ vi.mock("classicy", async (importOriginal) => {
 			Manager: {
 				Applications: {
 					apps: {
-						"TV.app": { data: mockAppData.value, open: true, windows: [] },
+						"TV.app": { data: mockAppData.value, open: true, windows: {} },
 					},
 				},
 			},

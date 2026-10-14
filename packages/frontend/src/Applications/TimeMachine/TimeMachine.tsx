@@ -8,6 +8,7 @@ import {
 	ClassicyPopUpMenu,
 	ClassicySlider,
 	ClassicySpinner,
+	type ClassicyStoreSystemAppWindows,
 	ClassicyWindow,
 	describeAppState,
 	quitMenuItemHelper,
@@ -83,7 +84,7 @@ const scrubBalloon = describeAppState(appId, "settings.scrubSeconds");
 // (this bug shipped for Settings even after Bookmarks was fixed for it — see
 // issue #562). Reading the persisted entry once, here, lets the app keep a
 // window unmounted (so that effect never fires) when it was last closed.
-const readPersistedWindows = (): { id: string; closed?: boolean }[] | undefined =>
+const readPersistedWindows = (): ClassicyStoreSystemAppWindows | undefined =>
 	typeof useAppManager.getState === "function"
 		? useAppManager.getState().System.Manager.Applications.apps[appId]?.windows
 		: undefined;
