@@ -3,16 +3,16 @@ module classicy/streamer
 go 1.26.0
 
 require (
-	github.com/alicebob/miniredis/v2 v2.39.0
-	github.com/anthropics/anthropic-sdk-go v1.78.0
+	github.com/alicebob/miniredis/v2 v2.40.0
+	github.com/anthropics/anthropic-sdk-go v1.80.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/minio/minio-go/v7 v7.3.0
 	github.com/openai/openai-go v1.12.0
-	github.com/redis/go-redis/v9 v9.22.0
+	github.com/redis/go-redis/v9 v9.23.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
-	golang.org/x/sync v0.23.0
+	golang.org/x/sync v0.24.0
 	golang.org/x/time v0.16.0
 )
 
@@ -42,12 +42,12 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
+	go.uber.org/atomic v1.12.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect
 )
