@@ -70,7 +70,7 @@ jobs:
           # Wire the App token into the origin remote so `git push` is App-authored.
           token: ${{ steps.token.outputs.token }}
 
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
         # Provisions node/pnpm from mise.toml, matching build.yml.
 
       - name: Get pnpm store directory
