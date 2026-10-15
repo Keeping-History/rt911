@@ -9,6 +9,16 @@ import {
 
 const KEY = "rt911AlertsEnabled";
 
+// Where getItem/setItem actually live. jsdom's localStorage is a real Storage,
+// whose named-property setter turns `spyOn(localStorage, "getItem")` into a
+// stored item called "getItem" instead of a method override, so the spy must
+// go on Storage.prototype. When vitest.setup.ts's plain-object polyfill is in
+// play instead (Node 25 under vitest 4), the methods are its own properties.
+const storageMethodOwner = (): Storage =>
+	window.localStorage instanceof Storage
+		? Storage.prototype
+		: window.localStorage;
+
 afterEach(() => {
 	cleanup();
 	vi.restoreAllMocks();
@@ -55,11 +65,8 @@ describe("alertsSettings store", () => {
 	});
 
 	it("falls back to enabled when localStorage reads throw (private-mode Safari)", () => {
-		// window.localStorage in this test environment is an own-property
-		// polyfill (see vitest.setup.ts), not a Storage.prototype instance, so
-		// the spy must target the instance itself to actually intercept calls.
 		const getItemSpy = vi
-			.spyOn(window.localStorage, "getItem")
+			.spyOn(storageMethodOwner(), "getItem")
 			.mockImplementation(() => {
 				throw new Error("denied");
 			});
@@ -70,7 +77,7 @@ describe("alertsSettings store", () => {
 
 	it("keeps working in-memory when localStorage writes throw", () => {
 		const setItemSpy = vi
-			.spyOn(window.localStorage, "setItem")
+			.spyOn(storageMethodOwner(), "setItem")
 			.mockImplementation(() => {
 				throw new Error("denied");
 			});
