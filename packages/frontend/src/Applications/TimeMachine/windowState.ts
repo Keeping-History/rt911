@@ -1,10 +1,4 @@
-// A persisted Classicy window entry, narrowed to just the fields we need to
-// decide whether it should be visible. Classicy stores the full window object
-// (position, size, focus, …) but only `id` and `closed` matter for restoration.
-interface PersistedWindow {
-	id: string;
-	closed?: boolean;
-}
+import { type ClassicyStoreSystemAppWindows, getAppWindow } from "classicy";
 
 /**
  * True when a window with `windowId` is present in the persisted store and not
@@ -12,8 +6,14 @@ interface PersistedWindow {
  * on mount so windows that were open before a browser reload reappear — Classicy
  * persists the window entry, but the app's own visibility flag would otherwise
  * reset to false, orphaning the persisted (and focused) window.
+ *
+ * `windows` is the app's window record (`apps[appId].windows`, keyed by window
+ * id since Classicy 1.0); only each entry's `closed` flag matters here.
  */
 export const isWindowOpen = (
-	windows: PersistedWindow[] | undefined,
+	windows: ClassicyStoreSystemAppWindows | undefined,
 	windowId: string,
-): boolean => !!windows?.some((w) => w.id === windowId && !w.closed);
+): boolean => {
+	const window = getAppWindow({ windows }, windowId);
+	return !!window && !window.closed;
+};

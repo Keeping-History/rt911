@@ -109,7 +109,7 @@ vi.mock("classicy", () => ({
 				Manager: {
 					Applications: {
 						apps: {
-							"Weather.app": { open: true, windows: [], data: mockAppData.current },
+							"Weather.app": { open: true, windows: {}, data: mockAppData.current },
 						},
 					},
 				},
