@@ -1,6 +1,6 @@
 import {
-	ClassicyAlert, type ClassicyMenuItem, ClassicyWindow, useAppManager, useAppManagerDispatch,
-	useClassicyDateTime,
+	ClassicyAlert, type ClassicyMenuItem, ClassicyWindow, getAppWindow, useAppManager,
+	useAppManagerDispatch, useClassicyDateTime,
 } from "classicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deletePlaylist, duplicatePlaylist, getPlaylist, updatePlaylist } from "../../Providers/Auth/playlistApi";
@@ -156,8 +156,7 @@ export function PlaylistDocumentWindow({
 	// palette click must keep acting on the document the user was last in.
 	const focused = useAppManager(
 		(s) =>
-			s.System.Manager.Applications.apps[appId]?.windows.find((w) => w.id === windowId)
-				?.focused ?? false,
+			getAppWindow(s.System.Manager.Applications.apps[appId], windowId)?.focused ?? false,
 	);
 	useEffect(() => {
 		if (focused) setActive(playlistId);

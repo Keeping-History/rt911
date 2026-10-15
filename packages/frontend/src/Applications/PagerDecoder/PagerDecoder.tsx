@@ -8,6 +8,7 @@ import {
 	ClassicySpinner,
 	ClassicyTextEditor,
 	ClassicyWindow,
+	getAppWindow,
 	quitMenuItemHelper,
 	useAppManager,
 	useAppManagerDispatch,
@@ -71,7 +72,7 @@ export const PagerDecoder = () => {
 
 	const { connected } = useContext(MediaStreamContext);
 	const isPaused =
-		appState?.windows?.find((w) => w.id === "pager-terminal")?.closed ?? false;
+		getAppWindow(appState, "pager-terminal")?.closed ?? false;
 	const { lines, streamingText, streamingMeta, uniqueValues, clearLines } =
 		usePagerPlayback(settings, isPaused, !!appState);
 
