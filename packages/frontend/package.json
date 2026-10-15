@@ -24,7 +24,7 @@
 	"dependencies": {
 		"@msgpack/msgpack": "^3.1.3",
 		"@openreplay/tracker": "^18.1.2",
-		"classicy": "2.0.0",
+		"classicy": "2.0.1",
 		"classnames": "^2.5.1",
 		"dompurify": "^3.4.16",
 		"html2canvas-pro": "^2.4.0",
