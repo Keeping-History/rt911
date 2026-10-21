@@ -26,19 +26,19 @@
 		"@openreplay/tracker": "^18.1.2",
 		"classicy": "2.0.7",
 		"classnames": "^2.5.1",
-		"dompurify": "^3.4.16",
+		"dompurify": "^3.4.17",
 		"html2canvas-pro": "^2.5.2",
-		"maplibre-gl": "^6.14.0",
+		"maplibre-gl": "^6.15.0",
 		"pmtiles": "^4.4.1",
-		"react": "^19.3.0",
-		"react-dom": "^19.3.0",
+		"react": "^19.3.1",
+		"react-dom": "^19.3.1",
 		"react-fast-marquee": "^1.6.5",
 		"react-player": "^3.4.0",
-		"sass-embedded": "^1.105.1",
-		"zod": "^4.6.6"
+		"sass-embedded": "^1.105.2",
+		"zod": "^4.6.7"
 	},
 	"devDependencies": {
-		"@playwright/test": "^1.64.0",
+		"@playwright/test": "^1.64.1",
 		"@testing-library/react": "^16.3.3",
 		"@types/dompurify": "^3.0.5",
 		"@types/geojson": "^7946.0.16",
@@ -46,11 +46,11 @@
 		"@types/react": "^19.3.0",
 		"@types/react-dom": "^19.3.0",
 		"@vitejs/plugin-react": "^6.1.2",
-		"jsdom": "^30.1.2",
-		"oxlint": "^1.87.0",
+		"jsdom": "^30.1.3",
+		"oxlint": "^1.88.0",
 		"typescript": "~7.0.2",
 		"vite": "^8.3.4",
-		"vitest": "^5.0.0"
+		"vitest": "^5.0.5"
 	},
 	"volta": {
 		"node": "25.2.0"
