@@ -10,6 +10,9 @@ import { ToolPalette } from "./ToolPalette";
 
 const labels = TOOLS.map((tool) => TOOL_LABELS[tool]);
 
+// ClassicyBalloonHelp's anchor wrapper, by its (public, styled) class name.
+const ANCHOR = ".classicyBalloonHelpAnchor";
+
 describe("ToolPalette", () => {
 	it("offers all four tools", () => {
 		const { getByRole } = render(<ToolPalette tool="arrow" onSelect={() => {}} />);
@@ -61,15 +64,18 @@ describe("ToolPalette", () => {
 
 	describe("balloon help", () => {
 		it("gives every tool its own balloon anchor", () => {
-			const { getAllByRole } = render(<ToolPalette tool="arrow" onSelect={() => {}} />);
-			// ClassicyBalloonHelp's anchor is role="tooltip" — one per tool, and no
-			// button left without one, which is the whole of the requirement.
-			expect(getAllByRole("tooltip")).toHaveLength(TOOLS.length);
+			render(<ToolPalette tool="arrow" onSelect={() => {}} />);
+			// ClassicyBalloonHelp wraps its child in a `.classicyBalloonHelpAnchor`
+			// <div> — one per tool, and no button left without one, which is the
+			// whole of the requirement. (Since classicy 2.0.9 the anchor carries no
+			// role; `role="tooltip"` belongs to the balloon, and only while shown.)
+			expect(document.querySelectorAll(ANCHOR)).toHaveLength(TOOLS.length);
+			expect(screen.queryByRole("tooltip")).toBeNull();
 			for (const tool of TOOLS) {
 				const button = document.querySelector(
 					`[aria-label="${TOOL_LABELS[tool]}"]`,
 				) as HTMLElement | null;
-				expect(button?.closest('[role="tooltip"]')).not.toBeNull();
+				expect(button?.closest(ANCHOR)).not.toBeNull();
 			}
 		});
 
@@ -84,12 +90,16 @@ describe("ToolPalette", () => {
 					render(<ToolPalette tool="arrow" onSelect={() => {}} />);
 					const anchor = document
 						.querySelector(`[aria-label="${TOOL_LABELS[tool]}"]`)
-						?.closest('[role="tooltip"]') as HTMLElement;
+						?.closest(ANCHOR) as HTMLElement;
 					fireEvent.mouseEnter(anchor);
 					act(() => {
 						vi.advanceTimersByTime(600);
 					});
 					expect(screen.getByText(TOOL_BALLOONS[tool])).toBeTruthy();
+					// The shown balloon is the tooltip, and it describes the anchor.
+					const tooltip = screen.getByRole("tooltip");
+					expect(tooltip.textContent).toContain(TOOL_BALLOONS[tool]);
+					expect(anchor.getAttribute("aria-describedby")).toBe(tooltip.id);
 				}
 			} finally {
 				vi.useRealTimers();
