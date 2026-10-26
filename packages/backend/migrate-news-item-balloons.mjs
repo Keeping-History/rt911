@@ -30,6 +30,10 @@
  * only for --apply (news_items content is anonymous-readable).
  *
  * Idempotent: a second run finds no more onmouseover to strip.
+ *
+ * The pure text/anchor helpers are exported for
+ * migrate-news-item-balloons.test.mjs (`pnpm test:scripts`); the Directus
+ * work only runs when this file is executed directly.
  */
 import { writeFile } from "node:fs/promises";
 
@@ -47,7 +51,8 @@ function requireEnv(name) {
 	return value;
 }
 
-const DIRECTUS_URL = requireEnv("DIRECTUS_URL");
+// Resolved in main() so importing this module (tests) has no side effects.
+let DIRECTUS_URL = "";
 
 async function api(method, path, { token, body } = {}) {
 	const res = await fetch(`${DIRECTUS_URL}${path}`, {
@@ -94,7 +99,7 @@ function decodeEntitiesOnce(s) {
 
 // The source double-escapes entities (&amp;lt; for a literal &lt;) — decode to
 // a fixpoint rather than once. Capped so malformed input can't loop forever.
-function decodeEntities(s) {
+export function decodeEntities(s) {
 	let prev = s;
 	for (let i = 0; i < 4; i++) {
 		const next = decodeEntitiesOnce(prev);
@@ -104,13 +109,29 @@ function decodeEntities(s) {
 	return prev;
 }
 
-/** Cleans an extracted OL() argument into plain balloon text: unescape the JS string, decode entities, strip any leftover markup (e.g. <em>). */
-function cleanBalloonText(raw) {
-	const unescaped = raw.replace(/\\(.)/g, "$1");
-	return decodeEntities(unescaped).replace(/<[^>]*>/g, "").trim();
+// Removal-only replaces run to a fixpoint. A single pass can leave behind — or
+// re-form — the very thing it removed (`<scr<b>ipt>` → `<script>`, a doubled
+// `onmouseover=` where only the first copy goes), which is what GitHub code
+// scanning's js/incomplete-multi-character-sanitization flags. Every pass that
+// changes the string strictly shortens it, so each loop terminates.
+
+/** Strips every `<…>` tag, repeating until none can form. */
+function stripTags(s) {
+	let prev;
+	do {
+		prev = s;
+		s = s.replace(/<[^>]*>/g, "");
+	} while (s !== prev);
+	return s;
 }
 
-function escapeAttr(s) {
+/** Cleans an extracted OL() argument into plain balloon text: unescape the JS string, decode entities, strip any leftover markup (e.g. <em>). */
+export function cleanBalloonText(raw) {
+	const unescaped = raw.replace(/\\(.)/g, "$1");
+	return stripTags(decodeEntities(unescaped)).trim();
+}
+
+export function escapeAttr(s) {
 	return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
@@ -120,14 +141,26 @@ const ANCHOR_TAG_RE = /<a\b[^>]*>/g;
 const HREF_RE = /href\s*=\s*(["'])(.*?)\1/;
 const OL_RE = /onmouseover\s*=\s*"return OL\('((?:\\.|[^'\\])*)'\)"/;
 const ND_RE = /\s*onmouseout\s*=\s*"return nd\(\)"/;
+const OL_RE_ALL = new RegExp(OL_RE.source, "g");
+const ND_RE_ALL = new RegExp(ND_RE.source, "g");
 const INTERNAL_HREF_RE = /^#\/news-item\/(\d+)$/;
+
+/** Strips every dead OL()/nd() handler from one anchor tag, repeating until none can form. */
+function stripDeadHandlers(tag) {
+	let prev;
+	do {
+		prev = tag;
+		tag = tag.replace(OL_RE_ALL, "").replace(ND_RE_ALL, "");
+	} while (tag !== prev);
+	return tag;
+}
 
 /**
  * Rewrites one anchor tag: strips onmouseover/onmouseout, adds
  * data-balloon-title. Returns the tag unchanged if it has no OL() call to
  * replace.
  */
-function rewriteAnchorTag(tag, idToTitle) {
+export function rewriteAnchorTag(tag, idToTitle) {
 	const olMatch = tag.match(OL_RE);
 	if (!olMatch) return { tag, resolution: null };
 
@@ -143,14 +176,14 @@ function rewriteAnchorTag(tag, idToTitle) {
 		title = cleanBalloonText(olMatch[1]);
 		resolution = "external-citation";
 	}
-	if (!title) return { tag: tag.replace(OL_RE, "").replace(ND_RE, ""), resolution: "empty" };
+	const stripped = stripDeadHandlers(tag);
+	if (!title) return { tag: stripped, resolution: "empty" };
 
-	const stripped = tag.replace(OL_RE, "").replace(ND_RE, "");
 	const withBalloon = stripped.replace(/>$/, ` data-balloon-title="${escapeAttr(title)}">`);
 	return { tag: withBalloon, resolution };
 }
 
-function rewriteContent(content, idToTitle) {
+export function rewriteContent(content, idToTitle) {
 	const counts = { "internal-title": 0, "external-citation": 0, empty: 0 };
 	let touched = false;
 	const rewritten = content.replace(ANCHOR_TAG_RE, (tag) => {
@@ -166,66 +199,73 @@ function rewriteContent(content, idToTitle) {
 
 // --- Main --------------------------------------------------------------------
 
-console.log(
-	APPLY ? "Applying news_items balloon-title rewrites…" : "DRY RUN — no changes will be made (pass --apply to apply).",
-);
-console.log(`Target: ${DIRECTUS_URL}`);
+async function main() {
+	DIRECTUS_URL = requireEnv("DIRECTUS_URL");
 
-console.log("Fetching news_items titles for the internal-link id→title map…");
-const titleRows = (await api("GET", `/items/news_items?fields=id,title,full_title&limit=-1`)).data;
-const idToTitle = new Map();
-for (const row of titleRows) {
-	const title = (row.full_title || row.title || "").trim();
-	if (title) idToTitle.set(row.id, title);
-}
-console.log(`  ${titleRows.length} rows, ${idToTitle.size} with a usable title.`);
+	console.log(
+		APPLY ? "Applying news_items balloon-title rewrites…" : "DRY RUN — no changes will be made (pass --apply to apply).",
+	);
+	console.log(`Target: ${DIRECTUS_URL}`);
 
-console.log("Fetching news_items rows with a dead onmouseover…");
-const contentRows = (
-	await api("GET", `/items/news_items?fields=id,content&filter[content][_contains]=onmouseover&limit=-1`)
-).data;
-console.log(`  ${contentRows.length} rows to process.`);
-
-const totals = { rows: 0, "internal-title": 0, "external-citation": 0, empty: 0 };
-const samples = [];
-let token = APPLY ? await login() : null;
-async function patchRow(id, content) {
-	try {
-		await api("PATCH", `/items/news_items/${id}`, { token, body: { content } });
-	} catch (err) {
-		if (!String(err.message).includes("TOKEN_EXPIRED")) throw err;
-		console.log("  session token expired — re-authenticating…");
-		token = await login();
-		await api("PATCH", `/items/news_items/${id}`, { token, body: { content } });
+	console.log("Fetching news_items titles for the internal-link id→title map…");
+	const titleRows = (await api("GET", `/items/news_items?fields=id,title,full_title&limit=-1`)).data;
+	const idToTitle = new Map();
+	for (const row of titleRows) {
+		const title = (row.full_title || row.title || "").trim();
+		if (title) idToTitle.set(row.id, title);
 	}
-}
+	console.log(`  ${titleRows.length} rows, ${idToTitle.size} with a usable title.`);
 
-let processed = 0;
-for (const row of contentRows) {
-	const { content: newContent, stats } = rewriteContent(row.content, idToTitle);
-	processed++;
-	if (processed % 500 === 0) console.log(`  ...${processed}/${contentRows.length}`);
-	if (!stats) continue;
+	console.log("Fetching news_items rows with a dead onmouseover…");
+	const contentRows = (
+		await api("GET", `/items/news_items?fields=id,content&filter[content][_contains]=onmouseover&limit=-1`)
+	).data;
+	console.log(`  ${contentRows.length} rows to process.`);
 
-	totals.rows++;
-	for (const key of Object.keys(stats)) totals[key] += stats[key];
-	if (samples.length < 15) samples.push({ id: row.id, before: row.content, after: newContent });
-
-	if (APPLY && newContent !== row.content) {
-		// Sequential on purpose — parallel Directus REST loops against this
-		// instance have returned mixed-up response bodies before.
-		await patchRow(row.id, newContent);
+	const totals = { rows: 0, "internal-title": 0, "external-citation": 0, empty: 0 };
+	const samples = [];
+	let token = APPLY ? await login() : null;
+	async function patchRow(id, content) {
+		try {
+			await api("PATCH", `/items/news_items/${id}`, { token, body: { content } });
+		} catch (err) {
+			if (!String(err.message).includes("TOKEN_EXPIRED")) throw err;
+			console.log("  session token expired — re-authenticating…");
+			token = await login();
+			await api("PATCH", `/items/news_items/${id}`, { token, body: { content } });
+		}
 	}
+
+	let processed = 0;
+	for (const row of contentRows) {
+		const { content: newContent, stats } = rewriteContent(row.content, idToTitle);
+		processed++;
+		if (processed % 500 === 0) console.log(`  ...${processed}/${contentRows.length}`);
+		if (!stats) continue;
+
+		totals.rows++;
+		for (const key of Object.keys(stats)) totals[key] += stats[key];
+		if (samples.length < 15) samples.push({ id: row.id, before: row.content, after: newContent });
+
+		if (APPLY && newContent !== row.content) {
+			// Sequential on purpose — parallel Directus REST loops against this
+			// instance have returned mixed-up response bodies before.
+			await patchRow(row.id, newContent);
+		}
+	}
+
+	const report = { generatedAt: new Date().toISOString(), applied: APPLY, totals, samples };
+	const reportPath = new URL("./migrate-news-item-balloons-report.json", import.meta.url);
+	await writeFile(reportPath, JSON.stringify(report, null, 2));
+
+	console.log("\n--- Summary ---");
+	console.log(`Rows with at least one dead onmouseover: ${totals.rows}`);
+	console.log(`  → internal cross-reference, title from the target row: ${totals["internal-title"]}`);
+	console.log(`  → external citation, kept original text:               ${totals["external-citation"]}`);
+	console.log(`  → resolved to empty text (attribute stripped, no balloon): ${totals.empty}`);
+	console.log(`\nFull report (with before/after samples) written to ${reportPath.pathname}`);
+	console.log(APPLY ? "\nDone — content rewritten." : "\nDry run complete — pass --apply to write these changes.");
 }
 
-const report = { generatedAt: new Date().toISOString(), applied: APPLY, totals, samples };
-const reportPath = new URL("./migrate-news-item-balloons-report.json", import.meta.url);
-await writeFile(reportPath, JSON.stringify(report, null, 2));
-
-console.log("\n--- Summary ---");
-console.log(`Rows with at least one dead onmouseover: ${totals.rows}`);
-console.log(`  → internal cross-reference, title from the target row: ${totals["internal-title"]}`);
-console.log(`  → external citation, kept original text:               ${totals["external-citation"]}`);
-console.log(`  → resolved to empty text (attribute stripped, no balloon): ${totals.empty}`);
-console.log(`\nFull report (with before/after samples) written to ${reportPath.pathname}`);
-console.log(APPLY ? "\nDone — content rewritten." : "\nDry run complete — pass --apply to write these changes.");
+// `import.meta.main` needs Node ≥ 24.2 — mise.toml pins 25.
+if (import.meta.main) await main();
