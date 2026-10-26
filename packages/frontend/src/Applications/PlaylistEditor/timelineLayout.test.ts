@@ -4,6 +4,7 @@ import {
 	fractionToMs,
 	FULL_BOUNDS,
 	layoutBars,
+	layoutLanes,
 	layoutFlags,
 	MAX_ZOOM,
 	MIN_ZOOM,
@@ -290,5 +291,36 @@ describe("bounded ruler and layout", () => {
 		);
 		expect(bars[0].startFrac).toBe(0.25);
 		expect(bars[0].endFrac).toBe(0.75);
+	});
+});
+
+describe("layoutLanes", () => {
+	it("puts every window of one item in one lane, in bar order, and keeps distinct items apart", () => {
+		const lanes = layoutLanes([
+			media("e1", { itemId: "WETA", start: "2001-09-11T12:00:00Z", end: "2001-09-11T13:00:00Z" }),
+			media("e2", { itemId: "CNN" }),
+			// Same station, different case: the engine matches case-insensitively, so the lane must too.
+			media("e3", { itemId: "weta", start: "2001-09-11T15:00:00Z", end: "2001-09-11T16:00:00Z" }),
+			{ uid: "e4", entry: { kind: "media", app: "radio", itemId: "wcbs" } } as never,
+		]);
+		expect(lanes.map((l) => [l.group, l.label, l.bars.map((b) => b.uid)])).toEqual([
+			["tv", "WETA", ["e1", "e3"]],
+			["tv", "CNN", ["e2"]],
+			["radio", "wcbs", ["e4"]],
+		]);
+		expect(new Set(lanes.map((l) => l.key)).size).toBe(3);
+	});
+
+	it("orders a lane's bars by start so overlapping or out-of-order windows still tab in time order", () => {
+		const lanes = layoutLanes([
+			media("late", { itemId: "WETA", start: "2001-09-11T15:00:00Z", end: "2001-09-11T16:00:00Z" }),
+			media("early", { itemId: "WETA", start: "2001-09-11T12:00:00Z", end: "2001-09-11T13:00:00Z" }),
+		]);
+		expect(lanes).toHaveLength(1);
+		expect(lanes[0].bars.map((b) => b.uid)).toEqual(["early", "late"]);
+	});
+
+	it("returns no lanes for flag-only entries", () => {
+		expect(layoutLanes([{ uid: "n", entry: { kind: "media", app: "news", itemId: "1" } } as never])).toEqual([]);
 	});
 });

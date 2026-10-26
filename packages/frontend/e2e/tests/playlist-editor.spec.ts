@@ -264,3 +264,45 @@ test("View ▸ Zoom In narrows the selected TV lane's sampled preview window", a
 	// an immediate synchronous update the first read is guaranteed to see.
 	await expect.poll(thumbSrcs).not.toEqual(before);
 });
+
+/**
+ * A media item can carry several start/stop windows. The second window is a
+ * second entry for the same item, added from the Settings window; on the
+ * timeline both windows share ONE lane as separate bars, and the two cards in
+ * the Media tab are told apart by their window summaries.
+ */
+test("Add Another Time Window gives a TV channel a second bar in the same lane", async ({ page }) => {
+	await page.route("**/thumbnails/**", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "image/gif",
+			body: Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"),
+		}),
+	);
+	await openPlaylistWithEntries(page, [
+		{ kind: "media", app: "tv", itemId: "cnn", start: "2001-09-11T12:40:00Z", end: "2001-09-11T13:30:00Z" },
+	]);
+
+	const lanes = page.locator(".playlistTimelineLane");
+	const bars = page.locator(".playlistTimelineBar");
+	await expect(lanes).toHaveCount(1);
+	await expect(bars).toHaveCount(1);
+
+	// The card's pencil selects the entry and reveals the Settings window, where
+	// the new button lives next to Start/End.
+	await page.getByRole("button", { name: "Edit CNN" }).click();
+	await page.getByRole("button", { name: "Add Another Time Window" }).click();
+
+	// Still one lane — it is the same channel — but two bars in it.
+	await expect(lanes).toHaveCount(1);
+	await expect(bars).toHaveCount(2);
+	await expect(lanes.first().locator(".playlistTimelineBar")).toHaveCount(2);
+
+	// The Media tab now shows two CNN cards whose windows read apart: the
+	// original, and the new one placed in the hour after it.
+	const summaries = page.locator(".playlistMediaCardWindow");
+	await expect(summaries).toHaveText(["9/11 08:40–09:30", "9/11 09:30–10:30"]);
+	// (Dirty-state after the add is the reducer's contract — editorState.test.ts —
+	// and the menu bar here belongs to the focused Settings window, not the
+	// document, so File > Save is deliberately not asserted from this spot.)
+});

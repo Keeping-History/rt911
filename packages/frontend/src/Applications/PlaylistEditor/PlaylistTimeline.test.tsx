@@ -354,3 +354,54 @@ describe("PlaylistTimeline", () => {
 		expect(topOf(0)).toBe(topOf(1));
 	});
 });
+
+describe("several windows of one item", () => {
+	const twoWindows: EditorEntry[] = [
+		{
+			uid: "w1",
+			entry: { kind: "media", app: "tv", itemId: "WETA", start: "2001-09-11T12:00:00Z", end: "2001-09-11T13:00:00Z" },
+		},
+		{
+			uid: "other",
+			entry: { kind: "media", app: "tv", itemId: "CNN" },
+		},
+		{
+			uid: "w2",
+			entry: { kind: "media", app: "tv", itemId: "weta", start: "2001-09-11T15:00:00Z", end: "2001-09-11T16:00:00Z" },
+		},
+	];
+
+	it("draws them as separate bars in ONE lane, each selectable on its own", () => {
+		const onSelect = vi.fn();
+		render(<PlaylistTimeline entries={twoWindows} selectedUid={null} onSelect={onSelect} {...atRest} />);
+		const lanes = document.querySelectorAll(".playlistTimelineLane");
+		expect(lanes).toHaveLength(2);
+		const wetaBars = lanes[0].querySelectorAll(".playlistTimelineBar");
+		expect(wetaBars).toHaveLength(2);
+		expect(lanes[1].querySelectorAll(".playlistTimelineBar")).toHaveLength(1);
+
+		fireEvent.click(wetaBars[0]);
+		expect(onSelect).toHaveBeenLastCalledWith("w1");
+		fireEvent.click(wetaBars[1]);
+		expect(onSelect).toHaveBeenLastCalledWith("w2");
+	});
+
+	it("gives each window its own edge handles, so either can be dragged", () => {
+		render(
+			<PlaylistTimeline
+				entries={twoWindows} selectedUid={null} onSelect={vi.fn()} onSetEntryBound={vi.fn()} {...atRest}
+			/>,
+		);
+		for (const uid of ["w1", "w2"]) {
+			expect(screen.getByTestId(`bar-handle-start-${uid}`)).toBeTruthy();
+			expect(screen.getByTestId(`bar-handle-end-${uid}`)).toBeTruthy();
+		}
+	});
+
+	it("marks only the selected window as selected and raises it above its lane-mates", () => {
+		render(<PlaylistTimeline entries={twoWindows} selectedUid="w2" onSelect={vi.fn()} {...atRest} />);
+		const selected = document.querySelectorAll(".playlistTimelineBarSelected");
+		expect(selected).toHaveLength(1);
+		expect(selected[0].getAttribute("title")).toBe("weta");
+	});
+});

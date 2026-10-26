@@ -208,3 +208,28 @@ describe("EntryForm", () => {
 		expect(new Date(call.at).toString()).not.toBe("Invalid Date");
 	});
 });
+
+describe("EntryForm › Add Another Time Window", () => {
+	const media = { uid: "e1", entry: { kind: "media" as const, app: "tv" as const, itemId: "WETA" } };
+
+	it("offers the button on a media entry and calls the handler", () => {
+		const onAddTimeWindow = vi.fn();
+		render(<EntryForm value={media} onChange={vi.fn()} onAddTimeWindow={onAddTimeWindow} />);
+		fireEvent.click(screen.getByRole("button", { name: "Add Another Time Window" }));
+		expect(onAddTimeWindow).toHaveBeenCalledTimes(1);
+	});
+
+	it("hides the button when no handler is wired, and never shows it for other kinds", () => {
+		const { unmount } = render(<EntryForm value={media} onChange={vi.fn()} />);
+		expect(screen.queryByRole("button", { name: "Add Another Time Window" })).toBeNull();
+		unmount();
+		render(
+			<EntryForm
+				value={{ uid: "j", entry: { kind: "jump", at: "", to: "" } }}
+				onChange={vi.fn()}
+				onAddTimeWindow={vi.fn()}
+			/>,
+		);
+		expect(screen.queryByRole("button", { name: "Add Another Time Window" })).toBeNull();
+	});
+});

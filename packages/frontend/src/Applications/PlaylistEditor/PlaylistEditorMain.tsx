@@ -7,6 +7,7 @@ import { type EditorAction, type EditorEntry, type EditorState, utcIsoToDisplayW
 import { MediaRadioRow } from "./MediaRadioRow";
 import { MediaTvRow, type TvEditorEntry } from "./MediaTvRow";
 import { PlaylistTimeline } from "./PlaylistTimeline";
+import { windowSummary } from "./windowSummary";
 
 const KIND_BRANCHES: [PlaylistEntry["kind"], string][] = [
 	["media", "Media"], ["app", "Apps"], ["settings", "Settings"],
@@ -59,7 +60,7 @@ function entrySummary(e: EditorEntry): string {
 		return `${String(w.getHours()).padStart(2, "0")}:${String(w.getMinutes()).padStart(2, "0")}`;
 	};
 	switch (e.entry.kind) {
-		case "media": return `${e.entry.app.toUpperCase()} · ${e.entry.itemId}`;
+		case "media": return `${e.entry.app.toUpperCase()} · ${e.entry.itemId} · ${windowSummary(e.entry)}`;
 		case "app": return `Disable ${e.entry.appId}`;
 		case "settings": return `Settings ${e.entry.appId}`;
 		case "file": return `${e.entry.path.split(":").pop()}${e.entry.at ? ` @ ${t(e.entry.at)}` : ""}`;

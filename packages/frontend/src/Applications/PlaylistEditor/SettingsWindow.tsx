@@ -53,6 +53,9 @@ export function SettingsWindow({
 					onChange={(entry) =>
 						edit(activeId, { type: "updateEntry", uid: selected.uid, entry })
 					}
+					// The reducer appends the new window and selects it, so this window
+					// re-renders onto the new entry by itself.
+					onAddTimeWindow={() => edit(activeId, { type: "addTimeWindow", uid: selected.uid })}
 				/>
 			) : (
 				<ClassicyControlLabel label="Select an entry in a playlist to edit its settings." />

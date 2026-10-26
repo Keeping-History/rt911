@@ -2,10 +2,12 @@ import type { ClassicyFileDialogEntry, ClassicyFileOpenSelection } from "classic
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import { parsePlaylist } from "../../Providers/Playlist/parsePlaylist";
 import type {
+	MediaEntry,
 	PlaylistDefinition,
 	PlaylistEntry,
 } from "../../Providers/Playlist/playlistTypes";
 import { playlistUtcMs } from "../../Providers/Playlist/playlistTypes";
+import { timelineBounds, type TimelineBounds } from "./timelineLayout";
 
 export const DISPLAY_TZ_OFFSET_HOURS = -4;
 
@@ -47,6 +49,14 @@ export type EditorAction =
 			select?: boolean;
 	  }
 	| { type: "updateEntry"; uid: string; entry: PlaylistEntry }
+	/**
+	 * Give the media item behind `uid` another availability window: a new
+	 * media entry for the same app + itemId, placed after the item's latest
+	 * bound (see nextTimeWindow), selected so the Settings window edits it.
+	 * The engine already reads several entries for one item as several
+	 * windows (evaluate().isItemAvailable ORs them), so nothing else changes.
+	 */
+	| { type: "addTimeWindow"; uid: string }
 	| { type: "removeEntry"; uid: string }
 	| { type: "select"; uid: string | null }
 	| { type: "markSaved" };
@@ -120,6 +130,35 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 				),
 				dirty: true,
 			};
+		case "addTimeWindow": {
+			const source = state.entries.find((e) => e.uid === action.uid);
+			if (!source || source.entry.kind !== "media") return state;
+			const window = nextTimeWindow(
+				state.entries,
+				source.entry,
+				timelineBounds(state.start, state.end),
+			);
+			// `focus` rides along: "the same item, again" almost always wants
+			// the same behaviour, and the form the new entry opens in can change
+			// it. Resolved metadata (a flight's actual span, a story's
+			// publication time) rides along too, so the new bar draws right away
+			// instead of waiting on another Directus lookup.
+			const uid = `e${state.nextUid}`;
+			return {
+				...state,
+				entries: [
+					...state.entries,
+					{
+						uid,
+						entry: { ...source.entry, start: window.start, end: window.end },
+						timelineMeta: source.timelineMeta,
+					},
+				],
+				nextUid: state.nextUid + 1,
+				selectedUid: uid,
+				dirty: true,
+			};
+		}
 		case "removeEntry":
 			return {
 				...state,
@@ -132,6 +171,47 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 		case "markSaved":
 			return { ...state, dirty: false };
 	}
+}
+
+const WINDOW_DEFAULT_MS = 3_600_000;
+
+/** Media entries that address the same item, by the engine's own rule (app + case-insensitive itemId). */
+export function sameItemEntries(entries: EditorEntry[], item: MediaEntry): MediaEntry[] {
+	const id = item.itemId.toLowerCase();
+	return entries
+		.map((e) => e.entry)
+		.filter(
+			(e): e is MediaEntry =>
+				e.kind === "media" && e.app === item.app && e.itemId.toLowerCase() === id,
+		);
+}
+
+/**
+ * Where a NEW window for `item` goes by default: one hour, starting where the
+ * item's latest bound ends — the greatest `end`, or the greatest `start` of a
+ * window with no end, or the timeline's left edge when no window has any
+ * bound — and clamped inside `bounds`. If an hour does not fit after the
+ * anchor, the window ends at the right edge and starts an hour before it, so
+ * the result is never inverted and never degenerate (bounds are whole hours,
+ * at least one). The teacher then drags or types the real times.
+ */
+export function nextTimeWindow(
+	entries: EditorEntry[],
+	item: MediaEntry,
+	bounds: TimelineBounds,
+): { start: string; end: string } {
+	let anchorMs = bounds.startMs;
+	for (const e of sameItemEntries(entries, item)) {
+		const bound = e.end ?? e.start;
+		if (bound !== undefined) anchorMs = Math.max(anchorMs, playlistUtcMs(bound));
+	}
+	let startMs = Math.min(anchorMs, bounds.endMs);
+	let endMs = startMs + WINDOW_DEFAULT_MS;
+	if (endMs > bounds.endMs) {
+		endMs = bounds.endMs;
+		startMs = Math.max(bounds.startMs, endMs - WINDOW_DEFAULT_MS);
+	}
+	return { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() };
 }
 
 export function assembleDefinition(state: EditorState): PlaylistDefinition {

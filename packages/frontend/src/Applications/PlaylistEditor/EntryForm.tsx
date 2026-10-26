@@ -1,4 +1,5 @@
 import {
+	ClassicyButton,
 	ClassicyCheckbox,
 	ClassicyControlLabel,
 	ClassicyInput,
@@ -18,9 +19,16 @@ const KNOWN_APP_IDS = [
 export function EntryForm({
 	value,
 	onChange,
+	onAddTimeWindow,
 }: {
 	value: EditorEntry;
 	onChange: (entry: PlaylistEntry) => void;
+	/**
+	 * Give this media item another start/stop (editorState's `addTimeWindow`).
+	 * Offered here because this form is where a teacher discovers an entry
+	 * has only one window. Absent in read-only hosts, which hides the button.
+	 */
+	onAddTimeWindow?: () => void;
 }) {
 	const e = value.entry;
 
@@ -45,6 +53,11 @@ export function EntryForm({
 							onChange({ ...e, focus: ev.target.value === "none" ? undefined : (ev.target.value as "once" | "locked") })
 						}
 					/>
+					{onAddTimeWindow && (
+						<ClassicyButton buttonSize="small" onClickFunc={onAddTimeWindow}>
+							Add Another Time Window
+						</ClassicyButton>
+					)}
 				</div>
 			);
 		case "app":

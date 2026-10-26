@@ -143,6 +143,12 @@ $lane-bar-height: 20px;
 	cursor: pointer;
 }
 
+/* Several windows of one item share a lane. The selected one is lifted above
+ * its lane-mates so an overlapping window can still be grabbed and dragged. */
+.playlistTimelineBarSelected {
+	z-index: 1;
+}
+
 /* The label rides above the bar rather than inside it. `position: sticky`
  * resolves against the nearest ancestor with a scrolling box, and
  * `overflow: hidden` counts as one — so a label inside .playlistTimelineBar
@@ -344,6 +350,14 @@ $lane-bar-height: 20px;
 	border: 1px solid var(--color-system-05);
 	background-color: var(--color-system-01);
 	cursor: pointer;
+}
+
+/* The window under the call sign: what tells two cards for one station apart. */
+.playlistMediaCardWindow {
+	font-size: 9px;
+	line-height: 1;
+	white-space: nowrap;
+	opacity: 0.8;
 }
 
 .playlistMediaCardSelected {

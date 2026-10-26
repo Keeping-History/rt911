@@ -70,3 +70,15 @@ describe("MediaCardRow", () => {
 		expect(onSelect).not.toHaveBeenCalled();
 	});
 });
+
+describe("MediaCardRow › window summary", () => {
+	it("labels each card with its own window, so two windows of one station read apart", () => {
+		cardRow([
+			{ uid: "a", entry: { kind: "media", app: "tv", itemId: "weta", start: "2001-09-11T12:40:00Z", end: "2001-09-11T13:30:00Z" } },
+			{ uid: "b", entry: { kind: "media", app: "tv", itemId: "weta", start: "2001-09-11T13:55:00Z", end: "2001-09-11T14:30:00Z" } },
+			{ uid: "c", entry: { kind: "media", app: "tv", itemId: "cnn" } },
+		]);
+		const summaries = [...document.querySelectorAll(".playlistMediaCardWindow")].map((el) => el.textContent);
+		expect(summaries).toEqual(["9/11 08:40–09:30", "9/11 09:55–10:30", "always"]);
+	});
+});

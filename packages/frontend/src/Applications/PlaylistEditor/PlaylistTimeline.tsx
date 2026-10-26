@@ -1,5 +1,6 @@
 import { ClassicyButton, ClassicyIcons } from "classicy";
 import {
+	Fragment,
 	type PointerEvent as ReactPointerEvent,
 	useCallback,
 	useEffect,
@@ -15,7 +16,7 @@ import { resolveTimelineMeta } from "./resolveTimelineMeta";
 import {
 	dragEdgeIso,
 	fractionToMs,
-	layoutBars,
+	layoutLanes,
 	layoutFlags,
 	MAX_ZOOM,
 	MIN_ZOOM,
@@ -241,7 +242,10 @@ export function PlaylistTimeline({
 		[entries, resolved],
 	);
 	const bounds = useMemo(() => timelineBounds(start, end), [start, end]);
-	const bars = useMemo(() => layoutBars(merged, bounds), [merged, bounds]);
+	// One lane per media item, holding every window of that item as its own
+	// bar — see layoutLanes. Everything per-bar below (drag preview, handles,
+	// label, the expanded preview) keys on the bar's uid exactly as before.
+	const lanes = useMemo(() => layoutLanes(merged, bounds), [merged, bounds]);
 	const flags = useMemo(
 		() => layoutFlags(merged, FLAG_MIN_GAP_FRAC / zoom, bounds),
 		[merged, zoom, bounds],
@@ -398,104 +402,108 @@ export function PlaylistTimeline({
 							))}
 						</div>
 						<div className="playlistTimelineLanes">
-							{bars.map((b) => {
-								// A live drag previews on the bar itself: the dragged edge
-								// tracks the snapped value, and its fade lifts because the
-								// edge is now bound. Everything below reads these instead of
-								// b.* so the actual-span overlay stays proportioned.
-								const dragging = drag?.uid === b.uid ? drag : null;
-								const previewFrac = dragging ? timeToFraction(dragging.iso, bounds) : null;
-								const startFrac = dragging?.edge === "start" ? (previewFrac ?? b.startFrac) : b.startFrac;
-								const endFrac = dragging?.edge === "end" ? (previewFrac ?? b.endFrac) : b.endFrac;
-								const fadeStart = b.fadeStart && dragging?.edge !== "start";
-								const fadeEnd = b.fadeEnd && dragging?.edge !== "end";
-								const handleCursor = (edge: "start" | "end") =>
-									edgeCursor(dragging?.edge === edge ? (dragging.dir ?? "lr") : "lr");
-								// The TV strip samples the part of the entry that is ON SCREEN,
-								// not its whole span — an entry with no bounds covers all ten
-								// days, and six thumbnails forty hours apart preview nothing.
-								// Intersecting with the scroll window is what makes zooming and
-								// panning walk the strip through the footage. The radio waveform
-								// wants the opposite (see LanePreview): it is positioned in track
-								// space, so it takes the entry's committed window and `bounds`
-								// below and ignores these two entirely.
-								//
-								// Both read b.startFrac/b.endFrac rather than the drag-preview
-								// fractions above deliberately: following a live edge drag would
-								// re-derive the bucket set on every snapped minute and issue a
-								// fresh row of <img src>es each time — 193 image requests, measured,
-								// for one hour of dragging. The committed bounds hold the strip
-								// still until the drag lands.
-								const previewStart = Math.max(b.startFrac, visibleFrac?.start ?? 0);
-								const previewEnd = Math.min(b.endFrac, visibleFrac?.end ?? 0);
-								return (
-									<div key={b.uid} className={`playlistTimelineLane playlistTimelineLane-${b.group}`}>
-										<button
-											type="button"
-											className={
-												b.uid === selectedUid
-													? "playlistTimelineBar playlistTimelineBarSelected"
-													: "playlistTimelineBar"
-											}
-											style={{
-												left: `${startFrac * 100}%`,
-												width: `${(endFrac - startFrac) * 100}%`,
-												maskImage: barMaskImage(fadeStart, fadeEnd),
-											}}
-											title={b.label}
-											onClick={() => onSelect(b.uid === selectedUid ? null : b.uid)}
-										>
-											{b.focus === "once" && <span aria-hidden>▸</span>}
-											{b.focus === "locked" && <span aria-hidden>🔒</span>}
-											{b.actualStartFrac !== undefined && endFrac - startFrac > 0 && (
-												<span
-													className="playlistTimelineActualSpan"
+							{lanes.map((lane) => (
+								<div key={lane.key} className={`playlistTimelineLane playlistTimelineLane-${lane.group}`}>
+									{lane.bars.map((b) => {
+										// A live drag previews on the bar itself: the dragged edge
+										// tracks the snapped value, and its fade lifts because the
+										// edge is now bound. Everything below reads these instead of
+										// b.* so the actual-span overlay stays proportioned.
+										const dragging = drag?.uid === b.uid ? drag : null;
+										const previewFrac = dragging ? timeToFraction(dragging.iso, bounds) : null;
+										const startFrac = dragging?.edge === "start" ? (previewFrac ?? b.startFrac) : b.startFrac;
+										const endFrac = dragging?.edge === "end" ? (previewFrac ?? b.endFrac) : b.endFrac;
+										const fadeStart = b.fadeStart && dragging?.edge !== "start";
+										const fadeEnd = b.fadeEnd && dragging?.edge !== "end";
+										const handleCursor = (edge: "start" | "end") =>
+											edgeCursor(dragging?.edge === edge ? (dragging.dir ?? "lr") : "lr");
+										// The TV strip samples the part of the entry that is ON SCREEN,
+										// not its whole span — an entry with no bounds covers all ten
+										// days, and six thumbnails forty hours apart preview nothing.
+										// Intersecting with the scroll window is what makes zooming and
+										// panning walk the strip through the footage. The radio waveform
+										// wants the opposite (see LanePreview): it is positioned in track
+										// space, so it takes the entry's committed window and `bounds`
+										// below and ignores these two entirely.
+										//
+										// Both read b.startFrac/b.endFrac rather than the drag-preview
+										// fractions above deliberately: following a live edge drag would
+										// re-derive the bucket set on every snapped minute and issue a
+										// fresh row of <img src>es each time — 193 image requests, measured,
+										// for one hour of dragging. The committed bounds hold the strip
+										// still until the drag lands.
+										const previewStart = Math.max(b.startFrac, visibleFrac?.start ?? 0);
+										const previewEnd = Math.min(b.endFrac, visibleFrac?.end ?? 0);
+										return (
+											<Fragment key={b.uid}>
+												<button
+													type="button"
+													className={
+														b.uid === selectedUid
+															? "playlistTimelineBar playlistTimelineBarSelected"
+															: "playlistTimelineBar"
+													}
 													style={{
-														left: `${((b.actualStartFrac - startFrac) / (endFrac - startFrac)) * 100}%`,
-														width: `${(((b.actualEndFrac ?? endFrac) - b.actualStartFrac) / (endFrac - startFrac)) * 100}%`,
+														left: `${startFrac * 100}%`,
+														width: `${(endFrac - startFrac) * 100}%`,
+														maskImage: barMaskImage(fadeStart, fadeEnd),
 													}}
+													title={b.label}
+													onClick={() => onSelect(b.uid === selectedUid ? null : b.uid)}
+												>
+													{b.focus === "once" && <span aria-hidden>▸</span>}
+													{b.focus === "locked" && <span aria-hidden>🔒</span>}
+													{b.actualStartFrac !== undefined && endFrac - startFrac > 0 && (
+														<span
+															className="playlistTimelineActualSpan"
+															style={{
+																left: `${((b.actualStartFrac - startFrac) / (endFrac - startFrac)) * 100}%`,
+																width: `${(((b.actualEndFrac ?? endFrac) - b.actualStartFrac) / (endFrac - startFrac)) * 100}%`,
+															}}
+														/>
+													)}
+													{onSetEntryBound &&
+														(["start", "end"] as const).map((edge) => (
+															<span
+																key={edge}
+																aria-hidden
+																className={`playlistTimelineBarHandle playlistTimelineBarHandle-${edge}`}
+																data-testid={`bar-handle-${edge}-${b.uid}`}
+																style={{ cursor: handleCursor(edge) }}
+																onPointerDown={(e) => beginEdgeDrag(e, b.uid, edge)}
+																onPointerMove={moveEdgeDrag}
+																onPointerUp={endEdgeDrag}
+																onPointerCancel={() => setDrag(null)}
+															/>
+													))}
+											</button>
+											<div
+												className="playlistTimelineLabelTrack"
+												style={{
+													left: `${startFrac * 100}%`,
+													width: `${(endFrac - startFrac) * 100}%`,
+												}}
+												aria-hidden
+											>
+												<span className="playlistTimelineLabel">{b.label}</span>
+											</div>
+											{b.uid === selectedUid && (
+												<LanePreview
+													group={b.group}
+													channel={b.label}
+													visibleStartMs={fractionToMs(previewStart, bounds)}
+													visibleEndMs={fractionToMs(previewEnd, bounds)}
+													viewportPx={view.clientWidth}
+													entryStartMs={fractionToMs(b.startFrac, bounds)}
+													entryEndMs={fractionToMs(b.endFrac, bounds)}
+													bounds={bounds}
 												/>
 											)}
-											{onSetEntryBound &&
-												(["start", "end"] as const).map((edge) => (
-													<span
-														key={edge}
-														aria-hidden
-														className={`playlistTimelineBarHandle playlistTimelineBarHandle-${edge}`}
-														data-testid={`bar-handle-${edge}-${b.uid}`}
-														style={{ cursor: handleCursor(edge) }}
-														onPointerDown={(e) => beginEdgeDrag(e, b.uid, edge)}
-														onPointerMove={moveEdgeDrag}
-														onPointerUp={endEdgeDrag}
-														onPointerCancel={() => setDrag(null)}
-													/>
-												))}
-										</button>
-										<div
-											className="playlistTimelineLabelTrack"
-											style={{
-												left: `${startFrac * 100}%`,
-												width: `${(endFrac - startFrac) * 100}%`,
-											}}
-											aria-hidden
-										>
-											<span className="playlistTimelineLabel">{b.label}</span>
-										</div>
-										{b.uid === selectedUid && (
-											<LanePreview
-												group={b.group}
-												channel={b.label}
-												visibleStartMs={fractionToMs(previewStart, bounds)}
-												visibleEndMs={fractionToMs(previewEnd, bounds)}
-												viewportPx={view.clientWidth}
-												entryStartMs={fractionToMs(b.startFrac, bounds)}
-												entryEndMs={fractionToMs(b.endFrac, bounds)}
-												bounds={bounds}
-											/>
-										)}
-									</div>
-								);
-							})}
+										</Fragment>
+										);
+									})}
+								</div>
+							))}
 						</div>
 					</div>
 				</div>

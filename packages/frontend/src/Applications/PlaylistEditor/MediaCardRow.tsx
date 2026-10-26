@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { MediaEntry } from "../../Providers/Playlist/playlistTypes";
 import type { EditorEntry } from "./editorState";
 import { playlistEditorIcons } from "./playlistIcons";
+import { windowSummary } from "./windowSummary";
 
 /** A media entry the caller has already narrowed to one station-shaped app. */
 export type MediaCardEntry = EditorEntry & { entry: MediaEntry };
@@ -72,6 +73,8 @@ export function MediaCardRow({
 							<div className="playlistMediaCardLogo" />
 						)}
 						<ClassicyControlLabel label={label} labelSize="small" />
+						{/* Two windows of one station are two cards; the window is what tells them apart. */}
+						<span className="playlistMediaCardWindow">{windowSummary(e.entry)}</span>
 						{/* stopPropagation here, not inside each onClickFunc: ClassicyButton's
 						  * callback shape isn't guaranteed to forward the native event (it
 						  * doesn't everywhere else in this codebase), but the click DOM event

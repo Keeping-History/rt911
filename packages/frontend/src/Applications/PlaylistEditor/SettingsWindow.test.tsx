@@ -79,3 +79,19 @@ describe("SettingsWindow", () => {
 		expect(screen.getByText(/select an entry/i)).not.toBeNull();
 	});
 });
+
+describe("SettingsWindow › Add Another Time Window", () => {
+	it("routes the form's request to addTimeWindow for the selected entry of the ACTIVE document", () => {
+		const edit = vi.fn();
+		const selected = { uid: "m3", entry: { kind: "media" as const, app: "tv" as const, itemId: "WETA" } };
+		renderWindow({
+			states: { p2: state({ playlistId: "p2", entries: [selected], selectedUid: "m3" }) },
+			activeId: "p2",
+			edit,
+		});
+		const onAddTimeWindow = (formProps.current as { onAddTimeWindow?: () => void } | null)?.onAddTimeWindow;
+		expect(onAddTimeWindow).toBeTypeOf("function");
+		onAddTimeWindow?.();
+		expect(edit).toHaveBeenCalledWith("p2", { type: "addTimeWindow", uid: "m3" });
+	});
+});

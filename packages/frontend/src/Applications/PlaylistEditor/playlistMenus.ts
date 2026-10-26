@@ -138,10 +138,22 @@ export const MODE_BALLOONS = {
 		"Students keep the full desktop. This playlist only adds notes, jumps, and scheduled events on top of it.",
 } as const;
 
+export const ADD_TIME_WINDOW_BALLOONS = {
+	enabled:
+		"Give the selected item another start and stop. It gets a one-hour window " +
+		"after its latest one, ready to drag or edit in Settings.",
+	disabled:
+		"Select a TV channel, radio station, news story or flight first — a time " +
+		"window belongs to one media item.",
+} as const;
+
 export function documentEditMenu(o: {
 	mode: "restrict" | "annotate";
 	onSetMode: (mode: "restrict" | "annotate") => void;
 	addItems: ClassicyMenuItem[];
+	/** True while the selected entry is a media entry — the only kind with windows. */
+	canAddTimeWindow: boolean;
+	onAddTimeWindow: () => void;
 }): ClassicyMenuItem {
 	return {
 		id: "edit",
@@ -163,6 +175,19 @@ export function documentEditMenu(o: {
 			},
 			SPACER,
 			{ id: "playlist_edit_add", title: "Add…", menuChildren: o.addItems },
+			// Next to Add… rather than inside it: the submenu adds NEW things, and
+			// this acts on what is already selected. Disabled-with-a-reason, like
+			// Copy Student Link, so a teacher looking for it finds it.
+			{
+				id: "playlist_edit_add_time_window",
+				title: "Add Time Window",
+				disabled: !o.canAddTimeWindow,
+				balloon: {
+					title: "Add Time Window",
+					content: ADD_TIME_WINDOW_BALLOONS[o.canAddTimeWindow ? "enabled" : "disabled"],
+				},
+				onClickFunc: o.onAddTimeWindow,
+			},
 		],
 	};
 }
