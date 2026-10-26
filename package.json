@@ -7,6 +7,7 @@
 		"build": "pnpm --filter @rt911/frontend build",
 		"preview:auth": "pnpm --filter @rt911/frontend preview:auth",
 		"test": "pnpm --filter @rt911/frontend test",
+		"test:scripts": "node --test packages/backend/*.test.mjs",
 		"lint": "pnpm --filter @rt911/frontend lint",
 		"setup": "node packages/backend/seed.mjs",
 		"db:gen-epg": "node packages/backend/gen-epg.mjs",
