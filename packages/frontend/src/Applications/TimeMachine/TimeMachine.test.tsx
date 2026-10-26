@@ -135,14 +135,17 @@ describe("TimeMachine Settings window", () => {
 		expect(skipSlider!.value).toBe("45");
 		expect(screen.getByText("45 min")).toBeTruthy();
 
-		// Each slider is wrapped in ClassicyBalloonHelp's anchor (role="tooltip").
-		const anchors = screen.getAllByRole("tooltip");
+		// Each slider is wrapped in ClassicyBalloonHelp's `.classicyBalloonHelpAnchor`
+		// <div>. (Since classicy 2.0.9 the anchor carries no role; `role="tooltip"`
+		// belongs to the balloon itself, and only while it is showing.)
+		const anchors = document.querySelectorAll(".classicyBalloonHelpAnchor");
 		expect(anchors.length).toBe(3);
+		expect(screen.queryByRole("tooltip")).toBeNull();
 
 		// Hovering the skip slider's balloon anchor reveals content pulled
 		// straight from the manifest's schema .describe() text — not a
 		// hand-duplicated string.
-		const skipAnchor = skipSlider!.closest('[role="tooltip"]') as HTMLElement;
+		const skipAnchor = skipSlider!.closest(".classicyBalloonHelpAnchor") as HTMLElement;
 		fireEvent.mouseEnter(skipAnchor);
 		act(() => {
 			vi.advanceTimersByTime(600);
@@ -154,6 +157,10 @@ describe("TimeMachine Settings window", () => {
 		expect(expectedContent).toBeTruthy();
 		expect(screen.getByText("Skip distance")).toBeTruthy();
 		expect(screen.getByText(expectedContent!)).toBeTruthy();
+		// The shown balloon is the tooltip, and it describes the hovered anchor.
+		const tooltip = screen.getByRole("tooltip");
+		expect(tooltip.textContent).toContain(expectedContent!);
+		expect(skipAnchor.getAttribute("aria-describedby")).toBe(tooltip.id);
 	});
 
 	// Regression test for the bug this suite's rewrite fixed: Cancel/Save used
