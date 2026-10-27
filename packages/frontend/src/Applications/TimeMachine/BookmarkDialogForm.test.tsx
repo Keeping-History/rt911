@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { BookmarkDialogForm } from "./BookmarkDialogForm";
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	vi.useRealTimers();
+});
 
 const base = {
 	tzOffset: -4,
@@ -65,5 +68,34 @@ describe("BookmarkDialogForm", () => {
 		);
 		fireEvent.click(screen.getByRole("button", { name: /Save/i }));
 		expect(onSave.mock.calls[0][0].category).toBe("General");
+	});
+});
+
+describe("BookmarkDialogForm balloon help", () => {
+	it("explains why Save is dimmed while the title is empty", () => {
+		vi.useFakeTimers();
+		render(
+			<BookmarkDialogForm
+				{...base}
+				mode="create"
+				initial={{ title: "", category: "General", startDateUtc: "2001-09-11T12:46:40" }}
+				onSave={() => {}}
+			/>,
+		);
+
+		// Save is disabled here, so the hover is heard by the wrapper anchor —
+		// a hook bound to the button itself would never fire (React delivers
+		// no mouse events to disabled buttons).
+		const anchor = screen
+			.getByRole("button", { name: "Save" })
+			.closest(".classicyBalloonHelpAnchor") as HTMLElement;
+		expect(anchor).not.toBeNull();
+		fireEvent.mouseEnter(anchor);
+		act(() => {
+			vi.advanceTimersByTime(600);
+		});
+		expect(screen.getByRole("tooltip").textContent).toContain(
+			"give the bookmark a title first",
+		);
 	});
 });

@@ -8,8 +8,13 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeAppState, getAppWindow, useAppManager } from "classicy";
-import { TIME_MACHINE_APP_ID, TimeMachineDataSchema } from "./timeMachineSettings";
+import {
+	readTimeMachineSettings,
+	TIME_MACHINE_APP_ID,
+	TimeMachineDataSchema,
+} from "./timeMachineSettings";
 import { TimeMachine } from "./TimeMachine";
+import { transportBalloons } from "./transportBalloons";
 
 beforeEach(() => {
 	// useBookmarks fires a fetch on mount regardless of which window is open;
@@ -138,8 +143,10 @@ describe("TimeMachine Settings window", () => {
 		// Each slider is wrapped in ClassicyBalloonHelp's `.classicyBalloonHelpAnchor`
 		// <div>. (Since classicy 2.0.9 the anchor carries no role; `role="tooltip"`
 		// belongs to the balloon itself, and only while it is showing.)
-		const anchors = document.querySelectorAll(".classicyBalloonHelpAnchor");
-		expect(anchors.length).toBe(3);
+		// (Not a document-wide count: the main window's transport row has anchors too.)
+		for (const slider of [skipSlider, stepSlider, scrubSlider]) {
+			expect(slider!.closest(".classicyBalloonHelpAnchor")).not.toBeNull();
+		}
 		expect(screen.queryByRole("tooltip")).toBeNull();
 
 		// Hovering the skip slider's balloon anchor reveals content pulled
@@ -340,5 +347,99 @@ describe("TimeMachine Bookmarks window", () => {
 		);
 		expect(bookmarksWindow?.closed).toBe(true);
 		expect(screen.queryByText("Log in to view and create personal bookmarks.")).toBeNull();
+	});
+});
+
+describe("TimeMachine main window balloon help", () => {
+	it("wraps every button, names the glyph buttons, and quotes the live skip distance", () => {
+		vi.useFakeTimers();
+		openSettingsOnMount(); // seeds apps[id].open so ClassicyApp renders its windows
+		render(<TimeMachine />);
+
+		// Not yet touched, so the balloons quote the default Settings distances.
+		const expected = transportBalloons({
+			...readTimeMachineSettings(undefined),
+			paused: false,
+		});
+
+		// The arrow glyphs are meaningless to a screen reader; the balloon
+		// title doubles as each one's accessible name.
+		for (const key of [
+			"skipBack",
+			"stepBack",
+			"scrubBack",
+			"scrubForward",
+			"stepForward",
+			"skipForward",
+		] as const) {
+			expect(screen.getByRole("button", { name: expected[key].title })).toBeTruthy();
+		}
+
+		// Every button in the main window shows a balloon on hover. Play,
+		// Pause and GO sit under a ClassicyBalloonHelp wrapper (the anchor,
+		// which still hears the hover while Play or Pause is disabled);
+		// Capture Bookmark is hook-bound, so the button is its own anchor.
+		// mouseEnter doesn't bubble, so target whichever owns the listener.
+		for (const [name, title] of [
+			["Play", "Play"],
+			["Pause", "Pause"],
+			["GO", "Go"],
+			["Capture Bookmark", "Capture Bookmark"],
+		] as const) {
+			const button =
+				name === "Capture Bookmark"
+					? screen.getByLabelText(name)
+					: screen.getByRole("button", { name });
+			const target = button.closest(".classicyBalloonHelpAnchor") ?? button;
+			fireEvent.mouseEnter(target);
+			act(() => {
+				vi.advanceTimersByTime(600);
+			});
+			const tooltip = screen.getByRole("tooltip");
+			expect(tooltip.textContent).toContain(title);
+			expect(target.getAttribute("aria-describedby")).toBe(tooltip.id);
+			fireEvent.mouseLeave(target);
+			expect(screen.queryByRole("tooltip")).toBeNull();
+		}
+
+		// The one of Play/Pause that is disabled still gets a balloon, and it
+		// says why the button is unavailable.
+		const disabledOne = (
+			[
+				screen.getByRole("button", { name: "Play" }),
+				screen.getByRole("button", { name: "Pause" }),
+			] as HTMLButtonElement[]
+		).find((b) => b.disabled);
+		expect(disabledOne).toBeDefined();
+		const disabledAnchor = disabledOne!.closest(".classicyBalloonHelpAnchor") as HTMLElement;
+		fireEvent.mouseEnter(disabledAnchor);
+		act(() => {
+			vi.advanceTimersByTime(600);
+		});
+		expect(screen.getByRole("tooltip").textContent).toContain("Not available");
+		fireEvent.mouseLeave(disabledAnchor);
+
+		// No wrapper element around the square transport buttons or Capture
+		// Bookmark: they must stay direct flex children of their rows so they
+		// can shrink to fit the window (see balloonButtons.tsx).
+		const skipBack = screen.getByRole("button", { name: "Skip Back" });
+		expect(skipBack.closest(".classicyBalloonHelpAnchor")).toBeNull();
+		expect(skipBack.parentElement).toBe(
+			screen.getByRole("button", { name: "Pause" }).closest(".classicyBalloonHelpAnchor")!
+				.parentElement,
+		);
+		expect(
+			screen.getByLabelText("Capture Bookmark").closest(".classicyBalloonHelpAnchor"),
+		).toBeNull();
+
+		// Hovering Skip Back shows its title and the Settings-derived distance.
+		fireEvent.mouseEnter(skipBack);
+		act(() => {
+			vi.advanceTimersByTime(600);
+		});
+		const tooltip = screen.getByRole("tooltip");
+		expect(tooltip.textContent).toContain("Skip Back");
+		expect(tooltip.textContent).toContain(expected.skipBack.content);
+		expect(skipBack.getAttribute("aria-describedby")).toBe(tooltip.id);
 	});
 });

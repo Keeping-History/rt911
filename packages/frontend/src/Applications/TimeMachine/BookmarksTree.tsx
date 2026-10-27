@@ -1,4 +1,5 @@
 import type React from "react";
+import { BalloonButton } from "./balloonButtons";
 import editPng from "./edit.png";
 import trashPng from "./trash.png";
 import { Disclosure as BookmarkDisclosure } from "../../Components/Disclosure/Disclosure";
@@ -65,18 +66,23 @@ export const BookmarksTree: React.FC<BookmarksTreeProps> = ({
 				)}
 				{globalGroups.map(([category, items]) => (
 					<BookmarkDisclosure key={`g-${category}`} label={category} defaultOpen>
-						{items.map((b) => (
-							<button
-								key={b.id}
-								type="button"
-								className={styles.bookmarkRow}
-								title={b.full_title ?? b.title}
-								onClick={() => onJump(b.start_date)}
-							>
-								<span className={styles.bookmarkTime}>{formatUtcAsLocalTime(b.start_date, tzOffset)}</span>
-								<span className={styles.bookmarkTitle}>{b.title}</span>
-							</button>
-						))}
+						{items.map((b) => {
+							const time = formatUtcAsLocalTime(b.start_date, tzOffset);
+							return (
+								<BalloonButton
+									key={b.id}
+									className={styles.bookmarkRow}
+									balloon={{
+										title: b.full_title ?? b.title,
+										content: `Click to set the clock to ${time} and replay from this moment.`,
+									}}
+									onClick={() => onJump(b.start_date)}
+								>
+									<span className={styles.bookmarkTime}>{time}</span>
+									<span className={styles.bookmarkTitle}>{b.title}</span>
+								</BalloonButton>
+							);
+						})}
 					</BookmarkDisclosure>
 				))}
 			</BookmarkDisclosure>
@@ -91,37 +97,50 @@ export const BookmarksTree: React.FC<BookmarksTreeProps> = ({
 				{signedIn &&
 					personalGroups.map(([category, items]) => (
 						<BookmarkDisclosure key={`p-${category}`} label={category} defaultOpen>
-							{items.map((b) => (
-								<div key={b.id} className={styles.personalRow}>
-									<button
-										type="button"
-										className={styles.bookmarkRow}
-										title={b.title}
-										onClick={() => onJump(b.start_date)}
-									>
-										<span className={styles.bookmarkTime}>{formatUtcAsLocalTime(b.start_date, tzOffset)}</span>
-										<span className={styles.bookmarkTitle}>{b.title}</span>
-									</button>
-									<div className={styles.rowActions}>
-										<button
-											type="button"
-											className={styles.iconButton}
-											aria-label={`Edit “${b.title}”`}
-											onClick={() => onEdit(b)}
+							{items.map((b) => {
+								const time = formatUtcAsLocalTime(b.start_date, tzOffset);
+								return (
+									<div key={b.id} className={styles.personalRow}>
+										<BalloonButton
+											className={styles.bookmarkRow}
+											balloon={{
+												title: b.title,
+												content: `Click to set the clock to ${time} and replay from this moment.`,
+											}}
+											onClick={() => onJump(b.start_date)}
 										>
-											<img src={editPng} alt="" />
-										</button>
-										<button
-											type="button"
-											className={styles.iconButton}
-											aria-label={`Delete “${b.title}”`}
-											onClick={() => onDelete(b)}
-										>
-											<img src={trashPng} alt="" />
-										</button>
+											<span className={styles.bookmarkTime}>{time}</span>
+											<span className={styles.bookmarkTitle}>{b.title}</span>
+										</BalloonButton>
+										<div className={styles.rowActions}>
+											<BalloonButton
+												className={styles.iconButton}
+												aria-label={`Edit “${b.title}”`}
+												balloon={{
+													title: "Edit Bookmark",
+													content: `Change the title, category or time of “${b.title}”.`,
+												}}
+												onClick={() => onEdit(b)}
+											>
+												<img src={editPng} alt="" />
+											</BalloonButton>
+											{/* Deletion is immediate (handleDeletePersonal has no
+											    confirm step), and the balloon says so. */}
+											<BalloonButton
+												className={styles.iconButton}
+												aria-label={`Delete “${b.title}”`}
+												balloon={{
+													title: "Delete Bookmark",
+													content: `Remove “${b.title}” from your personal bookmarks straight away. This cannot be undone.`,
+												}}
+												onClick={() => onDelete(b)}
+											>
+												<img src={trashPng} alt="" />
+											</BalloonButton>
+										</div>
 									</div>
-								</div>
-							))}
+								);
+							})}
 						</BookmarkDisclosure>
 					))}
 			</BookmarkDisclosure>
